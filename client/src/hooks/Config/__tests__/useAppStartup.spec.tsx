@@ -7,7 +7,7 @@ import type { TUser } from 'librechat-data-provider';
 const mockUseHasAccess = jest.fn();
 const mockUseMCPServersQuery = jest.fn();
 const mockUseMCPToolsQuery = jest.fn();
-const mockInstallCloudFrontImageRetry = jest.fn(() => jest.fn());
+const mockInstallCloudFrontImageRetry = jest.fn((..._args: unknown[]) => jest.fn());
 const mockGetTokenHeader = jest.fn();
 
 jest.mock('@librechat/client', () => ({
@@ -153,7 +153,8 @@ describe('useAppStartup — MCP permission gating', () => {
     expect(mockInstallCloudFrontImageRetry).toHaveBeenCalledWith(startupConfig, {
       getAuthorizationHeader: expect.any(Function),
     });
-    const [, options] = mockInstallCloudFrontImageRetry.mock.calls[0];
+    const [, rawOptions] = mockInstallCloudFrontImageRetry.mock.calls[0];
+    const options = rawOptions as { getAuthorizationHeader: () => string };
     mockGetTokenHeader.mockReturnValue('Bearer app-token');
 
     expect(options.getAuthorizationHeader()).toBe('Bearer app-token');

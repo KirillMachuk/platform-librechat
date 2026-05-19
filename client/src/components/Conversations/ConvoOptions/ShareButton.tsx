@@ -40,7 +40,7 @@ export default function ShareButton({
 
   useEffect(() => {
     if (share?.shareId !== undefined) {
-      setSharedLink(buildShareLinkUrl(share.shareId));
+      setSharedLink(buildShareLinkUrl(share.shareId ?? ''));
     }
   }, [share]);
 

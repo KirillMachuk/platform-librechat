@@ -1,12 +1,12 @@
 import { Checkbox } from '@librechat/client';
 import { Capabilities } from 'librechat-data-provider';
 import { useFormContext, Controller } from 'react-hook-form';
-import type { AgentForm } from '~/common';
+import type { AssistantForm } from '~/common';
 import { useLocalize } from '~/hooks';
 
 export default function ImageVision() {
   const localize = useLocalize();
-  const methods = useFormContext<AgentForm>();
+  const methods = useFormContext<AssistantForm>();
   const { control, setValue, getValues } = methods;
 
   return (
@@ -17,9 +17,10 @@ export default function ImageVision() {
         render={({ field }) => (
           <Checkbox
             {...field}
-            checked={field.value}
+            checked={field.value === true}
             onCheckedChange={field.onChange}
             className="relative float-left mr-2 inline-flex h-4 w-4 cursor-pointer"
+            aria-label={localize('com_assistants_image_vision')}
             value={field.value?.toString()}
           />
         )}

@@ -42,7 +42,8 @@ export function useSearchResultsByTurn(attachments?: TAttachment[]) {
 
       // Handle agent file search attachments (following web search pattern)
       if (attachment.type === Tools.file_search && attachment[Tools.file_search]) {
-        const sources = attachment[Tools.file_search].sources;
+        const fileSearchData = attachment[Tools.file_search] as SearchResultData & { sources: FileSource[] };
+        const sources = fileSearchData.sources;
 
         // Deduplicate sources by fileId and merge pages
         const deduplicatedSources = new Map<string, DeduplicatedSource>();

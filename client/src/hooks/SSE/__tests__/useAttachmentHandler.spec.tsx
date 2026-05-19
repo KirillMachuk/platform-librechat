@@ -28,7 +28,7 @@ const wrapper = ({ children }: { children: ReactNode }) => <RecoilRoot>{children
 const submission = {} as EventSubmission;
 const messageId = 'msg-1';
 
-function makeAttachment(overrides: Partial<TAttachment>): TAttachment {
+function makeAttachment(overrides: Record<string, unknown> = {}): TAttachment {
   return {
     file_id: 'fid-1',
     filename: 'data.xlsx',

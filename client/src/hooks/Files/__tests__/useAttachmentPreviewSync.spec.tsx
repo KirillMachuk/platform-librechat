@@ -19,7 +19,9 @@ import { useEffect } from 'react';
 import { renderHook } from '@testing-library/react';
 import { RecoilRoot, useRecoilValue, useSetRecoilState } from 'recoil';
 import type { ReactNode } from 'react';
-import type { TAttachment, TFilePreview } from 'librechat-data-provider';
+import type { TAttachment, TFile, TFilePreview } from 'librechat-data-provider';
+
+type FullAttachment = TFile & { messageId: string; toolCallId: string };
 import store from '~/store';
 
 const mockUseFilePreview = jest.fn();
@@ -34,7 +36,7 @@ const wrapper = ({ children }: { children: ReactNode }) => <RecoilRoot>{children
 const messageId = 'msg-1';
 const fileId = 'fid-1';
 
-function makeAttachment(overrides: Partial<TAttachment> = {}): TAttachment {
+function makeAttachment(overrides: Record<string, unknown> = {}): TAttachment {
   return {
     file_id: fileId,
     filename: 'data.xlsx',
@@ -261,7 +263,7 @@ describe('useAttachmentPreviewSync', () => {
         textFormat: 'html',
       },
     });
-    const updated = ctx.map[messageId]?.[0] as TAttachment & { text?: string };
+    const updated = ctx.map[messageId]?.[0] as unknown as FullAttachment;
     expect(updated.status).toBe('ready');
     expect(updated.text).toBe('<table>final</table>');
     expect(ctx.result.current.status).toBe('ready');
@@ -277,7 +279,7 @@ describe('useAttachmentPreviewSync', () => {
         previewError: 'parser-error',
       },
     });
-    const updated = ctx.map[messageId]?.[0] as TAttachment & { previewError?: string };
+    const updated = ctx.map[messageId]?.[0] as unknown as FullAttachment;
     expect(updated.status).toBe('failed');
     expect(updated.previewError).toBe('parser-error');
     expect(ctx.result.current.status).toBe('failed');
@@ -336,7 +338,7 @@ describe('useAttachmentPreviewSync', () => {
     });
     const list = ctx.map[messageId] ?? [];
     expect(list).toHaveLength(1);
-    const inserted = list[0] as TAttachment & { text?: string; textFormat?: string };
+    const inserted = list[0] as unknown as FullAttachment;
     expect(inserted.file_id).toBe(fileId);
     expect(inserted.status).toBe('ready');
     expect(inserted.text).toBe('<table>resolved-on-reload</table>');
@@ -361,7 +363,7 @@ describe('useAttachmentPreviewSync', () => {
     });
     const list = ctx.map[messageId] ?? [];
     expect(list).toHaveLength(1);
-    const inserted = list[0] as TAttachment & { previewError?: string };
+    const inserted = list[0] as unknown as FullAttachment;
     expect(inserted.status).toBe('failed');
     expect(inserted.previewError).toBe('render-timeout');
   });

@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 import { render, waitFor, fireEvent } from '@testing-library/react';
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+/* jest globals are provided by the test runner */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Agent } from 'librechat-data-provider';
 

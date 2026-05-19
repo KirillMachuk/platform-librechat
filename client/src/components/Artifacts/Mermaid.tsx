@@ -3,7 +3,7 @@ import mermaid from 'mermaid';
 import { Button } from '@librechat/client';
 import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
+import type { ReactZoomPanPinchRef, ReactZoomPanPinchContentRef } from 'react-zoom-pan-pinch';
 import { artifactFlowchartConfig } from '~/utils/mermaid';
 
 interface MermaidDiagramProps {
@@ -13,7 +13,7 @@ interface MermaidDiagramProps {
 
 const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ content, isDarkMode = true }) => {
   const mermaidRef = useRef<HTMLDivElement>(null);
-  const transformRef = useRef<ReactZoomPanPinchRef>(null);
+  const transformRef = useRef<ReactZoomPanPinchContentRef>(null);
   const [isRendered, setIsRendered] = useState(false);
   const theme = isDarkMode ? 'dark' : 'neutral';
   const bgColor = isDarkMode ? '#212121' : '#FFFFFF';
@@ -66,7 +66,7 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ content, isDarkMode = t
     }
   }, [isRendered, centerAndFitDiagram]);
 
-  const handlePanning = useCallback(() => {
+  const handlePanning = useCallback((_ref: ReactZoomPanPinchRef, _event: MouseEvent | TouchEvent) => {
     if (!transformRef.current) {
       return;
     }
@@ -104,7 +104,7 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ content, isDarkMode = t
     }
 
     if (newX !== positionX || newY !== positionY) {
-      instance.setTransformState(scale, newX, newY);
+      transformRef.current.setTransform(newX, newY, scale);
     }
   }, []);
 
@@ -123,7 +123,6 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ content, isDarkMode = t
         initialPositionY={0}
         wheel={{ step: 0.1 }}
         panning={{ velocityDisabled: true }}
-        alignmentAnimation={{ disabled: true }}
         onPanning={handlePanning}
       >
         {({ zoomIn, zoomOut }) => (

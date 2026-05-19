@@ -20,6 +20,8 @@ const mockStartupConfig: TStartupConfig = {
   openidLoginEnabled: true,
   openidLabel: 'Test OpenID',
   openidImageUrl: 'http://test-server.com',
+  openidAutoRedirect: false,
+  appleLoginEnabled: false,
   samlLoginEnabled: true,
   samlLabel: 'Test SAML',
   samlImageUrl: 'http://test-server.com',
@@ -33,9 +35,11 @@ const mockStartupConfig: TStartupConfig = {
     enabled: false,
   },
   emailEnabled: false,
-  checkBalance: false,
   showBirthdayIcon: false,
   helpAndFaqURL: '',
+  sharedLinksEnabled: false,
+  publicSharedLinksEnabled: false,
+  allowAccountDeletion: false,
 };
 
 const setup = ({
@@ -106,7 +110,7 @@ beforeEach(() => {
 
 test('renders login form', () => {
   const { getByLabelText } = render(
-    <Login onSubmit={mockLogin} startupConfig={mockStartupConfig} />,
+    <Login onSubmit={mockLogin} startupConfig={mockStartupConfig} error="" setError={jest.fn()} />,
   );
   expect(getByLabelText(/email/i)).toBeInTheDocument();
   expect(getByLabelText(/password/i)).toBeInTheDocument();
@@ -114,7 +118,7 @@ test('renders login form', () => {
 
 test('submits login form', async () => {
   const { getByLabelText, getByRole } = render(
-    <Login onSubmit={mockLogin} startupConfig={mockStartupConfig} />,
+    <Login onSubmit={mockLogin} startupConfig={mockStartupConfig} error="" setError={jest.fn()} />,
   );
   const emailInput = getByLabelText(/email/i);
   const passwordInput = getByLabelText(/password/i);
@@ -129,7 +133,7 @@ test('submits login form', async () => {
 
 test('displays validation error messages', async () => {
   const { getByLabelText, getByRole, getByText } = render(
-    <Login onSubmit={mockLogin} startupConfig={mockStartupConfig} />,
+    <Login onSubmit={mockLogin} startupConfig={mockStartupConfig} error="" setError={jest.fn()} />,
   );
   const emailInput = getByLabelText(/email/i);
   const passwordInput = getByLabelText(/password/i);

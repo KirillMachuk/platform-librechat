@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
-import { SettingsTabValues } from 'librechat-data-provider';
-import { MessageSquare, Command, DollarSign } from 'lucide-react';
+import { PermissionTypes, Permissions, SettingsTabValues } from 'librechat-data-provider';
+import { Brain, MessageSquare, Command, DollarSign } from 'lucide-react';
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react';
 import {
   GearIcon,
@@ -18,12 +18,13 @@ import {
   Commands,
   Speech,
   Personalization,
+  Memory,
   Data,
   Balance,
   Account,
 } from './SettingsTabs';
 import usePersonalizationAccess from '~/hooks/usePersonalizationAccess';
-import { useLocalize, TranslationKeys } from '~/hooks';
+import { useLocalize, useHasAccess, TranslationKeys } from '~/hooks';
 import { useGetStartupConfig } from '~/data-provider';
 import { cn } from '~/utils';
 
@@ -34,6 +35,15 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
   const [activeTab, setActiveTab] = useState(SettingsTabValues.GENERAL);
   const tabRefs = useRef({});
   const { hasAnyPersonalizationFeature, hasMemoryOptOut } = usePersonalizationAccess();
+  const hasAccessToMemories = useHasAccess({
+    permissionType: PermissionTypes.MEMORIES,
+    permission: Permissions.USE,
+  });
+  const hasAccessToReadMemories = useHasAccess({
+    permissionType: PermissionTypes.MEMORIES,
+    permission: Permissions.READ,
+  });
+  const showMemoryTab = hasAccessToMemories && hasAccessToReadMemories;
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     const tabs: SettingsTabValues[] = [
@@ -42,6 +52,7 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
       SettingsTabValues.COMMANDS,
       SettingsTabValues.SPEECH,
       ...(hasAnyPersonalizationFeature ? [SettingsTabValues.PERSONALIZATION] : []),
+      ...(showMemoryTab ? [SettingsTabValues.MEMORY] : []),
       SettingsTabValues.DATA,
       ...(startupConfig?.balance?.enabled ? [SettingsTabValues.BALANCE] : []),
       SettingsTabValues.ACCOUNT,
@@ -99,6 +110,15 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
             value: SettingsTabValues.PERSONALIZATION,
             icon: <PersonalizationIcon />,
             label: 'com_nav_setting_personalization' as TranslationKeys,
+          },
+        ]
+      : []),
+    ...(showMemoryTab
+      ? [
+          {
+            value: SettingsTabValues.MEMORY,
+            icon: <Brain className="icon-sm" aria-hidden="true" />,
+            label: 'com_ui_memories' as TranslationKeys,
           },
         ]
       : []),
@@ -238,6 +258,11 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
                           hasMemoryOptOut={hasMemoryOptOut}
                           hasAnyPersonalizationFeature={hasAnyPersonalizationFeature}
                         />
+                      </Tabs.Content>
+                    )}
+                    {showMemoryTab && (
+                      <Tabs.Content value={SettingsTabValues.MEMORY} tabIndex={-1}>
+                        <Memory />
                       </Tabs.Content>
                     )}
                     <Tabs.Content value={SettingsTabValues.DATA} tabIndex={-1}>

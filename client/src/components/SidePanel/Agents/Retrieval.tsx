@@ -10,18 +10,18 @@ import {
   HoverCardTrigger,
 } from '@librechat/client';
 import OptionHover from '~/components/SidePanel/Parameters/OptionHover';
-import type { AgentForm } from '~/common';
+import type { AssistantForm } from '~/common';
 import { useLocalize } from '~/hooks';
 import { ESide } from '~/common';
 import { cn } from '~/utils/';
 
 export default function Retrieval({ retrievalModels }: { retrievalModels: Set<string> }) {
   const localize = useLocalize();
-  const methods = useFormContext<AgentForm>();
+  const methods = useFormContext<AssistantForm>();
   const { control, setValue, getValues } = methods;
   const model = useWatch({ control, name: 'model' });
 
-  const isDisabled = useMemo(() => !retrievalModels.has(model), [model, retrievalModels]);
+  const isDisabled = useMemo(() => !model || !retrievalModels.has(model), [model, retrievalModels]);
 
   useEffect(() => {
     if (model && isDisabled) {
@@ -39,10 +39,11 @@ export default function Retrieval({ retrievalModels }: { retrievalModels: Set<st
             render={({ field }) => (
               <Checkbox
                 {...field}
-                checked={field.value}
+                checked={field.value === true}
                 disabled={isDisabled}
                 onCheckedChange={field.onChange}
                 className="relative float-left mr-2 inline-flex h-4 w-4 cursor-pointer"
+                aria-label={localize('com_assistants_file_search')}
                 value={field.value?.toString()}
               />
             )}
@@ -55,7 +56,7 @@ export default function Retrieval({ retrievalModels }: { retrievalModels: Set<st
               )}
               htmlFor={Capabilities.retrieval}
               onClick={() =>
-                retrievalModels.has(model) &&
+                model != null && retrievalModels.has(model) &&
                 setValue(Capabilities.retrieval, !getValues(Capabilities.retrieval), {
                   shouldDirty: true,
                 })

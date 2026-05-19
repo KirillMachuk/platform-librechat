@@ -50,7 +50,7 @@ function AccountSettings({ collapsed = false }: { collapsed?: boolean }) {
       <Menu.Menu
         portal
         className="account-settings-popover popover-ui z-[125] w-[305px] rounded-lg md:w-[244px]"
-        placement={collapsed ? 'right-end' : undefined}
+        {...(collapsed ? { placement: 'right-end' as const } : {})}
         style={{
           transformOrigin: collapsed ? 'left bottom' : 'bottom',
           translate: collapsed ? '4px 0' : '0 -4px',

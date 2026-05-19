@@ -623,7 +623,7 @@ describe('SubagentCall — dialog content', () => {
       </RecoilRoot>,
     );
     expect(screen.getByText('raw final text')).toBeInTheDocument();
-    rerender(<RecoilRoot />);
+    rerender(<RecoilRoot><span /></RecoilRoot>);
   });
 
   it('renders persistedContent parts when no live events are available (page-refresh flow)', () => {

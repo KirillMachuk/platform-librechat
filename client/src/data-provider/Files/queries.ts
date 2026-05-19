@@ -1,6 +1,12 @@
 import { useRecoilValue } from 'recoil';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileSources, QueryKeys, DynamicQueryKeys, dataService } from 'librechat-data-provider';
+import {
+  FileSources,
+  QueryKeys,
+  DynamicQueryKeys,
+  dataService,
+} from 'librechat-data-provider';
+import type { TFileConfig } from 'librechat-data-provider';
 import type { QueryObserverResult, UseQueryOptions } from '@tanstack/react-query';
 import type t from 'librechat-data-provider';
 import { isEphemeralAgent } from '~/common';
@@ -38,12 +44,12 @@ export const useGetAgentFiles = <TData = t.TFile[]>(
   );
 };
 
-export const useGetFileConfig = <TData = t.FileConfig>(
-  config?: UseQueryOptions<t.FileConfig, unknown, TData>,
+export const useGetFileConfig = <TData = TFileConfig>(
+  config?: UseQueryOptions<TFileConfig, unknown, TData>,
 ): QueryObserverResult<TData, unknown> => {
-  return useQuery<t.FileConfig, unknown, TData>(
+  return useQuery<TFileConfig, unknown, TData>(
     [QueryKeys.fileConfig],
-    () => dataService.getFileConfig(),
+    () => dataService.getFileConfig() as unknown as TFileConfig,
     {
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,

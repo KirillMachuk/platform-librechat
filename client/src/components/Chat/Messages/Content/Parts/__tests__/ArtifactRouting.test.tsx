@@ -57,14 +57,14 @@ jest.mock('~/utils', () => ({
   isArtifactRoute: () => false,
 }));
 
-const baseAttachment = (overrides: Partial<TAttachment> = {}): TAttachment =>
+const baseAttachment = (overrides: Record<string, unknown> = {}): TAttachment =>
   ({
     file_id: 'file-1',
     filename: 'unset',
     filepath: '/files/file-1',
     type: 'application/octet-stream',
     ...overrides,
-  }) as TAttachment;
+  }) as unknown as TAttachment;
 
 /**
  * Seeds `isSubmittingFamily(0) = streaming` so `ToolArtifactCard`'s
@@ -131,7 +131,7 @@ describe('Attachment routing for tool artifacts', () => {
     const html = baseAttachment({
       filename: 'index.html',
       text: '<h1>hi</h1>',
-    } as Partial<TAttachment>);
+    });
     renderWith(<Attachment attachment={html} />);
 
     // Card body shows the artifact title
@@ -149,7 +149,7 @@ describe('Attachment routing for tool artifacts', () => {
     const jsx = baseAttachment({
       filename: 'App.tsx',
       text: 'export default () => null;',
-    } as Partial<TAttachment>);
+    });
     renderWith(<Attachment attachment={jsx} />);
     expect(screen.getByText('App.tsx')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /com_ui_download.*App\.tsx/i })).toBeInTheDocument();
@@ -159,7 +159,7 @@ describe('Attachment routing for tool artifacts', () => {
     const md = baseAttachment({
       filename: 'notes.md',
       text: '# hi',
-    } as Partial<TAttachment>);
+    });
     renderWith(<Attachment attachment={md} />);
     expect(screen.getByText('notes.md')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /com_ui_download.*notes\.md/i })).toBeInTheDocument();
@@ -174,7 +174,7 @@ describe('Attachment routing for tool artifacts', () => {
     const file = baseAttachment({
       filename,
       text,
-    } as Partial<TAttachment>);
+    });
     renderWith(<Attachment attachment={file} />);
     expect(screen.getByText(filename)).toBeInTheDocument();
     const downloadPattern = new RegExp(`com_ui_download.*${filename.replace('.', '\\.')}`, 'i');
@@ -185,7 +185,7 @@ describe('Attachment routing for tool artifacts', () => {
     const mmd = baseAttachment({
       filename: 'flow.mmd',
       text: 'graph TD\nA-->B',
-    } as Partial<TAttachment>);
+    });
     renderWith(<Attachment attachment={mmd} />);
     expect(screen.getByTestId('mermaid-render')).toHaveTextContent('graph TD');
     // The card-style trigger should NOT be rendered for mermaid
@@ -200,7 +200,7 @@ describe('Attachment routing for tool artifacts', () => {
       filename: 'data.json',
       type: 'application/json',
       text: '{"a":1,"b":2}',
-    } as Partial<TAttachment>);
+    });
     const { container } = renderWith(<Attachment attachment={json} />);
     expect(container.querySelector('pre')).not.toBeNull();
     expect(screen.queryByTestId('mermaid-render')).not.toBeInTheDocument();
@@ -217,7 +217,7 @@ describe('Attachment routing for tool artifacts', () => {
       filename,
       type,
       text: '<!DOCTYPE html><body><table><tr><td>x</td></tr></table></body>',
-    } as Partial<TAttachment>);
+    });
     renderWith(<Attachment attachment={att} />);
     expect(screen.getByText(filename)).toBeInTheDocument();
     /* Auto-pressed open button (streaming + non-CODE bucket) — same UX as
@@ -234,7 +234,7 @@ describe('ToolArtifactCard click behaviour', () => {
       file_id: 'html-1',
       filename: 'index.html',
       text: '<h1>hi</h1>',
-    } as Partial<TAttachment>);
+    });
 
   // Auto-open invariant: rendering a tool-artifact card must (a) register
   // the artifact in `artifactsState` and (b) focus it via
@@ -291,7 +291,7 @@ describe('ToolArtifactCard click behaviour', () => {
         file_id: 'dup-same-group',
         filename: 'index.html',
         text: '<h1>v1</h1>',
-      } as Partial<TAttachment>);
+      });
       const { container } = renderWith(<AttachmentGroup attachments={[dup, dup]} />);
       // Dedup atom keeps just one card visible.
       expect(container.querySelectorAll('div[title="index.html"]')).toHaveLength(1);
@@ -332,12 +332,12 @@ describe('ToolArtifactCard click behaviour', () => {
       file_id: 'dup-divergent',
       filename: 'output.html',
       text: '<h1>v1 (older)</h1>',
-    } as Partial<TAttachment>);
+    });
     const newer = baseAttachment({
       file_id: 'dup-divergent',
       filename: 'output.html',
       text: '<h1>v2 (newer)</h1>',
-    } as Partial<TAttachment>);
+    });
     render(
       <RecoilRoot>
         <ContentProbe />
@@ -358,7 +358,7 @@ describe('ToolArtifactCard click behaviour', () => {
       file_id: 'dup',
       filename: 'index.html',
       text: '<h1>v1</h1>',
-    } as Partial<TAttachment>);
+    });
     const { container } = renderWith(
       <>
         <AttachmentGroup attachments={[dup]} />
@@ -374,7 +374,7 @@ describe('ToolArtifactCard click behaviour', () => {
       file_id: 'mmd-dup',
       filename: 'flow.mmd',
       text: 'graph TD\nA-->B',
-    } as Partial<TAttachment>);
+    });
     renderWith(
       <>
         <AttachmentGroup attachments={[dupMermaid]} />
@@ -390,12 +390,12 @@ describe('ToolArtifactCard click behaviour', () => {
       file_id: 'older',
       filename: 'old.html',
       text: '<p>1</p>',
-    } as Partial<TAttachment>);
+    });
     const newerHtml = baseAttachment({
       file_id: 'newer',
       filename: 'new.html',
       text: '<p>2</p>',
-    } as Partial<TAttachment>);
+    });
     const { getSnapshot } = renderWithProbe(
       <AttachmentGroup attachments={[olderHtml, newerHtml]} />,
     );
@@ -414,7 +414,7 @@ describe('ToolArtifactCard click behaviour', () => {
       file_id: 'history-html',
       filename: 'previous.html',
       text: '<h1>prev</h1>',
-    } as Partial<TAttachment>);
+    });
     const { getSnapshot } = renderWithProbe(<Attachment attachment={html} />, {
       streaming: false,
     });
@@ -438,7 +438,7 @@ describe('ToolArtifactCard click behaviour', () => {
       file_id: 'helper-script',
       filename: 'test.py',
       text: 'print("hello")',
-    } as Partial<TAttachment>);
+    });
     const initializeState = (snap: MutableSnapshot) => {
       snap.set(store.isSubmittingFamily(0), true);
     };
@@ -474,7 +474,7 @@ describe('ToolArtifactCard click behaviour', () => {
       file_id: 'fresh-stream',
       filename: 'fresh.html',
       text: '<h1>fresh</h1>',
-    } as Partial<TAttachment>);
+    });
     const initializeState = (snap: MutableSnapshot) => {
       snap.set(store.isSubmittingFamily(0), true);
       snap.set(store.artifactsVisibility, false);
@@ -506,7 +506,7 @@ describe('ToolArtifactCard click behaviour', () => {
       file_id: 'history-no-vis',
       filename: 'historic.html',
       text: '<h1>old</h1>',
-    } as Partial<TAttachment>);
+    });
     const initializeState = (snap: MutableSnapshot) => {
       snap.set(store.isSubmittingFamily(0), false);
       snap.set(store.artifactsVisibility, false);
@@ -547,7 +547,7 @@ describe('ToolArtifactCard click behaviour', () => {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       text: '<table>resolved</table>',
       textFormat: 'html',
-    } as Partial<TAttachment>);
+    });
     const initializeState = (snap: MutableSnapshot) => {
       snap.set(store.isSubmittingFamily(0), false);
       snap.set(store.artifactsVisibility, false);
@@ -583,7 +583,7 @@ describe('ToolArtifactCard click behaviour', () => {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       text: '<table>resolved</table>',
       textFormat: 'html',
-    } as Partial<TAttachment>);
+    });
     const initializeState = (snap: MutableSnapshot) => {
       snap.set(store.isSubmittingFamily(0), false);
       snap.set(store.artifactsVisibility, false);
@@ -639,7 +639,7 @@ describe('ToolArtifactCard click behaviour', () => {
       file_id: 'click-py',
       filename: 'helper.py',
       text: 'print("hi")',
-    } as Partial<TAttachment>);
+    });
     const { getSnapshot } = renderWithProbe(<Attachment attachment={py} />);
     expect(getSnapshot().currentArtifactId).toBeNull();
     const openButton = screen.getByRole('button', { name: /com_ui_artifact_click/i });
@@ -658,7 +658,7 @@ describe('ToolArtifactCard click behaviour', () => {
       file_id: 'history-click',
       filename: 'previous.html',
       text: '<h1>prev</h1>',
-    } as Partial<TAttachment>);
+    });
     const { getSnapshot } = renderWithProbe(<Attachment attachment={html} />, {
       streaming: false,
     });
@@ -687,12 +687,12 @@ describe('AttachmentGroup routing', () => {
       filename: 'test_folder/test_file.txt',
       text: 'hello',
       bytes: 5,
-    } as Partial<TAttachment>);
+    });
     const dirkeep = baseAttachment({
       file_id: 'dk',
       filename: 'test_folder/_.dirkeep-88b30b',
       bytes: 0,
-    } as Partial<TAttachment>);
+    });
     const { container } = renderWith(<AttachmentGroup attachments={[dirkeep, realFile]} />);
     // No chip rendered for the dirkeep placeholder.
     expect(screen.queryByText(/dirkeep/)).not.toBeInTheDocument();
@@ -712,13 +712,13 @@ describe('AttachmentGroup routing', () => {
       filename: 'placeholder.zip',
       type: 'application/zip',
       bytes: 0,
-    } as Partial<TAttachment>);
+    });
     const real = baseAttachment({
       file_id: 'real-zip',
       filename: 'archive.zip',
       type: 'application/zip',
       bytes: 1024,
-    } as Partial<TAttachment>);
+    });
     const { container } = renderWith(<AttachmentGroup attachments={[empty, real]} />);
     fireEvent.click(screen.getByRole('button', { name: 'com_ui_show_n_files' }));
     const chips = Array.from(container.querySelectorAll('[data-testid="file-container"]'));
@@ -734,25 +734,25 @@ describe('AttachmentGroup routing', () => {
       file_id: 'file-a',
       filename: 'a.zip',
       type: 'application/zip',
-    } as Partial<TAttachment>);
+    });
     const second = baseAttachment({
       file_id: 'file-b',
       filename: 'b.zip',
       type: 'application/zip',
-    } as Partial<TAttachment>);
+    });
     const json = baseAttachment({
       file_id: 'file-c',
       filename: 'c.json',
       type: 'application/json',
       text: '{"c":true}',
-    } as Partial<TAttachment>);
+    });
     const image = baseAttachment({
       file_id: 'image-a',
       filename: 'preview.png',
       type: 'image/png',
       width: 16,
       height: 16,
-    } as Partial<TAttachment>);
+    });
 
     const { container } = renderWith(
       <AttachmentGroup attachments={[first, second, json, image]} />,
@@ -786,7 +786,7 @@ describe('AttachmentGroup routing', () => {
       filename: 'archive-deadbe.zip',
       type: 'application/zip',
       bytes: 1024,
-    } as Partial<TAttachment>);
+    });
     const { container } = renderWith(<AttachmentGroup attachments={[sandboxFile]} />);
     const chip = container.querySelector('[data-testid="file-container"]');
     expect(chip?.textContent).toBe('archive-deadbe.zip');
@@ -804,7 +804,7 @@ describe('AttachmentGroup routing', () => {
       filename: '_.config-abcdef.zip',
       type: 'application/zip',
       bytes: 12,
-    } as Partial<TAttachment>);
+    });
     const { container } = renderWith(<AttachmentGroup attachments={[sandboxDotfile]} />);
     const chip = container.querySelector('[data-testid="file-container"]');
     expect(chip?.textContent).toBe('.config.zip');
@@ -819,18 +819,18 @@ describe('AttachmentGroup routing', () => {
         file_id: 'resolved',
         filename: 'index.html',
         text: '<h1>hi</h1>',
-      } as Partial<TAttachment>),
+      }),
       baseAttachment({
         file_id: 'pending-1',
         filename: 'data.xlsx',
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         status: 'pending',
-      } as Partial<TAttachment>),
+      }),
       baseAttachment({
         file_id: 'plain',
         filename: 'archive.zip',
         text: undefined as unknown as string,
-      } as Partial<TAttachment>),
+      }),
     ] as TAttachment[];
 
     const { container } = renderWith(<AttachmentGroup attachments={attachments} />);
@@ -850,23 +850,23 @@ describe('AttachmentGroup routing', () => {
         file_id: 'a',
         filename: 'index.html',
         text: '<h1>hi</h1>',
-      } as Partial<TAttachment>),
+      }),
       baseAttachment({
         file_id: 'b',
         filename: 'flow.mmd',
         text: 'graph TD\nA-->B',
-      } as Partial<TAttachment>),
+      }),
       baseAttachment({
         file_id: 'c',
         filename: 'data.json',
         type: 'application/json',
         text: '{"a":1}',
-      } as Partial<TAttachment>),
+      }),
       baseAttachment({
         file_id: 'd',
         filename: 'archive.zip',
         text: undefined as unknown as string,
-      } as Partial<TAttachment>),
+      }),
     ] as TAttachment[];
 
     const { container } = renderWith(<AttachmentGroup attachments={attachments} />);

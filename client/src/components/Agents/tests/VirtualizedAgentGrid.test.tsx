@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { jest } from '@jest/globals';
+
 import VirtualizedAgentGrid from '../VirtualizedAgentGrid';
 import type t from 'librechat-data-provider';
 
@@ -131,9 +131,9 @@ jest.mock('../SmartLoader', () => ({
 }));
 
 jest.mock('../AgentCard', () => {
-  return function MockAgentCard({ agent, onClick }: { agent: t.Agent; onClick: () => void }) {
+  return function MockAgentCard({ agent, onSelect }: { agent: t.Agent; onSelect: () => void }) {
     return (
-      <div data-testid={`agent-card-${agent.id}`} onClick={onClick}>
+      <div data-testid={`agent-card-${agent.id}`} onClick={onSelect}>
         <h3>{agent.name}</h3>
         <p>{agent.description}</p>
       </div>

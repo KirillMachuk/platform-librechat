@@ -1449,6 +1449,9 @@ export enum KnownEndpoints {
   perplexity = 'perplexity',
   shuttleai = 'shuttleai',
   'together.ai' = 'together.ai',
+  google = 'google',
+  openai = 'openai',
+  qwen = 'qwen',
   unify = 'unify',
   vercel = 'vercel',
   xai = 'xai',
@@ -2097,6 +2100,10 @@ export enum SettingsTabValues {
    * Tab for Personalization Settings
    */
   PERSONALIZATION = 'personalization',
+  /**
+   * Tab for Memory Settings
+   */
+  MEMORY = 'memory',
 }
 
 export enum STTProviders {

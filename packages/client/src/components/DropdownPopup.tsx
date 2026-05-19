@@ -20,6 +20,7 @@ interface DropdownProps {
   portal?: boolean;
   preserveTabOrder?: boolean;
   focusLoop?: boolean;
+  placement?: Ariakit.MenuStoreProps['placement'];
   menuId: string;
   mountByState?: boolean;
   unmountOnHide?: boolean;

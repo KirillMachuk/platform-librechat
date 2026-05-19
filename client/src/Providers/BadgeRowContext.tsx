@@ -107,7 +107,7 @@ export default function BadgeRowProvider({
       const artifactsToggleValue = getTimestampedValue(artifactsToggleKey);
       const skillsToggleValue = getTimestampedValue(skillsToggleKey);
 
-      const initialValues: Record<string, boolean | string> = {};
+      const initialValues: Record<string, boolean | string | string[]> = {};
 
       if (codeToggleValue !== null) {
         try {

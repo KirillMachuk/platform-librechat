@@ -107,7 +107,7 @@ export function CompositeCitation(props: CompositeCitationProps) {
   return (
     <>
       <SourceHovercard
-        source={currentSource}
+        source={{ ...currentSource, link: currentSource.link ?? '' }}
         label={getCitationLabel()}
         onMouseEnter={() => setHoveredCitationId(citationId || null)}
         onMouseLeave={() => setHoveredCitationId(null)}
@@ -329,7 +329,7 @@ export function Citation(props: CitationComponentProps) {
   return (
     <>
       <SourceHovercard
-        source={refData}
+        source={{ ...refData, link: refData.link ?? '' }}
         label={getCitationLabel()}
         onMouseEnter={() => setHoveredCitationId(citationId || null)}
         onMouseLeave={() => setHoveredCitationId(null)}

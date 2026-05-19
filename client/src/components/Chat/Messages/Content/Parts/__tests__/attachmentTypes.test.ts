@@ -9,14 +9,14 @@ import {
   isTextAttachment,
 } from '../attachmentTypes';
 
-const baseAttachment = (overrides: Partial<TAttachment> = {}): TAttachment =>
+const baseAttachment = (overrides: Record<string, unknown> = {}): TAttachment =>
   ({
     file_id: 'file-1',
     filename: 'unset',
     filepath: '/files/file-1',
     type: 'application/octet-stream',
     ...overrides,
-  }) as TAttachment;
+  }) as unknown as TAttachment;
 
 describe('isImageAttachment', () => {
   it('returns true for image filenames with width, height, and filepath', () => {
@@ -25,7 +25,7 @@ describe('isImageAttachment', () => {
       width: 800,
       height: 600,
       filepath: '/files/chart.png',
-    } as Partial<TAttachment>);
+    });
     expect(isImageAttachment(attachment)).toBe(true);
   });
 
@@ -39,7 +39,7 @@ describe('isImageAttachment', () => {
       filename: 'notes.txt',
       width: 800,
       height: 600,
-    } as Partial<TAttachment>);
+    });
     expect(isImageAttachment(attachment)).toBe(false);
   });
 
@@ -47,7 +47,7 @@ describe('isImageAttachment', () => {
     const attachment = baseAttachment({
       filename: 'chart.png',
       height: 600,
-    } as Partial<TAttachment>);
+    });
     expect(isImageAttachment(attachment)).toBe(false);
   });
 
@@ -55,7 +55,7 @@ describe('isImageAttachment', () => {
     const attachment = baseAttachment({
       filename: 'chart.png',
       width: 800,
-    } as Partial<TAttachment>);
+    });
     expect(isImageAttachment(attachment)).toBe(false);
   });
 
@@ -65,7 +65,7 @@ describe('isImageAttachment', () => {
       width: 800,
       height: 600,
       filepath: null as unknown as string,
-    } as Partial<TAttachment>);
+    });
     expect(isImageAttachment(attachment)).toBe(false);
   });
 });
@@ -75,7 +75,7 @@ describe('isTextAttachment', () => {
     const attachment = baseAttachment({
       filename: 'output.csv',
       text: 'a,b,c\n1,2,3',
-    } as Partial<TAttachment>);
+    });
     expect(isTextAttachment(attachment)).toBe(true);
   });
 
@@ -87,7 +87,7 @@ describe('isTextAttachment', () => {
     const attachment = baseAttachment({
       filename: 'empty.txt',
       text: '',
-    } as Partial<TAttachment>);
+    });
     expect(isTextAttachment(attachment)).toBe(false);
   });
 
@@ -95,7 +95,7 @@ describe('isTextAttachment', () => {
     const attachment = baseAttachment({
       filename: 'broken.txt',
       text: null as unknown as string,
-    } as Partial<TAttachment>);
+    });
     expect(isTextAttachment(attachment)).toBe(false);
   });
 });
@@ -114,7 +114,7 @@ describe('artifactTypeForAttachment', () => {
     const attachment = baseAttachment({
       filename,
       text: 'content',
-    } as Partial<TAttachment>);
+    });
     expect(artifactTypeForAttachment(attachment)).toBe(expected);
   });
 
@@ -123,7 +123,7 @@ describe('artifactTypeForAttachment', () => {
       filename: 'noext',
       type: 'text/html',
       text: 'content',
-    } as unknown as Partial<TAttachment>);
+    });
     expect(artifactTypeForAttachment(attachment)).toBe('text/html');
   });
 
@@ -140,7 +140,7 @@ describe('artifactTypeForAttachment', () => {
       filename: 'photo.jpg',
       type: 'image/jpeg',
       text: undefined,
-    } as Partial<TAttachment>);
+    });
     expect(artifactTypeForAttachment(attachment)).toBeNull();
   });
 });
@@ -152,7 +152,7 @@ describe('isInternalSandboxArtifact', () => {
     const attachment = baseAttachment({
       filename: 'test_folder/_.dirkeep-88b30b',
       bytes: 0,
-    } as Partial<TAttachment>);
+    });
     expect(isInternalSandboxArtifact(attachment)).toBe(true);
   });
 
@@ -160,7 +160,7 @@ describe('isInternalSandboxArtifact', () => {
     const attachment = baseAttachment({
       filename: 'subdir/_.gitkeep-deadbe',
       bytes: 0,
-    } as Partial<TAttachment>);
+    });
     expect(isInternalSandboxArtifact(attachment)).toBe(true);
   });
 
@@ -172,7 +172,7 @@ describe('isInternalSandboxArtifact', () => {
     const attachment = baseAttachment({
       filename: '.dirkeep',
       bytes: 0,
-    } as Partial<TAttachment>);
+    });
     expect(isInternalSandboxArtifact(attachment)).toBe(false);
   });
 
@@ -180,7 +180,7 @@ describe('isInternalSandboxArtifact', () => {
     const attachment = baseAttachment({
       filename: 'src/components/.gitkeep',
       bytes: 0,
-    } as Partial<TAttachment>);
+    });
     expect(isInternalSandboxArtifact(attachment)).toBe(false);
   });
 
@@ -190,7 +190,7 @@ describe('isInternalSandboxArtifact', () => {
     const attachment = baseAttachment({
       filename: '_.dirkeep-88b30b',
       bytes: 12,
-    } as Partial<TAttachment>);
+    });
     expect(isInternalSandboxArtifact(attachment)).toBe(false);
   });
 
@@ -198,7 +198,7 @@ describe('isInternalSandboxArtifact', () => {
     const attachment = baseAttachment({
       filename: 'test_folder/test_file.txt',
       bytes: 47,
-    } as Partial<TAttachment>);
+    });
     expect(isInternalSandboxArtifact(attachment)).toBe(false);
   });
 
@@ -206,7 +206,7 @@ describe('isInternalSandboxArtifact', () => {
     const attachment = baseAttachment({
       filename: 'empty.md',
       bytes: 0,
-    } as Partial<TAttachment>);
+    });
     expect(isInternalSandboxArtifact(attachment)).toBe(false);
   });
 
@@ -216,7 +216,7 @@ describe('isInternalSandboxArtifact', () => {
      * don't accidentally hide files we don't have size info for. */
     const attachment = baseAttachment({
       filename: '_.dirkeep-88b30b',
-    } as Partial<TAttachment>);
+    });
     expect(isInternalSandboxArtifact(attachment)).toBe(false);
   });
 });
@@ -289,11 +289,11 @@ describe('displayFilename', () => {
 
 describe('attachmentSalience', () => {
   it('returns 0 for non-empty content (sorts first)', () => {
-    expect(attachmentSalience(baseAttachment({ bytes: 47 } as Partial<TAttachment>))).toBe(0);
+    expect(attachmentSalience(baseAttachment({ bytes: 47 }))).toBe(0);
   });
 
   it('returns 1 only for an explicit zero-byte entry (sinks last)', () => {
-    expect(attachmentSalience(baseAttachment({ bytes: 0 } as Partial<TAttachment>))).toBe(1);
+    expect(attachmentSalience(baseAttachment({ bytes: 0 }))).toBe(1);
   });
 
   it('treats undefined `bytes` as neutral so non-code-exec sources do not silently sink', () => {
@@ -307,11 +307,11 @@ describe('attachmentSalience', () => {
     const real = baseAttachment({
       bytes: 47,
       filename: 'test_file.txt',
-    } as Partial<TAttachment>);
+    });
     const placeholder = baseAttachment({
       bytes: 0,
       filename: '_.dirkeep-88b30b',
-    } as Partial<TAttachment>);
+    });
     const sorted = [placeholder, real].sort(
       (a, b) => attachmentSalience(a) - attachmentSalience(b),
     );
@@ -325,7 +325,7 @@ describe('artifactTypeForAttachment branching', () => {
     const attachment = baseAttachment({
       filename: 'flow.mmd',
       text: 'graph TD\nA-->B',
-    } as Partial<TAttachment>);
+    });
     expect(artifactTypeForAttachment(attachment)).toBe(TOOL_ARTIFACT_TYPES.MERMAID);
   });
 
@@ -337,7 +337,7 @@ describe('artifactTypeForAttachment branching', () => {
     const attachment = baseAttachment({
       filename,
       text: 'content',
-    } as Partial<TAttachment>);
+    });
     const type = artifactTypeForAttachment(attachment);
     expect(type).toBe(expected);
     expect(type).not.toBe(TOOL_ARTIFACT_TYPES.MERMAID);

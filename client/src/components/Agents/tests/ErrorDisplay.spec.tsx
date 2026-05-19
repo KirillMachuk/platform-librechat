@@ -272,7 +272,7 @@ describe('ErrorDisplay', () => {
     });
 
     it('handles null/undefined errors', () => {
-      render(<ErrorDisplay error={null} />);
+      render(<ErrorDisplay error={undefined as unknown as string} />);
 
       expect(screen.getByText('Something went wrong')).toBeInTheDocument();
       expect(

@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { jest } from '@jest/globals';
+
 import VirtualizedAgentGrid from '../VirtualizedAgentGrid';
 import type * as t from 'librechat-data-provider';
 

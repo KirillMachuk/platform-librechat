@@ -2,7 +2,6 @@
  * @jest-environment jsdom
  */
 /* eslint-disable i18next/no-literal-string */
-import { describe, it, expect } from '@jest/globals';
 import { render, fireEvent } from '@testing-library/react';
 import { FormProvider, useForm, type UseFormReturn } from 'react-hook-form';
 import type { AgentForm } from '~/common';
@@ -41,7 +40,15 @@ const defaultFormValues: AgentForm = {
   description: null,
   instructions: null,
   model: 'gpt-4',
-  model_parameters: {},
+  model_parameters: {
+    temperature: null,
+    maxContextTokens: null,
+    max_context_tokens: null,
+    max_output_tokens: null,
+    top_p: null,
+    frequency_penalty: null,
+    presence_penalty: null,
+  },
   tools: [],
   provider: 'openai',
   agent_ids: [],
@@ -62,7 +69,7 @@ const defaultFormValues: AgentForm = {
 
 describe('AgentAvatar reset menu', () => {
   it('clears preview and file state when reset is triggered', () => {
-    let methodsRef: UseFormReturn<AgentForm>;
+    let methodsRef!: UseFormReturn<AgentForm>;
     const Wrapper = () => {
       methodsRef = useForm<AgentForm>({
         defaultValues: {

@@ -71,9 +71,11 @@ jest.mock('~/hooks/Input/useSelectMention', () => () => ({
   onSelectSpec: mockOnSelectSpec,
 }));
 
-const mockUseGetStartupConfig = jest.fn(() => ({
-  data: { modelSpecs: { list: [] as unknown[] } },
-}));
+const mockUseGetStartupConfig = jest.fn(
+  (): { data?: { modelSpecs: { list: unknown[] } } } => ({
+    data: { modelSpecs: { list: [] } },
+  }),
+);
 
 jest.mock('~/data-provider', () => ({
   useGetEndpointsQuery: () => ({ data: {} }),

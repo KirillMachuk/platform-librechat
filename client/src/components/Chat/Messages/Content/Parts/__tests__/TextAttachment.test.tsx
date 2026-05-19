@@ -61,7 +61,7 @@ jest.mock('~/utils', () => ({
   isArtifactRoute: () => false,
 }));
 
-const textAttachment = (overrides: Partial<TAttachment> = {}): TAttachment =>
+const textAttachment = (overrides: Record<string, unknown> = {}): TAttachment =>
   ({
     file_id: 'file-1',
     /* JSON stays on the inline `<pre>` rendering path. CSV used to live
@@ -74,7 +74,7 @@ const textAttachment = (overrides: Partial<TAttachment> = {}): TAttachment =>
     type: 'application/json',
     text: '{"a":1,"b":2,"c":3}',
     ...overrides,
-  }) as TAttachment;
+  }) as unknown as TAttachment;
 
 const originalScrollHeightDescriptor = Object.getOwnPropertyDescriptor(
   HTMLPreElement.prototype,

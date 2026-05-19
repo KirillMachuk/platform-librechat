@@ -182,6 +182,7 @@ export default function MemoryPanel() {
                   checked={referenceSavedMemories}
                   tabIndex={-1}
                   aria-hidden="true"
+                  aria-label=""
                   className="pointer-events-none mr-2"
                 />
                 {localize('com_ui_use_memory')}

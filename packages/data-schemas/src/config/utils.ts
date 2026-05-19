@@ -26,9 +26,8 @@ export const getLogDirectory = (): string => {
   // We'll just use the path and let the file system create it if needed
   const apiLogsPath = path.join(cwd, 'api', 'logs');
 
-  // For LibreChat project structure, use api/logs
-  // For external consumers, they should set LIBRECHAT_LOG_DIR
-  if (cwd.includes('LibreChat')) {
+  // For 1ma / LibreChat project structure, use api/logs
+  if (cwd.includes('LibreChat') || cwd.includes('platform-librechat') || cwd.includes('1ma')) {
     return apiLogsPath;
   }
 

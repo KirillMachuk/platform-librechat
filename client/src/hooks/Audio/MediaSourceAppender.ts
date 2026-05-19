@@ -21,7 +21,7 @@ export class MediaSourceAppender {
   }
 
   public addBase64Data(base64Data: string) {
-    this.addData(Uint8Array.from(atob(base64Data), (char) => char.charCodeAt(0)).buffer);
+    this.addData(Uint8Array.from(atob(base64Data), (char) => char.charCodeAt(0)).buffer as ArrayBuffer);
   }
 
   public addData(data: ArrayBuffer) {

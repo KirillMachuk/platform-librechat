@@ -55,14 +55,14 @@ jest.mock('~/utils', () => ({
   isArtifactRoute: () => false,
 }));
 
-const baseAttachment = (overrides: Partial<TAttachment> = {}): TAttachment =>
+const baseAttachment = (overrides: Record<string, unknown> = {}): TAttachment =>
   ({
     file_id: 'file-1',
     filename: 'unset',
     filepath: '/files/file-1',
     type: 'application/octet-stream',
     ...overrides,
-  }) as TAttachment;
+  }) as unknown as TAttachment;
 
 /**
  * Default `streaming: true` so `ToolArtifactCard`'s mount-time
@@ -84,7 +84,7 @@ describe('LogContent attachment routing', () => {
       file_id: 'a',
       filename: 'index.html',
       text: '<h1>hi</h1>',
-    } as Partial<TAttachment>);
+    });
     renderWith(<LogContent output="" attachments={[html]} />);
     // The panel card carries an aria-pressed state; auto-focused on mount.
     expect(screen.getByRole('button', { pressed: true })).toBeInTheDocument();
@@ -96,7 +96,7 @@ describe('LogContent attachment routing', () => {
       file_id: 'b',
       filename: 'flow.mmd',
       text: 'graph TD\nA-->B',
-    } as Partial<TAttachment>);
+    });
     renderWith(<LogContent output="" attachments={[mmd]} />);
     expect(screen.getByTestId('mermaid-render')).toHaveTextContent('graph TD');
     // Panel card not rendered for mermaid
@@ -112,7 +112,7 @@ describe('LogContent attachment routing', () => {
       filename: 'data.json',
       type: 'application/json',
       text: '{"a":1,"b":2}',
-    } as Partial<TAttachment>);
+    });
     const { container } = renderWith(<LogContent output="" attachments={[json]} />);
     expect(container.querySelector('pre')).not.toBeNull();
     expect(screen.queryByRole('button', { pressed: true })).not.toBeInTheDocument();
@@ -124,7 +124,7 @@ describe('LogContent attachment routing', () => {
       file_id: 'd',
       filename: 'archive.zip',
       type: 'application/zip',
-    } as Partial<TAttachment>);
+    });
     renderWith(<LogContent output="" attachments={[zip]} />);
     expect(screen.getByTestId('log-link')).toHaveAttribute('data-filename', 'archive.zip');
   });
@@ -139,7 +139,7 @@ describe('LogContent attachment routing', () => {
       filename: 'slides.pptx',
       type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       text: '<!DOCTYPE html><body><ol><li>Slide 1</li></ol></body>',
-    } as Partial<TAttachment>);
+    });
     renderWith(<LogContent output="" attachments={[pptx]} />);
     expect(screen.getByText('slides.pptx')).toBeInTheDocument();
   });
@@ -153,7 +153,7 @@ describe('LogContent attachment routing', () => {
       filename: 'slides.pptx',
       type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       text: undefined as unknown as string,
-    } as Partial<TAttachment>);
+    });
     renderWith(<LogContent output="" attachments={[pptx]} />);
     expect(screen.queryByRole('button', { pressed: true })).not.toBeInTheDocument();
     expect(screen.getByTestId('log-link')).toHaveAttribute('data-filename', 'slides.pptx');
@@ -171,7 +171,7 @@ describe('LogContent attachment routing', () => {
       type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       text: '<!DOCTYPE html><body><ol><li>Slide 1</li></ol></body>',
       expiresAt: Date.now() - 60_000,
-    } as Partial<TAttachment>);
+    });
     renderWith(<LogContent output="" attachments={[expired]} />);
     // No panel card and no log-link (the expired branch returns plain text).
     expect(screen.queryByRole('button', { pressed: true })).not.toBeInTheDocument();
@@ -187,7 +187,7 @@ describe('LogContent attachment routing', () => {
       filename: 'index.html',
       text: '<h1>hi</h1>',
       expiresAt: Date.now() + 60_000,
-    } as Partial<TAttachment>);
+    });
     renderWith(<LogContent output="" attachments={[fresh]} />);
     expect(screen.getByRole('button', { pressed: true })).toBeInTheDocument();
   });
@@ -198,12 +198,12 @@ describe('LogContent attachment routing', () => {
         file_id: 'h',
         filename: 'index.html',
         text: '<h1>hi</h1>',
-      } as Partial<TAttachment>),
+      }),
       baseAttachment({
         file_id: 'm',
         filename: 'flow.mmd',
         text: 'graph TD\nA-->B',
-      } as Partial<TAttachment>),
+      }),
       baseAttachment({
         file_id: 't',
         /* JSON stays on the inline `<pre>` rendering path. CSV used to
@@ -213,7 +213,7 @@ describe('LogContent attachment routing', () => {
         filename: 'notes.json',
         type: 'application/json',
         text: '{"a":1,"b":2}',
-      } as Partial<TAttachment>),
+      }),
     ] as TAttachment[];
     const { container } = renderWith(
       <LogContent output="" attachments={attachments} renderImages={true} />,
