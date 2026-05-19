@@ -18,10 +18,10 @@ import {
   useHasAccess,
 } from '~/hooks';
 import MCPBuilderPanel from '~/components/SidePanel/MCPBuilder/MCPBuilderPanel';
-import AgentPanelSwitch from '~/components/SidePanel/Agents/AgentPanelSwitch';
 import PanelSwitch from '~/components/SidePanel/Builder/PanelSwitch';
 import Parameters from '~/components/SidePanel/Parameters/Panel';
 import FilesPanel from '~/components/SidePanel/Files/Panel';
+import AgentsPanel from '~/components/Agents/AgentsPanel';
 import { PromptsAccordion } from '~/components/Prompts';
 import { SkillsAccordion } from '~/components/Skills';
 
@@ -52,10 +52,6 @@ export default function useSideNavLinks({
     permissionType: PermissionTypes.AGENTS,
     permission: Permissions.USE,
   });
-  const hasAccessToCreateAgents = useHasAccess({
-    permissionType: PermissionTypes.AGENTS,
-    permission: Permissions.CREATE,
-  });
   const hasAccessToUseMCPSettings = useHasAccess({
     permissionType: PermissionTypes.MCP_SERVERS,
     permission: Permissions.USE,
@@ -75,15 +71,14 @@ export default function useSideNavLinks({
     if (
       endpointsConfig?.[EModelEndpoint.agents] &&
       hasAccessToAgents &&
-      hasAccessToCreateAgents &&
       endpointsConfig[EModelEndpoint.agents].disableBuilder !== true
     ) {
       links.push({
-        title: 'com_sidepanel_agent_builder',
+        title: 'com_ui_agents',
         label: '',
         icon: Bot,
-        id: EModelEndpoint.agents,
-        Component: AgentPanelSwitch,
+        id: 'agents',
+        Component: AgentsPanel,
       });
     }
 
@@ -168,7 +163,6 @@ export default function useSideNavLinks({
     endpointsConfig,
     keyProvided,
     hasAccessToAgents,
-    hasAccessToCreateAgents,
     hasAccessToPrompts,
     hasAccessToSkills,
     skillsEnabled,
