@@ -237,7 +237,8 @@ const useNewConvo = (index = 0) => {
         const getParams = () => (searchParamsString ? `?${searchParamsString}` : '');
 
         if (conversation.conversationId === Constants.NEW_CONVO && !modelsData) {
-          const appTitle = localStorage.getItem(LocalStorageKeys.APP_TITLE) || '1ma';
+          const storedTitle = localStorage.getItem(LocalStorageKeys.APP_TITLE);
+          const appTitle = !storedTitle || storedTitle === 'LibreChat' ? '1ma' : storedTitle;
           document.title = appTitle;
           const path = `/c/${Constants.NEW_CONVO}${getParams()}`;
           navigate(path, { state: { focusChat: true } });

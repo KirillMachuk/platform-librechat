@@ -49,10 +49,11 @@ export default function useAppStartup({
 
   /** Set the app title */
   useEffect(() => {
-    const appTitle = startupConfig?.appTitle ?? '';
-    if (!appTitle) {
+    const rawTitle = startupConfig?.appTitle ?? '';
+    if (!rawTitle) {
       return;
     }
+    const appTitle = rawTitle === 'LibreChat' ? '1ma' : rawTitle;
     document.title = appTitle;
     localStorage.setItem(LocalStorageKeys.APP_TITLE, appTitle);
   }, [startupConfig]);
