@@ -606,7 +606,7 @@
   "com_ui_add_multi_conversation": "Ajouter plusieurs conversations",
   "com_ui_adding_details": "Ajouter des détails",
   "com_ui_admin": "Administrateur",
-  "com_ui_admin_access_warning": "La désactivation de l'accès administrateur à cette fonctionnalité peut entraîner des problèmes d'interface imprévus nécessitant une actualisation. Une fois sauvegardé, le seul moyen de rétablir l'accès est via le paramètre d'interface dans la configuration librechat.yaml, ce qui affecte tous les rôles.",
+  "com_ui_admin_access_warning": "La désactivation de l'accès administrateur à cette fonctionnalité peut entraîner des problèmes d'interface imprévus nécessitant une actualisation. Une fois sauvegardé, le seul moyen de rétablir l'accès est via le paramètre d'interface dans la configuration 1ma.yaml, ce qui affecte tous les rôles.",
   "com_ui_admin_settings": "Paramètres administratifs",
   "com_ui_advanced": "Avancé",
   "com_ui_advanced_settings": "Réglages avancés",

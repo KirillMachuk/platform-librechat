@@ -527,7 +527,7 @@
   "com_ui_add_model_preset": "Adicionar um modelo ou predefinição para uma resposta adicional",
   "com_ui_add_multi_conversation": "Adicionar multi-conversação",
   "com_ui_admin": "Admin",
-  "com_ui_admin_access_warning": "Desabilitar o acesso de Admin a esse recurso pode causar problemas inesperados na IU que exigem atualização. Se salvo, a única maneira de reverter é por meio da configuração de interface na configuração librechat.yaml que afeta todas as funções.",
+  "com_ui_admin_access_warning": "Desabilitar o acesso de Admin a esse recurso pode causar problemas inesperados na IU que exigem atualização. Se salvo, a única maneira de reverter é por meio da configuração de interface na configuração 1ma.yaml que afeta todas as funções.",
   "com_ui_admin_settings": "Configurações de Admin",
   "com_ui_advanced": "Avançado",
   "com_ui_advanced_settings": "Opções Avançadas",

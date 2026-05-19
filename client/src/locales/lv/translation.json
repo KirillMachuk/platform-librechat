@@ -661,7 +661,7 @@
   "com_ui_adding_details": "Detalizētas informācijas pievienošana",
   "com_ui_additional_details": "Papildu informācija",
   "com_ui_admin": "Administrators",
-  "com_ui_admin_access_warning": "Administratora piekļuves atspējošana šai funkcijai var izraisīt neparedzētas lietotāja saskarnes problēmas, kurām nepieciešama atsvaidzināšana. Ja izmaiņas ir saglabātas, vienīgais veids, kā tās atjaunot, ir, izmantojot saskarnes iestatījumu librechat.yaml konfigurācijā, kas ietekmē visas lomas.",
+  "com_ui_admin_access_warning": "Administratora piekļuves atspējošana šai funkcijai var izraisīt neparedzētas lietotāja saskarnes problēmas, kurām nepieciešama atsvaidzināšana. Ja izmaiņas ir saglabātas, vienīgais veids, kā tās atjaunot, ir, izmantojot saskarnes iestatījumu 1ma.yaml konfigurācijā, kas ietekmē visas lomas.",
   "com_ui_admin_settings": "Administratora iestatījumi",
   "com_ui_admin_settings_section": "Administratora iestatījumi - {{section}}",
   "com_ui_advanced": "Paplašinātie uzstādījumi",

@@ -646,7 +646,7 @@
   "com_ui_adding_details": "Dodawanie szczegółów",
   "com_ui_additional_details": "Dodatkowe szczegóły",
   "com_ui_admin": "Administrator",
-  "com_ui_admin_access_warning": "Wyłączenie dostępu administratora do tej funkcji może spowodować nieoczekiwane problemy z interfejsem użytkownika wymagające odświeżenia. Jeśli zostanie zapisane, jedynym sposobem na przywrócenie jest ustawienie interfejsu w konfiguracji librechat.yaml, które wpływa na wszystkie role.",
+  "com_ui_admin_access_warning": "Wyłączenie dostępu administratora do tej funkcji może spowodować nieoczekiwane problemy z interfejsem użytkownika wymagające odświeżenia. Jeśli zostanie zapisane, jedynym sposobem na przywrócenie jest ustawienie interfejsu w konfiguracji 1ma.yaml, które wpływa na wszystkie role.",
   "com_ui_admin_settings": "Ustawienia administratora",
   "com_ui_admin_settings_section": "Ustawienia administratora - {{section}}",
   "com_ui_advanced": "Zaawansowane",

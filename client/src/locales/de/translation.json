@@ -653,7 +653,7 @@
   "com_ui_adding_details": "Hinzufügen von Details\n",
   "com_ui_additional_details": "Zusätzliche Details",
   "com_ui_admin": "Admin",
-  "com_ui_admin_access_warning": "Das Deaktivieren des Admin-Zugriffs auf diese Funktion kann zu unerwarteten Problemen in der Benutzeroberfläche führen, die ein Neuladen erfordern. Nach dem Speichern kann dies nur über die Schnittstelleneinstellung in der librechat.yaml-Konfiguration rückgängig gemacht werden, was sich auf alle Rollen auswirkt.",
+  "com_ui_admin_access_warning": "Das Deaktivieren des Admin-Zugriffs auf diese Funktion kann zu unerwarteten Problemen in der Benutzeroberfläche führen, die ein Neuladen erfordern. Nach dem Speichern kann dies nur über die Schnittstelleneinstellung in der 1ma.yaml-Konfiguration rückgängig gemacht werden, was sich auf alle Rollen auswirkt.",
   "com_ui_admin_settings": "Admin-Einstellungen",
   "com_ui_admin_settings_section": "Admin-Einstellungen - {{section}}",
   "com_ui_advanced": "Erweitert",

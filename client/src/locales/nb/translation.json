@@ -642,7 +642,7 @@
   "com_ui_adding_details": "Legger til detaljer",
   "com_ui_additional_details": "Flere detaljer",
   "com_ui_admin": "Admin",
-  "com_ui_admin_access_warning": "Deaktivering av admin-tilgang til denne funksjonen kan forårsake uventede UI-problemer. Hvis lagret, kan dette kun tilbakestilles via konfigurasjonsfilen (librechat.yaml).",
+  "com_ui_admin_access_warning": "Deaktivering av admin-tilgang til denne funksjonen kan forårsake uventede UI-problemer. Hvis lagret, kan dette kun tilbakestilles via konfigurasjonsfilen (1ma.yaml).",
   "com_ui_admin_settings": "Admin-innstillinger",
   "com_ui_admin_settings_section": "Admininnstillinger - {{section}}",
   "com_ui_advanced": "Avansert",
