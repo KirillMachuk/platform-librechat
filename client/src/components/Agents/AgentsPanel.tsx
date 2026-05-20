@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, memo } from 'react';
+import { useState, useRef, useCallback, useMemo, memo } from 'react';
 import { Plus, ChevronLeft } from 'lucide-react';
 import { Button } from '@librechat/client';
 import { PermissionTypes, Permissions } from 'librechat-data-provider';
@@ -9,9 +9,24 @@ import { useLocalize, useHasAccess } from '~/hooks';
 import CategoryTabs from './CategoryTabs';
 import SearchBar from './SearchBar';
 import AgentGrid from './AgentGrid';
-import { cn } from '~/utils';
 
 type View = 'catalog' | 'builder';
+
+function resolveCategoryLabel(
+  category: string,
+  categories: t.TMarketplaceCategory[] | undefined,
+  topPicksLabel: string,
+  allLabel: string,
+): string {
+  if (category === 'promoted') {
+    return topPicksLabel;
+  }
+  if (category === 'all') {
+    return allLabel;
+  }
+  const found = categories?.find((cat) => cat.value === category);
+  return found?.label ?? category;
+}
 
 function CatalogView() {
   const localize = useLocalize();
@@ -40,6 +55,13 @@ function CatalogView() {
     setDisplayCategory(tabValue);
   }, []);
 
+  const topPicksLabel = localize('com_agents_top_picks');
+  const allLabel = localize('com_agents_all');
+  const headingLabel = useMemo(
+    () => resolveCategoryLabel(displayCategory, categoriesQuery.data, topPicksLabel, allLabel),
+    [displayCategory, categoriesQuery.data, topPicksLabel, allLabel],
+  );
+
   return (
     <div
       ref={scrollContainerRef}
@@ -61,14 +83,7 @@ function CatalogView() {
       <div className="px-4 pb-6">
         {!searchQuery && (
           <div className="mb-4 mt-4">
-            <h2 className="text-xl font-bold text-text-primary">
-              {displayCategory === 'promoted'
-                ? localize('com_agents_top_picks')
-                : displayCategory === 'all'
-                  ? localize('com_agents_all')
-                  : (categoriesQuery.data?.find((cat) => cat.value === displayCategory)?.label ??
-                    displayCategory)}
-            </h2>
+            <h2 className="text-xl font-bold text-text-primary">{headingLabel}</h2>
           </div>
         )}
         <AgentGrid
@@ -96,11 +111,7 @@ function AgentsPanel() {
 
   return (
     <div className="flex h-full w-full flex-col">
-      <div
-        className={cn(
-          'flex items-center justify-between border-b border-border-light px-4 py-2',
-        )}
-      >
+      <div className="flex items-center justify-between border-b border-border-light px-4 py-2">
         {view === 'catalog' ? (
           <>
             <span className="text-sm font-medium text-text-primary">

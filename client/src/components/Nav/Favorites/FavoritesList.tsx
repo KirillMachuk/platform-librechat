@@ -6,7 +6,7 @@ import { useQueries } from '@tanstack/react-query';
 import { QueryKeys, dataService } from 'librechat-data-provider';
 import type { Agent, TEndpointsConfig, TModelSpec } from 'librechat-data-provider';
 import type { AgentQueryResult } from '~/common';
-import { useGetConversation, useFavorites, useLocalize, useNewConvo } from '~/hooks';
+import { useGetConversation, useFavorites, useNewConvo } from '~/hooks';
 import { useGetEndpointsQuery, useGetStartupConfig } from '~/data-provider';
 import { useAssistantsMapContext, useAgentsMapContext } from '~/Providers';
 import useSelectMention from '~/hooks/Input/useSelectMention';
@@ -108,7 +108,6 @@ export default function FavoritesList({
   isSmallScreen?: boolean;
   toggleNav?: () => void;
 }) {
-  const localize = useLocalize();
   const search = useRecoilValue(store.search);
   const getConversation = useGetConversation(0);
   const { favorites, reorderFavorites, isLoading: isFavoritesLoading } = useFavorites();
