@@ -3,6 +3,7 @@ const express = require('express');
 const { v4 } = require('uuid');
 const { logger } = require('@librechat/data-schemas');
 const { resolveUploadErrorMessage } = require('@librechat/api');
+const { EModelEndpoint } = require('librechat-data-provider');
 const {
   filterFile,
   processProjectFileUpload,
@@ -37,6 +38,11 @@ router.post('/', async (req, res) => {
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
+
+    // Project uploads aren't endpoint-scoped, but filterFile requires `endpoint`
+    // for MIME/size resolution. Default to `agents` so file-config resolution
+    // falls back through the `agents` branch to the global `default` block.
+    req.body.endpoint = req.body.endpoint || EModelEndpoint.agents;
 
     filterFile({ req });
 
