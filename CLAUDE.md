@@ -149,6 +149,43 @@ Multi-line imports count total character length across all lines. Consolidate va
 
 ---
 
+## Deployment Pipeline (1ma Lab)
+
+Production URL: **https://lab.1ma.ai**
+
+### How it works
+
+```
+push to platform-librechat/main
+  → GitHub Actions (.github/workflows/docker-image.yml)
+      → builds Docker image
+      → pushes to ghcr.io/kirillmachuk/platform-librechat:main
+      → makes empty commit to KirillMachuk/1ma-lab/main
+          → Railway detects push → pulls fresh ghcr.io image → deploys
+```
+
+### Repos involved
+
+| Repo | Role |
+|---|---|
+| `KirillMachuk/platform-librechat` | Source code (this repo) — all code changes go here |
+| `KirillMachuk/1ma-lab` | Deployment config — Railway watches this repo; its `Dockerfile` does `FROM ghcr.io/kirillmachuk/platform-librechat:main` |
+
+### Required GitHub secret (in platform-librechat)
+
+| Secret | Value |
+|---|---|
+| `DEPLOY_PAT` | GitHub fine-grained PAT with **Contents: Read & Write** on `KirillMachuk/1ma-lab` |
+
+### Important notes for agents
+
+- **Never push directly to `1ma-lab`** for code changes — it is deploy-only. All code lives here in `platform-librechat`.
+- A push to `main` here automatically deploys to production (~7–10 min build + deploy).
+- If Railway shows a stale deployment: go to Railway → service → `⋮` → **Redeploy** to pull the latest image manually.
+- The empty commit to `1ma-lab` will have message `chore: redeploy — pull platform-librechat@<sha7>`.
+
+---
+
 ## Testing
 
 - Framework: **Jest**, run per-workspace.
