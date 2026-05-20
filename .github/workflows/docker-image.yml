@@ -59,3 +59,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
+
+      - name: Trigger Railway deployment
+        if: github.ref == 'refs/heads/main'
+        run: curl -sS -X POST "${{ secrets.RAILWAY_DEPLOY_HOOK_URL }}"
