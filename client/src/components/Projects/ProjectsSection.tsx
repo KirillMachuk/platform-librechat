@@ -17,7 +17,7 @@ function ProjectsSection() {
 
   return (
     <div className="flex flex-col gap-1 px-2 pt-2" role="region" aria-label={localize('com_projects_section')}>
-      <div className="flex items-center justify-between px-2">
+      <div className="flex h-7 items-center justify-between px-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
           {localize('com_projects_section')}
         </span>

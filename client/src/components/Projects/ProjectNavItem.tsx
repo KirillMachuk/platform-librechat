@@ -32,8 +32,10 @@ function ProjectNavItem({ project }: Props) {
       onClick={handleClick}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm text-text-primary transition-colors hover:bg-surface-hover',
-        isActive && 'bg-surface-hover',
+        'group relative flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm text-text-primary outline-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black dark:focus-visible:ring-white',
+        isActive
+          ? 'bg-surface-active-alt before:absolute before:bottom-1 before:left-0 before:top-1 before:w-0.5 before:rounded-full before:bg-black dark:before:bg-white'
+          : 'hover:bg-surface-active-alt',
       )}
     >
       <Icon
