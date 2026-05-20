@@ -25,6 +25,7 @@ export enum FileContext {
   avatar = 'avatar',
   unknown = 'unknown',
   agents = 'agents',
+  project = 'project',
   assistants = 'assistants',
   execute_code = 'execute_code',
   image_generation = 'image_generation',

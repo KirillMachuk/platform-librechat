@@ -12,8 +12,10 @@ const {
   resolveAgentScopedSkillIds,
 } = require('@librechat/api');
 const {
+  Tools,
   ResourceType,
   EModelEndpoint,
+  EToolResources,
   PermissionBits,
   MAX_SUBAGENT_DEPTH,
   isAgentsEndpoint,
@@ -39,6 +41,70 @@ const AgentClient = require('~/server/controllers/agents/client');
 const { processAddedConvo } = require('./addedConvo');
 const { logViolation } = require('~/cache');
 const db = require('~/models');
+
+/**
+ * If the current conversation belongs to a Project, mutate `primaryAgent`
+ * to add project-level instructions and merge project source files into
+ * the `file_search` tool_resources so RAG retrieval automatically sees
+ * them. No-op when the conversation has no `project_id` or the project
+ * was deleted / doesn't belong to the user.
+ *
+ * @param {{ req: import('express').Request, primaryAgent: Record<string, unknown> }} params
+ * @returns {Promise<void>}
+ */
+async function applyProjectContext({ req, primaryAgent }) {
+  try {
+    let projectId = req.body?.project_id;
+    if (!projectId) {
+      const conversationId = req.body?.conversationId;
+      if (!conversationId) {
+        return;
+      }
+      const convo = await db.getConvo(req.user.id, conversationId);
+      projectId = convo?.project_id;
+    }
+    if (!projectId) {
+      return;
+    }
+    const project = await db.getProjectById(req.user.id, projectId);
+    if (!project) {
+      return;
+    }
+
+    if (project.instructions && project.instructions.trim().length > 0) {
+      const existingInstructions = (primaryAgent.instructions ?? '').trim();
+      primaryAgent.instructions = existingInstructions
+        ? `${project.instructions.trim()}\n\n---\n\n${existingInstructions}`
+        : project.instructions.trim();
+    }
+
+    const projectFiles = await db.getFiles(
+      { user: req.user.id, project_id: projectId, embedded: true },
+      null,
+      { text: 0 },
+    );
+    const projectFileIds = projectFiles.map((f) => f.file_id).filter(Boolean);
+    if (projectFileIds.length === 0) {
+      return;
+    }
+
+    primaryAgent.tool_resources = primaryAgent.tool_resources ?? {};
+    const fileSearchResource =
+      primaryAgent.tool_resources[EToolResources.file_search] ?? {};
+    const existingFileIds = fileSearchResource.file_ids ?? [];
+    primaryAgent.tool_resources[EToolResources.file_search] = {
+      ...fileSearchResource,
+      file_ids: Array.from(new Set([...existingFileIds, ...projectFileIds])),
+    };
+
+    primaryAgent.tools = primaryAgent.tools ?? [];
+    if (!primaryAgent.tools.includes(Tools.file_search)) {
+      primaryAgent.tools.push(Tools.file_search);
+    }
+  } catch (error) {
+    logger.error('[applyProjectContext] Failed to merge project context', error);
+  }
+}
 
 /**
  * Creates a tool loader function for the agent.
@@ -243,6 +309,8 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
   if (!primaryAgent) {
     throw new Error('Agent not found');
   }
+
+  await applyProjectContext({ req, primaryAgent });
 
   const modelsConfig = await getModelsConfig(req);
   const validationResult = await validateAgentModel({

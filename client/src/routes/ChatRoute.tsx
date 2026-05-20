@@ -4,7 +4,7 @@ import { Spinner, useToastContext } from '@librechat/client';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Constants, EModelEndpoint } from 'librechat-data-provider';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
-import type { TPreset } from 'librechat-data-provider';
+import type { TPreset, TConversation } from 'librechat-data-provider';
 import {
   mergeQuerySettingsWithSpec,
   processValidSettings,
@@ -109,13 +109,19 @@ export default function ChatRoute() {
       return specPreset;
     };
 
+    const projectIdParam = searchParams.get('project') ?? undefined;
+    const applyProjectId = (template?: Partial<TConversation>): Partial<TConversation> | undefined => {
+      if (!projectIdParam) return template;
+      return { ...(template ?? {}), project_id: projectIdParam };
+    };
+
     if (isNewConvo && endpointsQuery.data && modelsQuery.data) {
       const preset = getNewConvoPreset();
 
       logger.log('conversation', 'ChatRoute, new convo effect', conversation);
       newConversation({
         modelsData: modelsQuery.data,
-        template: conversation ? conversation : undefined,
+        template: applyProjectId(conversation ? conversation : undefined),
         ...(preset ? { preset } : {}),
       });
 
@@ -163,7 +169,7 @@ export default function ChatRoute() {
       logger.log('conversation', 'ChatRoute new convo, assistants effect', conversation);
       newConversation({
         modelsData: modelsQuery.data,
-        template: conversation ? conversation : undefined,
+        template: applyProjectId(conversation ? conversation : undefined),
         ...(preset ? { preset } : {}),
       });
       hasSetConversation.current = true;

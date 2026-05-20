@@ -278,6 +278,7 @@ export function createConversationMethods(
       search,
       sortBy = 'updatedAt',
       sortDirection = 'desc',
+      projectId,
     }: {
       cursor?: string | null;
       limit?: number;
@@ -286,6 +287,7 @@ export function createConversationMethods(
       search?: string;
       sortBy?: string;
       sortDirection?: string;
+      projectId?: string | null;
     } = {},
   ) {
     const Conversation = mongoose.models.Conversation as Model<IConversation>;
@@ -300,6 +302,10 @@ export function createConversationMethods(
 
     if (Array.isArray(tags) && tags.length > 0) {
       filters.push({ tags: { $in: tags } } as FilterQuery<IConversation>);
+    }
+
+    if (projectId) {
+      filters.push({ project_id: projectId } as FilterQuery<IConversation>);
     }
 
     filters.push({
@@ -379,7 +385,7 @@ export function createConversationMethods(
 
       const convos = await Conversation.find(query)
         .select(
-          'conversationId endpoint title createdAt updatedAt user model agent_id assistant_id spec iconURL',
+          'conversationId endpoint title createdAt updatedAt user model agent_id assistant_id spec iconURL project_id',
         )
         .sort(sortObj)
         .limit(limit + 1)

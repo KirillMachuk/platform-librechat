@@ -7,6 +7,7 @@ import { Skeleton, Sidebar as SidebarIcon, Button, TooltipAnchor } from '@librec
 import type { NavLink } from '~/common';
 import { CLOSE_SIDEBAR_ID } from '~/components/Chat/Menus/OpenSidebar';
 import ConversationsSection from '~/components/UnifiedSidebar/ConversationsSection';
+import { ProjectsSection } from '~/components/Projects';
 import PanelDialog from '~/components/UnifiedSidebar/PanelDialog';
 import { useLocalize, useNewConvo } from '~/hooks';
 import { clearMessagesCache, cn } from '~/utils';
@@ -198,6 +199,8 @@ function ExpandedPanel({
           <MenuRow key={link.id} link={link} onSelect={handleSelect} />
         ))}
       </div>
+
+      <ProjectsSection />
 
       <div className={cn('mt-3 min-h-0 flex-1 overflow-hidden')}>
         <ConversationsSection />

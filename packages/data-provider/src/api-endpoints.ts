@@ -101,6 +101,21 @@ export const apiKeys = () => apiKeysEndpoint;
 
 export const apiKeyById = (id: string) => `${apiKeysEndpoint}/${id}`;
 
+export const projectsRoot = `${BASE_URL}/api/projects`;
+
+export const projects = () => projectsRoot;
+
+export const projectById = (id: string) => `${projectsRoot}/${encodeURIComponent(id)}`;
+
+export const projectConversations = (id: string, cursor?: string | null) =>
+  `${projectsRoot}/${encodeURIComponent(id)}/conversations${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`;
+
+export const projectFiles = (id: string) =>
+  `${projectsRoot}/${encodeURIComponent(id)}/files`;
+
+export const projectFileById = (id: string, fileId: string) =>
+  `${projectsRoot}/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}`;
+
 export const conversationsRoot = `${BASE_URL}/api/convos`;
 
 export const conversations = (params: q.ConversationListParams) => {

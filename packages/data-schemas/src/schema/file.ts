@@ -19,6 +19,10 @@ const file: Schema<IMongoFile> = new Schema(
       type: String,
       index: true,
     },
+    project_id: {
+      type: String,
+      index: true,
+    },
     file_id: {
       type: String,
       index: true,

@@ -1,5 +1,6 @@
 import type { AxiosResponse } from 'axios';
 import type * as t from './types';
+import type * as p from './types/projects';
 import * as endpoints from './api-endpoints';
 import * as a from './types/assistants';
 import * as ag from './types/agents';
@@ -1281,3 +1282,47 @@ export interface ActiveJobsResponse {
 export const getActiveJobs = (): Promise<ActiveJobsResponse> => {
   return request.get(endpoints.activeJobs());
 };
+
+/* Projects (ChatGPT-style workspaces) */
+export function listProjects(): Promise<p.TProject[]> {
+  return request.get(endpoints.projects());
+}
+
+export function getProject(projectId: string): Promise<p.TProject> {
+  return request.get(endpoints.projectById(projectId));
+}
+
+export function createProject(payload: p.TProjectCreate): Promise<p.TProject> {
+  return request.post(endpoints.projects(), payload);
+}
+
+export function updateProject(
+  projectId: string,
+  payload: p.TProjectUpdate,
+): Promise<p.TProject> {
+  return request.patch(endpoints.projectById(projectId), payload);
+}
+
+export function deleteProject(projectId: string): Promise<void> {
+  return request.delete(endpoints.projectById(projectId));
+}
+
+export function listProjectConversations(
+  projectId: string,
+  params: p.TProjectConversationsParams = {},
+): Promise<q.ConversationListResponse> {
+  const cursor = params.cursor ?? null;
+  return request.get(endpoints.projectConversations(projectId, cursor));
+}
+
+export function listProjectFiles(projectId: string): Promise<f.TFile[]> {
+  return request.get(endpoints.projectFiles(projectId));
+}
+
+export function uploadProjectFile(projectId: string, formData: FormData): Promise<f.TFile> {
+  return request.postMultiPart(endpoints.projectFiles(projectId), formData);
+}
+
+export function deleteProjectFile(projectId: string, fileId: string): Promise<void> {
+  return request.delete(endpoints.projectFileById(projectId, fileId));
+}

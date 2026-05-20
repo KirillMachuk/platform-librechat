@@ -850,6 +850,95 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
 };
 
 /**
+ * Uploads a source file into a Project: storage + RAG embedding, namespaced
+ * by `project_id` so retrieval can filter to the project's sources. The file
+ * is persisted with `context: FileContext.project` and `project_id` set.
+ *
+ * @param {object} params
+ * @param {import('express').Request} params.req
+ * @param {import('express').Response} params.res
+ * @param {{ project_id: string, file_id: string, temp_file_id?: string }} params.metadata
+ * @returns {Promise<void>}
+ */
+const processProjectFileUpload = async ({ req, res, metadata }) => {
+  const { file } = req;
+  const appConfig = req.config;
+  const { project_id, file_id, temp_file_id = null } = metadata;
+
+  if (!project_id) {
+    throw new Error('No project ID provided for project file upload');
+  }
+
+  if (file.mimetype.startsWith('image')) {
+    throw new Error('Image uploads are not supported for project sources');
+  }
+
+  const isFileSearchEnabled = await checkCapability(req, AgentCapabilities.file_search);
+  if (!isFileSearchEnabled) {
+    throw new Error('File search capability is required for project sources');
+  }
+
+  const source = getFileStrategy(appConfig, { isImage: false });
+  const basePath = 'uploads';
+  const entity_id = project_id;
+
+  const { handleFileUpload } = getStrategyFunctions(source);
+  const sanitizedUploadFn = createSanitizedUploadWrapper(handleFileUpload);
+  const storageResult = await sanitizedUploadFn({
+    req,
+    file,
+    file_id,
+    basePath,
+    entity_id,
+  });
+
+  const { uploadVectors } = require('./VectorDB/crud');
+  const embeddingResult = await uploadVectors({
+    req,
+    file,
+    file_id,
+    entity_id,
+  });
+
+  const {
+    bytes,
+    filepath: _filepath,
+    storageKey: _storageKey,
+    storageRegion: _storageRegion,
+  } = storageResult;
+  const filename = embeddingResult?.filename || storageResult.filename;
+  const embedded = embeddingResult?.embedded;
+
+  const storageMetadata = getStorageMetadata({
+    filepath: _filepath,
+    source,
+    storageKey: _storageKey,
+    storageRegion: _storageRegion,
+  });
+
+  const fileInfo = removeNullishValues({
+    user: req.user.id,
+    project_id,
+    file_id,
+    temp_file_id,
+    bytes,
+    filepath: _filepath,
+    ...storageMetadata,
+    filename: filename ?? sanitizeFilename(file.originalname),
+    context: FileContext.project,
+    metadata: {},
+    type: file.mimetype,
+    embedded,
+    source,
+    tenantId: req.user.tenantId,
+  });
+
+  const result = await db.createFile(fileInfo, true);
+
+  res.status(200).json({ message: 'Project file uploaded and processed successfully', ...result });
+};
+
+/**
  * @param {object} params - The params object.
  * @param {OpenAI} params.openai - The OpenAI client instance.
  * @param {string} params.file_id - The ID of the file to retrieve.
@@ -1185,5 +1274,6 @@ module.exports = {
   processFileUpload,
   processDeleteRequest,
   processAgentFileUpload,
+  processProjectFileUpload,
   retrieveAndProcessFile,
 };

@@ -208,6 +208,7 @@ const startServer = async () => {
   app.use('/api/permissions', routes.accessPermissions);
 
   app.use('/api/tags', routes.tags);
+  app.use('/api/projects', await routes.projects.initialize());
   app.use('/api/mcp', routes.mcp);
 
   app.use('/metrics', metricsRouter);

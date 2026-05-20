@@ -5,6 +5,7 @@ export interface IMongoFile extends Omit<Document, 'model'> {
   user: Types.ObjectId;
   conversationId?: string;
   messageId?: string;
+  project_id?: string;
   file_id: string;
   temp_file_id?: string;
   bytes: number;

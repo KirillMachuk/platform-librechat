@@ -80,6 +80,11 @@ export enum QueryKeys {
   skillStates = 'skillStates',
   /* General user favorites */
   favorites = 'favorites',
+  /* Projects (ChatGPT-style workspaces) */
+  projects = 'projects',
+  project = 'project',
+  projectFiles = 'projectFiles',
+  projectConversations = 'projectConversations',
 }
 
 // Dynamic query keys that require parameters
@@ -118,4 +123,10 @@ export enum MutationKeys {
   updateSkillNode = 'updateSkillNode',
   deleteSkillNode = 'deleteSkillNode',
   updateSkillNodeContent = 'updateSkillNodeContent',
+  /* Projects */
+  createProject = 'createProject',
+  updateProject = 'updateProject',
+  deleteProject = 'deleteProject',
+  uploadProjectFile = 'uploadProjectFile',
+  deleteProjectFile = 'deleteProjectFile',
 }
