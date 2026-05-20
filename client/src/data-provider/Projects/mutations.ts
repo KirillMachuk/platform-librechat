@@ -66,6 +66,7 @@ export const useUploadProjectFileMutation = (
   return useMutation(
     ({ projectId, file }: UploadProjectFileArgs) => {
       const formData = new FormData();
+      formData.append('file_id', crypto.randomUUID());
       formData.append('file', file);
       return dataService.uploadProjectFile(projectId, formData);
     },

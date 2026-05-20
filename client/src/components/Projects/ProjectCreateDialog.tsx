@@ -15,6 +15,13 @@ import {
 import { useCreateProjectMutation } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 import { NotificationSeverity } from '~/common';
+import ProjectAppearancePopover from './ProjectAppearancePopover';
+import {
+  DEFAULT_PROJECT_ICON,
+  DEFAULT_PROJECT_COLOR,
+  resolveIcon,
+  resolveColor,
+} from './iconOptions';
 
 type Props = {
   open: boolean;
@@ -28,11 +35,17 @@ function ProjectCreateDialog({ open, onOpenChange }: Props) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [instructions, setInstructions] = useState('');
+  const [appearance, setAppearance] = useState({
+    icon: DEFAULT_PROJECT_ICON,
+    color: DEFAULT_PROJECT_COLOR,
+  });
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
 
   const reset = useCallback(() => {
     setName('');
     setDescription('');
     setInstructions('');
+    setAppearance({ icon: DEFAULT_PROJECT_ICON, color: DEFAULT_PROJECT_COLOR });
   }, []);
 
   const createMutation = useCreateProjectMutation({
@@ -62,8 +75,13 @@ function ProjectCreateDialog({ open, onOpenChange }: Props) {
       name: trimmed,
       description: description.trim(),
       instructions: instructions.trim(),
+      icon: appearance.icon,
+      color: appearance.color,
     });
-  }, [name, description, instructions, createMutation]);
+  }, [name, description, instructions, appearance, createMutation]);
+
+  const Icon = resolveIcon(appearance.icon);
+  const iconHex = resolveColor(appearance.color);
 
   return (
     <OGDialog
@@ -81,6 +99,17 @@ function ProjectCreateDialog({ open, onOpenChange }: Props) {
           id="project-create-description"
           className="flex flex-col gap-3 pt-2"
         >
+          <div className="flex justify-center pb-1">
+            <button
+              type="button"
+              onClick={() => setAppearanceOpen(true)}
+              aria-label={localize('com_projects_appearance')}
+              className="flex h-16 w-16 items-center justify-center rounded-full border border-border-light transition-transform hover:scale-105"
+              style={{ backgroundColor: `${iconHex}1a` }}
+            >
+              <Icon className="h-8 w-8" style={{ color: iconHex }} aria-hidden="true" />
+            </button>
+          </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="project-name">{localize('com_projects_name')}</Label>
             <Input
@@ -131,6 +160,12 @@ function ProjectCreateDialog({ open, onOpenChange }: Props) {
           </Button>
         </div>
       </OGDialogContent>
+      <ProjectAppearancePopover
+        open={appearanceOpen}
+        onOpenChange={setAppearanceOpen}
+        value={appearance}
+        onChange={setAppearance}
+      />
     </OGDialog>
   );
 }

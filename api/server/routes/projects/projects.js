@@ -25,7 +25,7 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { name, description, instructions } = req.body ?? {};
+    const { name, description, instructions, icon, color } = req.body ?? {};
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return res.status(400).json({ error: 'Project name is required' });
     }
@@ -33,6 +33,8 @@ router.post('/', async (req, res) => {
       name: name.trim(),
       description: typeof description === 'string' ? description : '',
       instructions: typeof instructions === 'string' ? instructions : '',
+      icon: typeof icon === 'string' ? icon : undefined,
+      color: typeof color === 'string' ? color : undefined,
     });
     res.status(201).json(project);
   } catch (error) {
@@ -56,11 +58,13 @@ router.get('/:projectId', async (req, res) => {
 
 router.patch('/:projectId', async (req, res) => {
   try {
-    const { name, description, instructions } = req.body ?? {};
+    const { name, description, instructions, icon, color } = req.body ?? {};
     const update = {};
     if (typeof name === 'string') update.name = name.trim();
     if (typeof description === 'string') update.description = description;
     if (typeof instructions === 'string') update.instructions = instructions;
+    if (typeof icon === 'string') update.icon = icon;
+    if (typeof color === 'string') update.color = color;
     const project = await updateProject(req.user.id, req.params.projectId, update);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });

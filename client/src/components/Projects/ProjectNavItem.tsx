@@ -1,7 +1,7 @@
 import { memo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Palette } from 'lucide-react';
 import type { TProject } from 'librechat-data-provider';
+import { resolveIcon, resolveColor } from './iconOptions';
 import { cn } from '~/utils';
 
 type Props = {
@@ -23,6 +23,8 @@ function ProjectNavItem({ project }: Props) {
   );
 
   const isActive = activeProjectId === project.projectId;
+  const Icon = resolveIcon(project.icon);
+  const iconColor = resolveColor(project.color);
 
   return (
     <a
@@ -34,7 +36,11 @@ function ProjectNavItem({ project }: Props) {
         isActive && 'bg-surface-hover',
       )}
     >
-      <Palette className="h-5 w-5 flex-shrink-0 text-pink-500" aria-hidden="true" />
+      <Icon
+        className="h-5 w-5 flex-shrink-0"
+        style={{ color: iconColor }}
+        aria-hidden="true"
+      />
       <span className="truncate">{project.name}</span>
     </a>
   );

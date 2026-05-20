@@ -3,6 +3,8 @@ export type TProject = {
   name: string;
   description: string;
   instructions: string;
+  icon?: string;
+  color?: string;
   conversationCount?: number;
   fileCount?: number;
   createdAt?: string;
@@ -13,6 +15,8 @@ export type TProjectCreate = {
   name: string;
   description?: string;
   instructions?: string;
+  icon?: string;
+  color?: string;
 };
 
 export type TProjectUpdate = Partial<TProjectCreate>;

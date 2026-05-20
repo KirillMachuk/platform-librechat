@@ -19,6 +19,13 @@ import {
 } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 import { NotificationSeverity } from '~/common';
+import ProjectAppearancePopover from './ProjectAppearancePopover';
+import {
+  DEFAULT_PROJECT_ICON,
+  DEFAULT_PROJECT_COLOR,
+  resolveIcon,
+  resolveColor,
+} from './iconOptions';
 
 type Props = {
   project: TProject;
@@ -34,12 +41,21 @@ function ProjectEditDialog({ project, open, onOpenChange }: Props) {
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description);
   const [instructions, setInstructions] = useState(project.instructions);
+  const [appearance, setAppearance] = useState({
+    icon: project.icon ?? DEFAULT_PROJECT_ICON,
+    color: project.color ?? DEFAULT_PROJECT_COLOR,
+  });
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
       setName(project.name);
       setDescription(project.description);
       setInstructions(project.instructions);
+      setAppearance({
+        icon: project.icon ?? DEFAULT_PROJECT_ICON,
+        color: project.color ?? DEFAULT_PROJECT_COLOR,
+      });
     }
   }, [open, project]);
 
@@ -87,8 +103,13 @@ function ProjectEditDialog({ project, open, onOpenChange }: Props) {
       name: trimmedName,
       description: description.trim(),
       instructions: instructions.trim(),
+      icon: appearance.icon,
+      color: appearance.color,
     });
-  }, [name, description, instructions, updateMutation]);
+  }, [name, description, instructions, appearance, updateMutation]);
+
+  const Icon = resolveIcon(appearance.icon);
+  const iconHex = resolveColor(appearance.color);
 
   const handleDelete = useCallback(() => {
     if (!window.confirm(localize('com_projects_delete_confirm', { name: project.name }))) {
@@ -106,6 +127,17 @@ function ProjectEditDialog({ project, open, onOpenChange }: Props) {
           <OGDialogTitle>{localize('com_projects_edit_title')}</OGDialogTitle>
         </OGDialogHeader>
         <div id="project-edit-description" className="flex flex-col gap-3 pt-2">
+          <div className="flex justify-center pb-1">
+            <button
+              type="button"
+              onClick={() => setAppearanceOpen(true)}
+              aria-label={localize('com_projects_appearance')}
+              className="flex h-16 w-16 items-center justify-center rounded-full border border-border-light transition-transform hover:scale-105"
+              style={{ backgroundColor: `${iconHex}1a` }}
+            >
+              <Icon className="h-8 w-8" style={{ color: iconHex }} aria-hidden="true" />
+            </button>
+          </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="project-edit-name">{localize('com_projects_name')}</Label>
             <Input
@@ -161,6 +193,12 @@ function ProjectEditDialog({ project, open, onOpenChange }: Props) {
           </div>
         </div>
       </OGDialogContent>
+      <ProjectAppearancePopover
+        open={appearanceOpen}
+        onOpenChange={setAppearanceOpen}
+        value={appearance}
+        onChange={setAppearance}
+      />
     </OGDialog>
   );
 }

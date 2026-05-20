@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Palette, MoreHorizontal, Upload, FileText, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Upload, FileText, Trash2 } from 'lucide-react';
 import {
   Button,
   Spinner,
@@ -11,10 +11,18 @@ import {
   useGetProjectQuery,
   useProjectConversationsQuery,
   useProjectFilesQuery,
+  useUpdateProjectMutation,
   useUploadProjectFileMutation,
   useDeleteProjectFileMutation,
 } from '~/data-provider';
-import { ProjectEditDialog } from '~/components/Projects';
+import {
+  ProjectAppearancePopover,
+  ProjectEditDialog,
+  resolveIcon,
+  resolveColor,
+  DEFAULT_PROJECT_ICON,
+  DEFAULT_PROJECT_COLOR,
+} from '~/components/Projects';
 import { useLocalize } from '~/hooks';
 import { NotificationSeverity } from '~/common';
 import { cn } from '~/utils';
@@ -38,11 +46,29 @@ export default function ProjectRoute() {
 
   const [tab, setTab] = useState<Tab>('chats');
   const [editOpen, setEditOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
   const { data: project, isLoading: projectLoading } = useGetProjectQuery(projectId);
   const { data: convoList } = useProjectConversationsQuery(projectId);
   const { data: files = [] } = useProjectFilesQuery(projectId);
+
+  const updateMutation = useUpdateProjectMutation(projectId, {
+    onError: () => {
+      showToast({
+        message: localize('com_projects_update_error'),
+        severity: NotificationSeverity.ERROR,
+        showIcon: true,
+      });
+    },
+  });
+
+  const handleAppearanceChange = useCallback(
+    (next: { icon: string; color: string }) => {
+      updateMutation.mutate(next);
+    },
+    [updateMutation],
+  );
 
   const uploadMutation = useUploadProjectFileMutation({
     onSuccess: () => {
@@ -125,11 +151,26 @@ export default function ProjectRoute() {
     );
   }
 
+  const Icon = resolveIcon(project.icon);
+  const iconHex = resolveColor(project.color);
+  const currentAppearance = {
+    icon: project.icon ?? DEFAULT_PROJECT_ICON,
+    color: project.color ?? DEFAULT_PROJECT_COLOR,
+  };
+
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-y-auto px-6 py-8">
       <div className="flex items-center justify-between gap-3 pb-4">
         <div className="flex items-center gap-3">
-          <Palette className="h-7 w-7 text-pink-500" aria-hidden="true" />
+          <button
+            type="button"
+            onClick={() => setAppearanceOpen(true)}
+            aria-label={localize('com_projects_appearance')}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-border-light transition-transform hover:scale-105"
+            style={{ backgroundColor: `${iconHex}1a` }}
+          >
+            <Icon className="h-6 w-6" style={{ color: iconHex }} aria-hidden="true" />
+          </button>
           <h1 className="text-2xl font-semibold text-text-primary">{project.name}</h1>
         </div>
         <TooltipAnchor
@@ -284,6 +325,12 @@ export default function ProjectRoute() {
       </div>
 
       <ProjectEditDialog project={project} open={editOpen} onOpenChange={setEditOpen} />
+      <ProjectAppearancePopover
+        open={appearanceOpen}
+        onOpenChange={setAppearanceOpen}
+        value={currentAppearance}
+        onChange={handleAppearanceChange}
+      />
     </div>
   );
 }

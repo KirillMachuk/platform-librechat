@@ -25,6 +25,14 @@ const projectSchema: Schema<IProject> = new Schema(
       type: String,
       default: '',
     },
+    icon: {
+      type: String,
+      default: 'Palette',
+    },
+    color: {
+      type: String,
+      default: 'pink',
+    },
     tenantId: {
       type: String,
       index: true,

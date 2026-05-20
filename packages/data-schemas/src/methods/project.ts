@@ -7,12 +7,16 @@ interface CreateProjectInput {
   name: string;
   description?: string;
   instructions?: string;
+  icon?: string;
+  color?: string;
 }
 
 interface UpdateProjectInput {
   name?: string;
   description?: string;
   instructions?: string;
+  icon?: string;
+  color?: string;
 }
 
 interface ProjectListItem {
@@ -20,6 +24,8 @@ interface ProjectListItem {
   name: string;
   description: string;
   instructions: string;
+  icon: string;
+  color: string;
   createdAt?: Date;
   updatedAt?: Date;
   conversationCount: number;
@@ -40,6 +46,8 @@ export function createProjectMethods(mongoose: typeof import('mongoose')) {
       name: data.name,
       description: data.description ?? '',
       instructions: data.instructions ?? '',
+      icon: data.icon ?? 'Palette',
+      color: data.color ?? 'pink',
     });
     return project.toObject() as IProject;
   }
@@ -87,6 +95,8 @@ export function createProjectMethods(mongoose: typeof import('mongoose')) {
       name: p.name,
       description: p.description ?? '',
       instructions: p.instructions ?? '',
+      icon: p.icon ?? 'Palette',
+      color: p.color ?? 'pink',
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
       conversationCount: convoCountMap.get(p.projectId) ?? 0,
@@ -104,6 +114,8 @@ export function createProjectMethods(mongoose: typeof import('mongoose')) {
     if (data.name !== undefined) update.name = data.name;
     if (data.description !== undefined) update.description = data.description;
     if (data.instructions !== undefined) update.instructions = data.instructions;
+    if (data.icon !== undefined) update.icon = data.icon;
+    if (data.color !== undefined) update.color = data.color;
     if (Object.keys(update).length === 0) {
       return Project.findOne({ user, projectId }).lean<IProject>();
     }
