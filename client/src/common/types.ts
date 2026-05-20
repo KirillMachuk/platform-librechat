@@ -122,11 +122,15 @@ export type IconsRecord = {
 
 export type AgentIconMapProps = IconMapProps & { agentName?: string };
 
+export type NavLinkComponentProps = {
+  onClose?: () => void;
+};
+
 export type NavLink = {
   title: TranslationKeys;
   label?: string;
   icon: LucideIcon | React.FC;
-  Component?: React.ComponentType;
+  Component?: React.ComponentType<NavLinkComponentProps>;
   onClick?: (e?: React.MouseEvent) => void;
   variant?: 'default' | 'ghost';
   id: string;

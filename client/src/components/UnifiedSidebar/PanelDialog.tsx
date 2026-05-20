@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react';
 import type { NavLink } from '~/common';
 import { useLocalize } from '~/hooks';
@@ -13,6 +13,7 @@ interface PanelDialogProps {
 function PanelDialog({ link, open, onOpenChange }: PanelDialogProps) {
   const localize = useLocalize();
   const Component = link?.Component;
+  const handleClose = useCallback(() => onOpenChange(false), [onOpenChange]);
 
   return (
     <Transition appear show={open}>
@@ -74,7 +75,7 @@ function PanelDialog({ link, open, onOpenChange }: PanelDialogProps) {
                 </button>
               </DialogTitle>
               <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden text-text-primary">
-                {Component ? <Component /> : null}
+                {Component ? <Component onClose={handleClose} /> : null}
               </div>
             </DialogPanel>
           </div>

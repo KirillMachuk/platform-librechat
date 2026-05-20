@@ -1,12 +1,7 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { MoreHorizontal, Upload, FileText, Trash2 } from 'lucide-react';
-import {
-  Button,
-  Spinner,
-  TooltipAnchor,
-  useToastContext,
-} from '@librechat/client';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, MoreHorizontal, Upload, FileText, Trash2 } from 'lucide-react';
+import { Button, Spinner, TooltipAnchor, useToastContext } from '@librechat/client';
 import {
   useGetProjectQuery,
   useProjectConversationsQuery,
@@ -15,19 +10,25 @@ import {
   useUploadProjectFileMutation,
   useDeleteProjectFileMutation,
 } from '~/data-provider';
+import { useLocalize } from '~/hooks';
+import { NotificationSeverity } from '~/common';
+import { cn } from '~/utils';
+import ProjectAppearancePopover from './ProjectAppearancePopover';
+import ProjectEditDialog from './ProjectEditDialog';
 import {
-  ProjectAppearancePopover,
-  ProjectEditDialog,
   resolveIcon,
   resolveColor,
   DEFAULT_PROJECT_ICON,
   DEFAULT_PROJECT_COLOR,
-} from '~/components/Projects';
-import { useLocalize } from '~/hooks';
-import { NotificationSeverity } from '~/common';
-import { cn } from '~/utils';
+} from './iconOptions';
 
 type Tab = 'chats' | 'sources';
+
+type Props = {
+  projectId: string;
+  onBack: () => void;
+  onClose: () => void;
+};
 
 function formatBytes(bytes?: number): string {
   if (!bytes || bytes <= 0) return '0 B';
@@ -37,11 +38,10 @@ function formatBytes(bytes?: number): string {
   return `${value.toFixed(value < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
-export default function ProjectRoute() {
+function ProjectDetailView({ projectId, onBack, onClose }: Props) {
   const localize = useLocalize();
   const navigate = useNavigate();
   const { showToast } = useToastContext();
-  const { projectId = '' } = useParams<{ projectId: string }>();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [tab, setTab] = useState<Tab>('chats');
@@ -101,7 +101,17 @@ export default function ProjectRoute() {
 
   const handleNewChat = useCallback(() => {
     navigate(`/c/new?project=${encodeURIComponent(projectId)}`);
-  }, [navigate, projectId]);
+    onClose();
+  }, [navigate, projectId, onClose]);
+
+  const handleConversationOpen = useCallback(
+    (conversationId: string | null | undefined) => {
+      if (!conversationId) return;
+      navigate(`/c/${conversationId}`);
+      onClose();
+    },
+    [navigate, onClose],
+  );
 
   const handleUploadList = useCallback(
     (filesToUpload: FileList | File[] | null) => {
@@ -137,7 +147,7 @@ export default function ProjectRoute() {
 
   if (projectLoading) {
     return (
-      <div className="flex h-full w-full items-center justify-center">
+      <div className="flex h-full w-full items-center justify-center py-16">
         <Spinner />
       </div>
     );
@@ -145,8 +155,11 @@ export default function ProjectRoute() {
 
   if (!project) {
     return (
-      <div className="flex h-full w-full items-center justify-center text-text-secondary">
-        {localize('com_projects_create_error')}
+      <div className="flex h-full w-full flex-col items-center justify-center gap-4 py-16 text-text-secondary">
+        <span>{localize('com_projects_create_error')}</span>
+        <Button variant="outline" onClick={onBack}>
+          {localize('com_ui_back')}
+        </Button>
       </div>
     );
   }
@@ -159,9 +172,24 @@ export default function ProjectRoute() {
   };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-y-auto px-6 py-8">
+    <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-6 py-6">
       <div className="flex items-center justify-between gap-3 pb-4">
         <div className="flex items-center gap-3">
+          <TooltipAnchor
+            side="bottom"
+            description={localize('com_ui_back')}
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={localize('com_ui_back')}
+                onClick={onBack}
+                className="h-9 w-9 rounded-lg"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            }
+          />
           <button
             type="button"
             onClick={() => setAppearanceOpen(true)}
@@ -227,7 +255,7 @@ export default function ProjectRoute() {
                   onClick={(e) => {
                     if (e.button === 0 && !e.ctrlKey && !e.metaKey) {
                       e.preventDefault();
-                      navigate(`/c/${c.conversationId}`);
+                      handleConversationOpen(c.conversationId);
                     }
                   }}
                   className="flex flex-col gap-0.5 rounded-lg px-3 py-2 hover:bg-surface-hover"
@@ -295,7 +323,10 @@ export default function ProjectRoute() {
                   className="flex items-center justify-between gap-2 rounded-lg border border-border-light bg-surface-primary px-3 py-2"
                 >
                   <div className="flex min-w-0 items-center gap-2">
-                    <FileText className="h-5 w-5 flex-shrink-0 text-text-secondary" aria-hidden="true" />
+                    <FileText
+                      className="h-5 w-5 flex-shrink-0 text-text-secondary"
+                      aria-hidden="true"
+                    />
                     <div className="flex min-w-0 flex-col">
                       <span className="truncate text-sm text-text-primary">{file.filename}</span>
                       <span className="text-xs text-text-secondary">{formatBytes(file.bytes)}</span>
@@ -324,7 +355,12 @@ export default function ProjectRoute() {
         )}
       </div>
 
-      <ProjectEditDialog project={project} open={editOpen} onOpenChange={setEditOpen} />
+      <ProjectEditDialog
+        project={project}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onDeleted={onBack}
+      />
       <ProjectAppearancePopover
         open={appearanceOpen}
         onOpenChange={setAppearanceOpen}
@@ -359,3 +395,5 @@ function TabButton({
     </button>
   );
 }
+
+export default memo(ProjectDetailView);

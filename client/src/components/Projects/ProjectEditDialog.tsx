@@ -13,10 +13,7 @@ import {
   useToastContext,
 } from '@librechat/client';
 import type { TProject } from 'librechat-data-provider';
-import {
-  useDeleteProjectMutation,
-  useUpdateProjectMutation,
-} from '~/data-provider';
+import { useDeleteProjectMutation, useUpdateProjectMutation } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 import { NotificationSeverity } from '~/common';
 import ProjectAppearancePopover from './ProjectAppearancePopover';
@@ -31,9 +28,10 @@ type Props = {
   project: TProject;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onDeleted?: () => void;
 };
 
-function ProjectEditDialog({ project, open, onOpenChange }: Props) {
+function ProjectEditDialog({ project, open, onOpenChange, onDeleted }: Props) {
   const localize = useLocalize();
   const navigate = useNavigate();
   const { showToast } = useToastContext();
@@ -85,7 +83,11 @@ function ProjectEditDialog({ project, open, onOpenChange }: Props) {
         showIcon: true,
       });
       onOpenChange(false);
-      navigate('/c/new');
+      if (onDeleted) {
+        onDeleted();
+      } else {
+        navigate('/c/new');
+      }
     },
     onError: () => {
       showToast({
@@ -148,9 +150,7 @@ function ProjectEditDialog({ project, open, onOpenChange }: Props) {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor="project-edit-description">
-              {localize('com_projects_description')}
-            </Label>
+            <Label htmlFor="project-edit-description">{localize('com_projects_description')}</Label>
             <Input
               id="project-edit-description"
               value={description}
@@ -172,22 +172,14 @@ function ProjectEditDialog({ project, open, onOpenChange }: Props) {
           </div>
         </div>
         <div className="flex justify-between gap-3 pt-4">
-          <Button
-            variant="destructive"
-            onClick={handleDelete}
-            disabled={isBusy}
-          >
+          <Button variant="destructive" onClick={handleDelete} disabled={isBusy}>
             {deleteMutation.isLoading ? <Spinner /> : localize('com_projects_delete')}
           </Button>
           <div className="flex gap-3">
             <OGDialogClose asChild>
               <Button variant="outline">{localize('com_ui_cancel')}</Button>
             </OGDialogClose>
-            <Button
-              variant="default"
-              onClick={handleSubmit}
-              disabled={!name.trim() || isBusy}
-            >
+            <Button variant="default" onClick={handleSubmit} disabled={!name.trim() || isBusy}>
               {updateMutation.isLoading ? <Spinner /> : localize('com_ui_save')}
             </Button>
           </div>

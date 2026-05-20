@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { MCPIcon, AttachmentIcon, OpenAIMinimalIcon } from '@librechat/client';
-import { Bot, NotebookPen, ScrollText, SlidersHorizontal } from 'lucide-react';
+import { Bot, Folder, NotebookPen, ScrollText, SlidersHorizontal } from 'lucide-react';
 import {
   Permissions,
   EModelEndpoint,
@@ -22,6 +22,7 @@ import PanelSwitch from '~/components/SidePanel/Builder/PanelSwitch';
 import Parameters from '~/components/SidePanel/Parameters/Panel';
 import FilesPanel from '~/components/SidePanel/Files/Panel';
 import AgentsPanel from '~/components/Agents/AgentsPanel';
+import { ProjectsPanel } from '~/components/Projects';
 import { PromptsAccordion } from '~/components/Prompts';
 import { SkillsAccordion } from '~/components/Skills';
 
@@ -67,6 +68,14 @@ export default function useSideNavLinks({
 
   const Links = useMemo(() => {
     const links: NavLink[] = [];
+
+    links.push({
+      title: 'com_projects_section',
+      label: '',
+      icon: Folder,
+      id: 'projects',
+      Component: ProjectsPanel,
+    });
 
     if (
       endpointsConfig?.[EModelEndpoint.agents] &&

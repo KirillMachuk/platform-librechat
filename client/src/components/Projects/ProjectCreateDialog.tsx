@@ -1,5 +1,4 @@
 import { memo, useCallback, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Button,
   Input,
@@ -12,6 +11,7 @@ import {
   OGDialogContent,
   useToastContext,
 } from '@librechat/client';
+import type { TProject } from 'librechat-data-provider';
 import { useCreateProjectMutation } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 import { NotificationSeverity } from '~/common';
@@ -26,11 +26,11 @@ import {
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCreated?: (project: TProject) => void;
 };
 
-function ProjectCreateDialog({ open, onOpenChange }: Props) {
+function ProjectCreateDialog({ open, onOpenChange, onCreated }: Props) {
   const localize = useLocalize();
-  const navigate = useNavigate();
   const { showToast } = useToastContext();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -57,7 +57,7 @@ function ProjectCreateDialog({ open, onOpenChange }: Props) {
       });
       onOpenChange(false);
       reset();
-      navigate(`/p/${project.projectId}`);
+      onCreated?.(project);
     },
     onError: () => {
       showToast({
@@ -95,10 +95,7 @@ function ProjectCreateDialog({ open, onOpenChange }: Props) {
         <OGDialogHeader>
           <OGDialogTitle>{localize('com_projects_create_title')}</OGDialogTitle>
         </OGDialogHeader>
-        <div
-          id="project-create-description"
-          className="flex flex-col gap-3 pt-2"
-        >
+        <div id="project-create-description" className="flex flex-col gap-3 pt-2">
           <div className="flex justify-center pb-1">
             <button
               type="button"
@@ -122,9 +119,7 @@ function ProjectCreateDialog({ open, onOpenChange }: Props) {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor="project-description">
-              {localize('com_projects_description')}
-            </Label>
+            <Label htmlFor="project-description">{localize('com_projects_description')}</Label>
             <Input
               id="project-description"
               value={description}
@@ -134,9 +129,7 @@ function ProjectCreateDialog({ open, onOpenChange }: Props) {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor="project-instructions">
-              {localize('com_projects_instructions')}
-            </Label>
+            <Label htmlFor="project-instructions">{localize('com_projects_instructions')}</Label>
             <textarea
               id="project-instructions"
               value={instructions}
