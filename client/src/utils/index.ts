@@ -5,6 +5,7 @@ import logger from './logger';
 
 export * from './map';
 export * from './json';
+export * from './text';
 export * from './email';
 export * from './share';
 export * from './files';
@@ -16,6 +17,7 @@ export * from './agents';
 export * from './drafts';
 export * from './convos';
 export * from './routes';
+export * from './convoPath';
 export * from './presets';
 export * from './prompts';
 export * from './textarea';
