@@ -1,5 +1,6 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useGetModelsQuery } from 'librechat-data-provider/react-query';
 import { ArrowLeft, MoreHorizontal, Upload, FileText, Trash2 } from 'lucide-react';
 import { Button, Spinner, TooltipAnchor, useToastContext } from '@librechat/client';
 import {
@@ -10,7 +11,7 @@ import {
   useUploadProjectFileMutation,
   useDeleteProjectFileMutation,
 } from '~/data-provider';
-import { useLocalize } from '~/hooks';
+import { useLocalize, useNewConvo } from '~/hooks';
 import { NotificationSeverity } from '~/common';
 import { cn } from '~/utils';
 import ProjectAppearancePopover from './ProjectAppearancePopover';
@@ -42,6 +43,8 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
   const localize = useLocalize();
   const navigate = useNavigate();
   const { showToast } = useToastContext();
+  const { newConversation } = useNewConvo();
+  const { data: modelsData } = useGetModelsQuery();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [tab, setTab] = useState<Tab>('chats');
@@ -100,9 +103,20 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
   const conversations = useMemo(() => convoList?.conversations ?? [], [convoList]);
 
   const handleNewChat = useCallback(() => {
+    // Seed the conversation atom with project_id BEFORE navigating. ChatRoute's
+    // applyProjectId useEffect doesn't re-fire on plain URL changes (its deps
+    // exclude conversationId/searchParams), so a bare navigate(/c/new?project=)
+    // leaves state with stale data and the first message creates a convo
+    // without project_id. By calling newConversation here with the template,
+    // the atom is set immediately; ?project= in the URL is a safety net for
+    // ChatRoute's existing reader and so the URL itself reflects the context.
+    newConversation({
+      modelsData,
+      template: { project_id: projectId },
+    });
     navigate(`/c/new?project=${encodeURIComponent(projectId)}`);
     onClose();
-  }, [navigate, projectId, onClose]);
+  }, [newConversation, modelsData, navigate, projectId, onClose]);
 
   const handleConversationOpen = useCallback(
     (conversationId: string | null | undefined) => {
