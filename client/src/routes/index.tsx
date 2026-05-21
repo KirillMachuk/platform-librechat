@@ -118,6 +118,10 @@ export const router = createBrowserRouter(
               element: <ChatRoute />,
             },
             {
+              path: 'projects/:projectId/c/:conversationId?',
+              element: <ChatRoute />,
+            },
+            {
               path: 'search',
               element: <Search />,
             },

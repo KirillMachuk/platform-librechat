@@ -44,9 +44,10 @@ export default function ChatRoute() {
 
   const index = 0;
   const [searchParams] = useSearchParams();
-  const { conversationId = '' } = useParams();
+  const { conversationId = '', projectId } = useParams();
   useIdChangeEffect(conversationId);
   const { hasSetConversation, conversation } = store.useCreateConversationAtom(index);
+  const { setConversation } = store.useSetConversationAtom(index);
   const { newConversation } = useNewConvo();
   const { showToast } = useToastContext();
   const localize = useLocalize();
@@ -109,7 +110,7 @@ export default function ChatRoute() {
       return specPreset;
     };
 
-    const projectIdParam = searchParams.get('project') ?? undefined;
+    const projectIdParam = projectId ?? searchParams.get('project') ?? undefined;
     const applyProjectId = (template?: Partial<TConversation>): Partial<TConversation> | undefined => {
       if (!projectIdParam) return template;
       return { ...(template ?? {}), project_id: projectIdParam };
@@ -197,6 +198,22 @@ export default function ChatRoute() {
     modelsQuery.data,
     assistantListMap,
   ]);
+
+  /**
+   * Keep conversation.project_id in sync with the URL `:projectId` segment.
+   * The big effect above gates on `hasSetConversation.current` and does not
+   * re-fire on URL changes, so without this every cross-project navigation
+   * leaves the atom stale (and the first message would persist with the
+   * previous project_id or none at all). Idempotent: early-returns when
+   * the atom already matches the URL.
+   */
+  useEffect(() => {
+    if (!conversation) return;
+    const next = projectId ?? null;
+    const current = conversation.project_id ?? null;
+    if (next === current) return;
+    setConversation({ ...conversation, project_id: next ?? undefined });
+  }, [projectId, conversation, setConversation]);
 
   if (endpointsQuery.isLoading || modelsQuery.isLoading) {
     return (
