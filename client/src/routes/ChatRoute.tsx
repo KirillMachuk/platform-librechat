@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useRecoilCallback, useRecoilValue } from 'recoil';
 import { Spinner, useToastContext } from '@librechat/client';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { Constants, EModelEndpoint } from 'librechat-data-provider';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
 import type { TPreset, TConversation } from 'librechat-data-provider';
@@ -11,6 +11,7 @@ import {
   getDefaultModelSpec,
   getModelSpecPreset,
   isNotFoundError,
+  buildConvoPath,
   logger,
 } from '~/utils';
 import {
@@ -43,6 +44,7 @@ export default function ChatRoute() {
   useAppStartup({ startupConfig, user });
 
   const index = 0;
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { conversationId = '', projectId } = useParams();
   useIdChangeEffect(conversationId);
@@ -214,6 +216,35 @@ export default function ChatRoute() {
     if (next === current) return;
     setConversation({ ...conversation, project_id: next ?? undefined });
   }, [projectId, conversation, setConversation]);
+
+  /**
+   * Canonicalize legacy chat URLs to the path-based project form.
+   *
+   * 1. /c/<id>?project=<projectId>  → /projects/<projectId>/c/<id>
+   *    (covers old client builds and shared links from before the refactor)
+   * 2. /c/<id> for a chat whose persisted convo has project_id
+   *    → /projects/<projectId>/c/<id>
+   *    (covers users opening pre-refactor bookmarks)
+   *
+   * Both replace history so the user does not see a flash; the canonical
+   * URL is the only one in the back stack.
+   */
+  useEffect(() => {
+    if (projectId) return;
+    const queryProjectId = searchParams.get('project');
+    if (queryProjectId && conversationId) {
+      navigate(buildConvoPath({ conversationId, projectId: queryProjectId }), {
+        replace: true,
+      });
+      return;
+    }
+    const persistedProjectId = initialConvoQuery.data?.project_id;
+    if (persistedProjectId && conversationId && conversationId !== Constants.NEW_CONVO) {
+      navigate(buildConvoPath({ conversationId, projectId: persistedProjectId }), {
+        replace: true,
+      });
+    }
+  }, [projectId, searchParams, conversationId, initialConvoQuery.data, navigate]);
 
   if (endpointsQuery.isLoading || modelsQuery.isLoading) {
     return (
