@@ -1,9 +1,11 @@
 import { memo, useMemo } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { useRecoilValue } from 'recoil';
 import { useMediaQuery } from '@librechat/client';
 import { getConfigDefaults, PermissionTypes, Permissions } from 'librechat-data-provider';
 import ModelSelector from './Menus/Endpoints/ModelSelector';
-import { useGetStartupConfig } from '~/data-provider';
+import { useGetProjectQuery, useGetStartupConfig } from '~/data-provider';
+import { resolveIcon, resolveColor } from '~/components/Projects/iconOptions';
 import ExportAndShareMenu from './ExportAndShareMenu';
 import { OpenSidebar, PresetsMenu } from './Menus';
 import BookmarkMenu from './Menus/BookmarkMenu';
@@ -18,6 +20,30 @@ const defaultInterface = getConfigDefaults().interface;
 function Header() {
   const { data: startupConfig } = useGetStartupConfig();
   const navVisible = useRecoilValue(store.sidebarExpanded);
+  const conversation = useRecoilValue(store.conversationByIndex(0));
+  const projectId = conversation?.project_id;
+  const { data: project } = useGetProjectQuery(projectId ?? '', {
+    enabled: !!projectId,
+  });
+
+  const projectBadge = useMemo(() => {
+    if (!project) return null;
+    const Icon = resolveIcon(project.icon);
+    const iconHex = resolveColor(project.color);
+    return (
+      <>
+        <div
+          title={project.name}
+          aria-label={project.name}
+          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-border-light"
+          style={{ backgroundColor: `${iconHex}1a` }}
+        >
+          <Icon className="h-3.5 w-3.5" style={{ color: iconHex }} aria-hidden="true" />
+        </div>
+        <ChevronRight className="h-4 w-4 flex-shrink-0 text-text-secondary" aria-hidden="true" />
+      </>
+    );
+  }, [project]);
 
   const interfaceConfig = useMemo(
     () => startupConfig?.interface ?? defaultInterface,
@@ -53,6 +79,7 @@ function Header() {
                 !isSmallScreen ? 'transition-all duration-200 ease-in-out' : '',
               )}
             >
+              {projectBadge}
               <ModelSelector startupConfig={startupConfig} />
               {interfaceConfig.presets === true && interfaceConfig.modelSelect && <PresetsMenu />}
               {hasAccessToBookmarks === true && <BookmarkMenu />}
