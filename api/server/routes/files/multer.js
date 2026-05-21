@@ -10,6 +10,8 @@ const {
 } = require('librechat-data-provider');
 const { getAppConfig } = require('~/server/services/Config');
 
+const MOJIBAKE_PATTERN = /[\xC2-\xF7][\x80-\xBF]/;
+
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const appConfig = req.config;
@@ -21,16 +23,23 @@ const storage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     req.file_id = crypto.randomUUID();
-    // Busboy decodes the multipart Content-Disposition filename as Latin-1 by
-    // default (RFC 2183), which turns UTF-8 bytes (e.g. Cyrillic) into mojibake.
-    // Re-encode latin1 -> utf8 to recover the original name, then attempt
-    // %-decoding for RFC 5987 / URL-encoded uploads.
-    const recovered = Buffer.from(file.originalname, 'latin1').toString('utf8');
-    file.originalname = recovered;
+    // Busboy decodes the multipart Content-Disposition `filename=` parameter
+    // as Latin-1 by default (RFC 2183). When the client sends UTF-8 bytes for
+    // the filename, that decoding turns multi-byte sequences into mojibake —
+    // e.g. "Название.md" becomes "ÐÐ°Ð·Ð²Ð°Ð½Ð¸Ðµ.md".
+    //
+    // Detect by signature: a UTF-8 leading byte (0xC2-0xF7) followed by a
+    // continuation byte (0x80-0xBF). Re-encode latin1 -> utf8 only then.
+    // Names that already arrive as proper UTF-8 (RFC 5987
+    // `filename*=UTF-8''…` — busboy gives us the decoded string directly),
+    // pure ASCII, or natural Latin-1 accented text are left untouched.
+    if (MOJIBAKE_PATTERN.test(file.originalname)) {
+      file.originalname = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    }
     try {
       file.originalname = decodeURIComponent(file.originalname);
     } catch (_err) {
-      // Filename wasn't URL-encoded — keep the recovered UTF-8 form.
+      // Filename wasn't URL-encoded — keep the name as-is.
     }
     const sanitizedFilename = sanitizeFilename(file.originalname);
     cb(null, sanitizedFilename);

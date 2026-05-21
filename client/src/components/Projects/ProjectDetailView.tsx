@@ -11,7 +11,8 @@ import {
   useUploadProjectFileMutation,
   useDeleteProjectFileMutation,
 } from '~/data-provider';
-import { useLocalize, useNewConvo } from '~/hooks';
+import type { TConversation } from 'librechat-data-provider';
+import { useLocalize, useNavigateToConvo, useNewConvo } from '~/hooks';
 import { NotificationSeverity } from '~/common';
 import { buildConvoPath, cn } from '~/utils';
 import ProjectAppearancePopover from './ProjectAppearancePopover';
@@ -44,6 +45,7 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
   const navigate = useNavigate();
   const { showToast } = useToastContext();
   const { newConversation } = useNewConvo();
+  const { navigateToConvo } = useNavigateToConvo();
   const { data: modelsData } = useGetModelsQuery();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -103,25 +105,29 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
   const conversations = useMemo(() => convoList?.conversations ?? [], [convoList]);
 
   const handleNewChat = useCallback(() => {
-    // Seed the conversation atom with project_id, then jump to the
-    // project-scoped /projects/<id>/c/new path. useNewConvo's internal
-    // navigate would build /c/new (no project) — our explicit navigate
-    // after it wins and lands the user inside the project route.
+    // newConversation seeds the conversation atom with project_id and
+    // then navigates itself via buildConvoPath (see useNewConvo
+    // switchToConversation), so it lands the user on
+    // /projects/<id>/c/new without an extra navigate hop.
     newConversation({
       modelsData,
       template: { project_id: projectId },
     });
-    navigate(buildConvoPath({ projectId }));
     onClose();
-  }, [newConversation, modelsData, navigate, projectId, onClose]);
+  }, [newConversation, modelsData, projectId, onClose]);
 
   const handleConversationOpen = useCallback(
-    (conversationId: string | null | undefined) => {
-      if (!conversationId) return;
-      navigate(buildConvoPath({ conversationId, projectId }));
+    (conversation: TConversation) => {
+      if (!conversation.conversationId) return;
+      // Reuse the same path as the global sidebar so cache invalidation,
+      // queryClient.fetchFreshData and conversation atom hydration all
+      // run consistently. navigateToConvo internally calls
+      // buildConvoPath with convo.project_id, landing the user on
+      // /projects/<id>/c/<chatId>.
+      navigateToConvo(conversation);
       onClose();
     },
-    [navigate, onClose, projectId],
+    [navigateToConvo, onClose],
   );
 
   const handleUploadList = useCallback(
@@ -262,11 +268,14 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
               conversations.map((c) => (
                 <a
                   key={c.conversationId}
-                  href={`/c/${c.conversationId}`}
+                  href={buildConvoPath({
+                    conversationId: c.conversationId,
+                    projectId: c.project_id ?? projectId,
+                  })}
                   onClick={(e) => {
                     if (e.button === 0 && !e.ctrlKey && !e.metaKey) {
                       e.preventDefault();
-                      handleConversationOpen(c.conversationId);
+                      handleConversationOpen(c as TConversation);
                     }
                   }}
                   className="flex flex-col gap-0.5 rounded-lg px-3 py-2 hover:bg-surface-hover"

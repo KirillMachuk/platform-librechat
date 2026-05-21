@@ -206,16 +206,18 @@ export default function ChatRoute() {
    * The big effect above gates on `hasSetConversation.current` and does not
    * re-fire on URL changes, so without this every cross-project navigation
    * leaves the atom stale (and the first message would persist with the
-   * previous project_id or none at all). Idempotent: early-returns when
-   * the atom already matches the URL.
+   * previous project_id or none at all). Uses a functional Recoil setter
+   * so the effect's deps stay tiny (only re-runs when the URL projectId
+   * itself changes, not on every unrelated atom mutation).
    */
   useEffect(() => {
-    if (!conversation) return;
-    const next = projectId ?? null;
-    const current = conversation.project_id ?? null;
-    if (next === current) return;
-    setConversation({ ...conversation, project_id: next ?? undefined });
-  }, [projectId, conversation, setConversation]);
+    setConversation((prev) => {
+      if (!prev) return prev;
+      const next = projectId ?? undefined;
+      if ((prev.project_id ?? undefined) === next) return prev;
+      return { ...prev, project_id: next };
+    });
+  }, [projectId, setConversation]);
 
   /**
    * Canonicalize legacy chat URLs to the path-based project form.
