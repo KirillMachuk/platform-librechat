@@ -21,7 +21,17 @@ const storage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     req.file_id = crypto.randomUUID();
-    file.originalname = decodeURIComponent(file.originalname);
+    // Busboy decodes the multipart Content-Disposition filename as Latin-1 by
+    // default (RFC 2183), which turns UTF-8 bytes (e.g. Cyrillic) into mojibake.
+    // Re-encode latin1 -> utf8 to recover the original name, then attempt
+    // %-decoding for RFC 5987 / URL-encoded uploads.
+    const recovered = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    file.originalname = recovered;
+    try {
+      file.originalname = decodeURIComponent(file.originalname);
+    } catch (_err) {
+      // Filename wasn't URL-encoded — keep the recovered UTF-8 form.
+    }
     const sanitizedFilename = sanitizeFilename(file.originalname);
     cb(null, sanitizedFilename);
   },

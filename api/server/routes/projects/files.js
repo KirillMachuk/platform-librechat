@@ -9,6 +9,7 @@ const {
   processProjectFileUpload,
   processDeleteRequest,
 } = require('~/server/services/Files/process');
+const { deleteVectors } = require('~/server/services/Files/VectorDB/crud');
 const db = require('~/models');
 
 const router = express.Router({ mergeParams: true });
@@ -90,6 +91,26 @@ router.delete('/:file_id', async (req, res) => {
     if (!files || files.length === 0) {
       return res.status(404).json({ error: 'File not found in project' });
     }
+
+    // Express body parser leaves req.body undefined for DELETE without a body
+    // (axios.delete sends no Content-Type). processDeleteRequest dereferences
+    // req.body.assistant_id and would throw; give it an empty body to read.
+    req.body = req.body ?? {};
+
+    // Project sources are dual-stored (storage + pgvector). The local strategy
+    // chosen by processDeleteRequest only removes the disk file — vector
+    // embeddings would orphan in pgvector. Purge them explicitly first.
+    const vectorDeletions = files
+      .filter((file) => file.embedded)
+      .map((file) =>
+        deleteVectors(req, file).catch((error) =>
+          logger.error('[DELETE /projects/:projectId/files/:file_id] Vector cleanup', error),
+        ),
+      );
+    if (vectorDeletions.length > 0) {
+      await Promise.allSettled(vectorDeletions);
+    }
+
     await processDeleteRequest({ req, files });
     res.status(204).end();
   } catch (error) {
