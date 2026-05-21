@@ -25,6 +25,7 @@ import type {
 } from 'librechat-data-provider';
 import type { AssistantListItem } from '~/common';
 import {
+  buildConvoPath,
   updateLastSelectedModel,
   getLocalStorageItems,
   getDefaultModelSpec,
@@ -233,19 +234,24 @@ const useNewConvo = (index = 0) => {
           return;
         }
 
-        const searchParamsString = searchParams?.toString();
-        const getParams = () => (searchParamsString ? `?${searchParamsString}` : '');
+        const carriedParams = new URLSearchParams(searchParams ?? undefined);
+        // `project` moved into the URL path (see buildConvoPath) — drop it
+        // from the query so we don't duplicate the context.
+        carriedParams.delete('project');
+        const carriedQuery = carriedParams.toString();
+        const carriedSuffix = carriedQuery ? `?${carriedQuery}` : '';
+        const projectId = conversation.project_id ?? undefined;
 
         if (conversation.conversationId === Constants.NEW_CONVO && !modelsData) {
           const storedTitle = localStorage.getItem(LocalStorageKeys.APP_TITLE);
           const appTitle = !storedTitle || storedTitle === 'LibreChat' ? '1ma' : storedTitle;
           document.title = appTitle;
-          const path = `/c/${Constants.NEW_CONVO}${getParams()}`;
+          const path = `${buildConvoPath({ projectId })}${carriedSuffix}`;
           navigate(path, { state: { focusChat: true } });
           return;
         }
 
-        const path = `/c/${conversation.conversationId}${getParams()}`;
+        const path = `${buildConvoPath({ conversationId: conversation.conversationId, projectId })}${carriedSuffix}`;
         navigate(path, {
           replace: true,
           state: disableFocus ? {} : { focusChat: true },

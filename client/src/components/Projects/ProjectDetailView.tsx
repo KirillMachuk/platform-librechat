@@ -13,7 +13,7 @@ import {
 } from '~/data-provider';
 import { useLocalize, useNewConvo } from '~/hooks';
 import { NotificationSeverity } from '~/common';
-import { cn } from '~/utils';
+import { buildConvoPath, cn } from '~/utils';
 import ProjectAppearancePopover from './ProjectAppearancePopover';
 import ProjectEditDialog from './ProjectEditDialog';
 import {
@@ -103,28 +103,25 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
   const conversations = useMemo(() => convoList?.conversations ?? [], [convoList]);
 
   const handleNewChat = useCallback(() => {
-    // Seed the conversation atom with project_id BEFORE navigating. ChatRoute's
-    // applyProjectId useEffect doesn't re-fire on plain URL changes (its deps
-    // exclude conversationId/searchParams), so a bare navigate(/c/new?project=)
-    // leaves state with stale data and the first message creates a convo
-    // without project_id. By calling newConversation here with the template,
-    // the atom is set immediately; ?project= in the URL is a safety net for
-    // ChatRoute's existing reader and so the URL itself reflects the context.
+    // Seed the conversation atom with project_id, then jump to the
+    // project-scoped /projects/<id>/c/new path. useNewConvo's internal
+    // navigate would build /c/new (no project) — our explicit navigate
+    // after it wins and lands the user inside the project route.
     newConversation({
       modelsData,
       template: { project_id: projectId },
     });
-    navigate(`/c/new?project=${encodeURIComponent(projectId)}`);
+    navigate(buildConvoPath({ projectId }));
     onClose();
   }, [newConversation, modelsData, navigate, projectId, onClose]);
 
   const handleConversationOpen = useCallback(
     (conversationId: string | null | undefined) => {
       if (!conversationId) return;
-      navigate(`/c/${conversationId}`);
+      navigate(buildConvoPath({ conversationId, projectId }));
       onClose();
     },
-    [navigate, onClose],
+    [navigate, onClose, projectId],
   );
 
   const handleUploadList = useCallback(

@@ -11,7 +11,7 @@ import { useGetEndpointsQuery } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
 import { ConvoOptions } from './ConvoOptions';
 import RenameForm from './RenameForm';
-import { cn, logger } from '~/utils';
+import { cn, logger, buildConvoPath } from '~/utils';
 import ConvoLink from './ConvoLink';
 import store from '~/store';
 
@@ -145,7 +145,10 @@ export default function Conversation({
     if (ctrlOrMetaKey) {
       toggleNav();
       const baseUrl = window.location.origin;
-      const path = `/c/${conversationId}`;
+      const path = buildConvoPath({
+        conversationId,
+        projectId: conversation.project_id,
+      });
       window.open(baseUrl + path, '_blank');
       return;
     }

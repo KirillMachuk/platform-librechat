@@ -27,6 +27,7 @@ import {
   logger,
   setDraft,
   scrollToEnd,
+  buildConvoPath,
   getAllContentText,
   addConvoToAllQueries,
   updateConvoInAllQueries,
@@ -506,9 +507,13 @@ export default function useEventHandlers({
           );
           setShowStopButton(false);
           setIsSubmitting(false);
-          // Navigate to new chat if not already there
-          if (location.pathname !== `/c/${Constants.NEW_CONVO}`) {
-            navigate(`/c/${Constants.NEW_CONVO}`, { replace: true });
+          // Navigate to new chat if not already there. Preserve project
+          // context when the aborted submission belonged to a project.
+          const earlyAbortPath = buildConvoPath({
+            projectId: submissionConvo?.project_id,
+          });
+          if (location.pathname !== earlyAbortPath) {
+            navigate(earlyAbortPath, { replace: true });
           }
           return;
         }
@@ -564,14 +569,17 @@ export default function useEventHandlers({
             removeConvoFromAllQueries(queryClient, submissionConvo.conversationId);
           }
 
+          const newChatPath = buildConvoPath({ projectId: submissionConvo?.project_id });
           const isNewChat =
-            location.pathname === `/c/${Constants.NEW_CONVO}` &&
-            currentConvoId === Constants.NEW_CONVO;
+            location.pathname === newChatPath && currentConvoId === Constants.NEW_CONVO;
 
           setFinalMessages(currentConvoId, isNewChat ? [] : [...messages]);
           setDraft({ id: currentConvoId, value: requestMessage?.text });
           if (isNewChat) {
-            navigate(`/c/${Constants.NEW_CONVO}`, { replace: true, state: { focusChat: true } });
+            navigate(
+              buildConvoPath({ projectId: submissionConvo?.project_id }),
+              { replace: true, state: { focusChat: true } },
+            );
           }
           return;
         }
@@ -651,9 +659,18 @@ export default function useEventHandlers({
             });
           }
 
-          if (location.pathname === `/c/${Constants.NEW_CONVO}`) {
+          const newChatPathForFinal = buildConvoPath({
+            projectId: conversation.project_id ?? submissionConvo?.project_id,
+          });
+          if (location.pathname === newChatPathForFinal) {
             preserveSubagentAtomsForNewConvoIdRef.current = conversation.conversationId;
-            navigate(`/c/${conversation.conversationId}`, { replace: true });
+            navigate(
+              buildConvoPath({
+                conversationId: conversation.conversationId,
+                projectId: conversation.project_id ?? submissionConvo?.project_id,
+              }),
+              { replace: true },
+            );
           }
         }
       } finally {

@@ -4,7 +4,7 @@ import type { TStartupConfig } from 'librechat-data-provider';
 import { TranslationKeys, useLocalize } from '~/hooks';
 import { useGetStartupConfig } from '~/data-provider';
 import AuthLayout from '~/components/Auth/AuthLayout';
-import { REDIRECT_PARAM, SESSION_KEY } from '~/utils';
+import { REDIRECT_PARAM, SESSION_KEY, isChatRoute } from '~/utils';
 
 const headerMap: Record<string, TranslationKeys> = {
   '/login': 'com_auth_welcome_back',
@@ -34,14 +34,17 @@ export default function StartupLayout({ isAuthenticated }: { isAuthenticated?: b
       const hasPendingRedirect =
         new URLSearchParams(window.location.search).has(REDIRECT_PARAM) ||
         sessionStorage.getItem(SESSION_KEY) != null;
-      if (!hasPendingRedirect) {
+      // Already inside a chat route (including /projects/<id>/c/...) means
+      // the user landed on a deep-linked chat — don't bounce them to /c/new.
+      const alreadyOnChat = isChatRoute(location.pathname);
+      if (!hasPendingRedirect && !alreadyOnChat) {
         navigate('/c/new', { replace: true });
       }
     }
     if (data) {
       setStartupConfig(data);
     }
-  }, [isAuthenticated, navigate, data]);
+  }, [isAuthenticated, navigate, data, location.pathname]);
 
   useEffect(() => {
     document.title = startupConfig?.appTitle || '1ma';

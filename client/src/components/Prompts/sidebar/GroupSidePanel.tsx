@@ -4,7 +4,7 @@ import { usePromptGroupsContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
 import PanelNavigation from './PanelNavigation';
 import List from '../lists/List';
-import { cn } from '~/utils';
+import { cn, isChatRoute as isChatRoutePath } from '~/utils';
 
 export default function GroupSidePanel({
   children,
@@ -21,7 +21,7 @@ export default function GroupSidePanel({
 }) {
   const location = useLocation();
   const localize = useLocalize();
-  const isChatRoute = isChatRouteProp ?? location.pathname?.startsWith('/c/') ?? false;
+  const isChatRoute = isChatRouteProp ?? isChatRoutePath(location.pathname ?? '');
 
   const context = usePromptGroupsContext();
   if (!context) {

@@ -20,6 +20,7 @@ import {
   getDefaultEndpoint,
   clearMessagesCache,
   buildDefaultConvo,
+  buildConvoPath,
   logger,
 } from '~/utils';
 import { useApplyModelSpecEffects } from '~/hooks/Agents';
@@ -66,12 +67,21 @@ const useNavigateToConvo = (index = 0) => {
       const convoData = { ...data };
       clearModelForNonEphemeralAgent(convoData);
       setConversation(convoData);
-      navigate(`/c/${conversationId ?? Constants.NEW_CONVO}`, { state: { focusChat: true } });
+      navigate(
+        buildConvoPath({
+          conversationId: conversationId ?? Constants.NEW_CONVO,
+          projectId: convoData.project_id,
+        }),
+        { state: { focusChat: true } },
+      );
     } catch (error) {
       console.error('Error fetching conversation data on navigation', error);
       if (conversation) {
         setConversation(conversation as TConversation);
-        navigate(`/c/${conversationId}`, { state: { focusChat: true } });
+        navigate(
+          buildConvoPath({ conversationId, projectId: conversation.project_id }),
+          { state: { focusChat: true } },
+        );
       }
     }
   };
@@ -129,7 +139,13 @@ const useNavigateToConvo = (index = 0) => {
       fetchFreshData(convo);
     } else {
       setConversation(convo);
-      navigate(`/c/${convo.conversationId ?? Constants.NEW_CONVO}`, { state: { focusChat: true } });
+      navigate(
+        buildConvoPath({
+          conversationId: convo.conversationId ?? Constants.NEW_CONVO,
+          projectId: convo.project_id,
+        }),
+        { state: { focusChat: true } },
+      );
     }
   };
 
