@@ -22,12 +22,25 @@ const buildOptions = (req, endpoint, parsedBody, endpointType) => {
   /** @type {import('librechat-data-provider').TConversation | undefined} */
   const addedConvo = req.body?.addedConvo;
 
+  /**
+   * `project_id` rides directly on the request payload (see
+   * `packages/data-provider/src/createPayload.ts`). Surface it on
+   * `endpointOption` so `BaseClient#saveMessageToDatabase` spreads it into
+   * `fieldsToKeep` and `saveConvo` persists the binding on the newly
+   * created conversation. Without this, the convo would be saved without
+   * `project_id` (because parsedBody is built from the compact schema
+   * which omits identity fields), and BaseClient's unset-missing-fields
+   * pass would also strip it from any pre-existing project chat.
+   */
+  const project_id = req.body?.project_id;
+
   return removeNullishValues({
     spec,
     iconURL,
     endpoint,
     agent_id,
     endpointType,
+    project_id,
     model_parameters,
     agent: agentPromise,
     addedConvo,

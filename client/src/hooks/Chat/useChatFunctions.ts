@@ -28,7 +28,7 @@ import type { SetterOrUpdater } from 'recoil';
 import type { TAskFunction, ExtendedFile } from '~/common';
 import useSetFilesToDelete from '~/hooks/Files/useSetFilesToDelete';
 import useGetSender from '~/hooks/Conversations/useGetSender';
-import { logger, createDualMessageContent } from '~/utils';
+import { buildConvoPath, logger, createDualMessageContent } from '~/utils';
 import store, { useGetEphemeralAgent } from '~/store';
 import { startupConfigKey } from '~/data-provider';
 import useUserKey from '~/hooks/Input/useUserKey';
@@ -196,7 +196,14 @@ export default function useChatFunctions({
       parentMessageId = Constants.NO_PARENT;
       currentMessages = [];
       conversationId = null;
-      navigate('/c/new', { state: { focusChat: true } });
+      // Preserve project context across the NEW_CONVO submit. A hardcoded
+      // `/c/new` strips `/projects/<id>` from the URL, which causes
+      // ChatRoute's projectId-sync effect to wipe `conversation.project_id`
+      // from the atom and removes the project icon from the header before
+      // the submission ships.
+      navigate(buildConvoPath({ projectId: conversation?.project_id }), {
+        state: { focusChat: true },
+      });
     }
 
     const targetParentMessageId = isRegenerate ? messageId : latestMessage?.parentMessageId;

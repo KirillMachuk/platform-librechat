@@ -111,6 +111,15 @@ export type TPayload = Partial<TMessage> &
     isContinued: boolean;
     isRegenerate?: boolean;
     conversationId: string | null;
+    /**
+     * Binds the request to a Project so the agents pipeline can attach
+     * project-level instructions and file_search resources. Sourced from
+     * `submission.conversation.project_id`, which is set when the user
+     * opens a chat from inside a Project. Required for NEW conversations
+     * because the backend cannot look up `project_id` via `conversationId`
+     * until the convo is persisted.
+     */
+    project_id?: string;
     messages?: TMessages;
     isTemporary: boolean;
     ephemeralAgent?: TEphemeralAgent | null;

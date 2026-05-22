@@ -39,6 +39,14 @@ export default function createPayload(submission: t.TSubmission) {
     isRegenerate,
     editedContent,
     conversationId,
+    /**
+     * Forwards the active Project binding. `endpointOption` is built from
+     * `compactAgentsBaseSchema` which intentionally strips identity fields,
+     * so without this the backend never sees `project_id` for NEW chats
+     * (the DB lookup fallback in `applyProjectContext` requires an existing
+     * `conversationId`, which a NEW chat does not have yet).
+     */
+    project_id: conversation?.project_id ?? undefined,
     isContinued: !!(isEdited && isContinued),
     ephemeralAgent: s.isAssistantsEndpoint(endpoint) ? undefined : ephemeralAgent,
     manualSkills: s.isAssistantsEndpoint(endpoint) ? undefined : manualSkills,
