@@ -291,7 +291,15 @@ const useNewConvo = (index = 0) => {
         isParamEndpoint(_preset?.endpoint ?? '', _preset?.endpointType ?? '');
       const template =
         paramEndpoint === true && templateConvoId && templateConvoId === Constants.NEW_CONVO
-          ? { endpoint: _template.endpoint }
+          ? // Param-endpoint NEW_CONVO: hand control of settings to the spec/preset,
+            // but keep identity-only fields that don't belong to LLM params.
+            // Without preserving project_id here, ChatRoute's setup useEffect
+            // (which re-fires on remount when navigating /c/<old> →
+            // /projects/<id>/c/new) wipes the project binding the user just
+            // established via handleNewChat, the submission goes out without
+            // project_id, RAG sources are not attached, and the post-final
+            // navigate lands on /c/new instead of /projects/<id>/c/<newId>.
+            { endpoint: _template.endpoint, project_id: _template.project_id }
           : _template;
 
       const conversation = {
