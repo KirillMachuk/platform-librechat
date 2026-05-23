@@ -70,6 +70,12 @@ const primeFiles = async (options) => {
     files.push({
       file_id: file.file_id,
       filename: file.filename,
+      // Preserve the entity namespace the file was embedded under so that
+      // the RAG /query call uses the same entity_id that /embed used.
+      // Project source files are embedded with entity_id=project_id; without
+      // this the query falls back to the agent id, hits a different namespace,
+      // and returns zero results.
+      entity_id: file.project_id ?? undefined,
     });
   }
 
@@ -106,10 +112,15 @@ const createFileSearchTool = async ({ userId, files, entity_id, fileCitations = 
           query,
           k: 5,
         };
-        if (!entity_id) {
+        // Per-file entity_id (e.g. project_id for project source files) takes
+        // priority over the tool-level entity_id (agent id). This ensures that
+        // project files embedded under entity_id=project_id are queried in the
+        // correct RAG namespace rather than the agent's namespace.
+        const effectiveEntityId = file.entity_id ?? entity_id;
+        if (!effectiveEntityId) {
           return body;
         }
-        body.entity_id = entity_id;
+        body.entity_id = effectiveEntityId;
         logger.debug(`[${Tools.file_search}] RAG API /query body`, body);
         return body;
       };
