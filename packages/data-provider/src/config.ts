@@ -56,6 +56,11 @@ export const excludedKeys = new Set([
   'files',
   'spec',
   'disableParams',
+  // Identity field — must never be cleared by the endpoint-options $unset pass.
+  // project_id is set once (on first message or via conversationCreatedAt) and
+  // must survive subsequent turns where req.body may not carry it (e.g. after
+  // a page reload on an existing project conversation).
+  'project_id',
 ]);
 
 export enum SettingsViews {

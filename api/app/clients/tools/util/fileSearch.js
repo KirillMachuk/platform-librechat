@@ -38,18 +38,27 @@ const primeFiles = async (options) => {
   // Get all files first
   const allFiles = (await getFiles({ file_id: { $in: file_ids } }, null, { text: 0 })) ?? [];
 
-  // Filter by access if user and agent are provided
-  let dbFiles;
-  if (req?.user?.id && agentId) {
-    dbFiles = await filterFilesByAgentAccess({
-      files: allFiles,
+  // Project source files are pre-authorised: applyProjectContext already called
+  // db.getProjectById(userId, projectId) before injecting them, so membership
+  // is established. Passing them through filterFilesByAgentAccess would block
+  // files uploaded by a different project member (agent ownership ≠ project
+  // membership). Split and bypass the agent check for project files.
+  const projectFiles = allFiles.filter((f) => f.project_id);
+  const agentFiles = allFiles.filter((f) => !f.project_id);
+
+  let accessibleAgentFiles;
+  if (req?.user?.id && agentId && agentFiles.length > 0) {
+    accessibleAgentFiles = await filterFilesByAgentAccess({
+      files: agentFiles,
       userId: req.user.id,
       role: req.user.role,
       agentId,
     });
   } else {
-    dbFiles = allFiles;
+    accessibleAgentFiles = agentFiles;
   }
+
+  let dbFiles = [...projectFiles, ...accessibleAgentFiles];
 
   dbFiles = dbFiles.concat(resourceFiles);
 
