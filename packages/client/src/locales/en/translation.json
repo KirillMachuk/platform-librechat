@@ -28,5 +28,12 @@
   "com_ui_disabled": "Disabled",
   "com_ui_toggle_theme": "Toggle theme",
   "com_ui_dark_theme_enabled": "Dark theme enabled",
-  "com_ui_light_theme_enabled": "Light theme enabled"
+  "com_ui_light_theme_enabled": "Light theme enabled",
+  "com_ui_pagination": "Pagination",
+  "com_ui_prev": "Previous",
+  "com_ui_next": "Next",
+  "com_ui_ascending": "Ascending",
+  "com_ui_descending": "Descending",
+  "com_ui_show_all": "Show all",
+  "com_files_filter_by": "Filter columns"
 }

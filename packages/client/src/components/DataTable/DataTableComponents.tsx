@@ -45,23 +45,54 @@ interface TableRowComponentProps<TData extends Record<string, unknown>> {
   virtualIndex?: number;
   style?: React.CSSProperties;
   selected: boolean;
+  onRowClick?: (row: TData) => void;
 }
+
+const INTERACTIVE_SELECTOR =
+  '[data-row-action], a, button, input, label, textarea, select, [role="checkbox"], [role="button"], [role="menuitem"]';
 
 // ...existing code...
 const TableRowComponent = <TData extends Record<string, unknown>>(
-  { row, virtualIndex, style, selected }: TableRowComponentProps<TData>,
+  { row, virtualIndex, style, selected, onRowClick }: TableRowComponentProps<TData>,
   ref: React.Ref<HTMLTableRowElement>,
 ) => {
   // Check if we're on mobile - use window.innerWidth for component-level check
   const isSmallScreen = typeof window !== 'undefined' && window.innerWidth < 768;
+  const clickable = onRowClick != null;
+  const handleRowActivate = () => onRowClick?.(row.original);
 
   return (
     <TableRow
       ref={ref}
       data-state={selected ? 'selected' : undefined}
       data-index={virtualIndex}
-      className="border-none hover:bg-surface-secondary"
+      className={cn(
+        'border-none hover:bg-surface-secondary',
+        clickable && 'cursor-pointer',
+      )}
       style={style}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={
+        clickable
+          ? (event) => {
+              if ((event.target as HTMLElement).closest(INTERACTIVE_SELECTOR)) {
+                return;
+              }
+              handleRowActivate();
+            }
+          : undefined
+      }
+      onKeyDown={
+        clickable
+          ? (event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              if ((event.target as HTMLElement).closest(INTERACTIVE_SELECTOR)) return;
+              event.preventDefault();
+              handleRowActivate();
+            }
+          : undefined
+      }
     >
       {row.getVisibleCells().map((cell) => {
         const meta = cell.column.columnDef.meta as
@@ -122,12 +153,15 @@ interface GenericRowProps {
   virtualIndex?: number;
   style?: React.CSSProperties;
   selected: boolean;
+  onRowClick?: (row: Record<string, unknown>) => void;
 }
 
 export const MemoizedTableRow = memo(
   ForwardTableRowComponent as (props: GenericRowProps) => JSX.Element,
   (prev: GenericRowProps, next: GenericRowProps) =>
-    prev.row.original === next.row.original && prev.selected === next.selected,
+    prev.row.original === next.row.original &&
+    prev.selected === next.selected &&
+    prev.onRowClick === next.onRowClick,
 );
 
 export const SkeletonRows = memo(

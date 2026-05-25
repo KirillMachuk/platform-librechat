@@ -15,18 +15,22 @@ jest.mock('~/utils', () => ({
   },
 }));
 
-// Mock hooks
+// Mock hooks — `useLocalize` must return a stable function reference so
+// `tableColumns` useMemo deps don't churn every render (which would
+// trigger an infinite re-render loop via downstream setColumnVisibility).
+const mockLocalize = (key: string, options?: Record<string, unknown>) => {
+  if (options && typeof options === 'object') {
+    let result = key;
+    Object.entries(options).forEach(([k, v]) => {
+      result = result.replace(`{${k}}`, String(v));
+    });
+    return result;
+  }
+  return key;
+};
+
 jest.mock('~/hooks', () => ({
-  useLocalize: () => (key: string, options?: Record<string, unknown>) => {
-    if (options && typeof options === 'object') {
-      let result = key;
-      Object.entries(options).forEach(([k, v]) => {
-        result = result.replace(`{${k}}`, String(v));
-      });
-      return result;
-    }
-    return key;
-  },
+  useLocalize: () => mockLocalize,
   useMediaQuery: jest.fn(() => false),
 }));
 

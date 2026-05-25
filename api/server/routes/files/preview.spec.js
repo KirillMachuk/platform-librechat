@@ -16,9 +16,13 @@ jest.mock('@librechat/data-schemas', () => ({
 }));
 
 jest.mock('@librechat/api', () => ({
+  logAxiosError: jest.fn(),
   refreshS3FileUrls: jest.fn(),
   resolveUploadErrorMessage: jest.fn(),
   verifyAgentUploadPermission: jest.fn(),
+  officeHtmlBucket: jest.fn(() => null),
+  renderOfficePreview: jest.fn(),
+  MAX_OFFICE_PREVIEW_BYTES: 25 * 1024 * 1024,
 }));
 
 const mockFindFileById = jest.fn();
@@ -391,6 +395,110 @@ describe('GET /files/:file_id/preview', () => {
       expect(mockUpdateFile).toHaveBeenCalled();
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ file_id: 'fid-race', status: 'pending' });
+    });
+  });
+
+  describe('on-demand office HTML render', () => {
+    /* For office bucket files that have no pre-rendered `text` (e.g.
+     * uploaded via My Files rather than the code-execution deferred-
+     * preview flow), the endpoint streams the file, converts it via
+     * `renderOfficePreview`, and returns the HTML inline. Concurrent
+     * polls of the same file MUST be deduplicated to a single render
+     * — otherwise the 2.5s frontend poll cadence would multiply CPU
+     * cost on slow renders. */
+    const { officeHtmlBucket, renderOfficePreview } = require('@librechat/api');
+    const { getStrategyFunctions } = require('~/server/services/Files/strategies');
+    const { Readable } = require('stream');
+
+    const mockGetDownloadStream = jest.fn();
+    beforeEach(() => {
+      officeHtmlBucket.mockReset();
+      renderOfficePreview.mockReset();
+      mockGetDownloadStream.mockReset();
+      getStrategyFunctions.mockImplementation(() => ({
+        getDownloadStream: mockGetDownloadStream,
+      }));
+    });
+
+    it('renders office HTML on-demand when the record is ready but text is null', async () => {
+      const updatedAt = new Date('2026-05-21T10:00:00Z');
+      mockGetFiles.mockResolvedValueOnce([
+        {
+          file_id: 'fid-ondemand-docx',
+          user: OWNER_USER_ID,
+          filename: 'doc.docx',
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          status: 'ready',
+          source: 'local',
+          filepath: '/tmp/doc.docx',
+          updatedAt,
+        },
+      ]);
+      mockFindFileById.mockResolvedValueOnce({ file_id: 'fid-ondemand-docx', text: null });
+      officeHtmlBucket.mockReturnValue('docx');
+      mockGetDownloadStream.mockResolvedValueOnce(Readable.from(Buffer.from([1, 2, 3])));
+      renderOfficePreview.mockResolvedValueOnce({ html: '<html>doc</html>', bucket: 'docx' });
+
+      const res = await request(buildApp()).get('/files/fid-ondemand-docx/preview');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        file_id: 'fid-ondemand-docx',
+        status: 'ready',
+        text: '<html>doc</html>',
+        textFormat: 'html',
+      });
+      expect(renderOfficePreview).toHaveBeenCalledTimes(1);
+    });
+
+    it('surfaces previewError when on-demand render returns an error', async () => {
+      mockGetFiles.mockResolvedValueOnce([
+        {
+          file_id: 'fid-ondemand-toolarge',
+          user: OWNER_USER_ID,
+          filename: 'huge.xlsx',
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          status: 'ready',
+          source: 'local',
+          filepath: '/tmp/huge.xlsx',
+          updatedAt: new Date('2026-05-21T11:00:00Z'),
+        },
+      ]);
+      mockFindFileById.mockResolvedValueOnce({ file_id: 'fid-ondemand-toolarge', text: null });
+      officeHtmlBucket.mockReturnValue('spreadsheet');
+      mockGetDownloadStream.mockResolvedValueOnce(Readable.from(Buffer.from([1, 2, 3])));
+      renderOfficePreview.mockResolvedValueOnce({ error: 'too-large' });
+
+      const res = await request(buildApp()).get('/files/fid-ondemand-toolarge/preview');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        file_id: 'fid-ondemand-toolarge',
+        status: 'ready',
+        previewError: 'too-large',
+      });
+    });
+
+    it('skips on-demand render for OpenAI-storage files (different download signature)', async () => {
+      mockGetFiles.mockResolvedValueOnce([
+        {
+          file_id: 'fid-openai-docx',
+          user: OWNER_USER_ID,
+          filename: 'oa.docx',
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          status: 'ready',
+          source: 'openai',
+          updatedAt: new Date('2026-05-21T12:00:00Z'),
+        },
+      ]);
+      mockFindFileById.mockResolvedValueOnce({ file_id: 'fid-openai-docx', text: null });
+
+      const res = await request(buildApp()).get('/files/fid-openai-docx/preview');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ file_id: 'fid-openai-docx', status: 'ready' });
+      expect(renderOfficePreview).not.toHaveBeenCalled();
+      expect(officeHtmlBucket).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,4 +1,5 @@
 import type { ColumnDef, SortingState, Table } from '@tanstack/react-table';
+import type { TranslationKeys } from '../../hooks';
 import type React from 'react';
 
 export type ProcessedDataRow<TData> = TData & { _id: string; _index: number };
@@ -64,6 +65,18 @@ export type TableColumn<TData, TValue> = ColumnDef<TData, TValue> & {
      * ```
      */
     isRowHeader?: boolean;
+    /**
+     * When true, the wrapping `<th>` will NOT attach a click-to-sort handler
+     * or render the default sort indicator chevron. Use this when the column's
+     * `header` function renders its own interactive sort control
+     * (e.g. `SortFilterHeader`, a custom `<Button>`), so that:
+     *   - clicks on the inner control are not double-handled by the wrapper
+     *   - only one sort indicator is visible
+     *
+     * Defaults to `false` — the wrapper behaves as a sortable cell when the
+     * column allows sorting.
+     */
+    customHeader?: boolean;
   };
 };
 
@@ -89,6 +102,27 @@ export interface DataTableConfig {
   pinning?: {
     enableColumnPinning?: boolean;
   };
+  /**
+   * Override default data orchestration. By default the table operates in
+   * manual mode (server-side sort/filter with infinite scroll via virtualizer).
+   * Set `manualSorting`/`manualFiltering` to `false` to enable client-side
+   * sort/filter, and set `enablePagination` to swap virtualization for
+   * standard prev/next pagination.
+   */
+  behavior?: {
+    manualSorting?: boolean;
+    manualFiltering?: boolean;
+    enablePagination?: boolean;
+    pageSize?: number;
+  };
+  /**
+   * Render a column-visibility dropdown in the toolbar. Requires `contextMap`
+   * to translate column ids into localized labels.
+   */
+  columnVisibility?: {
+    enabled?: boolean;
+    contextMap?: Record<string, TranslationKeys>;
+  };
 }
 
 export interface DataTableProps<TData extends Record<string, unknown>, TValue> {
@@ -113,6 +147,12 @@ export interface DataTableProps<TData extends Record<string, unknown>, TValue> {
     selectedRows: TData[];
     table: Table<ProcessedDataRow<TData>>;
   }) => React.ReactNode;
+  /**
+   * Invoked when a body row is activated via click or keyboard (Enter/Space).
+   * Clicks that originate from interactive children (links, buttons, inputs,
+   * checkboxes, or elements marked `data-row-action`) are ignored.
+   */
+  onRowClick?: (row: TData) => void;
 }
 
 export interface DataTableSearchProps {

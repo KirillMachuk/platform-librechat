@@ -1,18 +1,20 @@
-import { useState, useId, useMemo } from 'react';
+import { useId, useMemo, useState } from 'react';
 import * as Menu from '@ariakit/react/menu';
-import { Column } from '@tanstack/react-table';
-import { ListFilter, FilterX } from 'lucide-react';
-import { DropdownPopup, TooltipAnchor } from '@librechat/client';
+import { FilterX, ListFilter } from 'lucide-react';
 import { ArrowDownIcon, ArrowUpIcon, CaretSortIcon } from '@radix-ui/react-icons';
-import type { MenuItemProps } from '~/common';
-import { useLocalize, TranslationKeys } from '~/hooks';
+import type { Column } from '@tanstack/react-table';
+import type { MenuItemProps } from '../../common';
+import type { TranslationKeys } from '../../hooks';
+import { useLocalize } from '../../hooks';
+import { TooltipAnchor } from '../Tooltip';
+import DropdownPopup from '../DropdownPopup';
 import { cn } from '~/utils';
 
 interface SortFilterHeaderProps<TData, TValue> extends React.HTMLAttributes<HTMLDivElement> {
   title: string;
   column: Column<TData, TValue>;
-  filters?: Record<string, string[] | number[]>;
-  valueMap?: Record<any, TranslationKeys>;
+  filters?: Record<string, Array<string | number>>;
+  valueMap?: Record<string | number, TranslationKeys>;
   ariaLabel?: string;
 }
 
@@ -43,28 +45,29 @@ export function SortFilterHeader<TData, TValue>({
     ];
 
     if (filters) {
-      items.push({ separate: true } as any);
-      Object.entries(filters).forEach(([_key, values]) => {
-        values.forEach((value?: string | number) => {
-          const translationKey = valueMap?.[value ?? ''];
+      items.push({ separate: true } as MenuItemProps);
+      Object.entries(filters).forEach(([, values]) => {
+        values.forEach((value) => {
+          const translationKey = valueMap?.[value];
           const filterValue =
             translationKey != null && translationKey.length
               ? localize(translationKey)
               : String(value);
-          if (filterValue) {
-            const isActive = column.getFilterValue() === value;
-            items.push({
-              label: filterValue,
-              onClick: () => column.setFilterValue(value),
-              icon: <ListFilter className="icon-sm text-text-secondary" aria-hidden="true" />,
-              show: true,
-              className: isActive ? 'border-l-2 border-l-border-xheavy' : '',
-            });
+          if (!filterValue) {
+            return;
           }
+          const isActive = column.getFilterValue() === value;
+          items.push({
+            label: filterValue,
+            onClick: () => column.setFilterValue(value),
+            icon: <ListFilter className="icon-sm text-text-secondary" aria-hidden="true" />,
+            show: true,
+            className: isActive ? 'border-l-2 border-l-border-xheavy' : '',
+          });
         });
       });
 
-      items.push({ separate: true } as any);
+      items.push({ separate: true } as MenuItemProps);
       items.push({
         label: localize('com_ui_show_all'),
         onClick: () => column.setFilterValue(undefined),
@@ -115,16 +118,13 @@ export function SortFilterHeader<TData, TValue>({
                 ) : (
                   <ListFilter className="icon-sm text-text-secondary" aria-hidden="true" />
                 )}
-                {(() => {
-                  const sortState = column.getIsSorted();
-                  if (sortState === 'desc') {
-                    return <ArrowDownIcon className="icon-sm" />;
-                  }
-                  if (sortState === 'asc') {
-                    return <ArrowUpIcon className="icon-sm" />;
-                  }
-                  return <CaretSortIcon className="icon-sm" />;
-                })()}
+                {sortState === 'desc' ? (
+                  <ArrowDownIcon className="icon-sm" />
+                ) : sortState === 'asc' ? (
+                  <ArrowUpIcon className="icon-sm" />
+                ) : (
+                  <CaretSortIcon className="icon-sm" />
+                )}
               </Menu.MenuButton>
             }
           />
@@ -136,3 +136,5 @@ export function SortFilterHeader<TData, TValue>({
     </div>
   );
 }
+
+export default SortFilterHeader;

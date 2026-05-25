@@ -194,6 +194,7 @@ export default function ArchivedChatsTable({
         meta: {
           size: isSmallScreen ? '70%' : '50%',
           mobileSize: '70%',
+          customHeader: true,
         },
       },
       {
@@ -233,6 +234,7 @@ export default function ArchivedChatsTable({
         meta: {
           size: isSmallScreen ? '30%' : '35%',
           mobileSize: '30%',
+          customHeader: true,
         },
       },
       {
@@ -293,6 +295,7 @@ export default function ArchivedChatsTable({
         meta: {
           size: '15%',
           mobileSize: '25%',
+          customHeader: true,
         },
       },
     ],
@@ -304,15 +307,16 @@ export default function ArchivedChatsTable({
       <DataTable
         columns={columns}
         data={allConversations}
-        filterColumn="title"
         onFilterChange={debouncedFilterChange}
         filterValue={queryParams.search}
         fetchNextPage={handleFetchNextPage}
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
         isLoading={isLoading}
-        showCheckboxes={false}
-        enableSearch={searchState.enabled === true}
+        config={{
+          selection: { showCheckboxes: false },
+          search: { enableSearch: searchState.enabled === true },
+        }}
       />
 
       <OGDialog open={isDeleteOpen} onOpenChange={onOpenChange}>

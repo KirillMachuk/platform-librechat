@@ -1,22 +1,23 @@
-import { useState, useId, useMemo } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { ListFilter } from 'lucide-react';
 import * as Menu from '@ariakit/react/menu';
-import { useReactTable } from '@tanstack/react-table';
-import { DropdownPopup } from '@librechat/client';
-import { useLocalize, TranslationKeys } from '~/hooks';
+import type { Table } from '@tanstack/react-table';
+import type { TranslationKeys } from '../../hooks';
+import { useLocalize } from '../../hooks';
+import DropdownPopup from '../DropdownPopup';
 import { cn } from '~/utils';
 
-interface ColumnVisibilityDropdownProps<TData> {
-  table: ReturnType<typeof useReactTable<TData>>;
+interface DataTableColumnVisibilityProps<TData> {
+  table: Table<TData>;
   contextMap: Record<string, TranslationKeys>;
-  isSmallScreen: boolean;
+  isSmallScreen?: boolean;
 }
 
-export function ColumnVisibilityDropdown<TData>({
+export function DataTableColumnVisibility<TData>({
   table,
   contextMap,
-  isSmallScreen,
-}: ColumnVisibilityDropdownProps<TData>) {
+  isSmallScreen = false,
+}: DataTableColumnVisibilityProps<TData>) {
   const localize = useLocalize();
   const menuId = useId();
   const [isOpen, setIsOpen] = useState(false);
@@ -26,12 +27,15 @@ export function ColumnVisibilityDropdown<TData>({
       table
         .getAllColumns()
         .filter((column) => column.getCanHide())
-        .map((column) => ({
-          label: localize(contextMap[column.id]),
-          onClick: () => column.toggleVisibility(!column.getIsVisible()),
-          icon: column.getIsVisible() ? '✓' : '',
-          id: column.id,
-        })),
+        .map((column) => {
+          const translationKey = contextMap[column.id];
+          return {
+            label: translationKey ? localize(translationKey) : column.id,
+            onClick: () => column.toggleVisibility(!column.getIsVisible()),
+            icon: column.getIsVisible() ? '✓' : '',
+            id: column.id,
+          };
+        }),
     [table, contextMap, localize],
   );
 
@@ -57,3 +61,5 @@ export function ColumnVisibilityDropdown<TData>({
     />
   );
 }
+
+export default DataTableColumnVisibility;

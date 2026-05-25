@@ -1,23 +1,20 @@
 /* eslint-disable react-hooks/rules-of-hooks */
-import { ArrowUpDown, ArrowUp, ArrowDown, Database } from 'lucide-react';
+import { Database } from 'lucide-react';
 import { FileSources, FileContext } from 'librechat-data-provider';
 import {
-  Button,
-  Checkbox,
   useMediaQuery,
-  TooltipAnchor,
+  SortFilterHeader,
   AzureMinimalIcon,
   OpenAIMinimalIcon,
 } from '@librechat/client';
-import type { ColumnDef } from '@tanstack/react-table';
+import type { TableColumn } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import ImagePreview from '~/components/Chat/Input/Files/ImagePreview';
 import FilePreview from '~/components/Chat/Input/Files/FilePreview';
 import { TranslationKeys, useLocalize } from '~/hooks';
-import { SortFilterHeader } from './SortFilterHeader';
 import { formatDate, getFileType } from '~/utils';
 
-const contextMap: Record<any, TranslationKeys> = {
+const contextMap: Record<string, TranslationKeys> = {
   [FileContext.avatar]: 'com_ui_avatar',
   [FileContext.unknown]: 'com_ui_unknown',
   [FileContext.assistants]: 'com_ui_assistants',
@@ -26,82 +23,20 @@ const contextMap: Record<any, TranslationKeys> = {
   [FileContext.message_attachment]: 'com_ui_attachment',
 };
 
-export const columns: ColumnDef<TFile>[] = [
+export const filenameContextMap: Record<string, TranslationKeys> = {
+  filename: 'com_ui_name',
+  updatedAt: 'com_ui_date',
+  filterSource: 'com_ui_storage',
+  context: 'com_ui_context',
+  bytes: 'com_ui_size',
+};
+
+export const columns: TableColumn<TFile, unknown>[] = [
   {
-    id: 'select',
-    size: 40,
-    header: ({ table }) => {
-      const localize = useLocalize();
-      return (
-        <TooltipAnchor
-          description={localize('com_ui_select_all')}
-          side="top"
-          role="checkbox"
-          render={
-            <Checkbox
-              checked={
-                table.getIsAllPageRowsSelected() ||
-                (table.getIsSomePageRowsSelected() && 'indeterminate')
-              }
-              onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-              aria-label={localize('com_ui_select_all')}
-              className="flex"
-            />
-          }
-        />
-      );
-    },
-    cell: ({ row }) => {
-      const localize = useLocalize();
-      return (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label={localize('com_ui_select_row')}
-          className="flex"
-        />
-      );
-    },
-    enableSorting: false,
-    enableHiding: false,
-  },
-  {
-    meta: {
-      size: '150px',
-    },
     accessorKey: 'filename',
-    header: ({ column }) => {
+    header: () => {
       const localize = useLocalize();
-      const sortState = column.getIsSorted();
-      let SortIcon = ArrowUpDown;
-      let ariaSort: 'ascending' | 'descending' | 'none' = 'none';
-      if (sortState === 'desc') {
-        SortIcon = ArrowDown;
-        ariaSort = 'descending';
-      } else if (sortState === 'asc') {
-        SortIcon = ArrowUp;
-        ariaSort = 'ascending';
-      }
-      return (
-        <TooltipAnchor
-          description={localize('com_ui_name_sort')}
-          side="top"
-          render={
-            <Button
-              variant="ghost"
-              className="px-2 py-0 text-xs hover:bg-surface-hover sm:px-2 sm:py-2 sm:text-sm"
-              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-              aria-sort={ariaSort}
-              aria-label={localize('com_ui_name_sort')}
-              aria-hidden="true"
-              aria-current={sortState ? 'true' : 'false'}
-            >
-              {localize('com_ui_name')}
-              <SortIcon className="ml-2 h-3 w-4 sm:h-4 sm:w-4" />
-            </Button>
-          }
-        />
-      );
+      return localize('com_ui_name');
     },
     cell: ({ row }) => {
       const file = row.original;
@@ -126,41 +61,15 @@ export const columns: ColumnDef<TFile>[] = [
         </div>
       );
     },
+    meta: {
+      isRowHeader: true,
+    },
   },
   {
     accessorKey: 'updatedAt',
-    header: ({ column }) => {
+    header: () => {
       const localize = useLocalize();
-      const sortState = column.getIsSorted();
-      let SortIcon = ArrowUpDown;
-      let ariaSort: 'ascending' | 'descending' | 'none' = 'none';
-      if (sortState === 'desc') {
-        SortIcon = ArrowDown;
-        ariaSort = 'descending';
-      } else if (sortState === 'asc') {
-        SortIcon = ArrowUp;
-        ariaSort = 'ascending';
-      }
-      return (
-        <TooltipAnchor
-          description={localize('com_ui_date_sort')}
-          side="top"
-          render={
-            <Button
-              variant="ghost"
-              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-              className="px-2 py-0 text-xs hover:bg-surface-hover sm:px-2 sm:py-2 sm:text-sm"
-              aria-sort={ariaSort}
-              aria-label={localize('com_ui_date_sort')}
-              aria-hidden="true"
-              aria-current={sortState ? 'true' : 'false'}
-            >
-              {localize('com_ui_date')}
-              <SortIcon className="ml-2 h-3 w-4 sm:h-4 sm:w-4" />
-            </Button>
-          }
-        />
-      );
+      return localize('com_ui_date');
     },
     cell: ({ row }) => {
       const isSmallScreen = useMediaQuery('(max-width: 768px)');
@@ -169,6 +78,7 @@ export const columns: ColumnDef<TFile>[] = [
   },
   {
     accessorKey: 'filterSource',
+    meta: { customHeader: true },
     header: ({ column }) => {
       const localize = useLocalize();
       return (
@@ -220,6 +130,7 @@ export const columns: ColumnDef<TFile>[] = [
   },
   {
     accessorKey: 'context',
+    meta: { customHeader: true },
     header: ({ column }) => {
       const localize = useLocalize();
       return (
@@ -248,47 +159,16 @@ export const columns: ColumnDef<TFile>[] = [
   },
   {
     accessorKey: 'bytes',
-    header: ({ column }) => {
+    header: () => {
       const localize = useLocalize();
-      const sortState = column.getIsSorted();
-      let SortIcon = ArrowUpDown;
-      let ariaSort: 'ascending' | 'descending' | 'none' = 'none';
-      if (sortState === 'desc') {
-        SortIcon = ArrowDown;
-        ariaSort = 'descending';
-      } else if (sortState === 'asc') {
-        SortIcon = ArrowUp;
-        ariaSort = 'ascending';
-      }
-      return (
-        <TooltipAnchor
-          description={localize('com_ui_size_sort')}
-          side="top"
-          render={
-            <Button
-              variant="ghost"
-              className="px-2 py-0 text-xs hover:bg-surface-hover sm:px-2 sm:py-2 sm:text-sm"
-              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-              aria-sort={ariaSort}
-              aria-label={localize('com_ui_size_sort')}
-              aria-hidden="true"
-              aria-current={sortState ? 'true' : 'false'}
-            >
-              {localize('com_ui_size')}
-              <SortIcon className="ml-2 h-3 w-4 sm:h-4 sm:w-4" />
-            </Button>
-          }
-        />
-      );
+      return localize('com_ui_size');
     },
     cell: ({ row }) => {
-      const suffix = ' MB';
       const value = Number((Number(row.original.bytes) / 1024 / 1024).toFixed(2));
       if (value < 0.01) {
         return '< 0.01 MB';
       }
-
-      return `${value}${suffix}`;
+      return `${value} MB`;
     },
   },
 ];

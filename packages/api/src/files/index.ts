@@ -3,6 +3,7 @@ export * from './audio';
 export * from './code';
 export * from './context';
 export * from './documents/crud';
+export * from './documents/ondemand';
 export * from './encode';
 export * from './filter';
 export * from './mistral/crud';

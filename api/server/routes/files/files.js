@@ -3,9 +3,12 @@ const express = require('express');
 const { logger, SystemCapabilities } = require('@librechat/data-schemas');
 const {
   logAxiosError,
+  officeHtmlBucket,
   refreshS3FileUrls,
+  renderOfficePreview,
   resolveUploadErrorMessage,
   verifyAgentUploadPermission,
+  MAX_OFFICE_PREVIEW_BYTES,
 } = require('@librechat/api');
 const {
   Time,
@@ -344,6 +347,135 @@ router.get('/code/download/:session_id/:fileId', async (req, res) => {
  * sweep (5min) since this runs per-request, not per-instance. */
 const PREVIEW_LAZY_SWEEP_CUTOFF_MS = 2 * 60 * 1000;
 
+/* In-memory LRU cache for on-demand office HTML preview. Keyed by
+ * `${file_id}:${updatedAt.getTime()}` so a re-uploaded record (which
+ * changes updatedAt) misses the cache and re-renders. Bounded by both
+ * entry count and total bytes — large XLSX/PPTX can produce multi-MB
+ * HTML; without a byte cap a busy instance could balloon to GBs. */
+const OFFICE_PREVIEW_CACHE_MAX_ENTRIES = 50;
+const OFFICE_PREVIEW_CACHE_MAX_TOTAL_BYTES = 64 * 1024 * 1024;
+const OFFICE_PREVIEW_CACHE_MAX_VALUE_BYTES = 2 * 1024 * 1024;
+const officePreviewCache = new Map();
+let officePreviewCacheBytes = 0;
+
+const officePreviewCacheGet = (key) => {
+  const value = officePreviewCache.get(key);
+  if (value === undefined) {
+    return undefined;
+  }
+  officePreviewCache.delete(key);
+  officePreviewCache.set(key, value);
+  return value;
+};
+
+const evictOldest = () => {
+  const oldestKey = officePreviewCache.keys().next().value;
+  if (oldestKey === undefined) {
+    return;
+  }
+  const oldest = officePreviewCache.get(oldestKey);
+  officePreviewCache.delete(oldestKey);
+  if (oldest) {
+    officePreviewCacheBytes -= oldest.length;
+  }
+};
+
+const officePreviewCacheSet = (key, html) => {
+  const bytes = Buffer.byteLength(html, 'utf8');
+  if (bytes > OFFICE_PREVIEW_CACHE_MAX_VALUE_BYTES) {
+    return;
+  }
+  if (officePreviewCache.has(key)) {
+    const existing = officePreviewCache.get(key);
+    officePreviewCacheBytes -= existing.length;
+    officePreviewCache.delete(key);
+  }
+  while (
+    officePreviewCache.size >= OFFICE_PREVIEW_CACHE_MAX_ENTRIES ||
+    officePreviewCacheBytes + bytes > OFFICE_PREVIEW_CACHE_MAX_TOTAL_BYTES
+  ) {
+    if (officePreviewCache.size === 0) {
+      break;
+    }
+    evictOldest();
+  }
+  officePreviewCache.set(key, html);
+  officePreviewCacheBytes += bytes;
+};
+
+/* In-flight render dedup: the frontend `useFilePreview` hook polls this
+ * endpoint every 2.5s while pending, so a slow render (mammoth on a
+ * large DOCX can take several seconds) would otherwise spawn N parallel
+ * renders of the same file — pinning a CPU core and blocking the
+ * Express event loop. Resolving every concurrent caller from the same
+ * Promise eliminates the multiplier. */
+const officePreviewInflight = new Map();
+
+const streamToBuffer = (stream, maxBytes) =>
+  new Promise((resolve, reject) => {
+    const chunks = [];
+    let total = 0;
+    stream.on('data', (chunk) => {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      total += buf.length;
+      if (total > maxBytes) {
+        stream.destroy();
+        reject(new Error('too-large'));
+        return;
+      }
+      chunks.push(buf);
+    });
+    stream.on('end', () => resolve(Buffer.concat(chunks, total)));
+    stream.on('error', reject);
+  });
+
+const officePreviewCacheKey = (file) => {
+  const stamp = file.updatedAt instanceof Date ? file.updatedAt.getTime() : 'na';
+  return `${file.file_id}:${stamp}`;
+};
+
+const loadOfficePreviewBuffer = async (req, file) => {
+  const { getDownloadStream } = getStrategyFunctions(file.source);
+  if (typeof getDownloadStream !== 'function') {
+    return { error: 'unsupported' };
+  }
+  try {
+    const stream = await getDownloadStream(req, file.storageKey || file.filepath);
+    const buffer = await streamToBuffer(stream, MAX_OFFICE_PREVIEW_BYTES);
+    return { buffer };
+  } catch (err) {
+    if (err && err.message === 'too-large') {
+      return { error: 'too-large' };
+    }
+    throw err;
+  }
+};
+
+const renderOfficePreviewOnce = async (req, file, cacheKey) => {
+  const loaded = await loadOfficePreviewBuffer(req, file);
+  if (loaded.error) {
+    return { error: loaded.error };
+  }
+  const rendered = await renderOfficePreview(loaded.buffer, file.filename, file.type);
+  if ('html' in rendered) {
+    officePreviewCacheSet(cacheKey, rendered.html);
+    return { html: rendered.html };
+  }
+  return { error: rendered.error };
+};
+
+const getOrStartOfficePreview = (req, file, cacheKey) => {
+  const existing = officePreviewInflight.get(cacheKey);
+  if (existing) {
+    return existing;
+  }
+  const promise = renderOfficePreviewOnce(req, file, cacheKey).finally(() => {
+    officePreviewInflight.delete(cacheKey);
+  });
+  officePreviewInflight.set(cacheKey, promise);
+  return promise;
+};
+
 /**
  * Poll the lifecycle status of a code-execution file's inline preview.
  *
@@ -405,6 +537,32 @@ router.get('/:file_id/preview', fileAccess, async (req, res) => {
       if (withText?.text != null) {
         payload.text = withText.text;
         payload.textFormat = withText.textFormat ?? null;
+      } else if (
+        !checkOpenAIStorage(file.source) &&
+        officeHtmlBucket(file.filename, file.type)
+      ) {
+        const cacheKey = officePreviewCacheKey(file);
+        const cached = officePreviewCacheGet(cacheKey);
+        if (cached) {
+          payload.text = cached;
+          payload.textFormat = 'html';
+        } else {
+          try {
+            const rendered = await getOrStartOfficePreview(req, file, cacheKey);
+            if (rendered.error) {
+              payload.previewError = rendered.error;
+            } else {
+              payload.text = rendered.html;
+              payload.textFormat = 'html';
+            }
+          } catch (renderErr) {
+            logger.warn(
+              `[/files/:file_id/preview] On-demand office render failed for ${file_id}:`,
+              renderErr,
+            );
+            payload.previewError = 'render-failed';
+          }
+        }
       }
     } else if (status === 'failed' && file.previewError) {
       payload.previewError = file.previewError;

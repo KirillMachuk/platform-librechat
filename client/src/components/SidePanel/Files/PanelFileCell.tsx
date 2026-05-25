@@ -1,11 +1,9 @@
-import type { Row } from '@tanstack/react-table';
 import type { TFile } from 'librechat-data-provider';
 import ImagePreview from '~/components/Chat/Input/Files/ImagePreview';
 import FilePreview from '~/components/Chat/Input/Files/FilePreview';
 import { getFileType } from '~/utils';
 
-export default function PanelFileCell({ row }: { row: Row<TFile | undefined> }) {
-  const file = row.original;
+export default function PanelFileCell({ file }: { file?: TFile }) {
   return (
     <div className="flex w-full items-center gap-2">
       {file?.type?.startsWith('image') === true ? (

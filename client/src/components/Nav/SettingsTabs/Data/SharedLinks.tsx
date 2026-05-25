@@ -215,6 +215,7 @@ export default function SharedLinks() {
         meta: {
           size: '32%',
           mobileSize: '50%',
+          customHeader: true,
         },
       },
       {
@@ -254,6 +255,7 @@ export default function SharedLinks() {
         meta: {
           size: '10%',
           mobileSize: '20%',
+          customHeader: true,
         },
       },
       {
@@ -266,6 +268,7 @@ export default function SharedLinks() {
         meta: {
           size: '7%',
           mobileSize: '25%',
+          customHeader: true,
         },
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
@@ -334,15 +337,16 @@ export default function SharedLinks() {
             columns={columns}
             data={allLinks}
             onDelete={handleDelete}
-            filterColumn="title"
             hasNextPage={hasNextPage}
             isFetchingNextPage={isFetchingNextPage}
             fetchNextPage={handleFetchNextPage}
-            showCheckboxes={false}
             onFilterChange={debouncedFilterChange}
             filterValue={queryParams.search}
             isLoading={isLoading}
-            enableSearch={searchStore.enabled === true}
+            config={{
+              selection: { showCheckboxes: false },
+              search: { enableSearch: searchStore.enabled === true },
+            }}
           />
         </OGDialogContent>
       </OGDialog>

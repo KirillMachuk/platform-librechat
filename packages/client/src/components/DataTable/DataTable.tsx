@@ -1,23 +1,59 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+
+/* Shallow equality for plain objects (string-keyed values, single level). */
+function shallowEqualObject<T extends Record<string, unknown>>(a: T, b: T): boolean {
+  if (a === b) return true;
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (let i = 0; i < aKeys.length; i++) {
+    const k = aKeys[i];
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+    if (a[k] !== b[k]) return false;
+  }
+  return true;
+}
+
+/* Shallow equality for arrays of plain objects (e.g. SortingState).
+ * Two arrays are equal when they have the same length and each
+ * corresponding element is shallow-equal as an object. */
+function shallowEqualArrayOfObjects<T extends Record<string, unknown>>(
+  a: T[],
+  b: T[],
+): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (!shallowEqualObject(a[i], b[i])) return false;
+  }
+  return true;
+}
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowUp, ArrowDown, ArrowDownUp } from 'lucide-react';
 import {
   useReactTable,
   getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
   flexRender,
   type SortingState,
   type VisibilityState,
   type ColumnDef,
   type Row,
   type Table as TTable,
+  type ColumnFiltersState,
+  type PaginationState,
 } from '@tanstack/react-table';
 import type { DataTableProps, ProcessedDataRow } from './DataTable.types';
 import { SelectionCheckbox, MemoizedTableRow, SkeletonRows } from './DataTableComponents';
 import { Table, TableBody, TableHead, TableHeader, TableCell, TableRow } from '../Table';
 import { useDebounced, useOptimizedRowSelection } from './DataTable.hooks';
+import { DataTableColumnVisibility } from './DataTableColumnVisibility';
 import { useMediaQuery, useLocalize } from '~/hooks';
 import { DataTableSearch } from './DataTableSearch';
 import { cn, logger } from '~/utils';
+import { Button } from '../Button';
 import { Label } from '../Label';
 import { Spinner } from '~/svgs';
 
@@ -37,6 +73,7 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
   sorting,
   onSortingChange,
   customActionsRenderer,
+  onRowClick,
 }: DataTableProps<TData, TValue>) {
   const localize = useLocalize();
   const isSmallScreen = useMediaQuery('(max-width: 768px)');
@@ -45,19 +82,33 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
   const scrollTimeoutRef = useRef<number | null>(null);
   const scrollRAFRef = useRef<number | null>(null);
 
+  const cfg = config ?? {};
+  const { enableRowSelection = true, showCheckboxes = true } = cfg.selection ?? {};
   const {
-    selection: { enableRowSelection = true, showCheckboxes = true } = {},
-    search: { enableSearch = true, debounce: debounceDelay = 300 } = {},
-    skeleton: { count: skeletonCount = 10 } = {},
-    virtualization: {
-      overscan = 10,
-      minRows = 50,
-      rowHeight = 56,
-      fastOverscanMultiplier = 4,
-    } = {},
-  } = config || {};
+    enableSearch = true,
+    debounce: debounceDelay = 300,
+    filterColumn,
+  } = cfg.search ?? {};
+  const { count: skeletonCount = 10 } = cfg.skeleton ?? {};
+  const {
+    overscan = 10,
+    minRows = 50,
+    rowHeight = 56,
+    fastOverscanMultiplier = 4,
+  } = cfg.virtualization ?? {};
+  const {
+    manualSorting = true,
+    manualFiltering = true,
+    enablePagination = false,
+    pageSize: configuredPageSize = 10,
+  } = cfg.behavior ?? {};
+  const {
+    enabled: columnVisibilityEnabled = false,
+    contextMap: columnVisibilityContextMap,
+  } = cfg.columnVisibility ?? {};
 
-  const virtualizationActive = data.length >= minRows;
+  const paginationActive = enablePagination;
+  const virtualizationActive = !paginationActive && data.length >= minRows;
 
   // Dynamic overscan for fast scrolling - increases rendered rows during rapid scroll
   const [dynamicOverscan, setDynamicOverscan] = useState(overscan);
@@ -77,10 +128,50 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
     };
   }, []);
 
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
-  const [optimizedRowSelection, setOptimizedRowSelection] = useOptimizedRowSelection();
+  const [columnVisibility, setColumnVisibilityRaw] = useState<VisibilityState>({});
+  /* Equality-guarded setters: react-table's onXChange callbacks re-emit
+   * a fresh state object on every render even when the logical value
+   * hasn't changed. Without bailout, those setState calls trigger
+   * re-renders, which re-emit, which re-render — infinite loop. The
+   * wrappers below short-circuit when prev and next are shallow-equal
+   * so React's Object.is bailout kicks in and the render stops. */
+  const setColumnVisibility = useCallback<typeof setColumnVisibilityRaw>(
+    (updater) =>
+      setColumnVisibilityRaw((prev) => {
+        const next =
+          typeof updater === 'function'
+            ? (updater as (p: VisibilityState) => VisibilityState)(prev)
+            : updater;
+        return shallowEqualObject(prev, next) ? prev : next;
+      }),
+    [],
+  );
+  const [optimizedRowSelectionRaw, setOptimizedRowSelectionRaw] = useOptimizedRowSelection();
+  const setOptimizedRowSelection = useCallback<typeof setOptimizedRowSelectionRaw>(
+    (updater) =>
+      setOptimizedRowSelectionRaw((prev) => {
+        const next =
+          typeof updater === 'function'
+            ? (updater as (p: Record<string, boolean>) => Record<string, boolean>)(prev)
+            : updater;
+        return shallowEqualObject(prev, next) ? prev : next;
+      }),
+    [setOptimizedRowSelectionRaw],
+  );
+  const optimizedRowSelection = optimizedRowSelectionRaw;
   const [searchTerm, setSearchTerm] = useState(filterValue);
-  const [internalSorting, setInternalSorting] = useState<SortingState>(defaultSort);
+  const [internalSorting, setInternalSortingRaw] = useState<SortingState>(defaultSort);
+  const setInternalSorting = useCallback<typeof setInternalSortingRaw>(
+    (updater) =>
+      setInternalSortingRaw((prev) => {
+        const next =
+          typeof updater === 'function'
+            ? (updater as (p: SortingState) => SortingState)(prev)
+            : updater;
+        return shallowEqualArrayOfObjects(prev, next) ? prev : next;
+      }),
+    [],
+  );
 
   const selectedCount = Object.keys(optimizedRowSelection).length;
   const isAllSelected = useMemo(
@@ -238,23 +329,80 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
 
   const sizedColumns = tableColumns;
 
+  const [columnFilters, setColumnFiltersRaw] = useState<ColumnFiltersState>([]);
+  const setColumnFilters = useCallback<typeof setColumnFiltersRaw>(
+    (updater) =>
+      setColumnFiltersRaw((prev) => {
+        const next =
+          typeof updater === 'function'
+            ? (updater as (p: ColumnFiltersState) => ColumnFiltersState)(prev)
+            : updater;
+        return shallowEqualArrayOfObjects(prev, next) ? prev : next;
+      }),
+    [],
+  );
+  const [pagination, setPaginationRaw] = useState<PaginationState>(() => ({
+    pageIndex: 0,
+    pageSize: configuredPageSize,
+  }));
+  const setPagination = useCallback<typeof setPaginationRaw>(
+    (updater) =>
+      setPaginationRaw((prev) => {
+        const next =
+          typeof updater === 'function'
+            ? (updater as (p: PaginationState) => PaginationState)(prev)
+            : updater;
+        return shallowEqualObject(
+          prev as unknown as Record<string, unknown>,
+          next as unknown as Record<string, unknown>,
+        )
+          ? prev
+          : next;
+      }),
+    [],
+  );
+
+  const onRowClickRef = useRef(onRowClick);
+  useEffect(() => {
+    onRowClickRef.current = onRowClick;
+  }, [onRowClick]);
+
+  const stableOnRowClick = useMemo<((row: TData) => void) | undefined>(
+    () =>
+      onRowClick == null
+        ? undefined
+        : (row: TData) => {
+            onRowClickRef.current?.(row);
+          },
+    [onRowClick == null],
+  );
+
+  const rowStyle = useMemo<React.CSSProperties>(() => ({ height: rowHeight }), [rowHeight]);
+
   const table = useReactTable<TData>({
     data,
     columns: sizedColumns,
     getRowId: getRowId,
     getCoreRowModel: getCoreRowModel(),
+    ...(manualSorting ? {} : { getSortedRowModel: getSortedRowModel() }),
+    ...(manualFiltering ? {} : { getFilteredRowModel: getFilteredRowModel() }),
+    ...(paginationActive ? { getPaginationRowModel: getPaginationRowModel() } : {}),
     enableRowSelection,
     enableMultiRowSelection: true,
-    manualSorting: true,
-    manualFiltering: true,
+    manualSorting,
+    manualFiltering,
     state: {
       sorting: finalSorting,
       columnVisibility,
       rowSelection: optimizedRowSelection,
+      ...(manualFiltering ? {} : { columnFilters }),
+      ...(paginationActive ? { pagination } : {}),
     },
     onSortingChange: onSortingChange ?? setInternalSorting,
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setOptimizedRowSelection,
+    ...(manualFiltering ? {} : { onColumnFiltersChange: setColumnFilters }),
+    ...(paginationActive ? { onPaginationChange: setPagination } : {}),
   });
 
   const rowVirtualizer = useVirtualizer({
@@ -276,7 +424,8 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
   const headerGroups = table.getHeaderGroups();
 
   const showSkeletons = isLoading || (isFetching && !isFetchingNextPage);
-  const shouldShowSearch = enableSearch && onFilterChange;
+  const shouldShowSearch =
+    enableSearch && (onFilterChange != null || (!manualFiltering && filterColumn != null));
 
   // Render table body based on loading state and virtualization
   let tableBodyContent: React.ReactNode;
@@ -308,7 +457,8 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
               row={row as unknown as Row<Record<string, unknown>>}
               virtualIndex={virtualRow.index}
               selected={row.getIsSelected()}
-              style={{ height: rowHeight }}
+              style={rowStyle}
+              onRowClick={stableOnRowClick as ((row: Record<string, unknown>) => void) | undefined}
             />
           );
         })}
@@ -329,7 +479,8 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
         row={row as unknown as Row<Record<string, unknown>>}
         virtualIndex={row.index}
         selected={row.getIsSelected()}
-        style={{ height: rowHeight }}
+        style={rowStyle}
+        onRowClick={stableOnRowClick as ((row: Record<string, unknown>) => void) | undefined}
       />
     ));
   }
@@ -339,11 +490,26 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
   }, [filterValue]);
 
   useEffect(() => {
-    if (debouncedTerm !== filterValue && onFilterChange) {
+    if (debouncedTerm === filterValue) return;
+    if (onFilterChange) {
       onFilterChange(debouncedTerm);
       setOptimizedRowSelection({});
+      return;
     }
-  }, [debouncedTerm, filterValue, onFilterChange, setOptimizedRowSelection]);
+    if (!manualFiltering && filterColumn) {
+      const column = table.getColumn(filterColumn);
+      column?.setFilterValue(debouncedTerm.length > 0 ? debouncedTerm : undefined);
+      setOptimizedRowSelection({});
+    }
+  }, [
+    debouncedTerm,
+    filterValue,
+    onFilterChange,
+    setOptimizedRowSelection,
+    manualFiltering,
+    filterColumn,
+    table,
+  ]);
 
   // Recalculate virtual range when data or state changes
   useEffect(() => {
@@ -446,6 +612,15 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
             selectedRows,
             table: table as unknown as TTable<ProcessedDataRow<TData>>,
           })}
+        {columnVisibilityEnabled && columnVisibilityContextMap && (
+          <div className="px-2 md:px-3">
+            <DataTableColumnVisibility
+              table={table}
+              contextMap={columnVisibilityContextMap}
+              isSmallScreen={isSmallScreen}
+            />
+          </div>
+        )}
       </div>
       <div
         ref={tableContainerRef}
@@ -480,11 +655,15 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
                   }
 
                   const isSelectHeader = header.id === 'select';
-                  const meta = header.column.columnDef.meta as { className?: string } | undefined;
+                  const meta = header.column.columnDef.meta as
+                    | { className?: string; customHeader?: boolean }
+                    | undefined;
+                  const hasCustomHeader = meta?.customHeader === true;
                   const canSort = header.column.getCanSort();
+                  const wrapperSortable = canSort && !hasCustomHeader;
 
                   let sortAriaLabel: string | undefined;
-                  if (canSort) {
+                  if (wrapperSortable) {
                     const sortState = header.column.getIsSorted();
                     let sortStateLabel = 'sortable';
                     if (sortState === 'asc') {
@@ -502,7 +681,7 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
                   }
 
                   const handleSortingKeyDown = (e: React.KeyboardEvent) => {
-                    if (canSort && (e.key === 'Enter' || e.key === ' ')) {
+                    if (wrapperSortable && (e.key === 'Enter' || e.key === ' ')) {
                       e.preventDefault();
                       header.column.toggleSorting();
                     }
@@ -526,31 +705,31 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
                       className={cn(
                         'border-b border-border-light px-2 py-2 md:px-3 md:py-2',
                         isSelectHeader && 'px-0 text-center',
-                        canSort && 'cursor-pointer hover:bg-surface-tertiary',
+                        wrapperSortable && 'cursor-pointer hover:bg-surface-tertiary',
                         meta?.className,
                         header.column.getIsResizing() && 'bg-surface-tertiary/60',
                         isDesktopOnly && 'hidden md:table-cell',
                       )}
                       style={widthStyle}
-                      onClick={header.column.getToggleSortingHandler()}
-                      onKeyDown={handleSortingKeyDown}
-                      role={canSort ? 'button' : undefined}
-                      tabIndex={canSort ? 0 : undefined}
+                      onClick={wrapperSortable ? header.column.getToggleSortingHandler() : undefined}
+                      onKeyDown={wrapperSortable ? handleSortingKeyDown : undefined}
+                      role={wrapperSortable ? 'button' : undefined}
+                      tabIndex={wrapperSortable ? 0 : undefined}
                       aria-label={sortAriaLabel}
                       aria-sort={
-                        header.column.getIsSorted() === 'asc'
+                        wrapperSortable && header.column.getIsSorted() === 'asc'
                           ? 'ascending'
-                          : header.column.getIsSorted() === 'desc'
+                          : wrapperSortable && header.column.getIsSorted() === 'desc'
                             ? 'descending'
                             : undefined
                       }
                     >
-                      {isSelectHeader ? (
+                      {isSelectHeader || hasCustomHeader ? (
                         flexRender(header.column.columnDef.header, header.getContext())
                       ) : (
                         <div className="flex items-center gap-1 md:gap-2">
                           {flexRender(header.column.columnDef.header, header.getContext())}
-                          {canSort && (
+                          {wrapperSortable && (
                             <span className="text-text-primary" aria-hidden="true">
                               {{
                                 asc: <ArrowUp className="size-4 text-text-primary" />,
@@ -602,6 +781,35 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
           </div>
         )}
       </div>
+      {paginationActive && (
+        <div
+          className="flex w-full shrink-0 items-center justify-end gap-2 border-t border-border-light px-2 py-2 md:px-3"
+          role="navigation"
+          aria-label={localize('com_ui_pagination')}
+        >
+          <div className="mr-auto text-xs text-text-secondary md:text-sm" aria-live="polite">
+            {`${pagination.pageIndex + 1} / ${Math.max(table.getPageCount(), 1)}`}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+            aria-label={localize('com_ui_prev')}
+          >
+            {localize('com_ui_prev')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+            aria-label={localize('com_ui_next')}
+          >
+            {localize('com_ui_next')}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

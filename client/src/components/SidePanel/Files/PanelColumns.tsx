@@ -1,58 +1,36 @@
 /* eslint-disable react-hooks/rules-of-hooks */
-import { ArrowUpDown } from 'lucide-react';
-import { Button } from '@librechat/client';
-import type { ColumnDef } from '@tanstack/react-table';
+import type { TableColumn } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import PanelFileCell from './PanelFileCell';
 import { useLocalize } from '~/hooks';
 import { formatDate } from '~/utils';
 
-export const columns: ColumnDef<TFile | undefined>[] = [
+export const columns: TableColumn<TFile, unknown>[] = [
   {
     accessorKey: 'filename',
-    header: ({ column }) => {
+    header: () => {
       const localize = useLocalize();
-      return (
-        <Button
-          variant="ghost"
-          className="hover:bg-surface-hover"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          aria-label={localize('com_ui_name')}
-        >
-          {localize('com_ui_name')}
-          <ArrowUpDown className="ml-2 h-4 w-4" aria-hidden="true" />
-        </Button>
-      );
+      return localize('com_ui_name');
     },
+    cell: ({ row }) => <PanelFileCell file={row.original} />,
     meta: {
-      size: '150px',
+      width: 75,
+      isRowHeader: true,
     },
-    cell: ({ row }) => <PanelFileCell row={row} />,
   },
   {
     accessorKey: 'updatedAt',
-    meta: {
-      size: '10%',
-    },
-    header: ({ column }) => {
+    header: () => {
       const localize = useLocalize();
-      return (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-auto px-1 py-0.5 hover:bg-surface-hover"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          aria-label={localize('com_ui_date')}
-        >
-          {localize('com_ui_date')}
-          <ArrowUpDown className="ml-1 h-3 w-3" />
-        </Button>
-      );
+      return localize('com_ui_date');
     },
     cell: ({ row }) => (
       <span className="flex justify-end text-xs">
         {formatDate(row.original?.updatedAt?.toString() ?? '')}
       </span>
     ),
+    meta: {
+      width: 25,
+    },
   },
 ];

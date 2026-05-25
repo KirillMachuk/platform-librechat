@@ -4,10 +4,42 @@ import { useRecoilValue } from 'recoil';
 import { Download } from 'lucide-react';
 import { OGDialog, OGDialogContent, OGDialogTitle, OGDialogDescription } from '@librechat/client';
 import CopyButton from '~/components/Messages/Content/CopyButton';
-import { logger, sortPagesByRelevance, triggerDownload } from '~/utils';
-import { useFileDownload } from '~/data-provider';
-import { useLocalize } from '~/hooks';
+import { logger, decodeBytes, sortPagesByRelevance, triggerDownload } from '~/utils';
+import { useFileDownload, useFilePreview } from '~/data-provider';
+import { useLocalize, TranslationKeys } from '~/hooks';
 import store from '~/store';
+
+type PreviewKind = 'pdf' | 'text' | 'office' | false;
+
+const OFFICE_EXTS = new Set([
+  'docx',
+  'doc',
+  'xlsx',
+  'xls',
+  'pptx',
+  'ppt',
+  'ods',
+  'odt',
+]);
+
+const OFFICE_MIME_HINTS = [
+  'wordprocessingml',
+  'spreadsheetml',
+  'presentationml',
+  'msword',
+  'ms-excel',
+  'ms-powerpoint',
+  'opendocument',
+];
+
+const PREVIEW_ERROR_MESSAGES: Record<string, TranslationKeys> = {
+  'too-large': 'com_ui_preview_too_large',
+  timeout: 'com_ui_preview_timeout',
+  'render-failed': 'com_ui_preview_render_failed',
+  unsupported: 'com_ui_preview_unavailable',
+  empty: 'com_ui_preview_render_failed',
+  orphaned: 'com_ui_preview_render_failed',
+};
 
 interface FilePreviewDialogProps {
   open: boolean;
@@ -26,12 +58,15 @@ function getFileExtension(filename: string): string {
   return dot > 0 ? filename.slice(dot + 1).toLowerCase() : '';
 }
 
-function canPreviewByMime(mime?: string): 'pdf' | 'text' | false {
+function canPreviewByMime(mime?: string): PreviewKind {
   if (!mime) {
     return false;
   }
   if (mime.includes('pdf')) {
     return 'pdf';
+  }
+  if (OFFICE_MIME_HINTS.some((hint) => mime.includes(hint))) {
+    return 'office';
   }
   if (
     mime.startsWith('text/') ||
@@ -47,10 +82,13 @@ function canPreviewByMime(mime?: string): 'pdf' | 'text' | false {
   return false;
 }
 
-function canPreviewByExt(filename: string): 'pdf' | 'text' | false {
+function canPreviewByExt(filename: string): PreviewKind {
   const ext = getFileExtension(filename);
   if (ext === 'pdf') {
     return 'pdf';
+  }
+  if (OFFICE_EXTS.has(ext)) {
+    return 'office';
   }
   const textExts = new Set([
     'txt',
@@ -145,12 +183,49 @@ export default function FilePreviewDialog({
   const [isCopied, setIsCopied] = useState(false);
   const loadingRef = useRef(false);
 
-  const previewKind = canPreviewByMime(fileType) || canPreviewByExt(fileName);
+  const previewKind: PreviewKind = canPreviewByMime(fileType) || canPreviewByExt(fileName);
+
+  const officePreviewQuery = useFilePreview(fileId, {
+    enabled: open && previewKind === 'office' && !!fileId,
+  });
+
+  const officeHtml = useMemo(() => {
+    if (previewKind !== 'office') {
+      return null;
+    }
+    const data = officePreviewQuery.data;
+    if (!data || data.status !== 'ready' || data.textFormat !== 'html' || !data.text) {
+      return null;
+    }
+    return data.text;
+  }, [previewKind, officePreviewQuery.data]);
+
+  const officeLoading =
+    previewKind === 'office' &&
+    (officePreviewQuery.isLoading || officePreviewQuery.data?.status === 'pending');
+
+  const officeErrorKey: TranslationKeys = useMemo(() => {
+    const data = officePreviewQuery.data;
+    if (officePreviewQuery.isError) {
+      return 'com_ui_preview_render_failed';
+    }
+    if (data?.previewError && PREVIEW_ERROR_MESSAGES[data.previewError]) {
+      return PREVIEW_ERROR_MESSAGES[data.previewError];
+    }
+    return 'com_ui_preview_unavailable';
+  }, [officePreviewQuery.isError, officePreviewQuery.data]);
+
+  const officeError =
+    previewKind === 'office' &&
+    (officePreviewQuery.isError ||
+      officePreviewQuery.data?.status === 'failed' ||
+      !!officePreviewQuery.data?.previewError ||
+      (officePreviewQuery.data?.status === 'ready' && officeHtml == null));
 
   const cancelledRef = useRef(false);
 
   const loadPreview = useCallback(async () => {
-    if (!fileId || !previewKind || loadingRef.current) {
+    if (!fileId || !previewKind || previewKind === 'office' || loadingRef.current) {
       return;
     }
     loadingRef.current = true;
@@ -175,7 +250,7 @@ export default function FilePreviewDialog({
       }
 
       if (previewKind === 'text') {
-        setFileContent(await blob.text());
+        setFileContent(decodeBytes(await blob.arrayBuffer()));
       } else {
         const typed = new Blob([blob], { type: 'application/pdf' });
         setFileBlobUrl(URL.createObjectURL(typed));
@@ -208,7 +283,7 @@ export default function FilePreviewDialog({
   }, [downloadFile, fileId, fileName]);
 
   useEffect(() => {
-    if (open && previewKind && !fileContent && !fileBlobUrl) {
+    if (open && previewKind && previewKind !== 'office' && !fileContent && !fileBlobUrl) {
       loadPreview();
     }
   }, [open, previewKind, fileContent, fileBlobUrl, loadPreview]);
@@ -285,17 +360,21 @@ export default function FilePreviewDialog({
         </div>
 
         <div className="relative min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-4">
-          {loading && (
+          {(loading || officeLoading) && (
             <div className="flex h-60 items-center justify-center rounded-lg bg-surface-secondary">
               <span className="shimmer text-sm text-text-secondary">
-                {localize('com_ui_loading')}
+                {officeLoading
+                  ? localize('com_ui_preview_rendering')
+                  : localize('com_ui_loading')}
               </span>
             </div>
           )}
-          {previewError && (
+          {(previewError || officeError) && !officeLoading && (
             <div className="flex h-32 items-center justify-center rounded-lg bg-surface-secondary">
               <span className="text-sm text-text-secondary">
-                {localize('com_ui_preview_unavailable')}
+                {previewError
+                  ? localize('com_ui_preview_unavailable')
+                  : localize(officeErrorKey)}
               </span>
             </div>
           )}
@@ -304,6 +383,14 @@ export default function FilePreviewDialog({
               src={fileBlobUrl}
               title={`${localize('com_ui_preview')}: ${fileName}`}
               className="h-[70vh] w-full rounded-lg border border-border-light"
+            />
+          )}
+          {officeHtml && (
+            <iframe
+              srcDoc={officeHtml}
+              sandbox="allow-scripts"
+              title={`${localize('com_ui_preview')}: ${fileName}`}
+              className="h-[70vh] w-full rounded-lg border border-border-light bg-white"
             />
           )}
           {fileContent && (
