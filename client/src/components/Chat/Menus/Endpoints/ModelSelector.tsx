@@ -1,13 +1,16 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { TooltipAnchor } from '@librechat/client';
-import { getConfigDefaults } from 'librechat-data-provider';
+import { EModelEndpoint, getConfigDefaults, isAgentsEndpoint } from 'librechat-data-provider';
 import type { ModelSelectorProps } from '~/common';
 import {
+  SelectorTabs,
   renderModelSpecs,
   renderEndpoints,
   renderSearchResults,
   renderCustomGroups,
+  renderEndpointModels,
 } from './components';
+import type { SelectorTab } from './components';
 import { ModelSelectorProvider, useModelSelectorContext } from './ModelSelectorContext';
 import { ModelSelectorChatProvider } from './ModelSelectorChatContext';
 import { getSelectedIcon, getDisplayValue } from './utils';
@@ -21,23 +24,23 @@ function ModelSelectorContent() {
   const localize = useLocalize();
 
   const {
-    // LibreChat
     agentsMap,
     modelSpecs,
     mappedEndpoints,
     endpointsConfig,
-    // State
     searchValue,
     searchResults,
     selectedValues,
-    // Functions
     setSearchValue,
     setSelectedValues,
-    // Dialog
     keyDialogOpen,
     onOpenChange,
     keyDialogEndpoint,
   } = useModelSelectorContext();
+
+  const [activeTab, setActiveTab] = useState<SelectorTab>(() =>
+    isAgentsEndpoint(selectedValues.endpoint ?? '') ? 'agents' : 'llm',
+  );
 
   const selectedIcon = useMemo(
     () =>
@@ -49,6 +52,7 @@ function ModelSelectorContent() {
       }),
     [mappedEndpoints, selectedValues, modelSpecs, endpointsConfig],
   );
+
   const selectedDisplayValue = useMemo(
     () =>
       getDisplayValue({
@@ -59,6 +63,39 @@ function ModelSelectorContent() {
         mappedEndpoints,
       }),
     [localize, agentsMap, modelSpecs, selectedValues, mappedEndpoints],
+  );
+
+  const agentsEndpoint = useMemo(
+    () => mappedEndpoints?.find((ep) => isAgentsEndpoint(ep.value)) ?? null,
+    [mappedEndpoints],
+  );
+
+  const llmEndpoints = useMemo(
+    () => mappedEndpoints?.filter((ep) => !isAgentsEndpoint(ep.value)) ?? [],
+    [mappedEndpoints],
+  );
+
+  const agentModelSpecs = useMemo(
+    () => modelSpecs?.filter((spec) => spec.group === EModelEndpoint.agents) ?? [],
+    [modelSpecs],
+  );
+
+  const nonAgentModelSpecs = useMemo(
+    () => modelSpecs?.filter((spec) => !spec.group) ?? [],
+    [modelSpecs],
+  );
+
+  const agentSpecIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const spec of agentModelSpecs) {
+      if (spec.preset?.agent_id) ids.add(spec.preset.agent_id);
+    }
+    return ids;
+  }, [agentModelSpecs]);
+
+  const agentsEndpointModels = useMemo(
+    () => agentsEndpoint?.models?.filter((m) => !agentSpecIds.has(m.name)) ?? [],
+    [agentsEndpoint, agentSpecIds],
   );
 
   const trigger = (
@@ -81,11 +118,36 @@ function ModelSelectorContent() {
     />
   );
 
+  const renderAgentsTab = () => (
+    <>
+      {renderModelSpecs(agentModelSpecs, selectedValues.modelSpec || '')}
+      {agentsEndpoint && renderEndpointModels(agentsEndpoint, agentsEndpointModels, undefined, 0)}
+    </>
+  );
+
+  const renderLlmTab = () => (
+    <>
+      {renderModelSpecs(nonAgentModelSpecs, selectedValues.modelSpec || '')}
+      {renderEndpoints(llmEndpoints)}
+      {renderCustomGroups(modelSpecs || [], mappedEndpoints ?? [])}
+    </>
+  );
+
+  const renderContent = () => {
+    if (searchResults) {
+      return renderSearchResults(searchResults, localize, searchValue);
+    }
+    if (activeTab === 'agents') {
+      return renderAgentsTab();
+    }
+    return renderLlmTab();
+  };
+
   return (
     <div className="relative flex w-full max-w-md flex-col items-center gap-2">
       <Menu
         values={selectedValues}
-        onValuesChange={(values: Record<string, any>) => {
+        onValuesChange={(values: Record<string, string>) => {
           setSelectedValues({
             endpoint: values.endpoint || '',
             model: values.model || '',
@@ -97,21 +159,10 @@ function ModelSelectorContent() {
         comboboxLabel={localize('com_endpoint_search_models')}
         trigger={trigger}
       >
-        {searchResults ? (
-          renderSearchResults(searchResults, localize, searchValue)
-        ) : (
-          <>
-            {/* Render ungrouped modelSpecs (no group field) */}
-            {renderModelSpecs(
-              modelSpecs?.filter((spec) => !spec.group) || [],
-              selectedValues.modelSpec || '',
-            )}
-            {/* Render endpoints (will include grouped specs matching endpoint names) */}
-            {renderEndpoints(mappedEndpoints ?? [])}
-            {/* Render custom groups (specs with group field not matching any endpoint) */}
-            {renderCustomGroups(modelSpecs || [], mappedEndpoints ?? [])}
-          </>
+        {!searchResults && (
+          <SelectorTabs activeTab={activeTab} onTabChange={setActiveTab} />
         )}
+        {renderContent()}
       </Menu>
       <DialogManager
         keyDialogOpen={keyDialogOpen}
@@ -127,7 +178,6 @@ export default function ModelSelector({ startupConfig }: ModelSelectorProps) {
   const interfaceConfig = startupConfig?.interface ?? defaultInterface;
   const modelSpecs = startupConfig?.modelSpecs?.list ?? [];
 
-  // Hide the selector when modelSelect is false and there are no model specs to show
   if (interfaceConfig.modelSelect === false && modelSpecs.length === 0) {
     return null;
   }

@@ -83,7 +83,7 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
 
   const permissionLevel = useAgentDefaultPermissionLevel();
   const { data: agents = null } = useListAgentsQuery(
-    { requiredPermission: permissionLevel },
+    { requiredPermission: permissionLevel, limit: 100 },
     {
       select: (data) => data?.data,
     },

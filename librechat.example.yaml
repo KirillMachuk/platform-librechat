@@ -117,6 +117,10 @@ interface:
       By using the Website, you acknowledge that you have read these Terms of Service and agree to be bound by them.
 
   modelSelect: true
+  # Default agent selected on every new blank conversation.
+  # Set to the agent ID from the Agents panel (e.g. agent_abc123).
+  # Leave unset to keep the current LibreChat default behaviour.
+  # defaultAgentId: 'agent_abc123'
   parameters: true
   presets: true
   prompts:

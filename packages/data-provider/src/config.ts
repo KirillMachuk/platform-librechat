@@ -912,6 +912,7 @@ export const interfaceSchema = z
     customWelcome: z.string().optional(),
     mcpServers: mcpServersSchema.optional(),
     modelSelect: z.boolean().optional(),
+    defaultAgentId: z.string().optional(),
     parameters: z.boolean().optional(),
     multiConvo: z.boolean().optional(),
     bookmarks: z.boolean().optional(),
