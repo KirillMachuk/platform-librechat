@@ -3,9 +3,9 @@ const express = require('express');
 const { logger, SystemCapabilities } = require('@librechat/data-schemas');
 const {
   logAxiosError,
-  officeHtmlBucket,
   refreshS3FileUrls,
   renderOfficePreview,
+  isOfficeHtmlPreviewable,
   resolveUploadErrorMessage,
   verifyAgentUploadPermission,
   MAX_OFFICE_PREVIEW_BYTES,
@@ -539,7 +539,7 @@ router.get('/:file_id/preview', fileAccess, async (req, res) => {
         payload.textFormat = withText.textFormat ?? null;
       } else if (
         !checkOpenAIStorage(file.source) &&
-        officeHtmlBucket(file.filename, file.type)
+        isOfficeHtmlPreviewable(file.filename, file.type)
       ) {
         const cacheKey = officePreviewCacheKey(file);
         const cached = officePreviewCacheGet(cacheKey);

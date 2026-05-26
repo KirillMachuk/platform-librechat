@@ -11,25 +11,25 @@ import store from '~/store';
 
 type PreviewKind = 'pdf' | 'text' | 'office' | false;
 
-const OFFICE_EXTS = new Set([
-  'docx',
-  'doc',
-  'xlsx',
-  'xls',
-  'pptx',
-  'ppt',
-  'ods',
-  'odt',
-]);
+/* Must stay in sync with `OFFICE_EXTENSIONS` in
+ * `packages/api/src/files/documents/html.ts`. The backend only renders
+ * the modern OOXML formats + CSV via `bufferToOfficeHtml`; legacy
+ * formats (.doc/.ppt/.odt/.odp) have no HTML producer, so routing them
+ * here would trigger a poll that ends in "ready with no text" and a
+ * confusing "Preview unavailable" UX with one wasted request. */
+const OFFICE_EXTS = new Set(['docx', 'xlsx', 'xls', 'ods', 'pptx', 'csv']);
 
+/* MIME hints mirror the backend's `officeHtmlBucket` MIME fallback. We
+ * intentionally avoid the broad `'opendocument'` substring (it would
+ * match .odt/.odp which the backend rejects) and use `ms-excel` /
+ * `wordprocessingml` etc. for the modern OOXML/spreadsheet families. */
 const OFFICE_MIME_HINTS = [
   'wordprocessingml',
   'spreadsheetml',
   'presentationml',
-  'msword',
   'ms-excel',
-  'ms-powerpoint',
-  'opendocument',
+  'opendocument.spreadsheet',
+  'csv',
 ];
 
 const PREVIEW_ERROR_MESSAGES: Record<string, TranslationKeys> = {
@@ -74,8 +74,7 @@ function canPreviewByMime(mime?: string): PreviewKind {
     mime.includes('xml') ||
     mime.includes('javascript') ||
     mime.includes('typescript') ||
-    mime.includes('yaml') ||
-    mime.includes('csv')
+    mime.includes('yaml')
   ) {
     return 'text';
   }
@@ -93,7 +92,6 @@ function canPreviewByExt(filename: string): PreviewKind {
   const textExts = new Set([
     'txt',
     'md',
-    'csv',
     'json',
     'xml',
     'yaml',
@@ -202,6 +200,7 @@ export default function FilePreviewDialog({
 
   const officeLoading =
     previewKind === 'office' &&
+    !officePreviewQuery.isError &&
     (officePreviewQuery.isLoading || officePreviewQuery.data?.status === 'pending');
 
   const officeErrorKey: TranslationKeys = useMemo(() => {
@@ -363,18 +362,14 @@ export default function FilePreviewDialog({
           {(loading || officeLoading) && (
             <div className="flex h-60 items-center justify-center rounded-lg bg-surface-secondary">
               <span className="shimmer text-sm text-text-secondary">
-                {officeLoading
-                  ? localize('com_ui_preview_rendering')
-                  : localize('com_ui_loading')}
+                {officeLoading ? localize('com_ui_preview_rendering') : localize('com_ui_loading')}
               </span>
             </div>
           )}
           {(previewError || officeError) && !officeLoading && (
             <div className="flex h-32 items-center justify-center rounded-lg bg-surface-secondary">
               <span className="text-sm text-text-secondary">
-                {previewError
-                  ? localize('com_ui_preview_unavailable')
-                  : localize(officeErrorKey)}
+                {previewError ? localize('com_ui_preview_unavailable') : localize(officeErrorKey)}
               </span>
             </div>
           )}

@@ -20,7 +20,7 @@ jest.mock('@librechat/api', () => ({
   refreshS3FileUrls: jest.fn(),
   resolveUploadErrorMessage: jest.fn(),
   verifyAgentUploadPermission: jest.fn(),
-  officeHtmlBucket: jest.fn(() => null),
+  isOfficeHtmlPreviewable: jest.fn(() => false),
   renderOfficePreview: jest.fn(),
   MAX_OFFICE_PREVIEW_BYTES: 25 * 1024 * 1024,
 }));
@@ -406,13 +406,13 @@ describe('GET /files/:file_id/preview', () => {
      * polls of the same file MUST be deduplicated to a single render
      * — otherwise the 2.5s frontend poll cadence would multiply CPU
      * cost on slow renders. */
-    const { officeHtmlBucket, renderOfficePreview } = require('@librechat/api');
+    const { isOfficeHtmlPreviewable, renderOfficePreview } = require('@librechat/api');
     const { getStrategyFunctions } = require('~/server/services/Files/strategies');
     const { Readable } = require('stream');
 
     const mockGetDownloadStream = jest.fn();
     beforeEach(() => {
-      officeHtmlBucket.mockReset();
+      isOfficeHtmlPreviewable.mockReset();
       renderOfficePreview.mockReset();
       mockGetDownloadStream.mockReset();
       getStrategyFunctions.mockImplementation(() => ({
@@ -435,7 +435,7 @@ describe('GET /files/:file_id/preview', () => {
         },
       ]);
       mockFindFileById.mockResolvedValueOnce({ file_id: 'fid-ondemand-docx', text: null });
-      officeHtmlBucket.mockReturnValue('docx');
+      isOfficeHtmlPreviewable.mockReturnValue(true);
       mockGetDownloadStream.mockResolvedValueOnce(Readable.from(Buffer.from([1, 2, 3])));
       renderOfficePreview.mockResolvedValueOnce({ html: '<html>doc</html>', bucket: 'docx' });
 
@@ -465,7 +465,7 @@ describe('GET /files/:file_id/preview', () => {
         },
       ]);
       mockFindFileById.mockResolvedValueOnce({ file_id: 'fid-ondemand-toolarge', text: null });
-      officeHtmlBucket.mockReturnValue('spreadsheet');
+      isOfficeHtmlPreviewable.mockReturnValue(true);
       mockGetDownloadStream.mockResolvedValueOnce(Readable.from(Buffer.from([1, 2, 3])));
       renderOfficePreview.mockResolvedValueOnce({ error: 'too-large' });
 
@@ -498,7 +498,7 @@ describe('GET /files/:file_id/preview', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ file_id: 'fid-openai-docx', status: 'ready' });
       expect(renderOfficePreview).not.toHaveBeenCalled();
-      expect(officeHtmlBucket).not.toHaveBeenCalled();
+      expect(isOfficeHtmlPreviewable).not.toHaveBeenCalled();
     });
   });
 });

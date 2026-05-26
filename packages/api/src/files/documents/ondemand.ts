@@ -5,6 +5,24 @@ import type { OfficeHtmlBucket } from './html';
 export const MAX_OFFICE_PREVIEW_BYTES = 25 * 1024 * 1024;
 export const OFFICE_PREVIEW_TIMEOUT_MS = 30 * 1000;
 
+/**
+ * Public boolean gate for the office-preview pipeline.
+ *
+ * The underlying `officeHtmlBucket` predicate lives in `./html` and returns
+ * a typed bucket discriminator used internally by the renderer. The JS
+ * route layer (`api/server/routes/files`) only needs to know "can this
+ * file be previewed via the office pipeline?" — exposing the typed bucket
+ * to JS leaks an internal type and historically broke the barrel export
+ * (the bucket predicate was never re-exported, so consumers crashed with
+ * `officeHtmlBucket is not a function` at runtime).
+ *
+ * Keep this as the single public entry point; do not re-export
+ * `officeHtmlBucket` itself.
+ */
+export function isOfficeHtmlPreviewable(filename: string, mimeType: string): boolean {
+  return officeHtmlBucket(filename, mimeType) !== null;
+}
+
 export type RenderOfficePreviewError =
   | 'too-large'
   | 'unsupported'

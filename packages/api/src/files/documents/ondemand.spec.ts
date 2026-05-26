@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import {
   MAX_OFFICE_PREVIEW_BYTES,
   OFFICE_PREVIEW_TIMEOUT_MS,
+  isOfficeHtmlPreviewable,
   renderOfficePreview,
 } from './ondemand';
 
@@ -38,11 +39,7 @@ describe('renderOfficePreview', () => {
   });
 
   test('returns "unsupported" for a non-office filename and mime', async () => {
-    const result = await renderOfficePreview(
-      Buffer.from('hello world'),
-      'notes.txt',
-      'text/plain',
-    );
+    const result = await renderOfficePreview(Buffer.from('hello world'), 'notes.txt', 'text/plain');
     expect(result).toEqual({ error: 'unsupported' });
   });
 
@@ -67,5 +64,25 @@ describe('renderOfficePreview', () => {
 
   test('exports a positive timeout constant', () => {
     expect(OFFICE_PREVIEW_TIMEOUT_MS).toBeGreaterThan(0);
+  });
+});
+
+describe('isOfficeHtmlPreviewable', () => {
+  test.each([
+    ['doc.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    ['sheet.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+    ['slides.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+    ['data.csv', 'text/csv'],
+  ])('returns true for office filename %s', (filename, mime) => {
+    expect(isOfficeHtmlPreviewable(filename, mime)).toBe(true);
+  });
+
+  test.each([
+    ['image.png', 'image/png'],
+    ['doc.pdf', 'application/pdf'],
+    ['notes.md', 'text/markdown'],
+    ['plain.txt', 'text/plain'],
+  ])('returns false for non-office filename %s', (filename, mime) => {
+    expect(isOfficeHtmlPreviewable(filename, mime)).toBe(false);
   });
 });

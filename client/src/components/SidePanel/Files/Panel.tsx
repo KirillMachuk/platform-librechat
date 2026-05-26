@@ -11,11 +11,12 @@ import {
 } from 'librechat-data-provider';
 import type { DataTableConfig } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
+import FilePreviewDialog from '~/components/Chat/Messages/Content/FilePreviewDialog';
 import { MyFilesModal } from '~/components/Chat/Input/Files/MyFilesModal';
 import { useFileMapContext, useChatContext } from '~/Providers';
 import { useLocalize, useUpdateFiles } from '~/hooks';
 import { useGetFiles, useGetFileConfig } from '~/data-provider';
-import { columns } from './PanelColumns';
+import { buildColumns } from './PanelColumns';
 
 const TABLE_CONFIG: DataTableConfig = {
   selection: { enableRowSelection: false, showCheckboxes: false },
@@ -40,12 +41,22 @@ export default function FilesPanel() {
   });
 
   const [showFilesModal, setShowFilesModal] = useState(false);
+  const [previewFile, setPreviewFile] = useState<TFile | null>(null);
   const manageFilesRef = useRef<HTMLButtonElement>(null);
 
   const filesWithIds = useMemo<Array<TFile & { id: string }>>(
     () => filesList.map((file) => ({ ...file, id: file.file_id })),
     [filesList],
   );
+
+  const handlePreview = useCallback((file: TFile) => setPreviewFile(file), []);
+  const handlePreviewClose = useCallback((nextOpen: boolean) => {
+    if (!nextOpen) {
+      setPreviewFile(null);
+    }
+  }, []);
+
+  const columns = useMemo(() => buildColumns({ onPreview: handlePreview }), [handlePreview]);
 
   const handleFileClick = useCallback(
     (file: TFile) => {
@@ -169,6 +180,14 @@ export default function FilesPanel() {
         open={showFilesModal}
         onOpenChange={setShowFilesModal}
         triggerRef={manageFilesRef}
+      />
+      <FilePreviewDialog
+        open={previewFile !== null}
+        onOpenChange={handlePreviewClose}
+        fileName={previewFile?.filename ?? ''}
+        fileId={previewFile?.file_id}
+        fileType={previewFile?.type ?? undefined}
+        fileSize={previewFile?.bytes}
       />
     </div>
   );
