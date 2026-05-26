@@ -60,12 +60,43 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
-      - name: Trigger Railway deployment via 1ma-lab
+      - name: Trigger Railway deployment
         if: github.ref == 'refs/heads/main'
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
         run: |
-          git clone --depth=1 "https://x-access-token:${{ secrets.DEPLOY_PAT }}@github.com/KirillMachuk/1ma-lab.git" /tmp/1ma-lab
-          cd /tmp/1ma-lab
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git config user.name "github-actions[bot]"
-          git commit --allow-empty -m "chore: redeploy — pull platform-librechat@$(echo '${{ github.sha }}' | cut -c1-7)"
-          git push
+          set -euo pipefail
+          API=https://backboard.railway.com/graphql/v2
+
+          LOOKUP=$(jq -cn --arg id "$RAILWAY_PROJECT_ID" '{
+            query: "query($id: String!) { project(id: $id) { services { edges { node { id name } } } environments { edges { node { id name } } } } }",
+            variables: { id: $id }
+          }')
+
+          RESP=$(curl -sfX POST "$API" \
+            -H "Authorization: Bearer $RAILWAY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$LOOKUP")
+
+          SERVICE_ID=$(echo "$RESP" | jq -r '.data.project.services.edges[] | select(.node.name=="1ma-lab") | .node.id')
+          ENV_ID=$(echo "$RESP" | jq -r '.data.project.environments.edges[] | select(.node.name=="production") | .node.id')
+
+          if [ -z "$SERVICE_ID" ] || [ -z "$ENV_ID" ] || [ "$SERVICE_ID" = "null" ] || [ "$ENV_ID" = "null" ]; then
+            echo "Could not resolve Railway service/environment IDs. Response:"
+            echo "$RESP"
+            exit 1
+          fi
+
+          REDEPLOY=$(jq -cn --arg sid "$SERVICE_ID" --arg eid "$ENV_ID" '{
+            query: "mutation($serviceId: String!, $environmentId: String!) { serviceInstanceRedeploy(serviceId: $serviceId, environmentId: $environmentId) }",
+            variables: { serviceId: $sid, environmentId: $eid }
+          }')
+
+          curl -sfX POST "$API" \
+            -H "Authorization: Bearer $RAILWAY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$REDEPLOY"
+
+          echo
+          echo "Triggered Railway redeploy for service 1ma-lab (sha-$(echo '${{ github.sha }}' | cut -c1-7))"

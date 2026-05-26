@@ -160,8 +160,8 @@ push to platform-librechat/main
   → GitHub Actions (.github/workflows/docker-image.yml)
       → builds Docker image
       → pushes to ghcr.io/kirillmachuk/platform-librechat:main
-      → makes empty commit to KirillMachuk/1ma-lab/main
-          → Railway detects push → pulls fresh ghcr.io image → deploys
+      → calls Railway GraphQL API → triggers redeploy of service "1ma-lab"
+          → Railway pulls fresh ghcr.io image → deploys
 ```
 
 ### Repos involved
@@ -169,20 +169,21 @@ push to platform-librechat/main
 | Repo | Role |
 |---|---|
 | `KirillMachuk/platform-librechat` | Source code (this repo) — all code changes go here |
-| `KirillMachuk/1ma-lab` | Deployment config — Railway watches this repo; its `Dockerfile` does `FROM ghcr.io/kirillmachuk/platform-librechat:main` |
+| `KirillMachuk/1ma-lab` | Deployment config — its `Dockerfile` does `FROM ghcr.io/kirillmachuk/platform-librechat:main`. Railway's connected source, but deploys are now triggered via direct API call (not git push), so commits here are no longer needed. |
 
-### Required GitHub secret (in platform-librechat)
+### Required GitHub secrets (in platform-librechat)
 
 | Secret | Value |
 |---|---|
-| `DEPLOY_PAT` | GitHub fine-grained PAT with **Contents: Read & Write** on `KirillMachuk/1ma-lab` |
+| `RAILWAY_TOKEN` | Railway workspace API token (Account → Tokens → Create Token, attach to workspace) |
+| `RAILWAY_PROJECT_ID` | UUID from the Railway project URL: `railway.com/project/<UUID>` |
 
 ### Important notes for agents
 
 - **Never push directly to `1ma-lab`** for code changes — it is deploy-only. All code lives here in `platform-librechat`.
 - A push to `main` here automatically deploys to production (~7–10 min build + deploy).
-- If Railway shows a stale deployment: go to Railway → service → `⋮` → **Redeploy** to pull the latest image manually.
-- The empty commit to `1ma-lab` will have message `chore: redeploy — pull platform-librechat@<sha7>`.
+- The Railway API call resolves the service named `1ma-lab` and the environment named `production`. If either is renamed, update the lookup in `.github/workflows/docker-image.yml`.
+- If a deploy is needed without a code change: re-run the workflow (`gh workflow run "Build & Push Docker Image"`) or manually click Redeploy in Railway.
 
 ---
 
