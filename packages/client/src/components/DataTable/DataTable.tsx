@@ -1,9 +1,11 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 
-/* Shallow equality for plain objects (string-keyed values, single level). */
-function shallowEqualObject<T extends Record<string, unknown>>(a: T, b: T): boolean {
+/* Shallow equality for plain objects (string-keyed values, single level).
+ * Accepts any object type; access is keyed via Object.keys so the generic
+ * does not require a string index signature. */
+function shallowEqualObject<T extends object>(a: T, b: T): boolean {
   if (a === b) return true;
-  const aKeys = Object.keys(a);
+  const aKeys = Object.keys(a) as Array<keyof T>;
   const bKeys = Object.keys(b);
   if (aKeys.length !== bKeys.length) return false;
   for (let i = 0; i < aKeys.length; i++) {
@@ -14,13 +16,10 @@ function shallowEqualObject<T extends Record<string, unknown>>(a: T, b: T): bool
   return true;
 }
 
-/* Shallow equality for arrays of plain objects (e.g. SortingState).
- * Two arrays are equal when they have the same length and each
- * corresponding element is shallow-equal as an object. */
-function shallowEqualArrayOfObjects<T extends Record<string, unknown>>(
-  a: T[],
-  b: T[],
-): boolean {
+/* Shallow equality for arrays of plain objects (e.g. SortingState,
+ * ColumnFiltersState). Two arrays are equal when they have the same
+ * length and each corresponding element is shallow-equal as an object. */
+function shallowEqualArrayOfObjects<T extends object>(a: T[], b: T[]): boolean {
   if (a === b) return true;
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
@@ -352,12 +351,7 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
           typeof updater === 'function'
             ? (updater as (p: PaginationState) => PaginationState)(prev)
             : updater;
-        return shallowEqualObject(
-          prev as unknown as Record<string, unknown>,
-          next as unknown as Record<string, unknown>,
-        )
-          ? prev
-          : next;
+        return shallowEqualObject(prev, next) ? prev : next;
       }),
     [],
   );
@@ -405,12 +399,23 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
     ...(paginationActive ? { onPaginationChange: setPagination } : {}),
   });
 
+  /* Stable callbacks for useVirtualizer options. react-virtual reinstalls
+   * scroll observers and recomputes measurements when these references churn,
+   * which under jsdom (no real layout) cascades into an infinite
+   * useLayoutEffect → flushSync(rerender) loop. Stabilising them keeps the
+   * virtualizer's internal scrollElement equality check a no-op after mount. */
+  const getScrollElement = useCallback(() => tableContainerRef.current, []);
+  const getItemKeyForVirtualizer = useCallback(
+    (index: number) => getRowId(data[index] as TData, index),
+    [data, getRowId],
+  );
+  const estimateSize = useCallback(() => rowHeight, [rowHeight]);
   const rowVirtualizer = useVirtualizer({
     enabled: virtualizationActive,
     count: data.length,
-    getScrollElement: () => tableContainerRef.current,
-    getItemKey: (index) => getRowId(data[index] as TData, index),
-    estimateSize: useCallback(() => rowHeight, [rowHeight]),
+    getScrollElement,
+    getItemKey: getItemKeyForVirtualizer,
+    estimateSize,
     overscan: dynamicOverscan,
   });
 
