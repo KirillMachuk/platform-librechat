@@ -4,8 +4,8 @@ import { EModelEndpoint, getConfigDefaults, isAgentsEndpoint } from 'librechat-d
 import type { ModelSelectorProps } from '~/common';
 import {
   SelectorTabs,
+  EndpointModelItem,
   renderModelSpecs,
-  renderEndpoints,
   renderSearchResults,
   renderCustomGroups,
   renderEndpointModels,
@@ -128,7 +128,15 @@ function ModelSelectorContent() {
   const renderLlmTab = () => (
     <>
       {renderModelSpecs(nonAgentModelSpecs, selectedValues.modelSpec || '')}
-      {renderEndpoints(llmEndpoints)}
+      {llmEndpoints.flatMap((endpoint) =>
+        (endpoint.models ?? []).map((model) => (
+          <EndpointModelItem
+            key={`${endpoint.value}-${model.name}`}
+            endpoint={endpoint}
+            modelId={model.name}
+          />
+        )),
+      )}
       {renderCustomGroups(modelSpecs || [], mappedEndpoints ?? [])}
     </>
   );

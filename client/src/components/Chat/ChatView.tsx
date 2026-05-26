@@ -12,7 +12,7 @@ import {
   useResumeOnLoad,
   useAdaptiveSSE,
   useChatHelpers,
-  useDefaultAgent,
+  useDefaultSelection,
 } from '~/hooks';
 import ConversationStarters from './Input/ConversationStarters';
 import { useGetMessagesByConvoId } from '~/data-provider';
@@ -60,7 +60,7 @@ function ChatView({ index = 0 }: { index?: number }) {
   const chatHelpers = useChatHelpers(index, conversationId);
   const addedChatHelpers = useAddedResponse();
 
-  useDefaultAgent({
+  useDefaultSelection({
     index,
     conversationId,
     newConversation: chatHelpers.newConversation,

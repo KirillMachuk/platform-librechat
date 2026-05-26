@@ -117,10 +117,17 @@ interface:
       By using the Website, you acknowledge that you have read these Terms of Service and agree to be bound by them.
 
   modelSelect: true
-  # Default agent selected on every new blank conversation.
-  # Set to the agent ID from the Agents panel (e.g. agent_abc123).
-  # Leave unset to keep the current LibreChat default behaviour.
+  # Default selection priority for new blank conversations:
+  #   1. defaultAgentId — picks a DB-backed agent (created via Agent Builder UI).
+  #      Takes precedence over defaultModel when both are set.
+  #   2. defaultModel — picks a raw LLM (endpoint + model name from endpoints config).
+  # Both are optional. If neither is set, LibreChat uses its own last-used / first-available default.
+  #
   # defaultAgentId: 'agent_abc123'
+  #
+  # defaultModel:
+  #   endpoint: anthropic
+  #   model: claude-3-5-sonnet-20241022
   parameters: true
   presets: true
   prompts:
