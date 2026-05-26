@@ -6,6 +6,7 @@ import type { Endpoint } from '~/common';
 import { useFavorites, useLocalize, useIsActiveItem } from '~/hooks';
 import { useModelSelectorContext } from '../ModelSelectorContext';
 import { CustomMenuItem as MenuItem } from '../CustomMenu';
+import { stripProviderPrefix } from '../utils';
 import { cn } from '~/utils';
 
 interface EndpointModelItemProps {
@@ -45,8 +46,8 @@ export function EndpointModelItem({ modelId, endpoint }: EndpointModelItemProps)
     endpoint.assistantNames?.[modelId]
   ) {
     modelName = endpoint.assistantNames[modelId];
-  } else if (modelName?.includes('/')) {
-    modelName = modelName.slice(modelName.indexOf('/') + 1);
+  } else if (modelName) {
+    modelName = stripProviderPrefix(modelName);
   }
 
   const isAgent = isAgentsEndpoint(endpoint.value);
@@ -72,15 +73,11 @@ export function EndpointModelItem({ modelId, endpoint }: EndpointModelItemProps)
   };
 
   const renderAvatar = () => {
-    const isAgentOrAssistant =
-      isAgentsEndpoint(endpoint.value) || isAssistantsEndpoint(endpoint.value);
-    const showEndpointIcon = isAgentOrAssistant && endpoint.icon;
-
     const getContent = () => {
       if (avatarUrl) {
         return <img src={avatarUrl} alt={modelName ?? ''} className="h-full w-full object-cover" />;
       }
-      if (showEndpointIcon) {
+      if (endpoint.icon) {
         return endpoint.icon;
       }
       return null;

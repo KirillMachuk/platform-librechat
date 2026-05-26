@@ -6,6 +6,7 @@ import type { TModelSpec } from 'librechat-data-provider';
 import type { Endpoint } from '~/common';
 import { useModelSelectorContext } from '../ModelSelectorContext';
 import { CustomMenuItem as MenuItem } from '../CustomMenu';
+import { stripProviderPrefix } from '../utils';
 import SpecIcon from './SpecIcon';
 import { cn } from '~/utils';
 
@@ -120,6 +121,8 @@ export function SearchResults({ results, localize, searchValue }: SearchResultsP
                     endpoint.assistantNames[model.name]
                   ) {
                     modelName = endpoint.assistantNames[model.name];
+                  } else {
+                    modelName = stripProviderPrefix(modelName);
                   }
                   return modelName.toLowerCase().includes(lowerQuery);
                 });
@@ -157,6 +160,8 @@ export function SearchResults({ results, localize, searchValue }: SearchResultsP
                     endpoint.assistantNames[modelId]
                   ) {
                     modelName = endpoint.assistantNames[modelId];
+                  } else {
+                    modelName = stripProviderPrefix(modelName);
                   }
 
                   const isModelSelected =

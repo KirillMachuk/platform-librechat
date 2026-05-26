@@ -11,6 +11,14 @@ import type { useLocalize } from '~/hooks';
 import SpecIcon from '~/components/Chat/Menus/Endpoints/components/SpecIcon';
 import { Endpoint, SelectedValues } from '~/common';
 
+/** Strips the provider prefix from LiteLLM-style model IDs.
+ * "anthropic/claude-sonnet-4.6" -> "claude-sonnet-4.6"
+ * "gpt-4-turbo" -> "gpt-4-turbo" (unchanged when no slash) */
+export function stripProviderPrefix(modelId: string): string {
+  const slashAt = modelId.indexOf('/');
+  return slashAt === -1 ? modelId : modelId.slice(slashAt + 1);
+}
+
 export function filterItems<
   T extends {
     label: string;
@@ -205,7 +213,7 @@ export const getDisplayValue = ({
       return endpoint.assistantNames[selectedValues.model];
     }
 
-    return selectedValues.model;
+    return stripProviderPrefix(selectedValues.model);
   }
 
   if (selectedValues.endpoint) {
