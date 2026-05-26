@@ -45,6 +45,8 @@ export function EndpointModelItem({ modelId, endpoint }: EndpointModelItemProps)
     endpoint.assistantNames?.[modelId]
   ) {
     modelName = endpoint.assistantNames[modelId];
+  } else if (modelName?.includes('/')) {
+    modelName = modelName.slice(modelName.indexOf('/') + 1);
   }
 
   const isAgent = isAgentsEndpoint(endpoint.value);
