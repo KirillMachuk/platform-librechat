@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/rules-of-hooks */
-import { Database } from 'lucide-react';
+import { Database, Eye } from 'lucide-react';
 import { FileSources, FileContext } from 'librechat-data-provider';
 import {
   useMediaQuery,
@@ -13,6 +13,10 @@ import ImagePreview from '~/components/Chat/Input/Files/ImagePreview';
 import FilePreview from '~/components/Chat/Input/Files/FilePreview';
 import { TranslationKeys, useLocalize } from '~/hooks';
 import { formatDate, getFileType } from '~/utils';
+
+export interface FileColumnsContext {
+  onPreview: (file: TFile) => void;
+}
 
 const contextMap: Record<string, TranslationKeys> = {
   [FileContext.avatar]: 'com_ui_avatar',
@@ -31,7 +35,7 @@ export const filenameContextMap: Record<string, TranslationKeys> = {
   bytes: 'com_ui_size',
 };
 
-export const columns: TableColumn<TFile, unknown>[] = [
+export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFile, unknown>[] => [
   {
     accessorKey: 'filename',
     header: () => {
@@ -171,4 +175,39 @@ export const columns: TableColumn<TFile, unknown>[] = [
       return `${value} MB`;
     },
   },
+  {
+    id: 'preview',
+    header: () => null,
+    cell: ({ row }) => {
+      const localize = useLocalize();
+      const label = `${localize('com_ui_preview')}: ${row.original.filename}`;
+      return (
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              ctx.onPreview(row.original);
+            }}
+            aria-label={label}
+            title={localize('com_ui_preview')}
+            className="rounded p-1 text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy"
+          >
+            <Eye className="size-4" aria-hidden="true" />
+          </button>
+        </div>
+      );
+    },
+    meta: {
+      width: 8,
+    },
+  },
 ];
+
+export const columns = buildColumns({
+  onPreview: () => {
+    /* Stable no-op fallback for any consumer importing `columns` directly —
+     * production callers should use `buildColumns({ onPreview })` so the
+     * action wires into a real handler. */
+  },
+});
