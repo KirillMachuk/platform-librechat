@@ -89,7 +89,7 @@ const SearchChatsDialog = memo(function SearchChatsDialog() {
   return (
     <OGDialog open={open} onOpenChange={setOpen}>
       <OGDialogContent
-        className="flex max-h-[85vh] w-[calc(100vw-2rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 supports-[height:85dvh]:max-h-[85dvh] sm:w-full"
+        className="flex h-[640px] max-h-[85vh] w-[calc(100vw-2rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 supports-[height:85dvh]:max-h-[85dvh] sm:w-full"
         showCloseButton={false}
       >
         <div className="flex items-center gap-2 border-b border-border-light px-4 py-3">
