@@ -162,7 +162,7 @@ export default function FilesPanel() {
         columns={columns}
         data={filesWithIds}
         config={TABLE_CONFIG}
-        onRowClick={(row) => handleFileClick(row as TFile)}
+        onRowClick={handleFileClick}
         className="h-auto max-h-[calc(100vh-12rem)] flex-1"
       />
       <Button

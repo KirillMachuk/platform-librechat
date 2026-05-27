@@ -1,12 +1,14 @@
-import type { TFile } from 'librechat-data-provider';
+import type { Row } from '@tanstack/react-table';
+import type { TFileRow } from './PanelColumns';
 import ImagePreview from '~/components/Chat/Input/Files/ImagePreview';
 import FilePreview from '~/components/Chat/Input/Files/FilePreview';
 import { getFileType } from '~/utils';
 
-export default function PanelFileCell({ file }: { file?: TFile }) {
+export default function PanelFileCell({ row }: { row: Row<TFileRow> }) {
+  const file = row.original;
   return (
     <div className="flex w-full items-center gap-2">
-      {file?.type?.startsWith('image') === true ? (
+      {file.type?.startsWith('image') === true ? (
         <ImagePreview
           url={file.filepath}
           className="h-8 w-8 flex-shrink-0"
@@ -14,11 +16,11 @@ export default function PanelFileCell({ file }: { file?: TFile }) {
           alt={file.filename}
         />
       ) : (
-        <FilePreview fileType={getFileType(file?.type)} file={file} />
+        <FilePreview fileType={getFileType(file.type)} file={file} />
       )}
       <div className="min-w-0 flex-1 overflow-hidden">
         <span className="block w-full overflow-hidden truncate text-ellipsis whitespace-nowrap text-xs">
-          {file?.filename}
+          {file.filename}
         </span>
       </div>
     </div>

@@ -46,18 +46,28 @@ interface TableRowComponentProps<TData extends Record<string, unknown>> {
   style?: React.CSSProperties;
   selected: boolean;
   onRowClick?: (row: TData) => void;
+  /**
+   * `isSmallScreen` is passed by the parent (which subscribes once via
+   * `useMediaQuery`) instead of each row calling the hook itself — calling
+   * `useMediaQuery` per row would attach an event listener per row.
+   */
+  isSmallScreen?: boolean;
 }
 
 const INTERACTIVE_SELECTOR =
   '[data-row-action], a, button, input, label, textarea, select, [role="checkbox"], [role="button"], [role="menuitem"]';
 
-// ...existing code...
 const TableRowComponent = <TData extends Record<string, unknown>>(
-  { row, virtualIndex, style, selected, onRowClick }: TableRowComponentProps<TData>,
+  {
+    row,
+    virtualIndex,
+    style,
+    selected,
+    onRowClick,
+    isSmallScreen = false,
+  }: TableRowComponentProps<TData>,
   ref: React.Ref<HTMLTableRowElement>,
 ) => {
-  // Check if we're on mobile - use window.innerWidth for component-level check
-  const isSmallScreen = typeof window !== 'undefined' && window.innerWidth < 768;
   const clickable = onRowClick != null;
   const handleRowActivate = () => onRowClick?.(row.original);
 
@@ -76,7 +86,8 @@ const TableRowComponent = <TData extends Record<string, unknown>>(
       onClick={
         clickable
           ? (event) => {
-              if ((event.target as HTMLElement).closest(INTERACTIVE_SELECTOR)) {
+              const matched = (event.target as HTMLElement).closest(INTERACTIVE_SELECTOR);
+              if (matched != null && matched !== event.currentTarget) {
                 return;
               }
               handleRowActivate();
@@ -87,7 +98,8 @@ const TableRowComponent = <TData extends Record<string, unknown>>(
         clickable
           ? (event) => {
               if (event.key !== 'Enter' && event.key !== ' ') return;
-              if ((event.target as HTMLElement).closest(INTERACTIVE_SELECTOR)) return;
+              const matched = (event.target as HTMLElement).closest(INTERACTIVE_SELECTOR);
+              if (matched != null && matched !== event.currentTarget) return;
               event.preventDefault();
               handleRowActivate();
             }
@@ -140,7 +152,6 @@ const TableRowComponent = <TData extends Record<string, unknown>>(
     </TableRow>
   );
 };
-// ...existing code...
 
 type ForwardTableRowComponentType = <TData extends Record<string, unknown>>(
   props: TableRowComponentProps<TData> & React.RefAttributes<HTMLTableRowElement>,
@@ -154,6 +165,7 @@ interface GenericRowProps {
   style?: React.CSSProperties;
   selected: boolean;
   onRowClick?: (row: Record<string, unknown>) => void;
+  isSmallScreen?: boolean;
 }
 
 export const MemoizedTableRow = memo(
@@ -161,7 +173,8 @@ export const MemoizedTableRow = memo(
   (prev: GenericRowProps, next: GenericRowProps) =>
     prev.row.original === next.row.original &&
     prev.selected === next.selected &&
-    prev.onRowClick === next.onRowClick,
+    prev.onRowClick === next.onRowClick &&
+    prev.isSmallScreen === next.isSmallScreen,
 );
 
 export const SkeletonRows = memo(

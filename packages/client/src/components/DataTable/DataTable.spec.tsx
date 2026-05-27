@@ -133,6 +133,10 @@ jest.mock('../Table', () => ({
     'data-index': dataIndex,
     style,
     'aria-hidden': ariaHidden,
+    onClick,
+    onKeyDown,
+    role,
+    tabIndex,
   }: {
     children: React.ReactNode;
     className?: string;
@@ -140,6 +144,10 @@ jest.mock('../Table', () => ({
     'data-index'?: number;
     style?: React.CSSProperties;
     'aria-hidden'?: boolean;
+    onClick?: React.MouseEventHandler<HTMLTableRowElement>;
+    onKeyDown?: React.KeyboardEventHandler<HTMLTableRowElement>;
+    role?: string;
+    tabIndex?: number;
   }) => (
     <tr
       data-testid="table-row"
@@ -148,6 +156,10 @@ jest.mock('../Table', () => ({
       data-index={dataIndex}
       style={style}
       aria-hidden={ariaHidden}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
+      role={role}
+      tabIndex={tabIndex}
     >
       {children}
     </tr>
@@ -972,6 +984,113 @@ describe('DataTable', () => {
       const sortableHeader = screen.getAllByTestId('table-head')[1];
       expect(sortableHeader).toHaveAttribute('role', 'button');
       expect(sortableHeader).toHaveAttribute('tabIndex', '0');
+    });
+  });
+
+  describe('Custom Header opt-out', () => {
+    it('should NOT attach a wrapper onClick when meta.customHeader=true', () => {
+      const columns: TableColumn<TestData, string>[] = [
+        {
+          accessorKey: 'name',
+          header: () => <button data-testid="inner-sort">Inner</button>,
+          enableSorting: true,
+          meta: { customHeader: true },
+        },
+      ];
+      const data = createTestData(3);
+
+      render(
+        <TestWrapper>
+          <DataTable columns={columns} data={data} />
+        </TestWrapper>,
+      );
+
+      const customHeader = screen.getAllByTestId('table-head')[1];
+      expect(customHeader).not.toHaveAttribute('role', 'button');
+      expect(customHeader).not.toHaveAttribute('tabIndex');
+      expect(screen.getByTestId('inner-sort')).toBeInTheDocument();
+    });
+  });
+
+  describe('onRowClick', () => {
+    it('should invoke callback with row.original when row is clicked', () => {
+      const columns = createTestColumns();
+      const data = createTestData(3);
+      const onRowClick = jest.fn();
+
+      render(
+        <TestWrapper>
+          <DataTable columns={columns} data={data} onRowClick={onRowClick} />
+        </TestWrapper>,
+      );
+
+      const firstDataRow = screen.getAllByTestId('table-row')[1];
+      fireEvent.click(firstDataRow);
+      expect(onRowClick).toHaveBeenCalledTimes(1);
+      expect(onRowClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'row-0' }));
+    });
+
+    it('should NOT invoke callback when clicking an interactive child', () => {
+      const columns: TableColumn<TestData, string>[] = [
+        {
+          accessorKey: 'name',
+          header: 'Name',
+          cell: ({ row }) => (
+            <button data-testid={`btn-${row.original.id}`}>{row.original.name}</button>
+          ),
+        },
+      ];
+      const data = createTestData(2);
+      const onRowClick = jest.fn();
+
+      render(
+        <TestWrapper>
+          <DataTable columns={columns} data={data} onRowClick={onRowClick} />
+        </TestWrapper>,
+      );
+
+      fireEvent.click(screen.getByTestId('btn-row-0'));
+      expect(onRowClick).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Pagination mode', () => {
+    it('should slice data per pageSize when enablePagination=true', () => {
+      const columns = createTestColumns();
+      const data = createTestData(12);
+
+      render(
+        <TestWrapper>
+          <DataTable
+            columns={columns}
+            data={data}
+            config={{ behavior: { enablePagination: true, pageSize: 5 } }}
+          />
+        </TestWrapper>,
+      );
+
+      // 5 data rows + 1 header row (and select column header is on row 0)
+      const dataRows = screen.getAllByTestId('table-row');
+      // 1 header row + 5 page rows = 6 rows total
+      expect(dataRows.length).toBe(6);
+    });
+
+    it('should disable Prev button on first page', () => {
+      const columns = createTestColumns();
+      const data = createTestData(12);
+
+      render(
+        <TestWrapper>
+          <DataTable
+            columns={columns}
+            data={data}
+            config={{ behavior: { enablePagination: true, pageSize: 5 } }}
+          />
+        </TestWrapper>,
+      );
+
+      const prevButton = screen.getByRole('button', { name: 'com_ui_prev' });
+      expect(prevButton).toBeDisabled();
     });
   });
 });

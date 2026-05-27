@@ -87,7 +87,9 @@ export default function SharedLinks() {
       return [];
     }
 
-    return data.pages.flatMap((page) => page.links.filter(Boolean));
+    return data.pages
+      .flatMap((page) => page.links.filter(Boolean))
+      .map((link) => ({ ...link, id: link.shareId }));
   }, [data?.pages]);
 
   const deleteMutation = useDeleteSharedLinkMutation({
@@ -213,8 +215,7 @@ export default function SharedLinks() {
           );
         },
         meta: {
-          size: '32%',
-          mobileSize: '50%',
+          width: isSmallScreen ? 50 : 32,
           customHeader: true,
         },
       },
@@ -253,8 +254,7 @@ export default function SharedLinks() {
         },
         cell: ({ row }) => formatDate(row.original.createdAt?.toString() ?? '', isSmallScreen),
         meta: {
-          size: '10%',
-          mobileSize: '20%',
+          width: isSmallScreen ? 20 : 10,
           customHeader: true,
         },
       },
@@ -266,8 +266,7 @@ export default function SharedLinks() {
           </Label>
         ),
         meta: {
-          size: '7%',
-          mobileSize: '25%',
+          width: isSmallScreen ? 25 : 7,
           customHeader: true,
         },
         cell: ({ row }) => (

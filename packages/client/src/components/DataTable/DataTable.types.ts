@@ -2,23 +2,21 @@ import type { ColumnDef, SortingState, Table } from '@tanstack/react-table';
 import type { TranslationKeys } from '../../hooks';
 import type React from 'react';
 
-export type ProcessedDataRow<TData> = TData & { _id: string; _index: number };
-
-export type TableColumnDef<TData, TValue> = ColumnDef<ProcessedDataRow<TData>, TValue>;
-
 export type TableColumn<TData, TValue> = ColumnDef<TData, TValue> & {
   accessorKey?: string | number;
   meta?: {
-    /** Column width as a percentage (1-100). Used for proportional column sizing. */
+    /**
+     * Column width as a percentage of total table width (1-100).
+     *
+     * Use this for proportional sizing. For columns that should be a fixed
+     * pixel width, omit `width` and rely on `minWidth` plus content sizing.
+     *
+     * For responsive widths (different on mobile vs desktop), compute the
+     * value in your column definition's `useMemo` based on `useMediaQuery`.
+     */
     width?: number;
-    /** Fixed column size in pixels (e.g., '150px'). Takes precedence over width percentage. */
-    size?: string | number;
-    /** Fixed column size for mobile screens. Falls back to size if not specified. */
-    mobileSize?: string | number;
     /** Minimum width for the column (e.g., '80px'). */
     minWidth?: string | number;
-    /** Priority for flexible column width distribution. Higher priority = more space. Default is 1. */
-    priority?: number;
     /** Additional CSS classes to apply to the column cells and header. */
     className?: string;
     /**
@@ -81,33 +79,89 @@ export type TableColumn<TData, TValue> = ColumnDef<TData, TValue> & {
 };
 
 export interface DataTableConfig {
+  /**
+   * Row selection / multi-select checkboxes.
+   *
+   * - `enableRowSelection` (default: `true`) — gates react-table's selection state.
+   *   When `false`, all selection APIs become no-ops.
+   * - `showCheckboxes` (default: `true`) — renders the checkbox column.
+   *   Set to `false` for read-only / "view-only" tables (e.g. side-panel
+   *   listings where rows act as buttons).
+   */
   selection?: {
     enableRowSelection?: boolean;
     showCheckboxes?: boolean;
   };
+  /**
+   * Search/filter input behaviour.
+   *
+   * - `enableSearch` (default: `true`) — shows the search box in the toolbar.
+   * - `debounce` (default: `300` ms) — input debounce before firing the change.
+   * - `filterColumn` — when set + `behavior.manualFiltering: false`, the
+   *   search box drives client-side filtering of that column. Required
+   *   pairing for client-side search; ignored when `onFilterChange` is
+   *   provided (server-side mode).
+   */
   search?: {
     enableSearch?: boolean;
     debounce?: number;
     filterColumn?: string;
   };
+  /**
+   * Skeleton placeholder rows shown while `isLoading` or `isFetching` (not
+   * appending) is true.
+   *
+   * - `count` (default: `10`) — number of skeleton rows.
+   */
   skeleton?: {
     count?: number;
   };
+  /**
+   * Row virtualization (via `@tanstack/react-virtual`). Only active when
+   * `behavior.enablePagination` is `false` AND `data.length >= minRows`.
+   *
+   * - `overscan` (default: `10`) — rows rendered above/below viewport.
+   * - `minRows` (default: `50`) — minimum data length before virtualizing.
+   * - `rowHeight` (default: `56`) — estimated row height in pixels.
+   * - `fastOverscanMultiplier` (default: `4`) — overscan boost during fast
+   *   scrolling (capped at `overscan * 8`).
+   */
   virtualization?: {
     overscan?: number;
     minRows?: number;
     rowHeight?: number;
     fastOverscanMultiplier?: number;
   };
+  /**
+   * Reserved for future column pinning support.
+   * Currently unused.
+   */
   pinning?: {
     enableColumnPinning?: boolean;
   };
   /**
    * Override default data orchestration. By default the table operates in
-   * manual mode (server-side sort/filter with infinite scroll via virtualizer).
-   * Set `manualSorting`/`manualFiltering` to `false` to enable client-side
-   * sort/filter, and set `enablePagination` to swap virtualization for
-   * standard prev/next pagination.
+   * **server-side mode** (manual sort/filter, infinite scroll via virtualizer).
+   *
+   * - `manualSorting` (default: `true`) — server sorts; consumer updates
+   *   `queryParams.sortBy/sortDirection` via `onSortingChange`.
+   *   Set `false` for client-side sorting (uses `getSortedRowModel`).
+   * - `manualFiltering` (default: `true`) — server filters; consumer updates
+   *   `queryParams.search` via `onFilterChange`.
+   *   Set `false` to enable client-side filter via `search.filterColumn`.
+   * - `enablePagination` (default: `false`) — disables virtualization and
+   *   switches to standard Prev/Next pagination controls.
+   * - `pageSize` (default: `10`) — rows per page when pagination is active.
+   *
+   * **Typical pairings:**
+   *
+   * ```ts
+   * // Server-side (default): big lists, cursor pagination
+   * config={{ /* nothing — defaults are correct *​/ }}
+   *
+   * // Client-side: small/medium dataset already in memory
+   * config={{ behavior: { manualSorting: false, manualFiltering: false, enablePagination: true, pageSize: 10 } }}
+   * ```
    */
   behavior?: {
     manualSorting?: boolean;
@@ -116,8 +170,21 @@ export interface DataTableConfig {
     pageSize?: number;
   };
   /**
-   * Render a column-visibility dropdown in the toolbar. Requires `contextMap`
-   * to translate column ids into localized labels.
+   * Render a column-visibility dropdown in the toolbar so users can
+   * hide/show columns.
+   *
+   * - `enabled` (default: `false`) — show the dropdown trigger.
+   * - `contextMap` (required when enabled) — maps each `column.id` /
+   *   `accessorKey` to a translation key for the dropdown label.
+   *
+   * ```ts
+   * config={{
+   *   columnVisibility: {
+   *     enabled: true,
+   *     contextMap: { filename: 'com_ui_name', updatedAt: 'com_ui_date' },
+   *   },
+   * }}
+   * ```
    */
   columnVisibility?: {
     enabled?: boolean;
@@ -125,7 +192,37 @@ export interface DataTableConfig {
   };
 }
 
-export interface DataTableProps<TData extends Record<string, unknown>, TValue> {
+/**
+ * Minimum shape DataTable requires from each row: a stable `id` used by
+ * react-table for selection / virtualization keying. Strings preferred
+ * (database primary keys); numbers accepted for synthetic IDs.
+ *
+ * Consumers whose source data lacks an `id` field (e.g. `conversationId`,
+ * `shareId`, `file_id`) should map it into shape before passing:
+ *
+ * ```ts
+ * const rows = useMemo(() => items.map((it) => ({ ...it, id: it.shareId })), [items]);
+ * ```
+ *
+ * Making this explicit at the type level prevents the silent fall-back to
+ * index-based row IDs, which breaks selection state when data reorders.
+ */
+export interface RowWithId {
+  id: string | number;
+}
+
+/**
+ * Utility: take any data shape `T` and add the required `id` field.
+ *
+ * Use at the call site when the source type lacks an `id` (e.g. uses
+ * `file_id`, `shareId`, `conversationId`) — declare your columns and your
+ * mapped data as `WithId<TFile>` / `WithId<SharedLinkItem>` etc. so the
+ * `TData` generic is consistently inferred for both `columns` and `data`
+ * props of `DataTable`.
+ */
+export type WithId<T> = T & RowWithId;
+
+export interface DataTableProps<TData extends RowWithId, TValue> {
   columns: TableColumn<TData, TValue>[];
   data: TData[];
   className?: string;
@@ -145,7 +242,7 @@ export interface DataTableProps<TData extends Record<string, unknown>, TValue> {
   customActionsRenderer?: (params: {
     selectedCount: number;
     selectedRows: TData[];
-    table: Table<ProcessedDataRow<TData>>;
+    table: Table<TData>;
   }) => React.ReactNode;
   /**
    * Invoked when a body row is activated via click or keyboard (Enter/Space).

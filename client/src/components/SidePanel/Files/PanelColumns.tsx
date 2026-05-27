@@ -1,8 +1,10 @@
 /* eslint-disable react-hooks/rules-of-hooks */
 import { Eye } from 'lucide-react';
-import type { TableColumn } from '@librechat/client';
+import type { TableColumn, WithId } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import PanelFileCell from './PanelFileCell';
+
+export type TFileRow = WithId<TFile>;
 import { useLocalize } from '~/hooks';
 import { formatDate } from '~/utils';
 
@@ -10,14 +12,14 @@ export interface PanelColumnsContext {
   onPreview: (file: TFile) => void;
 }
 
-export const buildColumns = (ctx: PanelColumnsContext): TableColumn<TFile, unknown>[] => [
+export const buildColumns = (ctx: PanelColumnsContext): TableColumn<TFileRow, unknown>[] => [
   {
     accessorKey: 'filename',
     header: () => {
       const localize = useLocalize();
       return localize('com_ui_name');
     },
-    cell: ({ row }) => <PanelFileCell file={row.original} />,
+    cell: ({ row }) => <PanelFileCell row={row} />,
     meta: {
       width: 65,
       isRowHeader: true,

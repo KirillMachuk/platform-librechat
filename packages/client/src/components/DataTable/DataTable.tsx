@@ -1,4 +1,31 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { ArrowUp, ArrowDown, ArrowDownUp } from 'lucide-react';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  flexRender,
+  type SortingState,
+  type VisibilityState,
+  type ColumnDef,
+  type Row,
+  type ColumnFiltersState,
+  type PaginationState,
+} from '@tanstack/react-table';
+import type { DataTableProps, RowWithId } from './DataTable.types';
+import { SelectionCheckbox, MemoizedTableRow, SkeletonRows } from './DataTableComponents';
+import { Table, TableBody, TableHead, TableHeader, TableCell, TableRow } from '../Table';
+import { useDebounced, useOptimizedRowSelection } from './DataTable.hooks';
+import { DataTableColumnVisibility } from './DataTableColumnVisibility';
+import { useMediaQuery, useLocalize } from '~/hooks';
+import { DataTableSearch } from './DataTableSearch';
+import { cn, logger } from '~/utils';
+import { Button } from '../Button';
+import { Label } from '../Label';
+import { Spinner } from '~/svgs';
 
 /* Shallow equality for plain objects (string-keyed values, single level).
  * Accepts any object type; access is keyed via Object.keys so the generic
@@ -27,36 +54,8 @@ function shallowEqualArrayOfObjects<T extends object>(a: T[], b: T[]): boolean {
   }
   return true;
 }
-import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowUp, ArrowDown, ArrowDownUp } from 'lucide-react';
-import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  flexRender,
-  type SortingState,
-  type VisibilityState,
-  type ColumnDef,
-  type Row,
-  type Table as TTable,
-  type ColumnFiltersState,
-  type PaginationState,
-} from '@tanstack/react-table';
-import type { DataTableProps, ProcessedDataRow } from './DataTable.types';
-import { SelectionCheckbox, MemoizedTableRow, SkeletonRows } from './DataTableComponents';
-import { Table, TableBody, TableHead, TableHeader, TableCell, TableRow } from '../Table';
-import { useDebounced, useOptimizedRowSelection } from './DataTable.hooks';
-import { DataTableColumnVisibility } from './DataTableColumnVisibility';
-import { useMediaQuery, useLocalize } from '~/hooks';
-import { DataTableSearch } from './DataTableSearch';
-import { cn, logger } from '~/utils';
-import { Button } from '../Button';
-import { Label } from '../Label';
-import { Spinner } from '~/svgs';
 
-function DataTable<TData extends Record<string, unknown>, TValue>({
+function DataTable<TData extends RowWithId, TValue>({
   columns,
   data,
   className = '',
@@ -109,8 +108,16 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
   const paginationActive = enablePagination;
   const virtualizationActive = !paginationActive && data.length >= minRows;
 
-  // Dynamic overscan for fast scrolling - increases rendered rows during rapid scroll
+  // Dynamic overscan for fast scrolling - increases rendered rows during rapid scroll.
+  // `dynamicOverscan` drives the virtualizer (needs to be reactive state),
+  // `dynamicOverscanRef` mirrors it for the scroll handler's read-only checks —
+  // putting it in the handler's deps would tear down the scroll listener on
+  // every overscan boost (i.e. constantly during fast scrolls).
   const [dynamicOverscan, setDynamicOverscan] = useState(overscan);
+  const dynamicOverscanRef = useRef(overscan);
+  useEffect(() => {
+    dynamicOverscanRef.current = dynamicOverscan;
+  }, [dynamicOverscan]);
   const lastScrollTopRef = useRef(0);
   const lastScrollTimeRef = useRef(performance.now());
   const fastScrollTimeoutRef = useRef<number | null>(null);
@@ -119,24 +126,26 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
     setDynamicOverscan(overscan);
   }, [overscan]);
 
-  useEffect(() => {
-    return () => {
-      if (fastScrollTimeoutRef.current) {
-        clearTimeout(fastScrollTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const [columnVisibility, setColumnVisibilityRaw] = useState<VisibilityState>({});
+  /* Column visibility comes from two sources:
+   *   1. `calculatedVisibility` — derived from column meta (e.g. `desktopOnly`),
+   *      a pure function of props.
+   *   2. `userColumnVisibility` — user toggles via the visibility dropdown.
+   * Merging via a derived `useMemo` (see below) instead of pushing into a
+   * single `useState` via `useEffect` is what kills the infinite re-render
+   * loop: a non-memoized `columns` prop would otherwise create a fresh
+   * `calculatedVisibility` ref every render, fire the effect, mutate state,
+   * re-render — ad infinitum. With the derived approach the visibility
+   * value is recomputed on render but never causes its own re-render. */
+  const [userColumnVisibility, setUserColumnVisibilityRaw] = useState<VisibilityState>({});
   /* Equality-guarded setters: react-table's onXChange callbacks re-emit
    * a fresh state object on every render even when the logical value
    * hasn't changed. Without bailout, those setState calls trigger
    * re-renders, which re-emit, which re-render — infinite loop. The
    * wrappers below short-circuit when prev and next are shallow-equal
    * so React's Object.is bailout kicks in and the render stops. */
-  const setColumnVisibility = useCallback<typeof setColumnVisibilityRaw>(
+  const setUserColumnVisibility = useCallback<typeof setUserColumnVisibilityRaw>(
     (updater) =>
-      setColumnVisibilityRaw((prev) => {
+      setUserColumnVisibilityRaw((prev) => {
         const next =
           typeof updater === 'function'
             ? (updater as (p: VisibilityState) => VisibilityState)(prev)
@@ -145,7 +154,7 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
       }),
     [],
   );
-  const [optimizedRowSelectionRaw, setOptimizedRowSelectionRaw] = useOptimizedRowSelection();
+  const [optimizedRowSelection, setOptimizedRowSelectionRaw] = useOptimizedRowSelection();
   const setOptimizedRowSelection = useCallback<typeof setOptimizedRowSelectionRaw>(
     (updater) =>
       setOptimizedRowSelectionRaw((prev) => {
@@ -157,7 +166,6 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
       }),
     [setOptimizedRowSelectionRaw],
   );
-  const optimizedRowSelection = optimizedRowSelectionRaw;
   const [searchTerm, setSearchTerm] = useState(filterValue);
   const [internalSorting, setInternalSortingRaw] = useState<SortingState>(defaultSort);
   const setInternalSorting = useCallback<typeof setInternalSortingRaw>(
@@ -179,46 +187,47 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
   );
   const isIndeterminate = selectedCount > 0 && !isAllSelected;
 
-  const getRowId = useCallback(
-    (row: TData, index?: number) => String(row.id ?? `row-${index ?? 0}`),
-    [],
-  );
+  const getRowId = useCallback((row: TData) => String(row.id), []);
 
   const selectedRows = useMemo(() => {
     if (Object.keys(optimizedRowSelection).length === 0) return [];
 
-    const dataMap = new Map(data.map((item, index) => [getRowId(item, index), item]));
+    const dataMap = new Map(data.map((item) => [getRowId(item), item]));
     return Object.keys(optimizedRowSelection)
       .map((id) => dataMap.get(id))
       .filter(Boolean) as TData[];
   }, [optimizedRowSelection, data, getRowId]);
 
   const cleanupTimers = useCallback(() => {
-    if (scrollRAFRef.current) {
+    if (scrollRAFRef.current != null) {
       cancelAnimationFrame(scrollRAFRef.current);
       scrollRAFRef.current = null;
     }
-    if (scrollTimeoutRef.current) {
+    if (scrollTimeoutRef.current != null) {
       clearTimeout(scrollTimeoutRef.current);
       scrollTimeoutRef.current = null;
+    }
+    if (fastScrollTimeoutRef.current != null) {
+      clearTimeout(fastScrollTimeoutRef.current);
+      fastScrollTimeoutRef.current = null;
     }
   }, []);
 
   const debouncedTerm = useDebounced(searchTerm, debounceDelay);
   const finalSorting = sorting ?? internalSorting;
 
-  // Mobile column visibility: columns with desktopOnly meta are hidden via CSS on mobile
-  // but remain in DOM for accessibility. CSS classes handle visual hiding.
+  /* Pre-seed visibility state for columns that opt into the
+   * `desktopOnly` flag. The actual mobile hiding is done via CSS
+   * (`hidden md:table-cell`); the keys are seeded so the user-toggle
+   * dropdown and react-table's internal book-keeping line up with the
+   * column ids. Pure function of `columns` — no other inputs. */
   const calculatedVisibility = useMemo(() => {
     const newVisibility: VisibilityState = {};
 
     columns.forEach((col) => {
-      const meta = (col as { meta?: { desktopOnly?: boolean } }).meta;
-      if (!meta?.desktopOnly) return;
+      if (!col.meta?.desktopOnly) return;
 
-      const rawId =
-        (col as { id?: string | number; accessorKey?: string | number }).id ??
-        (col as { accessorKey?: string | number }).accessorKey;
+      const rawId = col.id ?? col.accessorKey;
 
       if ((typeof rawId === 'string' || typeof rawId === 'number') && String(rawId).length > 0) {
         newVisibility[String(rawId)] = true;
@@ -230,31 +239,16 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
       }
     });
     return newVisibility;
-  }, [isSmallScreen, columns]);
+  }, [columns]);
 
-  useEffect(() => {
-    setColumnVisibility((prev) => ({ ...prev, ...calculatedVisibility }));
-  }, [calculatedVisibility]);
-
-  // Warn about missing row IDs - only once per component lifecycle
-  const hasWarnedAboutMissingIds = useRef(false);
-
-  useEffect(() => {
-    if (data.length > 0 && !hasWarnedAboutMissingIds.current) {
-      const missing = data.filter((item) => item.id === null || item.id === undefined);
-      if (missing.length > 0) {
-        logger.warn(
-          `DataTable Warning: ${missing.length} data rows are missing a unique "id" property. Using index as a fallback. This can lead to unexpected behavior with selection and sorting.`,
-          { missingCount: missing.length, sample: missing.slice(0, 3) },
-        );
-        hasWarnedAboutMissingIds.current = true;
-      }
-    }
-  }, [data]);
+  const columnVisibility = useMemo<VisibilityState>(
+    () => ({ ...calculatedVisibility, ...userColumnVisibility }),
+    [calculatedVisibility, userColumnVisibility],
+  );
 
   const tableColumns = useMemo((): ColumnDef<TData, TValue>[] => {
     if (!enableRowSelection || !showCheckboxes) {
-      return columns.map((col) => col as unknown as ColumnDef<TData, TValue>);
+      return columns;
     }
 
     const selectColumn: ColumnDef<TData, TValue> = {
@@ -276,8 +270,8 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
                 if (isAllSelected || !value) {
                   setOptimizedRowSelection({});
                 } else {
-                  const allSelection = data.reduce<Record<string, boolean>>((acc, item, index) => {
-                    acc[getRowId(item, index)] = true;
+                  const allSelection = data.reduce<Record<string, boolean>>((acc, item) => {
+                    acc[getRowId(item)] = true;
                     return acc;
                   }, {});
                   setOptimizedRowSelection(allSelection);
@@ -290,9 +284,8 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
         );
       },
       cell: ({ row }) => {
-        const rowDescription = row.original.name
-          ? `named ${row.original.name}`
-          : `at position ${row.index + 1}`;
+        const named = (row.original as { name?: string }).name;
+        const rowDescription = named ? `named ${named}` : `at position ${row.index + 1}`;
         return (
           <div
             className="flex h-full items-center justify-center"
@@ -313,7 +306,7 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
       },
     };
 
-    return [selectColumn, ...columns.map((col) => col as unknown as ColumnDef<TData, TValue>)];
+    return [selectColumn, ...columns];
   }, [
     columns,
     enableRowSelection,
@@ -356,6 +349,16 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
     [],
   );
 
+  /* Sync pagination.pageSize when consumer changes `config.behavior.pageSize`
+   * (e.g. responsive layout swaps 10 → 5 on mobile). Without this the initial
+   * useState seed wins forever. The equality-guarded setter prevents an
+   * unnecessary state churn when pageSize is unchanged. */
+  useEffect(() => {
+    setPagination((prev) =>
+      prev.pageSize === configuredPageSize ? prev : { pageIndex: 0, pageSize: configuredPageSize },
+    );
+  }, [configuredPageSize, setPagination]);
+
   const onRowClickRef = useRef(onRowClick);
   useEffect(() => {
     onRowClickRef.current = onRowClick;
@@ -393,7 +396,7 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
       ...(paginationActive ? { pagination } : {}),
     },
     onSortingChange: onSortingChange ?? setInternalSorting,
-    onColumnVisibilityChange: setColumnVisibility,
+    onColumnVisibilityChange: setUserColumnVisibility,
     onRowSelectionChange: setOptimizedRowSelection,
     ...(manualFiltering ? {} : { onColumnFiltersChange: setColumnFilters }),
     ...(paginationActive ? { onPaginationChange: setPagination } : {}),
@@ -406,7 +409,7 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
    * virtualizer's internal scrollElement equality check a no-op after mount. */
   const getScrollElement = useCallback(() => tableContainerRef.current, []);
   const getItemKeyForVirtualizer = useCallback(
-    (index: number) => getRowId(data[index] as TData, index),
+    (index: number) => getRowId(data[index] as TData),
     [data, getRowId],
   );
   const estimateSize = useCallback(() => rowHeight, [rowHeight]);
@@ -464,6 +467,7 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
               selected={row.getIsSelected()}
               style={rowStyle}
               onRowClick={stableOnRowClick as ((row: Record<string, unknown>) => void) | undefined}
+              isSmallScreen={isSmallScreen}
             />
           );
         })}
@@ -480,12 +484,13 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
   } else {
     tableBodyContent = rows.map((row) => (
       <MemoizedTableRow
-        key={getRowId(row.original as TData, row.index)}
+        key={getRowId(row.original as TData)}
         row={row as unknown as Row<Record<string, unknown>>}
         virtualIndex={row.index}
         selected={row.getIsSelected()}
         style={rowStyle}
         onRowClick={stableOnRowClick as ((row: Record<string, unknown>) => void) | undefined}
+        isSmallScreen={isSmallScreen}
       />
     ));
   }
@@ -534,50 +539,50 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
     return () => ro.disconnect();
   }, [virtualizationActive, rowVirtualizer]);
 
-  const handleScroll = useMemo(() => {
-    let rafId: number | null = null;
-    let timeoutId: number | null = null;
+  const handleScroll = useCallback(() => {
+    if (scrollRAFRef.current != null) cancelAnimationFrame(scrollRAFRef.current);
 
-    return () => {
-      if (rafId) cancelAnimationFrame(rafId);
-
-      rafId = requestAnimationFrame(() => {
-        const container = tableContainerRef.current;
-        if (container) {
-          const now = performance.now();
-          const delta = Math.abs(container.scrollTop - lastScrollTopRef.current);
-          const dt = now - lastScrollTimeRef.current;
-          if (dt > 0) {
-            const velocity = delta / dt;
-            // Increase overscan during fast scrolling for smoother experience
-            if (velocity > 2 && virtualizationActive && dynamicOverscan === overscan) {
-              if (fastScrollTimeoutRef.current) {
-                window.clearTimeout(fastScrollTimeoutRef.current);
-              }
-              setDynamicOverscan(Math.min(overscan * fastOverscanMultiplier, overscan * 8));
-              fastScrollTimeoutRef.current = window.setTimeout(() => {
-                setDynamicOverscan((current) => (current !== overscan ? overscan : current));
-              }, 160);
+    scrollRAFRef.current = requestAnimationFrame(() => {
+      scrollRAFRef.current = null;
+      const container = tableContainerRef.current;
+      if (container) {
+        const now = performance.now();
+        const delta = Math.abs(container.scrollTop - lastScrollTopRef.current);
+        const dt = now - lastScrollTimeRef.current;
+        if (dt > 0) {
+          const velocity = delta / dt;
+          // Increase overscan during fast scrolling for smoother experience
+          if (velocity > 2 && virtualizationActive && dynamicOverscanRef.current === overscan) {
+            if (fastScrollTimeoutRef.current != null) {
+              window.clearTimeout(fastScrollTimeoutRef.current);
             }
+            setDynamicOverscan(Math.min(overscan * fastOverscanMultiplier, overscan * 8));
+            fastScrollTimeoutRef.current = window.setTimeout(() => {
+              fastScrollTimeoutRef.current = null;
+              setDynamicOverscan((current) => (current !== overscan ? overscan : current));
+            }, 160);
           }
-          lastScrollTopRef.current = container.scrollTop;
-          lastScrollTimeRef.current = now;
         }
+        lastScrollTopRef.current = container.scrollTop;
+        lastScrollTimeRef.current = now;
+      }
 
-        if (timeoutId) clearTimeout(timeoutId);
+      if (scrollTimeoutRef.current != null) clearTimeout(scrollTimeoutRef.current);
 
-        // Trigger infinite scroll pagination
-        timeoutId = window.setTimeout(() => {
-          const loaderContainer = tableContainerRef.current;
-          if (!loaderContainer || !fetchNextPage || !hasNextPage || isFetchingNextPage) return;
+      // Trigger infinite scroll pagination
+      scrollTimeoutRef.current = window.setTimeout(() => {
+        scrollTimeoutRef.current = null;
+        const loaderContainer = tableContainerRef.current;
+        if (!loaderContainer || !fetchNextPage || !hasNextPage || isFetchingNextPage) return;
 
-          const { scrollTop, scrollHeight, clientHeight } = loaderContainer;
-          if (scrollTop + clientHeight >= scrollHeight - 200) {
-            fetchNextPage().finally();
-          }
-        }, 100);
-      });
-    };
+        const { scrollTop, scrollHeight, clientHeight } = loaderContainer;
+        if (scrollTop + clientHeight >= scrollHeight - 200) {
+          void fetchNextPage().catch((err) => {
+            logger.warn('DataTable: fetchNextPage failed', err);
+          });
+        }
+      }, 100);
+    });
   }, [
     fetchNextPage,
     hasNextPage,
@@ -585,7 +590,6 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
     overscan,
     fastOverscanMultiplier,
     virtualizationActive,
-    dynamicOverscan,
   ]);
 
   useEffect(() => {
@@ -609,24 +613,28 @@ function DataTable<TData extends Record<string, unknown>, TValue>({
       role="region"
       aria-label={localize('com_ui_data_table')}
     >
-      <div className="flex w-full shrink-0 items-center gap-2 border-b border-border-light md:gap-3">
-        {shouldShowSearch && <DataTableSearch value={searchTerm} onChange={setSearchTerm} />}
-        {customActionsRenderer &&
-          customActionsRenderer({
-            selectedCount,
-            selectedRows,
-            table: table as unknown as TTable<ProcessedDataRow<TData>>,
-          })}
-        {columnVisibilityEnabled && columnVisibilityContextMap && (
-          <div className="px-2 md:px-3">
-            <DataTableColumnVisibility
-              table={table}
-              contextMap={columnVisibilityContextMap}
-              isSmallScreen={isSmallScreen}
-            />
-          </div>
-        )}
-      </div>
+      {(shouldShowSearch ||
+        customActionsRenderer != null ||
+        (columnVisibilityEnabled && columnVisibilityContextMap != null)) && (
+        <div className="flex w-full shrink-0 items-center gap-2 border-b border-border-light md:gap-3">
+          {shouldShowSearch && <DataTableSearch value={searchTerm} onChange={setSearchTerm} />}
+          {customActionsRenderer &&
+            customActionsRenderer({
+              selectedCount,
+              selectedRows,
+              table,
+            })}
+          {columnVisibilityEnabled && columnVisibilityContextMap && (
+            <div className="px-2 md:px-3">
+              <DataTableColumnVisibility
+                table={table}
+                contextMap={columnVisibilityContextMap}
+                isSmallScreen={isSmallScreen}
+              />
+            </div>
+          )}
+        </div>
+      )}
       <div
         ref={tableContainerRef}
         className="overflow-anchor-none relative min-h-0 flex-1 overflow-auto will-change-scroll"

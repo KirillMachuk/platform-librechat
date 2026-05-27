@@ -40,7 +40,13 @@ export { default as Dropdown } from './Dropdown';
 export { DataTable } from './DataTable';
 export { DataTableColumnVisibility } from './DataTable/DataTableColumnVisibility';
 export { SortFilterHeader } from './DataTable/SortFilterHeader';
-export type { DataTableConfig, DataTableProps, TableColumn } from './DataTable/DataTable.types';
+export type {
+  DataTableConfig,
+  DataTableProps,
+  TableColumn,
+  RowWithId,
+  WithId,
+} from './DataTable/DataTable.types';
 export { default as SplitText } from './SplitText';
 export { default as FormInput } from './FormInput';
 export { default as PixelCard } from './PixelCard';

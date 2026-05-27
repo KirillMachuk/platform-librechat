@@ -87,7 +87,10 @@ export default function ArchivedChatsTable({
     if (!data?.pages) {
       return [];
     }
-    return data.pages.flatMap((page) => page?.conversations?.filter(Boolean) ?? []);
+    return data.pages
+      .flatMap((page) => page?.conversations?.filter(Boolean) ?? [])
+      .filter((conv): conv is typeof conv & { conversationId: string } => conv.conversationId != null)
+      .map((conv) => ({ ...conv, id: conv.conversationId }));
   }, [data?.pages]);
 
   const deleteMutation = useDeleteConversationMutation({
@@ -192,8 +195,7 @@ export default function ArchivedChatsTable({
           );
         },
         meta: {
-          size: isSmallScreen ? '70%' : '50%',
-          mobileSize: '70%',
+          width: isSmallScreen ? 70 : 50,
           customHeader: true,
         },
       },
@@ -232,8 +234,7 @@ export default function ArchivedChatsTable({
         },
         cell: ({ row }) => formatDate(row.original.createdAt?.toString() ?? '', isSmallScreen),
         meta: {
-          size: isSmallScreen ? '30%' : '35%',
-          mobileSize: '30%',
+          width: isSmallScreen ? 30 : 35,
           customHeader: true,
         },
       },
@@ -293,8 +294,7 @@ export default function ArchivedChatsTable({
           );
         },
         meta: {
-          size: '15%',
-          mobileSize: '25%',
+          width: isSmallScreen ? 25 : 15,
           customHeader: true,
         },
       },

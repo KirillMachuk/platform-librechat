@@ -205,7 +205,7 @@ export function MyFilesModal({
             columns={columns}
             data={filesWithIds}
             config={config}
-            onRowClick={(row) => handleAttach(row as TFile)}
+            onRowClick={handleAttach}
             customActionsRenderer={({ selectedRows }) => (
               <Button
                 variant="outline"
