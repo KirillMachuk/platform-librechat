@@ -19,6 +19,12 @@ export const search = atom<SearchState>({
   },
 });
 
+export const searchChatsDialogOpen = atom<boolean>({
+  key: 'searchChatsDialogOpen',
+  default: false,
+});
+
 export default {
   search,
+  searchChatsDialogOpen,
 };

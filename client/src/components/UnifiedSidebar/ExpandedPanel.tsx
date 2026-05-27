@@ -7,6 +7,7 @@ import { Skeleton, Sidebar as SidebarIcon, Button, TooltipAnchor } from '@librec
 import type { NavLink } from '~/common';
 import { CLOSE_SIDEBAR_ID } from '~/components/Chat/Menus/OpenSidebar';
 import ConversationsSection from '~/components/UnifiedSidebar/ConversationsSection';
+import { SearchChatsRow, SearchChatsDialog } from '~/components/Nav/SearchChats';
 import PanelDialog from '~/components/UnifiedSidebar/PanelDialog';
 import { useLocalize, useNewConvo } from '~/hooks';
 import { clearMessagesCache, cn } from '~/utils';
@@ -144,32 +145,31 @@ function ExpandedPanel({
 
   const menuLinks = links.filter((link) => link.id !== 'conversations');
 
-  if (!expanded) {
-    return (
-      <div className="flex h-full w-full flex-shrink-0 flex-col items-center gap-2 border-r border-border-light bg-surface-primary-alt px-2 py-2">
-        <TooltipAnchor
-          side="right"
-          description={localize(toggleLabel)}
-          render={
-            <Button
-              data-testid="open-sidebar-button"
-              size="icon"
-              variant="ghost"
-              aria-label={localize(toggleLabel)}
-              aria-expanded={false}
-              className="h-9 w-9 rounded-lg"
-              onClick={toggleClick}
-            >
-              <SidebarIcon aria-hidden="true" className="h-5 w-5 text-text-primary" />
-            </Button>
-          }
-        />
-        <NewChatIconButton />
-      </div>
-    );
-  }
+  const collapsed = (
+    <div className="flex h-full w-full flex-shrink-0 flex-col items-center gap-2 border-r border-border-light bg-surface-primary-alt px-2 py-2">
+      <TooltipAnchor
+        side="right"
+        description={localize(toggleLabel)}
+        render={
+          <Button
+            data-testid="open-sidebar-button"
+            size="icon"
+            variant="ghost"
+            aria-label={localize(toggleLabel)}
+            aria-expanded={false}
+            className="h-9 w-9 rounded-lg"
+            onClick={toggleClick}
+          >
+            <SidebarIcon aria-hidden="true" className="h-5 w-5 text-text-primary" />
+          </Button>
+        }
+      />
+      <NewChatIconButton />
+      <SearchChatsRow variant="icon" />
+    </div>
+  );
 
-  return (
+  const fullPanel = (
     <div className="flex h-full w-full flex-shrink-0 flex-col border-r border-border-light bg-surface-primary-alt">
       <div className="flex items-center justify-between gap-2 px-2 py-2">
         <TooltipAnchor
@@ -194,6 +194,7 @@ function ExpandedPanel({
 
       <div className="flex flex-col gap-0.5 px-2">
         <NewChatRow />
+        <SearchChatsRow />
         {menuLinks.map((link) => (
           <MenuRow key={link.id} link={link} onSelect={handleSelect} />
         ))}
@@ -211,6 +212,13 @@ function ExpandedPanel({
 
       <PanelDialog link={activeLink} open={dialogOpen} onOpenChange={handleDialogChange} />
     </div>
+  );
+
+  return (
+    <>
+      {expanded ? fullPanel : collapsed}
+      <SearchChatsDialog />
+    </>
   );
 }
 

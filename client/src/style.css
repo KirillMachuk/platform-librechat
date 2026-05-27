@@ -2886,3 +2886,36 @@ html {
 .sharepoint-picker-bg {
   background-color: #f5f5f5;
 }
+
+.search-highlight {
+  animation: search-highlight-pulse 1.5s ease-out;
+  border-radius: 0.5rem;
+}
+
+@keyframes search-highlight-pulse {
+  0% {
+    background-color: rgba(250, 204, 21, 0.32);
+    box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.18);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-highlight {
+    animation: search-highlight-static 1.5s steps(2, end);
+  }
+
+  @keyframes search-highlight-static {
+    0%,
+    99% {
+      outline: 2px solid rgba(250, 204, 21, 0.7);
+      outline-offset: 2px;
+    }
+    100% {
+      outline: 2px solid transparent;
+    }
+  }
+}

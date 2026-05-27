@@ -3,7 +3,7 @@ import { useAtomValue } from 'jotai';
 import { useRecoilValue } from 'recoil';
 import { CSSTransition } from 'react-transition-group';
 import type { TMessage } from 'librechat-data-provider';
-import { useScreenshot, useMessageScrolling, useLocalize } from '~/hooks';
+import { useScreenshot, useMessageScrolling, useScrollToMessage, useLocalize } from '~/hooks';
 import ScrollToBottom from '~/components/Messages/ScrollToBottom';
 import { MessagesViewProvider } from '~/Providers';
 import { fontSizeAtom } from '~/store/fontSize';
@@ -34,6 +34,8 @@ function MessagesViewContent({
   } = useMessageScrolling(_messagesTree);
 
   const { conversationId } = conversation ?? {};
+  const isMessagesReady = Array.isArray(_messagesTree) && _messagesTree.length > 0;
+  useScrollToMessage(isMessagesReady);
 
   return (
     <>
