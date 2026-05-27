@@ -248,6 +248,7 @@ const Results = memo(function Results({
                   id={itemId}
                   conversationId={cid}
                   title={c.title || localize('com_ui_new_chat')}
+                  type="recent"
                   isActive={activeId === itemId}
                   onSelect={onSelect}
                 />
@@ -290,6 +291,7 @@ const Results = memo(function Results({
                 id={itemId}
                 conversationId={cid}
                 title={c.title || localize('com_ui_new_chat')}
+                type="chat"
                 isActive={activeId === itemId}
                 onSelect={onSelect}
               />
@@ -313,6 +315,7 @@ const Results = memo(function Results({
                 messageId={m.messageId}
                 title={m.title || localize('com_ui_new_chat')}
                 snippet={makeSnippet(m.text ?? '', query)}
+                type="message"
                 isActive={activeId === itemId}
                 onSelect={onSelect}
               />
