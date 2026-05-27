@@ -7,14 +7,14 @@ import {
   AzureMinimalIcon,
   OpenAIMinimalIcon,
 } from '@librechat/client';
-import type { TableColumn, WithId } from '@librechat/client';
+import type { TableColumn } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
-
-export type TFileRow = WithId<TFile>;
 import ImagePreview from '~/components/Chat/Input/Files/ImagePreview';
 import FilePreview from '~/components/Chat/Input/Files/FilePreview';
 import { TranslationKeys, useLocalize } from '~/hooks';
 import { formatDate, getFileType } from '~/utils';
+
+export type TFileRow = TFile & { id: string };
 
 export interface FileColumnsContext {
   onPreview: (file: TFile) => void;

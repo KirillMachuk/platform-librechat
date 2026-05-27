@@ -1,12 +1,12 @@
 /* eslint-disable react-hooks/rules-of-hooks */
 import { Eye } from 'lucide-react';
-import type { TableColumn, WithId } from '@librechat/client';
+import type { TableColumn } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import PanelFileCell from './PanelFileCell';
-
-export type TFileRow = WithId<TFile>;
 import { useLocalize } from '~/hooks';
 import { formatDate } from '~/utils';
+
+export type TFileRow = TFile & { id: string };
 
 export interface PanelColumnsContext {
   onPreview: (file: TFile) => void;
