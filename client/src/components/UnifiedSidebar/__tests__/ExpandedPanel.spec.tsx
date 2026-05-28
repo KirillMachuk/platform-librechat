@@ -45,6 +45,12 @@ jest.mock('~/components/UnifiedSidebar/ConversationsSection', () => ({
   default: () => <div data-testid="conversations-section" />,
 }));
 
+jest.mock('~/components/Nav/SearchChats', () => ({
+  __esModule: true,
+  SearchChatsRow: () => <div data-testid="search-chats-row" />,
+  SearchChatsDialog: () => null,
+}));
+
 jest.mock('~/components/UnifiedSidebar/PanelDialog', () => ({
   __esModule: true,
   default: ({

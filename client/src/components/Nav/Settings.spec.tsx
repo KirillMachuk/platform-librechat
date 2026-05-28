@@ -11,6 +11,8 @@ jest.mock('~/data-provider', () => ({
 
 jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string) => key,
+  useHasAccess: () => false,
+  TranslationKeys: {},
 }));
 
 jest.mock('~/hooks/usePersonalizationAccess', () => ({
@@ -39,6 +41,7 @@ jest.mock('./SettingsTabs', () => ({
   Data: () => <div data-testid="data-panel" />,
   Balance: () => <div data-testid="balance-panel" />,
   Account: () => <div data-testid="account-panel" />,
+  Memory: () => <div data-testid="memory-panel" />,
   About: () => <div data-testid="about-panel" />,
 }));
 

@@ -38,10 +38,6 @@ jest.mock('../ChatRoute', () => ({
   __esModule: true,
   default: () => null,
 }));
-jest.mock('../Search', () => ({
-  __esModule: true,
-  default: () => null,
-}));
 jest.mock('../Root', () => ({
   __esModule: true,
   default: () => null,
