@@ -59,9 +59,17 @@ RUN \
     npm prune --production; \
     npm cache clean --force
 
+# Switch to root so the entrypoint can fix volume permissions before
+# dropping privileges back to `node`. Required for Railway, which mounts
+# fresh persistent volumes as root.
+USER root
+RUN apk add --no-cache su-exec
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
 # Node API setup
 EXPOSE 3080
 ENV HOST=0.0.0.0
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["npm", "run", "backend"]
 
 # Optional: for client with nginx routing
