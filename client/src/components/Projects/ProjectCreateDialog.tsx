@@ -1,4 +1,5 @@
 import { memo, useCallback, useState } from 'react';
+import { Info } from 'lucide-react';
 import {
   Button,
   Input,
@@ -96,6 +97,10 @@ function ProjectCreateDialog({ open, onOpenChange, onCreated }: Props) {
           <OGDialogTitle>{localize('com_projects_create_title')}</OGDialogTitle>
         </OGDialogHeader>
         <div id="project-create-description" className="flex flex-col gap-3 pt-2">
+          <div className="flex items-start gap-2 rounded-md border border-border-light bg-surface-secondary px-3 py-2 text-sm text-text-secondary">
+            <Info className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
+            <span>{localize('com_projects_create_hint')}</span>
+          </div>
           <div className="flex justify-center pb-1">
             <button
               type="button"

@@ -78,15 +78,15 @@ export const PROJECT_COLORS: ProjectColorOption[] = [
   { name: 'pink', hex: '#ec4899' },
 ];
 
-export const DEFAULT_PROJECT_ICON = 'Palette';
-export const DEFAULT_PROJECT_COLOR = 'pink';
+export const DEFAULT_PROJECT_ICON = 'Folder';
+export const DEFAULT_PROJECT_COLOR = 'black';
 
 export function resolveIcon(name?: string | null): LucideIcon {
-  if (!name) return Palette;
-  return PROJECT_ICONS.find((i) => i.name === name)?.Icon ?? Palette;
+  if (!name) return Folder;
+  return PROJECT_ICONS.find((i) => i.name === name)?.Icon ?? Folder;
 }
 
 export function resolveColor(name?: string | null): string {
-  if (!name) return '#ec4899';
-  return PROJECT_COLORS.find((c) => c.name === name)?.hex ?? '#ec4899';
+  if (!name) return '#0f172a';
+  return PROJECT_COLORS.find((c) => c.name === name)?.hex ?? '#0f172a';
 }
