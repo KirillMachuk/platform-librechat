@@ -137,6 +137,10 @@ export const router = createBrowserRouter(
               lazy: loadSkillsView,
             },
             {
+              path: 'skills/new',
+              lazy: loadSkillsView,
+            },
+            {
               path: 'skills/:skillId',
               lazy: loadSkillsView,
             },

@@ -163,6 +163,13 @@ if [ -f "$ENV_EXAMPLE" ]; then
   replace_in_file "configuring your LibreChat" "configuring your ${BRAND}" "$ENV_EXAMPLE"
   # Comment mentioning LibreChat
   replace_in_file "in front of your LibreChat" "in front of your ${BRAND}" "$ENV_EXAMPLE"
+  # Catch-all for any remaining "LibreChat" in .env.example comments
+  # (upstream keeps adding new comments mentioning LibreChat)
+  if grep -q "LibreChat" "$ENV_EXAMPLE" 2>/dev/null; then
+    _sed_i "s|LibreChat|${BRAND}|g" "$ENV_EXAMPLE"
+    echo "  [fixed] $ENV_EXAMPLE (catch-all)"
+    CHANGED=$((CHANGED + 1))
+  fi
 fi
 
 # ---------------------------------------------------------------
