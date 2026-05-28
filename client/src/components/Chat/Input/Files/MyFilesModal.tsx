@@ -24,10 +24,12 @@ export function MyFilesModal({
   open,
   onOpenChange,
   triggerRef,
+  onAttachSuccess,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   triggerRef?: React.RefObject<HTMLButtonElement | HTMLDivElement | null>;
+  onAttachSuccess?: () => void;
 }) {
   const localize = useLocalize();
   const [previewFile, setPreviewFile] = useState<TFile | null>(null);
@@ -58,7 +60,10 @@ export function MyFilesModal({
 
   const columns = useMemo(() => buildColumns({ onPreview: handlePreview }), [handlePreview]);
 
-  const closeModal = useCallback(() => onOpenChange(false), [onOpenChange]);
+  const closeModal = useCallback(() => {
+    onOpenChange(false);
+    onAttachSuccess?.();
+  }, [onOpenChange, onAttachSuccess]);
   const attachFile = useAttachFileToChat(closeModal);
 
   const config = useMemo<DataTableConfig>(

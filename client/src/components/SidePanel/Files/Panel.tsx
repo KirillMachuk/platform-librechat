@@ -1,12 +1,14 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ArrowUpLeft } from 'lucide-react';
-import { Button, DataTable } from '@librechat/client';
+import { ArrowUpLeft, Upload } from 'lucide-react';
+import { v4 } from 'uuid';
+import { useToastContext, Button, DataTable } from '@librechat/client';
 import type { DataTableConfig } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import FilePreviewDialog from '~/components/Chat/Messages/Content/FilePreviewDialog';
 import { MyFilesModal } from '~/components/Chat/Input/Files/MyFilesModal';
 import { useLocalize, useAttachFileToChat } from '~/hooks';
-import { useGetFiles } from '~/data-provider';
+import { useGetFiles, useUploadFileMutation } from '~/data-provider';
+import { useChatContext } from '~/Providers/ChatContext';
 import { buildColumns } from './PanelColumns';
 
 const TABLE_CONFIG: DataTableConfig = {
@@ -15,18 +17,21 @@ const TABLE_CONFIG: DataTableConfig = {
     manualSorting: false,
     manualFiltering: false,
     enablePagination: true,
-    pageSize: 10,
+    pageSize: 6,
   },
   search: { filterColumn: 'filename' },
 };
 
-export default function FilesPanel() {
+export default function FilesPanel({ onClose }: { onClose?: () => void }) {
   const localize = useLocalize();
+  const { showToast } = useToastContext();
+  const { conversation } = useChatContext();
   const { data: filesList = [] } = useGetFiles<TFile[]>();
 
   const [showFilesModal, setShowFilesModal] = useState(false);
   const [previewFile, setPreviewFile] = useState<TFile | null>(null);
   const manageFilesRef = useRef<HTMLButtonElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filesWithIds = useMemo<Array<TFile & { id: string }>>(
     () => filesList.map((file) => ({ ...file, id: file.file_id })),
@@ -41,7 +46,36 @@ export default function FilesPanel() {
   }, []);
 
   const columns = useMemo(() => buildColumns({ onPreview: handlePreview }), [handlePreview]);
-  const attachFile = useAttachFileToChat();
+  const attachFile = useAttachFileToChat(onClose);
+
+  const uploadFileMutation = useUploadFileMutation({
+    onError: () => {
+      showToast({ message: localize('com_error_files_upload'), status: 'error' });
+    },
+  });
+
+  const handleFileUpload = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files?.length) {
+        return;
+      }
+
+      const endpoint = conversation?.endpoint ?? 'default';
+
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.append('endpoint', endpoint);
+        formData.append('file', file, encodeURIComponent(file.name));
+        formData.append('file_id', v4());
+        formData.append('message_file', 'true');
+        uploadFileMutation.mutate(formData);
+      }
+
+      e.target.value = '';
+    },
+    [conversation?.endpoint, uploadFileMutation],
+  );
 
   return (
     <div className="flex h-full w-full flex-col gap-2 px-3 pb-3 pt-2">
@@ -50,23 +84,43 @@ export default function FilesPanel() {
         data={filesWithIds}
         config={TABLE_CONFIG}
         onRowClick={(row) => attachFile(row as TFile)}
-        className="h-auto max-h-[calc(100vh-12rem)] flex-1"
+        className="h-auto max-h-[calc(100vh-16rem)] flex-1"
       />
-      <Button
-        ref={manageFilesRef}
-        variant="outline"
-        size="sm"
-        className="w-full"
-        onClick={() => setShowFilesModal(true)}
-        aria-label={localize('com_sidepanel_manage_files')}
-      >
-        <ArrowUpLeft className="h-4 w-4" aria-hidden="true" />
-        <span className="ml-2">{localize('com_sidepanel_manage_files')}</span>
-      </Button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleFileUpload}
+      />
+      <div className="flex w-full gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex-1"
+          onClick={() => fileInputRef.current?.click()}
+          aria-label={localize('com_ui_upload_files')}
+        >
+          <Upload className="h-4 w-4" aria-hidden="true" />
+          <span className="ml-2">{localize('com_ui_upload')}</span>
+        </Button>
+        <Button
+          ref={manageFilesRef}
+          variant="outline"
+          size="sm"
+          className="flex-1"
+          onClick={() => setShowFilesModal(true)}
+          aria-label={localize('com_sidepanel_manage_files')}
+        >
+          <ArrowUpLeft className="h-4 w-4" aria-hidden="true" />
+          <span className="ml-2">{localize('com_sidepanel_manage_files')}</span>
+        </Button>
+      </div>
       <MyFilesModal
         open={showFilesModal}
         onOpenChange={setShowFilesModal}
         triggerRef={manageFilesRef}
+        onAttachSuccess={onClose}
       />
       <FilePreviewDialog
         open={previewFile !== null}
