@@ -128,7 +128,7 @@ describe('DataTableSearch', () => {
 
     const input = screen.getByTestId('search-input');
     expect(input.className).toContain('h-10');
-    expect(input.className).toContain('bg-surface-secondary');
+    expect(input.className).toContain('bg-surface-primary');
   });
 
   it('should have correct id for label association', () => {

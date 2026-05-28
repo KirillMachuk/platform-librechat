@@ -557,10 +557,10 @@ export default function useEventHandlers({
           setFinalMessages(currentConvoId, isNewChat ? [] : [...messages]);
           setDraft({ id: currentConvoId, value: requestMessage?.text });
           if (isNewChat) {
-            navigate(
-              buildConvoPath({ projectId: submissionConvo?.project_id }),
-              { replace: true, state: { focusChat: true } },
-            );
+            navigate(buildConvoPath({ projectId: submissionConvo?.project_id }), {
+              replace: true,
+              state: { focusChat: true },
+            });
           }
           return;
         }

@@ -114,7 +114,9 @@ export default function ChatRoute() {
     };
 
     const projectIdParam = projectId ?? searchParams.get('project') ?? undefined;
-    const applyProjectId = (template?: Partial<TConversation>): Partial<TConversation> | undefined => {
+    const applyProjectId = (
+      template?: Partial<TConversation>,
+    ): Partial<TConversation> | undefined => {
       if (!projectIdParam) return template;
       return { ...(template ?? {}), project_id: projectIdParam };
     };

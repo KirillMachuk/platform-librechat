@@ -60,12 +60,12 @@ jest.mock('~/components/UnifiedSidebar/PanelDialog', () => ({
     link: NavLink | null;
     open: boolean;
     onOpenChange: (v: boolean) => void;
-  }) =>
-    open && link ? <div data-testid="panel-dialog">{link.title}</div> : null,
+  }) => (open && link ? <div data-testid="panel-dialog">{link.title}</div> : null),
 }));
 
 import ExpandedPanel from '../ExpandedPanel';
 
+// eslint-disable-next-line i18next/no-literal-string
 const PromptsStub = () => <div>prompts-stub</div>;
 
 const createLinks = (): NavLink[] => [
@@ -83,8 +83,7 @@ const createLinks = (): NavLink[] => [
   },
 ];
 
-const createQueryClient = () =>
-  new QueryClient({ defaultOptions: { queries: { retry: false } } });
+const createQueryClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 function renderPanel({
   expanded = true,
@@ -104,12 +103,7 @@ function renderPanel({
   );
 
   const result = render(
-    <ExpandedPanel
-      links={links}
-      expanded={expanded}
-      onCollapse={onCollapse}
-      onExpand={onExpand}
-    />,
+    <ExpandedPanel links={links} expanded={expanded} onCollapse={onCollapse} onExpand={onExpand} />,
     { wrapper },
   );
 
@@ -130,9 +124,7 @@ describe('ExpandedPanel', () => {
       expect(screen.getByRole('button', { name: 'com_ui_prompts' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'com_ui_bookmarks' })).toBeInTheDocument();
       expect(screen.getByTestId('conversations-section')).toBeInTheDocument();
-      await waitFor(() =>
-        expect(screen.getByTestId('account-settings')).toBeInTheDocument(),
-      );
+      await waitFor(() => expect(screen.getByTestId('account-settings')).toBeInTheDocument());
     });
   });
 

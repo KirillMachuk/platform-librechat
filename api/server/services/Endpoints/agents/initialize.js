@@ -90,8 +90,7 @@ async function applyProjectContext({ req, primaryAgent }) {
     }
 
     primaryAgent.tool_resources = primaryAgent.tool_resources ?? {};
-    const fileSearchResource =
-      primaryAgent.tool_resources[EToolResources.file_search] ?? {};
+    const fileSearchResource = primaryAgent.tool_resources[EToolResources.file_search] ?? {};
     const existingFileIds = fileSearchResource.file_ids ?? [];
     primaryAgent.tool_resources[EToolResources.file_search] = {
       ...fileSearchResource,

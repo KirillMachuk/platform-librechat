@@ -77,10 +77,9 @@ const useNavigateToConvo = (index = 0) => {
       console.error('Error fetching conversation data on navigation', error);
       if (conversation) {
         setConversation(conversation as TConversation);
-        navigate(
-          buildConvoPath({ conversationId, projectId: conversation.project_id }),
-          { state: { focusChat: true } },
-        );
+        navigate(buildConvoPath({ conversationId, projectId: conversation.project_id }), {
+          state: { focusChat: true },
+        });
       }
     }
   };
