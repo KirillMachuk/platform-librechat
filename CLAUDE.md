@@ -1,8 +1,56 @@
-# LibreChat
+# 1ma (fork of LibreChat)
+
+## White-Label & Upstream Merge
+
+This repo is a **white-label fork** of [danny-avila/LibreChat](https://github.com/danny-avila/LibreChat), branded as **1ma**. The client must never see "LibreChat" anywhere in the UI.
+
+### Rebranding script
+
+After every upstream merge, run:
+
+```bash
+bash scripts/rebrand.sh 1ma
+```
+
+The script replaces all user-visible "LibreChat" → "1ma" in:
+- All locale files (`client/src/locales/*/translation.json`)
+- `client/index.html` (title, meta)
+- Docker compose files (container names, MONGO_URI)
+- `librechat.example.yaml` (welcome text, Terms of Service, comments)
+- `.env.example` (APP_TITLE, MONGO_URI, header, comments)
+
+It is **idempotent** — safe to run multiple times. At the end it audits and exits with error if any user-visible "LibreChat" remains.
+
+**Do NOT replace** "LibreChat" in: code comments/JSDoc, `package.json` URLs, `helm/` charts, `.github/ISSUE_TEMPLATE/`, npm package names (`@librechat/agents`, `librechat-data-provider`), Docker registry URLs (`registry.librechat.ai`), or the config file name `librechat.yaml`.
+
+### Upstream merge procedure
+
+```bash
+git fetch upstream
+git checkout -b merge/upstream-YYYY-MM-DD
+git merge upstream/main
+# resolve conflicts (workflows: git rm; locales: accept both sides)
+bash scripts/rebrand.sh 1ma
+npm install && npm run build && npm run test:client
+git commit && git push
+# create PR → review → merge to main → auto-deploy
+```
+
+Upstream remote: `upstream` → `https://github.com/danny-avila/LibreChat.git`
+
+### Fork-specific features (not in upstream)
+
+- **Projects** — ChatGPT-style workspaces with sources (RAG) and instructions
+- **Two-tab Model Selector** — Agents | LLM picker with `defaultModel`/`defaultAgentId` config
+- **Search Chats popup** — centered search dialog replacing inline SearchBar
+- **Inter Variable font** — with Cyrillic + OpenType features
+- **Railway deploy** — Docker entrypoint with volume permission fix
+
+---
 
 ## Project Overview
 
-LibreChat is a monorepo with the following key workspaces:
+This is a monorepo with the following key workspaces:
 
 | Workspace | Language | Side | Dependency | Purpose |
 |---|---|---|---|---|

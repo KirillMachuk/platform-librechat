@@ -608,7 +608,6 @@ export type NewConversationParams = {
   preset?: Partial<t.TPreset>;
   modelsData?: t.TModelsConfig;
   buildDefault?: boolean;
-  keepLatestMessage?: boolean;
   keepAddedConvos?: boolean;
   disableParams?: boolean;
 };

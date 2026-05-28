@@ -52,7 +52,7 @@ cache: true
 #   #   /r/{storageRegion}/t/{tenantId}/{basePath}/{userId}/{file} (non-inline files)
 #   # storageRegion defaults to AWS_REGION when omitted, but only affects new keys
 #   # when includeRegionInPath is true. Existing files are not moved automatically.
-#   # LibreChat does not configure CloudFront origins, Route53, or regional routing.
+#   # 1ma does not configure CloudFront origins, Route53, or regional routing.
 #   storageRegion: "us-east-2"
 #   includeRegionInPath: false
 #   # Direct-download filename/content-type overrides require the CloudFront cache/origin
@@ -121,7 +121,7 @@ interface:
   #   1. defaultAgentId — picks a DB-backed agent (created via Agent Builder UI).
   #      Takes precedence over defaultModel when both are set.
   #   2. defaultModel — picks a raw LLM (endpoint + model name from endpoints config).
-  # Both are optional. If neither is set, LibreChat uses its own last-used / first-available default.
+  # Both are optional. If neither is set, 1ma uses its own last-used / first-available default.
   #
   # defaultAgentId: 'agent_abc123'
   #
@@ -172,12 +172,21 @@ interface:
     #     de-DE: 'Ich verstehe und möchte fortfahren' # You can narrow translation to regions like (de-DE or de-CH)
     #   subLabel:
     #     en: |
-    #       Librechat hasn't reviewed this MCP server. Attackers may attempt to steal your data or trick the model into taking unintended actions, including destroying data. <a href="https://google.de" target="_blank"><strong>Learn more.</strong></a>
+    #       1ma hasn't reviewed this MCP server. Attackers may attempt to steal your data or trick the model into taking unintended actions, including destroying data. <a href="https://google.de" target="_blank"><strong>Learn more.</strong></a>
     #     de: |
-    #       LibreChat hat diesen MCP-Server nicht überprüft. Angreifer könnten versuchen, Ihre Daten zu stehlen oder das Modell zu unbeabsichtigten Aktionen zu verleiten, einschließlich der Zerstörung von Daten. <a href="https://google.de" target="_blank"><strong>Mehr erfahren.</strong></a>
+    #       1ma hat diesen MCP-Server nicht überprüft. Angreifer könnten versuchen, Ihre Daten zu stehlen oder das Modell zu unbeabsichtigten Aktionen zu verleiten, einschließlich der Zerstörung von Daten. <a href="https://google.de" target="_blank"><strong>Mehr erfahren.</strong></a>
 
   # Temporary chat retention period in hours (default: 720, min: 1, max: 8760)
   # temporaryChatRetention: 1
+  # Retention mode: "all" applies expiry to all data types, "temporary" (default) only to temporary chats
+  # Before switching from "all" back to "temporary", remove retention deadlines from non-temporary data
+  # that should stop expiring:
+  # db.conversations.updateMany({ isTemporary: false, expiredAt: { $ne: null } }, { $unset: { expiredAt: 1 } })
+  # db.messages.updateMany({ isTemporary: false, expiredAt: { $ne: null } }, { $unset: { expiredAt: 1 } })
+  # MongoDB does not drop superseded indexes automatically. After upgrading, old Meili indexes
+  # such as "_meiliIndex_1_expiredAt_1" can be dropped from conversations/messages once the new
+  # "_meiliIndex_1_isTemporary_1_expiredAt_1" indexes exist.
+  # retentionMode: "temporary"
 
 # Example Cloudflare turnstile (optional)
 #turnstile:
@@ -245,7 +254,7 @@ registration:
 actions:
   allowedDomains:
     - 'swapi.dev'
-    - 'librechat.ai'
+    - '1ma.ai'
     - 'google.com'
     # - 'http://10.225.26.25:7894'  # Internal IP with protocol/port (uncomment if needed)
   # `allowedAddresses` is an SSRF exemption list, NOT a strict whitelist.
@@ -315,6 +324,7 @@ actions:
 #   everything:
 #     # type: sse # type can optionally be omitted
 #     url: http://localhost:3001/sse
+#     # proxy: "${MCP_PROXY_URL}"  # optional outbound proxy (http/https/socks/socks5)
 #     timeout: 60000  # 1 minute timeout for this server, this is the default timeout for MCP servers.
 #   puppeteer:
 #     type: stdio
@@ -329,8 +339,8 @@ actions:
 #     args:
 #       - -y
 #       - "@modelcontextprotocol/server-filesystem"
-#       - /home/user/LibreChat/
-#     iconPath: /home/user/LibreChat/client/public/assets/logo.svg
+#       - /home/user/1ma/
+#     iconPath: /home/user/1ma/client/public/assets/logo.svg
 #   mcp-obsidian:
 #     command: npx
 #     args:

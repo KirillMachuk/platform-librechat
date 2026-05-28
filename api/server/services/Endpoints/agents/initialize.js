@@ -10,6 +10,7 @@ const {
   getCustomEndpointConfig,
   discoverConnectedAgents,
   resolveAgentScopedSkillIds,
+  buildAgentContextAttachmentsByAgentId,
 } = require('@librechat/api');
 const {
   Tools,
@@ -864,6 +865,11 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
     }
   }
 
+  const agentContextAttachmentsByAgentId = buildAgentContextAttachmentsByAgentId([
+    primaryConfig,
+    ...agentConfigs.values(),
+  ]);
+
   let endpointConfig = appConfig.endpoints?.[primaryConfig.endpoint];
   if (!isAgentsEndpoint(primaryConfig.endpoint) && !endpointConfig) {
     try {
@@ -919,7 +925,8 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
     agent: primaryConfig,
     spec: endpointOption.spec,
     iconURL: endpointOption.iconURL,
-    attachments: primaryConfig.attachments,
+    attachments: primaryConfig.requestAttachments ?? primaryConfig.attachments,
+    agentContextAttachmentsByAgentId,
     endpointType: endpointOption.endpointType,
     resendFiles: primaryConfig.resendFiles ?? true,
     maxContextTokens: primaryConfig.maxContextTokens,
