@@ -580,6 +580,7 @@ const EXTENSION_TO_TOOL_ARTIFACT_TYPE: Record<string, ToolArtifactType> = {
    * `attachment.text`. */
   docx: TOOL_ARTIFACT_TYPES.DOCX,
   csv: TOOL_ARTIFACT_TYPES.SPREADSHEET,
+  tsv: TOOL_ARTIFACT_TYPES.SPREADSHEET,
   xlsx: TOOL_ARTIFACT_TYPES.SPREADSHEET,
   xls: TOOL_ARTIFACT_TYPES.SPREADSHEET,
   ods: TOOL_ARTIFACT_TYPES.SPREADSHEET,
@@ -659,6 +660,10 @@ const MIME_TO_TOOL_ARTIFACT_TYPE: Record<string, ToolArtifactType> = {
    * with this MIME doesn't slip through the client routing while the
    * backend has already produced full HTML for it. */
   'text/comma-separated-values': TOOL_ARTIFACT_TYPES.SPREADSHEET,
+  /* TSV mirrors the backend's CSV_MIME_PATTERN expansion — extensionless
+   * `text/tab-separated-values` must route to the SPREADSHEET bucket
+   * (the backend produces full HTML via the csv producer with FS='\t'). */
+  'text/tab-separated-values': TOOL_ARTIFACT_TYPES.SPREADSHEET,
   'application/vnd.openxmlformats-officedocument.presentationml.presentation':
     TOOL_ARTIFACT_TYPES.PRESENTATION,
   // Note: bare `text/plain` is NOT mapped here. The extension map handles

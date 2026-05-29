@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { ArrowUpLeft, Upload } from 'lucide-react';
 import { v4 } from 'uuid';
-import { useToastContext, Button, DataTable } from '@librechat/client';
+import { Spinner, useToastContext, Button, DataTable } from '@librechat/client';
 import type { DataTableConfig } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import FilePreviewDialog from '~/components/Chat/Messages/Content/FilePreviewDialog';
@@ -22,6 +22,11 @@ const TABLE_CONFIG: DataTableConfig = {
   search: { filterColumn: 'filename' },
 };
 
+interface PendingUpload {
+  file_id: string;
+  filename: string;
+}
+
 export default function FilesPanel({ onClose }: { onClose?: () => void }) {
   const localize = useLocalize();
   const { showToast } = useToastContext();
@@ -30,6 +35,13 @@ export default function FilesPanel({ onClose }: { onClose?: () => void }) {
 
   const [showFilesModal, setShowFilesModal] = useState(false);
   const [previewFile, setPreviewFile] = useState<TFile | null>(null);
+  /**
+   * In-flight uploads — tracked locally because the global file query
+   * cache only receives a row once the mutation resolves. Without this,
+   * the user clicks Upload and nothing visible happens until the file
+   * appears in the list (or never, on error).
+   */
+  const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
   const manageFilesRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -48,6 +60,10 @@ export default function FilesPanel({ onClose }: { onClose?: () => void }) {
   const columns = useMemo(() => buildColumns({ onPreview: handlePreview }), [handlePreview]);
   const attachFile = useAttachFileToChat(onClose);
 
+  const removePending = useCallback((file_id: string) => {
+    setPendingUploads((prev) => prev.filter((p) => p.file_id !== file_id));
+  }, []);
+
   const uploadFileMutation = useUploadFileMutation({
     onError: () => {
       showToast({ message: localize('com_error_files_upload'), status: 'error' });
@@ -62,23 +78,65 @@ export default function FilesPanel({ onClose }: { onClose?: () => void }) {
       }
 
       const endpoint = conversation?.endpoint ?? 'default';
+      const newPending: PendingUpload[] = [];
 
       for (const file of Array.from(files)) {
+        const file_id = v4();
         const formData = new FormData();
         formData.append('endpoint', endpoint);
         formData.append('file', file, encodeURIComponent(file.name));
-        formData.append('file_id', v4());
+        formData.append('file_id', file_id);
         formData.append('message_file', 'true');
-        uploadFileMutation.mutate(formData);
+        newPending.push({ file_id, filename: file.name });
+        uploadFileMutation.mutate(formData, {
+          onSettled: () => removePending(file_id),
+        });
       }
 
+      setPendingUploads((prev) => [...newPending, ...prev]);
       e.target.value = '';
     },
-    [conversation?.endpoint, uploadFileMutation],
+    [conversation?.endpoint, removePending, uploadFileMutation],
   );
+
+  /**
+   * Hide pending entries whose file_id has already landed in the global
+   * files cache. `useUploadFileMutation.onSuccess` writes to the cache
+   * before our `onSettled` removes the pending entry — without this
+   * dedup the same file could flicker in both the indicator and the
+   * table for a single render tick. `Set` lookup keeps the per-render
+   * cost O(n) over `filesList`. */
+  const visiblePending = useMemo(() => {
+    if (pendingUploads.length === 0) {
+      return pendingUploads;
+    }
+    const knownIds = new Set(filesList.map((f) => f.file_id));
+    return pendingUploads.filter((p) => !knownIds.has(p.file_id));
+  }, [pendingUploads, filesList]);
+
+  const isUploading = visiblePending.length > 0;
+  const uploadStatusLabel = useMemo(() => {
+    if (visiblePending.length === 0) {
+      return '';
+    }
+    if (visiblePending.length === 1) {
+      return localize('com_ui_uploading_file', { 0: visiblePending[0].filename });
+    }
+    return localize('com_ui_uploading_files_count', { 0: String(visiblePending.length) });
+  }, [localize, visiblePending]);
 
   return (
     <div className="flex h-full w-full flex-col gap-2 px-3 pb-3 pt-2">
+      {isUploading && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-2 rounded-md border border-border-light bg-surface-secondary px-2 py-1.5 text-xs text-text-secondary"
+        >
+          <Spinner className="size-3 shrink-0" size={12} />
+          <span className="shimmer min-w-0 flex-1 truncate">{uploadStatusLabel}</span>
+        </div>
+      )}
       <DataTable
         columns={columns}
         data={filesWithIds}
@@ -100,8 +158,13 @@ export default function FilesPanel({ onClose }: { onClose?: () => void }) {
           className="flex-1"
           onClick={() => fileInputRef.current?.click()}
           aria-label={localize('com_ui_upload_files')}
+          disabled={isUploading}
         >
-          <Upload className="h-4 w-4" aria-hidden="true" />
+          {isUploading ? (
+            <Spinner className="h-4 w-4" size={16} />
+          ) : (
+            <Upload className="h-4 w-4" aria-hidden="true" />
+          )}
           <span className="ml-2">{localize('com_ui_upload')}</span>
         </Button>
         <Button

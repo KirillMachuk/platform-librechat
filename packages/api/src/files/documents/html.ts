@@ -785,18 +785,33 @@ export async function excelSheetToHtml(buffer: Buffer): Promise<string> {
  * CSV → HTML
  * ============================================================================= */
 
-/** Convert a CSV buffer to a sandboxed HTML document with a single table. */
-export async function csvToHtml(buffer: Buffer): Promise<string> {
+/**
+ * Convert a CSV (or TSV) buffer to a sandboxed HTML document with a
+ * single table. The optional `delimiter` is forwarded to SheetJS via the
+ * `FS` option so tab-separated files render correctly — without it, a
+ * TSV would parse as a single column per row. `label` controls the
+ * sheet name shown in the rendered chrome (defaults to "CSV").
+ */
+export async function csvToHtml(
+  buffer: Buffer,
+  options: { delimiter?: string; label?: string } = {},
+): Promise<string> {
   const XLSX = await import('xlsx');
   const text = buffer.toString('utf-8');
-  /* `XLSX.read` with `type: 'string'` accepts CSV as well as XML/JSON
-   * formats; the default sheet name for CSV is `Sheet1` which we relabel
-   * below for a friendlier tab. */
-  const workbook = XLSX.read(text, { type: 'string', raw: true });
+  const { delimiter, label = 'CSV' } = options;
+  /* `XLSX.read` with `type: 'string'` accepts CSV/TSV/XML/JSON; passing
+   * `FS` overrides delimiter autodetection for TSV inputs where SheetJS
+   * otherwise treats the whole line as one cell. The default sheet name
+   * for CSV is `Sheet1` which we relabel below for a friendlier tab. */
+  const workbook = XLSX.read(text, {
+    type: 'string',
+    raw: true,
+    ...(delimiter ? { FS: delimiter } : {}),
+  });
   const sheets = await renderWorkbookSheets(workbook, XLSX);
-  // Single sheet for CSV — relabel to "CSV" for clarity, no tab strip emitted.
+  // Single sheet — relabel for clarity, no tab strip emitted.
   const sanitized = await Promise.all(
-    sheets.map(async (s) => ({ ...s, name: 'CSV', html: await sanitizeOfficeHtml(s.html) })),
+    sheets.map(async (s) => ({ ...s, name: label, html: await sanitizeOfficeHtml(s.html) })),
   );
   return renderSpreadsheetHtml(sanitized);
 }
@@ -1495,7 +1510,9 @@ export const _internal = {
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 const ODS_MIME = 'application/vnd.oasis.opendocument.spreadsheet';
-const CSV_MIME_PATTERN = /^(text\/csv|application\/csv|text\/comma-separated-values)$/i;
+const CSV_MIME_PATTERN =
+  /^(text\/csv|application\/csv|text\/comma-separated-values|text\/tab-separated-values)$/i;
+const TSV_MIME = 'text/tab-separated-values';
 
 function extensionOf(name: string): string {
   const dot = name.lastIndexOf('.');
@@ -1533,12 +1550,18 @@ function baseMime(mime: string): string {
  * files identified solely by MIME (e.g. a tool emitting `data` with
  * `text/csv`), which then routed to the SPREADSHEET bucket on the
  * client expecting full HTML and got raw text instead.
+ *
+ * The `csv` bucket covers both CSV (comma-delimited) and TSV
+ * (tab-delimited) inputs. The dispatcher decides the delimiter via
+ * `isTsvInput` (extension wins) and passes it to `csvToHtml`'s `FS`
+ * option — both flow through the same producer and render pipeline.
  */
 export type OfficeHtmlBucket = 'docx' | 'spreadsheet' | 'csv' | 'pptx';
 
 const OFFICE_EXTENSIONS: Record<string, OfficeHtmlBucket> = {
   docx: 'docx',
   csv: 'csv',
+  tsv: 'csv',
   xlsx: 'spreadsheet',
   xls: 'spreadsheet',
   ods: 'spreadsheet',
@@ -1608,6 +1631,24 @@ export function officeHtmlBucket(name: string, mimeType: string): OfficeHtmlBuck
 }
 
 /**
+ * Decide whether the `csv` bucket should be parsed as tab-separated.
+ * Extension wins over MIME (consistent with `officeHtmlBucket`'s
+ * precedence rule) so a `.tsv` mislabeled `text/csv` still parses
+ * correctly, and a `.csv` mislabeled `text/tab-separated-values`
+ * doesn't get unexpectedly switched mid-flight.
+ */
+function isTsvInput(name: string, mimeType: string): boolean {
+  const ext = extensionOf(name);
+  if (ext === 'tsv') {
+    return true;
+  }
+  if (ext !== '') {
+    return false;
+  }
+  return baseMime(mimeType) === TSV_MIME;
+}
+
+/**
  * Route an office-format buffer to the matching HTML producer. Returns `null`
  * if the file isn't a recognized office type — caller should fall through to
  * its existing text/binary handling.
@@ -1622,7 +1663,9 @@ export async function bufferToOfficeHtml(
     case 'docx':
       return wordDocToHtml(buffer);
     case 'csv':
-      return csvToHtml(buffer);
+      return isTsvInput(name, mimeType)
+        ? csvToHtml(buffer, { delimiter: '\t', label: 'TSV' })
+        : csvToHtml(buffer);
     case 'spreadsheet':
       return excelSheetToHtml(buffer);
     case 'pptx':

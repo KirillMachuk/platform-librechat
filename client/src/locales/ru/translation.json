@@ -1317,6 +1317,8 @@
   "com_ui_upload_ocr_text": "Загрузить как текст",
   "com_ui_upload_success": "Файл успешно загружен",
   "com_ui_upload_type": "Выберите тип загрузки",
+  "com_ui_uploading_file": "Загрузка {{0}}",
+  "com_ui_uploading_files_count": "Загрузка файлов: {{0}}",
   "com_ui_usage": "Использование",
   "com_ui_use_2fa_code": "Использовать код 2FA вместо этого",
   "com_ui_use_backup_code": "Использовать резервный код вместо этого",

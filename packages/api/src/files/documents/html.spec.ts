@@ -313,6 +313,20 @@ describe('Office HTML producers', () => {
       const html = await csvToHtml(Buffer.from('', 'utf-8'));
       expect(html).toMatch(/^<!DOCTYPE html>/);
     });
+
+    test('parses TSV correctly when delimiter "\\t" is passed via options', async () => {
+      const tsv = Buffer.from('name\tage\tcity\nAlice\t30\tNYC\nBob\t25\tSF\n', 'utf-8');
+      const html = await csvToHtml(tsv, { delimiter: '\t', label: 'TSV' });
+      expect(html).toContain('Alice');
+      expect(html).toContain('NYC');
+      expect(html).toContain('Bob');
+      /* Without the FS option each row would land in a single column.
+       * Three columns means the delimiter was honored. */
+      const headerCells = (html.match(/<td[^>]*>name<\/td>|<th[^>]*>name<\/th>/g) || []).length;
+      expect(headerCells).toBeGreaterThan(0);
+      expect(html).toMatch(/age/);
+      expect(html).toMatch(/city/);
+    });
   });
 
   describe('pptxToSlideListHtml', () => {
@@ -694,6 +708,34 @@ describe('Office HTML producers', () => {
       expect(html!).toContain('<table');
     });
 
+    test('routes tsv by extension with tab delimiter (renders multi-column row)', async () => {
+      const html = await bufferToOfficeHtml(
+        Buffer.from('name\tage\tcity\nAlice\t30\tNYC\n', 'utf-8'),
+        'data.tsv',
+        'application/octet-stream',
+      );
+      expect(html).not.toBeNull();
+      expect(html!).toContain('<table');
+      expect(html!).toContain('Alice');
+      expect(html!).toContain('NYC');
+      /* The values must be in separate cells — not concatenated as
+       * "Alice\t30\tNYC" inside a single cell, which is what would
+       * happen if the delimiter wasn't passed through. */
+      expect(html!).not.toMatch(/>Alice\t30\tNYC</);
+    });
+
+    test('routes tsv by MIME when extension is missing', async () => {
+      const html = await bufferToOfficeHtml(
+        Buffer.from('a\tb\n1\t2', 'utf-8'),
+        'data',
+        'text/tab-separated-values',
+      );
+      expect(html).not.toBeNull();
+      expect(html!).toContain('<table');
+      /* Cells were split on the tab — values 1 and 2 are separate. */
+      expect(html!).not.toMatch(/>1\t2</);
+    });
+
     test('returns null for unrecognized types', async () => {
       const html = await bufferToOfficeHtml(Buffer.from('hello'), 'notes.txt', 'text/plain');
       expect(html).toBeNull();
@@ -723,6 +765,9 @@ describe('Office HTML producers', () => {
       ['data.csv', 'application/octet-stream', 'csv'],
       ['data', 'text/csv', 'csv'],
       ['data', 'application/csv', 'csv'],
+      ['data.tsv', 'application/octet-stream', 'csv'],
+      ['data.tsv', '', 'csv'],
+      ['data', 'text/tab-separated-values', 'csv'],
       ['workbook.xlsx', '', 'spreadsheet'],
       ['legacy.xls', '', 'spreadsheet'],
       ['sheet.ods', '', 'spreadsheet'],

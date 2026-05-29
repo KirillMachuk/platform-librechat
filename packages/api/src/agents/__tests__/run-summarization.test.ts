@@ -944,6 +944,70 @@ describe('custom-endpoint provider resolution', () => {
     expect(parameters.model).toBeUndefined();
     expect(parameters.modelName).toBeUndefined();
   });
+
+  it('falls back to agent endpoint (not SDK provider) for same-endpoint detection', async () => {
+    /**
+     * Regression: a custom endpoint named "1ma" backed by OpenRouter
+     * had `agent.provider = 'openrouter'` (the SDK-resolved provider) but
+     * `agent.endpoint = '1ma'`. With no explicit `summarization.provider`,
+     * the fallback used to be `provider` ('openrouter'), failing the
+     * `isSameEndpointAsAgent` check (`'openrouter' !== '1ma'`) and routing
+     * to `resolveSummarizationProvider('openrouter', …)`. That lookup
+     * found no endpoint named 'openrouter' (the config calls it '1ma'),
+     * fell back to the raw provider, and shipped an unsupported provider
+     * to the SDK — aborting the run with "Provider openrouter not
+     * supported" → 400.
+     *
+     * The fix uses `agent.endpoint` as the fallback so the same-endpoint
+     * path triggers and `agentContext.clientOptions` are reused.
+     */
+    const appConfig = makeAppConfig([
+      { name: '1ma', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'or-key' },
+    ]);
+    const agents = await callAndCapture({
+      agents: [makeAgent({ provider: 'openrouter', endpoint: '1ma' })],
+      /** No explicit summarizationConfig — exercises the fallback path. */
+      appConfig,
+    });
+
+    const config = agents[0].summarizationConfig as Record<string, unknown>;
+    /**
+     * Same-endpoint path returns the SDK provider name (not the endpoint
+     * name) so the SDK can construct a valid LLM client. The key signal
+     * the bug is fixed is that `parameters` stays undefined — meaning
+     * the SDK will reuse `agentContext.clientOptions` instead of trying
+     * to resolve an unsupported provider against `appConfig`.
+     */
+    expect(config.provider).toBe('openrouter');
+    expect(config.parameters).toBeUndefined();
+  });
+
+  it('treats empty-string agent endpoint as missing (falls back to SDK provider)', async () => {
+    /**
+     * Defensive check: an `agent.endpoint = ''` (empty string) must
+     * behave identically to `endpoint: undefined`. Using `??` alone
+     * would preserve `''` and lose the SDK provider fallback, leaving
+     * `rawProvider = ''` and disabling summarization silently.
+     */
+    const agents = await callAndCapture({
+      agents: [makeAgent({ provider: 'openAI', endpoint: '' })],
+    });
+
+    const config = agents[0].summarizationConfig as Record<string, unknown>;
+    expect(config.provider).toBe('openAI');
+  });
+
+  it('falls back to SDK provider when agent endpoint is undefined', async () => {
+    /** Sanity check: classic built-in providers without an endpoint
+     * field continue to use the SDK provider as the same-endpoint
+     * matching key — no behavior change from the fix. */
+    const agents = await callAndCapture({
+      agents: [makeAgent({ provider: 'openAI', endpoint: undefined })],
+    });
+
+    const config = agents[0].summarizationConfig as Record<string, unknown>;
+    expect(config.provider).toBe('openAI');
+  });
 });
 
 // ---------------------------------------------------------------------------

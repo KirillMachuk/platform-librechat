@@ -61,6 +61,7 @@ describe('detectArtifactTypeFromFile', () => {
     ['notes.odt', TOOL_ARTIFACT_TYPES.PLAIN_TEXT],
     ['report.docx', TOOL_ARTIFACT_TYPES.DOCX],
     ['data.csv', TOOL_ARTIFACT_TYPES.SPREADSHEET],
+    ['catalog.tsv', TOOL_ARTIFACT_TYPES.SPREADSHEET],
     ['workbook.xlsx', TOOL_ARTIFACT_TYPES.SPREADSHEET],
     ['legacy.xls', TOOL_ARTIFACT_TYPES.SPREADSHEET],
     ['sheet.ods', TOOL_ARTIFACT_TYPES.SPREADSHEET],
@@ -137,6 +138,9 @@ describe('detectArtifactTypeFromFile', () => {
      * would be skipped despite the backend producing valid HTML.
      * Regression for Codex P3 review on PR #12934. */
     ['text/comma-separated-values', TOOL_ARTIFACT_TYPES.SPREADSHEET],
+    /* TSV — backend `CSV_MIME_PATTERN` covers `text/tab-separated-values`
+     * and dispatches to `csvToHtml` with `FS='\t'`. Client must mirror. */
+    ['text/tab-separated-values', TOOL_ARTIFACT_TYPES.SPREADSHEET],
     /* Legacy XLS MIME aliases — backend's `excelMimeTypes` regex
      * accepts the full set used by older browsers/servers; the client
      * mirrors via the same regex so an extensionless XLS with any of

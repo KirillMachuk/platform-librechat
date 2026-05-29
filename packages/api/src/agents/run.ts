@@ -471,7 +471,24 @@ function shapeSummarizationConfig(
   agentEndpoint: string | undefined,
   headerContext: { user?: IUser; requestBody?: t.RequestBody },
 ) {
-  const rawProvider = config?.provider ?? fallbackProvider;
+  /**
+   * When no explicit `config.provider` is given, prefer `agentEndpoint`
+   * over the SDK-resolved `fallbackProvider` for the same-endpoint check.
+   * Without this, a custom endpoint backed by OpenRouter (or any provider
+   * whose `agent.provider` differs from `agent.endpoint`) gets a raw
+   * provider name like `'openrouter'` that doesn't match `agentEndpoint`
+   * (`'1ma'`), falls through to `resolveSummarizationProvider`, finds no
+   * matching endpoint config, and ships an unsupported provider to the
+   * SDK — aborting the run with "Provider <name> not supported" → 400.
+   *
+   * `fallbackProvider` (the SDK provider name) is still returned in the
+   * same-endpoint path so the SDK can construct a valid LLM client; only
+   * the matching key changes. `isNonEmptyString` guards against an
+   * explicit `agent.endpoint = ''` regressing the fallback to the SDK
+   * provider — empty endpoint is treated the same as undefined.
+   */
+  const endpointFallback = isNonEmptyString(agentEndpoint) ? agentEndpoint : fallbackProvider;
+  const rawProvider = config?.provider ?? endpointFallback;
   /**
    * When the summarization provider resolves to the same custom endpoint as
    * the main agent, skip client-option overrides. The SDK's self-summarize

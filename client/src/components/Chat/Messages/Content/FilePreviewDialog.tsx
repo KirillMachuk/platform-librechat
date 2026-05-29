@@ -13,16 +13,18 @@ type PreviewKind = 'pdf' | 'text' | 'office' | false;
 
 /* Must stay in sync with `OFFICE_EXTENSIONS` in
  * `packages/api/src/files/documents/html.ts`. The backend only renders
- * the modern OOXML formats + CSV via `bufferToOfficeHtml`; legacy
+ * the modern OOXML formats + CSV/TSV via `bufferToOfficeHtml`; legacy
  * formats (.doc/.ppt/.odt/.odp) have no HTML producer, so routing them
  * here would trigger a poll that ends in "ready with no text" and a
  * confusing "Preview unavailable" UX with one wasted request. */
-const OFFICE_EXTS = new Set(['docx', 'xlsx', 'xls', 'ods', 'pptx', 'csv']);
+const OFFICE_EXTS = new Set(['docx', 'xlsx', 'xls', 'ods', 'pptx', 'csv', 'tsv']);
 
 /* MIME hints mirror the backend's `officeHtmlBucket` MIME fallback. We
  * intentionally avoid the broad `'opendocument'` substring (it would
  * match .odt/.odp which the backend rejects) and use `ms-excel` /
- * `wordprocessingml` etc. for the modern OOXML/spreadsheet families. */
+ * `wordprocessingml` etc. for the modern OOXML/spreadsheet families.
+ * `tab-separated` covers `text/tab-separated-values` (TSV) which the
+ * backend now routes through the CSV producer. */
 const OFFICE_MIME_HINTS = [
   'wordprocessingml',
   'spreadsheetml',
@@ -30,6 +32,7 @@ const OFFICE_MIME_HINTS = [
   'ms-excel',
   'opendocument.spreadsheet',
   'csv',
+  'tab-separated',
 ];
 
 const PREVIEW_ERROR_MESSAGES: Record<string, TranslationKeys> = {
@@ -129,6 +132,13 @@ function formatBytes(bytes: number): string {
 }
 
 function getDisplayType(fileType?: string, fileName?: string): string {
+  const ext = fileName ? getFileExtension(fileName) : '';
+  /* Extension-driven check runs before MIME so a `.tsv` mislabeled
+   * `text/plain` still renders as Spreadsheet (matches the office HTML
+   * dispatcher's extension-wins precedence). */
+  if (ext === 'csv' || ext === 'tsv') {
+    return 'Spreadsheet';
+  }
   if (fileType) {
     if (fileType.includes('pdf')) {
       return 'PDF';
@@ -136,7 +146,12 @@ function getDisplayType(fileType?: string, fileName?: string): string {
     if (fileType.includes('word') || fileType.includes('document')) {
       return 'Document';
     }
-    if (fileType.includes('spreadsheet') || fileType.includes('excel')) {
+    if (
+      fileType.includes('spreadsheet') ||
+      fileType.includes('excel') ||
+      fileType.includes('csv') ||
+      fileType.includes('tab-separated')
+    ) {
       return 'Spreadsheet';
     }
     if (fileType.includes('presentation') || fileType.includes('powerpoint')) {
@@ -155,7 +170,6 @@ function getDisplayType(fileType?: string, fileName?: string): string {
       return 'XML';
     }
   }
-  const ext = fileName ? getFileExtension(fileName) : '';
   return ext ? ext.toUpperCase() : 'File';
 }
 
