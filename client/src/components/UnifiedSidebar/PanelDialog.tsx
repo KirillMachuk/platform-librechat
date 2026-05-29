@@ -26,7 +26,7 @@ function PanelDialog({ link, open, onOpenChange }: PanelDialogProps) {
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black opacity-50 dark:opacity-80" aria-hidden="true" />
+          <div className="fixed inset-0 bg-black/80" aria-hidden="true" />
         </TransitionChild>
 
         <TransitionChild
