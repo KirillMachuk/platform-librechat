@@ -9,6 +9,7 @@ import type { SettingDefinition } from 'librechat-data-provider';
 import type { OpenAI } from 'openai';
 import type * as t from '~/types';
 import { sanitizeModelName, constructAzureURL } from '~/utils/azure';
+import { getModelMaxOutputTokens, findMatchingPattern, maxOutputTokensMap } from '~/utils/tokens';
 import { isEnabled } from '~/utils/common';
 
 type OpenAILLMConfig = Omit<Partial<t.OAIClientOptions>, 'verbosity'> &
@@ -461,6 +462,31 @@ export function getOpenAILLMConfig({
   if (llmConfig.max_tokens != null) {
     llmConfig.maxTokens = llmConfig.max_tokens;
     delete llmConfig.max_tokens;
+  }
+
+  /**
+   * Clamp requested output tokens to the model's real maximum. OpenRouter (the
+   * custom endpoint) serves many vendors, so an over-limit `maxTokens` — e.g. a
+   * stale `65536` saved in conversation params — makes upstream providers reject
+   * the whole request with a 400 ("Provider returned error") for models whose
+   * cap is lower (claude-sonnet-4.6 → 64000) and inflates the OpenRouter credit
+   * reservation behind 402s. Clamping only ever lowers the value, so it can
+   * prevent an over-request but never create one.
+   */
+  if (typeof llmConfig.maxTokens === 'number' && llmConfig.model) {
+    const tokenEndpoint = useOpenRouter
+      ? EModelEndpoint.custom
+      : ((endpoint as EModelEndpoint | undefined) ?? EModelEndpoint.openAI);
+    const tokensMap = maxOutputTokensMap[tokenEndpoint as keyof typeof maxOutputTokensMap];
+    /** Only clamp a confidently-recognized model — never apply the generic
+     * `system_default` fallback, so a newly-added model that isn't yet in the
+     * token map keeps the requested value instead of being silently capped. */
+    if (tokensMap != null && findMatchingPattern(llmConfig.model, tokensMap) != null) {
+      const modelMaxOutput = getModelMaxOutputTokens(llmConfig.model, tokenEndpoint);
+      if (typeof modelMaxOutput === 'number' && llmConfig.maxTokens > modelMaxOutput) {
+        llmConfig.maxTokens = modelMaxOutput;
+      }
+    }
   }
 
   const tools: BindToolsInput[] = [];

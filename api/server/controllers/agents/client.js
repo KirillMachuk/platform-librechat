@@ -1103,6 +1103,18 @@ class AgentClient extends BaseClient {
         '[api/server/controllers/agents/client.js #sendCompletion] Operation aborted',
         err,
       );
+      /** Surface the upstream provider's real reason. Errors like OpenRouter's
+       * generic "400 Provider returned error" carry the actual cause (e.g. an
+       * Anthropic max_tokens rejection) in nested fields the wrapped message
+       * drops, so log them explicitly to make incidents diagnosable. */
+      const providerErrorDetail =
+        err?.error?.metadata ?? err?.error ?? err?.response?.data ?? err?.cause;
+      if (providerErrorDetail != null) {
+        logger.error(
+          '[api/server/controllers/agents/client.js #sendCompletion] Upstream provider error detail',
+          { status: err?.status, detail: providerErrorDetail },
+        );
+      }
       if (!abortController.signal.aborted) {
         logger.error(
           '[api/server/controllers/agents/client.js #sendCompletion] Unhandled error type',

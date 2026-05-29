@@ -410,11 +410,33 @@ const deepseekMaxOutputs = {
   'deepseek.r1': 64000,
 };
 
+/**
+ * OpenRouter (custom endpoint) serves `vendor/model` ids that use dots
+ * (e.g. `anthropic/claude-sonnet-4.6`), so the dash-keyed `anthropicMaxOutputs`
+ * only partially matches and can resolve a lower cap than the real one. These
+ * dot-format aliases let `findMatchingPattern` resolve the true output limit for
+ * the vendors exposed through OpenRouter.
+ */
+const openRouterMaxOutputs = {
+  'claude-haiku-4.5': 64000,
+  'claude-sonnet-4.6': 64000,
+  'claude-opus-4.5': 64000,
+  'claude-opus-4.6': 128000,
+  'claude-opus-4.7': 128000,
+  'gemini-2.5-flash': 65536,
+  'gemini-2.5-pro': 65536,
+};
+
 export const maxOutputTokensMap = {
   [EModelEndpoint.anthropic]: anthropicMaxOutputs,
   [EModelEndpoint.azureOpenAI]: modelMaxOutputs,
   [EModelEndpoint.openAI]: { ...modelMaxOutputs, ...deepseekMaxOutputs },
-  [EModelEndpoint.custom]: { ...modelMaxOutputs, ...deepseekMaxOutputs },
+  [EModelEndpoint.custom]: {
+    ...modelMaxOutputs,
+    ...deepseekMaxOutputs,
+    ...anthropicMaxOutputs,
+    ...openRouterMaxOutputs,
+  },
 };
 
 /** Finds the longest matching key in the tokens map via substring match. */

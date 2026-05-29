@@ -1376,6 +1376,7 @@
   "com_ui_preview_timeout": "Preview took too long to render",
   "com_ui_preview_render_failed": "Could not render preview for this file",
   "com_ui_preview_unavailable": "Preview not available for this file type",
+  "com_ui_preview_truncated": "Showing the beginning of a large file. Download it to see the full content.",
   "com_ui_privacy_policy": "Privacy policy",
   "com_ui_privacy_policy_url": "Privacy Policy URL",
   "com_ui_production": "Production",

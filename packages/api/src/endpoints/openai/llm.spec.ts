@@ -1060,4 +1060,82 @@ describe('applyDefaultParams', () => {
       topP: 0.9,
     });
   });
+
+  describe('Max Output Tokens Clamp (OpenRouter custom endpoint)', () => {
+    it('clamps over-limit max_tokens to the model cap for OpenRouter Claude Sonnet', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'test-api-key',
+        streaming: true,
+        endpoint: '1ma',
+        useOpenRouter: true,
+        modelOptions: {
+          model: 'anthropic/claude-sonnet-4.6',
+          max_tokens: 65536,
+        },
+      });
+
+      expect(result.llmConfig).toHaveProperty('maxTokens', 64000);
+    });
+
+    it('does not raise max_tokens below the model cap', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'test-api-key',
+        streaming: true,
+        endpoint: '1ma',
+        useOpenRouter: true,
+        modelOptions: {
+          model: 'anthropic/claude-sonnet-4.6',
+          max_tokens: 8000,
+        },
+      });
+
+      expect(result.llmConfig).toHaveProperty('maxTokens', 8000);
+    });
+
+    it('leaves a within-cap request unchanged for OpenRouter GPT-5.5 (moved to max_completion_tokens)', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'test-api-key',
+        streaming: true,
+        endpoint: '1ma',
+        useOpenRouter: true,
+        modelOptions: {
+          model: 'openai/gpt-5.5',
+          max_tokens: 65536,
+        },
+      });
+
+      expect(result.llmConfig.modelKwargs).toHaveProperty('max_completion_tokens', 65536);
+      expect(result.llmConfig).not.toHaveProperty('maxTokens');
+    });
+
+    it('does not clamp an unrecognized model (keeps the requested value)', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'test-api-key',
+        streaming: true,
+        endpoint: '1ma',
+        useOpenRouter: true,
+        modelOptions: {
+          model: 'acme/quasar-7b',
+          max_tokens: 99999,
+        },
+      });
+
+      expect(result.llmConfig).toHaveProperty('maxTokens', 99999);
+    });
+
+    it('resolves the true cap for OpenRouter Claude Opus 4.7 (dot-format id)', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'test-api-key',
+        streaming: true,
+        endpoint: '1ma',
+        useOpenRouter: true,
+        modelOptions: {
+          model: 'anthropic/claude-opus-4.7',
+          max_tokens: 200000,
+        },
+      });
+
+      expect(result.llmConfig).toHaveProperty('maxTokens', 128000);
+    });
+  });
 });

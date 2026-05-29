@@ -35,6 +35,20 @@ const OFFICE_MIME_HINTS = [
   'tab-separated',
 ];
 
+/* The first time a Radix dialog opens after page load it initializes global
+ * machinery (focus scope, scroll-lock styles) and can emit a spurious
+ * `onOpenChange(false)` in the same tick as opening — the dialog flashes open
+ * then closes, and only a second click "sticks". Swallowing a close that
+ * arrives within this window neutralizes that race without affecting real user
+ * closes (overlay click / Escape / close button all happen far later). */
+const SPURIOUS_CLOSE_MS = 200;
+
+/* Cap for inline text preview. Rendering a multi-MB text/log/json file into a
+ * single <pre> freezes the tab, so we only decode the first slice and flag the
+ * rest as truncated (the full file stays available via Download). CSV/TSV are
+ * unaffected — they render server-side through the bounded office HTML path. */
+const TEXT_PREVIEW_MAX_BYTES = 512 * 1024;
+
 const PREVIEW_ERROR_MESSAGES: Record<string, TranslationKeys> = {
   'too-large': 'com_ui_preview_too_large',
   timeout: 'com_ui_preview_timeout',
@@ -192,8 +206,20 @@ export default function FilePreviewDialog({
   const [fileBlobUrl, setFileBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [previewError, setPreviewError] = useState(false);
+  const [previewTruncated, setPreviewTruncated] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const loadingRef = useRef(false);
+  const openedAtRef = useRef(0);
+
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (!next && Date.now() - openedAtRef.current < SPURIOUS_CLOSE_MS) {
+        return;
+      }
+      onOpenChange(next);
+    },
+    [onOpenChange],
+  );
 
   const previewKind: PreviewKind = canPreviewByMime(fileType) || canPreviewByExt(fileName);
 
@@ -263,7 +289,10 @@ export default function FilePreviewDialog({
       }
 
       if (previewKind === 'text') {
-        setFileContent(decodeBytes(await blob.arrayBuffer()));
+        const isOversized = blob.size > TEXT_PREVIEW_MAX_BYTES;
+        const slice = isOversized ? blob.slice(0, TEXT_PREVIEW_MAX_BYTES) : blob;
+        setFileContent(decodeBytes(await slice.arrayBuffer()));
+        setPreviewTruncated(isOversized);
       } else {
         const typed = new Blob([blob], { type: 'application/pdf' });
         setFileBlobUrl(URL.createObjectURL(typed));
@@ -310,14 +339,17 @@ export default function FilePreviewDialog({
   }, [fileBlobUrl]);
 
   useEffect(() => {
-    if (!open) {
-      cancelledRef.current = true;
-      setFileContent(null);
-      setFileBlobUrl(null);
-      setPreviewError(false);
-      setLoading(false);
-      setIsCopied(false);
+    if (open) {
+      openedAtRef.current = Date.now();
+      return;
     }
+    cancelledRef.current = true;
+    setFileContent(null);
+    setFileBlobUrl(null);
+    setPreviewError(false);
+    setPreviewTruncated(false);
+    setLoading(false);
+    setIsCopied(false);
   }, [open]);
 
   const handleCopy = useCallback(() => {
@@ -347,7 +379,7 @@ export default function FilePreviewDialog({
   }
 
   return (
-    <OGDialog open={open} onOpenChange={onOpenChange}>
+    <OGDialog open={open} onOpenChange={handleOpenChange}>
       <OGDialogContent
         className="flex w-full max-w-4xl flex-col !overflow-hidden p-0"
         showCloseButton={true}
@@ -418,6 +450,11 @@ export default function FilePreviewDialog({
                   {fileContent}
                 </pre>
               </div>
+              {previewTruncated && (
+                <div className="mt-2 rounded-lg bg-surface-secondary px-4 py-2 text-center text-xs text-text-secondary">
+                  {localize('com_ui_preview_truncated')}
+                </div>
+              )}
             </>
           )}
           {!previewKind && !loading && (
