@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/rules-of-hooks */
-import { Eye } from 'lucide-react';
+import { Paperclip } from 'lucide-react';
 import type { TableColumn } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import PanelFileCell from './PanelFileCell';
@@ -9,7 +9,7 @@ import { formatDate } from '~/utils';
 export type TFileRow = TFile & { id: string };
 
 export interface PanelColumnsContext {
-  onPreview: (file: TFile) => void;
+  onAttach: (file: TFile) => void;
 }
 
 export const buildColumns = (ctx: PanelColumnsContext): TableColumn<TFileRow, unknown>[] => [
@@ -45,20 +45,20 @@ export const buildColumns = (ctx: PanelColumnsContext): TableColumn<TFileRow, un
     header: () => null,
     cell: ({ row }) => {
       const localize = useLocalize();
-      const label = `${localize('com_ui_preview')}: ${row.original.filename}`;
+      const label = `${localize('com_ui_attach_to_chat')}: ${row.original.filename}`;
       return (
         <div className="flex items-center justify-end">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              ctx.onPreview(row.original);
+              ctx.onAttach(row.original);
             }}
             aria-label={label}
-            title={localize('com_ui_preview')}
+            title={localize('com_ui_attach_to_chat')}
             className="rounded p-1 text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy"
           >
-            <Eye className="size-4" aria-hidden="true" />
+            <Paperclip className="size-4" aria-hidden="true" />
           </button>
         </div>
       );
@@ -70,9 +70,9 @@ export const buildColumns = (ctx: PanelColumnsContext): TableColumn<TFileRow, un
 ];
 
 export const columns = buildColumns({
-  onPreview: () => {
+  onAttach: () => {
     /* Stable no-op fallback for any consumer that imports `columns` directly
-     * — production callers should use `buildColumns({ onPreview })` so the
+     * — production callers should use `buildColumns({ onAttach })` so the
      * action wires into a real handler. */
   },
 });

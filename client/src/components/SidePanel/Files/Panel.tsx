@@ -57,8 +57,8 @@ export default function FilesPanel({ onClose }: { onClose?: () => void }) {
     }
   }, []);
 
-  const columns = useMemo(() => buildColumns({ onPreview: handlePreview }), [handlePreview]);
   const attachFile = useAttachFileToChat(onClose);
+  const columns = useMemo(() => buildColumns({ onAttach: attachFile }), [attachFile]);
 
   const removePending = useCallback((file_id: string) => {
     setPendingUploads((prev) => prev.filter((p) => p.file_id !== file_id));
@@ -141,7 +141,7 @@ export default function FilesPanel({ onClose }: { onClose?: () => void }) {
         columns={columns}
         data={filesWithIds}
         config={TABLE_CONFIG}
-        onRowClick={(row) => attachFile(row as TFile)}
+        onRowClick={(row) => handlePreview(row as TFile)}
         className="h-auto max-h-[calc(100vh-16rem)] flex-1"
       />
       <input

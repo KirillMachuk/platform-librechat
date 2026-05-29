@@ -794,6 +794,7 @@
   "com_ui_attach_error_total_size": "Total file size limit exceeded for endpoint:",
   "com_ui_attach_error_type": "Unsupported file type for endpoint:",
   "com_ui_attach_remove": "Remove file",
+  "com_ui_attach_to_chat": "Attach to chat",
   "com_ui_attach_warn_endpoint": "Non-Assistant files may be ignored without a compatible tool",
   "com_ui_attachment": "Attachment",
   "com_ui_auth_type": "Auth Type",
