@@ -485,8 +485,15 @@ export function getModelTokenValue(
     return value;
   }
 
-  if (value?.context) {
-    return value.context;
+  if (value != null) {
+    /* Honor the requested `key` on an exact match. Previously this always
+     * returned `value.context`, so an `output` lookup against an object-valued
+     * map (e.g. the live OpenRouter token config) wrongly got the context size.
+     * Falls through to pattern matching when the exact entry lacks this metric. */
+    const exactValue = value[key];
+    if (typeof exactValue === 'number') {
+      return exactValue;
+    }
   }
 
   const matchedPattern = findMatchingPattern(modelName, tokensMap);
