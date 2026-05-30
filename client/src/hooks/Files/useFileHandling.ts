@@ -26,6 +26,11 @@ import store, { ephemeralAgentByConvoId } from '~/store';
 import useClientResize from './useClientResize';
 import useUpdateFiles from './useUpdateFiles';
 
+/** Above this size a document is large enough that it's indexed for relevance
+ * search (RAG) rather than read in full, so we surface a one-time info toast to
+ * set expectations. Images are excluded — they're auto-resized before upload. */
+const LARGE_FILE_WARNING_BYTES = 10 * 1024 * 1024;
+
 type UseFileHandling = {
   fileSetter?: FileSetter;
   fileFilter?: (file: File) => boolean;
@@ -350,6 +355,20 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
             message: localize('com_info_heic_converting'),
             status: 'info',
             duration: 3000,
+          });
+        }
+
+        // Proactively set expectations for large documents: they're indexed for
+        // relevance search rather than read whole, so the user knows to ask
+        // specific questions or split the file for a full read.
+        const isImageFile = originalFile.type.startsWith('image/');
+        if (!isImageFile && originalFile.size > LARGE_FILE_WARNING_BYTES) {
+          showToast({
+            message: localize('com_info_large_file', {
+              0: (originalFile.size / (1024 * 1024)).toFixed(0),
+            }),
+            status: 'info',
+            duration: 6000,
           });
         }
 

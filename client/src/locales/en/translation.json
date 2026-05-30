@@ -404,6 +404,7 @@
   "com_generated_files": "Generated files:",
   "com_hide_examples": "Hide Examples",
   "com_info_heic_converting": "Converting HEIC image to JPEG...",
+  "com_info_large_file": "Large file ({{0}} MB). The assistant will find the most relevant parts for your question — for a detailed read, ask specific questions or split the file into smaller parts.",
   "com_nav_2fa": "Two-Factor Authentication (2FA)",
   "com_nav_about_branch": "Branch",
   "com_nav_about_build_date": "Built",
