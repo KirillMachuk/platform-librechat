@@ -1103,16 +1103,35 @@ class AgentClient extends BaseClient {
         '[api/server/controllers/agents/client.js #sendCompletion] Operation aborted',
         err,
       );
-      /** Surface the upstream provider's real reason. Errors like OpenRouter's
-       * generic "400 Provider returned error" carry the actual cause (e.g. an
-       * Anthropic max_tokens rejection) in nested fields the wrapped message
-       * drops, so log them explicitly to make incidents diagnosable. */
-      const providerErrorDetail =
-        err?.error?.metadata ?? err?.error ?? err?.response?.data ?? err?.cause;
-      if (providerErrorDetail != null) {
+      /** Surface the upstream provider's real reason as a flat string. OpenRouter's
+       * generic "Provider returned error" hides the actual cause (e.g. an Anthropic
+       * parameter rejection) in nested fields, and the SDK error object carries
+       * circular refs the JSON logger silently drops — so extract primitives and
+       * inline them into the message where they always render. */
+      try {
+        const body = err?.error ?? err?.response?.data?.error ?? err?.response?.data;
+        const meta = body?.metadata;
+        const raw = meta?.raw;
+        let rawText = 'n/a';
+        if (typeof raw === 'string') {
+          rawText = raw;
+        } else if (raw != null) {
+          rawText = JSON.stringify(raw);
+        }
+        const detail = [
+          `status=${err?.status ?? err?.response?.status ?? 'n/a'}`,
+          `code=${body?.code ?? err?.code ?? 'n/a'}`,
+          `provider=${meta?.provider_name ?? 'n/a'}`,
+          `message=${body?.message ?? err?.message ?? 'n/a'}`,
+          `raw=${rawText}`,
+        ].join(' | ');
         logger.error(
-          '[api/server/controllers/agents/client.js #sendCompletion] Upstream provider error detail',
-          { status: err?.status, detail: providerErrorDetail },
+          `[api/server/controllers/agents/client.js #sendCompletion] Upstream provider error detail: ${detail}`,
+        );
+      } catch (logErr) {
+        logger.error(
+          '[api/server/controllers/agents/client.js #sendCompletion] Failed to extract provider error detail',
+          logErr,
         );
       }
       if (!abortController.signal.aborted) {

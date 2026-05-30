@@ -182,7 +182,20 @@ function applyOpenRouterReasoningConfig({
   reasoningEffort?: string | null;
 }): boolean {
   if (!hasReasoningParams({ reasoning_effort: reasoningEffort })) {
-    llmConfig.include_reasoning = true;
+    /**
+     * Don't force reasoning on by default for OpenRouter Anthropic models.
+     * `include_reasoning: true` maps to `reasoning.enabled: true`, which turns
+     * on Anthropic extended thinking. Thinking is incompatible with the agent's
+     * multi-turn tool loop — the `thinking` blocks aren't replayed across turns,
+     * so after a file_search/tool round-trip Anthropic rejects the follow-up
+     * request and OpenRouter surfaces it as a generic "Provider returned error".
+     * Non-Anthropic providers keep the default so their reasoning still streams.
+     */
+    const isAnthropic =
+      typeof model === 'string' && normalizeOpenRouterModel(model).startsWith('anthropic/');
+    if (!isAnthropic) {
+      llmConfig.include_reasoning = true;
+    }
     return false;
   }
 

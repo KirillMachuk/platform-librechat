@@ -892,12 +892,26 @@ describe('getOpenAILLMConfig', () => {
         streaming: true,
         useOpenRouter: true,
         modelOptions: {
-          model: 'anthropic/claude-3-sonnet',
+          model: 'gpt-4',
           reasoning_effort: ReasoningEffort.unset,
         },
       });
 
       expect(result.llmConfig).toHaveProperty('include_reasoning', true);
+      expect(result.llmConfig).not.toHaveProperty('reasoning');
+    });
+
+    it('should NOT force include_reasoning for OpenRouter Anthropic models by default', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'test-api-key',
+        streaming: true,
+        useOpenRouter: true,
+        modelOptions: {
+          model: 'anthropic/claude-sonnet-4.6',
+        },
+      });
+
+      expect(result.llmConfig).not.toHaveProperty('include_reasoning');
       expect(result.llmConfig).not.toHaveProperty('reasoning');
     });
 
