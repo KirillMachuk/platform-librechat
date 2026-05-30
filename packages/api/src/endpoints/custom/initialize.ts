@@ -1,6 +1,7 @@
 import {
   ErrorTypes,
   envVarRegex,
+  KnownEndpoints,
   FetchTokenConfig,
   extractEnvVariable,
 } from 'librechat-data-provider';
@@ -15,6 +16,11 @@ import { validateEndpointURL } from '~/auth';
 import { tokenConfigCache } from '~/cache';
 
 const { PROXY } = process.env;
+
+/** True when a value points at OpenRouter (by endpoint name or baseURL). */
+function includesOpenRouter(value?: string | null): boolean {
+  return typeof value === 'string' && value.toLowerCase().includes(KnownEndpoints.openrouter);
+}
 
 /**
  * Builds custom options from endpoint configuration
@@ -141,19 +147,26 @@ export async function initializeCustom({
   const tokenKey =
     !hasTokenConfig && (userProvidesKey || userProvidesURL) ? `${endpoint}:${userId}` : endpoint;
 
-  const cachedConfig =
+  /**
+   * Pull live per-model token limits (context window + pricing) from the
+   * provider's `/models` endpoint when it's OpenRouter-backed. We detect
+   * OpenRouter by baseURL — not only by the endpoint name — so a white-labeled
+   * endpoint (e.g. renamed from "openrouter" to "1ma") still gets real limits
+   * instead of silently falling back to the hardcoded token maps. This is
+   * intentionally decoupled from `models.fetch` (which controls the *displayed*
+   * model list) so the curated menu stays intact. On any failure
+   * `endpointTokenConfig` stays undefined and callers fall back to the static
+   * maps — identical to the previous behavior.
+   */
+  const shouldFetchTokenConfig =
     !hasTokenConfig &&
-    FetchTokenConfig[endpoint.toLowerCase() as keyof typeof FetchTokenConfig] &&
-    (await cache.get(tokenKey));
+    (Boolean(FetchTokenConfig[endpoint.toLowerCase() as keyof typeof FetchTokenConfig]) ||
+      includesOpenRouter(baseURL));
 
+  const cachedConfig = shouldFetchTokenConfig && (await cache.get(tokenKey));
   endpointTokenConfig = (cachedConfig as EndpointTokenConfig) || undefined;
 
-  if (
-    FetchTokenConfig[endpoint.toLowerCase() as keyof typeof FetchTokenConfig] &&
-    endpointConfig &&
-    endpointConfig.models?.fetch &&
-    !endpointTokenConfig
-  ) {
+  if (shouldFetchTokenConfig && endpointConfig && !endpointTokenConfig) {
     await fetchModels({ apiKey, baseURL, name: endpoint, user: userId, tokenKey });
     endpointTokenConfig = (await cache.get(tokenKey)) as EndpointTokenConfig | undefined;
   }

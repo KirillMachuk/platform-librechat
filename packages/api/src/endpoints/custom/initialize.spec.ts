@@ -210,3 +210,31 @@ describe('initializeCustom – SSRF guard wiring', () => {
     expect(mockGetOpenAIConfig).not.toHaveBeenCalled();
   });
 });
+
+describe('initializeCustom – live token-config fetch (OpenRouter detection)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('fetches live token config for an OpenRouter baseURL even when the endpoint is white-labeled and models.fetch is off', async () => {
+    const { fetchModels } = jest.requireMock('~/endpoints/models');
+    const params = createParams({ baseURL: 'https://openrouter.ai/api/v1' });
+    params.endpoint = '1ma';
+
+    await initializeCustom(params);
+
+    expect(fetchModels).toHaveBeenCalledWith(
+      expect.objectContaining({ baseURL: 'https://openrouter.ai/api/v1', name: '1ma' }),
+    );
+  });
+
+  it('does not fetch token config for a non-OpenRouter custom endpoint', async () => {
+    const { fetchModels } = jest.requireMock('~/endpoints/models');
+    const params = createParams({ baseURL: 'https://api.example.com/v1' });
+    params.endpoint = 'test-custom';
+
+    await initializeCustom(params);
+
+    expect(fetchModels).not.toHaveBeenCalled();
+  });
+});
