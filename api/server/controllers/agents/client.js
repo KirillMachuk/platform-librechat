@@ -68,6 +68,37 @@ const db = require('~/models');
 
 const loadAgent = (params) => loadAgentFn(params, { getAgent: db.getAgent, getMCPServerTools });
 
+/**
+ * Maps an upstream/model-provider error to a clean, neutral message for the
+ * end user. The precise technical reason (status/code/provider/raw) is logged
+ * separately in `sendCompletion`'s catch; this never leaks the provider name
+ * or internal details into the chat. Status is read from the SDK error object
+ * and, as a fallback, parsed from a wrapped message like "402 ...".
+ */
+function getUserFacingError(err) {
+  const parsed =
+    typeof err?.message === 'string' ? Number((err.message.match(/\b([45]\d\d)\b/) || [])[1]) : NaN;
+  const status =
+    err?.status ?? err?.response?.status ?? (Number.isNaN(parsed) ? undefined : parsed);
+
+  if (status === 402) {
+    return 'Сервис временно недоступен из-за ограничения по ресурсам. Обратитесь к администратору.';
+  }
+  if (status === 429) {
+    return 'Слишком много запросов. Подождите несколько секунд и попробуйте снова.';
+  }
+  if (status === 401 || status === 403) {
+    return 'Ошибка доступа к сервису моделей. Обратитесь к администратору.';
+  }
+  if (status === 400) {
+    return 'Не удалось обработать запрос — возможно, слишком большой текст или файл. Сократите ввод или выберите модель с бóльшим контекстом.';
+  }
+  if (typeof status === 'number' && status >= 500) {
+    return 'Сервис моделей временно недоступен. Попробуйте ещё раз через минуту.';
+  }
+  return 'Произошла ошибка при обработке запроса. Попробуйте ещё раз.';
+}
+
 class AgentClient extends BaseClient {
   constructor(options = {}) {
     super(null, options);
@@ -1141,7 +1172,7 @@ class AgentClient extends BaseClient {
         );
         this.contentParts.push({
           type: ContentTypes.ERROR,
-          [ContentTypes.ERROR]: `An error occurred while processing the request${err?.message ? `: ${err.message}` : ''}`,
+          [ContentTypes.ERROR]: getUserFacingError(err),
         });
       }
     } finally {
