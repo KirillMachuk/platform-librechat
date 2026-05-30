@@ -1,0 +1,32 @@
+name: Model Availability Smoke
+
+# Daily check that every production model still exists on OpenRouter, so a
+# removed/renamed model is caught here instead of breaking chats silently.
+# Public endpoint — no secrets, no cost. Run manually via "Run workflow".
+
+on:
+  schedule:
+    - cron: '0 6 * * *' # daily, 06:00 UTC
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/check-openrouter-models.mjs'
+      - '.github/workflows/model-availability.yml'
+
+jobs:
+  check-models:
+    name: Check production models exist on OpenRouter
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check OpenRouter model availability
+        run: node scripts/check-openrouter-models.mjs
