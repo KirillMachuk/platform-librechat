@@ -13,6 +13,7 @@ import settings from './settings';
 import misc from './misc';
 import isTemporary from './temporary';
 export * from './agents';
+export * from './fileMode';
 export * from './mcp';
 export * from './favorites';
 export * from './subagents';

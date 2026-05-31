@@ -21,6 +21,7 @@ import FileSearch from './FileSearch';
 import Artifacts from './Artifacts';
 import MCPSelect from './MCPSelect';
 import WebSearch from './WebSearch';
+import FileMode from './FileMode';
 import Skills from './Skills';
 import store from '~/store';
 
@@ -371,6 +372,7 @@ function BadgeRow({
         )}
         {showEphemeralBadges === true && (
           <>
+            <FileMode />
             <WebSearch />
             <CodeInterpreter />
             <FileSearch />

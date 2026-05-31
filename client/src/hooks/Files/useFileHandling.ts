@@ -20,9 +20,10 @@ import { logger, validateFiles, cachePreview, getCachedPreview, removePreviewEnt
 import { useGetFileConfig, useUploadFileMutation } from '~/data-provider';
 import useLocalize, { TranslationKeys } from '~/hooks/useLocalize';
 import { useDelayedUploadToast } from './useDelayedUploadToast';
+import { resolveFileToolResource } from '~/utils/fileMode';
 import { processFileForUpload } from '~/utils/heicConverter';
 import { useChatContext } from '~/Providers/ChatContext';
-import store, { ephemeralAgentByConvoId } from '~/store';
+import store, { ephemeralAgentByConvoId, fileModeByConvoId } from '~/store';
 import useClientResize from './useClientResize';
 import useUpdateFiles from './useUpdateFiles';
 
@@ -63,6 +64,12 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
     ephemeralAgentByConvoId(conversation?.conversationId ?? Constants.NEW_CONVO),
   );
   const isTemporary = useRecoilValue(store.isTemporary);
+  /** Toolbar-selected file mode (auto/text/native/search) for this conversation.
+   * Used to resolve a per-file `tool_resource` when the caller doesn't pass an
+   * explicit one (e.g. drag-drop or the default attach path). */
+  const fileMode = useRecoilValue(
+    fileModeByConvoId(conversation?.conversationId ?? Constants.NEW_CONVO),
+  );
   const setError = (error: string) => setErrors((prevErrors) => [...prevErrors, error]);
   const { addFile, replaceFile, updateFileById, deleteFileById } = useUpdateFiles(
     params?.fileSetter ?? setFiles,
@@ -337,8 +344,20 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
           size: originalFile.size,
         };
 
+        // An explicit tool resource (e.g. from the "+" menu) always wins.
+        // Otherwise resolve it from the toolbar file mode: in `auto` the choice
+        // is deterministic (image → native, document fits → text/OCR, large →
+        // RAG); explicit toolbar modes map directly. Images always go native.
         if (_toolResource != null && _toolResource !== '') {
-          initialExtendedFile.tool_resource = _toolResource;
+          initialExtendedFile.tool_resource = _toolResource as EToolResources;
+        } else {
+          const resolved = resolveFileToolResource(fileMode, {
+            mimetype: originalFile.type,
+            sizeBytes: originalFile.size,
+          });
+          if (resolved != null) {
+            initialExtendedFile.tool_resource = resolved;
+          }
         }
 
         // Add file immediately to show in UI
