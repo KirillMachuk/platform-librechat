@@ -105,6 +105,15 @@ export default function useDragHelpers() {
         return;
       }
 
+      // ChatGPT-style: plain custom/LLM endpoints and ephemeral agents upload
+      // directly and let Auto (the toolbar FileMode control) decide how to
+      // handle the file — no 3-choice modal. Real saved agents keep the modal
+      // so the user can target a specific tool resource (code environment etc.).
+      if (!agentId || isEphemeralAgent(agentId)) {
+        handleFilesRef.current(item.files);
+        return;
+      }
+
       const agentsConfig = endpointsConfig?.[EModelEndpoint.agents];
       const capabilities = agentsConfig?.capabilities ?? defaultAgentCapabilities;
       const fileSearchEnabled = capabilities.includes(AgentCapabilities.file_search) === true;

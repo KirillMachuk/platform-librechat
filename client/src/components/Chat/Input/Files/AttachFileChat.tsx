@@ -97,7 +97,12 @@ function AttachFileChat({
     [disableInputs, endpointFileConfig?.disabled],
   );
 
-  if (isAssistants && endpointSupportsFiles && !isUploadDisabled) {
+  // ChatGPT-style attach: assistants and plain custom/LLM endpoints get a
+  // single paperclip that uploads any supported file immediately (no mode
+  // menu, no per-type accept filter). The file's handling mode is decided by
+  // Auto and surfaced in the toolbar FileMode control. Only real agents keep
+  // the multi-resource menu (code environment, etc.).
+  if ((isAssistants || (!isAgents && endpointSupportsFiles)) && !isUploadDisabled) {
     return (
       <AttachFile
         disabled={disableInputs}

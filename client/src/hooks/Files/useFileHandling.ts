@@ -357,6 +357,16 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
           });
           if (resolved != null) {
             initialExtendedFile.tool_resource = resolved;
+            // RAG needs the file_search tool enabled on the ephemeral agent so
+            // the model can query the vector store at chat time. Mirror what the
+            // legacy "+" menu did — this is model-independent, so Auto's RAG
+            // choice works on any model (not just the file-search spec).
+            if (resolved === EToolResources.file_search) {
+              setEphemeralAgent((prev) => ({
+                ...prev,
+                [EToolResources.file_search]: true,
+              }));
+            }
           }
         }
 
