@@ -1796,5 +1796,10 @@
   "com_ui_zoom_in": "Zoom in",
   "com_ui_zoom_level": "Zoom level",
   "com_ui_zoom_out": "Zoom out",
-  "com_user_message": "You"
+  "com_user_message": "You",
+  "com_ui_file_mode": "Document handling",
+  "com_ui_file_mode_auto": "Auto",
+  "com_ui_file_mode_text": "Full text",
+  "com_ui_file_mode_native": "Original file",
+  "com_ui_file_mode_search": "Search in document"
 }
