@@ -85,9 +85,12 @@ describe('AttachFileChat', () => {
       expect(screen.getByTestId('attach-file-menu')).toBeInTheDocument();
     });
 
-    it('renders AttachFileMenu for custom endpoint with file support', () => {
+    it('renders the simple AttachFile for a custom endpoint (ChatGPT-style)', () => {
+      // Plain custom/LLM endpoints upload directly (no mode menu); handling is
+      // decided by Auto and surfaced in the toolbar FileMode control.
       renderComponent({ endpoint: 'Moonshot' });
-      expect(screen.getByTestId('attach-file-menu')).toBeInTheDocument();
+      expect(screen.getByTestId('attach-file')).toBeInTheDocument();
+      expect(screen.queryByTestId('attach-file-menu')).not.toBeInTheDocument();
     });
 
     it('renders null for null conversation', () => {
@@ -175,30 +178,34 @@ describe('AttachFileChat', () => {
     });
   });
 
-  describe('endpointType resolution for non-agents', () => {
-    it('passes custom endpointType for a custom endpoint', () => {
+  describe('non-agent endpoints use the simple AttachFile', () => {
+    it('renders AttachFile for a custom endpoint (no mode menu)', () => {
       renderComponent({ endpoint: 'Moonshot' });
-      expect(mockAttachFileMenuProps.endpointType).toBe(EModelEndpoint.custom);
+      expect(screen.getByTestId('attach-file')).toBeInTheDocument();
+      expect(screen.queryByTestId('attach-file-menu')).not.toBeInTheDocument();
     });
 
-    it('passes openAI endpointType for openAI endpoint', () => {
+    it('renders AttachFile for the openAI endpoint (no mode menu)', () => {
       renderComponent({ endpoint: EModelEndpoint.openAI });
-      expect(mockAttachFileMenuProps.endpointType).toBe(EModelEndpoint.openAI);
+      expect(screen.getByTestId('attach-file')).toBeInTheDocument();
+      expect(screen.queryByTestId('attach-file-menu')).not.toBeInTheDocument();
     });
   });
 
-  describe('consistency: same endpoint type for direct vs agent usage', () => {
-    it('resolves Moonshot the same way whether used directly or through an agent', () => {
+  describe('attach surface differs for direct vs agent usage', () => {
+    it('uses the simple AttachFile directly but the multi-resource menu through an agent', () => {
       renderComponent({ endpoint: 'Moonshot' });
-      const directType = mockAttachFileMenuProps.endpointType;
+      expect(screen.getByTestId('attach-file')).toBeInTheDocument();
+      expect(screen.queryByTestId('attach-file-menu')).not.toBeInTheDocument();
 
       mockAgentsMap = {
         'agent-1': { provider: 'Moonshot', model_parameters: {} } as Partial<Agent>,
       };
       renderComponent({ endpoint: EModelEndpoint.agents, agent_id: 'agent-1' });
-      const agentType = mockAttachFileMenuProps.endpointType;
-
-      expect(directType).toBe(agentType);
+      expect(screen.getByTestId('attach-file-menu')).toBeInTheDocument();
+      // The agent path still resolves the provider's specific endpointType for
+      // correct citation/file processing.
+      expect(mockAttachFileMenuProps.endpointType).toBe(EModelEndpoint.custom);
     });
   });
 
