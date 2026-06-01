@@ -222,7 +222,6 @@ export const getResponseSender = (endpointOption: Partial<t.TEndpointOption>): s
     model: _m,
     endpoint: _e,
     endpointType,
-    modelDisplayLabel: _mdl,
     chatGptLabel: _cgl,
     modelLabel: _ml,
   } = endpointOption;
@@ -230,7 +229,6 @@ export const getResponseSender = (endpointOption: Partial<t.TEndpointOption>): s
   const endpoint = _e as EModelEndpoint;
 
   const model = _m ?? '';
-  const modelDisplayLabel = _mdl ?? '';
   const chatGptLabel = _cgl ?? '';
   const modelLabel = _ml ?? '';
   if (
@@ -277,28 +275,9 @@ export const getResponseSender = (endpointOption: Partial<t.TEndpointOption>): s
   }
 
   if (endpoint === EModelEndpoint.custom || endpointType === EModelEndpoint.custom) {
-    if (modelLabel) {
-      return modelLabel;
-    } else if (chatGptLabel) {
-      // @deprecated - prefer modelLabel
-      return chatGptLabel;
-    } else if (model && extractOmniVersion(model)) {
-      return extractOmniVersion(model);
-    } else if (model && (model.includes('mistral') || model.includes('codestral'))) {
-      return 'Mistral';
-    } else if (model && model.includes('deepseek')) {
-      return 'Deepseek';
-    } else if (model && model.includes('kimi')) {
-      return 'Kimi';
-    } else if (model && model.includes('moonshot')) {
-      return 'Moonshot';
-    } else if (model && model.includes('gpt-')) {
-      const gptVersion = extractGPTVersion(model);
-      return gptVersion || 'GPT';
-    } else if (modelDisplayLabel) {
-      return modelDisplayLabel;
-    }
-
+    // White-label: plain LLM chats always respond as "AI" — the underlying
+    // provider/model is never surfaced as the message author. Named agents keep
+    // their own name (resolved before this function via the agent's `name`).
     return 'AI';
   }
 
