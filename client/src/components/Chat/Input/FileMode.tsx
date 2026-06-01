@@ -1,12 +1,14 @@
-import React, { memo, useMemo, useState } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import * as Ariakit from '@ariakit/react';
 import { Sparkles, FileType2Icon, FileImageIcon, FileSearch as FileSearchIcon } from 'lucide-react';
 import { TooltipAnchor, DropdownPopup } from '@librechat/client';
 import { Constants, EToolResources } from 'librechat-data-provider';
 import type { LucideIcon } from 'lucide-react';
-import type { MenuItemProps } from '~/common';
+import type { MenuItemProps, ExtendedFile } from '~/common';
 import type { TranslationKeys } from '~/hooks/useLocalize';
 import { resolveFileToolResource, isImageMimetype, type FileMode } from '~/utils/fileMode';
+import { useFileHandling, useFileDeletion } from '~/hooks/Files';
+import { useDeleteFilesMutation } from '~/data-provider';
 import { useChatContext } from '~/Providers/ChatContext';
 import { useBadgeRowContext } from '~/Providers';
 import { fileModeByConvoId } from '~/store';
@@ -56,6 +58,10 @@ function FileMode() {
   const conversationId = context?.conversationId ?? Constants.NEW_CONVO;
   const [mode, setMode] = useRecoilState(fileModeByConvoId(conversationId));
 
+  const { handleFiles, setFiles } = useFileHandling();
+  const { mutateAsync: deleteFilesMutate } = useDeleteFilesMutation();
+  const { deleteFile } = useFileDeletion({ mutateAsync: deleteFilesMutate });
+
   /** The non-image files currently attached. Images are excluded — they're
    * always sent natively for vision and the control stays hidden for them. */
   const documentFiles = useMemo(() => {
@@ -65,6 +71,42 @@ function FileMode() {
     }
     return Array.from(files.values()).filter((file) => !isImageMimetype(file.type ?? ''));
   }, [chat?.files]);
+
+  /**
+   * Re-process already-attached documents in the newly chosen mode. Files
+   * upload at attach time with their handling baked in, so changing the mode
+   * means delete + re-upload of the original File with the new tool_resource.
+   * Skips files still uploading or restored from history (no original File),
+   * and no-ops when the resolved resource is unchanged.
+   */
+  const reprocessAttached = useCallback(
+    (newMode: FileMode) => {
+      for (const ef of documentFiles as ExtendedFile[]) {
+        if (ef.file == null || (ef.progress ?? 1) < 1) {
+          continue;
+        }
+        const resolved = resolveFileToolResource(newMode, {
+          mimetype: ef.type ?? ef.file.type ?? '',
+          sizeBytes: ef.size ?? ef.file.size ?? 0,
+        });
+        if (resolved === ef.tool_resource) {
+          continue;
+        }
+        const original = ef.file;
+        deleteFile({ file: ef, setFiles });
+        handleFiles([original], undefined, newMode);
+      }
+    },
+    [documentFiles, deleteFile, setFiles, handleFiles],
+  );
+
+  const selectMode = useCallback(
+    (value: FileMode) => {
+      setMode(value);
+      reprocessAttached(value);
+    },
+    [setMode, reprocessAttached],
+  );
 
   /** When Auto is active and exactly one document is attached, surface the
    * concrete choice Auto made; otherwise just show "Auto". */
@@ -94,7 +136,7 @@ function FileMode() {
     const Icon = MODE_ICONS[value];
     return {
       label: localize(MODE_LABEL_KEYS[value]),
-      onClick: () => setMode(value),
+      onClick: () => selectMode(value),
       icon: <Icon className="icon-md" />,
     };
   });
