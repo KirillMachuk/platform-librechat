@@ -17,7 +17,8 @@ import { parsePagination } from './pagination';
 
 const MAX_SEARCH_LENGTH = 200;
 
-const USER_LIST_FIELDS = '_id name username email avatar role provider createdAt updatedAt';
+const USER_LIST_FIELDS =
+  '_id name username email avatar role provider disabled createdAt updatedAt';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 8;
@@ -91,6 +92,7 @@ export function createAdminUsersHandlers(deps: AdminUsersDeps) {
         avatar: u.avatar ?? '',
         role: u.role ?? 'USER',
         provider: u.provider ?? 'local',
+        disabled: u.disabled ?? false,
         createdAt: u.createdAt?.toISOString(),
         updatedAt: u.updatedAt?.toISOString(),
       }));
@@ -279,6 +281,7 @@ export function createAdminUsersHandlers(deps: AdminUsersDeps) {
         username?: string;
         role?: string;
         password?: string;
+        disabled?: boolean;
       };
       const update: Partial<IUser> = {};
       if (typeof body.name === 'string') {
@@ -301,16 +304,30 @@ export function createAdminUsersHandlers(deps: AdminUsersDeps) {
         }
         update.password = await hashPassword(body.password);
       }
+      if (typeof body.disabled === 'boolean') {
+        update.disabled = body.disabled;
+      }
       if (Object.keys(update).length === 0) {
         return res.status(400).json({ error: 'No updatable fields provided' });
       }
 
-      if (update.role && update.role !== SystemRoles.ADMIN) {
+      const callerId = req.user?._id?.toString() ?? req.user?.id;
+      if (update.disabled === true && callerId === id) {
+        return res.status(403).json({ error: 'Cannot disable your own account' });
+      }
+
+      const demotesAdmin = typeof update.role === 'string' && update.role !== SystemRoles.ADMIN;
+      const disablesUser = update.disabled === true;
+      if (demotesAdmin || disablesUser) {
         const [target] = await findUsers({ _id: id }, 'role', { limit: 1 });
         if (target?.role === SystemRoles.ADMIN) {
           const adminCount = await countUsers({ role: SystemRoles.ADMIN });
           if (adminCount <= 1) {
-            return res.status(400).json({ error: 'Cannot demote the last admin user' });
+            return res.status(400).json({
+              error: disablesUser
+                ? 'Cannot disable the last admin user'
+                : 'Cannot demote the last admin user',
+            });
           }
         }
       }
@@ -327,6 +344,7 @@ export function createAdminUsersHandlers(deps: AdminUsersDeps) {
         email: updated.email ?? '',
         role: updated.role ?? 'USER',
         provider: updated.provider ?? 'local',
+        disabled: updated.disabled ?? false,
       });
     } catch (error) {
       logger.error('[adminUsers] updateUser error:', error);

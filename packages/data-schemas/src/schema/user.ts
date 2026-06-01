@@ -45,6 +45,10 @@ const userSchema = new Schema<IUser>(
       required: true,
       default: false,
     },
+    disabled: {
+      type: Boolean,
+      default: false,
+    },
     password: {
       type: String,
       trim: true,

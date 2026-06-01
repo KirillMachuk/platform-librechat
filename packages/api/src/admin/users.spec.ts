@@ -103,6 +103,19 @@ describe('createAdminUsersHandlers', () => {
       expect(response.users[0]).toHaveProperty('role');
     });
 
+    it('exposes the disabled flag for each user', async () => {
+      const deps = createDeps({
+        findUsers: jest.fn().mockResolvedValue([mockUser({ disabled: true })]),
+        countUsers: jest.fn().mockResolvedValue(1),
+      });
+      const handlers = createAdminUsersHandlers(deps);
+      const { req, res, json } = createReqRes();
+
+      await handlers.listUsers(req, res);
+
+      expect(json.mock.calls[0][0].users[0].disabled).toBe(true);
+    });
+
     it('passes pagination params to findUsers and unfiltered count', async () => {
       const findUsers = jest.fn().mockResolvedValue([]);
       const countUsers = jest.fn().mockResolvedValue(0);
@@ -750,6 +763,54 @@ describe('createAdminUsersHandlers', () => {
 
       expect(status).toHaveBeenCalledWith(200);
       expect(deps.updateUser).toHaveBeenCalled();
+    });
+
+    it('sets the disabled flag and returns it', async () => {
+      const updateUser = jest.fn().mockResolvedValue(mockUser({ disabled: true }));
+      const deps = createDeps({ updateUser });
+      const handlers = createAdminUsersHandlers(deps);
+      const { req, res, status, json } = createReqRes({
+        params: { id: validUserId },
+        body: { disabled: true },
+      });
+
+      await handlers.updateUser(req, res);
+
+      expect(status).toHaveBeenCalledWith(200);
+      expect(updateUser).toHaveBeenCalledWith(validUserId, { disabled: true });
+      expect(json.mock.calls[0][0].disabled).toBe(true);
+    });
+
+    it('returns 403 when disabling your own account', async () => {
+      const handlers = createAdminUsersHandlers(createDeps());
+      const { req, res, status, json } = createReqRes({
+        params: { id: validUserId },
+        body: { disabled: true },
+        user: { _id: new Types.ObjectId(validUserId), role: 'admin' },
+      });
+
+      await handlers.updateUser(req, res);
+
+      expect(status).toHaveBeenCalledWith(403);
+      expect(json).toHaveBeenCalledWith({ error: 'Cannot disable your own account' });
+    });
+
+    it('blocks disabling the last admin', async () => {
+      const deps = createDeps({
+        findUsers: jest.fn().mockResolvedValue([mockUser({ role: SystemRoles.ADMIN })]),
+        countUsers: jest.fn().mockResolvedValue(1),
+      });
+      const handlers = createAdminUsersHandlers(deps);
+      const { req, res, status, json } = createReqRes({
+        params: { id: validUserId },
+        body: { disabled: true },
+      });
+
+      await handlers.updateUser(req, res);
+
+      expect(status).toHaveBeenCalledWith(400);
+      expect(json).toHaveBeenCalledWith({ error: 'Cannot disable the last admin user' });
+      expect(deps.updateUser).not.toHaveBeenCalled();
     });
 
     it('returns 404 when the user is not found', async () => {
