@@ -651,6 +651,35 @@ describe('createAdminUsersHandlers', () => {
       });
     });
 
+    it('hashes and updates the password when provided', async () => {
+      const hashPassword = jest.fn().mockResolvedValue('new-hash');
+      const updateUser = jest.fn().mockResolvedValue(mockUser());
+      const deps = createDeps({ hashPassword, updateUser });
+      const handlers = createAdminUsersHandlers(deps);
+      const { req, res, status } = createReqRes({
+        params: { id: validUserId },
+        body: { password: 'newsecret1' },
+      });
+
+      await handlers.updateUser(req, res);
+
+      expect(status).toHaveBeenCalledWith(200);
+      expect(hashPassword).toHaveBeenCalledWith('newsecret1');
+      expect(updateUser).toHaveBeenCalledWith(validUserId, { password: 'new-hash' });
+    });
+
+    it('returns 400 when the new password is too short', async () => {
+      const handlers = createAdminUsersHandlers(createDeps());
+      const { req, res, status } = createReqRes({
+        params: { id: validUserId },
+        body: { password: 'short' },
+      });
+
+      await handlers.updateUser(req, res);
+
+      expect(status).toHaveBeenCalledWith(400);
+    });
+
     it('returns 400 for invalid id', async () => {
       const handlers = createAdminUsersHandlers(createDeps());
       const { req, res, status, json } = createReqRes({

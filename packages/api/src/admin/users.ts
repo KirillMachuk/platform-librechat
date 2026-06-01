@@ -274,7 +274,12 @@ export function createAdminUsersHandlers(deps: AdminUsersDeps) {
         return res.status(400).json({ error: 'Invalid user ID format' });
       }
 
-      const body = (req.body ?? {}) as { name?: string; username?: string; role?: string };
+      const body = (req.body ?? {}) as {
+        name?: string;
+        username?: string;
+        role?: string;
+        password?: string;
+      };
       const update: Partial<IUser> = {};
       if (typeof body.name === 'string') {
         update.name = body.name.trim();
@@ -287,6 +292,14 @@ export function createAdminUsersHandlers(deps: AdminUsersDeps) {
           return res.status(400).json({ error: 'Invalid role' });
         }
         update.role = body.role;
+      }
+      if (typeof body.password === 'string') {
+        if (body.password.length < MIN_PASSWORD_LENGTH) {
+          return res
+            .status(400)
+            .json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
+        }
+        update.password = await hashPassword(body.password);
       }
       if (Object.keys(update).length === 0) {
         return res.status(400).json({ error: 'No updatable fields provided' });
