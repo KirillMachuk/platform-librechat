@@ -20,7 +20,7 @@ import { logger, validateFiles, cachePreview, getCachedPreview, removePreviewEnt
 import { useGetFileConfig, useUploadFileMutation } from '~/data-provider';
 import useLocalize, { TranslationKeys } from '~/hooks/useLocalize';
 import { useDelayedUploadToast } from './useDelayedUploadToast';
-import { resolveFileToolResource } from '~/utils/fileMode';
+import { resolveFileToolResource, type FileMode } from '~/utils/fileMode';
 import { processFileForUpload } from '~/utils/heicConverter';
 import { useChatContext } from '~/Providers/ChatContext';
 import store, { ephemeralAgentByConvoId, fileModeByConvoId } from '~/store';
@@ -296,7 +296,11 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
     img.src = preview;
   };
 
-  const handleFiles = async (_files: FileList | File[], _toolResource?: string) => {
+  const handleFiles = async (
+    _files: FileList | File[],
+    _toolResource?: string,
+    _forcedMode?: FileMode,
+  ) => {
     abortControllerRef.current = new AbortController();
     const fileList = Array.from(_files);
     /* Validate files */
@@ -351,7 +355,10 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
         if (_toolResource != null && _toolResource !== '') {
           initialExtendedFile.tool_resource = _toolResource as EToolResources;
         } else {
-          const resolved = resolveFileToolResource(fileMode, {
+          // `_forcedMode` (passed by the toolbar chip when re-processing an
+          // already-attached file) wins over the conversation atom, which would
+          // otherwise be read stale within the same event handler.
+          const resolved = resolveFileToolResource(_forcedMode ?? fileMode, {
             mimetype: originalFile.type,
             sizeBytes: originalFile.size,
           });
