@@ -1801,5 +1801,6 @@
   "com_ui_file_mode_auto": "Auto",
   "com_ui_file_mode_text": "Full text",
   "com_ui_file_mode_native": "Original file",
-  "com_ui_file_mode_search": "Search in document"
+  "com_ui_file_mode_search": "Search in document",
+  "com_warning_model_no_vision": "This model can't read images. Switch to a model with vision (e.g. Sonnet, GPT-5, or Gemini) to work with pictures."
 }

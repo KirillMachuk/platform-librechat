@@ -9,6 +9,7 @@ import {
   EToolResources,
   mergeFileConfig,
   isAssistantsEndpoint,
+  validateVisionModel,
   getEndpointFileConfig,
   defaultAssistantsVersion,
 } from 'librechat-data-provider';
@@ -405,6 +406,24 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
             }),
             status: 'info',
             duration: 6000,
+          });
+        }
+
+        // Capability notice: images only work on vision-capable models. If the
+        // active model can't see images, warn with a concrete recommendation
+        // (switch model) instead of letting the attachment silently fail at the
+        // provider. The upload is still allowed — the user may switch the model
+        // before sending. Text/OCR and RAG are model-independent, so this check
+        // only applies to images.
+        if (
+          isImageFile &&
+          conversation?.model &&
+          !validateVisionModel({ model: conversation.model })
+        ) {
+          showToast({
+            message: localize('com_warning_model_no_vision'),
+            status: 'warning',
+            duration: 8000,
           });
         }
 
