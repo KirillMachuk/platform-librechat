@@ -331,6 +331,25 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
       return;
     }
 
+    // Capability notice (once per batch): images only work on vision-capable
+    // models. If the active model can't see images, warn with a concrete
+    // recommendation (switch model) instead of letting the attachment silently
+    // fail at the provider. Upload is still allowed — the user may switch the
+    // model before sending. Text/OCR and RAG are model-independent, so this
+    // only applies to images. Emitted once even for a multi-image batch.
+    const batchHasImage = fileList.some((file) => file.type.startsWith('image/'));
+    if (
+      batchHasImage &&
+      conversation?.model &&
+      !validateVisionModel({ model: conversation.model })
+    ) {
+      showToast({
+        message: localize('com_warning_model_no_vision'),
+        status: 'warning',
+        duration: 8000,
+      });
+    }
+
     /* Process files */
     for (const originalFile of fileList) {
       const file_id = v4();
@@ -406,24 +425,6 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
             }),
             status: 'info',
             duration: 6000,
-          });
-        }
-
-        // Capability notice: images only work on vision-capable models. If the
-        // active model can't see images, warn with a concrete recommendation
-        // (switch model) instead of letting the attachment silently fail at the
-        // provider. The upload is still allowed — the user may switch the model
-        // before sending. Text/OCR and RAG are model-independent, so this check
-        // only applies to images.
-        if (
-          isImageFile &&
-          conversation?.model &&
-          !validateVisionModel({ model: conversation.model })
-        ) {
-          showToast({
-            message: localize('com_warning_model_no_vision'),
-            status: 'warning',
-            duration: 8000,
           });
         }
 
