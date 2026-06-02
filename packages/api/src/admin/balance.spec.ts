@@ -49,9 +49,25 @@ function createDeps(overrides: Partial<AdminBalanceDeps> = {}): AdminBalanceDeps
   return {
     findUser: jest.fn().mockResolvedValue({ _id: new Types.ObjectId(validUserId) } as IUser),
     findBalanceByUser: jest.fn().mockResolvedValue(mockBalance()),
+    findBalancesByUsers: jest.fn().mockResolvedValue([]),
     upsertBalanceFields: jest.fn().mockResolvedValue(mockBalance()),
     ...overrides,
   };
+}
+
+function createQueryReqRes(query: Record<string, string | string[]>) {
+  const req = {
+    params: {},
+    query,
+    body: {},
+    user: { _id: new Types.ObjectId(), role: 'admin' },
+  } as unknown as ServerRequest;
+
+  const json = jest.fn();
+  const status = jest.fn().mockReturnValue({ json });
+  const res = { status, json } as unknown as Response;
+
+  return { req, res, status, json };
 }
 
 describe('createAdminBalanceHandlers', () => {
@@ -129,6 +145,78 @@ describe('createAdminBalanceHandlers', () => {
       await handlers.getUserBalance(req, res);
 
       expect(status).toHaveBeenCalledWith(500);
+    });
+  });
+
+  describe('getUsersBalances', () => {
+    it('returns balances for the requested ids in one query, zero-filling missing ones', async () => {
+      const idA = new Types.ObjectId().toString();
+      const idB = new Types.ObjectId().toString();
+      const findBalancesByUsers = jest
+        .fn()
+        .mockResolvedValue([
+          mockBalance({ user: new Types.ObjectId(idA), tokenCredits: 3_000_000 }),
+        ]);
+      const deps = createDeps({ findBalancesByUsers });
+      const handlers = createAdminBalanceHandlers(deps);
+      const { req, res, status, json } = createQueryReqRes({ ids: `${idA},${idB}` });
+
+      await handlers.getUsersBalances(req, res);
+
+      expect(status).toHaveBeenCalledWith(200);
+      expect(findBalancesByUsers).toHaveBeenCalledTimes(1);
+      expect(findBalancesByUsers).toHaveBeenCalledWith([idA, idB]);
+      const { balances } = json.mock.calls[0][0];
+      expect(balances).toHaveLength(2);
+      expect(balances[0]).toMatchObject({ userId: idA, tokenCredits: 3_000_000, balanceUsd: 3 });
+      expect(balances[1]).toMatchObject({ userId: idB, tokenCredits: 0, balanceUsd: 0 });
+    });
+
+    it('filters out invalid ids before querying', async () => {
+      const idA = new Types.ObjectId().toString();
+      const findBalancesByUsers = jest.fn().mockResolvedValue([]);
+      const deps = createDeps({ findBalancesByUsers });
+      const handlers = createAdminBalanceHandlers(deps);
+      const { req, res, status } = createQueryReqRes({ ids: `${idA}, not-an-id ,` });
+
+      await handlers.getUsersBalances(req, res);
+
+      expect(status).toHaveBeenCalledWith(200);
+      expect(findBalancesByUsers).toHaveBeenCalledWith([idA]);
+    });
+
+    it('rejects when ids is missing', async () => {
+      const deps = createDeps();
+      const handlers = createAdminBalanceHandlers(deps);
+      const { req, res, status } = createQueryReqRes({});
+
+      await handlers.getUsersBalances(req, res);
+
+      expect(status).toHaveBeenCalledWith(400);
+      expect(deps.findBalancesByUsers).not.toHaveBeenCalled();
+    });
+
+    it('rejects when no id is a valid ObjectId', async () => {
+      const deps = createDeps();
+      const handlers = createAdminBalanceHandlers(deps);
+      const { req, res, status } = createQueryReqRes({ ids: 'a,b,c' });
+
+      await handlers.getUsersBalances(req, res);
+
+      expect(status).toHaveBeenCalledWith(400);
+      expect(deps.findBalancesByUsers).not.toHaveBeenCalled();
+    });
+
+    it('rejects more than 200 ids', async () => {
+      const ids = Array.from({ length: 201 }, () => new Types.ObjectId().toString()).join(',');
+      const deps = createDeps();
+      const handlers = createAdminBalanceHandlers(deps);
+      const { req, res, status } = createQueryReqRes({ ids });
+
+      await handlers.getUsersBalances(req, res);
+
+      expect(status).toHaveBeenCalledWith(400);
+      expect(deps.findBalancesByUsers).not.toHaveBeenCalled();
     });
   });
 

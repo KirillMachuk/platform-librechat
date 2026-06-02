@@ -9,6 +9,9 @@ import type { ServerRequest } from '~/types/http';
 /** Conversion rate between the canonical balance unit and USD: 1,000,000 credits = $1. */
 export const TOKEN_CREDITS_PER_USD = 1_000_000;
 
+/** Upper bound on ids accepted by the bulk balance endpoint (matches the user-list page cap). */
+const MAX_BULK_IDS = 200;
+
 const REFILL_UNITS: ReadonlySet<string> = new Set(REFILL_INTERVAL_UNITS);
 
 export interface AdminBalanceDeps {
@@ -17,6 +20,7 @@ export interface AdminBalanceDeps {
     fieldsToSelect?: string | string[] | null,
   ) => Promise<IUser | null>;
   findBalanceByUser: (user: string) => Promise<IBalance | null>;
+  findBalancesByUsers: (users: string[]) => Promise<IBalance[]>;
   upsertBalanceFields: (user: string, fields: IBalanceUpdate) => Promise<IBalance | null>;
 }
 
@@ -92,7 +96,39 @@ function buildBalanceUpdate(body: BalancePatchBody): BalanceValidation {
 }
 
 export function createAdminBalanceHandlers(deps: AdminBalanceDeps) {
-  const { findUser, findBalanceByUser, upsertBalanceFields } = deps;
+  const { findUser, findBalanceByUser, findBalancesByUsers, upsertBalanceFields } = deps;
+
+  async function getUsersBalancesHandler(req: ServerRequest, res: Response) {
+    try {
+      const rawIds = req.query.ids;
+      const idsStr = typeof rawIds === 'string' ? rawIds : '';
+      const requested = idsStr
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      if (requested.length === 0) {
+        return res.status(400).json({ error: 'Query parameter "ids" is required' });
+      }
+      if (requested.length > MAX_BULK_IDS) {
+        return res.status(400).json({ error: `Too many ids (max ${MAX_BULK_IDS})` });
+      }
+
+      const validIds = requested.filter(isValidObjectIdString);
+      if (validIds.length === 0) {
+        return res.status(400).json({ error: 'No valid user ids provided' });
+      }
+
+      const docs = await findBalancesByUsers(validIds);
+      const byUser = new Map(docs.map((d) => [d.user.toString(), d]));
+      const balances = validIds.map((id) => mapBalance(id, byUser.get(id) ?? null));
+
+      return res.status(200).json({ balances });
+    } catch (error) {
+      logger.error('[adminBalance] getUsersBalances error:', error);
+      return res.status(500).json({ error: 'Failed to get balances' });
+    }
+  }
 
   async function getUserBalanceHandler(req: ServerRequest, res: Response) {
     try {
@@ -143,6 +179,7 @@ export function createAdminBalanceHandlers(deps: AdminBalanceDeps) {
   }
 
   return {
+    getUsersBalances: getUsersBalancesHandler,
     getUserBalance: getUserBalanceHandler,
     setUserBalance: setUserBalanceHandler,
   };

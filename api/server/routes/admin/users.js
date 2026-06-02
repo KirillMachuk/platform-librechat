@@ -32,6 +32,7 @@ const handlers = createAdminUsersHandlers({
 const balanceHandlers = createAdminBalanceHandlers({
   findUser: db.findUser,
   findBalanceByUser: db.findBalanceByUser,
+  findBalancesByUsers: db.findBalancesByUsers,
   upsertBalanceFields: db.upsertBalanceFields,
 });
 
@@ -39,6 +40,7 @@ router.use(requireJwtAuth, requireAdminAccess);
 
 router.get('/', requireReadUsers, handlers.listUsers);
 router.get('/search', requireReadUsers, handlers.searchUsers);
+router.get('/balances', requireReadUsers, balanceHandlers.getUsersBalances);
 router.post('/', requireManageUsers, handlers.createUser);
 router.get('/:id/balance', requireReadUsers, balanceHandlers.getUserBalance);
 router.patch('/:id/balance', requireManageUsers, balanceHandlers.setUserBalance);

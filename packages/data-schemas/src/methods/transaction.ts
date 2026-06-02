@@ -1,6 +1,6 @@
 import logger from '~/config/winston';
 import type { FilterQuery, Model, Types } from 'mongoose';
-import type { IBalance, IBalanceUpdate, TransactionData } from '~/types';
+import type { IBalance, IBalanceUpdate, TransactionData, UserUsageAggregate } from '~/types';
 import type { ITransaction } from '~/schema/transaction';
 
 const cancelRate = 1.15;
@@ -400,6 +400,62 @@ export function createTransactionMethods(
     ).lean<IBalance>();
   }
 
+  /** Retrieves balance records for several users in a single query. */
+  async function findBalancesByUsers(users: string[]): Promise<IBalance[]> {
+    if (!users.length) {
+      return [];
+    }
+    const Balance = mongoose.models.Balance as Model<IBalance>;
+    return Balance.find({ user: { $in: users } }).lean<IBalance[]>();
+  }
+
+  /**
+   * Aggregates spend per user over a `[start, end)` window in a single query.
+   * Spend = debit transactions (negative `tokenValue`/`rawAmount`); refills are ignored.
+   * Users with no spend are excluded; results are sorted by credits descending.
+   */
+  async function aggregateUsageByUser(params: {
+    start: Date;
+    end: Date;
+    tenantId?: string;
+  }): Promise<UserUsageAggregate[]> {
+    const Transaction = mongoose.models.Transaction;
+    const match: FilterQuery<ITransaction> = {
+      createdAt: { $gte: params.start, $lt: params.end },
+    };
+    if (params.tenantId) {
+      match.tenantId = params.tenantId;
+    }
+    return Transaction.aggregate<UserUsageAggregate>([
+      { $match: match },
+      {
+        $group: {
+          _id: '$user',
+          totalCredits: {
+            $sum: { $cond: [{ $lt: ['$tokenValue', 0] }, { $abs: '$tokenValue' }, 0] },
+          },
+          totalTokens: {
+            $sum: { $cond: [{ $lt: ['$rawAmount', 0] }, { $abs: '$rawAmount' }, 0] },
+          },
+        },
+      },
+      { $match: { totalCredits: { $gt: 0 } } },
+      { $sort: { totalCredits: -1 } },
+      { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
+      { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          userId: { $toString: '$_id' },
+          email: '$user.email',
+          name: '$user.name',
+          totalCredits: 1,
+          totalTokens: 1,
+        },
+      },
+    ]);
+  }
+
   /** Deletes transactions matching a filter. */
   async function deleteTransactions(filter: FilterQuery<ITransaction>) {
     const Transaction = mongoose.models.Transaction;
@@ -429,6 +485,8 @@ export function createTransactionMethods(
     updateBalance,
     bulkInsertTransactions,
     findBalanceByUser,
+    findBalancesByUsers,
+    aggregateUsageByUser,
     upsertBalanceFields,
     getTransactions,
     deleteTransactions,
