@@ -1,6 +1,7 @@
 const { logger } = require('@librechat/data-schemas');
 const { generate2FATempToken } = require('~/server/services/twoFactorService');
 const { setAuthTokens } = require('~/server/services/AuthService');
+const { recordAudit, auditRequestContext } = require('~/server/services/Audit');
 
 const loginController = async (req, res) => {
   try {
@@ -17,6 +18,16 @@ const loginController = async (req, res) => {
     user.id = user._id.toString();
 
     const token = await setAuthTokens(req.user._id, res, null, req);
+
+    recordAudit({
+      actorId: req.user._id,
+      actorEmail: req.user.email,
+      actorRole: req.user.role,
+      action: 'auth.login',
+      outcome: 'success',
+      tenantId: req.user.tenantId,
+      ...auditRequestContext(req),
+    });
 
     return res.status(200).send({ token, user });
   } catch (err) {
