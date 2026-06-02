@@ -9,6 +9,7 @@ const {
   getRoleByName,
 } = require('~/models');
 const { requireJwtAuth } = require('~/server/middleware');
+const auditApiKey = require('~/server/middleware/auditApiKey');
 
 const router = express.Router();
 
@@ -25,12 +26,12 @@ const checkRemoteAgentsUse = generateCheckAccess({
   getRoleByName,
 });
 
-router.post('/', requireJwtAuth, checkRemoteAgentsUse, handlers.createApiKey);
+router.post('/', requireJwtAuth, checkRemoteAgentsUse, auditApiKey, handlers.createApiKey);
 
 router.get('/', requireJwtAuth, checkRemoteAgentsUse, handlers.listApiKeys);
 
 router.get('/:id', requireJwtAuth, checkRemoteAgentsUse, handlers.getApiKey);
 
-router.delete('/:id', requireJwtAuth, checkRemoteAgentsUse, handlers.deleteApiKey);
+router.delete('/:id', requireJwtAuth, checkRemoteAgentsUse, auditApiKey, handlers.deleteApiKey);
 
 module.exports = router;
