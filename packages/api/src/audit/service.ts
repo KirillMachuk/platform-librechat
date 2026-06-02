@@ -34,3 +34,47 @@ export function createAuditRecorder(deps: AuditRecorderDeps) {
 
   return { recordAudit };
 }
+
+export interface BackfillCounts {
+  scanned: number;
+  inserted: number;
+}
+
+export interface AuditBackfillDeps {
+  backfillAuditFromTransactions: (params?: { since?: Date }) => Promise<BackfillCounts>;
+  backfillAgentInvokes: (params?: { since?: Date }) => Promise<BackfillCounts>;
+}
+
+export function createAuditBackfiller(deps: AuditBackfillDeps) {
+  /**
+   * Runs an incremental backfill over the trailing `lookbackMs` window: derives
+   * `llm.message` (from transactions) and `agent.invoke` (from messages) entries
+   * created since then. The overlap is harmless — both derivations dedupe by
+   * sourceId. Never throws; returns zeroed counts on failure so a scheduler can
+   * keep ticking.
+   */
+  async function runBackfill(opts: { now: number; lookbackMs: number }): Promise<BackfillCounts> {
+    const since = new Date(opts.now - opts.lookbackMs);
+    try {
+      const [transactions, agents] = await Promise.all([
+        deps.backfillAuditFromTransactions({ since }),
+        deps.backfillAgentInvokes({ since }),
+      ]);
+      const result = {
+        scanned: transactions.scanned + agents.scanned,
+        inserted: transactions.inserted + agents.inserted,
+      };
+      if (result.inserted > 0) {
+        logger.info(
+          `[audit] scheduled backfill: +${result.inserted} of ${result.scanned} since ${since.toISOString()}`,
+        );
+      }
+      return result;
+    } catch (error) {
+      logger.warn('[audit] scheduled backfill failed', error);
+      return { scanned: 0, inserted: 0 };
+    }
+  }
+
+  return { runBackfill };
+}
