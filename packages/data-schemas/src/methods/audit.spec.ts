@@ -13,6 +13,8 @@ jest.mock('~/config/winston', () => ({
 
 let mongoServer: InstanceType<typeof MongoMemoryServer>;
 let Transaction: mongoose.Model<ITransaction>;
+let Message: mongoose.Model<unknown>;
+let Conversation: mongoose.Model<unknown>;
 let methods: ReturnType<typeof createAuditMethods>;
 
 beforeAll(async () => {
@@ -20,6 +22,8 @@ beforeAll(async () => {
   const models = createModels(mongoose);
   Object.assign(mongoose.models, models);
   Transaction = mongoose.models.Transaction;
+  Message = mongoose.models.Message;
+  Conversation = mongoose.models.Conversation;
   methods = createAuditMethods(mongoose);
   await mongoose.connect(mongoServer.getUri());
 });
@@ -168,5 +172,108 @@ describe('backfillAuditFromTransactions', () => {
 
   test('returns zero counts when there are no spend transactions', async () => {
     expect(await methods.backfillAuditFromTransactions()).toEqual({ scanned: 0, inserted: 0 });
+  });
+
+  test('only scans transactions since the given watermark', async () => {
+    const user = new mongoose.Types.ObjectId();
+    await Transaction.collection.insertMany([
+      {
+        user,
+        tokenType: 'completion',
+        rawAmount: -100,
+        tokenValue: -1000,
+        createdAt: new Date('2026-01-10T00:00:00.000Z'),
+      },
+      {
+        user,
+        tokenType: 'completion',
+        rawAmount: -200,
+        tokenValue: -2000,
+        createdAt: new Date('2026-05-10T00:00:00.000Z'),
+      },
+    ]);
+
+    const result = await methods.backfillAuditFromTransactions({
+      since: new Date('2026-05-01T00:00:00.000Z'),
+    });
+
+    expect(result).toEqual({ scanned: 1, inserted: 1 });
+  });
+});
+
+describe('backfillAgentInvokes', () => {
+  const agentUser = new mongoose.Types.ObjectId().toString();
+
+  async function seed() {
+    await Conversation.collection.insertMany([
+      { conversationId: 'c-agent', user: agentUser, agent_id: 'agent-007' },
+      { conversationId: 'c-plain', user: agentUser },
+    ]);
+    await Message.collection.insertMany([
+      // user message in an agent conversation → should produce agent.invoke
+      {
+        messageId: 'm1',
+        conversationId: 'c-agent',
+        user: agentUser,
+        isCreatedByUser: true,
+        model: 'gpt-x',
+        createdAt: new Date('2026-03-15T10:00:00.000Z'),
+      },
+      // assistant reply in the agent conversation → ignored (not user-created)
+      {
+        messageId: 'm2',
+        conversationId: 'c-agent',
+        user: agentUser,
+        isCreatedByUser: false,
+        createdAt: new Date('2026-03-15T10:00:01.000Z'),
+      },
+      // user message in a non-agent conversation → ignored (no agent_id)
+      {
+        messageId: 'm3',
+        conversationId: 'c-plain',
+        user: agentUser,
+        isCreatedByUser: true,
+        createdAt: new Date('2026-03-15T10:00:02.000Z'),
+      },
+    ]);
+  }
+
+  test('derives agent.invoke only from user messages in agent conversations, idempotently', async () => {
+    await seed();
+
+    const first = await methods.backfillAgentInvokes();
+    expect(first).toEqual({ scanned: 1, inserted: 1 });
+
+    const entries = await methods.getAuditLogs(
+      { action: 'agent.invoke' },
+      { limit: 10, offset: 0 },
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      action: 'agent.invoke',
+      targetType: 'agent',
+      targetId: 'agent-007',
+      conversationId: 'c-agent',
+      messageId: 'm1',
+    });
+    expect(entries[0].actorId?.toString()).toBe(agentUser);
+    expect(entries[0].createdAt).toEqual(new Date('2026-03-15T10:00:00.000Z'));
+
+    // Re-run: idempotent via agent:<messageId> sourceId
+    const second = await methods.backfillAgentInvokes();
+    expect(second).toEqual({ scanned: 1, inserted: 0 });
+    expect(await methods.countAuditLogs({ action: 'agent.invoke' })).toBe(1);
+  });
+
+  test('returns zero counts when there are no agent conversations', async () => {
+    await Conversation.collection.insertOne({ conversationId: 'c-plain', user: agentUser });
+    await Message.collection.insertOne({
+      messageId: 'mx',
+      conversationId: 'c-plain',
+      user: agentUser,
+      isCreatedByUser: true,
+      createdAt: new Date('2026-03-15T10:00:00.000Z'),
+    });
+    expect(await methods.backfillAgentInvokes()).toEqual({ scanned: 0, inserted: 0 });
   });
 });
