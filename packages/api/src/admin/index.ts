@@ -1,3 +1,4 @@
+export { createAdminAuditHandlers } from './audit';
 export { createAdminBalanceHandlers, TOKEN_CREDITS_PER_USD } from './balance';
 export { createAdminConfigHandlers } from './config';
 export { createAdminGrantsHandlers } from './grants';
@@ -5,6 +6,7 @@ export { createAdminGroupsHandlers } from './groups';
 export { createAdminRolesHandlers } from './roles';
 export { createAdminUsageHandlers } from './usage';
 export { createAdminUsersHandlers } from './users';
+export type { AdminAuditDeps } from './audit';
 export type { AdminBalanceDeps } from './balance';
 export type { AdminUsageDeps } from './usage';
 export type { AdminConfigDeps } from './config';
