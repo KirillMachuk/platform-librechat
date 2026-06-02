@@ -3,6 +3,7 @@ const { createAdminGrantsHandlers, getCachedPrincipals } = require('@librechat/a
 const { SystemCapabilities } = require('@librechat/data-schemas');
 const { requireCapability } = require('~/server/middleware/roles/capabilities');
 const { requireJwtAuth } = require('~/server/middleware');
+const auditPermission = require('~/server/middleware/auditPermission');
 const db = require('~/models');
 
 const router = express.Router();
@@ -24,6 +25,7 @@ const handlers = createAdminGrantsHandlers({
 });
 
 router.use(requireJwtAuth, requireAdminAccess);
+router.use(auditPermission);
 
 router.get('/', handlers.listGrants);
 router.get('/effective', handlers.getEffectiveCapabilities);
