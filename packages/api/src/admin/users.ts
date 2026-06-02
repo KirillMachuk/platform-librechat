@@ -4,6 +4,8 @@ import { logger, isValidObjectIdString } from '@librechat/data-schemas';
 import type {
   IUser,
   IConfig,
+  BalanceConfig,
+  CreateUserRequest,
   AdminUserListItem,
   AdminUserSearchResult,
   UserDeleteResult,
@@ -15,7 +17,12 @@ import { parsePagination } from './pagination';
 
 const MAX_SEARCH_LENGTH = 200;
 
-const USER_LIST_FIELDS = '_id name username email avatar role provider createdAt updatedAt';
+const USER_LIST_FIELDS =
+  '_id name username email avatar role provider disabled createdAt updatedAt';
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MIN_PASSWORD_LENGTH = 8;
+const ASSIGNABLE_ROLES: ReadonlySet<string> = new Set([SystemRoles.USER, SystemRoles.ADMIN]);
 
 export interface AdminUsersDeps {
   findUsers: (
@@ -40,10 +47,34 @@ export interface AdminUsersDeps {
     principalType: PrincipalType;
     principalId: string | Types.ObjectId;
   }) => Promise<void>;
+  findUser: (
+    searchCriteria: FilterQuery<IUser>,
+    fieldsToSelect?: string | string[] | null,
+  ) => Promise<IUser | null>;
+  createUser: (
+    data: CreateUserRequest,
+    balanceConfig?: BalanceConfig,
+    disableTTL?: boolean,
+    returnUser?: boolean,
+  ) => Promise<Types.ObjectId | Partial<IUser>>;
+  updateUser: (userId: string, updateData: Partial<IUser>) => Promise<IUser | null>;
+  hashPassword: (password: string) => Promise<string>;
+  getBalanceConfig?: () => Promise<BalanceConfig | undefined>;
 }
 
 export function createAdminUsersHandlers(deps: AdminUsersDeps) {
-  const { findUsers, countUsers, deleteUserById, deleteConfig, deleteAclEntries } = deps;
+  const {
+    findUsers,
+    countUsers,
+    findUser,
+    createUser,
+    updateUser,
+    hashPassword,
+    getBalanceConfig,
+    deleteUserById,
+    deleteConfig,
+    deleteAclEntries,
+  } = deps;
 
   async function listUsersHandler(req: ServerRequest, res: Response) {
     try {
@@ -61,6 +92,7 @@ export function createAdminUsersHandlers(deps: AdminUsersDeps) {
         avatar: u.avatar ?? '',
         role: u.role ?? 'USER',
         provider: u.provider ?? 'local',
+        disabled: u.disabled ?? false,
         createdAt: u.createdAt?.toISOString(),
         updatedAt: u.updatedAt?.toISOString(),
       }));
@@ -176,9 +208,155 @@ export function createAdminUsersHandlers(deps: AdminUsersDeps) {
     }
   }
 
+  async function createUserHandler(req: ServerRequest, res: Response) {
+    try {
+      const body = (req.body ?? {}) as {
+        email?: string;
+        name?: string;
+        username?: string;
+        password?: string;
+        role?: string;
+      };
+
+      const email = body.email?.trim().toLowerCase();
+      if (!email || !EMAIL_PATTERN.test(email)) {
+        return res.status(400).json({ error: 'Valid email is required' });
+      }
+      if (!body.password || body.password.length < MIN_PASSWORD_LENGTH) {
+        return res
+          .status(400)
+          .json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
+      }
+      const role = body.role ?? SystemRoles.USER;
+      if (!ASSIGNABLE_ROLES.has(role)) {
+        return res.status(400).json({ error: 'Invalid role' });
+      }
+
+      const existing = await findUser({ email }, '_id');
+      if (existing) {
+        return res.status(409).json({ error: 'A user with this email already exists' });
+      }
+
+      const hashedPassword = await hashPassword(body.password);
+      const balanceConfig = getBalanceConfig ? await getBalanceConfig() : undefined;
+      const created = (await createUser(
+        {
+          email,
+          name: body.name?.trim() || email,
+          username: body.username?.trim() || email,
+          password: hashedPassword,
+          provider: 'local',
+          role,
+          emailVerified: true,
+        },
+        balanceConfig,
+        true,
+        true,
+      )) as Partial<IUser>;
+
+      return res.status(201).json({
+        id: created._id?.toString() ?? '',
+        name: created.name ?? '',
+        username: created.username ?? '',
+        email: created.email ?? '',
+        role: created.role ?? role,
+        provider: created.provider ?? 'local',
+        createdAt: created.createdAt?.toISOString(),
+      });
+    } catch (error) {
+      logger.error('[adminUsers] createUser error:', error);
+      return res.status(500).json({ error: 'Failed to create user' });
+    }
+  }
+
+  async function updateUserHandler(req: ServerRequest, res: Response) {
+    try {
+      const { id } = req.params as { id: string };
+      if (!isValidObjectIdString(id)) {
+        return res.status(400).json({ error: 'Invalid user ID format' });
+      }
+
+      const body = (req.body ?? {}) as {
+        name?: string;
+        username?: string;
+        role?: string;
+        password?: string;
+        disabled?: boolean;
+      };
+      const update: Partial<IUser> = {};
+      if (typeof body.name === 'string') {
+        update.name = body.name.trim();
+      }
+      if (typeof body.username === 'string') {
+        update.username = body.username.trim();
+      }
+      if (typeof body.role === 'string') {
+        if (!ASSIGNABLE_ROLES.has(body.role)) {
+          return res.status(400).json({ error: 'Invalid role' });
+        }
+        update.role = body.role;
+      }
+      if (typeof body.password === 'string') {
+        if (body.password.length < MIN_PASSWORD_LENGTH) {
+          return res
+            .status(400)
+            .json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
+        }
+        update.password = await hashPassword(body.password);
+      }
+      if (typeof body.disabled === 'boolean') {
+        update.disabled = body.disabled;
+      }
+      if (Object.keys(update).length === 0) {
+        return res.status(400).json({ error: 'No updatable fields provided' });
+      }
+
+      const callerId = req.user?._id?.toString() ?? req.user?.id;
+      if (update.disabled === true && callerId === id) {
+        return res.status(403).json({ error: 'Cannot disable your own account' });
+      }
+
+      const demotesAdmin = typeof update.role === 'string' && update.role !== SystemRoles.ADMIN;
+      const disablesUser = update.disabled === true;
+      if (demotesAdmin || disablesUser) {
+        const [target] = await findUsers({ _id: id }, 'role', { limit: 1 });
+        if (target?.role === SystemRoles.ADMIN) {
+          const adminCount = await countUsers({ role: SystemRoles.ADMIN });
+          if (adminCount <= 1) {
+            return res.status(400).json({
+              error: disablesUser
+                ? 'Cannot disable the last admin user'
+                : 'Cannot demote the last admin user',
+            });
+          }
+        }
+      }
+
+      const updated = await updateUser(id, update);
+      if (!updated) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      return res.status(200).json({
+        id: updated._id?.toString() ?? id,
+        name: updated.name ?? '',
+        username: updated.username ?? '',
+        email: updated.email ?? '',
+        role: updated.role ?? 'USER',
+        provider: updated.provider ?? 'local',
+        disabled: updated.disabled ?? false,
+      });
+    } catch (error) {
+      logger.error('[adminUsers] updateUser error:', error);
+      return res.status(500).json({ error: 'Failed to update user' });
+    }
+  }
+
   return {
     listUsers: listUsersHandler,
     searchUsers: searchUsersHandler,
+    createUser: createUserHandler,
+    updateUser: updateUserHandler,
     deleteUser: deleteUserHandler,
   };
 }

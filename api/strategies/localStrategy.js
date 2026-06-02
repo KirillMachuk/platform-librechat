@@ -43,6 +43,12 @@ async function passportLogin(req, email, password, done) {
       return done(null, false, { message: 'Incorrect password.' });
     }
 
+    if (user.disabled) {
+      logError('Passport Local Strategy - Account disabled', { email });
+      logger.error(`[Login] [Login failed] [Username: ${email}] [Request-IP: ${req.ip}]`);
+      return done(null, false, { message: 'Account is disabled.' });
+    }
+
     const emailEnabled = checkEmailConfig();
     const userCreatedAtTimestamp = Math.floor(new Date(user.createdAt).getTime() / 1000);
 
