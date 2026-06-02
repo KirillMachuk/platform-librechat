@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const express = require('express');
-const { createAdminUsersHandlers } = require('@librechat/api');
+const { createAdminUsersHandlers, createAdminBalanceHandlers } = require('@librechat/api');
 const { SystemCapabilities } = require('@librechat/data-schemas');
 const { getAppConfig } = require('~/server/services/Config');
 const { requireCapability } = require('~/server/middleware/roles/capabilities');
@@ -29,11 +29,19 @@ const handlers = createAdminUsersHandlers({
   },
 });
 
+const balanceHandlers = createAdminBalanceHandlers({
+  findUser: db.findUser,
+  findBalanceByUser: db.findBalanceByUser,
+  upsertBalanceFields: db.upsertBalanceFields,
+});
+
 router.use(requireJwtAuth, requireAdminAccess);
 
 router.get('/', requireReadUsers, handlers.listUsers);
 router.get('/search', requireReadUsers, handlers.searchUsers);
 router.post('/', requireManageUsers, handlers.createUser);
+router.get('/:id/balance', requireReadUsers, balanceHandlers.getUserBalance);
+router.patch('/:id/balance', requireManageUsers, balanceHandlers.setUserBalance);
 router.patch('/:id', requireManageUsers, handlers.updateUser);
 router.delete('/:id', requireManageUsers, handlers.deleteUser);
 
