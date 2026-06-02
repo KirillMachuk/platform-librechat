@@ -7,7 +7,6 @@ import type {
   BalanceConfig,
   CreateUserRequest,
   AdminUserListItem,
-  AdminUserSearchResult,
   UserDeleteResult,
 } from '@librechat/data-schemas';
 import type { FilterQuery } from 'mongoose';
@@ -19,6 +18,22 @@ const MAX_SEARCH_LENGTH = 200;
 
 const USER_LIST_FIELDS =
   '_id name username email avatar role provider disabled createdAt updatedAt';
+
+/** Maps a user document to the admin list item shape (shared by list + search). */
+function mapUserListItem(u: IUser): AdminUserListItem {
+  return {
+    id: u._id?.toString() ?? '',
+    name: u.name ?? '',
+    username: u.username ?? '',
+    email: u.email ?? '',
+    avatar: u.avatar ?? '',
+    role: u.role ?? 'USER',
+    provider: u.provider ?? 'local',
+    disabled: u.disabled ?? false,
+    createdAt: u.createdAt?.toISOString(),
+    updatedAt: u.updatedAt?.toISOString(),
+  };
+}
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 8;
@@ -84,18 +99,7 @@ export function createAdminUsersHandlers(deps: AdminUsersDeps) {
         countUsers(),
       ]);
 
-      const mapped: AdminUserListItem[] = users.map((u) => ({
-        id: u._id?.toString() ?? '',
-        name: u.name ?? '',
-        username: u.username ?? '',
-        email: u.email ?? '',
-        avatar: u.avatar ?? '',
-        role: u.role ?? 'USER',
-        provider: u.provider ?? 'local',
-        disabled: u.disabled ?? false,
-        createdAt: u.createdAt?.toISOString(),
-        updatedAt: u.updatedAt?.toISOString(),
-      }));
+      const mapped = users.map(mapUserListItem);
 
       return res.status(200).json({ users: mapped, total, limit, offset });
     } catch (error) {
@@ -132,17 +136,11 @@ export function createAdminUsersHandlers(deps: AdminUsersDeps) {
 
       const users = await findUsers(
         { $or: [{ name: regex }, { email: regex }, { username: regex }] },
-        '_id name email username avatar',
+        USER_LIST_FIELDS,
         { limit: searchLimit, sort: { name: 1 } },
       );
 
-      const results: AdminUserSearchResult[] = users.map((u) => ({
-        id: u._id?.toString() ?? '',
-        name: u.name ?? '',
-        email: u.email ?? '',
-        username: u.username,
-        avatarUrl: u.avatar,
-      }));
+      const results = users.map(mapUserListItem);
 
       return res
         .status(200)

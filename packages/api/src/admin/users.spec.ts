@@ -188,6 +188,21 @@ describe('createAdminUsersHandlers', () => {
       expect(response.users[0]).toHaveProperty('name');
       expect(response.users[0]).toHaveProperty('email');
       expect(response.users[0]).toHaveProperty('username');
+      expect(response.users[0]).toHaveProperty('role');
+      expect(response.users[0]).toHaveProperty('disabled');
+    });
+
+    it('projects full list fields (role/disabled) for search', async () => {
+      const findUsers = jest.fn().mockResolvedValue([]);
+      const deps = createDeps({ findUsers });
+      const handlers = createAdminUsersHandlers(deps);
+      const { req, res } = createReqRes({ query: { q: 'test' } });
+
+      await handlers.searchUsers(req, res);
+
+      const projection = findUsers.mock.calls[0][1];
+      expect(projection).toContain('role');
+      expect(projection).toContain('disabled');
     });
 
     it('sets capped to true when results hit the limit', async () => {
