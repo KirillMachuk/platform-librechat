@@ -15,6 +15,7 @@ const handlers = createAdminAuditHandlers({
   getAuditLogs: db.getAuditLogs,
   countAuditLogs: db.countAuditLogs,
   backfillAuditFromTransactions: db.backfillAuditFromTransactions,
+  backfillAgentInvokes: db.backfillAgentInvokes,
 });
 
 router.use(requireJwtAuth, requireAdminAccess);

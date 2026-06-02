@@ -45,6 +45,7 @@ function createDeps(overrides: Partial<AdminAuditDeps> = {}): AdminAuditDeps {
     getAuditLogs: jest.fn().mockResolvedValue([]),
     countAuditLogs: jest.fn().mockResolvedValue(0),
     backfillAuditFromTransactions: jest.fn().mockResolvedValue({ scanned: 0, inserted: 0 }),
+    backfillAgentInvokes: jest.fn().mockResolvedValue({ scanned: 0, inserted: 0 }),
     ...overrides,
   };
 }
@@ -143,21 +144,23 @@ describe('createAdminAuditHandlers', () => {
   });
 
   describe('backfillAudit', () => {
-    it('returns the backfill counts', async () => {
-      const backfillAuditFromTransactions = jest
-        .fn()
-        .mockResolvedValue({ scanned: 12, inserted: 5 });
-      const deps = createDeps({ backfillAuditFromTransactions });
+    it('sums the transaction + agent backfill counts', async () => {
+      const deps = createDeps({
+        backfillAuditFromTransactions: jest.fn().mockResolvedValue({ scanned: 12, inserted: 5 }),
+        backfillAgentInvokes: jest.fn().mockResolvedValue({ scanned: 8, inserted: 3 }),
+      });
       const handlers = createAdminAuditHandlers(deps);
       const { req, res, status, json } = createReqRes();
 
       await handlers.backfillAudit(req, res);
 
       expect(status).toHaveBeenCalledWith(200);
-      expect(json.mock.calls[0][0]).toEqual({ scanned: 12, inserted: 5 });
+      expect(deps.backfillAuditFromTransactions).toHaveBeenCalledTimes(1);
+      expect(deps.backfillAgentInvokes).toHaveBeenCalledTimes(1);
+      expect(json.mock.calls[0][0]).toEqual({ scanned: 20, inserted: 8 });
     });
 
-    it('returns 500 when backfill throws', async () => {
+    it('returns 500 when a backfill throws', async () => {
       const deps = createDeps({
         backfillAuditFromTransactions: jest.fn().mockRejectedValue(new Error('boom')),
       });

@@ -12,6 +12,11 @@ export interface AdminAuditDeps {
   countAuditLogs: (filter: AuditLogFilter) => Promise<number>;
   backfillAuditFromTransactions: (params?: {
     tenantId?: string;
+    since?: Date;
+  }) => Promise<{ scanned: number; inserted: number }>;
+  backfillAgentInvokes: (params?: {
+    tenantId?: string;
+    since?: Date;
   }) => Promise<{ scanned: number; inserted: number }>;
 }
 
@@ -54,7 +59,8 @@ function mapEntry(entry: IAuditLog): AdminAuditEntry {
 }
 
 export function createAdminAuditHandlers(deps: AdminAuditDeps) {
-  const { getAuditLogs, countAuditLogs, backfillAuditFromTransactions } = deps;
+  const { getAuditLogs, countAuditLogs, backfillAuditFromTransactions, backfillAgentInvokes } =
+    deps;
 
   async function listAuditHandler(req: ServerRequest, res: Response) {
     try {
@@ -112,8 +118,14 @@ export function createAdminAuditHandlers(deps: AdminAuditDeps) {
 
   async function backfillAuditHandler(_req: ServerRequest, res: Response) {
     try {
-      const result = await backfillAuditFromTransactions();
-      return res.status(200).json(result);
+      const [transactions, agents] = await Promise.all([
+        backfillAuditFromTransactions(),
+        backfillAgentInvokes(),
+      ]);
+      return res.status(200).json({
+        scanned: transactions.scanned + agents.scanned,
+        inserted: transactions.inserted + agents.inserted,
+      });
     } catch (error) {
       logger.error('[adminAudit] backfillAudit error:', error);
       return res.status(500).json({ error: 'Failed to backfill audit log' });

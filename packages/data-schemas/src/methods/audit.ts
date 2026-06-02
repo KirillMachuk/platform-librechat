@@ -9,6 +9,18 @@ export interface BackfillResult {
 }
 
 const DUP_KEY_CODE = 11000;
+const OBJECT_ID = /^[a-f0-9]{24}$/i;
+
+/** Projected shape of a user message sent in an agent conversation. */
+interface AgentInvokeRow {
+  messageId: string;
+  user: string;
+  conversationId: string;
+  agentId: string;
+  model?: string;
+  tenantId?: string;
+  createdAt: Date;
+}
 
 export function createAuditMethods(mongoose: typeof import('mongoose')) {
   function buildQuery(filter: AuditLogFilter): FilterQuery<IAuditLog> {
@@ -69,6 +81,7 @@ export function createAuditMethods(mongoose: typeof import('mongoose')) {
    */
   async function backfillAuditFromTransactions(params?: {
     tenantId?: string;
+    since?: Date;
   }): Promise<BackfillResult> {
     const AuditLog = mongoose.models.AuditLog as Model<IAuditLog>;
     const Transaction = mongoose.models.Transaction as Model<ITransaction>;
@@ -76,6 +89,9 @@ export function createAuditMethods(mongoose: typeof import('mongoose')) {
     const match: FilterQuery<ITransaction> = { tokenType: { $in: ['prompt', 'completion'] } };
     if (params?.tenantId) {
       match.tenantId = params.tenantId;
+    }
+    if (params?.since) {
+      match.createdAt = { $gte: params.since };
     }
 
     const txns = await Transaction.find(match)
@@ -133,7 +149,108 @@ export function createAuditMethods(mongoose: typeof import('mongoose')) {
     return { scanned: txns.length, inserted: docs.length };
   }
 
-  return { recordAuditLog, getAuditLogs, countAuditLogs, backfillAuditFromTransactions };
+  /**
+   * Idempotently derives `agent.invoke` audit entries from user messages sent in
+   * agent conversations (the conversation has an `agent_id`). Preserves each
+   * message's timestamp and is re-runnable via the `agent:<messageId>` sourceId.
+   * Pass `since` to scan only recent messages (used by the scheduled backfill).
+   */
+  async function backfillAgentInvokes(params?: {
+    tenantId?: string;
+    since?: Date;
+  }): Promise<BackfillResult> {
+    const AuditLog = mongoose.models.AuditLog as Model<IAuditLog>;
+    const Message = mongoose.models.Message;
+
+    const match: { isCreatedByUser: boolean; tenantId?: string; createdAt?: { $gte: Date } } = {
+      isCreatedByUser: true,
+    };
+    if (params?.tenantId) {
+      match.tenantId = params.tenantId;
+    }
+    if (params?.since) {
+      match.createdAt = { $gte: params.since };
+    }
+
+    const rows = await Message.aggregate<AgentInvokeRow>([
+      { $match: match },
+      {
+        $lookup: {
+          from: 'conversations',
+          localField: 'conversationId',
+          foreignField: 'conversationId',
+          as: 'convo',
+        },
+      },
+      { $unwind: '$convo' },
+      { $match: { 'convo.agent_id': { $nin: [null, ''] } } },
+      {
+        $project: {
+          _id: 0,
+          messageId: 1,
+          user: 1,
+          conversationId: 1,
+          agentId: '$convo.agent_id',
+          model: 1,
+          tenantId: 1,
+          createdAt: 1,
+        },
+      },
+    ]);
+
+    if (!rows.length) {
+      return { scanned: 0, inserted: 0 };
+    }
+
+    const sourceIds = rows.map((r) => `agent:${r.messageId}`);
+    const existing = await AuditLog.find({ sourceId: { $in: sourceIds } })
+      .select('sourceId')
+      .lean<{ sourceId?: string }[]>();
+    const seen = new Set(existing.map((e) => e.sourceId));
+
+    const docs: AuditLogInput[] = rows
+      .filter(
+        (r) =>
+          typeof r.user === 'string' && OBJECT_ID.test(r.user) && !seen.has(`agent:${r.messageId}`),
+      )
+      .map((r) => ({
+        tenantId: r.tenantId,
+        actorId: r.user,
+        action: 'agent.invoke',
+        targetType: 'agent',
+        targetId: r.agentId,
+        conversationId: r.conversationId,
+        messageId: r.messageId,
+        model: r.model ?? undefined,
+        outcome: 'success',
+        sourceId: `agent:${r.messageId}`,
+        createdAt: r.createdAt,
+      }));
+
+    if (!docs.length) {
+      return { scanned: rows.length, inserted: 0 };
+    }
+
+    try {
+      await AuditLog.insertMany(docs, { ordered: false, timestamps: false });
+    } catch (error) {
+      const code = (error as { code?: number }).code;
+      if (code !== DUP_KEY_CODE) {
+        logger.error('[audit] agent-invoke backfill insert error:', error);
+        throw error;
+      }
+    }
+
+    return { scanned: rows.length, inserted: docs.length };
+  }
+
+  return {
+    recordAuditLog,
+    getAuditLogs,
+    countAuditLogs,
+    backfillAuditFromTransactions,
+    backfillAgentInvokes,
+  };
 }
 
 export type AuditMethods = ReturnType<typeof createAuditMethods>;
