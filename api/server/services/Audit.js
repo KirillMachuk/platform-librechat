@@ -1,4 +1,9 @@
-const { createAuditRecorder, auditRequestContext } = require('@librechat/api');
+const { logger } = require('@librechat/data-schemas');
+const {
+  createAuditRecorder,
+  createAuditBackfiller,
+  auditRequestContext,
+} = require('@librechat/api');
 
 /**
  * Lazily wires the audit recorder on first use. Kept defensive on purpose:
@@ -32,4 +37,41 @@ function requestContext(req) {
   return typeof auditRequestContext === 'function' ? auditRequestContext(req) : {};
 }
 
-module.exports = { recordAudit, auditRequestContext: requestContext };
+const HOUR_MS = 60 * 60 * 1000;
+/** Trailing window each tick scans. Wider than the interval to avoid gaps; dedupe is by sourceId. */
+const BACKFILL_LOOKBACK_MS = 2 * HOUR_MS;
+
+/**
+ * Starts the hourly incremental audit backfill so the activity feed (token
+ * usage + agent interactions) stays current without a manual "sync". Each tick
+ * only scans the trailing window, so cost stays flat as data grows. Defensive:
+ * a wiring/run failure is logged, never thrown, and never blocks startup.
+ * Returns the timer (unref'd) or null if it could not be started.
+ */
+function startAuditBackfillSchedule() {
+  let backfiller;
+  try {
+    const db = require('~/models');
+    backfiller = createAuditBackfiller({
+      backfillAuditFromTransactions: db.backfillAuditFromTransactions,
+      backfillAgentInvokes: db.backfillAgentInvokes,
+    });
+  } catch (err) {
+    logger.warn('[audit] backfill schedule not started:', err);
+    return null;
+  }
+
+  const tick = () => {
+    backfiller.runBackfill({ now: Date.now(), lookbackMs: BACKFILL_LOOKBACK_MS }).catch(() => {});
+  };
+
+  const timer = setInterval(tick, HOUR_MS);
+  if (typeof timer.unref === 'function') {
+    timer.unref();
+  }
+  tick();
+  logger.info('[audit] hourly backfill schedule started');
+  return timer;
+}
+
+module.exports = { recordAudit, auditRequestContext: requestContext, startAuditBackfillSchedule };

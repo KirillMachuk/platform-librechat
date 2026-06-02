@@ -1,4 +1,4 @@
-import { createAuditRecorder, auditRequestContext } from './service';
+import { createAuditRecorder, createAuditBackfiller, auditRequestContext } from './service';
 
 jest.mock('@librechat/data-schemas', () => ({
   logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() },
@@ -37,6 +37,37 @@ describe('createAuditRecorder', () => {
     await flush();
 
     expect(recordAuditLog).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('createAuditBackfiller', () => {
+  it('runs both derivations with a since watermark and sums the counts', async () => {
+    const backfillAuditFromTransactions = jest.fn().mockResolvedValue({ scanned: 4, inserted: 2 });
+    const backfillAgentInvokes = jest.fn().mockResolvedValue({ scanned: 6, inserted: 1 });
+    const { runBackfill } = createAuditBackfiller({
+      backfillAuditFromTransactions,
+      backfillAgentInvokes,
+    });
+
+    const now = 10 * 60 * 60 * 1000;
+    const result = await runBackfill({ now, lookbackMs: 2 * 60 * 60 * 1000 });
+
+    expect(result).toEqual({ scanned: 10, inserted: 3 });
+    const expectedSince = new Date(now - 2 * 60 * 60 * 1000);
+    expect(backfillAuditFromTransactions).toHaveBeenCalledWith({ since: expectedSince });
+    expect(backfillAgentInvokes).toHaveBeenCalledWith({ since: expectedSince });
+  });
+
+  it('returns zeroed counts and never throws when a derivation fails', async () => {
+    const { runBackfill } = createAuditBackfiller({
+      backfillAuditFromTransactions: jest.fn().mockRejectedValue(new Error('db down')),
+      backfillAgentInvokes: jest.fn().mockResolvedValue({ scanned: 1, inserted: 1 }),
+    });
+
+    await expect(runBackfill({ now: Date.now(), lookbackMs: 1000 })).resolves.toEqual({
+      scanned: 0,
+      inserted: 0,
+    });
   });
 });
 

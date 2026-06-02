@@ -290,6 +290,8 @@ const startServer = async () => {
       if (inspectFlags || isEnabled(process.env.MEM_DIAG)) {
         memoryDiagnostics.start();
       }
+      require('~/server/services/Audit').startAuditBackfillSchedule();
+
       serverReady = true;
       logger.info('Server readiness checks passing.');
     } catch (initErr) {
