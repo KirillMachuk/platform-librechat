@@ -144,6 +144,29 @@ export type AdminUserBalance = {
   lastRefill?: string;
 };
 
+/** Per-user spend aggregate over a time window (raw output of the usage aggregation). */
+export type UserUsageAggregate = {
+  userId: string;
+  email?: string;
+  name?: string;
+  /** Absolute token count spent (sum of debit transactions). */
+  totalTokens: number;
+  /** Absolute credits spent (1,000,000 credits = $1). */
+  totalCredits: number;
+};
+
+/** A usage row as returned by the admin usage endpoint — adds the USD view. */
+export type AdminUsageRow = UserUsageAggregate & {
+  totalUsd: number;
+};
+
+/** The admin usage report for a resolved [from, to) window. */
+export type AdminUsageReport = {
+  from: string;
+  to: string;
+  rows: AdminUsageRow[];
+};
+
 /** Minimal user info returned by user search endpoints. */
 export type AdminUserSearchResult = {
   id: string;

@@ -27,6 +27,8 @@ let createStructuredTransaction: ReturnType<
 >['createStructuredTransaction'];
 let getMultiplier: ReturnType<typeof createTxMethods>['getMultiplier'];
 let getCacheMultiplier: ReturnType<typeof createTxMethods>['getCacheMultiplier'];
+let findBalancesByUsers: ReturnType<typeof createTransactionMethods>['findBalancesByUsers'];
+let aggregateUsageByUser: ReturnType<typeof createTransactionMethods>['aggregateUsageByUser'];
 
 beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create();
@@ -50,6 +52,8 @@ beforeAll(async () => {
   });
   createTransaction = transactionMethods.createTransaction;
   createStructuredTransaction = transactionMethods.createStructuredTransaction;
+  findBalancesByUsers = transactionMethods.findBalancesByUsers;
+  aggregateUsageByUser = transactionMethods.aggregateUsageByUser;
 
   const spendMethods = createSpendTokensMethods(mongoose, {
     createTransaction: transactionMethods.createTransaction,
@@ -1049,5 +1053,136 @@ describe('Premium Token Pricing Integration Tests', () => {
 
     const updatedBalance = await Balance.findOne({ user: userId });
     expect(updatedBalance?.tokenCredits).toBeCloseTo(initialBalance - expectedCost, 0);
+  });
+});
+
+describe('findBalancesByUsers', () => {
+  test('returns balances for the requested users only, in one query', async () => {
+    const a = new mongoose.Types.ObjectId();
+    const b = new mongoose.Types.ObjectId();
+    const c = new mongoose.Types.ObjectId();
+    await Balance.create([
+      { user: a, tokenCredits: 1000 },
+      { user: b, tokenCredits: 2000 },
+      { user: c, tokenCredits: 3000 },
+    ]);
+
+    const result = await findBalancesByUsers([a.toString(), b.toString()]);
+
+    expect(result).toHaveLength(2);
+    const byUser = new Map(result.map((r) => [r.user.toString(), r.tokenCredits]));
+    expect(byUser.get(a.toString())).toBe(1000);
+    expect(byUser.get(b.toString())).toBe(2000);
+    expect(byUser.has(c.toString())).toBe(false);
+  });
+
+  test('returns an empty array for empty input', async () => {
+    expect(await findBalancesByUsers([])).toEqual([]);
+  });
+});
+
+describe('aggregateUsageByUser', () => {
+  test('sums spend per user, excludes refills, sorts by credits desc, joins email', async () => {
+    const userA = await mongoose.models.User.create({ email: 'alice@x.io', name: 'Alice' });
+    const userB = await mongoose.models.User.create({ email: 'bob@x.io', name: 'Bob' });
+    const inWindow = new Date('2026-03-15T00:00:00.000Z');
+
+    await Transaction.collection.insertMany([
+      {
+        user: userA._id,
+        tokenType: 'completion',
+        tokenValue: -3000,
+        rawAmount: -300,
+        createdAt: inWindow,
+      },
+      {
+        user: userA._id,
+        tokenType: 'prompt',
+        tokenValue: -2000,
+        rawAmount: -200,
+        createdAt: inWindow,
+      },
+      {
+        user: userA._id,
+        tokenType: 'credits',
+        tokenValue: 10000,
+        rawAmount: 10000,
+        createdAt: inWindow,
+      },
+      {
+        user: userB._id,
+        tokenType: 'completion',
+        tokenValue: -8000,
+        rawAmount: -800,
+        createdAt: inWindow,
+      },
+    ]);
+
+    const rows = await aggregateUsageByUser({
+      start: new Date('2026-03-01T00:00:00.000Z'),
+      end: new Date('2026-04-01T00:00:00.000Z'),
+    });
+
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      userId: userB._id.toString(),
+      email: 'bob@x.io',
+      totalCredits: 8000,
+      totalTokens: 800,
+    });
+    expect(rows[1]).toMatchObject({
+      userId: userA._id.toString(),
+      email: 'alice@x.io',
+      totalCredits: 5000,
+      totalTokens: 500,
+    });
+  });
+
+  test('excludes transactions outside the window', async () => {
+    const user = await mongoose.models.User.create({ email: 'carol@x.io', name: 'Carol' });
+    await Transaction.collection.insertMany([
+      {
+        user: user._id,
+        tokenType: 'completion',
+        tokenValue: -1000,
+        rawAmount: -100,
+        createdAt: new Date('2026-01-10T00:00:00.000Z'),
+      },
+      {
+        user: user._id,
+        tokenType: 'completion',
+        tokenValue: -5000,
+        rawAmount: -500,
+        createdAt: new Date('2026-05-10T00:00:00.000Z'),
+      },
+    ]);
+
+    const rows = await aggregateUsageByUser({
+      start: new Date('2026-05-01T00:00:00.000Z'),
+      end: new Date('2026-06-01T00:00:00.000Z'),
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ totalCredits: 5000, totalTokens: 500 });
+  });
+
+  test('returns an empty array when there is only refill activity', async () => {
+    const user = await mongoose.models.User.create({ email: 'dan@x.io', name: 'Dan' });
+    await Transaction.collection.insertMany([
+      {
+        user: user._id,
+        tokenType: 'credits',
+        tokenValue: 5000,
+        rawAmount: 5000,
+        createdAt: new Date('2026-03-15T00:00:00.000Z'),
+      },
+    ]);
+
+    const rows = await aggregateUsageByUser({
+      start: new Date('2026-03-01T00:00:00.000Z'),
+      end: new Date('2026-04-01T00:00:00.000Z'),
+    });
+
+    expect(rows).toEqual([]);
   });
 });
