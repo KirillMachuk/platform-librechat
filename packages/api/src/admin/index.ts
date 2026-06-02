@@ -1,8 +1,10 @@
+export { createAdminBalanceHandlers, TOKEN_CREDITS_PER_USD } from './balance';
 export { createAdminConfigHandlers } from './config';
 export { createAdminGrantsHandlers } from './grants';
 export { createAdminGroupsHandlers } from './groups';
 export { createAdminRolesHandlers } from './roles';
 export { createAdminUsersHandlers } from './users';
+export type { AdminBalanceDeps } from './balance';
 export type { AdminConfigDeps } from './config';
 export type { AdminGrantsDeps, GrantPrincipalType } from './grants';
 export type { AdminGroupsDeps } from './groups';

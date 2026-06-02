@@ -1,4 +1,9 @@
-import type { PrincipalType, PrincipalModel, TCustomConfig } from 'librechat-data-provider';
+import type {
+  PrincipalType,
+  PrincipalModel,
+  TCustomConfig,
+  RefillIntervalUnit,
+} from 'librechat-data-provider';
 import type { SystemCapabilities } from '~/admin/capabilities';
 
 /* ── Capability types ───────────────────────────────────────────────── */
@@ -123,6 +128,20 @@ export type AdminUserListItem = {
   disabled?: boolean;
   createdAt?: string;
   updatedAt?: string;
+};
+
+/** A user's token balance and auto-refill settings, as returned by the admin balance endpoint. */
+export type AdminUserBalance = {
+  userId: string;
+  /** Raw token credits (1,000,000 credits = $1). */
+  tokenCredits: number;
+  /** Convenience conversion of `tokenCredits` to USD. */
+  balanceUsd: number;
+  autoRefillEnabled: boolean;
+  refillIntervalValue: number;
+  refillIntervalUnit: RefillIntervalUnit;
+  refillAmount: number;
+  lastRefill?: string;
 };
 
 /** Minimal user info returned by user search endpoints. */
