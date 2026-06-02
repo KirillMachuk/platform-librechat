@@ -44,6 +44,7 @@ import {
   defaultRate,
 } from './tx';
 import { createTransactionMethods, type TransactionMethods } from './transaction';
+import { createAuditMethods, type AuditMethods } from './audit';
 import { createSpendTokensMethods, type SpendTokensMethods } from './spendTokens';
 import { createPromptMethods, type PromptMethods, type PromptDeps } from './prompt';
 import {
@@ -96,6 +97,7 @@ export type AllMethods = UserMethods &
   ConversationMethods &
   TxMethods &
   TransactionMethods &
+  AuditMethods &
   SpendTokensMethods &
   PromptMethods &
   SkillMethods &
@@ -224,6 +226,7 @@ export function createMethods(
     /* Tier 3 */
     ...txMethods,
     ...transactionMethods,
+    ...createAuditMethods(mongoose),
     ...spendTokensMethods,
     ...promptMethods,
     ...skillMethods,
@@ -263,6 +266,7 @@ export type {
   ConversationMethods,
   TxMethods,
   TransactionMethods,
+  AuditMethods,
   SpendTokensMethods,
   PromptMethods,
   SkillMethods,

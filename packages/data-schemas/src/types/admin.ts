@@ -167,6 +167,24 @@ export type AdminUsageReport = {
   rows: AdminUsageRow[];
 };
 
+/** A single audit-log entry as returned by the admin audit endpoint. */
+export type AdminAuditEntry = {
+  id: string;
+  action: string;
+  actorId?: string;
+  actorEmail?: string;
+  actorRole?: string;
+  targetType?: string;
+  targetId?: string;
+  conversationId?: string;
+  messageId?: string;
+  model?: string;
+  tokens?: { input?: number; output?: number; total?: number };
+  ip?: string;
+  outcome: string;
+  createdAt?: string;
+};
+
 /** Minimal user info returned by user search endpoints. */
 export type AdminUserSearchResult = {
   id: string;
