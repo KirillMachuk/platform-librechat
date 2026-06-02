@@ -2,6 +2,7 @@ const cookies = require('cookie');
 const { isEnabled, clearCloudFrontCookies } = require('@librechat/api');
 const { logger } = require('@librechat/data-schemas');
 const { logoutUser } = require('~/server/services/AuthService');
+const { recordAudit, auditRequestContext } = require('~/server/services/Audit');
 const { getOpenIdConfig } = require('~/strategies');
 
 /** Parses and validates OPENID_MAX_LOGOUT_URL_LENGTH, returning defaultValue on invalid input */
@@ -38,6 +39,16 @@ const logoutController = async (req, res) => {
   try {
     const logout = await logoutUser(req, refreshToken);
     const { status, message } = logout;
+
+    recordAudit({
+      actorId: req.user?._id,
+      actorEmail: req.user?.email,
+      actorRole: req.user?.role,
+      action: 'auth.logout',
+      outcome: 'success',
+      tenantId: req.user?.tenantId,
+      ...auditRequestContext(req),
+    });
 
     res.clearCookie('refreshToken');
     res.clearCookie('openid_access_token');
