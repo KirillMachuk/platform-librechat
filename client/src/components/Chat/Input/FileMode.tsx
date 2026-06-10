@@ -59,7 +59,7 @@ function FileMode() {
   const [mode, setMode] = useRecoilState(fileModeByConvoId(conversationId));
 
   const { handleFiles, setFiles } = useFileHandling();
-  const { mutateAsync: deleteFilesMutate } = useDeleteFilesMutation();
+  const { mutateAsync: deleteFilesMutate } = useDeleteFilesMutation({ silent: true });
   const { deleteFile } = useFileDeletion({ mutateAsync: deleteFilesMutate });
 
   /** The non-image files currently attached. Images are excluded — they're
@@ -94,7 +94,7 @@ function FileMode() {
         }
         const original = ef.file;
         deleteFile({ file: ef, setFiles });
-        handleFiles([original], undefined, newMode);
+        handleFiles([original], undefined, newMode, ef.file_id);
       }
     },
     [documentFiles, deleteFile, setFiles, handleFiles],

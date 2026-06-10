@@ -139,7 +139,9 @@ export const useUploadFileMutation = (
 };
 
 export const useDeleteFilesMutation = (
-  _options?: t.DeleteMutationOptions,
+  /** `silent` skips the success toast — for internal deletes (e.g. file-mode
+   * reprocessing) where "deleted" would confuse the user mid-operation. */
+  _options?: t.DeleteMutationOptions & { silent?: boolean },
 ): UseMutationResult<
   t.DeleteFilesResponse, // response data
   unknown, // error
@@ -149,7 +151,7 @@ export const useDeleteFilesMutation = (
   const queryClient = useQueryClient();
   const { showToast } = useToastContext();
   const localize = useLocalize();
-  const { onSuccess, onError, ...options } = _options || {};
+  const { onSuccess, onError, silent, ...options } = _options || {};
   return useMutation([MutationKeys.fileDelete], {
     mutationFn: (body: t.DeleteFilesBody) => dataService.deleteFiles(body),
     ...options,
@@ -177,10 +179,12 @@ export const useDeleteFilesMutation = (
         return (cachefiles ?? []).filter((file) => !fileMap.has(file.file_id));
       });
 
-      showToast({
-        message: localize('com_ui_delete_success'),
-        status: 'success',
-      });
+      if (!silent) {
+        showToast({
+          message: localize('com_ui_delete_success'),
+          status: 'success',
+        });
+      }
 
       onSuccess?.(data, vars, context);
       if (vars.agent_id != null && vars.agent_id) {
