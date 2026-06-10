@@ -51,6 +51,7 @@ const {
   VisionModes,
   ContentTypes,
   EModelEndpoint,
+  EToolResources,
   PermissionTypes,
   AgentCapabilities,
   isAgentsEndpoint,
@@ -327,12 +328,43 @@ class AgentClient extends BaseClient {
       this.options.attachments = files;
     }
 
-    /** Note: Bedrock uses legacy RAG API handling */
-    if (this.message_file_map && !isAgentsEndpoint(this.options.endpoint)) {
+    /**
+     * Embedded (RAG) documents primed for this run via `file_search`
+     * tool_resources. On follow-up turns these are reloaded from
+     * `conversation.files` (see `applyConversationFileContext`), so this list
+     * is non-empty on EVERY turn of a chat that contains a searchable
+     * document — unlike `message_file_map`, which only covers messages that
+     * carry attachments.
+     *
+     * Project source files are excluded: they are embedded under
+     * `entity_id=project_id` and the augmented-prompt path queries the RAG API
+     * without an `entity_id` (it would miss that namespace). Those keep working
+     * through the `file_search` tool, which sends the correct `entity_id`.
+     */
+    const embeddedResourceFiles = (
+      this.options.agent?.tool_resources?.[EToolResources.file_search]?.files ?? []
+    ).filter((file) => file?.embedded === true && !file.project_id);
+
+    /**
+     * Forced retrieval floor: run the conversation's embedded documents
+     * through the augmented-prompt path on every turn (query = latest user
+     * message), so document access never depends on the model choosing to
+     * call `file_search`. The tool remains available on top for additional,
+     * model-directed searches. `RAG_FORCED_CONTEXT=false` restores upstream
+     * behavior (legacy path for non-agents endpoints only).
+     */
+    const forcedRagContext =
+      process.env.RAG_FORCED_CONTEXT == null ? true : isEnabled(process.env.RAG_FORCED_CONTEXT);
+    const useLegacyContext = this.message_file_map && !isAgentsEndpoint(this.options.endpoint);
+
+    if (useLegacyContext || (forcedRagContext && embeddedResourceFiles.length > 0)) {
       this.contextHandlers = createContextHandlers(
         this.options.req,
         orderedMessages[orderedMessages.length - 1].text,
       );
+      for (const file of embeddedResourceFiles) {
+        this.contextHandlers.processFile(file);
+      }
     }
 
     /** @type {Record<number, number>} */
