@@ -818,7 +818,14 @@ router.post('/', async (req, res) => {
       try {
         await fs.unlink(req.file.path);
       } catch (error) {
-        logger.error('[/files] Error deleting file after file processing:', error);
+        // The dual-storage / RAG pipeline may move or remove the temp file as
+        // part of normal processing, so it's already gone by the time we clean
+        // up. That's expected — only surface unexpected unlink failures.
+        if (error?.code === 'ENOENT') {
+          logger.debug('[/files] Temp file already removed before cleanup:', req.file.path);
+        } else {
+          logger.error('[/files] Error deleting file after file processing:', error);
+        }
       }
     } else {
       logger.debug('[/files] File processing completed without cleanup');
