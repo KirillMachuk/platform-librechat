@@ -290,7 +290,25 @@ describe('processAgentFileUpload', () => {
       expect(getStrategyFunctions).toHaveBeenCalledWith(FileSources.mistral_ocr);
     });
 
-    test('throws instead of falling back to parseText when document_parser fails for a document MIME type', async () => {
+    /* Fork-specific (1ma): RAG_API_URL routes through doc-gateway, whose /text endpoint runs
+     * local Tesseract OCR. So when the local document parser yields no text (scanned PDF), we
+     * fall back to parseText (RAG /text) to OCR it — full-text mode must work on scans. */
+    test('falls back to RAG /text OCR and succeeds when document_parser fails on a scanned PDF', async () => {
+      getStrategyFunctions.mockReturnValue({
+        handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
+      });
+      const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
+      const { parseText } = require('@librechat/api');
+      parseText.mockResolvedValueOnce({ text: 'OCR-извлечённый текст договора', bytes: 30 });
+
+      await expect(
+        processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
+      ).resolves.not.toThrow();
+
+      expect(parseText).toHaveBeenCalled();
+    });
+
+    test('throws when document_parser fails and the RAG /text OCR fallback also yields no text', async () => {
       getStrategyFunctions.mockReturnValue({
         handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
       });
@@ -301,7 +319,7 @@ describe('processAgentFileUpload', () => {
         processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
       ).rejects.toThrow(/image-based and requires an OCR service/);
 
-      expect(parseText).not.toHaveBeenCalled();
+      expect(parseText).toHaveBeenCalled();
     });
 
     test('falls back to document_parser when configured OCR fails for a document MIME type', async () => {
@@ -326,7 +344,7 @@ describe('processAgentFileUpload', () => {
       expect(getStrategyFunctions).toHaveBeenCalledWith(FileSources.document_parser);
     });
 
-    test('throws when both configured OCR and document_parser fallback fail', async () => {
+    test('throws when configured OCR, document_parser, and RAG /text fallback all fail', async () => {
       mergeFileConfig.mockReturnValue(makeFileConfig({ ocrSupportedMimeTypes: [PDF_MIME] }));
       getStrategyFunctions.mockReturnValue({
         handleFileUpload: jest.fn().mockRejectedValue(new Error('failure')),
@@ -341,7 +359,7 @@ describe('processAgentFileUpload', () => {
         processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
       ).rejects.toThrow(/image-based and requires an OCR service/);
 
-      expect(parseText).not.toHaveBeenCalled();
+      expect(parseText).toHaveBeenCalled();
     });
   });
 
