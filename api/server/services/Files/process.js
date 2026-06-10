@@ -800,10 +800,12 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
       try {
         const parsed = await parseText({ req, file, file_id });
         if (parsed?.text?.trim()) {
+          // filepath = original upload path (matches the native parseText branch below);
+          // the extracted text itself is persisted by createTextFile, source=FileSources.text.
           return {
             filename: file.originalname,
             bytes: parsed.bytes,
-            filepath: FileSources.text,
+            filepath: file.path,
             text: parsed.text,
           };
         }
