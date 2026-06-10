@@ -101,6 +101,7 @@ export default function useSelectMention({
           template: currentConvo,
           preset,
           keepAddedConvos: true,
+          keepFiles: true,
         });
         return;
       }
@@ -110,6 +111,7 @@ export default function useSelectMention({
         template: { ...(template as Partial<TConversation>) },
         preset,
         keepAddedConvos: isModular,
+        keepFiles: true,
       });
     },
     [
@@ -195,6 +197,7 @@ export default function useSelectMention({
           template: currentConvo,
           preset: currentConvo,
           keepAddedConvos: true,
+          keepFiles: true,
         });
         return;
       }
@@ -204,6 +207,7 @@ export default function useSelectMention({
         template: { ...(template as Partial<TConversation>) },
         preset: { ...kwargs, spec: null, iconURL: null, modelLabel: null, endpoint: newEndpoint },
         keepAddedConvos: isNewModular,
+        keepFiles: true,
       });
     },
     [getConversation, getDefaultConversation, modularChat, newConversation, endpointsConfig],
@@ -257,6 +261,7 @@ export default function useSelectMention({
           template: currentConvo,
           preset: newPreset,
           keepAddedConvos: true,
+          keepFiles: true,
           disableParams,
         });
         return;
@@ -266,6 +271,7 @@ export default function useSelectMention({
       newConversation({
         preset: newPreset,
         keepAddedConvos: isModular,
+        keepFiles: true,
         disableParams,
       });
     },

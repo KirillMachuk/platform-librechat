@@ -262,6 +262,7 @@ const useNewConvo = (index = 0) => {
       disableFocus,
       buildDefault = true,
       keepAddedConvos = false,
+      keepFiles = false,
       disableParams,
     }: {
       template?: Partial<TConversation>;
@@ -270,6 +271,7 @@ const useNewConvo = (index = 0) => {
       buildDefault?: boolean;
       disableFocus?: boolean;
       keepAddedConvos?: boolean;
+      keepFiles?: boolean;
       disableParams?: boolean;
     } = {}) {
       pauseGlobalAudio();
@@ -323,7 +325,7 @@ const useNewConvo = (index = 0) => {
         convoId: conversation.conversationId,
       });
 
-      if (conversation.conversationId === Constants.NEW_CONVO && !modelsData) {
+      if (conversation.conversationId === Constants.NEW_CONVO && !modelsData && !keepFiles) {
         const filesToDelete = Array.from(files.values())
           .filter(
             (file) =>
