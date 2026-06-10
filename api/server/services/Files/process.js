@@ -793,6 +793,28 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
           err,
         );
       }
+      /* The local document parser (pdfjs) extracts only a PDF's text layer — a scanned PDF
+       * has none, so it throws "No text found" and full-text mode fails on scans. Fall back to
+       * the RAG API /text endpoint, which routes through doc-gateway (local Tesseract OCR), so
+       * scanned contracts work in full-text mode too. No-op if RAG_API_URL is unset/unreachable. */
+      try {
+        const parsed = await parseText({ req, file, file_id });
+        if (parsed?.text?.trim()) {
+          // filepath = original upload path (matches the native parseText branch below);
+          // the extracted text itself is persisted by createTextFile, source=FileSources.text.
+          return {
+            filename: file.originalname,
+            bytes: parsed.bytes,
+            filepath: file.path,
+            text: parsed.text,
+          };
+        }
+      } catch (err) {
+        logger.error(
+          `[processAgentFileUpload] RAG /text OCR fallback failed for "${file.originalname}":`,
+          err,
+        );
+      }
     };
 
     if (shouldUseConfiguredOCR && !(await checkCapability(req, AgentCapabilities.ocr))) {
