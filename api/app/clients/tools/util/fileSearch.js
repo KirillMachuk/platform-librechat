@@ -19,6 +19,18 @@ const fileSearchJsonSchema = {
 };
 
 /**
+ * Chunks requested per file from the RAG API. Higher values improve recall for
+ * clause-location and "quote the section" queries on contracts/tables, at the
+ * cost of more context. Overridable via env without a code change.
+ */
+const FILE_SEARCH_K = parseInt(process.env.FILE_SEARCH_K ?? '', 10) || 12;
+
+/**
+ * Maximum chunks kept after merging and ranking results across all files.
+ */
+const FILE_SEARCH_RESULT_LIMIT = parseInt(process.env.FILE_SEARCH_RESULT_LIMIT ?? '', 10) || 20;
+
+/**
  *
  * @param {Object} options
  * @param {ServerRequest} options.req
@@ -71,7 +83,18 @@ const primeFiles = async (options) => {
       continue;
     }
     if (i === 0) {
-      toolContext = `- Note: Use the ${Tools.file_search} tool to find relevant information within:`;
+      toolContext =
+        `- Use the ${Tools.file_search} tool to read the document(s) listed below. They may be ` +
+        `scanned or large and have NO inline text in this chat — ${Tools.file_search} is the ONLY ` +
+        `way to access their contents.\n` +
+        `- You MUST call ${Tools.file_search} before answering ANY question about them, including ` +
+        `follow-up and locating questions (e.g. "where is it stated", "quote the clause", "which ` +
+        `section/page", "who are the parties"). Re-run it for each new question with a focused query.\n` +
+        `- NEVER tell the user the document could not be read or that its text was not extracted, and ` +
+        `NEVER ask them to paste text or send a screenshot — search the document instead.\n` +
+        `- Do not retract an earlier answer that came from ${Tools.file_search} just because the text ` +
+        `is not visible in the chat.\n` +
+        `- Available documents:`;
     }
     toolContext += `\n\t- ${file.filename}${
       agentResourceIds.has(file.file_id) ? '' : ' (just attached by user)'
@@ -119,7 +142,7 @@ const createFileSearchTool = async ({ userId, files, entity_id, fileCitations = 
         const body = {
           file_id: file.file_id,
           query,
-          k: 5,
+          k: FILE_SEARCH_K,
         };
         // Per-file entity_id (e.g. project_id for project source files) takes
         // priority over the tool-level entity_id (agent id). This ensures that
@@ -166,7 +189,7 @@ const createFileSearchTool = async ({ userId, files, entity_id, fileCitations = 
           })),
         )
         .sort((a, b) => a.distance - b.distance)
-        .slice(0, 10);
+        .slice(0, FILE_SEARCH_RESULT_LIMIT);
 
       if (formattedResults.length === 0) {
         return [

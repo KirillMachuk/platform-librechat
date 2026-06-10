@@ -107,6 +107,61 @@ async function applyProjectContext({ req, primaryAgent }) {
 }
 
 /**
+ * Keep a conversation's embedded (RAG) files reachable on every turn.
+ *
+ * A document uploaded in "search" mode is accessible only through the
+ * `file_search` tool, which must be re-primed each turn. On follow-up turns the
+ * per-message file-search toggle is often off, so the tool is never loaded and
+ * the model answers as if the document is gone (or claims its text "wasn't
+ * extracted"). When the conversation already has embedded files bound to it,
+ * force `file_search` into the agent's tools and merge their `file_id`s into the
+ * `file_search` tool_resources — independent of the toggle. Only embedded
+ * (RAG) files are touched; `context`/`native`-mode files are left alone. No-op
+ * for new conversations or when no embedded files are bound.
+ *
+ * @param {{ req: import('express').Request, primaryAgent: Record<string, unknown> }} params
+ * @returns {Promise<void>}
+ */
+async function applyConversationFileContext({ req, primaryAgent }) {
+  try {
+    const conversationId = req.body?.conversationId;
+    if (!conversationId) {
+      return;
+    }
+
+    const convoFileIds = (await db.getConvoFiles(conversationId)) ?? [];
+    if (convoFileIds.length === 0) {
+      return;
+    }
+
+    const embeddedFiles = await db.getFiles(
+      { file_id: { $in: convoFileIds }, embedded: true },
+      null,
+      { text: 0 },
+    );
+    const embeddedFileIds = embeddedFiles.map((f) => f.file_id).filter(Boolean);
+    if (embeddedFileIds.length === 0) {
+      return;
+    }
+
+    primaryAgent.tool_resources = primaryAgent.tool_resources ?? {};
+    const fileSearchResource = primaryAgent.tool_resources[EToolResources.file_search] ?? {};
+    const existingFileIds = fileSearchResource.file_ids ?? [];
+    primaryAgent.tool_resources[EToolResources.file_search] = {
+      ...fileSearchResource,
+      file_ids: Array.from(new Set([...existingFileIds, ...embeddedFileIds])),
+    };
+
+    primaryAgent.tools = primaryAgent.tools ?? [];
+    if (!primaryAgent.tools.includes(Tools.file_search)) {
+      primaryAgent.tools.push(Tools.file_search);
+    }
+  } catch (error) {
+    logger.error('[applyConversationFileContext] Failed to merge conversation file context', error);
+  }
+}
+
+/**
  * Creates a tool loader function for the agent.
  * @param {AbortSignal} signal - The abort signal
  * @param {string | null} [streamId] - The stream ID for resumable mode
@@ -311,6 +366,7 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
   }
 
   await applyProjectContext({ req, primaryAgent });
+  await applyConversationFileContext({ req, primaryAgent });
 
   const modelsConfig = await getModelsConfig(req);
   const validationResult = await validateAgentModel({
@@ -940,4 +996,4 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
   return { client, userMCPAuthMap };
 };
 
-module.exports = { initializeClient };
+module.exports = { initializeClient, applyConversationFileContext };

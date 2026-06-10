@@ -67,7 +67,7 @@ jest.mock('~/cache', () => ({
   logViolation: jest.fn(),
 }));
 
-const { initializeClient } = require('./initialize');
+const { initializeClient, applyConversationFileContext } = require('./initialize');
 const { logger } = require('@librechat/data-schemas');
 const { User, AclEntry } = require('~/db/models');
 const { createAgent } = require('~/models');
@@ -772,5 +772,80 @@ describe('initializeClient — subagent loading', () => {
     /** Only one initializeAgent call — for the primary. No subagent loaded. */
     expect(mockInitializeAgent).toHaveBeenCalledTimes(1);
     expect(agentClientArgs.agent.subagentAgentConfigs).toEqual([]);
+  });
+});
+
+describe('applyConversationFileContext', () => {
+  const db = require('~/models');
+
+  const makeReq = (conversationId) => ({
+    body: { conversationId },
+    user: { id: 'user_1', role: 'USER' },
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('forces file_search and injects embedded conversation file_ids on follow-up turns', async () => {
+    jest.spyOn(db, 'getConvoFiles').mockResolvedValue(['file_emb_1', 'file_ctx_2']);
+    jest.spyOn(db, 'getFiles').mockResolvedValue([{ file_id: 'file_emb_1', embedded: true }]);
+
+    const primaryAgent = { tools: [], tool_resources: {} };
+    await applyConversationFileContext({ req: makeReq('conv_1'), primaryAgent });
+
+    expect(primaryAgent.tools).toContain('file_search');
+    expect(primaryAgent.tool_resources.file_search.file_ids).toContain('file_emb_1');
+    /** Only embedded files are forced; context/native-mode files are left out. */
+    expect(primaryAgent.tool_resources.file_search.file_ids).not.toContain('file_ctx_2');
+    /** getFiles is scoped to embedded:true. */
+    expect(db.getFiles).toHaveBeenCalledWith(expect.objectContaining({ embedded: true }), null, {
+      text: 0,
+    });
+  });
+
+  it('is a no-op when the conversation has no embedded files', async () => {
+    jest.spyOn(db, 'getConvoFiles').mockResolvedValue(['file_ctx_2']);
+    jest.spyOn(db, 'getFiles').mockResolvedValue([]);
+
+    const primaryAgent = { tools: [], tool_resources: {} };
+    await applyConversationFileContext({ req: makeReq('conv_1'), primaryAgent });
+
+    expect(primaryAgent.tools).not.toContain('file_search');
+    expect(primaryAgent.tool_resources.file_search).toBeUndefined();
+  });
+
+  it('is a no-op for a new conversation (no conversationId) without hitting the DB', async () => {
+    const convoSpy = jest.spyOn(db, 'getConvoFiles').mockResolvedValue([]);
+
+    const primaryAgent = { tools: [], tool_resources: {} };
+    await applyConversationFileContext({ req: makeReq(undefined), primaryAgent });
+
+    expect(convoSpy).not.toHaveBeenCalled();
+    expect(primaryAgent.tools).not.toContain('file_search');
+  });
+
+  it('does not duplicate file_search when already enabled', async () => {
+    jest.spyOn(db, 'getConvoFiles').mockResolvedValue(['file_emb_1']);
+    jest.spyOn(db, 'getFiles').mockResolvedValue([{ file_id: 'file_emb_1', embedded: true }]);
+
+    const primaryAgent = {
+      tools: ['file_search'],
+      tool_resources: { file_search: { file_ids: ['file_emb_1'] } },
+    };
+    await applyConversationFileContext({ req: makeReq('conv_1'), primaryAgent });
+
+    expect(primaryAgent.tools.filter((t) => t === 'file_search')).toHaveLength(1);
+    expect(primaryAgent.tool_resources.file_search.file_ids).toEqual(['file_emb_1']);
+  });
+
+  it('never throws — DB errors are swallowed so chat is not broken', async () => {
+    jest.spyOn(db, 'getConvoFiles').mockRejectedValue(new Error('db down'));
+
+    const primaryAgent = { tools: [], tool_resources: {} };
+    await expect(
+      applyConversationFileContext({ req: makeReq('conv_1'), primaryAgent }),
+    ).resolves.toBeUndefined();
+    expect(primaryAgent.tools).not.toContain('file_search');
   });
 });
