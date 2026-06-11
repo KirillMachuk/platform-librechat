@@ -38,6 +38,7 @@ jest.mock('~/store', () => ({
   __esModule: true,
   default: { isTemporary: { key: 'isTemporary' } },
   ephemeralAgentByConvoId: jest.fn(() => ({ key: 'mock' })),
+  fileModeByConvoId: jest.fn(() => ({ key: 'mockFileMode' })),
 }));
 
 jest.mock('@tanstack/react-query', () => ({

@@ -301,6 +301,7 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
     _files: FileList | File[],
     _toolResource?: string,
     _forcedMode?: FileMode,
+    _replaceFileId?: string,
   ) => {
     abortControllerRef.current = new AbortController();
     const fileList = Array.from(_files);
@@ -313,8 +314,17 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
         endpointType,
       });
 
+      /** When re-processing an attached file (mode change), the old entry is
+       * being deleted in the same tick — React state hasn't flushed yet, so
+       * `files` still contains it. Exclude it from validation, otherwise the
+       * re-upload of the same name/size trips the duplicate check and the
+       * file is lost (deleted but never re-added). */
+      const effectiveFiles = _replaceFileId
+        ? new Map(Array.from(files.entries()).filter(([, f]) => f.file_id !== _replaceFileId))
+        : files;
+
       filesAreValid = validateFiles({
-        files,
+        files: effectiveFiles,
         fileList,
         setError,
         fileConfig,

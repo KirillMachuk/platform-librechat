@@ -609,6 +609,7 @@ export type NewConversationParams = {
   modelsData?: t.TModelsConfig;
   buildDefault?: boolean;
   keepAddedConvos?: boolean;
+  keepFiles?: boolean;
   disableParams?: boolean;
 };
 
