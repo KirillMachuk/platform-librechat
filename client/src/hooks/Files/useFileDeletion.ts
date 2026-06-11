@@ -67,17 +67,14 @@ const useFileDeletion = ({
       } = _file as t.TFile & { attached?: boolean };
 
       const progress = _file['progress'] ?? 1;
+      const stillUploading = progress < 1;
 
-      if (progress < 1) {
-        return;
-      }
-      const file: t.BatchFile = {
-        file_id,
-        embedded,
-        filepath,
-        source,
-      };
-
+      // Always remove from the UI first — even mid-upload — so the X button
+      // works while a slow file (e.g. a scanned PDF, whose OCR+embed keeps the
+      // upload request open for a minute or more) is still processing.
+      // `updateFileById` no-ops on a missing entry, so a late upload onSuccess
+      // cannot resurrect a file the user just removed. The in-flight request is
+      // also aborted by the caller (FileRow#handleDelete -> abortUpload).
       if (setFiles) {
         setFiles((currentFiles) => {
           const updatedFiles = new Map(currentFiles);
@@ -94,9 +91,19 @@ const useFileDeletion = ({
         deletePreview(temp_file_id);
       }
 
-      if (attached) {
+      // A still-uploading file isn't persisted server-side yet, and an
+      // explicitly `attached` file is owned elsewhere — in both cases skip the
+      // server-side batch delete.
+      if (stillUploading || attached) {
         return;
       }
+
+      const file: t.BatchFile = {
+        file_id,
+        embedded,
+        filepath,
+        source,
+      };
 
       setFileDeleteBatch((prevBatch) => {
         const newBatch = [...prevBatch, file];
