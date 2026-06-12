@@ -96,9 +96,23 @@ const primeFiles = async (options) => {
         `is not visible in the chat.\n` +
         `- Available documents:`;
     }
+    /* Async embedding (RAG_ASYNC_EMBED): a file whose background embed has
+     * not finished is announced honestly and excluded from the query list —
+     * otherwise the agent promises a document the vector store cannot see
+     * yet and tells the user the document is empty. */
+    const embedIncomplete =
+      file.embeddingStatus === 'pending' || file.embeddingStatus === 'processing';
+    const embedFailed = file.embeddingStatus === 'failed';
     toolContext += `\n\t- ${file.filename}${
       agentResourceIds.has(file.file_id) ? '' : ' (just attached by user)'
-    }`;
+    }${
+      embedIncomplete
+        ? ' — STILL INDEXING, not searchable yet; tell the user to retry in a few minutes'
+        : ''
+    }${embedFailed ? ' — indexing FAILED, contents are not searchable' : ''}`;
+    if (embedIncomplete || embedFailed) {
+      continue;
+    }
     files.push({
       file_id: file.file_id,
       filename: file.filename,

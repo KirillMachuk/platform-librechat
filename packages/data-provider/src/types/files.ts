@@ -116,6 +116,14 @@ export type TFile = {
   temp_file_id?: string;
   bytes: number;
   embedded: boolean;
+  /**
+   * Async RAG embedding lifecycle (RAG_ASYNC_EMBED). `'pending'`/`'processing'`
+   * while the background worker indexes the file into the vector store,
+   * `'ready'` once searchable, `'failed'` if indexing gave up. `undefined`
+   * for legacy records and synchronous uploads — clients MUST treat that as
+   * ready (the file is already searchable).
+   */
+  embeddingStatus?: 'pending' | 'processing' | 'ready' | 'failed';
   filename: string;
   filepath: string;
   object: 'file';
