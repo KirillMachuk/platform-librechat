@@ -911,15 +911,23 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
       entity_id,
     });
 
-    // SECOND: Upload to Vector DB
-    const { uploadVectors } = require('./VectorDB/crud');
-
-    embeddingResult = await uploadVectors({
-      req,
-      file,
-      file_id,
-      entity_id,
-    });
+    // SECOND: Upload to Vector DB. With RAG_ASYNC_EMBED the request returns
+    // immediately and the background embed worker (Files/Embed) picks the
+    // record up from its `embeddingStatus: 'pending'` state — large scans
+    // queue + parse for minutes at the doc-gateway and must not hold the
+    // upload response open.
+    const { asyncEmbedEnabled } = require('./Embed');
+    if (asyncEmbedEnabled()) {
+      embeddingResult = { embedded: false, filename: file.originalname, deferred: true };
+    } else {
+      const { uploadVectors } = require('./VectorDB/crud');
+      embeddingResult = await uploadVectors({
+        req,
+        file,
+        file_id,
+        entity_id,
+      });
+    }
 
     // Vector status will be stored at root level, no need for metadata
     fileInfoMetadata = {};
@@ -1004,6 +1012,18 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
       height,
       width,
       tenantId: req.user.tenantId,
+      /* Deferred embedding (RAG_ASYNC_EMBED): persist the queue state the
+       * background worker claims. `embedEntityId` records the namespace
+       * the embed must use verbatim (see schema comment) — undefined for
+       * message attachments and stripped by removeNullishValues. */
+      ...(embeddingResult?.deferred === true
+        ? {
+            embeddingStatus: 'pending',
+            embedNextAt: new Date(),
+            embedAttempts: 0,
+            embedEntityId: entity_id,
+          }
+        : {}),
     }),
     ...retentionExpiry,
   };
@@ -1056,13 +1076,19 @@ const processProjectFileUpload = async ({ req, res, metadata }) => {
     entity_id,
   });
 
-  const { uploadVectors } = require('./VectorDB/crud');
-  const embeddingResult = await uploadVectors({
-    req,
-    file,
-    file_id,
-    entity_id,
-  });
+  const { asyncEmbedEnabled } = require('./Embed');
+  let embeddingResult;
+  if (asyncEmbedEnabled()) {
+    embeddingResult = { embedded: false, filename: file.originalname, deferred: true };
+  } else {
+    const { uploadVectors } = require('./VectorDB/crud');
+    embeddingResult = await uploadVectors({
+      req,
+      file,
+      file_id,
+      entity_id,
+    });
+  }
 
   const {
     bytes,
@@ -1095,6 +1121,16 @@ const processProjectFileUpload = async ({ req, res, metadata }) => {
     embedded,
     source,
     tenantId: req.user.tenantId,
+    /* Deferred embedding (RAG_ASYNC_EMBED): project sources embed under
+     * entity_id = project_id; the worker reuses it verbatim. */
+    ...(embeddingResult?.deferred === true
+      ? {
+          embeddingStatus: 'pending',
+          embedNextAt: new Date(),
+          embedAttempts: 0,
+          embedEntityId: entity_id,
+        }
+      : {}),
   });
 
   const result = await db.createFile(fileInfo, true);

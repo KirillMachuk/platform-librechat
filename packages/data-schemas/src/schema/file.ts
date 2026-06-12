@@ -57,6 +57,41 @@ const file: Schema<IMongoFile> = new Schema(
     embedded: {
       type: Boolean,
     },
+    embeddingStatus: {
+      /* Async RAG embedding lifecycle (RAG_ASYNC_EMBED). The upload step
+       * persists the record with 'pending' and responds immediately; the
+       * background embed worker claims it ('processing', leased via
+       * embedNextAt) and commits 'ready' (together with embedded: true)
+       * or 'failed' (with embedError). Absent on legacy records and on
+       * synchronous uploads (flag off). */
+      type: String,
+      enum: ['pending', 'processing', 'ready', 'failed'],
+    },
+    embedNextAt: {
+      /* Dual-purpose scheduler field: for 'pending' — earliest next
+       * attempt (retry backoff); for 'processing' — lease expiry, so a
+       * record orphaned by a worker crash becomes claimable again once
+       * the lease passes. Single index with embeddingStatus serves both. */
+      type: Date,
+    },
+    embedAttempts: {
+      type: Number,
+    },
+    embedError: {
+      /* Short machine-readable reason when embeddingStatus === 'failed'
+       * ('busy', 'timeout', 'network', 'unsupported', 'max-retries').
+       * Mirrors the previewError cap to keep stack traces out of the DB. */
+      type: String,
+      maxlength: 200,
+    },
+    embedEntityId: {
+      /* Entity namespace the file was scheduled to embed under (agent_id
+       * for agent knowledge, project_id for project sources, absent for
+       * plain chat attachments). The /query side resolves the same
+       * namespace, so the background /embed MUST reuse this value
+       * verbatim — a mismatch makes retrieval silently return nothing. */
+      type: String,
+    },
     type: {
       type: String,
       required: true,
@@ -164,6 +199,7 @@ const file: Schema<IMongoFile> = new Schema(
 
 file.index({ expiredAt: 1 });
 file.index({ createdAt: 1, updatedAt: 1 });
+file.index({ embeddingStatus: 1, embedNextAt: 1 });
 file.index(
   { filename: 1, conversationId: 1, context: 1, tenantId: 1 },
   { unique: true, partialFilterExpression: { context: FileContext.execute_code } },

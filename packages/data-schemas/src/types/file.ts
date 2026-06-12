@@ -56,6 +56,24 @@ export interface IMongoFile extends Omit<Document, 'model'> {
   storageRegion?: string;
   object: 'file';
   embedded?: boolean;
+  /**
+   * Async RAG embedding lifecycle (RAG_ASYNC_EMBED). 'pending' — queued
+   * for the background embed worker; 'processing' — claimed (lease via
+   * embedNextAt); 'ready' — embedded (set together with embedded: true);
+   * 'failed' — gave up (see embedError). Absent on legacy records and on
+   * synchronous uploads; clients MUST treat undefined as ready.
+   */
+  embeddingStatus?: 'pending' | 'processing' | 'ready' | 'failed';
+  /** Scheduler: next retry time (pending) or lease expiry (processing). */
+  embedNextAt?: Date;
+  embedAttempts?: number;
+  /** Short machine-readable reason when embeddingStatus === 'failed'. */
+  embedError?: string;
+  /**
+   * Entity namespace (agent_id / project_id) the background /embed must
+   * use verbatim — retrieval queries the same namespace.
+   */
+  embedEntityId?: string;
   type: string;
   context?: string;
   usage: number;
