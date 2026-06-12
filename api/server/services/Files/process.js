@@ -624,6 +624,42 @@ const processFileUpload = async ({ req, res, metadata }) => {
   res.status(200).json({ message: 'File uploaded and processed successfully', ...result });
 };
 
+const DEFAULT_RAG_AUTO_ROUTE_BYTES = 250 * 1024;
+
+const ragAutoRouteBytes = () => {
+  const raw = parseInt(process.env.RAG_AUTO_ROUTE_LARGE_DOC_BYTES ?? '', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_RAG_AUTO_ROUTE_BYTES;
+};
+
+/**
+ * In full-text (`context`) mode the WHOLE extracted document goes inline to the model and through
+ * the in-country anonymizer, which masks it in one slow pass for big contracts. Routing large docs
+ * to `file_search` (RAG) means only small retrieved chunks are masked, keeping latency low. Opt-in
+ * via `RAG_AUTO_ROUTE_LARGE_DOC=true` (off by default, so agents without file_search are unaffected);
+ * size threshold via `RAG_AUTO_ROUTE_LARGE_DOC_BYTES`. Images and small files are never rerouted.
+ * @param {{ req: ServerRequest, file: Express.Multer.File, toolResource: string, isImage: boolean }} params
+ * @returns {Promise<string>} the tool resource to actually use for this upload
+ */
+const resolveLargeDocRouting = async ({ req, file, toolResource, isImage }) => {
+  if (process.env.RAG_AUTO_ROUTE_LARGE_DOC !== 'true') {
+    return toolResource;
+  }
+  if (toolResource !== EToolResources.context || isImage || !file?.size) {
+    return toolResource;
+  }
+  if (file.size < ragAutoRouteBytes()) {
+    return toolResource;
+  }
+  const isFileSearchEnabled = await checkCapability(req, AgentCapabilities.file_search);
+  if (!isFileSearchEnabled) {
+    return toolResource;
+  }
+  logger.info(
+    `[processAgentFileUpload] auto-routed large document "${file.originalname}" (${file.size} bytes) from full-text to file_search (RAG) to keep anonymizer latency low`,
+  );
+  return EToolResources.file_search;
+};
+
 /**
  * Applies the current strategy for file uploads.
  * Saves file metadata to the database with an expiry TTL.
@@ -638,7 +674,8 @@ const processFileUpload = async ({ req, res, metadata }) => {
 const processAgentFileUpload = async ({ req, res, metadata }) => {
   const { file } = req;
   const appConfig = req.config;
-  const { agent_id, tool_resource, file_id, temp_file_id = null } = metadata;
+  const { agent_id, file_id, temp_file_id = null } = metadata;
+  let tool_resource = metadata.tool_resource;
 
   let messageAttachment = !!metadata.message_file;
 
@@ -658,6 +695,7 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
   let fileInfoMetadata;
   const entity_id = messageAttachment === true ? undefined : agent_id;
   const basePath = mime.getType(file.originalname)?.startsWith('image') ? 'images' : 'uploads';
+  tool_resource = await resolveLargeDocRouting({ req, file, toolResource: tool_resource, isImage });
   if (tool_resource === EToolResources.execute_code) {
     const isCodeEnabled = await checkCapability(req, AgentCapabilities.execute_code);
     if (!isCodeEnabled) {
@@ -1411,4 +1449,5 @@ module.exports = {
   processAgentFileUpload,
   processProjectFileUpload,
   retrieveAndProcessFile,
+  resolveLargeDocRouting,
 };
