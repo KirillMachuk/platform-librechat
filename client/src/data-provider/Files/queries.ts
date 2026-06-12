@@ -1,17 +1,31 @@
 import { useRecoilValue } from 'recoil';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  FileSources,
-  QueryKeys,
-  DynamicQueryKeys,
-  dataService,
-} from 'librechat-data-provider';
+import { FileSources, QueryKeys, DynamicQueryKeys, dataService } from 'librechat-data-provider';
 import type { TFileConfig } from 'librechat-data-provider';
 import type { QueryObserverResult, UseQueryOptions } from '@tanstack/react-query';
 import type t from 'librechat-data-provider';
 import { isEphemeralAgent } from '~/common';
 import { addFileToCache } from '~/utils';
 import store from '~/store';
+
+/**
+ * RAG_ASYNC_EMBED: poll the file list while any file is still indexing into
+ * the vector store, so the "Indexing…" badge clears on its own. Returns
+ * `false` (no polling) whenever nothing is indexing — i.e. always, when the
+ * async flag is off and no record carries `embeddingStatus` — keeping the
+ * default behaviour byte-for-byte unchanged. Defensive against the boolean
+ * `TData` some callers select via `select`.
+ */
+const EMBED_POLL_MS = 5000;
+const embedPollInterval = (data: unknown): number | false =>
+  Array.isArray(data) &&
+  data.some(
+    (file) =>
+      (file as Partial<t.TFile>)?.embeddingStatus === 'pending' ||
+      (file as Partial<t.TFile>)?.embeddingStatus === 'processing',
+  )
+    ? EMBED_POLL_MS
+    : false;
 
 export const useGetFiles = <TData = t.TFile[] | boolean>(
   config?: UseQueryOptions<t.TFile[], unknown, TData>,
@@ -21,6 +35,7 @@ export const useGetFiles = <TData = t.TFile[] | boolean>(
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchOnMount: false,
+    refetchInterval: (data) => embedPollInterval(data),
     ...config,
     enabled: (config?.enabled ?? true) === true && queriesEnabled,
   });
@@ -38,6 +53,7 @@ export const useGetAgentFiles = <TData = t.TFile[]>(
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
       refetchOnMount: false,
+      refetchInterval: (data) => embedPollInterval(data),
       ...config,
       enabled: (config?.enabled ?? true) === true && queriesEnabled && !isEphemeralAgent(agentId),
     },

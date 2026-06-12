@@ -1193,6 +1193,7 @@
   "com_ui_lines_count": "{0} lines",
   "com_ui_link_copied": "Link copied",
   "com_ui_link_refreshed": "Link refreshed",
+  "com_ui_indexing": "Indexing…",
   "com_ui_live": "live",
   "com_ui_loading": "Loading...",
   "com_ui_locked": "Locked",
