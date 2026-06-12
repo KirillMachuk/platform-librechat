@@ -114,6 +114,7 @@ const {
   processFileURL,
   sweepExpiredFiles,
   startExpiredFileSweep,
+  resolveLargeDocRouting,
 } = require('./process');
 
 const PDF_MIME = 'application/pdf';
@@ -157,6 +158,94 @@ const makeFileConfig = ({ ocrSupportedMimeTypes = [] } = {}) => ({
   ocr: { supportedMimeTypes: ocrSupportedMimeTypes },
   stt: { supportedMimeTypes: [] },
   text: { supportedMimeTypes: [] },
+});
+
+describe('resolveLargeDocRouting (R3.4 — авто-маршрут больших документов в RAG)', () => {
+  const req = { config: {} };
+  const bigFile = { size: 500 * 1024, originalname: 'contract.pdf' };
+  const smallFile = { size: 1024, originalname: 'note.txt' };
+
+  let originalFlag;
+  beforeEach(() => {
+    originalFlag = process.env.RAG_AUTO_ROUTE_LARGE_DOC;
+    checkCapability.mockClear();
+    checkCapability.mockResolvedValue(true);
+  });
+  afterEach(() => {
+    if (originalFlag === undefined) {
+      delete process.env.RAG_AUTO_ROUTE_LARGE_DOC;
+    } else {
+      process.env.RAG_AUTO_ROUTE_LARGE_DOC = originalFlag;
+    }
+  });
+
+  it('флаг выключен → режим без изменений, capability не дёргается', async () => {
+    delete process.env.RAG_AUTO_ROUTE_LARGE_DOC;
+    const out = await resolveLargeDocRouting({
+      req,
+      file: bigFile,
+      toolResource: EToolResources.context,
+      isImage: false,
+    });
+    expect(out).toBe(EToolResources.context);
+    expect(checkCapability).not.toHaveBeenCalled();
+  });
+
+  it('флаг вкл + большой документ + file_search включён → file_search', async () => {
+    process.env.RAG_AUTO_ROUTE_LARGE_DOC = 'true';
+    const out = await resolveLargeDocRouting({
+      req,
+      file: bigFile,
+      toolResource: EToolResources.context,
+      isImage: false,
+    });
+    expect(out).toBe(EToolResources.file_search);
+  });
+
+  it('флаг вкл + маленький файл → остаётся context', async () => {
+    process.env.RAG_AUTO_ROUTE_LARGE_DOC = 'true';
+    const out = await resolveLargeDocRouting({
+      req,
+      file: smallFile,
+      toolResource: EToolResources.context,
+      isImage: false,
+    });
+    expect(out).toBe(EToolResources.context);
+  });
+
+  it('флаг вкл + большой, но file_search выключен → остаётся context (документ не теряется)', async () => {
+    process.env.RAG_AUTO_ROUTE_LARGE_DOC = 'true';
+    checkCapability.mockResolvedValue(false);
+    const out = await resolveLargeDocRouting({
+      req,
+      file: bigFile,
+      toolResource: EToolResources.context,
+      isImage: false,
+    });
+    expect(out).toBe(EToolResources.context);
+  });
+
+  it('флаг вкл + изображение → не трогаем', async () => {
+    process.env.RAG_AUTO_ROUTE_LARGE_DOC = 'true';
+    const out = await resolveLargeDocRouting({
+      req,
+      file: bigFile,
+      toolResource: EToolResources.context,
+      isImage: true,
+    });
+    expect(out).toBe(EToolResources.context);
+  });
+
+  it('флаг вкл + уже file_search → без изменений', async () => {
+    process.env.RAG_AUTO_ROUTE_LARGE_DOC = 'true';
+    const out = await resolveLargeDocRouting({
+      req,
+      file: bigFile,
+      toolResource: EToolResources.file_search,
+      isImage: false,
+    });
+    expect(out).toBe(EToolResources.file_search);
+  });
 });
 
 describe('processAgentFileUpload', () => {
