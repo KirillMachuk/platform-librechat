@@ -179,4 +179,38 @@ describe('embed worker state machine', () => {
     expect(backoffMs(4)).toBe(480_000);
     expect(backoffMs(10)).toBe(15 * 60_000);
   });
+
+  it('clears a stale embedError when rescheduling a transient failure', async () => {
+    await seed({ file_id: 'stale-err', embedError: 'http-500' });
+    const error = new Error('busy');
+    error.response = { status: 503 };
+    embedStoredFile.mockRejectedValueOnce(error);
+
+    const claimed = await claimNext();
+    await processClaimed(claimed, APP_CONFIG);
+
+    const record = await File.findOne({ file_id: 'stale-err' }).lean();
+    expect(record.embeddingStatus).toBe('pending');
+    expect(record.embedError ?? null).toBeNull();
+  });
+
+  it('leases a claim for longer than the embed timeout (no double-claim window)', async () => {
+    const prev = {
+      lease: process.env.RAG_EMBED_LEASE_MS,
+      timeout: process.env.RAG_EMBED_TIMEOUT_MS,
+    };
+    process.env.RAG_EMBED_LEASE_MS = '1000'; // 1s — deliberately below timeout
+    process.env.RAG_EMBED_TIMEOUT_MS = '600000'; // 10m
+    try {
+      await seed({ file_id: 'lease-clamp' });
+      const before = Date.now();
+      const claimed = await claimNext();
+      // lease is clamped to TIMEOUT + 60s, so the next-attempt time is far in
+      // the future — a second worker cannot re-claim while the first embeds.
+      expect(claimed.embedNextAt.getTime() - before).toBeGreaterThan(600_000);
+    } finally {
+      process.env.RAG_EMBED_LEASE_MS = prev.lease;
+      process.env.RAG_EMBED_TIMEOUT_MS = prev.timeout;
+    }
+  });
 });

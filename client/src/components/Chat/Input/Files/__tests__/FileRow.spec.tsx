@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { FileSources, dataService } from 'librechat-data-provider';
 import type { ExtendedFile } from '~/common';
@@ -403,6 +403,33 @@ describe('FileRow', () => {
 
       expect(mockSetFilesLoading).toHaveBeenCalledWith(false);
       expect(mockGetFiles).not.toHaveBeenCalled();
+    });
+
+    it('drops an indexing attachment that disappeared server-side (releases the block)', async () => {
+      jest.useFakeTimers();
+      try {
+        mockGetFiles.mockResolvedValue([]); // file no longer exists on the server
+        const file = createMockFile({
+          file_id: 'gone-1',
+          type: 'application/pdf',
+          progress: 1,
+          embeddingStatus: 'pending',
+        });
+        renderFileRow(new Map([[file.file_id, file]]));
+
+        await act(async () => {
+          jest.advanceTimersByTime(5000);
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+
+        const updater = mockSetFiles.mock.calls.at(-1)?.[0];
+        expect(typeof updater).toBe('function');
+        const result = updater(new Map([[file.file_id, file]]));
+        expect(result.has('gone-1')).toBe(false);
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 });

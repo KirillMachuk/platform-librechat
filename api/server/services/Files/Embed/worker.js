@@ -1,7 +1,7 @@
 const { logger, runAsSystem } = require('@librechat/data-schemas');
 const { getAppConfig } = require('~/server/services/Config');
 const { embedStoredFile, logAxiosError } = require('./crud');
-const { getFiles, updateFile } = require('~/models');
+const { claimNextEmbedFile, updateFile } = require('~/models');
 
 /**
  * Background RAG-embedding worker (RAG_ASYNC_EMBED).
@@ -27,8 +27,12 @@ const intEnv = (name, fallback) => {
 };
 
 const POLL_MS = () => intEnv('RAG_EMBED_POLL_MS', 3_000);
-const LEASE_MS = () => intEnv('RAG_EMBED_LEASE_MS', 30 * 60_000);
 const TIMEOUT_MS = () => intEnv('RAG_EMBED_TIMEOUT_MS', 30 * 60_000);
+/* The lease MUST exceed the embed timeout, otherwise the lease can expire
+ * while the first worker is still embedding and a second worker re-claims the
+ * file — a duplicate parse at the (serialized) doc-gateway. Clamp to
+ * TIMEOUT + 60s regardless of the configured value. */
+const LEASE_MS = () => Math.max(intEnv('RAG_EMBED_LEASE_MS', 40 * 60_000), TIMEOUT_MS() + 60_000);
 const MAX_ATTEMPTS = () => intEnv('RAG_EMBED_MAX_ATTEMPTS', 5);
 const CONCURRENCY = () => intEnv('RAG_EMBED_CONCURRENCY', 1);
 
@@ -44,36 +48,15 @@ const isPermanentFailure = (error) => {
 };
 
 /**
- * Claims the oldest due record (pending retry or expired processing lease)
- * with a CAS on `{ embeddingStatus, embedNextAt }`, so concurrent loops and
- * multiple instances cannot double-claim.
+ * Atomically claims the oldest due record (pending retry or expired
+ * processing lease) via a single findOneAndUpdate. Atomic claiming means
+ * concurrent loops and multiple app instances can never double-claim, and it
+ * touches one document instead of materialising the whole pending backlog
+ * each poll.
  * @returns {Promise<MongoFile | null>} the claimed record, or null
  */
 async function claimNext() {
-  const now = new Date();
-  const candidates = await getFiles(
-    {
-      embeddingStatus: { $in: ['pending', 'processing'] },
-      embedNextAt: { $lte: now },
-    },
-    { embedNextAt: 1, updatedAt: 1 },
-    { text: 0 },
-  );
-  for (const candidate of candidates ?? []) {
-    const claimed = await updateFile(
-      {
-        file_id: candidate.file_id,
-        embeddingStatus: 'processing',
-        embedNextAt: new Date(Date.now() + LEASE_MS()),
-        embedAttempts: (candidate.embedAttempts ?? 0) + 1,
-      },
-      { embeddingStatus: candidate.embeddingStatus, embedNextAt: candidate.embedNextAt },
-    );
-    if (claimed) {
-      return claimed;
-    }
-  }
-  return null;
+  return claimNextEmbedFile(LEASE_MS());
 }
 
 /** Embeds one claimed record and commits the resulting state transition. */
@@ -110,6 +93,7 @@ async function processClaimed(file, appConfig) {
       file_id: file.file_id,
       embeddingStatus: 'pending',
       embedNextAt: new Date(Date.now() + backoffMs(file.embedAttempts ?? 1)),
+      embedError: null,
     });
   }
 }
@@ -133,9 +117,9 @@ function startEmbedWorker() {
   );
 
   const loop = async () => {
+    const appConfig = await getAppConfig({ baseOnly: true });
     while (running) {
       try {
-        const appConfig = await getAppConfig({ baseOnly: true });
         const claimed = await runAsSystem(claimNext);
         if (!claimed) {
           await new Promise((resolve) => setTimeout(resolve, POLL_MS()));
