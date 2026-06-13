@@ -574,6 +574,8 @@ export interface ExtendedFile {
   source?: FileSources;
   attached?: boolean;
   embedded?: boolean;
+  /** Async RAG embedding lifecycle (RAG_ASYNC_EMBED); see TFile.embeddingStatus. */
+  embeddingStatus?: t.TFile['embeddingStatus'];
   tool_resource?: string;
   metadata?: t.TFile['metadata'];
 }
