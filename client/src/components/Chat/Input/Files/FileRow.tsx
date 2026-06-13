@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useToastContext } from '@librechat/client';
-import { EToolResources } from 'librechat-data-provider';
+import { EToolResources, dataService } from 'librechat-data-provider';
 import type { ExtendedFile } from '~/common';
 import { useDeleteFilesMutation } from '~/data-provider';
 import { logger, getCachedPreview } from '~/utils';
@@ -38,6 +38,17 @@ export default function FileRow({
     fileFilter ? fileFilter(file) : true,
   );
 
+  /* RAG_ASYNC_EMBED: file_ids of attachments still indexing into the vector
+   * store. Stable string key so the poll effect re-subscribes only when the
+   * set actually changes (not on every render). Empty — and thus inert — when
+   * the async flag is off and no record carries `embeddingStatus`. */
+  const indexingKey = files
+    .filter((file) => file.embeddingStatus === 'pending' || file.embeddingStatus === 'processing')
+    .map((file) => file.file_id)
+    .filter(Boolean)
+    .sort()
+    .join(',');
+
   const { mutateAsync } = useDeleteFilesMutation({
     onMutate: async () =>
       logger.log(
@@ -69,11 +80,62 @@ export default function FileRow({
       return;
     }
 
+    // RAG_ASYNC_EMBED: keep send disabled while an attachment is still indexing
+    // — the document is uploaded but not yet searchable, so a question now would
+    // miss it. Mirrors the upload-in-progress block (ChatGPT-style gate).
+    if (indexingKey) {
+      setFilesLoading(true);
+      return;
+    }
+
     if (files.every((file) => file.progress === 1)) {
       setFilesLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [files]);
+  }, [files, indexingKey]);
+
+  /* Poll the embedding status of indexing attachments and fold the result back
+   * into the file map, so the send-button block above releases on its own once
+   * the vector store can see the document. Runs only while something is
+   * indexing; tears down when the set empties. */
+  useEffect(() => {
+    if (!indexingKey) {
+      return;
+    }
+    let cancelled = false;
+    const sync = async () => {
+      try {
+        const allFiles = await dataService.getFiles();
+        if (cancelled) {
+          return;
+        }
+        const freshById = new Map(allFiles.map((file) => [file.file_id, file]));
+        setFiles((current) => {
+          let changed = false;
+          const next = new Map(current);
+          for (const [key, file] of next) {
+            const fresh = file.file_id ? freshById.get(file.file_id) : undefined;
+            if (fresh && fresh.embeddingStatus !== file.embeddingStatus) {
+              next.set(key, {
+                ...file,
+                embeddingStatus: fresh.embeddingStatus,
+                embedded: fresh.embedded ?? file.embedded,
+              });
+              changed = true;
+            }
+          }
+          return changed ? next : current;
+        });
+      } catch {
+        // Transient (network/auth refresh); the next tick retries.
+      }
+    };
+    const intervalId = setInterval(sync, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [indexingKey, setFiles]);
 
   if (files.length === 0) {
     return null;

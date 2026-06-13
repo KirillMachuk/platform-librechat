@@ -1,9 +1,17 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { FileSources } from 'librechat-data-provider';
+import { FileSources, dataService } from 'librechat-data-provider';
 import type { ExtendedFile } from '~/common';
 import FileRow from '../FileRow';
+
+jest.mock('librechat-data-provider', () => {
+  const actual = jest.requireActual('librechat-data-provider');
+  return {
+    ...actual,
+    dataService: { ...actual.dataService, getFiles: jest.fn().mockResolvedValue([]) },
+  };
+});
 
 jest.mock('~/hooks', () => ({
   useLocalize: jest.fn(),
@@ -358,6 +366,43 @@ describe('FileRow', () => {
       expect(imageUrl).toBe(
         '/images/68c98b26901ebe2d87c193a2/c0fe1b93-ba3d-456c-80be-9a492bfd9ed0__image.png',
       );
+    });
+  });
+
+  describe('async embedding gate (RAG_ASYNC_EMBED)', () => {
+    const mockGetFiles = dataService.getFiles as jest.Mock;
+
+    it('keeps send disabled while an uploaded attachment is still indexing', () => {
+      const file = createMockFile({
+        file_id: 'indexing-1',
+        type: 'application/pdf',
+        progress: 1,
+        embeddingStatus: 'pending',
+      });
+      renderFileRow(new Map([[file.file_id, file]]));
+
+      expect(mockSetFilesLoading).toHaveBeenCalledWith(true);
+      expect(mockSetFilesLoading).not.toHaveBeenCalledWith(false);
+    });
+
+    it('enables send once the attachment finished indexing (ready)', () => {
+      const file = createMockFile({
+        file_id: 'ready-1',
+        type: 'application/pdf',
+        progress: 1,
+        embeddingStatus: 'ready',
+      });
+      renderFileRow(new Map([[file.file_id, file]]));
+
+      expect(mockSetFilesLoading).toHaveBeenCalledWith(false);
+    });
+
+    it('does not gate synchronous uploads (no embeddingStatus field)', () => {
+      const file = createMockFile({ file_id: 'sync-1', type: 'application/pdf', progress: 1 });
+      renderFileRow(new Map([[file.file_id, file]]));
+
+      expect(mockSetFilesLoading).toHaveBeenCalledWith(false);
+      expect(mockGetFiles).not.toHaveBeenCalled();
     });
   });
 });
