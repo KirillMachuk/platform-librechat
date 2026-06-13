@@ -1234,8 +1234,17 @@ class BaseClient {
         allFiles.push(file);
         continue;
       }
+      /* `embeddingStatus != null` marks a file routed to RAG whose async
+       * embed (RAG_ASYNC_EMBED) has not necessarily finished. It must NEVER
+       * fall through to the document-inlining branches below: a 20MB scan
+       * would be base64-inlined into the LLM request (413 at the
+       * anonymizer/provider) and the whole document would leave the
+       * sovereignty perimeter — the exact thing RAG routing exists to
+       * prevent. While pending, `primeFiles` already tells the agent the
+       * file is still indexing. */
       if (
         file.embedded === true ||
+        file.embeddingStatus != null ||
         file.metadata?.codeEnvRef != null ||
         file.metadata?.fileIdentifier != null
       ) {
