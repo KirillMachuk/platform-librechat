@@ -462,6 +462,39 @@ export function createFileMethods(mongoose: typeof import('mongoose')) {
     return result.modifiedCount ?? 0;
   }
 
+  /**
+   * Atomically claims the oldest due async-embedding record (RAG_ASYNC_EMBED)
+   * — a 'pending' file due for (re)try, or a 'processing' file whose lease
+   * expired after a worker crash — and leases it for `leaseMs`. A single
+   * findOneAndUpdate eliminates the fetch-then-CAS race, so concurrent worker
+   * loops or multiple app instances cannot double-claim the same file.
+   * `expiresAt` is cleared so the short-lived upload TTL cannot delete a file
+   * mid-embed.
+   *
+   * @param leaseMs - Lease duration; MUST exceed the embed timeout, else a
+   *   second worker could claim a file the first is still embedding.
+   * @returns The claimed record ('processing'), or null if nothing is due.
+   */
+  async function claimNextEmbedFile(leaseMs: number): Promise<IMongoFile | null> {
+    const File = mongoose.models.File as Model<IMongoFile>;
+    const now = new Date();
+    return File.findOneAndUpdate(
+      {
+        embeddingStatus: { $in: ['pending', 'processing'] },
+        embedNextAt: { $lte: now },
+      },
+      {
+        $set: {
+          embeddingStatus: 'processing',
+          embedNextAt: new Date(now.getTime() + leaseMs),
+        },
+        $inc: { embedAttempts: 1 },
+        $unset: { expiresAt: '' },
+      },
+      { sort: { embedNextAt: 1 }, new: true },
+    ).lean<IMongoFile>();
+  }
+
   return {
     findFileById,
     getFiles,
@@ -470,6 +503,7 @@ export function createFileMethods(mongoose: typeof import('mongoose')) {
     getCodeGeneratedFiles,
     getUserCodeFiles,
     claimCodeFile,
+    claimNextEmbedFile,
     createFile,
     updateFile,
     updateFileUsage,

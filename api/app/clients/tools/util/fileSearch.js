@@ -118,10 +118,12 @@ const primeFiles = async (options) => {
       filename: file.filename,
       // Preserve the entity namespace the file was embedded under so that
       // the RAG /query call uses the same entity_id that /embed used.
-      // Project source files are embedded with entity_id=project_id; without
-      // this the query falls back to the agent id, hits a different namespace,
-      // and returns zero results.
-      entity_id: file.project_id ?? undefined,
+      // `embedEntityId` is the namespace the async embed worker used
+      // (agent_id for agent knowledge, project_id for project sources);
+      // prefer it so the query matches the embed explicitly instead of
+      // relying on the tool-level fallback. Falls back to project_id for
+      // legacy/sync records that predate the field.
+      entity_id: file.embedEntityId ?? file.project_id ?? undefined,
     });
   }
 

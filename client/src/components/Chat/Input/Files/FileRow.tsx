@@ -115,6 +115,14 @@ export default function FileRow({
           const next = new Map(current);
           for (const [key, file] of next) {
             const fresh = file.file_id ? freshById.get(file.file_id) : undefined;
+            if (!fresh && file.file_id && file.embeddingStatus) {
+              // An indexing attachment vanished server-side (deleted / retention
+              // cleanup). Drop it from local state so indexingKey empties and the
+              // send-button block releases — otherwise the poll runs forever.
+              next.delete(key);
+              changed = true;
+              continue;
+            }
             if (fresh && fresh.embeddingStatus !== file.embeddingStatus) {
               next.set(key, {
                 ...file,
