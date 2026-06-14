@@ -223,7 +223,7 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
                   <span className="sr-only">{localize('com_ui_close_settings')}</span>
                 </button>
               </DialogTitle>
-              <div className="max-h-[calc(90vh-120px)] overflow-auto px-6 md:w-[840px]">
+              <div className="h-[600px] max-h-[calc(90vh-120px)] overflow-auto px-6 md:w-[840px]">
                 <Tabs.Root
                   value={activeTab}
                   onValueChange={handleTabChange}
