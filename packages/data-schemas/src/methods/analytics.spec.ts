@@ -66,15 +66,26 @@ beforeEach(async () => {
       createdAt: new Date('2026-01-01T10:00:00.000Z'),
     },
     {
+      // Agent answer: top-level text is empty, the answer lives in content as `{ value }`.
       messageId: 'm1-a',
       conversationId: 'c1',
       user: aliceId,
       isCreatedByUser: false,
       sender: 'Assistant',
-      content: [{ type: 'text', text: 'Вот черновик договора' }],
+      content: [{ type: 'text', text: { value: 'Вот черновик договора' } }],
       model: 'gpt-x',
       endpoint: 'agents',
       createdAt: new Date('2026-01-01T10:00:05.000Z'),
+    },
+    {
+      // Reasoning turn: text under the `think` key.
+      messageId: 'm1-b',
+      conversationId: 'c1',
+      user: aliceId,
+      isCreatedByUser: false,
+      sender: 'Assistant',
+      content: [{ type: 'think', think: 'рассуждение модели' }],
+      createdAt: new Date('2026-01-01T10:00:06.000Z'),
     },
     {
       messageId: 'm2',
@@ -91,10 +102,11 @@ beforeEach(async () => {
 
 describe('listInteractions', () => {
   test('returns only user requests, newest first, with joined author/agent/title', async () => {
-    const rows = await methods.listInteractions({}, { limit: 10, offset: 0 });
+    const { interactions, hasMore } = await methods.listInteractions({}, { limit: 10, offset: 0 });
 
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({
+    expect(interactions).toHaveLength(2);
+    expect(hasMore).toBe(false);
+    expect(interactions[0]).toMatchObject({
       messageId: 'm2',
       userId: bobId,
       userEmail: 'bob@x.io',
@@ -104,7 +116,7 @@ describe('listInteractions', () => {
       conversationTitle: 'Отчёт',
       preview: 'Сделай отчёт по продажам',
     });
-    expect(rows[1]).toMatchObject({
+    expect(interactions[1]).toMatchObject({
       messageId: 'm1',
       userEmail: 'alice@x.io',
       agentId: 'agent-legal',
@@ -113,51 +125,67 @@ describe('listInteractions', () => {
   });
 
   test('filters by employee', async () => {
-    const rows = await methods.listInteractions({ userId: aliceId }, { limit: 10, offset: 0 });
-    expect(rows).toHaveLength(1);
-    expect(rows[0].messageId).toBe('m1');
+    const { interactions } = await methods.listInteractions(
+      { userId: aliceId },
+      { limit: 10, offset: 0 },
+    );
+    expect(interactions).toHaveLength(1);
+    expect(interactions[0].messageId).toBe('m1');
   });
 
   test('filters by model and endpoint', async () => {
     const byModel = await methods.listInteractions({ model: 'gpt-x' }, { limit: 10, offset: 0 });
-    expect(byModel.map((r) => r.messageId)).toEqual(['m1']);
+    expect(byModel.interactions.map((r) => r.messageId)).toEqual(['m1']);
 
     const byEndpoint = await methods.listInteractions(
       { endpoint: 'openai' },
       { limit: 10, offset: 0 },
     );
-    expect(byEndpoint.map((r) => r.messageId)).toEqual(['m2']);
+    expect(byEndpoint.interactions.map((r) => r.messageId)).toEqual(['m2']);
   });
 
   test('filters by agent (resolves conversation ids)', async () => {
-    const rows = await methods.listInteractions(
+    const matched = await methods.listInteractions(
       { agentId: 'agent-legal' },
       { limit: 10, offset: 0 },
     );
-    expect(rows.map((r) => r.messageId)).toEqual(['m1']);
+    expect(matched.interactions.map((r) => r.messageId)).toEqual(['m1']);
 
     const none = await methods.listInteractions({ agentId: 'missing' }, { limit: 10, offset: 0 });
-    expect(none).toHaveLength(0);
+    expect(none.interactions).toHaveLength(0);
+  });
+
+  test('accepts pre-resolved conversationIds', async () => {
+    const { interactions } = await methods.listInteractions(
+      { conversationIds: ['c1'] },
+      { limit: 10, offset: 0 },
+    );
+    expect(interactions.map((r) => r.messageId)).toEqual(['m1']);
   });
 
   test('case-insensitive substring search over request text', async () => {
-    const rows = await methods.listInteractions({ search: 'договор' }, { limit: 10, offset: 0 });
-    expect(rows.map((r) => r.messageId)).toEqual(['m1']);
+    const { interactions } = await methods.listInteractions(
+      { search: 'договор' },
+      { limit: 10, offset: 0 },
+    );
+    expect(interactions.map((r) => r.messageId)).toEqual(['m1']);
   });
 
   test('filters by date window', async () => {
-    const rows = await methods.listInteractions(
+    const { interactions } = await methods.listInteractions(
       { from: new Date('2026-01-15T00:00:00.000Z') },
       { limit: 10, offset: 0 },
     );
-    expect(rows.map((r) => r.messageId)).toEqual(['m2']);
+    expect(interactions.map((r) => r.messageId)).toEqual(['m2']);
   });
 
-  test('paginates', async () => {
+  test('paginates and reports hasMore', async () => {
     const page1 = await methods.listInteractions({}, { limit: 1, offset: 0 });
     const page2 = await methods.listInteractions({}, { limit: 1, offset: 1 });
-    expect(page1.map((r) => r.messageId)).toEqual(['m2']);
-    expect(page2.map((r) => r.messageId)).toEqual(['m1']);
+    expect(page1.interactions.map((r) => r.messageId)).toEqual(['m2']);
+    expect(page1.hasMore).toBe(true);
+    expect(page2.interactions.map((r) => r.messageId)).toEqual(['m1']);
+    expect(page2.hasMore).toBe(false);
   });
 
   test('truncates the preview to the configured length', async () => {
@@ -170,8 +198,11 @@ describe('listInteractions', () => {
       text: long,
       createdAt: new Date('2026-03-01T00:00:00.000Z'),
     });
-    const rows = await methods.listInteractions({ search: 'aaaa' }, { limit: 10, offset: 0 });
-    expect(rows[0].preview.length).toBe(280);
+    const { interactions } = await methods.listInteractions(
+      { search: 'aaaa' },
+      { limit: 10, offset: 0 },
+    );
+    expect(interactions[0].preview.length).toBe(280);
   });
 });
 
@@ -188,19 +219,24 @@ describe('countInteractions', () => {
 });
 
 describe('getConversationDetail', () => {
-  test('returns ordered turns with resolved text and author info', async () => {
+  test('returns ordered turns, resolving agent {value} answers and reasoning content', async () => {
     const detail = await methods.getConversationDetail('c1');
 
     expect(detail).not.toBeNull();
     expect(detail?.title).toBe('Договоры');
     expect(detail?.agentId).toBe('agent-legal');
     expect(detail?.userEmail).toBe('alice@x.io');
-    expect(detail?.messages).toHaveLength(2);
+    expect(detail?.truncated).toBe(false);
+    expect(detail?.messages).toHaveLength(3);
     expect(detail?.messages[0]).toMatchObject({ messageId: 'm1', isCreatedByUser: true });
     expect(detail?.messages[1]).toMatchObject({
       messageId: 'm1-a',
       isCreatedByUser: false,
       text: 'Вот черновик договора',
+    });
+    expect(detail?.messages[2]).toMatchObject({
+      messageId: 'm1-b',
+      text: 'рассуждение модели',
     });
   });
 

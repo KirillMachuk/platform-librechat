@@ -203,6 +203,8 @@ export type AnalyticsInteractionFilter = {
   userId?: string;
   /** Filter by agent (`conversations.agent_id`). */
   agentId?: string;
+  /** Pre-resolved conversation ids (e.g. from an agent lookup) to scope the feed to. */
+  conversationIds?: string[];
   model?: string;
   endpoint?: string;
   /** Case-insensitive substring search over the request text. */
@@ -250,6 +252,8 @@ export type AnalyticsConversation = {
   userEmail?: string;
   userName?: string;
   messages: AnalyticsConversationMessage[];
+  /** True when the message list was capped (more turns exist than returned). */
+  truncated: boolean;
 };
 
 /** A single interaction row as returned by the admin analytics endpoint (ISO date). */
@@ -257,10 +261,11 @@ export type AdminInteraction = Omit<AnalyticsInteraction, 'createdAt'> & {
   createdAt?: string;
 };
 
-/** The admin analytics interaction list response. */
+/** The admin analytics interaction list response. Uses `hasMore` (cheap over-fetch)
+ * instead of an exact total to avoid a full count scan on every page at scale. */
 export type AdminInteractionList = {
   interactions: AdminInteraction[];
-  total: number;
+  hasMore: boolean;
   limit: number;
   offset: number;
 };

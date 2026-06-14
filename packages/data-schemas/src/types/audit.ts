@@ -10,6 +10,7 @@ export type AuditAction =
   | 'file.cite'
   | 'agent.invoke'
   | 'conversation.read'
+  | 'conversation.search'
   | 'permission.grant'
   | 'permission.revoke'
   | 'admin.config_change'

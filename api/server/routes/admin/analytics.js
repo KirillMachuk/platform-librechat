@@ -13,8 +13,8 @@ const requireReadConversations = requireCapability(SystemCapabilities.READ_CONVE
 
 const handlers = createAdminAnalyticsHandlers({
   listInteractions: db.listInteractions,
-  countInteractions: db.countInteractions,
   getConversationDetail: db.getConversationDetail,
+  resolveAgentConversationIds: db.resolveAgentConversationIds,
   recordAudit,
 });
 
