@@ -30,7 +30,10 @@ const {
   getDefaultHandlers,
 } = require('~/server/controllers/agents/callbacks');
 const { loadAgentTools, loadToolsForExecution } = require('~/server/services/ToolService');
-const { filterFilesByAgentAccess } = require('~/server/services/Files/permissions');
+const {
+  filterFilesByAgentAccess,
+  filterRequestFilesByAccess,
+} = require('~/server/services/Files/permissions');
 const {
   getSkillToolDeps,
   enrichWithSkillConfigurable,
@@ -438,6 +441,7 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
       getToolFilesByIds: db.getToolFilesByIds,
       getCodeGeneratedFiles: db.getCodeGeneratedFiles,
       filterFilesByAgentAccess,
+      filterRequestFilesByAccess,
       listSkillsByAccess: db.listSkillsByAccess,
       listAlwaysApplySkills: db.listAlwaysApplySkills,
       getSkillByName: db.getSkillByName,
@@ -513,6 +517,7 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
         getToolFilesByIds: db.getToolFilesByIds,
         getCodeGeneratedFiles: db.getCodeGeneratedFiles,
         filterFilesByAgentAccess,
+        filterRequestFilesByAccess,
         listSkillsByAccess: db.listSkillsByAccess,
         listAlwaysApplySkills: db.listAlwaysApplySkills,
         getSkillByName: db.getSkillByName,
@@ -728,6 +733,7 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
           getToolFilesByIds: db.getToolFilesByIds,
           getCodeGeneratedFiles: db.getCodeGeneratedFiles,
           filterFilesByAgentAccess,
+          filterRequestFilesByAccess,
           listSkillsByAccess: db.listSkillsByAccess,
           listAlwaysApplySkills: db.listAlwaysApplySkills,
           getSkillByName: db.getSkillByName,

@@ -5,7 +5,10 @@ const {
   validateAgentModel,
   loadAddedAgent: loadAddedAgentFn,
 } = require('@librechat/api');
-const { filterFilesByAgentAccess } = require('~/server/services/Files/permissions');
+const {
+  filterFilesByAgentAccess,
+  filterRequestFilesByAccess,
+} = require('~/server/services/Files/permissions');
 const { getMCPServerTools } = require('~/server/services/Config');
 const db = require('~/models');
 
@@ -118,6 +121,7 @@ const processAddedConvo = async ({
         getToolFilesByIds: db.getToolFilesByIds,
         getCodeGeneratedFiles: db.getCodeGeneratedFiles,
         filterFilesByAgentAccess,
+        filterRequestFilesByAccess,
       },
     );
 
