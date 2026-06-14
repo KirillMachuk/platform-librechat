@@ -15,7 +15,11 @@ const { logger } = require('@librechat/data-schemas');
 const { Constants, PermissionBits, ResourceType } = require('librechat-data-provider');
 const { checkPermission } = require('~/server/services/PermissionService');
 const { getAgent, getFiles } = require('~/models');
-const { filterFilesByAgentAccess, hasAccessToFilesViaAgent } = require('./permissions');
+const {
+  filterFilesByAgentAccess,
+  filterRequestFilesByAccess,
+  hasAccessToFilesViaAgent,
+} = require('./permissions');
 
 const AUTHOR_ID = 'author-user-id';
 const USER_ID = 'viewer-user-id';
@@ -439,5 +443,88 @@ describe('hasAccessToFilesViaAgent', () => {
 
       expect(result.get('f1')).toBe(false);
     });
+  });
+});
+
+describe('filterRequestFilesByAccess', () => {
+  const EPHEMERAL_AGENT_ID = Constants.EPHEMERAL_AGENT_ID;
+
+  it('drops a non-owned file for an ephemeral agent (cross-user IDOR guard)', async () => {
+    // Ephemeral agents are not saved DB agents — getAgent resolves to null.
+    getAgent.mockResolvedValue(null);
+
+    const ownFile = makeFile('own-1', USER_ID);
+    const victimFile = makeFile('victim-1', 'other-user-id');
+
+    const result = await filterRequestFilesByAccess({
+      files: [ownFile, victimFile],
+      userId: USER_ID,
+      agentId: EPHEMERAL_AGENT_ID,
+    });
+
+    expect(result).toEqual([ownFile]);
+
+    // Contrast: the agent-scoped variant short-circuits for ephemeral agents
+    // and would leak the victim's file — this is exactly the gap being closed.
+    const leaky = await filterFilesByAgentAccess({
+      files: [ownFile, victimFile],
+      userId: USER_ID,
+      agentId: EPHEMERAL_AGENT_ID,
+    });
+    expect(leaky).toEqual([ownFile, victimFile]);
+  });
+
+  it('keeps the requester’s own files for an ephemeral agent without a DB lookup', async () => {
+    const files = [makeFile('own-1', USER_ID), makeFile('own-2', USER_ID)];
+
+    const result = await filterRequestFilesByAccess({
+      files,
+      userId: USER_ID,
+      agentId: EPHEMERAL_AGENT_ID,
+    });
+
+    expect(result).toEqual(files);
+    expect(getAgent).not.toHaveBeenCalled();
+  });
+
+  it('keeps owned + author-attached files for a real shared agent with VIEW', async () => {
+    getAgent.mockResolvedValue(makeAgent());
+    checkPermission.mockResolvedValue(true);
+
+    const ownFile = makeFile('own-1', USER_ID);
+    const sharedAttached = makeFile('attached-1', AUTHOR_ID); // attached & author-owned
+    const foreignUnattached = makeFile('not-attached', AUTHOR_ID); // author-owned, not attached
+    const otherUserFile = makeFile('rogue-1', 'other-user-id');
+
+    const result = await filterRequestFilesByAccess({
+      files: [ownFile, sharedAttached, foreignUnattached, otherUserFile],
+      userId: USER_ID,
+      role: 'USER',
+      agentId: AGENT_ID,
+    });
+
+    expect(result).toEqual([ownFile, sharedAttached]);
+  });
+
+  it('returns files unchanged when userId is missing', async () => {
+    const files = [makeFile('f1', 'whoever')];
+    const result = await filterRequestFilesByAccess({
+      files,
+      userId: undefined,
+      agentId: EPHEMERAL_AGENT_ID,
+    });
+
+    expect(result).toBe(files);
+    expect(getAgent).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty array for empty input', async () => {
+    const result = await filterRequestFilesByAccess({
+      files: [],
+      userId: USER_ID,
+      agentId: EPHEMERAL_AGENT_ID,
+    });
+
+    expect(result).toEqual([]);
   });
 });

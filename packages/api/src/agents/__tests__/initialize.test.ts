@@ -632,6 +632,56 @@ describe('initializeAgent — attachment scoping', () => {
     expect(result.requestAttachments).toEqual([requestFile]);
     expect(result.agentContextAttachments).toEqual([agentContextFile]);
   });
+
+  it('filters request attachments by ownership before priming', async () => {
+    const { primeResources } = jest.requireMock('../resources') as {
+      primeResources: jest.Mock;
+    };
+    const { filterFilesByEndpointConfig } = jest.requireMock('~/files') as {
+      filterFilesByEndpointConfig: jest.Mock;
+    };
+
+    const ownFile = { file_id: 'own-1', filename: 'own.txt', user: 'user-1' };
+    const victimFile = { file_id: 'victim-1', filename: 'victim.txt', user: 'user-2' };
+
+    // Endpoint-config filter is mocked to []; return the loaded files so the
+    // ownership guard (not size/MIME) is what's under test here.
+    filterFilesByEndpointConfig.mockReturnValueOnce([ownFile, victimFile]);
+    primeResources.mockResolvedValueOnce({
+      attachments: [],
+      requestAttachments: [],
+      agentContextAttachments: undefined,
+      tool_resources: undefined,
+    });
+
+    const { agent, req, res, loadTools, db } = createMocks();
+    db.updateFilesUsage = jest.fn().mockResolvedValue([ownFile, victimFile]);
+    db.filterRequestFilesByAccess = jest.fn(
+      async ({ files, userId }: { files: Array<{ user?: string }>; userId: string }) =>
+        files.filter((file) => file.user === userId),
+    ) as unknown as InitializeAgentDbMethods['filterRequestFilesByAccess'];
+
+    await initializeAgent(
+      {
+        req,
+        res,
+        agent,
+        loadTools,
+        requestFiles: [ownFile, victimFile] as never,
+        endpointOption: { endpoint: EModelEndpoint.agents },
+        allowedProviders: new Set([Providers.OPENAI]),
+        isInitialAgent: true,
+      },
+      db,
+    );
+
+    expect(db.filterRequestFilesByAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', agentId: 'agent-1' }),
+    );
+    // The cross-user file never reaches primeResources (and thus the prompt).
+    const primedAttachments = await primeResources.mock.calls[0][0].attachments;
+    expect(primedAttachments).toEqual([ownFile]);
+  });
 });
 
 describe('initializeAgent — maxContextTokens', () => {

@@ -306,6 +306,10 @@ export interface InitializeAgentDbMethods extends EndpointDbMethods {
   getFiles: (filter: unknown, sort: unknown, select: unknown) => Promise<unknown[]>;
   /** Filter files by agent access permissions (ownership or agent attachment) */
   filterFilesByAgentAccess?: TFilterFilesByAgentAccess;
+  /** Filter request-attachment files by ownership / agent access. Enforced even
+   *  for ephemeral agents (unlike `filterFilesByAgentAccess`), so a user cannot
+   *  reference another user's `file_id` and read its content cross-user. */
+  filterRequestFilesByAccess?: TFilterFilesByAgentAccess;
   /** Get tool files by IDs (user-uploaded files only, code files handled separately) */
   getToolFilesByIds: (fileIds: string[], toolSet: Set<EToolResources>) => Promise<unknown[]>;
   /** Get conversation file IDs */
@@ -563,6 +567,23 @@ export async function initializeAgent(
       endpoint: agent.endpoint ?? '',
       endpointType,
     });
+  }
+
+  /**
+   * Ownership guard for request attachments. `req.body.files` is
+   * client-controlled and `updateFilesUsage` loads files by `file_id` alone, so
+   * without this a user could attach another user's `file_id` and have its
+   * extracted text inlined (`extractFileContext`) or sent to a vision model.
+   * Drops any file the requester neither owns nor can reach via a real shared
+   * agent; for the ephemeral-agent endpoints this collapses to owned-only.
+   */
+  if (currentFiles && currentFiles.length && req.user?.id && db.filterRequestFilesByAccess) {
+    currentFiles = (await db.filterRequestFilesByAccess({
+      files: currentFiles as unknown as TFile[],
+      userId: req.user.id,
+      role: req.user.role,
+      agentId: agent.id,
+    })) as unknown as IMongoFile[];
   }
 
   const {
