@@ -11,6 +11,7 @@ export type AuditAction =
   | 'agent.invoke'
   | 'conversation.read'
   | 'conversation.search'
+  | 'conversation.export'
   | 'permission.grant'
   | 'permission.revoke'
   | 'admin.config_change'

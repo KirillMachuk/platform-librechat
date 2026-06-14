@@ -2,6 +2,7 @@ import { logger, isValidObjectIdString } from '@librechat/data-schemas';
 import type {
   AuditLogInput,
   AdminInteraction,
+  AnalyticsExportRow,
   AnalyticsConversation,
   AnalyticsInteraction,
   AdminConversationDetail,
@@ -16,12 +17,20 @@ import { parsePagination } from './pagination';
 const MAX_SEARCH_LEN = 200;
 /** Reject pathological deep-paging that would force an unbounded $skip walk. */
 const MAX_OFFSET = 100000;
+/** Safety cap on rows returned by a single CSV export. */
+const MAX_EXPORT_ROWS = 50000;
+/** CSV header row — mirrors the visible feed columns. */
+const EXPORT_HEADERS = ['Время', 'Сотрудник', 'Email', 'Модель/агент', 'Запрос'];
 
 export interface AdminAnalyticsDeps {
   listInteractions: (
     filter: AnalyticsInteractionFilter,
     options: { limit: number; offset: number },
   ) => Promise<{ interactions: AnalyticsInteraction[]; hasMore: boolean }>;
+  exportInteractions: (
+    filter: AnalyticsInteractionFilter,
+    options: { limit: number },
+  ) => Promise<AnalyticsExportRow[]>;
   getConversationDetail: (
     conversationId: string,
     tenantId?: string,
@@ -76,6 +85,31 @@ function toConversationDetail(detail: AnalyticsConversation): AdminConversationD
   };
 }
 
+/** Escapes a CSV cell (RFC 4180): quote when it contains a comma/quote/newline. */
+function csvCell(value: string): string {
+  return /["\n\r,]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+/** Renders export rows as a UTF-8 CSV (BOM so Excel reads Cyrillic; CRLF line endings). */
+function buildCsv(rows: AnalyticsExportRow[]): string {
+  const lines = [EXPORT_HEADERS.join(',')];
+  for (const r of rows) {
+    const modelAgent = r.agentName ? `${r.model ?? ''} · агент: ${r.agentName}` : (r.model ?? '');
+    lines.push(
+      [
+        r.createdAt ? new Date(r.createdAt).toISOString() : '',
+        r.userName ?? '',
+        r.userEmail ?? '',
+        modelAgent,
+        r.text ?? '',
+      ]
+        .map(csvCell)
+        .join(','),
+    );
+  }
+  return '\uFEFF' + lines.join('\r\n');
+}
+
 /** Builds the (PII-free except the admin's own query terms) audit metadata for a feed access. */
 function buildSearchMeta(
   filter: AnalyticsInteractionFilter,
@@ -109,9 +143,18 @@ function buildSearchMeta(
   return meta;
 }
 
+type ResolvedFilter =
+  | { ok: true; filter: AnalyticsInteractionFilter; agentId?: string; empty: boolean }
+  | { ok: false; status: number; message: string };
+
 export function createAdminAnalyticsHandlers(deps: AdminAnalyticsDeps) {
-  const { listInteractions, getConversationDetail, resolveAgentConversationIds, recordAudit } =
-    deps;
+  const {
+    listInteractions,
+    exportInteractions,
+    getConversationDetail,
+    resolveAgentConversationIds,
+    recordAudit,
+  } = deps;
 
   function actorFields(req: ServerRequest) {
     return {
@@ -121,6 +164,77 @@ export function createAdminAnalyticsHandlers(deps: AdminAnalyticsDeps) {
     };
   }
 
+  /**
+   * Parses the shared feed/export query filters and resolves an agent filter to
+   * conversation ids once. Returns `empty: true` when an agent has no
+   * conversations (caller should short-circuit to an empty result).
+   */
+  async function resolveFilter(req: ServerRequest): Promise<ResolvedFilter> {
+    const filter: AnalyticsInteractionFilter = {};
+
+    // Tenant isolation: scope to the admin's tenant (no-op in single-tenant).
+    if (req.user?.tenantId) {
+      filter.tenantId = req.user.tenantId;
+    }
+
+    const userId = firstString(req.query.userId);
+    if (userId) {
+      if (!isValidObjectIdString(userId)) {
+        return { ok: false, status: 400, message: 'Invalid userId format' };
+      }
+      filter.userId = userId;
+    }
+
+    const agentId = firstString(req.query.agentId);
+    if (agentId) {
+      filter.agentId = agentId;
+    }
+
+    const model = firstString(req.query.model);
+    if (model) {
+      filter.model = model;
+    }
+
+    const endpoint = firstString(req.query.endpoint);
+    if (endpoint) {
+      filter.endpoint = endpoint;
+    }
+
+    const search = firstString(req.query.q);
+    if (search) {
+      filter.search = search.slice(0, MAX_SEARCH_LEN);
+    }
+
+    const fromRaw = firstString(req.query.from);
+    if (fromRaw) {
+      const from = parseDate(fromRaw);
+      if (!from) {
+        return { ok: false, status: 400, message: 'Invalid "from" date' };
+      }
+      filter.from = from;
+    }
+
+    const toRaw = firstString(req.query.to);
+    if (toRaw) {
+      const to = parseDate(toRaw);
+      if (!to) {
+        return { ok: false, status: 400, message: 'Invalid "to" date' };
+      }
+      filter.to = to;
+    }
+
+    if (agentId) {
+      const conversationIds = await resolveAgentConversationIds(agentId, filter.tenantId);
+      if (!conversationIds.length) {
+        return { ok: true, filter, agentId, empty: true };
+      }
+      filter.conversationIds = conversationIds;
+      delete filter.agentId;
+    }
+
+    return { ok: true, filter, agentId, empty: false };
+  }
+
   async function listInteractionsHandler(req: ServerRequest, res: Response) {
     try {
       const { limit, offset } = parsePagination(req.query);
@@ -128,74 +242,21 @@ export function createAdminAnalyticsHandlers(deps: AdminAnalyticsDeps) {
         return res.status(400).json({ error: `offset must not exceed ${MAX_OFFSET}` });
       }
 
-      const filter: AnalyticsInteractionFilter = {};
-
-      // Tenant isolation: scope to the admin's tenant (no-op in single-tenant).
-      if (req.user?.tenantId) {
-        filter.tenantId = req.user.tenantId;
+      const resolved = await resolveFilter(req);
+      if (!resolved.ok) {
+        return res.status(resolved.status).json({ error: resolved.message });
       }
+      const { filter, agentId, empty } = resolved;
 
-      const userId = firstString(req.query.userId);
-      if (userId) {
-        if (!isValidObjectIdString(userId)) {
-          return res.status(400).json({ error: 'Invalid userId format' });
-        }
-        filter.userId = userId;
-      }
-
-      const agentId = firstString(req.query.agentId);
-      if (agentId) {
-        filter.agentId = agentId;
-      }
-
-      const model = firstString(req.query.model);
-      if (model) {
-        filter.model = model;
-      }
-
-      const endpoint = firstString(req.query.endpoint);
-      if (endpoint) {
-        filter.endpoint = endpoint;
-      }
-
-      const search = firstString(req.query.q);
-      if (search) {
-        filter.search = search.slice(0, MAX_SEARCH_LEN);
-      }
-
-      const fromRaw = firstString(req.query.from);
-      if (fromRaw) {
-        const from = parseDate(fromRaw);
-        if (!from) {
-          return res.status(400).json({ error: 'Invalid "from" date' });
-        }
-        filter.from = from;
-      }
-
-      const toRaw = firstString(req.query.to);
-      if (toRaw) {
-        const to = parseDate(toRaw);
-        if (!to) {
-          return res.status(400).json({ error: 'Invalid "to" date' });
-        }
-        filter.to = to;
-      }
-
-      // Resolve the agent's conversations once, then reuse them for the feed query.
-      if (agentId) {
-        const conversationIds = await resolveAgentConversationIds(agentId, filter.tenantId);
-        if (!conversationIds.length) {
-          recordAudit({
-            ...actorFields(req),
-            action: 'conversation.search',
-            targetType: 'analytics',
-            metadata: buildSearchMeta(filter, agentId, 0),
-            ...auditRequestContext(req),
-          });
-          return res.status(200).json({ interactions: [], hasMore: false, limit, offset });
-        }
-        filter.conversationIds = conversationIds;
-        delete filter.agentId;
+      if (empty) {
+        recordAudit({
+          ...actorFields(req),
+          action: 'conversation.search',
+          targetType: 'analytics',
+          metadata: buildSearchMeta(filter, agentId, 0),
+          ...auditRequestContext(req),
+        });
+        return res.status(200).json({ interactions: [], hasMore: false, limit, offset });
       }
 
       const { interactions, hasMore } = await listInteractions(filter, { limit, offset });
@@ -219,6 +280,38 @@ export function createAdminAnalyticsHandlers(deps: AdminAnalyticsDeps) {
       }
       logger.error('[adminAnalytics] listInteractions error:', error);
       return res.status(500).json({ error: 'Failed to list interactions' });
+    }
+  }
+
+  async function exportHandler(req: ServerRequest, res: Response) {
+    try {
+      const resolved = await resolveFilter(req);
+      if (!resolved.ok) {
+        return res.status(resolved.status).json({ error: resolved.message });
+      }
+      const { filter, agentId, empty } = resolved;
+
+      const rows = empty ? [] : await exportInteractions(filter, { limit: MAX_EXPORT_ROWS });
+
+      recordAudit({
+        ...actorFields(req),
+        action: 'conversation.export',
+        targetType: 'analytics',
+        metadata: buildSearchMeta(filter, agentId, rows.length),
+        ...auditRequestContext(req),
+      });
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="analytics-export.csv"');
+      return res.status(200).send(buildCsv(rows));
+    } catch (error) {
+      if (isQueryTimeout(error)) {
+        return res
+          .status(503)
+          .json({ error: 'Export timed out — narrow the date range or filters' });
+      }
+      logger.error('[adminAnalytics] export error:', error);
+      return res.status(500).json({ error: 'Failed to export interactions' });
     }
   }
 
@@ -256,6 +349,7 @@ export function createAdminAnalyticsHandlers(deps: AdminAnalyticsDeps) {
 
   return {
     listInteractions: listInteractionsHandler,
+    export: exportHandler,
     getConversation: getConversationHandler,
   };
 }

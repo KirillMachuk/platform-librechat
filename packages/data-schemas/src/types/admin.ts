@@ -231,6 +231,18 @@ export type AnalyticsInteraction = {
   createdAt: Date;
 };
 
+/** A single export row (method output) — like a feed row but with the FULL request text. */
+export type AnalyticsExportRow = {
+  createdAt: Date;
+  userId: string;
+  userEmail?: string;
+  userName?: string;
+  model?: string;
+  agentName?: string;
+  /** Full request text (not truncated). */
+  text: string;
+};
+
 /** A single message within a full conversation (method output). */
 export type AnalyticsConversationMessage = {
   messageId: string;
