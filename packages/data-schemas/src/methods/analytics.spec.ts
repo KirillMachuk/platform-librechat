@@ -285,8 +285,9 @@ describe('getConversationDetail', () => {
 
 describe('exportInteractions', () => {
   test('returns full request text with resolved model/agent + author', async () => {
-    const rows = await methods.exportInteractions({}, { limit: 100 });
+    const { rows, truncated } = await methods.exportInteractions({}, { limit: 100 });
     expect(rows).toHaveLength(2);
+    expect(truncated).toBe(false);
 
     const m1row = rows.find((r) => r.text === 'Составь договор аренды');
     expect(m1row).toMatchObject({
@@ -301,13 +302,14 @@ describe('exportInteractions', () => {
     expect(m2row?.agentName).toBeUndefined();
   });
 
-  test('respects the row cap', async () => {
-    const rows = await methods.exportInteractions({}, { limit: 1 });
+  test('caps rows and flags truncation when more match than the limit', async () => {
+    const { rows, truncated } = await methods.exportInteractions({}, { limit: 1 });
     expect(rows).toHaveLength(1);
+    expect(truncated).toBe(true);
   });
 
   test('respects filters', async () => {
-    const rows = await methods.exportInteractions({ userId: aliceId }, { limit: 100 });
+    const { rows } = await methods.exportInteractions({ userId: aliceId }, { limit: 100 });
     expect(rows.map((r) => r.text)).toEqual(['Составь договор аренды']);
   });
 });

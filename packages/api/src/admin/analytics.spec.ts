@@ -82,7 +82,7 @@ function createReqRes(
 function createDeps(overrides: Partial<AdminAnalyticsDeps> = {}): AdminAnalyticsDeps {
   return {
     listInteractions: jest.fn().mockResolvedValue({ interactions: [], hasMore: false }),
-    exportInteractions: jest.fn().mockResolvedValue([]),
+    exportInteractions: jest.fn().mockResolvedValue({ rows: [], truncated: false }),
     getConversationDetail: jest.fn().mockResolvedValue(null),
     resolveAgentConversationIds: jest.fn().mockResolvedValue([]),
     recordAudit: jest.fn(),
@@ -251,17 +251,20 @@ describe('createAdminAnalyticsHandlers', () => {
 
   describe('export', () => {
     it('returns CSV (BOM + header rows) and records a conversation.export audit', async () => {
-      const exportInteractions = jest.fn().mockResolvedValue([
-        {
-          createdAt: new Date('2026-03-15T00:00:00.000Z'),
-          userId: 'u1',
-          userEmail: 'alice@x.io',
-          userName: 'Alice',
-          model: 'gpt-x',
-          agentName: 'Юрист',
-          text: 'привет, мир',
-        },
-      ]);
+      const exportInteractions = jest.fn().mockResolvedValue({
+        rows: [
+          {
+            createdAt: new Date('2026-03-15T00:00:00.000Z'),
+            userId: 'u1',
+            userEmail: 'alice@x.io',
+            userName: 'Alice',
+            model: 'gpt-x',
+            agentName: 'Юрист',
+            text: 'привет, мир',
+          },
+        ],
+        truncated: false,
+      });
       const recordAudit = jest.fn();
       const deps = createDeps({ exportInteractions, recordAudit });
       const handlers = createAdminAnalyticsHandlers(deps);
@@ -271,6 +274,7 @@ describe('createAdminAnalyticsHandlers', () => {
 
       expect(status).toHaveBeenCalledWith(200);
       expect(setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv; charset=utf-8');
+      expect(setHeader).toHaveBeenCalledWith('X-Export-Truncated', 'false');
       const csv = send.mock.calls[0][0] as string;
       expect(csv.charCodeAt(0)).toBe(0xfeff);
       expect(csv).toContain('Время,Сотрудник,Email,Модель/агент,Запрос');
@@ -279,6 +283,61 @@ describe('createAdminAnalyticsHandlers', () => {
       expect(recordAudit).toHaveBeenCalledTimes(1);
       expect(recordAudit.mock.calls[0][0].action).toBe('conversation.export');
       expect(recordAudit.mock.calls[0][0].metadata.results).toBe(1);
+      expect(recordAudit.mock.calls[0][0].metadata.truncated).toBe(false);
+    });
+
+    it('neutralizes spreadsheet formula injection in employee-controlled cells', async () => {
+      const exportInteractions = jest.fn().mockResolvedValue({
+        rows: [
+          {
+            createdAt: new Date('2026-03-15T00:00:00.000Z'),
+            userId: 'u1',
+            userEmail: 'e@x.io',
+            userName: '=cmd|calc',
+            model: 'gpt-x',
+            agentName: undefined,
+            text: '=HYPERLINK("http://evil","x")',
+          },
+          {
+            createdAt: new Date('2026-03-15T00:00:00.000Z'),
+            userId: 'u2',
+            userEmail: 'e2@x.io',
+            userName: 'Bob',
+            model: 'gpt-x',
+            agentName: undefined,
+            text: '+1+1',
+          },
+        ],
+        truncated: false,
+      });
+      const deps = createDeps({ exportInteractions });
+      const handlers = createAdminAnalyticsHandlers(deps);
+      const { req, res, send } = createReqRes();
+
+      await handlers.export(req, res);
+
+      const csv = send.mock.calls[0][0] as string;
+      // Formula triggers are prefixed with a single quote so a spreadsheet treats them as text.
+      expect(csv).toContain("'=HYPERLINK");
+      expect(csv).toContain("'=cmd|calc");
+      expect(csv).toContain("'+1+1");
+      // No formula reaches a cell boundary (start-of-cell after a comma) un-neutralized.
+      expect(csv).not.toContain(',=HYPERLINK');
+      expect(csv).not.toContain(',=cmd');
+      expect(csv).not.toContain(',+1+1');
+    });
+
+    it('flags a truncated export via header and audit metadata', async () => {
+      const exportInteractions = jest.fn().mockResolvedValue({ rows: [], truncated: true });
+      const recordAudit = jest.fn();
+      const deps = createDeps({ exportInteractions, recordAudit });
+      const handlers = createAdminAnalyticsHandlers(deps);
+      const { req, res, setHeader } = createReqRes();
+
+      await handlers.export(req, res);
+
+      expect(setHeader).toHaveBeenCalledWith('X-Export-Truncated', 'true');
+      expect(recordAudit.mock.calls[0][0].metadata.truncated).toBe(true);
     });
 
     it('rejects an invalid userId before exporting', async () => {

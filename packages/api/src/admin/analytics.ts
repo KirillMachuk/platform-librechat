@@ -30,7 +30,7 @@ export interface AdminAnalyticsDeps {
   exportInteractions: (
     filter: AnalyticsInteractionFilter,
     options: { limit: number },
-  ) => Promise<AnalyticsExportRow[]>;
+  ) => Promise<{ rows: AnalyticsExportRow[]; truncated: boolean }>;
   getConversationDetail: (
     conversationId: string,
     tenantId?: string,
@@ -85,9 +85,18 @@ function toConversationDetail(detail: AnalyticsConversation): AdminConversationD
   };
 }
 
-/** Escapes a CSV cell (RFC 4180): quote when it contains a comma/quote/newline. */
+/**
+ * Escapes a CSV cell, in two ordered steps:
+ *  1. Formula-injection guard — request text and names are employee-controlled, and a
+ *     cell starting with `= + - @` (or a leading tab/CR a spreadsheet trims to expose
+ *     one) is executed as a formula by Excel/Sheets/LibreOffice on open. Prefix a single
+ *     quote to force text. RFC 4180 quoting does NOT defuse this (the formula is still
+ *     parsed inside a quoted cell), so it must be neutralized first.
+ *  2. RFC 4180 — quote the (already-guarded) value when it contains a comma/quote/newline.
+ */
 function csvCell(value: string): string {
-  return /["\n\r,]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  const guarded = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  return /["\n\r,]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
 }
 
 /** Renders export rows as a UTF-8 CSV (BOM so Excel reads Cyrillic; CRLF line endings). */
@@ -291,18 +300,22 @@ export function createAdminAnalyticsHandlers(deps: AdminAnalyticsDeps) {
       }
       const { filter, agentId, empty } = resolved;
 
-      const rows = empty ? [] : await exportInteractions(filter, { limit: MAX_EXPORT_ROWS });
+      const { rows, truncated } = empty
+        ? { rows: [], truncated: false }
+        : await exportInteractions(filter, { limit: MAX_EXPORT_ROWS });
 
       recordAudit({
         ...actorFields(req),
         action: 'conversation.export',
         targetType: 'analytics',
-        metadata: buildSearchMeta(filter, agentId, rows.length),
+        metadata: { ...buildSearchMeta(filter, agentId, rows.length), truncated },
         ...auditRequestContext(req),
       });
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', 'attachment; filename="analytics-export.csv"');
+      // Signals the BFF/UI that the export hit MAX_EXPORT_ROWS (oldest rows omitted).
+      res.setHeader('X-Export-Truncated', truncated ? 'true' : 'false');
       return res.status(200).send(buildCsv(rows));
     } catch (error) {
       if (isQueryTimeout(error)) {

@@ -282,20 +282,22 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
   async function exportInteractions(
     filter: AnalyticsInteractionFilter,
     options: { limit: number },
-  ): Promise<AnalyticsExportRow[]> {
+  ): Promise<{ rows: AnalyticsExportRow[]; truncated: boolean }> {
     const Message = mongoose.models.Message as Model<IMessage>;
     let conversationIds = filter.conversationIds;
     if (!conversationIds && filter.agentId) {
       conversationIds = await resolveAgentConversationIds(filter.agentId, filter.tenantId);
       if (!conversationIds.length) {
-        return [];
+        return { rows: [], truncated: false };
       }
     }
     const tenantId = getTenantId();
+    // Over-fetch one row past the cap so we can flag a truncated export (mirrors
+    // getConversationDetail) instead of silently dropping the oldest requests.
     const raw = await Message.aggregate<RawExportRow>([
       { $match: buildMatch(filter, conversationIds) },
       { $sort: { createdAt: -1 } },
-      { $limit: options.limit },
+      { $limit: options.limit + 1 },
       {
         $lookup: {
           from: 'conversations',
@@ -327,16 +329,19 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
       },
     ]).option({ maxTimeMS: MAX_QUERY_MS });
 
+    const truncated = raw.length > options.limit;
+    const page = truncated ? raw.slice(0, options.limit) : raw;
+
     const realAgentIds = [
       ...new Set(
-        raw
+        page
           .map((r) => r.agentId)
           .filter((id): id is string => Boolean(id) && !parseEphemeralAgentId(id as string)),
       ),
     ];
     const agentNames = await fetchAgentNames(realAgentIds);
 
-    return raw.map((r) => {
+    const rows = page.map((r) => {
       const { model, agentName } = resolveModelAgent(r.agentId, r.model, r.convoModel, agentNames);
       return {
         createdAt: r.createdAt,
@@ -348,6 +353,7 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
         text: r.text,
       };
     });
+    return { rows, truncated };
   }
 
   /** Exact match count for a filter. Not used by the paged feed (which uses
