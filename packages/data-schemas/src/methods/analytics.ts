@@ -1,4 +1,4 @@
-import { parseTextParts } from 'librechat-data-provider';
+import { parseTextParts, parseEphemeralAgentId } from 'librechat-data-provider';
 import { getTenantId } from '~/config/tenantContext';
 import type { PipelineStage, FilterQuery, Model } from 'mongoose';
 import type {
@@ -39,6 +39,28 @@ function resolveText(text?: string, content?: unknown[]): string {
   return '';
 }
 
+/**
+ * Resolves a human-readable model + (real) agent name from raw join fields.
+ * The default 1ma chat wraps a model in an *ephemeral* agent whose id encodes
+ * `endpoint__model___sender` — that is a model, not a real agent, so we surface
+ * the model and no agent name. Only genuinely named agents get an agent name.
+ */
+function resolveModelAgent(
+  agentId: string | undefined,
+  messageModel: string | undefined,
+  convoModel: string | undefined,
+  agentNames: Map<string, string>,
+): { model?: string; agentName?: string } {
+  if (!agentId) {
+    return { model: messageModel ?? convoModel };
+  }
+  const ephemeral = parseEphemeralAgentId(agentId);
+  if (ephemeral) {
+    return { model: messageModel ?? ephemeral.model ?? convoModel };
+  }
+  return { model: messageModel ?? convoModel, agentName: agentNames.get(agentId) ?? agentId };
+}
+
 type ConversationMessageRow = Pick<
   IMessage,
   | 'messageId'
@@ -52,16 +74,48 @@ type ConversationMessageRow = Pick<
   | 'createdAt'
 >;
 
+/** Raw projection of the interactions aggregation, before model/agent resolution. */
+type RawInteractionRow = {
+  messageId: string;
+  conversationId: string;
+  userId: string;
+  userEmail?: string;
+  userName?: string;
+  model?: string;
+  endpoint?: string;
+  agentId?: string;
+  convoModel?: string;
+  conversationTitle?: string;
+  preview: string;
+  createdAt: Date;
+};
+
 /** Tenant-scoped `$lookup` sub-pipeline so joined conversations can never cross tenants. */
 function convoLookupPipeline(tenantId?: string): PipelineStage.Lookup['$lookup']['pipeline'] {
   const conds: Array<{ $eq: [string, string] }> = [{ $eq: ['$conversationId', '$$cid'] }];
   if (tenantId) {
     conds.push({ $eq: ['$tenantId', tenantId] });
   }
-  return [{ $match: { $expr: { $and: conds } } }, { $project: { _id: 0, title: 1, agent_id: 1 } }];
+  return [
+    { $match: { $expr: { $and: conds } } },
+    { $project: { _id: 0, title: 1, agent_id: 1, model: 1 } },
+  ];
 }
 
 export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
+  /** Batch-resolves real (named) agent ids to display names. Ephemeral ids are skipped by the caller. */
+  async function fetchAgentNames(agentIds: string[]): Promise<Map<string, string>> {
+    if (!agentIds.length) {
+      return new Map();
+    }
+    const Agent = mongoose.models.Agent as Model<{ id: string; name?: string }>;
+    const agents = await Agent.find({ id: { $in: agentIds } })
+      .select('id name -_id')
+      .maxTimeMS(MAX_QUERY_MS)
+      .lean<{ id: string; name?: string }[]>();
+    return new Map(agents.filter((a) => a.name).map((a) => [a.id, a.name as string]));
+  }
+
   /** Conversation ids belonging to a given agent (scoped to tenant when provided). */
   async function resolveAgentConversationIds(
     agentId: string,
@@ -117,10 +171,10 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
 
   /**
    * Reads a page of employee↔AI request rows (newest first), joined to their
-   * conversation (title/agent, tenant-scoped) and author (email/name). Heavy
-   * filters are applied at the message level before the per-page join so cost
-   * stays flat at scale. Over-fetches one row to report `hasMore` instead of an
-   * exact total (which would force a full count scan on every page).
+   * conversation (title/agent/model, tenant-scoped) and author (email/name).
+   * Heavy filters are applied at the message level before the per-page join so
+   * cost stays flat at scale. Over-fetches one row to report `hasMore` instead
+   * of an exact total (which would force a full count scan on every page).
    */
   async function listInteractions(
     filter: AnalyticsInteractionFilter,
@@ -135,7 +189,7 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
       }
     }
     const tenantId = getTenantId();
-    const rows = await Message.aggregate<AnalyticsInteraction>([
+    const raw = await Message.aggregate<RawInteractionRow>([
       { $match: buildMatch(filter, conversationIds) },
       { $sort: { createdAt: -1 } },
       { $skip: options.offset },
@@ -167,16 +221,44 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
           model: 1,
           endpoint: 1,
           agentId: '$convo.agent_id',
+          convoModel: '$convo.model',
           conversationTitle: '$convo.title',
           preview: { $substrCP: [{ $ifNull: ['$text', ''] }, 0, PREVIEW_LEN] },
-          tokenCount: 1,
           createdAt: 1,
         },
       },
     ]).option({ maxTimeMS: MAX_QUERY_MS });
 
-    const hasMore = rows.length > options.limit;
-    return { interactions: hasMore ? rows.slice(0, options.limit) : rows, hasMore };
+    const hasMore = raw.length > options.limit;
+    const page = hasMore ? raw.slice(0, options.limit) : raw;
+
+    const realAgentIds = [
+      ...new Set(
+        page
+          .map((r) => r.agentId)
+          .filter((id): id is string => Boolean(id) && !parseEphemeralAgentId(id as string)),
+      ),
+    ];
+    const agentNames = await fetchAgentNames(realAgentIds);
+
+    const interactions: AnalyticsInteraction[] = page.map((r) => {
+      const { model, agentName } = resolveModelAgent(r.agentId, r.model, r.convoModel, agentNames);
+      return {
+        messageId: r.messageId,
+        conversationId: r.conversationId,
+        userId: r.userId,
+        userEmail: r.userEmail,
+        userName: r.userName,
+        model,
+        endpoint: r.endpoint,
+        agentName,
+        conversationTitle: r.conversationTitle,
+        preview: r.preview,
+        createdAt: r.createdAt,
+      };
+    });
+
+    return { interactions, hasMore };
   }
 
   /** Exact match count for a filter. Not used by the paged feed (which uses
@@ -207,9 +289,12 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
       convoFilter.tenantId = tenantId;
     }
     const convo = await Conversation.findOne(convoFilter)
-      .select('conversationId title agent_id user')
+      .select('conversationId title agent_id model user')
       .maxTimeMS(MAX_QUERY_MS)
-      .lean<Pick<IConversation, 'conversationId' | 'title' | 'agent_id' | 'user'> | null>();
+      .lean<Pick<
+        IConversation,
+        'conversationId' | 'title' | 'agent_id' | 'model' | 'user'
+      > | null>();
     if (!convo) {
       return null;
     }
@@ -252,10 +337,22 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
       userName = user?.name;
     }
 
+    const agentNames =
+      convo.agent_id && !parseEphemeralAgentId(convo.agent_id)
+        ? await fetchAgentNames([convo.agent_id])
+        : new Map<string, string>();
+    const { model, agentName } = resolveModelAgent(
+      convo.agent_id,
+      undefined,
+      convo.model,
+      agentNames,
+    );
+
     return {
       conversationId: convo.conversationId,
       title: convo.title,
-      agentId: convo.agent_id,
+      model,
+      agentName,
       userId: convo.user,
       userEmail,
       userName,

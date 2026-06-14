@@ -220,13 +220,14 @@ export type AnalyticsInteraction = {
   userId: string;
   userEmail?: string;
   userName?: string;
+  /** Resolved model (parsed from an ephemeral agent id / message / conversation). */
   model?: string;
   endpoint?: string;
-  agentId?: string;
+  /** Display name of a real (named) agent; absent for plain model chats. */
+  agentName?: string;
   conversationTitle?: string;
   /** Truncated request text. */
   preview: string;
-  tokenCount?: number;
   createdAt: Date;
 };
 
@@ -247,7 +248,10 @@ export type AnalyticsConversationMessage = {
 export type AnalyticsConversation = {
   conversationId: string;
   title?: string;
-  agentId?: string;
+  /** Resolved model for the conversation (ephemeral-agent / conversation). */
+  model?: string;
+  /** Display name of a real (named) agent; absent for plain model chats. */
+  agentName?: string;
   userId?: string;
   userEmail?: string;
   userName?: string;

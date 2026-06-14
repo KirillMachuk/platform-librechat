@@ -14,6 +14,7 @@ let mongoServer: InstanceType<typeof MongoMemoryServer>;
 let Message: mongoose.Model<Record<string, unknown>>;
 let Conversation: mongoose.Model<Record<string, unknown>>;
 let User: mongoose.Model<Record<string, unknown>>;
+let Agent: mongoose.Model<Record<string, unknown>>;
 let methods: ReturnType<typeof createAnalyticsMethods>;
 
 let aliceId: string;
@@ -26,6 +27,7 @@ beforeAll(async () => {
   Message = mongoose.models.Message;
   Conversation = mongoose.models.Conversation;
   User = mongoose.models.User;
+  Agent = mongoose.models.Agent;
   methods = createAnalyticsMethods(mongoose);
   await mongoose.connect(mongoServer.getUri());
 });
@@ -42,6 +44,15 @@ beforeEach(async () => {
   const bob = await User.create({ email: 'bob@x.io', name: 'Bob' });
   aliceId = alice._id.toString();
   bobId = bob._id.toString();
+
+  // A real (named) agent — its display name should resolve in the feed.
+  await Agent.create({
+    id: 'agent-legal',
+    name: 'Юрист',
+    provider: 'openai',
+    model: 'gpt-x',
+    author: alice._id,
+  });
 
   await Conversation.create([
     {
@@ -119,9 +130,36 @@ describe('listInteractions', () => {
     expect(interactions[1]).toMatchObject({
       messageId: 'm1',
       userEmail: 'alice@x.io',
-      agentId: 'agent-legal',
+      model: 'gpt-x',
+      agentName: 'Юрист',
       conversationTitle: 'Договоры',
     });
+  });
+
+  test('ephemeral (model-as-agent) resolves to the model with no agent name', async () => {
+    await Conversation.create({
+      conversationId: 'c3',
+      title: 'Чат с моделью',
+      user: bobId,
+      agent_id: '1ma__openai/gpt-5.4-mini___',
+      endpoint: 'agents',
+    });
+    await Message.create({
+      messageId: 'm3',
+      conversationId: 'c3',
+      user: bobId,
+      isCreatedByUser: true,
+      text: 'Привет',
+      createdAt: new Date('2026-03-02T10:00:00.000Z'),
+    });
+
+    const { interactions } = await methods.listInteractions(
+      { conversationIds: ['c3'] },
+      { limit: 10, offset: 0 },
+    );
+    expect(interactions).toHaveLength(1);
+    expect(interactions[0].model).toBe('openai/gpt-5.4-mini');
+    expect(interactions[0].agentName).toBeUndefined();
   });
 
   test('filters by employee', async () => {
@@ -224,7 +262,7 @@ describe('getConversationDetail', () => {
 
     expect(detail).not.toBeNull();
     expect(detail?.title).toBe('Договоры');
-    expect(detail?.agentId).toBe('agent-legal');
+    expect(detail?.agentName).toBe('Юрист');
     expect(detail?.userEmail).toBe('alice@x.io');
     expect(detail?.truncated).toBe(false);
     expect(detail?.messages).toHaveLength(3);

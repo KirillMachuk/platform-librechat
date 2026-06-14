@@ -19,10 +19,9 @@ function mockInteraction(overrides: Partial<AnalyticsInteraction> = {}): Analyti
     userName: 'User',
     model: 'gpt-x',
     endpoint: 'agents',
-    agentId: 'agent-1',
+    agentName: 'Юрист',
     conversationTitle: 'Title',
     preview: 'hello',
-    tokenCount: 12,
     createdAt: new Date('2026-03-15T00:00:00.000Z'),
     ...overrides,
   };
@@ -32,7 +31,8 @@ function mockConversation(overrides: Partial<AnalyticsConversation> = {}): Analy
   return {
     conversationId: 'c1',
     title: 'Title',
-    agentId: 'agent-1',
+    model: 'gpt-x',
+    agentName: 'Юрист',
     userId: new Types.ObjectId().toString(),
     userEmail: 'user@example.com',
     userName: 'User',
