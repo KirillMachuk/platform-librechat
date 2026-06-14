@@ -183,6 +183,12 @@ messageSchema.index({ expiredAt: 1 }, { expireAfterSeconds: 0 });
 messageSchema.index({ createdAt: 1 });
 messageSchema.index({ messageId: 1, user: 1, tenantId: 1 }, { unique: true });
 
+// AI usage analytics: feed of user requests (newest first) and per-employee filter.
+// Lead with the always-present equality field so the createdAt sort is index-served.
+// When multitenancy ships and every query carries tenantId, add tenant-prefixed variants.
+messageSchema.index({ isCreatedByUser: 1, createdAt: -1 });
+messageSchema.index({ user: 1, isCreatedByUser: 1, createdAt: -1 });
+
 // index for MeiliSearch sync operations
 messageSchema.index({ _meiliIndex: 1, isTemporary: 1, expiredAt: 1 });
 

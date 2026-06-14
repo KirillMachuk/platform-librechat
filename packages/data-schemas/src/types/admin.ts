@@ -193,3 +193,89 @@ export type AdminUserSearchResult = {
   username?: string;
   avatarUrl?: string;
 };
+
+/* ── AI usage analytics types ───────────────────────────────────────── */
+
+/** Filter accepted by the analytics interaction read methods. */
+export type AnalyticsInteractionFilter = {
+  tenantId?: string;
+  /** Filter by employee (`messages.user`). */
+  userId?: string;
+  /** Filter by agent (`conversations.agent_id`). */
+  agentId?: string;
+  /** Pre-resolved conversation ids (e.g. from an agent lookup) to scope the feed to. */
+  conversationIds?: string[];
+  model?: string;
+  endpoint?: string;
+  /** Case-insensitive substring search over the request text. */
+  search?: string;
+  from?: Date;
+  to?: Date;
+};
+
+/** A single employee↔AI request row (method output — truncated preview + Date). */
+export type AnalyticsInteraction = {
+  messageId: string;
+  conversationId: string;
+  userId: string;
+  userEmail?: string;
+  userName?: string;
+  model?: string;
+  endpoint?: string;
+  agentId?: string;
+  conversationTitle?: string;
+  /** Truncated request text. */
+  preview: string;
+  tokenCount?: number;
+  createdAt: Date;
+};
+
+/** A single message within a full conversation (method output). */
+export type AnalyticsConversationMessage = {
+  messageId: string;
+  parentMessageId?: string | null;
+  isCreatedByUser: boolean;
+  sender?: string;
+  /** Resolved text (falls back to text content parts). */
+  text: string;
+  model?: string;
+  endpoint?: string;
+  createdAt?: Date;
+};
+
+/** A full conversation with its messages (method output). */
+export type AnalyticsConversation = {
+  conversationId: string;
+  title?: string;
+  agentId?: string;
+  userId?: string;
+  userEmail?: string;
+  userName?: string;
+  messages: AnalyticsConversationMessage[];
+  /** True when the message list was capped (more turns exist than returned). */
+  truncated: boolean;
+};
+
+/** A single interaction row as returned by the admin analytics endpoint (ISO date). */
+export type AdminInteraction = Omit<AnalyticsInteraction, 'createdAt'> & {
+  createdAt?: string;
+};
+
+/** The admin analytics interaction list response. Uses `hasMore` (cheap over-fetch)
+ * instead of an exact total to avoid a full count scan on every page at scale. */
+export type AdminInteractionList = {
+  interactions: AdminInteraction[];
+  hasMore: boolean;
+  limit: number;
+  offset: number;
+};
+
+/** A single conversation message as returned by the admin analytics endpoint (ISO date). */
+export type AdminConversationMessage = Omit<AnalyticsConversationMessage, 'createdAt'> & {
+  createdAt?: string;
+};
+
+/** A full conversation as returned by the admin analytics endpoint. */
+export type AdminConversationDetail = Omit<AnalyticsConversation, 'messages'> & {
+  messages: AdminConversationMessage[];
+};

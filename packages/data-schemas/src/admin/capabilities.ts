@@ -30,6 +30,8 @@ export const SystemCapabilities = {
   MANAGE_CONFIGS: 'manage:configs',
   ASSIGN_CONFIGS: 'assign:configs',
   READ_USAGE: 'read:usage',
+  /** Read other users' raw conversation content (AI usage analytics). Sensitive — granted explicitly. */
+  READ_CONVERSATIONS: 'read:conversations',
   READ_AGENTS: 'read:agents',
   MANAGE_AGENTS: 'manage:agents',
   MANAGE_MCP_SERVERS: 'manage:mcpservers',
@@ -218,6 +220,10 @@ export const CAPABILITY_CATEGORIES: CapabilityCategory[] = [
   {
     key: 'system',
     labelKey: 'com_cap_cat_system',
-    capabilities: [SystemCapabilities.ACCESS_ADMIN, SystemCapabilities.READ_USAGE],
+    capabilities: [
+      SystemCapabilities.ACCESS_ADMIN,
+      SystemCapabilities.READ_USAGE,
+      SystemCapabilities.READ_CONVERSATIONS,
+    ],
   },
 ];
