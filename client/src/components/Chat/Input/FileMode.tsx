@@ -2,11 +2,16 @@ import React, { memo, useCallback, useMemo, useState } from 'react';
 import * as Ariakit from '@ariakit/react';
 import { Sparkles, FileType2Icon, FileImageIcon, FileSearch as FileSearchIcon } from 'lucide-react';
 import { TooltipAnchor, DropdownPopup } from '@librechat/client';
-import { Constants, EToolResources } from 'librechat-data-provider';
+import { Constants } from 'librechat-data-provider';
 import type { LucideIcon } from 'lucide-react';
 import type { MenuItemProps, ExtendedFile } from '~/common';
 import type { TranslationKeys } from '~/hooks/useLocalize';
-import { resolveFileToolResource, isImageMimetype, type FileMode } from '~/utils/fileMode';
+import {
+  resolveFileToolResource,
+  autoModeDisplayFromFile,
+  isImageMimetype,
+  type FileMode,
+} from '~/utils/fileMode';
 import { useFileHandling, useFileDeletion } from '~/hooks/Files';
 import { useDeleteFilesMutation } from '~/data-provider';
 import { useChatContext } from '~/Providers/ChatContext';
@@ -31,18 +36,6 @@ const MODE_LABEL_KEYS: Record<FileMode, TranslationKeys> = {
 };
 
 const ORDER: FileMode[] = ['auto', 'text', 'native', 'search'];
-
-/** Maps a resolved `tool_resource` back to the user-facing mode it represents,
- * so Auto can show what it actually chose (e.g. "Авто · Текст"). */
-const toolResourceToMode = (resource: EToolResources | undefined): Exclude<FileMode, 'auto'> => {
-  if (resource === EToolResources.file_search) {
-    return 'search';
-  }
-  if (resource === EToolResources.context) {
-    return 'text';
-  }
-  return 'native';
-};
 
 /**
  * Toolbar control for how an attached document is handled (Auto / Text / Native
@@ -109,17 +102,14 @@ function FileMode() {
   );
 
   /** When Auto is active and exactly one document is attached, surface the
-   * concrete choice Auto made; otherwise just show "Auto". */
+   * concrete mode the server actually applied (e.g. "Auto · Search") — read
+   * from the uploaded file's real state, not a client-side size guess, so the
+   * chip can't claim "Full text" for a document the backend routed to RAG. */
   const resolvedAutoMode = useMemo<Exclude<FileMode, 'auto'> | null>(() => {
     if (mode !== 'auto' || documentFiles.length !== 1) {
       return null;
     }
-    const file = documentFiles[0];
-    const resource = resolveFileToolResource('auto', {
-      mimetype: file.type ?? '',
-      sizeBytes: file.size ?? 0,
-    });
-    return toolResourceToMode(resource);
+    return autoModeDisplayFromFile(documentFiles[0]);
   }, [mode, documentFiles]);
 
   if (documentFiles.length === 0) {

@@ -1369,5 +1369,14 @@
   "com_ui_zoom_in": "Увеличить",
   "com_ui_zoom_level": "Масштаб",
   "com_ui_zoom_out": "Уменьшить",
-  "com_user_message": "Вы"
+  "com_ui_file_mode": "Обработка документа",
+  "com_ui_file_mode_auto": "Авто",
+  "com_ui_file_mode_text": "Полный текст",
+  "com_ui_file_mode_native": "Оригинал файла",
+  "com_ui_file_mode_search": "Поиск по документу",
+  "com_ui_indexing": "Индексация…",
+  "com_ui_index_failed": "Не проиндексирован",
+  "com_ui_index_failed_message": "Не удалось проиндексировать «{{0}}» для поиска — ассистент его не найдёт. Удалите файл и загрузите снова.",
+  "com_user_message": "Вы",
+  "com_warning_model_no_vision": "Эта модель не умеет читать изображения. Переключитесь на модель с поддержкой изображений (например, Sonnet, GPT-5 или Gemini), чтобы работать с картинками."
 }

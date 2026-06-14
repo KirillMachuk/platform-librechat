@@ -1,4 +1,5 @@
 import { EToolResources } from 'librechat-data-provider';
+import type { TFile } from 'librechat-data-provider';
 
 /**
  * User-facing file-handling modes for an attachment, surfaced in the chat
@@ -112,4 +113,31 @@ export const resolveFileToolResource = (
     return undefined;
   }
   return mode === 'auto' ? resolveAutoFileMode(input) : EXPLICIT_MODE_TOOL_RESOURCE[mode];
+};
+
+/**
+ * Post-upload, report which concrete mode Auto actually applied to a single
+ * document — read from the file's real server state, NOT a client-side size
+ * guess. The backend can auto-route a large full-text document to RAG
+ * (`file_search`); when it does, the file carries `embedded`/`embeddingStatus`
+ * regardless of what the client predicted, so the chip would otherwise lie
+ * ("Auto · Full text" for a doc that actually went to search).
+ *
+ * Returns `null` while the upload is still resolving (routing unknown yet), so
+ * the toolbar shows plain "Auto" rather than a guess that may flip once the
+ * server responds. A document that failed to index still counts as `search`
+ * (that was the intent) — the failure is surfaced separately on the file chip.
+ */
+export const autoModeDisplayFromFile = (file: {
+  progress?: number;
+  embedded?: boolean;
+  embeddingStatus?: TFile['embeddingStatus'];
+}): Exclude<FileMode, 'auto'> | null => {
+  if ((file.progress ?? 1) < 1) {
+    return null;
+  }
+  if (file.embedded === true || file.embeddingStatus != null) {
+    return 'search';
+  }
+  return 'text';
 };
