@@ -31,6 +31,19 @@ export interface AdminAnalyticsDeps {
   recordAudit: (event: AuditLogInput) => void;
 }
 
+/** MongoDB error code for a query that exceeded its maxTimeMS budget. */
+const MONGO_MAX_TIME_EXPIRED = 50;
+
+/** True when an error is a query-time-budget expiry (expected on a too-broad query, not a fault). */
+function isQueryTimeout(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: number }).code === MONGO_MAX_TIME_EXPIRED
+  );
+}
+
 /** Parses an ISO/epoch date string, returning null when invalid. */
 function parseDate(value: string): Date | null {
   const date = new Date(value);
@@ -199,6 +212,11 @@ export function createAdminAnalyticsHandlers(deps: AdminAnalyticsDeps) {
         .status(200)
         .json({ interactions: interactions.map(toInteraction), hasMore, limit, offset });
     } catch (error) {
+      if (isQueryTimeout(error)) {
+        return res
+          .status(503)
+          .json({ error: 'Query timed out — narrow the date range or filters and try again' });
+      }
       logger.error('[adminAnalytics] listInteractions error:', error);
       return res.status(500).json({ error: 'Failed to list interactions' });
     }
@@ -228,6 +246,9 @@ export function createAdminAnalyticsHandlers(deps: AdminAnalyticsDeps) {
 
       return res.status(200).json({ conversation: toConversationDetail(detail) });
     } catch (error) {
+      if (isQueryTimeout(error)) {
+        return res.status(503).json({ error: 'Query timed out — try again' });
+      }
       logger.error('[adminAnalytics] getConversation error:', error);
       return res.status(500).json({ error: 'Failed to load conversation' });
     }

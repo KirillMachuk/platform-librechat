@@ -230,6 +230,20 @@ describe('createAdminAnalyticsHandlers', () => {
 
       expect(status).toHaveBeenCalledWith(500);
     });
+
+    it('returns 503 when the query times out (maxTimeMS expired)', async () => {
+      const deps = createDeps({
+        listInteractions: jest
+          .fn()
+          .mockRejectedValue(Object.assign(new Error('timeout'), { code: 50 })),
+      });
+      const handlers = createAdminAnalyticsHandlers(deps);
+      const { req, res, status } = createReqRes();
+
+      await handlers.listInteractions(req, res);
+
+      expect(status).toHaveBeenCalledWith(503);
+    });
   });
 
   describe('getConversation', () => {
@@ -296,6 +310,20 @@ describe('createAdminAnalyticsHandlers', () => {
       await handlers.getConversation(req, res);
 
       expect(status).toHaveBeenCalledWith(500);
+    });
+
+    it('returns 503 when the lookup times out (maxTimeMS expired)', async () => {
+      const deps = createDeps({
+        getConversationDetail: jest
+          .fn()
+          .mockRejectedValue(Object.assign(new Error('timeout'), { code: 50 })),
+      });
+      const handlers = createAdminAnalyticsHandlers(deps);
+      const { req, res, status } = createReqRes({}, { conversationId: 'c1' });
+
+      await handlers.getConversation(req, res);
+
+      expect(status).toHaveBeenCalledWith(503);
     });
   });
 });

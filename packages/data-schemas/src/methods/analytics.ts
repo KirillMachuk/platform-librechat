@@ -73,7 +73,7 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
       filter.tenantId = tenantId;
     }
     const convos = await Conversation.find(filter)
-      .select('conversationId')
+      .select('conversationId -_id')
       .maxTimeMS(MAX_QUERY_MS)
       .lean<{ conversationId: string }[]>();
     return convos.map((c) => c.conversationId).filter(Boolean);
