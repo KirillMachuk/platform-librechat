@@ -12,7 +12,12 @@ const useSpeechToText = (
   startRecording: () => void | (() => Promise<void>);
 } => {
   const { speechToTextEndpoint } = useGetAudioSettings();
-  const externalSpeechToText = speechToTextEndpoint === 'external';
+  /** `openai`/`azureOpenAI` — провайдеры серверного STT из конфига (схема допускает только их),
+   * поэтому они тоже означают «внешний» (сервер), а не браузерный. */
+  const externalSpeechToText =
+    speechToTextEndpoint === 'external' ||
+    speechToTextEndpoint === 'openai' ||
+    speechToTextEndpoint === 'azureOpenAI';
 
   const {
     isListening: speechIsListeningBrowser,

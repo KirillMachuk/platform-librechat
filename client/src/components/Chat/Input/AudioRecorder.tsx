@@ -6,18 +6,23 @@ import { useChatFormContext } from '~/Providers';
 import { globalAudioId } from '~/common';
 import { cn } from '~/utils';
 
-const isExternalSTT = (speechToTextEndpoint: string) => speechToTextEndpoint === 'external';
+/** Серверный (не браузерный) STT. `openai`/`azureOpenAI` — это ПРОВАЙДЕРЫ внешнего STT из
+ * конфига (схема librechat.yaml допускает только их), поэтому трактуем их как external наравне
+ * с `external`. Иначе настроенный сервер-STT (наш суверенный сервис) молча уходил бы в браузерный
+ * Web Speech API. */
+const isExternalSTT = (speechToTextEndpoint: string) =>
+  speechToTextEndpoint === 'external' ||
+  speechToTextEndpoint === 'openai' ||
+  speechToTextEndpoint === 'azureOpenAI';
 export default memo(function AudioRecorder({
   disabled,
   ask,
   methods,
-  textAreaRef,
   isSubmitting,
 }: {
   disabled: boolean;
   ask: (data: { text: string }) => void;
   methods: ReturnType<typeof useChatFormContext>;
-  textAreaRef: React.RefObject<HTMLTextAreaElement>;
   isSubmitting: boolean;
 }) {
   const { setValue, reset, getValues } = methods;
@@ -78,10 +83,6 @@ export default memo(function AudioRecorder({
     setText,
     onTranscriptionComplete,
   );
-
-  if (!textAreaRef.current) {
-    return null;
-  }
 
   const handleStartRecording = async () => {
     existingTextRef.current = getValues('text') || '';
