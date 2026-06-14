@@ -733,6 +733,7 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
           getToolFilesByIds: db.getToolFilesByIds,
           getCodeGeneratedFiles: db.getCodeGeneratedFiles,
           filterFilesByAgentAccess,
+          filterRequestFilesByAccess,
           listSkillsByAccess: db.listSkillsByAccess,
           listAlwaysApplySkills: db.listAlwaysApplySkills,
           getSkillByName: db.getSkillByName,
