@@ -7,6 +7,7 @@ import type {
   IConversation,
   AnalyticsConversation,
   AnalyticsInteraction,
+  AnalyticsExportRow,
   AnalyticsConversationMessage,
   AnalyticsInteractionFilter,
 } from '~/types';
@@ -87,6 +88,18 @@ type RawInteractionRow = {
   convoModel?: string;
   conversationTitle?: string;
   preview: string;
+  createdAt: Date;
+};
+
+/** Raw projection of the export aggregation (full request text, before resolution). */
+type RawExportRow = {
+  userId: string;
+  userEmail?: string;
+  userName?: string;
+  model?: string;
+  agentId?: string;
+  convoModel?: string;
+  text: string;
   createdAt: Date;
 };
 
@@ -261,6 +274,82 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
     return { interactions, hasMore };
   }
 
+  /**
+   * Reads matching request rows for CSV export — same filter as the feed, but
+   * returns the FULL request text (not the truncated preview), newest first,
+   * capped by `options.limit`. Resolves model/agent and author like the feed.
+   */
+  async function exportInteractions(
+    filter: AnalyticsInteractionFilter,
+    options: { limit: number },
+  ): Promise<AnalyticsExportRow[]> {
+    const Message = mongoose.models.Message as Model<IMessage>;
+    let conversationIds = filter.conversationIds;
+    if (!conversationIds && filter.agentId) {
+      conversationIds = await resolveAgentConversationIds(filter.agentId, filter.tenantId);
+      if (!conversationIds.length) {
+        return [];
+      }
+    }
+    const tenantId = getTenantId();
+    const raw = await Message.aggregate<RawExportRow>([
+      { $match: buildMatch(filter, conversationIds) },
+      { $sort: { createdAt: -1 } },
+      { $limit: options.limit },
+      {
+        $lookup: {
+          from: 'conversations',
+          let: { cid: '$conversationId' },
+          pipeline: convoLookupPipeline(tenantId),
+          as: 'convo',
+        },
+      },
+      { $unwind: { path: '$convo', preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          _userOid: { $convert: { input: '$user', to: 'objectId', onError: null, onNull: null } },
+        },
+      },
+      { $lookup: { from: 'users', localField: '_userOid', foreignField: '_id', as: 'usr' } },
+      { $unwind: { path: '$usr', preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          userId: '$user',
+          userEmail: '$usr.email',
+          userName: '$usr.name',
+          model: 1,
+          agentId: '$convo.agent_id',
+          convoModel: '$convo.model',
+          text: { $ifNull: ['$text', ''] },
+          createdAt: 1,
+        },
+      },
+    ]).option({ maxTimeMS: MAX_QUERY_MS });
+
+    const realAgentIds = [
+      ...new Set(
+        raw
+          .map((r) => r.agentId)
+          .filter((id): id is string => Boolean(id) && !parseEphemeralAgentId(id as string)),
+      ),
+    ];
+    const agentNames = await fetchAgentNames(realAgentIds);
+
+    return raw.map((r) => {
+      const { model, agentName } = resolveModelAgent(r.agentId, r.model, r.convoModel, agentNames);
+      return {
+        createdAt: r.createdAt,
+        userId: r.userId,
+        userEmail: r.userEmail,
+        userName: r.userName,
+        model,
+        agentName,
+        text: r.text,
+      };
+    });
+  }
+
   /** Exact match count for a filter. Not used by the paged feed (which uses
    * `hasMore`); kept for aggregate/dashboard callers that need a real total. */
   async function countInteractions(filter: AnalyticsInteractionFilter): Promise<number> {
@@ -363,6 +452,7 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
 
   return {
     listInteractions,
+    exportInteractions,
     countInteractions,
     getConversationDetail,
     resolveAgentConversationIds,

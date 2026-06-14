@@ -71,15 +71,18 @@ function createReqRes(
   } as unknown as ServerRequest;
 
   const json = jest.fn();
-  const status = jest.fn().mockReturnValue({ json });
-  const res = { status, json } as unknown as Response;
+  const send = jest.fn();
+  const setHeader = jest.fn();
+  const status = jest.fn().mockReturnValue({ json, send });
+  const res = { status, json, send, setHeader } as unknown as Response;
 
-  return { req, res, status, json };
+  return { req, res, status, json, send, setHeader };
 }
 
 function createDeps(overrides: Partial<AdminAnalyticsDeps> = {}): AdminAnalyticsDeps {
   return {
     listInteractions: jest.fn().mockResolvedValue({ interactions: [], hasMore: false }),
+    exportInteractions: jest.fn().mockResolvedValue([]),
     getConversationDetail: jest.fn().mockResolvedValue(null),
     resolveAgentConversationIds: jest.fn().mockResolvedValue([]),
     recordAudit: jest.fn(),
@@ -243,6 +246,50 @@ describe('createAdminAnalyticsHandlers', () => {
       await handlers.listInteractions(req, res);
 
       expect(status).toHaveBeenCalledWith(503);
+    });
+  });
+
+  describe('export', () => {
+    it('returns CSV (BOM + header rows) and records a conversation.export audit', async () => {
+      const exportInteractions = jest.fn().mockResolvedValue([
+        {
+          createdAt: new Date('2026-03-15T00:00:00.000Z'),
+          userId: 'u1',
+          userEmail: 'alice@x.io',
+          userName: 'Alice',
+          model: 'gpt-x',
+          agentName: 'Юрист',
+          text: 'привет, мир',
+        },
+      ]);
+      const recordAudit = jest.fn();
+      const deps = createDeps({ exportInteractions, recordAudit });
+      const handlers = createAdminAnalyticsHandlers(deps);
+      const { req, res, status, send, setHeader } = createReqRes();
+
+      await handlers.export(req, res);
+
+      expect(status).toHaveBeenCalledWith(200);
+      expect(setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv; charset=utf-8');
+      const csv = send.mock.calls[0][0] as string;
+      expect(csv.charCodeAt(0)).toBe(0xfeff);
+      expect(csv).toContain('Время,Сотрудник,Email,Модель/агент,Запрос');
+      expect(csv).toContain('"привет, мир"');
+      expect(csv).toContain('агент: Юрист');
+      expect(recordAudit).toHaveBeenCalledTimes(1);
+      expect(recordAudit.mock.calls[0][0].action).toBe('conversation.export');
+      expect(recordAudit.mock.calls[0][0].metadata.results).toBe(1);
+    });
+
+    it('rejects an invalid userId before exporting', async () => {
+      const deps = createDeps();
+      const handlers = createAdminAnalyticsHandlers(deps);
+      const { req, res, status } = createReqRes({ userId: 'not-an-id' });
+
+      await handlers.export(req, res);
+
+      expect(status).toHaveBeenCalledWith(400);
+      expect(deps.exportInteractions).not.toHaveBeenCalled();
     });
   });
 

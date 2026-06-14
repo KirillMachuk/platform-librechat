@@ -13,6 +13,7 @@ const requireReadConversations = requireCapability(SystemCapabilities.READ_CONVE
 
 const handlers = createAdminAnalyticsHandlers({
   listInteractions: db.listInteractions,
+  exportInteractions: db.exportInteractions,
   getConversationDetail: db.getConversationDetail,
   resolveAgentConversationIds: db.resolveAgentConversationIds,
   recordAudit,
@@ -21,6 +22,7 @@ const handlers = createAdminAnalyticsHandlers({
 router.use(requireJwtAuth, requireAdminAccess);
 
 router.get('/interactions', requireReadConversations, handlers.listInteractions);
+router.get('/export', requireReadConversations, handlers.export);
 router.get('/conversations/:conversationId', requireReadConversations, handlers.getConversation);
 
 module.exports = router;

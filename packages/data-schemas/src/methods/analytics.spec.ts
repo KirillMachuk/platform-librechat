@@ -282,3 +282,32 @@ describe('getConversationDetail', () => {
     expect(await methods.getConversationDetail('nope')).toBeNull();
   });
 });
+
+describe('exportInteractions', () => {
+  test('returns full request text with resolved model/agent + author', async () => {
+    const rows = await methods.exportInteractions({}, { limit: 100 });
+    expect(rows).toHaveLength(2);
+
+    const m1row = rows.find((r) => r.text === 'Составь договор аренды');
+    expect(m1row).toMatchObject({
+      userEmail: 'alice@x.io',
+      userName: 'Alice',
+      model: 'gpt-x',
+      agentName: 'Юрист',
+    });
+
+    const m2row = rows.find((r) => r.text === 'Сделай отчёт по продажам');
+    expect(m2row?.model).toBe('claude-y');
+    expect(m2row?.agentName).toBeUndefined();
+  });
+
+  test('respects the row cap', async () => {
+    const rows = await methods.exportInteractions({}, { limit: 1 });
+    expect(rows).toHaveLength(1);
+  });
+
+  test('respects filters', async () => {
+    const rows = await methods.exportInteractions({ userId: aliceId }, { limit: 100 });
+    expect(rows.map((r) => r.text)).toEqual(['Составь договор аренды']);
+  });
+});
