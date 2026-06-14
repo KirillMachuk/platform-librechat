@@ -110,6 +110,16 @@ export default function FileRow({
           return;
         }
         const freshById = new Map(allFiles.map((file) => [file.file_id, file]));
+        /* A document whose embed just turned `failed` was uploaded but never
+         * indexed — search over it silently returns nothing. The poll is about
+         * to drop it from `indexingKey` (releasing the send block), so tell the
+         * user once instead of letting it fail invisibly. */
+        const newlyFailed = files.filter(
+          (file) =>
+            (file.embeddingStatus === 'pending' || file.embeddingStatus === 'processing') &&
+            file.file_id != null &&
+            freshById.get(file.file_id)?.embeddingStatus === 'failed',
+        );
         setFiles((current) => {
           let changed = false;
           const next = new Map(current);
@@ -134,6 +144,12 @@ export default function FileRow({
           }
           return changed ? next : current;
         });
+        for (const file of newlyFailed) {
+          showToast({
+            message: localize('com_ui_index_failed_message', { 0: file.filename ?? '' }),
+            status: 'error',
+          });
+        }
       } catch {
         // Transient (network/auth refresh); the next tick retries.
       }
@@ -143,6 +159,7 @@ export default function FileRow({
       cancelled = true;
       clearInterval(intervalId);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [indexingKey, setFiles]);
 
   if (files.length === 0) {

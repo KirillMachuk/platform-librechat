@@ -1194,6 +1194,8 @@
   "com_ui_link_copied": "Link copied",
   "com_ui_link_refreshed": "Link refreshed",
   "com_ui_indexing": "Indexing…",
+  "com_ui_index_failed": "Not indexed",
+  "com_ui_index_failed_message": "Couldn't index \"{{0}}\" for search — the assistant won't find it. Remove it and upload again.",
   "com_ui_live": "live",
   "com_ui_loading": "Loading...",
   "com_ui_locked": "Locked",
