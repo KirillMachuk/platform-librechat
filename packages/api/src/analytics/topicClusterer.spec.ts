@@ -149,4 +149,35 @@ describe('createTopicClusterer', () => {
       expect(deps.createAnalyticsRun).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('labeling', () => {
+    it('applies labelTopics and saves the labeled topics', async () => {
+      const labelTopics = jest
+        .fn()
+        .mockImplementation((topics) =>
+          Promise.resolve(topics.map((t: { topicKey: number }) => ({ ...t, label: 'Договоры' }))),
+        );
+      const deps = makeDeps({ labelTopics });
+      const clusterer = createTopicClusterer(deps);
+
+      await clusterer.runClustering({ tenantId: 't1' });
+
+      expect(labelTopics).toHaveBeenCalledTimes(1);
+      const [, savedTopics] = (deps.saveRunResults as jest.Mock).mock.calls[0];
+      expect(savedTopics[0].label).toBe('Договоры');
+    });
+
+    it('degrades to keyword-only topics when labeling throws (run still completes)', async () => {
+      const labelTopics = jest.fn().mockRejectedValue(new Error('label step down'));
+      const deps = makeDeps({ labelTopics });
+      const clusterer = createTopicClusterer(deps);
+
+      await clusterer.runClustering({ tenantId: 't1' });
+
+      const [, savedTopics] = (deps.saveRunResults as jest.Mock).mock.calls[0];
+      expect(savedTopics[0].label).toBeUndefined();
+      expect(deps.completeAnalyticsRun).toHaveBeenCalled();
+      expect(deps.failAnalyticsRun).not.toHaveBeenCalled();
+    });
+  });
 });

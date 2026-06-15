@@ -18,6 +18,8 @@ export interface ClusterResult {
     share: number;
     representativeConversationIds: string[];
     centroid?: number[];
+    /** Human-readable name — absent from the service response; filled by the labeler. */
+    label?: string;
   }>;
   assignments: Array<{
     conversationId: string;
@@ -64,13 +66,21 @@ export interface TopicClustererDeps {
   ) => Promise<void>;
   failAnalyticsRun: (runId: unknown, error: unknown) => Promise<void>;
   getLatestAnalyticsRun: (filter: { tenantId?: string }) => Promise<IAnalyticsRun | null>;
+  /**
+   * Optional: fills in human-readable topic `label`s (anonymized keywords → LLM).
+   * Absent or failing labeling degrades to keyword-only topics — never fails a run.
+   */
+  labelTopics?: (topics: ClusterResult['topics']) => Promise<ClusterResult['topics']>;
 }
 
-function logSummary(topics: ClusterResult['topics'], stats: ClusterResult['stats']): void {
+function logSummary(
+  topics: Array<ClusterResult['topics'][number] & { label?: string }>,
+  stats: ClusterResult['stats'],
+): void {
   const preview = [...topics]
     .sort((a, b) => b.size - a.size)
     .slice(0, 10)
-    .map((t) => `[${t.keywords.slice(0, 4).join('/') || t.topicKey}]×${t.size}`)
+    .map((t) => `[${t.label || t.keywords.slice(0, 4).join('/') || t.topicKey}]×${t.size}`)
     .join(', ');
   logger.info(
     `[topics] clustered ${stats.conversations} conversations → ${stats.topics} topics ` +
@@ -124,9 +134,20 @@ export function createTopicClusterer(deps: TopicClustererDeps) {
         })),
       );
 
+      // Best-effort labels (anonymized keywords → LLM). Never let labeling break the
+      // run — fall back to keyword-only topics on any failure.
+      let labeledTopics = topics;
+      if (deps.labelTopics) {
+        try {
+          labeledTopics = await deps.labelTopics(topics);
+        } catch (labelError) {
+          logger.warn('[topics] labeling step failed; storing keyword-only topics:', labelError);
+        }
+      }
+
       await deps.saveRunResults(
         run._id,
-        topics,
+        labeledTopics,
         assignments.map((a) => ({
           conversationId: a.conversationId,
           topicKey: a.topicKey,
@@ -143,7 +164,7 @@ export function createTopicClusterer(deps: TopicClustererDeps) {
         assignedCount: stats.assigned,
         noiseCount: stats.noise,
       });
-      logSummary(topics, stats);
+      logSummary(labeledTopics, stats);
       return run;
     } catch (error) {
       await deps.failAnalyticsRun(run._id, error);

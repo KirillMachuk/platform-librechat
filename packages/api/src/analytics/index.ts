@@ -5,3 +5,5 @@ export type {
   ClusterResult,
   ClusterConversationInput,
 } from './topicClusterer';
+export { createTopicLabeler } from './topicLabeler';
+export type { TopicLabeler, TopicLabelerDeps } from './topicLabeler';

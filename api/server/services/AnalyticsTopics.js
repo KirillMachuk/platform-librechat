@@ -1,5 +1,5 @@
 const { logger, runAsSystem, tenantStorage } = require('@librechat/data-schemas');
-const { createTopicClusterer } = require('@librechat/api');
+const { createTopicClusterer, createTopicLabeler } = require('@librechat/api');
 
 /**
  * AI usage analytics P2 — topic clustering orchestration.
@@ -8,12 +8,23 @@ const { createTopicClusterer } = require('@librechat/api');
  * caches the result in Mongo so the admin sees themes without re-running the heavy
  * pass on every screen open. Scheduled like the audit backfill (setInterval +
  * immediate tick), but each tenant runs at most once per window (runIfStale), so a
- * restart never re-clusters. Topic LABELS (anonymized text → LLM) are a later step.
+ * restart never re-clusters. Topic LABELS are added by routing each topic's
+ * keywords through the anonymizer (mask before egress) → a cheap LLM.
  */
 
 const TOPICS_SERVICE_URL = (process.env.TOPICS_SERVICE_URL || '').replace(/\/$/, '');
 const TOPICS_AUTH_TOKEN = process.env.TOPICS_AUTH_TOKEN || '';
+// Labeling endpoint — point at the anonymizer's OpenAI-compatible chat/completions
+// so PII is masked before it reaches the external LLM. Empty ⇒ keyword-only topics.
+const TOPICS_LABEL_URL = (process.env.TOPICS_LABEL_URL || '').replace(/\/$/, '');
+const TOPICS_LABEL_TOKEN = process.env.TOPICS_LABEL_TOKEN || '';
+const TOPICS_LABEL_MODEL = process.env.TOPICS_LABEL_MODEL || 'openai/gpt-5.4-mini';
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+const LABEL_SYSTEM_PROMPT =
+  'Ты — ассистент аналитики. По ключевым словам кластера запросов сотрудников к ИИ ' +
+  'дай короткое название темы на русском языке: 2–4 слова, существительное в ' +
+  'именительном падеже. Ответь ТОЛЬКО названием, без кавычек, пояснений и точки.';
 
 function _int(name, def) {
   const v = parseInt(process.env[name] || '', 10);
@@ -61,11 +72,54 @@ async function clusterConversations(conversations) {
   }
 }
 
+/**
+ * Names a topic from its keywords via the configured LLM endpoint (the
+ * anonymizer's chat/completions, so PII is masked before egress). Returns null
+ * when labeling is not configured or the response is empty.
+ */
+async function generateLabel({ keywords }) {
+  if (!TOPICS_LABEL_URL || !keywords || !keywords.length) {
+    return null;
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try {
+    const res = await fetch(`${TOPICS_LABEL_URL}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(TOPICS_LABEL_TOKEN ? { authorization: `Bearer ${TOPICS_LABEL_TOKEN}` } : {}),
+      },
+      body: JSON.stringify({
+        model: TOPICS_LABEL_MODEL,
+        max_tokens: 24,
+        temperature: 0.2,
+        messages: [
+          { role: 'system', content: LABEL_SYSTEM_PROMPT },
+          { role: 'user', content: `Ключевые слова: ${keywords.join(', ')}` },
+        ],
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`label LLM responded ${res.status}: ${text.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content;
+    return typeof content === 'string' && content.trim() ? content : null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function buildClusterer() {
   const db = require('~/models');
+  const labeler = TOPICS_LABEL_URL ? createTopicLabeler({ generateLabel }) : null;
   return createTopicClusterer({
     assembleConversationsForClustering: db.assembleConversationsForClustering,
     clusterConversations,
+    labelTopics: labeler ? labeler.labelTopics : undefined,
     createAnalyticsRun: db.createAnalyticsRun,
     saveRunResults: db.saveRunResults,
     completeAnalyticsRun: db.completeAnalyticsRun,
@@ -74,8 +128,12 @@ function buildClusterer() {
   });
 }
 
-/** One scheduler tick: cluster each tenant's recent conversations (if its last run is stale). */
-async function runTick() {
+/**
+ * One scheduler tick: cluster each tenant's recent conversations. Normally skips
+ * a tenant whose last run is still fresh (runIfStale); `force` recomputes
+ * regardless (used by the one-off TOPICS_FORCE_RUN and the on-demand trigger).
+ */
+async function runTick({ force = false } = {}) {
   const db = require('~/models');
   const clusterer = buildClusterer();
   await runAsSystem(async () => {
@@ -83,9 +141,10 @@ async function runTick() {
     for (const tenantId of tenantIds) {
       const from = new Date(Date.now() - WINDOW_DAYS * DAY_MS);
       const run = () =>
-        clusterer
-          .runIfStale({ tenantId, from, minIntervalMs: SCHEDULE_MS })
-          .catch((err) => logger.error('[topics] tenant clustering run failed:', err));
+        (force
+          ? clusterer.runClustering({ tenantId, from, trigger: 'manual' })
+          : clusterer.runIfStale({ tenantId, from, minIntervalMs: SCHEDULE_MS })
+        ).catch((err) => logger.error('[topics] tenant clustering run failed:', err));
       // Per-tenant work runs inside the tenant context so reads/writes are scoped.
       if (tenantId) {
         await tenantStorage.run({ tenantId }, run);
@@ -107,16 +166,21 @@ function startTopicClusterSchedule() {
     return null;
   }
 
-  const tick = () => {
-    runTick().catch((err) => logger.error('[topics] schedule tick failed:', err));
+  const forceFirst = ['true', '1', 'yes', 'on'].includes(
+    (process.env.TOPICS_FORCE_RUN || '').toLowerCase(),
+  );
+  const tick = (opts) => {
+    runTick(opts).catch((err) => logger.error('[topics] schedule tick failed:', err));
   };
 
   // Defer the first run so a heavy clustering pass doesn't block server startup.
-  const initial = setTimeout(tick, FIRST_TICK_DELAY_MS);
+  // TOPICS_FORCE_RUN makes that first run recompute even if a recent run exists
+  // (one-off: set it, redeploy to recompute now, then unset).
+  const initial = setTimeout(() => tick({ force: forceFirst }), FIRST_TICK_DELAY_MS);
   if (typeof initial.unref === 'function') {
     initial.unref();
   }
-  const timer = setInterval(tick, SCHEDULE_MS);
+  const timer = setInterval(() => tick({ force: false }), SCHEDULE_MS);
   if (typeof timer.unref === 'function') {
     timer.unref();
   }
@@ -127,4 +191,4 @@ function startTopicClusterSchedule() {
   return timer;
 }
 
-module.exports = { startTopicClusterSchedule, clusterConversations, runTick };
+module.exports = { startTopicClusterSchedule, clusterConversations, generateLabel, runTick };
