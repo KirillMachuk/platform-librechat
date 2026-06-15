@@ -456,6 +456,37 @@ describe('Meilisearch Mongoose plugin', () => {
     expect(storedDoc?._meiliIndex).toBe(false);
   });
 
+  test('batch sync (the reindex path) derives createdAtTs and drops the raw date', async () => {
+    // This is the exact path the production reindex runs (syncWithMeili ->
+    // processSyncBatch -> addDocumentsInBatches), distinct from the per-save hook.
+    const messageModel = createMessageModel(mongoose) as SchemaWithMeiliMethods;
+    mockAddDocumentsInBatches.mockClear();
+    const messageId = new mongoose.Types.ObjectId().toString();
+    const createdAt = new Date('2026-04-01T12:00:00.000Z');
+
+    await messageModel.collection.insertOne({
+      messageId,
+      conversationId: new mongoose.Types.ObjectId().toString(),
+      user: new mongoose.Types.ObjectId().toString(),
+      isCreatedByUser: true,
+      isTemporary: false,
+      text: 'Составь договор',
+      _meiliIndex: false,
+      createdAt,
+      updatedAt: createdAt,
+    });
+
+    await messageModel.syncWithMeili();
+
+    const batched = mockAddDocumentsInBatches.mock.calls.flatMap((c) => c[0]) as Array<
+      Record<string, unknown>
+    >;
+    const doc = batched.find((d) => d.messageId === messageId);
+    expect(doc).toBeDefined();
+    expect(doc!.createdAtTs).toBe(createdAt.getTime());
+    expect(doc!.createdAt).toBeUndefined();
+  });
+
   test('sync w/ meili treats null isTemporary with no expiration like missing legacy fields', async () => {
     const modelName = `DynamicMeiliNullTemporary${new mongoose.Types.ObjectId().toString()}`;
     const dynamicModel = createDynamicMeiliModel(modelName);
