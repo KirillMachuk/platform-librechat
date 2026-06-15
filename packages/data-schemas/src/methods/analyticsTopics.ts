@@ -264,6 +264,21 @@ export function createAnalyticsTopicsMethods(mongoose: typeof import('mongoose')
       .lean<IAnalyticsAssignment[]>();
   }
 
+  /**
+   * Distinct tenant ids that have conversations — the set the scheduler iterates,
+   * running one clustering pass per tenant. Returns `[undefined]` for a
+   * single-tenant deployment (no tenantId), so the caller runs one unscoped pass.
+   * Call under `runAsSystem` to enumerate across tenants.
+   */
+  async function getClusteringTenantIds(): Promise<(string | undefined)[]> {
+    const Conversation = mongoose.models.Conversation as Model<IConversation>;
+    const ids = (await Conversation.distinct('tenantId').maxTimeMS(MAX_QUERY_MS)) as Array<
+      string | null | undefined
+    >;
+    const tenants = ids.filter((t): t is string => Boolean(t));
+    return tenants.length ? tenants : [undefined];
+  }
+
   return {
     assembleConversationsForClustering,
     createAnalyticsRun,
@@ -275,6 +290,7 @@ export function createAnalyticsTopicsMethods(mongoose: typeof import('mongoose')
     saveRunResults,
     getRunTopics,
     getTopicAssignments,
+    getClusteringTenantIds,
   };
 }
 
