@@ -191,4 +191,25 @@ function startTopicClusterSchedule() {
   return timer;
 }
 
-module.exports = { startTopicClusterSchedule, clusterConversations, generateLabel, runTick };
+/**
+ * On-demand recompute for one tenant (the admin "Сгенерировать" button). Runs in
+ * its own tenant context because it executes after the triggering request has
+ * returned (fire-and-forget), so the request's ALS context is already gone.
+ */
+async function runClusteringNow({ tenantId } = {}) {
+  const clusterer = buildClusterer();
+  const from = new Date(Date.now() - WINDOW_DAYS * DAY_MS);
+  const run = () => clusterer.runClustering({ tenantId, from, trigger: 'manual' });
+  if (tenantId) {
+    return tenantStorage.run({ tenantId }, run);
+  }
+  return runAsSystem(run);
+}
+
+module.exports = {
+  startTopicClusterSchedule,
+  clusterConversations,
+  generateLabel,
+  runClusteringNow,
+  runTick,
+};

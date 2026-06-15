@@ -304,3 +304,84 @@ describe('results persistence', () => {
     expect(stamped?.tenantId).toBe('t1');
   });
 });
+
+describe('getConversationSummaries (drill-in)', () => {
+  beforeEach(async () => {
+    await Conversation.create([
+      {
+        conversationId: 's1',
+        title: 'Договор аренды',
+        user: 'u1',
+        tenantId: 't1',
+        endpoint: 'openai',
+        createdAt: new Date('2026-05-01'),
+      },
+      {
+        conversationId: 's2',
+        title: 'Отчёт',
+        user: 'u2',
+        tenantId: 't1',
+        endpoint: 'openai',
+        createdAt: new Date('2026-05-02'),
+      },
+      {
+        conversationId: 's3',
+        title: 'Другой тенант',
+        user: 'u9',
+        tenantId: 't2',
+        endpoint: 'openai',
+        createdAt: new Date('2026-05-02'),
+      },
+    ]);
+    await Message.create([
+      {
+        messageId: 's1-1',
+        conversationId: 's1',
+        user: 'u1',
+        isCreatedByUser: true,
+        text: 'изучи договор аренды',
+        tenantId: 't1',
+        createdAt: new Date('2026-05-01T10:00:00Z'),
+      },
+      {
+        messageId: 's1-0',
+        conversationId: 's1',
+        user: 'u1',
+        isCreatedByUser: false,
+        text: 'ответ',
+        tenantId: 't1',
+        createdAt: new Date('2026-05-01T10:00:30Z'),
+      },
+      {
+        messageId: 's2-1',
+        conversationId: 's2',
+        user: 'u2',
+        isCreatedByUser: true,
+        text: 'сделай отчёт',
+        tenantId: 't1',
+        createdAt: new Date('2026-05-02T10:00:00Z'),
+      },
+      {
+        messageId: 's3-1',
+        conversationId: 's3',
+        user: 'u9',
+        isCreatedByUser: true,
+        text: 'секрет',
+        tenantId: 't2',
+        createdAt: new Date('2026-05-02T10:00:00Z'),
+      },
+    ]);
+  });
+
+  test('returns title + first user-request preview, preserving the input order', async () => {
+    const out = await methods.getConversationSummaries(['s2', 's1'], 't1');
+    expect(out.map((s) => s.conversationId)).toEqual(['s2', 's1']);
+    const s1 = out.find((s) => s.conversationId === 's1');
+    expect(s1).toMatchObject({ title: 'Договор аренды', preview: 'изучи договор аренды' });
+  });
+
+  test('is tenant-scoped: another tenant’s conversation is not returned', async () => {
+    const out = await methods.getConversationSummaries(['s1', 's3'], 't1');
+    expect(out.map((s) => s.conversationId)).toEqual(['s1']);
+  });
+});
