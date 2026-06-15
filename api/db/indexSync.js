@@ -352,6 +352,35 @@ async function performSync(flowManager, flowId, flowType) {
       );
     }
 
+    // Probe what is ACTUALLY in the Meili messages index (vs what Mongo says is
+    // indexable) — pins down whether recent employee requests are missing from
+    // the index or indexed without searchable text.
+    try {
+      const mi = client.index('messages');
+      const stats = await mi.getStats();
+      const fmt = (t) => (t ? new Date(t).toISOString().slice(0, 10) : 'n/a');
+      const indexed = await mi.search('', {
+        limit: 1000,
+        filter: 'isCreatedByUser = true',
+        attributesToRetrieve: ['createdAtTs'],
+      });
+      const tss = indexed.hits.map((h) => h.createdAtTs).filter((t) => typeof t === 'number');
+      const dogovor = await mi.search('договор', {
+        limit: 1000,
+        filter: 'isCreatedByUser = true',
+        attributesToRetrieve: ['createdAtTs'],
+      });
+      const dtss = dogovor.hits.map((h) => h.createdAtTs).filter((t) => typeof t === 'number');
+      logger.info(
+        `[indexSync][probe] index docs=${stats.numberOfDocuments}; indexed employee msgs=${indexed.hits.length}` +
+          ` (oldest=${fmt(Math.min(...tss))} newest=${fmt(Math.max(...tss))}); ` +
+          `"договор" employee hits=${dogovor.estimatedTotalHits} ` +
+          `(oldest=${fmt(Math.min(...dtss))} newest=${fmt(Math.max(...dtss))})`,
+      );
+    } catch (probeErr) {
+      logger.warn('[indexSync][probe] failed:', probeErr.message);
+    }
+
     return { messagesSync, convosSync };
   } finally {
     if (indexingDisabled === true) {
