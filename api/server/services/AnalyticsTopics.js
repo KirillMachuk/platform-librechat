@@ -128,8 +128,12 @@ function buildClusterer() {
   });
 }
 
-/** One scheduler tick: cluster each tenant's recent conversations (if its last run is stale). */
-async function runTick() {
+/**
+ * One scheduler tick: cluster each tenant's recent conversations. Normally skips
+ * a tenant whose last run is still fresh (runIfStale); `force` recomputes
+ * regardless (used by the one-off TOPICS_FORCE_RUN and the on-demand trigger).
+ */
+async function runTick({ force = false } = {}) {
   const db = require('~/models');
   const clusterer = buildClusterer();
   await runAsSystem(async () => {
@@ -137,9 +141,10 @@ async function runTick() {
     for (const tenantId of tenantIds) {
       const from = new Date(Date.now() - WINDOW_DAYS * DAY_MS);
       const run = () =>
-        clusterer
-          .runIfStale({ tenantId, from, minIntervalMs: SCHEDULE_MS })
-          .catch((err) => logger.error('[topics] tenant clustering run failed:', err));
+        (force
+          ? clusterer.runClustering({ tenantId, from, trigger: 'manual' })
+          : clusterer.runIfStale({ tenantId, from, minIntervalMs: SCHEDULE_MS })
+        ).catch((err) => logger.error('[topics] tenant clustering run failed:', err));
       // Per-tenant work runs inside the tenant context so reads/writes are scoped.
       if (tenantId) {
         await tenantStorage.run({ tenantId }, run);
@@ -161,16 +166,21 @@ function startTopicClusterSchedule() {
     return null;
   }
 
-  const tick = () => {
-    runTick().catch((err) => logger.error('[topics] schedule tick failed:', err));
+  const forceFirst = ['true', '1', 'yes', 'on'].includes(
+    (process.env.TOPICS_FORCE_RUN || '').toLowerCase(),
+  );
+  const tick = (opts) => {
+    runTick(opts).catch((err) => logger.error('[topics] schedule tick failed:', err));
   };
 
   // Defer the first run so a heavy clustering pass doesn't block server startup.
-  const initial = setTimeout(tick, FIRST_TICK_DELAY_MS);
+  // TOPICS_FORCE_RUN makes that first run recompute even if a recent run exists
+  // (one-off: set it, redeploy to recompute now, then unset).
+  const initial = setTimeout(() => tick({ force: forceFirst }), FIRST_TICK_DELAY_MS);
   if (typeof initial.unref === 'function') {
     initial.unref();
   }
-  const timer = setInterval(tick, SCHEDULE_MS);
+  const timer = setInterval(() => tick({ force: false }), SCHEDULE_MS);
   if (typeof timer.unref === 'function') {
     timer.unref();
   }
