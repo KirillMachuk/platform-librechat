@@ -21,6 +21,13 @@ const MAX_OFFSET = 100000;
 const MAX_EXPORT_ROWS = 50000;
 /** CSV header row — mirrors the visible feed columns. */
 const EXPORT_HEADERS = ['Время', 'Сотрудник', 'Email', 'Модель/агент', 'Запрос'];
+/**
+ * Field delimiter. Semicolon (not comma) because Russian/European Excel and
+ * macOS Numbers use `;` as the list separator in those locales — a comma-
+ * delimited file opens entirely in one column there. `;` splits into columns
+ * across RU/EU Excel, Numbers, Google Sheets and LibreOffice.
+ */
+const CSV_DELIMITER = ';';
 
 export interface AdminAnalyticsDeps {
   listInteractions: (
@@ -109,16 +116,17 @@ function toConversationDetail(detail: AnalyticsConversation): AdminConversationD
  *     one) is executed as a formula by Excel/Sheets/LibreOffice on open. Prefix a single
  *     quote to force text. RFC 4180 quoting does NOT defuse this (the formula is still
  *     parsed inside a quoted cell), so it must be neutralized first.
- *  2. RFC 4180 — quote the (already-guarded) value when it contains a comma/quote/newline.
+ *  2. RFC 4180 — quote the (already-guarded) value when it contains the
+ *     delimiter, a quote, or a newline.
  */
 function csvCell(value: string): string {
   const guarded = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
-  return /["\n\r,]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
+  return /["\n\r;]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
 }
 
 /** Renders export rows as a UTF-8 CSV (BOM so Excel reads Cyrillic; CRLF line endings). */
 function buildCsv(rows: AnalyticsExportRow[]): string {
-  const lines = [EXPORT_HEADERS.join(',')];
+  const lines = [EXPORT_HEADERS.join(CSV_DELIMITER)];
   for (const r of rows) {
     const modelAgent = r.agentName ? `${r.model ?? ''} · агент: ${r.agentName}` : (r.model ?? '');
     lines.push(
@@ -130,7 +138,7 @@ function buildCsv(rows: AnalyticsExportRow[]): string {
         r.text ?? '',
       ]
         .map(csvCell)
-        .join(','),
+        .join(CSV_DELIMITER),
     );
   }
   return '\uFEFF' + lines.join('\r\n');
