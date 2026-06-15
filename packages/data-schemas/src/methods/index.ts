@@ -46,6 +46,7 @@ import {
 import { createTransactionMethods, type TransactionMethods } from './transaction';
 import { createAuditMethods, type AuditMethods } from './audit';
 import { createAnalyticsMethods, type AnalyticsMethods } from './analytics';
+import { createAnalyticsTopicsMethods, type AnalyticsTopicsMethods } from './analyticsTopics';
 import { createSpendTokensMethods, type SpendTokensMethods } from './spendTokens';
 import { createPromptMethods, type PromptMethods, type PromptDeps } from './prompt';
 import {
@@ -100,6 +101,7 @@ export type AllMethods = UserMethods &
   TransactionMethods &
   AuditMethods &
   AnalyticsMethods &
+  AnalyticsTopicsMethods &
   SpendTokensMethods &
   PromptMethods &
   SkillMethods &
@@ -230,6 +232,7 @@ export function createMethods(
     ...transactionMethods,
     ...createAuditMethods(mongoose),
     ...createAnalyticsMethods(mongoose),
+    ...createAnalyticsTopicsMethods(mongoose),
     ...spendTokensMethods,
     ...promptMethods,
     ...skillMethods,
@@ -271,6 +274,7 @@ export type {
   TransactionMethods,
   AuditMethods,
   AnalyticsMethods,
+  AnalyticsTopicsMethods,
   SpendTokensMethods,
   PromptMethods,
   SkillMethods,
