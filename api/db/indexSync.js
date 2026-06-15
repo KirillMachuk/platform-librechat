@@ -5,6 +5,7 @@ const {
   MEILI_CREATED_AT_TS_FIELD,
   MESSAGE_MEILI_FILTERABLE_ATTRIBUTES,
   MESSAGE_MEILI_SEARCHABLE_ATTRIBUTES,
+  MESSAGE_MEILI_SORTABLE_ATTRIBUTES,
 } = require('@librechat/data-schemas');
 const { CacheKeys } = require('librechat-data-provider');
 const { isEnabled, FlowStateManager } = require('@librechat/api');
@@ -118,9 +119,28 @@ async function ensureFilterableAttributes(client) {
         await messagesIndex.updateSettings({
           filterableAttributes: MESSAGE_MEILI_FILTERABLE_ATTRIBUTES,
           searchableAttributes: MESSAGE_MEILI_SEARCHABLE_ATTRIBUTES,
+          sortableAttributes: MESSAGE_MEILI_SORTABLE_ATTRIBUTES,
         });
         logger.info('[indexSync] Messages index configured for analytics filtering');
         settingsUpdated = true;
+      }
+
+      // Ensure the recency sort attribute independently of the filterable check.
+      // createdAtTs is already in every indexed doc, so enabling sort needs NO
+      // re-sync — do not set settingsUpdated for this.
+      const currentSortable = settings.sortableAttributes || [];
+      const missingSortable = MESSAGE_MEILI_SORTABLE_ATTRIBUTES.filter(
+        (attr) => !currentSortable.includes(attr),
+      );
+      if (missingSortable.length > 0) {
+        logger.info(
+          `[indexSync] Configuring messages index sortable attributes (adding: ${missingSortable.join(
+            ', ',
+          )})...`,
+        );
+        await messagesIndex.updateSettings({
+          sortableAttributes: MESSAGE_MEILI_SORTABLE_ATTRIBUTES,
+        });
       }
 
       // Inspect a sample document. The mongoMeili plugin may have already written
@@ -350,35 +370,6 @@ async function performSync(flowManager, flowId, flowType) {
       logger.info(
         `[indexSync] Conversations are fully synced: ${convoProgress.totalProcessed}/${convoProgress.totalDocuments}`,
       );
-    }
-
-    // Probe what is ACTUALLY in the Meili messages index (vs what Mongo says is
-    // indexable) — pins down whether recent employee requests are missing from
-    // the index or indexed without searchable text.
-    try {
-      const mi = client.index('messages');
-      const stats = await mi.getStats();
-      const fmt = (t) => (t ? new Date(t).toISOString().slice(0, 10) : 'n/a');
-      const indexed = await mi.search('', {
-        limit: 1000,
-        filter: 'isCreatedByUser = true',
-        attributesToRetrieve: ['createdAtTs'],
-      });
-      const tss = indexed.hits.map((h) => h.createdAtTs).filter((t) => typeof t === 'number');
-      const dogovor = await mi.search('договор', {
-        limit: 1000,
-        filter: 'isCreatedByUser = true',
-        attributesToRetrieve: ['createdAtTs'],
-      });
-      const dtss = dogovor.hits.map((h) => h.createdAtTs).filter((t) => typeof t === 'number');
-      logger.info(
-        `[indexSync][probe] index docs=${stats.numberOfDocuments}; indexed employee msgs=${indexed.hits.length}` +
-          ` (oldest=${fmt(Math.min(...tss))} newest=${fmt(Math.max(...tss))}); ` +
-          `"договор" employee hits=${dogovor.estimatedTotalHits} ` +
-          `(oldest=${fmt(Math.min(...dtss))} newest=${fmt(Math.max(...dtss))})`,
-      );
-    } catch (probeErr) {
-      logger.warn('[indexSync][probe] failed:', probeErr.message);
     }
 
     return { messagesSync, convosSync };

@@ -36,6 +36,12 @@ interface MongoMeiliOptions {
    */
   searchableAttributes?: string[];
   /**
+   * Sortable attributes. When omitted, no sortableAttributes are set. The
+   * `messages` index passes `createdAtTs` so the analytics search can return
+   * newest-first instead of pure relevance.
+   */
+  sortableAttributes?: string[];
+  /**
    * Extra Mongo fields to select + carry into the indexed document beyond the
    * `meiliIndex`-flagged ones (e.g. `createdAt` so `transformForIndex` can derive
    * a numeric timestamp). These are picked but not implicitly searchable.
@@ -663,7 +669,8 @@ export default function mongoMeili(schema: Schema, options: MongoMeiliOptions): 
 
   const { host, apiKey, indexName, primaryKey } = options;
   const filterableAttributes = options.filterableAttributes ?? ['user'];
-  const { searchableAttributes, extraIndexedFields, transformForIndex } = options;
+  const { searchableAttributes, sortableAttributes, extraIndexedFields, transformForIndex } =
+    options;
   const syncOptions = {
     batchSize: options.syncBatchSize || getSyncConfig().batchSize,
     delayMs: options.syncDelayMs || getSyncConfig().delayMs,
@@ -716,11 +723,16 @@ export default function mongoMeili(schema: Schema, options: MongoMeiliOptions): 
       if (searchableAttributes) {
         settings.searchableAttributes = searchableAttributes;
       }
+      if (sortableAttributes) {
+        settings.sortableAttributes = sortableAttributes;
+      }
       await index.updateSettings(settings);
       logger.debug(
         `[mongoMeili] Updated index ${indexName} settings: filterable=[${filterableAttributes.join(
           ', ',
-        )}]${searchableAttributes ? ` searchable=[${searchableAttributes.join(', ')}]` : ''}`,
+        )}]${searchableAttributes ? ` searchable=[${searchableAttributes.join(', ')}]` : ''}${
+          sortableAttributes ? ` sortable=[${sortableAttributes.join(', ')}]` : ''
+        }`,
       );
     } catch (settingsError) {
       logger.error(`[mongoMeili] Error updating index settings for ${indexName}:`, settingsError);

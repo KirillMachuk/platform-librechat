@@ -6,6 +6,7 @@ import {
   MEILI_CREATED_AT_TS_FIELD,
   MESSAGE_MEILI_FILTERABLE_ATTRIBUTES,
   MESSAGE_MEILI_SEARCHABLE_ATTRIBUTES,
+  MESSAGE_MEILI_SORTABLE_ATTRIBUTES,
 } from '~/config/meiliAnalytics';
 
 /**
@@ -35,9 +36,11 @@ export function createMessageModel(mongoose: typeof import('mongoose')) {
       apiKey: process.env.MEILI_MASTER_KEY,
       indexName: 'messages',
       primaryKey: 'messageId',
-      // Analytics search: tenant-scoped, employee-only, period-filterable feed.
+      // Analytics search: tenant-scoped, employee-only, period-filterable feed,
+      // sortable by recency so search results match the newest-first feed.
       filterableAttributes: MESSAGE_MEILI_FILTERABLE_ATTRIBUTES,
       searchableAttributes: MESSAGE_MEILI_SEARCHABLE_ATTRIBUTES,
+      sortableAttributes: MESSAGE_MEILI_SORTABLE_ATTRIBUTES,
       extraIndexedFields: ['createdAt'],
       transformForIndex: addCreatedAtTs,
     });
