@@ -265,6 +265,91 @@ export function createAnalyticsTopicsMethods(mongoose: typeof import('mongoose')
   }
 
   /**
+   * Conversation summaries (title + author + first request preview) for a set of
+   * conversation ids, tenant-scoped, preserving the input order. Powers the
+   * topic drill-in list. Reads are aggregate metadata + a short preview, not the
+   * full transcript (that stays behind getConversationDetail / conversation.read).
+   */
+  async function getConversationSummaries(
+    conversationIds: string[],
+    tenantId?: string,
+  ): Promise<
+    Array<{
+      conversationId: string;
+      title?: string;
+      userId?: string;
+      userEmail?: string;
+      userName?: string;
+      createdAt?: Date;
+      preview: string;
+    }>
+  > {
+    if (!conversationIds.length) {
+      return [];
+    }
+    const Conversation = mongoose.models.Conversation as Model<IConversation>;
+    const convoMatch: FilterQuery<IConversation> = { conversationId: { $in: conversationIds } };
+    if (tenantId) {
+      convoMatch.tenantId = tenantId;
+    }
+    const firstUserMessageConds: Array<Record<string, unknown>> = [
+      { $eq: ['$conversationId', '$$cid'] },
+      { $eq: ['$isCreatedByUser', true] },
+    ];
+    if (tenantId) {
+      firstUserMessageConds.push({ $eq: ['$tenantId', tenantId] });
+    }
+    const rows = await Conversation.aggregate<{
+      conversationId: string;
+      title?: string;
+      userId?: string;
+      userEmail?: string;
+      userName?: string;
+      createdAt?: Date;
+      preview: string;
+    }>([
+      { $match: convoMatch },
+      {
+        $addFields: {
+          _userOid: { $convert: { input: '$user', to: 'objectId', onError: null, onNull: null } },
+        },
+      },
+      { $lookup: { from: 'users', localField: '_userOid', foreignField: '_id', as: 'usr' } },
+      { $unwind: { path: '$usr', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'messages',
+          let: { cid: '$conversationId' },
+          pipeline: [
+            { $match: { $expr: { $and: firstUserMessageConds } } },
+            { $sort: { createdAt: 1 } },
+            { $limit: 1 },
+            { $project: { _id: 0, text: 1 } },
+          ],
+          as: 'firstMsg',
+        },
+      },
+      { $unwind: { path: '$firstMsg', preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          conversationId: 1,
+          title: 1,
+          userId: '$user',
+          userEmail: '$usr.email',
+          userName: '$usr.name',
+          createdAt: 1,
+          preview: { $substrCP: [{ $ifNull: ['$firstMsg.text', ''] }, 0, 200] },
+        },
+      },
+    ]).option({ maxTimeMS: MAX_QUERY_MS });
+
+    const order = new Map(conversationIds.map((id, i) => [id, i]));
+    rows.sort((a, b) => (order.get(a.conversationId) ?? 0) - (order.get(b.conversationId) ?? 0));
+    return rows;
+  }
+
+  /**
    * Distinct tenant ids that have conversations — the set the scheduler iterates,
    * running one clustering pass per tenant. Returns `[undefined]` for a
    * single-tenant deployment (no tenantId), so the caller runs one unscoped pass.
@@ -290,6 +375,7 @@ export function createAnalyticsTopicsMethods(mongoose: typeof import('mongoose')
     saveRunResults,
     getRunTopics,
     getTopicAssignments,
+    getConversationSummaries,
     getClusteringTenantIds,
   };
 }
