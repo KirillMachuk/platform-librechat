@@ -1,6 +1,16 @@
 name: Frontend Unit Tests
 
 on:
+  # Also run on push to main (not just PRs) so a green main reflects the frontend
+  # test suite, not only the Docker build — otherwise broken client tests can land
+  # on main unnoticed (the suite never re-runs there). Same client paths as PRs.
+  push:
+    branches:
+      - main
+    paths:
+      - 'client/**'
+      - 'packages/client/**'
+      - 'packages/data-provider/**'
   pull_request:
     paths:
       - 'client/**'
