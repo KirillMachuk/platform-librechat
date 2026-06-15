@@ -22,10 +22,12 @@ export default function ImageVision() {
             className="relative float-left mr-2 inline-flex h-4 w-4 cursor-pointer"
             aria-label={localize('com_assistants_image_vision')}
             value={field.value?.toString()}
+            aria-labelledby="image-vision-label"
           />
         )}
       />
       <label
+        id="image-vision-label"
         className="form-check-label text-token-text-primary w-full cursor-pointer"
         htmlFor={Capabilities.image_vision}
         onClick={() =>

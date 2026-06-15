@@ -17,7 +17,7 @@ export function DataTableColumnVisibility<TData>({
   table,
   contextMap,
   isSmallScreen = false,
-}: DataTableColumnVisibilityProps<TData>) {
+}: DataTableColumnVisibilityProps<TData>): JSX.Element {
   const localize = useLocalize();
   const menuId = useId();
   const [isOpen, setIsOpen] = useState(false);

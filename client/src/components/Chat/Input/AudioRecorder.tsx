@@ -2,8 +2,8 @@ import { memo, useCallback, useRef } from 'react';
 import { MicOff } from 'lucide-react';
 import { useToastContext, TooltipAnchor, ListeningIcon, Spinner } from '@librechat/client';
 import { useLocalize, useSpeechToText, useGetAudioSettings } from '~/hooks';
+import { globalAudioId, type TAskFunction } from '~/common';
 import { useChatFormContext } from '~/Providers';
-import { globalAudioId } from '~/common';
 import { cn } from '~/utils';
 
 /** Серверный (не браузерный) STT. `openai`/`azureOpenAI` — это ПРОВАЙДЕРЫ внешнего STT из
@@ -21,7 +21,7 @@ export default memo(function AudioRecorder({
   isSubmitting,
 }: {
   disabled: boolean;
-  ask: (data: { text: string }) => void;
+  ask: TAskFunction;
   methods: ReturnType<typeof useChatFormContext>;
   isSubmitting: boolean;
 }) {
@@ -54,7 +54,10 @@ export default memo(function AudioRecorder({
           isExternalSTT(speechToTextEndpoint) && existingTextRef.current
             ? `${existingTextRef.current} ${text}`
             : text;
-        ask({ text: finalText });
+        const submitted = ask({ text: finalText });
+        if (submitted === false) {
+          return;
+        }
         reset({ text: '' });
         existingTextRef.current = '';
       }

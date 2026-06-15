@@ -8,6 +8,7 @@ describe('ConversationTag Utilities', () => {
     conversations = [
       {
         _id: 'id-saved',
+        _id: 'tag-id-saved',
         tag: 'saved',
         count: 1,
         position: 0,
@@ -18,6 +19,7 @@ describe('ConversationTag Utilities', () => {
       },
       {
         _id: 'id-tag1',
+        _id: 'tag-id-1',
         tag: 'tag1',
         count: 1,
         position: 1,
@@ -28,6 +30,7 @@ describe('ConversationTag Utilities', () => {
       },
       {
         _id: 'id-tag2',
+        _id: 'tag-id-2',
         tag: 'tag2',
         count: 20,
         position: 2,
@@ -38,6 +41,7 @@ describe('ConversationTag Utilities', () => {
       },
       {
         _id: 'id-tag3',
+        _id: 'tag-id-3',
         tag: 'tag3',
         count: 30,
         position: 3,
@@ -48,6 +52,7 @@ describe('ConversationTag Utilities', () => {
       },
       {
         _id: 'id-tag4',
+        _id: 'tag-id-4',
         tag: 'tag4',
         count: 40,
         position: 4,
@@ -58,6 +63,7 @@ describe('ConversationTag Utilities', () => {
       },
       {
         _id: 'id-tag5',
+        _id: 'tag-id-5',
         tag: 'tag5',
         count: 50,
         position: 5,
@@ -182,6 +188,7 @@ describe('ConversationTag Utilities', () => {
       { tag: 'newtag', description: 'newDescription' },
       {
         _id: 'id-newtag',
+        _id: 'tag-id-newtag',
         tag: 'newtag',
         description: 'newDescription',
         position: 1,
@@ -216,6 +223,7 @@ describe('ConversationTag Utilities', () => {
       { tag: 'newtag', description: 'newDescription' },
       {
         _id: 'id-saved-new',
+        _id: 'tag-id-saved',
         tag: 'saved',
         description: 'newDescription',
         position: 0,

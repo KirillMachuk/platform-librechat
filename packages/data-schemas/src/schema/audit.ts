@@ -5,7 +5,7 @@ import type * as t from '~/types';
  * Append-only audit log: a single "who — what — when" feed.
  * No update/delete methods are exposed; entries are immutable once written.
  */
-const auditLogSchema = new Schema<t.IAuditLog>(
+const auditLogSchema: Schema<t.IAuditLog> = new Schema<t.IAuditLog>(
   {
     tenantId: { type: String, index: true },
     actorId: { type: Schema.Types.ObjectId, ref: 'User', index: true },

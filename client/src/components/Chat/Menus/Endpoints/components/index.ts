@@ -4,3 +4,4 @@ export * from './EndpointItem';
 export * from './SearchResults';
 export * from './CustomGroup';
 export * from './SelectorTabs';
+export * from './Marketplace';

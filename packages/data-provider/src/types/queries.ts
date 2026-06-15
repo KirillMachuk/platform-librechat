@@ -19,11 +19,19 @@ export type ConversationListParams = {
   sortDirection?: 'asc' | 'desc';
   tags?: string[];
   search?: string;
+  projectId?: string;
 };
 
 export type MinimalConversation = Pick<
   s.TConversation,
-  'conversationId' | 'endpoint' | 'title' | 'createdAt' | 'updatedAt' | 'user' | 'project_id'
+  | 'conversationId'
+  | 'endpoint'
+  | 'title'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'user'
+  | 'project_id'
+  | 'chatProjectId'
 >;
 
 export type ConversationListResponse = {
@@ -36,6 +44,21 @@ export type ConversationUpdater = (
   data: ConversationData,
   conversation: s.TConversation,
 ) => ConversationData;
+
+export type ProjectListParams = {
+  cursor?: string;
+  limit?: number;
+  sortBy?: 'name' | 'createdAt' | 'lastConversationAt';
+  sortDirection?: 'asc' | 'desc';
+  search?: string;
+};
+
+export type ProjectListResponse = {
+  projects: t.TChatProject[];
+  nextCursor: string | null;
+};
+
+export type ProjectData = InfiniteData<ProjectListResponse>;
 
 /* Messages */
 export type MessagesListParams = {
@@ -60,7 +83,6 @@ export type SharedMessagesResponse = Omit<s.TSharedLink, 'messages'> & {
 
 export interface SharedLinksListParams {
   pageSize: number;
-  isPublic: boolean;
   sortBy: 'title' | 'createdAt';
   sortDirection: 'asc' | 'desc';
   search?: string;
@@ -70,7 +92,6 @@ export interface SharedLinksListParams {
 export type SharedLinkItem = {
   shareId: string;
   title: string;
-  isPublic: boolean;
   createdAt: Date;
   conversationId: string;
 };
@@ -187,6 +208,8 @@ export interface MCPServerStatus {
 export interface MCPConnectionStatusResponse {
   success: boolean;
   connectionStatus: Record<string, MCPServerStatus>;
+  /** Server-configured OAuth completion window in ms (`MCP_OAUTH_HANDLING_TIMEOUT`) */
+  oauthTimeout?: number;
 }
 
 export interface MCPServerConnectionStatusResponse {

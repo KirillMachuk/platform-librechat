@@ -41,7 +41,8 @@ export default function AutoSendTextSelector() {
   };
 
   const handleInputChange = (value: string | number | null) => {
-    const newValue = typeof value === 'number' ? value : 3;
+    const parsed = typeof value === 'number' ? value : parseInt(String(value ?? ''), 10);
+    const newValue = Number.isNaN(parsed) ? 3 : parsed;
     setDelayValue(newValue);
     if (isEnabled) {
       setAutoSendText(newValue);

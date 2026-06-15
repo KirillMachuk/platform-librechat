@@ -24,6 +24,11 @@ function escapeRegex(value: string): string {
   return value.replace(REGEX_SPECIALS, '\\$&');
 }
 
+/** Quotes a value for a MeiliSearch filter expression, escaping `"` and `\`. */
+function meiliQuote(value: string): string {
+  return `"${value.replace(/["\\]/g, '\\$&')}"`;
+}
+
 /**
  * Resolves a message's display text. Prefers the top-level `text` column; for
  * agent/assistant turns (where `text` is empty and the answer lives in
@@ -115,7 +120,76 @@ function convoLookupPipeline(tenantId?: string): PipelineStage.Lookup['$lookup']
   ];
 }
 
-export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
+/**
+ * Joins matched message rows to their conversation (tenant-scoped) and author,
+ * then projects the `RawInteractionRow` shape. Shared by the Mongo feed and the
+ * Meili-ranked hydration so both produce identical rows. `tenantId` (from the
+ * request's ALS context) scopes the conversation join — never cross-tenant.
+ */
+function interactionEnrichmentStages(tenantId?: string): PipelineStage[] {
+  return [
+    {
+      $lookup: {
+        from: 'conversations',
+        let: { cid: '$conversationId' },
+        pipeline: convoLookupPipeline(tenantId),
+        as: 'convo',
+      },
+    },
+    { $unwind: { path: '$convo', preserveNullAndEmptyArrays: true } },
+    {
+      $addFields: {
+        _userOid: { $convert: { input: '$user', to: 'objectId', onError: null, onNull: null } },
+      },
+    },
+    { $lookup: { from: 'users', localField: '_userOid', foreignField: '_id', as: 'usr' } },
+    { $unwind: { path: '$usr', preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        _id: 0,
+        messageId: 1,
+        conversationId: 1,
+        userId: '$user',
+        userEmail: '$usr.email',
+        userName: '$usr.name',
+        model: 1,
+        endpoint: 1,
+        agentId: '$convo.agent_id',
+        convoModel: '$convo.model',
+        conversationTitle: '$convo.title',
+        preview: { $substrCP: [{ $ifNull: ['$text', ''] }, 0, PREVIEW_LEN] },
+        createdAt: 1,
+      },
+    },
+  ];
+}
+
+export interface AnalyticsMethods {
+  listInteractions(
+    filter: AnalyticsInteractionFilter,
+    options: { limit: number; offset: number },
+  ): Promise<{ interactions: AnalyticsInteraction[]; hasMore: boolean }>;
+  listInteractionsByIds(
+    messageIds: string[],
+    filter: AnalyticsInteractionFilter,
+  ): Promise<AnalyticsInteraction[]>;
+  searchInteractionIds(
+    filter: AnalyticsInteractionFilter,
+    options: { limit: number; offset: number },
+  ): Promise<{ ids: string[]; hasMore: boolean } | null>;
+  exportInteractions(
+    filter: AnalyticsInteractionFilter,
+    options: { limit: number },
+  ): Promise<{ rows: AnalyticsExportRow[]; truncated: boolean }>;
+  countInteractions(filter: AnalyticsInteractionFilter): Promise<number>;
+  getConversationDetail(
+    conversationId: string,
+    tenantId?: string,
+  ): Promise<AnalyticsConversation | null>;
+  resolveAgentConversationIds(agentId: string, tenantId?: string): Promise<string[]>;
+}
+
+export function createAnalyticsMethods(mongoose: typeof import('mongoose')): AnalyticsMethods {
   /** Batch-resolves real (named) agent ids to display names. Ephemeral ids are skipped by the caller. */
   async function fetchAgentNames(agentIds: string[]): Promise<Map<string, string>> {
     if (!agentIds.length) {
@@ -182,6 +256,35 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
     return match;
   }
 
+  /** Resolves agent display names and maps raw projected rows to the feed DTO. */
+  async function mapRawToInteractions(rows: RawInteractionRow[]): Promise<AnalyticsInteraction[]> {
+    const realAgentIds = [
+      ...new Set(
+        rows
+          .map((r) => r.agentId)
+          .filter((id): id is string => Boolean(id) && !parseEphemeralAgentId(id as string)),
+      ),
+    ];
+    const agentNames = await fetchAgentNames(realAgentIds);
+
+    return rows.map((r) => {
+      const { model, agentName } = resolveModelAgent(r.agentId, r.model, r.convoModel, agentNames);
+      return {
+        messageId: r.messageId,
+        conversationId: r.conversationId,
+        userId: r.userId,
+        userEmail: r.userEmail,
+        userName: r.userName,
+        model,
+        endpoint: r.endpoint,
+        agentName,
+        conversationTitle: r.conversationTitle,
+        preview: r.preview,
+        createdAt: r.createdAt,
+      };
+    });
+  }
+
   /**
    * Reads a page of employee↔AI request rows (newest first), joined to their
    * conversation (title/agent/model, tenant-scoped) and author (email/name).
@@ -207,71 +310,107 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
       { $sort: { createdAt: -1 } },
       { $skip: options.offset },
       { $limit: options.limit + 1 },
-      {
-        $lookup: {
-          from: 'conversations',
-          let: { cid: '$conversationId' },
-          pipeline: convoLookupPipeline(tenantId),
-          as: 'convo',
-        },
-      },
-      { $unwind: { path: '$convo', preserveNullAndEmptyArrays: true } },
-      {
-        $addFields: {
-          _userOid: { $convert: { input: '$user', to: 'objectId', onError: null, onNull: null } },
-        },
-      },
-      { $lookup: { from: 'users', localField: '_userOid', foreignField: '_id', as: 'usr' } },
-      { $unwind: { path: '$usr', preserveNullAndEmptyArrays: true } },
-      {
-        $project: {
-          _id: 0,
-          messageId: 1,
-          conversationId: 1,
-          userId: '$user',
-          userEmail: '$usr.email',
-          userName: '$usr.name',
-          model: 1,
-          endpoint: 1,
-          agentId: '$convo.agent_id',
-          convoModel: '$convo.model',
-          conversationTitle: '$convo.title',
-          preview: { $substrCP: [{ $ifNull: ['$text', ''] }, 0, PREVIEW_LEN] },
-          createdAt: 1,
-        },
-      },
+      ...interactionEnrichmentStages(tenantId),
     ]).option({ maxTimeMS: MAX_QUERY_MS });
 
     const hasMore = raw.length > options.limit;
     const page = hasMore ? raw.slice(0, options.limit) : raw;
-
-    const realAgentIds = [
-      ...new Set(
-        page
-          .map((r) => r.agentId)
-          .filter((id): id is string => Boolean(id) && !parseEphemeralAgentId(id as string)),
-      ),
-    ];
-    const agentNames = await fetchAgentNames(realAgentIds);
-
-    const interactions: AnalyticsInteraction[] = page.map((r) => {
-      const { model, agentName } = resolveModelAgent(r.agentId, r.model, r.convoModel, agentNames);
-      return {
-        messageId: r.messageId,
-        conversationId: r.conversationId,
-        userId: r.userId,
-        userEmail: r.userEmail,
-        userName: r.userName,
-        model,
-        endpoint: r.endpoint,
-        agentName,
-        conversationTitle: r.conversationTitle,
-        preview: r.preview,
-        createdAt: r.createdAt,
-      };
-    });
+    const interactions = await mapRawToInteractions(page);
 
     return { interactions, hasMore };
+  }
+
+  /**
+   * Hydrates a list of messageIds (already ranked by the search backend) into the
+   * feed DTO, preserving the input order. Used by the MeiliSearch search path:
+   * Meili ranks + paginates, then this fills in the conversation/author joins.
+   * Re-applies the tenant + employee filters as defense in depth so a stray id
+   * can never surface another tenant's content.
+   */
+  async function listInteractionsByIds(
+    messageIds: string[],
+    filter: AnalyticsInteractionFilter,
+  ): Promise<AnalyticsInteraction[]> {
+    if (!messageIds.length) {
+      return [];
+    }
+    const Message = mongoose.models.Message as Model<IMessage>;
+    const tenantId = getTenantId();
+    const match: FilterQuery<IMessage> = {
+      messageId: { $in: messageIds },
+      isCreatedByUser: true,
+    };
+    if (filter.tenantId) {
+      match.tenantId = filter.tenantId;
+    }
+    const raw = await Message.aggregate<RawInteractionRow>([
+      { $match: match },
+      ...interactionEnrichmentStages(tenantId),
+    ]).option({ maxTimeMS: MAX_QUERY_MS });
+
+    const interactions = await mapRawToInteractions(raw);
+    // Preserve the search backend's ranking — Mongo `$in` does not order by it.
+    const rank = new Map(messageIds.map((id, i) => [id, i]));
+    interactions.sort((a, b) => (rank.get(a.messageId) ?? 0) - (rank.get(b.messageId) ?? 0));
+    return interactions;
+  }
+
+  /**
+   * Resolves a ranked, typo-tolerant page of messageIds for a text query via
+   * MeiliSearch (the `messages` index the chat search already maintains). The
+   * query is the message text; structured constraints (tenant, employee flag,
+   * period, optional employee) are pushed down as Meili filters so the scan is
+   * index-served, not a Mongo collection scan.
+   *
+   * Returns `null` when Meili is unavailable or tenant context is missing, so the
+   * caller can fall back to the Mongo `$regex` path. TENANT ISOLATION: a query is
+   * never issued without an explicit `tenantId` filter (Meili bypasses the
+   * Mongoose tenant middleware).
+   */
+  async function searchInteractionIds(
+    filter: AnalyticsInteractionFilter,
+    options: { limit: number; offset: number },
+  ): Promise<{ ids: string[]; hasMore: boolean } | null> {
+    const Message = mongoose.models.Message as Model<IMessage> & {
+      meiliSearch?: (
+        q: string,
+        params: Record<string, unknown>,
+        populate?: boolean,
+      ) => Promise<{ hits?: Array<Record<string, unknown>> }>;
+    };
+    if (typeof Message.meiliSearch !== 'function' || !filter.tenantId) {
+      return null;
+    }
+    const clauses: string[] = [
+      `tenantId = ${meiliQuote(filter.tenantId)}`,
+      'isCreatedByUser = true',
+    ];
+    if (filter.userId) {
+      clauses.push(`user = ${meiliQuote(filter.userId)}`);
+    }
+    if (filter.from) {
+      clauses.push(`createdAtTs >= ${new Date(filter.from).getTime()}`);
+    }
+    if (filter.to) {
+      clauses.push(`createdAtTs < ${new Date(filter.to).getTime()}`);
+    }
+
+    const response = await Message.meiliSearch(
+      filter.search ?? '',
+      {
+        filter: clauses.join(' AND '),
+        limit: options.limit + 1,
+        offset: options.offset,
+        attributesToRetrieve: ['messageId'],
+      },
+      false,
+    );
+
+    const ids = (response.hits ?? [])
+      .map((h) => h.messageId)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+    const hasMore = ids.length > options.limit;
+    return { ids: hasMore ? ids.slice(0, options.limit) : ids, hasMore };
   }
 
   /**
@@ -458,11 +597,11 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
 
   return {
     listInteractions,
+    listInteractionsByIds,
+    searchInteractionIds,
     exportInteractions,
     countInteractions,
     getConversationDetail,
     resolveAgentConversationIds,
   };
 }
-
-export type AnalyticsMethods = ReturnType<typeof createAnalyticsMethods>;

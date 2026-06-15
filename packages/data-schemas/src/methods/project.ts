@@ -32,7 +32,19 @@ interface ProjectListItem {
   fileCount: number;
 }
 
-export function createProjectMethods(mongoose: typeof import('mongoose')) {
+export interface ProjectMethods {
+  createProject(user: string, data: CreateProjectInput): Promise<IProject>;
+  getProjectById(user: string, projectId: string): Promise<IProject | null>;
+  getProjects(user: string): Promise<ProjectListItem[]>;
+  updateProject(
+    user: string,
+    projectId: string,
+    data: UpdateProjectInput,
+  ): Promise<IProject | null>;
+  deleteProject(user: string, projectId: string): Promise<boolean>;
+}
+
+export function createProjectMethods(mongoose: typeof import('mongoose')): ProjectMethods {
   function getProjectModel(): Model<IProject> {
     return mongoose.models.Project as Model<IProject>;
   }
@@ -151,5 +163,3 @@ export function createProjectMethods(mongoose: typeof import('mongoose')) {
     deleteProject,
   };
 }
-
-export type ProjectMethods = ReturnType<typeof createProjectMethods>;

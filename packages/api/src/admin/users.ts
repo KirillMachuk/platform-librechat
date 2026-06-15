@@ -77,7 +77,13 @@ export interface AdminUsersDeps {
   getBalanceConfig?: () => Promise<BalanceConfig | undefined>;
 }
 
-export function createAdminUsersHandlers(deps: AdminUsersDeps) {
+export function createAdminUsersHandlers(deps: AdminUsersDeps): {
+  listUsers: (req: ServerRequest, res: Response) => Promise<Response>;
+  searchUsers: (req: ServerRequest, res: Response) => Promise<Response>;
+  createUser: (req: ServerRequest, res: Response) => Promise<Response>;
+  updateUser: (req: ServerRequest, res: Response) => Promise<Response>;
+  deleteUser: (req: ServerRequest, res: Response) => Promise<Response>;
+} {
   const {
     findUsers,
     countUsers,

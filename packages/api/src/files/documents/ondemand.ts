@@ -2,8 +2,8 @@ import { withTimeout } from '../../utils/promise';
 import { bufferToOfficeHtml, officeHtmlBucket } from './html';
 import type { OfficeHtmlBucket } from './html';
 
-export const MAX_OFFICE_PREVIEW_BYTES = 25 * 1024 * 1024;
-export const OFFICE_PREVIEW_TIMEOUT_MS = 30 * 1000;
+export const MAX_OFFICE_PREVIEW_BYTES: number = 25 * 1024 * 1024;
+export const OFFICE_PREVIEW_TIMEOUT_MS: number = 30 * 1000;
 
 /**
  * Public boolean gate for the office-preview pipeline.

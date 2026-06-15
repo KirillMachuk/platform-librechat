@@ -1,12 +1,13 @@
-import { Dispatcher, ProxyAgent } from 'undici';
 import { logger } from '@librechat/data-schemas';
 import { AnthropicClientOptions } from '@librechat/agents';
 import {
   anthropicSettings,
+  omitsSamplingParameters,
   removeNullishValues,
   ThinkingDisplay,
   AuthKeys,
 } from 'librechat-data-provider';
+import type { Dispatcher } from 'undici';
 import type {
   AnthropicLLMConfigResult,
   AnthropicConfigOptions,
@@ -25,6 +26,7 @@ import {
   isAnthropicVertexCredentials,
   getVertexDeploymentName,
 } from './vertex';
+import { getProxyDispatcher } from '~/utils/proxy';
 
 const WEB_SEARCH_BETA = 'web-search-2025-03-05';
 
@@ -51,7 +53,7 @@ function parseCredentials(
 }
 
 /** Known Anthropic parameters that map directly to the client config */
-export const knownAnthropicParams = new Set([
+export const knownAnthropicParams: Set<string> = new Set([
   'model',
   'temperature',
   'topP',
@@ -177,9 +179,12 @@ function getLLMConfig(
     );
   }
 
+  const resolvedModel = requestOptions.model ?? mergedOptions.model;
+  const shouldOmitSamplingParameters = omitsSamplingParameters(resolvedModel);
+
   requestOptions = configureReasoning(requestOptions, systemOptions);
 
-  if (supportsAdaptiveThinking(mergedOptions.model)) {
+  if (supportsAdaptiveThinking(resolvedModel)) {
     if (
       systemOptions.effort &&
       (systemOptions.effort as string) !== '' &&
@@ -204,8 +209,8 @@ function getLLMConfig(
 
   const hasActiveThinking = requestOptions.thinking != null;
   const isThinkingModel =
-    /claude-3[-.]7/.test(mergedOptions.model) || supportsAdaptiveThinking(mergedOptions.model);
-  if (!isThinkingModel || !hasActiveThinking) {
+    /claude-3[-.]7/.test(resolvedModel) || supportsAdaptiveThinking(resolvedModel);
+  if (!shouldOmitSamplingParameters && (!isThinkingModel || !hasActiveThinking)) {
     requestOptions.topP = mergedOptions.topP;
     requestOptions.topK = mergedOptions.topK;
   }
@@ -223,10 +228,10 @@ function getLLMConfig(
     requestOptions.clientOptions.defaultHeaders = headers;
   }
 
-  if (options.proxy && requestOptions.clientOptions) {
-    const proxyAgent = new ProxyAgent(options.proxy);
+  const proxyDispatcher = getProxyDispatcher(options.proxy);
+  if (proxyDispatcher && requestOptions.clientOptions) {
     requestOptions.clientOptions.fetchOptions = {
-      dispatcher: proxyAgent,
+      dispatcher: proxyDispatcher,
     };
   }
 
@@ -291,6 +296,12 @@ function getLLMConfig(
         delete (requestOptions.invocationKwargs as Record<string, unknown>)[param];
       }
     });
+  }
+
+  if (shouldOmitSamplingParameters) {
+    delete requestOptions.temperature;
+    delete requestOptions.topP;
+    delete requestOptions.topK;
   }
 
   const tools = [];

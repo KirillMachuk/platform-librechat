@@ -9,6 +9,7 @@ const adminGrants = require('./admin/grants');
 const adminGroups = require('./admin/groups');
 const adminRoles = require('./admin/roles');
 const adminUsage = require('./admin/usage');
+const adminSkills = require('./admin/skills');
 const adminUsers = require('./admin/users');
 const endpoints = require('./endpoints');
 const staticRoute = require('./static');
@@ -36,8 +37,10 @@ const auth = require('./auth');
 const keys = require('./keys');
 const user = require('./user');
 const mcp = require('./mcp');
+const rum = require('./rum');
 
 module.exports = {
+  rum,
   mcp,
   auth,
   adminAuth,
@@ -48,6 +51,7 @@ module.exports = {
   adminGroups,
   adminRoles,
   adminUsage,
+  adminSkills,
   adminUsers,
   keys,
   apiKeys,
@@ -64,6 +68,7 @@ module.exports = {
   config,
   models,
   prompts,
+  projects,
   skills,
   actions,
   presets,

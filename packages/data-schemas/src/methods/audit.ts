@@ -22,7 +22,21 @@ interface AgentInvokeRow {
   createdAt: Date;
 }
 
-export function createAuditMethods(mongoose: typeof import('mongoose')) {
+export interface AuditMethods {
+  recordAuditLog(event: AuditLogInput): Promise<IAuditLog>;
+  getAuditLogs(
+    filter: AuditLogFilter,
+    options: { limit: number; offset: number },
+  ): Promise<IAuditLog[]>;
+  countAuditLogs(filter: AuditLogFilter): Promise<number>;
+  backfillAuditFromTransactions(params?: {
+    tenantId?: string;
+    since?: Date;
+  }): Promise<BackfillResult>;
+  backfillAgentInvokes(params?: { tenantId?: string; since?: Date }): Promise<BackfillResult>;
+}
+
+export function createAuditMethods(mongoose: typeof import('mongoose')): AuditMethods {
   function buildQuery(filter: AuditLogFilter): FilterQuery<IAuditLog> {
     const query: FilterQuery<IAuditLog> = {};
     if (filter.tenantId) {
@@ -252,5 +266,3 @@ export function createAuditMethods(mongoose: typeof import('mongoose')) {
     backfillAgentInvokes,
   };
 }
-
-export type AuditMethods = ReturnType<typeof createAuditMethods>;

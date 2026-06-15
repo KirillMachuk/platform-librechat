@@ -8,15 +8,14 @@ import type {
   SubagentAggregatorState,
 } from '~/utils/subagentContent';
 import type { SubagentProgress } from '~/store/subagents';
-
 import {
   foldSubagentEvent,
   foldSubagentEventIntoTicker,
   initSubagentAggregatorState,
   initSubagentTickerState,
 } from '~/utils/subagentContent';
-import { subagentProgressByToolCallId } from '~/store/subagents';
 import SubagentCall, { SUBAGENT_TICKER_THROTTLE_MS } from '../SubagentCall';
+import { subagentProgressByToolCallId } from '~/store/subagents';
 
 jest.mock('~/hooks', () => ({
   useLocalize:
@@ -627,6 +626,7 @@ describe('SubagentCall — dialog content', () => {
         <span />
       </RecoilRoot>,
     );
+    rerender(<RecoilRoot>{null}</RecoilRoot>);
   });
 
   it('renders persistedContent parts when no live events are available (page-refresh flow)', () => {

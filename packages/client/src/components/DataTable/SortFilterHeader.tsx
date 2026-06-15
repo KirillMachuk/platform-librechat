@@ -25,7 +25,7 @@ export function SortFilterHeader<TData, TValue>({
   filters,
   valueMap,
   ariaLabel,
-}: SortFilterHeaderProps<TData, TValue>) {
+}: SortFilterHeaderProps<TData, TValue>): JSX.Element {
   const localize = useLocalize();
   const menuId = useId();
   const [isOpen, setIsOpen] = useState(false);

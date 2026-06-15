@@ -58,7 +58,10 @@ function mapEntry(entry: IAuditLog): AdminAuditEntry {
   };
 }
 
-export function createAdminAuditHandlers(deps: AdminAuditDeps) {
+export function createAdminAuditHandlers(deps: AdminAuditDeps): {
+  listAudit: (req: ServerRequest, res: Response) => Promise<Response>;
+  backfillAudit: (req: ServerRequest, res: Response) => Promise<Response>;
+} {
   const { getAuditLogs, countAuditLogs, backfillAuditFromTransactions, backfillAgentInvokes } =
     deps;
 

@@ -36,6 +36,23 @@ export interface AdminAnalyticsDeps {
     tenantId?: string,
   ) => Promise<AnalyticsConversation | null>;
   resolveAgentConversationIds: (agentId: string, tenantId?: string) => Promise<string[]>;
+  /**
+   * MeiliSearch-backed text search returning a ranked, paginated page of
+   * messageIds (tenant-scoped). Returns `null` when Meili is unavailable so the
+   * handler falls back to the Mongo `$regex` path. Optional.
+   */
+  searchInteractionIds?: (
+    filter: AnalyticsInteractionFilter,
+    options: { limit: number; offset: number },
+  ) => Promise<{ ids: string[]; hasMore: boolean } | null>;
+  /** Hydrates Meili-ranked messageIds into feed rows, preserving order. Optional. */
+  listInteractionsByIds?: (
+    messageIds: string[],
+    filter: AnalyticsInteractionFilter,
+  ) => Promise<AnalyticsInteraction[]>;
+  /** When true (and the two methods above are provided), the feed text search is
+   * served by MeiliSearch instead of Mongo. Resolved from env at route wiring. */
+  useMeiliSearch?: boolean;
   /** Fire-and-forget audit recorder; logs the fact of reading raw content. */
   recordAudit: (event: AuditLogInput) => void;
 }
@@ -156,14 +173,34 @@ type ResolvedFilter =
   | { ok: true; filter: AnalyticsInteractionFilter; agentId?: string; empty: boolean }
   | { ok: false; status: number; message: string };
 
-export function createAdminAnalyticsHandlers(deps: AdminAnalyticsDeps) {
+/**
+ * Whether a filter can be served by MeiliSearch. Meili indexes only
+ * tenant/employee/period/text; `model`/`endpoint` live on the conversation
+ * (often null on messages) and an agent filter resolves to a conversationId set
+ * — none are Meili attributes, so those requests fall back to Mongo for
+ * correctness. A search term must be present (no query ⇒ plain chronological feed).
+ */
+function meiliEligible(filter: AnalyticsInteractionFilter): boolean {
+  return Boolean(filter.search) && !filter.conversationIds && !filter.model && !filter.endpoint;
+}
+
+export function createAdminAnalyticsHandlers(deps: AdminAnalyticsDeps): {
+  listInteractions: (req: ServerRequest, res: Response) => Promise<Response>;
+  export: (req: ServerRequest, res: Response) => Promise<Response>;
+  getConversation: (req: ServerRequest, res: Response) => Promise<Response>;
+} {
   const {
     listInteractions,
+    listInteractionsByIds,
+    searchInteractionIds,
+    useMeiliSearch,
     exportInteractions,
     getConversationDetail,
     resolveAgentConversationIds,
     recordAudit,
   } = deps;
+
+  const meiliSearchReady = Boolean(useMeiliSearch && searchInteractionIds && listInteractionsByIds);
 
   function actorFields(req: ServerRequest) {
     return {
@@ -268,7 +305,32 @@ export function createAdminAnalyticsHandlers(deps: AdminAnalyticsDeps) {
         return res.status(200).json({ interactions: [], hasMore: false, limit, offset });
       }
 
-      const { interactions, hasMore } = await listInteractions(filter, { limit, offset });
+      let interactions: AnalyticsInteraction[] | undefined;
+      let hasMore = false;
+
+      // MeiliSearch path: ranked, typo-tolerant, index-served text search. Any
+      // failure (Meili down, plugin absent, missing tenant) returns/throws to a
+      // transparent Mongo fallback so the feed never breaks on a search outage.
+      if (meiliSearchReady && meiliEligible(filter)) {
+        try {
+          const searchResult = await searchInteractionIds!(filter, { limit, offset });
+          if (searchResult) {
+            interactions = await listInteractionsByIds!(searchResult.ids, filter);
+            hasMore = searchResult.hasMore;
+          }
+        } catch (meiliError) {
+          logger.warn(
+            '[adminAnalytics] MeiliSearch failed; falling back to Mongo search:',
+            meiliError,
+          );
+        }
+      }
+
+      if (interactions === undefined) {
+        const result = await listInteractions(filter, { limit, offset });
+        interactions = result.interactions;
+        hasMore = result.hasMore;
+      }
 
       recordAudit({
         ...actorFields(req),

@@ -19,7 +19,9 @@ export function auditRequestContext(req?: AuditRequestLike): { ip?: string; user
   return { ip: req.ip, userAgent: typeof ua === 'string' ? ua : undefined };
 }
 
-export function createAuditRecorder(deps: AuditRecorderDeps) {
+export function createAuditRecorder(deps: AuditRecorderDeps): {
+  recordAudit: (event: AuditLogInput) => void;
+} {
   /**
    * Fire-and-forget audit write. Never throws into the caller and never blocks
    * the request — an audit failure must not break the action being audited.
@@ -45,7 +47,9 @@ export interface AuditBackfillDeps {
   backfillAgentInvokes: (params?: { since?: Date }) => Promise<BackfillCounts>;
 }
 
-export function createAuditBackfiller(deps: AuditBackfillDeps) {
+export function createAuditBackfiller(deps: AuditBackfillDeps): {
+  runBackfill: (opts: { now: number; lookbackMs: number }) => Promise<BackfillCounts>;
+} {
   /**
    * Runs an incremental backfill over the trailing `lookbackMs` window: derives
    * `llm.message` (from transactions) and `agent.invoke` (from messages) entries

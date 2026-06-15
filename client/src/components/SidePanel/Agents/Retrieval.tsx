@@ -9,8 +9,8 @@ import {
   HoverCardPortal,
   HoverCardTrigger,
 } from '@librechat/client';
-import OptionHover from '~/components/SidePanel/Parameters/OptionHover';
 import type { AssistantForm } from '~/common';
+import OptionHover from '~/components/SidePanel/Parameters/OptionHover';
 import { useLocalize } from '~/hooks';
 import { ESide } from '~/common';
 import { cn } from '~/utils/';
@@ -45,11 +45,13 @@ export default function Retrieval({ retrievalModels }: { retrievalModels: Set<st
                 className="relative float-left mr-2 inline-flex h-4 w-4 cursor-pointer"
                 aria-label={localize('com_assistants_file_search')}
                 value={field.value?.toString()}
+                aria-labelledby="retrieval-label"
               />
             )}
           />
           <div className="flex items-center space-x-2">
             <label
+              id="retrieval-label"
               className={cn(
                 'form-check-label text-token-text-primary w-full select-none',
                 isDisabled ? 'cursor-no-drop opacity-50' : 'cursor-pointer',

@@ -8,8 +8,8 @@ import {
 import type { TEndpoint } from 'librechat-data-provider';
 import type { AppConfig } from '@librechat/data-schemas';
 import type { BaseInitializeParams, InitializeResultBase, EndpointTokenConfig } from '~/types';
-import { getOpenAIConfig } from '~/endpoints/openai/config';
 import { isUserProvided, checkUserKeyExpiry } from '~/utils';
+import { getOpenAIConfig } from '~/endpoints/openai/config';
 import { getCustomEndpointConfig } from '~/app/config';
 import { fetchModels } from '~/endpoints/models';
 import { validateEndpointURL } from '~/auth';
@@ -20,6 +20,49 @@ const { PROXY } = process.env;
 /** True when a value points at OpenRouter (by endpoint name or baseURL). */
 function includesOpenRouter(value?: string | null): boolean {
   return typeof value === 'string' && value.toLowerCase().includes(KnownEndpoints.openrouter);
+}
+
+/**
+ * Cache key for an endpoint's fetched token config. User-scoped when the
+ * model fetch can resolve per-user: user-provided key/URL, or header
+ * templates forwarded against an admin-trusted base URL — making the
+ * response, and therefore the derived token config, user-specific.
+ */
+export function getTokenConfigKey(
+  endpointConfig: Partial<TEndpoint>,
+  endpoint: string,
+  userId: string,
+): string {
+  const hasTokenConfig = endpointConfig.tokenConfig != null;
+  const userProvidesKey = isUserProvided(extractEnvVariable(endpointConfig.apiKey ?? ''));
+  const userProvidesURL = isUserProvided(extractEnvVariable(endpointConfig.baseURL ?? ''));
+  const willForwardUserScopedHeaders = !!endpointConfig?.headers && !userProvidesURL;
+  return !hasTokenConfig && (userProvidesKey || userProvidesURL || willForwardUserScopedHeaders)
+    ? `${endpoint}:${userId}`
+    : endpoint;
+}
+
+/**
+ * Maps an admin-facing static `tokenConfig` to the billing shape: the UI uses
+ * `cacheWrite`/`cacheRead`, but `getCacheMultiplier` indexes `write`/`read`.
+ * Adds those keys (preserving the originals) so cache tokens bill at the
+ * configured rate instead of the prompt-rate fallback.
+ */
+function toBillingTokenConfig(
+  tokenConfig: Record<string, Record<string, number>>,
+): EndpointTokenConfig {
+  const result: EndpointTokenConfig = {};
+  for (const [model, rates] of Object.entries(tokenConfig)) {
+    const mapped = { ...rates } as Record<string, number>;
+    if (rates.cacheWrite != null) {
+      mapped.write = rates.cacheWrite;
+    }
+    if (rates.cacheRead != null) {
+      mapped.read = rates.cacheRead;
+    }
+    result[model] = mapped as EndpointTokenConfig[string];
+  }
+  return result;
 }
 
 /**
@@ -142,29 +185,38 @@ export async function initializeCustom({
   const userId = req.user?.id ?? '';
 
   const cache = tokenConfigCache();
-  /** tokenConfig is an optional extended property on custom endpoints */
-  const hasTokenConfig = (endpointConfig as Record<string, unknown>).tokenConfig != null;
-  const tokenKey =
-    !hasTokenConfig && (userProvidesKey || userProvidesURL) ? `${endpoint}:${userId}` : endpoint;
+  const hasTokenConfig = endpointConfig.tokenConfig != null;
+  const tokenKey = getTokenConfigKey(endpointConfig, endpoint, userId);
 
-  /**
-   * Pull live per-model token limits (context window + pricing) from the
-   * provider's `/models` endpoint when it's OpenRouter-backed. We detect
-   * OpenRouter by baseURL — not only by the endpoint name — so a white-labeled
-   * endpoint (e.g. renamed from "openrouter" to "1ma") still gets real limits
-   * instead of silently falling back to the hardcoded token maps. This is
-   * intentionally decoupled from `models.fetch` (which controls the *displayed*
-   * model list) so the curated menu stays intact. On any failure
-   * `endpointTokenConfig` stays undefined and callers fall back to the static
-   * maps — identical to the previous behavior.
-   */
-  const shouldFetchTokenConfig =
-    !hasTokenConfig &&
-    (Boolean(FetchTokenConfig[endpoint.toLowerCase() as keyof typeof FetchTokenConfig]) ||
-      includesOpenRouter(baseURL));
+  let shouldFetchTokenConfig: boolean;
+  if (hasTokenConfig) {
+    /** A static override is authoritative — use it for the agent's billing
+     *  and balance checks, not just the advertised UI token config. Mirror
+     *  the admin-facing `cacheWrite`/`cacheRead` keys onto the `write`/`read`
+     *  keys the billing multiplier reads. */
+    endpointTokenConfig = toBillingTokenConfig(
+      endpointConfig.tokenConfig as Record<string, Record<string, number>>,
+    );
+    shouldFetchTokenConfig = false;
+  } else {
+    /**
+     * Pull live per-model token limits (context window + pricing) from the
+     * provider's `/models` endpoint when it's OpenRouter-backed. We detect
+     * OpenRouter by baseURL — not only by the endpoint name — so a white-labeled
+     * endpoint (e.g. renamed from "openrouter" to "1ma") still gets real limits
+     * instead of silently falling back to the hardcoded token maps. This is
+     * intentionally decoupled from `models.fetch` (which controls the *displayed*
+     * model list) so the curated menu stays intact. On any failure
+     * `endpointTokenConfig` stays undefined and callers fall back to the static
+     * maps — identical to the previous behavior.
+     */
+    shouldFetchTokenConfig =
+      Boolean(FetchTokenConfig[endpoint.toLowerCase() as keyof typeof FetchTokenConfig]) ||
+      includesOpenRouter(baseURL);
 
-  const cachedConfig = shouldFetchTokenConfig && (await cache.get(tokenKey));
-  endpointTokenConfig = (cachedConfig as EndpointTokenConfig) || undefined;
+    const cachedConfig = shouldFetchTokenConfig && (await cache.get(tokenKey));
+    endpointTokenConfig = (cachedConfig as EndpointTokenConfig) || undefined;
+  }
 
   if (shouldFetchTokenConfig && endpointConfig && !endpointTokenConfig) {
     await fetchModels({ apiKey, baseURL, name: endpoint, user: userId, tokenKey });

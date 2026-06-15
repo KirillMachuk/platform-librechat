@@ -18,8 +18,8 @@ import { FaviconImage, getCleanDomain } from '~/components/Web/SourceHovercard';
 import SourcesErrorBoundary from './SourcesErrorBoundary';
 import { useFileDownload } from '~/data-provider';
 import { useSearchContext } from '~/Providers';
-import { useLocalize } from '~/hooks';
 import { cn, triggerDownload } from '~/utils';
+import { useLocalize } from '~/hooks';
 import store from '~/store';
 
 interface SourceItemProps {

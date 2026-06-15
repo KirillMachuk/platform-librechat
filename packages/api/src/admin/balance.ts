@@ -95,7 +95,11 @@ function buildBalanceUpdate(body: BalancePatchBody): BalanceValidation {
   return { update };
 }
 
-export function createAdminBalanceHandlers(deps: AdminBalanceDeps) {
+export function createAdminBalanceHandlers(deps: AdminBalanceDeps): {
+  getUsersBalances: (req: ServerRequest, res: Response) => Promise<Response>;
+  getUserBalance: (req: ServerRequest, res: Response) => Promise<Response>;
+  setUserBalance: (req: ServerRequest, res: Response) => Promise<Response>;
+} {
   const { findUser, findBalanceByUser, findBalancesByUsers, upsertBalanceFields } = deps;
 
   async function getUsersBalancesHandler(req: ServerRequest, res: Response) {

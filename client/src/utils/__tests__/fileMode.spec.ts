@@ -3,6 +3,7 @@ import {
   isImageMimetype,
   resolveAutoFileMode,
   resolveFileToolResource,
+  autoModeDisplayFromFile,
   type FileMode,
 } from '../fileMode';
 
@@ -103,5 +104,36 @@ describe('resolveFileToolResource', () => {
     const bigDoc = { mimetype: 'application/pdf', sizeBytes: 50_000_000 };
     expect(resolveFileToolResource('text', bigDoc)).toBe(EToolResources.context);
     expect(resolveFileToolResource('native', bigDoc)).toBeUndefined();
+  });
+});
+
+describe('autoModeDisplayFromFile', () => {
+  it('returns null while the upload is still resolving (routing unknown)', () => {
+    expect(autoModeDisplayFromFile({ progress: 0.5 })).toBeNull();
+    expect(autoModeDisplayFromFile({ progress: 0.99, embedded: true })).toBeNull();
+  });
+
+  it('reports "search" for an embedded (RAG) document', () => {
+    expect(autoModeDisplayFromFile({ progress: 1, embedded: true })).toBe('search');
+  });
+
+  it('reports "search" while a RAG document is still indexing (async embed)', () => {
+    expect(autoModeDisplayFromFile({ progress: 1, embeddingStatus: 'pending' })).toBe('search');
+    expect(autoModeDisplayFromFile({ progress: 1, embeddingStatus: 'processing' })).toBe('search');
+  });
+
+  it('reports "search" for a RAG document even when indexing failed (intent was search)', () => {
+    expect(autoModeDisplayFromFile({ progress: 1, embeddingStatus: 'failed' })).toBe('search');
+  });
+
+  it('reports "text" for a full-text document with no embedding signals', () => {
+    expect(autoModeDisplayFromFile({ progress: 1 })).toBe('text');
+    expect(autoModeDisplayFromFile({ progress: 1, embedded: false })).toBe('text');
+  });
+
+  it('reflects the server truth, not a size guess: a doc routed to RAG shows "search"', () => {
+    // A 300KB contract the client predicted as full text but the backend
+    // auto-routed to file_search comes back embedded — the chip must not lie.
+    expect(autoModeDisplayFromFile({ progress: 1, embedded: true })).toBe('search');
   });
 });

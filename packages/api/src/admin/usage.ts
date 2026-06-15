@@ -29,7 +29,9 @@ function toUsageRow(row: UserUsageAggregate): AdminUsageRow {
   };
 }
 
-export function createAdminUsageHandlers(deps: AdminUsageDeps) {
+export function createAdminUsageHandlers(deps: AdminUsageDeps): {
+  getUsage: (req: ServerRequest, res: Response) => Promise<Response>;
+} {
   const { aggregateUsageByUser } = deps;
 
   async function getUsageHandler(req: ServerRequest, res: Response) {

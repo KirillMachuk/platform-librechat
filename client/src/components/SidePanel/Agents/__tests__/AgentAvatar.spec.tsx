@@ -41,13 +41,13 @@ const defaultFormValues: AgentForm = {
   instructions: null,
   model: 'gpt-4',
   model_parameters: {
-    temperature: null,
+    temperature: 1,
     maxContextTokens: null,
     max_context_tokens: null,
     max_output_tokens: null,
-    top_p: null,
-    frequency_penalty: null,
-    presence_penalty: null,
+    top_p: 1,
+    frequency_penalty: 0,
+    presence_penalty: 0,
   },
   tools: [],
   provider: 'openai',
@@ -69,7 +69,7 @@ const defaultFormValues: AgentForm = {
 
 describe('AgentAvatar reset menu', () => {
   it('clears preview and file state when reset is triggered', () => {
-    let methodsRef!: UseFormReturn<AgentForm>;
+    let methodsRef: UseFormReturn<AgentForm> | undefined;
     const Wrapper = () => {
       methodsRef = useForm<AgentForm>({
         defaultValues: {
@@ -94,6 +94,10 @@ describe('AgentAvatar reset menu', () => {
 
     const { getByTestId } = render(<Wrapper />);
     fireEvent.click(getByTestId('reset-avatar'));
+
+    if (!methodsRef) {
+      throw new Error('Form methods were not initialized');
+    }
 
     expect(methodsRef.getValues('avatar_preview')).toBe('');
     expect(methodsRef.getValues('avatar_file')).toBeNull();

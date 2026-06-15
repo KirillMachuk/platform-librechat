@@ -1,12 +1,12 @@
 import React from 'react';
 import { Provider, createStore } from 'jotai';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { RecoilRoot, useRecoilState, useRecoilValue, useSetRecoilState } from 'recoil';
 import { Constants, LocalStorageKeys } from 'librechat-data-provider';
+import { RecoilRoot, useRecoilState, useRecoilValue, useSetRecoilState } from 'recoil';
+import { MCPServerDefinition } from '../useMCPServerManager';
 import { ephemeralAgentByConvoId } from '~/store';
 import { setTimestamp } from '~/utils/timestamps';
 import { useMCPSelect } from '../useMCPSelect';
-import { MCPServerDefinition } from '../useMCPServerManager';
 
 // Mock dependencies
 jest.mock('~/utils/timestamps', () => ({
@@ -21,6 +21,7 @@ const createMCPServers = (serverNames: string[]): MCPServerDefinition[] => {
     serverName,
     config: {
       type: 'sse' as const,
+      type: 'sse',
       url: 'http://mcp',
     },
     effectivePermissions: 15, // All permissions (VIEW=1, EDIT=2, DELETE=4, SHARE=8)
