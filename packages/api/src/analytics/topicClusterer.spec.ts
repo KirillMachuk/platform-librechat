@@ -43,8 +43,11 @@ function makeDeps(overrides: Partial<TopicClustererDeps> = {}): TopicClustererDe
       { conversationId: 'c2', text: 'договор аренды', userId: 'u2' },
     ]),
     clusterConversations: jest.fn().mockResolvedValue(clusterResult()),
-    createAnalyticsRun: jest.fn().mockResolvedValue({ _id: 'run1' }),
+    startAnalyticsRun: jest.fn().mockResolvedValue({ _id: 'run1' }),
+    getActiveAnalyticsRun: jest.fn().mockResolvedValue(null),
     saveRunResults: jest.fn().mockResolvedValue(undefined),
+    deleteRunResults: jest.fn().mockResolvedValue(undefined),
+    pruneOldAnalyticsRuns: jest.fn().mockResolvedValue(undefined),
     completeAnalyticsRun: jest.fn().mockResolvedValue(undefined),
     failAnalyticsRun: jest.fn().mockResolvedValue(undefined),
     getLatestAnalyticsRun: jest.fn().mockResolvedValue(null),
@@ -63,8 +66,8 @@ describe('createTopicClusterer', () => {
       trigger: 'manual',
     });
 
-    expect(deps.createAnalyticsRun).toHaveBeenCalledWith(
-      expect.objectContaining({ tenantId: 't1', trigger: 'manual' }),
+    expect(deps.startAnalyticsRun).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: 't1', trigger: 'manual', leaseMs: expect.any(Number) }),
     );
     expect(deps.clusterConversations).toHaveBeenCalledTimes(1);
     // createdAt is normalised to an ISO string for the service.
@@ -85,6 +88,8 @@ describe('createTopicClusterer', () => {
       }),
     );
     expect(deps.failAnalyticsRun).not.toHaveBeenCalled();
+    // retention runs after a successful pass
+    expect(deps.pruneOldAnalyticsRuns).toHaveBeenCalledWith('t1', expect.any(Number));
   });
 
   it('short-circuits to a zeroed run when the window has no conversations', async () => {
@@ -100,17 +105,34 @@ describe('createTopicClusterer', () => {
       assignedCount: 0,
       noiseCount: 0,
     });
+    expect(deps.pruneOldAnalyticsRuns).toHaveBeenCalledWith('t1', expect.any(Number));
   });
 
-  it('marks the run failed and rethrows when clustering errors', async () => {
+  it('skips entirely when an active run is already in flight (dedup)', async () => {
+    const deps = makeDeps({
+      getActiveAnalyticsRun: jest.fn().mockResolvedValue({ _id: 'inflight' }),
+    });
+    const clusterer = createTopicClusterer(deps);
+
+    const result = await clusterer.runClustering({ tenantId: 't1' });
+
+    expect(result).toEqual({ _id: 'inflight' });
+    expect(deps.startAnalyticsRun).not.toHaveBeenCalled();
+    expect(deps.clusterConversations).not.toHaveBeenCalled();
+    expect(deps.completeAnalyticsRun).not.toHaveBeenCalled();
+  });
+
+  it('marks the run failed, cleans up partial writes, and rethrows when clustering errors', async () => {
     const deps = makeDeps({
       clusterConversations: jest.fn().mockRejectedValue(new Error('topics down')),
     });
     const clusterer = createTopicClusterer(deps);
 
     await expect(clusterer.runClustering({ tenantId: 't1' })).rejects.toThrow('topics down');
+    expect(deps.deleteRunResults).toHaveBeenCalledWith('run1');
     expect(deps.failAnalyticsRun).toHaveBeenCalledWith('run1', expect.any(Error));
     expect(deps.completeAnalyticsRun).not.toHaveBeenCalled();
+    expect(deps.pruneOldAnalyticsRuns).not.toHaveBeenCalled();
   });
 
   describe('runIfStale', () => {
@@ -123,7 +145,7 @@ describe('createTopicClusterer', () => {
       const result = await clusterer.runIfStale({ tenantId: 't1', minIntervalMs: 60_000 });
 
       expect(result).toBeNull();
-      expect(deps.createAnalyticsRun).not.toHaveBeenCalled();
+      expect(deps.startAnalyticsRun).not.toHaveBeenCalled();
     });
 
     it('runs when the latest run is older than the interval', async () => {
@@ -136,7 +158,7 @@ describe('createTopicClusterer', () => {
 
       await clusterer.runIfStale({ tenantId: 't1', minIntervalMs: 60_000 });
 
-      expect(deps.createAnalyticsRun).toHaveBeenCalledTimes(1);
+      expect(deps.startAnalyticsRun).toHaveBeenCalledTimes(1);
       expect(deps.clusterConversations).toHaveBeenCalledTimes(1);
     });
 
@@ -146,7 +168,7 @@ describe('createTopicClusterer', () => {
 
       await clusterer.runIfStale({ tenantId: 't1', minIntervalMs: 60_000 });
 
-      expect(deps.createAnalyticsRun).toHaveBeenCalledTimes(1);
+      expect(deps.startAnalyticsRun).toHaveBeenCalledTimes(1);
     });
   });
 
