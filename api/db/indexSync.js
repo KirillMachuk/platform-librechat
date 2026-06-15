@@ -242,6 +242,37 @@ async function performSync(flowManager, flowId, flowType) {
       throw new Error('Meilisearch not available');
     }
 
+    // Index-coverage observability: the analytics search only sees what is in
+    // the Meili index, and the index applies the retention/temporary visibility
+    // filter (built for the user's own chat search). This logs how many employee
+    // requests are excluded from the index so the gap between the Mongo feed
+    // (shows everything) and the Meili search (indexed subset) is visible.
+    try {
+      const retentionVisible = {
+        $or: [
+          { isTemporary: false, expiredAt: null },
+          { isTemporary: false, expiredAt: { $gt: new Date() } },
+          { isTemporary: null, expiredAt: null },
+        ],
+      };
+      const [total, userTotal, userIndexable, userTemp, userExpiring, userEmptyText] =
+        await Promise.all([
+          Message.countDocuments({}),
+          Message.countDocuments({ isCreatedByUser: true }),
+          Message.countDocuments({ isCreatedByUser: true, ...retentionVisible }),
+          Message.countDocuments({ isCreatedByUser: true, isTemporary: true }),
+          Message.countDocuments({ isCreatedByUser: true, expiredAt: { $ne: null } }),
+          Message.countDocuments({ isCreatedByUser: true, $or: [{ text: null }, { text: '' }] }),
+        ]);
+      logger.info(
+        `[indexSync][coverage] messages total=${total} | employee requests: total=${userTotal} ` +
+          `indexable=${userIndexable} excluded=${userTotal - userIndexable} ` +
+          `(temporary=${userTemp}, withExpiredAt=${userExpiring}, emptyText=${userEmptyText})`,
+      );
+    } catch (coverageErr) {
+      logger.warn('[indexSync][coverage] count probe failed:', coverageErr.message);
+    }
+
     /** Ensures indexes have proper filterable attributes configured */
     const { settingsUpdated, orphanedDocsFound: _orphanedDocsFound } =
       await ensureFilterableAttributes(client);
