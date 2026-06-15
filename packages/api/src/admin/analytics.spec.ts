@@ -345,7 +345,7 @@ describe('createAdminAnalyticsHandlers', () => {
             userName: 'Alice',
             model: 'gpt-x',
             agentName: 'Юрист',
-            text: 'привет, мир',
+            text: 'привет, мир; пример',
           },
         ],
         truncated: false,
@@ -362,8 +362,10 @@ describe('createAdminAnalyticsHandlers', () => {
       expect(setHeader).toHaveBeenCalledWith('X-Export-Truncated', 'false');
       const csv = send.mock.calls[0][0] as string;
       expect(csv.charCodeAt(0)).toBe(0xfeff);
-      expect(csv).toContain('Время,Сотрудник,Email,Модель/агент,Запрос');
-      expect(csv).toContain('"привет, мир"');
+      // Semicolon-delimited (RU/EU Excel + Numbers split on `;`, not `,`).
+      expect(csv).toContain('Время;Сотрудник;Email;Модель/агент;Запрос');
+      // A value containing the delimiter is RFC-4180 quoted; an embedded comma is not special.
+      expect(csv).toContain('"привет, мир; пример"');
       expect(csv).toContain('агент: Юрист');
       expect(recordAudit).toHaveBeenCalledTimes(1);
       expect(recordAudit.mock.calls[0][0].action).toBe('conversation.export');
@@ -406,10 +408,10 @@ describe('createAdminAnalyticsHandlers', () => {
       expect(csv).toContain("'=HYPERLINK");
       expect(csv).toContain("'=cmd|calc");
       expect(csv).toContain("'+1+1");
-      // No formula reaches a cell boundary (start-of-cell after a comma) un-neutralized.
-      expect(csv).not.toContain(',=HYPERLINK');
-      expect(csv).not.toContain(',=cmd');
-      expect(csv).not.toContain(',+1+1');
+      // No formula reaches a cell boundary (start-of-cell after the delimiter) un-neutralized.
+      expect(csv).not.toContain(';=HYPERLINK');
+      expect(csv).not.toContain(';=cmd');
+      expect(csv).not.toContain(';+1+1');
     });
 
     it('flags a truncated export via header and audit metadata', async () => {
