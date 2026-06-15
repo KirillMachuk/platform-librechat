@@ -313,3 +313,112 @@ describe('exportInteractions', () => {
     expect(rows.map((r) => r.text)).toEqual(['Составь договор аренды']);
   });
 });
+
+describe('listInteractionsByIds (MeiliSearch hydration)', () => {
+  test('hydrates ids into feed rows, preserving the input ranking order', async () => {
+    // Pass ids out of chronological order — the result must follow the input order,
+    // not createdAt, since Meili already ranked them by relevance.
+    const interactions = await methods.listInteractionsByIds(['m2', 'm1'], {});
+    expect(interactions.map((i) => i.messageId)).toEqual(['m2', 'm1']);
+    expect(interactions[0]).toMatchObject({ userEmail: 'bob@x.io', model: 'claude-y' });
+    expect(interactions[1]).toMatchObject({ userEmail: 'alice@x.io', agentName: 'Юрист' });
+  });
+
+  test('returns only employee requests even if assistant ids are passed', async () => {
+    const interactions = await methods.listInteractionsByIds(['m1', 'm1-a', 'm1-b'], {});
+    expect(interactions.map((i) => i.messageId)).toEqual(['m1']);
+  });
+
+  test('returns empty for an empty id list', async () => {
+    expect(await methods.listInteractionsByIds([], {})).toEqual([]);
+  });
+
+  test('enforces tenant isolation: ids from another tenant are dropped', async () => {
+    await Message.create([
+      {
+        messageId: 'mt1',
+        conversationId: 'ct1',
+        user: aliceId,
+        isCreatedByUser: true,
+        text: 'тенант 1',
+        tenantId: 't1',
+        createdAt: new Date('2026-03-01T10:00:00.000Z'),
+      },
+      {
+        messageId: 'mt2',
+        conversationId: 'ct2',
+        user: bobId,
+        isCreatedByUser: true,
+        text: 'тенант 2',
+        tenantId: 't2',
+        createdAt: new Date('2026-03-01T10:00:00.000Z'),
+      },
+    ]);
+    // Even though both ids are requested, the tenant filter must drop t2's row.
+    const interactions = await methods.listInteractionsByIds(['mt1', 'mt2'], { tenantId: 't1' });
+    expect(interactions.map((i) => i.messageId)).toEqual(['mt1']);
+  });
+});
+
+describe('searchInteractionIds (MeiliSearch backend)', () => {
+  afterEach(() => {
+    delete (Message as unknown as { meiliSearch?: unknown }).meiliSearch;
+  });
+
+  test('returns null when the MeiliSearch plugin is not registered', async () => {
+    const result = await methods.searchInteractionIds(
+      { tenantId: 't1', search: 'договор' },
+      { limit: 10, offset: 0 },
+    );
+    expect(result).toBeNull();
+  });
+
+  test('returns null when no tenant context is present (never searches cross-tenant)', async () => {
+    (Message as unknown as { meiliSearch: jest.Mock }).meiliSearch = jest
+      .fn()
+      .mockResolvedValue({ hits: [] });
+    const result = await methods.searchInteractionIds(
+      { search: 'договор' },
+      { limit: 10, offset: 0 },
+    );
+    expect(result).toBeNull();
+  });
+
+  test('builds a tenant + employee + period filter and returns ranked ids', async () => {
+    const meiliSearch = jest
+      .fn()
+      .mockResolvedValue({ hits: [{ messageId: 'm2' }, { messageId: 'm1' }] });
+    (Message as unknown as { meiliSearch: jest.Mock }).meiliSearch = meiliSearch;
+
+    const from = new Date('2026-01-01T00:00:00.000Z');
+    const to = new Date('2026-03-01T00:00:00.000Z');
+    const result = await methods.searchInteractionIds(
+      { tenantId: 't1', userId: aliceId, search: 'отчёт', from, to },
+      { limit: 10, offset: 0 },
+    );
+
+    expect(result).toEqual({ ids: ['m2', 'm1'], hasMore: false });
+    const [query, params, populate] = meiliSearch.mock.calls[0];
+    expect(query).toBe('отчёт');
+    expect(populate).toBe(false);
+    expect(params.filter).toContain('tenantId = "t1"');
+    expect(params.filter).toContain('isCreatedByUser = true');
+    expect(params.filter).toContain(`user = "${aliceId}"`);
+    expect(params.filter).toContain(`createdAtTs >= ${from.getTime()}`);
+    expect(params.filter).toContain(`createdAtTs < ${to.getTime()}`);
+    // Over-fetches one row past the page so hasMore can be reported.
+    expect(params.limit).toBe(11);
+    expect(params.attributesToRetrieve).toEqual(['messageId']);
+  });
+
+  test('reports hasMore and trims to the page size when over-fetch returns extra', async () => {
+    (Message as unknown as { meiliSearch: jest.Mock }).meiliSearch = jest
+      .fn()
+      .mockResolvedValue({ hits: [{ messageId: 'a' }, { messageId: 'b' }, { messageId: 'c' }] });
+    const result = await methods.searchInteractionIds(
+      { tenantId: 't1', search: 'x' },
+      { limit: 2, offset: 0 },
+    );
+    expect(result).toEqual({ ids: ['a', 'b'], hasMore: true });
+  });
+});
