@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 const { MeiliSearch } = require('meilisearch');
-const { logger } = require('@librechat/data-schemas');
+const {
+  logger,
+  MEILI_CREATED_AT_TS_FIELD,
+  MESSAGE_MEILI_FILTERABLE_ATTRIBUTES,
+  MESSAGE_MEILI_SEARCHABLE_ATTRIBUTES,
+} = require('@librechat/data-schemas');
 const { CacheKeys } = require('librechat-data-provider');
 const { isEnabled, FlowStateManager } = require('@librechat/api');
 const { getLogStores } = require('~/cache');
@@ -91,28 +96,53 @@ async function ensureFilterableAttributes(client) {
   let hasOrphanedDocs = false;
 
   try {
-    // Check and update messages index
+    // Check and update messages index.
+    // The admin analytics search needs a wider filterable set than just `user`
+    // (tenantId, the employee flag, and a numeric timestamp). The desired set is
+    // the single source of truth in @librechat/data-schemas so this never drifts
+    // from the mongoMeili plugin and silently narrows the settings back.
     try {
       const messagesIndex = client.index('messages');
       const settings = await messagesIndex.getSettings();
 
-      if (!settings.filterableAttributes || !settings.filterableAttributes.includes('user')) {
-        logger.info('[indexSync] Configuring messages index to filter by user...');
+      const currentFilterable = settings.filterableAttributes || [];
+      const missingFilterable = MESSAGE_MEILI_FILTERABLE_ATTRIBUTES.filter(
+        (attr) => !currentFilterable.includes(attr),
+      );
+      if (missingFilterable.length > 0) {
+        logger.info(
+          `[indexSync] Configuring messages index filterable attributes (adding: ${missingFilterable.join(
+            ', ',
+          )})...`,
+        );
         await messagesIndex.updateSettings({
-          filterableAttributes: ['user'],
+          filterableAttributes: MESSAGE_MEILI_FILTERABLE_ATTRIBUTES,
+          searchableAttributes: MESSAGE_MEILI_SEARCHABLE_ATTRIBUTES,
         });
-        logger.info('[indexSync] Messages index configured for user filtering');
+        logger.info('[indexSync] Messages index configured for analytics filtering');
         settingsUpdated = true;
       }
 
-      // Check if existing documents have user field indexed
+      // Inspect a sample document. The mongoMeili plugin may have already written
+      // the new settings before we read them (async, at model registration), so a
+      // settings diff alone can miss the migration. If indexed docs predate the
+      // analytics fields (no createdAtTs), force a full re-sync to populate them.
       try {
         const searchResult = await messagesIndex.search('', { limit: 1 });
-        if (searchResult.hits.length > 0 && !searchResult.hits[0].user) {
-          logger.info(
-            '[indexSync] Existing messages missing user field, will clean up orphaned documents...',
-          );
-          hasOrphanedDocs = true;
+        if (searchResult.hits.length > 0) {
+          const sample = searchResult.hits[0];
+          if (!sample.user) {
+            logger.info(
+              '[indexSync] Existing messages missing user field, will clean up orphaned documents...',
+            );
+            hasOrphanedDocs = true;
+          }
+          if (sample[MEILI_CREATED_AT_TS_FIELD] == null) {
+            logger.info(
+              '[indexSync] Indexed messages predate analytics fields (no createdAtTs); forcing re-sync.',
+            );
+            settingsUpdated = true;
+          }
         }
       } catch (searchError) {
         logger.debug('[indexSync] Could not check message documents:', searchError.message);

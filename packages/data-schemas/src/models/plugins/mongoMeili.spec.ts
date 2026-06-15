@@ -187,6 +187,22 @@ describe('Meilisearch Mongoose plugin', () => {
     );
   });
 
+  test('message indexing derives a numeric createdAtTs and drops the raw date', async () => {
+    await createMessageModel(mongoose).create({
+      messageId: new mongoose.Types.ObjectId(),
+      conversationId: new mongoose.Types.ObjectId(),
+      user: new mongoose.Types.ObjectId(),
+      isCreatedByUser: true,
+    });
+    const indexedDoc = mockAddDocuments.mock.calls.at(-1)?.[0]?.[0] as Record<string, unknown>;
+    // transformForIndex (addCreatedAtTs) runs in the per-save path: the Meili doc
+    // gets a numeric epoch the analytics period filter can range over, and the raw
+    // Date is dropped so only the filterable numeric remains.
+    expect(typeof indexedDoc.createdAtTs).toBe('number');
+    expect(indexedDoc.createdAt).toBeUndefined();
+    expect(indexedDoc.isCreatedByUser).toBe(true);
+  });
+
   test('saving messages with expiredAt=null indexes w/ meilisearch', async () => {
     await createMessageModel(mongoose).create({
       messageId: new mongoose.Types.ObjectId(),

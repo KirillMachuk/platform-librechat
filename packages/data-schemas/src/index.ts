@@ -21,6 +21,11 @@ export type * from './methods';
 export { default as logger } from './config/winston';
 export { default as meiliLogger } from './config/meiliLogger';
 export {
+  MEILI_CREATED_AT_TS_FIELD,
+  MESSAGE_MEILI_FILTERABLE_ATTRIBUTES,
+  MESSAGE_MEILI_SEARCHABLE_ATTRIBUTES,
+} from './config/meiliAnalytics';
+export {
   tenantStorage,
   getTenantId,
   getUserId,

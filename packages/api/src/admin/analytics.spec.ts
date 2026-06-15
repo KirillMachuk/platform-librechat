@@ -249,6 +249,91 @@ describe('createAdminAnalyticsHandlers', () => {
     });
   });
 
+  describe('listInteractions — MeiliSearch backend', () => {
+    function meiliDeps(overrides: Partial<AdminAnalyticsDeps> = {}) {
+      return createDeps({
+        useMeiliSearch: true,
+        searchInteractionIds: jest.fn().mockResolvedValue({ ids: ['m1'], hasMore: false }),
+        listInteractionsByIds: jest.fn().mockResolvedValue([mockInteraction()]),
+        listInteractions: jest.fn().mockResolvedValue({ interactions: [], hasMore: false }),
+        ...overrides,
+      });
+    }
+
+    it('serves an eligible text search via Meili (ranked ids → hydrate), not Mongo', async () => {
+      const searchInteractionIds = jest
+        .fn()
+        .mockResolvedValue({ ids: ['m2', 'm1'], hasMore: true });
+      const listInteractionsByIds = jest.fn().mockResolvedValue([mockInteraction()]);
+      const deps = meiliDeps({ searchInteractionIds, listInteractionsByIds });
+      const handlers = createAdminAnalyticsHandlers(deps);
+      const { req, res, status, json } = createReqRes({ q: 'договор' });
+
+      await handlers.listInteractions(req, res);
+
+      expect(searchInteractionIds).toHaveBeenCalledTimes(1);
+      const [filter, opts] = searchInteractionIds.mock.calls[0];
+      expect(filter.search).toBe('договор');
+      expect(opts).toMatchObject({ offset: 0 });
+      expect(listInteractionsByIds).toHaveBeenCalledWith(
+        ['m2', 'm1'],
+        expect.objectContaining({ search: 'договор' }),
+      );
+      expect(deps.listInteractions).not.toHaveBeenCalled();
+      expect(status).toHaveBeenCalledWith(200);
+      expect(json.mock.calls[0][0].hasMore).toBe(true);
+    });
+
+    it('falls back to Mongo when Meili returns null (unavailable / no tenant)', async () => {
+      const searchInteractionIds = jest.fn().mockResolvedValue(null);
+      const deps = meiliDeps({ searchInteractionIds });
+      const handlers = createAdminAnalyticsHandlers(deps);
+      const { req, res, status } = createReqRes({ q: 'договор' });
+
+      await handlers.listInteractions(req, res);
+
+      expect(searchInteractionIds).toHaveBeenCalledTimes(1);
+      expect(deps.listInteractions).toHaveBeenCalledTimes(1);
+      expect(status).toHaveBeenCalledWith(200);
+    });
+
+    it('falls back to Mongo (not 500) when Meili throws', async () => {
+      const searchInteractionIds = jest.fn().mockRejectedValue(new Error('meili down'));
+      const deps = meiliDeps({ searchInteractionIds });
+      const handlers = createAdminAnalyticsHandlers(deps);
+      const { req, res, status } = createReqRes({ q: 'договор' });
+
+      await handlers.listInteractions(req, res);
+
+      expect(deps.listInteractions).toHaveBeenCalledTimes(1);
+      expect(status).toHaveBeenCalledWith(200);
+    });
+
+    it('uses Mongo for filters Meili cannot serve (model/endpoint present)', async () => {
+      const searchInteractionIds = jest.fn();
+      const deps = meiliDeps({ searchInteractionIds });
+      const handlers = createAdminAnalyticsHandlers(deps);
+      const { req, res } = createReqRes({ q: 'договор', model: 'gpt-x' });
+
+      await handlers.listInteractions(req, res);
+
+      expect(searchInteractionIds).not.toHaveBeenCalled();
+      expect(deps.listInteractions).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses Mongo when there is no search term (plain chronological feed)', async () => {
+      const searchInteractionIds = jest.fn();
+      const deps = meiliDeps({ searchInteractionIds });
+      const handlers = createAdminAnalyticsHandlers(deps);
+      const { req, res } = createReqRes({});
+
+      await handlers.listInteractions(req, res);
+
+      expect(searchInteractionIds).not.toHaveBeenCalled();
+      expect(deps.listInteractions).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('export', () => {
     it('returns CSV (BOM + header rows) and records a conversation.export audit', async () => {
       const exportInteractions = jest.fn().mockResolvedValue({
