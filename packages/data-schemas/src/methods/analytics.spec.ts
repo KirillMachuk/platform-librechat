@@ -421,6 +421,8 @@ describe('searchInteractionIds (MeiliSearch backend)', () => {
     expect(params.filter).toContain(`user = "${aliceId}"`);
     expect(params.filter).toContain(`createdAtTs >= ${from.getTime()}`);
     expect(params.filter).toContain(`createdAtTs < ${to.getTime()}`);
+    // Newest-first ordering (matches the feed), not pure relevance.
+    expect(params.sort).toEqual(['createdAtTs:desc']);
     // Over-fetches one row past the page so hasMore can be reported.
     expect(params.limit).toBe(11);
     expect(params.attributesToRetrieve).toEqual(['messageId']);

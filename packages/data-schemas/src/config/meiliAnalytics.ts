@@ -40,3 +40,12 @@ export const MESSAGE_MEILI_FILTERABLE_ATTRIBUTES: string[] = [
  * searchable) while excluding the new metadata fields.
  */
 export const MESSAGE_MEILI_SEARCHABLE_ATTRIBUTES: string[] = ['text', 'content'];
+
+/**
+ * Sortable attributes. The analytics feed is newest-first; when an admin
+ * searches, they expect the same recency ordering (filtered by the term), not
+ * pure relevance — otherwise a highly-relevant OLD match buries recent ones and
+ * the feature looks like it "can't find recent requests". `createdAtTs` is
+ * already in every indexed doc, so enabling sort needs no re-index.
+ */
+export const MESSAGE_MEILI_SORTABLE_ATTRIBUTES: string[] = [MEILI_CREATED_AT_TS_FIELD];

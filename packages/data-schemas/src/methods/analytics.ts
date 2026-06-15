@@ -382,6 +382,9 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')) {
       filter.search ?? '',
       {
         filter: clauses.join(' AND '),
+        // Newest-first, matching the feed — relevance alone would bury recent
+        // matches under older "more relevant" ones (admins expect recency).
+        sort: ['createdAtTs:desc'],
         limit: options.limit + 1,
         offset: options.offset,
         attributesToRetrieve: ['messageId'],
