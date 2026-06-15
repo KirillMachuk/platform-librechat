@@ -35,6 +35,33 @@ const SCHEDULE_MS = _int('TOPICS_SCHEDULE_MS', DAY_MS);
 const WINDOW_DAYS = _int('TOPICS_WINDOW_DAYS', 90);
 const CLUSTER_TIMEOUT_MS = _int('TOPICS_CLUSTER_TIMEOUT_MS', 10 * 60 * 1000);
 const FIRST_TICK_DELAY_MS = _int('TOPICS_FIRST_TICK_DELAY_MS', 30000);
+// Lease a run holds while it works — must outlast a full pass (assemble + cluster +
+// label + save), so default to the cluster timeout plus a buffer. A crashed run's
+// lease expires and frees the tenant for a fresh run.
+const RUN_LEASE_MS = _int('TOPICS_RUN_LEASE_MS', CLUSTER_TIMEOUT_MS + 5 * 60 * 1000);
+// Retention: how many recent runs to keep per tenant (only the latest is read).
+const KEEP_RUNS = _int('TOPICS_KEEP_RUNS', 10);
+
+// In-process dedup: the tenants whose clustering pass is running in THIS process.
+// Stops an on-demand trigger from overlapping the scheduled tick (and vice-versa)
+// without a DB round-trip; the DB-level getActiveAnalyticsRun check additionally
+// guards across replicas and recovers crashed (lease-expired) runs.
+const runsInFlight = new Set();
+const guardKey = (tenantId) => tenantId || '__system__';
+
+async function guardedRun(tenantId, fn) {
+  const key = guardKey(tenantId);
+  if (runsInFlight.has(key)) {
+    logger.info(`[topics] clustering already in flight for ${key} in this process — skipping`);
+    return null;
+  }
+  runsInFlight.add(key);
+  try {
+    return await fn();
+  } finally {
+    runsInFlight.delete(key);
+  }
+}
 
 function topicsEnabled() {
   const flag = (process.env.TOPICS_ENABLED || '').toLowerCase();
@@ -120,8 +147,11 @@ function buildClusterer() {
     assembleConversationsForClustering: db.assembleConversationsForClustering,
     clusterConversations,
     labelTopics: labeler ? labeler.labelTopics : undefined,
-    createAnalyticsRun: db.createAnalyticsRun,
+    startAnalyticsRun: db.startAnalyticsRun,
+    getActiveAnalyticsRun: db.getActiveAnalyticsRun,
     saveRunResults: db.saveRunResults,
+    deleteRunResults: db.deleteRunResults,
+    pruneOldAnalyticsRuns: db.pruneOldAnalyticsRuns,
     completeAnalyticsRun: db.completeAnalyticsRun,
     failAnalyticsRun: db.failAnalyticsRun,
     getLatestAnalyticsRun: db.getLatestAnalyticsRun,
@@ -141,9 +171,22 @@ async function runTick({ force = false } = {}) {
     for (const tenantId of tenantIds) {
       const from = new Date(Date.now() - WINDOW_DAYS * DAY_MS);
       const run = () =>
-        (force
-          ? clusterer.runClustering({ tenantId, from, trigger: 'manual' })
-          : clusterer.runIfStale({ tenantId, from, minIntervalMs: SCHEDULE_MS })
+        guardedRun(tenantId, () =>
+          force
+            ? clusterer.runClustering({
+                tenantId,
+                from,
+                trigger: 'manual',
+                leaseMs: RUN_LEASE_MS,
+                keepRuns: KEEP_RUNS,
+              })
+            : clusterer.runIfStale({
+                tenantId,
+                from,
+                minIntervalMs: SCHEDULE_MS,
+                leaseMs: RUN_LEASE_MS,
+                keepRuns: KEEP_RUNS,
+              }),
         ).catch((err) => logger.error('[topics] tenant clustering run failed:', err));
       // Per-tenant work runs inside the tenant context so reads/writes are scoped.
       if (tenantId) {
@@ -199,7 +242,16 @@ function startTopicClusterSchedule() {
 async function runClusteringNow({ tenantId } = {}) {
   const clusterer = buildClusterer();
   const from = new Date(Date.now() - WINDOW_DAYS * DAY_MS);
-  const run = () => clusterer.runClustering({ tenantId, from, trigger: 'manual' });
+  const run = () =>
+    guardedRun(tenantId, () =>
+      clusterer.runClustering({
+        tenantId,
+        from,
+        trigger: 'manual',
+        leaseMs: RUN_LEASE_MS,
+        keepRuns: KEEP_RUNS,
+      }),
+    );
   if (tenantId) {
     return tenantStorage.run({ tenantId }, run);
   }

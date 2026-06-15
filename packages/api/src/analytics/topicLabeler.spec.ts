@@ -1,5 +1,5 @@
 import type { ClusterResult } from './topicClusterer';
-import { createTopicLabeler } from './topicLabeler';
+import { createTopicLabeler, stripPiiKeywords } from './topicLabeler';
 
 jest.mock('@librechat/data-schemas', () => ({
   ...jest.requireActual('@librechat/data-schemas'),
@@ -67,5 +67,50 @@ describe('createTopicLabeler', () => {
     const out = await labelTopics([topic(0, ['a']), topic(1, ['b'])]);
     expect(out[0].label).toBeUndefined();
     expect(out[1].label).toBe('ok');
+  });
+
+  it('strips structured-PII keywords before sending them to the LLM', async () => {
+    const generateLabel = jest.fn().mockResolvedValue('Договоры');
+    const { labelTopics } = createTopicLabeler({ generateLabel });
+
+    await labelTopics([topic(0, ['договор', 'ivan@mail.ru', '+7 999 123-45-67', 'аренда'])]);
+
+    expect(generateLabel).toHaveBeenCalledWith({ keywords: ['договор', 'аренда'] });
+  });
+
+  it('skips labeling entirely when every keyword looks like PII', async () => {
+    const generateLabel = jest.fn().mockResolvedValue('x');
+    const { labelTopics } = createTopicLabeler({ generateLabel });
+
+    const out = await labelTopics([topic(0, ['ivan@mail.ru', '79991234567'])]);
+
+    expect(out[0].label).toBeUndefined();
+    expect(generateLabel).not.toHaveBeenCalled();
+  });
+});
+
+describe('stripPiiKeywords', () => {
+  it('keeps ordinary topic words', () => {
+    expect(stripPiiKeywords(['договор', 'аренда', 'отчёт', 'НДС'])).toEqual([
+      'договор',
+      'аренда',
+      'отчёт',
+      'НДС',
+    ]);
+  });
+
+  it('drops emails, urls, phones and long number runs', () => {
+    expect(
+      stripPiiKeywords([
+        'договор',
+        'ivan@mail.ru',
+        'https://example.com',
+        'www.site. by',
+        '+7 999 123-45-67',
+        '79991234567',
+        '1234567', // 7-digit id
+        'паспорт1234', // <6 digit run, <7 digits → kept
+      ]),
+    ).toEqual(['договор', 'паспорт1234']);
   });
 });

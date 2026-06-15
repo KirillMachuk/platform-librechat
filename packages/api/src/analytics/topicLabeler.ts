@@ -25,6 +25,30 @@ function cleanLabel(raw: string): string {
     .trim();
 }
 
+const EMAIL_RE = /\S+@\S+/;
+const URL_RE = /(https?:\/\/|www\.)/i;
+const DIGIT_RUN_RE = /\d{6,}/;
+
+/**
+ * Defense-in-depth: would this keyword leak STRUCTURED PII if sent for labeling?
+ * Catches the patterns a regex can catch with near-zero false positives — emails,
+ * URLs, phone/card/passport/account numbers. NAME-type PII is out of scope here and
+ * is handled by the labeling endpoint, which routes through the anonymizer (mask
+ * before egress). This filter just guarantees obvious identifiers never reach it.
+ */
+function looksLikePii(keyword: string): boolean {
+  if (EMAIL_RE.test(keyword) || URL_RE.test(keyword) || DIGIT_RUN_RE.test(keyword)) {
+    return true;
+  }
+  // Phone numbers often carry separators (+7 999 123-45-67) that defeat the run test.
+  return keyword.replace(/\D+/g, '').length >= 7;
+}
+
+/** Drops keywords that look like structured PII before they're used as label fodder. */
+export function stripPiiKeywords(keywords: string[]): string[] {
+  return keywords.filter((k) => !looksLikePii(k));
+}
+
 export function createTopicLabeler(deps: TopicLabelerDeps) {
   const concurrency = Math.max(1, deps.concurrency ?? 3);
 
@@ -44,8 +68,17 @@ export function createTopicLabeler(deps: TopicLabelerDeps) {
         if (!topic.keywords?.length) {
           continue;
         }
+        // Strip structured-PII keywords before egress; if nothing safe remains,
+        // keep the topic keyword-only rather than send identifiers off-perimeter.
+        const safeKeywords = stripPiiKeywords(topic.keywords);
+        if (!safeKeywords.length) {
+          logger.debug(
+            `[topics] topic ${topic.topicKey}: all keywords filtered as PII — skipping label`,
+          );
+          continue;
+        }
         try {
-          const raw = await deps.generateLabel({ keywords: topic.keywords });
+          const raw = await deps.generateLabel({ keywords: safeKeywords });
           const label = raw ? cleanLabel(raw) : '';
           if (label) {
             result[index] = { ...topic, label };

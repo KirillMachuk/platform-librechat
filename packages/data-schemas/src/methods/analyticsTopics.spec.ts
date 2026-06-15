@@ -165,35 +165,44 @@ describe('assembleConversationsForClustering', () => {
   });
 });
 
-describe('run lifecycle (lease/claim)', () => {
-  test('claim marks running + sets a lease; a second immediate claim finds nothing', async () => {
-    await methods.createAnalyticsRun({ tenantId: 't1', trigger: 'manual' });
-    const claimed = await methods.claimNextAnalyticsRun(60000);
-    expect(claimed?.status).toBe('running');
-    expect(claimed?.attempts).toBe(1);
-    expect(claimed?.leaseExpiresAt).toBeInstanceOf(Date);
+describe('run lifecycle (lease/dedup)', () => {
+  test('startAnalyticsRun creates a running run with a lease; getActiveAnalyticsRun finds it', async () => {
+    const run = await methods.startAnalyticsRun({
+      tenantId: 't1',
+      trigger: 'manual',
+      leaseMs: 60000,
+    });
+    expect(run.status).toBe('running');
+    expect(run.attempts).toBe(1);
+    expect(run.leaseExpiresAt).toBeInstanceOf(Date);
 
-    const again = await methods.claimNextAnalyticsRun(60000);
-    expect(again).toBeNull();
+    const active = await methods.getActiveAnalyticsRun('t1');
+    expect(active?._id?.toString()).toBe(run._id?.toString());
   });
 
-  test('an expired lease is re-claimable (crashed worker recovery)', async () => {
-    const run = await methods.createAnalyticsRun({ trigger: 'scheduled' });
-    await methods.claimNextAnalyticsRun(60000);
+  test('a run whose lease expired is no longer active (crashed worker frees the slot)', async () => {
+    const run = await methods.startAnalyticsRun({ trigger: 'scheduled', leaseMs: 60000 });
+    expect(await methods.getActiveAnalyticsRun()).not.toBeNull();
     // Simulate a crashed worker: force the lease into the past.
     await AnalyticsRun.updateOne(
       { _id: run._id },
       { $set: { leaseExpiresAt: new Date(Date.now() - 1000) } },
     );
-    const reclaimed = await methods.claimNextAnalyticsRun(60000);
-    expect(reclaimed?._id?.toString()).toBe(run._id?.toString());
-    expect(reclaimed?.attempts).toBe(2);
+    expect(await methods.getActiveAnalyticsRun()).toBeNull();
+  });
+
+  test('completed and failed runs are not active', async () => {
+    const done = await methods.startAnalyticsRun({ tenantId: 't2', leaseMs: 60000 });
+    await methods.completeAnalyticsRun(done._id, { conversationCount: 1 });
+    const failed = await methods.startAnalyticsRun({ tenantId: 't2', leaseMs: 60000 });
+    await methods.failAnalyticsRun(failed._id, new Error('x'));
+    expect(await methods.getActiveAnalyticsRun('t2')).toBeNull();
   });
 
   test('complete records stats; fail records a (clamped) error; getLatest returns newest done', async () => {
-    const r1 = await methods.createAnalyticsRun({ tenantId: 't1' });
+    const r1 = await methods.startAnalyticsRun({ tenantId: 't1', leaseMs: 60000 });
     await methods.completeAnalyticsRun(r1._id, { conversationCount: 10, topicCount: 3 });
-    const r2 = await methods.createAnalyticsRun({ tenantId: 't1' });
+    const r2 = await methods.startAnalyticsRun({ tenantId: 't1', leaseMs: 60000 });
     await methods.failAnalyticsRun(r2._id, new Error('boom'));
 
     const latest = await methods.getLatestAnalyticsRun({ tenantId: 't1' });
@@ -209,7 +218,7 @@ describe('run lifecycle (lease/claim)', () => {
 
 describe('results persistence', () => {
   test('saveRunResults replaces prior results idempotently; reads are sorted', async () => {
-    const run = await methods.createAnalyticsRun({ tenantId: 't1' });
+    const run = await methods.startAnalyticsRun({ tenantId: 't1', leaseMs: 60000 });
     await methods.saveRunResults(
       run._id,
       [
@@ -275,7 +284,7 @@ describe('results persistence', () => {
 
   test('tenant isolation: results saved under one tenant are invisible to another', async () => {
     const run = await tenantStorage.run({ tenantId: 't1' } as never, async () => {
-      const r = await methods.createAnalyticsRun({});
+      const r = await methods.startAnalyticsRun({ leaseMs: 60000 });
       await methods.saveRunResults(
         r._id,
         [
@@ -302,6 +311,72 @@ describe('results persistence', () => {
     // Stamped with t1 (visible within t1).
     const stamped = await AnalyticsTopic.findOne({ runId: run._id }).lean<{ tenantId: string }>();
     expect(stamped?.tenantId).toBe('t1');
+  });
+});
+
+describe('deleteRunResults', () => {
+  test("removes a run's topics + assignments but leaves the run document", async () => {
+    const run = await methods.startAnalyticsRun({ tenantId: 't1', leaseMs: 60000 });
+    await methods.saveRunResults(
+      run._id,
+      [{ topicKey: 0, keywords: ['k'], size: 1, share: 1, representativeConversationIds: [] }],
+      [{ conversationId: 'c1', topicKey: 0 }],
+    );
+    expect(await methods.getRunTopics(run._id)).toHaveLength(1);
+
+    await methods.deleteRunResults(run._id);
+
+    expect(await methods.getRunTopics(run._id)).toHaveLength(0);
+    expect(await methods.getTopicAssignments(run._id, 0, { limit: 10, offset: 0 })).toHaveLength(0);
+    expect(await AnalyticsRun.findById(run._id).lean()).not.toBeNull();
+  });
+});
+
+describe('pruneOldAnalyticsRuns (retention)', () => {
+  test('keeps the newest N runs for the tenant and cascades topic/assignment deletes', async () => {
+    const runs = [];
+    for (let i = 0; i < 4; i++) {
+      const r = await methods.startAnalyticsRun({ tenantId: 't1', leaseMs: 60000 });
+      // Space out createdAt so "newest" is deterministic (startAnalyticsRun stamps now()).
+      await AnalyticsRun.updateOne(
+        { _id: r._id },
+        { $set: { createdAt: new Date(2026, 0, i + 1) } },
+      );
+      await methods.saveRunResults(
+        r._id,
+        [{ topicKey: 0, keywords: ['k'], size: 1, share: 1, representativeConversationIds: [] }],
+        [{ conversationId: `c${i}`, topicKey: 0 }],
+      );
+      runs.push(r);
+    }
+
+    await methods.pruneOldAnalyticsRuns('t1', 2);
+
+    const remaining = await AnalyticsRun.find({ tenantId: 't1' }).lean<Array<{ _id: unknown }>>();
+    const remainingIds = remaining.map((r) => String(r._id));
+    expect(remainingIds).toHaveLength(2);
+    expect(remainingIds).toEqual(
+      expect.arrayContaining([String(runs[2]._id), String(runs[3]._id)]),
+    );
+    // Oldest (pruned) run's results cascaded away; newest run's results remain.
+    expect(await methods.getRunTopics(runs[0]._id)).toHaveLength(0);
+    expect(await methods.getRunTopics(runs[3]._id)).toHaveLength(1);
+  });
+
+  test('only prunes the given tenant', async () => {
+    for (let i = 0; i < 3; i++) {
+      const r = await methods.startAnalyticsRun({ tenantId: 't1', leaseMs: 60000 });
+      await AnalyticsRun.updateOne(
+        { _id: r._id },
+        { $set: { createdAt: new Date(2026, 0, i + 1) } },
+      );
+    }
+    await methods.startAnalyticsRun({ tenantId: 't2', leaseMs: 60000 });
+
+    await methods.pruneOldAnalyticsRuns('t1', 1);
+
+    expect(await AnalyticsRun.countDocuments({ tenantId: 't1' })).toBe(1);
+    expect(await AnalyticsRun.countDocuments({ tenantId: 't2' })).toBe(1);
   });
 });
 

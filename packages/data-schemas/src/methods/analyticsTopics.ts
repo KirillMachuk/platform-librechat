@@ -5,7 +5,6 @@ import type {
   IAnalyticsRun,
   IAnalyticsTopic,
   ClusteringInput,
-  AnalyticsRunStatus,
   IAnalyticsAssignment,
   AnalyticsRunTrigger,
 } from '~/types';
@@ -119,57 +118,52 @@ export function createAnalyticsTopicsMethods(mongoose: typeof import('mongoose')
       .filter((c) => c.text.length > 0);
   }
 
-  /** Creates a pending run (the schedule enqueues runs; a leased worker executes them). */
-  async function createAnalyticsRun(input: {
+  /**
+   * Starts a clustering run: creates it already `running` with a lease, so a
+   * crashed worker's run becomes reclaimable once the lease expires. Pair with
+   * `getActiveAnalyticsRun` to dedup (caller checks no active run exists first).
+   * `leaseMs` MUST exceed the expected run time.
+   */
+  async function startAnalyticsRun(input: {
     tenantId?: string;
     trigger?: AnalyticsRunTrigger;
     windowStart?: Date;
     windowEnd?: Date;
+    leaseMs: number;
   }): Promise<IAnalyticsRun> {
+    const now = Date.now();
     return runModel().create({
-      status: 'pending',
+      status: 'running',
       trigger: input.trigger ?? 'scheduled',
       windowStart: input.windowStart,
       windowEnd: input.windowEnd,
       tenantId: input.tenantId,
+      startedAt: new Date(now),
+      leaseExpiresAt: new Date(now + input.leaseMs),
+      attempts: 1,
     });
   }
 
   /**
-   * Atomically claims the next runnable run (pending, or running with an expired
-   * lease — a crashed worker) and marks it running with a fresh lease, so concurrent
-   * workers/replicas can never double-run. Call under `runAsSystem` to claim across
-   * tenants. `leaseMs` MUST exceed the work timeout or another worker could re-claim
-   * mid-flight.
+   * The run currently holding the tenant's "slot": `pending`, or `running` with a
+   * lease that has NOT expired. A running run whose lease expired (a crashed
+   * worker) is NOT active and no longer blocks a fresh run. Used to dedup the
+   * scheduled + on-demand (+ future multi-replica) triggers so only one clustering
+   * pass runs at a time per tenant.
    */
-  async function claimNextAnalyticsRun(leaseMs: number): Promise<IAnalyticsRun | null> {
-    const now = Date.now();
-    return runModel().findOneAndUpdate(
-      {
-        status: { $in: ['pending', 'running'] },
-        $or: [{ leaseExpiresAt: null }, { leaseExpiresAt: { $lte: new Date(now) } }],
-      },
-      {
-        $set: {
-          status: 'running' as AnalyticsRunStatus,
-          leaseExpiresAt: new Date(now + leaseMs),
-          startedAt: new Date(now),
-        },
-        $inc: { attempts: 1 },
-      },
-      { sort: { createdAt: 1 }, new: true },
-    );
-  }
-
-  /** Extends the lease of an in-flight run (call periodically for long runs). */
-  async function renewAnalyticsRunLease(
-    runId: Types.ObjectId | string,
-    leaseMs: number,
-  ): Promise<void> {
-    await runModel().updateOne(
-      { _id: runId },
-      { $set: { leaseExpiresAt: new Date(Date.now() + leaseMs) } },
-    );
+  async function getActiveAnalyticsRun(tenantId?: string): Promise<IAnalyticsRun | null> {
+    const match: FilterQuery<IAnalyticsRun> = {
+      status: { $in: ['pending', 'running'] },
+      $or: [{ leaseExpiresAt: null }, { leaseExpiresAt: { $gt: new Date() } }],
+    };
+    if (tenantId) {
+      match.tenantId = tenantId;
+    }
+    return runModel()
+      .findOne(match)
+      .sort({ createdAt: -1 })
+      .maxTimeMS(MAX_QUERY_MS)
+      .lean<IAnalyticsRun | null>();
   }
 
   /** Marks a run done and records its summary stats; clears the lease. */
@@ -238,6 +232,38 @@ export function createAnalyticsTopicsMethods(mongoose: typeof import('mongoose')
         { ordered: false },
       );
     }
+  }
+
+  /** Removes a run's topics + assignments (cleanup of a failed/partial run's writes). */
+  async function deleteRunResults(runId: Types.ObjectId | string): Promise<void> {
+    await topicModel().deleteMany({ runId });
+    await assignmentModel().deleteMany({ runId });
+  }
+
+  /**
+   * Retention: keeps the most recent `keep` runs for the tenant and deletes older
+   * ones, cascading their topics + assignments — so the collections don't grow
+   * unbounded (only the latest run is ever read). Call under the tenant's context.
+   */
+  async function pruneOldAnalyticsRuns(tenantId: string | undefined, keep: number): Promise<void> {
+    const match: FilterQuery<IAnalyticsRun> = {};
+    if (tenantId) {
+      match.tenantId = tenantId;
+    }
+    const stale = await runModel()
+      .find(match)
+      .sort({ createdAt: -1 })
+      .skip(Math.max(0, keep))
+      .select('_id')
+      .maxTimeMS(MAX_QUERY_MS)
+      .lean<Array<{ _id: Types.ObjectId }>>();
+    if (!stale.length) {
+      return;
+    }
+    const ids = stale.map((r) => r._id);
+    await topicModel().deleteMany({ runId: { $in: ids } });
+    await assignmentModel().deleteMany({ runId: { $in: ids } });
+    await runModel().deleteMany({ _id: { $in: ids } });
   }
 
   /** Topics of a run, largest theme first (the distribution view). */
@@ -366,13 +392,14 @@ export function createAnalyticsTopicsMethods(mongoose: typeof import('mongoose')
 
   return {
     assembleConversationsForClustering,
-    createAnalyticsRun,
-    claimNextAnalyticsRun,
-    renewAnalyticsRunLease,
+    startAnalyticsRun,
+    getActiveAnalyticsRun,
     completeAnalyticsRun,
     failAnalyticsRun,
     getLatestAnalyticsRun,
     saveRunResults,
+    deleteRunResults,
+    pruneOldAnalyticsRuns,
     getRunTopics,
     getTopicAssignments,
     getConversationSummaries,
