@@ -297,7 +297,6 @@ const startServer = async () => {
         memoryDiagnostics.start();
       }
       require('~/server/services/Audit').startAuditBackfillSchedule();
-      require('~/server/services/AnalyticsTopics').startTopicClusterSchedule();
 
       serverReady = true;
       logger.info('Server readiness checks passing.');

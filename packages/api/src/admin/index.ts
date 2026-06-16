@@ -1,5 +1,4 @@
 export { createAdminAnalyticsHandlers } from './analytics';
-export { createAdminTopicsHandlers } from './analyticsTopics';
 export { createAdminAuditHandlers } from './audit';
 export { createAdminBalanceHandlers, TOKEN_CREDITS_PER_USD } from './balance';
 export { createAdminConfigHandlers } from './config';
@@ -9,7 +8,6 @@ export { createAdminRolesHandlers } from './roles';
 export { createAdminUsageHandlers } from './usage';
 export { createAdminUsersHandlers } from './users';
 export type { AdminAnalyticsDeps } from './analytics';
-export type { AdminTopicsDeps } from './analyticsTopics';
 export type { AdminAuditDeps } from './audit';
 export type { AdminBalanceDeps } from './balance';
 export type { AdminUsageDeps } from './usage';

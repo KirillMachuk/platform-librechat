@@ -196,9 +196,6 @@ messageSchema.index({ messageId: 1, user: 1, tenantId: 1 }, { unique: true });
 // When multitenancy ships and every query carries tenantId, add tenant-prefixed variants.
 messageSchema.index({ isCreatedByUser: 1, createdAt: -1 });
 messageSchema.index({ user: 1, isCreatedByUser: 1, createdAt: -1 });
-// Topic clustering: gather a conversation's user messages (assembler) and the
-// first user message per conversation (drill-in preview) without a full scan.
-messageSchema.index({ conversationId: 1, isCreatedByUser: 1, createdAt: 1 });
 
 // index for MeiliSearch sync operations
 messageSchema.index({ _meiliIndex: 1, isTemporary: 1, expiredAt: 1 });
