@@ -362,10 +362,18 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')): Ana
    * period, optional employee) are pushed down as Meili filters so the scan is
    * index-served, not a Mongo collection scan.
    *
-   * Returns `null` when Meili is unavailable or tenant context is missing, so the
-   * caller can fall back to the Mongo `$regex` path. TENANT ISOLATION: a query is
-   * never issued without an explicit `tenantId` filter (Meili bypasses the
-   * Mongoose tenant middleware).
+   * Returns `null` only when the Meili plugin is not registered, so the caller
+   * can fall back to the Mongo `$regex` path.
+   *
+   * TENANT ISOLATION (mirrors the Mongo `buildMatch`): the `tenantId` filter is
+   * applied when, and only when, the request carries one. Meili bypasses the
+   * Mongoose tenant middleware, so a cross-user search MUST self-impose the
+   * filter — which it does whenever `filter.tenantId` is set (multi-tenant).
+   * When it is absent (single-tenant container-per-client — the standard
+   * deployment) there is exactly one tenant in the database, so searching
+   * without a tenant clause is correct, not a leak. Requiring `tenantId` here
+   * would make the feature silently dead in single-tenant deployments while
+   * giving no more isolation than the already-shipped Mongo path.
    */
   async function searchInteractionIds(
     filter: AnalyticsInteractionFilter,
@@ -378,13 +386,13 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')): Ana
         populate?: boolean,
       ) => Promise<{ hits?: Array<Record<string, unknown>> }>;
     };
-    if (typeof Message.meiliSearch !== 'function' || !filter.tenantId) {
+    if (typeof Message.meiliSearch !== 'function') {
       return null;
     }
-    const clauses: string[] = [
-      `tenantId = ${meiliQuote(filter.tenantId)}`,
-      'isCreatedByUser = true',
-    ];
+    const clauses: string[] = ['isCreatedByUser = true'];
+    if (filter.tenantId) {
+      clauses.push(`tenantId = ${meiliQuote(filter.tenantId)}`);
+    }
     if (filter.userId) {
       clauses.push(`user = ${meiliQuote(filter.userId)}`);
     }
@@ -399,6 +407,9 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')): Ana
       filter.search ?? '',
       {
         filter: clauses.join(' AND '),
+        // Newest-first, matching the feed — relevance alone would bury recent
+        // matches under older "more relevant" ones (admins expect recency).
+        sort: ['createdAtTs:desc'],
         limit: options.limit + 1,
         offset: options.offset,
         attributesToRetrieve: ['messageId'],

@@ -62,6 +62,10 @@ const messageSchema: Schema<IMessage> = new Schema(
       type: Boolean,
       required: true,
       default: false,
+      // Indexed (filter-only) so the admin analytics search can return only
+      // employee requests. See MESSAGE_MEILI_SEARCHABLE_ATTRIBUTES — it is kept
+      // out of searchable attributes so its value can't pollute relevance.
+      meiliIndex: true,
     },
     isTemporary: {
       type: Boolean,
@@ -174,6 +178,10 @@ const messageSchema: Schema<IMessage> = new Schema(
     tenantId: {
       type: String,
       index: true,
+      // Indexed (filter-only) so the admin analytics search can stay
+      // tenant-isolated: Meili queries bypass the Mongoose tenant middleware,
+      // so cross-user search MUST filter on this attribute explicitly.
+      meiliIndex: true,
     },
   },
   { timestamps: true },

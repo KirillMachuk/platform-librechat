@@ -23,6 +23,35 @@ interface MongoMeiliOptions {
   mongoose: typeof import('mongoose');
   syncBatchSize?: number;
   syncDelayMs?: number;
+  /**
+   * Filterable attributes for this index. Defaults to `['user']` (preserving the
+   * historical per-user search behavior). The `messages` index passes the wider
+   * analytics set so admin search can filter by tenant/period/employee.
+   */
+  filterableAttributes?: string[];
+  /**
+   * Restrict full-text search to these attributes. When omitted, Meili searches
+   * every indexed attribute (the default). The `messages` index passes the
+   * message-body attributes so the new filter-only fields can't pollute relevance.
+   */
+  searchableAttributes?: string[];
+  /**
+   * Sortable attributes. When omitted, no sortableAttributes are set. The
+   * `messages` index passes `createdAtTs` so the analytics search can return
+   * newest-first instead of pure relevance.
+   */
+  sortableAttributes?: string[];
+  /**
+   * Extra Mongo fields to select + carry into the indexed document beyond the
+   * `meiliIndex`-flagged ones (e.g. `createdAt` so `transformForIndex` can derive
+   * a numeric timestamp). These are picked but not implicitly searchable.
+   */
+  extraIndexedFields?: string[];
+  /**
+   * Final hook to derive/rename fields on the object sent to Meili (runs in both
+   * the per-document and batch-sync paths). Used to emit a numeric `createdAtTs`.
+   */
+  transformForIndex?: (object: Record<string, unknown>) => Record<string, unknown>;
 }
 
 interface MeiliIndexable {
@@ -186,14 +215,19 @@ const createMeiliMongooseModel = ({
   attributesToIndex,
   primaryKey,
   syncOptions,
+  transformForIndex,
 }: {
   index: Index<MeiliIndexable>;
   getIndexableQuery: () => FilterQuery<unknown>;
   attributesToIndex: string[];
   primaryKey: string;
   syncOptions: { batchSize: number; delayMs: number };
+  transformForIndex?: (object: Record<string, unknown>) => Record<string, unknown>;
 }) => {
   const syncConfig = { ...getSyncConfig(), ...syncOptions };
+  /** Optional final shaping of the document sent to Meili (e.g. derive createdAtTs). */
+  const applyTransform = (object: Record<string, unknown>): Record<string, unknown> =>
+    transformForIndex ? transformForIndex(object) : object;
 
   class MeiliMongooseModel {
     /**
@@ -304,7 +338,7 @@ const createMeiliMongooseModel = ({
 
       // Format documents for MeiliSearch
       const formattedDocs = documents.map((doc) =>
-        _.omitBy(_.pick(doc, attributesToIndex), (_v, k) => k.startsWith('$')),
+        applyTransform(_.omitBy(_.pick(doc, attributesToIndex), (_v, k) => k.startsWith('$'))),
       );
 
       try {
@@ -456,7 +490,7 @@ const createMeiliMongooseModel = ({
         delete object.content;
       }
 
-      return object;
+      return applyTransform(object);
     }
 
     /**
@@ -634,6 +668,9 @@ export default function mongoMeili(schema: Schema, options: MongoMeiliOptions): 
   });
 
   const { host, apiKey, indexName, primaryKey } = options;
+  const filterableAttributes = options.filterableAttributes ?? ['user'];
+  const { searchableAttributes, sortableAttributes, extraIndexedFields, transformForIndex } =
+    options;
   const syncOptions = {
     batchSize: options.syncBatchSize || getSyncConfig().batchSize,
     delayMs: options.syncDelayMs || getSyncConfig().delayMs,
@@ -682,10 +719,21 @@ export default function mongoMeili(schema: Schema, options: MongoMeiliOptions): 
     }
 
     try {
-      await index.updateSettings({
-        filterableAttributes: ['user'],
-      });
-      logger.debug(`[mongoMeili] Updated index ${indexName} settings to make 'user' filterable`);
+      const settings: Record<string, unknown> = { filterableAttributes };
+      if (searchableAttributes) {
+        settings.searchableAttributes = searchableAttributes;
+      }
+      if (sortableAttributes) {
+        settings.sortableAttributes = sortableAttributes;
+      }
+      await index.updateSettings(settings);
+      logger.debug(
+        `[mongoMeili] Updated index ${indexName} settings: filterable=[${filterableAttributes.join(
+          ', ',
+        )}]${searchableAttributes ? ` searchable=[${searchableAttributes.join(', ')}]` : ''}${
+          sortableAttributes ? ` sortable=[${sortableAttributes.join(', ')}]` : ''
+        }`,
+      );
     } catch (settingsError) {
       logger.error(`[mongoMeili] Error updating index settings for ${indexName}:`, settingsError);
     }
@@ -706,6 +754,16 @@ export default function mongoMeili(schema: Schema, options: MongoMeiliOptions): 
     logger.debug(`[mongoMeili] Added 'user' field to ${indexName} index attributes`);
   }
 
+  // Extra source fields (e.g. `createdAt`) selected + carried so `transformForIndex`
+  // can derive index-only attributes such as a numeric `createdAtTs`.
+  if (extraIndexedFields) {
+    for (const field of extraIndexedFields) {
+      if (!attributesToIndex.includes(field)) {
+        attributesToIndex.push(field);
+      }
+    }
+  }
+
   schema.loadClass(
     createMeiliMongooseModel({
       index,
@@ -713,6 +771,7 @@ export default function mongoMeili(schema: Schema, options: MongoMeiliOptions): 
       attributesToIndex,
       primaryKey,
       syncOptions,
+      transformForIndex,
     }),
   );
 

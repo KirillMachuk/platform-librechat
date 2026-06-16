@@ -160,7 +160,60 @@ const filterFilesByAgentAccess = async ({ files, userId, role, agentId }) => {
   return [...ownedFiles, ...accessibleFiles];
 };
 
+/**
+ * Filter request-attachment files (`req.body.files`) by ownership / agent access.
+ *
+ * Unlike {@link filterFilesByAgentAccess}, this does NOT short-circuit for
+ * ephemeral agents. Request attachments are client-controlled, so without this
+ * guard a user could reference another user's `file_id` and have its extracted
+ * text inlined into the prompt (cross-user read within a tenant). Ephemeral
+ * agents own no shared files, so for them `hasAccessToFilesViaAgent` denies any
+ * non-owned file (`getAgent` returns null for a non-`agent_` id) and only the
+ * caller's own files survive. Real (saved) agents still grant access to their
+ * author-owned attachments, preserving legitimate sharing.
+ *
+ * @param {Object} params - Parameters object
+ * @param {Array<MongoFile>} params.files - Files loaded for the request
+ * @param {string} params.userId - The requesting user's ID
+ * @param {string} [params.role] - Optional user role to avoid a DB query
+ * @param {string} params.agentId - Agent ID (ephemeral or real) for the run
+ * @returns {Promise<Array<MongoFile>>} Files the requester may use
+ */
+const filterRequestFilesByAccess = async ({ files, userId, role, agentId }) => {
+  if (!userId || !files || files.length === 0) {
+    return files ?? [];
+  }
+
+  const ownedFiles = [];
+  const filesToCheck = [];
+
+  for (const file of files) {
+    if (file.user && file.user.toString() === userId.toString()) {
+      ownedFiles.push(file);
+    } else {
+      filesToCheck.push(file);
+    }
+  }
+
+  if (filesToCheck.length === 0) {
+    return ownedFiles;
+  }
+
+  const accessMap = await hasAccessToFilesViaAgent({
+    userId,
+    role,
+    fileIds: filesToCheck.map((f) => f.file_id),
+    agentId,
+    files: filesToCheck,
+  });
+
+  const accessibleFiles = filesToCheck.filter((file) => accessMap.get(file.file_id));
+
+  return [...ownedFiles, ...accessibleFiles];
+};
+
 module.exports = {
   hasAccessToFilesViaAgent,
   filterFilesByAgentAccess,
+  filterRequestFilesByAccess,
 };

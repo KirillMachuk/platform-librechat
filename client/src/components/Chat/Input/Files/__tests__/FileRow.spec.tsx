@@ -32,6 +32,12 @@ jest.mock('~/utils', () => ({
   getCachedPreview: jest.fn(() => undefined),
 }));
 
+const mockShowToast = jest.fn();
+jest.mock('@librechat/client', () => ({
+  ...jest.requireActual('@librechat/client'),
+  useToastContext: () => ({ showToast: mockShowToast }),
+}));
+
 jest.mock('../Image', () => {
   return function MockImage({ url, progress, source }: any) {
     return (
@@ -403,6 +409,33 @@ describe('FileRow', () => {
 
       expect(mockSetFilesLoading).toHaveBeenCalledWith(false);
       expect(mockGetFiles).not.toHaveBeenCalled();
+    });
+
+    it('warns once when an indexing attachment fails to embed', async () => {
+      jest.useFakeTimers();
+      try {
+        const file = createMockFile({
+          file_id: 'fail-1',
+          type: 'application/pdf',
+          filename: 'contract.pdf',
+          progress: 1,
+          embeddingStatus: 'pending',
+        });
+        // The background embed worker marked the document `failed`.
+        mockGetFiles.mockResolvedValue([{ ...file, embeddingStatus: 'failed' }]);
+        renderFileRow(new Map([[file.file_id, file]]));
+
+        await act(async () => {
+          jest.advanceTimersByTime(5000);
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+
+        expect(mockShowToast).toHaveBeenCalledTimes(1);
+        expect(mockShowToast).toHaveBeenCalledWith(expect.objectContaining({ status: 'error' }));
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('drops an indexing attachment that disappeared server-side (releases the block)', async () => {

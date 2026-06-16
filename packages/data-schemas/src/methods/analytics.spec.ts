@@ -373,15 +373,30 @@ describe('searchInteractionIds (MeiliSearch backend)', () => {
     expect(result).toBeNull();
   });
 
-  test('returns null when no tenant context is present (never searches cross-tenant)', async () => {
-    (Message as unknown as { meiliSearch: jest.Mock }).meiliSearch = jest
-      .fn()
-      .mockResolvedValue({ hits: [] });
+  test('single-tenant (no tenantId): searches without a tenant clause, not null', async () => {
+    // Container-per-client (single tenant) has no tenantId. The search must still
+    // run — omitting the tenant clause is correct (one tenant in the DB), and
+    // returning null here would make the whole feature silently dead in prod.
+    const meiliSearch = jest.fn().mockResolvedValue({ hits: [{ messageId: 'm1' }] });
+    (Message as unknown as { meiliSearch: jest.Mock }).meiliSearch = meiliSearch;
     const result = await methods.searchInteractionIds(
       { search: 'договор' },
       { limit: 10, offset: 0 },
     );
-    expect(result).toBeNull();
+    expect(result).toEqual({ ids: ['m1'], hasMore: false });
+    const filter = meiliSearch.mock.calls[0][1].filter as string;
+    expect(filter).toContain('isCreatedByUser = true');
+    expect(filter).not.toContain('tenantId');
+  });
+
+  test('multi-tenant: imposes the tenantId filter when present', async () => {
+    const meiliSearch = jest.fn().mockResolvedValue({ hits: [] });
+    (Message as unknown as { meiliSearch: jest.Mock }).meiliSearch = meiliSearch;
+    await methods.searchInteractionIds(
+      { tenantId: 't1', search: 'договор' },
+      { limit: 10, offset: 0 },
+    );
+    expect(meiliSearch.mock.calls[0][1].filter).toContain('tenantId = "t1"');
   });
 
   test('builds a tenant + employee + period filter and returns ranked ids', async () => {
@@ -406,6 +421,8 @@ describe('searchInteractionIds (MeiliSearch backend)', () => {
     expect(params.filter).toContain(`user = "${aliceId}"`);
     expect(params.filter).toContain(`createdAtTs >= ${from.getTime()}`);
     expect(params.filter).toContain(`createdAtTs < ${to.getTime()}`);
+    // Newest-first ordering (matches the feed), not pure relevance.
+    expect(params.sort).toEqual(['createdAtTs:desc']);
     // Over-fetches one row past the page so hasMore can be reported.
     expect(params.limit).toBe(11);
     expect(params.attributesToRetrieve).toEqual(['messageId']);

@@ -8,7 +8,10 @@ const {
   loadAddedAgent: loadAddedAgentFn,
 } = require('@librechat/api');
 const { isEphemeralAgentId } = require('librechat-data-provider');
-const { filterFilesByAgentAccess } = require('~/server/services/Files/permissions');
+const {
+  filterFilesByAgentAccess,
+  filterRequestFilesByAccess,
+} = require('~/server/services/Files/permissions');
 const { getMCPServerTools } = require('~/server/services/Config');
 const { canAuthorSkillFiles } = require('./skillDeps');
 const db = require('~/models');
@@ -190,6 +193,7 @@ const processAddedConvo = async ({
         listSkillsByAccess: db.listSkillsByAccess,
         listAlwaysApplySkills: db.listAlwaysApplySkills,
         getSkillByName: db.getSkillByName,
+        filterRequestFilesByAccess,
       },
     );
 

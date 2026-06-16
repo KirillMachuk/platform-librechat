@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 const { MeiliSearch } = require('meilisearch');
-const { logger } = require('@librechat/data-schemas');
+const {
+  logger,
+  MEILI_CREATED_AT_TS_FIELD,
+  MESSAGE_MEILI_FILTERABLE_ATTRIBUTES,
+  MESSAGE_MEILI_SEARCHABLE_ATTRIBUTES,
+  MESSAGE_MEILI_SORTABLE_ATTRIBUTES,
+} = require('@librechat/data-schemas');
 const { CacheKeys } = require('librechat-data-provider');
 const { isEnabled, FlowStateManager } = require('@librechat/api');
 const { getLogStores } = require('~/cache');
@@ -91,28 +97,72 @@ async function ensureFilterableAttributes(client) {
   let hasOrphanedDocs = false;
 
   try {
-    // Check and update messages index
+    // Check and update messages index.
+    // The admin analytics search needs a wider filterable set than just `user`
+    // (tenantId, the employee flag, and a numeric timestamp). The desired set is
+    // the single source of truth in @librechat/data-schemas so this never drifts
+    // from the mongoMeili plugin and silently narrows the settings back.
     try {
       const messagesIndex = client.index('messages');
       const settings = await messagesIndex.getSettings();
 
-      if (!settings.filterableAttributes || !settings.filterableAttributes.includes('user')) {
-        logger.info('[indexSync] Configuring messages index to filter by user...');
+      const currentFilterable = settings.filterableAttributes || [];
+      const missingFilterable = MESSAGE_MEILI_FILTERABLE_ATTRIBUTES.filter(
+        (attr) => !currentFilterable.includes(attr),
+      );
+      if (missingFilterable.length > 0) {
+        logger.info(
+          `[indexSync] Configuring messages index filterable attributes (adding: ${missingFilterable.join(
+            ', ',
+          )})...`,
+        );
         await messagesIndex.updateSettings({
-          filterableAttributes: ['user'],
+          filterableAttributes: MESSAGE_MEILI_FILTERABLE_ATTRIBUTES,
+          searchableAttributes: MESSAGE_MEILI_SEARCHABLE_ATTRIBUTES,
+          sortableAttributes: MESSAGE_MEILI_SORTABLE_ATTRIBUTES,
         });
-        logger.info('[indexSync] Messages index configured for user filtering');
+        logger.info('[indexSync] Messages index configured for analytics filtering');
         settingsUpdated = true;
       }
 
-      // Check if existing documents have user field indexed
+      // Ensure the recency sort attribute independently of the filterable check.
+      // createdAtTs is already in every indexed doc, so enabling sort needs NO
+      // re-sync — do not set settingsUpdated for this.
+      const currentSortable = settings.sortableAttributes || [];
+      const missingSortable = MESSAGE_MEILI_SORTABLE_ATTRIBUTES.filter(
+        (attr) => !currentSortable.includes(attr),
+      );
+      if (missingSortable.length > 0) {
+        logger.info(
+          `[indexSync] Configuring messages index sortable attributes (adding: ${missingSortable.join(
+            ', ',
+          )})...`,
+        );
+        await messagesIndex.updateSettings({
+          sortableAttributes: MESSAGE_MEILI_SORTABLE_ATTRIBUTES,
+        });
+      }
+
+      // Inspect a sample document. The mongoMeili plugin may have already written
+      // the new settings before we read them (async, at model registration), so a
+      // settings diff alone can miss the migration. If indexed docs predate the
+      // analytics fields (no createdAtTs), force a full re-sync to populate them.
       try {
         const searchResult = await messagesIndex.search('', { limit: 1 });
-        if (searchResult.hits.length > 0 && !searchResult.hits[0].user) {
-          logger.info(
-            '[indexSync] Existing messages missing user field, will clean up orphaned documents...',
-          );
-          hasOrphanedDocs = true;
+        if (searchResult.hits.length > 0) {
+          const sample = searchResult.hits[0];
+          if (!sample.user) {
+            logger.info(
+              '[indexSync] Existing messages missing user field, will clean up orphaned documents...',
+            );
+            hasOrphanedDocs = true;
+          }
+          if (sample[MEILI_CREATED_AT_TS_FIELD] == null) {
+            logger.info(
+              '[indexSync] Indexed messages predate analytics fields (no createdAtTs); forcing re-sync.',
+            );
+            settingsUpdated = true;
+          }
         }
       } catch (searchError) {
         logger.debug('[indexSync] Could not check message documents:', searchError.message);
@@ -210,6 +260,37 @@ async function performSync(flowManager, flowId, flowType) {
     const { status } = await client.health();
     if (status !== 'available') {
       throw new Error('Meilisearch not available');
+    }
+
+    // Index-coverage observability: the analytics search only sees what is in
+    // the Meili index, and the index applies the retention/temporary visibility
+    // filter (built for the user's own chat search). This logs how many employee
+    // requests are excluded from the index so the gap between the Mongo feed
+    // (shows everything) and the Meili search (indexed subset) is visible.
+    try {
+      const retentionVisible = {
+        $or: [
+          { isTemporary: false, expiredAt: null },
+          { isTemporary: false, expiredAt: { $gt: new Date() } },
+          { isTemporary: null, expiredAt: null },
+        ],
+      };
+      const [total, userTotal, userIndexable, userTemp, userExpiring, userEmptyText] =
+        await Promise.all([
+          Message.countDocuments({}),
+          Message.countDocuments({ isCreatedByUser: true }),
+          Message.countDocuments({ isCreatedByUser: true, ...retentionVisible }),
+          Message.countDocuments({ isCreatedByUser: true, isTemporary: true }),
+          Message.countDocuments({ isCreatedByUser: true, expiredAt: { $ne: null } }),
+          Message.countDocuments({ isCreatedByUser: true, $or: [{ text: null }, { text: '' }] }),
+        ]);
+      logger.info(
+        `[indexSync][coverage] messages total=${total} | employee requests: total=${userTotal} ` +
+          `indexable=${userIndexable} excluded=${userTotal - userIndexable} ` +
+          `(temporary=${userTemp}, withExpiredAt=${userExpiring}, emptyText=${userEmptyText})`,
+      );
+    } catch (coverageErr) {
+      logger.warn('[indexSync][coverage] count probe failed:', coverageErr.message);
     }
 
     /** Ensures indexes have proper filterable attributes configured */

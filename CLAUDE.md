@@ -232,6 +232,7 @@ push to platform-librechat/main
 - A push to `main` here automatically deploys to production (~7–10 min build + deploy).
 - The Railway API call resolves the service named `1ma-lab` and the environment named `production`. If either is renamed, update the lookup in `.github/workflows/docker-image.yml`.
 - If a deploy is needed without a code change: re-run the workflow (`gh workflow run "Build & Push Docker Image"`) or manually click Redeploy in Railway.
+- **CI scope gotcha:** the frontend test suite (`.github/workflows/frontend-review.yml`, jobs "Tests: Ubuntu/Windows") runs **only on pull requests** that touch `client/**`, `packages/client/**`, or `packages/data-provider/**` — **never on push to `main`**. So a green `main` only means the Docker image built; it does **not** mean the frontend tests pass. Broken client tests can land on `main` silently (and api-only PRs never run them). To gauge frontend-test health, look at a client PR's checks, not `main`'s.
 
 ---
 

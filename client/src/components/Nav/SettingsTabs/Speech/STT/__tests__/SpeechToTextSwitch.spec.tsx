@@ -31,8 +31,12 @@ describe('SpeechToTextSwitch', () => {
       </RecoilRoot>,
     );
     const switchElement = getByTestId('SpeechToText');
-    fireEvent.click(switchElement);
 
-    expect(mockSetSpeechToText).toHaveBeenCalledWith(false);
+    // Stage-1 speech defaults ship with the microphone (speechToText) OFF, so the
+    // switch starts unchecked and the first toggle turns it on.
+    expect(switchElement).not.toBeChecked();
+
+    fireEvent.click(switchElement);
+    expect(mockSetSpeechToText).toHaveBeenCalledWith(true);
   });
 });

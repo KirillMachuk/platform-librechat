@@ -187,6 +187,22 @@ describe('Meilisearch Mongoose plugin', () => {
     );
   });
 
+  test('message indexing derives a numeric createdAtTs and drops the raw date', async () => {
+    await createMessageModel(mongoose).create({
+      messageId: new mongoose.Types.ObjectId(),
+      conversationId: new mongoose.Types.ObjectId(),
+      user: new mongoose.Types.ObjectId(),
+      isCreatedByUser: true,
+    });
+    const indexedDoc = mockAddDocuments.mock.calls.at(-1)?.[0]?.[0] as Record<string, unknown>;
+    // transformForIndex (addCreatedAtTs) runs in the per-save path: the Meili doc
+    // gets a numeric epoch the analytics period filter can range over, and the raw
+    // Date is dropped so only the filterable numeric remains.
+    expect(typeof indexedDoc.createdAtTs).toBe('number');
+    expect(indexedDoc.createdAt).toBeUndefined();
+    expect(indexedDoc.isCreatedByUser).toBe(true);
+  });
+
   test('saving messages with expiredAt=null indexes w/ meilisearch', async () => {
     await createMessageModel(mongoose).create({
       messageId: new mongoose.Types.ObjectId(),
@@ -450,6 +466,37 @@ describe('Meilisearch Mongoose plugin', () => {
 
     expect(mockAddDocumentsInBatches).not.toHaveBeenCalled();
     expect(storedDoc?._meiliIndex).toBe(false);
+  });
+
+  test('batch sync (the reindex path) derives createdAtTs and drops the raw date', async () => {
+    // This is the exact path the production reindex runs (syncWithMeili ->
+    // processSyncBatch -> addDocumentsInBatches), distinct from the per-save hook.
+    const messageModel = createMessageModel(mongoose) as SchemaWithMeiliMethods;
+    mockAddDocumentsInBatches.mockClear();
+    const messageId = new mongoose.Types.ObjectId().toString();
+    const createdAt = new Date('2026-04-01T12:00:00.000Z');
+
+    await messageModel.collection.insertOne({
+      messageId,
+      conversationId: new mongoose.Types.ObjectId().toString(),
+      user: new mongoose.Types.ObjectId().toString(),
+      isCreatedByUser: true,
+      isTemporary: false,
+      text: 'Составь договор',
+      _meiliIndex: false,
+      createdAt,
+      updatedAt: createdAt,
+    });
+
+    await messageModel.syncWithMeili();
+
+    const batched = mockAddDocumentsInBatches.mock.calls.flatMap((c) => c[0]) as Array<
+      Record<string, unknown>
+    >;
+    const doc = batched.find((d) => d.messageId === messageId);
+    expect(doc).toBeDefined();
+    expect(doc!.createdAtTs).toBe(createdAt.getTime());
+    expect(doc!.createdAt).toBeUndefined();
   });
 
   test('sync w/ meili treats null isTemporary with no expiration like missing legacy fields', async () => {
