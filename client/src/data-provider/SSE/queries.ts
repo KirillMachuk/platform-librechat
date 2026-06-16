@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { apiBaseUrl, QueryKeys, request, dataService } from 'librechat-data-provider';
+import { useRecoilCallback } from 'recoil';
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
+import { apiBaseUrl, QueryKeys, request, dataService } from 'librechat-data-provider';
 import type { Agents, TConversation } from 'librechat-data-provider';
 import { isNotFoundError, updateConvoInAllQueries } from '~/utils';
 import { useGetStartupConfig } from '../Endpoints';
+import store from '~/store';
 
 export interface StreamStatusResponse {
   active: boolean;
@@ -91,6 +93,30 @@ export function useTitleGeneration(enabled = true) {
   const [queueVersion, setQueueVersion] = useState(0);
   const [readyToFetch, setReadyToFetch] = useState<string[]>([]);
 
+  /**
+   * Push a freshly generated title into the active conversation's Recoil atom.
+   * The query-cache updates below only feed the sidebar list and `document.title`;
+   * the open chat reads its title from `conversationByIndex` (set to "New Chat" by
+   * finalHandler). Without this, the title reverts to "New Chat" until a hard reload.
+   */
+  const applyTitleToActiveConvo = useRecoilCallback(
+    ({ snapshot, set }) =>
+      async (conversationId: string, title: string) => {
+        if (!title) {
+          return;
+        }
+        const keys = await snapshot.getPromise(store.conversationKeysAtom);
+        for (const key of keys) {
+          const convo = await snapshot.getPromise(store.conversationByIndex(key));
+          if (!convo || convo.conversationId !== conversationId || convo.title === title) {
+            continue;
+          }
+          set(store.conversationByIndex(key), { ...convo, title });
+        }
+      },
+    [],
+  );
+
   const { data: activeJobsData } = useActiveJobs(enabled);
   const activeJobIds = useMemo(
     () => activeJobsData?.activeJobIds ?? [],
@@ -163,6 +189,9 @@ export function useTitleGeneration(enabled = true) {
           (convo: TConversation | undefined) => (convo ? { ...convo, title } : convo),
         );
         updateConvoInAllQueries(queryClient, conversationId, (c) => ({ ...c, title }));
+        // Keep the open chat's source of truth (Recoil atom) in sync, otherwise the
+        // header/state stay on "New Chat" until a hard reload.
+        applyTitleToActiveConvo(conversationId, title);
         // Only update document title if this conversation is currently active
         if (window.location.pathname.includes(conversationId)) {
           document.title = title;
@@ -194,7 +223,7 @@ export function useTitleGeneration(enabled = true) {
         }
       }
     });
-  }, [titleQueries, readyToFetch, queryClient, activeJobIds]);
+  }, [titleQueries, readyToFetch, queryClient, activeJobIds, applyTitleToActiveConvo]);
 }
 
 /**
