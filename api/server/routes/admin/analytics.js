@@ -1,14 +1,9 @@
 const express = require('express');
-const {
-  createAdminAnalyticsHandlers,
-  createAdminTopicsHandlers,
-  isEnabled,
-} = require('@librechat/api');
+const { createAdminAnalyticsHandlers, isEnabled } = require('@librechat/api');
 const { SystemCapabilities, logger } = require('@librechat/data-schemas');
 const { requireCapability } = require('~/server/middleware/roles/capabilities');
 const { requireJwtAuth } = require('~/server/middleware');
 const { recordAudit } = require('~/server/services/Audit');
-const { runClusteringNow } = require('~/server/services/AnalyticsTopics');
 const db = require('~/models');
 
 const router = express.Router();
@@ -39,29 +34,10 @@ const handlers = createAdminAnalyticsHandlers({
   recordAudit,
 });
 
-// P2 — topic clustering read API + on-demand recompute. The recompute trigger is
-// only wired when a topics service is configured (else POST /topics/run → 503).
-const topicsHandlers = createAdminTopicsHandlers({
-  getLatestAnalyticsRun: db.getLatestAnalyticsRun,
-  getRunTopics: db.getRunTopics,
-  getTopicAssignments: db.getTopicAssignments,
-  getConversationSummaries: db.getConversationSummaries,
-  runTopicClustering: process.env.TOPICS_SERVICE_URL ? runClusteringNow : undefined,
-  recordAudit,
-});
-
 router.use(requireJwtAuth, requireAdminAccess);
 
 router.get('/interactions', requireReadConversations, handlers.listInteractions);
 router.get('/export', requireReadConversations, handlers.export);
 router.get('/conversations/:conversationId', requireReadConversations, handlers.getConversation);
-
-router.get('/topics', requireReadConversations, topicsHandlers.getTopics);
-router.get(
-  '/topics/:topicKey/conversations',
-  requireReadConversations,
-  topicsHandlers.getTopicConversations,
-);
-router.post('/topics/run', requireReadConversations, topicsHandlers.runTopics);
 
 module.exports = router;

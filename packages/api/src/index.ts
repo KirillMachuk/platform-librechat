@@ -3,8 +3,6 @@ export * from './app';
 export * from './admin';
 /* Audit */
 export * from './audit';
-/* Analytics — topic clustering (P2) */
-export * from './analytics';
 export * from './cdn';
 /* Auth */
 export * from './auth';
