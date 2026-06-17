@@ -51,6 +51,13 @@ const DEFAULT_MAX_WHOLE_BYTES = 10 * 1024 * 1024;
 export const isImageMimetype = (mimetype: string): boolean => mimetype.startsWith('image/');
 
 /**
+ * Whether a MIME type denotes a PDF. PDFs defer to server-side content routing
+ * (text size for digital, page count for scans) instead of the byte heuristic,
+ * because a scanned PDF is heavy in bytes but light in text.
+ */
+export const isPdfMimetype = (mimetype: string): boolean => mimetype === 'application/pdf';
+
+/**
  * Largest document size (bytes) we'll send "whole" before preferring RAG.
  * Pure math from the model's context window; no LLM involved.
  */
@@ -65,9 +72,11 @@ const wholeDocumentByteLimit = (modelMaxTokens?: number): number => {
  * Deterministically choose how an attached file should be handled — no LLM
  * call, just file type + size vs the model's context window.
  *
- * - image            → `undefined` (sent natively to the provider for vision)
- * - document, fits   → `EToolResources.context` (extract text / OCR)
- * - document, large  → `EToolResources.file_search` (RAG)
+ * - image             → `undefined` (sent natively to the provider for vision)
+ * - pdf               → `EToolResources.context`; the server then routes by
+ *                       content (text size for digital, page count for scans)
+ * - other doc, fits   → `EToolResources.context` (extract text / OCR)
+ * - other doc, large  → `EToolResources.file_search` (RAG)
  *
  * The return value is the `tool_resource` the upload should use, or `undefined`
  * to send the file natively to the provider.
@@ -79,6 +88,10 @@ export const resolveAutoFileMode = ({
 }: FileModeInput): EToolResources | undefined => {
   if (isImageMimetype(mimetype)) {
     return undefined;
+  }
+
+  if (isPdfMimetype(mimetype)) {
+    return EToolResources.context;
   }
 
   if (sizeBytes <= wholeDocumentByteLimit(modelMaxTokens)) {

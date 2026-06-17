@@ -1,5 +1,6 @@
 import { EToolResources } from 'librechat-data-provider';
 import {
+  isPdfMimetype,
   isImageMimetype,
   resolveAutoFileMode,
   resolveFileToolResource,
@@ -19,43 +20,52 @@ describe('isImageMimetype', () => {
   });
 });
 
+describe('isPdfMimetype', () => {
+  it('detects PDFs and rejects other types', () => {
+    expect(isPdfMimetype('application/pdf')).toBe(true);
+    expect(isPdfMimetype('text/plain')).toBe(false);
+    expect(isPdfMimetype('image/png')).toBe(false);
+  });
+});
+
 describe('resolveAutoFileMode', () => {
   it('sends images natively (undefined tool_resource)', () => {
     expect(resolveAutoFileMode({ mimetype: 'image/png', sizeBytes: 5_000_000 })).toBeUndefined();
   });
 
-  it('uses whole-document text (context) for documents that fit the context window', () => {
+  it('defaults PDFs to context at any size (server routes by content, not bytes)', () => {
+    // A scanned PDF is heavy in bytes but light in text; the byte heuristic would
+    // wrongly send it to RAG, so PDFs defer to server-side content routing.
+    expect(resolveAutoFileMode({ mimetype: 'application/pdf', sizeBytes: 100_000 })).toBe(
+      EToolResources.context,
+    );
+    expect(resolveAutoFileMode({ mimetype: 'application/pdf', sizeBytes: 40 * 1024 * 1024 })).toBe(
+      EToolResources.context,
+    );
+  });
+
+  it('uses whole-document text (context) for non-PDF documents that fit the context window', () => {
     expect(
-      resolveAutoFileMode({
-        mimetype: 'application/pdf',
-        sizeBytes: 100_000,
-        modelMaxTokens: 200_000,
-      }),
+      resolveAutoFileMode({ mimetype: 'text/plain', sizeBytes: 100_000, modelMaxTokens: 200_000 }),
     ).toBe(EToolResources.context);
   });
 
-  it('falls back to RAG (file_search) for documents too large for the context window', () => {
+  it('falls back to RAG (file_search) for non-PDF documents too large for the context window', () => {
     expect(
-      resolveAutoFileMode({
-        mimetype: 'application/pdf',
-        sizeBytes: 600_000,
-        modelMaxTokens: 200_000,
-      }),
+      resolveAutoFileMode({ mimetype: 'text/plain', sizeBytes: 600_000, modelMaxTokens: 200_000 }),
     ).toBe(EToolResources.file_search);
   });
 
-  it('uses a generous default threshold (~10MB) when the model context window is unknown', () => {
-    // A typical contract-sized document stays in whole-document mode.
-    expect(resolveAutoFileMode({ mimetype: 'application/pdf', sizeBytes: 2 * 1024 * 1024 })).toBe(
+  it('uses a generous default threshold (~10MB) for non-PDF when the context window is unknown', () => {
+    expect(resolveAutoFileMode({ mimetype: 'text/plain', sizeBytes: 2 * 1024 * 1024 })).toBe(
       EToolResources.context,
     );
-    // Only genuinely large files fall back to RAG.
-    expect(resolveAutoFileMode({ mimetype: 'application/pdf', sizeBytes: 11 * 1024 * 1024 })).toBe(
+    expect(resolveAutoFileMode({ mimetype: 'text/plain', sizeBytes: 11 * 1024 * 1024 })).toBe(
       EToolResources.file_search,
     );
   });
 
-  it('scales the whole-document limit with the model context window', () => {
+  it('scales the whole-document limit with the model context window (non-PDF)', () => {
     const sizeBytes = 480_000;
     // Small context model -> too large -> RAG
     expect(resolveAutoFileMode({ mimetype: 'text/plain', sizeBytes, modelMaxTokens: 32_000 })).toBe(
