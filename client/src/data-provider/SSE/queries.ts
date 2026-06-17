@@ -101,17 +101,24 @@ export function useTitleGeneration(enabled = true) {
    */
   const applyTitleToActiveConvo = useRecoilCallback(
     ({ snapshot, set }) =>
-      async (conversationId: string, title: string) => {
+      (conversationId: string, title: string) => {
         if (!title) {
           return;
         }
-        const keys = await snapshot.getPromise(store.conversationKeysAtom);
+        const keys = snapshot.getLoadable(store.conversationKeysAtom).getValue();
         for (const key of keys) {
-          const convo = await snapshot.getPromise(store.conversationByIndex(key));
-          if (!convo || convo.conversationId !== conversationId || convo.title === title) {
+          const convo = snapshot.getLoadable(store.conversationByIndex(key)).getValue();
+          if (convo?.conversationId !== conversationId) {
             continue;
           }
-          set(store.conversationByIndex(key), { ...convo, title });
+          // Updater form reads the *live* atom, so a title arriving late can't clobber
+          // newer conversation state (model/agent/message changes) with a stale snapshot.
+          // Returning `cur` unchanged when the title already matches lets Recoil bail.
+          set(store.conversationByIndex(key), (cur) =>
+            cur && cur.conversationId === conversationId && cur.title !== title
+              ? { ...cur, title }
+              : cur,
+          );
         }
       },
     [],
