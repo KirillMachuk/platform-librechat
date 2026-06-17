@@ -698,8 +698,9 @@ const resolveLargeDocRouting = async ({ req, file, toolResource, isImage }) => {
  * (image resolution) but light in text, so byte routing wrongly pushed small
  * scanned contracts to RAG. Probes the PDF without OCR (so a scan headed for RAG
  * is never OCR'd twice). Thresholds via `AUTO_CONTEXT_MAX_CHARS` /
- * `AUTO_CONTEXT_MAX_SCAN_PAGES`. Only PDFs in `context` mode are reconsidered;
- * other types/modes are returned unchanged.
+ * `AUTO_CONTEXT_MAX_SCAN_PAGES`. Only PDFs are sized by content; non-PDF
+ * documents fall back to the byte-size reroute so large office docs still go to
+ * RAG as before. Non-`context` modes and images are returned unchanged.
  * @param {{ req: ServerRequest, file: Express.Multer.File, toolResource: string, isImage: boolean }} params
  * @returns {Promise<string>} the tool resource to actually use for this upload
  */
@@ -708,7 +709,7 @@ const resolveContentRouting = async ({ req, file, toolResource, isImage }) => {
     return toolResource;
   }
   if (file?.mimetype !== 'application/pdf' || !file?.path) {
-    return toolResource;
+    return resolveLargeDocRouting({ req, file, toolResource, isImage });
   }
   const isFileSearchEnabled = await checkCapability(req, AgentCapabilities.file_search);
   if (!isFileSearchEnabled) {
