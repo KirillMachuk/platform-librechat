@@ -11,6 +11,7 @@ export * from './ocr';
 export * from './parse';
 export * from './rag';
 export * from './retention';
+export * from './routing';
 export * from './sweep';
 export * from './validation';
 export * from './text';
