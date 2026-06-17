@@ -103,3 +103,45 @@ export const routePdfBySize = (
     { textChars, pageCount, isScanned: isScannedPdf(pageCount, textChars) },
     thresholds,
   );
+
+/** Default minimum OCR'd characters for an image to count as a document. */
+export const DEFAULT_IMAGE_OCR_MIN_CHARS = 150;
+
+/**
+ * Whether Auto image-OCR is enabled. Off by default: images keep going natively
+ * (vision) until a deployment opts in. When on, an uploaded image is OCR'd
+ * locally and, if it yields enough real text, treated as a full-text document.
+ */
+export const isImageOcrEnabled = (env: NodeJS.ProcessEnv = process.env): boolean =>
+  env.AUTO_IMAGE_OCR === 'true';
+
+/** Minimum OCR'd characters for an image to count as a document (env-tunable). */
+export const imageOcrMinChars = (env: NodeJS.ProcessEnv = process.env): number =>
+  positiveInt(env.AUTO_IMAGE_OCR_MIN_CHARS, DEFAULT_IMAGE_OCR_MIN_CHARS);
+
+const MIN_TEXT_RATIO = 0.7;
+const TEXTY_CHARS = /[\p{L}\p{N}\s.,;:!?'"()[\]{}\-–—«»…/№%@#&*+=]/gu;
+
+/**
+ * Heuristic: does this string look like real extracted text rather than binary
+ * garbage? Guards the OCR path against a native fallback that read raw image
+ * bytes as a string, or near-unreadable OCR — in those cases the caller prefers
+ * the vision path.
+ */
+export const looksLikeText = (text: string): boolean => {
+  const sample = text.slice(0, 4000);
+  if (sample.length === 0) {
+    return false;
+  }
+  const texty = (sample.match(TEXTY_CHARS) ?? []).length;
+  return texty / sample.length >= MIN_TEXT_RATIO;
+};
+
+/**
+ * Whether OCR output should be accepted as a document: enough characters AND it
+ * actually looks like text. Otherwise the caller falls back to the vision path.
+ */
+export const acceptOcrText = (text: string, minChars: number): boolean => {
+  const trimmed = text.trim();
+  return trimmed.length >= minChars && looksLikeText(trimmed);
+};
