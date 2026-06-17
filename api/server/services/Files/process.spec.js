@@ -57,6 +57,10 @@ jest.mock('@librechat/api', () => {
     }),
     sweepExpiredFiles: jest.fn().mockResolvedValue({ scanned: 0, deleted: 0, failed: 0 }),
     startExpiredFileSweep: jest.fn().mockReturnValue('sweep-interval'),
+    probePdf: jest.fn().mockResolvedValue({ pageCount: 0, textChars: 0 }),
+    routePdfBySize: jest.fn(),
+    isContentRoutingEnabled: jest.fn(() => false),
+    readDocRoutingThresholds: jest.fn(() => ({ maxContextChars: 40000, maxContextScanPages: 12 })),
   };
 });
 
@@ -128,6 +132,8 @@ jest.mock('~/server/services/Files/Audio/STTService', () => ({
 const {
   getRetentionExpiry,
   getAgentFileRetentionExpiry,
+  probePdf,
+  routePdfBySize,
   sweepExpiredFiles: sweepExpiredFilesWithDeps,
   startExpiredFileSweep: startExpiredFileSweepWithDeps,
 } = require('@librechat/api');
@@ -150,6 +156,7 @@ const {
   sweepExpiredFiles,
   startExpiredFileSweep,
   resolveLargeDocRouting,
+  resolveContentRouting,
 } = require('./process');
 
 const PDF_MIME = 'application/pdf';
@@ -293,6 +300,90 @@ const setupStoredFileUpload = (result = {}) => {
   getStrategyFunctions.mockReturnValue({ handleFileUpload });
   return handleFileUpload;
 };
+
+describe('resolveContentRouting (content-size Auto routing, behind AUTO_ROUTE_BY_TEXT)', () => {
+  const baseReq = { user: { id: 'u1' }, config: {} };
+  const pdf = { mimetype: 'application/pdf', path: '/tmp/x.pdf', originalname: 'x.pdf' };
+
+  beforeEach(() => {
+    checkCapability.mockClear();
+    checkCapability.mockResolvedValue(true);
+    probePdf.mockClear();
+    probePdf.mockResolvedValue({ pageCount: 8, textChars: 300 });
+    routePdfBySize.mockClear();
+    routePdfBySize.mockReturnValue(EToolResources.context);
+  });
+
+  it('leaves a non-context resource unchanged and does not probe', async () => {
+    const out = await resolveContentRouting({
+      req: baseReq,
+      file: pdf,
+      toolResource: EToolResources.file_search,
+      isImage: false,
+    });
+    expect(out).toBe(EToolResources.file_search);
+    expect(probePdf).not.toHaveBeenCalled();
+  });
+
+  it('leaves images unchanged', async () => {
+    const out = await resolveContentRouting({
+      req: baseReq,
+      file: { mimetype: 'image/png', path: '/tmp/x.png' },
+      toolResource: EToolResources.context,
+      isImage: true,
+    });
+    expect(out).toBe(EToolResources.context);
+    expect(probePdf).not.toHaveBeenCalled();
+  });
+
+  it('leaves non-PDF documents on the existing path (no content probe)', async () => {
+    const out = await resolveContentRouting({
+      req: baseReq,
+      file: { mimetype: 'text/plain', path: '/tmp/x.txt' },
+      toolResource: EToolResources.context,
+      isImage: false,
+    });
+    expect(out).toBe(EToolResources.context);
+    expect(probePdf).not.toHaveBeenCalled();
+  });
+
+  it('does not reroute when file_search capability is disabled', async () => {
+    checkCapability.mockResolvedValue(false);
+    const out = await resolveContentRouting({
+      req: baseReq,
+      file: pdf,
+      toolResource: EToolResources.context,
+      isImage: false,
+    });
+    expect(out).toBe(EToolResources.context);
+    expect(probePdf).not.toHaveBeenCalled();
+  });
+
+  it('probes the PDF and returns the content-based decision (context)', async () => {
+    routePdfBySize.mockReturnValue(EToolResources.context);
+    const out = await resolveContentRouting({
+      req: baseReq,
+      file: pdf,
+      toolResource: EToolResources.context,
+      isImage: false,
+    });
+    expect(probePdf).toHaveBeenCalledWith('/tmp/x.pdf');
+    expect(routePdfBySize).toHaveBeenCalledWith(8, 300, expect.any(Object));
+    expect(out).toBe(EToolResources.context);
+  });
+
+  it('reroutes a large PDF to file_search per the decision', async () => {
+    probePdf.mockResolvedValue({ pageCount: 80, textChars: 250000 });
+    routePdfBySize.mockReturnValue(EToolResources.file_search);
+    const out = await resolveContentRouting({
+      req: baseReq,
+      file: pdf,
+      toolResource: EToolResources.context,
+      isImage: false,
+    });
+    expect(out).toBe(EToolResources.file_search);
+  });
+});
 
 describe('processAgentFileUpload', () => {
   beforeEach(() => {
