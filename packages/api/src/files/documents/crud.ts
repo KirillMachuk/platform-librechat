@@ -144,10 +144,11 @@ export function capSpreadsheetText(
   text: string,
   maxBytes: number = SPREADSHEET_MAX_TEXT_BYTES,
 ): string {
-  const buf = Buffer.from(text, 'utf8');
-  if (buf.length <= maxBytes) {
+  // Measure without allocating; only the rare oversized case needs the Buffer copy.
+  if (Buffer.byteLength(text, 'utf8') <= maxBytes) {
     return text;
   }
+  const buf = Buffer.from(text, 'utf8');
   let end = maxBytes;
   while (end > 0 && buf[end] !== 0x0a) {
     end--;
