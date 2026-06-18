@@ -103,20 +103,22 @@ async function pdfToText(file: Express.Multer.File): Promise<string> {
 }
 
 /**
- * Cheaply probe a PDF for content-based Auto routing: page count plus the length
- * of its text layer, WITHOUT running OCR. A scanned (image) PDF has pages but a
- * near-empty text layer (see `isScannedPdf` in `../routing`). Returns
- * `pageCount: 0` when the file cannot be read as a PDF, so routing falls back
- * safely rather than throwing on the upload path.
+ * Probe a PDF for content-based Auto routing: page count, the length of its text
+ * layer, and the extracted `text` itself — WITHOUT running OCR. A scanned (image)
+ * PDF has pages but a near-empty text layer (see `isScannedPdf` in `../routing`).
+ * The `text` is returned so a digital PDF kept in `context` can reuse it instead
+ * of being parsed a second time by the document_parser strategy. Returns
+ * `pageCount: 0` and empty `text` when the file cannot be read as a PDF, so
+ * routing falls back safely rather than throwing on the upload path.
  */
 export async function probePdf(
   filePath: string,
-): Promise<{ pageCount: number; textChars: number }> {
+): Promise<{ pageCount: number; textChars: number; text: string }> {
   try {
     const { pageCount, text } = await readPdf(filePath);
-    return { pageCount, textChars: text.trim().length };
+    return { pageCount, textChars: text.trim().length, text };
   } catch {
-    return { pageCount: 0, textChars: 0 };
+    return { pageCount: 0, textChars: 0, text: '' };
   }
 }
 

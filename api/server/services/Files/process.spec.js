@@ -309,7 +309,7 @@ describe('resolveContentRouting (content-size Auto routing, behind AUTO_ROUTE_BY
     checkCapability.mockClear();
     checkCapability.mockResolvedValue(true);
     probePdf.mockClear();
-    probePdf.mockResolvedValue({ pageCount: 8, textChars: 300 });
+    probePdf.mockResolvedValue({ pageCount: 8, textChars: 300, text: 'probe extracted text' });
     routePdfBySize.mockClear();
     routePdfBySize.mockReturnValue(EToolResources.context);
   });
@@ -321,7 +321,7 @@ describe('resolveContentRouting (content-size Auto routing, behind AUTO_ROUTE_BY
       toolResource: EToolResources.file_search,
       isImage: false,
     });
-    expect(out).toBe(EToolResources.file_search);
+    expect(out.toolResource).toBe(EToolResources.file_search);
     expect(probePdf).not.toHaveBeenCalled();
   });
 
@@ -332,7 +332,7 @@ describe('resolveContentRouting (content-size Auto routing, behind AUTO_ROUTE_BY
       toolResource: EToolResources.context,
       isImage: true,
     });
-    expect(out).toBe(EToolResources.context);
+    expect(out.toolResource).toBe(EToolResources.context);
     expect(probePdf).not.toHaveBeenCalled();
   });
 
@@ -343,7 +343,7 @@ describe('resolveContentRouting (content-size Auto routing, behind AUTO_ROUTE_BY
       toolResource: EToolResources.context,
       isImage: false,
     });
-    expect(out).toBe(EToolResources.context);
+    expect(out.toolResource).toBe(EToolResources.context);
     expect(probePdf).not.toHaveBeenCalled();
   });
 
@@ -355,7 +355,7 @@ describe('resolveContentRouting (content-size Auto routing, behind AUTO_ROUTE_BY
       toolResource: EToolResources.context,
       isImage: false,
     });
-    expect(out).toBe(EToolResources.context);
+    expect(out.toolResource).toBe(EToolResources.context);
     expect(probePdf).not.toHaveBeenCalled();
   });
 
@@ -369,11 +369,13 @@ describe('resolveContentRouting (content-size Auto routing, behind AUTO_ROUTE_BY
     });
     expect(probePdf).toHaveBeenCalledWith('/tmp/x.pdf');
     expect(routePdfBySize).toHaveBeenCalledWith(8, 300, expect.any(Object));
-    expect(out).toBe(EToolResources.context);
+    expect(out.toolResource).toBe(EToolResources.context);
+    // a digital PDF kept in context forwards the probe's text so it isn't parsed twice
+    expect(out.pdfText).toBe('probe extracted text');
   });
 
   it('reroutes a large PDF to file_search per the decision', async () => {
-    probePdf.mockResolvedValue({ pageCount: 80, textChars: 250000 });
+    probePdf.mockResolvedValue({ pageCount: 80, textChars: 250000, text: 'big pdf text' });
     routePdfBySize.mockReturnValue(EToolResources.file_search);
     const out = await resolveContentRouting({
       req: baseReq,
@@ -381,7 +383,9 @@ describe('resolveContentRouting (content-size Auto routing, behind AUTO_ROUTE_BY
       toolResource: EToolResources.context,
       isImage: false,
     });
-    expect(out).toBe(EToolResources.file_search);
+    expect(out.toolResource).toBe(EToolResources.file_search);
+    // headed to RAG: the probe text is not forwarded (RAG embeds its own chunks)
+    expect(out.pdfText).toBeUndefined();
   });
 });
 
