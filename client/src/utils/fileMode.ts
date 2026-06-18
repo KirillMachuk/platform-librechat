@@ -51,9 +51,12 @@ const DEFAULT_MAX_WHOLE_BYTES = 10 * 1024 * 1024;
 export const isImageMimetype = (mimetype: string): boolean => mimetype.startsWith('image/');
 
 /**
- * Whether a MIME type denotes a PDF. PDFs defer to server-side content routing
- * (text size for digital, page count for scans) instead of the byte heuristic,
- * because a scanned PDF is heavy in bytes but light in text.
+ * Whether a MIME type denotes a PDF. Under the byte ceiling, PDFs go to
+ * `context` so the server can refine by content (text size for digital, page
+ * count for scans); a clearly-oversized PDF still falls back to RAG here,
+ * because the client can't read the server's content-routing flag — without
+ * this ceiling a huge PDF would sit in `context` on a deployment where
+ * server-side content routing is off.
  */
 export const isPdfMimetype = (mimetype: string): boolean => mimetype === 'application/pdf';
 
@@ -73,8 +76,11 @@ const wholeDocumentByteLimit = (modelMaxTokens?: number): number => {
  * call, just file type + size vs the model's context window.
  *
  * - image             → `undefined` (sent natively to the provider for vision)
- * - pdf               → `EToolResources.context`; the server then routes by
+ * - pdf, fits         → `EToolResources.context`; the server then refines by
  *                       content (text size for digital, page count for scans)
+ * - pdf, oversized    → `EToolResources.file_search` (RAG) — a clearly huge PDF
+ *                       must not sit in `context` where server content routing
+ *                       may be off
  * - other doc, fits   → `EToolResources.context` (extract text / OCR)
  * - other doc, large  → `EToolResources.file_search` (RAG)
  *
@@ -91,7 +97,9 @@ export const resolveAutoFileMode = ({
   }
 
   if (isPdfMimetype(mimetype)) {
-    return EToolResources.context;
+    return sizeBytes <= wholeDocumentByteLimit(modelMaxTokens)
+      ? EToolResources.context
+      : EToolResources.file_search;
   }
 
   if (sizeBytes <= wholeDocumentByteLimit(modelMaxTokens)) {

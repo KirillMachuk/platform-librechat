@@ -33,14 +33,19 @@ describe('resolveAutoFileMode', () => {
     expect(resolveAutoFileMode({ mimetype: 'image/png', sizeBytes: 5_000_000 })).toBeUndefined();
   });
 
-  it('defaults PDFs to context at any size (server routes by content, not bytes)', () => {
-    // A scanned PDF is heavy in bytes but light in text; the byte heuristic would
-    // wrongly send it to RAG, so PDFs defer to server-side content routing.
+  it('routes in-budget PDFs to context (server refines by content), oversized PDFs to RAG', () => {
+    // A scanned PDF is heavy in bytes but light in text, so an in-budget PDF goes to
+    // context for the server to refine by content. But the client can't read the
+    // server's content-routing flag, so a clearly-oversized PDF must still fall back
+    // to RAG here rather than risk sitting whole in context.
     expect(resolveAutoFileMode({ mimetype: 'application/pdf', sizeBytes: 100_000 })).toBe(
       EToolResources.context,
     );
-    expect(resolveAutoFileMode({ mimetype: 'application/pdf', sizeBytes: 40 * 1024 * 1024 })).toBe(
+    expect(resolveAutoFileMode({ mimetype: 'application/pdf', sizeBytes: 9 * 1024 * 1024 })).toBe(
       EToolResources.context,
+    );
+    expect(resolveAutoFileMode({ mimetype: 'application/pdf', sizeBytes: 40 * 1024 * 1024 })).toBe(
+      EToolResources.file_search,
     );
   });
 
