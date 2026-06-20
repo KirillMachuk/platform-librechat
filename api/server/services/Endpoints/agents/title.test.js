@@ -310,4 +310,65 @@ describe('agents addTitle', () => {
     );
     expect(mockCache.delete).not.toHaveBeenCalled();
   });
+
+  it('returns the persisted title so the controller can detect success', async () => {
+    const client = makeClient('Returned Title');
+
+    const result = await addTitle(makeReq(), {
+      text: 'hello',
+      client,
+      conversationId: 'cid-return',
+      immediate: true,
+      convoReady: Promise.resolve(),
+    });
+
+    expect(result).toBe('Returned Title');
+  });
+
+  it('returns the title in legacy (final) mode', async () => {
+    const client = makeClient('Final Title');
+
+    const result = await addTitle(makeReq(), {
+      text: 'hi',
+      client,
+      response: { conversationId: 'resp-return' },
+    });
+
+    expect(result).toBe('Final Title');
+  });
+
+  it('returns undefined when no title is produced (e.g. model timed out)', async () => {
+    // A timed-out / empty title generation resolves to a falsy title; the
+    // controller relies on this to trigger its fallback regeneration.
+    const client = makeClient(undefined);
+
+    const result = await addTitle(makeReq(), {
+      text: 'hi',
+      client,
+      conversationId: 'cid-empty',
+      immediate: true,
+      convoReady: Promise.resolve(),
+    });
+
+    expect(result).toBeUndefined();
+    expect(mockSaveConvo).not.toHaveBeenCalled();
+  });
+
+  it('returns undefined when the title is discarded (stream superseded)', async () => {
+    const client = makeClient('Discarded Title');
+    const ac = new AbortController();
+    ac.abort();
+
+    const result = await addTitle(makeReq(), {
+      text: 'hi',
+      client,
+      conversationId: 'cid-discard',
+      immediate: true,
+      convoReady: Promise.resolve(),
+      signal: ac.signal,
+      discardSignal: ac.signal,
+    });
+
+    expect(result).toBeUndefined();
+  });
 });
