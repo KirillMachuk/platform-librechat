@@ -72,6 +72,14 @@ export function markTitleGenerationProcessed(conversationId: string) {
   queueListeners.forEach((listener) => listener());
 }
 
+/** Clears the module-level title-generation queues. Exported for test isolation
+ *  (these Sets persist across renders by design, so jest cases must reset them). */
+export function resetTitleGenerationState() {
+  titleQueue.clear();
+  processedTitles.clear();
+  deferredTitles.clear();
+}
+
 /**
  * Hook to process the title generation queue.
  *

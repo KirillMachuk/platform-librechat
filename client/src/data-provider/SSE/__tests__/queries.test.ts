@@ -15,12 +15,19 @@ jest.mock('~/utils', () => {
   return { isNotFoundError, updateConvoInAllQueries: jest.fn() };
 });
 
-jest.mock('librechat-data-provider', () => ({
-  apiBaseUrl: () => '',
-  QueryKeys: { conversation: 'conversation', activeJobs: 'activeJobs' },
-  request: { get: jest.fn() },
-  dataService: { genTitle: jest.fn(), getActiveJobs: jest.fn() },
-}));
+jest.mock('librechat-data-provider', () => {
+  // `queries.ts` transitively imports `~/store`, whose `endpoints.ts` reads
+  // `EModelEndpoint.azureOpenAI` at module load. Spread the real module so those
+  // enums exist, and override only the network/query surface the test controls.
+  const actual = jest.requireActual('librechat-data-provider');
+  return {
+    ...actual,
+    apiBaseUrl: () => '',
+    QueryKeys: { conversation: 'conversation', activeJobs: 'activeJobs' },
+    request: { get: jest.fn() },
+    dataService: { genTitle: jest.fn(), getActiveJobs: jest.fn() },
+  };
+});
 
 jest.mock('@tanstack/react-query', () => ({
   useQuery: jest.fn(() => ({ data: undefined })),
