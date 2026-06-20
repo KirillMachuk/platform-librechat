@@ -31,6 +31,9 @@ const { saveConvo } = require('~/models');
  * @param {(params: { conversationId: string, title: string }) => Promise<void>|void} [params.onTitleGenerated]
  *   Called after the title is cached and before persistence waits for the
  *   conversation row. Used by live streams to push the title immediately.
+ * @returns {Promise<string|undefined>} The generated title once persisted, or
+ *   `undefined` when no title was produced (disabled, timed out, discarded, or
+ *   empty). Lets the caller detect a lost title and fall back to regenerating it.
  */
 const addTitle = async (
   req,
@@ -164,6 +167,8 @@ const addTitle = async (
       },
       { context: 'api/server/services/Endpoints/agents/title.js', noUpsert: true },
     );
+
+    return title;
   } catch (error) {
     logger.error('Error generating title:', error);
   }

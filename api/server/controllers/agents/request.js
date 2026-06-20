@@ -590,6 +590,36 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         // The conversation row now exists and this stream is authoritative; allow
         // any in-flight immediate title generation to persist (saveConvo uses noUpsert).
         resolveConvoReady();
+
+        // Recover a lost title before the stream closes. In immediate mode a slow
+        // document turn can blow the title's 45s timeout (the agent run is not ready
+        // in time), leaving the conversation as "New Chat"; the frontend's genTitle
+        // poll has already given up, so a title saved later would not surface without
+        // a reload. Only when this turn COMPLETED successfully — a stopped or
+        // superseded turn intentionally discards its title via `titleDiscardController`
+        // — and the immediate attempt produced nothing, regenerate from the finished
+        // response and push it through the title event while the client is still
+        // subscribed (before `acceptsTitleEvents` is cleared below).
+        if (titleEligible && !wasAbortedBeforeComplete && immediateTitlePromise) {
+          const immediateTitle = await immediateTitlePromise;
+          if (!immediateTitle) {
+            try {
+              const fallbackTitle = await addTitle(req, {
+                text,
+                response: { ...response },
+                client,
+                conversationId: conversation.conversationId,
+                onTitleGenerated: emitTitleEvent,
+              });
+              if (fallbackTitle) {
+                conversation.title = fallbackTitle;
+              }
+            } catch (err) {
+              logger.error('[ResumableAgentController] Fallback title generation failed', err);
+            }
+          }
+        }
+
         acceptsTitleEvents = false;
 
         if (titleEventPromise) {
