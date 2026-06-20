@@ -26,6 +26,9 @@ const {
   routePdfBySize,
   isContentRoutingEnabled,
   readDocRoutingThresholds,
+  isImageOcrEnabled,
+  imageOcrMinChars,
+  acceptOcrText,
   processAudioFile,
   getStorageMetadata,
   sweepExpiredFiles: sweepExpiredFilesWithDeps,
@@ -779,6 +782,33 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
       isImage,
     });
   }
+
+  // Auto image-OCR (behind AUTO_IMAGE_OCR): OCR an uploaded image locally; if it yields enough
+  // real text, treat it as a full-text `context` document (masked by the anonymizer — more
+  // sovereign than vision). Too little / non-text -> fall through to the native vision path.
+  let imageOcrText = null;
+  if (isImageOcrEnabled() && isImage && tool_resource == null) {
+    try {
+      const parsed = await parseText({ req, file, file_id });
+      if (parsed?.text && acceptOcrText(parsed.text, imageOcrMinChars())) {
+        imageOcrText = parsed;
+        tool_resource = EToolResources.context;
+        logger.info(
+          `[processAgentFileUpload] image OCR'd "${file.originalname}" (${parsed.text.length} chars) -> full-text context`,
+        );
+      } else {
+        logger.info(
+          `[processAgentFileUpload] image OCR for "${file.originalname}" yielded too little/non-text -> native vision`,
+        );
+      }
+    } catch (err) {
+      logger.error(
+        `[processAgentFileUpload] image OCR failed for "${file.originalname}", using native vision:`,
+        err,
+      );
+    }
+  }
+
   if (tool_resource === EToolResources.execute_code) {
     const isCodeEnabled = await checkCapability(req, AgentCapabilities.execute_code);
     if (!isCodeEnabled) {
@@ -884,6 +914,16 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         .status(200)
         .json({ message: 'Agent file uploaded and processed successfully', ...result });
     };
+
+    // Auto image-OCR result: text was already extracted above — persist it as a full-text
+    // document and skip the document-parser path (which doesn't handle image MIME types).
+    if (imageOcrText) {
+      return createTextFile({
+        text: imageOcrText.text,
+        bytes: imageOcrText.bytes,
+        filepath: file.path,
+      });
+    }
 
     const fileConfig = mergeFileConfig(appConfig.fileConfig);
 

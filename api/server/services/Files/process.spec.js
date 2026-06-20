@@ -61,6 +61,9 @@ jest.mock('@librechat/api', () => {
     routePdfBySize: jest.fn(),
     isContentRoutingEnabled: jest.fn(() => false),
     readDocRoutingThresholds: jest.fn(() => ({ maxContextChars: 40000, maxContextScanPages: 12 })),
+    isImageOcrEnabled: jest.fn(() => false),
+    imageOcrMinChars: jest.fn(() => 150),
+    acceptOcrText: jest.fn(() => false),
   };
 });
 
