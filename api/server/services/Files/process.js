@@ -22,6 +22,10 @@ const { logger, runAsSystem } = require('@librechat/data-schemas');
 const {
   sanitizeFilename,
   parseText,
+  probePdf,
+  routePdfBySize,
+  isContentRoutingEnabled,
+  readDocRoutingThresholds,
   processAudioFile,
   getStorageMetadata,
   sweepExpiredFiles: sweepExpiredFilesWithDeps,
@@ -688,6 +692,44 @@ const resolveLargeDocRouting = async ({ req, file, toolResource, isImage }) => {
 };
 
 /**
+ * Content-based variant of {@link resolveLargeDocRouting}: routes a PDF to
+ * full-text `context` vs `file_search` by its extracted-text size (digital) or
+ * page count (scanned) rather than its byte size — a scan is heavy in bytes
+ * (image resolution) but light in text, so byte routing wrongly pushed small
+ * scanned contracts to RAG. Probes the PDF without OCR (so a scan headed for RAG
+ * is never OCR'd twice). Thresholds via `AUTO_CONTEXT_MAX_CHARS` /
+ * `AUTO_CONTEXT_MAX_SCAN_PAGES`. Only PDFs are sized by content; non-PDF
+ * documents fall back to the byte-size reroute so large office docs still go to
+ * RAG as before. Non-`context` modes and images are returned unchanged.
+ * @param {{ req: ServerRequest, file: Express.Multer.File, toolResource: string, isImage: boolean }} params
+ * @returns {Promise<{ toolResource: string, pdfText?: string }>} the tool resource to use, plus the
+ *   probe's already-extracted text when a digital PDF stays in `context` (so it isn't parsed twice)
+ */
+const resolveContentRouting = async ({ req, file, toolResource, isImage }) => {
+  if (toolResource !== EToolResources.context || isImage) {
+    return { toolResource };
+  }
+  if (file?.mimetype !== 'application/pdf' || !file?.path) {
+    return { toolResource: await resolveLargeDocRouting({ req, file, toolResource, isImage }) };
+  }
+  const isFileSearchEnabled = await checkCapability(req, AgentCapabilities.file_search);
+  if (!isFileSearchEnabled) {
+    return { toolResource };
+  }
+  const { pageCount, textChars, text } = await probePdf(file.path);
+  const routed = routePdfBySize(pageCount, textChars, readDocRoutingThresholds());
+  if (routed === EToolResources.file_search) {
+    logger.info(
+      `[processAgentFileUpload] content-routed "${file.originalname}" (${pageCount} pages, ${textChars} text chars) from full-text to file_search (RAG)`,
+    );
+    return { toolResource: routed };
+  }
+  // Stays in context: hand the already-extracted text to the document branch so a
+  // digital PDF's text layer is parsed once here, not again by document_parser.
+  return { toolResource: routed, pdfText: text };
+};
+
+/**
  * Applies the current strategy for file uploads.
  * Saves file metadata to the database with an expiry TTL.
  * Files must be deleted from the server filesystem manually.
@@ -722,7 +764,21 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
   let fileInfoMetadata;
   const entity_id = messageAttachment === true ? undefined : agent_id;
   const basePath = mime.getType(file.originalname)?.startsWith('image') ? 'images' : 'uploads';
-  tool_resource = await resolveLargeDocRouting({ req, file, toolResource: tool_resource, isImage });
+  // Text the content-routing probe already extracted from a digital PDF kept in
+  // `context`; reused by resolveDocumentText below to avoid a second pdfjs pass.
+  let probedPdfText = null;
+  if (isContentRoutingEnabled()) {
+    const routed = await resolveContentRouting({ req, file, toolResource: tool_resource, isImage });
+    tool_resource = routed.toolResource;
+    probedPdfText = routed.pdfText ?? null;
+  } else {
+    tool_resource = await resolveLargeDocRouting({
+      req,
+      file,
+      toolResource: tool_resource,
+      isImage,
+    });
+  }
   if (tool_resource === EToolResources.execute_code) {
     const isCodeEnabled = await checkCapability(req, AgentCapabilities.execute_code);
     if (!isCodeEnabled) {
@@ -852,6 +908,19 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
             err,
           );
         }
+      }
+      // Reuse text the content-routing probe already extracted (a digital PDF kept
+      // in `context`) so pdfjs parses the file once, not twice. Placed after
+      // configured OCR so a tenant's OCR strategy still wins; the probe text is the
+      // same pdfToText output document_parser would produce, so the stored record
+      // (text, bytes, filepath) is identical.
+      if (probedPdfText != null && probedPdfText.trim()) {
+        return {
+          filename: file.originalname,
+          bytes: Buffer.byteLength(probedPdfText, 'utf8'),
+          filepath: FileSources.document_parser,
+          text: probedPdfText,
+        };
       }
       try {
         const { handleFileUpload } = getStrategyFunctions(FileSources.document_parser);
@@ -1521,4 +1590,5 @@ module.exports = {
   processProjectFileUpload,
   retrieveAndProcessFile,
   resolveLargeDocRouting,
+  resolveContentRouting,
 };

@@ -70,15 +70,19 @@ function getParserForMimeType(mimetype: string): FileParseFn | undefined {
   return undefined;
 }
 
-/** Parses PDF, returns text inside. */
-async function pdfToText(file: Express.Multer.File): Promise<string> {
+/**
+ * Reads a PDF once via pdfjs, returning its page count and concatenated
+ * text-layer text. Shared by {@link pdfToText} (full extraction) and
+ * {@link probePdf} (cheap routing probe) so the pdfjs pass is written once.
+ */
+async function readPdf(filePath: string): Promise<{ pageCount: number; text: string }> {
   // Imported inline so that Jest can test other routes without failing due to loading ESM
   const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
 
-  const data = new Uint8Array(await fs.promises.readFile(file.path));
+  const data = new Uint8Array(await fs.promises.readFile(filePath));
   const pdf = await getDocument({ data }).promise;
 
-  let fullText = '';
+  let text = '';
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const textContent = await page.getTextContent();
@@ -86,10 +90,36 @@ async function pdfToText(file: Express.Multer.File): Promise<string> {
       .filter((item): item is TextItem => !('type' in item))
       .map((item) => item.str)
       .join(' ');
-    fullText += pageText + '\n';
+    text += pageText + '\n';
   }
 
-  return fullText;
+  return { pageCount: pdf.numPages, text };
+}
+
+/** Parses PDF, returns text inside. */
+async function pdfToText(file: Express.Multer.File): Promise<string> {
+  const { text } = await readPdf(file.path);
+  return text;
+}
+
+/**
+ * Probe a PDF for content-based Auto routing: page count, the length of its text
+ * layer, and the extracted `text` itself — WITHOUT running OCR. A scanned (image)
+ * PDF has pages but a near-empty text layer (see `isScannedPdf` in `../routing`).
+ * The `text` is returned so a digital PDF kept in `context` can reuse it instead
+ * of being parsed a second time by the document_parser strategy. Returns
+ * `pageCount: 0` and empty `text` when the file cannot be read as a PDF, so
+ * routing falls back safely rather than throwing on the upload path.
+ */
+export async function probePdf(
+  filePath: string,
+): Promise<{ pageCount: number; textChars: number; text: string }> {
+  try {
+    const { pageCount, text } = await readPdf(filePath);
+    return { pageCount, textChars: text.trim().length, text };
+  } catch {
+    return { pageCount: 0, textChars: 0, text: '' };
+  }
 }
 
 /** Parses Word document, returns text inside. */
