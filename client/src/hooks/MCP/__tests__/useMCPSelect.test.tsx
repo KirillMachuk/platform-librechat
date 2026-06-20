@@ -21,7 +21,6 @@ const createMCPServers = (serverNames: string[]): MCPServerDefinition[] => {
     serverName,
     config: {
       type: 'sse' as const,
-      type: 'sse',
       url: 'http://mcp',
     },
     effectivePermissions: 15, // All permissions (VIEW=1, EDIT=2, DELETE=4, SHARE=8)

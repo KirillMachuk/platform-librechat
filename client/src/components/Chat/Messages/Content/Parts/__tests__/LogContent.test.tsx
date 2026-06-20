@@ -151,7 +151,6 @@ describe('LogContent attachment routing', () => {
       filename: 'slides.pptx',
       type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       text: undefined as unknown as string,
-      text: undefined,
     });
     renderWith(<LogContent output="" attachments={[pptx]} />);
     expect(screen.queryByRole('button', { pressed: true })).not.toBeInTheDocument();

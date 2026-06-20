@@ -43,7 +43,6 @@ export default function Retrieval({ retrievalModels }: { retrievalModels: Set<st
                 disabled={isDisabled}
                 onCheckedChange={field.onChange}
                 className="relative float-left mr-2 inline-flex h-4 w-4 cursor-pointer"
-                aria-label={localize('com_assistants_file_search')}
                 value={field.value?.toString()}
                 aria-labelledby="retrieval-label"
               />
@@ -58,7 +57,8 @@ export default function Retrieval({ retrievalModels }: { retrievalModels: Set<st
               )}
               htmlFor={Capabilities.retrieval}
               onClick={() =>
-                model != null && retrievalModels.has(model) &&
+                model != null &&
+                retrievalModels.has(model) &&
                 setValue(Capabilities.retrieval, !getValues(Capabilities.retrieval), {
                   shouldDirty: true,
                 })
