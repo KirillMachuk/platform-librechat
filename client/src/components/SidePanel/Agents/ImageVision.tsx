@@ -20,7 +20,6 @@ export default function ImageVision() {
             checked={field.value === true}
             onCheckedChange={field.onChange}
             className="relative float-left mr-2 inline-flex h-4 w-4 cursor-pointer"
-            aria-label={localize('com_assistants_image_vision')}
             value={field.value?.toString()}
             aria-labelledby="image-vision-label"
           />

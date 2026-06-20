@@ -18,13 +18,6 @@ const createForm = (): AgentForm => ({
   instructions: null,
   model: 'gpt-4',
   model_parameters: {
-    temperature: null,
-    maxContextTokens: null,
-    max_context_tokens: null,
-    max_output_tokens: null,
-    top_p: null,
-    frequency_penalty: null,
-    presence_penalty: null,
     temperature: 1,
     maxContextTokens: null,
     max_context_tokens: null,
