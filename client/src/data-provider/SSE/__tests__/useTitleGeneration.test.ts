@@ -54,20 +54,35 @@ jest.mock('~/utils', () => ({
   updateConvoInAllQueries: (...args: unknown[]) => mockUpdateConvoInAllQueries(...args),
 }));
 
-jest.mock('librechat-data-provider', () => ({
-  apiBaseUrl: () => '',
-  QueryKeys: { conversation: 'conversation', activeJobs: 'activeJobs' },
-  request: { get: jest.fn() },
-  dataService: { genTitle: jest.fn(), getActiveJobs: jest.fn() },
-}));
+jest.mock('librechat-data-provider', () => {
+  // `queries.ts` transitively imports `~/store`, whose `endpoints.ts` reads
+  // `EModelEndpoint.azureOpenAI` at module load. Spread the real module so those
+  // enums exist, and override only the network/query surface the test controls.
+  const actual = jest.requireActual('librechat-data-provider');
+  return {
+    ...actual,
+    apiBaseUrl: () => '',
+    QueryKeys: { conversation: 'conversation', activeJobs: 'activeJobs' },
+    request: { get: jest.fn() },
+    dataService: { genTitle: jest.fn(), getActiveJobs: jest.fn() },
+  };
+});
 
+import React from 'react';
+import { RecoilRoot } from 'recoil';
 import { renderHook, act } from '@testing-library/react';
 import {
   useTitleGeneration,
   genTitleQueryKey,
   queueTitleGeneration,
   markTitleGenerationProcessed,
+  resetTitleGenerationState,
 } from '../queries';
+
+/** The hook uses `useRecoilCallback` (applyTitleToActiveConvo), which must run under
+ *  a RecoilRoot. `.ts` file, so build the wrapper without JSX. */
+const wrapper = ({ children }: { children: React.ReactNode }) =>
+  React.createElement(RecoilRoot, null, children);
 
 const notFound = { response: { status: 404 } };
 
@@ -80,6 +95,9 @@ beforeEach(() => {
   mockTiming = 'immediate';
   mockQueriesResults = [];
   mockCapturedQueries = [];
+  // The hook's queues are module-level (persist across renders by design), so
+  // clear them between cases or a queued id leaks into the next test's fetch set.
+  resetTitleGenerationState();
   jest.clearAllMocks();
 });
 
@@ -88,7 +106,7 @@ describe('useTitleGeneration — eligibility', () => {
     mockTiming = 'immediate';
     mockActiveJobIds = ['conv-imm'];
 
-    renderHook(() => useTitleGeneration(true));
+    renderHook(() => useTitleGeneration(true), { wrapper });
     act(() => queueTitleGeneration('conv-imm'));
 
     expect(isEligible('conv-imm')).toBe(true);
@@ -98,7 +116,7 @@ describe('useTitleGeneration — eligibility', () => {
     mockTiming = 'final';
     mockActiveJobIds = ['conv-fin'];
 
-    const { rerender } = renderHook(() => useTitleGeneration(true));
+    const { rerender } = renderHook(() => useTitleGeneration(true), { wrapper });
     act(() => queueTitleGeneration('conv-fin'));
     expect(isEligible('conv-fin')).toBe(false);
 
@@ -112,7 +130,7 @@ describe('useTitleGeneration — eligibility', () => {
     mockTiming = 'immediate';
     mockActiveJobIds = ['conv-sse-title'];
 
-    const { rerender } = renderHook(() => useTitleGeneration(true));
+    const { rerender } = renderHook(() => useTitleGeneration(true), { wrapper });
     act(() => queueTitleGeneration('conv-sse-title'));
     expect(isEligible('conv-sse-title')).toBe(true);
 
@@ -128,7 +146,7 @@ describe('useTitleGeneration — result handling', () => {
     mockTiming = 'immediate';
     mockActiveJobIds = ['conv-ok'];
 
-    const { rerender } = renderHook(() => useTitleGeneration(true));
+    const { rerender } = renderHook(() => useTitleGeneration(true), { wrapper });
     act(() => queueTitleGeneration('conv-ok'));
 
     mockQueriesResults = [{ isSuccess: true, isError: false, data: { title: 'Quantum Chat' } }];
@@ -153,7 +171,7 @@ describe('useTitleGeneration — result handling', () => {
     mockTiming = 'immediate';
     mockActiveJobIds = ['conv-active404'];
 
-    const { rerender } = renderHook(() => useTitleGeneration(true));
+    const { rerender } = renderHook(() => useTitleGeneration(true), { wrapper });
     act(() => queueTitleGeneration('conv-active404'));
 
     mockQueriesResults = [{ isError: true, isSuccess: false, error: notFound }];
@@ -167,7 +185,7 @@ describe('useTitleGeneration — result handling', () => {
     mockTiming = 'immediate';
     mockActiveJobIds = []; // stream already complete
 
-    const { rerender } = renderHook(() => useTitleGeneration(true));
+    const { rerender } = renderHook(() => useTitleGeneration(true), { wrapper });
     act(() => queueTitleGeneration('conv-done404'));
 
     mockQueriesResults = [{ isError: true, isSuccess: false, error: notFound }];
