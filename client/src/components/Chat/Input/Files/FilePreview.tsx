@@ -30,7 +30,10 @@ const FilePreview = ({
   // nothing. Surface it instead of letting the file look ready.
   const indexFailed = embeddingStatus === 'failed';
   return (
-    <div className={cn('relative size-10 shrink-0 overflow-hidden rounded-xl', className)}>
+    <div
+      className={cn('relative size-10 shrink-0 overflow-hidden rounded-xl', className)}
+      title={indexing ? localize('com_ui_indexing') : undefined}
+    >
       <FileIcon file={file} fileType={fileType} />
       <SourceIcon source={file?.source} isCodeFile={!!file?.['metadata']?.fileIdentifier} />
       {(uploading || indexing) && (
