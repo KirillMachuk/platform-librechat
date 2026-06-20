@@ -10,6 +10,11 @@ type FileParseFn = (file: Express.Multer.File) => Promise<string>;
 const DOCUMENT_PARSER_MAX_FILE_SIZE = 15 * megabyte;
 const ODT_MAX_DECOMPRESSED_SIZE = 50 * megabyte;
 
+/** Byte budget for extracted spreadsheet text. Kept under the 15MB text-storage
+ *  limit so an oversized sheet degrades gracefully (first rows + a notice) instead
+ *  of failing the whole upload. */
+const SPREADSHEET_MAX_TEXT_BYTES = 14 * megabyte;
+
 /**
  * Parses an uploaded document and extracts its text content and metadata.
  * Handled types must stay in sync with `documentParserMimeTypes` from data-provider.
@@ -156,7 +161,39 @@ async function excelSheetToText(file: Express.Multer.File): Promise<string> {
     text += `${sheetName}:\n${worksheetAsCsvString}\n`;
   }
 
-  return text;
+  return capSpreadsheetText(text);
+}
+
+/**
+ * Cap extracted spreadsheet text to a byte budget so a huge sheet degrades
+ * gracefully — first rows plus a clear notice — instead of failing the upload at
+ * the 15MB text-storage limit. Truncation lands on a row boundary; small and
+ * medium spreadsheets (under budget) are returned unchanged. Exported for tests.
+ */
+export function capSpreadsheetText(
+  text: string,
+  maxBytes: number = SPREADSHEET_MAX_TEXT_BYTES,
+): string {
+  // Measure without allocating; only the rare oversized case needs the Buffer copy.
+  if (Buffer.byteLength(text, 'utf8') <= maxBytes) {
+    return text;
+  }
+  const buf = Buffer.from(text, 'utf8');
+  let end = maxBytes;
+  while (end > 0 && buf[end] !== 0x0a) {
+    end--;
+  }
+  if (end === 0) {
+    end = maxBytes;
+  }
+  const shown = buf.subarray(0, end).toString('utf8');
+  const shownRows = (shown.match(/\n/g) ?? []).length;
+  const totalRows = (text.match(/\n/g) ?? []).length;
+  return (
+    `${shown}\n[Таблица слишком большая для полного показа: показаны первые ` +
+    `${shownRows.toLocaleString('ru-RU')} из ${totalRows.toLocaleString('ru-RU')} строк. ` +
+    `Скачайте файл, чтобы увидеть остальное.]\n`
+  );
 }
 
 /**

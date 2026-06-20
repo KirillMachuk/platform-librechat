@@ -1,7 +1,7 @@
 import path from 'path';
 import * as fs from 'fs';
 import JSZip from 'jszip';
-import { parseDocument } from './crud';
+import { capSpreadsheetText, parseDocument } from './crud';
 
 describe('Document Parser', () => {
   test('parseDocument() parses text from docx', async () => {
@@ -236,5 +236,34 @@ describe('Document Parser', () => {
     const { read, utils } = await import('xlsx');
     expect(typeof read).toBe('function');
     expect(typeof utils?.sheet_to_csv).toBe('function');
+  });
+});
+
+describe('capSpreadsheetText', () => {
+  it('returns small/medium spreadsheet text unchanged', () => {
+    const text = 'Sheet1:\n' + 'a,b,c\n'.repeat(100);
+    expect(capSpreadsheetText(text, 1_000_000)).toBe(text);
+  });
+
+  it('truncates oversized text on a row boundary with a RU notice', () => {
+    const text =
+      'Sheet1:\n' + Array.from({ length: 500 }, (_, i) => `row${i},value${i}`).join('\n') + '\n';
+    const out = capSpreadsheetText(text, 200);
+    const shownPart = out.split('\n[')[0];
+    expect(Buffer.byteLength(shownPart, 'utf8')).toBeLessThanOrEqual(200);
+    expect(out).toContain('Таблица слишком большая');
+    // truncation landed on a row boundary — the last shown line is a complete row
+    expect(shownPart.split('\n').pop()).toMatch(/^row\d+,value\d+$/);
+  });
+
+  it('reports fewer shown rows than total when truncated', () => {
+    const text = 'S:\n' + Array.from({ length: 1000 }, (_, i) => `r${i}`).join('\n') + '\n';
+    const out = capSpreadsheetText(text, 150);
+    const m = out.match(/первые (.+?) из (.+?) строк/);
+    expect(m).not.toBeNull();
+    const shown = parseInt(m[1].replace(/\D/g, ''), 10);
+    const total = parseInt(m[2].replace(/\D/g, ''), 10);
+    expect(shown).toBeGreaterThan(0);
+    expect(shown).toBeLessThan(total);
   });
 });
