@@ -33,7 +33,9 @@
     "build:dev": "npm run clean && NODE_ENV=development tsdown",
     "b:build": "bun run b:clean && bun run tsdown",
     "build:watch": "tsdown --watch",
-    "dev": "tsdown --watch"
+    "dev": "tsdown --watch",
+    "test": "jest --coverage --watch",
+    "test:ci": "jest --coverage --ci --logHeapUsage"
   },
   "peerDependencies": {
     "@ariakit/react": "^0.4.16",
