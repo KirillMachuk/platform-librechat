@@ -18,6 +18,7 @@ interface BadgeRowContextType {
   agentsConfig?: TAgentsEndpoint | null;
   skills: ReturnType<typeof useToolToggle>;
   webSearch: ReturnType<typeof useToolToggle>;
+  deepResearch: ReturnType<typeof useToolToggle>;
   artifacts: ReturnType<typeof useToolToggle>;
   fileSearch: ReturnType<typeof useToolToggle>;
   codeInterpreter: ReturnType<typeof useToolToggle>;
@@ -223,6 +224,17 @@ export default function BadgeRowProvider({
     },
   });
 
+  /** Deep Research hook — its own ephemeral capability key. Intentionally NOT
+   *  seeded from localStorage on new conversations (cost-sensitive: the user
+   *  opts in per chat); pin state still persists via useToolToggle. */
+  const deepResearch = useToolToggle({
+    conversationId,
+    storageContextKey,
+    toolKey: AgentCapabilities.deep_research,
+    localStorageKey: LocalStorageKeys.LAST_DEEP_RESEARCH_TOGGLE_,
+    isAuthenticated: true,
+  });
+
   /** FileSearch hook */
   const fileSearch = useToolToggle({
     conversationId,
@@ -255,6 +267,7 @@ export default function BadgeRowProvider({
   const value: BadgeRowContextType = {
     skills,
     webSearch,
+    deepResearch,
     artifacts,
     fileSearch,
     agentsConfig,

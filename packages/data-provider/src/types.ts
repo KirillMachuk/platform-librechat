@@ -107,6 +107,8 @@ export type TEphemeralAgent = {
   execute_code?: boolean;
   artifacts?: string;
   skills?: boolean;
+  /** Deep Research mode for this turn — assembles the orchestrator→worker→writer graph. */
+  deep_research?: boolean;
 };
 
 export type TPayload = Partial<TMessage> &

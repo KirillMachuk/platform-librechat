@@ -572,6 +572,7 @@ export enum AgentCapabilities {
   execute_code = 'execute_code',
   file_search = 'file_search',
   web_search = 'web_search',
+  deep_research = 'deep_research',
   artifacts = 'artifacts',
   subagents = 'subagents',
   actions = 'actions',
@@ -687,6 +688,7 @@ export const defaultAgentCapabilities = [
   AgentCapabilities.execute_code,
   AgentCapabilities.file_search,
   AgentCapabilities.web_search,
+  AgentCapabilities.deep_research,
   AgentCapabilities.artifacts,
   AgentCapabilities.subagents,
   AgentCapabilities.actions,
@@ -1208,6 +1210,7 @@ export const interfaceSchema = z
     retainAgentFiles: z.boolean().optional(),
     runCode: z.boolean().optional(),
     webSearch: z.boolean().optional(),
+    deepResearch: z.boolean().optional(),
     contextUsage: z.boolean().optional(),
     contextCost: z.boolean().optional(),
     currency: z
@@ -1285,6 +1288,7 @@ export const interfaceSchema = z
     autoSubmitFromUrl: true,
     runCode: true,
     webSearch: true,
+    deepResearch: true,
     contextUsage: true,
     contextCost: false,
     peoplePicker: {
@@ -1573,6 +1577,39 @@ export const webSearchSchema = z.object({
 
 export type TWebSearchConfig = DeepPartial<z.infer<typeof webSearchSchema>>;
 
+export const DeepResearchModes = ['economy', 'balanced', 'deep'] as const;
+export type DeepResearchMode = (typeof DeepResearchModes)[number];
+
+/**
+ * Per-mode budget + model mapping for Deep Research. Numbers are safe starting
+ * defaults; tune per tenant. `leadModel`/`workerModel`/`writerModel` fall back to
+ * the conversation's selected model when omitted.
+ */
+export const deepResearchModeSchema = z.object({
+  maxConcurrentResearchers: z.number().int().min(1).max(8).default(3),
+  maxOrchestratorCycles: z.number().int().min(1).max(16).default(6),
+  maxSearcherTurns: z.number().int().min(1).max(20).default(4),
+  perRunTokenBudget: z.number().int().positive().default(400000),
+  wallClockMinutes: z.number().int().min(1).max(60).default(8),
+  leadModel: z.string().optional(),
+  workerModel: z.string().optional(),
+  writerModel: z.string().optional(),
+});
+
+export const deepResearchSchema = z.object({
+  /** Active depth tier, selected per tenant (admin). */
+  activeMode: z.enum(['economy', 'balanced', 'deep']).default('deep'),
+  modes: z
+    .object({
+      economy: deepResearchModeSchema.optional(),
+      balanced: deepResearchModeSchema.optional(),
+      deep: deepResearchModeSchema.optional(),
+    })
+    .optional(),
+});
+
+export type TDeepResearchConfig = DeepPartial<z.infer<typeof deepResearchSchema>>;
+
 export const ocrSchema = z.object({
   mistralModel: z.string().optional(),
   apiKey: z.string().optional().default('${OCR_API_KEY}'),
@@ -1699,6 +1736,7 @@ export const configSchema = z.object({
   cache: z.boolean().default(true),
   ocr: ocrSchema.optional(),
   webSearch: webSearchSchema.optional(),
+  deepResearch: deepResearchSchema.optional(),
   memory: memorySchema.optional(),
   summarization: summarizationConfigSchema.optional(),
   skillSync: skillSyncConfigSchema,
@@ -2609,6 +2647,8 @@ export enum LocalStorageKeys {
   LAST_CODE_TOGGLE_ = 'LAST_CODE_TOGGLE_',
   /** Last checked toggle for Web Search per conversation ID */
   LAST_WEB_SEARCH_TOGGLE_ = 'LAST_WEB_SEARCH_TOGGLE_',
+  /** Last checked toggle for Deep Research per conversation ID */
+  LAST_DEEP_RESEARCH_TOGGLE_ = 'LAST_DEEP_RESEARCH_TOGGLE_',
   /** Last checked toggle for File Search per conversation ID */
   LAST_FILE_SEARCH_TOGGLE_ = 'LAST_FILE_SEARCH_TOGGLE_',
   /** Last checked toggle for Artifacts per conversation ID */
