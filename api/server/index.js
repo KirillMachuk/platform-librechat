@@ -78,7 +78,17 @@ const rejectChatStartsUntilReady = (req, res, next) => {
 };
 
 const configureGenerationStreams = () => {
-  const streamServices = createStreamServices();
+  /** Running-job TTL ceiling (seconds). Sized above the worst-case long run
+   *  (Deep Research deep mode) so neither the Redis age reaper nor the in-memory
+   *  inactivity reaper kills an active multi-minute generation. */
+  const runningTtlSeconds = Math.max(
+    60,
+    parseInt(process.env.STREAM_RUNNING_TTL_S || '1800', 10) || 1800,
+  );
+  const streamServices = createStreamServices({
+    redisOptions: { runningTtl: runningTtlSeconds },
+    inMemoryOptions: { staleJobTimeout: runningTtlSeconds * 1000 },
+  });
   GenerationJobManager.configure({
     ...streamServices,
     cleanupOnComplete: !isEnabled(process.env.STREAM_KEEP_COMPLETED_JOBS),

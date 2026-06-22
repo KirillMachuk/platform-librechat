@@ -841,6 +841,39 @@ endpoints:
 #     # format: markdown        # 'markdown' (default) or 'text' (plain text, may increase latency)
 #     # timeout: 15000          # HTTP request timeout in milliseconds (max 120000); Tavily Extract receives seconds clamped to 1-60
 
+# Deep Research Configuration (optional) — the "Deep Research" chat mode.
+# Turns the chat into an orchestrator→researcher agent graph over the unified
+# retrieval layer (web_search + the sovereign file_search RAG). Requires web
+# search (above) configured. The composer toggle only turns DR on/off; the depth
+# tier is tenant-wide (admin) via `activeMode`. Per-mode `leadModel`/`workerModel`
+# are model ids on your configured endpoint; when unset, the conversation's
+# selected model is used for both. Toggle visibility per tenant with
+# `interface.deepResearch` (default: true).
+# deepResearch:
+#   activeMode: deep              # 'economy' | 'balanced' | 'deep' (default: deep)
+#   modes:
+#     economy:
+#       maxConcurrentResearchers: 2
+#       maxOrchestratorCycles: 4
+#       maxSearcherTurns: 3
+#       perRunTokenBudget: 200000
+#       wallClockMinutes: 5
+#       # leadModel / workerModel: cheaper models (e.g. Chinese analogues) — pending model benchmark
+#     balanced:
+#       maxConcurrentResearchers: 3
+#       maxOrchestratorCycles: 6
+#       maxSearcherTurns: 4
+#       perRunTokenBudget: 400000
+#       wallClockMinutes: 8
+#     deep:
+#       maxConcurrentResearchers: 4
+#       maxOrchestratorCycles: 8
+#       maxSearcherTurns: 5
+#       perRunTokenBudget: 800000
+#       wallClockMinutes: 15
+#       leadModel: 'anthropic/claude-opus-4-8'      # orchestrator + writer (example id; must exist on your endpoint)
+#       workerModel: 'anthropic/claude-sonnet-4-6'  # researchers (example id; must exist on your endpoint)
+
 # Memory configuration for user memories
 # memory:
 #   # (optional) Disable memory functionality
