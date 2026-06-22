@@ -424,6 +424,10 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
   const deepResearchMode = deepResearchActive
     ? resolveDeepResearchMode(appConfig?.deepResearch)
     : null;
+  /** Capture the conversation's selected model BEFORE the lead-model override so
+   *  researchers fall back to it (never the expensive lead model) when no
+   *  workerModel is configured. */
+  const deepResearchConversationModel = primaryAgent.model;
   if (deepResearchMode?.leadModel) {
     primaryAgent.model = deepResearchMode.leadModel;
   }
@@ -1068,6 +1072,10 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
         primaryAgent,
         primaryConfig,
         mode: deepResearchMode,
+        conversationModel: deepResearchConversationModel,
+        /** P1: researchers use web + sovereign RAG. RAG-only (sovereign) mode
+         *  auto-detection / config-driven selection is a P2 follow-up. */
+        webSearchAvailable: true,
         initializeSearcher: initializeDeepResearchSearcher,
         logger,
       });

@@ -1,5 +1,5 @@
 import { resolveDeepResearchMode, DEEP_RESEARCH_MODE_DEFAULTS } from './modes';
-import { buildSearcherAgent, buildDeepResearchGraph } from './graph';
+import { buildSearcherAgent, buildDeepResearchGraph, deepResearchRecursionLimit } from './graph';
 import type { DeepResearchAgent, DeepResearchConfig } from './graph';
 
 describe('resolveDeepResearchMode', () => {
@@ -35,6 +35,17 @@ describe('resolveDeepResearchMode', () => {
   });
 });
 
+describe('deepResearchRecursionLimit', () => {
+  it('derives a bounded per-run step cap from the mode', () => {
+    const deep = deepResearchRecursionLimit(DEEP_RESEARCH_MODE_DEFAULTS.deep);
+    expect(deep).toBe((8 + 4) * 2 + 6); // 30
+    expect(deep).toBeLessThanOrEqual(50);
+    expect(deepResearchRecursionLimit(DEEP_RESEARCH_MODE_DEFAULTS.economy)).toBeGreaterThanOrEqual(
+      12,
+    );
+  });
+});
+
 describe('buildSearcherAgent', () => {
   const primary: DeepResearchAgent = {
     id: 'ephemeral',
@@ -43,30 +54,48 @@ describe('buildSearcherAgent', () => {
     endpoint: 'openrouter',
     tool_resources: { file_search: { file_ids: ['f1', 'f2'] } },
   };
+  const opts = { now: 'NOW', webSearchAvailable: true };
 
   it('derives a distinct ephemeral id and the unified retrieval toolset', () => {
-    const searcher = buildSearcherAgent(primary, DEEP_RESEARCH_MODE_DEFAULTS.deep, 'NOW');
+    const searcher = buildSearcherAgent(primary, DEEP_RESEARCH_MODE_DEFAULTS.deep, opts);
     expect(searcher.id).toBe('ephemeral__dr_searcher');
     expect(searcher.id).not.toBe(primary.id);
     expect(searcher.id?.startsWith('agent_')).toBe(false);
     expect(searcher.tools).toEqual(['web_search', 'file_search']);
-    expect(typeof searcher.instructions).toBe('string');
     expect((searcher.instructions ?? '').length).toBeGreaterThan(100);
   });
 
-  it('uses the worker model when set, else inherits the primary model', () => {
+  it('is RAG-only when web search is unavailable (no foreign egress)', () => {
+    const searcher = buildSearcherAgent(primary, DEEP_RESEARCH_MODE_DEFAULTS.deep, {
+      now: 'NOW',
+      webSearchAvailable: false,
+    });
+    expect(searcher.tools).toEqual(['file_search']);
+  });
+
+  it('uses workerModel, else the conversation model — never the (overridden) lead model', () => {
     const withWorker = buildSearcherAgent(
       primary,
       { ...DEEP_RESEARCH_MODE_DEFAULTS.deep, workerModel: 'worker-model' },
-      'NOW',
+      { ...opts, conversationModel: 'convo-model' },
     );
     expect(withWorker.model).toBe('worker-model');
-    const withoutWorker = buildSearcherAgent(primary, DEEP_RESEARCH_MODE_DEFAULTS.deep, 'NOW');
-    expect(withoutWorker.model).toBe('lead-model');
+
+    // No workerModel: must fall back to the captured conversation model, NOT primary.model
+    // (which may have been overridden to the expensive lead model).
+    const noWorker = buildSearcherAgent(
+      { ...primary, model: 'lead-OVERRIDDEN' },
+      DEEP_RESEARCH_MODE_DEFAULTS.deep,
+      {
+        ...opts,
+        conversationModel: 'convo-model',
+      },
+    );
+    expect(noWorker.model).toBe('convo-model');
   });
 
   it('deep-clones tool_resources so the searcher cannot mutate the parent', () => {
-    const searcher = buildSearcherAgent(primary, DEEP_RESEARCH_MODE_DEFAULTS.deep, 'NOW');
+    const searcher = buildSearcherAgent(primary, DEEP_RESEARCH_MODE_DEFAULTS.deep, opts);
     expect(searcher.tool_resources).toEqual(primary.tool_resources);
     expect(searcher.tool_resources).not.toBe(primary.tool_resources);
     (searcher.tool_resources?.file_search as { file_ids: string[] }).file_ids.push('mutated');
@@ -87,7 +116,7 @@ describe('buildDeepResearchGraph', () => {
     config: { id: 'ephemeral', instructions: 'Workspace instructions.' },
   });
 
-  it('attaches the researcher subagent and rewrites the orchestrator instructions', async () => {
+  it('attaches the researcher subagent, caps recursion, and rewrites instructions', async () => {
     const { agent, config } = makePrimary();
     let receivedSearcher: DeepResearchAgent | null = null;
     const initializeSearcher = jest.fn(async (searcher: DeepResearchAgent) => {
@@ -99,6 +128,8 @@ describe('buildDeepResearchGraph', () => {
       primaryAgent: agent,
       primaryConfig: config,
       mode: DEEP_RESEARCH_MODE_DEFAULTS.deep,
+      conversationModel: 'convo-model',
+      webSearchAvailable: true,
       initializeSearcher,
     });
 
@@ -110,17 +141,21 @@ describe('buildDeepResearchGraph', () => {
     expect(config.subagentAgentConfigs![0].maxTurns).toBe(
       DEEP_RESEARCH_MODE_DEFAULTS.deep.maxSearcherTurns,
     );
+    expect(config.recursion_limit).toBe(
+      deepResearchRecursionLimit(DEEP_RESEARCH_MODE_DEFAULTS.deep),
+    );
     expect(config.instructions).toContain('оркестратор');
     expect(config.instructions).toContain('Workspace instructions.');
   });
 
-  it('falls back gracefully (no subagents) when the researcher fails to initialize', async () => {
+  it('falls back gracefully (no subagents, no recursion override) when the researcher fails', async () => {
     const { agent, config } = makePrimary();
     const warn = jest.fn();
     const ok = await buildDeepResearchGraph({
       primaryAgent: agent,
       primaryConfig: config,
       mode: DEEP_RESEARCH_MODE_DEFAULTS.deep,
+      webSearchAvailable: true,
       initializeSearcher: async () => null,
       logger: { warn },
     });
@@ -128,6 +163,7 @@ describe('buildDeepResearchGraph', () => {
     expect(ok).toBe(false);
     expect(config.subagents).toBeUndefined();
     expect(config.subagentAgentConfigs).toBeUndefined();
+    expect(config.recursion_limit).toBeUndefined();
     expect(warn).toHaveBeenCalled();
   });
 });
