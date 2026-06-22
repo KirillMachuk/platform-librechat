@@ -1,6 +1,6 @@
-import { resolveDeepResearchMode, DEEP_RESEARCH_MODE_DEFAULTS } from './modes';
-import { buildSearcherAgent, buildDeepResearchGraph, deepResearchRecursionLimit } from './graph';
 import type { DeepResearchAgent, DeepResearchConfig } from './graph';
+import { buildSearcherAgent, buildDeepResearchGraph, deepResearchRecursionLimit } from './graph';
+import { resolveDeepResearchMode, DEEP_RESEARCH_MODE_DEFAULTS } from './modes';
 
 describe('resolveDeepResearchMode', () => {
   it('defaults to the deep preset when no config is provided', () => {

@@ -1,7 +1,7 @@
 import { replaceSpecialVars } from 'librechat-data-provider';
-import { buildWebSearchContext } from '../tools/toolkits/web';
-import { buildOrchestratorInstructions, buildSearcherInstructions } from './prompts';
 import type { ResolvedDeepResearchMode } from './types';
+import { buildOrchestratorInstructions, buildSearcherInstructions } from './prompts';
+import { buildWebSearchContext } from '../tools/toolkits/web';
 
 /**
  * Minimal structural view of an agent definition / initialized run config that
