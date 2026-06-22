@@ -14,9 +14,9 @@ describe('resolveDeepResearchMode', () => {
   });
 
   it('falls back to deep for an unknown active mode', () => {
-    expect(
-      resolveDeepResearchMode({ activeMode: 'nonsense' as unknown as 'deep' }),
-    ).toEqual(DEEP_RESEARCH_MODE_DEFAULTS.deep);
+    expect(resolveDeepResearchMode({ activeMode: 'nonsense' as unknown as 'deep' })).toEqual(
+      DEEP_RESEARCH_MODE_DEFAULTS.deep,
+    );
   });
 
   it('merges per-mode overrides over the preset and carries model ids', () => {
@@ -27,7 +27,9 @@ describe('resolveDeepResearchMode', () => {
       },
     });
     expect(resolved.maxConcurrentResearchers).toBe(6);
-    expect(resolved.maxOrchestratorCycles).toBe(DEEP_RESEARCH_MODE_DEFAULTS.deep.maxOrchestratorCycles);
+    expect(resolved.maxOrchestratorCycles).toBe(
+      DEEP_RESEARCH_MODE_DEFAULTS.deep.maxOrchestratorCycles,
+    );
     expect(resolved.leadModel).toBe('lead-x');
     expect(resolved.workerModel).toBe('worker-y');
   });
@@ -77,7 +79,11 @@ describe('buildSearcherAgent', () => {
 
 describe('buildDeepResearchGraph', () => {
   const makePrimary = (): { agent: DeepResearchAgent; config: DeepResearchConfig } => ({
-    agent: { id: 'ephemeral', model: 'lead-model', tool_resources: { file_search: { file_ids: [] } } },
+    agent: {
+      id: 'ephemeral',
+      model: 'lead-model',
+      tool_resources: { file_search: { file_ids: [] } },
+    },
     config: { id: 'ephemeral', instructions: 'Workspace instructions.' },
   });
 
