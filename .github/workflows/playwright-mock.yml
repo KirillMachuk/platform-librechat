@@ -23,7 +23,10 @@ env:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The mock e2e suite runs serially (workers:1, fullyParallel:false) for
+    # backend/DB isolation; with the in-job builds + CI retries it needs ~30+ min
+    # and was chronically cancelled at the old 30m cap. Sized to fit with headroom.
+    timeout-minutes: 50
     env:
       E2E_CHROMIUM_CHANNEL: chrome
     steps:
