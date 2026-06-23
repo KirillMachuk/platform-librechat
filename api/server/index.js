@@ -255,6 +255,7 @@ const startServer = async () => {
   app.use('/api/admin/analytics', routes.adminAnalytics);
   app.use('/api/admin/audit', routes.adminAudit);
   app.use('/api/admin/config', routes.adminConfig);
+  app.use('/api/admin/settings/deep-research', routes.adminDeepResearch);
   app.use('/api/admin/grants', routes.adminGrants);
   app.use('/api/admin/groups', routes.adminGroups);
   app.use('/api/admin/roles', routes.adminRoles);

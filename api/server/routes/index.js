@@ -5,6 +5,7 @@ const adminAuth = require('./admin/auth');
 const adminAnalytics = require('./admin/analytics');
 const adminAudit = require('./admin/audit');
 const adminConfig = require('./admin/config');
+const adminDeepResearch = require('./admin/deepResearch');
 const adminGrants = require('./admin/grants');
 const adminGroups = require('./admin/groups');
 const adminRoles = require('./admin/roles');
@@ -47,6 +48,7 @@ module.exports = {
   adminAnalytics,
   adminAudit,
   adminConfig,
+  adminDeepResearch,
   adminGrants,
   adminGroups,
   adminRoles,
@@ -72,7 +74,6 @@ module.exports = {
   skills,
   actions,
   presets,
-  projects,
   balance,
   messages,
   memories,
