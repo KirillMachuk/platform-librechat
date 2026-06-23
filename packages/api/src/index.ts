@@ -45,6 +45,8 @@ export * from './memory';
 export * from './modelSpecs';
 /* Agents */
 export * from './agents';
+/* Deep Research */
+export * from './deepResearch';
 /* Actions */
 export * from './actions';
 /* Prompts */

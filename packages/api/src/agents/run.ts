@@ -318,6 +318,12 @@ type RunAgent = Omit<Agent, 'tools'> & {
   subagentAgentConfigs?: RunAgent[];
   /** Source subagent spawning configuration (enabled / allowSelf / agent_ids). */
   subagents?: AgentSubagentsConfig;
+  /**
+   * Per-subagent AGENT→TOOLS cycle cap, forwarded onto the {@link SubagentConfig}
+   * the parent emits for this child (default 25 in the SDK). Deep Research sets
+   * this to bound each researcher's loop for cost control.
+   */
+  maxTurns?: number;
 };
 
 function isNonEmptyString(value: unknown): value is string {
@@ -805,6 +811,7 @@ function buildSubagentConfigs(
         child.description ??
         `Delegate a subtask to the ${child.name ?? child.id} agent in an isolated context.`,
       agentInputs: childInputs,
+      maxTurns: child.maxTurns,
     });
   }
 

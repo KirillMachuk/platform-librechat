@@ -1,12 +1,12 @@
-import type { Redis, Cluster } from 'ioredis';
 import { logger } from '@librechat/data-schemas';
+import type { Redis, Cluster } from 'ioredis';
 import type { IJobStore, IEventTransport } from './interfaces/IJobStore';
-import { InMemoryJobStore } from './implementations/InMemoryJobStore';
 import { InMemoryEventTransport } from './implementations/InMemoryEventTransport';
-import { RedisJobStore } from './implementations/RedisJobStore';
 import { RedisEventTransport } from './implementations/RedisEventTransport';
-import { cacheConfig } from '~/cache/cacheConfig';
+import { InMemoryJobStore } from './implementations/InMemoryJobStore';
+import { RedisJobStore } from './implementations/RedisJobStore';
 import { ioredisClient } from '~/cache/redisClients';
+import { cacheConfig } from '~/cache/cacheConfig';
 
 /**
  * Configuration for stream services (optional overrides)
@@ -35,6 +35,15 @@ export interface StreamServicesConfig {
     ttlAfterComplete?: number;
     maxJobs?: number;
     staleJobTimeout?: number;
+  };
+
+  /**
+   * Options for the Redis job store. `runningTtl` (seconds) is the lifetime of a
+   * running job hash; raise it above the worst-case long run (e.g. Deep Research)
+   * so age-based Redis cleanup doesn't reap an active multi-minute generation.
+   */
+  redisOptions?: {
+    runningTtl?: number;
   };
 }
 
@@ -72,7 +81,7 @@ export function createStreamServices(config: StreamServicesConfig = {}): StreamS
   // Use provided config or fall back to cache config (USE_REDIS_STREAMS for stream-specific override)
   const useRedis = config.useRedis ?? cacheConfig.USE_REDIS_STREAMS;
   const redisClient = config.redisClient ?? ioredisClient;
-  const { redisSubscriber, inMemoryOptions } = config;
+  const { redisSubscriber, inMemoryOptions, redisOptions } = config;
 
   // Check if we should and can use Redis
   if (useRedis && redisClient) {
@@ -91,7 +100,7 @@ export function createStreamServices(config: StreamServicesConfig = {}): StreamS
         return createInMemoryServices(inMemoryOptions);
       }
 
-      const jobStore = new RedisJobStore(redisClient);
+      const jobStore = new RedisJobStore(redisClient, redisOptions);
       const eventTransport = new RedisEventTransport(redisClient, subscriber);
 
       logger.info('[StreamServices] Created Redis-backed stream services');

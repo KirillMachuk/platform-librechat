@@ -12,6 +12,8 @@ const {
   resolveAgentTokenConfig,
   resolveAgentScopedSkillIds,
   resolveModelSpecSkillIds,
+  buildDeepResearchGraph,
+  resolveDeepResearchMode,
   buildAgentContextAttachmentsByAgentId,
 } = require('@librechat/api');
 const {
@@ -411,6 +413,24 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
 
   await applyProjectContext({ req, primaryAgent });
   await applyConversationFileContext({ req, primaryAgent });
+
+  /** Deep Research: when the capability is enabled and the toggle is set, this
+   *  turn runs as an orchestrator→researcher graph (assembled after subagent
+   *  resolution below). Resolve the active depth mode up front so the optional
+   *  lead-model override is applied before model validation. */
+  const deepResearchActive =
+    req.body?.ephemeralAgent?.deep_research === true &&
+    enabledCapabilities.has(AgentCapabilities.deep_research);
+  const deepResearchMode = deepResearchActive
+    ? resolveDeepResearchMode(appConfig?.deepResearch)
+    : null;
+  /** Capture the conversation's selected model BEFORE the lead-model override so
+   *  researchers fall back to it (never the expensive lead model) when no
+   *  workerModel is configured. */
+  const deepResearchConversationModel = primaryAgent.model;
+  if (deepResearchMode?.leadModel) {
+    primaryAgent.model = deepResearchMode.leadModel;
+  }
 
   const modelsConfig = await getModelsConfig(req);
   const validationResult = await validateAgentModel({
@@ -986,6 +1006,81 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
     for (const config of agentConfigs.values()) {
       config.subagents = undefined;
       config.subagentAgentConfigs = undefined;
+    }
+  }
+
+  /** Deep Research: turn the ephemeral primary agent into an orchestrator that
+   *  spawns a researcher subagent over the unified retrieval layer (web_search +
+   *  file_search). Injected AFTER subagent resolution so the capability strip
+   *  above doesn't clobber the injected `subagents`/`subagentAgentConfigs`. The
+   *  researcher is initialized as an ephemeral agent (id not starting with
+   *  `agent_`), kept out of `agentConfigs` (pure subagent → standard graph), and
+   *  registered in `agentToolContexts` so its tools resolve at execution. */
+  if (deepResearchActive && deepResearchMode) {
+    const initializeDeepResearchSearcher = async (searcherAgent) => {
+      try {
+        const agent = {
+          ...primaryAgent,
+          ...searcherAgent,
+          subagents: undefined,
+          subagentAgentConfigs: undefined,
+        };
+        const config = await initializeAgent(
+          {
+            req,
+            res,
+            agent,
+            loadTools,
+            requestFiles,
+            conversationId,
+            parentMessageId,
+            endpointOption: { ...endpointOption, endpoint: EModelEndpoint.agents },
+            allowedProviders,
+            accessibleSkillIds: [],
+            skillAuthoringAvailable: false,
+            codeEnvAvailable,
+            skillStates,
+            defaultActiveOnShare,
+          },
+          {
+            getFiles: db.getFiles,
+            getUserKey: db.getUserKey,
+            getMessages: db.getMessages,
+            getConvoFiles: db.getConvoFiles,
+            updateFilesUsage: db.updateFilesUsage,
+            getUserKeyValues: db.getUserKeyValues,
+            getUserCodeFiles: db.getUserCodeFiles,
+            getToolFilesByIds: db.getToolFilesByIds,
+            getCodeGeneratedFiles: db.getCodeGeneratedFiles,
+            filterFilesByAgentAccess,
+            filterRequestFilesByAccess,
+            listSkillsByAccess: skillDbMethods.listSkillsByAccess,
+            listAlwaysApplySkills: skillDbMethods.listAlwaysApplySkills,
+            getSkillByName: skillDbMethods.getSkillByName,
+          },
+        );
+        agentToolContexts.set(config.id, buildAgentToolContext({ agent, config }));
+        return config;
+      } catch (err) {
+        logger.error('[deepResearch] Failed to initialize researcher subagent', err);
+        return null;
+      }
+    };
+
+    try {
+      await buildDeepResearchGraph({
+        primaryAgent,
+        primaryConfig,
+        mode: deepResearchMode,
+        conversationModel: deepResearchConversationModel,
+        /** P1: researchers use web + sovereign RAG. RAG-only (sovereign) mode
+         *  auto-detection / config-driven selection is a P2 follow-up. */
+        webSearchAvailable: true,
+        initializeSearcher: initializeDeepResearchSearcher,
+        logger,
+      });
+    } catch (err) {
+      logger.error('[deepResearch] Failed to assemble Deep Research graph', err);
     }
   }
 
