@@ -842,37 +842,63 @@ endpoints:
 #     # timeout: 15000          # HTTP request timeout in milliseconds (max 120000); Tavily Extract receives seconds clamped to 1-60
 
 # Deep Research Configuration (optional) — the "Deep Research" chat mode.
-# Turns the chat into an orchestrator→researcher agent graph over the unified
-# retrieval layer (web_search + the sovereign file_search RAG). Requires web
-# search (above) configured. The composer toggle only turns DR on/off; the depth
-# tier is tenant-wide (admin) via `activeMode`. Per-mode `leadModel`/`workerModel`
-# are model ids on your configured endpoint; when unset, the conversation's
-# selected model is used for both. Toggle visibility per tenant with
-# `interface.deepResearch` (default: true).
+# Orchestrator→researcher agent graph over the unified retrieval layer (web_search
+# + the sovereign file_search RAG). Requires web search (above) configured. The
+# composer toggle only turns DR on/off; the depth tier is tenant-wide (admin) via
+# `activeMode`. `leadModel` = orchestrator/planner/synthesis, `workerModel` =
+# researchers; when unset, the conversation's selected model is used. Toggle
+# visibility per tenant with `interface.deepResearch` (default: true).
+#
+# MODEL STACK — finalized from the price/quality benchmark
+# (dr-model-bench/REPORT_dr_model_stack.md, 2026-06-23). The quality bottleneck is
+# RETRIEVAL, not the model; the cheap stacks showed no quality regression vs deep at
+# 40-150x lower cost. OPERATIONAL RULES that must hold:
+#   - Tool-driving nodes (lead + workers) must use NON-THINKING slugs — thinking
+#     variants break tool-calling. Reasoning models only for a no-tools reflection step.
+#   - Final synthesis (the lead) must be DeepSeek for native Russian — never Qwen/GLM.
+#   - Pin EXACT slugs (not aliases) and pin the OpenRouter provider for reliability
+#     (provider.order + allow_fallbacks:false, :exacto route); keep a cross-vendor
+#     fallback (openai/gpt-5-mini or anthropic/claude-haiku-4.5) for single-provider models.
+#   - Sovereignty does NOT depend on the model: every OpenRouter route is cross-border,
+#     so the egress anonymizer is always required; treat DeepSeek as "foreign" for 152-FZ.
+#   - The synthesis prompt enforces "no number/fact without a traceable source"
+#     (anti-hallucination) — the key mitigation for cheap models on weakly-retrieved topics.
+#
+# ROLLOUT: keep economy/balanced on Sonnet until the real-1ma-retrieval re-benchmark
+# passes the prod gate (tool-reliability >=98% AND blind human RU >=7/10 AND citation
+# accuracy >=0.9). The :online benchmark already greenlights the switch; the slugs
+# below are the recommended target — flip live only after the gate.
 # deepResearch:
 #   activeMode: deep              # 'economy' | 'balanced' | 'deep' (default: deep)
 #   modes:
-#     economy:
+#     economy:                    # ~$0.04/run
 #       maxConcurrentResearchers: 2
 #       maxOrchestratorCycles: 4
 #       maxSearcherTurns: 3
 #       perRunTokenBudget: 200000
 #       wallClockMinutes: 5
-#       # leadModel / workerModel: cheaper models (e.g. Chinese analogues) — pending model benchmark
-#     balanced:
+#       leadModel: 'deepseek/deepseek-chat-v3.1'     # non-thinking; plan + RU synthesis
+#       workerModel: 'qwen/qwen3-235b-a22b-2507'     # cheap reader, clean tool-calling
+#       # reflection (P2 node, no tools): qwen/qwen3-235b-a22b-thinking-2507
+#       # query-gen (P2 node): z-ai/glm-4.7-flash
+#     balanced:                   # ~$0.14/run
 #       maxConcurrentResearchers: 3
 #       maxOrchestratorCycles: 6
 #       maxSearcherTurns: 4
 #       perRunTokenBudget: 400000
 #       wallClockMinutes: 8
-#     deep:
+#       leadModel: 'deepseek/deepseek-v4-pro'        # plan + RU synthesis (faster than Sonnet)
+#       workerModel: 'deepseek/deepseek-v3.2'        # reader, large context
+#       # reflection (P2 node, no tools): deepseek/deepseek-r1-0528
+#       # query-gen (P2 node): google/gemini-2.5-flash-lite
+#     deep:                       # ~$5.9/run — DO NOT change
 #       maxConcurrentResearchers: 4
 #       maxOrchestratorCycles: 8
 #       maxSearcherTurns: 5
 #       perRunTokenBudget: 800000
 #       wallClockMinutes: 15
-#       leadModel: 'anthropic/claude-opus-4-8'      # orchestrator + writer (example id; must exist on your endpoint)
-#       workerModel: 'anthropic/claude-sonnet-4-6'  # researchers (example id; must exist on your endpoint)
+#       leadModel: 'anthropic/claude-opus-4.8'       # orchestrator + writer
+#       workerModel: 'anthropic/claude-sonnet-4.6'   # researchers
 
 # Memory configuration for user memories
 # memory:
