@@ -1,6 +1,6 @@
 import { logger, BASE_CONFIG_PRINCIPAL_ID } from '@librechat/data-schemas';
 import { PrincipalType, PrincipalModel, DeepResearchModes } from 'librechat-data-provider';
-import type { TDeepResearchConfig, DeepResearchMode } from 'librechat-data-provider';
+import type { DeepResearchMode } from 'librechat-data-provider';
 import type { AppConfig } from '@librechat/data-schemas';
 import type { Types, ClientSession } from 'mongoose';
 import type { Response } from 'express';
@@ -42,7 +42,7 @@ function getTenantId(req: ServerRequest): string | undefined {
 
 /** Builds the settings payload: the active tier plus every tier's resolved config. */
 function buildSettings(appConfig: AppConfig): DeepResearchSettingsResponse {
-  const drConfig = (appConfig as { deepResearch?: TDeepResearchConfig }).deepResearch;
+  const drConfig = appConfig.deepResearch;
   const activeMode = (drConfig?.activeMode ?? 'deep') as DeepResearchMode;
   const modes = DeepResearchModes.map((name) =>
     resolveDeepResearchMode({ activeMode: name, modes: drConfig?.modes }),

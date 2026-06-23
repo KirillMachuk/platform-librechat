@@ -1,8 +1,8 @@
 import { replaceSpecialVars } from 'librechat-data-provider';
 import type { ResolvedDeepResearchMode } from './types';
 import { buildOrchestratorInstructions, buildSearcherInstructions } from './prompts';
+import { isReasoningModel, resolveDeepResearchModel } from './modes';
 import { buildWebSearchContext } from '../tools/toolkits/web';
-import { resolveDeepResearchModel } from './modes';
 
 /**
  * Minimal structural view of an agent definition / initialized run config that
@@ -150,6 +150,11 @@ export async function buildDeepResearchGraph(
     conversationModel,
     webSearchAvailable,
   });
+  if (isReasoningModel(searcherAgent.model)) {
+    logger?.warn?.(
+      `[deepResearch] Researcher model "${searcherAgent.model}" is a reasoning model that may 400 on multi-turn tool calls; set deepResearch.modes.${mode.name}.workerModel to a non-reasoning model.`,
+    );
+  }
   const searcherConfig = await initializeSearcher(searcherAgent);
   if (!searcherConfig) {
     logger?.warn?.(
