@@ -23,10 +23,18 @@ env:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    # The mock e2e suite runs serially (workers:1, fullyParallel:false) for
-    # backend/DB isolation; with the in-job builds + CI retries it needs ~30+ min
-    # and was chronically cancelled at the old 30m cap. Sized to fit with headroom.
-    timeout-minutes: 50
+    # The mock e2e suite runs serially within a job (workers:1, fullyParallel:false)
+    # for backend/DB isolation. We run it as parallel shards so the whole suite
+    # completes well under the per-job cap — the un-sharded suite exceeded 50 min and
+    # was chronically cancelled on every PR (which also prevented its build caches
+    # from ever saving, so every run rebuilt cold). Each shard is a self-contained
+    # job (own build + backend + Mongo + mock); the per-shard timeout has headroom
+    # for a cold-cache build so the run completes and warms the caches for next time.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     env:
       E2E_CHROMIUM_CHANNEL: chrome
     steps:
@@ -116,8 +124,8 @@ jobs:
           google-chrome --version
           npx playwright install-deps chrome
 
-      - name: Run mock-LLM Tier-1 e2e
-        run: npx playwright test --config=e2e/playwright.config.mock.ts
+      - name: Run mock-LLM Tier-1 e2e (shard ${{ matrix.shard }}/4)
+        run: npx playwright test --config=e2e/playwright.config.mock.ts --shard=${{ matrix.shard }}/4
         env:
           CI: 'true'
 
@@ -125,7 +133,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-shard-${{ matrix.shard }}
           path: e2e/playwright-report/**
           retention-days: 7
           if-no-files-found: ignore
@@ -134,7 +142,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-test-results
+          name: playwright-test-results-shard-${{ matrix.shard }}
           path: e2e/specs/.test-results/**
           retention-days: 7
           if-no-files-found: ignore
