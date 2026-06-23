@@ -1,6 +1,11 @@
 import type { DeepResearchAgent, DeepResearchConfig } from './graph';
+import {
+  isReasoningModel,
+  resolveDeepResearchMode,
+  resolveDeepResearchModel,
+  DEEP_RESEARCH_MODE_DEFAULTS,
+} from './modes';
 import { buildSearcherAgent, buildDeepResearchGraph, deepResearchRecursionLimit } from './graph';
-import { resolveDeepResearchMode, DEEP_RESEARCH_MODE_DEFAULTS } from './modes';
 
 describe('resolveDeepResearchMode', () => {
   it('defaults to the deep preset when no config is provided', () => {
@@ -32,6 +37,48 @@ describe('resolveDeepResearchMode', () => {
     );
     expect(resolved.leadModel).toBe('lead-x');
     expect(resolved.workerModel).toBe('worker-y');
+  });
+});
+
+describe('isReasoningModel', () => {
+  it('flags OpenAI reasoning families that 400 on multi-turn tool calls', () => {
+    expect(isReasoningModel('openai/gpt-5.4-mini')).toBe(true);
+    expect(isReasoningModel('openai/gpt-5')).toBe(true);
+    expect(isReasoningModel('openai/gpt-5.5')).toBe(true);
+    expect(isReasoningModel('openai/o1')).toBe(true);
+    expect(isReasoningModel('openai/o3-mini')).toBe(true);
+  });
+
+  it('does not flag non-reasoning models (incl. gpt-5 *-chat instruct variants)', () => {
+    expect(isReasoningModel('anthropic/claude-sonnet-4.6')).toBe(false);
+    expect(isReasoningModel('deepseek/deepseek-chat')).toBe(false);
+    expect(isReasoningModel('deepseek/deepseek-v4-pro')).toBe(false);
+    expect(isReasoningModel('qwen/qwen3.7-max')).toBe(false);
+    expect(isReasoningModel('openai/gpt-5-chat')).toBe(false);
+    expect(isReasoningModel(undefined)).toBe(false);
+    expect(isReasoningModel('')).toBe(false);
+  });
+});
+
+describe('resolveDeepResearchModel', () => {
+  it('uses the configured mode model when it is non-reasoning', () => {
+    expect(resolveDeepResearchModel('anthropic/claude-sonnet-4.6', 'openai/gpt-5.4-mini')).toBe(
+      'anthropic/claude-sonnet-4.6',
+    );
+  });
+
+  it('skips a reasoning fallback and prefers the first non-reasoning candidate', () => {
+    expect(
+      resolveDeepResearchModel(undefined, 'openai/gpt-5.4-mini', 'anthropic/claude-sonnet-4.6'),
+    ).toBe('anthropic/claude-sonnet-4.6');
+  });
+
+  it('returns the first candidate as a last resort when every option is reasoning', () => {
+    expect(resolveDeepResearchModel(undefined, 'openai/gpt-5', 'openai/o1')).toBe('openai/gpt-5');
+  });
+
+  it('returns undefined when no candidate is provided', () => {
+    expect(resolveDeepResearchModel(undefined, undefined)).toBeUndefined();
   });
 });
 
@@ -92,6 +139,15 @@ describe('buildSearcherAgent', () => {
       },
     );
     expect(noWorker.model).toBe('convo-model');
+  });
+
+  it('skips a reasoning conversation model and falls back to the non-reasoning lead', () => {
+    const searcher = buildSearcherAgent(
+      { ...primary, model: 'anthropic/claude-sonnet-4.6' },
+      DEEP_RESEARCH_MODE_DEFAULTS.deep,
+      { ...opts, conversationModel: 'openai/gpt-5.4-mini' },
+    );
+    expect(searcher.model).toBe('anthropic/claude-sonnet-4.6');
   });
 
   it('deep-clones tool_resources so the searcher cannot mutate the parent', () => {

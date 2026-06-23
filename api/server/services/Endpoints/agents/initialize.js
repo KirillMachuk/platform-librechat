@@ -12,8 +12,10 @@ const {
   resolveAgentTokenConfig,
   resolveAgentScopedSkillIds,
   resolveModelSpecSkillIds,
+  isReasoningModel,
   buildDeepResearchGraph,
   resolveDeepResearchMode,
+  resolveDeepResearchModel,
   buildAgentContextAttachmentsByAgentId,
 } = require('@librechat/api');
 const {
@@ -425,11 +427,26 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
     ? resolveDeepResearchMode(appConfig?.deepResearch)
     : null;
   /** Capture the conversation's selected model BEFORE the lead-model override so
-   *  researchers fall back to it (never the expensive lead model) when no
+   *  researchers can fall back to it (never the expensive lead model) when no
    *  workerModel is configured. */
   const deepResearchConversationModel = primaryAgent.model;
-  if (deepResearchMode?.leadModel) {
-    primaryAgent.model = deepResearchMode.leadModel;
+  if (deepResearchActive && deepResearchMode) {
+    /** Force a non-reasoning model for the orchestrator. The user's selected chat
+     *  model (or an unset leadModel) must not leak a reasoning model — those 400
+     *  on DR's multi-turn tool calls. Prefer the configured leadModel, else the
+     *  conversation model only if it is non-reasoning. */
+    const leadModel = resolveDeepResearchModel(
+      deepResearchMode.leadModel,
+      deepResearchConversationModel,
+    );
+    if (leadModel) {
+      primaryAgent.model = leadModel;
+    }
+    if (isReasoningModel(primaryAgent.model)) {
+      logger.warn(
+        `[deepResearch] Orchestrator model "${primaryAgent.model}" is a reasoning model that may 400 on multi-turn tool calls; set deepResearch.modes.${deepResearchMode.name}.leadModel to a non-reasoning model.`,
+      );
+    }
   }
 
   const modelsConfig = await getModelsConfig(req);
