@@ -2,6 +2,7 @@ import { replaceSpecialVars } from 'librechat-data-provider';
 import type { ResolvedDeepResearchMode } from './types';
 import { buildOrchestratorInstructions, buildSearcherInstructions } from './prompts';
 import { buildWebSearchContext } from '../tools/toolkits/web';
+import { resolveDeepResearchModel } from './modes';
 
 /**
  * Minimal structural view of an agent definition / initialized run config that
@@ -35,9 +36,9 @@ export interface BuildDeepResearchGraphParams {
   primaryConfig: DeepResearchConfig;
   mode: ResolvedDeepResearchMode;
   /**
-   * The conversation's originally-selected model, captured BEFORE any lead-model
-   * override. Used as the researcher fallback so workers never silently inherit
-   * an expensive lead model when `workerModel` is unset.
+   * The conversation's originally-selected model, captured BEFORE the lead-model
+   * override. A non-reasoning fallback for the researcher when `workerModel` is
+   * unset; reasoning models are skipped (they 400 on multi-turn tool calls).
    */
   conversationModel?: string;
   /** Whether web search is configured; when false, DR runs RAG-only (sovereign). */
@@ -77,7 +78,7 @@ export function deepResearchRecursionLimit(mode: ResolvedDeepResearchMode): numb
 
 export interface SearcherAgentOptions {
   now: string;
-  /** Researcher model fallback when `mode.workerModel` is unset (NOT the lead model). */
+  /** Non-reasoning researcher fallback when `mode.workerModel` is unset. */
   conversationModel?: string;
   /** When false, the researcher gets file_search only (no foreign web egress). */
   webSearchAvailable: boolean;
@@ -99,7 +100,7 @@ export function buildSearcherAgent(
       'ищет во внутренних документах (file_search)' +
       (webSearchAvailable ? ' и в интернете (web_search)' : '') +
       ', возвращает структурированный отчёт.',
-    model: mode.workerModel ?? conversationModel ?? primaryAgent.model,
+    model: resolveDeepResearchModel(mode.workerModel, conversationModel, primaryAgent.model),
     provider: primaryAgent.provider,
     endpoint: primaryAgent.endpoint,
     instructions: buildSearcherInstructions({

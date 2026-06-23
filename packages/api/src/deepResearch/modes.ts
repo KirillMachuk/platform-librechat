@@ -34,6 +34,40 @@ export const DEEP_RESEARCH_MODE_DEFAULTS: Record<DeepResearchMode, ResolvedDeepR
   },
 };
 
+/**
+ * OpenAI reasoning families (o-series and gpt-5.x, excluding the non-reasoning
+ * `*-chat` instruct variants) require their reasoning trace to be replayed
+ * between tool turns. LibreChat does not replay it, so these models return HTTP
+ * 400 on Deep Research's multi-turn file_search / web_search loops. A DR tool
+ * node (orchestrator or researcher) must never run on such a model.
+ */
+export function isReasoningModel(model?: string): boolean {
+  if (!model) {
+    return false;
+  }
+  const id = model.toLowerCase().split('/').pop() ?? '';
+  if (id.includes('chat')) {
+    return false;
+  }
+  return /^o[1-9]/.test(id) || /^gpt-5/.test(id);
+}
+
+/**
+ * Picks the model for a Deep Research tool node. Forces the mode's configured
+ * (non-thinking) model; when it is unset, skips any user-selected reasoning
+ * model that would 400 on tool calls and prefers the first non-reasoning
+ * fallback. Returns the first candidate only as a last resort (every candidate
+ * is a reasoning model), so a misconfiguration degrades loudly rather than
+ * silently inheriting the user's reasoning chat model.
+ */
+export function resolveDeepResearchModel(
+  modeModel: string | undefined,
+  ...fallbacks: Array<string | undefined>
+): string | undefined {
+  const candidates = [modeModel, ...fallbacks].filter((model): model is string => Boolean(model));
+  return candidates.find((model) => !isReasoningModel(model)) ?? candidates[0];
+}
+
 /** Resolves the active Deep Research mode from tenant config, merged over defaults. */
 export function resolveDeepResearchMode(config?: TDeepResearchConfig): ResolvedDeepResearchMode {
   const activeMode = (config?.activeMode ?? 'deep') as DeepResearchMode;
