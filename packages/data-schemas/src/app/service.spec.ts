@@ -145,4 +145,23 @@ describe('AppService assistants config', () => {
       defaultAssistantsVersion.azureAssistants,
     );
   });
+
+  it('surfaces deepResearch (activeMode + per-mode models) at the top level for readers', async () => {
+    const config = {
+      deepResearch: {
+        activeMode: 'balanced',
+        modes: {
+          balanced: {
+            leadModel: 'anthropic/claude-sonnet-4.6',
+            workerModel: 'anthropic/claude-sonnet-4.6',
+          },
+        },
+      },
+    } as DeepPartial<TCustomConfig>;
+
+    const result = await AppService({ config });
+
+    expect(result.deepResearch?.activeMode).toBe('balanced');
+    expect(result.deepResearch?.modes?.balanced?.workerModel).toBe('anthropic/claude-sonnet-4.6');
+  });
 });

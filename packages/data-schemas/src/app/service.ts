@@ -146,6 +146,7 @@ export const AppService = async (params?: {
     filteredTools,
     includedTools,
     messageFilter,
+    deepResearch: config.deepResearch,
     summarization,
     availableTools,
     imageOutputType,
