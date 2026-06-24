@@ -37,6 +37,9 @@ jest.mock('@librechat/api', () => ({
     abortJob: jest.fn(),
   },
   recordCollectedUsage: mockRecordCollectedUsage,
+  // Real splice-claim behavior so the "passes the usage" + "array is cleared" assertions hold.
+  claimCollectedUsage: (usage) =>
+    Array.isArray(usage) && usage.length ? usage.splice(0, usage.length) : [],
   sanitizeMessageForTransmit: jest.fn((msg) => msg),
 }));
 
@@ -105,6 +108,9 @@ describe('abortMiddleware - spendCollectedUsage', () => {
 
     it('should call recordCollectedUsage with abort context and full deps', async () => {
       const collectedUsage = [{ input_tokens: 100, output_tokens: 50, model: 'gpt-4' }];
+      // The atomic claim splices the array, so the spend receives a snapshot of the
+      // contents (the original is emptied). Capture the expected contents first.
+      const expectedUsage = [...collectedUsage];
 
       await spendCollectedUsage({
         userId: 'user-123',
@@ -131,7 +137,7 @@ describe('abortMiddleware - spendCollectedUsage', () => {
         {
           user: 'user-123',
           conversationId: 'convo-123',
-          collectedUsage,
+          collectedUsage: expectedUsage,
           context: 'abort',
           messageId: 'msg-123',
           model: 'gpt-4',
@@ -145,6 +151,7 @@ describe('abortMiddleware - spendCollectedUsage', () => {
         { input_tokens: 80, output_tokens: 40, model: 'claude-3' },
         { input_tokens: 120, output_tokens: 60, model: 'gemini-pro' },
       ];
+      const expectedUsage = [...collectedUsage];
 
       await spendCollectedUsage({
         userId: 'user-123',
@@ -158,7 +165,7 @@ describe('abortMiddleware - spendCollectedUsage', () => {
         expect.any(Object),
         expect.objectContaining({
           context: 'abort',
-          collectedUsage,
+          collectedUsage: expectedUsage,
         }),
       );
     });
