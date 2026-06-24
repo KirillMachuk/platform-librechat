@@ -16,7 +16,14 @@ function mockReq(overrides = {}) {
 
 interface MockRes {
   statusCode: number;
-  body: undefined | { activeMode?: string; modes?: Array<{ name: string }>; error?: string };
+  body:
+    | undefined
+    | {
+        activeMode?: string;
+        modes?: Array<{ name: string }>;
+        availableModels?: string[];
+        error?: string;
+      };
   status: jest.Mock;
   json: jest.Mock;
 }
@@ -44,9 +51,17 @@ const appConfig = (activeMode?: string) => ({
   },
 });
 
+const AVAILABLE = [
+  'anthropic/claude-sonnet-4.6',
+  'anthropic/claude-opus-4.8',
+  'deepseek/deepseek-v4-pro',
+  'deepseek/deepseek-v3.2',
+];
+
 function createHandlers(overrides = {}) {
   const deps = {
     getAppConfig: jest.fn().mockResolvedValue(appConfig('balanced')),
+    getModelsConfig: jest.fn().mockResolvedValue({ '1ma': AVAILABLE }),
     patchConfigFields: jest.fn().mockResolvedValue({ _id: 'c1' }),
     invalidateConfigCaches: jest.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -65,6 +80,7 @@ describe('createDeepResearchSettingsHandlers', () => {
       expect(res.statusCode).toBe(200);
       expect(res.body?.activeMode).toBe('balanced');
       expect(res.body?.modes?.map((m) => m.name)).toEqual(['economy', 'balanced', 'deep']);
+      expect(res.body?.availableModels).toEqual([...AVAILABLE].sort());
     });
 
     it('defaults activeMode to "deep" when no deepResearch config is present', async () => {
@@ -142,6 +158,89 @@ describe('createDeepResearchSettingsHandlers', () => {
       await handlers.setActiveMode(mockReq({ body: { activeMode: 'deep' } }), res);
 
       expect(res.statusCode).toBe(500);
+    });
+  });
+
+  describe('setModeModels', () => {
+    it('patches per-mode lead/worker models when both are available', async () => {
+      const { handlers, deps } = createHandlers();
+      const res = mockRes();
+
+      await handlers.setModeModels(
+        mockReq({
+          body: {
+            mode: 'balanced',
+            leadModel: 'deepseek/deepseek-v4-pro',
+            workerModel: 'deepseek/deepseek-v3.2',
+          },
+        }),
+        res,
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(deps.patchConfigFields).toHaveBeenCalledWith(
+        PrincipalType.ROLE,
+        BASE_CONFIG_PRINCIPAL_ID,
+        PrincipalModel.ROLE,
+        {
+          'deepResearch.modes.balanced.leadModel': 'deepseek/deepseek-v4-pro',
+          'deepResearch.modes.balanced.workerModel': 'deepseek/deepseek-v3.2',
+        },
+        10,
+      );
+      expect(deps.invalidateConfigCaches).toHaveBeenCalledWith('t1');
+    });
+
+    it('rejects a model not in the endpoint allowlist without writing', async () => {
+      const { handlers, deps } = createHandlers();
+      const res = mockRes();
+
+      await handlers.setModeModels(
+        mockReq({
+          body: {
+            mode: 'economy',
+            leadModel: 'openai/ghost-model',
+            workerModel: 'deepseek/deepseek-v3.2',
+          },
+        }),
+        res,
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body?.error).toContain('openai/ghost-model');
+      expect(deps.patchConfigFields).not.toHaveBeenCalled();
+    });
+
+    it('rejects an invalid mode without writing', async () => {
+      const { handlers, deps } = createHandlers();
+      const res = mockRes();
+
+      await handlers.setModeModels(
+        mockReq({
+          body: {
+            mode: 'turbo',
+            leadModel: 'deepseek/deepseek-v4-pro',
+            workerModel: 'deepseek/deepseek-v3.2',
+          },
+        }),
+        res,
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect(deps.patchConfigFields).not.toHaveBeenCalled();
+    });
+
+    it('rejects when a model is missing without writing', async () => {
+      const { handlers, deps } = createHandlers();
+      const res = mockRes();
+
+      await handlers.setModeModels(
+        mockReq({ body: { mode: 'deep', leadModel: 'anthropic/claude-opus-4.8' } }),
+        res,
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect(deps.patchConfigFields).not.toHaveBeenCalled();
     });
   });
 });
