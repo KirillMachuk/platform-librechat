@@ -101,7 +101,12 @@ export default defineConfig({
   use: {
     baseURL,
     locale: 'en-US',
-    video: 'on-first-retry',
+    // No video: it needs Playwright's bundled ffmpeg, which isn't installed when
+    // the browser download is skipped (system Chrome via channel). Recording it
+    // on retries made every retry die in browserContext.newPage, so flaky tests
+    // could never recover. `trace: retain-on-failure` already captures DOM
+    // snapshots, network, console, and per-action screenshots for debugging.
+    video: 'off',
     trace: 'retain-on-failure',
     ignoreHTTPSErrors: true,
     headless: true,
