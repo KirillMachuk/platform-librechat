@@ -182,6 +182,8 @@ export type AdminAuditEntry = {
   tokens?: { input?: number; output?: number; total?: number };
   ip?: string;
   outcome: string;
+  /** Action-specific detail (e.g. DR mode + chosen models, granted capability). */
+  metadata?: Record<string, string | number | boolean>;
   createdAt?: string;
 };
 

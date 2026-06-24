@@ -5,7 +5,7 @@ const { requireCapability } = require('~/server/middleware/roles/capabilities');
 const { getAppConfig, invalidateConfigCaches } = require('~/server/services/Config');
 const { getModelsConfig } = require('~/server/controllers/ModelController');
 const { requireJwtAuth } = require('~/server/middleware');
-const auditConfigChange = require('~/server/middleware/auditConfigChange');
+const auditDeepResearchChange = require('~/server/middleware/auditDeepResearchChange');
 const db = require('~/models');
 
 const router = express.Router();
@@ -20,7 +20,7 @@ const handlers = createDeepResearchSettingsHandlers({
 });
 
 router.use(requireJwtAuth, requireAdminAccess);
-router.use(auditConfigChange);
+router.use(auditDeepResearchChange);
 
 router.get('/', handlers.getSettings);
 router.put('/', handlers.setActiveMode);
