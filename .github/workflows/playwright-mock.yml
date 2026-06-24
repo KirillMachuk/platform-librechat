@@ -125,7 +125,21 @@ jobs:
           npx playwright install-deps chrome
 
       - name: Run mock-LLM Tier-1 e2e (shard ${{ matrix.shard }}/4)
-        run: npx playwright test --config=e2e/playwright.config.mock.ts --shard=${{ matrix.shard }}/4
+        # Cap the test step well under the job timeout (45m). A hung run then fails
+        # THIS step — so the failure()/!cancelled() upload steps below still run and
+        # capture artifacts — instead of running to the job timeout, which cancels
+        # the job and drops everything. The suite finishes in ~2-3 min/shard, so 15m
+        # is ample headroom over a legit (even cold-cache) run.
+        timeout-minutes: 15
+        # tee the runner output (which includes the mock webServer's piped stdout) to
+        # a file so the server log survives as a downloadable artifact, not just inline
+        # step logs. Write it to e2e/logs (NOT Playwright's outputDir, which is wiped at
+        # the start of the run). pipefail keeps playwright's exit code authoritative.
+        run: |
+          set -o pipefail
+          mkdir -p e2e/logs
+          npx playwright test --config=e2e/playwright.config.mock.ts --shard=${{ matrix.shard }}/4 2>&1 \
+            | tee "e2e/logs/run-shard-${{ matrix.shard }}.log"
         env:
           CI: 'true'
 
@@ -138,11 +152,13 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Upload traces & screenshots
+      - name: Upload traces, screenshots & run log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-test-results-shard-${{ matrix.shard }}
-          path: e2e/specs/.test-results/**
+          path: |
+            e2e/specs/.test-results/**
+            e2e/logs/**
           retention-days: 7
           if-no-files-found: ignore

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import type { Page, Response } from '@playwright/test';
 import {
   isAgentsStream,
   MOCK_ENDPOINTS,
@@ -54,29 +54,62 @@ const imageFixture: UploadFixture = {
 const composer = (page: Page) => page.locator('form');
 
 async function openProviderFileChooser(page: Page) {
-  await page.getByRole('button', { name: 'Attach File Options' }).click();
-  await expect(page.getByText('Upload to Provider')).toBeVisible();
-
+  // The fork's composer uses a single paperclip that opens the file chooser
+  // directly (no upload-type menu). "Attach Files" is also a sidebar nav button,
+  // so scope to the composer form.
+  const composerForm = page
+    .locator('form')
+    .filter({ has: page.getByRole('textbox', { name: 'Message input' }) });
   const fileChooserPromise = page.waitForEvent('filechooser');
-  await page.getByText('Upload to Provider').click();
+  await composerForm.getByRole('button', { name: 'Attach Files' }).click();
   const fileChooser = await fileChooserPromise;
   expect(await fileChooser.element().getAttribute('type')).toBe('file');
   return fileChooser;
 }
 
-async function uploadProviderFile(page: Page, fixture: UploadFixture) {
+const FILE_UPLOAD = (response: Response) =>
+  response.url().includes('/api/files') &&
+  response.request().method() === 'POST' &&
+  response.status() === 200;
+
+/**
+ * The attach type is chosen by the "Document handling" toolbar control. Switch
+ * a non-image document to "Original file" (native) so it reaches the model as a
+ * provider input_file; the switch deletes and re-uploads the file.
+ */
+async function selectNativeFileMode(page: Page) {
+  const trigger = page.getByRole('button', { name: 'Document handling' });
+  await expect(trigger).toBeVisible();
+  if (((await trigger.textContent()) ?? '').includes('Original file')) {
+    return;
+  }
+  const reupload = page.waitForResponse(FILE_UPLOAD, { timeout: 30000 }).catch(() => undefined);
+  await trigger.click();
+  await page.getByRole('menuitem', { name: 'Original file' }).click();
+  await reupload;
+  await expect(trigger).toContainText('Original file');
+}
+
+async function attachFile(page: Page, fixture: UploadFixture) {
   const fileChooser = await openProviderFileChooser(page);
-  const uploadResponsePromise = page.waitForResponse(
-    (response) =>
-      response.url().includes('/api/files') &&
-      response.request().method() === 'POST' &&
-      response.status() === 200,
-    { timeout: 30000 },
-  );
+  const uploadResponsePromise = page.waitForResponse(FILE_UPLOAD, { timeout: 30000 });
   await fileChooser.setFiles(fixture);
   const uploadResponse = await uploadResponsePromise;
   expect(uploadResponse.ok()).toBeTruthy();
-  await page.waitForTimeout(350);
+  return uploadResponse;
+}
+
+/**
+ * Attach a document and switch it to native "Original file" handling so it
+ * reaches the model as a provider input_file. The mode applies to the next
+ * upload, so callers that need a native single file should attach it after a
+ * prior document set the mode (images are always native and have no control).
+ */
+async function uploadProviderFile(page: Page, fixture: UploadFixture) {
+  const uploadResponse = await attachFile(page, fixture);
+  if (!fixture.mimeType.startsWith('image/')) {
+    await selectNativeFileMode(page);
+  }
   return uploadResponse;
 }
 
@@ -308,9 +341,7 @@ test.describe('core chat loop', () => {
     await expect(page.getByText('1 / 2')).toBeVisible();
   });
 
-  test('keeps upload-to-provider CSV attached to the sent message and model input', async ({
-    page,
-  }) => {
+  test('keeps an attached CSV through send and reload', async ({ page }) => {
     test.setTimeout(90000);
 
     const csvFixture: UploadFixture = {
@@ -319,30 +350,20 @@ test.describe('core chat loop', () => {
       buffer: Buffer.from('name,value\nalpha,1\n'),
     };
     const filename = csvFixture.name;
-    const assertionText = `E2E_ASSERT_PROVIDER_FILE:${filename}`;
+    const reply = replyText('csv-attach');
     const fileChip = messagesView(page).getByRole('button', { name: filename });
 
     await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
     await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
 
-    await uploadProviderFile(page, csvFixture);
+    // The fork attaches a lone CSV as an extracted-text source (RAG), not a
+    // native provider file; it still rides with the sent message and persists.
+    await attachFile(page, csvFixture);
+    await expect(composer(page).getByRole('button', { name: filename })).toBeVisible();
 
-    await expect(page.getByRole('button', { name: filename })).toBeVisible();
-
-    const input = page.getByRole('textbox', { name: 'Message input' });
-    await input.click();
-    await input.fill(assertionText);
-    await expect(page.getByTestId('send-button')).toBeEnabled();
-
-    const [response] = await Promise.all([
-      page.waitForResponse(isAgentsStream, { timeout: 30000 }),
-      page.getByTestId('send-button').click(),
-    ]);
+    const response = await sendMessage(page, replyPrompt('csv-attach'));
     expect(response.ok()).toBeTruthy();
-
-    await expect(
-      messagesView(page).getByText(`E2E provider file assertion passed: ${filename}`),
-    ).toBeVisible();
+    await expect(messagesView(page).getByText(reply)).toBeVisible({ timeout: 30000 });
     await expect(fileChip).toBeVisible();
 
     await expect(page).toHaveURL(/\/c\/[0-9a-fA-F-]{36}$/);

@@ -141,6 +141,11 @@ test.describe('prompt manager', () => {
       await page.getByRole('link', { name: 'Create Prompt' }).click();
       await expect(page).toHaveURL(/\/prompts\/new$/);
 
+      // The Prompts popup stays open over the create page in the fork; dismiss it
+      // so its overlay doesn't sit over the form and swallow the submit click.
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('dialog')).toBeHidden();
+
       await page.getByRole('textbox', { name: 'Prompt Name' }).fill(promptName);
       await page.getByRole('textbox', { name: 'Prompt text input field' }).fill(promptText);
       await page
@@ -152,6 +157,11 @@ test.describe('prompt manager', () => {
         })
         .fill(COMMAND);
 
+      // The submit button stays aria-disabled until react-hook-form revalidates
+      // the just-filled fields; wait for it to enable so the click isn't
+      // preventDefault-ed (which would silently skip the POST).
+      const createButton = page.getByRole('button', { name: 'Create Prompt' });
+      await expect(createButton).toBeEnabled();
       const [createResponse] = await Promise.all([
         page.waitForResponse(
           (response) =>
@@ -161,7 +171,7 @@ test.describe('prompt manager', () => {
             response.status() < 300,
           { timeout: 30000 },
         ),
-        page.getByRole('button', { name: 'Create Prompt' }).click(),
+        createButton.click(),
       ]);
       const createdPrompt = (await createResponse.json()) as {
         group?: PromptGroup;

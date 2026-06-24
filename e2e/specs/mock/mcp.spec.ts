@@ -7,6 +7,8 @@ import {
   selectMockModel,
   uniqueAgentName,
   waitForPersistedAgent,
+  selectFromSearchCombobox,
+  closeAgentBuilder,
 } from './agents.helpers';
 import { MOCK_ENDPOINTS, fetchJson, getAccessToken, mockReply, sendMessage } from './helpers';
 
@@ -130,8 +132,12 @@ test.describe('agent builder MCP tools', () => {
       expect(persistedAgent.mcpServerNames).toEqual(expect.arrayContaining([MCP_SERVER_NAME]));
 
       const reopenedForm = await openAgentBuilder(page);
-      await reopenedForm.getByRole('combobox', { name: 'Agent', exact: true }).click();
-      await page.getByRole('option', { name: agentName }).click();
+      await selectFromSearchCombobox(
+        page,
+        reopenedForm.getByRole('combobox', { name: 'Agent', exact: true }),
+        'Search agents by name',
+        agentName,
+      );
 
       await expect(reopenedForm.getByLabel('Agent name')).toHaveValue(agentName);
       await expect(reopenedForm.getByLabel('Agent description')).toHaveValue(DESCRIPTION);
@@ -139,6 +145,7 @@ test.describe('agent builder MCP tools', () => {
       await expectSelectedMCPServerTools(reopenedForm);
 
       await reopenedForm.getByRole('button', { name: 'Select Agent' }).click();
+      await closeAgentBuilder(page, reopenedForm);
 
       const response = await sendMessage(page, `hello from ${agentName}`);
       expect(response.ok()).toBeTruthy();

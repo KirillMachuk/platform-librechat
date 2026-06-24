@@ -38,13 +38,24 @@ const modelSelectorTrigger = (page: Page) =>
 
 export const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** Open the model selector, choose an endpoint, then its model (committed on the model click). */
+/**
+ * Open the model selector and choose an endpoint from the "LLM models" tab.
+ * Model specs surface their label as the option (e.g. "Mock Provider A"), while
+ * added non-spec endpoints surface their model name directly (e.g.
+ * "mock-model-c"). Click whichever the endpoint exposes.
+ */
 export async function selectMockEndpoint(page: Page, endpoint: MockEndpoint) {
   const trigger = modelSelectorTrigger(page);
   await trigger.click();
-  await page.getByRole('option', { name: endpoint.label }).click();
+  const labelOption = page.getByRole('option', { name: endpoint.label, exact: true });
   const modelOption = page.getByRole('option', { name: endpoint.model, exact: true });
-  if (await modelOption.isVisible({ timeout: 1000 }).catch(() => false)) {
+  await expect(labelOption.or(modelOption).first()).toBeVisible({ timeout: 10000 });
+  if (await labelOption.isVisible().catch(() => false)) {
+    await labelOption.click();
+    if (await modelOption.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await modelOption.click();
+    }
+  } else {
     await modelOption.click();
   }
   await expect(trigger).not.toHaveText('Select a model');

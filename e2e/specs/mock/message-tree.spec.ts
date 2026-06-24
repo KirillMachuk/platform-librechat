@@ -1094,7 +1094,11 @@ test.describe('message tree stream operations', () => {
     const basePrompt = replyPrompt(`${label}-base`);
     const baseReply = replyText(`${label}-base`);
     const errorPrompt = `E2E_FORCED_ERROR:${label}`;
-    const errorText = `E2E forced stream error ${label}`;
+    // The fork collapses any stream error into one hardcoded, locale-independent
+    // fallback string (getUserFacingError in api/server/controllers/agents/
+    // client.js — NOT i18n), not the raw thrown text. Both the rendered turn and
+    // the stored message carry it, so it identifies the error turn in the tree.
+    const errorText = 'Произошла ошибка при обработке запроса. Попробуйте ещё раз.';
     const afterErrorPrompt = replyPrompt(`${label}-after-error`);
     const afterErrorReply = replyText(`${label}-after-error`);
 

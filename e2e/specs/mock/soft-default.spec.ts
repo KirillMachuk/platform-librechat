@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { NEW_CHAT_PATH, getAccessToken, mockReply, requestJson, sendMessage } from './helpers';
+import {
+  NEW_CHAT_PATH,
+  mockReply,
+  sendMessage,
+  requestJson,
+  getAccessToken,
+  selectMockEndpoint,
+} from './helpers';
 
 /** Label of the `softDefault: true` spec in e2e/config/librechat.e2e.yaml. */
 const SOFT_DEFAULT_LABEL = 'E2E Soft Default';
@@ -41,16 +48,15 @@ async function createAgent(page: Page, name: string): Promise<AgentResponse> {
 
 async function selectAgent(page: Page, agentName: string) {
   await modelTrigger(page).click();
-  await page.getByRole('option', { name: 'My Agents' }).click();
+  await page.getByRole('tab', { name: 'Agents' }).click();
   await page.getByRole('option', { name: agentName }).click();
   await expect(modelTrigger(page)).toContainText(agentName);
 }
 
 async function selectEphemeralModel(page: Page) {
-  await modelTrigger(page).click();
-  await page.getByRole('option', { name: EPHEMERAL_ENDPOINT.label }).click();
-  await page.getByRole('option', { name: EPHEMERAL_ENDPOINT.model, exact: true }).click();
-  await expect(modelTrigger(page)).toContainText(EPHEMERAL_ENDPOINT.model);
+  // Reuse the shared selector helper (single source of truth for the fork's
+  // two-tab picker); it handles non-spec endpoints that surface as the model name.
+  await selectMockEndpoint(page, EPHEMERAL_ENDPOINT);
 }
 
 async function sendAndAwaitReply(page: Page, text: string) {
