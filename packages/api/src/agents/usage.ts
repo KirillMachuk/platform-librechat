@@ -497,6 +497,24 @@ export interface RecordUsageResult {
  * When `pricing` and `bulkWriteOps` deps are provided, prepares all transaction documents
  * in-memory first, then writes them in a single `insertMany` + one `updateBalance` call.
  */
+/**
+ * Atomically claims all collected-usage entries for billing.
+ *
+ * A run's token usage must be spent EXACTLY ONCE, but it can be billed from two
+ * places that may race: the run's own `finally` (in-process completion or an
+ * in-process abort like the Deep Research budget watchdog) and the HTTP `/abort`
+ * middleware (a user pressing Stop). `splice` is synchronous, so on the
+ * single-threaded event loop the first caller removes-and-returns every entry and
+ * any second caller sees `[]` — guaranteeing no double-spend without a lock. The
+ * caller must spend the returned snapshot, not the original array.
+ */
+export function claimCollectedUsage<T>(usage: T[] | null | undefined): T[] {
+  if (!Array.isArray(usage) || usage.length === 0) {
+    return [];
+  }
+  return usage.splice(0, usage.length);
+}
+
 export async function recordCollectedUsage(
   deps: RecordUsageDeps,
   params: RecordUsageParams,

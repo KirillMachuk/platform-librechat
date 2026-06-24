@@ -5,6 +5,7 @@ const {
   sendEvent,
   countTokens,
   GenerationJobManager,
+  claimCollectedUsage,
   recordCollectedUsage,
   sanitizeMessageForTransmit,
   buildAbortedResponseMetadata,
@@ -37,7 +38,11 @@ async function spendCollectedUsage({
   fallbackModel,
   messageId,
 }) {
-  if (!collectedUsage || collectedUsage.length === 0) {
+  // Atomically claim the usage before the async spend (synchronous splice): if the
+  // run's own finally bills concurrently, exactly one side gets the entries and the
+  // other sees an empty array — no double-spend, no lock needed.
+  const claimed = claimCollectedUsage(collectedUsage);
+  if (claimed.length === 0) {
     return;
   }
 
@@ -51,17 +56,12 @@ async function spendCollectedUsage({
     {
       user: userId,
       conversationId,
-      collectedUsage,
+      collectedUsage: claimed,
       context: 'abort',
       messageId,
       model: fallbackModel,
     },
   );
-
-  // Clear the array to prevent double-spending from the AgentClient finally block.
-  // The collectedUsage array is shared by reference with AgentClient.collectedUsage,
-  // so clearing it here ensures recordCollectedUsage() sees an empty array and returns early.
-  collectedUsage.length = 0;
 }
 
 /**

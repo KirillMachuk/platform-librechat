@@ -20,6 +20,7 @@ const {
   createTokenCounter,
   applyContextToAgent,
   isMemoryAgentEnabled,
+  claimCollectedUsage,
   recordCollectedUsage,
   sendEvent,
   computeUsageCostUSD,
@@ -1586,8 +1587,13 @@ class AgentClient extends BaseClient {
           this.artifactPromises.push(...attachments);
         }
 
-        /** Skip token spending if aborted - the abort handler (abortMiddleware.js) handles it
-        This prevents double-spending when user aborts via `/api/agents/chat/abort` */
+        /** Spend the run's token usage exactly once. A normal finish bills here. On
+         *  abort, a USER stop bills via abortMiddleware (HTTP /abort); but an
+         *  IN-PROCESS abort (e.g. the Deep Research budget watchdog) makes no HTTP call,
+         *  so its usage would go unbilled. Claim the usage atomically (synchronous
+         *  splice) and bill it here too — if a user abort races, one side gets the
+         *  entries and the other sees []. Also covers cross-replica aborts (the run's
+         *  replica owns the live usage). */
         const wasAborted = abortController?.signal?.aborted;
         if (!wasAborted) {
           await this.recordCollectedUsage({
@@ -1596,9 +1602,15 @@ class AgentClient extends BaseClient {
             transactions: transactionsConfig,
           });
         } else {
-          logger.debug(
-            '[api/server/controllers/agents/client.js #chatCompletion] Skipping token spending - handled by abort middleware',
-          );
+          const claimed = claimCollectedUsage(this.collectedUsage);
+          if (claimed.length > 0) {
+            await this.recordCollectedUsage({
+              context: 'abort',
+              collectedUsage: claimed,
+              balance: balanceConfig,
+              transactions: transactionsConfig,
+            });
+          }
         }
       } catch (err) {
         logger.error(
