@@ -8,6 +8,7 @@ import {
   uniqueAgentName,
   waitForPersistedAgent,
   selectFromSearchCombobox,
+  closeAgentBuilder,
 } from './agents.helpers';
 import { MOCK_ENDPOINTS, fetchJson, getAccessToken, mockReply, sendMessage } from './helpers';
 
@@ -144,9 +145,7 @@ test.describe('agent builder MCP tools', () => {
       await expectSelectedMCPServerTools(reopenedForm);
 
       await reopenedForm.getByRole('button', { name: 'Select Agent' }).click();
-      // The fork's agent builder is a modal popup; close it so the composer can send.
-      await page.keyboard.press('Escape');
-      await expect(reopenedForm).toBeHidden();
+      await closeAgentBuilder(page, reopenedForm);
 
       const response = await sendMessage(page, `hello from ${agentName}`);
       expect(response.ok()).toBeTruthy();

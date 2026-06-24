@@ -79,6 +79,12 @@ export async function waitForPersistedAgent(
   return latestAgent!;
 }
 
+/** The fork's agent builder is a modal popup; dismiss it so the composer can send. */
+export async function closeAgentBuilder(page: Page, form: Locator) {
+  await page.keyboard.press('Escape');
+  await expect(form).toBeHidden();
+}
+
 export async function openAgentBuilder(page: Page) {
   await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
 

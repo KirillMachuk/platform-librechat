@@ -96,7 +96,6 @@ async function attachFile(page: Page, fixture: UploadFixture) {
   await fileChooser.setFiles(fixture);
   const uploadResponse = await uploadResponsePromise;
   expect(uploadResponse.ok()).toBeTruthy();
-  await page.waitForTimeout(350);
   return uploadResponse;
 }
 
@@ -111,7 +110,6 @@ async function uploadProviderFile(page: Page, fixture: UploadFixture) {
   if (!fixture.mimeType.startsWith('image/')) {
     await selectNativeFileMode(page);
   }
-  await page.waitForTimeout(350);
   return uploadResponse;
 }
 

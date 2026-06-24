@@ -47,7 +47,7 @@ export const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]
 export async function selectMockEndpoint(page: Page, endpoint: MockEndpoint) {
   const trigger = modelSelectorTrigger(page);
   await trigger.click();
-  const labelOption = page.getByRole('option', { name: endpoint.label });
+  const labelOption = page.getByRole('option', { name: endpoint.label, exact: true });
   const modelOption = page.getByRole('option', { name: endpoint.model, exact: true });
   await expect(labelOption.or(modelOption).first()).toBeVisible({ timeout: 10000 });
   if (await labelOption.isVisible().catch(() => false)) {
