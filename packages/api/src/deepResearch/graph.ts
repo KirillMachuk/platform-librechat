@@ -108,7 +108,19 @@ export function buildSearcherAgent(
       (webSearchAvailable ? ' и в интернете (web_search)' : '') +
       ', возвращает структурированный отчёт.',
     model: resolveDeepResearchModel(mode.workerModel, conversationModel, primaryAgent.model),
-    provider: primaryAgent.provider,
+    /**
+     * Resolve the worker against the primary's ENDPOINT identity, not its
+     * `provider`. By the time the graph is assembled, the primary's
+     * `initializeAgent` has already replaced `primaryAgent.provider` with the
+     * resolved SDK provider — custom endpoints collapse to `openAI` via
+     * `getProviderConfig`'s `overrideProvider`. Reusing that collapsed value
+     * makes the searcher's own `initializeAgent` resolve the DEFAULT OpenAI
+     * endpoint instead of the custom one, sending the configured worker model
+     * to the wrong upstream (`400 invalid model ID`) and bypassing any
+     * sovereign egress proxy. `endpoint` preserves the original identity the
+     * primary used to resolve its config, so the worker routes identically.
+     */
+    provider: primaryAgent.endpoint ?? primaryAgent.provider,
     endpoint: primaryAgent.endpoint,
     instructions: buildSearcherInstructions({
       now,

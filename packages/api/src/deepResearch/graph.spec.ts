@@ -141,6 +141,28 @@ describe('buildSearcherAgent', () => {
     expect(noWorker.model).toBe('convo-model');
   });
 
+  it('routes the worker to the custom endpoint identity, not the overridden SDK provider', () => {
+    /**
+     * After the primary's `initializeAgent` runs, a custom endpoint's
+     * `provider` is collapsed to the resolved SDK provider (custom endpoints
+     * become `openAI` via `getProviderConfig`'s `overrideProvider`), while
+     * `endpoint` preserves the original custom-endpoint identity used to
+     * resolve its baseURL/apiKey. The searcher must inherit that ENDPOINT
+     * identity so its own `initializeAgent` resolves the same custom upstream —
+     * inheriting the collapsed `provider` would route it to the default OpenAI
+     * endpoint and 400 with "invalid model ID".
+     */
+    const overridden: DeepResearchAgent = {
+      ...primary,
+      provider: 'openAI',
+      endpoint: '1ma',
+    };
+    const searcher = buildSearcherAgent(overridden, DEEP_RESEARCH_MODE_DEFAULTS.deep, opts);
+    expect(searcher.provider).toBe('1ma');
+    expect(searcher.endpoint).toBe('1ma');
+    expect(searcher.provider).not.toBe('openAI');
+  });
+
   it('skips a reasoning conversation model and falls back to the non-reasoning lead', () => {
     const searcher = buildSearcherAgent(
       { ...primary, model: 'anthropic/claude-sonnet-4.6' },

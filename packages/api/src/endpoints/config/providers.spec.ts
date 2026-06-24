@@ -141,6 +141,26 @@ describe('getProviderConfig', () => {
 
     expect(result.overrideProvider).toBe(Providers.ANTHROPIC);
   });
+
+  it('the collapsed openAI provider does NOT recover a custom endpoint (DR researcher routing)', () => {
+    // After a custom endpoint's `initializeAgent` runs, `agent.provider` is
+    // collapsed from the endpoint identity (e.g. `1ma`) to `Providers.OPENAI`.
+    // Re-resolving with that collapsed value yields the DEFAULT OpenAI client
+    // (no custom baseURL) — the exact failure that sent Deep Research workers to
+    // api.openai.com with an OpenRouter model id ("400 invalid model ID").
+    const appConfig = buildAppConfig([
+      { name: '1ma', baseURL: 'http://anonymizer.internal:8000/v1', apiKey: 'sk-anon' },
+    ]);
+
+    const collapsed = getProviderConfig({ provider: Providers.OPENAI, appConfig });
+    expect(collapsed.overrideProvider).toBe(Providers.OPENAI);
+    expect(collapsed.customEndpointConfig).toBeUndefined();
+
+    // The endpoint identity recovers the custom config — which is why the
+    // searcher must inherit `primaryAgent.endpoint`, not the collapsed provider.
+    const viaEndpoint = getProviderConfig({ provider: '1ma', appConfig });
+    expect(viaEndpoint.customEndpointConfig?.baseURL).toBe('http://anonymizer.internal:8000/v1');
+  });
 });
 
 describe('resolveTitleTiming', () => {
