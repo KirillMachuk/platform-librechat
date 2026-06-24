@@ -54,6 +54,7 @@ function mapEntry(entry: IAuditLog): AdminAuditEntry {
       : undefined,
     ip: entry.ip,
     outcome: entry.outcome,
+    metadata: entry.metadata,
     createdAt: entry.createdAt ? new Date(entry.createdAt).toISOString() : undefined,
   };
 }

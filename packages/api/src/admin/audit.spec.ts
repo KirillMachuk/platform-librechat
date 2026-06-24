@@ -75,6 +75,30 @@ describe('createAdminAuditHandlers', () => {
       expect(body.entries[0].tokens.total).toBe(300);
     });
 
+    it('surfaces targetId + metadata for config-detail entries (e.g. DR changes)', async () => {
+      const entry = mockEntry({
+        action: 'deep_research.set_models',
+        targetType: 'deep_research',
+        targetId: 'deep',
+        conversationId: undefined,
+        metadata: { mode: 'deep', leadModel: 'opus-4.8', workerModel: 'sonnet-4.6' },
+      });
+      const deps = createDeps({ getAuditLogs: jest.fn().mockResolvedValue([entry]) });
+      const handlers = createAdminAuditHandlers(deps);
+      const { req, res, json } = createReqRes();
+
+      await handlers.listAudit(req, res);
+
+      const mapped = json.mock.calls[0][0].entries[0];
+      expect(mapped.targetType).toBe('deep_research');
+      expect(mapped.targetId).toBe('deep');
+      expect(mapped.metadata).toEqual({
+        mode: 'deep',
+        leadModel: 'opus-4.8',
+        workerModel: 'sonnet-4.6',
+      });
+    });
+
     it('passes action, conversation and date filters through', async () => {
       const getAuditLogs = jest.fn().mockResolvedValue([]);
       const deps = createDeps({ getAuditLogs });

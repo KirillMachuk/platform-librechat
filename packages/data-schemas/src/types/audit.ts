@@ -15,6 +15,8 @@ export type AuditAction =
   | 'permission.grant'
   | 'permission.revoke'
   | 'admin.config_change'
+  | 'deep_research.set_active_mode'
+  | 'deep_research.set_models'
   | 'apikey.create'
   | 'apikey.revoke';
 
