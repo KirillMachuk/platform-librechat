@@ -7,6 +7,7 @@ import {
   selectMockModel,
   uniqueAgentName,
   waitForPersistedAgent,
+  selectFromSearchCombobox,
 } from './agents.helpers';
 import { MOCK_ENDPOINTS, mockReply, sendMessage } from './helpers';
 
@@ -172,8 +173,12 @@ test.describe('agent builder', () => {
       expect(persistedAgent.model_parameters).toMatchObject(PERSISTED_MODEL_PARAMETERS);
 
       form = await openAgentBuilder(page);
-      await form.getByRole('combobox', { name: 'Agent', exact: true }).click();
-      await page.getByRole('option', { name: agentName }).click();
+      await selectFromSearchCombobox(
+        page,
+        form.getByRole('combobox', { name: 'Agent', exact: true }),
+        'Search agents by name',
+        agentName,
+      );
 
       await expect(form.getByLabel('Agent name')).toHaveValue(agentName);
       await expect(form.getByLabel('Agent description')).toHaveValue(DESCRIPTION);
@@ -184,6 +189,9 @@ test.describe('agent builder', () => {
       await form.getByRole('button', { name: 'Back to builder' }).click();
 
       await form.getByRole('button', { name: 'Select Agent' }).click();
+      // The fork's agent builder is a modal popup; close it so the composer can send.
+      await page.keyboard.press('Escape');
+      await expect(form).toBeHidden();
 
       const response = await sendMessage(page, `hello from ${agentName}`);
       expect(response.ok()).toBeTruthy();

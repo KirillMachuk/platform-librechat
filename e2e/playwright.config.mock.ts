@@ -100,6 +100,7 @@ export default defineConfig({
     : [['html', { outputFolder: reportPath }], ['list']],
   use: {
     baseURL,
+    locale: 'en-US',
     video: 'on-first-retry',
     trace: 'retain-on-failure',
     ignoreHTTPSErrors: true,
@@ -121,7 +122,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `node ${serverPath}`,
+      command: `node "${serverPath}"`,
       cwd: rootPath,
       url: baseURL,
       stdout: 'pipe',

@@ -123,6 +123,12 @@ jobs:
         run: |
           google-chrome --version
           npx playwright install-deps chrome
+          # We skip the full browser download (system Chrome is used via the
+          # `chrome` channel), but Playwright still needs its bundled ffmpeg to
+          # record `video: on-first-retry`. Without it, every retried test dies
+          # in browserContext.newPage, so flaky tests can never be rescued by a
+          # retry. An explicit install ignores PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD.
+          npx playwright install ffmpeg
 
       - name: Run mock-LLM Tier-1 e2e (shard ${{ matrix.shard }}/4)
         run: npx playwright test --config=e2e/playwright.config.mock.ts --shard=${{ matrix.shard }}/4

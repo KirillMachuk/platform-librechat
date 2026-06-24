@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { MOCK_ENDPOINTS, NEW_CHAT_PATH, fetchJson, getAccessToken, requestJson } from './helpers';
 
 export const AGENT_EDIT_PERMISSION = 2;
@@ -88,14 +88,35 @@ export async function openAgentBuilder(page: Page) {
     .then(() => true)
     .catch(() => false);
   if (!builderVisible) {
-    const agentBuilderButton = page.getByRole('button', { name: 'Agent Builder' });
-    await expect(agentBuilderButton).toBeVisible();
-    if ((await agentBuilderButton.getAttribute('aria-pressed')) !== 'true') {
-      await agentBuilderButton.click();
-    }
+    // The fork exposes the agent builder through the "Agents" sidebar popup:
+    // open it, then start a new agent to switch the panel into builder view.
+    await page.getByRole('button', { name: 'Agents', exact: true }).click();
+    const createButton = page.getByTestId('agents-create-button');
+    await expect(createButton).toBeVisible();
+    await createButton.click();
   }
   await expect(form).toBeVisible();
   return form;
+}
+
+/**
+ * Select an option from one of the agent builder's searchable Ariakit
+ * comboboxes (provider, model, agent switcher). The dropdown renders where the
+ * surrounding panel overlaps it, so a normal pointer click is intercepted;
+ * filter via the search box, then dispatch the click straight to the option.
+ */
+export async function selectFromSearchCombobox(
+  page: Page,
+  trigger: Locator,
+  searchName: string,
+  optionName: string,
+  exactOption = false,
+) {
+  await trigger.click();
+  await page.getByRole('combobox', { name: searchName }).fill(optionName);
+  const option = page.getByRole('option', { name: optionName, exact: exactOption }).first();
+  await expect(option).toBeVisible();
+  await option.dispatchEvent('click');
 }
 
 export async function selectMockModel(page: Page, clickBackToBuilder = false) {
@@ -104,11 +125,23 @@ export async function selectMockModel(page: Page, clickBackToBuilder = false) {
   await form.locator('label[for="provider"] + button').click();
   await expect(form.getByText('Model Parameters', { exact: true })).toBeVisible();
 
-  await form.getByRole('combobox', { name: 'Provider' }).click();
-  await page.getByRole('option', { name: MOCK_ENDPOINTS[0].label }).click();
+  await selectFromSearchCombobox(
+    page,
+    form.getByRole('combobox', { name: 'Provider' }),
+    'Search provider by name',
+    MOCK_ENDPOINTS[0].label,
+  );
 
-  await form.getByRole('combobox', { name: 'Model' }).click();
-  await page.getByRole('option', { name: MOCK_ENDPOINTS[0].model, exact: true }).click();
+  // The model picker only enables once a provider is committed above.
+  const modelCombobox = form.getByRole('combobox', { name: 'Model' });
+  await expect(modelCombobox).toBeEnabled();
+  await selectFromSearchCombobox(
+    page,
+    modelCombobox,
+    'Select a model',
+    MOCK_ENDPOINTS[0].model,
+    true,
+  );
 
   if (clickBackToBuilder) {
     await form.getByRole('button', { name: 'Back to builder' }).click();

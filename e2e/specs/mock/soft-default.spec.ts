@@ -41,14 +41,13 @@ async function createAgent(page: Page, name: string): Promise<AgentResponse> {
 
 async function selectAgent(page: Page, agentName: string) {
   await modelTrigger(page).click();
-  await page.getByRole('option', { name: 'My Agents' }).click();
+  await page.getByRole('tab', { name: 'Agents' }).click();
   await page.getByRole('option', { name: agentName }).click();
   await expect(modelTrigger(page)).toContainText(agentName);
 }
 
 async function selectEphemeralModel(page: Page) {
   await modelTrigger(page).click();
-  await page.getByRole('option', { name: EPHEMERAL_ENDPOINT.label }).click();
   await page.getByRole('option', { name: EPHEMERAL_ENDPOINT.model, exact: true }).click();
   await expect(modelTrigger(page)).toContainText(EPHEMERAL_ENDPOINT.model);
 }
