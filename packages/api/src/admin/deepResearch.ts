@@ -45,17 +45,27 @@ function getTenantId(req: ServerRequest): string | undefined {
 }
 
 /**
- * The valid lead/worker choices for Deep Research: every endpoint's available
+ * The valid lead/worker choices for Deep Research: the DR endpoint's available
  * models, EXCLUDING reasoning models. Reasoning models (o-series, gpt-5.x) 400 on
  * DR's multi-turn tool loop, so they must never be selectable or savable as a DR
  * tool-node model — this is the single source of truth the admin UI and the write
  * validation both use.
+ *
+ * Scoped to `endpoint` when the tenant designates one (deepResearch.endpoint): a
+ * model from another endpoint would 400 the run. Falls back to the union of all
+ * endpoints when `endpoint` is unset OR names an endpoint with no models — a
+ * mis-set endpoint must not brick the picker (the single-endpoint lab is unaffected
+ * either way).
  */
 function collectAvailableModels(
   modelsConfig: Record<string, string[]> | null | undefined,
+  endpoint?: string,
 ): string[] {
+  const scoped = endpoint ? modelsConfig?.[endpoint] : undefined;
+  const sources =
+    Array.isArray(scoped) && scoped.length > 0 ? [scoped] : Object.values(modelsConfig ?? {});
   const all = new Set<string>();
-  for (const models of Object.values(modelsConfig ?? {})) {
+  for (const models of sources) {
     if (!Array.isArray(models)) {
       continue;
     }
@@ -107,7 +117,10 @@ export function createDeepResearchSettingsHandlers(deps: DeepResearchSettingsDep
       getAppConfig({ tenantId, refresh }),
       getModelsConfig(req),
     ]);
-    return buildSettings(appConfig, collectAvailableModels(modelsConfig));
+    return buildSettings(
+      appConfig,
+      collectAvailableModels(modelsConfig, appConfig.deepResearch?.endpoint),
+    );
   }
 
   async function applyOverride(
@@ -175,7 +188,11 @@ export function createDeepResearchSettingsHandlers(deps: DeepResearchSettingsDep
       if (updates.length === 0) {
         return res.status(400).json({ error: 'Provide leadModel and/or workerModel' });
       }
-      const available = collectAvailableModels(await getModelsConfig(req));
+      const [appConfig, modelsConfig] = await Promise.all([
+        getAppConfig({ tenantId: getTenantId(req) }),
+        getModelsConfig(req),
+      ]);
+      const available = collectAvailableModels(modelsConfig, appConfig.deepResearch?.endpoint);
       const invalid = updates
         .map(([, model]) => model)
         .filter((model) => !model || !available.includes(model));
