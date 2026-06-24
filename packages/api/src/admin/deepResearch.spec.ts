@@ -276,4 +276,70 @@ describe('createDeepResearchSettingsHandlers', () => {
       expect(deps.patchConfigFields).not.toHaveBeenCalled();
     });
   });
+
+  describe('endpoint scoping (deepResearch.endpoint)', () => {
+    const appConfigWithEndpoint = (endpoint?: string) => ({
+      deepResearch: {
+        activeMode: 'balanced',
+        endpoint,
+        modes: { balanced: { leadModel: 'anthropic/claude-sonnet-4.6' } },
+      },
+    });
+    // Two endpoints with disjoint models — scoping must pick only the DR endpoint's.
+    const MULTI = { '1ma': [...AVAILABLE], other: ['other/exclusive-model'] };
+
+    it('scopes availableModels to the configured DR endpoint', async () => {
+      const { handlers } = createHandlers({
+        getAppConfig: jest.fn().mockResolvedValue(appConfigWithEndpoint('1ma')),
+        getModelsConfig: jest.fn().mockResolvedValue(MULTI),
+      });
+      const res = mockRes();
+
+      await handlers.getSettings(mockReq(), res);
+
+      expect(res.body?.availableModels).toEqual([...AVAILABLE].sort());
+      expect(res.body?.availableModels).not.toContain('other/exclusive-model');
+    });
+
+    it('unions all endpoints when no DR endpoint is configured', async () => {
+      const { handlers } = createHandlers({
+        getAppConfig: jest.fn().mockResolvedValue(appConfigWithEndpoint(undefined)),
+        getModelsConfig: jest.fn().mockResolvedValue(MULTI),
+      });
+      const res = mockRes();
+
+      await handlers.getSettings(mockReq(), res);
+
+      expect(res.body?.availableModels).toContain('other/exclusive-model');
+    });
+
+    it('falls back to the union when the configured endpoint has no models (no brick)', async () => {
+      const { handlers } = createHandlers({
+        getAppConfig: jest.fn().mockResolvedValue(appConfigWithEndpoint('missing')),
+        getModelsConfig: jest.fn().mockResolvedValue(MULTI),
+      });
+      const res = mockRes();
+
+      await handlers.getSettings(mockReq(), res);
+
+      expect(res.body?.availableModels).toContain('other/exclusive-model');
+    });
+
+    it('write validation rejects a model outside the scoped DR endpoint', async () => {
+      const { handlers, deps } = createHandlers({
+        getAppConfig: jest.fn().mockResolvedValue(appConfigWithEndpoint('1ma')),
+        getModelsConfig: jest.fn().mockResolvedValue(MULTI),
+      });
+      const res = mockRes();
+
+      await handlers.setModeModels(
+        mockReq({ body: { mode: 'balanced', leadModel: 'other/exclusive-model' } }),
+        res,
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body?.error).toContain('other/exclusive-model');
+      expect(deps.patchConfigFields).not.toHaveBeenCalled();
+    });
+  });
 });

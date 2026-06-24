@@ -1599,6 +1599,14 @@ export const deepResearchModeSchema = z.object({
 export const deepResearchSchema = z.object({
   /** Active depth tier, selected per tenant (admin). */
   activeMode: z.enum(['economy', 'balanced', 'deep']).default('deep'),
+  /**
+   * Endpoint whose model list scopes the admin's lead/worker choices. DR runs on
+   * the conversation's endpoint at runtime; a white-label tenant names that one
+   * endpoint here so the admin can't pick (or save) a model that lives on some
+   * OTHER endpoint and would 400 the run. Unset → all endpoints' models (the
+   * single-endpoint default).
+   */
+  endpoint: z.string().optional(),
   modes: z
     .object({
       economy: deepResearchModeSchema.optional(),
