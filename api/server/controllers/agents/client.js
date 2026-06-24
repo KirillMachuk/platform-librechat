@@ -48,6 +48,7 @@ const {
   buildAgentScopedContext,
   buildSkillPrimeContentParts,
   buildInitialToolSessions,
+  armDeepResearchBudget,
 } = require('@librechat/api');
 const {
   Callback,
@@ -1150,12 +1151,27 @@ class AgentClient extends BaseClient {
     let run;
     /** @type {Promise<(TAttachment | null)[] | undefined>} */
     let memoryPromise;
+    /** @type {(() => void) | null} Disposer for the Deep Research budget watchdog. */
+    let disposeDeepResearchBudget = null;
     const appConfig = this.options.req.config;
     const balanceConfig = getBalanceConfig(appConfig);
     const transactionsConfig = getTransactionsConfig(appConfig);
     try {
       if (!abortController) {
         abortController = new AbortController();
+      }
+
+      /** Deep Research per-run budget (wall-clock + tokens): arm a watchdog that
+       *  gracefully aborts an overrun (partial report preserved); disposed in the
+       *  finally below. Inert for non-DR runs (deepResearchBudget is undefined). */
+      const deepResearchBudget = this.options.agent?.deepResearchBudget;
+      if (deepResearchBudget) {
+        disposeDeepResearchBudget = armDeepResearchBudget({
+          abortController,
+          collectedUsage: this.collectedUsage,
+          budget: deepResearchBudget,
+          logger,
+        });
       }
 
       /** @type {AppConfig['endpoints']['agents']} */
@@ -1536,6 +1552,12 @@ class AgentClient extends BaseClient {
         });
       }
     } finally {
+      /** Clear the Deep Research budget watchdog on every exit path (success,
+       *  error, abort, disconnect) so no stale timer aborts a later run or leaks. */
+      if (disposeDeepResearchBudget) {
+        disposeDeepResearchBudget();
+        disposeDeepResearchBudget = null;
+      }
       /** Capture calibration state from the run for persistence on the response message.
        *  Runs in finally so values are captured even on abort. */
       const ratio = this.run?.getCalibrationRatio() ?? 0;

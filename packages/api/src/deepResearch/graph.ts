@@ -27,6 +27,13 @@ export interface DeepResearchConfig extends DeepResearchAgent {
   maxTurns?: number;
   /** Per-run orchestrator step cap (honored by resolveRecursionLimit) — bounds spawns/cost. */
   recursion_limit?: number;
+  /**
+   * Per-run wall-clock and token caps, enforced in the agents client run loop
+   * (a watchdog aborts the run gracefully — partial report is preserved). Set
+   * from the active mode so `wallClockMinutes`/`perRunTokenBudget` are real
+   * limits, not display-only config.
+   */
+  deepResearchBudget?: { wallClockMs: number; tokenBudget: number };
 }
 
 export interface BuildDeepResearchGraphParams {
@@ -179,5 +186,9 @@ export async function buildDeepResearchGraph(
   primaryConfig.subagents = { enabled: true, allowSelf: false };
   primaryConfig.subagentAgentConfigs = [searcherConfig];
   primaryConfig.recursion_limit = deepResearchRecursionLimit(mode);
+  primaryConfig.deepResearchBudget = {
+    wallClockMs: Math.max(1, mode.wallClockMinutes) * 60_000,
+    tokenBudget: mode.perRunTokenBudget,
+  };
   return true;
 }
