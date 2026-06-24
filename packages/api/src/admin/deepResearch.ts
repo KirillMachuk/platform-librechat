@@ -6,7 +6,7 @@ import type { Types, ClientSession } from 'mongoose';
 import type { Response } from 'express';
 import type { ResolvedDeepResearchMode } from '../deepResearch';
 import type { ServerRequest } from '~/types/http';
-import { resolveDeepResearchMode } from '../deepResearch';
+import { isReasoningModel, resolveDeepResearchMode } from '../deepResearch';
 
 /** Priority of the tenant-wide Deep Research override; matches the admin config default. */
 const DEEP_RESEARCH_PRIORITY = 10;
@@ -44,7 +44,13 @@ function getTenantId(req: ServerRequest): string | undefined {
   return (req.user as { tenantId?: string } | undefined)?.tenantId;
 }
 
-/** Union of every endpoint's available models — the valid lead/worker choices. */
+/**
+ * The valid lead/worker choices for Deep Research: every endpoint's available
+ * models, EXCLUDING reasoning models. Reasoning models (o-series, gpt-5.x) 400 on
+ * DR's multi-turn tool loop, so they must never be selectable or savable as a DR
+ * tool-node model — this is the single source of truth the admin UI and the write
+ * validation both use.
+ */
 function collectAvailableModels(
   modelsConfig: Record<string, string[]> | null | undefined,
 ): string[] {
@@ -54,7 +60,7 @@ function collectAvailableModels(
       continue;
     }
     for (const model of models) {
-      if (typeof model === 'string' && model) {
+      if (typeof model === 'string' && model && !isReasoningModel(model)) {
         all.add(model);
       }
     }
@@ -157,22 +163,32 @@ export function createDeepResearchSettingsHandlers(deps: DeepResearchSettingsDep
           .status(400)
           .json({ error: `mode must be one of: ${DeepResearchModes.join(', ')}` });
       }
-      if (!leadModel || !workerModel) {
-        return res.status(400).json({ error: 'leadModel and workerModel are required' });
+      /** Patch only the role(s) actually provided — never overwrite the sibling from
+       *  a possibly-stale client value (avoids lost-update races on rapid edits). */
+      const updates: Array<['leadModel' | 'workerModel', string]> = [];
+      if (leadModel !== undefined) {
+        updates.push(['leadModel', leadModel]);
+      }
+      if (workerModel !== undefined) {
+        updates.push(['workerModel', workerModel]);
+      }
+      if (updates.length === 0) {
+        return res.status(400).json({ error: 'Provide leadModel and/or workerModel' });
       }
       const available = collectAvailableModels(await getModelsConfig(req));
-      const invalid = [leadModel, workerModel].filter((model) => !available.includes(model));
+      const invalid = updates
+        .map(([, model]) => model)
+        .filter((model) => !model || !available.includes(model));
       if (invalid.length) {
         return res.status(400).json({
-          error: `Model(s) not available on this deployment: ${invalid.join(', ')}. Add them to the endpoint model list first.`,
+          error: `Model(s) not usable for Deep Research (must be a non-reasoning model available on the endpoint): ${invalid.map((m) => m || '(empty)').join(', ')}`,
         });
       }
-      return res.status(200).json(
-        await applyOverride(req, {
-          [`deepResearch.modes.${mode}.leadModel`]: leadModel,
-          [`deepResearch.modes.${mode}.workerModel`]: workerModel,
-        }),
-      );
+      const fields: Record<string, unknown> = {};
+      for (const [role, model] of updates) {
+        fields[`deepResearch.modes.${mode}.${role}`] = model;
+      }
+      return res.status(200).json(await applyOverride(req, fields));
     } catch (error) {
       logger.error('[adminDeepResearch] setModeModels error:', error);
       return res.status(500).json({ error: 'Failed to update Deep Research models' });

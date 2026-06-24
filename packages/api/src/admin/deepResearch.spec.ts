@@ -61,7 +61,8 @@ const AVAILABLE = [
 function createHandlers(overrides = {}) {
   const deps = {
     getAppConfig: jest.fn().mockResolvedValue(appConfig('balanced')),
-    getModelsConfig: jest.fn().mockResolvedValue({ '1ma': AVAILABLE }),
+    // The endpoint also offers a reasoning model; it must be excluded from availableModels.
+    getModelsConfig: jest.fn().mockResolvedValue({ '1ma': [...AVAILABLE, 'openai/gpt-5.5'] }),
     patchConfigFields: jest.fn().mockResolvedValue({ _id: 'c1' }),
     invalidateConfigCaches: jest.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -80,7 +81,9 @@ describe('createDeepResearchSettingsHandlers', () => {
       expect(res.statusCode).toBe(200);
       expect(res.body?.activeMode).toBe('balanced');
       expect(res.body?.modes?.map((m) => m.name)).toEqual(['economy', 'balanced', 'deep']);
+      // Excludes the reasoning model (gpt-5.5) — not a valid DR tool-node model.
       expect(res.body?.availableModels).toEqual([...AVAILABLE].sort());
+      expect(res.body?.availableModels).not.toContain('openai/gpt-5.5');
     });
 
     it('defaults activeMode to "deep" when no deepResearch config is present', async () => {
@@ -230,7 +233,7 @@ describe('createDeepResearchSettingsHandlers', () => {
       expect(deps.patchConfigFields).not.toHaveBeenCalled();
     });
 
-    it('rejects when a model is missing without writing', async () => {
+    it('patches only the provided field (lead-only) without touching the sibling', async () => {
       const { handlers, deps } = createHandlers();
       const res = mockRes();
 
@@ -238,6 +241,36 @@ describe('createDeepResearchSettingsHandlers', () => {
         mockReq({ body: { mode: 'deep', leadModel: 'anthropic/claude-opus-4.8' } }),
         res,
       );
+
+      expect(res.statusCode).toBe(200);
+      expect(deps.patchConfigFields).toHaveBeenCalledWith(
+        PrincipalType.ROLE,
+        BASE_CONFIG_PRINCIPAL_ID,
+        PrincipalModel.ROLE,
+        { 'deepResearch.modes.deep.leadModel': 'anthropic/claude-opus-4.8' },
+        10,
+      );
+    });
+
+    it('rejects a reasoning model (would 400 on DR tool calls) without writing', async () => {
+      const { handlers, deps } = createHandlers();
+      const res = mockRes();
+
+      await handlers.setModeModels(
+        mockReq({ body: { mode: 'balanced', workerModel: 'openai/gpt-5.5' } }),
+        res,
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body?.error).toContain('openai/gpt-5.5');
+      expect(deps.patchConfigFields).not.toHaveBeenCalled();
+    });
+
+    it('rejects when neither model is provided', async () => {
+      const { handlers, deps } = createHandlers();
+      const res = mockRes();
+
+      await handlers.setModeModels(mockReq({ body: { mode: 'deep' } }), res);
 
       expect(res.statusCode).toBe(400);
       expect(deps.patchConfigFields).not.toHaveBeenCalled();
