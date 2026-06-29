@@ -9,7 +9,12 @@ export default defineConfig({
   entry: ['src/index.ts', 'src/telemetry.ts'],
   format: ['cjs'],
   platform: 'node',
-  dts: { oxc: true },
+  // tsc-based dts (not oxc) — the Deep Research rebuild uses LangGraph.js
+  // `Annotation.Root`/`StateGraph` whose deeply-inferred types cannot satisfy
+  // oxc's isolatedDeclarations (which requires explicit types on every export).
+  // tsc infers them correctly; structured emit also avoids the basename collision
+  // the oxc flat-emit workaround (telemetry shim) was guarding against.
+  dts: { oxc: false },
   outDir: 'dist',
   sourcemap: true,
   // Externalize every third-party dependency (consumers provide the peers) and bundle

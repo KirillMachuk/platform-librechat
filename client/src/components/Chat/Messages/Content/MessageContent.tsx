@@ -127,12 +127,10 @@ const DisplayMessage = ({ text, isCreatedByUser, message, showCursor }: TDisplay
   );
 };
 
-export const UnfinishedMessage = ({ message }: { message: TMessage }) => (
-  <ErrorMessage
-    message={message}
-    text="The response is incomplete; it's either still processing, was cancelled, or censored. Refresh or try a different prompt."
-  />
-);
+export const UnfinishedMessage = ({ message }: { message: TMessage }) => {
+  const localize = useLocalize();
+  return <ErrorMessage message={message} text={localize('com_ui_unfinished_message')} />;
+};
 
 const MessageContent = ({
   text,

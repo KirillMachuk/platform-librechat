@@ -1607,6 +1607,12 @@ export const deepResearchSchema = z.object({
    * single-endpoint default).
    */
   endpoint: z.string().optional(),
+  /**
+   * Opt-in to the rebuilt StateGraph DR engine (custom LangGraph.js graph with
+   * a deterministic budget gate + guaranteed terminal report). Default false →
+   * the legacy prompt-driven engine runs. Flip per tenant once validated on lab.
+   */
+  useNewEngine: z.boolean().default(false),
   modes: z
     .object({
       economy: deepResearchModeSchema.optional(),

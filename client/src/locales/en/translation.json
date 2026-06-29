@@ -1776,6 +1776,7 @@
   "com_ui_unassigned": "Unassigned",
   "com_ui_unavailable": "Unavailable",
   "com_ui_unfavorite": "Remove from favorites",
+  "com_ui_unfinished_message": "This response may be incomplete — it was still processing, was stopped, or reached a limit. Any results shown above are still usable.",
   "com_ui_unknown": "Unknown",
   "com_ui_unknown_file_type": "Unknown file type",
   "com_ui_unpin": "Unpin",
