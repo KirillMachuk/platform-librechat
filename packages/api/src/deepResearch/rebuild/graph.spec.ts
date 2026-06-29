@@ -1,13 +1,12 @@
-import { FakeListChatModel } from '@langchain/core/utils/testing';
 import { HumanMessage } from '@langchain/core/messages';
-
+import { FakeListChatModel } from '@langchain/core/utils/testing';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { DeepResearchConfigurable } from './state';
 import type { DeepResearchNode } from './graph';
+import { buildDeepResearchGraph, createDeepResearchGraph } from './graph';
+import { createSupervisorNode } from './nodes/supervisor';
 import { resolveDeepResearchTier } from './config';
 import { createScopeNode } from './nodes/scope';
-import { createSupervisorNode } from './nodes/supervisor';
-import { buildDeepResearchGraph, createDeepResearchGraph } from './graph';
 
 const NOW = '2026-06-25T00:00:00Z';
 const NONCE = 'test-nonce';

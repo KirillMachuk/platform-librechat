@@ -2,11 +2,9 @@ import { z } from 'zod';
 import { tool } from '@langchain/core/tools';
 import { AIMessageChunk } from '@langchain/core/messages';
 import { FakeListChatModel } from '@langchain/core/utils/testing';
-
-import type { BaseMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
+import type { BaseMessage } from '@langchain/core/messages';
 import type { DeepResearchState, DeepResearchFinding } from '../state';
-import { resolveDeepResearchTier } from '../config';
 import {
   extractSources,
   runResearchLoop,
@@ -14,6 +12,7 @@ import {
   createResearcherNode,
   type ToolCaller,
 } from './researcher';
+import { resolveDeepResearchTier } from '../config';
 
 const NOW = '2026-06-25T00:00:00Z';
 const NONCE = 'test-nonce';

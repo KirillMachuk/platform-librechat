@@ -1,9 +1,7 @@
-import { AIMessage, HumanMessage } from '@langchain/core/messages';
 import { FakeListChatModel } from '@langchain/core/utils/testing';
-
+import { AIMessage, HumanMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { DeepResearchState, DeepResearchFinding } from '../state';
-import { resolveDeepResearchTier } from '../config';
 import {
   composeReport,
   createReportNode,
@@ -11,6 +9,7 @@ import {
   concludeToFinalize,
   type ReportModel,
 } from './report';
+import { resolveDeepResearchTier } from '../config';
 
 const NOW = '2026-06-25T00:00:00Z';
 const NONCE = 'test-nonce';

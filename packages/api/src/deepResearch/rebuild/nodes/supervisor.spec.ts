@@ -1,9 +1,8 @@
 import { FakeListChatModel } from '@langchain/core/utils/testing';
-
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { DeepResearchState, DeepResearchConfigurable } from '../state';
-import { resolveDeepResearchTier } from '../config';
 import { createSupervisorNode, routeFromSupervisor, budgetGateReason } from './supervisor';
+import { resolveDeepResearchTier } from '../config';
 
 const NOW = '2026-06-25T00:00:00Z';
 const NONCE = 'test-nonce';
