@@ -107,13 +107,36 @@ router.get('/chat/stream/:streamId', async (req, res) => {
     return false;
   };
 
+  // M7: keep-alive heartbeat. Deep Research (and any long generation) can stay silent
+  // for minutes; an SSE comment every 15s keeps idle-timeout proxies (Railway/Cloudflare)
+  // from cutting the connection. Comments (`: ...`) are ignored by EventSource clients.
+  const heartbeat = setInterval(() => {
+    if (res.writableEnded) {
+      clearInterval(heartbeat);
+      return;
+    }
+    // A destroyed socket makes res.write throw synchronously; guard so the timer
+    // callback never rejects with an unhandled error, and stop pinging if it does.
+    try {
+      res.write(': ping\n\n');
+      if (typeof res.flush === 'function') {
+        res.flush();
+      }
+    } catch {
+      clearInterval(heartbeat);
+    }
+  }, 15_000);
+  heartbeat.unref?.();
+
   const onDone = (event) => {
+    clearInterval(heartbeat);
     streamTelemetry.recordFinalEventEmitted();
     writeEvent(event, { final: true });
     res.end();
   };
 
   const onError = (error) => {
+    clearInterval(heartbeat);
     if (!res.writableEnded) {
       streamTelemetry.recordErrorEventEmitted();
       writeEvent({ error }, { eventName: 'error' });
@@ -156,6 +179,7 @@ router.get('/chat/stream/:streamId', async (req, res) => {
   }
 
   req.on('close', () => {
+    clearInterval(heartbeat);
     logger.debug(`[AgentStream] Client disconnected from ${streamId}`);
     result.unsubscribe();
   });

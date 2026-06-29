@@ -10,3 +10,6 @@ export { buildOrchestratorInstructions, buildSearcherInstructions } from './prom
 export type { DeepResearchBudget, DeepResearchUsageRecord } from './budget';
 export type { DeepResearchAgent, DeepResearchConfig, BuildDeepResearchGraphParams } from './graph';
 export type { ResolvedDeepResearchMode } from './types';
+
+/** Deep Research rebuild (custom StateGraph engine) — run behind a feature flag. */
+export * from './rebuild';

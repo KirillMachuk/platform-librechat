@@ -20,6 +20,7 @@ const {
 const { handleAbortError } = require('~/server/middleware');
 const { logViolation } = require('~/cache');
 const { saveMessage, getMessages, getConvo } = require('~/models');
+const { runNewDeepResearch } = require('~/server/services/Endpoints/agents/deepResearchRun');
 
 function createCloseHandler(abortController) {
   return function (manual) {
@@ -334,6 +335,43 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
     }
 
     client = result.client;
+
+    /** New StateGraph Deep Research engine, behind `deepResearch.useNewEngine`.
+     *  Runs the custom graph INSTEAD of the standard agent run and returns early.
+     *  The legacy DR is the default (flag off), so this branch cannot regress it. */
+    if (
+      req.config?.deepResearch?.useNewEngine === true &&
+      req.body?.ephemeralAgent?.deep_research === true
+    ) {
+      try {
+        await runNewDeepResearch({
+          req,
+          res,
+          streamId,
+          signal: job.abortController.signal,
+          endpoint: client?.options?.agent?.endpoint ?? endpointOption.endpoint,
+          conversationModel: client?.options?.agent?.model ?? endpointOption.model_parameters?.model,
+          userId,
+          conversationId,
+          parentMessageId,
+          responseMessageId: preliminaryResponseMessageId,
+          sender: client?.sender,
+          userMessage: preliminaryUserMessage,
+          text,
+        });
+      } finally {
+        // H3: this branch returns early and runs the whole DR synchronously, so the
+        // normal background-completion cleanup never fires for it. Release the pending-
+        // request slot and dispose the heavy agent client here. Nulling `client` stops
+        // the outer catch from disposing it a second time if the run threw.
+        await finishResumableRequest(req, userId);
+        if (client) {
+          disposeClient(client);
+          client = null;
+        }
+      }
+      return;
+    }
 
     // Resolve title timing from the public agents endpoint first, then fall
     // back to the agent's actual backing provider/custom endpoint.
