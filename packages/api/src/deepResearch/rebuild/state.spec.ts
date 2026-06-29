@@ -34,7 +34,9 @@ describe('DeepResearchStateAnnotation', () => {
       .addEdge('b', END)
       .compile();
 
-    const result: DeepResearchState = await graph.invoke({ messages: [new HumanMessage('user q')] });
+    const result: DeepResearchState = await graph.invoke({
+      messages: [new HumanMessage('user q')],
+    });
 
     expect(result.jurisdiction).toBe('KZ');
     expect(result.findings.map((f) => f.digest)).toEqual(['d1', 'd2']);

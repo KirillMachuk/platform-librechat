@@ -102,7 +102,9 @@ describe('runDeepResearch', () => {
 
     expect(result.finalizeReason).toBe('completed');
     expect(tokens.join('')).toContain('Отчёт готов');
-    expect(progress.some((p) => p.type === 'research' && p.subQuestion === 'объём рынка')).toBe(true);
+    expect(progress.some((p) => p.type === 'research' && p.subQuestion === 'объём рынка')).toBe(
+      true,
+    );
     expect(progress.some((p) => p.type === 'report')).toBe(true);
   });
 

@@ -21,9 +21,11 @@ class ThrowingChatModel extends BaseChatModel {
     super({} as BaseChatModelParams);
     this.failure = failure;
   }
+
   _llmType(): string {
     return 'throwing';
   }
+
   async _generate(_messages: BaseMessage[]): Promise<ChatResult> {
     throw new Error(this.failure);
   }

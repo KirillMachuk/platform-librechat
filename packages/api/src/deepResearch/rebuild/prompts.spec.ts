@@ -50,8 +50,20 @@ describe('prompt spotlighting (H5)', () => {
 
   it('researcher, compress and report all carry the untrusted directive with the nonce', () => {
     const prompts = [
-      buildResearcherPrompt({ subQuestion: 'q', jurisdiction: 'RU', now: NOW, maxTurns: 5, nonce: NONCE }),
-      buildCompressPrompt({ subQuestion: 'q', jurisdiction: 'RU', digestCap: 800, now: NOW, nonce: NONCE }),
+      buildResearcherPrompt({
+        subQuestion: 'q',
+        jurisdiction: 'RU',
+        now: NOW,
+        maxTurns: 5,
+        nonce: NONCE,
+      }),
+      buildCompressPrompt({
+        subQuestion: 'q',
+        jurisdiction: 'RU',
+        digestCap: 800,
+        now: NOW,
+        nonce: NONCE,
+      }),
       buildReportPrompt({ request: 'q', brief: 'b', jurisdiction: 'RU', now: NOW, nonce: NONCE }),
     ];
     for (const prompt of prompts) {

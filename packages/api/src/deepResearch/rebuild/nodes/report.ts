@@ -25,7 +25,10 @@ const DEFAULT_MAX_RETRIES = 3;
 
 /** Minimal invoke surface satisfied by a real chat model and by test fakes. */
 export interface ReportModel {
-  invoke(messages: BaseMessage[], options?: { signal?: AbortSignal }): Promise<BaseMessage | AIMessageChunk>;
+  invoke(
+    messages: BaseMessage[],
+    options?: { signal?: AbortSignal },
+  ): Promise<BaseMessage | AIMessageChunk>;
 }
 
 export interface ReportNodeDeps {
@@ -61,7 +64,8 @@ function formatFindings(findings: DeepResearchFinding[], perDigestCap: number): 
   return findings
     .map((finding, i) => {
       const digest = finding.digest.slice(0, Math.max(1, perDigestCap));
-      const sources = finding.sources.length > 0 ? `\nИсточники: ${finding.sources.join(', ')}` : '';
+      const sources =
+        finding.sources.length > 0 ? `\nИсточники: ${finding.sources.join(', ')}` : '';
       return `### Находка ${i + 1}: ${finding.subQuestion}\n${digest}${sources}`;
     })
     .join('\n\n');
@@ -116,7 +120,8 @@ export async function composeReport(params: {
   signal?: AbortSignal;
   maxRetries?: number;
 }): Promise<{ text: string; usage: Partial<DeepResearchTokenUsage> }> {
-  const { reportModel, request, brief, jurisdiction, findings, digestCap, now, nonce, signal } = params;
+  const { reportModel, request, brief, jurisdiction, findings, digestCap, now, nonce, signal } =
+    params;
   const maxRetries = params.maxRetries ?? DEFAULT_MAX_RETRIES;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -141,14 +146,24 @@ export async function composeReport(params: {
       }
       if (!isContextLimitError(error) || attempt === maxRetries) {
         return {
-          text: buildFallbackReport({ brief, jurisdiction, findings, reason: sanitizeErrorForUser(error) }),
+          text: buildFallbackReport({
+            brief,
+            jurisdiction,
+            findings,
+            reason: sanitizeErrorForUser(error),
+          }),
           usage: {},
         };
       }
     }
   }
   return {
-    text: buildFallbackReport({ brief, jurisdiction, findings, reason: 'превышены лимиты контекста' }),
+    text: buildFallbackReport({
+      brief,
+      jurisdiction,
+      findings,
+      reason: 'превышены лимиты контекста',
+    }),
     usage: {},
   };
 }

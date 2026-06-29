@@ -6,7 +6,6 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import type {
   DeepResearchFinding,
   DeepResearchTokenUsage,
-  DeepResearchStateUpdate,
   DeepResearchConfigurable,
 } from '../state';
 import type { DeepResearchTier } from '../config';
@@ -66,7 +65,8 @@ async function executeToolCall(
   if (!tool) {
     return `Инструмент "${call.name}" недоступен.`;
   }
-  const cap = (text: string): string => stripCitationControlChars(text).slice(0, MAX_TOOL_OUTPUT_CHARS);
+  const cap = (text: string): string =>
+    stripCitationControlChars(text).slice(0, MAX_TOOL_OUTPUT_CHARS);
   const timeout = AbortSignal.timeout(TOOL_TIMEOUT_MS);
   const toolSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
   try {
@@ -75,7 +75,8 @@ async function executeToolCall(
       return cap(result);
     }
     if (result instanceof ToolMessage) {
-      const content = typeof result.content === 'string' ? result.content : JSON.stringify(result.content);
+      const content =
+        typeof result.content === 'string' ? result.content : JSON.stringify(result.content);
       return cap(content);
     }
     return cap(JSON.stringify(result));
@@ -126,13 +127,19 @@ export async function runResearchLoop(params: {
         // Every tool_call still needs a tool response (the provider rejects a
         // dangling tool_call_id), so skipped calls get a placeholder, not silence.
         const skipped = `Вызов инструмента "${call.name}" пропущен: лимит ${MAX_TOOL_CALLS_PER_TURN} вызовов за один ход.`;
-        messages.push(new ToolMessage({ content: skipped, tool_call_id: call.id ?? '', name: call.name }));
+        messages.push(
+          new ToolMessage({ content: skipped, tool_call_id: call.id ?? '', name: call.name }),
+        );
         continue;
       }
       const content = await executeToolCall(toolsByName.get(call.name), call, signal);
       toolOutputs.push(content);
       messages.push(
-        new ToolMessage({ content: fenceUntrusted(content, nonce), tool_call_id: call.id ?? '', name: call.name }),
+        new ToolMessage({
+          content: fenceUntrusted(content, nonce),
+          tool_call_id: call.id ?? '',
+          name: call.name,
+        }),
       );
     }
   }
@@ -157,7 +164,8 @@ export async function compressResearch(params: {
   nonce: string;
   signal?: AbortSignal;
 }): Promise<{ digest: string; usage: Partial<DeepResearchTokenUsage> }> {
-  const { compressModel, subQuestion, jurisdiction, gathered, digestCap, now, nonce, signal } = params;
+  const { compressModel, subQuestion, jurisdiction, gathered, digestCap, now, nonce, signal } =
+    params;
   if (!gathered) {
     return { digest: '', usage: {} };
   }
@@ -166,7 +174,10 @@ export async function compressResearch(params: {
     new HumanMessage(fenceUntrusted(gathered, nonce)),
   ];
   const response = await compressModel.invoke(prompt, { signal });
-  return { digest: extractText(response).trim().slice(0, digestCap), usage: usageFromExchange(prompt, response) };
+  return {
+    digest: extractText(response).trim().slice(0, digestCap),
+    usage: usageFromExchange(prompt, response),
+  };
 }
 
 /** Unique source URLs from the bounded gathered material (for ГОСТ citations) —
@@ -195,7 +206,9 @@ export function extractSources(gathered: string): string[] {
 export function createResearcherNode(deps: ResearcherNodeDeps): DeepResearchNode {
   const { model } = deps;
   if (!model.bindTools) {
-    throw new Error('[deepResearch] researcher model does not support tool calling (bindTools missing)');
+    throw new Error(
+      '[deepResearch] researcher model does not support tool calling (bindTools missing)',
+    );
   }
   const caller: ToolCaller = model.bindTools(deps.tools);
 
@@ -203,7 +216,11 @@ export function createResearcherNode(deps: ResearcherNodeDeps): DeepResearchNode
     const subQuestion = state.currentSubQuestion;
     const round = state.round;
     if (!subQuestion.trim()) {
-      return { errors: [{ node: 'researcher', message: 'dispatched without a sub-question', at: deps.now }] };
+      return {
+        errors: [
+          { node: 'researcher', message: 'dispatched without a sub-question', at: deps.now },
+        ],
+      };
     }
 
     const signal = config.signal;
@@ -258,7 +275,13 @@ export function createResearcherNode(deps: ResearcherNodeDeps): DeepResearchNode
       }
       return {
         findings: [
-          { round, subQuestion, digest: `(ошибка исследования: ${sanitizeErrorForUser(error)})`, sources: [], tokens: 0 },
+          {
+            round,
+            subQuestion,
+            digest: `(ошибка исследования: ${sanitizeErrorForUser(error)})`,
+            sources: [],
+            tokens: 0,
+          },
         ],
         errors: [{ node: 'researcher', message: toErrorMessage(error), at: deps.now }],
       };

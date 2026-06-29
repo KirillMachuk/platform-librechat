@@ -28,11 +28,14 @@ function scriptedCaller(responses: AIMessageChunk[]): ToolCaller {
   return { invoke: async () => responses[Math.min(i++, responses.length - 1)] };
 }
 
-const okTool = tool(async ({ query }: { query: string }) => `данные по ${query}: https://cbr.ru/key-rate`, {
-  name: 'web_search',
-  description: 'поиск',
-  schema: z.object({ query: z.string() }),
-});
+const okTool = tool(
+  async ({ query }: { query: string }) => `данные по ${query}: https://cbr.ru/key-rate`,
+  {
+    name: 'web_search',
+    description: 'поиск',
+    schema: z.object({ query: z.string() }),
+  },
+);
 const throwingTool = tool(
   async () => {
     throw new Error('boom');
@@ -61,7 +64,10 @@ function stateWith(partial: Partial<DeepResearchState>): DeepResearchState {
 describe('runResearchLoop', () => {
   it('executes a tool call then stops when the model gives a final answer', async () => {
     const result = await runResearchLoop({
-      caller: scriptedCaller([toolCallChunk('web_search', { query: 'ставка ЦБ' }, 'c1'), finalChunk('итог')]),
+      caller: scriptedCaller([
+        toolCallChunk('web_search', { query: 'ставка ЦБ' }, 'c1'),
+        finalChunk('итог'),
+      ]),
       tools: [okTool],
       system: 's',
       question: 'q',
@@ -117,10 +123,20 @@ describe('runResearchLoop', () => {
     const caller: ToolCaller = {
       invoke: async (messages) => {
         seen.push([...messages]);
-        return seen.length === 1 ? toolCallChunk('web_search', { query: 'q' }, 'c1') : finalChunk('итог');
+        return seen.length === 1
+          ? toolCallChunk('web_search', { query: 'q' }, 'c1')
+          : finalChunk('итог');
       },
     };
-    await runResearchLoop({ caller, tools: [okTool], system: 's', question: 'q', nonce: 'NZ', tokenCap: Infinity, maxTurns: 5 });
+    await runResearchLoop({
+      caller,
+      tools: [okTool],
+      system: 's',
+      question: 'q',
+      nonce: 'NZ',
+      tokenCap: Infinity,
+      maxTurns: 5,
+    });
     const toolMsg = seen[1].find((m) => m.getType() === 'tool');
     expect(String(toolMsg?.content)).toContain('<UNTRUSTED NZ>');
     expect(String(toolMsg?.content)).toContain('cbr.ru');
@@ -136,7 +152,15 @@ describe('runResearchLoop', () => {
     };
     // tokenCap of 1: the first turn's usage already meets it, so the loop stops
     // after one model call instead of running all 10 turns.
-    await runResearchLoop({ caller, tools: [okTool], system: 's', question: 'q', nonce: NONCE, tokenCap: 1, maxTurns: 10 });
+    await runResearchLoop({
+      caller,
+      tools: [okTool],
+      system: 's',
+      question: 'q',
+      nonce: NONCE,
+      tokenCap: 1,
+      maxTurns: 10,
+    });
     expect(calls).toBe(1);
   });
 
@@ -179,7 +203,10 @@ describe('runResearchLoop', () => {
       schema: z.object({ query: z.string() }),
     });
     const result = await runResearchLoop({
-      caller: scriptedCaller([toolCallChunk('web_search', { query: 'q' }, 'c1'), finalChunk('done')]),
+      caller: scriptedCaller([
+        toolCallChunk('web_search', { query: 'q' }, 'c1'),
+        finalChunk('done'),
+      ]),
       tools: [hugeTool],
       system: 's',
       question: 'q',
@@ -256,7 +283,10 @@ describe('createResearcherNode', () => {
       now: NOW,
       nonce: NONCE,
     });
-    const update = await node(stateWith({ currentSubQuestion: 'Объём рынка', round: 2 }), emptyConfig);
+    const update = await node(
+      stateWith({ currentSubQuestion: 'Объём рынка', round: 2 }),
+      emptyConfig,
+    );
     const findings = (update.findings ?? []) as DeepResearchFinding[];
     expect(findings).toHaveLength(1);
     expect(findings[0].round).toBe(2);

@@ -61,7 +61,9 @@ function resultFrom(
     });
   return {
     finalReport,
-    finalizeReason: values?.finalReport ? values.finalizeReason ?? finalizeReason : finalizeReason,
+    finalizeReason: values?.finalReport
+      ? (values.finalizeReason ?? finalizeReason)
+      : finalizeReason,
     usage: values?.tokenUsage ?? ZERO_USAGE,
     findings: values?.findings ?? [],
   };
@@ -107,11 +109,14 @@ function handleUpdate(data: unknown, onProgress: (progress: DeepResearchProgress
  * inside the graph (budget gate), not here. When `onToken`/`onProgress` are
  * provided, the REPORT node's tokens stream out and progress is surfaced.
  */
-export async function runDeepResearch(params: RunDeepResearchParams): Promise<RunDeepResearchResult> {
+export async function runDeepResearch(
+  params: RunDeepResearchParams,
+): Promise<RunDeepResearchResult> {
   const { graph, input, configurable, signal, wallClockMs, onToken, onProgress } = params;
 
   const timeoutController = new AbortController();
-  const timer = wallClockMs > 0 ? setTimeout(() => timeoutController.abort(), wallClockMs) : undefined;
+  const timer =
+    wallClockMs > 0 ? setTimeout(() => timeoutController.abort(), wallClockMs) : undefined;
   timer?.unref?.();
 
   const signals = [signal, timeoutController.signal].filter((s): s is AbortSignal => Boolean(s));
@@ -132,7 +137,9 @@ export async function runDeepResearch(params: RunDeepResearchParams): Promise<Ru
     streamMode,
   };
 
-  const finalizeForCancellation = (values: DeepResearchState | undefined): RunDeepResearchResult | null => {
+  const finalizeForCancellation = (
+    values: DeepResearchState | undefined,
+  ): RunDeepResearchResult | null => {
     // User intent wins: a client Stop reports 'aborted' even if the wall-clock
     // watchdog also tripped in the same tick (L9), so the UI never mislabels a
     // deliberate Stop as a timeout.
@@ -156,7 +163,10 @@ export async function runDeepResearch(params: RunDeepResearchParams): Promise<Ru
         handleUpdate(data, onProgress);
       }
     }
-    return finalizeForCancellation(lastValues) ?? resultFrom(lastValues, 'completed', 'отчёт не сформирован');
+    return (
+      finalizeForCancellation(lastValues) ??
+      resultFrom(lastValues, 'completed', 'отчёт не сформирован')
+    );
   } catch (error) {
     const cancellation = finalizeForCancellation(lastValues);
     if (cancellation) {
@@ -167,7 +177,11 @@ export async function runDeepResearch(params: RunDeepResearchParams): Promise<Ru
     if (error instanceof GraphRecursionError) {
       return resultFrom(lastValues, 'rounds', 'достигнут предел числа шагов исследования');
     }
-    return resultFrom(lastValues, 'error', `ошибка выполнения исследования: ${sanitizeErrorForUser(error)}`);
+    return resultFrom(
+      lastValues,
+      'error',
+      `ошибка выполнения исследования: ${sanitizeErrorForUser(error)}`,
+    );
   } finally {
     if (timer) {
       clearTimeout(timer);

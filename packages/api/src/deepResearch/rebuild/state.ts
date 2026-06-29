@@ -43,7 +43,14 @@ export interface DeepResearchNodeError {
  *  distinct from 'completed' so the UI can say so). 'limit' = the run was refused
  *  up front (per-user concurrency cap) and never gathered — a terminal, NON-error
  *  state the UI must not flag as an unfinished/failed message. */
-export type FinalizeReason = 'completed' | 'budget' | 'rounds' | 'time' | 'aborted' | 'error' | 'limit';
+export type FinalizeReason =
+  | 'completed'
+  | 'budget'
+  | 'rounds'
+  | 'time'
+  | 'aborted'
+  | 'error'
+  | 'limit';
 
 /** Why SUPERVISOR ended the gather loop; REPORT maps it to a FinalizeReason. */
 export type SupervisorConcludeReason = 'budget' | 'rounds' | 'complete';
@@ -83,8 +90,7 @@ export interface DeepResearchRunBudget {
 }
 
 const lastWins = <T>(_current: T, incoming: T): T => incoming;
-const concat = <T>(current: T[], incoming: T[] | undefined): T[] =>
-  current.concat(incoming ?? []);
+const concat = <T>(current: T[], incoming: T[] | undefined): T[] => current.concat(incoming ?? []);
 const sumUsage = (
   current: DeepResearchTokenUsage,
   incoming: Partial<DeepResearchTokenUsage> | undefined,

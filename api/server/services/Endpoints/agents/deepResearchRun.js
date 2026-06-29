@@ -282,7 +282,11 @@ async function runNewDeepResearch(params) {
   // (the engine guarantees a report), so this try guards the pre-graph assembly.
   // M1: the soft DR concurrency cap short-circuits via a sentinel into the same finalize.
   let result;
-  const otherActiveJobs = await countOtherActiveJobs({ streamId, userId, tenantId: req?.user?.tenantId });
+  const otherActiveJobs = await countOtherActiveJobs({
+    streamId,
+    userId,
+    tenantId: req?.user?.tenantId,
+  });
   try {
     if (otherActiveJobs >= MAX_CONCURRENT_DR) {
       throw new DeepResearchCapError();
@@ -327,11 +331,15 @@ async function runNewDeepResearch(params) {
       wallClockMs: Math.max(1, tier.wallClockMinutes) * 60_000,
       // v1: progress is logged; rendered UI progress + token streaming ship after lab SSE validation.
       onProgress: (event) =>
-        logger.info(`[deepResearchRun] ${event.type}${event.subQuestion ? `: ${event.subQuestion}` : ''}`),
+        logger.info(
+          `[deepResearchRun] ${event.type}${event.subQuestion ? `: ${event.subQuestion}` : ''}`,
+        ),
     });
   } catch (error) {
     if (error instanceof DeepResearchCapError) {
-      logger.warn(`[deepResearchRun] user ${userId} at DR concurrency cap (${otherActiveJobs} active); rejecting`);
+      logger.warn(
+        `[deepResearchRun] user ${userId} at DR concurrency cap (${otherActiveJobs} active); rejecting`,
+      );
       result = {
         finalReport:
           'У вас уже выполняется несколько задач одновременно. Дождитесь завершения текущих исследований и запустите это снова.',
@@ -427,7 +435,10 @@ async function runNewDeepResearch(params) {
       conversation = saved && saved.conversationId ? saved : null;
     }
   } catch (error) {
-    logger.warn('[deepResearchRun] failed to load/persist conversation; using minimal object', error);
+    logger.warn(
+      '[deepResearchRun] failed to load/persist conversation; using minimal object',
+      error,
+    );
   }
   const finalConversation = conversation
     ? { ...conversation, conversationId }

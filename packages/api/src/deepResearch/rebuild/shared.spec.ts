@@ -104,26 +104,38 @@ describe('stripCitationControlChars', () => {
   });
 
   it('leaves clean text unchanged', () => {
-    expect(stripCitationControlChars('обычный текст 123 https://cbr.ru')).toBe('обычный текст 123 https://cbr.ru');
+    expect(stripCitationControlChars('обычный текст 123 https://cbr.ru')).toBe(
+      'обычный текст 123 https://cbr.ru',
+    );
   });
 });
 
 describe('sanitizeErrorForUser', () => {
   it('maps errors to fixed RU category phrases', () => {
-    expect(sanitizeErrorForUser(new Error('AbortError: operation aborted'))).toBe('операция была прервана');
+    expect(sanitizeErrorForUser(new Error('AbortError: operation aborted'))).toBe(
+      'операция была прервана',
+    );
     expect(sanitizeErrorForUser(new Error('Request timed out after 60000ms'))).toBe(
       'превышено время ожидания ответа модели',
     );
-    expect(sanitizeErrorForUser(new Error('429 Too Many Requests'))).toBe('достигнут лимит запросов к модели');
+    expect(sanitizeErrorForUser(new Error('429 Too Many Requests'))).toBe(
+      'достигнут лимит запросов к модели',
+    );
     expect(sanitizeErrorForUser(new Error('ECONNREFUSED 10.0.0.5:443'))).toBe(
       'временная сетевая ошибка при обращении к модели',
     );
-    expect(sanitizeErrorForUser(new Error('maximum context length exceeded'))).toBe('превышен лимит контекста модели');
-    expect(sanitizeErrorForUser(new Error('totally unexpected failure'))).toBe('внутренняя ошибка при обработке запроса');
+    expect(sanitizeErrorForUser(new Error('maximum context length exceeded'))).toBe(
+      'превышен лимит контекста модели',
+    );
+    expect(sanitizeErrorForUser(new Error('totally unexpected failure'))).toBe(
+      'внутренняя ошибка при обработке запроса',
+    );
   });
 
   it('never leaks the host, URL or port from the raw error', () => {
-    const leaky = new Error('connect ETIMEDOUT https://anon-proxy.internal:8443/v1/chat from 10.0.0.5');
+    const leaky = new Error(
+      'connect ETIMEDOUT https://anon-proxy.internal:8443/v1/chat from 10.0.0.5',
+    );
     const safe = sanitizeErrorForUser(leaky);
     expect(safe).not.toMatch(/https?:|:\d{2,5}|anon-proxy|10\.0\.0\.5/);
   });

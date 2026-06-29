@@ -53,14 +53,24 @@ describe('concludeToFinalize', () => {
 
 describe('buildFallbackReport', () => {
   it('assembles a report from findings without a model', () => {
-    const report = buildFallbackReport({ brief: 'b', jurisdiction: 'RU', findings: [finding('Q1')], reason: 'тест' });
+    const report = buildFallbackReport({
+      brief: 'b',
+      jurisdiction: 'RU',
+      findings: [finding('Q1')],
+      reason: 'тест',
+    });
     expect(report).toContain('частичный отчёт');
     expect(report).toContain('Q1');
     expect(report).toContain('cbr.ru');
   });
 
   it('handles empty findings', () => {
-    const report = buildFallbackReport({ brief: 'b', jurisdiction: 'RU', findings: [], reason: 'тест' });
+    const report = buildFallbackReport({
+      brief: 'b',
+      jurisdiction: 'RU',
+      findings: [],
+      reason: 'тест',
+    });
     expect(report).toContain('не удалось собрать данные');
   });
 });
@@ -79,7 +89,9 @@ describe('composeReport', () => {
   it('returns the model report on success', async () => {
     const result = await composeReport({
       ...base,
-      reportModel: new FakeListChatModel({ responses: ['# Записка\nКлючевые выводы: рынок растёт.'] }),
+      reportModel: new FakeListChatModel({
+        responses: ['# Записка\nКлючевые выводы: рынок растёт.'],
+      }),
     });
     expect(result.text).toContain('Ключевые выводы');
   });
@@ -148,7 +160,10 @@ describe('createReportNode', () => {
       now: NOW,
       nonce: NONCE,
     });
-    const update = await node(stateWith({ findings: [finding('Q1')], concludeReason: 'budget' }), emptyConfig);
+    const update = await node(
+      stateWith({ findings: [finding('Q1')], concludeReason: 'budget' }),
+      emptyConfig,
+    );
     expect(update.finalReport).toContain('Итоговая записка');
     expect(update.finalizeReason).toBe('budget');
   });

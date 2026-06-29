@@ -2,7 +2,11 @@ import { SystemMessage } from '@langchain/core/messages';
 
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
-import type { DeepResearchState, DeepResearchStateUpdate, DeepResearchConfigurable } from '../state';
+import type {
+  DeepResearchState,
+  DeepResearchStateUpdate,
+  DeepResearchConfigurable,
+} from '../state';
 import type { DeepResearchTier } from '../config';
 import { extractText, usageFromExchange, toErrorMessage, tolerantJsonParse } from '../shared';
 import { buildSupervisorPrompt } from '../prompts';

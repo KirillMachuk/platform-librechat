@@ -9,7 +9,12 @@ export function extractText(message: BaseMessage): string {
   }
   if (Array.isArray(content)) {
     return content
-      .map((part) => (typeof part === 'string' ? part : 'text' in part && typeof part.text === 'string' ? part.text : ''))
+      .map((part) => {
+        if (typeof part === 'string') {
+          return part;
+        }
+        return 'text' in part && typeof part.text === 'string' ? part.text : '';
+      })
       .join('');
   }
   return '';
@@ -37,7 +42,11 @@ export function usageFromMessage(message: BaseMessage): Partial<DeepResearchToke
     return {};
   }
   const { input_tokens = 0, output_tokens = 0, total_tokens } = usage;
-  return { input: input_tokens, output: output_tokens, total: total_tokens ?? input_tokens + output_tokens };
+  return {
+    input: input_tokens,
+    output: output_tokens,
+    total: total_tokens ?? input_tokens + output_tokens,
+  };
 }
 
 /**
@@ -93,7 +102,9 @@ export function sanitizeErrorForUser(error: unknown): string {
   if (/rate.?limit|429|too many|quota|insufficient|limit exceeded/.test(raw)) {
     return 'достигнут лимит запросов к модели';
   }
-  if (/network|econn|enotfound|socket|fetch failed|dns|getaddrinfo|502|503|504|bad gateway/.test(raw)) {
+  if (
+    /network|econn|enotfound|socket|fetch failed|dns|getaddrinfo|502|503|504|bad gateway/.test(raw)
+  ) {
     return 'временная сетевая ошибка при обращении к модели';
   }
   if (/context|token|length|maximum|413|payload too large/.test(raw)) {
@@ -149,7 +160,10 @@ export function mergeUsage(
 
 /** Extracts the first {...} object from possibly fenced/prefixed model text. */
 export function tolerantJsonParse(text: string): Record<string, unknown> | null {
-  const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+  const cleaned = text
+    .replace(/```json/gi, '')
+    .replace(/```/g, '')
+    .trim();
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');
   if (start === -1 || end <= start) {
@@ -157,7 +171,9 @@ export function tolerantJsonParse(text: string): Record<string, unknown> | null 
   }
   try {
     const parsed: unknown = JSON.parse(cleaned.slice(start, end + 1));
-    return parsed !== null && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+    return parsed !== null && typeof parsed === 'object'
+      ? (parsed as Record<string, unknown>)
+      : null;
   } catch {
     return null;
   }

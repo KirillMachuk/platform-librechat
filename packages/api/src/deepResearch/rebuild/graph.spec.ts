@@ -14,24 +14,34 @@ const NONCE = 'test-nonce';
 const TIER = resolveDeepResearchTier(); // deep: maxOrchestratorCycles = 8
 
 const scopeNode = () =>
-  createScopeNode({ model: new FakeListChatModel({ responses: ['{"jurisdiction":"RU","brief":"b"}'] }), now: NOW });
+  createScopeNode({
+    model: new FakeListChatModel({ responses: ['{"jurisdiction":"RU","brief":"b"}'] }),
+    now: NOW,
+  });
 
 const supervisorNode = (responses: string[]) =>
-  createSupervisorNode({ model: new FakeListChatModel({ responses }), tier: TIER, now: NOW, nonce: NONCE });
+  createSupervisorNode({
+    model: new FakeListChatModel({ responses }),
+    tier: TIER,
+    now: NOW,
+    nonce: NONCE,
+  });
 
 /** Stub researcher: records one finding and a simulated token cost per round. */
-const stubResearcher = (costPerRound: number): DeepResearchNode => async (state) => ({
-  findings: [
-    {
-      round: state.round,
-      subQuestion: state.currentSubQuestion,
-      digest: `дайджест по «${state.currentSubQuestion}»`,
-      sources: [],
-      tokens: costPerRound,
-    },
-  ],
-  tokenUsage: { input: costPerRound, output: 0, total: costPerRound },
-});
+const stubResearcher =
+  (costPerRound: number): DeepResearchNode =>
+  async (state) => ({
+    findings: [
+      {
+        round: state.round,
+        subQuestion: state.currentSubQuestion,
+        digest: `дайджест по «${state.currentSubQuestion}»`,
+        sources: [],
+        tokens: costPerRound,
+      },
+    ],
+    tokenUsage: { input: costPerRound, output: 0, total: costPerRound },
+  });
 
 /** Stub terminal report: maps concludeReason → finalizeReason. */
 const stubReport: DeepResearchNode = async (state) => ({
@@ -62,7 +72,10 @@ describe('buildDeepResearchGraph (termination guarantees)', () => {
       report: stubReport,
     });
 
-    const result = await graph.invoke({ messages: [new HumanMessage('изучи рынок CRM')] }, runConfig(800_000));
+    const result = await graph.invoke(
+      { messages: [new HumanMessage('изучи рынок CRM')] },
+      runConfig(800_000),
+    );
 
     expect(result.jurisdiction).toBe('RU');
     expect(result.findings).toHaveLength(2);
@@ -78,7 +91,10 @@ describe('buildDeepResearchGraph (termination guarantees)', () => {
       report: stubReport,
     });
 
-    const result = await graph.invoke({ messages: [new HumanMessage('go')] }, runConfig(800_000, 0.75));
+    const result = await graph.invoke(
+      { messages: [new HumanMessage('go')] },
+      runConfig(800_000, 0.75),
+    );
 
     expect(result.finalReport).toContain('ОТЧЁТ');
     expect(result.finalizeReason).toBe('budget');
@@ -94,7 +110,10 @@ describe('buildDeepResearchGraph (termination guarantees)', () => {
       report: stubReport,
     });
 
-    const result = await graph.invoke({ messages: [new HumanMessage('go')] }, runConfig(1_000_000_000, 0.75));
+    const result = await graph.invoke(
+      { messages: [new HumanMessage('go')] },
+      runConfig(1_000_000_000, 0.75),
+    );
 
     expect(result.finalReport).toContain('ОТЧЁТ');
     expect(result.finalizeReason).toBe('completed');
@@ -115,14 +134,19 @@ describe('createDeepResearchGraph (full assembly, all real nodes)', () => {
       }),
       workerModel: new FakeListChatModel({ responses: ['по под-вопросу собран материал'] }),
       compressModel: new FakeListChatModel({ responses: ['дайджест'] }),
-      reportModel: new FakeListChatModel({ responses: ['# Итоговый отчёт\nКлючевые выводы: рынок растёт.'] }),
+      reportModel: new FakeListChatModel({
+        responses: ['# Итоговый отчёт\nКлючевые выводы: рынок растёт.'],
+      }),
       tools: [],
       tier: TIER,
       now: NOW,
       nonce: NONCE,
     });
 
-    const result = await graph.invoke({ messages: [new HumanMessage('изучи рынок CRM в России')] }, runConfig(800_000));
+    const result = await graph.invoke(
+      { messages: [new HumanMessage('изучи рынок CRM в России')] },
+      runConfig(800_000),
+    );
 
     expect(result.jurisdiction).toBe('RU');
     expect(result.findings).toHaveLength(1);
@@ -140,7 +164,10 @@ describe('createDeepResearchGraph (full assembly, all real nodes)', () => {
     // from the nodes into the gate via usageFromExchange (the C2 fix end-to-end).
     const graph = createDeepResearchGraph({
       leadModel: new FakeListChatModel({
-        responses: ['{"jurisdiction":"RU","brief":"Рынок"}', '{"action":"RESEARCH","subQuestion":"q1"}'],
+        responses: [
+          '{"jurisdiction":"RU","brief":"Рынок"}',
+          '{"action":"RESEARCH","subQuestion":"q1"}',
+        ],
       }),
       workerModel: new FakeListChatModel({ responses: ['материал'] }),
       compressModel: new FakeListChatModel({ responses: ['дайджест'] }),

@@ -98,7 +98,12 @@ export function createDeepResearchGraph(deps: DeepResearchGraphDeps) {
   return buildDeepResearchGraph(
     {
       scope: createScopeNode({ model: deps.leadModel, now: deps.now }),
-      supervisor: createSupervisorNode({ model: deps.leadModel, tier: deps.tier, now: deps.now, nonce: deps.nonce }),
+      supervisor: createSupervisorNode({
+        model: deps.leadModel,
+        tier: deps.tier,
+        now: deps.now,
+        nonce: deps.nonce,
+      }),
       researcher: createResearcherNode({
         model: deps.workerModel,
         compressModel: deps.compressModel,
@@ -107,7 +112,12 @@ export function createDeepResearchGraph(deps: DeepResearchGraphDeps) {
         now: deps.now,
         nonce: deps.nonce,
       }),
-      report: createReportNode({ reportModel: deps.reportModel, tier: deps.tier, now: deps.now, nonce: deps.nonce }),
+      report: createReportNode({
+        reportModel: deps.reportModel,
+        tier: deps.tier,
+        now: deps.now,
+        nonce: deps.nonce,
+      }),
     },
     { checkpointer: deps.checkpointer },
   );

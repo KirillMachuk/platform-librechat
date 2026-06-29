@@ -350,7 +350,8 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
           streamId,
           signal: job.abortController.signal,
           endpoint: client?.options?.agent?.endpoint ?? endpointOption.endpoint,
-          conversationModel: client?.options?.agent?.model ?? endpointOption.model_parameters?.model,
+          conversationModel:
+            client?.options?.agent?.model ?? endpointOption.model_parameters?.model,
           userId,
           conversationId,
           parentMessageId,

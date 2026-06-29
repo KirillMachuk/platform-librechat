@@ -55,21 +55,33 @@ export function tierToRunBudget(tier: DeepResearchTier): DeepResearchRunBudget {
 }
 
 /** Lead model — scope / supervisor / report (the stronger model per §4). */
-export function leadModelFor(tier: DeepResearchTier, conversationModel?: string): string | undefined {
+export function leadModelFor(
+  tier: DeepResearchTier,
+  conversationModel?: string,
+): string | undefined {
   return resolveDeepResearchModel(tier.leadModel, conversationModel);
 }
 
 /** Worker model — the researcher. Falls back to the lead model, never a reasoning chat model. */
-export function workerModelFor(tier: DeepResearchTier, conversationModel?: string): string | undefined {
+export function workerModelFor(
+  tier: DeepResearchTier,
+  conversationModel?: string,
+): string | undefined {
   return resolveDeepResearchModel(tier.workerModel, conversationModel, tier.leadModel);
 }
 
 /** Compress model — the digest step. Cheapest viable; defaults down the worker chain. */
-export function compressModelFor(tier: DeepResearchTier, conversationModel?: string): string | undefined {
+export function compressModelFor(
+  tier: DeepResearchTier,
+  conversationModel?: string,
+): string | undefined {
   return resolveDeepResearchModel(tier.compressModel, tier.workerModel, conversationModel);
 }
 
 /** Report model — synthesis runs on the lead model (§4: strong model is the quality lever). */
-export function reportModelFor(tier: DeepResearchTier, conversationModel?: string): string | undefined {
+export function reportModelFor(
+  tier: DeepResearchTier,
+  conversationModel?: string,
+): string | undefined {
   return leadModelFor(tier, conversationModel);
 }

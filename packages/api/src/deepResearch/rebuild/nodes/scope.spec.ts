@@ -69,7 +69,9 @@ describe('createScopeNode', () => {
   });
 
   it('degrades to UNSPECIFIED + raw request when the model returns noise', async () => {
-    const update = await scopeWith('я не знаю')(stateWith([new HumanMessage('запрос пользователя')]));
+    const update = await scopeWith('я не знаю')(
+      stateWith([new HumanMessage('запрос пользователя')]),
+    );
     expect(update.jurisdiction).toBe('UNSPECIFIED');
     expect(update.researchBrief).toBe('я не знаю');
   });
@@ -81,6 +83,9 @@ describe('createScopeNode', () => {
     await createScopeNode({ model, now: NOW })(stateWith([new HumanMessage('q')]), {
       signal: controller.signal,
     });
-    expect(spy).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ signal: controller.signal }));
+    expect(spy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ signal: controller.signal }),
+    );
   });
 });

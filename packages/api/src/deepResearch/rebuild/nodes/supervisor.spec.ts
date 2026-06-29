@@ -40,19 +40,37 @@ function configWith(tokenBudget = 800_000, budgetGateRatio = 0.75): RunnableConf
 describe('budgetGateReason', () => {
   it('flags budget when usage reaches the reserve threshold', () => {
     expect(
-      budgetGateReason({ tokenUsed: 600_000, round: 0, tokenBudget: 800_000, budgetGateRatio: 0.75, maxRounds: 8 }),
+      budgetGateReason({
+        tokenUsed: 600_000,
+        round: 0,
+        tokenBudget: 800_000,
+        budgetGateRatio: 0.75,
+        maxRounds: 8,
+      }),
     ).toBe('budget');
   });
 
   it('flags rounds when the round cap is hit', () => {
     expect(
-      budgetGateReason({ tokenUsed: 0, round: 8, tokenBudget: 800_000, budgetGateRatio: 0.75, maxRounds: 8 }),
+      budgetGateReason({
+        tokenUsed: 0,
+        round: 8,
+        tokenBudget: 800_000,
+        budgetGateRatio: 0.75,
+        maxRounds: 8,
+      }),
     ).toBe('rounds');
   });
 
   it('returns null while budget and rounds remain', () => {
     expect(
-      budgetGateReason({ tokenUsed: 100, round: 1, tokenBudget: 800_000, budgetGateRatio: 0.75, maxRounds: 8 }),
+      budgetGateReason({
+        tokenUsed: 100,
+        round: 1,
+        tokenBudget: 800_000,
+        budgetGateRatio: 0.75,
+        maxRounds: 8,
+      }),
     ).toBeNull();
   });
 });
@@ -72,7 +90,10 @@ describe('createSupervisorNode', () => {
     const model = new FakeListChatModel({
       responses: ['{"action":"RESEARCH","subQuestion":"Объём рынка CRM в РФ за 2025 год"}'],
     });
-    const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(stateWith({}), configWith());
+    const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(
+      stateWith({}),
+      configWith(),
+    );
     expect(update.currentSubQuestion).toBe('Объём рынка CRM в РФ за 2025 год');
     expect(update.round).toBe(1);
     expect(update.researcherCount).toBe(1);
@@ -81,7 +102,10 @@ describe('createSupervisorNode', () => {
 
   it('concludes when the model says COMPLETE', async () => {
     const model = new FakeListChatModel({ responses: ['{"action":"COMPLETE","subQuestion":""}'] });
-    const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(stateWith({ round: 2 }), configWith());
+    const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(
+      stateWith({ round: 2 }),
+      configWith(),
+    );
     expect(update.concludeReason).toBe('complete');
     expect(update.currentSubQuestion ?? '').toBe('');
   });
@@ -100,7 +124,10 @@ describe('createSupervisorNode', () => {
   it('concludes on the round cap WITHOUT calling the model', async () => {
     const model = new FakeListChatModel({ responses: ['{"action":"RESEARCH","subQuestion":"x"}'] });
     const spy = jest.spyOn(model, 'invoke');
-    const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(stateWith({ round: 8 }), configWith());
+    const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(
+      stateWith({ round: 8 }),
+      configWith(),
+    );
     expect(update.concludeReason).toBe('rounds');
     expect(spy).not.toHaveBeenCalled();
   });
@@ -113,6 +140,9 @@ describe('createSupervisorNode', () => {
       ...configWith(),
       signal: controller.signal,
     });
-    expect(spy).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ signal: controller.signal }));
+    expect(spy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ signal: controller.signal }),
+    );
   });
 });
