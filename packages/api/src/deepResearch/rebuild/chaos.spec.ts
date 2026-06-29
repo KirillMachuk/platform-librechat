@@ -1,10 +1,9 @@
 import { HumanMessage } from '@langchain/core/messages';
 import { FakeListChatModel } from '@langchain/core/utils/testing';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
-
+import type { BaseChatModelParams } from '@langchain/core/language_models/chat_models';
 import type { BaseMessage } from '@langchain/core/messages';
 import type { ChatResult } from '@langchain/core/outputs';
-import type { BaseChatModelParams } from '@langchain/core/language_models/chat_models';
 import type { DeepResearchConfigurable } from './state';
 import { resolveDeepResearchTier, tierToRunBudget } from './config';
 import { createDeepResearchGraph } from './graph';

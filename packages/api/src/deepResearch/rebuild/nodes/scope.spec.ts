@@ -1,6 +1,5 @@
-import { FakeListChatModel } from '@langchain/core/utils/testing';
 import { HumanMessage } from '@langchain/core/messages';
-
+import { FakeListChatModel } from '@langchain/core/utils/testing';
 import type { BaseMessage } from '@langchain/core/messages';
 import type { DeepResearchState } from '../state';
 import { createScopeNode, parseScopeOutput } from './scope';

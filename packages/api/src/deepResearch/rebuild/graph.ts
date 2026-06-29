@@ -1,16 +1,15 @@
 import { StateGraph, START, END } from '@langchain/langgraph';
-
-import type { BaseCheckpointSaver } from '@langchain/langgraph';
-import type { StructuredToolInterface } from '@langchain/core/tools';
-import type { RunnableConfig } from '@langchain/core/runnables';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import type { StructuredToolInterface } from '@langchain/core/tools';
+import type { BaseCheckpointSaver } from '@langchain/langgraph';
+import type { RunnableConfig } from '@langchain/core/runnables';
 import type { DeepResearchState, DeepResearchStateUpdate } from './state';
 import type { DeepResearchTier } from './config';
-import { DeepResearchStateAnnotation } from './state';
-import { createScopeNode } from './nodes/scope';
-import { createReportNode } from './nodes/report';
-import { createResearcherNode } from './nodes/researcher';
 import { routeFromSupervisor, createSupervisorNode } from './nodes/supervisor';
+import { createResearcherNode } from './nodes/researcher';
+import { DeepResearchStateAnnotation } from './state';
+import { createReportNode } from './nodes/report';
+import { createScopeNode } from './nodes/scope';
 
 /** A graph node: pure `(state, config) → partial update`. Never throws. */
 export type DeepResearchNode = (

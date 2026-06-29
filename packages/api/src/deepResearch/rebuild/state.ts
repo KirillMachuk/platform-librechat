@@ -1,6 +1,6 @@
 import { Annotation, messagesStateReducer } from '@langchain/langgraph';
-import type { BaseMessage } from '@langchain/core/messages';
 import type { DeepResearchMode } from 'librechat-data-provider';
+import type { BaseMessage } from '@langchain/core/messages';
 
 /**
  * Deep Research graph state (custom StateGraph rebuild).

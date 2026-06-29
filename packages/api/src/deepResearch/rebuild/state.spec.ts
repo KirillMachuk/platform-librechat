@@ -1,7 +1,7 @@
 import { StateGraph, START, END } from '@langchain/langgraph';
 import { HumanMessage, AIMessage } from '@langchain/core/messages';
-import { DeepResearchStateAnnotation } from './state';
 import type { DeepResearchState, DeepResearchStateUpdate } from './state';
+import { DeepResearchStateAnnotation } from './state';
 
 describe('DeepResearchStateAnnotation', () => {
   it('reduces channels correctly: concat, sum, last-wins, message append', async () => {

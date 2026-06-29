@@ -1,3 +1,4 @@
+import type { TDeepResearchConfig } from 'librechat-data-provider';
 import {
   tierToRunBudget,
   leadModelFor,
@@ -6,8 +7,6 @@ import {
   compressModelFor,
   resolveDeepResearchTier,
 } from './config';
-
-import type { TDeepResearchConfig } from 'librechat-data-provider';
 
 describe('resolveDeepResearchTier', () => {
   it('defaults to the deep tier with its graph knobs', () => {

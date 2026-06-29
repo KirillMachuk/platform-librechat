@@ -1,7 +1,5 @@
 import { GraphRecursionError } from '@langchain/langgraph';
-
 import type { BaseMessage } from '@langchain/core/messages';
-import type { CompiledDeepResearchGraph } from './graph';
 import type {
   FinalizeReason,
   DeepResearchState,
@@ -9,6 +7,7 @@ import type {
   DeepResearchTokenUsage,
   DeepResearchConfigurable,
 } from './state';
+import type { CompiledDeepResearchGraph } from './graph';
 import { extractText, sanitizeErrorForUser } from './shared';
 import { buildFallbackReport } from './nodes/report';
 

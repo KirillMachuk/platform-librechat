@@ -1,8 +1,7 @@
-import { resolveDeepResearchMode, resolveDeepResearchModel } from '../modes';
-
 import type { TDeepResearchConfig, DeepResearchMode } from 'librechat-data-provider';
 import type { ResolvedDeepResearchMode } from '../types';
 import type { DeepResearchRunBudget } from './state';
+import { resolveDeepResearchMode, resolveDeepResearchModel } from '../modes';
 
 /**
  * A resolved tier for the StateGraph DR rebuild. Extends the existing
