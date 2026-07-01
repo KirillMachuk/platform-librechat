@@ -2,15 +2,26 @@
 jest.mock('axios');
 jest.mock('form-data');
 jest.mock('https-proxy-agent');
-jest.mock('@librechat/data-schemas', () => ({ logger: { warn: jest.fn(), error: jest.fn() } }));
-jest.mock('@librechat/api', () => ({ genAzureEndpoint: jest.fn(), logAxiosError: jest.fn() }));
+jest.mock('@librechat/data-schemas', () => ({
+  logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
+}));
+jest.mock('@librechat/api', () => ({
+  genAzureEndpoint: jest.fn(),
+  logAxiosError: jest.fn(),
+  applyAxiosProxyConfig: jest.fn(),
+}));
 jest.mock('librechat-data-provider', () => ({
-  extractEnvVariable: jest.fn(),
-  STTProviders: {},
+  extractEnvVariable: jest.fn((value) => value),
+  STTProviders: { OPENAI: 'openai', AZURE_OPENAI: 'azureOpenAI' },
 }));
 jest.mock('~/server/services/Config', () => ({ getAppConfig: jest.fn() }));
 
-const { getFileExtensionFromMime, MIME_TO_EXTENSION_MAP } = require('./STTService');
+const {
+  STTService,
+  getFileExtensionFromMime,
+  isTransientSttError,
+  MIME_TO_EXTENSION_MAP,
+} = require('./STTService');
 
 describe('getFileExtensionFromMime', () => {
   it('should normalize audio/x-m4a to m4a', () => {
@@ -109,5 +120,79 @@ describe('STT audio format validation with MIME normalization', () => {
     expect(isFormatAccepted('text/webm')).toBe(false);
     expect(isFormatAccepted('text/plain')).toBe(false);
     expect(isFormatAccepted('application/json')).toBe(false);
+  });
+});
+
+describe('isTransientSttError', () => {
+  it('treats 5xx and 429 responses as transient', () => {
+    expect(isTransientSttError({ response: { status: 500 } })).toBe(true);
+    expect(isTransientSttError({ response: { status: 503 } })).toBe(true);
+    expect(isTransientSttError({ response: { status: 429 } })).toBe(true);
+  });
+
+  it('treats 4xx responses as permanent', () => {
+    expect(isTransientSttError({ response: { status: 400 } })).toBe(false);
+    expect(isTransientSttError({ response: { status: 413 } })).toBe(false);
+    expect(isTransientSttError({ response: { status: 401 } })).toBe(false);
+  });
+
+  it('treats network reset/timeout codes as transient', () => {
+    expect(isTransientSttError({ code: 'ECONNREFUSED' })).toBe(true);
+    expect(isTransientSttError({ code: 'ETIMEDOUT' })).toBe(true);
+    expect(isTransientSttError({ code: 'ECONNRESET' })).toBe(true);
+  });
+
+  it('treats unknown or malformed errors as permanent', () => {
+    expect(isTransientSttError(new Error('boom'))).toBe(false);
+    expect(isTransientSttError({})).toBe(false);
+    expect(isTransientSttError(null)).toBe(false);
+  });
+});
+
+describe('STTService.sttRequest retry', () => {
+  const axios = require('axios');
+  const schema = {
+    url: 'http://stt.railway.internal:8000/v1/audio/transcriptions',
+    model: 'whisper',
+    apiKey: 'test-key',
+  };
+  const payload = {
+    audioBuffer: Buffer.from('fake-audio'),
+    audioFile: { originalname: 'a.webm', mimetype: 'audio/webm', size: 10 },
+    language: 'ru',
+  };
+
+  let service;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new STTService();
+  });
+
+  it('retries a transient failure and returns trimmed text on a later attempt', async () => {
+    const transient = Object.assign(new Error('refused'), { code: 'ECONNREFUSED' });
+    axios.post
+      .mockRejectedValueOnce(transient)
+      .mockResolvedValueOnce({ status: 200, data: { text: '  hi  ' } });
+
+    const text = await service.sttRequest('openai', schema, payload);
+
+    expect(text).toBe('hi');
+    expect(axios.post).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a permanent (4xx) failure', async () => {
+    const permanent = Object.assign(new Error('bad request'), { response: { status: 400 } });
+    axios.post.mockRejectedValue(permanent);
+
+    await expect(service.sttRequest('openai', schema, payload)).rejects.toBe(permanent);
+    expect(axios.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up after the maximum attempts on persistent transient failures', async () => {
+    const transient = Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' });
+    axios.post.mockRejectedValue(transient);
+
+    await expect(service.sttRequest('openai', schema, payload)).rejects.toBe(transient);
+    expect(axios.post).toHaveBeenCalledTimes(3);
   });
 });

@@ -107,6 +107,37 @@ function getFileExtensionFromMime(mimeType) {
   return 'webm'; // Default fallback
 }
 
+/** STT retry policy: attempts and base backoff (ms) for transient failures. */
+const STT_MAX_ATTEMPTS = 3;
+const STT_RETRY_BASE_MS = 500;
+
+/** Resolves after the given number of milliseconds. */
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Classifies an STT request failure as transient (worth retrying) or permanent.
+ * Network resets/timeouts and 5xx/429 responses are transient; 4xx responses
+ * (bad request, unsupported media, auth) and malformed 2xx bodies are not.
+ * @param {unknown} error - The error thrown by the STT request.
+ * @returns {boolean} True when the request should be retried.
+ */
+function isTransientSttError(error) {
+  const status = error?.response?.status;
+  if (typeof status === 'number') {
+    return status >= 500 || status === 429;
+  }
+  const transientCodes = [
+    'ECONNREFUSED',
+    'ECONNRESET',
+    'ETIMEDOUT',
+    'ECONNABORTED',
+    'EAI_AGAIN',
+    'ENETUNREACH',
+    'EPIPE',
+  ];
+  return typeof error?.code === 'string' && transientCodes.includes(error.code);
+}
+
 /**
  * Service class for handling Speech-to-Text (STT) operations.
  * @class
@@ -289,37 +320,51 @@ class STTService {
 
     const fileExtension = getFileExtensionFromMime(audioFile.mimetype);
 
-    const audioReadStream = Readable.from(audioBuffer);
-    audioReadStream.path = `audio.${fileExtension}`;
+    let lastError;
+    for (let attempt = 1; attempt <= STT_MAX_ATTEMPTS; attempt++) {
+      // A Readable is single-use, so every attempt rebuilds the payload — a
+      // retry must not reuse a stream already consumed by a prior axios.post.
+      const audioReadStream = Readable.from(audioBuffer);
+      audioReadStream.path = `audio.${fileExtension}`;
 
-    const [url, data, headers] = strategy.call(
-      this,
-      sttSchema,
-      audioReadStream,
-      audioFile,
-      language,
-    );
+      const [url, data, headers] = strategy.call(
+        this,
+        sttSchema,
+        audioReadStream,
+        audioFile,
+        language,
+      );
 
-    const options = { headers };
+      const options = { headers };
+      applyAxiosProxyConfig(options, url);
 
-    applyAxiosProxyConfig(options, url);
+      try {
+        const response = await axios.post(url, data, options);
 
-    try {
-      const response = await axios.post(url, data, options);
+        if (response.status !== 200) {
+          throw new Error('Invalid response from the STT API');
+        }
 
-      if (response.status !== 200) {
-        throw new Error('Invalid response from the STT API');
+        if (!response.data || !response.data.text) {
+          throw new Error('Missing data in response from the STT API');
+        }
+
+        return response.data.text.trim();
+      } catch (error) {
+        lastError = error;
+        if (attempt >= STT_MAX_ATTEMPTS || !isTransientSttError(error)) {
+          logAxiosError({ message: `STT request failed for provider ${provider}:`, error });
+          throw error;
+        }
+        logger.warn(
+          `[STT] Transient failure for provider ${provider} ` +
+            `(attempt ${attempt}/${STT_MAX_ATTEMPTS}); retrying.`,
+        );
+        await delay(STT_RETRY_BASE_MS * 2 ** (attempt - 1));
       }
-
-      if (!response.data || !response.data.text) {
-        throw new Error('Missing data in response from the STT API');
-      }
-
-      return response.data.text.trim();
-    } catch (error) {
-      logAxiosError({ message: `STT request failed for provider ${provider}:`, error });
-      throw error;
     }
+
+    throw lastError;
   }
 
   /**
@@ -348,7 +393,14 @@ class STTService {
       res.json({ text });
     } catch (error) {
       logAxiosError({ message: 'An error occurred while processing the audio:', error });
-      res.sendStatus(500);
+      if (isTransientSttError(error)) {
+        res.status(503).set('Retry-After', '5').json({
+          code: 'STT_SERVICE_DOWN',
+          message: 'Speech-to-text service is temporarily unavailable. Please try again shortly.',
+        });
+      } else {
+        res.sendStatus(500);
+      }
     } finally {
       try {
         await fs.unlink(req.file.path);
@@ -381,4 +433,10 @@ async function speechToText(req, res) {
   await sttService.processSpeechToText(req, res);
 }
 
-module.exports = { STTService, speechToText, getFileExtensionFromMime, MIME_TO_EXTENSION_MAP };
+module.exports = {
+  STTService,
+  speechToText,
+  getFileExtensionFromMime,
+  isTransientSttError,
+  MIME_TO_EXTENSION_MAP,
+};
