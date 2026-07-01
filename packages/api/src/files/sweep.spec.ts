@@ -8,6 +8,7 @@ describe('expired file sweep helpers', () => {
     warn: jest.fn(),
     error: jest.fn(),
   };
+  const recordAudit = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -40,7 +41,7 @@ describe('expired file sweep helpers', () => {
 
     const result = await sweepExpiredFiles(
       { appConfig: {} as AppConfig, loadAppConfig, limit: 1 },
-      { getExpiredFiles, processDeleteRequest, logger },
+      { getExpiredFiles, processDeleteRequest, recordAudit, logger },
     );
 
     expect(loadAppConfig).toHaveBeenCalledTimes(1);
@@ -54,6 +55,14 @@ describe('expired file sweep helpers', () => {
       files: [expect.objectContaining({ file_id: 'expired-openai-file' })],
     });
     expect(result).toEqual({ scanned: 1, deleted: 1, failed: 0 });
+    expect(recordAudit).toHaveBeenCalledWith({
+      action: 'file.delete',
+      tenantId: 'tenant-a',
+      targetType: 'file',
+      targetId: 'expired-openai-file',
+      outcome: 'success',
+      metadata: { reason: 'retention', source: FileSources.openai, ownerId: 'user-123' },
+    });
   });
 
   it('counts files without owners as failed without deleting them', async () => {
@@ -62,7 +71,7 @@ describe('expired file sweep helpers', () => {
 
     const result = await sweepExpiredFiles(
       { appConfig: {} as AppConfig, limit: 1 },
-      { getExpiredFiles, processDeleteRequest, logger },
+      { getExpiredFiles, processDeleteRequest, recordAudit, logger },
     );
 
     expect(processDeleteRequest).not.toHaveBeenCalled();
@@ -70,6 +79,43 @@ describe('expired file sweep helpers', () => {
       '[sweepExpiredFiles] Skipping expired file without user: orphaned-file',
     );
     expect(result).toEqual({ scanned: 1, deleted: 0, failed: 1 });
+    expect(recordAudit).toHaveBeenCalledWith({
+      action: 'file.delete',
+      targetType: 'file',
+      targetId: 'orphaned-file',
+      outcome: 'failure',
+      metadata: { reason: 'retention', source: FileSources.local },
+    });
+  });
+
+  it('records a failure audit when a delete does not resolve', async () => {
+    const getExpiredFiles = jest.fn().mockResolvedValue([
+      {
+        file_id: 'stuck-file',
+        source: FileSources.local,
+        user: 'user-9',
+        tenantId: 'tenant-b',
+      },
+    ]);
+    const processDeleteRequest = jest.fn().mockResolvedValue({
+      deletedFileIds: [],
+      failedFileIds: ['stuck-file'],
+    });
+
+    const result = await sweepExpiredFiles(
+      { appConfig: {} as AppConfig, limit: 1 },
+      { getExpiredFiles, processDeleteRequest, recordAudit, logger },
+    );
+
+    expect(result).toEqual({ scanned: 1, deleted: 0, failed: 1 });
+    expect(recordAudit).toHaveBeenCalledWith({
+      action: 'file.delete',
+      tenantId: 'tenant-b',
+      targetType: 'file',
+      targetId: 'stuck-file',
+      outcome: 'failure',
+      metadata: { reason: 'retention', source: FileSources.local, ownerId: 'user-9' },
+    });
   });
 
   it('falls back to the default interval for sub-millisecond values', () => {
