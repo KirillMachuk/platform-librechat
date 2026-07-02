@@ -191,7 +191,12 @@ const createFileSearchTool = async ({ userId, files, entity_id, fileCitations = 
       const validResults = results.filter((result) => result !== null);
 
       if (validResults.length === 0) {
-        return ['No results found or errors occurred while searching the files.', undefined];
+        // Every per-file query returned null (each rejection is caught above), so
+        // this branch means the RAG service could not be reached — not "no hits".
+        return [
+          'The document search service is temporarily unavailable. Please try again shortly.',
+          undefined,
+        ];
       }
 
       const formattedResults = validResults

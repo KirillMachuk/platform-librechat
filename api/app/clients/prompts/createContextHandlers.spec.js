@@ -51,4 +51,20 @@ describe('createContextHandlers — forced-floor retrieval depth (k)', () => {
     const body = await runQuery();
     expect(body.k).toBe(8);
   });
+
+  it('degrades gracefully when RAG is unavailable, without throwing', async () => {
+    axios.post.mockRejectedValue(new Error('ECONNREFUSED'));
+    const handlers = createContextHandlers({ user: { id: 'u1' } }, 'какой срок аренды?');
+    await handlers.processFile({
+      file_id: 'f1',
+      filename: 'lease.pdf',
+      type: 'application/pdf',
+      embedded: true,
+    });
+
+    const prompt = await handlers.createContext();
+
+    expect(typeof prompt).toBe('string');
+    expect(prompt).toMatch(/temporarily unavailable/i);
+  });
 });
