@@ -131,15 +131,23 @@ const primeFiles = async (options) => {
 };
 
 /**
- *
  * @param {Object} options
  * @param {string} options.userId
  * @param {Array<{ file_id: string; filename: string }>} options.files
  * @param {string} [options.entity_id]
  * @param {boolean} [options.fileCitations=false] - Whether to include citation instructions
+ * @param {(content: string) => Promise<string>} [options.transformContent] Sovereign DR (Track B):
+ *   masks the retrieved document text (the user's own PII) before it egresses to the model. Applied
+ *   ONLY to the model-visible content; if it rejects, the caller must drop the chunk (never send raw).
  * @returns
  */
-const createFileSearchTool = async ({ userId, files, entity_id, fileCitations = false }) => {
+const createFileSearchTool = async ({
+  userId,
+  files,
+  entity_id,
+  fileCitations = false,
+  transformContent,
+}) => {
   return tool(
     async ({ query }) => {
       if (files.length === 0) {
@@ -233,7 +241,12 @@ const createFileSearchTool = async ({ userId, files, entity_id, fileCitations = 
         pageRelevance: result.page ? { [result.page]: 1.0 - result.distance } : {},
       }));
 
-      return [formattedString, { [Tools.file_search]: { sources, fileCitations } }];
+      // Sovereign DR (Track B): mask the user's document text (the only PII-bearing part the
+      // model sees) before it egresses. The artifact is UI-only — the user's own data shown
+      // back to them — so it stays raw. Only this final return carries chunk content; the
+      // early returns above are static, PII-free strings that need no masking.
+      const content = transformContent ? await transformContent(formattedString) : formattedString;
+      return [content, { [Tools.file_search]: { sources, fileCitations } }];
     },
     {
       name: Tools.file_search,

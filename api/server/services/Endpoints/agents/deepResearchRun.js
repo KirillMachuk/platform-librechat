@@ -16,6 +16,7 @@ const {
   sanitizeMessageForTransmit,
   createDeepResearchGraph,
   selectChatFileSearchInputs,
+  startSovereignSession,
   leadModelFor,
   workerModelFor,
   reportModelFor,
@@ -103,7 +104,7 @@ async function countOtherActiveJobs({ streamId, userId, tenantId }) {
  */
 
 /** Builds a `BaseChatModel` for `model` routed under endpoint `1ma` (anonymizer baseURL). */
-async function buildNodeModel({ req, db, endpoint, model }) {
+async function buildNodeModel({ req, db, endpoint, model, passthroughHeaders }) {
   const { llmConfig, configOptions, provider } = await initializeCustom({
     req,
     endpoint,
@@ -114,8 +115,38 @@ async function buildNodeModel({ req, db, endpoint, model }) {
   // initializeCustom returns no explicit provider. Confirm vs librechat.yaml `1ma`.
   const resolvedProvider = provider ?? llmConfig.provider ?? Providers.OPENAI;
   const { provider: _omit, ...clientOptions } = llmConfig;
+  // Track B: passthrough headers tell the anonymizer NOT to mask this model call, so public
+  // web/derivatives stay intact — user PII is masked at the source (question + file_search).
+  // Merged into defaultHeaders so EVERY graph model call carries them. null → legacy masking.
+  const finalConfig = passthroughHeaders
+    ? {
+        ...configOptions,
+        defaultHeaders: { ...(configOptions?.defaultHeaders ?? {}), ...passthroughHeaders },
+      }
+    : configOptions;
   const ModelClass = getChatModelClass(resolvedProvider);
-  return new ModelClass({ ...clientOptions, configuration: configOptions });
+  return new ModelClass({ ...clientOptions, configuration: finalConfig });
+}
+
+/**
+ * Resolves the anonymizer connection (baseURL + client token) for `endpoint` from the same
+ * initializeCustom config the models use, so Track B's detect/restore calls hit the exact
+ * anonymizer the model traffic egresses through. Returns null when no baseURL/apiKey is
+ * exposed (→ sovereign masking stays off and DR runs the legacy full-masking path).
+ */
+async function resolveAnonymizerConnection({ req, db, endpoint, model }) {
+  const { llmConfig, configOptions } = await initializeCustom({
+    req,
+    endpoint,
+    model_parameters: { model },
+    db,
+  });
+  const baseURL = configOptions?.baseURL;
+  const apiKey = llmConfig?.apiKey;
+  if (typeof baseURL !== 'string' || !baseURL || typeof apiKey !== 'string' || !apiKey) {
+    return null;
+  }
+  return { baseURL, apiKey };
 }
 
 /**
@@ -129,7 +160,7 @@ async function buildNodeModel({ req, db, endpoint, model }) {
  * exists. DR runs as an EPHEMERAL agent, for which that guard grants no shared files —
  * so only the caller's own documents survive, closing the cross-tenant read.
  */
-async function buildChatFileSearchTool({ req, userId, conversationId }) {
+async function buildChatFileSearchTool({ req, userId, conversationId, transformContent }) {
   if (!conversationId) {
     return null;
   }
@@ -152,7 +183,7 @@ async function buildChatFileSearchTool({ req, userId, conversationId }) {
     if (files.length === 0) {
       return null;
     }
-    return createFileSearchTool({ userId, files, fileCitations: true });
+    return createFileSearchTool({ userId, files, fileCitations: true, transformContent });
   } catch (error) {
     logger.warn('[deepResearchRun] file_search unavailable; running without chat-file RAG', error);
     return null;
@@ -263,14 +294,20 @@ async function runNewDeepResearch(params) {
   const db = { getFiles, getConvoFiles, getConvo };
   const tier = resolveDeepResearchTier(req.config?.deepResearch);
   const leadModelSlug = leadModelFor(tier, conversationModel);
+  // Stable per-run id keying the anonymizer's server-side substitution map (Track B) AND the
+  // engine's configurable.runId — the SAME value, so question-mask and report-restore share one map.
+  const runId = streamId ?? responseMessageId;
   // L4: dedup model clients by slug — lead and report are usually the same model, so
   // cache the in-flight build promise and reuse one instance (clients are stateless
   // per-call, so sharing across nodes is safe) instead of building the same slug twice.
   const modelCache = new Map();
+  // Track B: assigned once (before any model is built) when the sovereign session is active, so
+  // every graph model call carries the anonymizer passthrough headers. null → legacy full-masking.
+  let passthroughHeaders = null;
   const buildModel = (model) => {
     let pending = modelCache.get(model);
     if (!pending) {
-      pending = buildNodeModel({ req, db, endpoint, model });
+      pending = buildNodeModel({ req, db, endpoint, model, passthroughHeaders });
       modelCache.set(model, pending);
     }
     return pending;
@@ -282,6 +319,7 @@ async function runNewDeepResearch(params) {
   // (the engine guarantees a report), so this try guards the pre-graph assembly.
   // M1: the soft DR concurrency cap short-circuits via a sentinel into the same finalize.
   let result;
+  let sovereign = null;
   const otherActiveJobs = await countOtherActiveJobs({
     streamId,
     userId,
@@ -291,6 +329,45 @@ async function runNewDeepResearch(params) {
     if (otherActiveJobs >= MAX_CONCURRENT_DR) {
       throw new DeepResearchCapError();
     }
+
+    // Track B (sovereign DR): mask the user's question ONCE, then run the graph in anonymizer
+    // passthrough so ONLY user data (question + documents) is masked — never the public web.
+    // Best-effort: any failure leaves `sovereign` null and DR runs the legacy full-masking path
+    // (anonymizer masks all egress), which is safe — it just over-masks public content.
+    let connection = null;
+    try {
+      connection = await resolveAnonymizerConnection({ req, db, endpoint, model: leadModelSlug });
+    } catch (error) {
+      logger.warn(
+        '[deepResearchRun] anonymizer connection unresolved; sovereign masking off',
+        error,
+      );
+    }
+    sovereign = await startSovereignSession({
+      connection,
+      runId,
+      passthroughToken: process.env.ANON_PASSTHROUGH_TOKEN || '',
+      question: text ?? '',
+      signal,
+      logger,
+    });
+    passthroughHeaders = sovereign?.passthroughHeaders ?? null;
+    // In passthrough the anonymizer won't mask file_search output, so we mask the user's document
+    // text ourselves. If masking fails we drop the chunk (never egress raw PII), not the whole run.
+    const maskFileSearch = sovereign
+      ? async (content) => {
+          try {
+            return await sovereign.maskContent(content);
+          } catch (error) {
+            logger.warn(
+              '[deepResearchRun] file_search masking failed; dropping chunk from context',
+              error,
+            );
+            return 'Результаты поиска по документам недоступны (не удалось безопасно обезличить).';
+          }
+        }
+      : undefined;
+
     const [leadModel, workerModel, compressModel, reportModel] = await Promise.all([
       buildModel(leadModelSlug),
       buildModel(workerModelFor(tier, conversationModel)),
@@ -299,7 +376,7 @@ async function runNewDeepResearch(params) {
     ]);
 
     const [fileSearchTool, webSearchTool] = await Promise.all([
-      buildChatFileSearchTool({ req, userId, conversationId }),
+      buildChatFileSearchTool({ req, userId, conversationId, transformContent: maskFileSearch }),
       buildWebSearchTool({ req, userId }),
     ]);
     const tools = [fileSearchTool, webSearchTool].filter(Boolean);
@@ -319,9 +396,10 @@ async function runNewDeepResearch(params) {
 
     result = await runDeepResearch({
       graph,
-      input: { messages: [new HumanMessage(text ?? '')] },
+      // Track B: the graph sees the MASKED question (sovereign) or the raw text (legacy).
+      input: { messages: [new HumanMessage(sovereign ? sovereign.maskedQuestion : (text ?? ''))] },
       configurable: {
-        runId: streamId ?? responseMessageId,
+        runId,
         userId,
         conversationId,
         mode: tier.name,
@@ -366,10 +444,18 @@ async function runNewDeepResearch(params) {
   // 'completed' is a full report; 'limit' is a deliberate, non-error refusal (concurrency
   // cap) whose message stands alone — neither should get the frontend "unfinished" banner.
   const unfinished = !['completed', 'limit'].includes(result.finalizeReason);
+  // Track B: de-mask the final report via the server-side run map (placeholders → real PII), then
+  // free the map. restore never throws (worst case: placeholders remain — safe, not a leak); both
+  // run for EVERY outcome incl. abort, so the partial report saved below is de-masked too.
+  let reportText = result.finalReport;
+  if (sovereign) {
+    reportText = await sovereign.restore(result.finalReport);
+    await sovereign.drop();
+  }
   // M8: a partial report is prefixed with a localized reason banner so the user knows
   // WHY it stopped (budget/time/rounds/abort/error). Baked into the saved text so a
   // reload shows it too; the frontend's generic "unfinished" banner (C1f) complements it.
-  const finalReportText = withPartialBanner(result.finalReport, result.finalizeReason);
+  const finalReportText = withPartialBanner(reportText, result.finalizeReason);
   const responseMessage = {
     messageId: responseMessageId,
     conversationId,
