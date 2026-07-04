@@ -501,12 +501,46 @@ describe('GET /files/:file_id/preview', () => {
       expect(isOfficeHtmlPreviewable).not.toHaveBeenCalled();
     });
 
-    it('serves pre-rendered previewText as office HTML and skips the on-demand renderer', async () => {
-      /* Fork-specific (1ma): office files uploaded via the full-text `context`
-       * path have their sanitized HTML rendered at upload into `previewText`
-       * (the original is discarded, so on-demand render can't run). The route
-       * serves it as textFormat:'html' and MUST NOT leak the plain `text` the
-       * model reads, nor re-invoke the renderer. */
+    it('serves a deferred-rendered docx/xlsx previewText as office HTML without re-rendering', async () => {
+      /* Fork-specific (1ma): docx/xlsx/… taken down the full-text `context` path
+       * have their sanitized HTML rendered (deferred) at upload into `previewText`.
+       * The route serves it as textFormat:'html', MUST NOT leak the plain `text`
+       * the model reads, and MUST NOT re-invoke the renderer. */
+      mockGetFiles.mockResolvedValueOnce([
+        {
+          file_id: 'fid-ctx-docx',
+          user: OWNER_USER_ID,
+          filename: 'report.docx',
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          status: 'ready',
+          source: 'text',
+        },
+      ]);
+      mockFindFileById.mockResolvedValueOnce({
+        file_id: 'fid-ctx-docx',
+        text: 'plain extracted docx text',
+        textFormat: null,
+        previewText: '<table><tr><td>rendered</td></tr></table>',
+      });
+      isOfficeHtmlPreviewable.mockReturnValue(true);
+
+      const res = await request(buildApp()).get('/files/fid-ctx-docx/preview');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        file_id: 'fid-ctx-docx',
+        status: 'ready',
+        text: '<table><tr><td>rendered</td></tr></table>',
+        textFormat: 'html',
+      });
+      expect(renderOfficePreview).not.toHaveBeenCalled();
+    });
+
+    it('renders a csv/tsv context preview from stored text (new AND legacy records, no original)', async () => {
+      /* csv/tsv keep their raw content in `text`, so the route renders the office
+       * table from it on demand — no previewText, no stored original, no doomed
+       * storage stream. Works for records uploaded before the deferred change. */
+      const { FileSources } = require('librechat-data-provider');
       mockGetFiles.mockResolvedValueOnce([
         {
           file_id: 'fid-ctx-csv',
@@ -514,16 +548,19 @@ describe('GET /files/:file_id/preview', () => {
           filename: 'blog.csv',
           type: 'text/csv',
           status: 'ready',
-          source: 'local',
+          source: FileSources.text,
         },
       ]);
       mockFindFileById.mockResolvedValueOnce({
         file_id: 'fid-ctx-csv',
         text: 'Name,Slug\n1,2',
         textFormat: null,
-        previewText: '<table><tr><td>Name</td></tr></table>',
       });
       isOfficeHtmlPreviewable.mockReturnValue(true);
+      renderOfficePreview.mockResolvedValueOnce({
+        html: '<table><tr><td>Name</td></tr></table>',
+        bucket: 'csv',
+      });
 
       const res = await request(buildApp()).get('/files/fid-ctx-csv/preview');
 
@@ -534,39 +571,41 @@ describe('GET /files/:file_id/preview', () => {
         text: '<table><tr><td>Name</td></tr></table>',
         textFormat: 'html',
       });
-      expect(renderOfficePreview).not.toHaveBeenCalled();
+      // Rendered from the stored text, NOT a storage download.
+      expect(renderOfficePreview).toHaveBeenCalledTimes(1);
+      expect(renderOfficePreview.mock.calls[0][0].toString('utf8')).toBe('Name,Slug\n1,2');
+      expect(mockGetDownloadStream).not.toHaveBeenCalled();
     });
 
-    it('degrades a legacy context office record (source=text, no previewText) to plain text without rendering', async () => {
-      /* Records uploaded before the fix have no previewText and source=text,
-       * whose original bytes are gone. They must NOT attempt a doomed
-       * on-demand render (dead stream + render-failed on every open) — degrade
-       * to the plain-text response instead. */
+    it('degrades a legacy docx/xlsx (source=text, no previewText) to plain text without rendering', async () => {
+      /* A non-csv office record uploaded before the deferred change has no
+       * previewText and no retrievable original, so it degrades to plain text
+       * (the frontend shows "unavailable") rather than a doomed on-demand render. */
       const { FileSources } = require('librechat-data-provider');
       mockGetFiles.mockResolvedValueOnce([
         {
-          file_id: 'fid-legacy-ctx',
+          file_id: 'fid-legacy-docx',
           user: OWNER_USER_ID,
-          filename: 'old.csv',
-          type: 'text/csv',
+          filename: 'old.docx',
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           status: 'ready',
           source: FileSources.text,
         },
       ]);
       mockFindFileById.mockResolvedValueOnce({
-        file_id: 'fid-legacy-ctx',
-        text: 'Name,Slug\n1,2',
+        file_id: 'fid-legacy-docx',
+        text: 'plain extracted text',
         textFormat: null,
       });
       isOfficeHtmlPreviewable.mockReturnValue(true);
 
-      const res = await request(buildApp()).get('/files/fid-legacy-ctx/preview');
+      const res = await request(buildApp()).get('/files/fid-legacy-docx/preview');
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
-        file_id: 'fid-legacy-ctx',
+        file_id: 'fid-legacy-docx',
         status: 'ready',
-        text: 'Name,Slug\n1,2',
+        text: 'plain extracted text',
         textFormat: null,
       });
       expect(renderOfficePreview).not.toHaveBeenCalled();

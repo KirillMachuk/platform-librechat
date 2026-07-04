@@ -302,6 +302,22 @@ describe('Office HTML producers', () => {
       expect(html).not.toContain('class="lc-sheet-tabs"');
     });
 
+    test('locks the preview document down with a restrictive CSP (no scripts, no network)', async () => {
+      const csv = Buffer.from('name,age\nAlice,30\n', 'utf-8');
+      const html = await csvToHtml(csv);
+      const csp = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/)?.[1];
+      expect(csp).toBeDefined();
+      /* default-src 'none' blocks scripts + network even though the preview
+       * iframe sandbox allows scripts (for the separate docx-CDN path) and even
+       * if the sanitizer ever missed one; inline styles + data: images (the
+       * SheetJS/mammoth output) stay allowed. */
+      expect(csp).toContain("default-src 'none'");
+      expect(csp).not.toMatch(/script-src/);
+      expect(csp).not.toMatch(/connect-src/);
+      expect(csp).toContain("style-src 'unsafe-inline'");
+      expect(csp).toContain('img-src data:');
+    });
+
     test('handles CSV with embedded commas via quoted fields', async () => {
       const csv = Buffer.from('label,value\n"hello, world",42\n', 'utf-8');
       const html = await csvToHtml(csv);
