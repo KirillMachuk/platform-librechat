@@ -735,9 +735,61 @@ const resolveContentRouting = async ({ req, file, toolResource, isImage }) => {
 };
 
 /**
- * Applies the current strategy for file uploads.
- * Saves file metadata to the database with an expiry TTL.
- * Files must be deleted from the server filesystem manually.
+ * True only for office formats whose preview needs the ORIGINAL bytes, i.e.
+ * everything except csv/tsv. csv/tsv previews are rendered on demand from the
+ * stored `text` (which IS the raw content), so they never need an upload-time
+ * render; docx/xlsx/xls/ods/pptx have a lossy `text` extract and do.
+ * @param {string} filename
+ * @param {string} mimeType
+ * @returns {boolean}
+ */
+const officePreviewNeedsOriginal = (filename, mimeType) => {
+  if (!isOfficeHtmlPreviewable(filename, mimeType)) {
+    return false;
+  }
+  const ext = path.extname(filename).slice(1).toLowerCase();
+  if (ext === 'csv' || ext === 'tsv') {
+    return false;
+  }
+  if (ext === '' && /csv|tab-separated/i.test(mimeType || '')) {
+    return false;
+  }
+  return true;
+};
+
+/**
+ * Fire-and-forget deferred office-preview render for full-text `context`
+ * uploads (docx/xlsx/xls/ods/pptx). Runs AFTER the upload response is sent so
+ * the CPU-bound render never blocks it — mirrors the code-execution
+ * deferred-preview flow. Renders sanitized HTML into `previewText` and flips
+ * `status` to 'ready'/'failed'. Intentionally NOT awaited; a render lost to a
+ * restart leaves the record 'pending' for the lazy sweep to reap.
+ * @param {{ file_id: string, buffer: Buffer, filename: string, mimeType: string }} params
+ * @returns {void}
+ */
+const renderDeferredOfficePreview = ({ file_id, buffer, filename, mimeType }) => {
+  renderOfficePreview(buffer, filename, mimeType)
+    .then((rendered) =>
+      db.updateFile(
+        'html' in rendered
+          ? { file_id, previewText: rendered.html, status: 'ready' }
+          : { file_id, status: 'failed', previewError: rendered.error },
+      ),
+    )
+    .catch((err) => {
+      logger.warn(
+        `[processAgentFileUpload] deferred office preview failed for "${filename}":`,
+        err,
+      );
+      return db
+        .updateFile({ file_id, status: 'failed', previewError: 'render-failed' })
+        .catch(() => {});
+    });
+};
+
+/**
+ * Applies the current strategy for agent file uploads (context / file_search /
+ * execute_code), extracting text and persisting the file record.
  *
  * @param {Object} params - The parameters object.
  * @param {ServerRequest} params.req - The Express request object.
@@ -886,34 +938,21 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         tool_resource,
       });
 
-      /* Office-bucket files (csv/tsv/docx/xlsx/xls/ods/pptx) render in the
-       * client through the "office" preview, which shows ONLY server-produced
-       * sanitized HTML (textFormat==='html'). This full-text `context` path
-       * stores the model's plain extracted text in `text` and discards the
-       * original upload, so the preview route's on-demand office renderer
-       * (which needs the original bytes) can never fire for these records.
-       * Render the sanitized HTML now — the original upload is still on disk —
-       * into the preview-only `previewText` field. `text` (what the model
-       * reads) is untouched. Non-office files are a no-op. */
-      let previewText = null;
-      let previewStatus;
-      let previewError = null;
-      if (isOfficeHtmlPreviewable(file.originalname, file.mimetype)) {
+      /* Office preview (the model's `text` is never touched):
+       *  - csv/tsv: `text` IS the raw content → the preview route renders it on
+       *    demand (new AND legacy records), so nothing to do here.
+       *  - docx/xlsx/xls/ods/pptx: `text` is a lossy extract, so the preview
+       *    needs the ORIGINAL bytes this full-text path otherwise discards.
+       *    Capture them now (the multer temp file is unlinked once the response
+       *    returns) and render DEFERRED (status:'pending' → fire-and-forget →
+       *    'ready'/'failed') so the CPU-bound render never blocks the upload. */
+      let officeBuffer = null;
+      if (officePreviewNeedsOriginal(file.originalname, file.mimetype)) {
         try {
-          const buffer = file.buffer ?? (await fs.promises.readFile(file.path));
-          const rendered = await renderOfficePreview(buffer, file.originalname, file.mimetype);
-          if ('html' in rendered) {
-            previewText = rendered.html;
-            previewStatus = 'ready';
-          } else {
-            previewError = rendered.error;
-            previewStatus = 'failed';
-          }
+          officeBuffer = file.buffer ?? (await fs.promises.readFile(file.path));
         } catch (err) {
-          previewError = 'render-failed';
-          previewStatus = 'failed';
           logger.warn(
-            `[processAgentFileUpload] office preview render failed for "${file.originalname}":`,
+            `[processAgentFileUpload] could not read "${file.originalname}" for deferred preview:`,
             err,
           );
         }
@@ -933,9 +972,7 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
           model: messageAttachment ? undefined : req.body.model,
           context: messageAttachment ? FileContext.message_attachment : FileContext.agents,
           tenantId: req.user.tenantId,
-          previewText,
-          status: previewStatus,
-          previewError,
+          status: officeBuffer ? 'pending' : undefined,
         }),
         ...retentionExpiry,
       };
@@ -949,6 +986,17 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         });
       }
       const result = await db.createFile(fileInfo, true);
+
+      /* Deferred render — intentionally NOT awaited so the response returns now. */
+      if (officeBuffer) {
+        renderDeferredOfficePreview({
+          file_id,
+          buffer: officeBuffer,
+          filename: file.originalname,
+          mimeType: file.mimetype,
+        });
+      }
+
       return res
         .status(200)
         .json({ message: 'Agent file uploaded and processed successfully', ...result });
