@@ -64,6 +64,8 @@ jest.mock('@librechat/api', () => {
     isImageOcrEnabled: jest.fn(() => false),
     imageOcrMinChars: jest.fn(() => 150),
     acceptOcrText: jest.fn(() => false),
+    isOfficeHtmlPreviewable: jest.fn(() => false),
+    renderOfficePreview: jest.fn(),
   };
 });
 
@@ -593,6 +595,82 @@ describe('processAgentFileUpload', () => {
       ).rejects.toThrow(/image-based and requires an OCR service/);
 
       expect(parseText).toHaveBeenCalled();
+    });
+  });
+
+  /* Fork-specific (1ma): office-bucket files taken down the full-text `context`
+   * path store the model's plain extracted text in `text` and discard the
+   * original upload, so the preview route can never render them on demand.
+   * We render the sanitized office HTML at upload into the preview-only
+   * `previewText` field. `text` (what the model reads) must stay plain. */
+  describe('office preview render at upload (context path)', () => {
+    const { isOfficeHtmlPreviewable, renderOfficePreview } = require('@librechat/api');
+
+    afterEach(() => {
+      isOfficeHtmlPreviewable.mockReturnValue(false);
+      renderOfficePreview.mockReset();
+    });
+
+    test('renders sanitized office HTML into previewText and leaves model text plain', async () => {
+      isOfficeHtmlPreviewable.mockReturnValue(true);
+      renderOfficePreview.mockResolvedValue({
+        html: '<table><tr><td>cell</td></tr></table>',
+        bucket: 'docx',
+      });
+      getStrategyFunctions.mockReturnValue({
+        handleFileUpload: jest
+          .fn()
+          .mockResolvedValue({ text: 'plain extracted text', bytes: 20, filepath: 'doc://result' }),
+      });
+      const req = makeReq({ mimetype: DOCX_MIME });
+      req.file.originalname = 'report.docx';
+      req.file.buffer = Buffer.from('PK binary docx bytes');
+
+      await processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() });
+
+      expect(renderOfficePreview).toHaveBeenCalledTimes(1);
+      const persisted = db.createFile.mock.calls[0][0];
+      expect(persisted.previewText).toBe('<table><tr><td>cell</td></tr></table>');
+      expect(persisted.status).toBe('ready');
+      expect(persisted.source).toBe(FileSources.text);
+      // Model-context invariant: `text` stays the plain extract, never the HTML.
+      expect(persisted.text).toBe('plain extracted text');
+      expect(persisted.text).not.toContain('<table');
+      expect(persisted.previewError).toBeUndefined();
+    });
+
+    test('marks the preview failed (keeping model text) when the office render errors', async () => {
+      isOfficeHtmlPreviewable.mockReturnValue(true);
+      renderOfficePreview.mockResolvedValue({ error: 'too-large' });
+      getStrategyFunctions.mockReturnValue({
+        handleFileUpload: jest
+          .fn()
+          .mockResolvedValue({ text: 'plain extracted text', bytes: 20, filepath: 'doc://result' }),
+      });
+      const req = makeReq({ mimetype: DOCX_MIME });
+      req.file.originalname = 'huge.docx';
+      req.file.buffer = Buffer.from('PK binary docx bytes');
+
+      await processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() });
+
+      const persisted = db.createFile.mock.calls[0][0];
+      expect(persisted.status).toBe('failed');
+      expect(persisted.previewError).toBe('too-large');
+      // Upload still succeeds and the model text is stored regardless.
+      expect(persisted.text).toBe('plain extracted text');
+      expect(persisted).not.toHaveProperty('previewText');
+    });
+
+    test('does not render or set preview fields for non-office context files', async () => {
+      isOfficeHtmlPreviewable.mockReturnValue(false);
+      const req = makeReq({ mimetype: PDF_MIME });
+
+      await processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() });
+
+      expect(renderOfficePreview).not.toHaveBeenCalled();
+      const persisted = db.createFile.mock.calls[0][0];
+      expect(persisted).not.toHaveProperty('previewText');
+      expect(persisted).not.toHaveProperty('status');
     });
   });
 

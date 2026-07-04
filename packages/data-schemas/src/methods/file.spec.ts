@@ -213,23 +213,26 @@ describe('File Methods', () => {
       expect(files!.map((f) => f.file_id)).toEqual(expect.arrayContaining(fileIds));
     });
 
-    it('should exclude text field by default', async () => {
+    it('should exclude the large text and previewText fields by default', async () => {
       const fileId = uuidv4();
       const userId = new mongoose.Types.ObjectId();
 
       await fileMethods.createFile({
         file_id: fileId,
         user: userId,
-        filename: 'with-text.txt',
-        filepath: '/uploads/with-text.txt',
-        type: 'text/plain',
+        filename: 'with-text.csv',
+        filepath: '/uploads/with-text.csv',
+        type: 'text/csv',
         bytes: 100,
         text: 'Some content here',
+        previewText: '<table><tr><td>rendered</td></tr></table>',
       });
 
       const files = await fileMethods.getFiles({ file_id: fileId });
       expect(files).toHaveLength(1);
+      // Both large blobs are dropped from list queries to keep payloads small.
       expect(files![0].text).toBeUndefined();
+      expect(files![0].previewText).toBeUndefined();
     });
   });
 

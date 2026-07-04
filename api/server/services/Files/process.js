@@ -31,6 +31,8 @@ const {
   acceptOcrText,
   processAudioFile,
   getStorageMetadata,
+  renderOfficePreview,
+  isOfficeHtmlPreviewable,
   sweepExpiredFiles: sweepExpiredFilesWithDeps,
   startExpiredFileSweep: startExpiredFileSweepWithDeps,
 } = require('@librechat/api');
@@ -883,6 +885,40 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         messageAttachment,
         tool_resource,
       });
+
+      /* Office-bucket files (csv/tsv/docx/xlsx/xls/ods/pptx) render in the
+       * client through the "office" preview, which shows ONLY server-produced
+       * sanitized HTML (textFormat==='html'). This full-text `context` path
+       * stores the model's plain extracted text in `text` and discards the
+       * original upload, so the preview route's on-demand office renderer
+       * (which needs the original bytes) can never fire for these records.
+       * Render the sanitized HTML now — the original upload is still on disk —
+       * into the preview-only `previewText` field. `text` (what the model
+       * reads) is untouched. Non-office files are a no-op. */
+      let previewText = null;
+      let previewStatus;
+      let previewError = null;
+      if (isOfficeHtmlPreviewable(file.originalname, file.mimetype)) {
+        try {
+          const buffer = file.buffer ?? (await fs.promises.readFile(file.path));
+          const rendered = await renderOfficePreview(buffer, file.originalname, file.mimetype);
+          if ('html' in rendered) {
+            previewText = rendered.html;
+            previewStatus = 'ready';
+          } else {
+            previewError = rendered.error;
+            previewStatus = 'failed';
+          }
+        } catch (err) {
+          previewError = 'render-failed';
+          previewStatus = 'failed';
+          logger.warn(
+            `[processAgentFileUpload] office preview render failed for "${file.originalname}":`,
+            err,
+          );
+        }
+      }
+
       const fileInfo = {
         ...removeNullishValues({
           text,
@@ -897,6 +933,9 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
           model: messageAttachment ? undefined : req.body.model,
           context: messageAttachment ? FileContext.message_attachment : FileContext.agents,
           tenantId: req.user.tenantId,
+          previewText,
+          status: previewStatus,
+          previewError,
         }),
         ...retentionExpiry,
       };

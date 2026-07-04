@@ -534,13 +534,33 @@ router.get('/:file_id/preview', fileAccess, async (req, res) => {
     const payload = { file_id, status };
     if (status === 'ready') {
       const withText = await db.findFileById(file_id);
-      if (withText?.text != null) {
+      /* On-demand office render needs the ORIGINAL bytes. `FileSources.text`
+       * records (the full-text `context` path) discard the original — their
+       * office HTML is pre-rendered into `previewText` at upload (served by the
+       * branch below). Excluding them here means a legacy context office record
+       * with no `previewText` degrades to plain text rather than a doomed
+       * stream + `render-failed` on every open. Order matters: `checkOpenAIStorage`
+       * stays first so `isOfficeHtmlPreviewable` isn't called for OpenAI storage. */
+      const officeEligible =
+        !checkOpenAIStorage(file.source) &&
+        file.source !== FileSources.text &&
+        isOfficeHtmlPreviewable(file.filename, file.type);
+      if (withText?.previewText != null) {
+        /* Office file taken down the full-text `context` path: its sanitized
+         * HTML was rendered at upload (that path discards the original, so it
+         * can't be rendered on demand below). Serve it as the office preview. */
+        payload.text = withText.previewText;
+        payload.textFormat = 'html';
+      } else if (withText?.text != null && (withText.textFormat === 'html' || !officeEligible)) {
+        /* Serve stored inline text: already-rendered office HTML (code-exec
+         * deferred preview, textFormat==='html') or plain text for non-office
+         * files. An office file whose stored text is a plain extract
+         * (textFormat !== 'html') deliberately falls through to the on-demand
+         * renderer below rather than leaking plain text the office iframe
+         * can't use — preserves the PR #12934 no-plain-text-fallback gate. */
         payload.text = withText.text;
         payload.textFormat = withText.textFormat ?? null;
-      } else if (
-        !checkOpenAIStorage(file.source) &&
-        isOfficeHtmlPreviewable(file.filename, file.type)
-      ) {
+      } else if (officeEligible) {
         const cacheKey = officePreviewCacheKey(file);
         const cached = officePreviewCacheGet(cacheKey);
         if (cached) {

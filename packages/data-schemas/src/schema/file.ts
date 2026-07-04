@@ -139,6 +139,21 @@ const file: Schema<IMongoFile> = new Schema(
        * on PR #12957.) */
       type: String,
     },
+    previewText: {
+      /* Preview-only sanitized office HTML, rendered at upload time for
+       * office-bucket files (csv/tsv/docx/xlsx/xls/ods/pptx) that go down
+       * the full-text `context` path. That path stores the model's plain
+       * extracted text in `text` and discards the original upload, so the
+       * preview route's on-demand office renderer (which needs the original
+       * bytes) can never fire for them. `previewText` carries the HTML the
+       * client injects into the office iframe; it is NEVER read by the
+       * model (the model reads `text`). Set alongside `status: 'ready'`;
+       * on render failure `status: 'failed'` + `previewError` are set and
+       * this stays absent. Produced only via `bufferToOfficeHtml`'s
+       * sanitize pipeline, so it satisfies the textFormat==='html' /
+       * no-plain-text-fallback gate from PR #12934. */
+      type: String,
+    },
     context: {
       type: String,
     },

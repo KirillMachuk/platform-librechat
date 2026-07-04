@@ -500,5 +500,76 @@ describe('GET /files/:file_id/preview', () => {
       expect(renderOfficePreview).not.toHaveBeenCalled();
       expect(isOfficeHtmlPreviewable).not.toHaveBeenCalled();
     });
+
+    it('serves pre-rendered previewText as office HTML and skips the on-demand renderer', async () => {
+      /* Fork-specific (1ma): office files uploaded via the full-text `context`
+       * path have their sanitized HTML rendered at upload into `previewText`
+       * (the original is discarded, so on-demand render can't run). The route
+       * serves it as textFormat:'html' and MUST NOT leak the plain `text` the
+       * model reads, nor re-invoke the renderer. */
+      mockGetFiles.mockResolvedValueOnce([
+        {
+          file_id: 'fid-ctx-csv',
+          user: OWNER_USER_ID,
+          filename: 'blog.csv',
+          type: 'text/csv',
+          status: 'ready',
+          source: 'local',
+        },
+      ]);
+      mockFindFileById.mockResolvedValueOnce({
+        file_id: 'fid-ctx-csv',
+        text: 'Name,Slug\n1,2',
+        textFormat: null,
+        previewText: '<table><tr><td>Name</td></tr></table>',
+      });
+      isOfficeHtmlPreviewable.mockReturnValue(true);
+
+      const res = await request(buildApp()).get('/files/fid-ctx-csv/preview');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        file_id: 'fid-ctx-csv',
+        status: 'ready',
+        text: '<table><tr><td>Name</td></tr></table>',
+        textFormat: 'html',
+      });
+      expect(renderOfficePreview).not.toHaveBeenCalled();
+    });
+
+    it('degrades a legacy context office record (source=text, no previewText) to plain text without rendering', async () => {
+      /* Records uploaded before the fix have no previewText and source=text,
+       * whose original bytes are gone. They must NOT attempt a doomed
+       * on-demand render (dead stream + render-failed on every open) — degrade
+       * to the plain-text response instead. */
+      const { FileSources } = require('librechat-data-provider');
+      mockGetFiles.mockResolvedValueOnce([
+        {
+          file_id: 'fid-legacy-ctx',
+          user: OWNER_USER_ID,
+          filename: 'old.csv',
+          type: 'text/csv',
+          status: 'ready',
+          source: FileSources.text,
+        },
+      ]);
+      mockFindFileById.mockResolvedValueOnce({
+        file_id: 'fid-legacy-ctx',
+        text: 'Name,Slug\n1,2',
+        textFormat: null,
+      });
+      isOfficeHtmlPreviewable.mockReturnValue(true);
+
+      const res = await request(buildApp()).get('/files/fid-legacy-ctx/preview');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        file_id: 'fid-legacy-ctx',
+        status: 'ready',
+        text: 'Name,Slug\n1,2',
+        textFormat: null,
+      });
+      expect(renderOfficePreview).not.toHaveBeenCalled();
+    });
   });
 });
