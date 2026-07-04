@@ -50,6 +50,14 @@ export interface IMongoFile extends Omit<Document, 'model'> {
    * and for files that never expect a preview.
    */
   previewRevision?: string;
+  /**
+   * Preview-only sanitized office HTML rendered at upload time for
+   * office-bucket files uploaded via the full-text `context` path (which
+   * stores plain extracted text in `text` and discards the original, so
+   * on-demand office rendering can't run later). Never read by the model.
+   * Present only when `status === 'ready'` for such records.
+   */
+  previewText?: string;
   filename: string;
   filepath: string;
   storageKey?: string;

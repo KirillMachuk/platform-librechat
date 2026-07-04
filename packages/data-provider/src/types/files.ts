@@ -1,5 +1,5 @@
-import { EToolResources } from './assistants';
 import type { CodeEnvRef } from '../codeEnvRef';
+import { EToolResources } from './assistants';
 
 export enum FileSources {
   local = 'local',
@@ -160,6 +160,14 @@ export type TFile = {
    * Suitable for tooltip text but not user-facing prose.
    */
   previewError?: string;
+  /**
+   * Preview-only sanitized office HTML rendered at upload for office-bucket
+   * files taken down the full-text `context` path (which keeps only the
+   * model's plain extracted `text` and discards the original). The preview
+   * route surfaces this as `text` + `textFormat: 'html'`. Never read by the
+   * model. Absent for every other record kind.
+   */
+  previewText?: string;
   metadata?: {
     fileIdentifier?: string;
     /**

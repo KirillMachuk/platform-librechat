@@ -93,7 +93,12 @@ export function createFileMethods(mongoose: typeof import('mongoose')): {
     if (selectFields != null) {
       query.select(selectFields);
     } else {
-      query.select({ text: 0 });
+      /* Exclude the two large preview blobs from list queries: `text` (the
+       * model's extracted content) and `previewText` (rendered office HTML).
+       * Neither is used by file-list views — previews are fetched via the
+       * dedicated `/files/:id/preview` route — and shipping them bloats the
+       * payload (previewText can be up to ~512KB per office file). */
+      query.select({ text: 0, previewText: 0 });
     }
     return await query.sort(sortOptions).lean<IMongoFile[]>();
   }
