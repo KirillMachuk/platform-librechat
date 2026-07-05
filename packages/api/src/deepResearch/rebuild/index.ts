@@ -10,6 +10,7 @@ export { selectChatFileSearchInputs } from './files';
 export { buildFallbackReport } from './nodes/report';
 export { sanitizeErrorForUser } from './shared';
 export { startSovereignSession, sovereignPassthroughHeaders } from './sovereign';
+export { reportToPdfBuffer } from './pdf';
 export {
   tierToRunBudget,
   leadModelFor,

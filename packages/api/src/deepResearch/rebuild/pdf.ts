@@ -39,7 +39,10 @@ interface InlineContext {
 
 /** Parses inline Markdown into pdfmake text runs, recursing so emphasis nests
  *  (`**bold *italic* **`). Unmatched markers fall through as literal text. */
-function parseInline(text: string, ctx: InlineContext = { bold: false, italics: false }): Content[] {
+function parseInline(
+  text: string,
+  ctx: InlineContext = { bold: false, italics: false },
+): Content[] {
   const runs: Content[] = [];
   const pushLiteral = (value: string) => {
     if (value.length > 0) {
@@ -87,7 +90,10 @@ const HEADING_STYLE = ['h1', 'h2', 'h3', 'h3', 'h3', 'h3'] as const;
 
 /** Splits a `| a | b |` row into trimmed cell strings (outer pipes dropped). */
 function splitTableRow(line: string): string[] {
-  const inner = line.trim().replace(/^\|/, '').replace(/\|\s*$/, '');
+  const inner = line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|\s*$/, '');
   return inner.split('|').map((cell) => cell.trim());
 }
 
@@ -159,7 +165,11 @@ export function reportToDocDefinition(markdown: string): TDocumentDefinitions {
       continue;
     }
 
-    if (TABLE_ROW.test(line) && index + 1 < lines.length && TABLE_DELIMITER.test(lines[index + 1])) {
+    if (
+      TABLE_ROW.test(line) &&
+      index + 1 < lines.length &&
+      TABLE_DELIMITER.test(lines[index + 1])
+    ) {
       flushParagraph();
       const headerCells = splitTableRow(line);
       const bodyRows: string[][] = [];
@@ -197,7 +207,9 @@ export function reportToDocDefinition(markdown: string): TDocumentDefinitions {
         items.push({ text: parseInline(item.trim()) });
         index += 1;
       }
-      content.push(ordered ? { ol: items, margin: [0, 0, 0, 6] } : { ul: items, margin: [0, 0, 0, 6] });
+      content.push(
+        ordered ? { ol: items, margin: [0, 0, 0, 6] } : { ul: items, margin: [0, 0, 0, 6] },
+      );
       continue;
     }
 
