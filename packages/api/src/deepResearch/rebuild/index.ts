@@ -9,6 +9,7 @@ export { runDeepResearch } from './run';
 export { selectChatFileSearchInputs } from './files';
 export { buildFallbackReport } from './nodes/report';
 export { sanitizeErrorForUser } from './shared';
+export { startSovereignSession, sovereignPassthroughHeaders } from './sovereign';
 export {
   tierToRunBudget,
   leadModelFor,
@@ -19,6 +20,7 @@ export {
 } from './config';
 
 export type { DeepResearchTier } from './config';
+export type { AnonymizerConnection, SovereignSession } from './sovereign';
 export type { CompiledDeepResearchGraph, DeepResearchGraphDeps } from './graph';
 export type { DeepResearchProgress, RunDeepResearchParams, RunDeepResearchResult } from './run';
 export type {
