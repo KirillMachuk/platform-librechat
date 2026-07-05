@@ -154,8 +154,14 @@ function createContextHandlers(req, userMessageContent) {
 
       return prompt;
     } catch (error) {
-      logger.error('Error creating context:', error);
-      throw error;
+      // The forced-floor retrieval runs on every turn for embedded files, so a
+      // RAG outage here must NOT break the whole message. Degrade gracefully:
+      // tell the model retrieval was unavailable instead of throwing.
+      logger.error(
+        '[createContext] document retrieval unavailable; answering without context:',
+        error,
+      );
+      return '\n\tNote: the document search service was temporarily unavailable, so no context could be retrieved from the attached documents for this message.';
     }
   };
 
