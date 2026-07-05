@@ -31,8 +31,6 @@ const {
   acceptOcrText,
   processAudioFile,
   getStorageMetadata,
-  renderOfficePreview,
-  isOfficeHtmlPreviewable,
   sweepExpiredFiles: sweepExpiredFilesWithDeps,
   startExpiredFileSweep: startExpiredFileSweepWithDeps,
 } = require('@librechat/api');
@@ -735,36 +733,6 @@ const resolveContentRouting = async ({ req, file, toolResource, isImage }) => {
 };
 
 /**
- * Fire-and-forget deferred office-preview render for full-text `context`
- * uploads (csv/tsv/docx/xlsx/xls/ods/pptx). Runs AFTER the upload response is
- * sent so the CPU-bound render never blocks it — mirrors the code-execution
- * deferred-preview flow. Renders sanitized HTML into `previewText` and flips
- * `status` to 'ready'/'failed'. Intentionally NOT awaited; a render lost to a
- * restart leaves the record 'pending' for the lazy sweep to reap.
- * @param {{ file_id: string, buffer: Buffer, filename: string, mimeType: string }} params
- * @returns {void}
- */
-const renderDeferredOfficePreview = ({ file_id, buffer, filename, mimeType }) => {
-  renderOfficePreview(buffer, filename, mimeType)
-    .then((rendered) =>
-      db.updateFile(
-        'html' in rendered
-          ? { file_id, previewText: rendered.html, status: 'ready' }
-          : { file_id, status: 'failed', previewError: rendered.error },
-      ),
-    )
-    .catch((err) => {
-      logger.warn(
-        `[processAgentFileUpload] deferred office preview failed for "${filename}":`,
-        err,
-      );
-      return db
-        .updateFile({ file_id, status: 'failed', previewError: 'render-failed' })
-        .catch(() => {});
-    });
-};
-
-/**
  * Applies the current strategy for agent file uploads (context / file_search /
  * execute_code), extracting text and persisting the file record.
  *
@@ -902,7 +870,7 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
      * @param {string} params.type
      * @return {Promise<void>}
      */
-    const createTextFile = async ({ text, bytes, filepath, type = 'text/plain' }) => {
+    const createTextFile = async ({ text, bytes, type = file.mimetype }) => {
       const textBytes = Buffer.byteLength(text, 'utf8');
       if (textBytes > 15 * megabyte) {
         throw new Error(
@@ -915,25 +883,23 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         tool_resource,
       });
 
-      /* Office preview (the model's `text` is never touched): every office
-       * format (csv/tsv/docx/xlsx/xls/ods/pptx) needs the ORIGINAL bytes — the
-       * stored `text` is a parser/doc-gateway extract (reformatted, not the raw
-       * file, so it can't be rendered back into the source table). This
-       * full-text path otherwise discards the original, so capture it now (the
-       * multer temp file is unlinked once the response returns) and render
-       * DEFERRED (status:'pending' → fire-and-forget → 'ready'/'failed') so the
-       * CPU-bound render never blocks the upload response. */
-      let officeBuffer = null;
-      if (isOfficeHtmlPreviewable(file.originalname, file.mimetype)) {
-        try {
-          officeBuffer = file.buffer ?? (await fs.promises.readFile(file.path));
-        } catch (err) {
-          logger.warn(
-            `[processAgentFileUpload] could not read "${file.originalname}" for deferred preview:`,
-            err,
-          );
-        }
-      }
+      /* Retain the ORIGINAL upload in durable storage (same as file_search /
+       * plain attachments), alongside the extracted `text` the model reads. The
+       * `text` is a doc-gateway/parser reformat — NOT the raw file — so it can't
+       * stand in for the original. Keeping the original lets the preview route
+       * render office previews on demand from the source bytes, lets the browser
+       * preview PDFs, and makes Download work; discarding it (the old behavior)
+       * made all three impossible. `text` (what the model reads) is untouched. */
+      const storageSource = getFileStrategy(appConfig, { isImage: false });
+      const { handleFileUpload } = getStrategyFunctions(storageSource);
+      const sanitizedUploadFn = createSanitizedUploadWrapper(handleFileUpload);
+      const stored = await sanitizedUploadFn({ req, file, file_id, basePath, entity_id });
+      const storageMetadata = getStorageMetadata({
+        filepath: stored.filepath,
+        source: storageSource,
+        storageKey: stored.storageKey,
+        storageRegion: stored.storageRegion,
+      });
 
       const fileInfo = {
         ...removeNullishValues({
@@ -943,13 +909,11 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
           temp_file_id,
           user: req.user.id,
           type,
-          filepath: filepath ?? file.path,
-          source: FileSources.text,
           filename: file.originalname,
           model: messageAttachment ? undefined : req.body.model,
           context: messageAttachment ? FileContext.message_attachment : FileContext.agents,
           tenantId: req.user.tenantId,
-          status: officeBuffer ? 'pending' : undefined,
+          ...storageMetadata,
         }),
         ...retentionExpiry,
       };
@@ -963,17 +927,6 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         });
       }
       const result = await db.createFile(fileInfo, true);
-
-      /* Deferred render — intentionally NOT awaited so the response returns now. */
-      if (officeBuffer) {
-        renderDeferredOfficePreview({
-          file_id,
-          buffer: officeBuffer,
-          filename: file.originalname,
-          mimeType: file.mimetype,
-        });
-      }
-
       return res
         .status(200)
         .json({ message: 'Agent file uploaded and processed successfully', ...result });
@@ -982,11 +935,7 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
     // Auto image-OCR result: text was already extracted above — persist it as a full-text
     // document and skip the document-parser path (which doesn't handle image MIME types).
     if (imageOcrText) {
-      return createTextFile({
-        text: imageOcrText.text,
-        bytes: imageOcrText.bytes,
-        filepath: file.path,
-      });
+      return createTextFile({ text: imageOcrText.text, bytes: imageOcrText.bytes });
     }
 
     const fileConfig = mergeFileConfig(appConfig.fileConfig);
@@ -1066,8 +1015,8 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
     if (shouldUseOCR) {
       const ocrResult = await resolveDocumentText();
       if (ocrResult) {
-        const { text, bytes, filepath: ocrFileURL } = ocrResult;
-        return await createTextFile({ text, bytes, filepath: ocrFileURL });
+        const { text, bytes } = ocrResult;
+        return await createTextFile({ text, bytes });
       }
       throw new Error(
         `Unable to extract text from "${file.originalname}". The document may be image-based and requires an OCR service to process.`,

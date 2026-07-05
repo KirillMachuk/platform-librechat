@@ -530,9 +530,19 @@ describe('processAgentFileUpload', () => {
      * local Tesseract OCR. So when the local document parser yields no text (scanned PDF), we
      * fall back to parseText (RAG /text) to OCR it — full-text mode must work on scans. */
     test('falls back to RAG /text OCR and succeeds when document_parser fails on a scanned PDF', async () => {
-      getStrategyFunctions.mockReturnValue({
-        handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
-      });
+      // document_parser (extraction) fails; the storage strategy (that retains the
+      // original) still succeeds so the upload can complete.
+      getStrategyFunctions.mockImplementation((src) =>
+        src === FileSources.document_parser
+          ? {
+              handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
+            }
+          : {
+              handleFileUpload: jest
+                .fn()
+                .mockResolvedValue({ filepath: '/uploads/scan.pdf', bytes: 100 }),
+            },
+      );
       const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
       const { parseText } = require('@librechat/api');
       parseText.mockResolvedValueOnce({ text: 'OCR-извлечённый текст договора', bytes: 30 });
@@ -599,134 +609,77 @@ describe('processAgentFileUpload', () => {
     });
   });
 
-  /* Fork-specific (1ma): office files taken down the full-text `context` path
-   * store the model's plain `text` and discard the original. csv/tsv are
-   * rendered from `text` on demand by the preview route (nothing to do here);
-   * docx/xlsx/xls/ods/pptx need the original bytes, so they render DEFERRED —
-   * status:'pending' at upload, then a fire-and-forget render fills `previewText`
-   * and flips to 'ready'/'failed'. `text` (what the model reads) stays plain and
-   * the CPU-bound render never blocks the upload response. */
-  describe('deferred office preview render (context path)', () => {
-    const { isOfficeHtmlPreviewable, renderOfficePreview } = require('@librechat/api');
+  /* Fork-specific (1ma): office/pdf/etc. files taken down the full-text `context`
+   * path RETAIN the original upload in durable storage (same as file_search /
+   * plain attachments) alongside the extracted `text`. The preview route renders
+   * office previews on demand from the original, the browser previews PDFs, and
+   * Download works — none of which is possible once the original is discarded.
+   * The model's `text` is untouched; no deferred render, no `previewText`. */
+  describe('retains the original upload (context path)', () => {
+    const { getStorageMetadata } = require('@librechat/api');
 
-    // Flush the fire-and-forget render + its updateFile microtasks.
-    const flush = () => new Promise((resolve) => setImmediate(resolve));
-
+    beforeEach(() => {
+      // Echo the storage metadata so the record reflects where the original lives.
+      getStorageMetadata.mockImplementation((m) => ({
+        filepath: m.filepath,
+        source: m.source,
+        storageKey: m.storageKey,
+        storageRegion: m.storageRegion,
+      }));
+    });
     afterEach(() => {
-      isOfficeHtmlPreviewable.mockReturnValue(false);
-      renderOfficePreview.mockReset();
+      getStorageMetadata.mockReturnValue({});
     });
 
-    test('persists docx/xlsx as pending, then fills previewText via a deferred updateFile', async () => {
-      isOfficeHtmlPreviewable.mockReturnValue(true);
-      renderOfficePreview.mockResolvedValue({
-        html: '<table><tr><td>cell</td></tr></table>',
-        bucket: 'docx',
-      });
+    test('stores the original via the file strategy and keeps model text (docx), no previewText/status', async () => {
       getStrategyFunctions.mockReturnValue({
-        handleFileUpload: jest
-          .fn()
-          .mockResolvedValue({ text: 'plain extracted text', bytes: 20, filepath: 'doc://result' }),
+        handleFileUpload: jest.fn().mockResolvedValue({
+          text: 'plain extracted text',
+          bytes: 20,
+          filepath: '/uploads/report.docx',
+          storageKey: 'uploads/u/report.docx',
+        }),
       });
       const req = makeReq({ mimetype: DOCX_MIME });
       req.file.originalname = 'report.docx';
-      req.file.buffer = Buffer.from('PK binary docx bytes');
 
       await processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() });
 
-      // Immediate persist: pending, NO previewText in the record (so the upload
-      // response carries no rendered HTML), model text intact.
+      // The original was uploaded via the configured (local) strategy.
+      expect(getStrategyFunctions).toHaveBeenCalledWith('local');
       const persisted = db.createFile.mock.calls[0][0];
-      expect(persisted.status).toBe('pending');
-      expect(persisted).not.toHaveProperty('previewText');
-      expect(persisted.source).toBe(FileSources.text);
-      expect(persisted.text).toBe('plain extracted text');
-      expect(persisted.text).not.toContain('<table');
-
-      // Deferred render runs AFTER the response and persists via updateFile.
-      await flush();
-      expect(renderOfficePreview).toHaveBeenCalledTimes(1);
-      expect(db.updateFile).toHaveBeenCalledWith({
-        file_id: 'file-uuid-123',
-        previewText: '<table><tr><td>cell</td></tr></table>',
-        status: 'ready',
-      });
+      expect(persisted.source).toBe('local'); // durable original, not FileSources.text
+      expect(persisted.filepath).toBe('/uploads/report.docx');
+      expect(persisted.text).toBe('plain extracted text'); // model text intact
+      expect(persisted).not.toHaveProperty('previewText'); // no deferred render
+      expect(persisted).not.toHaveProperty('status');
+      expect(db.updateFile).not.toHaveBeenCalled();
     });
 
-    test('marks the deferred preview failed (keeping model text) when the render errors', async () => {
-      isOfficeHtmlPreviewable.mockReturnValue(true);
-      renderOfficePreview.mockResolvedValue({ error: 'too-large' });
-      getStrategyFunctions.mockReturnValue({
-        handleFileUpload: jest
-          .fn()
-          .mockResolvedValue({ text: 'plain extracted text', bytes: 20, filepath: 'doc://result' }),
-      });
-      const req = makeReq({ mimetype: DOCX_MIME });
-      req.file.originalname = 'huge.docx';
-      req.file.buffer = Buffer.from('PK binary docx bytes');
-
-      await processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() });
-      await flush();
-
-      expect(db.updateFile).toHaveBeenCalledWith({
-        file_id: 'file-uuid-123',
-        status: 'failed',
-        previewError: 'too-large',
-      });
-      // Upload still succeeded and stored the plain model text.
-      expect(db.createFile.mock.calls[0][0].text).toBe('plain extracted text');
-    });
-
-    test('renders csv deferred from the ORIGINAL buffer (not the reformatted `text`)', async () => {
-      isOfficeHtmlPreviewable.mockReturnValue(true);
-      renderOfficePreview.mockResolvedValue({
-        html: '<table><tr><td>Name</td></tr></table>',
-        bucket: 'csv',
-      });
+    test('stores the original for csv too and keeps the reformatted extract for the model', async () => {
       const { parseText } = require('@librechat/api');
       // doc-gateway reformats the CSV into a labeled extract — NOT the raw file.
-      parseText.mockResolvedValueOnce({ text: 'Дата: 2026\nИмя:\nТелефон: 375', bytes: 20 });
+      parseText.mockResolvedValueOnce({ text: 'Дата: 2026\nИмя:', bytes: 15 });
       mergeFileConfig.mockReturnValue({
         checkType: (mime, types) => (types ?? []).includes(mime),
         ocr: { supportedMimeTypes: [] },
         stt: { supportedMimeTypes: [] },
         text: { supportedMimeTypes: ['text/csv'] },
       });
+      getStrategyFunctions.mockReturnValue({
+        handleFileUpload: jest
+          .fn()
+          .mockResolvedValue({ filepath: '/uploads/leads.csv', bytes: 8000 }),
+      });
       const req = makeReq({ mimetype: 'text/csv' });
       req.file.originalname = 'leads.csv';
-      req.file.buffer = Buffer.from('Дата,Имя,Телефон\n2026,,375'); // the RAW csv
 
       await processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() });
 
       const persisted = db.createFile.mock.calls[0][0];
-      expect(persisted.status).toBe('pending');
-      expect(persisted).not.toHaveProperty('previewText');
-      // Model text = the reformatted extract, unchanged.
-      expect(persisted.text).toBe('Дата: 2026\nИмя:\nТелефон: 375');
-
-      await flush();
-      // The preview renders the RAW original buffer, NOT the reformatted `text`
-      // — otherwise the table collapses into one "Label: value" column.
-      expect(renderOfficePreview).toHaveBeenCalledTimes(1);
-      expect(renderOfficePreview.mock.calls[0][0].toString('utf8')).toBe(
-        'Дата,Имя,Телефон\n2026,,375',
-      );
-      expect(db.updateFile).toHaveBeenCalledWith({
-        file_id: 'file-uuid-123',
-        previewText: '<table><tr><td>Name</td></tr></table>',
-        status: 'ready',
-      });
-    });
-
-    test('does not render or set status for non-office context files', async () => {
-      isOfficeHtmlPreviewable.mockReturnValue(false);
-      const req = makeReq({ mimetype: PDF_MIME });
-
-      await processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() });
-      await flush();
-
-      expect(renderOfficePreview).not.toHaveBeenCalled();
-      const persisted = db.createFile.mock.calls[0][0];
+      expect(persisted.source).toBe('local');
+      expect(persisted.filepath).toBe('/uploads/leads.csv');
+      expect(persisted.text).toBe('Дата: 2026\nИмя:'); // model text = reformatted extract, untouched
       expect(persisted).not.toHaveProperty('previewText');
       expect(persisted).not.toHaveProperty('status');
     });
