@@ -1705,6 +1705,8 @@
   "com_ui_special_variables": "Special variables",
   "com_ui_speech_not_supported": "Your browser does not support speech recognition",
   "com_ui_speech_not_supported_use_external": "Your browser does not support speech recognition. Try switching to External STT in Settings > Speech.",
+  "com_ui_speech_process_error": "An error occurred while processing the audio, maybe the audio was too short.",
+  "com_ui_speech_service_unavailable": "Speech-to-text service is temporarily unavailable. Please try again shortly.",
   "com_ui_speech_while_submitting": "Can't submit speech while a response is being generated",
   "com_ui_sr_global_prompt": "Global prompt group",
   "com_ui_sr_public_skill": "Public skill",

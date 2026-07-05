@@ -3,13 +3,29 @@ import { useRecoilState } from 'recoil';
 import { useToastContext } from '@librechat/client';
 import { useSpeechToTextMutation } from '~/data-provider';
 import useGetAudioSettings from './useGetAudioSettings';
+import { useLocalize } from '~/hooks';
 import store from '~/store';
+
+/**
+ * True when a Speech-to-Text request failed because the backend service was
+ * unreachable/unavailable — the server returns HTTP 503 for transient outages
+ * (see STTService). Lets the UI show an accurate "try again" message instead of
+ * blaming the recording (e.g. "audio was too short").
+ */
+export const isSttServiceUnavailable = (error: unknown): boolean => {
+  if (error == null || typeof error !== 'object') {
+    return false;
+  }
+  const response = (error as { response?: { status?: number } }).response;
+  return response?.status === 503;
+};
 
 const useSpeechToTextExternal = (
   setText: (text: string) => void,
   onTranscriptionComplete: (text: string) => void,
 ) => {
   const { showToast } = useToastContext();
+  const localize = useLocalize();
   const { speechToTextEndpoint } = useGetAudioSettings();
   const isExternalSTTEnabled = speechToTextEndpoint === 'external';
   const audioStream = useRef<MediaStream | null>(null);
@@ -41,9 +57,11 @@ const useSpeechToTextExternal = (
         }, autoSendText * 1000);
       }
     },
-    onError: () => {
+    onError: (error: unknown) => {
       showToast({
-        message: 'An error occurred while processing the audio, maybe the audio was too short',
+        message: isSttServiceUnavailable(error)
+          ? localize('com_ui_speech_service_unavailable')
+          : localize('com_ui_speech_process_error'),
         status: 'error',
       });
       setIsRequestBeingMade(false);
