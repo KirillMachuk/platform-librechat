@@ -1,3 +1,4 @@
+import { webSearchAuth, logger } from '@librechat/data-schemas';
 import {
   AuthType,
   SafeSearchTypes,
@@ -6,7 +7,6 @@ import {
   ScraperProviders,
   extractVariableName,
 } from 'librechat-data-provider';
-import { webSearchAuth } from '@librechat/data-schemas';
 import type { RerankerTypes, TCustomConfig, TWebSearchConfig } from 'librechat-data-provider';
 import type { TWebSearchKeys, TWebSearchCategories } from '@librechat/data-schemas';
 import { isSSRFTarget, resolveHostnameSSRF } from '../auth';
@@ -264,6 +264,18 @@ export async function loadWebSearchAuth({
   for (const category of categories) {
     const [isCategoryAuthenticated, isUserProvided] = await checkAuth(category);
     if (!isCategoryAuthenticated) {
+      // Reranking is an optional ENHANCEMENT: a configured reranker whose key is
+      // missing/unresolvable must not kill the entire web-search capability (it used
+      // to zero `authenticated`, silently unregistering the tool — searches simply
+      // stopped happening). Degrade to 'none' (provider-order ranking) and keep going.
+      if (category === SearchCategories.RERANKERS) {
+        logger.warn(
+          `[loadWebSearchAuth] reranker "${webSearchConfig?.rerankerType}" is configured but not authenticated; degrading to rerankerType=none`,
+        );
+        authResult.rerankerType = 'none' as RerankerTypes;
+        authTypes.push([category, AuthType.SYSTEM_DEFINED]);
+        continue;
+      }
       authenticated = false;
       authTypes.push([category, AuthType.USER_PROVIDED]);
       continue;

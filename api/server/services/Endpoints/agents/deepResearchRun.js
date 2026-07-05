@@ -640,6 +640,16 @@ async function runNewDeepResearch(params) {
         buildWebSearchTool({ req, userId }),
       ]);
       const tools = [fileSearchTool, webSearchTool].filter(Boolean);
+      // The single most diagnostic line for a "gathered nothing" run: researchers
+      // without web_search can only produce empty findings (→ nodata).
+      logger.info(
+        `[deepResearchRun] tools: web_search=${webSearchTool ? 'on' : 'OFF'} file_search=${fileSearchTool ? 'on' : 'off'}`,
+      );
+      if (!webSearchTool) {
+        logger.warn(
+          '[deepResearchRun] web_search tool unavailable (check webSearch auth/keys) — the run will likely produce no material',
+        );
+      }
 
       const graph = createDeepResearchGraph({
         leadModel,
