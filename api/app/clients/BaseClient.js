@@ -1234,8 +1234,10 @@ class BaseClient {
        * fall through to the document-inlining branches below — the retained
        * original exists for preview/download only, and inlining it would
        * double-send the content and ship the raw file to the provider (415
-       * at the anonymizer in anonymize mode). */
-      if (source === FileSources.text || file.text) {
+       * at the anonymizer in anonymize mode). `!= null` (not truthy): an
+       * EMPTY extract still marks a context file — its original must not be
+       * inlined either. */
+      if (source === FileSources.text || file.text != null) {
         allFiles.push(file);
         continue;
       }
