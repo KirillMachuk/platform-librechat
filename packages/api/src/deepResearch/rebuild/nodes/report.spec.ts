@@ -29,6 +29,7 @@ function stateWith(partial: Partial<DeepResearchState>): DeepResearchState {
     jurisdiction: 'RU',
     researchBrief: 'бриф',
     currentSubQuestion: '',
+    currentSubQuestions: [],
     findings: [],
     round: 0,
     researcherCount: 0,

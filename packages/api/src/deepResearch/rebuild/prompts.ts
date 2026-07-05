@@ -27,7 +27,7 @@ export function buildScopePrompt({ now }: { now: string }): string {
 {"jurisdiction": "RU|RB|KZ|UNSPECIFIED", "brief": "<бриф на русском>"}`;
 }
 
-/** SUPERVISOR: reflect on gathered findings; pick the next sub-question or conclude. */
+/** SUPERVISOR: reflect on gathered findings; pick the next batch of sub-questions or conclude. */
 export function buildSupervisorPrompt({
   now,
   brief,
@@ -35,6 +35,7 @@ export function buildSupervisorPrompt({
   findings,
   round,
   maxRounds,
+  maxConcurrent,
   nonce,
 }: {
   now: string;
@@ -43,6 +44,7 @@ export function buildSupervisorPrompt({
   findings: DeepResearchFinding[];
   round: number;
   maxRounds: number;
+  maxConcurrent: number;
   nonce: string;
 }): string {
   const gathered = findings.length
@@ -63,13 +65,13 @@ ${untrustedDirective(nonce)}
 ${gathered}
 
 Реши следующий шаг:
-- Если для качественного ответа на бриф нужно собрать ещё информацию — верни action "RESEARCH" и ОДИН конкретный следующий под-вопрос (subQuestion), которого ещё нет среди собранного.
+- Если для качественного ответа на бриф нужно собрать ещё информацию — верни action "RESEARCH" и от 1 до ${maxConcurrent} НЕЗАВИСИМЫХ под-вопросов (subQuestions). Они исследуются ПАРАЛЛЕЛЬНО, поэтому каждый должен покрывать отдельную грань темы (свой аспект/вендор/критерий) и НЕ зависеть от ответа на другой.
 - Если собранного достаточно для полного ответа, либо дальнейший поиск избыточен — верни action "COMPLETE".
 
-Не повторяй уже исследованные под-вопросы. Под-вопрос — на русском, конкретный, пригодный для веб-поиска.
+Не повторяй уже исследованные под-вопросы. Каждый под-вопрос — на русском, конкретный, пригодный для веб-поиска. Разбивай широкую тему на целевые под-вопросы (по вендору / по критерию), а не задавай один общий.
 
 Ответь СТРОГО одним JSON-объектом, без markdown и пояснений вне JSON:
-{"action": "RESEARCH|COMPLETE", "subQuestion": "<под-вопрос или пустая строка>", "reasoning": "<кратко почему>"}`;
+{"action": "RESEARCH|COMPLETE", "subQuestions": ["<под-вопрос 1>", "<под-вопрос 2>"], "reasoning": "<кратко почему>"}`;
 }
 
 /** RESEARCHER: drive the tool loop to gather material for one sub-question. */

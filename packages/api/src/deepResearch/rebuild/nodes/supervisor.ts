@@ -55,12 +55,42 @@ export function budgetGateReason(args: {
   return null;
 }
 
-function parseSupervisorOutput(text: string): { complete: boolean; subQuestion: string } {
+/** Collects the supervisor's next batch: the `subQuestions` array (preferred) else a
+ *  single `subQuestion` (back-compat) — trimmed, de-duplicated, empties dropped, and
+ *  capped at `maxBatch` so one round never dispatches more than the concurrency cap. */
+export function normalizeSubQuestions(
+  value: unknown,
+  fallback: unknown,
+  maxBatch: number,
+): string[] {
+  const raw = Array.isArray(value) ? value : [fallback];
+  const seen = new Set<string>();
+  const batch: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'string') {
+      continue;
+    }
+    const question = item.trim();
+    if (!question || seen.has(question)) {
+      continue;
+    }
+    seen.add(question);
+    batch.push(question);
+    if (batch.length >= Math.max(1, maxBatch)) {
+      break;
+    }
+  }
+  return batch;
+}
+
+function parseSupervisorOutput(
+  text: string,
+  maxBatch: number,
+): { complete: boolean; subQuestions: string[] } {
   const parsed = tolerantJsonParse(text);
   const action = String(parsed?.action ?? '').toLowerCase();
-  const subQuestionValue = parsed?.subQuestion;
-  const subQuestion = typeof subQuestionValue === 'string' ? subQuestionValue.trim() : '';
-  return { complete: action.includes('complete') || !subQuestion, subQuestion };
+  const subQuestions = normalizeSubQuestions(parsed?.subQuestions, parsed?.subQuestion, maxBatch);
+  return { complete: action.includes('complete') || subQuestions.length === 0, subQuestions };
 }
 
 /**
@@ -100,12 +130,16 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
             findings: state.findings,
             round: state.round,
             maxRounds: deps.tier.maxOrchestratorCycles,
+            maxConcurrent: deps.tier.maxConcurrentResearchers,
             nonce: deps.nonce,
           }),
         ),
       ];
       const response = await deps.model.invoke(prompt, { signal: config.signal });
-      const { complete, subQuestion } = parseSupervisorOutput(extractText(response));
+      const { complete, subQuestions } = parseSupervisorOutput(
+        extractText(response),
+        deps.tier.maxConcurrentResearchers,
+      );
       if (complete) {
         return {
           concludeReason: 'complete',
@@ -113,9 +147,10 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
         };
       }
       return {
-        currentSubQuestion: subQuestion,
+        currentSubQuestion: subQuestions[0],
+        currentSubQuestions: subQuestions,
         round: state.round + 1,
-        researcherCount: state.researcherCount + 1,
+        researcherCount: state.researcherCount + subQuestions.length,
         tokenUsage: usageFromExchange(prompt, response),
       };
     } catch (error) {

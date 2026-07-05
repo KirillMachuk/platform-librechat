@@ -132,8 +132,11 @@ export const DeepResearchStateAnnotation = Annotation.Root({
   jurisdiction: Annotation<string>({ reducer: lastWins, default: () => '' }),
   /** Research brief produced by SCOPE from the user's request. */
   researchBrief: Annotation<string>({ reducer: lastWins, default: () => '' }),
-  /** Sub-question the supervisor hands to the next researcher dispatch. */
+  /** First sub-question of the current batch — kept for UI progress + back-compat. */
   currentSubQuestion: Annotation<string>({ reducer: lastWins, default: () => '' }),
+  /** The batch of independent sub-questions the supervisor dispatches to run in
+   *  parallel this round (A2); ≤ the tier's maxConcurrentResearchers. */
+  currentSubQuestions: Annotation<string[]>({ reducer: lastWins, default: () => [] }),
   /** Compressed digests — the only research that reaches outer state. */
   findings: Annotation<DeepResearchFinding[]>({ reducer: concat, default: () => [] }),
   /** Completed orchestrator rounds (written only by SUPERVISOR). */

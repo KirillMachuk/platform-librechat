@@ -1,7 +1,12 @@
 import { FakeListChatModel } from '@langchain/core/utils/testing';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { DeepResearchState, DeepResearchConfigurable } from '../state';
-import { createSupervisorNode, routeFromSupervisor, budgetGateReason } from './supervisor';
+import {
+  budgetGateReason,
+  createSupervisorNode,
+  routeFromSupervisor,
+  normalizeSubQuestions,
+} from './supervisor';
 import { resolveDeepResearchTier } from '../config';
 
 const NOW = '2026-06-25T00:00:00Z';
@@ -14,6 +19,7 @@ function stateWith(partial: Partial<DeepResearchState>): DeepResearchState {
     jurisdiction: 'RU',
     researchBrief: 'бриф',
     currentSubQuestion: '',
+    currentSubQuestions: [],
     findings: [],
     round: 0,
     researcherCount: 0,
@@ -111,6 +117,25 @@ describe('budgetGateReason', () => {
   });
 });
 
+describe('normalizeSubQuestions (A2 batch parsing)', () => {
+  it('prefers the array — trims, de-dups, drops empties, caps at maxBatch', () => {
+    expect(normalizeSubQuestions(['  a  ', 'b', 'a', '', 'c', 'd'], undefined, 3)).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
+  });
+
+  it('falls back to a single subQuestion when no array is given (back-compat)', () => {
+    expect(normalizeSubQuestions(undefined, 'только один', 3)).toEqual(['только один']);
+  });
+
+  it('returns [] when neither the array nor the fallback is usable', () => {
+    expect(normalizeSubQuestions(undefined, '', 3)).toEqual([]);
+    expect(normalizeSubQuestions([123, {}], undefined, 3)).toEqual([]);
+  });
+});
+
 describe('routeFromSupervisor', () => {
   it('routes to report once concluded', () => {
     expect(routeFromSupervisor(stateWith({ concludeReason: 'budget' }))).toBe('report');
@@ -122,7 +147,7 @@ describe('routeFromSupervisor', () => {
 });
 
 describe('createSupervisorNode', () => {
-  it('dispatches a researcher with the next sub-question', async () => {
+  it('dispatches a researcher with the next sub-question (single, back-compat)', async () => {
     const model = new FakeListChatModel({
       responses: ['{"action":"RESEARCH","subQuestion":"Объём рынка CRM в РФ за 2025 год"}'],
     });
@@ -131,9 +156,41 @@ describe('createSupervisorNode', () => {
       configWith(),
     );
     expect(update.currentSubQuestion).toBe('Объём рынка CRM в РФ за 2025 год');
+    expect(update.currentSubQuestions).toEqual(['Объём рынка CRM в РФ за 2025 год']);
     expect(update.round).toBe(1);
     expect(update.researcherCount).toBe(1);
     expect(update.concludeReason ?? null).toBeNull();
+  });
+
+  it('dispatches a BATCH of independent sub-questions to run in parallel (A2)', async () => {
+    const model = new FakeListChatModel({
+      responses: [
+        '{"action":"RESEARCH","subQuestions":["Цена Битрикс24","Цена amoCRM","On-prem варианты"]}',
+      ],
+    });
+    const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(
+      stateWith({ researcherCount: 2 }),
+      configWith(),
+    );
+    expect(update.currentSubQuestions).toEqual([
+      'Цена Битрикс24',
+      'Цена amoCRM',
+      'On-prem варианты',
+    ]);
+    expect(update.currentSubQuestion).toBe('Цена Битрикс24'); // first, for UI progress
+    expect(update.round).toBe(1);
+    expect(update.researcherCount).toBe(5); // 2 prior + 3 dispatched
+  });
+
+  it('caps the dispatched batch at the tier concurrency limit (deep = 4)', async () => {
+    const model = new FakeListChatModel({
+      responses: ['{"action":"RESEARCH","subQuestions":["q1","q2","q3","q4","q5","q6"]}'],
+    });
+    const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(
+      stateWith({}),
+      configWith(),
+    );
+    expect(update.currentSubQuestions).toHaveLength(TIER.maxConcurrentResearchers);
   });
 
   it('concludes when the model says COMPLETE', async () => {
