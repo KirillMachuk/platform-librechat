@@ -1316,4 +1316,51 @@ describe('BaseClient', () => {
       expect(userSave[0].files[0].file_id).toBe('file-abc');
     });
   });
+
+  describe('processAttachments document partitioning', () => {
+    let TestClient;
+
+    beforeEach(() => {
+      TestClient = new FakeClient(apiKey, {
+        endpoint: 'openai',
+        req: { config: {} },
+      });
+      TestClient.addDocuments = jest.fn().mockResolvedValue([]);
+    });
+
+    /* Context files retain their original upload (source `local`/s3); their
+     * content reaches the model as text via `extractFileContext`. Inlining the
+     * original as a document block would double-send the content and ship the
+     * raw file to the provider (415 at the anonymizer in anonymize mode). */
+    test('files with extracted text (full-text context) are never inlined as documents', async () => {
+      const contextPdf = {
+        file_id: 'ctx-pdf',
+        type: 'application/pdf',
+        source: 'local',
+        filepath: '/uploads/u/kp.pdf',
+        text: 'extracted text the model reads',
+      };
+      const plainPdf = {
+        file_id: 'plain-pdf',
+        type: 'application/pdf',
+        source: 'local',
+        filepath: '/uploads/u/raw.pdf',
+      };
+
+      const files = await TestClient.processAttachments({}, [contextPdf, plainPdf]);
+
+      expect(TestClient.addDocuments).toHaveBeenCalledTimes(1);
+      expect(TestClient.addDocuments.mock.calls[0][1]).toEqual([plainPdf]);
+      expect(files.map((f) => f.file_id)).toEqual(expect.arrayContaining(['ctx-pdf', 'plain-pdf']));
+    });
+
+    test('legacy text-source files keep bypassing document inlining', async () => {
+      const legacy = { file_id: 'legacy', type: 'application/pdf', source: 'text', text: 'x' };
+
+      const files = await TestClient.processAttachments({}, [legacy]);
+
+      expect(TestClient.addDocuments).not.toHaveBeenCalled();
+      expect(files.map((f) => f.file_id)).toEqual(['legacy']);
+    });
+  });
 });
