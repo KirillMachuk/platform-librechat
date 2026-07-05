@@ -42,7 +42,9 @@ export interface DeepResearchNodeError {
  *  'rounds' = the orchestrator round cap stopped gathering (a deliberate partial,
  *  distinct from 'completed' so the UI can say so). 'limit' = the run was refused
  *  up front (per-user concurrency cap) and never gathered — a terminal, NON-error
- *  state the UI must not flag as an unfinished/failed message. */
+ *  state the UI must not flag as an unfinished/failed message. 'clarify' = the runner
+ *  short-circuited before the graph to ask clarifying questions (D2, also terminal
+ *  and non-error). */
 export type FinalizeReason =
   | 'completed'
   | 'budget'
@@ -50,7 +52,8 @@ export type FinalizeReason =
   | 'time'
   | 'aborted'
   | 'error'
-  | 'limit';
+  | 'limit'
+  | 'clarify';
 
 /** Why SUPERVISOR ended the gather loop; REPORT maps it to a FinalizeReason.
  *  'time' = the wall-clock synthesis-reserve gate stopped gathering so the model

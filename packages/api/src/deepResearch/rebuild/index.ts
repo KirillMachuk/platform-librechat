@@ -12,6 +12,12 @@ export { sanitizeErrorForUser } from './shared';
 export { startSovereignSession, sovereignPassthroughHeaders } from './sovereign';
 export { reportToPdfBuffer } from './pdf';
 export {
+  buildClarifyPrompt,
+  parseClarifyOutput,
+  formatClarifyMessage,
+  isClarifyMessage,
+} from './clarify';
+export {
   tierToRunBudget,
   leadModelFor,
   workerModelFor,

@@ -1613,6 +1613,14 @@ export const deepResearchSchema = z.object({
    * the legacy prompt-driven engine runs. Flip per tenant once validated on lab.
    */
   useNewEngine: z.boolean().default(false),
+  /**
+   * Ask up to 3 clarifying questions before starting research when the request is
+   * under-specified for a targeted recommendation (D2, ChatGPT-style two-turn): the
+   * questions come back as one assistant message and the user's reply starts the run
+   * with that context. Default true; set false to always research immediately. Pure
+   * kill-switch — no code deploy needed to disable.
+   */
+  clarify: z.boolean().default(true),
   modes: z
     .object({
       economy: deepResearchModeSchema.optional(),
