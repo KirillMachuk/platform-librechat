@@ -33,6 +33,10 @@ const mockCreateDeepResearchGraph = jest.fn(() => ({}));
 const mockEmitDone = jest.fn();
 const mockCompleteJob = jest.fn();
 const mockSavedMessages = [];
+const mockReportToPdfBuffer = jest.fn(async () => Buffer.from('%PDF-1.4 fake'));
+const mockCreateFile = jest.fn(async (data) => ({ ...data }));
+const mockSaveBuffer = jest.fn(async () => '/uploads/u1/report.pdf');
+const mockGetStrategyFunctions = jest.fn(() => ({ saveBuffer: mockSaveBuffer }));
 
 jest.mock('@librechat/agents', () => ({
   Providers: { OPENAI: 'openAI' },
@@ -64,6 +68,8 @@ jest.mock('@librechat/api', () => ({
   workerModelFor: jest.fn(() => 'worker-model'),
   reportModelFor: jest.fn(() => 'report-model'),
   compressModelFor: jest.fn(() => 'compress-model'),
+  reportToPdfBuffer: (...a) => mockReportToPdfBuffer(...a),
+  getStorageMetadata: jest.fn(() => ({})),
 }));
 
 jest.mock('@librechat/data-schemas', () => ({
@@ -75,8 +81,12 @@ jest.mock('~/server/services/Files/permissions', () => ({
   filterRequestFilesByAccess: jest.fn(async () => []),
 }));
 jest.mock('~/server/services/Tools/credentials', () => ({ loadAuthValues: jest.fn() }));
+jest.mock('~/server/services/Files/strategies', () => ({
+  getStrategyFunctions: (...a) => mockGetStrategyFunctions(...a),
+}));
 
 jest.mock('~/models', () => ({
+  createFile: (...a) => mockCreateFile(...a),
   getFiles: jest.fn(async () => []),
   getConvo: jest.fn(async () => ({ conversationId: 'c1', title: 't' })),
   saveConvo: jest.fn(async () => ({ conversationId: 'c1' })),
@@ -97,7 +107,7 @@ const { runNewDeepResearch, buildDeepResearchTitle } = require('./deepResearchRu
 
 function baseParams(text) {
   return {
-    req: { config: {}, user: { role: 'user' }, body: {} },
+    req: { config: { fileStrategy: 'local' }, user: { role: 'user' }, body: {} },
     res: {},
     streamId: 'stream-1',
     signal: undefined,
@@ -279,5 +289,54 @@ describe('resolveDeepResearchTitle (topic title from the masked question, PII-fr
     await runNewDeepResearch(baseParams('изучи рынок ЭДО'));
 
     expect(models.saveConvo.mock.calls[0][1].title).toBe('Рынок ЭДО');
+  });
+});
+
+describe('runNewDeepResearch — D4 report PDF artifact', () => {
+  const api = require('@librechat/api');
+
+  it('attaches a PDF file to the response message on a completed report', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(mockReportToPdfBuffer).toHaveBeenCalledTimes(1);
+    const reportMsg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(reportMsg.files).toHaveLength(1);
+    expect(reportMsg.files[0].type).toBe('application/pdf');
+    expect(reportMsg.files[0].filename).toMatch(/\.pdf$/);
+    expect(mockCreateFile.mock.calls[0][1]).toBe(true); // disableTTL
+  });
+
+  it('skips the PDF (and never generates one) for a temporary chat', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    const params = baseParams('изучи рынок CRM');
+    params.req.body.isTemporary = true;
+
+    await runNewDeepResearch(params);
+
+    expect(mockReportToPdfBuffer).not.toHaveBeenCalled();
+    expect(mockSavedMessages.find((m) => m.messageId === 'r1').files).toBeUndefined();
+  });
+
+  it('sends the report without a file when PDF generation fails (fail-open)', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockReportToPdfBuffer.mockRejectedValueOnce(new Error('pdf boom'));
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const reportMsg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(reportMsg.files).toBeUndefined();
+    expect(reportMsg.text).toBe(REPORT); // report still delivered
+  });
+
+  it('skips the PDF for a non-report outcome (concurrency limit)', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    api.GenerationJobManager.getActiveJobIdsForUser.mockResolvedValueOnce(['a', 'b', 'c']);
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(mockReportToPdfBuffer).not.toHaveBeenCalled();
+    expect(mockSavedMessages.find((m) => m.messageId === 'r1').files).toBeUndefined();
   });
 });

@@ -1,5 +1,5 @@
 const { randomUUID } = require('node:crypto');
-const { Constants } = require('librechat-data-provider');
+const { Constants, FileContext } = require('librechat-data-provider');
 const { HumanMessage, SystemMessage } = require('@langchain/core/messages');
 const { Providers, getChatModelClass, createSearchTool } = require('@librechat/agents');
 const {
@@ -17,6 +17,8 @@ const {
   createDeepResearchGraph,
   selectChatFileSearchInputs,
   startSovereignSession,
+  reportToPdfBuffer,
+  getStorageMetadata,
   leadModelFor,
   workerModelFor,
   reportModelFor,
@@ -26,7 +28,9 @@ const { logger } = require('@librechat/data-schemas');
 const { createFileSearchTool } = require('~/app/clients/tools/util/fileSearch');
 const { filterRequestFilesByAccess } = require('~/server/services/Files/permissions');
 const { loadAuthValues } = require('~/server/services/Tools/credentials');
+const { getStrategyFunctions } = require('~/server/services/Files/strategies');
 const {
+  createFile,
   getFiles,
   getConvo,
   saveConvo,
@@ -166,6 +170,75 @@ async function countOtherActiveJobs({ streamId, userId, tenantId }) {
   } catch (error) {
     logger.warn('[deepResearchRun] DR admission count failed; allowing run (fail-open)', error);
     return 0;
+  }
+}
+
+/** DR outcomes that yield a genuine, model-written report worth a PDF artifact (D4). A
+ *  concurrency refusal (limit), an error fallback, and a user-aborted partial are skipped. */
+const PDF_ELIGIBLE_REASONS = new Set(['completed', 'budget', 'rounds', 'time']);
+
+/**
+ * D4: attach the final report as a downloadable PDF on the response message. The frontend
+ * renders any non-image `message.files[]` entry as a chip with a download button, so no
+ * client change is needed. FAIL-OPEN: any failure logs a warning and leaves the message
+ * without a file — a PDF hiccup never breaks the run. Skipped for temporary chats (no
+ * orphan files) and non-report outcomes. Must run BEFORE the response is saved so the
+ * persisted message carries the file.
+ */
+async function attachReportPdf({ req, responseMessage, reportMarkdown, title, finalizeReason }) {
+  if (req?.body?.isTemporary || !PDF_ELIGIBLE_REASONS.has(finalizeReason)) {
+    return;
+  }
+  const markdown = (reportMarkdown ?? '').trim();
+  if (!markdown) {
+    return;
+  }
+  try {
+    const fileStrategy = req?.config?.fileStrategy;
+    const { saveBuffer } = getStrategyFunctions(fileStrategy);
+    if (typeof saveBuffer !== 'function') {
+      logger.warn(
+        `[deepResearchRun] fileStrategy "${fileStrategy}" has no saveBuffer; PDF skipped`,
+      );
+      return;
+    }
+    const buffer = await reportToPdfBuffer(markdown);
+    const fileId = randomUUID();
+    const displayName = `${(title || 'Отчёт').trim()}.pdf`;
+    const filepath = await saveBuffer({
+      userId: responseMessage.user,
+      buffer,
+      fileName: `${fileId}__report.pdf`,
+      basePath: 'uploads',
+      tenantId: req?.user?.tenantId,
+    });
+    const file = await createFile(
+      {
+        file_id: fileId,
+        filepath,
+        ...getStorageMetadata({ filepath, source: fileStrategy }),
+        filename: displayName,
+        type: 'application/pdf',
+        bytes: buffer.length,
+        user: responseMessage.user,
+        tenantId: req?.user?.tenantId,
+        messageId: responseMessage.messageId,
+        conversationId: responseMessage.conversationId,
+        source: fileStrategy,
+        context: FileContext.message_attachment,
+        object: 'file',
+        usage: 0,
+      },
+      true /* disableTTL — the report artifact must not be TTL-swept */,
+    );
+    if (file) {
+      responseMessage.files = [file];
+    }
+  } catch (error) {
+    logger.warn(
+      '[deepResearchRun] failed to attach report PDF; sending report without file',
+      error,
+    );
   }
 }
 
@@ -529,6 +602,21 @@ async function runNewDeepResearch(params) {
     reportText = await sovereign.restore(result.finalReport);
     await sovereign.drop();
   }
+
+  // P6+: chat title = a model-distilled TOPIC of the (masked) request — robust to any
+  // phrasing and PII-free (it runs on the masked question). Computed once here so BOTH the
+  // D4 PDF filename and the persisted conversation row reuse it. An aborted run skips the
+  // model call (its title is never persisted); fail-open to the deterministic heuristic.
+  const deepResearchTitle =
+    result.finalizeReason === 'aborted'
+      ? buildDeepResearchTitle(text)
+      : await resolveDeepResearchTitle({
+          buildModel,
+          leadModelSlug,
+          topicText: sovereign ? sovereign.maskedQuestion : text,
+          fallbackText: text,
+        });
+
   // M8: a partial report is prefixed with a localized reason banner so the user knows
   // WHY it stopped (budget/time/rounds/abort/error). Baked into the saved text so a
   // reload shows it too; the frontend's generic "unfinished" banner (C1f) complements it.
@@ -557,6 +645,16 @@ async function runNewDeepResearch(params) {
     interfaceConfig: req?.config?.interfaceConfig,
   };
 
+  // D4: attach the report as a downloadable PDF chip on the response message — BEFORE it is
+  // saved, so the persisted message carries the file. Fail-open; skips temp/non-report runs.
+  await attachReportPdf({
+    req,
+    responseMessage,
+    reportMarkdown: finalReportText,
+    title: deepResearchTitle,
+    finalizeReason: result.finalizeReason,
+  });
+
   // Save user + response BEFORE the final event (mirrors request.js:523-546 — avoids
   // the race where a follow-up arrives before the response is persisted).
   if (userMessage) {
@@ -581,17 +679,6 @@ async function runNewDeepResearch(params) {
   if (result.finalizeReason === 'aborted') {
     return result;
   }
-
-  // P6+: the chat title is a model-distilled TOPIC of the (masked) request — robust to
-  // any phrasing and PII-free (runs on the masked question). Computed once here (after the
-  // abort early-return, so a Stop skips it) and reused for both the persisted row and the
-  // final event. Fail-open to the deterministic heuristic.
-  const deepResearchTitle = await resolveDeepResearchTitle({
-    buildModel,
-    leadModelSlug,
-    topicText: sovereign ? sovereign.maskedQuestion : text,
-    fallbackText: text,
-  });
 
   // M9/M10: a NEW DR chat has no persisted Conversation row yet, so the sidebar would
   // show nothing until reload and the final event would carry an empty conversation.
