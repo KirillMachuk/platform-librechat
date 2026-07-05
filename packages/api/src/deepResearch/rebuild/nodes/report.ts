@@ -180,6 +180,10 @@ export async function composeReport(params: {
  * search/scraper): deterministic, no model call — the model would only dress the
  * emptiness up as a fake analytical note full of «нет данных».
  */
+/** Cap for the request echo inside the no-data notice: a clarify continuation's
+ *  "request" is the whole dialogue transcript — echoing it verbatim is unreadable. */
+const NO_DATA_REQUEST_CAP = 160;
+
 export function buildNoDataReport(params: {
   request: string;
   findings: DeepResearchFinding[];
@@ -188,9 +192,13 @@ export function buildNoDataReport(params: {
     .map((finding) => `- ${finding.subQuestion}`)
     .filter((line, index, all) => all.indexOf(line) === index)
     .join('\n');
+  const flat = params.request.trim().replace(/\s+/g, ' ');
+  const chars = [...flat];
+  const shownRequest =
+    chars.length > NO_DATA_REQUEST_CAP ? `${chars.slice(0, NO_DATA_REQUEST_CAP).join('')}…` : flat;
   return (
     `## Не удалось собрать материал\n\n` +
-    `По запросу «${params.request.trim()}» веб-поиск не вернул пригодного материала: ` +
+    `По запросу «${shownRequest}» веб-поиск не вернул пригодного материала: ` +
     `источники не открылись или поиск был недоступен. Отчёт без фактической базы не составлен.\n\n` +
     (attempted ? `Что исследовалось:\n${attempted}\n\n` : '') +
     `Что можно сделать: повторите исследование чуть позже или переформулируйте запрос. ` +

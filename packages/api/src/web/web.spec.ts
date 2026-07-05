@@ -157,6 +157,40 @@ describe('web.ts', () => {
       expect(result.authTypes.some(([category]) => category === 'providers')).toBe(true);
     });
 
+    it('degrades a configured-but-unauthenticated reranker to "none" WITHOUT killing web search', async () => {
+      // The reranker is an optional enhancement: rerankerType=jina with a missing
+      // JINA_API_KEY must not zero `authenticated` (that silently unregistered the
+      // whole web_search tool — Deep Research gathered nothing).
+      webSearchConfig = {
+        ...webSearchConfig,
+        searchProvider: 'serper' as SearchProviders,
+        scraperProvider: 'firecrawl' as ScraperProviders,
+        rerankerType: 'jina' as RerankerTypes,
+      };
+      mockLoadAuthValues.mockImplementation(({ authFields }) => {
+        const result: Record<string, string> = {};
+        authFields.forEach((field: string) => {
+          if (field === 'JINA_API_KEY') {
+            return; // the deleted key
+          }
+          result[field] =
+            field === 'FIRECRAWL_API_URL' ? 'https://api.firecrawl.dev' : 'test-api-key';
+        });
+        return Promise.resolve(result);
+      });
+
+      const result = await loadWebSearchAuth({
+        userId,
+        webSearchConfig,
+        loadAuthValues: mockLoadAuthValues,
+      });
+
+      expect(result.authenticated).toBe(true);
+      expect(result.authResult.rerankerType).toBe('none');
+      expect(result.authResult.searchProvider).toBe('serper');
+      expect(result.authResult.scraperProvider).toBe('firecrawl');
+    });
+
     it('should handle exceptions from loadAuthValues', async () => {
       // Mock loadAuthValues to throw an error
       mockLoadAuthValues.mockImplementation(() => {
@@ -1180,7 +1214,7 @@ describe('web.ts', () => {
       expect(result.authenticated).toBe(false);
     });
 
-    it('should fail authentication when specified service is not authenticated but others are', async () => {
+    it('degrades an unauthenticated SPECIFIED reranker to none (no cross-service fallback), search stays up', async () => {
       // Initialize a webSearchConfig with a specific rerankerType (jina)
       const webSearchConfig: TCustomConfig['webSearch'] = {
         serperApiKey: '${SERPER_API_KEY}',
@@ -1214,9 +1248,11 @@ describe('web.ts', () => {
         loadAuthValues: mockLoadAuthValues,
       });
 
-      // Should fail because the specified reranker (jina) is not authenticated
-      // even though another reranker (cohere) might be authenticated
-      expect(result.authenticated).toBe(false);
+      // The specified reranker (jina) is not authenticated: search must NOT die for an
+      // optional enhancement — the reranker degrades to 'none'. Cohere is NOT silently
+      // substituted (the admin asked for jina, not "any reranker").
+      expect(result.authenticated).toBe(true);
+      expect(result.authResult.rerankerType).toBe('none');
 
       // Verify that JINA_API_KEY was requested
       const jinaApiKeyCalls = mockLoadAuthValues.mock.calls.filter((call) =>
