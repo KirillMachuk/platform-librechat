@@ -42,6 +42,7 @@ const mockReportToPdfBuffer = jest.fn(async () => Buffer.from('%PDF-1.4 fake'));
 const mockCreateFile = jest.fn(async (data) => ({ ...data }));
 const mockSaveBuffer = jest.fn(async () => '/uploads/u1/report.pdf');
 const mockGetStrategyFunctions = jest.fn(() => ({ saveBuffer: mockSaveBuffer }));
+const mockTitleCacheSet = jest.fn(async () => {});
 
 jest.mock('@librechat/agents', () => ({
   Providers: { OPENAI: 'openAI' },
@@ -112,6 +113,9 @@ jest.mock('~/server/services/Tools/credentials', () => ({ loadAuthValues: jest.f
 jest.mock('~/server/services/Files/strategies', () => ({
   getStrategyFunctions: (...a) => mockGetStrategyFunctions(...a),
 }));
+jest.mock('~/cache/getLogStores', () =>
+  jest.fn(() => ({ set: (...a) => mockTitleCacheSet(...a), get: jest.fn(), delete: jest.fn() })),
+);
 
 jest.mock('~/models', () => ({
   createFile: (...a) => mockCreateFile(...a),
@@ -452,5 +456,44 @@ describe('runNewDeepResearch — D2 clarify (two-turn)', () => {
     await runNewDeepResearch(baseParams('посоветуй что-нибудь')); // baseParams has clarify:false
 
     expect(mockRunDeepResearch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('runNewDeepResearch — title parity with the standard pipeline (gen_title 404 fix)', () => {
+  it('caches the title in GEN_TITLE and emits the live title event, like addTitle does', async () => {
+    const api = require('@librechat/api');
+    mockStartSovereignSession.mockResolvedValue(null);
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    // The frontend polls GET /api/convos/gen_title/:conversationId (retrying 404s) for
+    // every new chat — the cache entry is what turns that 404 into a 200.
+    expect(mockTitleCacheSet).toHaveBeenCalledWith('u1-c1', 'Сравнение CRM-систем', 120000);
+    const titleEvents = api.GenerationJobManager.emitChunk.mock.calls.filter(
+      ([, chunk]) => chunk?.event === 'title',
+    );
+    expect(titleEvents).toHaveLength(1);
+    expect(titleEvents[0][1].data).toEqual({ conversationId: 'c1', title: 'Сравнение CRM-систем' });
+  });
+});
+
+describe('runNewDeepResearch — honest nodata outcome', () => {
+  it('a nodata run gets NO PDF and keeps the unfinished flag', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockResolvedValueOnce({
+      finalReport: '## Не удалось собрать материал\n…',
+      finalizeReason: 'nodata',
+      usage: { input: 5, output: 5, total: 10 },
+      findings: [],
+      errors: [{ node: 'researcher', message: 'search dead', at: 'now' }],
+    });
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(mockReportToPdfBuffer).not.toHaveBeenCalled();
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.files).toBeUndefined();
+    expect(msg.unfinished).toBe(true);
+    expect(msg.text).toContain('Не удалось собрать материал');
   });
 });

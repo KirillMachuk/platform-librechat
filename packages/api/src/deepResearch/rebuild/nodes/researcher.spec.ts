@@ -8,10 +8,12 @@ import type { DeepResearchState, DeepResearchFinding } from '../state';
 import {
   researchOne,
   isContentUrl,
+  EMPTY_DIGEST,
   extractSources,
   runResearchLoop,
   compressResearch,
   createResearcherNode,
+  hasResearchMaterial,
   type ToolCaller,
 } from './researcher';
 import { resolveDeepResearchTier } from '../config';
@@ -419,5 +421,23 @@ describe('researchOne', () => {
     expect(result.finding.subQuestion).toBe('под-вопрос');
     expect(result.finding.round).toBe(3);
     expect(result.error?.node).toBe('researcher');
+  });
+});
+
+describe('hasResearchMaterial (the honest-report gate)', () => {
+  const withDigest = (digest: string): DeepResearchFinding => ({
+    round: 1,
+    subQuestion: 'q',
+    digest,
+    sources: [],
+    tokens: 0,
+  });
+
+  it('accepts a real digest and rejects empty/placeholder/failure digests', () => {
+    expect(hasResearchMaterial(withDigest('Битрикс24: тарифы от 0 руб.'))).toBe(true);
+    expect(hasResearchMaterial(withDigest(''))).toBe(false);
+    expect(hasResearchMaterial(withDigest('   '))).toBe(false);
+    expect(hasResearchMaterial(withDigest(EMPTY_DIGEST))).toBe(false);
+    expect(hasResearchMaterial(withDigest('(ошибка исследования: сервис недоступен)'))).toBe(false);
   });
 });

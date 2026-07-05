@@ -55,6 +55,10 @@ describe('concludeToFinalize', () => {
     // writes a full report; only the HARD watchdog (run wrapper) yields a 'time' partial.
     expect(concludeToFinalize('time')).toBe('completed');
   });
+
+  it('maps a supervisor ERROR to an error partial — never a silent "completed"', () => {
+    expect(concludeToFinalize('error')).toBe('error');
+  });
 });
 
 describe('buildFallbackReport', () => {
@@ -172,5 +176,51 @@ describe('createReportNode', () => {
     );
     expect(update.finalReport).toContain('Итоговая записка');
     expect(update.finalizeReason).toBe('budget');
+  });
+
+  it('maps a supervisor ERROR conclude to an error partial (banner), still writing from findings', async () => {
+    const node = createReportNode({
+      reportModel: new FakeListChatModel({ responses: ['# Что успели собрать'] }),
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+    });
+    const update = await node(
+      stateWith({ findings: [finding('Q1')], concludeReason: 'error' }),
+      emptyConfig,
+    );
+    expect(update.finalReport).toContain('Что успели собрать');
+    expect(update.finalizeReason).toBe('error');
+  });
+
+  it('refuses to fake a report out of ZERO usable material — honest nodata, model NOT called', async () => {
+    const model = new FakeListChatModel({ responses: ['# Псевдо-отчёт'] });
+    const spy = jest.spyOn(model, 'invoke');
+    const node = createReportNode({ reportModel: model, tier: TIER, now: NOW, nonce: NONCE });
+    const placeholderFinding: DeepResearchFinding = {
+      round: 1,
+      subQuestion: 'Q1',
+      digest: '(по этому под-вопросу не удалось собрать данные)',
+      sources: [],
+      tokens: 10,
+    };
+    const update = await node(
+      stateWith({ findings: [placeholderFinding], concludeReason: 'complete' }),
+      emptyConfig,
+    );
+    expect(spy).not.toHaveBeenCalled();
+    expect(update.finalizeReason).toBe('nodata');
+    expect(update.finalReport).toContain('Не удалось собрать материал');
+    expect(update.finalReport).toContain('Q1');
+  });
+
+  it('supervisor error + zero material → deterministic error fallback (not nodata)', async () => {
+    const model = new FakeListChatModel({ responses: ['# Псевдо-отчёт'] });
+    const spy = jest.spyOn(model, 'invoke');
+    const node = createReportNode({ reportModel: model, tier: TIER, now: NOW, nonce: NONCE });
+    const update = await node(stateWith({ findings: [], concludeReason: 'error' }), emptyConfig);
+    expect(spy).not.toHaveBeenCalled();
+    expect(update.finalizeReason).toBe('error');
+    expect(update.finalReport).toContain('частичный отчёт');
   });
 });

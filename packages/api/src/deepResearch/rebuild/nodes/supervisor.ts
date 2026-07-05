@@ -7,7 +7,13 @@ import type {
   DeepResearchConfigurable,
 } from '../state';
 import type { DeepResearchTier } from '../config';
-import { extractText, usageFromExchange, toErrorMessage, tolerantJsonParse } from '../shared';
+import {
+  extractText,
+  lastHumanText,
+  toErrorMessage,
+  tolerantJsonParse,
+  usageFromExchange,
+} from '../shared';
 import { buildSupervisorPrompt } from '../prompts';
 
 export interface SupervisorNodeDeps {
@@ -86,11 +92,11 @@ export function normalizeSubQuestions(
 function parseSupervisorOutput(
   text: string,
   maxBatch: number,
-): { complete: boolean; subQuestions: string[] } {
+): { completeRequested: boolean; subQuestions: string[] } {
   const parsed = tolerantJsonParse(text);
   const action = String(parsed?.action ?? '').toLowerCase();
   const subQuestions = normalizeSubQuestions(parsed?.subQuestions, parsed?.subQuestion, maxBatch);
-  return { complete: action.includes('complete') || subQuestions.length === 0, subQuestions };
+  return { completeRequested: action.includes('complete'), subQuestions };
 }
 
 /**
@@ -136,26 +142,32 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
         ),
       ];
       const response = await deps.model.invoke(prompt, { signal: config.signal });
-      const { complete, subQuestions } = parseSupervisorOutput(
+      const { completeRequested, subQuestions } = parseSupervisorOutput(
         extractText(response),
         deps.tier.maxConcurrentResearchers,
       );
-      if (complete) {
-        return {
-          concludeReason: 'complete',
-          tokenUsage: usageFromExchange(prompt, response),
-        };
+      const tokenUsage = usageFromExchange(prompt, response);
+      // COMPLETE before ANY research ran (round 0) is always wrong — there is nothing
+      // to report from. Malformed output (no valid batch, no explicit complete) must
+      // not silently end the run either. Both degrade to researching the brief itself;
+      // the deterministic gate above bounds how often this fallback can fire.
+      if (completeRequested && state.round > 0) {
+        return { concludeReason: 'complete', tokenUsage };
       }
+      const fallbackQuestion = state.researchBrief.trim() || lastHumanText(state.messages);
+      const batch = subQuestions.length > 0 ? subQuestions : [fallbackQuestion];
       return {
-        currentSubQuestion: subQuestions[0],
-        currentSubQuestions: subQuestions,
+        currentSubQuestion: batch[0],
+        currentSubQuestions: batch,
         round: state.round + 1,
-        researcherCount: state.researcherCount + subQuestions.length,
-        tokenUsage: usageFromExchange(prompt, response),
+        researcherCount: state.researcherCount + batch.length,
+        tokenUsage,
       };
     } catch (error) {
+      // A supervisor model failure is an ERROR partial (banner tells the user), never a
+      // silent "completed" — that used to ship an empty report that looked successful.
       return {
-        concludeReason: 'complete',
+        concludeReason: 'error',
         errors: [{ node: 'supervisor', message: toErrorMessage(error), at: deps.now }],
       };
     }

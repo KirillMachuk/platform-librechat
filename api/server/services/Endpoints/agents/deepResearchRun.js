@@ -1,5 +1,5 @@
 const { randomUUID } = require('node:crypto');
-const { Constants, FileContext } = require('librechat-data-provider');
+const { CacheKeys, Constants, FileContext } = require('librechat-data-provider');
 const { HumanMessage, SystemMessage } = require('@langchain/core/messages');
 const { Providers, getChatModelClass, createSearchTool } = require('@librechat/agents');
 const {
@@ -33,6 +33,7 @@ const { createFileSearchTool } = require('~/app/clients/tools/util/fileSearch');
 const { filterRequestFilesByAccess } = require('~/server/services/Files/permissions');
 const { loadAuthValues } = require('~/server/services/Tools/credentials');
 const { getStrategyFunctions } = require('~/server/services/Files/strategies');
+const getLogStores = require('~/cache/getLogStores');
 const {
   createFile,
   getFiles,
@@ -192,6 +193,9 @@ const PDF_ELIGIBLE_REASONS = new Set(['completed', 'budget', 'rounds', 'time']);
  */
 async function attachReportPdf({ req, responseMessage, reportMarkdown, title, finalizeReason }) {
   if (req?.body?.isTemporary || !PDF_ELIGIBLE_REASONS.has(finalizeReason)) {
+    logger.info(
+      `[deepResearchRun] PDF skipped (${req?.body?.isTemporary ? 'temporary chat' : `reason=${finalizeReason}`})`,
+    );
     return;
   }
   const markdown = (reportMarkdown ?? '').trim();
@@ -238,6 +242,11 @@ async function attachReportPdf({ req, responseMessage, reportMarkdown, title, fi
     );
     if (file) {
       responseMessage.files = [file];
+      logger.info(
+        `[deepResearchRun] report PDF attached (file_id=${fileId}, bytes=${buffer.length})`,
+      );
+    } else {
+      logger.warn('[deepResearchRun] createFile returned no record; report sent without PDF');
     }
   } catch (error) {
     logger.warn(
@@ -587,6 +596,10 @@ async function runNewDeepResearch(params) {
         question: sovereign ? sovereign.maskedQuestion : researchInput,
         now: new Date().toISOString(),
       });
+      logger.info(
+        `[deepResearchRun] clarify decision: ${decision.action}` +
+          (decision.questions.length ? ` (${decision.questions.length} questions)` : ''),
+      );
       if (decision.action === 'CLARIFY') {
         result = {
           finalReport: formatClarifyMessage(decision.questions),
@@ -691,6 +704,17 @@ async function runNewDeepResearch(params) {
     }
   }
 
+  // Ops summary: one line telling exactly HOW the run ended and how much material it
+  // gathered, plus every non-fatal node error — a degraded run (dead search, failing
+  // model) must be visible in logs, never silent.
+  logger.info(
+    `[deepResearchRun] finalized reason=${result.finalizeReason} findings=${result.findings.length} ` +
+      `errors=${result.errors?.length ?? 0} tokens=${result.usage?.total ?? 0}`,
+  );
+  for (const nodeError of result.errors ?? []) {
+    logger.warn(`[deepResearchRun] node error [${nodeError.node}]: ${nodeError.message}`);
+  }
+
   // 'completed' is a full report; 'limit' is a deliberate, non-error refusal (concurrency
   // cap); 'clarify' is a clarifying-questions message (D2) — each stands alone and must NOT
   // get the frontend "unfinished" banner.
@@ -717,6 +741,29 @@ async function runNewDeepResearch(params) {
           topicText: sovereign ? sovereign.maskedQuestion : text,
           fallbackText: text,
         });
+
+  // Parity with the standard title pipeline (answers the gen_title 404): the frontend
+  // eagerly polls GET /api/convos/gen_title/:conversationId (retrying 404s) for every
+  // new conversation — populate the SAME cache the standard addTitle service fills, and
+  // emit the same live 'title' SSE event, so DR titles behave exactly like normal chats.
+  if (result.finalizeReason !== 'aborted' && !req?.body?.isTemporary) {
+    try {
+      const titleCache = getLogStores(CacheKeys.GEN_TITLE);
+      await titleCache.set(`${userId}-${conversationId}`, deepResearchTitle, 120000);
+    } catch (error) {
+      logger.warn('[deepResearchRun] failed to cache title for gen_title route', error);
+    }
+    if (streamId) {
+      try {
+        await GenerationJobManager.emitChunk(streamId, {
+          event: 'title',
+          data: { conversationId, title: deepResearchTitle },
+        });
+      } catch (error) {
+        logger.warn('[deepResearchRun] failed to emit title event', error);
+      }
+    }
+  }
 
   // M8: a partial report is prefixed with a localized reason banner so the user knows
   // WHY it stopped (budget/time/rounds/abort/error). Baked into the saved text so a
