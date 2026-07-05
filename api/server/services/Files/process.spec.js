@@ -616,20 +616,9 @@ describe('processAgentFileUpload', () => {
    * Download works — none of which is possible once the original is discarded.
    * The model's `text` is untouched; no deferred render, no `previewText`. */
   describe('retains the original upload (context path)', () => {
-    const { getStorageMetadata } = require('@librechat/api');
-
-    beforeEach(() => {
-      // Echo the storage metadata so the record reflects where the original lives.
-      getStorageMetadata.mockImplementation((m) => ({
-        filepath: m.filepath,
-        source: m.source,
-        storageKey: m.storageKey,
-        storageRegion: m.storageRegion,
-      }));
-    });
-    afterEach(() => {
-      getStorageMetadata.mockReturnValue({});
-    });
+    /* getStorageMetadata is mocked as `() => ({})` (its real behavior for
+     * non-S3 sources) — filepath/source must land on the record as explicit
+     * fields, or preview/download 500 on `undefined.includes`. */
 
     test('stores the original via the file strategy and keeps model text (docx), no previewText/status', async () => {
       getStrategyFunctions.mockReturnValue({

@@ -915,6 +915,8 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
           model: messageAttachment ? undefined : req.body.model,
           context: messageAttachment ? FileContext.message_attachment : FileContext.agents,
           tenantId: req.user.tenantId,
+          filepath: stored.filepath,
+          source: storageSource,
           ...storageMetadata,
         }),
         ...retentionExpiry,
