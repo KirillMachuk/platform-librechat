@@ -136,7 +136,11 @@ jest.mock('~/models', () => ({
   bulkInsertTransactions: jest.fn(),
 }));
 
-const { runNewDeepResearch, buildDeepResearchTitle } = require('./deepResearchRun');
+const {
+  runNewDeepResearch,
+  buildDeepResearchTitle,
+  isClarifyFollowUp,
+} = require('./deepResearchRun');
 
 function baseParams(text) {
   return {
@@ -495,5 +499,69 @@ describe('runNewDeepResearch — honest nodata outcome', () => {
     expect(msg.files).toBeUndefined();
     expect(msg.unfinished).toBe(true);
     expect(msg.text).toContain('Не удалось собрать материал');
+  });
+});
+
+describe('isClarifyFollowUp (badge-independent DR routing for clarify replies)', () => {
+  const models = require('~/models');
+  const NO_PARENT = '00000000-0000-0000-0000-000000000000';
+
+  it('is TRUE when the parent is the assistant clarify message', async () => {
+    models.getMessages.mockResolvedValueOnce([
+      {
+        messageId: 'p1',
+        isCreatedByUser: false,
+        text: '**Уточните, пожалуйста, детали исследования:**\n1. Масштаб?',
+      },
+    ]);
+    await expect(
+      isClarifyFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'p1' }),
+    ).resolves.toBe(true);
+    expect(models.getMessages).toHaveBeenCalledWith(
+      { conversationId: 'c1', user: 'u1', messageId: 'p1' },
+      'messageId text isCreatedByUser',
+    );
+  });
+
+  it('is FALSE for a normal parent, a user-authored parent, and a missing parent', async () => {
+    models.getMessages.mockResolvedValueOnce([
+      { messageId: 'p1', isCreatedByUser: false, text: '## Отчёт по CRM' },
+    ]);
+    await expect(
+      isClarifyFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'p1' }),
+    ).resolves.toBe(false);
+
+    models.getMessages.mockResolvedValueOnce([
+      {
+        messageId: 'p1',
+        isCreatedByUser: true,
+        text: '**Уточните, пожалуйста, детали исследования:** копия',
+      },
+    ]);
+    await expect(
+      isClarifyFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'p1' }),
+    ).resolves.toBe(false);
+
+    models.getMessages.mockResolvedValueOnce([]);
+    await expect(
+      isClarifyFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'p1' }),
+    ).resolves.toBe(false);
+  });
+
+  it('is FALSE without a real parent (first message) and never queries', async () => {
+    await expect(
+      isClarifyFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: NO_PARENT }),
+    ).resolves.toBe(false);
+    await expect(
+      isClarifyFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: null }),
+    ).resolves.toBe(false);
+    expect(models.getMessages).not.toHaveBeenCalled();
+  });
+
+  it('fails CLOSED (false) on a lookup error', async () => {
+    models.getMessages.mockRejectedValueOnce(new Error('mongo down'));
+    await expect(
+      isClarifyFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'p1' }),
+    ).resolves.toBe(false);
   });
 });
