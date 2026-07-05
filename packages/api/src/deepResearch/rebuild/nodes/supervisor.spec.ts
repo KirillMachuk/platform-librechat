@@ -31,7 +31,7 @@ function configWith(tokenBudget = 800_000, budgetGateRatio = 0.75): RunnableConf
     runId: 'run-1',
     userId: 'user-1',
     mode: 'deep',
-    budget: { wallClockMs: 900_000, tokenBudget, budgetGateRatio },
+    budget: { wallClockMs: 900_000, tokenBudget, budgetGateRatio, timeGateRatio: 0.68 },
   };
   return { configurable };
 }
@@ -69,6 +69,43 @@ describe('budgetGateReason', () => {
         tokenBudget: 800_000,
         budgetGateRatio: 0.75,
         maxRounds: 8,
+      }),
+    ).toBeNull();
+  });
+
+  it('flags time once the soft deadline is reached, taking precedence over budget/rounds (A1)', () => {
+    expect(
+      budgetGateReason({
+        tokenUsed: 700_000, // would also trip budget
+        round: 8, // would also trip rounds
+        tokenBudget: 800_000,
+        budgetGateRatio: 0.75,
+        maxRounds: 8,
+        now: 10_000,
+        softDeadlineMs: 10_000,
+      }),
+    ).toBe('time');
+  });
+
+  it('leaves the time arm OFF when now/softDeadline are unset or the deadline is in the future', () => {
+    expect(
+      budgetGateReason({
+        tokenUsed: 100,
+        round: 1,
+        tokenBudget: 800_000,
+        budgetGateRatio: 0.75,
+        maxRounds: 8,
+      }),
+    ).toBeNull();
+    expect(
+      budgetGateReason({
+        tokenUsed: 100,
+        round: 1,
+        tokenBudget: 800_000,
+        budgetGateRatio: 0.75,
+        maxRounds: 8,
+        now: 5_000,
+        softDeadlineMs: 10_000,
       }),
     ).toBeNull();
   });
@@ -128,6 +165,32 @@ describe('createSupervisorNode', () => {
       configWith(),
     );
     expect(update.concludeReason).toBe('rounds');
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('concludes on the TIME gate (soft deadline passed) WITHOUT calling the model (A1)', async () => {
+    const model = new FakeListChatModel({ responses: ['{"action":"RESEARCH","subQuestion":"x"}'] });
+    const spy = jest.spyOn(model, 'invoke');
+    const configurable: DeepResearchConfigurable = {
+      runId: 'run-1',
+      userId: 'user-1',
+      mode: 'deep',
+      budget: {
+        wallClockMs: 900_000,
+        tokenBudget: 800_000,
+        budgetGateRatio: 0.75,
+        timeGateRatio: 0.68,
+      },
+      softDeadlineMs: 10_000,
+    };
+    const update = await createSupervisorNode({
+      model,
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+      clock: () => 10_001, // one ms past the soft deadline
+    })(stateWith({}), { configurable });
+    expect(update.concludeReason).toBe('time');
     expect(spy).not.toHaveBeenCalled();
   });
 

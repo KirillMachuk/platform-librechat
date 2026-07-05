@@ -48,6 +48,12 @@ describe('concludeToFinalize', () => {
     expect(concludeToFinalize('complete')).toBe('completed');
     expect(concludeToFinalize(null)).toBe('completed');
   });
+
+  it('maps the soft TIME gate to completed — a model-written report in time, NOT a partial (A1)', () => {
+    // The time gate reserves the tail of the wall-clock for synthesis, so the model
+    // writes a full report; only the HARD watchdog (run wrapper) yields a 'time' partial.
+    expect(concludeToFinalize('time')).toBe('completed');
+  });
 });
 
 describe('buildFallbackReport', () => {

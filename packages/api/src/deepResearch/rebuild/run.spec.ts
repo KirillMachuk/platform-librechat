@@ -131,7 +131,7 @@ describe('runDeepResearch', () => {
         runId: 'r',
         userId: 'u',
         mode: 'deep',
-        budget: { wallClockMs: 900_000, tokenBudget: 0, budgetGateRatio: 0.75 },
+        budget: { wallClockMs: 900_000, tokenBudget: 0, budgetGateRatio: 0.75, timeGateRatio: 0 },
       },
       wallClockMs: 60_000,
       recursionLimit: 5,

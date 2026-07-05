@@ -89,6 +89,8 @@ export interface DeepResearchGraphDeps {
   now: string;
   /** Per-run spotlighting nonce for fencing untrusted external material (H5). */
   nonce: string;
+  /** Injected wall-clock reader for the supervisor's time gate (A1); defaults to `Date.now`. */
+  clock?: () => number;
   checkpointer?: BaseCheckpointSaver;
 }
 
@@ -102,6 +104,7 @@ export function createDeepResearchGraph(deps: DeepResearchGraphDeps) {
         tier: deps.tier,
         now: deps.now,
         nonce: deps.nonce,
+        clock: deps.clock,
       }),
       researcher: createResearcherNode({
         model: deps.workerModel,

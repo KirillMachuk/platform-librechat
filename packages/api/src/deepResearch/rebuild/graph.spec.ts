@@ -53,7 +53,7 @@ function runConfig(tokenBudget: number, budgetGateRatio = 0.75): RunnableConfig 
     runId: 'run-1',
     userId: 'user-1',
     mode: 'deep',
-    budget: { wallClockMs: 900_000, tokenBudget, budgetGateRatio },
+    budget: { wallClockMs: 900_000, tokenBudget, budgetGateRatio, timeGateRatio: 0.68 },
   };
   return { configurable, recursionLimit: 256 };
 }
@@ -99,6 +99,38 @@ describe('buildDeepResearchGraph (termination guarantees)', () => {
     expect(result.finalizeReason).toBe('budget');
     expect(result.findings.length).toBeGreaterThanOrEqual(1);
     expect(result.findings.length).toBeLessThanOrEqual(3);
+  });
+
+  it('soft TIME gate forces REPORT and the model still writes it — completed, not partial (A1)', async () => {
+    const graph = buildDeepResearchGraph({
+      scope: scopeNode(),
+      supervisor: createSupervisorNode({
+        model: new FakeListChatModel({ responses: ['{"action":"RESEARCH","subQuestion":"q"}'] }), // would keep researching
+        tier: TIER,
+        now: NOW,
+        nonce: NONCE,
+        clock: () => 5_000, // "current time" is already past the soft deadline below
+      }),
+      researcher: stubResearcher(1_000),
+      report: stubReport,
+    });
+
+    const configurable: DeepResearchConfigurable = {
+      runId: 'run-1',
+      userId: 'user-1',
+      mode: 'deep',
+      budget: { wallClockMs: 900_000, tokenBudget: 0, budgetGateRatio: 1, timeGateRatio: 0.68 },
+      softDeadlineMs: 1_000,
+    };
+    const result = await graph.invoke(
+      { messages: [new HumanMessage('go')] },
+      { configurable, recursionLimit: 256 },
+    );
+
+    expect(result.concludeReason).toBe('time'); // the wall-clock synthesis-reserve gate fired
+    expect(result.findings).toHaveLength(0); // ...before ANY researcher was dispatched
+    expect(result.finalReport).toContain('ОТЧЁТ'); // the model still wrote the report
+    expect(result.finalizeReason).toBe('completed'); // a healthy completion, NOT a "partial: time"
   });
 
   it('round cap forces REPORT even with a huge budget and a never-concluding model', async () => {

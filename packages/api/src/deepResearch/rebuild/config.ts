@@ -18,6 +18,12 @@ export interface DeepResearchTier extends ResolvedDeepResearchMode {
    * routes to REPORT, reserving the remainder for synthesis (§4).
    */
   budgetGateRatio: number;
+  /**
+   * Fraction of the wall-clock at which SUPERVISOR stops gathering and routes to
+   * REPORT, reserving the rest for synthesis (A1 — the time analogue of
+   * `budgetGateRatio`, so a slow run still ends with a model-written report).
+   */
+  timeGateRatio: number;
   /** Max characters of one researcher digest — bounds outer-state growth (§4). */
   digestCap: number;
 }
@@ -26,10 +32,13 @@ export interface DeepResearchTier extends ResolvedDeepResearchMode {
  * New graph-specific per-tier defaults (not yet admin-exposed; promoted to
  * config in Phase 3 tuning). Budgets/models stay in the existing config.
  */
-const TIER_EXTRAS: Record<DeepResearchMode, { budgetGateRatio: number; digestCap: number }> = {
-  economy: { budgetGateRatio: 0.7, digestCap: 800 },
-  balanced: { budgetGateRatio: 0.72, digestCap: 1200 },
-  deep: { budgetGateRatio: 0.75, digestCap: 2000 },
+const TIER_EXTRAS: Record<
+  DeepResearchMode,
+  { budgetGateRatio: number; timeGateRatio: number; digestCap: number }
+> = {
+  economy: { budgetGateRatio: 0.7, timeGateRatio: 0.65, digestCap: 800 },
+  balanced: { budgetGateRatio: 0.72, timeGateRatio: 0.68, digestCap: 1200 },
+  deep: { budgetGateRatio: 0.75, timeGateRatio: 0.7, digestCap: 2000 },
 };
 
 /** Resolves the active tier (models/limits from config) plus the new graph knobs. */
@@ -40,6 +49,7 @@ export function resolveDeepResearchTier(config?: TDeepResearchConfig): DeepResea
     ...base,
     compressModel: base.workerModel,
     budgetGateRatio: extras.budgetGateRatio,
+    timeGateRatio: extras.timeGateRatio,
     digestCap: extras.digestCap,
   };
 }
@@ -50,6 +60,7 @@ export function tierToRunBudget(tier: DeepResearchTier): DeepResearchRunBudget {
     wallClockMs: Math.max(1, tier.wallClockMinutes) * 60_000,
     tokenBudget: tier.perRunTokenBudget,
     budgetGateRatio: tier.budgetGateRatio,
+    timeGateRatio: tier.timeGateRatio,
   };
 }
 

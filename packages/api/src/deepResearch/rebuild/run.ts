@@ -121,6 +121,16 @@ export async function runDeepResearch(
   const signals = [signal, timeoutController.signal].filter((s): s is AbortSignal => Boolean(s));
   const combinedSignal = signals.length > 0 ? AbortSignal.any(signals) : undefined;
 
+  // A1: absolute deadline at which SUPERVISOR stops gathering and routes to REPORT,
+  // reserving the rest of the wall-clock for synthesis — so the model writes the
+  // report in time instead of the hard watchdog killing the run into a fallback.
+  // Off (undefined) unless the ratio is strictly in (0, 1).
+  const timeGateRatio = configurable.budget?.timeGateRatio ?? 0;
+  const softDeadlineMs =
+    wallClockMs > 0 && timeGateRatio > 0 && timeGateRatio < 1
+      ? Date.now() + Math.floor(wallClockMs * timeGateRatio)
+      : undefined;
+
   const streamMode: ('values' | 'updates' | 'messages')[] = ['values'];
   if (onProgress) {
     streamMode.push('updates');
@@ -130,7 +140,7 @@ export async function runDeepResearch(
   }
 
   const config = {
-    configurable: { ...configurable, thread_id: configurable.runId },
+    configurable: { ...configurable, thread_id: configurable.runId, softDeadlineMs },
     signal: combinedSignal,
     recursionLimit: params.recursionLimit ?? DEFAULT_RECURSION_LIMIT,
     streamMode,
