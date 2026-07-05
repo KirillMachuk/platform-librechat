@@ -1,6 +1,6 @@
 const { randomUUID } = require('node:crypto');
 const { Constants } = require('librechat-data-provider');
-const { HumanMessage } = require('@langchain/core/messages');
+const { HumanMessage, SystemMessage } = require('@langchain/core/messages');
 const { Providers, getChatModelClass, createSearchTool } = require('@librechat/agents');
 const {
   sendEvent,
@@ -63,12 +63,21 @@ function withPartialBanner(text, finalizeReason) {
 const RESEARCH_IMPERATIVE =
   /^(?:пожалуйста,?\s+)?(?:проведи|сделай|выполни|подготовь|составь|собери|дай|найди|изучи|исследуй|проанализируй|разбери)(?:те)?\s+/iu;
 
+/** Capitalize the first code point and truncate to 60 code points, surrogate-safe — a cut
+ *  never splits an emoji/astral char into a lone surrogate that renders as a "�" glyph. */
+function capitalizeAndTruncateTitle(topic) {
+  const chars = [...topic];
+  const titled = chars[0].toUpperCase() + chars.slice(1).join('');
+  const out = [...titled];
+  return out.length > 60 ? `${out.slice(0, 57).join('')}…` : titled;
+}
+
 /**
- * Deterministic chat title from the research request (M9/P6) — a capitalized TOPIC,
- * never "New Chat" and never the raw lowercase imperative query. DR bypasses the
- * standard model title generation (its request.js branch returns early), so this is
- * the only title; it is the user's own text shown back to them, never egressed, so a
- * masked/raw request is fine here.
+ * Deterministic FALLBACK chat title from the research request (M9/P6) — a capitalized
+ * TOPIC, never "New Chat". Used only when the model-generated title
+ * ({@link resolveDeepResearchTitle}) is unavailable; a `^`-anchored imperative strip is
+ * fragile for arbitrary phrasings, which is why the model title is primary. Shown to the
+ * user, never egressed, so a masked/raw request is fine here.
  */
 function buildDeepResearchTitle(text) {
   const normalized = (text ?? '').trim().replace(/\s+/g, ' ');
@@ -76,12 +85,66 @@ function buildDeepResearchTitle(text) {
   if (!topic) {
     return 'Глубокое исследование';
   }
-  // Slice by code points, not UTF-16 units, so a truncation can't split a surrogate
-  // pair (emoji/astral char) into a lone surrogate that renders as a "�" glyph.
-  const chars = [...topic];
-  const titled = chars[0].toUpperCase() + chars.slice(1).join('');
-  const out = [...titled];
-  return out.length > 60 ? `${out.slice(0, 57).join('')}…` : titled;
+  return capitalizeAndTruncateTitle(topic);
+}
+
+/** Anonymizer PII placeholders (PERSON_1, PHONE_2, EMAIL_1…) that must never surface in a title. */
+const TITLE_PII_PLACEHOLDER = /\b[A-ZА-Я][A-ZА-Я]{2,}_\d+\b/g;
+
+/** Normalizes a model-proposed title: first non-empty line, no quotes/markdown/placeholders/trailing dot. */
+function cleanModelTitle(raw) {
+  const firstLine =
+    String(raw ?? '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean) ?? '';
+  return firstLine
+    .replace(TITLE_PII_PLACEHOLDER, '')
+    .replace(/[«»"'`]/g, '')
+    .replace(/^#+\s*/, '')
+    .replace(/\*+/g, '')
+    .replace(/[.。]+\s*$/u, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Flattens a LangChain message `content` (string or content-part array) to plain text. */
+function extractMessageText(content) {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return content.map((part) => (typeof part === 'string' ? part : (part?.text ?? ''))).join(' ');
+  }
+  return '';
+}
+
+/**
+ * DR chat title: a short TOPIC the lead model distills from the (masked) request, so any
+ * phrasing ("Меня зовут…, сравни X и Y") still yields a clean subject line — and because
+ * it runs on the MASKED question, the user's PII never lands in the title/sidebar. Reuses
+ * the already-built, cached lead model. Fail-open: any error or empty result falls back to
+ * the deterministic {@link buildDeepResearchTitle} heuristic.
+ */
+async function resolveDeepResearchTitle({ buildModel, leadModelSlug, topicText, fallbackText }) {
+  const source = (topicText ?? '').trim();
+  if (!source) {
+    return buildDeepResearchTitle(fallbackText);
+  }
+  try {
+    const model = await buildModel(leadModelSlug);
+    const response = await model.invoke([
+      new SystemMessage(
+        'Сформулируй короткий заголовок ТЕМЫ исследования на русском: 3–7 слов, именительный падеж, без кавычек, без точки в конце, это тема, а не команда. Не включай имена людей, телефоны, e-mail и служебные метки вида PERSON_1. Верни только заголовок.',
+      ),
+      new HumanMessage(`Запрос пользователя: ${source}`),
+    ]);
+    const cleaned = cleanModelTitle(extractMessageText(response?.content));
+    return cleaned ? capitalizeAndTruncateTitle(cleaned) : buildDeepResearchTitle(fallbackText);
+  } catch (error) {
+    logger.warn('[deepResearchRun] title generation failed; using heuristic fallback', error);
+    return buildDeepResearchTitle(fallbackText);
+  }
 }
 
 /** Soft per-user cap on concurrent active generations gating a new DR start (M1). */
@@ -519,6 +582,17 @@ async function runNewDeepResearch(params) {
     return result;
   }
 
+  // P6+: the chat title is a model-distilled TOPIC of the (masked) request — robust to
+  // any phrasing and PII-free (runs on the masked question). Computed once here (after the
+  // abort early-return, so a Stop skips it) and reused for both the persisted row and the
+  // final event. Fail-open to the deterministic heuristic.
+  const deepResearchTitle = await resolveDeepResearchTitle({
+    buildModel,
+    leadModelSlug,
+    topicText: sovereign ? sovereign.maskedQuestion : text,
+    fallbackText: text,
+  });
+
   // M9/M10: a NEW DR chat has no persisted Conversation row yet, so the sidebar would
   // show nothing until reload and the final event would carry an empty conversation.
   // Persist the row (with a deterministic title, never "New Chat") and build the final
@@ -529,7 +603,7 @@ async function runNewDeepResearch(params) {
     if (!conversation) {
       const saved = await saveConvo(
         reqCtx,
-        { conversationId, endpoint, model: leadModelSlug, title: buildDeepResearchTitle(text) },
+        { conversationId, endpoint, model: leadModelSlug, title: deepResearchTitle },
         { context: 'deepResearchRun - persist new conversation' },
       );
       conversation = saved && saved.conversationId ? saved : null;
@@ -542,7 +616,7 @@ async function runNewDeepResearch(params) {
   }
   const finalConversation = conversation
     ? { ...conversation, conversationId }
-    : { conversationId, endpoint, model: leadModelSlug, title: buildDeepResearchTitle(text) };
+    : { conversationId, endpoint, model: leadModelSlug, title: deepResearchTitle };
 
   const finalEvent = {
     final: true,
