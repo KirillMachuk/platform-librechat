@@ -12,6 +12,7 @@ import { fontSizeAtom } from '~/store/fontSize';
 import SiblingSwitch from './SiblingSwitch';
 import MultiMessage from './MultiMessage';
 import HoverButtons from './HoverButtons';
+import Files from './Content/Files';
 import SubRow from './SubRow';
 import store from '~/store';
 
@@ -156,6 +157,11 @@ export default function Message(props: TMessageProps) {
                     isLatestMessage={messageId === latestMessageId}
                     content={message.content as Array<TMessageContentParts | undefined>}
                   />
+                  {/* Assistant-side file artifacts (e.g. the Deep Research report PDF):
+                      Container renders message.files for USER messages only, so without
+                      this the assistant's attached files never appear. Images excluded —
+                      generated images render through content parts/attachments. */}
+                  {isCreatedByUser !== true && <Files message={message} nonImageOnly />}
                 </div>
                 {isLast && isSubmitting ? (
                   <div className="mt-1 h-[31px] bg-transparent" />

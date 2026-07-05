@@ -4,10 +4,19 @@ import FileContainer from '~/components/Chat/Input/Files/FileContainer';
 import FilePreviewDialog from './FilePreviewDialog';
 import Image from './Image';
 
-const Files = ({ message }: { message?: TMessage }) => {
+const Files = ({
+  message,
+  nonImageOnly = false,
+}: {
+  message?: TMessage;
+  nonImageOnly?: boolean;
+}) => {
   const imageFiles = useMemo(() => {
+    if (nonImageOnly) {
+      return [];
+    }
     return message?.files?.filter((file) => file.type?.startsWith('image/')) || [];
-  }, [message?.files]);
+  }, [message?.files, nonImageOnly]);
 
   const otherFiles = useMemo(() => {
     return message?.files?.filter((file) => !file.type?.startsWith('image/')) || [];

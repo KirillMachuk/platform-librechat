@@ -11,6 +11,7 @@ import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
 import SiblingSwitch from '~/components/Chat/Messages/SiblingSwitch';
 import HoverButtons from '~/components/Chat/Messages/HoverButtons';
 import MessageIcon from '~/components/Chat/Messages/MessageIcon';
+import Files from '~/components/Chat/Messages/Content/Files';
 import SubRow from '~/components/Chat/Messages/SubRow';
 import { fontSizeAtom } from '~/store/fontSize';
 import store from '~/store';
@@ -80,6 +81,7 @@ function areContentRenderPropsEqual(prev: ContentRenderProps, next: ContentRende
     prevMsg.endpoint === nextMsg.endpoint &&
     prevMsg.iconURL === nextMsg.iconURL &&
     prevMsg.feedback?.rating === nextMsg.feedback?.rating &&
+    (prevMsg.files?.length ?? 0) === (nextMsg.files?.length ?? 0) &&
     (prevMsg.attachments?.length ?? 0) === (nextMsg.attachments?.length ?? 0) &&
     (prevMsg.manualSkills?.length ?? 0) === (nextMsg.manualSkills?.length ?? 0) &&
     (prevMsg.alwaysAppliedSkills?.length ?? 0) === (nextMsg.alwaysAppliedSkills?.length ?? 0)
@@ -230,6 +232,11 @@ const ContentRender = memo(function ContentRender({
               conversationId={conversation?.conversationId}
               content={msg.content as Array<TMessageContentParts | undefined>}
             />
+            {/* Assistant-side file artifacts (e.g. the Deep Research report PDF):
+                Container renders message.files for USER messages only, so without this
+                the assistant's attached files never appear. Images excluded — generated
+                images render through content parts/attachments. */}
+            {msg.isCreatedByUser !== true && <Files message={msg} nonImageOnly />}
           </div>
           {hasNoChildren && isSubmitting ? (
             <PlaceholderRow />
