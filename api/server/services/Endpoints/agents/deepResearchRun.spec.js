@@ -13,6 +13,7 @@ const mockModelCtorArgs = [];
 const mockInvokeArgs = [];
 let mockTitleContent = 'Сравнение CRM-систем';
 let mockTitleThrows = false;
+let mockClarifyContent = '{"action":"PROCEED","questions":[]}';
 class mockFakeModel {
   constructor(opts) {
     mockModelCtorArgs.push(opts);
@@ -21,6 +22,10 @@ class mockFakeModel {
     mockInvokeArgs.push(messages);
     if (mockTitleThrows) {
       throw new Error('title model unavailable');
+    }
+    const system = messages?.[0]?.content;
+    if (typeof system === 'string' && system.includes('модуль УТОЧНЕНИЯ')) {
+      return { content: mockClarifyContent };
     }
     return { content: mockTitleContent };
   }
@@ -70,6 +75,29 @@ jest.mock('@librechat/api', () => ({
   compressModelFor: jest.fn(() => 'compress-model'),
   reportToPdfBuffer: (...a) => mockReportToPdfBuffer(...a),
   getStorageMetadata: jest.fn(() => ({})),
+  // D2 clarify helpers — faithful mirrors of the real clarify.ts (unit-tested there); the
+  // system prompt carries the 'модуль УТОЧНЕНИЯ' marker the fake model branches on.
+  buildClarifyPrompt: ({ now }) => `Ты — модуль УТОЧНЕНИЯ. ${now}`,
+  parseClarifyOutput: (text) => {
+    try {
+      const parsed = JSON.parse(text);
+      const questions = Array.isArray(parsed.questions)
+        ? parsed.questions.filter((q) => typeof q === 'string' && q.trim()).slice(0, 3)
+        : [];
+      return parsed.action === 'CLARIFY' && questions.length
+        ? { action: 'CLARIFY', questions }
+        : { action: 'PROCEED', questions: [] };
+    } catch {
+      return { action: 'PROCEED', questions: [] };
+    }
+  },
+  formatClarifyMessage: (questions) =>
+    `**Уточните, пожалуйста, детали исследования:**\n${questions
+      .map((q, i) => `${i + 1}. ${q}`)
+      .join('\n')}\n\nОтветьте сообщением.`,
+  isClarifyMessage: (text) =>
+    typeof text === 'string' &&
+    text.trimStart().startsWith('**Уточните, пожалуйста, детали исследования:**'),
 }));
 
 jest.mock('@librechat/data-schemas', () => ({
@@ -89,6 +117,7 @@ jest.mock('~/models', () => ({
   createFile: (...a) => mockCreateFile(...a),
   getFiles: jest.fn(async () => []),
   getConvo: jest.fn(async () => ({ conversationId: 'c1', title: 't' })),
+  getMessages: jest.fn(async () => []),
   saveConvo: jest.fn(async () => ({ conversationId: 'c1' })),
   saveMessage: jest.fn(async (ctx, msg) => {
     mockSavedMessages.push(msg);
@@ -107,7 +136,11 @@ const { runNewDeepResearch, buildDeepResearchTitle } = require('./deepResearchRu
 
 function baseParams(text) {
   return {
-    req: { config: { fileStrategy: 'local' }, user: { role: 'user' }, body: {} },
+    req: {
+      config: { fileStrategy: 'local', deepResearch: { clarify: false } },
+      user: { role: 'user' },
+      body: {},
+    },
     res: {},
     streamId: 'stream-1',
     signal: undefined,
@@ -132,6 +165,7 @@ beforeEach(() => {
   mockInvokeArgs.length = 0;
   mockTitleContent = 'Сравнение CRM-систем';
   mockTitleThrows = false;
+  mockClarifyContent = '{"action":"PROCEED","questions":[]}';
   mockInitializeCustom.mockResolvedValue({
     llmConfig: { apiKey: 'sk-client', provider: 'openAI' },
     configOptions: {
@@ -338,5 +372,85 @@ describe('runNewDeepResearch — D4 report PDF artifact', () => {
 
     expect(mockReportToPdfBuffer).not.toHaveBeenCalled();
     expect(mockSavedMessages.find((m) => m.messageId === 'r1').files).toBeUndefined();
+  });
+});
+
+describe('runNewDeepResearch — D2 clarify (two-turn)', () => {
+  const models = require('~/models');
+
+  function clarifyParams(text) {
+    const p = baseParams(text);
+    p.req.config.deepResearch = { clarify: true };
+    return p;
+  }
+
+  it('turn 1: an under-specified request asks clarifying questions and does NOT run the graph', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockClarifyContent = '{"action":"CLARIFY","questions":["Какой масштаб бизнеса?","Бюджет?"]}';
+
+    await runNewDeepResearch(clarifyParams('посоветуй CRM'));
+
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.text).toContain('Уточните, пожалуйста, детали исследования');
+    expect(msg.text).toContain('1. Какой масштаб бизнеса?');
+    expect(msg.unfinished).toBe(false);
+  });
+
+  it('turn 1: a specific-enough request PROCEEDs straight to the graph', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockClarifyContent = '{"action":"PROCEED","questions":[]}';
+
+    await runNewDeepResearch(clarifyParams('сравни Битрикс24 и AmoCRM по цене за 2026 год'));
+
+    expect(mockRunDeepResearch).toHaveBeenCalledTimes(1);
+  });
+
+  it('turn 1: the sovereign clarify message is restored (de-masked) before saving', async () => {
+    mockStartSovereignSession.mockResolvedValue({
+      maskedQuestion: 'посоветуй CRM для [PERSON_1]',
+      passthroughHeaders: {},
+      maskContent: jest.fn(async (t) => t),
+      restore: jest.fn(async (t) => t.replace('[PERSON_1]', 'Иван')),
+      drop: jest.fn(async () => {}),
+    });
+    mockClarifyContent = '{"action":"CLARIFY","questions":["Для [PERSON_1]: какой бюджет?"]}';
+
+    await runNewDeepResearch(clarifyParams('посоветуй CRM'));
+
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.text).toContain('Иван');
+    expect(msg.text).not.toContain('[PERSON_1]');
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+  });
+
+  it('turn 2: a reply to a clarify prompt researches the whole dialogue and skips a 2nd clarify', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getMessages.mockResolvedValueOnce([
+      { messageId: 'q0', parentMessageId: null, text: 'посоветуй CRM' },
+      {
+        messageId: 'p1',
+        parentMessageId: 'q0',
+        text: '**Уточните, пожалуйста, детали исследования:**\n1. Масштаб?',
+      },
+    ]);
+    mockClarifyContent = '{"action":"CLARIFY","questions":["не должно быть использовано"]}';
+
+    await runNewDeepResearch(clarifyParams('малый бизнес, до 10 человек'));
+
+    expect(mockRunDeepResearch).toHaveBeenCalledTimes(1);
+    const input = mockRunDeepResearch.mock.calls[0][0].input.messages[0].content;
+    expect(input).toContain('Диалог уточнения');
+    expect(input).toContain('посоветуй CRM');
+    expect(input).toContain('малый бизнес');
+  });
+
+  it('clarify flag off → no clarify check, the graph runs even for a vague request', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockClarifyContent = '{"action":"CLARIFY","questions":["Q?"]}';
+
+    await runNewDeepResearch(baseParams('посоветуй что-нибудь')); // baseParams has clarify:false
+
+    expect(mockRunDeepResearch).toHaveBeenCalledTimes(1);
   });
 });

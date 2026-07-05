@@ -17,6 +17,10 @@ const {
   createDeepResearchGraph,
   selectChatFileSearchInputs,
   startSovereignSession,
+  buildClarifyPrompt,
+  parseClarifyOutput,
+  formatClarifyMessage,
+  isClarifyMessage,
   reportToPdfBuffer,
   getStorageMetadata,
   leadModelFor,
@@ -33,6 +37,7 @@ const {
   createFile,
   getFiles,
   getConvo,
+  getMessages,
   saveConvo,
   saveMessage,
   spendTokens,
@@ -239,6 +244,64 @@ async function attachReportPdf({ req, responseMessage, reportMarkdown, title, fi
       '[deepResearchRun] failed to attach report PDF; sending report without file',
       error,
     );
+  }
+}
+
+/**
+ * D2 turn 2: if this message replies to a clarify prompt, assemble the whole dialogue
+ * (original request → clarify questions → this answer) so the research uses the full
+ * context. Returns null when it is NOT a clarify continuation, or on any load error
+ * (fail-open → the runner treats the message as a fresh request).
+ */
+async function buildClarifyContinuation({ userId, conversationId, parentMessageId, answer }) {
+  if (!parentMessageId || !conversationId) {
+    return null;
+  }
+  try {
+    const messages = await getMessages({ conversationId, user: userId });
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return null;
+    }
+    const byId = new Map(messages.map((m) => [m.messageId, m]));
+    const parent = byId.get(parentMessageId);
+    if (!parent || !isClarifyMessage(parent.text ?? '')) {
+      return null;
+    }
+    const original = parent.parentMessageId ? byId.get(parent.parentMessageId) : null;
+    const originalText = (original?.text ?? '').trim();
+    return [
+      'Диалог уточнения задачи исследования.',
+      originalText ? `\nИсходный запрос пользователя:\n${originalText}` : '',
+      `\nУточняющие вопросы:\n${(parent.text ?? '').trim()}`,
+      `\nОтвет пользователя:\n${(answer ?? '').trim()}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  } catch (error) {
+    logger.warn(
+      '[deepResearchRun] failed to load clarify parent; treating as a fresh request',
+      error,
+    );
+    return null;
+  }
+}
+
+/**
+ * D2 turn 1: ask the lead model whether the request is specific enough to research now or
+ * needs clarifying questions. Runs on the MASKED question. Fail-open: any error → PROCEED
+ * (research starts rather than the user being nagged with questions).
+ */
+async function runClarifyCheck({ buildModel, leadModelSlug, question, now }) {
+  try {
+    const model = await buildModel(leadModelSlug);
+    const response = await model.invoke([
+      new SystemMessage(buildClarifyPrompt({ now })),
+      new HumanMessage(question),
+    ]);
+    return parseClarifyOutput(extractMessageText(response?.content));
+  } catch (error) {
+    logger.warn('[deepResearchRun] clarify check failed; proceeding to research', error);
+    return { action: 'PROCEED', questions: [] };
   }
 }
 
@@ -480,6 +543,16 @@ async function runNewDeepResearch(params) {
       throw new DeepResearchCapError();
     }
 
+    // D2: when this message replies to a clarify prompt (turn 2), research the WHOLE dialogue
+    // (original request → questions → answer); otherwise research the raw request (turn 1).
+    // Fail-open: a parent-load failure → the raw request. `researchInput` is what gets masked.
+    const clarifyEnabled = req.config?.deepResearch?.clarify !== false;
+    const continuation = clarifyEnabled
+      ? await buildClarifyContinuation({ userId, conversationId, parentMessageId, answer: text })
+      : null;
+    const isClarifyContinuation = continuation != null;
+    const researchInput = continuation ?? text ?? '';
+
     // Track B (sovereign DR): mask the user's question ONCE, then run the graph in anonymizer
     // passthrough so ONLY user data (question + documents) is masked — never the public web.
     // Best-effort: any failure leaves `sovereign` null and DR runs the legacy full-masking path
@@ -497,72 +570,99 @@ async function runNewDeepResearch(params) {
       connection,
       runId,
       passthroughToken: process.env.ANON_PASSTHROUGH_TOKEN || '',
-      question: text ?? '',
+      question: researchInput,
       signal,
       logger,
     });
     passthroughHeaders = sovereign?.passthroughHeaders ?? null;
-    // In passthrough the anonymizer won't mask file_search output, so we mask the user's document
-    // text ourselves. If masking fails we drop the chunk (never egress raw PII), not the whole run.
-    const maskFileSearch = sovereign
-      ? async (content) => {
-          try {
-            return await sovereign.maskContent(content);
-          } catch (error) {
-            logger.warn(
-              '[deepResearchRun] file_search masking failed; dropping chunk from context',
-              error,
-            );
-            return 'Результаты поиска по документам недоступны (не удалось безопасно обезличить).';
+
+    // D2 turn 1: if the request is under-specified for a targeted recommendation (and this is
+    // NOT a reply to a clarify prompt), ask up to 3 clarifying questions as ONE assistant
+    // message instead of researching. The questions flow through the SAME finalize tail below
+    // (restore de-masks, save, title, final event) — no separate path.
+    if (clarifyEnabled && !isClarifyContinuation) {
+      const decision = await runClarifyCheck({
+        buildModel,
+        leadModelSlug,
+        question: sovereign ? sovereign.maskedQuestion : researchInput,
+        now: new Date().toISOString(),
+      });
+      if (decision.action === 'CLARIFY') {
+        result = {
+          finalReport: formatClarifyMessage(decision.questions),
+          finalizeReason: 'clarify',
+          usage: { input: 0, output: 0, total: 0 },
+          findings: [],
+        };
+      }
+    }
+
+    // Skip the (expensive) graph build + run when clarify already produced the turn's message.
+    if (!result) {
+      // In passthrough the anonymizer won't mask file_search output, so we mask the user's document
+      // text ourselves. If masking fails we drop the chunk (never egress raw PII), not the whole run.
+      const maskFileSearch = sovereign
+        ? async (content) => {
+            try {
+              return await sovereign.maskContent(content);
+            } catch (error) {
+              logger.warn(
+                '[deepResearchRun] file_search masking failed; dropping chunk from context',
+                error,
+              );
+              return 'Результаты поиска по документам недоступны (не удалось безопасно обезличить).';
+            }
           }
-        }
-      : undefined;
+        : undefined;
 
-    const [leadModel, workerModel, compressModel, reportModel] = await Promise.all([
-      buildModel(leadModelSlug),
-      buildModel(workerModelFor(tier, conversationModel)),
-      buildModel(compressModelFor(tier, conversationModel)),
-      buildModel(reportModelFor(tier, conversationModel)),
-    ]);
+      const [leadModel, workerModel, compressModel, reportModel] = await Promise.all([
+        buildModel(leadModelSlug),
+        buildModel(workerModelFor(tier, conversationModel)),
+        buildModel(compressModelFor(tier, conversationModel)),
+        buildModel(reportModelFor(tier, conversationModel)),
+      ]);
 
-    const [fileSearchTool, webSearchTool] = await Promise.all([
-      buildChatFileSearchTool({ req, userId, conversationId, transformContent: maskFileSearch }),
-      buildWebSearchTool({ req, userId }),
-    ]);
-    const tools = [fileSearchTool, webSearchTool].filter(Boolean);
+      const [fileSearchTool, webSearchTool] = await Promise.all([
+        buildChatFileSearchTool({ req, userId, conversationId, transformContent: maskFileSearch }),
+        buildWebSearchTool({ req, userId }),
+      ]);
+      const tools = [fileSearchTool, webSearchTool].filter(Boolean);
 
-    const graph = createDeepResearchGraph({
-      leadModel,
-      workerModel,
-      compressModel,
-      reportModel,
-      tools,
-      tier,
-      now: new Date().toISOString(),
-      // Per-run spotlighting nonce: fences untrusted web/RAG/tool material so injected
-      // page content cannot escape the data fences into instruction space (H5).
-      nonce: randomUUID(),
-    });
+      const graph = createDeepResearchGraph({
+        leadModel,
+        workerModel,
+        compressModel,
+        reportModel,
+        tools,
+        tier,
+        now: new Date().toISOString(),
+        // Per-run spotlighting nonce: fences untrusted web/RAG/tool material so injected
+        // page content cannot escape the data fences into instruction space (H5).
+        nonce: randomUUID(),
+      });
 
-    result = await runDeepResearch({
-      graph,
-      // Track B: the graph sees the MASKED question (sovereign) or the raw text (legacy).
-      input: { messages: [new HumanMessage(sovereign ? sovereign.maskedQuestion : (text ?? ''))] },
-      configurable: {
-        runId,
-        userId,
-        conversationId,
-        mode: tier.name,
-        budget: tierToRunBudget(tier),
-      },
-      signal,
-      wallClockMs: Math.max(1, tier.wallClockMinutes) * 60_000,
-      // v1: progress is logged; rendered UI progress + token streaming ship after lab SSE validation.
-      onProgress: (event) =>
-        logger.info(
-          `[deepResearchRun] ${event.type}${event.subQuestion ? `: ${event.subQuestion}` : ''}`,
-        ),
-    });
+      result = await runDeepResearch({
+        graph,
+        // Track B: the graph sees the MASKED question (sovereign) or the raw text (legacy).
+        input: {
+          messages: [new HumanMessage(sovereign ? sovereign.maskedQuestion : researchInput)],
+        },
+        configurable: {
+          runId,
+          userId,
+          conversationId,
+          mode: tier.name,
+          budget: tierToRunBudget(tier),
+        },
+        signal,
+        wallClockMs: Math.max(1, tier.wallClockMinutes) * 60_000,
+        // v1: progress is logged; rendered UI progress + token streaming ship after lab SSE validation.
+        onProgress: (event) =>
+          logger.info(
+            `[deepResearchRun] ${event.type}${event.subQuestion ? `: ${event.subQuestion}` : ''}`,
+          ),
+      });
+    }
   } catch (error) {
     if (error instanceof DeepResearchCapError) {
       logger.warn(
@@ -592,8 +692,9 @@ async function runNewDeepResearch(params) {
   }
 
   // 'completed' is a full report; 'limit' is a deliberate, non-error refusal (concurrency
-  // cap) whose message stands alone — neither should get the frontend "unfinished" banner.
-  const unfinished = !['completed', 'limit'].includes(result.finalizeReason);
+  // cap); 'clarify' is a clarifying-questions message (D2) — each stands alone and must NOT
+  // get the frontend "unfinished" banner.
+  const unfinished = !['completed', 'limit', 'clarify'].includes(result.finalizeReason);
   // Track B: de-mask the final report via the server-side run map (placeholders → real PII), then
   // free the map. restore never throws (worst case: placeholders remain — safe, not a leak); both
   // run for EVERY outcome incl. abort, so the partial report saved below is de-masked too.
