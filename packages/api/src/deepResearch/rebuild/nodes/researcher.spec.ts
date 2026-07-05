@@ -7,6 +7,7 @@ import type { BaseMessage } from '@langchain/core/messages';
 import type { DeepResearchState, DeepResearchFinding } from '../state';
 import {
   researchOne,
+  isContentUrl,
   extractSources,
   runResearchLoop,
   compressResearch,
@@ -248,6 +249,32 @@ describe('compressResearch', () => {
   });
 });
 
+describe('isContentUrl (C1 source hygiene)', () => {
+  it('keeps real articles, vendor sites and PDFs', () => {
+    for (const url of [
+      'https://www.tadviser.ru/index.php/Статья:CRM',
+      'https://www.cnews.ru/reviews/crm_2025',
+      'https://www.bitrix24.ru/prices/',
+      'https://static.gov.ru/reports/otchet-2024.pdf',
+    ]) {
+      expect(isContentUrl(url)).toBe(true);
+    }
+  });
+
+  it('drops images/assets, trackers/pixels and redirect hops', () => {
+    for (const url of [
+      'https://habrastorage.org/webt/ab/cd/pic.png',
+      'https://leonardo.osnova.io/photo.jpg',
+      'https://cdn.site.ru/bundle.min.js',
+      'https://www.facebook.com/tr?id=123',
+      'https://mc.yandex.ru/watch/456',
+      'https://api.vc.ru/v2.8/redirect?to=https://x.ru',
+    ]) {
+      expect(isContentUrl(url)).toBe(false);
+    }
+  });
+});
+
 describe('extractSources', () => {
   it('extracts and de-duplicates source URLs, trimming trailing punctuation', () => {
     expect(extractSources('см. https://cbr.ru/a и https://nalog.gov.ru/b.')).toEqual([
@@ -255,6 +282,19 @@ describe('extractSources', () => {
       'https://nalog.gov.ru/b',
     ]);
     expect(extractSources('https://x.ru/1\n\n---\n\nhttps://x.ru/1')).toEqual(['https://x.ru/1']);
+  });
+
+  it('filters out asset/tracker/redirect noise, keeping only content URLs (C1)', () => {
+    const gathered =
+      'Рейтинг: https://www.tadviser.ru/crm ' +
+      'картинка https://habrastorage.org/img/pic.png ' +
+      'пиксель https://www.facebook.com/tr?id=1 ' +
+      'редирект https://api.vc.ru/v2.8/redirect?to=x ' +
+      'ещё https://www.cnews.ru/review.';
+    expect(extractSources(gathered)).toEqual([
+      'https://www.tadviser.ru/crm',
+      'https://www.cnews.ru/review',
+    ]);
   });
 });
 

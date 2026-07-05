@@ -32,6 +32,15 @@ const MAX_TOOL_CALLS_PER_TURN = 5;
 const TOOL_TIMEOUT_MS = 60_000;
 const MAX_SOURCES = 50;
 const SOURCE_URL = /https?:\/\/[^\s)"'<>\]]+/g;
+/** Asset/media/font/style/script extensions — never article content (C1). */
+const NON_CONTENT_EXT =
+  /\.(?:jpe?g|png|gif|svg|webp|avif|ico|bmp|mp4|webm|mov|mp3|wav|css|js|mjs|woff2?|ttf|eot)(?:[?#]|$)/i;
+/** Analytics/pixel/ad hosts and paths — noise, never a real source (C1). */
+const TRACKER_URL =
+  /(?:facebook\.com\/tr|google-analytics\.com|googletagmanager\.com|doubleclick\.net|mc\.yandex\.\w+\/(?:watch|pixel)|top-fwz1\.mail\.ru|vk\.com\/rtrg|\/pixel(?:[?/]|$))/i;
+/** Redirect/interstitial hops that don't identify the real source (C1). */
+const REDIRECT_URL =
+  /(?:\/redirect(?:[?/]|$)|\/away(?:[?/]|$)|[?&]redirect=|l\.facebook\.com|out\.reddit\.com|\/goto\/)/i;
 
 /** Minimal invoke surface satisfied by `model.bindTools(tools)` and test fakes. */
 export interface ToolCaller {
@@ -180,14 +189,26 @@ export async function compressResearch(params: {
   };
 }
 
-/** Unique source URLs from the bounded gathered material (for ГОСТ citations) —
- *  scanned over the SAME text COMPRESS saw, capped at MAX_SOURCES. */
+/** True when a URL looks like real article/page content — not an image/asset, an
+ *  analytics/ad tracker, or a redirect hop (C1 source hygiene). PDFs are kept (they
+ *  are often the actual document/report). */
+export function isContentUrl(url: string): boolean {
+  return !NON_CONTENT_EXT.test(url) && !TRACKER_URL.test(url) && !REDIRECT_URL.test(url);
+}
+
+/** Unique CONTENT source URLs from the bounded gathered material (for ГОСТ citations)
+ *  — scanned over the SAME text COMPRESS saw, asset/tracker/redirect noise dropped
+ *  (C1), capped at MAX_SOURCES. */
 export function extractSources(gathered: string): string[] {
   const urls = new Set<string>();
   const matches = gathered.match(SOURCE_URL);
   if (matches) {
     for (const match of matches) {
-      urls.add(match.replace(/[.,;:]+$/, ''));
+      const url = match.replace(/[.,;:]+$/, '');
+      if (!isContentUrl(url)) {
+        continue;
+      }
+      urls.add(url);
       if (urls.size >= MAX_SOURCES) {
         break;
       }

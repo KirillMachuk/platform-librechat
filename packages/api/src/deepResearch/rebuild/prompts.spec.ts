@@ -90,3 +90,31 @@ describe('prompt spotlighting (H5)', () => {
     }
   });
 });
+
+describe('search + report quality prompts (C2, D1)', () => {
+  it('researcher prompt steers to targeted queries and authoritative RU sources (C2)', () => {
+    const prompt = buildResearcherPrompt({
+      subQuestion: 'q',
+      jurisdiction: 'RU',
+      now: NOW,
+      maxTurns: 5,
+      nonce: NONCE,
+    });
+    expect(prompt).toMatch(/TAdviser|CNews/);
+    expect(prompt).toMatch(/листикл/i);
+    expect(prompt).toMatch(/ТОЧНЫЕ запросы/);
+  });
+
+  it('report prompt asks for a comparison table and a recommendation (D1)', () => {
+    const prompt = buildReportPrompt({
+      request: 'q',
+      brief: 'b',
+      jurisdiction: 'RU',
+      now: NOW,
+      nonce: NONCE,
+    });
+    expect(prompt).toMatch(/ТАБЛИЦУ СРАВНЕНИЯ/);
+    expect(prompt).toMatch(/Рекомендация/);
+    expect(prompt).toMatch(/допущения/);
+  });
+});
