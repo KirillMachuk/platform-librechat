@@ -536,31 +536,28 @@ describe('GET /files/:file_id/preview', () => {
       expect(renderOfficePreview).not.toHaveBeenCalled();
     });
 
-    it('renders a csv/tsv context preview from stored text (new AND legacy records, no original)', async () => {
-      /* csv/tsv keep their raw content in `text`, so the route renders the office
-       * table from it on demand — no previewText, no stored original, no doomed
-       * storage stream. Works for records uploaded before the deferred change. */
-      const { FileSources } = require('librechat-data-provider');
+    it('serves a csv/tsv context preview from previewText, not the reformatted text', async () => {
+      /* csv/tsv now render at upload from the ORIGINAL bytes into previewText,
+       * same as docx/xlsx — the stored `text` is a reformatted doc-gateway
+       * extract (labeled "Field: value"), not the raw file, so rendering it back
+       * would collapse the table into a single column. */
       mockGetFiles.mockResolvedValueOnce([
         {
           file_id: 'fid-ctx-csv',
           user: OWNER_USER_ID,
-          filename: 'blog.csv',
+          filename: 'leads.csv',
           type: 'text/csv',
           status: 'ready',
-          source: FileSources.text,
+          source: 'text',
         },
       ]);
       mockFindFileById.mockResolvedValueOnce({
         file_id: 'fid-ctx-csv',
-        text: 'Name,Slug\n1,2',
+        text: 'Дата: 2026\nИмя:', // reformatted extract — must NOT be served/rendered
         textFormat: null,
+        previewText: '<table><tr><td>Дата</td></tr></table>',
       });
       isOfficeHtmlPreviewable.mockReturnValue(true);
-      renderOfficePreview.mockResolvedValueOnce({
-        html: '<table><tr><td>Name</td></tr></table>',
-        bucket: 'csv',
-      });
 
       const res = await request(buildApp()).get('/files/fid-ctx-csv/preview');
 
@@ -568,13 +565,10 @@ describe('GET /files/:file_id/preview', () => {
       expect(res.body).toEqual({
         file_id: 'fid-ctx-csv',
         status: 'ready',
-        text: '<table><tr><td>Name</td></tr></table>',
+        text: '<table><tr><td>Дата</td></tr></table>',
         textFormat: 'html',
       });
-      // Rendered from the stored text, NOT a storage download.
-      expect(renderOfficePreview).toHaveBeenCalledTimes(1);
-      expect(renderOfficePreview.mock.calls[0][0].toString('utf8')).toBe('Name,Slug\n1,2');
-      expect(mockGetDownloadStream).not.toHaveBeenCalled();
+      expect(renderOfficePreview).not.toHaveBeenCalled();
     });
 
     it('degrades a legacy docx/xlsx (source=text, no previewText) to plain text without rendering', async () => {

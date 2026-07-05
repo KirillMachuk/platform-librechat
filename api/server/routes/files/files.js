@@ -477,45 +477,6 @@ const getOrStartOfficePreview = (req, file, cacheKey) => {
 };
 
 /**
- * True for office files whose raw content lives in the record's `text` field —
- * csv/tsv. Their preview is rendered on demand FROM that text (no original
- * bytes needed), covering both the deferred-upload path and legacy records.
- * @param {string} filename
- * @param {string} type
- * @returns {boolean}
- */
-const isCsvLikeOffice = (filename, type) => {
-  if (!isOfficeHtmlPreviewable(filename, type)) {
-    return false;
-  }
-  const dot = filename.lastIndexOf('.');
-  const ext = dot > 0 ? filename.slice(dot + 1).toLowerCase() : '';
-  return ext === 'csv' || ext === 'tsv' || (ext === '' && /csv|tab-separated/i.test(type || ''));
-};
-
-/**
- * Render a csv/tsv preview from the stored `text` (the raw file content),
- * reusing the office-preview LRU cache. Cheap and bounded (csv/tsv render to a
- * single sanitized table), so it runs inline in the preview response.
- * @param {TFile} file
- * @param {string} text
- * @returns {Promise<{ html: string } | { error: string }>}
- */
-const renderCsvPreviewFromText = async (file, text) => {
-  const cacheKey = officePreviewCacheKey(file);
-  const cached = officePreviewCacheGet(cacheKey);
-  if (cached) {
-    return { html: cached };
-  }
-  const rendered = await renderOfficePreview(Buffer.from(text, 'utf8'), file.filename, file.type);
-  if ('html' in rendered) {
-    officePreviewCacheSet(cacheKey, rendered.html);
-    return { html: rendered.html };
-  }
-  return { error: rendered.error };
-};
-
-/**
  * Poll the lifecycle status of a code-execution file's inline preview.
  *
  * Deferred-preview flow: the immediate persist step writes the file
@@ -575,35 +536,21 @@ router.get('/:file_id/preview', fileAccess, async (req, res) => {
       const withText = await db.findFileById(file_id);
       /* On-demand office render (below) needs the ORIGINAL bytes. `FileSources.text`
        * records (the full-text `context` path) discard the original, so they are
-       * excluded here: docx/xlsx/… are served from the deferred `previewText`
-       * branch above, csv/tsv from the render-from-`text` branch above, and a
-       * legacy docx/xlsx with neither degrades to plain text rather than a doomed
-       * stream + `render-failed` on every open. Order matters: `checkOpenAIStorage`
-       * stays first so `isOfficeHtmlPreviewable` isn't called for OpenAI storage. */
+       * excluded here: new office uploads are served from the deferred `previewText`
+       * branch above, and a legacy context office record with no `previewText`
+       * degrades to plain text rather than a doomed stream + `render-failed` on
+       * every open. Order matters: `checkOpenAIStorage` stays first so
+       * `isOfficeHtmlPreviewable` isn't called for OpenAI storage. */
       const officeEligible =
         !checkOpenAIStorage(file.source) &&
         file.source !== FileSources.text &&
         isOfficeHtmlPreviewable(file.filename, file.type);
       if (withText?.previewText != null) {
         /* Office file taken down the full-text `context` path: its sanitized
-         * HTML was rendered (deferred) at upload — docx/xlsx/xls/ods/pptx. */
+         * HTML was rendered (deferred) at upload from the ORIGINAL bytes —
+         * every office format (csv/tsv/docx/xlsx/xls/ods/pptx). */
         payload.text = withText.previewText;
         payload.textFormat = 'html';
-      } else if (
-        withText?.text != null &&
-        withText.textFormat !== 'html' &&
-        isCsvLikeOffice(file.filename, file.type)
-      ) {
-        /* csv/tsv: the raw content lives in `text`, so render the office table
-         * from it on demand — covers deferred-path new records AND legacy ones
-         * (no stored preview, no original bytes needed). */
-        const rendered = await renderCsvPreviewFromText(file, withText.text);
-        if (rendered.error) {
-          payload.previewError = rendered.error;
-        } else {
-          payload.text = rendered.html;
-          payload.textFormat = 'html';
-        }
       } else if (withText?.text != null && (withText.textFormat === 'html' || !officeEligible)) {
         /* Serve stored inline text: already-rendered office HTML (code-exec
          * deferred preview, textFormat==='html') or plain text for non-office
