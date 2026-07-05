@@ -1362,5 +1362,20 @@ describe('BaseClient', () => {
       expect(TestClient.addDocuments).not.toHaveBeenCalled();
       expect(files.map((f) => f.file_id)).toEqual(['legacy']);
     });
+
+    test('context files with an EMPTY extract are still never inlined as documents', async () => {
+      const emptyExtract = {
+        file_id: 'empty-ctx',
+        type: 'application/pdf',
+        source: 'local',
+        filepath: '/uploads/u/empty.pdf',
+        text: '',
+      };
+
+      const files = await TestClient.processAttachments({}, [emptyExtract]);
+
+      expect(TestClient.addDocuments).not.toHaveBeenCalled();
+      expect(files.map((f) => f.file_id)).toEqual(['empty-ctx']);
+    });
   });
 });
