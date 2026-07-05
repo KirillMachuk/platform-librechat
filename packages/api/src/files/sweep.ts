@@ -4,7 +4,7 @@ import {
   checkOpenAIStorage,
   defaultAssistantsVersion,
 } from 'librechat-data-provider';
-import type { AppConfig } from '@librechat/data-schemas';
+import type { AppConfig, AuditLogInput } from '@librechat/data-schemas';
 
 const DEFAULT_FILE_RETENTION_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -51,6 +51,7 @@ type SweepDependencies = {
     req: SweepRequest;
     files: ExpiredFile[];
   }) => Promise<{ deletedFileIds: string[]; failedFileIds: string[] }>;
+  recordAudit: (event: AuditLogInput) => void;
   logger: SweepLogger;
 };
 
@@ -205,18 +206,37 @@ export async function resolveExpiredFileSweepConfig({
 
 export async function sweepExpiredFiles(
   { appConfig, limit = 100, loadAppConfig }: ExpiredFileSweepOptions | undefined = {},
-  { getExpiredFiles, processDeleteRequest, logger }: SweepDependencies,
+  { getExpiredFiles, processDeleteRequest, recordAudit, logger }: SweepDependencies,
 ): Promise<ExpiredFileSweepResult> {
   const files = (await getExpiredFiles(limit)) ?? [];
   let resolvedAppConfig = appConfig;
   let deleted = 0;
   let failed = 0;
 
+  const auditDeletion = (
+    file: ExpiredFile,
+    ownerId: string | undefined,
+    outcome: 'success' | 'failure',
+  ) =>
+    recordAudit({
+      action: 'file.delete',
+      tenantId: file.tenantId,
+      targetType: 'file',
+      targetId: file.file_id,
+      outcome,
+      metadata: {
+        reason: 'retention',
+        source: file.source ?? FileSources.local,
+        ...(ownerId ? { ownerId } : {}),
+      },
+    });
+
   for (const file of files) {
     const userId = typeof file.user === 'string' ? file.user : file.user?.toString?.();
     if (!userId) {
       logger.warn(`[sweepExpiredFiles] Skipping expired file without user: ${file.file_id}`);
       failed++;
+      auditDeletion(file, undefined, 'failure');
       continue;
     }
 
@@ -230,19 +250,23 @@ export async function sweepExpiredFiles(
       const { deletedFileIds, failedFileIds } = await processDeleteRequest({ req, files: [file] });
       if (failedFileIds.includes(file.file_id)) {
         failed++;
+        auditDeletion(file, userId, 'failure');
         continue;
       }
 
       if (deletedFileIds.includes(file.file_id)) {
         deleted++;
+        auditDeletion(file, userId, 'success');
       } else {
         failed++;
+        auditDeletion(file, userId, 'failure');
         logger.error(
           `[sweepExpiredFiles] Delete request finished without resolving expired file ${file.file_id}`,
         );
       }
     } catch (error) {
       failed++;
+      auditDeletion(file, userId, 'failure');
       logger.error(`[sweepExpiredFiles] Error deleting expired file ${file.file_id}:`, error);
     }
   }

@@ -8,6 +8,7 @@ export type AuditAction =
   | 'file.upload'
   | 'file.access'
   | 'file.cite'
+  | 'file.delete'
   | 'agent.invoke'
   | 'conversation.read'
   | 'conversation.search'
