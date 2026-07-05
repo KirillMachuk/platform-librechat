@@ -10,9 +10,19 @@
 const { HumanMessage } = require('@langchain/core/messages');
 
 const mockModelCtorArgs = [];
+const mockInvokeArgs = [];
+let mockTitleContent = 'Сравнение CRM-систем';
+let mockTitleThrows = false;
 class mockFakeModel {
   constructor(opts) {
     mockModelCtorArgs.push(opts);
+  }
+  async invoke(messages) {
+    mockInvokeArgs.push(messages);
+    if (mockTitleThrows) {
+      throw new Error('title model unavailable');
+    }
+    return { content: mockTitleContent };
   }
 }
 
@@ -109,6 +119,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockSavedMessages.length = 0;
   mockModelCtorArgs.length = 0;
+  mockInvokeArgs.length = 0;
+  mockTitleContent = 'Сравнение CRM-систем';
+  mockTitleThrows = false;
   mockInitializeCustom.mockResolvedValue({
     llmConfig: { apiKey: 'sk-client', provider: 'openAI' },
     configOptions: {
@@ -230,5 +243,41 @@ describe('buildDeepResearchTitle (D3 — topic title, not the raw imperative que
     const title = buildDeepResearchTitle(`исследование ${'а'.repeat(100)}`);
     expect([...title].length).toBeLessThanOrEqual(60);
     expect(title.endsWith('…')).toBe(true);
+  });
+});
+
+describe('resolveDeepResearchTitle (topic title from the masked question, PII-free)', () => {
+  const models = require('~/models');
+
+  it('titles a NEW conversation from the MASKED question via the lead model, stripping quotes', async () => {
+    mockStartSovereignSession.mockResolvedValue({
+      maskedQuestion: 'Меня зовут [PERSON_1], сравни Битрикс24 и AmoCRM',
+      passthroughHeaders: {},
+      maskContent: jest.fn(async (t) => t),
+      restore: jest.fn(async (t) => t),
+      drop: jest.fn(async () => {}),
+    });
+    models.getConvo.mockResolvedValueOnce(null); // NEW chat → a title must be minted
+    mockTitleContent = '«Сравнение CRM Битрикс24 и AmoCRM»';
+
+    await runNewDeepResearch(baseParams('Меня зовут Кирилл Мачук, сравни Битрикс24 и AmoCRM'));
+
+    // the title model saw the MASKED question — placeholder in, real name never
+    const human = mockInvokeArgs[0].find((m) => m instanceof HumanMessage);
+    expect(human.content).toContain('[PERSON_1]');
+    expect(human.content).not.toContain('Кирилл');
+
+    // quotes stripped; saved as the conversation title
+    expect(models.saveConvo.mock.calls[0][1].title).toBe('Сравнение CRM Битрикс24 и AmoCRM');
+  });
+
+  it('falls back to the deterministic heuristic when the title model fails', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getConvo.mockResolvedValueOnce(null);
+    mockTitleThrows = true;
+
+    await runNewDeepResearch(baseParams('изучи рынок ЭДО'));
+
+    expect(models.saveConvo.mock.calls[0][1].title).toBe('Рынок ЭДО');
   });
 });

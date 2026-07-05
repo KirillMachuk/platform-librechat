@@ -105,7 +105,7 @@ describe('search + report quality prompts (C2, D1)', () => {
     expect(prompt).toMatch(/ТОЧНЫЕ запросы/);
   });
 
-  it('report prompt asks for a comparison table and a recommendation (D1)', () => {
+  it('report prompt mandates a comparison table + recommendation, and forbids a PII memo header (D1)', () => {
     const prompt = buildReportPrompt({
       request: 'q',
       brief: 'b',
@@ -114,7 +114,11 @@ describe('search + report quality prompts (C2, D1)', () => {
       nonce: NONCE,
     });
     expect(prompt).toMatch(/ТАБЛИЦУ СРАВНЕНИЯ/);
+    expect(prompt).toMatch(/ОБЯЗАТЕЛЬНО/);
+    expect(prompt).toMatch(/\| Критерий \| Вариант А \| Вариант Б \|/);
     expect(prompt).toMatch(/Рекомендация/);
     expect(prompt).toMatch(/допущения/);
+    expect(prompt).toMatch(/НЕ добавляй шапку/);
+    expect(prompt).not.toMatch(/АНАЛИТИЧЕСКУЮ ЗАПИСКУ/);
   });
 });
