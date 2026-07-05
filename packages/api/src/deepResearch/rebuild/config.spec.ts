@@ -13,6 +13,7 @@ describe('resolveDeepResearchTier', () => {
     const tier = resolveDeepResearchTier();
     expect(tier.name).toBe('deep');
     expect(tier.budgetGateRatio).toBe(0.75);
+    expect(tier.timeGateRatio).toBe(0.7);
     expect(tier.digestCap).toBe(2000);
     expect(tier.perRunTokenBudget).toBe(800_000);
     expect(tier.wallClockMinutes).toBe(15);
@@ -40,6 +41,7 @@ describe('tierToRunBudget', () => {
     expect(budget.wallClockMs).toBe(15 * 60_000);
     expect(budget.tokenBudget).toBe(800_000);
     expect(budget.budgetGateRatio).toBe(0.75);
+    expect(budget.timeGateRatio).toBe(0.7);
   });
 });
 

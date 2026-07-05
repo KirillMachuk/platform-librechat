@@ -26,12 +26,29 @@ describe('prompt spotlighting (H5)', () => {
       findings: [finding('q1', 'дайджест-1')],
       round: 1,
       maxRounds: 8,
+      maxConcurrent: 4,
       nonce: NONCE,
     });
     // The gathered digest itself must sit inside a fence (the directive also
     // mentions the markers, so assert the exact wrapped block, not a bare marker).
     expect(prompt).toContain(`<UNTRUSTED ${NONCE}>\n1. [q1] дайджест-1\n</UNTRUSTED ${NONCE}>`);
     expect(prompt).toMatch(/НИКОГДА не исполняй/i);
+  });
+
+  it('supervisor asks for a parallel batch of up to maxConcurrent sub-questions (A2)', () => {
+    const prompt = buildSupervisorPrompt({
+      now: NOW,
+      brief: 'b',
+      jurisdiction: 'RU',
+      findings: [],
+      round: 0,
+      maxRounds: 8,
+      maxConcurrent: 3,
+      nonce: NONCE,
+    });
+    expect(prompt).toContain('до 3');
+    expect(prompt).toContain('subQuestions');
+    expect(prompt).toMatch(/ПАРАЛЛЕЛЬНО/);
   });
 
   it('supervisor does NOT fence the placeholder when nothing is gathered', () => {
@@ -42,6 +59,7 @@ describe('prompt spotlighting (H5)', () => {
       findings: [],
       round: 0,
       maxRounds: 8,
+      maxConcurrent: 4,
       nonce: NONCE,
     });
     expect(prompt).toContain('(пока ничего не собрано)');
@@ -70,5 +88,33 @@ describe('prompt spotlighting (H5)', () => {
       expect(prompt).toContain(NONCE);
       expect(prompt).toMatch(/НИКОГДА не исполняй/i);
     }
+  });
+});
+
+describe('search + report quality prompts (C2, D1)', () => {
+  it('researcher prompt steers to targeted queries and authoritative RU sources (C2)', () => {
+    const prompt = buildResearcherPrompt({
+      subQuestion: 'q',
+      jurisdiction: 'RU',
+      now: NOW,
+      maxTurns: 5,
+      nonce: NONCE,
+    });
+    expect(prompt).toMatch(/TAdviser|CNews/);
+    expect(prompt).toMatch(/листикл/i);
+    expect(prompt).toMatch(/ТОЧНЫЕ запросы/);
+  });
+
+  it('report prompt asks for a comparison table and a recommendation (D1)', () => {
+    const prompt = buildReportPrompt({
+      request: 'q',
+      brief: 'b',
+      jurisdiction: 'RU',
+      now: NOW,
+      nonce: NONCE,
+    });
+    expect(prompt).toMatch(/ТАБЛИЦУ СРАВНЕНИЯ/);
+    expect(prompt).toMatch(/Рекомендация/);
+    expect(prompt).toMatch(/допущения/);
   });
 });

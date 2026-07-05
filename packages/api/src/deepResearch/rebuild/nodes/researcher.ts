@@ -4,6 +4,7 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import type {
   DeepResearchFinding,
+  DeepResearchNodeError,
   DeepResearchTokenUsage,
   DeepResearchConfigurable,
 } from '../state';
@@ -31,6 +32,15 @@ const MAX_TOOL_CALLS_PER_TURN = 5;
 const TOOL_TIMEOUT_MS = 60_000;
 const MAX_SOURCES = 50;
 const SOURCE_URL = /https?:\/\/[^\s)"'<>\]]+/g;
+/** Asset/media/font/style/script extensions — never article content (C1). */
+const NON_CONTENT_EXT =
+  /\.(?:jpe?g|png|gif|svg|webp|avif|ico|bmp|mp4|webm|mov|mp3|wav|css|js|mjs|woff2?|ttf|eot)(?:[?#]|$)/i;
+/** Analytics/pixel/ad hosts and paths — noise, never a real source (C1). */
+const TRACKER_URL =
+  /(?:facebook\.com\/tr|google-analytics\.com|googletagmanager\.com|doubleclick\.net|mc\.yandex\.\w+\/(?:watch|pixel)|top-fwz1\.mail\.ru|vk\.com\/rtrg|\/pixel(?:[?/]|$))/i;
+/** Redirect/interstitial hops that don't identify the real source (C1). */
+const REDIRECT_URL =
+  /(?:\/redirect(?:[?/]|$)|\/away(?:[?/]|$)|[?&]redirect=|l\.facebook\.com|out\.reddit\.com|\/goto\/)/i;
 
 /** Minimal invoke surface satisfied by `model.bindTools(tools)` and test fakes. */
 export interface ToolCaller {
@@ -179,14 +189,26 @@ export async function compressResearch(params: {
   };
 }
 
-/** Unique source URLs from the bounded gathered material (for ГОСТ citations) —
- *  scanned over the SAME text COMPRESS saw, capped at MAX_SOURCES. */
+/** True when a URL looks like real article/page content — not an image/asset, an
+ *  analytics/ad tracker, or a redirect hop (C1 source hygiene). PDFs are kept (they
+ *  are often the actual document/report). */
+export function isContentUrl(url: string): boolean {
+  return !NON_CONTENT_EXT.test(url) && !TRACKER_URL.test(url) && !REDIRECT_URL.test(url);
+}
+
+/** Unique CONTENT source URLs from the bounded gathered material (for ГОСТ citations)
+ *  — scanned over the SAME text COMPRESS saw, asset/tracker/redirect noise dropped
+ *  (C1), capped at MAX_SOURCES. */
 export function extractSources(gathered: string): string[] {
   const urls = new Set<string>();
   const matches = gathered.match(SOURCE_URL);
   if (matches) {
     for (const match of matches) {
-      urls.add(match.replace(/[.,;:]+$/, ''));
+      const url = match.replace(/[.,;:]+$/, '');
+      if (!isContentUrl(url)) {
+        continue;
+      }
+      urls.add(url);
       if (urls.size >= MAX_SOURCES) {
         break;
       }
@@ -195,12 +217,92 @@ export function extractSources(gathered: string): string[] {
   return Array.from(urls);
 }
 
+export interface ResearchOneResult {
+  finding: DeepResearchFinding;
+  usage: DeepResearchTokenUsage;
+  /** Set on a non-fatal data/tool failure (recorded on the errors channel); abort re-throws. */
+  error?: DeepResearchNodeError;
+}
+
 /**
- * RESEARCHER — gathers material for one sub-question via a bounded tool loop,
- * then compresses it to a digest. Tools are pre-scoped by the caller (file_search
- * is built with chat-attached file_ids ONLY — the fix for bug ②). Never throws on
- * data/tool errors (records a placeholder finding + an error); re-throws only on
- * a real abort so the run wrapper can finalize a partial report.
+ * Researches ONE sub-question end-to-end: bounded tool loop → compress → source
+ * extraction. Never throws on data/tool errors (returns an error-finding so a
+ * sibling in the same parallel batch can't collapse it); re-throws only on a real
+ * abort so the batch can propagate it and the run wrapper finalizes a partial.
+ */
+export async function researchOne(params: {
+  caller: ToolCaller;
+  deps: ResearcherNodeDeps;
+  subQuestion: string;
+  round: number;
+  jurisdiction: string;
+  tokenCap: number;
+  signal?: AbortSignal;
+}): Promise<ResearchOneResult> {
+  const { caller, deps, subQuestion, round, jurisdiction, tokenCap, signal } = params;
+  try {
+    const { toolOutputs, usage: loopUsage } = await runResearchLoop({
+      caller,
+      tools: deps.tools,
+      system: buildResearcherPrompt({
+        subQuestion,
+        jurisdiction,
+        now: deps.now,
+        maxTurns: deps.tier.maxSearcherTurns,
+        nonce: deps.nonce,
+      }),
+      question: subQuestion,
+      maxTurns: deps.tier.maxSearcherTurns,
+      tokenCap,
+      nonce: deps.nonce,
+      signal,
+    });
+    const gathered = boundToolOutputs(toolOutputs);
+    const { digest, usage: compressUsage } = await compressResearch({
+      compressModel: deps.compressModel,
+      subQuestion,
+      jurisdiction,
+      gathered,
+      digestCap: deps.tier.digestCap,
+      now: deps.now,
+      nonce: deps.nonce,
+      signal,
+    });
+    const usage = mergeUsage(loopUsage, compressUsage);
+    return {
+      finding: {
+        round,
+        subQuestion,
+        digest: digest || '(по этому под-вопросу не удалось собрать данные)',
+        sources: extractSources(gathered),
+        tokens: usage.total,
+      },
+      usage,
+    };
+  } catch (error) {
+    if (signal?.aborted) {
+      throw error;
+    }
+    return {
+      finding: {
+        round,
+        subQuestion,
+        digest: `(ошибка исследования: ${sanitizeErrorForUser(error)})`,
+        sources: [],
+        tokens: 0,
+      },
+      usage: ZERO_USAGE,
+      error: { node: 'researcher', message: toErrorMessage(error), at: deps.now },
+    };
+  }
+}
+
+/**
+ * RESEARCHER — dispatches the supervisor's batch of sub-questions and researches
+ * them IN PARALLEL (A2), each via `researchOne`. The run's remaining gather budget
+ * is split across the batch so concurrent researchers can't collectively overspend.
+ * Tools are pre-scoped by the caller (file_search = chat-attached file_ids ONLY —
+ * the fix for bug ②). Never throws on data/tool errors; re-throws only on abort.
  */
 export function createResearcherNode(deps: ResearcherNodeDeps): DeepResearchNode {
   const { model } = deps;
@@ -212,9 +314,13 @@ export function createResearcherNode(deps: ResearcherNodeDeps): DeepResearchNode
   const caller: ToolCaller = model.bindTools(deps.tools);
 
   return async function researcher(state, config) {
-    const subQuestion = state.currentSubQuestion;
     const round = state.round;
-    if (!subQuestion.trim()) {
+    const batch = (
+      state.currentSubQuestions.length ? state.currentSubQuestions : [state.currentSubQuestion]
+    )
+      .map((question) => question?.trim())
+      .filter((question): question is string => Boolean(question));
+    if (batch.length === 0) {
       return {
         errors: [
           { node: 'researcher', message: 'dispatched without a sub-question', at: deps.now },
@@ -224,66 +330,47 @@ export function createResearcherNode(deps: ResearcherNodeDeps): DeepResearchNode
 
     const signal = config.signal;
     const budget = (config.configurable as DeepResearchConfigurable | undefined)?.budget;
-    // Remaining gather budget for THIS researcher: the gather ceiling minus what the
-    // run has already spent (NOT divided by researcher count — the graph is sequential,
-    // so each dispatch sees the live remaining headroom). Unbudgeted runs get no cap.
-    const tokenCap =
+    // Remaining gather headroom, SPLIT across the batch: the researchers run concurrently
+    // and cannot see each other's spend, so each gets an equal slice to keep the batch
+    // within the run's budget. Unbudgeted runs get no cap.
+    const remaining =
       budget && budget.tokenBudget > 0
         ? Math.max(0, budget.tokenBudget * budget.budgetGateRatio - state.tokenUsage.total)
         : Number.POSITIVE_INFINITY;
-    try {
-      const { toolOutputs, usage: loopUsage } = await runResearchLoop({
-        caller,
-        tools: deps.tools,
-        system: buildResearcherPrompt({
+    const perResearcherCap = Number.isFinite(remaining) ? remaining / batch.length : remaining;
+
+    // allSettled (not Promise.all): a real abort in one researcher must not orphan its
+    // siblings' rejections into unhandled rejections; settle all, then propagate abort once.
+    const settled = await Promise.allSettled(
+      batch.map((subQuestion) =>
+        researchOne({
+          caller,
+          deps,
           subQuestion,
+          round,
           jurisdiction: state.jurisdiction,
-          now: deps.now,
-          maxTurns: deps.tier.maxSearcherTurns,
-          nonce: deps.nonce,
+          tokenCap: perResearcherCap,
+          signal,
         }),
-        question: subQuestion,
-        maxTurns: deps.tier.maxSearcherTurns,
-        tokenCap,
-        nonce: deps.nonce,
-        signal,
-      });
-      const gathered = boundToolOutputs(toolOutputs);
-      const { digest, usage: compressUsage } = await compressResearch({
-        compressModel: deps.compressModel,
-        subQuestion,
-        jurisdiction: state.jurisdiction,
-        gathered,
-        digestCap: deps.tier.digestCap,
-        now: deps.now,
-        nonce: deps.nonce,
-        signal,
-      });
-      const usage = mergeUsage(loopUsage, compressUsage);
-      const finding: DeepResearchFinding = {
-        round,
-        subQuestion,
-        digest: digest || '(по этому под-вопросу не удалось собрать данные)',
-        sources: extractSources(gathered),
-        tokens: usage.total,
-      };
-      return { findings: [finding], tokenUsage: usage };
-    } catch (error) {
-      if (signal?.aborted) {
-        throw error;
-      }
-      return {
-        findings: [
-          {
-            round,
-            subQuestion,
-            digest: `(ошибка исследования: ${sanitizeErrorForUser(error)})`,
-            sources: [],
-            tokens: 0,
-          },
-        ],
-        errors: [{ node: 'researcher', message: toErrorMessage(error), at: deps.now }],
-      };
+      ),
+    );
+    const aborted = settled.find(
+      (outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected',
+    );
+    if (aborted) {
+      throw aborted.reason; // researchOne rejects ONLY on a real abort — surface it to the run wrapper
     }
+
+    const results = settled
+      .filter((o): o is PromiseFulfilledResult<ResearchOneResult> => o.status === 'fulfilled')
+      .map((o) => o.value);
+    const findings = results.map((r) => r.finding);
+    const usage = results.reduce((acc, r) => mergeUsage(acc, r.usage), ZERO_USAGE);
+    const errors = results
+      .map((r) => r.error)
+      .filter((error): error is DeepResearchNodeError => Boolean(error));
+    return errors.length > 0
+      ? { findings, tokenUsage: usage, errors }
+      : { findings, tokenUsage: usage };
   };
 }

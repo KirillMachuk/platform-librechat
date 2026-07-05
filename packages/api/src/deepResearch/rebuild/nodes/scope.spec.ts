@@ -12,6 +12,7 @@ function stateWith(messages: BaseMessage[]): DeepResearchState {
     jurisdiction: '',
     researchBrief: '',
     currentSubQuestion: '',
+    currentSubQuestions: [],
     findings: [],
     round: 0,
     researcherCount: 0,

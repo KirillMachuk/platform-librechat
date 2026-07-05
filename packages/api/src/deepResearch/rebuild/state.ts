@@ -52,8 +52,10 @@ export type FinalizeReason =
   | 'error'
   | 'limit';
 
-/** Why SUPERVISOR ended the gather loop; REPORT maps it to a FinalizeReason. */
-export type SupervisorConcludeReason = 'budget' | 'rounds' | 'complete';
+/** Why SUPERVISOR ended the gather loop; REPORT maps it to a FinalizeReason.
+ *  'time' = the wall-clock synthesis-reserve gate stopped gathering so the model
+ *  still writes the report in time (A1), NOT the hard watchdog killing the run. */
+export type SupervisorConcludeReason = 'budget' | 'rounds' | 'time' | 'complete';
 
 /** Prompt+completion token accounting, summed across every model call. */
 export interface DeepResearchTokenUsage {
@@ -74,6 +76,13 @@ export interface DeepResearchConfigurable {
   /** Active depth tier; selects models/limits from the tier config. */
   mode: DeepResearchMode;
   budget: DeepResearchRunBudget;
+  /**
+   * Absolute wall-clock deadline (ms epoch) at which SUPERVISOR stops gathering
+   * and routes to REPORT, reserving the remaining time for synthesis (A1). Set by
+   * the run wrapper at start = now + wallClockMs × timeGateRatio. Undefined → the
+   * time gate is off (only the hard watchdog applies).
+   */
+  softDeadlineMs?: number;
 }
 
 export interface DeepResearchRunBudget {
@@ -87,6 +96,14 @@ export interface DeepResearchRunBudget {
    * (e.g. 0.7 → gather until 70% spent, keep 30% for writing the report).
    */
   budgetGateRatio: number;
+  /**
+   * Fraction of `wallClockMs` at which the supervisor stops gathering and routes
+   * to REPORT, reserving the rest of the time for synthesis (A1 — mirrors
+   * `budgetGateRatio` for wall-clock; e.g. 0.68 → gather for 68% of the time,
+   * keep 32% so the model, not the fallback, writes the report). Only active when
+   * strictly in (0, 1).
+   */
+  timeGateRatio: number;
 }
 
 const lastWins = <T>(_current: T, incoming: T): T => incoming;
@@ -115,8 +132,11 @@ export const DeepResearchStateAnnotation = Annotation.Root({
   jurisdiction: Annotation<string>({ reducer: lastWins, default: () => '' }),
   /** Research brief produced by SCOPE from the user's request. */
   researchBrief: Annotation<string>({ reducer: lastWins, default: () => '' }),
-  /** Sub-question the supervisor hands to the next researcher dispatch. */
+  /** First sub-question of the current batch — kept for UI progress + back-compat. */
   currentSubQuestion: Annotation<string>({ reducer: lastWins, default: () => '' }),
+  /** The batch of independent sub-questions the supervisor dispatches to run in
+   *  parallel this round (A2); ≤ the tier's maxConcurrentResearchers. */
+  currentSubQuestions: Annotation<string[]>({ reducer: lastWins, default: () => [] }),
   /** Compressed digests — the only research that reaches outer state. */
   findings: Annotation<DeepResearchFinding[]>({ reducer: concat, default: () => [] }),
   /** Completed orchestrator rounds (written only by SUPERVISOR). */

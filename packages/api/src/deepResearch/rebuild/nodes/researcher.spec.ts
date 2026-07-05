@@ -6,6 +6,8 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 import type { BaseMessage } from '@langchain/core/messages';
 import type { DeepResearchState, DeepResearchFinding } from '../state';
 import {
+  researchOne,
+  isContentUrl,
   extractSources,
   runResearchLoop,
   compressResearch,
@@ -48,6 +50,7 @@ function stateWith(partial: Partial<DeepResearchState>): DeepResearchState {
     jurisdiction: 'RU',
     researchBrief: 'бриф',
     currentSubQuestion: '',
+    currentSubQuestions: [],
     findings: [],
     round: 0,
     researcherCount: 0,
@@ -246,6 +249,32 @@ describe('compressResearch', () => {
   });
 });
 
+describe('isContentUrl (C1 source hygiene)', () => {
+  it('keeps real articles, vendor sites and PDFs', () => {
+    for (const url of [
+      'https://www.tadviser.ru/index.php/Статья:CRM',
+      'https://www.cnews.ru/reviews/crm_2025',
+      'https://www.bitrix24.ru/prices/',
+      'https://static.gov.ru/reports/otchet-2024.pdf',
+    ]) {
+      expect(isContentUrl(url)).toBe(true);
+    }
+  });
+
+  it('drops images/assets, trackers/pixels and redirect hops', () => {
+    for (const url of [
+      'https://habrastorage.org/webt/ab/cd/pic.png',
+      'https://leonardo.osnova.io/photo.jpg',
+      'https://cdn.site.ru/bundle.min.js',
+      'https://www.facebook.com/tr?id=123',
+      'https://mc.yandex.ru/watch/456',
+      'https://api.vc.ru/v2.8/redirect?to=https://x.ru',
+    ]) {
+      expect(isContentUrl(url)).toBe(false);
+    }
+  });
+});
+
 describe('extractSources', () => {
   it('extracts and de-duplicates source URLs, trimming trailing punctuation', () => {
     expect(extractSources('см. https://cbr.ru/a и https://nalog.gov.ru/b.')).toEqual([
@@ -253,6 +282,19 @@ describe('extractSources', () => {
       'https://nalog.gov.ru/b',
     ]);
     expect(extractSources('https://x.ru/1\n\n---\n\nhttps://x.ru/1')).toEqual(['https://x.ru/1']);
+  });
+
+  it('filters out asset/tracker/redirect noise, keeping only content URLs (C1)', () => {
+    const gathered =
+      'Рейтинг: https://www.tadviser.ru/crm ' +
+      'картинка https://habrastorage.org/img/pic.png ' +
+      'пиксель https://www.facebook.com/tr?id=1 ' +
+      'редирект https://api.vc.ru/v2.8/redirect?to=x ' +
+      'ещё https://www.cnews.ru/review.';
+    expect(extractSources(gathered)).toEqual([
+      'https://www.tadviser.ru/crm',
+      'https://www.cnews.ru/review',
+    ]);
   });
 });
 
@@ -290,5 +332,92 @@ describe('createResearcherNode', () => {
     expect(findings).toHaveLength(1);
     expect(findings[0].round).toBe(2);
     expect(findings[0].subQuestion).toBe('Объём рынка');
+  });
+
+  it('researches a BATCH of sub-questions in parallel, one finding each (A2)', async () => {
+    const node = createResearcherNode({
+      model: new FakeListChatModel({ responses: ['ответ'] }),
+      compressModel: new FakeListChatModel({ responses: ['дайджест'] }),
+      tools: [],
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+    });
+    const update = await node(
+      stateWith({ currentSubQuestions: ['вопрос A', 'вопрос B', 'вопрос C'], round: 1 }),
+      emptyConfig,
+    );
+    const findings = (update.findings ?? []) as DeepResearchFinding[];
+    expect(findings).toHaveLength(3);
+    expect(findings.map((f) => f.subQuestion).sort()).toEqual(['вопрос A', 'вопрос B', 'вопрос C']);
+  });
+
+  it('one failing sub-question does not collapse its siblings in the batch (A2)', async () => {
+    // A model that returns no tool calls → each researcher succeeds; here compress fails
+    // for all, but the node still yields a finding per sub-question (placeholder/error), not a throw.
+    const node = createResearcherNode({
+      model: new FakeListChatModel({ responses: ['ответ'] }),
+      compressModel: new FakeListChatModel({ responses: ['дайджест'] }),
+      tools: [],
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+    });
+    const update = await node(
+      stateWith({ currentSubQuestions: ['A', 'B'], round: 0 }),
+      emptyConfig,
+    );
+    expect(((update.findings ?? []) as DeepResearchFinding[]).length).toBe(2);
+  });
+});
+
+describe('researchOne', () => {
+  const deps = {
+    model: new FakeListChatModel({ responses: ['unused'] }),
+    compressModel: new FakeListChatModel({ responses: ['дайджест'] }),
+    tools: [],
+    tier: TIER,
+    now: NOW,
+    nonce: NONCE,
+  };
+
+  it('re-throws on a real abort so a batch propagates it to the run wrapper', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const caller: ToolCaller = {
+      invoke: async () => {
+        throw new Error('aborted');
+      },
+    };
+    await expect(
+      researchOne({
+        caller,
+        deps,
+        subQuestion: 'q',
+        round: 0,
+        jurisdiction: 'RU',
+        tokenCap: Number.POSITIVE_INFINITY,
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('returns an error-finding (never throws) on a non-abort failure', async () => {
+    const caller: ToolCaller = {
+      invoke: async () => {
+        throw new Error('model 500');
+      },
+    };
+    const result = await researchOne({
+      caller,
+      deps,
+      subQuestion: 'под-вопрос',
+      round: 3,
+      jurisdiction: 'RU',
+      tokenCap: Number.POSITIVE_INFINITY,
+    });
+    expect(result.finding.subQuestion).toBe('под-вопрос');
+    expect(result.finding.round).toBe(3);
+    expect(result.error?.node).toBe('researcher');
   });
 });

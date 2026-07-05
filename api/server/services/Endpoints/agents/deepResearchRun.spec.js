@@ -83,7 +83,7 @@ jest.mock('~/models', () => ({
   bulkInsertTransactions: jest.fn(),
 }));
 
-const { runNewDeepResearch } = require('./deepResearchRun');
+const { runNewDeepResearch, buildDeepResearchTitle } = require('./deepResearchRun');
 
 function baseParams(text) {
   return {
@@ -203,5 +203,32 @@ describe('runNewDeepResearch — sovereign wiring (Track B)', () => {
         process.env.ANON_PASSTHROUGH_TOKEN = prev;
       }
     }
+  });
+});
+
+describe('buildDeepResearchTitle (D3 — topic title, not the raw imperative query)', () => {
+  it('strips the leading imperative and capitalizes into a topic', () => {
+    expect(buildDeepResearchTitle('проведи исследование рынка CRM в России')).toBe(
+      'Исследование рынка CRM в России',
+    );
+    expect(buildDeepResearchTitle('Изучи лучшие 1С-решения')).toBe('Лучшие 1С-решения');
+    expect(buildDeepResearchTitle('Пожалуйста, подготовь обзор рынка ЭДО')).toBe('Обзор рынка ЭДО');
+  });
+
+  it('keeps a plain topic as-is (just capitalized)', () => {
+    expect(buildDeepResearchTitle('рынок облачных касс в Казахстане')).toBe(
+      'Рынок облачных касс в Казахстане',
+    );
+  });
+
+  it('falls back to a default for empty input', () => {
+    expect(buildDeepResearchTitle('')).toBe('Глубокое исследование');
+    expect(buildDeepResearchTitle('   ')).toBe('Глубокое исследование');
+  });
+
+  it('truncates very long topics by code points with an ellipsis', () => {
+    const title = buildDeepResearchTitle(`исследование ${'а'.repeat(100)}`);
+    expect([...title].length).toBeLessThanOrEqual(60);
+    expect(title.endsWith('…')).toBe(true);
   });
 });

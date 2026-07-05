@@ -17,14 +17,22 @@ export interface SupervisorNodeDeps {
   now: string;
   /** Per-run spotlighting nonce for fencing untrusted findings (H5). */
   nonce: string;
+  /**
+   * Injected wall-clock reader for the time gate (A1). Defaults to `Date.now`;
+   * tests pass a fake so the gate is deterministic (the "never `Date.now()` in a
+   * node" rule is why this is injected rather than called directly).
+   */
+  clock?: () => number;
 }
 
 /**
  * Deterministic gather-stop gate (the core of fix ③): returns a non-null reason
- * once the run has spent its synthesis-reserve threshold of budget, or hit the
- * round cap. The supervisor checks this BEFORE any model call, so an exhausted
- * run routes straight to REPORT instead of burning more tokens or being killed
- * mid-flight. `tokenBudget <= 0` disables the token arm (rounds still apply).
+ * once the run has crossed its synthesis-reserve threshold of TIME (A1) or
+ * tokens, or hit the round cap. The supervisor checks this BEFORE any model call,
+ * so an exhausted run routes straight to REPORT — the model still writes the
+ * report instead of the run being killed mid-flight and falling back. `now`/
+ * `softDeadlineMs` unset → time arm off; `tokenBudget <= 0` → token arm off
+ * (rounds always apply).
  */
 export function budgetGateReason(args: {
   tokenUsed: number;
@@ -32,7 +40,12 @@ export function budgetGateReason(args: {
   tokenBudget: number;
   budgetGateRatio: number;
   maxRounds: number;
-}): 'budget' | 'rounds' | null {
+  now?: number;
+  softDeadlineMs?: number;
+}): 'budget' | 'rounds' | 'time' | null {
+  if (args.softDeadlineMs != null && args.now != null && args.now >= args.softDeadlineMs) {
+    return 'time';
+  }
   if (args.tokenBudget > 0 && args.tokenUsed >= args.tokenBudget * args.budgetGateRatio) {
     return 'budget';
   }
@@ -42,12 +55,42 @@ export function budgetGateReason(args: {
   return null;
 }
 
-function parseSupervisorOutput(text: string): { complete: boolean; subQuestion: string } {
+/** Collects the supervisor's next batch: the `subQuestions` array (preferred) else a
+ *  single `subQuestion` (back-compat) — trimmed, de-duplicated, empties dropped, and
+ *  capped at `maxBatch` so one round never dispatches more than the concurrency cap. */
+export function normalizeSubQuestions(
+  value: unknown,
+  fallback: unknown,
+  maxBatch: number,
+): string[] {
+  const raw = Array.isArray(value) ? value : [fallback];
+  const seen = new Set<string>();
+  const batch: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'string') {
+      continue;
+    }
+    const question = item.trim();
+    if (!question || seen.has(question)) {
+      continue;
+    }
+    seen.add(question);
+    batch.push(question);
+    if (batch.length >= Math.max(1, maxBatch)) {
+      break;
+    }
+  }
+  return batch;
+}
+
+function parseSupervisorOutput(
+  text: string,
+  maxBatch: number,
+): { complete: boolean; subQuestions: string[] } {
   const parsed = tolerantJsonParse(text);
   const action = String(parsed?.action ?? '').toLowerCase();
-  const subQuestionValue = parsed?.subQuestion;
-  const subQuestion = typeof subQuestionValue === 'string' ? subQuestionValue.trim() : '';
-  return { complete: action.includes('complete') || !subQuestion, subQuestion };
+  const subQuestions = normalizeSubQuestions(parsed?.subQuestions, parsed?.subQuestion, maxBatch);
+  return { complete: action.includes('complete') || subQuestions.length === 0, subQuestions };
 }
 
 /**
@@ -70,6 +113,8 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
       tokenBudget: budget?.tokenBudget ?? 0,
       budgetGateRatio: budget?.budgetGateRatio ?? 1,
       maxRounds: deps.tier.maxOrchestratorCycles,
+      now: (deps.clock ?? Date.now)(),
+      softDeadlineMs: configurable?.softDeadlineMs,
     });
     if (gate) {
       return { concludeReason: gate };
@@ -85,12 +130,16 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
             findings: state.findings,
             round: state.round,
             maxRounds: deps.tier.maxOrchestratorCycles,
+            maxConcurrent: deps.tier.maxConcurrentResearchers,
             nonce: deps.nonce,
           }),
         ),
       ];
       const response = await deps.model.invoke(prompt, { signal: config.signal });
-      const { complete, subQuestion } = parseSupervisorOutput(extractText(response));
+      const { complete, subQuestions } = parseSupervisorOutput(
+        extractText(response),
+        deps.tier.maxConcurrentResearchers,
+      );
       if (complete) {
         return {
           concludeReason: 'complete',
@@ -98,9 +147,10 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
         };
       }
       return {
-        currentSubQuestion: subQuestion,
+        currentSubQuestion: subQuestions[0],
+        currentSubQuestions: subQuestions,
         round: state.round + 1,
-        researcherCount: state.researcherCount + 1,
+        researcherCount: state.researcherCount + subQuestions.length,
         tokenUsage: usageFromExchange(prompt, response),
       };
     } catch (error) {
