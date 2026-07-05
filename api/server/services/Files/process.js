@@ -735,32 +735,9 @@ const resolveContentRouting = async ({ req, file, toolResource, isImage }) => {
 };
 
 /**
- * True only for office formats whose preview needs the ORIGINAL bytes, i.e.
- * everything except csv/tsv. csv/tsv previews are rendered on demand from the
- * stored `text` (which IS the raw content), so they never need an upload-time
- * render; docx/xlsx/xls/ods/pptx have a lossy `text` extract and do.
- * @param {string} filename
- * @param {string} mimeType
- * @returns {boolean}
- */
-const officePreviewNeedsOriginal = (filename, mimeType) => {
-  if (!isOfficeHtmlPreviewable(filename, mimeType)) {
-    return false;
-  }
-  const ext = path.extname(filename).slice(1).toLowerCase();
-  if (ext === 'csv' || ext === 'tsv') {
-    return false;
-  }
-  if (ext === '' && /csv|tab-separated/i.test(mimeType || '')) {
-    return false;
-  }
-  return true;
-};
-
-/**
  * Fire-and-forget deferred office-preview render for full-text `context`
- * uploads (docx/xlsx/xls/ods/pptx). Runs AFTER the upload response is sent so
- * the CPU-bound render never blocks it — mirrors the code-execution
+ * uploads (csv/tsv/docx/xlsx/xls/ods/pptx). Runs AFTER the upload response is
+ * sent so the CPU-bound render never blocks it — mirrors the code-execution
  * deferred-preview flow. Renders sanitized HTML into `previewText` and flips
  * `status` to 'ready'/'failed'. Intentionally NOT awaited; a render lost to a
  * restart leaves the record 'pending' for the lazy sweep to reap.
@@ -938,16 +915,16 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         tool_resource,
       });
 
-      /* Office preview (the model's `text` is never touched):
-       *  - csv/tsv: `text` IS the raw content → the preview route renders it on
-       *    demand (new AND legacy records), so nothing to do here.
-       *  - docx/xlsx/xls/ods/pptx: `text` is a lossy extract, so the preview
-       *    needs the ORIGINAL bytes this full-text path otherwise discards.
-       *    Capture them now (the multer temp file is unlinked once the response
-       *    returns) and render DEFERRED (status:'pending' → fire-and-forget →
-       *    'ready'/'failed') so the CPU-bound render never blocks the upload. */
+      /* Office preview (the model's `text` is never touched): every office
+       * format (csv/tsv/docx/xlsx/xls/ods/pptx) needs the ORIGINAL bytes — the
+       * stored `text` is a parser/doc-gateway extract (reformatted, not the raw
+       * file, so it can't be rendered back into the source table). This
+       * full-text path otherwise discards the original, so capture it now (the
+       * multer temp file is unlinked once the response returns) and render
+       * DEFERRED (status:'pending' → fire-and-forget → 'ready'/'failed') so the
+       * CPU-bound render never blocks the upload response. */
       let officeBuffer = null;
-      if (officePreviewNeedsOriginal(file.originalname, file.mimetype)) {
+      if (isOfficeHtmlPreviewable(file.originalname, file.mimetype)) {
         try {
           officeBuffer = file.buffer ?? (await fs.promises.readFile(file.path));
         } catch (err) {

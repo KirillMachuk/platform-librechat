@@ -677,10 +677,15 @@ describe('processAgentFileUpload', () => {
       expect(db.createFile.mock.calls[0][0].text).toBe('plain extracted text');
     });
 
-    test('does not render or store a preview for csv (the route renders it from text)', async () => {
-      isOfficeHtmlPreviewable.mockReturnValue(true); // csv IS office-previewable
+    test('renders csv deferred from the ORIGINAL buffer (not the reformatted `text`)', async () => {
+      isOfficeHtmlPreviewable.mockReturnValue(true);
+      renderOfficePreview.mockResolvedValue({
+        html: '<table><tr><td>Name</td></tr></table>',
+        bucket: 'csv',
+      });
       const { parseText } = require('@librechat/api');
-      parseText.mockResolvedValueOnce({ text: 'Name,Slug\n1,2', bytes: 11 });
+      // doc-gateway reformats the CSV into a labeled extract — NOT the raw file.
+      parseText.mockResolvedValueOnce({ text: 'Дата: 2026\nИмя:\nТелефон: 375', bytes: 20 });
       mergeFileConfig.mockReturnValue({
         checkType: (mime, types) => (types ?? []).includes(mime),
         ocr: { supportedMimeTypes: [] },
@@ -688,16 +693,29 @@ describe('processAgentFileUpload', () => {
         text: { supportedMimeTypes: ['text/csv'] },
       });
       const req = makeReq({ mimetype: 'text/csv' });
-      req.file.originalname = 'data.csv';
+      req.file.originalname = 'leads.csv';
+      req.file.buffer = Buffer.from('Дата,Имя,Телефон\n2026,,375'); // the RAW csv
 
       await processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() });
-      await flush();
 
-      expect(renderOfficePreview).not.toHaveBeenCalled();
       const persisted = db.createFile.mock.calls[0][0];
+      expect(persisted.status).toBe('pending');
       expect(persisted).not.toHaveProperty('previewText');
-      expect(persisted).not.toHaveProperty('status');
-      expect(persisted.text).toBe('Name,Slug\n1,2');
+      // Model text = the reformatted extract, unchanged.
+      expect(persisted.text).toBe('Дата: 2026\nИмя:\nТелефон: 375');
+
+      await flush();
+      // The preview renders the RAW original buffer, NOT the reformatted `text`
+      // — otherwise the table collapses into one "Label: value" column.
+      expect(renderOfficePreview).toHaveBeenCalledTimes(1);
+      expect(renderOfficePreview.mock.calls[0][0].toString('utf8')).toBe(
+        'Дата,Имя,Телефон\n2026,,375',
+      );
+      expect(db.updateFile).toHaveBeenCalledWith({
+        file_id: 'file-uuid-123',
+        previewText: '<table><tr><td>Name</td></tr></table>',
+        status: 'ready',
+      });
     });
 
     test('does not render or set status for non-office context files', async () => {
