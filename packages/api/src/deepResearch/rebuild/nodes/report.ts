@@ -18,6 +18,7 @@ import {
   usageFromExchange,
   sanitizeErrorForUser,
 } from '../shared';
+import { hasResearchMaterial } from './researcher';
 import { buildReportPrompt } from '../prompts';
 
 const DEFAULT_MAX_RETRIES = 3;
@@ -52,6 +53,9 @@ export function concludeToFinalize(reason: SupervisorConcludeReason | null): Fin
   }
   if (reason === 'rounds') {
     return 'rounds';
+  }
+  if (reason === 'error') {
+    return 'error';
   }
   return 'completed';
 }
@@ -172,13 +176,55 @@ export async function composeReport(params: {
 }
 
 /**
+ * Honest short notice when the gather loop produced NO usable material (dead
+ * search/scraper): deterministic, no model call — the model would only dress the
+ * emptiness up as a fake analytical note full of «нет данных».
+ */
+export function buildNoDataReport(params: {
+  request: string;
+  findings: DeepResearchFinding[];
+}): string {
+  const attempted = params.findings
+    .map((finding) => `- ${finding.subQuestion}`)
+    .filter((line, index, all) => all.indexOf(line) === index)
+    .join('\n');
+  return (
+    `## Не удалось собрать материал\n\n` +
+    `По запросу «${params.request.trim()}» веб-поиск не вернул пригодного материала: ` +
+    `источники не открылись или поиск был недоступен. Отчёт без фактической базы не составлен.\n\n` +
+    (attempted ? `Что исследовалось:\n${attempted}\n\n` : '') +
+    `Что можно сделать: повторите исследование чуть позже или переформулируйте запрос. ` +
+    `Если ошибка повторяется — сообщите администратору (похоже на сбой веб-поиска).`
+  );
+}
+
+/**
  * REPORT — the terminal node. Always runs before END (no path skips it) and
  * always produces a `finalReport`: model output, or a deterministic fallback.
+ * When the run gathered NO usable material, it refuses to fake an analytical
+ * note: a short honest notice ships instead ('nodata', or 'error' when the
+ * supervisor itself failed).
  */
 export function createReportNode(deps: ReportNodeDeps): DeepResearchNode {
   return async function report(state, config): Promise<DeepResearchStateUpdate> {
     const request = lastHumanText(state.messages);
     const finalizeReason = concludeToFinalize(state.concludeReason);
+    if (!state.findings.some(hasResearchMaterial)) {
+      const supervisorFailed = state.concludeReason === 'error';
+      const text = supervisorFailed
+        ? buildFallbackReport({
+            brief: state.researchBrief,
+            jurisdiction: state.jurisdiction,
+            findings: [],
+            reason: 'внутренняя ошибка оркестратора',
+          })
+        : buildNoDataReport({ request, findings: state.findings });
+      return {
+        finalReport: text,
+        finalizeReason: supervisorFailed ? 'error' : 'nodata',
+        messages: [new AIMessage(text)],
+      };
+    }
     const { text, usage } = await composeReport({
       reportModel: deps.reportModel,
       request,

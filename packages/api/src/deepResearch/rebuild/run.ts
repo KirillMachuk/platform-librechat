@@ -4,6 +4,7 @@ import type {
   FinalizeReason,
   DeepResearchState,
   DeepResearchFinding,
+  DeepResearchNodeError,
   DeepResearchTokenUsage,
   DeepResearchConfigurable,
 } from './state';
@@ -39,6 +40,9 @@ export interface RunDeepResearchParams {
 
 export interface RunDeepResearchResult {
   finalReport: string;
+  /** Non-fatal node failures accumulated during the run — the runner LOGS these so a
+   *  degraded run (dead search, failing model) is visible in ops, never silent. */
+  errors: DeepResearchNodeError[];
   finalizeReason: FinalizeReason;
   usage: DeepResearchTokenUsage;
   findings: DeepResearchFinding[];
@@ -65,6 +69,7 @@ function resultFrom(
       : finalizeReason,
     usage: values?.tokenUsage ?? ZERO_USAGE,
     findings: values?.findings ?? [],
+    errors: values?.errors ?? [],
   };
 }
 

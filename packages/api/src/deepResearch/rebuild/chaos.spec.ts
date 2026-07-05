@@ -1,5 +1,7 @@
-import { HumanMessage } from '@langchain/core/messages';
+import { z } from 'zod';
+import { tool } from '@langchain/core/tools';
 import { FakeListChatModel } from '@langchain/core/utils/testing';
+import { HumanMessage, AIMessageChunk } from '@langchain/core/messages';
 import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { BaseChatModelParams } from '@langchain/core/language_models/chat_models';
 import type { BaseMessage } from '@langchain/core/messages';
@@ -12,6 +14,27 @@ import { runDeepResearch } from './run';
 const NOW = '2026-06-25T00:00:00Z';
 const NONCE = 'test-nonce';
 const TIER = resolveDeepResearchTier();
+
+/** Worker fake that calls web_search once then answers — yields REAL tool material. */
+function fakeToolWorker(): BaseChatModel {
+  let turn = 0;
+  const caller = {
+    invoke: async () =>
+      turn++ === 0
+        ? new AIMessageChunk({
+            content: '',
+            tool_calls: [{ name: 'web_search', args: { query: 'q' }, id: 'c1', type: 'tool_call' }],
+          })
+        : new AIMessageChunk({ content: 'материал собран' }),
+  };
+  return { bindTools: () => caller } as unknown as BaseChatModel;
+}
+
+const webSearchTool = tool(async ({ query }: { query: string }) => `данные по ${query}`, {
+  name: 'web_search',
+  description: 'поиск',
+  schema: z.object({ query: z.string() }),
+});
 
 /** A chat model that always throws — simulates a 5xx/down upstream. No tool binding needed. */
 class ThrowingChatModel extends BaseChatModel {
@@ -52,10 +75,10 @@ describe('chaos — REPORT always fires', () => {
           '{"action":"COMPLETE","subQuestion":""}',
         ],
       }),
-      workerModel: new FakeListChatModel({ responses: ['материал'] }),
+      workerModel: fakeToolWorker(),
       compressModel: new FakeListChatModel({ responses: ['дайджест'] }),
       reportModel: new ThrowingChatModel('503 service unavailable'),
-      tools: [],
+      tools: [webSearchTool],
       tier: TIER,
       now: NOW,
       nonce: NONCE,
@@ -83,10 +106,14 @@ describe('chaos — REPORT always fires', () => {
 
     const result = await run(graph);
     expect(result.finalReport).toBeTruthy();
-    expect(result.finalizeReason).toBe('completed');
+    // Garbage output no longer silently "completes": each unparseable round degrades to
+    // researching the brief itself until the rounds gate stops the loop; with no real
+    // material gathered the run finalizes as an HONEST no-data notice.
+    expect(result.finalizeReason).toBe('nodata');
+    expect(result.finalReport).toContain('Не удалось собрать материал');
   });
 
-  it('produces a fallback even when research is empty and the report model is down', async () => {
+  it('refuses a fake report when research came up empty — honest notice, report model never called', async () => {
     const graph = createDeepResearchGraph({
       leadModel: new FakeListChatModel({
         responses: ['{"jurisdiction":"RU","brief":"b"}', '{"action":"COMPLETE","subQuestion":""}'],
@@ -101,7 +128,11 @@ describe('chaos — REPORT always fires', () => {
     });
 
     const result = await run(graph);
-    expect(result.finalReport).toContain('не удалось собрать данные');
-    expect(result.findings).toHaveLength(0);
+    // The round-0 anti-complete guard forces ONE real research attempt (1 placeholder
+    // finding), then the honest no-data notice ships DETERMINISTICALLY — the throwing
+    // report model is never invoked.
+    expect(result.finalReport).toContain('Не удалось собрать материал');
+    expect(result.finalizeReason).toBe('nodata');
+    expect(result.findings.length).toBeGreaterThanOrEqual(1);
   });
 });

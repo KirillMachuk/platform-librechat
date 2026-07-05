@@ -1,6 +1,6 @@
 import { FakeListChatModel } from '@langchain/core/utils/testing';
 import type { RunnableConfig } from '@langchain/core/runnables';
-import type { DeepResearchState, DeepResearchConfigurable } from '../state';
+import type { DeepResearchState, DeepResearchNodeError, DeepResearchConfigurable } from '../state';
 import {
   budgetGateReason,
   createSupervisorNode,
@@ -263,5 +263,40 @@ describe('createSupervisorNode', () => {
       expect.anything(),
       expect.objectContaining({ signal: controller.signal }),
     );
+  });
+
+  it('REFUSES a round-0 COMPLETE: forces one research round on the brief instead', async () => {
+    const model = new FakeListChatModel({ responses: ['{"action":"COMPLETE","subQuestion":""}'] });
+    const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(
+      stateWith({ round: 0, researchBrief: 'обзор рынка CRM' }),
+      configWith(),
+    );
+    expect(update.concludeReason ?? null).toBeNull();
+    expect(update.currentSubQuestions).toEqual(['обзор рынка CRM']);
+    expect(update.round).toBe(1);
+  });
+
+  it('degrades unparseable output to researching the brief — NEVER a silent complete', async () => {
+    const model = new FakeListChatModel({ responses: ['это вообще не json'] });
+    const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(
+      stateWith({ round: 1, researchBrief: 'обзор рынка CRM' }),
+      configWith(),
+    );
+    expect(update.concludeReason ?? null).toBeNull();
+    expect(update.currentSubQuestions).toEqual(['обзор рынка CRM']);
+    expect(update.round).toBe(2);
+  });
+
+  it('a model FAILURE concludes as ERROR (partial banner), never as a fake "complete"', async () => {
+    const model = new FakeListChatModel({ responses: ['x'] });
+    jest.spyOn(model, 'invoke').mockRejectedValue(new Error('502 upstream'));
+    const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(
+      stateWith({ round: 1 }),
+      configWith(),
+    );
+    expect(update.concludeReason).toBe('error');
+    const errors = (update.errors ?? []) as DeepResearchNodeError[];
+    expect(errors).toHaveLength(1);
+    expect(errors[0].node).toBe('supervisor');
   });
 });

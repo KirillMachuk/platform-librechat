@@ -217,6 +217,19 @@ export function extractSources(gathered: string): string[] {
   return Array.from(urls);
 }
 
+/** Digest placeholder when the tool loop yielded nothing to compress. */
+export const EMPTY_DIGEST = '(по этому под-вопросу не удалось собрать данные)';
+
+/** Digest prefix when the research of a sub-question failed outright. */
+export const FAILED_DIGEST_PREFIX = '(ошибка исследования';
+
+/** True when a finding carries REAL gathered material (not an empty/failure placeholder).
+ *  REPORT uses this to refuse writing a fake "completed" note out of placeholders. */
+export function hasResearchMaterial(finding: DeepResearchFinding): boolean {
+  const digest = finding.digest.trim();
+  return digest.length > 0 && digest !== EMPTY_DIGEST && !digest.startsWith(FAILED_DIGEST_PREFIX);
+}
+
 export interface ResearchOneResult {
   finding: DeepResearchFinding;
   usage: DeepResearchTokenUsage;
@@ -273,7 +286,7 @@ export async function researchOne(params: {
       finding: {
         round,
         subQuestion,
-        digest: digest || '(по этому под-вопросу не удалось собрать данные)',
+        digest: digest || EMPTY_DIGEST,
         sources: extractSources(gathered),
         tokens: usage.total,
       },
@@ -287,7 +300,7 @@ export async function researchOne(params: {
       finding: {
         round,
         subQuestion,
-        digest: `(ошибка исследования: ${sanitizeErrorForUser(error)})`,
+        digest: `${FAILED_DIGEST_PREFIX}: ${sanitizeErrorForUser(error)})`,
         sources: [],
         tokens: 0,
       },

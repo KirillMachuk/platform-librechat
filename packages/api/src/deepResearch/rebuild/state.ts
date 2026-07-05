@@ -44,7 +44,9 @@ export interface DeepResearchNodeError {
  *  up front (per-user concurrency cap) and never gathered — a terminal, NON-error
  *  state the UI must not flag as an unfinished/failed message. 'clarify' = the runner
  *  short-circuited before the graph to ask clarifying questions (D2, also terminal
- *  and non-error). */
+ *  and non-error). 'nodata' = the gather loop ran but produced NO usable material
+ *  (dead search/scraper) — the report is an honest short notice, never a fake
+ *  "completed" analytical note full of «нет данных». */
 export type FinalizeReason =
   | 'completed'
   | 'budget'
@@ -53,12 +55,16 @@ export type FinalizeReason =
   | 'aborted'
   | 'error'
   | 'limit'
-  | 'clarify';
+  | 'clarify'
+  | 'nodata';
 
 /** Why SUPERVISOR ended the gather loop; REPORT maps it to a FinalizeReason.
  *  'time' = the wall-clock synthesis-reserve gate stopped gathering so the model
- *  still writes the report in time (A1), NOT the hard watchdog killing the run. */
-export type SupervisorConcludeReason = 'budget' | 'rounds' | 'time' | 'complete';
+ *  still writes the report in time (A1), NOT the hard watchdog killing the run.
+ *  'error' = the supervisor's own model call failed — REPORT still writes what was
+ *  gathered, but the run finalizes as an ERROR partial (banner), never as a silent
+ *  "completed" with nothing in it. */
+export type SupervisorConcludeReason = 'budget' | 'rounds' | 'time' | 'complete' | 'error';
 
 /** Prompt+completion token accounting, summed across every model call. */
 export interface DeepResearchTokenUsage {

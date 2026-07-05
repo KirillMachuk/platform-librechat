@@ -1,6 +1,9 @@
-import { AIMessage, HumanMessage } from '@langchain/core/messages';
+import { z } from 'zod';
+import { tool } from '@langchain/core/tools';
+import { AIMessage, HumanMessage, AIMessageChunk } from '@langchain/core/messages';
 import { FakeListChatModel, FakeStreamingChatModel } from '@langchain/core/utils/testing';
 
+import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { DeepResearchConfigurable } from './state';
 import type { DeepResearchProgress } from './run';
 import { resolveDeepResearchTier, tierToRunBudget } from './config';
@@ -10,6 +13,28 @@ import { runDeepResearch } from './run';
 const NOW = '2026-06-25T00:00:00Z';
 const NONCE = 'test-nonce';
 const TIER = resolveDeepResearchTier();
+
+/** Worker fake that calls web_search once then answers — yields REAL tool material,
+ *  so the honest-report gate lets the report model write the note. */
+function fakeToolWorker(): BaseChatModel {
+  let turn = 0;
+  const caller = {
+    invoke: async () =>
+      turn++ === 0
+        ? new AIMessageChunk({
+            content: '',
+            tool_calls: [{ name: 'web_search', args: { query: 'q' }, id: 'c1', type: 'tool_call' }],
+          })
+        : new AIMessageChunk({ content: 'материал собран' }),
+  };
+  return { bindTools: () => caller } as unknown as BaseChatModel;
+}
+
+const webSearchTool = tool(async ({ query }: { query: string }) => `данные по ${query}`, {
+  name: 'web_search',
+  description: 'поиск',
+  schema: z.object({ query: z.string() }),
+});
 
 function configurable(): DeepResearchConfigurable {
   return { runId: 'run-1', userId: 'user-1', mode: 'deep', budget: tierToRunBudget(TIER) };
@@ -25,10 +50,10 @@ function buildGraph(leadSleep?: number) {
       ],
       sleep: leadSleep,
     }),
-    workerModel: new FakeListChatModel({ responses: ['собран материал'] }),
+    workerModel: fakeToolWorker(),
     compressModel: new FakeListChatModel({ responses: ['дайджест'] }),
     reportModel: new FakeListChatModel({ responses: ['# Итоговый отчёт\nКлючевые выводы'] }),
-    tools: [],
+    tools: [webSearchTool],
     tier: TIER,
     now: NOW,
     nonce: NONCE,
@@ -80,10 +105,10 @@ describe('runDeepResearch', () => {
           '{"action":"COMPLETE","subQuestion":""}',
         ],
       }),
-      workerModel: new FakeListChatModel({ responses: ['материал'] }),
+      workerModel: fakeToolWorker(),
       compressModel: new FakeListChatModel({ responses: ['дайджест'] }),
       reportModel: new FakeStreamingChatModel({ responses: [new AIMessage('# Отчёт готов')] }),
-      tools: [],
+      tools: [webSearchTool],
       tier: TIER,
       now: NOW,
       nonce: NONCE,

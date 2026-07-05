@@ -1,5 +1,8 @@
-import { HumanMessage } from '@langchain/core/messages';
+import { z } from 'zod';
+import { tool } from '@langchain/core/tools';
 import { FakeListChatModel } from '@langchain/core/utils/testing';
+import { HumanMessage, AIMessageChunk } from '@langchain/core/messages';
+import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { DeepResearchConfigurable } from './state';
 import type { DeepResearchNode } from './graph';
@@ -7,6 +10,35 @@ import { buildDeepResearchGraph, createDeepResearchGraph } from './graph';
 import { createSupervisorNode } from './nodes/supervisor';
 import { resolveDeepResearchTier } from './config';
 import { createScopeNode } from './nodes/scope';
+
+/** Worker fake that CALLS web_search once then answers — so the researcher gathers
+ *  REAL tool material (the honest-report gate refuses placeholder-only findings). */
+function fakeToolWorker(): BaseChatModel {
+  let turn = 0;
+  const caller = {
+    invoke: async () =>
+      turn++ === 0
+        ? new AIMessageChunk({
+            content: '',
+            tool_calls: [
+              {
+                name: 'web_search',
+                args: { query: 'объём рынка CRM' },
+                id: 'c1',
+                type: 'tool_call',
+              },
+            ],
+          })
+        : new AIMessageChunk({ content: 'материал собран' }),
+  };
+  return { bindTools: () => caller } as unknown as BaseChatModel;
+}
+
+const webSearchTool = tool(async ({ query }: { query: string }) => `данные по ${query}`, {
+  name: 'web_search',
+  description: 'поиск',
+  schema: z.object({ query: z.string() }),
+});
 
 const NOW = '2026-06-25T00:00:00Z';
 const NONCE = 'test-nonce';
@@ -163,12 +195,12 @@ describe('createDeepResearchGraph (full assembly, all real nodes)', () => {
           '{"action":"COMPLETE","subQuestion":""}',
         ],
       }),
-      workerModel: new FakeListChatModel({ responses: ['по под-вопросу собран материал'] }),
+      workerModel: fakeToolWorker(),
       compressModel: new FakeListChatModel({ responses: ['дайджест'] }),
       reportModel: new FakeListChatModel({
         responses: ['# Итоговый отчёт\nКлючевые выводы: рынок растёт.'],
       }),
-      tools: [],
+      tools: [webSearchTool],
       tier: TIER,
       now: NOW,
       nonce: NONCE,
@@ -200,10 +232,10 @@ describe('createDeepResearchGraph (full assembly, all real nodes)', () => {
           '{"action":"RESEARCH","subQuestion":"q1"}',
         ],
       }),
-      workerModel: new FakeListChatModel({ responses: ['материал'] }),
+      workerModel: fakeToolWorker(),
       compressModel: new FakeListChatModel({ responses: ['дайджест'] }),
       reportModel: new FakeListChatModel({ responses: ['# Отчёт'] }),
-      tools: [],
+      tools: [webSearchTool],
       tier: TIER,
       now: NOW,
       nonce: NONCE,
@@ -212,7 +244,11 @@ describe('createDeepResearchGraph (full assembly, all real nodes)', () => {
     const result = await graph.invoke({ messages: [new HumanMessage('go')] }, runConfig(1, 1));
 
     expect(result.tokenUsage.total).toBeGreaterThan(0);
-    expect(result.finalizeReason).toBe('budget');
-    expect(result.finalReport).toContain('Отчёт');
+    // The 1-token budget trips BEFORE any research ran, so the state proves the gate
+    // fired on real usage — and the report is the honest "no material" notice, never
+    // a fake analytical note written out of zero findings.
+    expect(result.concludeReason).toBe('budget');
+    expect(result.finalizeReason).toBe('nodata');
+    expect(result.finalReport).toContain('Не удалось собрать материал');
   });
 });
