@@ -58,16 +58,30 @@ function withPartialBanner(text, finalizeReason) {
   return `> ⚠️ Частичный отчёт: ${reason}. Ниже — то, что удалось собрать.\n\n${text}`;
 }
 
-/** Deterministic chat title from the research request (M9) — never "New Chat". */
+/** Leading imperative research phrases stripped so the title reads as a TOPIC, not a
+ *  command ("проведи исследование рынка CRM" → "Исследование рынка CRM") — the P6 fix. */
+const RESEARCH_IMPERATIVE =
+  /^(?:пожалуйста,?\s+)?(?:проведи|сделай|выполни|подготовь|составь|собери|дай|найди|изучи|исследуй|проанализируй|разбери)(?:те)?\s+/iu;
+
+/**
+ * Deterministic chat title from the research request (M9/P6) — a capitalized TOPIC,
+ * never "New Chat" and never the raw lowercase imperative query. DR bypasses the
+ * standard model title generation (its request.js branch returns early), so this is
+ * the only title; it is the user's own text shown back to them, never egressed, so a
+ * masked/raw request is fine here.
+ */
 function buildDeepResearchTitle(text) {
-  const trimmed = (text ?? '').trim().replace(/\s+/g, ' ');
-  if (!trimmed) {
+  const normalized = (text ?? '').trim().replace(/\s+/g, ' ');
+  const topic = normalized.replace(RESEARCH_IMPERATIVE, '').trim() || normalized;
+  if (!topic) {
     return 'Глубокое исследование';
   }
   // Slice by code points, not UTF-16 units, so a truncation can't split a surrogate
   // pair (emoji/astral char) into a lone surrogate that renders as a "�" glyph.
-  const chars = [...trimmed];
-  return chars.length > 60 ? `${chars.slice(0, 57).join('')}…` : trimmed;
+  const chars = [...topic];
+  const titled = chars[0].toUpperCase() + chars.slice(1).join('');
+  const out = [...titled];
+  return out.length > 60 ? `${out.slice(0, 57).join('')}…` : titled;
 }
 
 /** Soft per-user cap on concurrent active generations gating a new DR start (M1). */
@@ -549,4 +563,4 @@ async function runNewDeepResearch(params) {
   return result;
 }
 
-module.exports = { runNewDeepResearch };
+module.exports = { runNewDeepResearch, buildDeepResearchTitle };
