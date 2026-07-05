@@ -1229,7 +1229,13 @@ class BaseClient {
     for (const file of attachments) {
       /** @type {FileSources} */
       const source = file.source ?? FileSources.local;
-      if (source === FileSources.text) {
+      /* Files with extracted `text` are full-text context files: their
+       * content reaches the model via `extractFileContext`. They must never
+       * fall through to the document-inlining branches below — the retained
+       * original exists for preview/download only, and inlining it would
+       * double-send the content and ship the raw file to the provider (415
+       * at the anonymizer in anonymize mode). */
+      if (source === FileSources.text || file.text) {
         allFiles.push(file);
         continue;
       }
