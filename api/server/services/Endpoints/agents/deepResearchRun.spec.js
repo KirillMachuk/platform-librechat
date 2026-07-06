@@ -11,6 +11,7 @@ const { HumanMessage } = require('@langchain/core/messages');
 
 const mockModelCtorArgs = [];
 const mockInvokeArgs = [];
+const mockInvokeOptions = [];
 let mockTitleContent = 'Сравнение CRM-систем';
 let mockTitleThrows = false;
 let mockClarifyContent = '{"action":"PROCEED","questions":[]}';
@@ -18,8 +19,9 @@ class mockFakeModel {
   constructor(opts) {
     mockModelCtorArgs.push(opts);
   }
-  async invoke(messages) {
+  async invoke(messages, options) {
     mockInvokeArgs.push(messages);
+    mockInvokeOptions.push(options);
     if (mockTitleThrows) {
       throw new Error('title model unavailable');
     }
@@ -76,6 +78,14 @@ jest.mock('@librechat/api', () => ({
   compressModelFor: jest.fn(() => 'compress-model'),
   reportToPdfBuffer: (...a) => mockReportToPdfBuffer(...a),
   getStorageMetadata: jest.fn(() => ({})),
+  // Faithful mirror of the real length-estimate fallback (no usage_metadata on fakes).
+  usageFromExchange: (prompt, response) => {
+    const promptText = prompt.map((m) => String(m.content ?? '')).join(' ');
+    const responseText = typeof response?.content === 'string' ? response.content : '';
+    const input = Math.ceil(promptText.length / 4);
+    const output = Math.ceil(responseText.length / 4);
+    return { input, output, total: input + output };
+  },
   // D2 clarify helpers — faithful mirrors of the real clarify.ts (unit-tested there); the
   // system prompt carries the 'модуль УТОЧНЕНИЯ' marker the fake model branches on.
   buildClarifyPrompt: ({ now }) => `Ты — модуль УТОЧНЕНИЯ. ${now}`,
@@ -171,6 +181,7 @@ beforeEach(() => {
   mockSavedMessages.length = 0;
   mockModelCtorArgs.length = 0;
   mockInvokeArgs.length = 0;
+  mockInvokeOptions.length = 0;
   mockTitleContent = 'Сравнение CRM-систем';
   mockTitleThrows = false;
   mockClarifyContent = '{"action":"PROCEED","questions":[]}';
@@ -602,5 +613,42 @@ describe('isClarifyFollowUp (badge-independent DR routing for clarify replies)',
     await expect(
       isClarifyFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'p1' }),
     ).resolves.toBe(false);
+  });
+});
+
+describe('runNewDeepResearch — P0 review fixes (billing + abort signal)', () => {
+  it('bills the clarify model call: a CLARIFY turn returns non-zero usage', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockClarifyContent = '{"action":"CLARIFY","questions":["Какой масштаб бизнеса?"]}';
+    const params = baseParams('посоветуй CRM');
+    params.req.config.deepResearch = { clarify: true };
+
+    const result = await runNewDeepResearch(params);
+
+    expect(result.finalizeReason).toBe('clarify');
+    expect(result.usage.total).toBeGreaterThan(0);
+  });
+
+  it('bills the title model call on top of the engine usage', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+
+    const result = await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    // The engine mock reports total=30; the title call's estimated usage lands on top.
+    expect(result.usage.total).toBeGreaterThan(30);
+  });
+
+  it('threads the abort signal into the clarify and title model calls', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockClarifyContent = '{"action":"PROCEED","questions":[]}';
+    const controller = new AbortController();
+    const params = baseParams('изучи рынок CRM');
+    params.req.config.deepResearch = { clarify: true };
+    params.signal = controller.signal;
+
+    await runNewDeepResearch(params);
+
+    const signalled = mockInvokeOptions.filter((options) => options?.signal === controller.signal);
+    expect(signalled.length).toBeGreaterThanOrEqual(2); // clarify + title
   });
 });

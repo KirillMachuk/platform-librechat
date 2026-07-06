@@ -23,6 +23,7 @@ const {
   isClarifyMessage,
   reportToPdfBuffer,
   getStorageMetadata,
+  usageFromExchange,
   leadModelFor,
   workerModelFor,
   reportModelFor,
@@ -136,25 +137,44 @@ function extractMessageText(content) {
  * the already-built, cached lead model. Fail-open: any error or empty result falls back to
  * the deterministic {@link buildDeepResearchTitle} heuristic.
  */
-async function resolveDeepResearchTitle({ buildModel, leadModelSlug, topicText, fallbackText }) {
+async function resolveDeepResearchTitle({
+  buildModel,
+  leadModelSlug,
+  topicText,
+  fallbackText,
+  signal,
+}) {
   const source = (topicText ?? '').trim();
   if (!source) {
-    return buildDeepResearchTitle(fallbackText);
+    return { title: buildDeepResearchTitle(fallbackText), usage: null };
   }
   try {
     const model = await buildModel(leadModelSlug);
-    const response = await model.invoke([
+    const prompt = [
       new SystemMessage(
         'Сформулируй короткий заголовок ТЕМЫ исследования на русском: 3–7 слов, именительный падеж, без кавычек, без точки в конце, это тема, а не команда. Не включай имена людей, телефоны, e-mail и служебные метки вида PERSON_1. Верни только заголовок.',
       ),
       new HumanMessage(`Запрос пользователя: ${source}`),
-    ]);
+    ];
+    const response = await model.invoke(prompt, { signal });
     const cleaned = cleanModelTitle(extractMessageText(response?.content));
-    return cleaned ? capitalizeAndTruncateTitle(cleaned) : buildDeepResearchTitle(fallbackText);
+    return {
+      title: cleaned ? capitalizeAndTruncateTitle(cleaned) : buildDeepResearchTitle(fallbackText),
+      usage: usageFromExchange(prompt, response),
+    };
   } catch (error) {
     logger.warn('[deepResearchRun] title generation failed; using heuristic fallback', error);
-    return buildDeepResearchTitle(fallbackText);
+    return { title: buildDeepResearchTitle(fallbackText), usage: null };
   }
+}
+
+/** Adds two token-usage tallies (either side may be null/partial). */
+function sumUsage(a, b) {
+  return {
+    input: (a?.input ?? 0) + (b?.input ?? 0),
+    output: (a?.output ?? 0) + (b?.output ?? 0),
+    total: (a?.total ?? 0) + (b?.total ?? 0),
+  };
 }
 
 /** Soft per-user cap on concurrent active generations gating a new DR start (M1). */
@@ -213,7 +233,7 @@ async function attachReportPdf({ req, responseMessage, reportMarkdown, title, fi
     }
     const buffer = await reportToPdfBuffer(markdown);
     const fileId = randomUUID();
-    const displayName = `${(title || 'Отчёт').trim()}.pdf`;
+    const displayName = `${(title || 'Отчёт').replace(/[\\/]/g, ' ').trim()}.pdf`;
     const filepath = await saveBuffer({
       userId: responseMessage.user,
       buffer,
@@ -327,17 +347,18 @@ async function buildClarifyContinuation({ userId, conversationId, parentMessageI
  * needs clarifying questions. Runs on the MASKED question. Fail-open: any error → PROCEED
  * (research starts rather than the user being nagged with questions).
  */
-async function runClarifyCheck({ buildModel, leadModelSlug, question, now }) {
+async function runClarifyCheck({ buildModel, leadModelSlug, question, now, signal }) {
   try {
     const model = await buildModel(leadModelSlug);
-    const response = await model.invoke([
-      new SystemMessage(buildClarifyPrompt({ now })),
-      new HumanMessage(question),
-    ]);
-    return parseClarifyOutput(extractMessageText(response?.content));
+    const prompt = [new SystemMessage(buildClarifyPrompt({ now })), new HumanMessage(question)];
+    const response = await model.invoke(prompt, { signal });
+    return {
+      ...parseClarifyOutput(extractMessageText(response?.content)),
+      usage: usageFromExchange(prompt, response),
+    };
   } catch (error) {
     logger.warn('[deepResearchRun] clarify check failed; proceeding to research', error);
-    return { action: 'PROCEED', questions: [] };
+    return { action: 'PROCEED', questions: [], usage: null };
   }
 }
 
@@ -579,6 +600,9 @@ async function runNewDeepResearch(params) {
   // M1: the soft DR concurrency cap short-circuits via a sentinel into the same finalize.
   let result;
   let sovereign = null;
+  // Pre-graph model spend (the clarify check) — merged into result.usage after the run
+  // for BOTH outcomes (CLARIFY short-circuit and PROCEED), so billing covers every call.
+  let clarifyUsage = null;
   const otherActiveJobs = await countOtherActiveJobs({
     streamId,
     userId,
@@ -632,7 +656,9 @@ async function runNewDeepResearch(params) {
         leadModelSlug,
         question: sovereign ? sovereign.maskedQuestion : researchInput,
         now: new Date().toISOString(),
+        signal,
       });
+      clarifyUsage = decision.usage;
       logger.info(
         `[deepResearchRun] clarify decision: ${decision.action}` +
           (decision.questions.length ? ` (${decision.questions.length} questions)` : ''),
@@ -751,6 +777,12 @@ async function runNewDeepResearch(params) {
     }
   }
 
+  // The clarify check is a real lead-model call — bill it on EVERY outcome (the CLARIFY
+  // short-circuit carries zero usage of its own; the PROCEED path's graph usage is separate).
+  if (clarifyUsage) {
+    result.usage = sumUsage(result.usage, clarifyUsage);
+  }
+
   // Ops summary: one line telling exactly HOW the run ended and how much material it
   // gathered, plus every non-fatal node error — a degraded run (dead search, failing
   // model) must be visible in logs, never silent.
@@ -779,15 +811,20 @@ async function runNewDeepResearch(params) {
   // phrasing and PII-free (it runs on the masked question). Computed once here so BOTH the
   // D4 PDF filename and the persisted conversation row reuse it. An aborted run skips the
   // model call (its title is never persisted); fail-open to the deterministic heuristic.
-  const deepResearchTitle =
+  const { title: deepResearchTitle, usage: titleUsage } =
     result.finalizeReason === 'aborted'
-      ? buildDeepResearchTitle(text)
+      ? { title: buildDeepResearchTitle(text), usage: null }
       : await resolveDeepResearchTitle({
           buildModel,
           leadModelSlug,
           topicText: sovereign ? sovereign.maskedQuestion : text,
           fallbackText: text,
+          signal,
         });
+  // The title is a real lead-model call too — include it before the usage is billed below.
+  if (titleUsage) {
+    result.usage = sumUsage(result.usage, titleUsage);
+  }
 
   // Parity with the standard title pipeline (answers the gen_title 404): the frontend
   // eagerly polls GET /api/convos/gen_title/:conversationId (retrying 404s) for every
