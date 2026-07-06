@@ -6,6 +6,7 @@ import { cn, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils
 import MessageContent from '~/components/Chat/Messages/Content/MessageContent';
 import { useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
+import { USER_BUBBLE_CLASS } from '~/components/Chat/Messages/ui/turn';
 import SiblingSwitch from '~/components/Chat/Messages/SiblingSwitch';
 import HoverButtons from '~/components/Chat/Messages/HoverButtons';
 import SubRow from '~/components/Chat/Messages/SubRow';
@@ -181,12 +182,7 @@ const MessageRender = memo(function MessageRender({
               showUserBubble && 'items-end',
             )}
           >
-            <div
-              className={cn(
-                showUserBubble &&
-                  'max-w-[70%] rounded-3xl bg-[#F3F3F3] px-4 py-2 dark:bg-surface-tertiary',
-              )}
-            >
+            <div className={cn(showUserBubble && USER_BUBBLE_CLASS)}>
               <MessageContext.Provider value={messageContextValue}>
                 <MessageContent
                   ask={ask}

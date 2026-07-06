@@ -8,6 +8,7 @@ import type {
   TEndpointsConfig,
 } from 'librechat-data-provider';
 import type { useLocalize } from '~/hooks';
+import { getModelBrandIcon } from '~/components/Chat/Menus/Endpoints/components/brand';
 import SpecIcon from '~/components/Chat/Menus/Endpoints/components/SpecIcon';
 import { Endpoint, SelectedValues } from '~/common';
 
@@ -171,6 +172,15 @@ export function getSelectedIcon({
           alt: model,
           className: 'h-full w-full object-cover',
         }),
+      );
+    }
+
+    const brandIcon = getModelBrandIcon(model);
+    if (brandIcon) {
+      return React.createElement(
+        'div',
+        { className: 'flex h-5 w-5 items-center justify-center overflow-hidden rounded-full' },
+        brandIcon,
       );
     }
 

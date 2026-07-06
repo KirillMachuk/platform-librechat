@@ -118,7 +118,10 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
         />
       </div>
       <div
-        className={cn(classProp, 'overflow-y-auto bg-surface-chat p-4 dark:bg-surface-primary-alt')}
+        className={cn(
+          classProp,
+          'overflow-x-auto overflow-y-auto bg-surface-chat p-4 dark:bg-surface-primary-alt',
+        )}
       >
         <code
           ref={codeRef}
