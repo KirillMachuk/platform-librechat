@@ -172,7 +172,9 @@ function baseParams(text) {
     parentMessageId: 'p1',
     responseMessageId: 'r1',
     sender: 'Deep Research',
-    userMessage: { messageId: 'um1' },
+    // Mirrors getPreliminaryUserMessage's real shape (request.js) — the run relies on
+    // conversationId being present for the DB save.
+    userMessage: { messageId: 'um1', parentMessageId: 'p1', conversationId: 'c1', text },
     text,
   };
 }
@@ -550,7 +552,11 @@ describe('runNewDeepResearch — user message persisted as a real user turn', ()
     // (schema default) with no sender — after a refetch the question rendered as a
     // nameless, avatar-less message and the analytics isCreatedByUser filter skipped it.
     const userMsg = mockSavedMessages.find((m) => m.messageId === 'um1');
-    expect(userMsg).toMatchObject({ sender: 'User', isCreatedByUser: true });
+    expect(userMsg).toMatchObject({
+      sender: 'User',
+      isCreatedByUser: true,
+      conversationId: 'c1',
+    });
 
     // Job-store copy (the abort path re-saves from it).
     const createdEvents = api.GenerationJobManager.emitChunk.mock.calls.filter(

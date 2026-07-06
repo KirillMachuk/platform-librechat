@@ -580,14 +580,12 @@ async function runNewDeepResearch(params) {
     text,
   } = params;
 
-  // The controller's preliminary user message is bare {messageId, parentMessageId,
-  // conversationId, text}. Persisting it as-is stored isCreatedByUser:false (schema
-  // default) and no sender, so a refetch rendered the user's question as a nameless,
-  // avatar-less message and admin analytics (which filters employee requests by
-  // isCreatedByUser) skipped it. Enrich ONCE to the normal-path user-message shape and
-  // use this object everywhere it leaves the run: created event, DB save, final event.
+  // The user message must leave the run in the normal-path shape (sender/isCreatedByUser,
+  // else saveMessage persists an authorless AI turn) — enriched ONCE and reused for the
+  // created event, the DB save, and the final event. conversationId precedes the spread
+  // as a fallback only: without it saveMessage silently refuses to persist.
   const requestMessage = userMessage
-    ? { ...userMessage, sender: 'User', isCreatedByUser: true }
+    ? { conversationId, ...userMessage, sender: 'User', isCreatedByUser: true }
     : null;
 
   // H1: emit `created` up front so the job is flagged createdEventEmitted=true and the
@@ -893,7 +891,7 @@ async function runNewDeepResearch(params) {
     // H2: the report's parent is the user's QUESTION, not the question's parent.
     // Otherwise the report and the question become siblings and `buildTree` drops
     // the report on refetch (it vanishes on reload). Mirrors GenerationJobManager.
-    parentMessageId: userMessage?.messageId ?? parentMessageId,
+    parentMessageId: requestMessage?.messageId ?? parentMessageId,
     sender: sender ?? 'Deep Research',
     isCreatedByUser: false,
     user: userId,
