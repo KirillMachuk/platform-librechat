@@ -527,15 +527,25 @@ async function runNewDeepResearch(params) {
     text,
   } = params;
 
+  // The controller's preliminary user message is bare {messageId, parentMessageId,
+  // conversationId, text}. Persisting it as-is stored isCreatedByUser:false (schema
+  // default) and no sender, so a refetch rendered the user's question as a nameless,
+  // avatar-less message and admin analytics (which filters employee requests by
+  // isCreatedByUser) skipped it. Enrich ONCE to the normal-path user-message shape and
+  // use this object everywhere it leaves the run: created event, DB save, final event.
+  const requestMessage = userMessage
+    ? { ...userMessage, sender: 'User', isCreatedByUser: true }
+    : null;
+
   // H1: emit `created` up front so the job is flagged createdEventEmitted=true and the
   // user message is persisted to the job store. Without it, a Stop during the (content-
   // less) research phase looks like an "early abort" to abortJob, which wipes the question
   // and bounces the user into an empty new chat. emitChunk is a no-op once aborted, so this
   // must run before any await that the user could interrupt. Mirrors the agent path's onStart.
-  if (streamId && userMessage) {
+  if (streamId && requestMessage) {
     await GenerationJobManager.emitChunk(streamId, {
       created: true,
-      message: { ...userMessage, sender: 'User', isCreatedByUser: true },
+      message: requestMessage,
       streamId,
     });
   }
@@ -842,8 +852,8 @@ async function runNewDeepResearch(params) {
 
   // Save user + response BEFORE the final event (mirrors request.js:523-546 — avoids
   // the race where a follow-up arrives before the response is persisted).
-  if (userMessage) {
-    await saveMessage(reqCtx, userMessage, { context: 'deepResearchRun - user message' });
+  if (requestMessage) {
+    await saveMessage(reqCtx, requestMessage, { context: 'deepResearchRun - user message' });
   }
   await saveMessage(reqCtx, responseMessage, { context: 'deepResearchRun - final report' });
 
@@ -894,7 +904,7 @@ async function runNewDeepResearch(params) {
     final: true,
     conversation: finalConversation,
     title: finalConversation.title,
-    requestMessage: userMessage ? sanitizeMessageForTransmit(userMessage) : undefined,
+    requestMessage: requestMessage ? sanitizeMessageForTransmit(requestMessage) : undefined,
     responseMessage,
   };
 

@@ -502,6 +502,45 @@ describe('runNewDeepResearch — honest nodata outcome', () => {
   });
 });
 
+describe('runNewDeepResearch — user message persisted as a real user turn', () => {
+  it('saves the user message with sender User + isCreatedByUser true and mirrors it in created/final events', async () => {
+    const api = require('@librechat/api');
+    mockStartSovereignSession.mockResolvedValue(null);
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    // DB copy: persisting the bare preliminary message stored isCreatedByUser:false
+    // (schema default) with no sender — after a refetch the question rendered as a
+    // nameless, avatar-less message and the analytics isCreatedByUser filter skipped it.
+    const userMsg = mockSavedMessages.find((m) => m.messageId === 'um1');
+    expect(userMsg).toMatchObject({ sender: 'User', isCreatedByUser: true });
+
+    // Job-store copy (the abort path re-saves from it).
+    const createdEvents = api.GenerationJobManager.emitChunk.mock.calls.filter(
+      ([, chunk]) => chunk?.created === true,
+    );
+    expect(createdEvents).toHaveLength(1);
+    expect(createdEvents[0][1].message).toMatchObject({ sender: 'User', isCreatedByUser: true });
+
+    // Final event copy (replaces the client's optimistic message in the query cache).
+    expect(mockEmitDone).toHaveBeenCalledTimes(1);
+    const finalEvent = mockEmitDone.mock.calls[0][1];
+    expect(finalEvent.requestMessage).toMatchObject({ sender: 'User', isCreatedByUser: true });
+  });
+
+  it('a clarify turn saves the user message with the same user-turn fields', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockClarifyContent = '{"action":"CLARIFY","questions":["Какой бюджет?"]}';
+    const params = baseParams('посоветуй CRM');
+    params.req.config.deepResearch = { clarify: true };
+
+    await runNewDeepResearch(params);
+
+    const userMsg = mockSavedMessages.find((m) => m.messageId === 'um1');
+    expect(userMsg).toMatchObject({ sender: 'User', isCreatedByUser: true });
+  });
+});
+
 describe('isClarifyFollowUp (badge-independent DR routing for clarify replies)', () => {
   const models = require('~/models');
   const NO_PARENT = '00000000-0000-0000-0000-000000000000';
