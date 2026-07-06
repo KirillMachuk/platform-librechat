@@ -257,6 +257,33 @@ async function attachReportPdf({ req, responseMessage, reportMarkdown, title, fi
 }
 
 /**
+ * D2 badge-independence: TRUE when the message replies to the assistant's clarify
+ * questions. The routing gate uses this so answering a clarify prompt ALWAYS continues
+ * into the research — even when the frontend's `deep_research` flag was lost (toggled
+ * off, dropped on the new-chat key transition, etc.). Replying to the questions IS the
+ * user's intent; without this the answer fell into normal chat and a plain model
+ * improvised a source-less "report". Fail-closed: any error → false (normal chat).
+ */
+async function isClarifyFollowUp({ userId, conversationId, parentMessageId }) {
+  if (!conversationId || !parentMessageId || parentMessageId === Constants.NO_PARENT) {
+    return false;
+  }
+  try {
+    const messages = await getMessages(
+      { conversationId, user: userId, messageId: parentMessageId },
+      'messageId text isCreatedByUser',
+    );
+    const parent = Array.isArray(messages) ? messages[0] : null;
+    return Boolean(
+      parent && parent.isCreatedByUser !== true && isClarifyMessage(parent.text ?? ''),
+    );
+  } catch (error) {
+    logger.warn('[deepResearchRun] clarify follow-up check failed; routing to normal chat', error);
+    return false;
+  }
+}
+
+/**
  * D2 turn 2: if this message replies to a clarify prompt, assemble the whole dialogue
  * (original request → clarify questions → this answer) so the research uses the full
  * context. Returns null when it is NOT a clarify continuation, or on any load error
@@ -882,4 +909,4 @@ async function runNewDeepResearch(params) {
   return result;
 }
 
-module.exports = { runNewDeepResearch, buildDeepResearchTitle };
+module.exports = { runNewDeepResearch, buildDeepResearchTitle, isClarifyFollowUp };

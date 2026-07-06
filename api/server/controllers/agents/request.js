@@ -20,7 +20,10 @@ const {
 const { handleAbortError } = require('~/server/middleware');
 const { logViolation } = require('~/cache');
 const { saveMessage, getMessages, getConvo } = require('~/models');
-const { runNewDeepResearch } = require('~/server/services/Endpoints/agents/deepResearchRun');
+const {
+  runNewDeepResearch,
+  isClarifyFollowUp,
+} = require('~/server/services/Endpoints/agents/deepResearchRun');
 
 function createCloseHandler(abortController) {
   return function (manual) {
@@ -338,11 +341,21 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
 
     /** New StateGraph Deep Research engine, behind `deepResearch.useNewEngine`.
      *  Runs the custom graph INSTEAD of the standard agent run and returns early.
-     *  The legacy DR is the default (flag off), so this branch cannot regress it. */
-    if (
+     *  The legacy DR is the default (flag off), so this branch cannot regress it.
+     *  Routing is badge OR clarify-follow-up: a reply to the assistant's clarifying
+     *  questions continues into the research even when the frontend flag was lost —
+     *  otherwise the answer lands in normal chat and a plain model improvises a
+     *  source-less "report" (live-observed failure). */
+    const useNewDeepResearch =
       req.config?.deepResearch?.useNewEngine === true &&
-      req.body?.ephemeralAgent?.deep_research === true
-    ) {
+      (req.body?.ephemeralAgent?.deep_research === true ||
+        (await isClarifyFollowUp({ userId, conversationId, parentMessageId })));
+    if (useNewDeepResearch) {
+      if (req.body?.ephemeralAgent?.deep_research !== true) {
+        logger.info(
+          '[AgentController] clarify follow-up detected — routing to Deep Research (badge was off)',
+        );
+      }
       try {
         await runNewDeepResearch({
           req,
