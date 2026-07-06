@@ -78,6 +78,9 @@ jest.mock('@librechat/api', () => ({
   compressModelFor: jest.fn(() => 'compress-model'),
   reportToPdfBuffer: (...a) => mockReportToPdfBuffer(...a),
   getStorageMetadata: jest.fn(() => ({})),
+  getProviderConfig: ({ provider, appConfig }) => ({
+    customEndpointConfig: appConfig?.endpoints?.custom?.find?.((e) => e?.name === provider),
+  }),
   // Faithful mirror of the real length-estimate fallback (no usage_metadata on fakes).
   usageFromExchange: (prompt, response) => {
     const promptText = prompt.map((m) => String(m.content ?? '')).join(' ');
@@ -342,6 +345,29 @@ describe('resolveDeepResearchTitle (topic title from the masked question, PII-fr
     await runNewDeepResearch(baseParams('изучи рынок ЭДО'));
 
     expect(models.saveConvo.mock.calls[0][1].title).toBe('Рынок ЭДО');
+  });
+
+  it('uses the endpoint titlePrompt from config — DR obeys the SAME title rules as normal chats', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    const params = baseParams('изучи рынок CRM');
+    params.req.config.endpoints = {
+      custom: [
+        {
+          name: '1ma',
+          titlePrompt: 'Максимум 4 слова, без кавычек.\n\nДиалог:\n{convo}',
+          titleModel: 'anthropic/claude-sonnet-4.6',
+        },
+      ],
+    };
+
+    await runNewDeepResearch(params);
+
+    const titlePrompt = mockInvokeArgs
+      .map((messages) => messages?.[0]?.content)
+      .find((content) => typeof content === 'string' && content.includes('Максимум 4 слова'));
+    expect(titlePrompt).toBeDefined();
+    expect(titlePrompt).toContain('Пользователь: изучи рынок CRM');
+    expect(titlePrompt).not.toContain('{convo}');
   });
 });
 

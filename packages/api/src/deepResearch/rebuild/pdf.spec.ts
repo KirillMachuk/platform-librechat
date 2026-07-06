@@ -88,6 +88,50 @@ describe('reportToDocDefinition (Markdown → pdfmake doc)', () => {
   it('always sets the Cyrillic-capable Roboto default font', () => {
     expect(reportToDocDefinition('привет').defaultStyle?.font).toBe('Roboto');
   });
+
+  it('normalizes NBSP-glued numbers so table columns can wrap instead of overflowing', () => {
+    const nb = String.fromCharCode(0x00a0);
+    const nnb = String.fromCharCode(0x202f);
+    const runs = (blocks(`Тариф от 389${nb}₽/мес. за сотр. 1${nnb}945`)[0] as ContentText)
+      .text as ContentText[];
+    const text = runs.map((r) => r.text).join('');
+    expect(text).toContain('389 ₽/мес.');
+    expect(text).toContain('1 945');
+    expect(text).not.toContain(nb);
+    expect(text).not.toContain(nnb);
+  });
+
+  it('replaces glyphs missing from the vfs Roboto (arrows, minus) with ASCII fallbacks', () => {
+    const runs = (blocks(`CRM → Аналитика, ${String.fromCharCode(0x2212)}5 %`)[0] as ContentText)
+      .text as ContentText[];
+    const text = runs.map((r) => r.text).join('');
+    expect(text).toContain('CRM -> Аналитика');
+    expect(text).toContain('-5 %');
+    expect(text).not.toContain('→');
+  });
+
+  it('inserts soft break points into over-long tokens (long URLs never push past the edge)', () => {
+    const url = 'https://it-federation.ru/amocrm/amocrm/polnoe-sravnenie-tarifov-amocrm.html';
+    const runs = (blocks(`Источник: ${url}`)[0] as ContentText).text as ContentText[];
+    const text = runs.map((r) => r.text).join('');
+    const zwsp = String.fromCharCode(0x200b);
+    expect(text).toContain(zwsp);
+    expect(text.split(zwsp).join('')).toContain(url);
+  });
+
+  it('renders comparison tables at a compact font size', () => {
+    const md = '| А | Б |\n| --- | --- |\n| 1 | 2 |';
+    const table = blocks(md).find((c) => (c as ContentTable).table) as ContentTable & {
+      fontSize?: number;
+    };
+    expect(table.fontSize).toBe(9);
+  });
+
+  it('embeds the report title as PDF metadata when provided', () => {
+    const doc = reportToDocDefinition('# Отчёт', { title: 'Сравнение CRM' });
+    expect(doc.info?.title).toBe('Сравнение CRM');
+    expect(reportToDocDefinition('# Отчёт').info).toBeUndefined();
+  });
 });
 
 describe('reportToPdfBuffer', () => {
@@ -125,7 +169,9 @@ describe('reportToPdfBuffer', () => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const hanging = require('./pdf') as typeof import('./pdf');
-      await expect(hanging.reportToPdfBuffer('# зависание', 25)).rejects.toThrow(/timed out/);
+      await expect(hanging.reportToPdfBuffer('# зависание', { timeoutMs: 25 })).rejects.toThrow(
+        /timed out/,
+      );
     } finally {
       jest.dontMock('pdfmake/build/pdfmake');
       jest.resetModules();
