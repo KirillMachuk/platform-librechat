@@ -1,19 +1,15 @@
 import { useCallback, useMemo, memo } from 'react';
-import { useAtomValue } from 'jotai';
 import { useRecoilValue } from 'recoil';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
-import type { TMessageProps, TMessageIcon, TMessageChatContext } from '~/common';
+import type { TMessageProps, TMessageChatContext } from '~/common';
 import { useAttachments, useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
 import { cn, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
-import MessageTimestamp from '~/components/Chat/Messages/ui/MessageTimestamp';
 import ContentParts from '~/components/Chat/Messages/Content/ContentParts';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
 import SiblingSwitch from '~/components/Chat/Messages/SiblingSwitch';
 import HoverButtons from '~/components/Chat/Messages/HoverButtons';
-import MessageIcon from '~/components/Chat/Messages/MessageIcon';
 import Files from '~/components/Chat/Messages/Content/Files';
 import SubRow from '~/components/Chat/Messages/SubRow';
-import { fontSizeAtom } from '~/store/fontSize';
 import store from '~/store';
 
 type ContentRenderProps = {
@@ -106,11 +102,8 @@ const ContentRender = memo(function ContentRender({
   const {
     edit,
     index,
-    agent,
-    assistant,
     enterEdit,
     conversation,
-    messageLabel,
     handleContinue,
     handleFeedback,
     latestMessageId,
@@ -124,7 +117,6 @@ const ContentRender = memo(function ContentRender({
     setCurrentEditId,
     chatContext,
   });
-  const fontSize = useAtomValue(fontSizeAtom);
   const maximizeChatSpace = useRecoilValue(store.maximizeChatSpace);
 
   const handleRegenerateMessage = useCallback(() => regenerateMessage(), [regenerateMessage]);
@@ -134,25 +126,6 @@ const ContentRender = memo(function ContentRender({
   );
   const hasNoChildren = !(msg?.children?.length ?? 0);
   const isLatestMessage = msg?.messageId === latestMessageId;
-
-  const iconData: TMessageIcon = useMemo(
-    () => ({
-      endpoint: msg?.endpoint ?? conversation?.endpoint,
-      model: msg?.model ?? conversation?.model,
-      iconURL: msg?.iconURL,
-      modelLabel: messageLabel,
-      isCreatedByUser: msg?.isCreatedByUser,
-    }),
-    [
-      messageLabel,
-      conversation?.endpoint,
-      conversation?.model,
-      msg?.model,
-      msg?.iconURL,
-      msg?.endpoint,
-      msg?.isCreatedByUser,
-    ],
-  );
 
   const { hasParallelContent } = useContentMetadata(msg);
 
@@ -179,6 +152,9 @@ const ContentRender = memo(function ContentRender({
     focus: 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-xheavy',
   };
 
+  const isUserTurn = msg.isCreatedByUser === true;
+  const showUserBubble = isUserTurn && !edit;
+
   return (
     <div
       id={msg.messageId}
@@ -190,48 +166,40 @@ const ContentRender = memo(function ContentRender({
         'message-render',
       )}
     >
-      {!hasParallelContent && (
-        <div className="relative flex flex-shrink-0 flex-col items-center">
-          <div className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full">
-            <MessageIcon iconData={iconData} assistant={assistant} agent={agent} />
-          </div>
-        </div>
-      )}
-
-      <div
-        className={cn(
-          'relative flex flex-col',
-          hasParallelContent ? 'w-full' : 'w-11/12',
-          msg.isCreatedByUser ? 'user-turn' : 'agent-turn',
-        )}
-      >
-        {!hasParallelContent && (
-          <h2 className={cn('select-none font-semibold', fontSize)}>
-            <span className="sr-only">{getHeaderPrefixForScreenReader(msg, localize)}</span>
-            {messageLabel}
-            <MessageTimestamp value={msg.createdAt ?? msg.clientTimestamp} />
-          </h2>
-        )}
+      <div className={cn('relative flex w-full flex-col', isUserTurn ? 'user-turn' : 'agent-turn')}>
+        <h2 className="sr-only">{getHeaderPrefixForScreenReader(msg, localize)}</h2>
 
         <div className="flex flex-col gap-1">
-          <div className="flex min-h-[20px] max-w-full flex-grow flex-col gap-0">
-            <ContentParts
-              edit={edit}
-              isLast={isLast}
-              enterEdit={enterEdit}
-              siblingIdx={siblingIdx}
-              messageId={msg.messageId}
-              attachments={attachments}
-              searchResults={searchResults}
-              manualSkills={msg.manualSkills}
-              setSiblingIdx={setSiblingIdx}
-              isLatestMessage={isLatestMessage}
-              isSubmitting={isSubmitting}
-              isCreatedByUser={msg.isCreatedByUser}
-              createdAt={msg.createdAt ?? msg.clientTimestamp}
-              conversationId={conversation?.conversationId}
-              content={msg.content as Array<TMessageContentParts | undefined>}
-            />
+          <div
+            className={cn(
+              'flex min-h-[20px] max-w-full flex-grow flex-col gap-0',
+              showUserBubble && 'items-end',
+            )}
+          >
+            <div
+              className={cn(
+                showUserBubble &&
+                  'max-w-[70%] rounded-3xl bg-[#F3F3F3] px-4 py-2 dark:bg-surface-tertiary',
+              )}
+            >
+              <ContentParts
+                edit={edit}
+                isLast={isLast}
+                enterEdit={enterEdit}
+                siblingIdx={siblingIdx}
+                messageId={msg.messageId}
+                attachments={attachments}
+                searchResults={searchResults}
+                manualSkills={msg.manualSkills}
+                setSiblingIdx={setSiblingIdx}
+                isLatestMessage={isLatestMessage}
+                isSubmitting={isSubmitting}
+                isCreatedByUser={msg.isCreatedByUser}
+                createdAt={msg.createdAt ?? msg.clientTimestamp}
+                conversationId={conversation?.conversationId}
+                content={msg.content as Array<TMessageContentParts | undefined>}
+              />
+            </div>
             {/* Assistant-side file artifacts (e.g. the Deep Research report PDF):
                 Container renders message.files for USER messages only, so without this
                 the assistant's attached files never appear. Images excluded — generated
@@ -241,7 +209,7 @@ const ContentRender = memo(function ContentRender({
           {hasNoChildren && isSubmitting ? (
             <PlaceholderRow />
           ) : (
-            <SubRow classes="text-xs">
+            <SubRow classes={cn('text-xs', isUserTurn && 'justify-end')}>
               <SiblingSwitch
                 siblingIdx={siblingIdx}
                 siblingCount={siblingCount}

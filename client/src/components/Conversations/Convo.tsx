@@ -5,7 +5,6 @@ import { Constants } from 'librechat-data-provider';
 import { useToastContext, useMediaQuery } from '@librechat/client';
 import type { TConversation } from 'librechat-data-provider';
 import { useNavigateToConvo, useLocalize, useShiftKey } from '~/hooks';
-import ConversationEndpointIcon from './ConversationEndpointIcon';
 import { useUpdateConversationMutation } from '~/data-provider';
 import { areConversationRenderPropsEqual } from './utils';
 import { NotificationSeverity } from '~/common';
@@ -272,9 +271,7 @@ function Conversation({
           onRename={handleRename}
           isSmallScreen={isSmallScreen}
           localize={localize}
-        >
-          <ConversationEndpointIcon conversation={conversation} size={20} context="menu-item" />
-        </ConvoLink>
+        />
       )}
       <div
         className={cn(
