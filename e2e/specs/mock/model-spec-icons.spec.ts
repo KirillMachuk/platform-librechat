@@ -1,9 +1,14 @@
 import { expect, test } from '@playwright/test';
-import type { Locator, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { NEW_CHAT_PATH, selectModelSpec, sendMessage } from './helpers';
 
+/**
+ * Originally asserted the model-spec icon inside message turns. The fork's
+ * ChatGPT-style layout renders no per-message icons, so these specs now guard
+ * what the icon assertions were really protecting: a model-spec stream keeps
+ * its assistant message across navigation resume, abort, and reload.
+ */
 const ICON_SPEC_LABEL = 'E2E Icon Spec';
-const ICON_SPEC_URL = '/assets/openai.svg';
 
 const uniqueLabel = (name: string) => `${name}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 const iconPrompt = (label: string) => `E2E_RESUME_ICON_REPLY:${label}`;
@@ -11,8 +16,6 @@ const iconReplyPrefix = (label: string) => `E2E resume icon reply ${label}`;
 
 const assistantMessage = (page: Page, text: string) =>
   page.locator('.message-render').filter({ hasText: text }).last();
-
-const modelSpecIcon = (message: Locator) => message.locator(`img[src$="${ICON_SPEC_URL}"]`);
 
 async function openIconSpecChat(page: Page) {
   await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
@@ -27,13 +30,14 @@ async function sendIconSpecStream(page: Page, label: string) {
   const reply = iconReplyPrefix(label);
   const message = assistantMessage(page, reply);
   await expect(message.getByText(reply)).toBeVisible({ timeout: 30000 });
-  await expect(modelSpecIcon(message)).toBeVisible();
 
   return { conversationUrl: page.url(), reply };
 }
 
-test.describe('model spec message icons', () => {
-  test('preserves iconURL when resuming an active stream after navigation', async ({ page }) => {
+test.describe('model spec streams', () => {
+  test('keeps the assistant message when resuming an active stream after navigation', async ({
+    page,
+  }) => {
     test.setTimeout(90000);
     const label = uniqueLabel('resume-icon');
 
@@ -45,11 +49,13 @@ test.describe('model spec message icons', () => {
 
     const resumedMessage = assistantMessage(page, reply);
     await expect(resumedMessage.getByText(reply)).toBeVisible({ timeout: 30000 });
-    await expect(modelSpecIcon(resumedMessage)).toBeVisible();
+    await expect(resumedMessage.locator('.agent-turn')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible();
   });
 
-  test('preserves iconURL when aborting an active model spec stream', async ({ page }) => {
+  test('keeps the assistant message when aborting an active model spec stream', async ({
+    page,
+  }) => {
     test.setTimeout(90000);
     const label = uniqueLabel('abort-icon');
 
@@ -72,11 +78,10 @@ test.describe('model spec message icons', () => {
 
     const abortedMessage = assistantMessage(page, reply);
     await expect(abortedMessage.getByText(reply)).toBeVisible();
-    await expect(modelSpecIcon(abortedMessage)).toBeVisible();
 
     await page.reload({ timeout: 10000 });
     const reloadedMessage = assistantMessage(page, reply);
     await expect(reloadedMessage.getByText(reply)).toBeVisible({ timeout: 30000 });
-    await expect(modelSpecIcon(reloadedMessage)).toBeVisible();
+    await expect(reloadedMessage.locator('.agent-turn')).toBeVisible();
   });
 });
