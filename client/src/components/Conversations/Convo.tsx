@@ -7,10 +7,10 @@ import type { TConversation } from 'librechat-data-provider';
 import { useNavigateToConvo, useLocalize, useShiftKey } from '~/hooks';
 import { useUpdateConversationMutation } from '~/data-provider';
 import { areConversationRenderPropsEqual } from './utils';
+import { cn, logger, buildConvoPath } from '~/utils';
 import { NotificationSeverity } from '~/common';
 import { ConvoOptions } from './ConvoOptions';
 import RenameForm from './RenameForm';
-import { cn, logger, buildConvoPath } from '~/utils';
 import ConvoLink from './ConvoLink';
 import store from '~/store';
 
