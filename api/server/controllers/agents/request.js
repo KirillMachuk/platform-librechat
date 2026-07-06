@@ -107,6 +107,8 @@ function getPreliminaryUserMessage({ messageId, parentMessageId, text }, convers
     parentMessageId,
     conversationId,
     text,
+    sender: 'User',
+    isCreatedByUser: true,
   };
 }
 
@@ -491,6 +493,8 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
               parentMessageId: userMsg.parentMessageId,
               conversationId: userMsg.conversationId,
               text: userMsg.text,
+              sender: userMsg.sender,
+              isCreatedByUser: userMsg.isCreatedByUser,
             },
           });
 
@@ -1012,6 +1016,8 @@ const _LegacyAgentController = async (req, res, next, initializeClient, addTitle
           parentMessageId: userMsg.parentMessageId,
           conversationId,
           text: userMsg.text,
+          sender: userMsg.sender,
+          isCreatedByUser: userMsg.isCreatedByUser,
         },
       });
     };

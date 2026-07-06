@@ -5,6 +5,7 @@ import type { TMessageProps } from '~/common';
 import { useMessageHelpers, useLocalize, useAttachments, useContentMetadata } from '~/hooks';
 import { cn, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import ContentParts from './Content/ContentParts';
+import { USER_BUBBLE_CLASS } from './ui/turn';
 import SiblingSwitch from './SiblingSwitch';
 import MultiMessage from './MultiMessage';
 import HoverButtons from './HoverButtons';
@@ -38,6 +39,7 @@ export default function Message(props: TMessageProps) {
   const { children, messageId = null, isCreatedByUser } = message ?? {};
 
   const { hasParallelContent } = useContentMetadata(message);
+  const showUserBubble = isCreatedByUser === true && !edit;
 
   if (!message) {
     return null;
@@ -87,16 +89,10 @@ export default function Message(props: TMessageProps) {
                 <div
                   className={cn(
                     'flex min-h-[20px] max-w-full flex-grow flex-col gap-0',
-                    isCreatedByUser === true && !edit && 'items-end',
+                    showUserBubble && 'items-end',
                   )}
                 >
-                  <div
-                    className={cn(
-                      isCreatedByUser === true &&
-                        !edit &&
-                        'max-w-[70%] rounded-3xl bg-[#F3F3F3] px-4 py-2 dark:bg-surface-tertiary',
-                    )}
-                  >
+                  <div className={cn(showUserBubble && USER_BUBBLE_CLASS)}>
                     <ContentParts
                       edit={edit}
                       isLast={isLast}

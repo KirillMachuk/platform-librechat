@@ -30,7 +30,9 @@ export function getModelBrandIcon(modelId: string | null, size = 16): JSX.Elemen
   if (brand === 'anthropic') {
     return <AnthropicIcon size={size} className="text-text-primary" />;
   }
-  const asset = BRAND_ASSETS[brand];
+  const asset = Object.prototype.hasOwnProperty.call(BRAND_ASSETS, brand)
+    ? BRAND_ASSETS[brand]
+    : undefined;
   if (!asset) {
     return null;
   }

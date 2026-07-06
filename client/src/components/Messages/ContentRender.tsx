@@ -6,6 +6,7 @@ import { useAttachments, useLocalize, useMessageActions, useContentMetadata } fr
 import { cn, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import ContentParts from '~/components/Chat/Messages/Content/ContentParts';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
+import { USER_BUBBLE_CLASS } from '~/components/Chat/Messages/ui/turn';
 import SiblingSwitch from '~/components/Chat/Messages/SiblingSwitch';
 import HoverButtons from '~/components/Chat/Messages/HoverButtons';
 import Files from '~/components/Chat/Messages/Content/Files';
@@ -176,12 +177,7 @@ const ContentRender = memo(function ContentRender({
               showUserBubble && 'items-end',
             )}
           >
-            <div
-              className={cn(
-                showUserBubble &&
-                  'max-w-[70%] rounded-3xl bg-[#F3F3F3] px-4 py-2 dark:bg-surface-tertiary',
-              )}
-            >
+            <div className={cn(showUserBubble && USER_BUBBLE_CLASS)}>
               <ContentParts
                 edit={edit}
                 isLast={isLast}
