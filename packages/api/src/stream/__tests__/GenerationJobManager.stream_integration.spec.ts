@@ -1192,6 +1192,43 @@ describe('GenerationJobManager Integration Tests', () => {
       await manager.destroy();
     });
 
+    test('trackUserMessage keeps the user-turn fields for job-store consumers', async () => {
+      const manager = new GenerationJobManagerClass();
+      manager.configure({
+        jobStore: new InMemoryJobStore({ ttlAfterComplete: 60000 }),
+        eventTransport: new InMemoryEventTransport(),
+        isRedis: false,
+      });
+      manager.initialize();
+
+      const streamId = `user-turn-fields-${Date.now()}`;
+      await manager.createJob(streamId, 'user-1');
+
+      await manager.emitChunk(streamId, {
+        created: true,
+        message: {
+          messageId: 'um1',
+          parentMessageId: 'p1',
+          conversationId: 'c1',
+          text: 'hello',
+          sender: 'User',
+          isCreatedByUser: true,
+        },
+        streamId,
+      } as CreatedEvent);
+
+      // Any consumer persisting or transmitting the stored copy must see a real
+      // user turn — dropping these fields regressed to authorless AI messages.
+      const resumeState = await manager.getResumeState(streamId);
+      expect(resumeState?.userMessage).toMatchObject({
+        messageId: 'um1',
+        sender: 'User',
+        isCreatedByUser: true,
+      });
+
+      await manager.destroy();
+    });
+
     testRedis('should buffer and replay events emitted before subscribe (Redis)', async () => {
       const manager = new GenerationJobManagerClass();
       const services = createStreamServices({

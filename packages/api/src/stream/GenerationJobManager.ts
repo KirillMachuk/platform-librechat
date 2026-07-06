@@ -767,6 +767,7 @@ class GenerationJobManagerClass {
             parentMessageId: jobData.userMessage.parentMessageId,
             conversationId: jobData.conversationId,
             text: jobData.userMessage.text ?? '',
+            sender: jobData.userMessage.sender ?? 'User',
             isCreatedByUser: true,
           }
         : null,
@@ -943,9 +944,9 @@ class GenerationJobManagerClass {
         /**
          * Cross-replica fallback: the created event was buffered on the generating
          * instance and published via Redis pub/sub before this subscriber was active.
-         * Reconstruct from persisted metadata. Only fields stored by trackUserMessage()
-         * are available (messageId, parentMessageId, conversationId, text);
-         * sender/isCreatedByUser are invariant for user messages and added back here.
+         * Reconstruct from the metadata persisted by trackUserMessage(); the explicit
+         * sender/isCreatedByUser keep the user-turn invariant for copies stored
+         * before those fields were tracked.
          */
         logger.debug(
           `[GenerationJobManager] Cross-replica subscribe: emitting created event from metadata for ${streamId}`,
@@ -1301,11 +1302,15 @@ class GenerationJobManagerClass {
     const { message } = event;
     const updates: Partial<SerializableJobData> = {
       createdEventEmitted: true,
+      // sender/isCreatedByUser are kept so no consumer of the stored copy can
+      // persist or transmit the user message as an authorless AI turn.
       userMessage: {
         messageId: message.messageId,
         parentMessageId: message.parentMessageId,
         conversationId: message.conversationId,
         text: message.text,
+        sender: message.sender,
+        isCreatedByUser: message.isCreatedByUser,
       },
     };
 

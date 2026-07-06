@@ -25,6 +25,8 @@ export interface SerializableJobData {
     parentMessageId?: string;
     conversationId?: string;
     text?: string;
+    sender?: string;
+    isCreatedByUser?: boolean;
   };
 
   /** Response message ID for reconnection */
