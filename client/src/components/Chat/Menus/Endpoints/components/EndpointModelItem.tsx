@@ -7,6 +7,7 @@ import { useFavorites, useLocalize, useIsActiveItem } from '~/hooks';
 import { useModelSelectorContext } from '../ModelSelectorContext';
 import { CustomMenuItem as MenuItem } from '../CustomMenu';
 import { stripProviderPrefix } from '../utils';
+import { getModelBrandIcon } from './brand';
 import { cn } from '~/utils';
 
 interface EndpointModelItemProps {
@@ -76,6 +77,10 @@ export function EndpointModelItem({ modelId, endpoint }: EndpointModelItemProps)
     const getContent = () => {
       if (avatarUrl) {
         return <img src={avatarUrl} alt={modelName ?? ''} className="h-full w-full object-cover" />;
+      }
+      const brandIcon = getModelBrandIcon(modelId);
+      if (brandIcon) {
+        return brandIcon;
       }
       if (endpoint.icon) {
         return endpoint.icon;
