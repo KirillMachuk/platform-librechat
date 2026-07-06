@@ -260,7 +260,9 @@ describe('capSpreadsheetText', () => {
     const text = 'S:\n' + Array.from({ length: 1000 }, (_, i) => `r${i}`).join('\n') + '\n';
     const out = capSpreadsheetText(text, 150);
     const m = out.match(/первые (.+?) из (.+?) строк/);
-    expect(m).not.toBeNull();
+    if (m == null) {
+      throw new Error(`truncation banner not found in: ${out.slice(0, 120)}`);
+    }
     const shown = parseInt(m[1].replace(/\D/g, ''), 10);
     const total = parseInt(m[2].replace(/\D/g, ''), 10);
     expect(shown).toBeGreaterThan(0);
