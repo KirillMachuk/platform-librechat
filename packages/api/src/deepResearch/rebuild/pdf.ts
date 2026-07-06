@@ -234,15 +234,30 @@ export function reportToDocDefinition(markdown: string): TDocumentDefinitions {
   };
 }
 
+/** Hang guard for the PDF engine: `getBuffer` is callback-based with no failure contract,
+ *  so a renderer hang would otherwise freeze the run's finalization forever (and leak a
+ *  concurrency-cap slot). Rejecting lets the caller's fail-open path ship the report
+ *  without a file. */
+const PDF_RENDER_TIMEOUT_MS = 15_000;
+
 /** Renders the report Markdown to a PDF Buffer. `getBuffer` yields a Uint8Array, so it
  *  is wrapped for the file-storage layer (which expects a Node Buffer). */
-export function reportToPdfBuffer(markdown: string): Promise<Buffer> {
+export function reportToPdfBuffer(
+  markdown: string,
+  timeoutMs = PDF_RENDER_TIMEOUT_MS,
+): Promise<Buffer> {
   return new Promise<Buffer>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`PDF render timed out after ${timeoutMs}ms`)),
+      timeoutMs,
+    );
     try {
       createPdf(reportToDocDefinition(markdown), undefined, FONTS, vfs).getBuffer((result) => {
+        clearTimeout(timer);
         resolve(Buffer.from(result));
       });
     } catch (error) {
+      clearTimeout(timer);
       reject(error instanceof Error ? error : new Error(String(error)));
     }
   });

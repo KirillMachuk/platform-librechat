@@ -116,4 +116,19 @@ describe('reportToPdfBuffer', () => {
     const buffer = await reportToPdfBuffer('');
     expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-');
   });
+
+  it('rejects when the PDF engine hangs (timeout guard) instead of freezing the run', async () => {
+    jest.resetModules();
+    jest.doMock('pdfmake/build/pdfmake', () => ({
+      createPdf: () => ({ getBuffer: () => undefined }),
+    }));
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const hanging = require('./pdf') as typeof import('./pdf');
+      await expect(hanging.reportToPdfBuffer('# зависание', 25)).rejects.toThrow(/timed out/);
+    } finally {
+      jest.dontMock('pdfmake/build/pdfmake');
+      jest.resetModules();
+    }
+  });
 });
