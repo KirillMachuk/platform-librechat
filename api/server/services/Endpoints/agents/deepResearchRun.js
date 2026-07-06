@@ -23,6 +23,7 @@ const {
   isClarifyMessage,
   reportToPdfBuffer,
   getStorageMetadata,
+  getProviderConfig,
   usageFromExchange,
   leadModelFor,
   workerModelFor,
@@ -130,14 +131,42 @@ function extractMessageText(content) {
   return '';
 }
 
+/** Default DR title prompt — used only when the endpoint config has no `titlePrompt`.
+ *  Mirrors the standard prompt contract: `{convo}` is replaced with the dialogue. */
+const DEFAULT_TITLE_PROMPT =
+  'Сформулируй короткий заголовок ТЕМЫ исследования на русском: 3–7 слов, именительный падеж, без кавычек, без точки в конце, это тема, а не команда. Не включай имена людей, телефоны, e-mail и служебные метки вида PERSON_1. Верни только текст заголовка.\n\nДиалог:\n{convo}';
+
 /**
- * DR chat title: a short TOPIC the lead model distills from the (masked) request, so any
- * phrasing ("Меня зовут…, сравни X и Y") still yields a clean subject line — and because
- * it runs on the MASKED question, the user's PII never lands in the title/sidebar. Reuses
- * the already-built, cached lead model. Fail-open: any error or empty result falls back to
- * the deterministic {@link buildDeepResearchTitle} heuristic.
+ * The SAME title configuration normal chats use (librechat.yaml `titlePrompt`/`titleModel`
+ * per endpoint) — resolved with the standard fallback chain from the agents client. DR
+ * titles thus obey the tenant's configured rules («Максимум 4 слова», language, style)
+ * instead of a second hardcoded rule set. Fail-soft: any resolution error → null (defaults).
+ */
+function resolveTitleConfig(req, endpoint) {
+  const appConfig = req?.config;
+  try {
+    const providerConfig = getProviderConfig({ provider: endpoint, appConfig });
+    return (
+      appConfig?.endpoints?.all ??
+      appConfig?.endpoints?.[endpoint] ??
+      providerConfig?.customEndpointConfig ??
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * DR chat title: distilled by the CONFIGURED title model/prompt (parity with normal chats)
+ * from the (masked) request, so any phrasing ("Меня зовут…, сравни X и Y") still yields a
+ * clean subject line — and because it runs on the MASKED question, the user's PII never
+ * lands in the title/sidebar. Fail-open: any error or empty result falls back to the
+ * deterministic {@link buildDeepResearchTitle} heuristic.
  */
 async function resolveDeepResearchTitle({
+  req,
+  endpoint,
   buildModel,
   leadModelSlug,
   topicText,
@@ -149,13 +178,16 @@ async function resolveDeepResearchTitle({
     return { title: buildDeepResearchTitle(fallbackText), usage: null };
   }
   try {
-    const model = await buildModel(leadModelSlug);
-    const prompt = [
-      new SystemMessage(
-        'Сформулируй короткий заголовок ТЕМЫ исследования на русском: 3–7 слов, именительный падеж, без кавычек, без точки в конце, это тема, а не команда. Не включай имена людей, телефоны, e-mail и служебные метки вида PERSON_1. Верни только заголовок.',
-      ),
-      new HumanMessage(`Запрос пользователя: ${source}`),
-    ];
+    const titleConfig = resolveTitleConfig(req, endpoint);
+    const configuredModel = titleConfig?.titleModel;
+    const modelSlug =
+      configuredModel && configuredModel !== 'current_model' ? configuredModel : leadModelSlug;
+    const promptTemplate =
+      typeof titleConfig?.titlePrompt === 'string' && titleConfig.titlePrompt.includes('{convo}')
+        ? titleConfig.titlePrompt
+        : DEFAULT_TITLE_PROMPT;
+    const model = await buildModel(modelSlug);
+    const prompt = [new HumanMessage(promptTemplate.replace('{convo}', `Пользователь: ${source}`))];
     const response = await model.invoke(prompt, { signal });
     const cleaned = cleanModelTitle(extractMessageText(response?.content));
     return {
@@ -231,7 +263,7 @@ async function attachReportPdf({ req, responseMessage, reportMarkdown, title, fi
       );
       return;
     }
-    const buffer = await reportToPdfBuffer(markdown);
+    const buffer = await reportToPdfBuffer(markdown, { title: (title || 'Отчёт').trim() });
     const fileId = randomUUID();
     const displayName = `${(title || 'Отчёт').replace(/[\\/]/g, ' ').trim()}.pdf`;
     const filepath = await saveBuffer({
@@ -815,6 +847,8 @@ async function runNewDeepResearch(params) {
     result.finalizeReason === 'aborted'
       ? { title: buildDeepResearchTitle(text), usage: null }
       : await resolveDeepResearchTitle({
+          req,
+          endpoint,
           buildModel,
           leadModelSlug,
           topicText: sovereign ? sovereign.maskedQuestion : text,

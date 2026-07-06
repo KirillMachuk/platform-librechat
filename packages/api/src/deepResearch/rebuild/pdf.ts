@@ -28,6 +28,42 @@ const CONTENT_WIDTH = 515;
  *  they would render as .notdef boxes (e.g. the ⚠️ in the partial-report banner). */
 const PICTOGRAPH = /[\p{Extended_Pictographic}\u{FE00}-\u{FE0F}\u{200D}]/gu;
 
+/** NBSP/narrow-NBSP (models write «1 990 ₽» with them) glue numbers into one huge
+ *  unbreakable token; that token sets a table column's MINIMUM width, pushing the
+ *  table past the page edge. In a fixed-width PDF a line break beats an overflow. */
+const UNBREAKABLE_SPACE = /[\u00A0\u202F]/g;
+
+/** Glyphs the vfs Roboto subset lacks (render as .notdef boxes) → ASCII fallbacks. */
+const GLYPH_FALLBACKS: ReadonlyArray<[RegExp, string]> = [
+  [/→/g, '->'],
+  [/←/g, '<-'],
+  [/↔/g, '<->'],
+  [/⇒/g, '=>'],
+  [/⇐/g, '<='],
+  [/−/g, '-'],
+];
+
+/** Insertion points for soft breaks inside an over-long token (after separators). */
+const SOFT_BREAK_AFTER = /([/\\\-–.,)\]=&?])/g;
+const LONG_TOKEN = /\S{25,}/g;
+
+/** Gives pdfmake break opportunities INSIDE over-long tokens (URLs, glued ranges):
+ *  a zero-width space after each separator — UAX-14 line breaking treats it as a
+ *  break point, and it carries no glyph, so nothing visible changes. */
+function softenLongTokens(text: string): string {
+  return text.replace(LONG_TOKEN, (token) => token.replace(SOFT_BREAK_AFTER, '$1\u200B'));
+}
+
+/** All PDF-safety text normalizations in one pass order (idempotent). */
+function normalizeForPdf(markdown: string): string {
+  let normalized = (markdown ?? '').replace(PICTOGRAPH, '').replace(/\r\n?/g, '\n');
+  normalized = normalized.replace(UNBREAKABLE_SPACE, ' ');
+  for (const [pattern, replacement] of GLYPH_FALLBACKS) {
+    normalized = normalized.replace(pattern, replacement);
+  }
+  return softenLongTokens(normalized);
+}
+
 /** One inline formatting token: link, bold (`**`/`__`), italic (`*`/`_`), or code. */
 const INLINE_TOKEN =
   /\[([^\]]+)\]\(([^)\s]+)\)|\*\*([\s\S]+?)\*\*|__([\s\S]+?)__|\*([^*\n]+?)\*|_([^_\n]+?)_|`([^`]+?)`/g;
@@ -118,13 +154,23 @@ function buildTable(headerCells: string[], bodyRows: string[][]): Content {
       widths: new Array(columns).fill('*'),
       body: [header, ...body],
     },
+    fontSize: 9,
     margin: [0, 4, 0, 8],
   };
 }
 
+export interface ReportPdfOptions {
+  /** Embedded PDF metadata title — browser PDF viewers surface it for tab/save names. */
+  title?: string;
+  timeoutMs?: number;
+}
+
 /** Converts the report Markdown into a pdfmake document definition (block-level). */
-export function reportToDocDefinition(markdown: string): TDocumentDefinitions {
-  const cleaned = (markdown ?? '').replace(PICTOGRAPH, '').replace(/\r\n?/g, '\n');
+export function reportToDocDefinition(
+  markdown: string,
+  options?: Pick<ReportPdfOptions, 'title'>,
+): TDocumentDefinitions {
+  const cleaned = normalizeForPdf(markdown);
   const lines = cleaned.split('\n');
   const content: Content[] = [];
 
@@ -231,6 +277,7 @@ export function reportToDocDefinition(markdown: string): TDocumentDefinitions {
       h3: { fontSize: 13, bold: true, margin: [0, 6, 0, 3] },
     },
     pageMargins: [40, 40, 40, 40],
+    ...(options?.title ? { info: { title: options.title } } : {}),
   };
 }
 
@@ -242,20 +289,20 @@ const PDF_RENDER_TIMEOUT_MS = 15_000;
 
 /** Renders the report Markdown to a PDF Buffer. `getBuffer` yields a Uint8Array, so it
  *  is wrapped for the file-storage layer (which expects a Node Buffer). */
-export function reportToPdfBuffer(
-  markdown: string,
-  timeoutMs = PDF_RENDER_TIMEOUT_MS,
-): Promise<Buffer> {
+export function reportToPdfBuffer(markdown: string, options?: ReportPdfOptions): Promise<Buffer> {
+  const timeoutMs = options?.timeoutMs ?? PDF_RENDER_TIMEOUT_MS;
   return new Promise<Buffer>((resolve, reject) => {
     const timer = setTimeout(
       () => reject(new Error(`PDF render timed out after ${timeoutMs}ms`)),
       timeoutMs,
     );
     try {
-      createPdf(reportToDocDefinition(markdown), undefined, FONTS, vfs).getBuffer((result) => {
-        clearTimeout(timer);
-        resolve(Buffer.from(result));
-      });
+      createPdf(reportToDocDefinition(markdown, options), undefined, FONTS, vfs).getBuffer(
+        (result) => {
+          clearTimeout(timer);
+          resolve(Buffer.from(result));
+        },
+      );
     } catch (error) {
       clearTimeout(timer);
       reject(error instanceof Error ? error : new Error(String(error)));
