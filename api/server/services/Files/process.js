@@ -22,7 +22,9 @@ const { logger, runAsSystem } = require('@librechat/data-schemas');
 const {
   sanitizeFilename,
   parseText,
+  parseTextNative,
   probePdf,
+  withTimeout,
   routePdfBySize,
   isContentRoutingEnabled,
   readDocRoutingThresholds,
@@ -51,6 +53,23 @@ const { getStrategyFunctions } = require('./strategies');
 const { determineFileType } = require('~/server/utils');
 const { STTService } = require('./Audio/STTService');
 const db = require('~/models');
+
+/**
+ * Upload-path ceiling for document text extraction (`parseText`) and the PDF
+ * routing probe (`probePdf`). `parseText` posts to rag_api with its own 300s
+ * internal cap — far too long to hold an upload response open — so the upload
+ * handler races it against this shorter timeout and degrades gracefully
+ * (probe → route to RAG; OCR fallback → honest "unable to extract"; plain-text
+ * → native parse). Overridable via env.
+ */
+const DOC_PARSE_TIMEOUT_MS = parseInt(process.env.DOC_PARSE_TIMEOUT_MS ?? '', 10) || 30000;
+
+/**
+ * Separate, more generous ceiling for image OCR (a large multi-region scan is
+ * legitimately slower than a text extract). On timeout the caller falls through
+ * to the native vision path, so this only bounds how long OCR may block first.
+ */
+const IMAGE_OCR_TIMEOUT_MS = parseInt(process.env.IMAGE_OCR_TIMEOUT_MS ?? '', 10) || 45000;
 
 /**
  * Creates a modular file upload wrapper that ensures filename sanitization
@@ -756,7 +775,23 @@ const resolveContentRouting = async ({ req, file, toolResource, isImage }) => {
   if (!isFileSearchEnabled) {
     return { toolResource };
   }
-  const { pageCount, textChars, text } = await probePdf(file.path);
+  // Bound the routing probe: a pathological PDF must not hang the upload while
+  // pdfjs churns. On timeout, route to file_search (RAG) — the safe default for
+  // a large/slow document (it would head there by size anyway).
+  let probe;
+  try {
+    probe = await withTimeout(
+      probePdf(file.path),
+      DOC_PARSE_TIMEOUT_MS,
+      `PDF routing probe timed out for "${file.originalname}"`,
+    );
+  } catch (err) {
+    logger.warn(
+      `[processAgentFileUpload] ${err.message}; routing to file_search (RAG) to avoid blocking upload`,
+    );
+    return { toolResource: EToolResources.file_search };
+  }
+  const { pageCount, textChars, text } = probe;
   const routed = routePdfBySize(pageCount, textChars, readDocRoutingThresholds());
   if (routed === EToolResources.file_search) {
     logger.info(
@@ -825,7 +860,11 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
   let imageOcrText = null;
   if (isImageOcrEnabled() && isImage && tool_resource == null) {
     try {
-      const parsed = await parseText({ req, file, file_id });
+      const parsed = await withTimeout(
+        parseText({ req, file, file_id }),
+        IMAGE_OCR_TIMEOUT_MS,
+        `image OCR timed out for "${file.originalname}"`,
+      );
       if (parsed?.text && acceptOcrText(parsed.text, imageOcrMinChars())) {
         imageOcrText = parsed;
         tool_resource = EToolResources.context;
@@ -1028,7 +1067,15 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
        * the RAG API /text endpoint, which routes through doc-gateway (local Tesseract OCR), so
        * scanned contracts work in full-text mode too. No-op if RAG_API_URL is unset/unreachable. */
       try {
-        const parsed = await parseText({ req, file, file_id });
+        // Bound the OCR fallback so a slow/hung rag_api cannot hold the upload
+        // open for its full 300s internal cap. On timeout this rejects, the
+        // catch below logs it, resolveDocumentText returns undefined, and the
+        // caller raises an honest "unable to extract" error.
+        const parsed = await withTimeout(
+          parseText({ req, file, file_id }),
+          DOC_PARSE_TIMEOUT_MS,
+          `RAG /text OCR fallback timed out for "${file.originalname}"`,
+        );
         if (parsed?.text?.trim()) {
           // filepath = original upload path (matches the native parseText branch below);
           // the extracted text itself is persisted by createTextFile alongside the
@@ -1083,7 +1130,24 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
       throw new Error(`File type ${file.mimetype} is not supported for text parsing.`);
     }
 
-    const { text, bytes } = await parseText({ req, file, file_id });
+    // For plain-text types the RAG /text pass is an optimization, not a
+    // requirement — native parsing reads the file directly and correctly. Bound
+    // the RAG attempt so a slow rag_api cannot hold the upload open, and fall
+    // back to native (fast, local) on timeout rather than failing the upload.
+    let parsedText;
+    try {
+      parsedText = await withTimeout(
+        parseText({ req, file, file_id }),
+        DOC_PARSE_TIMEOUT_MS,
+        `text parsing timed out for "${file.originalname}"`,
+      );
+    } catch (err) {
+      logger.warn(
+        `[processAgentFileUpload] ${err.message}; falling back to native text parsing`,
+      );
+      parsedText = await parseTextNative(file);
+    }
+    const { text, bytes } = parsedText;
     return await createTextFile({ text, bytes, type: file.mimetype });
   }
 

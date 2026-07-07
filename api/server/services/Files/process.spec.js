@@ -40,6 +40,10 @@ jest.mock('@librechat/api', () => {
   return {
     sanitizeFilename: jest.fn((n) => n),
     parseText: jest.fn().mockResolvedValue({ text: '', bytes: 0 }),
+    parseTextNative: jest.fn().mockResolvedValue({ text: 'native-parsed', bytes: 13 }),
+    // Pass-through by default so existing tests are unaffected; individual D6
+    // tests override with mockRejectedValueOnce to simulate a timeout.
+    withTimeout: jest.fn((promise) => promise),
     processAudioFile: jest.fn(),
     getStorageMetadata: jest.fn(() => ({})),
     getRetentionExpiry,
@@ -139,6 +143,8 @@ const {
   getRetentionExpiry,
   getAgentFileRetentionExpiry,
   probePdf,
+  withTimeout,
+  parseTextNative,
   routePdfBySize,
   sweepExpiredFiles: sweepExpiredFilesWithDeps,
   startExpiredFileSweep: startExpiredFileSweepWithDeps,
@@ -393,6 +399,21 @@ describe('resolveContentRouting (content-size Auto routing, behind AUTO_ROUTE_BY
     // headed to RAG: the probe text is not forwarded (RAG embeds its own chunks)
     expect(out.pdfText).toBeUndefined();
   });
+
+  it('D6: routes to file_search (RAG) when the routing probe times out', async () => {
+    withTimeout.mockRejectedValueOnce(new Error('PDF routing probe timed out'));
+    const out = await resolveContentRouting({
+      req: baseReq,
+      file: pdf,
+      toolResource: EToolResources.context,
+      isImage: false,
+    });
+    expect(out.toolResource).toBe(EToolResources.file_search);
+    // the probe never produced a decision, so size-based routing is not consulted
+    expect(routePdfBySize).not.toHaveBeenCalled();
+    // restore pass-through for the remaining suite
+    withTimeout.mockImplementation((promise) => promise);
+  });
 });
 
 describe('processAgentFileUpload', () => {
@@ -566,6 +587,23 @@ describe('processAgentFileUpload', () => {
       ).rejects.toThrow(/image-based and requires an OCR service/);
 
       expect(parseText).toHaveBeenCalled();
+    });
+
+    test('D6: a timed-out RAG /text OCR fallback degrades to an honest error, not a hang', async () => {
+      getStrategyFunctions.mockReturnValue({
+        handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
+      });
+      const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
+      // Simulate the OCR fallback exceeding DOC_PARSE_TIMEOUT_MS: withTimeout rejects,
+      // resolveDocumentText swallows it and returns undefined, and the caller raises
+      // the same "unable to extract" error instead of blocking on the 300s parseText.
+      withTimeout.mockRejectedValueOnce(new Error('RAG /text OCR fallback timed out'));
+
+      await expect(
+        processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
+      ).rejects.toThrow(/image-based and requires an OCR service/);
+
+      withTimeout.mockImplementation((promise) => promise);
     });
 
     test('falls back to document_parser when configured OCR fails for a document MIME type', async () => {
