@@ -12,7 +12,7 @@ jest.mock('@librechat/data-schemas', () => ({
 }));
 
 import { handleRateLimits } from './limits';
-import { checkWebSearchConfig } from './checks';
+import { checkWebSearchConfig, assertStrongJwtSecrets } from './checks';
 import { logger } from '@librechat/data-schemas';
 import { extractVariableName as extract } from 'librechat-data-provider';
 
@@ -203,6 +203,60 @@ describe('checkWebSearchConfig', () => {
         expect.stringContaining('Current value: "this-is-a-..."'),
       );
     });
+  });
+});
+
+describe('assertStrongJwtSecrets', () => {
+  const EXAMPLE_JWT_SECRET =
+    '16f8c0ef4a5d391b26034086c628469d3f9f497f08163ab9b40137092f2909ef';
+  const EXAMPLE_JWT_REFRESH_SECRET =
+    'eaa5191f2914e30b9387fd84e254e4ba6fc51b4654968a9b0803b456a54b8418';
+  const STRONG = 'a'.repeat(48);
+  let originalEnv: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    originalEnv = process.env;
+    process.env = { ...originalEnv };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it('passes with strong non-default secrets', () => {
+    process.env.JWT_SECRET = STRONG;
+    process.env.JWT_REFRESH_SECRET = 'b'.repeat(64);
+    expect(() => assertStrongJwtSecrets()).not.toThrow();
+  });
+
+  it('throws when JWT_SECRET is missing', () => {
+    delete process.env.JWT_SECRET;
+    process.env.JWT_REFRESH_SECRET = STRONG;
+    expect(() => assertStrongJwtSecrets()).toThrow(/JWT_SECRET is not set/);
+  });
+
+  it('throws when JWT_SECRET is the public example value', () => {
+    process.env.JWT_SECRET = EXAMPLE_JWT_SECRET;
+    process.env.JWT_REFRESH_SECRET = STRONG;
+    expect(() => assertStrongJwtSecrets()).toThrow(/public example value/);
+  });
+
+  it('throws when JWT_REFRESH_SECRET is the public example value', () => {
+    process.env.JWT_SECRET = STRONG;
+    process.env.JWT_REFRESH_SECRET = EXAMPLE_JWT_REFRESH_SECRET;
+    expect(() => assertStrongJwtSecrets()).toThrow(/public example value/);
+  });
+
+  it('throws when a secret is shorter than 32 characters', () => {
+    process.env.JWT_SECRET = 'short';
+    process.env.JWT_REFRESH_SECRET = STRONG;
+    expect(() => assertStrongJwtSecrets()).toThrow(/shorter than 32 characters/);
+  });
+
+  it('accepts a secret exactly 32 characters long', () => {
+    process.env.JWT_SECRET = 'c'.repeat(32);
+    process.env.JWT_REFRESH_SECRET = STRONG;
+    expect(() => assertStrongJwtSecrets()).not.toThrow();
   });
 });
 
