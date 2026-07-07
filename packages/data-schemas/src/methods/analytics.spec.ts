@@ -42,8 +42,8 @@ beforeEach(async () => {
 
   const alice = await User.create({ email: 'alice@x.io', name: 'Alice' });
   const bob = await User.create({ email: 'bob@x.io', name: 'Bob' });
-  aliceId = alice._id.toString();
-  bobId = bob._id.toString();
+  aliceId = String(alice._id);
+  bobId = String(bob._id);
 
   // A real (named) agent — its display name should resolve in the feed.
   await Agent.create({

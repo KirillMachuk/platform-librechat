@@ -29,6 +29,7 @@ export function createFileMethods(mongoose: typeof import('mongoose')): {
     user: string;
     tenantId?: string | null;
   }) => Promise<IMongoFile>;
+  claimNextEmbedFile: (leaseMs: number) => Promise<IMongoFile | null>;
   createFile: (data: Partial<IMongoFile>, disableTTL?: boolean) => Promise<IMongoFile | null>;
   updateFile: (
     data: Partial<IMongoFile> & { file_id: string },
