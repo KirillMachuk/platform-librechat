@@ -9,6 +9,7 @@ const {
   processProjectFileUpload,
   purgeFilesWithVectors,
 } = require('~/server/services/Files/process');
+const { invalidateProjectContext } = require('~/server/services/Projects/context');
 const auditProject = require('~/server/middleware/auditProject');
 const db = require('~/models');
 
@@ -53,7 +54,9 @@ router.post('/', auditProject, async (req, res) => {
       temp_file_id: req.body?.file_id ?? undefined,
     };
 
-    return await processProjectFileUpload({ req, res, metadata });
+    const uploadResult = await processProjectFileUpload({ req, res, metadata });
+    await invalidateProjectContext(req.user.id, req.params.projectId);
+    return uploadResult;
   } catch (error) {
     const message = resolveUploadErrorMessage(error);
     logger.error('[POST /projects/:projectId/files] Error', error);
@@ -100,6 +103,7 @@ router.delete('/:file_id', auditProject, async (req, res) => {
     // Project sources are dual-stored (storage + pgvector); purge both, including
     // the vector embeddings the local delete strategy would otherwise orphan.
     await purgeFilesWithVectors({ req, files });
+    await invalidateProjectContext(req.user.id, req.params.projectId);
     res.status(204).end();
   } catch (error) {
     logger.error('[DELETE /projects/:projectId/files/:file_id] Error', error);

@@ -52,6 +52,7 @@ const { getModelsConfig } = require('~/server/controllers/ModelController');
 const { checkPermission, findAccessibleResources } = require('~/server/services/PermissionService');
 const AgentClient = require('~/server/controllers/agents/client');
 const { processAddedConvo } = require('./addedConvo');
+const { getProjectContext } = require('~/server/services/Projects/context');
 const { logViolation } = require('~/cache');
 const db = require('~/models');
 
@@ -79,24 +80,19 @@ async function applyProjectContext({ req, primaryAgent }) {
     if (!projectId) {
       return;
     }
-    const project = await db.getProjectById(req.user.id, projectId);
-    if (!project) {
+    const projectContext = await getProjectContext(req.user.id, projectId);
+    if (!projectContext) {
       return;
     }
 
-    if (project.instructions && project.instructions.trim().length > 0) {
+    if (projectContext.instructions.length > 0) {
       const existingInstructions = (primaryAgent.instructions ?? '').trim();
       primaryAgent.instructions = existingInstructions
-        ? `${project.instructions.trim()}\n\n---\n\n${existingInstructions}`
-        : project.instructions.trim();
+        ? `${projectContext.instructions}\n\n---\n\n${existingInstructions}`
+        : projectContext.instructions;
     }
 
-    const projectFiles = await db.getFiles(
-      { user: req.user.id, project_id: projectId, embedded: true },
-      null,
-      { text: 0 },
-    );
-    const projectFileIds = projectFiles.map((f) => f.file_id).filter(Boolean);
+    const projectFileIds = projectContext.fileIds;
     if (projectFileIds.length === 0) {
       return;
     }

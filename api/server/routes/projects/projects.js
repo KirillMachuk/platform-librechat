@@ -10,6 +10,7 @@ const {
   getConvosByCursor,
 } = require('~/models');
 const { purgeFilesWithVectors } = require('~/server/services/Files/process');
+const { invalidateProjectContext } = require('~/server/services/Projects/context');
 const auditProject = require('~/server/middleware/auditProject');
 const { requireJwtAuth } = require('~/server/middleware');
 
@@ -72,6 +73,7 @@ router.patch('/:projectId', auditProject, async (req, res) => {
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
+    await invalidateProjectContext(req.user.id, req.params.projectId);
     res.status(200).json(project);
   } catch (error) {
     logger.error('[PATCH /projects/:projectId] Error', error);
@@ -90,6 +92,7 @@ router.delete('/:projectId', auditProject, async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ error: 'Project not found' });
     }
+    await invalidateProjectContext(req.user.id, req.params.projectId);
 
     // DELETE carries no body; give processDeleteRequest an object to read.
     req.body = req.body ?? {};

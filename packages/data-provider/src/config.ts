@@ -2250,6 +2250,10 @@ export enum CacheKeys {
    */
   FLOWS = 'FLOWS',
   /**
+   * Key for per-(user, project) chat context: instructions + embedded file ids.
+   */
+  PROJECT_CONTEXT = 'PROJECT_CONTEXT',
+  /**
    * Key for pending chat requests (concurrency check)
    */
   PENDING_REQ = 'PENDING_REQ',
