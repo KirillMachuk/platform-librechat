@@ -331,6 +331,41 @@ const processDeleteRequest = async ({ req, files }) => {
 };
 
 /**
+ * Fully purges a set of files: their pgvector embeddings (for embedded files)
+ * first, then storage + metadata via {@link processDeleteRequest}. Project and
+ * conversation file sources are dual-stored (storage + pgvector), and the local
+ * delete strategy only removes the disk file — vector embeddings would orphan
+ * in pgvector otherwise. Vector cleanup is best-effort (`Promise.allSettled`) so
+ * a pgvector hiccup never blocks metadata/storage deletion.
+ *
+ * Shared by the per-file and per-project delete routes so both stay consistent.
+ *
+ * @param {object} params
+ * @param {ServerRequest} params.req
+ * @param {MongoFile[]} params.files
+ * @returns {Promise<void>}
+ */
+const purgeFilesWithVectors = async ({ req, files }) => {
+  if (!files || files.length === 0) {
+    return;
+  }
+
+  const { deleteVectors } = require('./VectorDB/crud');
+  const vectorDeletions = files
+    .filter((file) => file.embedded)
+    .map((file) =>
+      deleteVectors(req, file).catch((error) =>
+        logger.error('[purgeFilesWithVectors] Vector cleanup failed', error),
+      ),
+    );
+  if (vectorDeletions.length > 0) {
+    await Promise.allSettled(vectorDeletions);
+  }
+
+  await processDeleteRequest({ req, files });
+};
+
+/**
  * Deletes expired file storage before removing the corresponding File records.
  *
  * Mongo TTL indexes delete only the metadata document, so file retention uses
@@ -1644,6 +1679,7 @@ module.exports = {
   startExpiredFileSweep,
   processFileUpload,
   processDeleteRequest,
+  purgeFilesWithVectors,
   processAgentFileUpload,
   processProjectFileUpload,
   retrieveAndProcessFile,

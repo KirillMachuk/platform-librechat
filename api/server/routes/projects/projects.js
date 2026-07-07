@@ -4,10 +4,13 @@ const {
   createProject,
   getProjectById,
   getProjects,
+  getFiles,
   updateProject,
   deleteProject,
   getConvosByCursor,
 } = require('~/models');
+const { purgeFilesWithVectors } = require('~/server/services/Files/process');
+const auditProject = require('~/server/middleware/auditProject');
 const { requireJwtAuth } = require('~/server/middleware');
 
 const router = express.Router();
@@ -23,7 +26,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', auditProject, async (req, res) => {
   try {
     const { name, description, instructions, icon, color } = req.body ?? {};
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -56,7 +59,7 @@ router.get('/:projectId', async (req, res) => {
   }
 });
 
-router.patch('/:projectId', async (req, res) => {
+router.patch('/:projectId', auditProject, async (req, res) => {
   try {
     const { name, description, instructions, icon, color } = req.body ?? {};
     const update = {};
@@ -76,12 +79,28 @@ router.patch('/:projectId', async (req, res) => {
   }
 });
 
-router.delete('/:projectId', async (req, res) => {
+router.delete('/:projectId', auditProject, async (req, res) => {
   try {
+    // Collect the project's files before deleting the project doc — deleteProject
+    // detaches conversations but leaves File records (and their pgvector
+    // embeddings) behind, orphaning them until the global retention sweep.
+    const files = await getFiles({ user: req.user.id, project_id: req.params.projectId });
+
     const deleted = await deleteProject(req.user.id, req.params.projectId);
     if (!deleted) {
       return res.status(404).json({ error: 'Project not found' });
     }
+
+    // DELETE carries no body; give processDeleteRequest an object to read.
+    req.body = req.body ?? {};
+    try {
+      await purgeFilesWithVectors({ req, files });
+    } catch (cascadeError) {
+      // The project doc is already gone — report success and leave the
+      // stragglers to the retention sweep rather than faking a failed delete.
+      logger.error('[DELETE /projects/:projectId] File cascade failed', cascadeError);
+    }
+
     res.status(204).end();
   } catch (error) {
     logger.error('[DELETE /projects/:projectId] Error', error);
