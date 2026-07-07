@@ -11,6 +11,16 @@ interface MermaidDiagramProps {
   isDarkMode?: boolean;
 }
 
+/* DoS guards for the fullscreen renderer, mirroring the inline path
+ * (useMermaid.ts): a pathological diagram must not lock the tab. maxTextSize /
+ * maxEdges cap the parse, and the render timeout bounds a runaway layout. The
+ * fullscreen path keeps securityLevel: 'sandbox' (mermaid renders into an
+ * isolated iframe), so no separate SVG sanitize step is needed here — unlike the
+ * inline path, which renders raw SVG under 'strict' and therefore sanitizes. */
+const MERMAID_MAX_TEXT_SIZE = 50_000;
+const MERMAID_MAX_EDGES = 500;
+const MERMAID_RENDER_TIMEOUT_MS = 5_000;
+
 const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ content, isDarkMode = true }) => {
   const mermaidRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<ReactZoomPanPinchContentRef>(null);
@@ -19,10 +29,13 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ content, isDarkMode = t
   const bgColor = isDarkMode ? '#212121' : '#FFFFFF';
 
   useEffect(() => {
+    let cancelled = false;
     mermaid.initialize({
       startOnLoad: false,
       theme,
       securityLevel: 'sandbox',
+      maxTextSize: MERMAID_MAX_TEXT_SIZE,
+      maxEdges: MERMAID_MAX_EDGES,
       flowchart: artifactFlowchartConfig,
     });
 
@@ -31,8 +44,22 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ content, isDarkMode = t
         return;
       }
 
+      let timer: ReturnType<typeof setTimeout> | undefined;
       try {
-        const { svg } = await mermaid.render('mermaid-diagram', content);
+        const svg = await Promise.race([
+          mermaid.render('mermaid-diagram', content).then((result) => result.svg),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(
+              () => reject(new Error('Mermaid render timed out')),
+              MERMAID_RENDER_TIMEOUT_MS,
+            );
+          }),
+        ]);
+        // The render is async; bail if the component unmounted or the content
+        // changed while it was in flight (stale write into a detached node).
+        if (cancelled || !mermaidRef.current) {
+          return;
+        }
         mermaidRef.current.innerHTML = svg;
 
         const svgElement = mermaidRef.current.querySelector('svg');
@@ -43,13 +70,20 @@ const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ content, isDarkMode = t
         setIsRendered(true);
       } catch (error) {
         console.error('Mermaid rendering error:', error);
-        if (mermaidRef.current) {
+        if (!cancelled && mermaidRef.current) {
           mermaidRef.current.innerHTML = 'Error rendering diagram';
+        }
+      } finally {
+        if (timer) {
+          clearTimeout(timer);
         }
       }
     };
 
     renderDiagram();
+    return () => {
+      cancelled = true;
+    };
   }, [content, theme]);
 
   const centerAndFitDiagram = useCallback(() => {

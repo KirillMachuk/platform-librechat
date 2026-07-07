@@ -234,6 +234,16 @@ export const ArtifactCodeEditor = function ArtifactCodeEditor({
     return () => debouncedMutation.cancel();
   }, [artifact.id, debouncedMutation]);
 
+  /* On unmount, drop the shared editor handle. @monaco-editor/react disposes the
+   * underlying editor itself, but the parent-owned `monacoRef` would otherwise
+   * keep pointing at a disposed instance after fast artifact switches — any late
+   * caller (streaming append, reveal) would then operate on a dead editor. */
+  useEffect(() => {
+    return () => {
+      monacoRef.current = null;
+    };
+  }, [monacoRef]);
+
   /**
    * Streaming: use model.applyEdits() to append new content.
    * Unlike setValue/pushEditOperations, applyEdits preserves existing
