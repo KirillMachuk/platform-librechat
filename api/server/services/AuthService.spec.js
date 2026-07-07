@@ -471,6 +471,39 @@ describe('registerUser', () => {
       }),
     );
   });
+
+  it('creates a plain USER even for the very first registrant (no silent self-admin)', async () => {
+    // C-AUTH-1: an empty database must NOT hand ADMIN to whoever registers first
+    // through the public sign-up route.
+    countUsers.mockResolvedValue(0);
+
+    const result = await registerUser(registrationPayload);
+
+    expect(result.status).toBe(200);
+    expect(createUser.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ email: registrationPayload.email, role: 'USER' }),
+    );
+  });
+
+  it('ignores a role injected through the public registration payload', async () => {
+    // C-AUTH-1: the public HTTP body must never elevate the account. `role` is not
+    // one of the schema-parsed fields, so a crafted body cannot reach createUser.
+    countUsers.mockResolvedValue(0);
+
+    const result = await registerUser({ ...registrationPayload, role: 'ADMIN' });
+
+    expect(result.status).toBe(200);
+    expect(createUser.mock.calls[0][0]).toEqual(expect.objectContaining({ role: 'USER' }));
+  });
+
+  it('lets a trusted caller (create-user CLI --admin) provision an ADMIN via additionalData', async () => {
+    // C-AUTH-1: the only supported path to ADMIN is the server-trusted second argument,
+    // which the create-user CLI populates for --admin.
+    const result = await registerUser(registrationPayload, { role: 'ADMIN' });
+
+    expect(result.status).toBe(200);
+    expect(createUser.mock.calls[0][0]).toEqual(expect.objectContaining({ role: 'ADMIN' }));
+  });
 });
 
 describe('verifyEmail public response handling', () => {
