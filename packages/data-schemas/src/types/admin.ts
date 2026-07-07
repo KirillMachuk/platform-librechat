@@ -70,8 +70,9 @@ export type AdminConfigDeleteResponse = {
   success: boolean;
 };
 
-/** Audit action types for grant changes. */
-export type AuditAction = 'grant_assigned' | 'grant_removed';
+/** Audit action types for grant changes (admin panel). Distinct from the broader
+ *  system {@link AuditAction} in ./audit — kept separate to avoid an ambiguous re-export. */
+export type AdminAuditAction = 'grant_assigned' | 'grant_removed';
 
 /** SystemGrant document as returned by the admin API. */
 export type AdminSystemGrant = {
@@ -87,7 +88,7 @@ export type AdminSystemGrant = {
 /** Audit log entry for grant changes as returned by the admin API. */
 export type AdminAuditLogEntry = {
   id: string;
-  action: AuditAction;
+  action: AdminAuditAction;
   actorId: string;
   actorName: string;
   targetPrincipalType: PrincipalType;

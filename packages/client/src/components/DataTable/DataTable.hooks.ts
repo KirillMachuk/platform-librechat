@@ -1,5 +1,4 @@
-import { useState, useEffect, useMemo, SetStateAction, Dispatch, CSSProperties } from 'react';
-import type { TableColumn } from './DataTable.types';
+import { useState, useEffect, SetStateAction, Dispatch } from 'react';
 
 export function useDebounced<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -18,78 +17,6 @@ export const useOptimizedRowSelection = (
   const [selection, setSelection] = useState(initialSelection);
   return [selection, setSelection] as const;
 };
-
-export const useColumnStyles = <TData, TValue>(
-  columns: TableColumn<TData, TValue>[],
-  isSmallScreen: boolean,
-  containerRef: React.RefObject<HTMLDivElement>,
-): Record<string, CSSProperties> => {
-  const [containerWidth, setContainerWidth] = useState(0);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const updateWidth = () => {
-      setContainerWidth(container.clientWidth);
-    };
-
-    const resizeObserver = new ResizeObserver(updateWidth);
-    resizeObserver.observe(container);
-    updateWidth();
-
-    return () => resizeObserver.disconnect();
-  }, [containerRef]);
-
-  return useMemo(() => {
-    if (containerWidth === 0) {
-      return {};
-    }
-
-    const styles: Record<string, React.CSSProperties> = {};
-    let totalFixedWidth = 0;
-    const flexibleColumns: (TableColumn<TData, TValue> & { priority: number })[] = [];
-
-    columns.forEach((column) => {
-      const key = String(column.id ?? column.accessorKey ?? '');
-      const size = isSmallScreen ? column.meta?.mobileSize : column.meta?.size;
-
-      if (size) {
-        const width = parseInt(String(size), 10);
-        totalFixedWidth += width;
-        styles[key] = {
-          width: size,
-          minWidth: column.meta?.minWidth || size,
-        };
-      } else {
-        flexibleColumns.push({ ...column, priority: column.meta?.priority ?? 1 });
-      }
-    });
-
-    const availableWidth = containerWidth - totalFixedWidth;
-    const totalPriority = flexibleColumns.reduce((sum, col) => sum + col.priority, 0);
-
-    if (availableWidth > 0 && totalPriority > 0) {
-      flexibleColumns.forEach((column) => {
-        const key = String(column.id ?? column.accessorKey ?? '');
-        const proportion = column.priority / totalPriority;
-        const width = Math.max(Math.floor(availableWidth * proportion), 80); // min width of 80px
-        styles[key] = {
-          width: `${width}px`,
-          minWidth: column.meta?.minWidth ?? `${isSmallScreen ? 60 : 80}px`,
-        };
-      });
-    }
-
-    return styles;
-  }, [columns, containerWidth, isSmallScreen]);
-};
-
-export const useDynamicColumnWidths: <TData, TValue>(
-  columns: TableColumn<TData, TValue>[],
-  isSmallScreen: boolean,
-  containerRef: React.RefObject<HTMLDivElement>,
-) => Record<string, CSSProperties> = useColumnStyles;
 
 export const useKeyboardNavigation = (
   tableRef: React.RefObject<HTMLDivElement>,

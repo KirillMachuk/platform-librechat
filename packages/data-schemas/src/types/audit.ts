@@ -29,7 +29,7 @@ export interface IAuditTokens {
   total?: number;
 }
 
-export interface IAuditLog extends Document {
+export interface IAuditLog extends Omit<Document, 'model'> {
   tenantId?: string;
   actorId?: Types.ObjectId;
   actorEmail?: string;

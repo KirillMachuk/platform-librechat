@@ -194,7 +194,8 @@ describe('Meilisearch Mongoose plugin', () => {
       user: new mongoose.Types.ObjectId(),
       isCreatedByUser: true,
     });
-    const indexedDoc = mockAddDocuments.mock.calls.at(-1)?.[0]?.[0] as Record<string, unknown>;
+    const calls = mockAddDocuments.mock.calls;
+    const indexedDoc = calls[calls.length - 1]?.[0]?.[0] as Record<string, unknown>;
     // transformForIndex (addCreatedAtTs) runs in the per-save path: the Meili doc
     // gets a numeric epoch the analytics period filter can range over, and the raw
     // Date is dropped so only the filterable numeric remains.
@@ -471,7 +472,7 @@ describe('Meilisearch Mongoose plugin', () => {
   test('batch sync (the reindex path) derives createdAtTs and drops the raw date', async () => {
     // This is the exact path the production reindex runs (syncWithMeili ->
     // processSyncBatch -> addDocumentsInBatches), distinct from the per-save hook.
-    const messageModel = createMessageModel(mongoose) as SchemaWithMeiliMethods;
+    const messageModel = createMessageModel(mongoose) as unknown as SchemaWithMeiliMethods;
     mockAddDocumentsInBatches.mockClear();
     const messageId = new mongoose.Types.ObjectId().toString();
     const createdAt = new Date('2026-04-01T12:00:00.000Z');

@@ -1,7 +1,7 @@
-import logger from '~/config/winston';
-import type { FilterQuery, Model } from 'mongoose';
+import type { FilterQuery, Model, InsertManyOptions } from 'mongoose';
 import type { IAuditLog, AuditLogInput, AuditLogFilter } from '~/types';
 import type { ITransaction } from '~/schema/transaction';
+import logger from '~/config/winston';
 
 export interface BackfillResult {
   scanned: number;
@@ -9,6 +9,17 @@ export interface BackfillResult {
 }
 
 const DUP_KEY_CODE = 11000;
+
+/**
+ * Backfill inserts carry their own historical `createdAt`; `timestamps: false`
+ * stops the schema's `createdAt` hook from overwriting it. mongoose honors the
+ * option at runtime but omits it from InsertManyOptions (v8.23), so the type is
+ * widened here rather than asserted at each call site.
+ */
+const BACKFILL_INSERT_OPTIONS: InsertManyOptions & { timestamps: boolean } = {
+  ordered: false,
+  timestamps: false,
+};
 const OBJECT_ID = /^[a-f0-9]{24}$/i;
 
 /** Projected shape of a user message sent in an agent conversation. */
@@ -151,7 +162,7 @@ export function createAuditMethods(mongoose: typeof import('mongoose')): AuditMe
     }
 
     try {
-      await AuditLog.insertMany(docs, { ordered: false, timestamps: false });
+      await AuditLog.insertMany(docs, BACKFILL_INSERT_OPTIONS);
     } catch (error) {
       const code = (error as { code?: number }).code;
       if (code !== DUP_KEY_CODE) {
@@ -246,7 +257,7 @@ export function createAuditMethods(mongoose: typeof import('mongoose')): AuditMe
     }
 
     try {
-      await AuditLog.insertMany(docs, { ordered: false, timestamps: false });
+      await AuditLog.insertMany(docs, BACKFILL_INSERT_OPTIONS);
     } catch (error) {
       const code = (error as { code?: number }).code;
       if (code !== DUP_KEY_CODE) {

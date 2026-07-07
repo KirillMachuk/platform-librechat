@@ -82,6 +82,12 @@ export function createTransactionMethods(
   }) => Promise<IBalance>;
   bulkInsertTransactions: (docs: TransactionData[]) => Promise<void>;
   findBalanceByUser: (user: string) => Promise<IBalance | null>;
+  findBalancesByUsers: (users: string[]) => Promise<IBalance[]>;
+  aggregateUsageByUser: (params: {
+    start: Date;
+    end: Date;
+    tenantId?: string;
+  }) => Promise<UserUsageAggregate[]>;
   upsertBalanceFields: (user: string, fields: IBalanceUpdate) => Promise<IBalance | null>;
   getTransactions: (filter: FilterQuery<ITransaction>) => Promise<ITransaction[]>;
   deleteTransactions: (
