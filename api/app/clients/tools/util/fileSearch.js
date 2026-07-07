@@ -1,7 +1,13 @@
 const axios = require('axios');
 const { logger } = require('@librechat/data-schemas');
 const { tool } = require('@librechat/agents/langchain/tools');
-const { generateShortLivedToken, getRagRerankConfig, rerankOrder } = require('@librechat/api');
+const {
+  logAxiosError,
+  generateShortLivedToken,
+  createConcurrencyLimiter,
+  getRagRerankConfig,
+  rerankOrder,
+} = require('@librechat/api');
 const { Tools, EToolResources } = require('librechat-data-provider');
 const { filterFilesByAgentAccess } = require('~/server/services/Files/permissions');
 const { getFiles } = require('~/models');
@@ -29,6 +35,19 @@ const FILE_SEARCH_K = parseInt(process.env.FILE_SEARCH_K ?? '', 10) || 12;
  * Maximum chunks kept after merging and ranking results across all files.
  */
 const FILE_SEARCH_RESULT_LIMIT = parseInt(process.env.FILE_SEARCH_RESULT_LIMIT ?? '', 10) || 20;
+
+/**
+ * Hard ceiling on a single RAG `/query` call. axios has no default timeout, so
+ * a hung rag_api would otherwise hold the tool call (and the chat turn) open
+ * indefinitely. Same env knob as the forced-floor context path.
+ */
+const RAG_API_TIMEOUT_MS = parseInt(process.env.RAG_API_TIMEOUT_MS ?? '', 10) || 30000;
+
+/**
+ * Bounds the concurrent `/query` fan-out so an agent with many knowledge files
+ * cannot open an unbounded number of simultaneous RAG requests per invocation.
+ */
+const RAG_QUERY_CONCURRENCY = parseInt(process.env.RAG_QUERY_CONCURRENCY ?? '', 10) || 10;
 
 /**
  *
@@ -190,16 +209,26 @@ const createFileSearchTool = async ({
         return body;
       };
 
+      // Carry each file alongside its result so a dropped (failed) query cannot
+      // shift the array index and misattribute file_id/page to the wrong file —
+      // filtering nulls below would otherwise desync `files[fileIndex]`.
+      const limit = createConcurrencyLimiter(RAG_QUERY_CONCURRENCY);
       const queryPromises = files.map((file) =>
-        axios
-          .post(`${process.env.RAG_API_URL}/query`, createQueryBody(file), {
+        limit(() =>
+          axios.post(`${process.env.RAG_API_URL}/query`, createQueryBody(file), {
             headers: {
               Authorization: `Bearer ${jwtToken}`,
               'Content-Type': 'application/json',
             },
-          })
+            timeout: RAG_API_TIMEOUT_MS,
+          }),
+        )
+          .then((response) => ({ file, data: response.data }))
           .catch((error) => {
-            logger.error('Error encountered in `file_search` while querying file:', error);
+            logAxiosError({
+              message: `[${Tools.file_search}] query failed for file ${file.file_id}`,
+              error,
+            });
             return null;
           }),
       );
@@ -216,16 +245,28 @@ const createFileSearchTool = async ({
         ];
       }
 
+      // D5/D16: carry each file with its result ({file,data}) so a dropped
+      // (failed) query cannot shift the array index and misattribute file_id/page
+      // to the wrong file; tolerate a malformed/error-shaped payload instead of
+      // throwing a TypeError that would crash the whole tool call. Produce the
+      // distance-sorted merged pool WITHOUT slicing yet — the reranker (#105)
+      // needs the full candidate pool before the final cut.
       const mergedResults = validResults
-        .flatMap((result, fileIndex) =>
-          result.data.map(([docInfo, distance]) => ({
-            filename: docInfo.metadata.source.split('/').pop(),
-            content: docInfo.page_content,
-            distance,
-            file_id: files[fileIndex]?.file_id,
-            page: docInfo.metadata.page || null,
-          })),
-        )
+        .flatMap(({ file, data }) => {
+          const rows = Array.isArray(data) ? data : [];
+          return rows
+            .filter((item) => item?.[0]?.page_content != null)
+            .map((item) => {
+              const [docInfo, distance] = item;
+              return {
+                filename: docInfo.metadata?.source?.split('/').pop() ?? file.filename ?? 'unknown',
+                content: docInfo.page_content,
+                distance,
+                file_id: file.file_id,
+                page: docInfo.metadata?.page || null,
+              };
+            });
+        })
         .sort((a, b) => a.distance - b.distance);
 
       /* Кросс-файловый реранк расширенного пула cross-encoder'ом: pgvector-порядок шумный

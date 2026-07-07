@@ -3,6 +3,8 @@ const axios = require('axios');
 jest.mock('axios');
 jest.mock('@librechat/api', () => ({
   generateShortLivedToken: jest.fn(),
+  logAxiosError: jest.fn(),
+  createConcurrencyLimiter: jest.fn(() => (task) => task()),
   getRagRerankConfig: jest.fn(() => null),
   rerankOrder: jest.fn(async () => null),
 }));
@@ -76,6 +78,8 @@ describe('fileSearch.js - tuple return validation', () => {
 
       expect(Array.isArray(result)).toBe(true);
       expect(result).toHaveLength(2);
+      // Fork divergence: every per-file query rejecting means the RAG service was
+      // unreachable (not "no hits"), so the fork returns an availability message.
       expect(result[0]).toBe(
         'The document search service is temporarily unavailable. Please try again shortly.',
       );
