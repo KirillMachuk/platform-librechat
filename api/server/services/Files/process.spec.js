@@ -46,6 +46,37 @@ jest.mock('@librechat/api', () => {
     withTimeout: jest.fn((promise) => promise),
     processAudioFile: jest.fn(),
     getStorageMetadata: jest.fn(() => ({})),
+    // Faithful minimal limiter (same algorithm as the real one) so the D12
+    // concurrency-cap test observes real bounding rather than a pass-through.
+    createConcurrencyLimiter: (concurrency) => {
+      let active = 0;
+      const queue = [];
+      const release = () => {
+        active--;
+        const next = queue.shift();
+        if (next) next();
+      };
+      return (task) =>
+        new Promise((resolve, reject) => {
+          const run = () => {
+            active++;
+            Promise.resolve()
+              .then(task)
+              .then(
+                (value) => {
+                  release();
+                  resolve(value);
+                },
+                (error) => {
+                  release();
+                  reject(error);
+                },
+              );
+          };
+          if (active < concurrency) run();
+          else queue.push(run);
+        });
+    },
     getRetentionExpiry,
     getAgentFileRetentionExpiry: jest.fn(({ req, messageAttachment, toolResource }) => {
       const interfaceConfig = req?.config?.interfaceConfig;
@@ -1455,6 +1486,43 @@ describe('processFileURL', () => {
 describe('processDeleteRequest', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('D12: caps concurrent storage deletes at FILE_DELETE_CONCURRENCY', async () => {
+    const prev = process.env.FILE_DELETE_CONCURRENCY;
+    process.env.FILE_DELETE_CONCURRENCY = '3';
+    let active = 0;
+    let peak = 0;
+    const deleteFile = jest.fn(async () => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active--;
+    });
+    getStrategyFunctions.mockReturnValue({ deleteFile });
+    db.deleteFiles.mockResolvedValue({ deletedCount: 10 });
+
+    const files = Array.from({ length: 10 }, (_, i) => ({
+      file_id: `f${i}`,
+      filepath: `/images/user-123/f${i}.png`,
+      source: FileSources.local,
+    }));
+
+    const result = await processDeleteRequest({
+      req: { body: {}, config: {}, user: { id: 'user-123', tenantId: 'tenant-a' } },
+      files,
+    });
+
+    expect(peak).toBeLessThanOrEqual(3);
+    expect(peak).toBeGreaterThan(1); // proves deletes actually overlapped, not serialized
+    expect(deleteFile).toHaveBeenCalledTimes(10);
+    expect(result.deletedFileIds).toHaveLength(10);
+
+    if (prev === undefined) {
+      delete process.env.FILE_DELETE_CONCURRENCY;
+    } else {
+      process.env.FILE_DELETE_CONCURRENCY = prev;
+    }
   });
 
   it('removes metadata when backing storage is already missing', async () => {

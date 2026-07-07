@@ -33,6 +33,7 @@ const {
   acceptOcrText,
   processAudioFile,
   getStorageMetadata,
+  createConcurrencyLimiter,
   sweepExpiredFiles: sweepExpiredFilesWithDeps,
   startExpiredFileSweep: startExpiredFileSweepWithDeps,
 } = require('@librechat/api');
@@ -153,6 +154,18 @@ const rollbackOrphanedStorage = async ({ req, source, storageResult, file_id }) 
   }
 };
 
+/**
+ * Bounds concurrent storage deletes in a single batch request. `DELETE /files`
+ * accepts an arbitrary `files[]`, so without a cap a large batch fans out into
+ * hundreds of simultaneous S3/local deletes, saturating the event loop and the
+ * storage backend. OpenAI-source deletes keep their own leaky-bucket throttle.
+ * Read at call time (env is set at boot) so it stays overridable and testable.
+ */
+const fileDeleteConcurrency = () => {
+  const raw = parseInt(process.env.FILE_DELETE_CONCURRENCY ?? '', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 15;
+};
+
 const isMissingStorageError = (err) => {
   const code = err?.code ?? err?.status ?? err?.statusCode ?? err?.response?.status;
   if ([404, '404', 'ENOENT', 'NoSuchKey', 'NotFound', 'ResourceNotFound'].includes(code)) {
@@ -175,6 +188,8 @@ const isMissingStorageError = (err) => {
  * @param {Set<string>} params.resolvedFileIds - File IDs whose storage delete succeeded.
  * @param {Set<string>} params.failedFileIds - File IDs whose storage delete failed.
  * @param {OpenAI | undefined} [params.openai] - If an OpenAI file, the initialized OpenAI client.
+ * @param {<T>(task: () => Promise<T>) => Promise<T>} params.limit - Concurrency limiter for
+ *   non-OpenAI storage deletes (OpenAI uses its own leaky-bucket throttle).
  */
 function enqueueDeleteOperation({
   req,
@@ -184,6 +199,7 @@ function enqueueDeleteOperation({
   resolvedFileIds,
   failedFileIds,
   openai,
+  limit,
 }) {
   if (checkOpenAIStorage(file.source)) {
     // Enqueue to leaky bucket
@@ -212,20 +228,23 @@ function enqueueDeleteOperation({
       }),
     );
   } else {
-    // Add directly to promises
+    // Run under the concurrency limiter so a large batch does not fan out into
+    // hundreds of simultaneous storage deletes.
     promises.push(
-      deleteFile(req, file)
-        .then(() => resolvedFileIds.add(file.file_id))
-        .catch((err) => {
-          if (isMissingStorageError(err)) {
-            resolvedFileIds.add(file.file_id);
-            logger.warn('File storage was already missing during delete', err);
-            return;
-          }
-          failedFileIds.add(file.file_id);
-          logger.error('Error deleting file', err);
-          return Promise.reject(err);
-        }),
+      limit(() =>
+        deleteFile(req, file)
+          .then(() => resolvedFileIds.add(file.file_id))
+          .catch((err) => {
+            if (isMissingStorageError(err)) {
+              resolvedFileIds.add(file.file_id);
+              logger.warn('File storage was already missing during delete', err);
+              return;
+            }
+            failedFileIds.add(file.file_id);
+            logger.error('Error deleting file', err);
+            return Promise.reject(err);
+          }),
+      ),
     );
   }
 }
@@ -294,6 +313,7 @@ const processDeleteRequest = async ({ req, files }) => {
   const resolvedFileIds = new Set();
   const failedFileIds = new Set();
   const deletionMethods = {};
+  const limit = createConcurrencyLimiter(fileDeleteConcurrency());
   const promises = [];
 
   /** @type {Record<string, OpenAI | undefined>} */
@@ -367,6 +387,7 @@ const processDeleteRequest = async ({ req, files }) => {
       resolvedFileIds,
       failedFileIds,
       openai,
+      limit,
     });
   }
 
