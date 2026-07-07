@@ -1,7 +1,7 @@
 const axios = require('axios');
 const { logger } = require('@librechat/data-schemas');
 const { tool } = require('@librechat/agents/langchain/tools');
-const { generateShortLivedToken } = require('@librechat/api');
+const { generateShortLivedToken, getRagRerankConfig, rerankOrder } = require('@librechat/api');
 const { Tools, EToolResources } = require('librechat-data-provider');
 const { filterFilesByAgentAccess } = require('~/server/services/Files/permissions');
 const { getFiles } = require('~/models');
@@ -158,6 +158,15 @@ const createFileSearchTool = async ({
         return ['There was an error authenticating the file search request.', undefined];
       }
 
+      /* Суверенный реранк (RAG_RERANKER_URL, фаза 3a): при включённом реранке запрашиваем у
+       * rag_api БОЛЬШЕ кандидатов на файл — расширенный пул и есть источник качества (реранк
+       * только штатных k бесполезен: все чанки и так уйдут в контекст). Выключен = ровно
+       * прежнее поведение. */
+      const rerankConfig = getRagRerankConfig();
+      const perFileK = rerankConfig
+        ? Math.max(FILE_SEARCH_K, rerankConfig.candidates)
+        : FILE_SEARCH_K;
+
       /**
        * @param {import('librechat-data-provider').TFile} file
        * @returns {{ file_id: string, query: string, k: number, entity_id?: string }}
@@ -166,7 +175,7 @@ const createFileSearchTool = async ({
         const body = {
           file_id: file.file_id,
           query,
-          k: FILE_SEARCH_K,
+          k: perFileK,
         };
         // Per-file entity_id (e.g. project_id for project source files) takes
         // priority over the tool-level entity_id (agent id). This ensures that
@@ -207,7 +216,7 @@ const createFileSearchTool = async ({
         ];
       }
 
-      const formattedResults = validResults
+      const mergedResults = validResults
         .flatMap((result, fileIndex) =>
           result.data.map(([docInfo, distance]) => ({
             filename: docInfo.metadata.source.split('/').pop(),
@@ -217,8 +226,28 @@ const createFileSearchTool = async ({
             page: docInfo.metadata.page || null,
           })),
         )
-        .sort((a, b) => a.distance - b.distance)
-        .slice(0, FILE_SEARCH_RESULT_LIMIT);
+        .sort((a, b) => a.distance - b.distance);
+
+      /* Кросс-файловый реранк расширенного пула cross-encoder'ом: pgvector-порядок шумный
+       * (нужный пункт договора часто на 5-9 месте), реранкер ставит его в топ. Fail-open:
+       * null (выключен/таймаут/5xx) → остаёмся на порядке по дистанции. relevance для
+       * модели и UI берём из rerank-оценки (0..1) — дистанционная у переупорядоченного
+       * списка врала бы. */
+      let rankedResults = mergedResults;
+      if (rerankConfig && mergedResults.length > 1) {
+        const pool = mergedResults.slice(0, rerankConfig.candidates);
+        const order = await rerankOrder({
+          config: rerankConfig,
+          query,
+          documents: pool.map((result) => result.content),
+          topN: FILE_SEARCH_RESULT_LIMIT,
+        });
+        if (order != null) {
+          rankedResults = order.map(({ index, score }) => ({ ...pool[index], relevance: score }));
+        }
+      }
+
+      const formattedResults = rankedResults.slice(0, FILE_SEARCH_RESULT_LIMIT);
 
       if (formattedResults.length === 0) {
         return [
@@ -227,12 +256,14 @@ const createFileSearchTool = async ({
         ];
       }
 
+      const relevanceOf = (result) => result.relevance ?? 1.0 - result.distance;
+
       const formattedString = formattedResults
         .map(
           (result, index) =>
             `File: ${result.filename}${
               fileCitations ? `\nAnchor: \\ue202turn0file${index} (${result.filename})` : ''
-            }\nRelevance: ${(1.0 - result.distance).toFixed(4)}\nContent: ${result.content}\n`,
+            }\nRelevance: ${relevanceOf(result).toFixed(4)}\nContent: ${result.content}\n`,
         )
         .join('\n---\n');
 
@@ -241,9 +272,9 @@ const createFileSearchTool = async ({
         fileId: result.file_id,
         content: result.content,
         fileName: result.filename,
-        relevance: 1.0 - result.distance,
+        relevance: relevanceOf(result),
         pages: result.page ? [result.page] : [],
-        pageRelevance: result.page ? { [result.page]: 1.0 - result.distance } : {},
+        pageRelevance: result.page ? { [result.page]: relevanceOf(result) } : {},
       }));
 
       // Sovereign DR (Track B): mask the user's document text (the only PII-bearing part the

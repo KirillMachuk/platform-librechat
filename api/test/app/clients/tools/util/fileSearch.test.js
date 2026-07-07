@@ -3,6 +3,8 @@ const axios = require('axios');
 jest.mock('axios');
 jest.mock('@librechat/api', () => ({
   generateShortLivedToken: jest.fn(),
+  getRagRerankConfig: jest.fn(() => null),
+  rerankOrder: jest.fn(async () => null),
 }));
 
 jest.mock('@librechat/data-schemas', () => ({
@@ -74,7 +76,9 @@ describe('fileSearch.js - tuple return validation', () => {
 
       expect(Array.isArray(result)).toBe(true);
       expect(result).toHaveLength(2);
-      expect(result[0]).toBe('No results found or errors occurred while searching the files.');
+      expect(result[0]).toBe(
+        'The document search service is temporarily unavailable. Please try again shortly.',
+      );
       expect(result[1]).toBeUndefined();
     });
   });

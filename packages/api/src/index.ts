@@ -65,6 +65,8 @@ export * from './storage';
 export * from './tools';
 /* web search */
 export * from './web';
+/* RAG rerank (суверенный реранкер) */
+export * from './rag/rerank';
 /* Langfuse */
 export * from './langfuse';
 /* Cache */
