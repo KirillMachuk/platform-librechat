@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { getEndpointField } from 'librechat-data-provider';
 import type * as t from 'librechat-data-provider';
+import { getModelBrandIcon } from '~/components/Chat/Menus/Endpoints/components/brand';
 import { getIconKey, getEntity, getIconEndpoint } from '~/utils';
 import ConvoIconURL from '~/components/Endpoints/ConvoIconURL';
 import { icons } from '~/hooks/Endpoint/Icons';
@@ -50,6 +51,18 @@ export default function ConvoIcon({
   const iconKey = getIconKey({ endpoint, endpointsConfig, endpointIconURL });
   const Icon = icons[iconKey] ?? null;
 
+  // Fall back to the model's vendor brand mark when the endpoint has no icon of
+  // its own (e.g. the custom "1ma" endpoint) — otherwise the generic bot renders
+  // white-on-white in light theme. null for agents/assistants and unknown vendors,
+  // so the entity avatar / endpoint icon below still wins.
+  const brandIcon = useMemo(
+    () =>
+      !endpointIconURL && !avatar && conversation?.model
+        ? getModelBrandIcon(conversation.model, size)
+        : null,
+    [endpointIconURL, avatar, conversation?.model, size],
+  );
+
   return (
     <>
       {isImageURL(iconURL) ? (
@@ -65,17 +78,22 @@ export default function ConvoIcon({
         />
       ) : (
         <div className={containerClassName}>
-          {endpoint && Icon != null && (
-            <Icon
-              size={size}
-              context={context}
-              endpoint={endpoint}
-              className={className}
-              iconURL={endpointIconURL}
-              assistantName={name}
-              agentName={name}
-              avatar={avatar}
-            />
+          {brandIcon ? (
+            <div className={className}>{brandIcon}</div>
+          ) : (
+            endpoint &&
+            Icon != null && (
+              <Icon
+                size={size}
+                context={context}
+                endpoint={endpoint}
+                className={className}
+                iconURL={endpointIconURL}
+                assistantName={name}
+                agentName={name}
+                avatar={avatar}
+              />
+            )
           )}
         </div>
       )}
