@@ -25,7 +25,6 @@ const {
   findToken,
   createUser,
   updateUser,
-  countUsers,
   getUserById,
   findSession,
   createToken,
@@ -368,9 +367,6 @@ const registerUser = async (user, additionalData = {}) => {
       return { status: 200, message: genericVerificationMessage };
     }
 
-    //determine if this is the first registered user (not counting anonymous_user)
-    const isFirstRegisteredUser = (await countUsers()) === 0;
-
     const salt = bcrypt.genSaltSync(10);
     const newUserData = {
       provider: provider ?? 'local',
@@ -378,7 +374,12 @@ const registerUser = async (user, additionalData = {}) => {
       username,
       name,
       avatar: null,
-      role: isFirstRegisteredUser ? SystemRoles.ADMIN : SystemRoles.USER,
+      // Self-service registration always creates a plain USER. ADMIN is never
+      // self-assigned from public sign-up (previously the first registrant
+      // silently became ADMIN). Elevated roles are provisioned only via the
+      // server-trusted `additionalData.role` path (e.g. the create-user CLI
+      // with --admin), which is spread below and overrides this default.
+      role: SystemRoles.USER,
       password: bcrypt.hashSync(password, salt),
       ...trustedAdditionalData,
     };
