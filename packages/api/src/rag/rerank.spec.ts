@@ -1,5 +1,5 @@
-import { getRagRerankConfig, rerankOrder } from './rerank';
 import type { RagRerankConfig } from './rerank';
+import { getRagRerankConfig, rerankOrder } from './rerank';
 
 jest.mock('@librechat/data-schemas', () => ({
   logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn(), info: jest.fn() },
