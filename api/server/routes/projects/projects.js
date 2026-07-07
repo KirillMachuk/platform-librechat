@@ -1,5 +1,6 @@
 const express = require('express');
 const { logger } = require('@librechat/data-schemas');
+const { Constants } = require('librechat-data-provider');
 const {
   createProject,
   getProjectById,
@@ -12,10 +13,35 @@ const {
 const { purgeFilesWithVectors } = require('~/server/services/Files/process');
 const { invalidateProjectContext } = require('~/server/services/Projects/context');
 const auditProject = require('~/server/middleware/auditProject');
-const { requireJwtAuth } = require('~/server/middleware');
+const { requireJwtAuth, projectCreateLimiter } = require('~/server/middleware');
 
 const router = express.Router();
 router.use(requireJwtAuth);
+
+const PROJECT_FIELD_LIMITS = {
+  name: Constants.PROJECT_NAME_MAX_LENGTH,
+  description: Constants.PROJECT_DESCRIPTION_MAX_LENGTH,
+  instructions: Constants.PROJECT_INSTRUCTIONS_MAX_LENGTH,
+  icon: Constants.PROJECT_ICON_MAX_LENGTH,
+  color: Constants.PROJECT_COLOR_MAX_LENGTH,
+};
+
+/**
+ * Server-side length guard for project text fields. The client caps these, but a
+ * direct API call bypasses that — unbounded `instructions` bloats Mongo docs and
+ * is injected verbatim into agent instructions. Returns an error string, or null.
+ * @param {Record<string, unknown>} body
+ * @returns {string | null}
+ */
+const validateProjectFieldLengths = (body) => {
+  for (const [field, limit] of Object.entries(PROJECT_FIELD_LIMITS)) {
+    const value = body?.[field];
+    if (typeof value === 'string' && value.length > limit) {
+      return `Project ${field} cannot exceed ${limit} characters`;
+    }
+  }
+  return null;
+};
 
 router.get('/', async (req, res) => {
   try {
@@ -27,11 +53,15 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', auditProject, async (req, res) => {
+router.post('/', projectCreateLimiter, auditProject, async (req, res) => {
   try {
     const { name, description, instructions, icon, color } = req.body ?? {};
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return res.status(400).json({ error: 'Project name is required' });
+    }
+    const lengthError = validateProjectFieldLengths(req.body);
+    if (lengthError) {
+      return res.status(400).json({ error: lengthError });
     }
     const project = await createProject(req.user.id, {
       name: name.trim(),
@@ -63,6 +93,10 @@ router.get('/:projectId', async (req, res) => {
 router.patch('/:projectId', auditProject, async (req, res) => {
   try {
     const { name, description, instructions, icon, color } = req.body ?? {};
+    const lengthError = validateProjectFieldLengths(req.body);
+    if (lengthError) {
+      return res.status(400).json({ error: lengthError });
+    }
     const update = {};
     if (typeof name === 'string') update.name = name.trim();
     if (typeof description === 'string') update.description = description;

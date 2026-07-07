@@ -2592,6 +2592,16 @@ export enum Constants {
   COMMANDS_MAX_LENGTH = 56,
   /** Max length (characters) for a saved prompt's text (~25k tokens) */
   PROMPT_MAX_LENGTH = 100000,
+  /** Max length (characters) for a project name */
+  PROJECT_NAME_MAX_LENGTH = 120,
+  /** Max length (characters) for a project description */
+  PROJECT_DESCRIPTION_MAX_LENGTH = 500,
+  /** Max length (characters) for project instructions */
+  PROJECT_INSTRUCTIONS_MAX_LENGTH = 20000,
+  /** Max length (characters) for a project icon identifier */
+  PROJECT_ICON_MAX_LENGTH = 50,
+  /** Max length (characters) for a project color identifier */
+  PROJECT_COLOR_MAX_LENGTH = 20,
   /** Default Stream Rate (ms) */
   DEFAULT_STREAM_RATE = 1,
   /** Saved Tag */

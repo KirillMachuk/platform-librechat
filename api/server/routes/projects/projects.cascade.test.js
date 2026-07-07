@@ -13,16 +13,24 @@ jest.mock('~/server/middleware', () => ({
     req.user = { id: 'user-1' };
     next();
   },
+  projectCreateLimiter: (_req, _res, next) => next(),
 }));
 
 jest.mock('~/server/services/Files/process', () => ({
   purgeFilesWithVectors: jest.fn(),
 }));
 
+jest.mock('~/server/services/Projects/context', () => ({
+  invalidateProjectContext: jest.fn(),
+}));
+
+jest.mock('~/server/middleware/auditProject', () => (_req, _res, next) => next());
+
 const express = require('express');
 const request = require('supertest');
+const { Constants } = require('librechat-data-provider');
 const { purgeFilesWithVectors } = require('~/server/services/Files/process');
-const { getFiles, deleteProject } = require('~/models');
+const { getFiles, deleteProject, createProject } = require('~/models');
 const projectsRouter = require('./projects');
 
 describe('DELETE /projects/:projectId file cascade (C-PRJ-1)', () => {
@@ -72,5 +80,47 @@ describe('DELETE /projects/:projectId file cascade (C-PRJ-1)', () => {
     const res = await request(app).delete('/projects/p1');
 
     expect(res.status).toBe(204);
+  });
+});
+
+describe('project field length validation (C-PRJ-4)', () => {
+  let app;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    app = express();
+    app.use(express.json());
+    app.use('/projects', projectsRouter);
+  });
+
+  it('rejects oversized instructions on create with 400', async () => {
+    const res = await request(app)
+      .post('/projects')
+      .send({
+        name: 'Legal',
+        instructions: 'a'.repeat(Constants.PROJECT_INSTRUCTIONS_MAX_LENGTH + 1),
+      });
+
+    expect(res.status).toBe(400);
+    expect(createProject).not.toHaveBeenCalled();
+  });
+
+  it('rejects an oversized name on create with 400', async () => {
+    const res = await request(app)
+      .post('/projects')
+      .send({ name: 'a'.repeat(Constants.PROJECT_NAME_MAX_LENGTH + 1) });
+
+    expect(res.status).toBe(400);
+    expect(createProject).not.toHaveBeenCalled();
+  });
+
+  it('accepts fields within limits', async () => {
+    createProject.mockResolvedValue({ projectId: 'p1', name: 'Legal' });
+    const res = await request(app)
+      .post('/projects')
+      .send({ name: 'Legal', instructions: 'short instructions' });
+
+    expect(res.status).toBe(201);
+    expect(createProject).toHaveBeenCalled();
   });
 });

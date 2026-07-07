@@ -90,7 +90,7 @@ export function createProjectMethods(mongoose: typeof import('mongoose')): Proje
         { $group: { _id: '$project_id', count: { $sum: 1 } } },
       ]),
       File.aggregate([
-        { $match: { project_id: { $in: projectIds } } },
+        { $match: { user, project_id: { $in: projectIds } } },
         { $group: { _id: '$project_id', count: { $sum: 1 } } },
       ]),
     ]);
