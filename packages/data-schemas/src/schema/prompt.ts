@@ -1,4 +1,5 @@
 import { Schema } from 'mongoose';
+import { Constants } from 'librechat-data-provider';
 import type { IPrompt } from '~/types';
 
 const promptSchema: Schema<IPrompt> = new Schema(
@@ -18,6 +19,10 @@ const promptSchema: Schema<IPrompt> = new Schema(
     prompt: {
       type: String,
       required: true,
+      maxlength: [
+        Constants.PROMPT_MAX_LENGTH as number,
+        `Prompt cannot be longer than ${Constants.PROMPT_MAX_LENGTH} characters`,
+      ],
     },
     type: {
       type: String,

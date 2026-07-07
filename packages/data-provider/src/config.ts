@@ -2590,6 +2590,8 @@ export enum Constants {
   COMMON_DIVIDER = '__',
   /** Max length for commands */
   COMMANDS_MAX_LENGTH = 56,
+  /** Max length (characters) for a saved prompt's text (~25k tokens) */
+  PROMPT_MAX_LENGTH = 100000,
   /** Default Stream Rate (ms) */
   DEFAULT_STREAM_RATE = 1,
   /** Saved Tag */

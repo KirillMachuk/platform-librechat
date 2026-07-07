@@ -11,6 +11,7 @@ const {
   filterAccessibleIdsBySharedLogic,
 } = require('@librechat/api');
 const {
+  Constants,
   Permissions,
   ResourceType,
   AccessRoleIds,
@@ -242,6 +243,33 @@ router.get('/groups', async (req, res) => {
 });
 
 /**
+ * Validates and whitelists a client-supplied prompt payload before it reaches
+ * the model layer, which spreads it straight into Mongo. Only `prompt` (text)
+ * and `type` survive — dropping client-supplied `_id`, `author`, `groupId`,
+ * `tenantId`, or Mongo operators that would otherwise be injected into the
+ * upsert filter / document. Enforces the non-empty + size (`PROMPT_MAX_LENGTH`)
+ * and `type` enum invariants that only the mongoose schema caught before.
+ *
+ * @param {unknown} prompt
+ * @returns {{ value: { prompt: string, type: 'text' | 'chat' } } | { error: string }}
+ */
+const sanitizePromptPayload = (prompt) => {
+  if (!prompt || typeof prompt !== 'object') {
+    return { error: 'Prompt is required' };
+  }
+  if (typeof prompt.prompt !== 'string' || !prompt.prompt.trim()) {
+    return { error: 'Prompt text is required and must be a non-empty string' };
+  }
+  if (prompt.prompt.length > Constants.PROMPT_MAX_LENGTH) {
+    return { error: `Prompt text cannot exceed ${Constants.PROMPT_MAX_LENGTH} characters` };
+  }
+  if (prompt.type !== 'text' && prompt.type !== 'chat') {
+    return { error: 'Prompt type must be "text" or "chat"' };
+  }
+  return { value: { prompt: prompt.prompt, type: prompt.type } };
+};
+
+/**
  * Creates a new prompt group with initial prompt
  * @param {object} req
  * @param {TCreatePrompt} req.body
@@ -251,12 +279,17 @@ const createNewPromptGroup = async (req, res) => {
   try {
     const { prompt, group } = req.body;
 
-    if (!prompt || !group || !group.name) {
+    if (!group || !group.name) {
       return res.status(400).send({ error: 'Prompt and group name are required' });
     }
 
+    const sanitized = sanitizePromptPayload(prompt);
+    if (sanitized.error) {
+      return res.status(400).send({ error: sanitized.error });
+    }
+
     const saveData = {
-      prompt,
+      prompt: sanitized.value,
       group,
       author: req.user.id,
       authorName: req.user.name,
@@ -303,25 +336,14 @@ const addPromptToGroup = async (req, res) => {
     const { groupId } = req.params;
     const { prompt } = req.body;
 
-    if (!prompt) {
-      return res.status(400).send({ error: 'Prompt is required' });
+    const sanitized = sanitizePromptPayload(prompt);
+    if (sanitized.error) {
+      return res.status(400).send({ error: sanitized.error });
     }
 
-    if (typeof prompt.prompt !== 'string' || !prompt.prompt.trim()) {
-      return res
-        .status(400)
-        .send({ error: 'Prompt text is required and must be a non-empty string' });
-    }
-
-    if (prompt.type !== 'text' && prompt.type !== 'chat') {
-      return res.status(400).send({ error: 'Prompt type must be "text" or "chat"' });
-    }
-
-    // Ensure the prompt is associated with the correct group
-    prompt.groupId = groupId;
-
+    // Associate with the group server-side (never trust a client-supplied groupId).
     const saveData = {
-      prompt,
+      prompt: { ...sanitized.value, groupId },
       author: req.user.id,
       authorName: req.user.name,
     };

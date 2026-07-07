@@ -18,7 +18,7 @@ export const detectVariables = (text: string): boolean => {
 export const wrapVariable = (variable: string) => `{{${variable}}}`;
 
 export const extractUniqueVariables = (text: string): string[] => {
-  const regex = /{{(.*?)}}/g;
+  const regex = /{{([^{}]*)}}/g;
   let match: RegExpExecArray | null;
   const variables = new Set<string>();
   while ((match = regex.exec(text)) !== null) {
@@ -28,7 +28,7 @@ export const extractUniqueVariables = (text: string): string[] => {
 };
 
 export const extractVariableInfo = (text: string) => {
-  const regex = /{{(.*?)}}/g;
+  const regex = /{{([^{}]*)}}/g;
   let match: RegExpExecArray | null;
   const allVariables: string[] = [];
   const uniqueVariables: string[] = [];

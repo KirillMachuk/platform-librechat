@@ -81,7 +81,13 @@ export function markPublicPromptGroups(
 /**
  * Builds filter object for prompt group queries
  */
-export function buildPromptGroupFilter({ name, category }: { name?: string; category?: string }): {
+export function buildPromptGroupFilter({
+  name,
+  category,
+}: {
+  name?: unknown;
+  category?: unknown;
+}): {
   filter: Record<string, string | number | boolean | RegExp | undefined>;
   searchShared: boolean;
   searchSharedOnly: boolean;
@@ -90,20 +96,25 @@ export function buildPromptGroupFilter({ name, category }: { name?: string; cate
   let searchShared = true;
   let searchSharedOnly = false;
 
+  // Coerce query params to strings: Express parses `?name[$ne]=` into an object,
+  // which would otherwise flow a Mongo operator straight into the filter.
+  const safeName = typeof name === 'string' ? name : undefined;
+  const safeCategory = typeof category === 'string' ? category : undefined;
+
   // Handle name filter - convert to regex for case-insensitive search
-  if (name) {
-    filter.name = new RegExp(escapeRegExp(name), 'i');
+  if (safeName) {
+    filter.name = new RegExp(escapeRegExp(safeName), 'i');
   }
 
   // Handle category filters with special system categories
-  if (category === SystemCategories.MY_PROMPTS) {
+  if (safeCategory === SystemCategories.MY_PROMPTS) {
     searchShared = false;
-  } else if (category === SystemCategories.NO_CATEGORY) {
+  } else if (safeCategory === SystemCategories.NO_CATEGORY) {
     filter.category = '';
-  } else if (category === SystemCategories.SHARED_PROMPTS) {
+  } else if (safeCategory === SystemCategories.SHARED_PROMPTS) {
     searchSharedOnly = true;
-  } else if (category) {
-    filter.category = category;
+  } else if (safeCategory) {
+    filter.category = safeCategory;
   }
 
   return { filter, searchShared, searchSharedOnly };
