@@ -1,8 +1,32 @@
 const { isEnabled } = require('@librechat/api');
 const { logger } = require('@librechat/data-schemas');
-const { CacheKeys } = require('librechat-data-provider');
+const { CacheKeys, isReasoningModel } = require('librechat-data-provider');
 const getLogStores = require('~/cache/getLogStores');
 const { saveConvo } = require('~/models');
+
+const DEFAULT_TITLE_TIMEOUT_MS = 45000;
+/** Reasoning title models (o-series / gpt-5.x) "think" even over a 4-word title
+ *  and routinely blow past 45s; give them more room when no env override is set. */
+const REASONING_TITLE_TIMEOUT_MS = 120000;
+const MIN_TITLE_TIMEOUT_MS = 15000;
+const MAX_TITLE_TIMEOUT_MS = 300000;
+
+/**
+ * Resolves the title-generation timeout. An explicit `TITLE_GENERATION_TIMEOUT_MS`
+ * env value wins (clamped to a sane range); otherwise a reasoning title model
+ * gets a longer default than the standard 45s so it doesn't time out and drop
+ * the chat back to "New Chat". `titleModel` is best-effort (from client options);
+ * the env override is the reliable lever.
+ * @param {string} [titleModel]
+ * @returns {number}
+ */
+function resolveTitleTimeoutMs(titleModel) {
+  const envRaw = parseInt(process.env.TITLE_GENERATION_TIMEOUT_MS ?? '', 10);
+  if (Number.isFinite(envRaw) && envRaw > 0) {
+    return Math.min(Math.max(envRaw, MIN_TITLE_TIMEOUT_MS), MAX_TITLE_TIMEOUT_MS);
+  }
+  return isReasoningModel(titleModel) ? REASONING_TITLE_TIMEOUT_MS : DEFAULT_TITLE_TIMEOUT_MS;
+}
 
 /**
  * Add title to conversation in a way that avoids memory retention.
@@ -74,8 +98,9 @@ const addTitle = async (
   /** @type {NodeJS.Timeout} */
   let timeoutId;
   try {
+    const titleTimeoutMs = resolveTitleTimeoutMs(client?.options?.titleModel);
     const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error('Title generation timeout')), 45000);
+      timeoutId = setTimeout(() => reject(new Error('Title generation timeout')), titleTimeoutMs);
     }).catch((error) => {
       logger.error('Title error:', error);
     });
@@ -175,3 +200,4 @@ const addTitle = async (
 };
 
 module.exports = addTitle;
+module.exports.resolveTitleTimeoutMs = resolveTitleTimeoutMs;
