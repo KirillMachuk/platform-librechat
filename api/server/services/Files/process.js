@@ -55,14 +55,26 @@ const { STTService } = require('./Audio/STTService');
 const db = require('~/models');
 
 /**
- * Upload-path ceiling for document text extraction (`parseText`) and the PDF
- * routing probe (`probePdf`). `parseText` posts to rag_api with its own 300s
- * internal cap — far too long to hold an upload response open — so the upload
- * handler races it against this shorter timeout and degrades gracefully
- * (probe → route to RAG; OCR fallback → honest "unable to extract"; plain-text
- * → native parse). Overridable via env.
+ * Upload-path ceiling for the FAST text operations: the PDF routing probe
+ * (`probePdf`, a pdfjs text-layer pass) and native/digital text extraction.
+ * `parseText` posts to rag_api with its own 300s internal cap — far too long to
+ * hold an upload response open — so the handler races these against this shorter
+ * timeout and degrades gracefully (probe → route to RAG; plain-text → native
+ * parse). NOTE: this is deliberately NOT used for scanned-document OCR, which is
+ * legitimately slow — see `DOC_OCR_TIMEOUT_MS`. Overridable via env.
  */
 const DOC_PARSE_TIMEOUT_MS = parseInt(process.env.DOC_PARSE_TIMEOUT_MS ?? '', 10) || 30000;
+
+/**
+ * Ceiling for the scanned-document OCR fallback (a digital-parser miss → RAG
+ * `/text` → doc-gateway → Tesseract). Multi-page scans (e.g. KFC lease PDFs)
+ * legitimately take tens of seconds, so this is far more generous than the fast
+ * probe/text timeout: capping OCR at 30s would falsely fail real scanned
+ * contracts in full-text mode. Still well under `parseText`'s 300s so a truly
+ * hung rag_api can't pin the upload. For genuinely large scans prefer the async
+ * RAG route (`RAG_AUTO_ROUTE_LARGE_DOC` / `AUTO_ROUTE_BY_TEXT`). Overridable via env.
+ */
+const DOC_OCR_TIMEOUT_MS = parseInt(process.env.DOC_OCR_TIMEOUT_MS ?? '', 10) || 120000;
 
 /**
  * Separate, more generous ceiling for image OCR (a large multi-region scan is
@@ -1067,13 +1079,15 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
        * the RAG API /text endpoint, which routes through doc-gateway (local Tesseract OCR), so
        * scanned contracts work in full-text mode too. No-op if RAG_API_URL is unset/unreachable. */
       try {
-        // Bound the OCR fallback so a slow/hung rag_api cannot hold the upload
-        // open for its full 300s internal cap. On timeout this rejects, the
-        // catch below logs it, resolveDocumentText returns undefined, and the
-        // caller raises an honest "unable to extract" error.
+        // Bound the OCR fallback so a hung rag_api cannot hold the upload open
+        // for its full 300s internal cap — but generously (DOC_OCR_TIMEOUT_MS),
+        // because a legitimate multi-page scan (Tesseract) takes tens of seconds
+        // and a short cap would falsely fail real scanned contracts. On timeout
+        // this rejects, the catch below logs it, resolveDocumentText returns
+        // undefined, and the caller raises an honest "unable to extract" error.
         const parsed = await withTimeout(
           parseText({ req, file, file_id }),
-          DOC_PARSE_TIMEOUT_MS,
+          DOC_OCR_TIMEOUT_MS,
           `RAG /text OCR fallback timed out for "${file.originalname}"`,
         );
         if (parsed?.text?.trim()) {

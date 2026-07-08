@@ -594,7 +594,7 @@ describe('processAgentFileUpload', () => {
         handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
       });
       const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
-      // Simulate the OCR fallback exceeding DOC_PARSE_TIMEOUT_MS: withTimeout rejects,
+      // Simulate the OCR fallback exceeding its timeout: withTimeout rejects,
       // resolveDocumentText swallows it and returns undefined, and the caller raises
       // the same "unable to extract" error instead of blocking on the 300s parseText.
       withTimeout.mockRejectedValueOnce(new Error('RAG /text OCR fallback timed out'));
@@ -602,6 +602,15 @@ describe('processAgentFileUpload', () => {
       await expect(
         processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
       ).rejects.toThrow(/image-based and requires an OCR service/);
+
+      // The scanned-document OCR fallback must use the GENEROUS OCR timeout (120s),
+      // not the fast 30s probe/text timeout — a short cap falsely fails real
+      // multi-page scans (KFC leases). Assert the timeout arg passed to withTimeout.
+      const ocrCall = withTimeout.mock.calls.find((call) =>
+        String(call[2] ?? '').includes('OCR fallback timed out'),
+      );
+      expect(ocrCall).toBeDefined();
+      expect(ocrCall[1]).toBe(120000);
 
       withTimeout.mockImplementation((promise) => promise);
     });
