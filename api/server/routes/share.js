@@ -136,34 +136,35 @@ router.post(
   requireVerifiedEmail,
   checkSharedLinksAccess,
   async (req, res) => {
-  try {
-    const { targetMessageId } = req.body;
-    const expiredAt = await resolveSharedLinkExpiration(req, req.params.conversationId);
-    if (expiredAt != null && !isActiveExpirationDate(expiredAt)) {
-      return res.status(404).end();
-    }
+    try {
+      const { targetMessageId } = req.body;
+      const expiredAt = await resolveSharedLinkExpiration(req, req.params.conversationId);
+      if (expiredAt != null && !isActiveExpirationDate(expiredAt)) {
+        return res.status(404).end();
+      }
 
-    const role = await getRoleByName(req.user.role);
-    const sharedLinksPerms = role?.permissions?.[PermissionTypes.SHARED_LINKS] || {};
-    const grantPublic = sharedLinksPerms[Permissions.SHARE_PUBLIC] === true;
+      const role = await getRoleByName(req.user.role);
+      const sharedLinksPerms = role?.permissions?.[PermissionTypes.SHARED_LINKS] || {};
+      const grantPublic = sharedLinksPerms[Permissions.SHARE_PUBLIC] === true;
 
-    const created = await createSharedLink(
-      req.user.id,
-      req.params.conversationId,
-      targetMessageId,
-      expiredAt,
-    );
-    if (created) {
-      await grantCreationPermissions(created._id, req.user.id, grantPublic, expiredAt);
-      res.status(200).json(created);
-    } else {
-      res.status(404).end();
+      const created = await createSharedLink(
+        req.user.id,
+        req.params.conversationId,
+        targetMessageId,
+        expiredAt,
+      );
+      if (created) {
+        await grantCreationPermissions(created._id, req.user.id, grantPublic, expiredAt);
+        res.status(200).json(created);
+      } else {
+        res.status(404).end();
+      }
+    } catch (error) {
+      logger.error('Error creating shared link:', error);
+      res.status(500).json({ message: 'Error creating shared link' });
     }
-  } catch (error) {
-    logger.error('Error creating shared link:', error);
-    res.status(500).json({ message: 'Error creating shared link' });
-  }
-});
+  },
+);
 
 router.patch('/:shareId', requireJwtAuth, async (req, res) => {
   try {

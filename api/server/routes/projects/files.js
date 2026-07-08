@@ -21,11 +21,9 @@ router.get('/', async (req, res) => {
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
-    const files = await db.getFiles(
-      { user: req.user.id, project_id: req.params.projectId },
-      null,
-      { text: 0 },
-    );
+    const files = await db.getFiles({ user: req.user.id, project_id: req.params.projectId }, null, {
+      text: 0,
+    });
     res.status(200).json(files);
   } catch (error) {
     logger.error('[GET /projects/:projectId/files] Error', error);

@@ -64,10 +64,7 @@ export function createProjectMethods(mongoose: typeof import('mongoose')): Proje
     return project.toObject() as IProject;
   }
 
-  async function getProjectById(
-    user: string,
-    projectId: string,
-  ): Promise<IProject | null> {
+  async function getProjectById(user: string, projectId: string): Promise<IProject | null> {
     const Project = getProjectModel();
     return Project.findOne({ user, projectId }).lean<IProject>();
   }

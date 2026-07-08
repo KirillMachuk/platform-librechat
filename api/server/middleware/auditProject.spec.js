@@ -39,9 +39,7 @@ describe('auditProject', () => {
     expect(mockRecordAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'project.create', targetType: 'project' }),
     );
-    expect(JSON.stringify(mockRecordAudit.mock.calls[0][0])).not.toContain(
-      'SECRET INSTRUCTIONS',
-    );
+    expect(JSON.stringify(mockRecordAudit.mock.calls[0][0])).not.toContain('SECRET INSTRUCTIONS');
   });
 
   it('records project.update with the projectId', () => {

@@ -15,13 +15,17 @@ const connect = require('./connect');
   console.purple('--------------------------');
 
   if (process.argv.length < 5) {
-    console.orange('Usage: npm run create-user -- <email> <name> <username> [--email-verified=false] [--admin]');
+    console.orange(
+      'Usage: npm run create-user -- <email> <name> <username> [--email-verified=false] [--admin]',
+    );
     console.orange('Note: if you do not pass in the arguments, you will be prompted for them.');
     console.orange(
       'If you really need to pass in the password, you can do so as the 4th argument (not recommended for security).',
     );
     console.orange('Use --email-verified=false to set emailVerified to false. Default is true.');
-    console.orange('Use --admin to create an ADMIN account (server-side provisioning of the first admin).');
+    console.orange(
+      'Use --admin to create an ADMIN account (server-side provisioning of the first admin).',
+    );
     console.purple('--------------------------');
   }
 
@@ -95,9 +99,9 @@ If \`n\`, and email service is configured, the user will be sent a verification 
 If \`n\`, and email service is not configured, you must have the \`ALLOW_UNVERIFIED_EMAIL_LOGIN\` .env variable set to true,
 or the user will need to attempt logging in to have a verification link sent to them.`);
 
-    const normalizedEmailVerifiedInput = emailVerifiedInput.trim().toLowerCase()
+    const normalizedEmailVerifiedInput = emailVerifiedInput.trim().toLowerCase();
 
-    emailVerified = true
+    emailVerified = true;
 
     if (normalizedEmailVerifiedInput === 'n') {
       emailVerified = false;

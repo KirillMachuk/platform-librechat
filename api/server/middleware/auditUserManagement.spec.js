@@ -71,11 +71,7 @@ describe('auditUserManagement', () => {
 
   it('records user.delete with the target id', () => {
     const res = buildRes(200);
-    auditUserManagement(
-      buildReq({ method: 'DELETE', params: { id: 'u42' } }),
-      res,
-      jest.fn(),
-    );
+    auditUserManagement(buildReq({ method: 'DELETE', params: { id: 'u42' } }), res, jest.fn());
     res.emit('finish');
 
     expect(mockRecordAudit).toHaveBeenCalledWith(

@@ -57,9 +57,7 @@ describe('DELETE /projects/:projectId file cascade (C-PRJ-1)', () => {
     expect(res.status).toBe(204);
     expect(getFiles).toHaveBeenCalledWith({ user: 'user-1', project_id: 'p1' });
     expect(deleteProject).toHaveBeenCalledWith('user-1', 'p1');
-    expect(purgeFilesWithVectors).toHaveBeenCalledWith(
-      expect.objectContaining({ files }),
-    );
+    expect(purgeFilesWithVectors).toHaveBeenCalledWith(expect.objectContaining({ files }));
   });
 
   it('does not touch files when the project is not found (404)', async () => {
