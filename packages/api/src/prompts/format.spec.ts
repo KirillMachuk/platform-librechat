@@ -1,7 +1,33 @@
 import { Types } from 'mongoose';
-import { filterAccessibleIdsBySharedLogic } from './format';
+import { filterAccessibleIdsBySharedLogic, buildPromptGroupFilter } from './format';
 
 const id = () => new Types.ObjectId();
+
+describe('buildPromptGroupFilter (C-PRM-4 NoSQL hardening)', () => {
+  it('builds a case-insensitive regex for a string name', () => {
+    const { filter } = buildPromptGroupFilter({ name: 'Legal' });
+    expect(filter.name).toBeInstanceOf(RegExp);
+  });
+
+  it('passes a plain string category through', () => {
+    const { filter } = buildPromptGroupFilter({ category: 'work' });
+    expect(filter.category).toBe('work');
+  });
+
+  it('ignores a non-string category (Mongo operator injection attempt)', () => {
+    const { filter } = buildPromptGroupFilter({
+      category: { $ne: null } as unknown as string,
+    });
+    expect(filter.category).toBeUndefined();
+  });
+
+  it('ignores a non-string name so no operator reaches the filter', () => {
+    const { filter } = buildPromptGroupFilter({
+      name: { $gt: '' } as unknown as string,
+    });
+    expect(filter.name).toBeUndefined();
+  });
+});
 
 describe('filterAccessibleIdsBySharedLogic', () => {
   const ownedA = id();

@@ -20,6 +20,7 @@ const {
 } = require('~/server/middleware/checkSharePublicAccess');
 const { requireJwtAuth, checkBan, uaParser, canAccessResource } = require('~/server/middleware');
 const { checkPeoplePickerAccess } = require('~/server/middleware/checkPeoplePickerAccess');
+const requireVerifiedEmail = require('~/server/middleware/requireVerifiedEmail');
 const { findMCPServerByObjectId, getSkillById } = require('~/models');
 
 const router = express.Router();
@@ -175,6 +176,7 @@ router.get(
  */
 router.put(
   '/:resourceType/:resourceId',
+  requireVerifiedEmail,
   checkResourcePermissionAccess(PermissionBits.SHARE),
   checkShareAccess,
   checkSharePublicAccess,

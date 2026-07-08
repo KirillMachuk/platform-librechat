@@ -36,6 +36,10 @@ jest.mock('./crud', () => ({
   logAxiosError: jest.fn(),
 }));
 
+jest.mock('~/server/services/Projects/context', () => ({
+  invalidateProjectContext: jest.fn(),
+}));
+
 require('module-alias/register');
 const { embedStoredFile } = require('./crud');
 const { backoffMs, claimNext, processClaimed } = require('./worker');
@@ -110,6 +114,29 @@ describe('embed worker state machine', () => {
     const claimed = await claimNext();
     expect(claimed?.file_id).toBe('lease-1');
     expect(claimed.embedAttempts).toBe(2);
+  });
+
+  it('invalidates the project context cache when a project file becomes embedded', async () => {
+    const { invalidateProjectContext } = require('~/server/services/Projects/context');
+    const userId = new mongoose.Types.ObjectId();
+    await seed({ file_id: 'proj-1', user: userId, project_id: 'p-42' });
+    embedStoredFile.mockResolvedValueOnce({ embedded: true });
+
+    const claimed = await claimNext();
+    await processClaimed(claimed, APP_CONFIG);
+
+    expect(invalidateProjectContext).toHaveBeenCalledWith(userId.toString(), 'p-42');
+  });
+
+  it('does not invalidate project context for a non-project (conversation) file', async () => {
+    const { invalidateProjectContext } = require('~/server/services/Projects/context');
+    await seed({ file_id: 'conv-1' });
+    embedStoredFile.mockResolvedValueOnce({ embedded: true });
+
+    const claimed = await claimNext();
+    await processClaimed(claimed, APP_CONFIG);
+
+    expect(invalidateProjectContext).not.toHaveBeenCalled();
   });
 
   it('transitions to ready (embedded: true) on success', async () => {

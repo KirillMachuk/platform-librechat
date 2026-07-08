@@ -9,6 +9,7 @@ const mockSharedLinksAccess = jest.fn((_req, _res, next) => next());
 
 jest.mock('@librechat/api', () => ({
   isEnabled: jest.fn(() => true),
+  checkEmailConfig: jest.fn(() => false),
   generateCheckAccess: jest.fn(() => mockSharedLinksAccess),
   grantCreationPermissions: (...args) => mockGrantCreationPermissions(...args),
   updateSharedLinkPermissionsExpiration: (...args) =>

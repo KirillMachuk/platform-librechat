@@ -12,6 +12,47 @@ const secretDefaults = {
   JWT_REFRESH_SECRET: 'eaa5191f2914e30b9387fd84e254e4ba6fc51b4654968a9b0803b456a54b8418',
 };
 
+/**
+ * JWT signing secrets must be strong. A weak, default, or missing value lets an
+ * attacker forge 2FA temporary tokens (twoFactorService.generate2FATempToken)
+ * and openid_user_id session-reuse cookies (requireJwtAuth) offline — signature
+ * is the only thing guarding either. The minimum length mirrors the 32-byte
+ * `openssl rand -hex 32` recommendation the toolkit generates (64 hex chars);
+ * 32 characters is the lowest bar we accept.
+ */
+const MIN_JWT_SECRET_LENGTH = 32;
+const jwtSecretKeys = ['JWT_SECRET', 'JWT_REFRESH_SECRET'] as const;
+
+/**
+ * Fail-fast startup guard for JWT secret strength. Throws (halting boot via the
+ * fail-fast handler in server/index.js) when either JWT secret is missing, equal
+ * to the public example value, or shorter than {@link MIN_JWT_SECRET_LENGTH}.
+ */
+export function assertStrongJwtSecrets(): void {
+  const failures: string[] = [];
+  for (const key of jwtSecretKeys) {
+    const value = process.env[key];
+    if (!value) {
+      failures.push(`${key} is not set`);
+    } else if (value === secretDefaults[key]) {
+      failures.push(`${key} is set to the public example value`);
+    } else if (value.length < MIN_JWT_SECRET_LENGTH) {
+      failures.push(`${key} is shorter than ${MIN_JWT_SECRET_LENGTH} characters`);
+    }
+  }
+
+  if (failures.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `[Startup] Refusing to start with insecure JWT secret(s): ${failures.join('; ')}. ` +
+      'A weak or default JWT secret lets an attacker forge 2FA temporary tokens and ' +
+      'session-reuse cookies. Generate strong values with `openssl rand -hex 32` and set ' +
+      'JWT_SECRET and JWT_REFRESH_SECRET in the environment before starting.',
+  );
+}
+
 const deprecatedVariables = [
   {
     key: 'CHECK_BALANCE',
@@ -106,6 +147,8 @@ function checkPasswordReset() {
  * @param {Function} options.checkEmailConfig - Function to check email configuration
  */
 export function checkVariables(): void {
+  assertStrongJwtSecrets();
+
   let hasDefaultSecrets = false;
   for (const [key, value] of Object.entries(secretDefaults)) {
     if (process.env[key] === value) {

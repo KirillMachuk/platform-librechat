@@ -7,9 +7,10 @@ const { EModelEndpoint } = require('librechat-data-provider');
 const {
   filterFile,
   processProjectFileUpload,
-  processDeleteRequest,
+  purgeFilesWithVectors,
 } = require('~/server/services/Files/process');
-const { deleteVectors } = require('~/server/services/Files/VectorDB/crud');
+const { invalidateProjectContext } = require('~/server/services/Projects/context');
+const auditProject = require('~/server/middleware/auditProject');
 const db = require('~/models');
 
 const router = express.Router({ mergeParams: true });
@@ -20,11 +21,9 @@ router.get('/', async (req, res) => {
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
-    const files = await db.getFiles(
-      { user: req.user.id, project_id: req.params.projectId },
-      null,
-      { text: 0 },
-    );
+    const files = await db.getFiles({ user: req.user.id, project_id: req.params.projectId }, null, {
+      text: 0,
+    });
     res.status(200).json(files);
   } catch (error) {
     logger.error('[GET /projects/:projectId/files] Error', error);
@@ -32,7 +31,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', auditProject, async (req, res) => {
   let cleanup = true;
   try {
     const project = await db.getProjectById(req.user.id, req.params.projectId);
@@ -53,7 +52,9 @@ router.post('/', async (req, res) => {
       temp_file_id: req.body?.file_id ?? undefined,
     };
 
-    return await processProjectFileUpload({ req, res, metadata });
+    const uploadResult = await processProjectFileUpload({ req, res, metadata });
+    await invalidateProjectContext(req.user.id, req.params.projectId);
+    return uploadResult;
   } catch (error) {
     const message = resolveUploadErrorMessage(error);
     logger.error('[POST /projects/:projectId/files] Error', error);
@@ -77,7 +78,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.delete('/:file_id', async (req, res) => {
+router.delete('/:file_id', auditProject, async (req, res) => {
   try {
     const project = await db.getProjectById(req.user.id, req.params.projectId);
     if (!project) {
@@ -97,21 +98,10 @@ router.delete('/:file_id', async (req, res) => {
     // req.body.assistant_id and would throw; give it an empty body to read.
     req.body = req.body ?? {};
 
-    // Project sources are dual-stored (storage + pgvector). The local strategy
-    // chosen by processDeleteRequest only removes the disk file — vector
-    // embeddings would orphan in pgvector. Purge them explicitly first.
-    const vectorDeletions = files
-      .filter((file) => file.embedded)
-      .map((file) =>
-        deleteVectors(req, file).catch((error) =>
-          logger.error('[DELETE /projects/:projectId/files/:file_id] Vector cleanup', error),
-        ),
-      );
-    if (vectorDeletions.length > 0) {
-      await Promise.allSettled(vectorDeletions);
-    }
-
-    await processDeleteRequest({ req, files });
+    // Project sources are dual-stored (storage + pgvector); purge both, including
+    // the vector embeddings the local delete strategy would otherwise orphan.
+    await purgeFilesWithVectors({ req, files });
+    await invalidateProjectContext(req.user.id, req.params.projectId);
     res.status(204).end();
   } catch (error) {
     logger.error('[DELETE /projects/:projectId/files/:file_id] Error', error);

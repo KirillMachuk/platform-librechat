@@ -1,4 +1,5 @@
 import { Schema } from 'mongoose';
+import { Constants } from 'librechat-data-provider';
 import type { IProject } from '~/types';
 
 const projectSchema: Schema<IProject> = new Schema(
@@ -16,22 +17,27 @@ const projectSchema: Schema<IProject> = new Schema(
     name: {
       type: String,
       required: true,
+      maxlength: Constants.PROJECT_NAME_MAX_LENGTH as number,
     },
     description: {
       type: String,
       default: '',
+      maxlength: Constants.PROJECT_DESCRIPTION_MAX_LENGTH as number,
     },
     instructions: {
       type: String,
       default: '',
+      maxlength: Constants.PROJECT_INSTRUCTIONS_MAX_LENGTH as number,
     },
     icon: {
       type: String,
       default: 'Palette',
+      maxlength: Constants.PROJECT_ICON_MAX_LENGTH as number,
     },
     color: {
       type: String,
       default: 'pink',
+      maxlength: Constants.PROJECT_COLOR_MAX_LENGTH as number,
     },
     tenantId: {
       type: String,

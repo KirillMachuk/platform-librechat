@@ -64,10 +64,7 @@ export function createProjectMethods(mongoose: typeof import('mongoose')): Proje
     return project.toObject() as IProject;
   }
 
-  async function getProjectById(
-    user: string,
-    projectId: string,
-  ): Promise<IProject | null> {
+  async function getProjectById(user: string, projectId: string): Promise<IProject | null> {
     const Project = getProjectModel();
     return Project.findOne({ user, projectId }).lean<IProject>();
   }
@@ -90,7 +87,7 @@ export function createProjectMethods(mongoose: typeof import('mongoose')): Proje
         { $group: { _id: '$project_id', count: { $sum: 1 } } },
       ]),
       File.aggregate([
-        { $match: { project_id: { $in: projectIds } } },
+        { $match: { user, project_id: { $in: projectIds } } },
         { $group: { _id: '$project_id', count: { $sum: 1 } } },
       ]),
     ]);

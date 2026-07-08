@@ -1,5 +1,6 @@
 const { logger, runAsSystem } = require('@librechat/data-schemas');
 const { getAppConfig } = require('~/server/services/Config');
+const { invalidateProjectContext } = require('~/server/services/Projects/context');
 const { embedStoredFile, logAxiosError } = require('./crud');
 const { claimNextEmbedFile, updateFile } = require('~/models');
 
@@ -73,6 +74,14 @@ async function processClaimed(file, appConfig) {
     if (!updated) {
       logger.debug(`[embedWorker] ${file.file_id}: record gone after embed (deleted mid-flight)`);
       return;
+    }
+    // A project source only enters getProjectContext's fileIds once embedded=true.
+    // The upload handler invalidated the cache while the file was still pending, so
+    // without this the newly-searchable file stays hidden until the TTL lapses.
+    // Normalize the ObjectId to a string so the cache key matches the upload side,
+    // which invalidates with the string `req.user.id`.
+    if (file.project_id && file.user) {
+      await invalidateProjectContext(String(file.user), file.project_id);
     }
     logger.info(
       `[embedWorker] embedded ${file.file_id} (${file.filename}) in ${Date.now() - startedAt}ms, attempt ${file.embedAttempts}`,

@@ -258,7 +258,7 @@ describe('Prompt Routes - ACL Permissions', () => {
       const promptData = {
         prompt: {
           prompt: 'Group prompt content',
-          // Remove 'name' from prompt - it's not in the schema
+          type: 'text',
         },
         group: {
           name: 'Test Group',
@@ -281,6 +281,40 @@ describe('Prompt Routes - ACL Permissions', () => {
       });
 
       expect(aclEntry).toBeTruthy();
+    });
+
+    it('rejects a prompt group with an invalid/missing type (C-PRM-4)', async () => {
+      const response = await request(app)
+        .post('/api/prompts')
+        .send({ prompt: { prompt: 'no type here' }, group: { name: 'No Type' } });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('rejects an oversized prompt (C-PRM-2)', async () => {
+      const { Constants } = require('librechat-data-provider');
+      const response = await request(app)
+        .post('/api/prompts')
+        .send({
+          prompt: { prompt: 'a'.repeat(Constants.PROMPT_MAX_LENGTH + 1), type: 'text' },
+          group: { name: 'Too Big' },
+        });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('strips a client-supplied _id / author from the prompt payload (C-PRM-4)', async () => {
+      const forgedId = new ObjectId().toString();
+      const response = await request(app)
+        .post('/api/prompts')
+        .send({
+          prompt: { prompt: 'clean', type: 'text', _id: forgedId, author: forgedId },
+          group: { name: 'Whitelist Group' },
+        })
+        .expect(200);
+
+      expect(response.body.prompt._id).not.toBe(forgedId);
+      expect(response.body.prompt.author.toString()).toBe(testUsers.owner._id.toString());
     });
   });
 
