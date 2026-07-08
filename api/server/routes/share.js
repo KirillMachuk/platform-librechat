@@ -23,6 +23,7 @@ const {
 const canAccessSharedLink = require('~/server/middleware/canAccessSharedLink');
 const optionalJwtAuth = require('~/server/middleware/optionalJwtAuth');
 const requireJwtAuth = require('~/server/middleware/requireJwtAuth');
+const requireVerifiedEmail = require('~/server/middleware/requireVerifiedEmail');
 const router = express.Router();
 
 const checkSharedLinksAccess = generateCheckAccess({
@@ -129,7 +130,12 @@ router.get('/link/:conversationId', requireJwtAuth, async (req, res) => {
   }
 });
 
-router.post('/:conversationId', requireJwtAuth, checkSharedLinksAccess, async (req, res) => {
+router.post(
+  '/:conversationId',
+  requireJwtAuth,
+  requireVerifiedEmail,
+  checkSharedLinksAccess,
+  async (req, res) => {
   try {
     const { targetMessageId } = req.body;
     const expiredAt = await resolveSharedLinkExpiration(req, req.params.conversationId);

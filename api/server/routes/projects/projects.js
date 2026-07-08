@@ -120,6 +120,8 @@ router.delete('/:projectId', auditProject, async (req, res) => {
     // Collect the project's files before deleting the project doc — deleteProject
     // detaches conversations but leaves File records (and their pgvector
     // embeddings) behind, orphaning them until the global retention sweep.
+    // getFiles' default projection already drops the large `text`/`previewText`
+    // blobs, so this loads metadata only.
     const files = await getFiles({ user: req.user.id, project_id: req.params.projectId });
 
     const deleted = await deleteProject(req.user.id, req.params.projectId);
