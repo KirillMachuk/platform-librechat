@@ -97,8 +97,8 @@ jobs:
             -e MONGO_URI=mongodb://lc-mongo:27017/LibreChat \
             -e CREDS_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
             -e CREDS_IV=0123456789abcdef0123456789abcdef \
-            -e JWT_SECRET=docker-smoke-jwt-secret \
-            -e JWT_REFRESH_SECRET=docker-smoke-jwt-refresh-secret \
+            -e JWT_SECRET=docker-smoke-jwt-secret-0123456789abcdef \
+            -e JWT_REFRESH_SECRET=docker-smoke-jwt-refresh-secret-0123456789abcdef \
             -e SEARCH=false \
             librechat-api-smoke:ci
 
