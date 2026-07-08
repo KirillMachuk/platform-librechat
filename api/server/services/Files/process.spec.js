@@ -131,6 +131,10 @@ jest.mock('./VectorDB/crud', () => ({
   deleteVectors: jest.fn(),
 }));
 
+jest.mock('./Embed', () => ({
+  asyncEmbedEnabled: jest.fn(() => false),
+}));
+
 jest.mock('~/server/utils', () => ({
   determineFileType: jest.fn(),
 }));
@@ -1136,6 +1140,78 @@ describe('processAgentFileUpload', () => {
       const persisted = db.createFile.mock.calls[0][0];
       expect(persisted.metadata).not.toHaveProperty('fileIdentifier');
     });
+  });
+});
+
+describe('D3 — sync file_search embed failure rolls back orphaned storage', () => {
+  const makeFsReq = () => ({
+    user: { id: 'user-123', tenantId: 'tenant-a' },
+    file: {
+      path: '/tmp/x.pdf',
+      originalname: 'x.pdf',
+      filename: 'x.pdf',
+      mimetype: PDF_MIME,
+      size: 100,
+    },
+    body: { model: 'gpt-4o' },
+    config: { fileConfig: {}, fileStrategy: 'local' },
+  });
+  const fsMeta = () => ({
+    agent_id: 'agent-abc',
+    tool_resource: EToolResources.file_search,
+    file_id: 'file-uuid-123',
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    checkCapability.mockResolvedValue(true);
+  });
+
+  it('deletes the stored object and creates no DB record when embedding throws', async () => {
+    const deleteFile = jest.fn().mockResolvedValue(undefined);
+    const handleFileUpload = jest.fn().mockResolvedValue({
+      filepath: '/uploads/user-123/x.pdf',
+      storageKey: 'user-123/x.pdf',
+      bytes: 100,
+      filename: 'x.pdf',
+    });
+    getStrategyFunctions.mockReturnValue({ handleFileUpload, deleteFile });
+    uploadVectors.mockRejectedValueOnce(new Error('embed exploded'));
+
+    await expect(
+      processAgentFileUpload({ req: makeFsReq(), res: mockRes, metadata: fsMeta() }),
+    ).rejects.toThrow('embed exploded');
+
+    // Rollback removed the orphaned storage object with embedded:false...
+    expect(deleteFile).toHaveBeenCalledTimes(1);
+    expect(deleteFile.mock.calls[0][1]).toMatchObject({
+      file_id: 'file-uuid-123',
+      embedded: false,
+      filepath: '/uploads/user-123/x.pdf',
+    });
+    // ...and no orphan metadata record was persisted.
+    expect(db.createFile).not.toHaveBeenCalled();
+  });
+
+  it('does not roll back when embedding succeeds', async () => {
+    const deleteFile = jest.fn();
+    const handleFileUpload = jest.fn().mockResolvedValue({
+      filepath: '/uploads/user-123/x.pdf',
+      bytes: 100,
+      filename: 'x.pdf',
+    });
+    getStrategyFunctions.mockReturnValue({ handleFileUpload, deleteFile });
+    uploadVectors.mockResolvedValueOnce({
+      bytes: 100,
+      filename: 'x.pdf',
+      filepath: 'vectordb',
+      embedded: true,
+    });
+
+    await processAgentFileUpload({ req: makeFsReq(), res: mockRes, metadata: fsMeta() });
+
+    expect(deleteFile).not.toHaveBeenCalled();
+    expect(db.createFile).toHaveBeenCalledTimes(1);
   });
 });
 
