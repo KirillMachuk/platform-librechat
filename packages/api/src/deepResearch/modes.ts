@@ -1,3 +1,4 @@
+import { isReasoningModel } from 'librechat-data-provider';
 import type { TDeepResearchConfig, DeepResearchMode } from 'librechat-data-provider';
 import type { ResolvedDeepResearchMode } from './types';
 
@@ -35,22 +36,11 @@ export const DEEP_RESEARCH_MODE_DEFAULTS: Record<DeepResearchMode, ResolvedDeepR
 };
 
 /**
- * OpenAI reasoning families (o-series and gpt-5.x, excluding the non-reasoning
- * `*-chat` instruct variants) require their reasoning trace to be replayed
- * between tool turns. LibreChat does not replay it, so these models return HTTP
- * 400 on Deep Research's multi-turn file_search / web_search loops. A DR tool
- * node (orchestrator or researcher) must never run on such a model.
+ * Re-exported from `librechat-data-provider` (single source of truth, shared
+ * with the agent-save and agent-initialization tool gates). Kept exported here
+ * so existing Deep Research imports keep resolving from this module.
  */
-export function isReasoningModel(model?: string): boolean {
-  if (!model) {
-    return false;
-  }
-  const id = model.toLowerCase().split('/').pop() ?? '';
-  if (id.includes('chat')) {
-    return false;
-  }
-  return /^o[1-9]/.test(id) || /^gpt-5/.test(id);
-}
+export { isReasoningModel };
 
 /**
  * Picks the model for a Deep Research tool node. Forces the mode's configured

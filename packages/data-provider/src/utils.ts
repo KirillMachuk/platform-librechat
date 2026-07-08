@@ -83,3 +83,25 @@ export function extractEnvVariable(value: string) {
 export function normalizeEndpointName(name = ''): string {
   return name.toLowerCase() === 'ollama' ? 'ollama' : name;
 }
+
+/**
+ * OpenAI reasoning families (o-series and gpt-5.x, excluding the non-reasoning
+ * `*chat` instruct variants) require their reasoning trace to be replayed
+ * between tool turns. LibreChat does not replay it, so these models return HTTP
+ * 400 on multi-turn file_search / web_search / MCP tool loops. Any tool-running
+ * agent node (chat toggles, saved agents, Deep Research orchestrator or
+ * researcher) must never run on such a model.
+ *
+ * Shared single source of truth — the backend gates (agent save, agent
+ * initialization, Deep Research model resolution) must all use this predicate.
+ */
+export function isReasoningModel(model?: string | null): boolean {
+  if (!model) {
+    return false;
+  }
+  const id = model.toLowerCase().split('/').pop() ?? '';
+  if (id.includes('chat')) {
+    return false;
+  }
+  return /^o[1-9]/.test(id) || /^gpt-5/.test(id);
+}

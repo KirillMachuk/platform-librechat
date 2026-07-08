@@ -2402,6 +2402,11 @@ export enum ErrorTypes {
    */
   GOOGLE_TOOL_CONFLICT = 'google_tool_conflict',
   /**
+   * OpenAI reasoning models (o-series / gpt-5.x) 400 on multi-turn tool loops
+   * (reasoning trace is not replayed between turns), so tool use is rejected up front
+   */
+  REASONING_MODEL_TOOLS = 'reasoning_model_tools',
+  /**
    * Invalid Agent Provider (excluded by Admin)
    */
   INVALID_AGENT_PROVIDER = 'invalid_agent_provider',
