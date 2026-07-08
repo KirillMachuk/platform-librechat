@@ -44,6 +44,29 @@ describe('buildSandpackOptions', () => {
     const options = buildSandpackOptions('react-ts');
     expect(options?.bundlerURL).toBeUndefined();
   });
+
+  it('D10: drops a non-https bundlerURL (defense-in-depth)', () => {
+    const config = { bundlerURL: 'http://insecure.example.com' } as Parameters<
+      typeof buildSandpackOptions
+    >[1];
+    const options = buildSandpackOptions('react-ts', config);
+    expect(options?.bundlerURL).toBeUndefined();
+    expect(options?.externalResources).toEqual([TAILWIND_CDN]);
+  });
+
+  it('D10: drops a malformed bundlerURL', () => {
+    const config = { bundlerURL: 'not-a-url' } as Parameters<typeof buildSandpackOptions>[1];
+    const options = buildSandpackOptions('react-ts', config);
+    expect(options?.bundlerURL).toBeUndefined();
+  });
+
+  it('D10: keeps a valid https bundlerURL', () => {
+    const config = { bundlerURL: 'https://sandpack-bundler.codesandbox.io' } as Parameters<
+      typeof buildSandpackOptions
+    >[1];
+    const options = buildSandpackOptions('react-ts', config);
+    expect(options?.bundlerURL).toBe('https://sandpack-bundler.codesandbox.io');
+  });
 });
 
 describe('detectArtifactTypeFromFile', () => {
