@@ -13,13 +13,19 @@ interface MermaidDiagramProps {
 
 /* DoS guards for the fullscreen renderer, mirroring the inline path
  * (useMermaid.ts): a pathological diagram must not lock the tab. maxTextSize /
- * maxEdges cap the parse, and the render timeout bounds a runaway layout. The
- * fullscreen path keeps securityLevel: 'sandbox' (mermaid renders into an
- * isolated iframe), so no separate SVG sanitize step is needed here — unlike the
- * inline path, which renders raw SVG under 'strict' and therefore sanitizes. */
+ * maxEdges cap the parse (the PRIMARY guard, same limits as inline), and the
+ * render timeout is a secondary backstop against a runaway layout. The fullscreen
+ * path keeps securityLevel: 'sandbox' (mermaid renders into an isolated iframe),
+ * so no separate SVG sanitize step is needed here — unlike the inline path, which
+ * renders raw SVG under 'strict' and therefore sanitizes.
+ *
+ * The timeout is deliberately generous (20s): a legitimate large diagram (up to
+ * maxEdges) can take several seconds to lay out on a slow mobile CPU, and a tight
+ * cap would false-fail real diagrams on those devices while the edge/text caps
+ * already bound worst-case work. It only needs to catch a genuine hang. */
 const MERMAID_MAX_TEXT_SIZE = 50_000;
 const MERMAID_MAX_EDGES = 500;
-const MERMAID_RENDER_TIMEOUT_MS = 5_000;
+const MERMAID_RENDER_TIMEOUT_MS = 20_000;
 
 const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ content, isDarkMode = true }) => {
   const mermaidRef = useRef<HTMLDivElement>(null);
