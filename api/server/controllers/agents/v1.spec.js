@@ -80,6 +80,7 @@ const {
 } = require('./v1');
 
 const {
+  grantPermission,
   findAccessibleResources,
   findPubliclyAccessibleResources,
   getResourcePermissionsMap,
@@ -176,6 +177,24 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       expect(agentInDb).toBeDefined();
       expect(agentInDb.name).toBe('Test Agent');
       expect(agentInDb.author.toString()).toBe(mockReq.user.id);
+    });
+
+    test('should roll back the agent and 500 when granting owner permission fails (E-H4)', async () => {
+      grantPermission.mockRejectedValueOnce(new Error('grant failed'));
+
+      mockReq.body = {
+        name: 'Orphan Agent',
+        provider: 'openai',
+        model: 'gpt-4',
+      };
+
+      await createAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(mockRes.status).not.toHaveBeenCalledWith(201);
+      // The orphaned agent must not survive — no agent left for this author
+      const orphaned = await Agent.find({ author: mockReq.user.id });
+      expect(orphaned).toHaveLength(0);
     });
 
     test('should reject creation with unauthorized fields (mass assignment protection)', async () => {
@@ -482,6 +501,69 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
         }),
       );
     });
+
+    test('should reject a reasoning model when tools are present (E-H1)', async () => {
+      mockReq.body = {
+        provider: 'openai',
+        model: 'openai/gpt-5',
+        name: 'Reasoning + tools',
+        tools: ['file_search'],
+      };
+
+      await createAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      const payload = mockRes.json.mock.calls[0][0];
+      expect(payload.error).toContain('reasoning_model_tools');
+      // Nothing persisted
+      expect(await Agent.countDocuments({ author: mockReq.user.id })).toBe(0);
+    });
+
+    test('should allow a reasoning model with no tools (chat-only) (E-H1)', async () => {
+      mockReq.body = {
+        provider: 'openai',
+        model: 'openai/gpt-5',
+        name: 'Reasoning chat-only',
+        tools: [],
+      };
+
+      await createAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+      const created = mockRes.json.mock.calls[0][0];
+      expect(created.model).toBe('openai/gpt-5');
+    });
+
+    test('should allow a non-reasoning model with tools (E-H1)', async () => {
+      mockReq.body = {
+        provider: 'openai',
+        model: 'gpt-4',
+        name: 'Non-reasoning + tools',
+        tools: ['file_search'],
+      };
+
+      await createAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+      const created = mockRes.json.mock.calls[0][0];
+      expect(created.tools).toContain('file_search');
+    });
+
+    test('should reject creating an agent with more than MAX_AGENT_TOOLS tools (E-M7)', async () => {
+      mockReq.body = {
+        provider: 'openai',
+        model: 'gpt-4',
+        name: 'Too many tools',
+        tools: Array.from({ length: 65 }, (_, i) => `tool_${i}`),
+      };
+
+      await createAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      const payload = mockRes.json.mock.calls[0][0];
+      expect(payload.error).toMatch(/at most 64 tools/);
+      expect(await Agent.countDocuments({ author: mockReq.user.id })).toBe(0);
+    });
   });
 
   describe('getAgentHandler', () => {
@@ -564,6 +646,90 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       // Verify in database
       const agentInDb = await Agent.findOne({ id: existingAgentId });
       expect(agentInDb.name).toBe('Updated Agent');
+    });
+
+    test('should reject switching to a reasoning model while tools are present (E-H1)', async () => {
+      // Give the existing agent a tool, then try to switch its model to a reasoning one
+      await Agent.updateOne({ id: existingAgentId }, { $set: { tools: ['file_search'] } });
+      mockReq.user.id = existingAgentAuthorId.toString();
+      mockReq.params.id = existingAgentId;
+      mockReq.body = { model: 'openai/gpt-5' };
+
+      await updateAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      const payload = mockRes.json.mock.calls[0][0];
+      expect(payload.error).toContain('reasoning_model_tools');
+      // Model not changed in DB
+      const agentInDb = await Agent.findOne({ id: existingAgentId });
+      expect(agentInDb.model).toBe('gpt-3.5-turbo');
+    });
+
+    test('should allow switching to a reasoning model when the agent has no tools (E-H1)', async () => {
+      mockReq.user.id = existingAgentAuthorId.toString();
+      mockReq.params.id = existingAgentId;
+      mockReq.body = { model: 'openai/gpt-5' };
+
+      await updateAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).not.toHaveBeenCalledWith(400);
+      const agentInDb = await Agent.findOne({ id: existingAgentId });
+      expect(agentInDb.model).toBe('openai/gpt-5');
+    });
+
+    test('should allow an unrelated edit on a legacy reasoning+tools agent so it stays fixable (E-H1)', async () => {
+      const legacy = await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Legacy reasoning+tools',
+        provider: 'openai',
+        model: 'openai/gpt-5',
+        tools: ['file_search'],
+        author: existingAgentAuthorId,
+      });
+      mockReq.user.id = existingAgentAuthorId.toString();
+      mockReq.params.id = legacy.id;
+      // Edit only the description — does not touch model or tools
+      mockReq.body = { description: 'new description' };
+
+      await updateAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).not.toHaveBeenCalledWith(400);
+      const agentInDb = await Agent.findOne({ id: legacy.id });
+      expect(agentInDb.description).toBe('new description');
+    });
+
+    test('should allow clearing tools on a reasoning-model agent (fix path) (E-H1)', async () => {
+      const legacy = await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Legacy reasoning+tools',
+        provider: 'openai',
+        model: 'openai/gpt-5',
+        tools: ['file_search'],
+        author: existingAgentAuthorId,
+      });
+      mockReq.user.id = existingAgentAuthorId.toString();
+      mockReq.params.id = legacy.id;
+      mockReq.body = { tools: [] };
+
+      await updateAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).not.toHaveBeenCalledWith(400);
+      const agentInDb = await Agent.findOne({ id: legacy.id });
+      expect(agentInDb.tools).toEqual([]);
+    });
+
+    test('should reject updating an agent to more than MAX_AGENT_TOOLS tools (E-M7)', async () => {
+      mockReq.user.id = existingAgentAuthorId.toString();
+      mockReq.params.id = existingAgentId;
+      mockReq.body = {
+        tools: Array.from({ length: 65 }, (_, i) => `tool_${i}`),
+      };
+
+      await updateAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      const payload = mockRes.json.mock.calls[0][0];
+      expect(payload.error).toMatch(/at most 64 tools/);
     });
 
     test('should reject update with unauthorized fields (mass assignment protection)', async () => {

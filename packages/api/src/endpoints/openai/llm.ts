@@ -1,3 +1,4 @@
+import { logger } from '@librechat/data-schemas';
 import {
   EModelEndpoint,
   ReasoningParameterFormat,
@@ -12,6 +13,41 @@ import type * as t from '~/types';
 import { sanitizeModelName, constructAzureURL } from '~/utils/azure';
 import { getModelMaxOutputTokens, findMatchingPattern, maxOutputTokensMap } from '~/utils/tokens';
 import { isEnabled } from '~/utils/common';
+
+/**
+ * Clamps a sampling parameter to `[min, max]` only when it is out of range,
+ * returning the clamped value or the original. Used to stop an obviously-invalid
+ * value (a stale/corrupt `topP: 5`, a negative temperature, or a temperature
+ * above the provider's maximum) from 400-ing the whole request upstream. Returns
+ * `undefined` for non-finite input so the caller can leave the param untouched.
+ */
+function clampSamplingParam(value: unknown, min: number, max: number): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined;
+  }
+  if (value < min) {
+    return min;
+  }
+  if (value > max) {
+    return max;
+  }
+  return value;
+}
+
+/**
+ * Maximum valid `temperature` for a model's provider family. Anthropic rejects
+ * `temperature > 1.0` (OpenAI/most others allow up to 2.0), so clamping a
+ * too-high value to the provider's real ceiling turns an upstream 400 into a
+ * valid request. Detects Anthropic via the OpenRouter `anthropic/` prefix or a
+ * bare `claude` model name; everything else keeps the 2.0 ceiling.
+ */
+function maxTemperatureForModel(model?: string | null): number {
+  if (typeof model !== 'string') {
+    return 2;
+  }
+  const normalized = normalizeOpenRouterModel(model);
+  return normalized.startsWith('anthropic/') || normalized.includes('claude') ? 1 : 2;
+}
 
 type OpenAILLMConfig = Omit<Partial<t.OAIClientOptions>, 'verbosity'> &
   Omit<Partial<t.OpenAIParameters>, 'verbosity'> &
@@ -215,6 +251,47 @@ function isOpenRouterAnthropicAdaptiveModel(model?: string | null): boolean {
   }
   const normalizedModel = normalizeOpenRouterModel(model);
   return normalizedModel.startsWith('anthropic/') && supportsAdaptiveThinking(model);
+}
+
+function isOpenRouterAnthropicModel(model?: string | null): boolean {
+  return typeof model === 'string' && normalizeOpenRouterModel(model).startsWith('anthropic/');
+}
+
+/**
+ * Removes an OpenRouter Anthropic extended-thinking directive from an
+ * already-built LLM config when the agent will run a tool loop. Anthropic's
+ * `thinking` blocks are not replayed across tool turns, so extended thinking +
+ * multi-turn tools makes the follow-up request 400 ("Provider returned error").
+ * The default path never enables thinking for Anthropic, but an explicit
+ * `reasoning_effort` (from a preset or the parameters panel) does — this strips
+ * it back to the safe non-thinking default for the tool case. OpenAI reasoning
+ * models are handled earlier by the reasoning-model tool gate and never reach
+ * here with tools. Returns true when a thinking directive was removed (so the
+ * caller can surface a warning).
+ */
+export function suppressAnthropicThinkingForToolLoop(llmConfig: {
+  model?: string;
+  include_reasoning?: unknown;
+  modelKwargs?: Record<string, unknown>;
+}): boolean {
+  if (!isOpenRouterAnthropicModel(llmConfig.model)) {
+    return false;
+  }
+
+  let removed = false;
+  const { modelKwargs } = llmConfig;
+  if (modelKwargs && 'reasoning' in modelKwargs) {
+    delete modelKwargs.reasoning;
+    removed = true;
+    if (Object.keys(modelKwargs).length === 0) {
+      delete llmConfig.modelKwargs;
+    }
+  }
+  if (llmConfig.include_reasoning === true) {
+    delete llmConfig.include_reasoning;
+    removed = true;
+  }
+  return removed;
 }
 
 function normalizeOpenRouterModel(model: string): string {
@@ -644,6 +721,50 @@ export function getOpenAILLMConfig({
       if (typeof modelMaxOutput === 'number' && llmConfig.maxTokens > modelMaxOutput) {
         llmConfig.maxTokens = modelMaxOutput;
       }
+    } else if (llmConfig.maxTokens > 0) {
+      /**
+       * The model isn't in the static output-token map, so the requested
+       * `maxTokens` is passed through unclamped by design (a newly-added model
+       * may have a higher real cap). Surface it at debug so an operator tracing
+       * an upstream 400 ("max_tokens too large") can see the value went out
+       * unbounded and add the model to the map (or rely on OpenRouter's live
+       * limits). Debug level keeps this off the prod warn stream per request.
+       */
+      logger.debug(
+        `[getOpenAILLMConfig] maxTokens=${llmConfig.maxTokens} passed through unclamped for unrecognized model "${llmConfig.model}" (not in the ${tokenEndpoint} output-token map)`,
+      );
+    }
+  }
+
+  /**
+   * Clamp out-of-range sampling params before they reach the provider. A
+   * stale/corrupt value saved in conversation params (e.g. topP: 5, a negative
+   * temperature, or temperature 1.5 on Anthropic — valid for OpenAI, rejected by
+   * Anthropic) otherwise 400s the whole request. `temperature` uses the model's
+   * provider ceiling (Anthropic 1.0, else 2.0); a provider-valid mid-range value
+   * is untouched. Reasoning models drop these params below, so this only affects
+   * models that actually accept them.
+   */
+  if (llmConfig.temperature != null) {
+    const clampedTemperature = clampSamplingParam(
+      llmConfig.temperature,
+      0,
+      maxTemperatureForModel(llmConfig.model),
+    );
+    if (clampedTemperature != null && clampedTemperature !== llmConfig.temperature) {
+      logger.debug(
+        `[getOpenAILLMConfig] Clamped out-of-range temperature ${llmConfig.temperature} → ${clampedTemperature}`,
+      );
+      llmConfig.temperature = clampedTemperature;
+    }
+  }
+  if (llmConfig.topP != null) {
+    const clampedTopP = clampSamplingParam(llmConfig.topP, 0, 1);
+    if (clampedTopP != null && clampedTopP !== llmConfig.topP) {
+      logger.debug(
+        `[getOpenAILLMConfig] Clamped out-of-range topP ${llmConfig.topP} → ${clampedTopP}`,
+      );
+      llmConfig.topP = clampedTopP;
     }
   }
 

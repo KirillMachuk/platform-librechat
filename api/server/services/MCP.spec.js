@@ -51,6 +51,8 @@ const {
   checkOAuthFlowStatus,
   getServerConnectionStatus,
   createUnavailableToolStub,
+  sweepExpired,
+  reconnectThrottleKey,
 } = require('./MCP');
 
 jest.mock('./Config', () => ({
@@ -1890,6 +1892,55 @@ describe('User parameter passing tests', () => {
 
       // Verify reinitMCPServer was not called due to early error
       expect(mockReinitMCPServer).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sweepExpired — active TTL eviction (E-H6)', () => {
+    it('removes entries older than the TTL and keeps fresh ones (below MAX_CACHE_SIZE)', () => {
+      const now = Date.now();
+      const map = new Map([
+        ['fresh', now - 1_000],
+        ['stale', now - 20_000],
+        ['boundary', now - 10_000],
+      ]);
+
+      sweepExpired(map, 10_000);
+
+      expect(map.has('fresh')).toBe(true);
+      expect(map.has('stale')).toBe(false);
+      // exactly-TTL is treated as expired (>=)
+      expect(map.has('boundary')).toBe(false);
+      expect(map.size).toBe(1);
+    });
+
+    it('is a no-op on an empty map', () => {
+      const map = new Map();
+      expect(() => sweepExpired(map, 10_000)).not.toThrow();
+      expect(map.size).toBe(0);
+    });
+  });
+
+  describe('reconnectThrottleKey — tenant scoping (E-H6)', () => {
+    beforeEach(() => {
+      mockGetTenantId.mockReset();
+    });
+
+    it('does not collide across tenants that share the same user id', () => {
+      const keyA = reconnectThrottleKey({ id: 'user-1', tenantId: 'tenant-A' }, 'server');
+      const keyB = reconnectThrottleKey({ id: 'user-1', tenantId: 'tenant-B' }, 'server');
+      expect(keyA).not.toBe(keyB);
+      expect(keyA).toBe('tenant-A:user-1:server');
+      expect(keyB).toBe('tenant-B:user-1:server');
+    });
+
+    it('falls back to the ambient tenant id when the user carries none', () => {
+      mockGetTenantId.mockReturnValue('ambient-tenant');
+      expect(reconnectThrottleKey({ id: 'user-1' }, 'server')).toBe('ambient-tenant:user-1:server');
+    });
+
+    it('tolerates a missing tenant (empty prefix) without throwing', () => {
+      mockGetTenantId.mockReturnValue(undefined);
+      expect(reconnectThrottleKey({ id: 'user-1' }, 'server')).toBe(':user-1:server');
     });
   });
 });

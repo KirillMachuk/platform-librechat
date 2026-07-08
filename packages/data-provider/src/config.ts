@@ -2402,6 +2402,16 @@ export enum ErrorTypes {
    */
   GOOGLE_TOOL_CONFLICT = 'google_tool_conflict',
   /**
+   * OpenAI reasoning models (o-series / gpt-5.x) 400 on multi-turn tool loops
+   * (reasoning trace is not replayed between turns), so tool use is rejected up front
+   */
+  REASONING_MODEL_TOOLS = 'reasoning_model_tools',
+  /**
+   * Deep Research mode is configured with only reasoning models for a tool node
+   * (lead/worker); the run is refused up front instead of 400-ing mid-research
+   */
+  DEEP_RESEARCH_MODEL_INCOMPATIBLE = 'deep_research_model_incompatible',
+  /**
    * Invalid Agent Provider (excluded by Admin)
    */
   INVALID_AGENT_PROVIDER = 'invalid_agent_provider',

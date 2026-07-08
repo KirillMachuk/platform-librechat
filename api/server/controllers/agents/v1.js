@@ -18,6 +18,7 @@ const {
   Time,
   Tools,
   CacheKeys,
+  ErrorTypes,
   Constants,
   FileSources,
   ResourceType,
@@ -26,6 +27,7 @@ const {
   EToolResources,
   isActionTool,
   PermissionBits,
+  isReasoningModel,
   actionDelimiter,
   AgentCapabilities,
   EModelEndpoint,
@@ -59,6 +61,17 @@ const systemTools = {
 };
 
 const MAX_SEARCH_LEN = 100;
+
+/**
+ * Upper bound on the number of tools an agent may declare. Resolving hundreds of
+ * tools (especially MCP) on create/update is slow and memory-heavy; cap the
+ * request up front. Overridable via `MAX_AGENT_TOOLS` env (default 64).
+ */
+const MAX_AGENT_TOOLS = (() => {
+  const parsed = parseInt(process.env.MAX_AGENT_TOOLS ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 64;
+})();
+
 const escapeRegex = (str = '') => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const getSafeModelParameters = (modelParameters) => {
   const { useResponsesApi } = modelParameters ?? {};
@@ -341,6 +354,12 @@ const createAgentHandler = async (req, res) => {
     const validatedData = agentCreateSchema.parse(req.body);
     const { tools = [], ...agentData } = removeNullishValues(validatedData);
 
+    if (tools.length > MAX_AGENT_TOOLS) {
+      return res.status(400).json({
+        error: `An agent may declare at most ${MAX_AGENT_TOOLS} tools (received ${tools.length}).`,
+      });
+    }
+
     if (agentData.model_parameters && typeof agentData.model_parameters === 'object') {
       agentData.model_parameters = removeNullishValues(agentData.model_parameters, true);
     }
@@ -423,6 +442,20 @@ const createAgentHandler = async (req, res) => {
       configServers,
     });
 
+    /**
+     * OpenAI reasoning models (o-series / gpt-5.x) 400 on the multi-turn tool
+     * loop because their reasoning trace is not replayed between turns. Reject
+     * the save up front so the user gets a clear message here instead of an
+     * opaque "Provider returned error" on the first tool call. Runs after
+     * `filterAuthorizedTools` so it gates on the tools that will actually be
+     * persisted. Chat-only reasoning agents (no tools) are unaffected.
+     */
+    if (isReasoningModel(agentData.model) && agentData.tools.length > 0) {
+      return res.status(400).json({
+        error: `{ "type": "${ErrorTypes.REASONING_MODEL_TOOLS}", "info": "${agentData.model}" }`,
+      });
+    }
+
     const agent = await db.createAgent(agentData);
 
     try {
@@ -452,6 +485,23 @@ const createAgentHandler = async (req, res) => {
         `[createAgent] Failed to grant owner permissions for agent ${agent.id}:`,
         permissionError,
       );
+      /**
+       * The agent row exists but has no owner VIEW/EDIT grant — it is orphaned
+       * (invisible to the user, reachable only by an admin). Compensate by
+       * deleting the just-created agent and fail the request, so the client
+       * doesn't believe an unusable agent was created. Log the rollback outcome
+       * too; if the delete also fails the orphan is surfaced for manual cleanup.
+       */
+      try {
+        await db.deleteAgent({ id: agent.id });
+        logger.warn(`[createAgent] Rolled back orphaned agent ${agent.id} after grant failure`);
+      } catch (rollbackError) {
+        logger.error(
+          `[createAgent] Failed to roll back orphaned agent ${agent.id}; manual cleanup required:`,
+          rollbackError,
+        );
+      }
+      return res.status(500).json({ error: 'Failed to create agent' });
     }
 
     res.status(201).json(agent);
@@ -560,6 +610,12 @@ const updateAgentHandler = async (req, res) => {
     // Preserve explicit null for avatar to allow resetting the avatar
     const { avatar: avatarField, _id, ...rest } = validatedData;
     const updateData = removeNullishValues(rest);
+
+    if (Array.isArray(updateData.tools) && updateData.tools.length > MAX_AGENT_TOOLS) {
+      return res.status(400).json({
+        error: `An agent may declare at most ${MAX_AGENT_TOOLS} tools (received ${updateData.tools.length}).`,
+      });
+    }
 
     if (updateData.model_parameters && typeof updateData.model_parameters === 'object') {
       updateData.model_parameters = removeNullishValues(updateData.model_parameters, true);
@@ -688,6 +744,27 @@ const updateAgentHandler = async (req, res) => {
             updateData.tools = updateData.tools.filter((t) => !rejectedSet.has(t));
           }
         }
+      }
+    }
+
+    /**
+     * OpenAI reasoning models (o-series / gpt-5.x) 400 on the multi-turn tool
+     * loop (reasoning trace not replayed between turns). Block an update that
+     * would leave the agent in a reasoning-model + tools state, but only when
+     * the update actually touches `model` or `tools` — an unrelated edit (e.g.
+     * instructions) on a legacy agent already in that state is still allowed to
+     * save so the user can fix it, and it stays protected by the run-time gate
+     * in initializeAgent. Changing the model to non-reasoning or clearing tools
+     * passes the gate, so the combination is always fixable from here.
+     */
+    const touchesModelOrTools = updateData.model !== undefined || updateData.tools !== undefined;
+    if (touchesModelOrTools) {
+      const effectiveModel = updateData.model ?? existingAgent.model;
+      const effectiveTools = updateData.tools ?? existingAgent.tools ?? [];
+      if (isReasoningModel(effectiveModel) && effectiveTools.length > 0) {
+        return res.status(400).json({
+          error: `{ "type": "${ErrorTypes.REASONING_MODEL_TOOLS}", "info": "${effectiveModel}" }`,
+        });
       }
     }
 

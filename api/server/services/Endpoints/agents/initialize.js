@@ -16,6 +16,7 @@ const {
   buildDeepResearchGraph,
   resolveDeepResearchMode,
   resolveDeepResearchModel,
+  DeepResearchConfigError,
   buildAgentContextAttachmentsByAgentId,
 } = require('@librechat/api');
 const {
@@ -1093,6 +1094,15 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
         logger,
       });
     } catch (err) {
+      /** A DR model misconfiguration (only reasoning models available for a tool
+       *  node) is not recoverable by degrading to a single agent — that would
+       *  silently drop research and, if the lead is reasoning, still 400. Surface
+       *  it to the user. Transient failures (searcher init) keep the graceful
+       *  single-agent fallback. */
+      if (err instanceof DeepResearchConfigError) {
+        logger.error('[deepResearch] Deep Research is misconfigured; refusing the run', err);
+        throw err;
+      }
       logger.error('[deepResearch] Failed to assemble Deep Research graph', err);
     }
   }

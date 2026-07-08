@@ -21,6 +21,27 @@ const NUMERIC_KEY_RE = /^\d+$/;
 const LOG_CONTEXT_KEYS = ['tenantId', 'userId', 'requestId'];
 const SYSTEM_TENANT_ID = '__SYSTEM__';
 
+const REDACTED_VALUE = '[REDACTED]';
+const REDACTION_TRUNCATED_KEY = '__redaction_truncated__';
+const MAX_REDACTION_DEPTH = 8;
+const MAX_REDACTION_ENTRIES = 50;
+const DEFAULT_REDACTION_STRING_LENGTH = 8192;
+const MAX_REDACTION_STRING_LENGTH = Math.max(
+  CONSOLE_JSON_STRING_LENGTH,
+  DEFAULT_REDACTION_STRING_LENGTH,
+);
+const MAX_REDACTION_BUFFER_BYTES = MAX_REDACTION_STRING_LENGTH;
+
+/**
+ * Property names whose values are redacted wholesale regardless of content.
+ * Shared, verbatim, with the reference implementation in
+ * `packages/data-schemas/src/config/parsers.ts` so both loggers scrub the
+ * same set of sensitive keys.
+ */
+const sensitiveMetadataKey =
+  /^(authorization|proxy-authorization|x-api-key|api[-_]?key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|secret|password)$/i;
+const errorStringProperties = new Set(['name', 'message', 'stack']);
+
 /**
  * Redacts sensitive information from a console message and trims it to a specified length if provided.
  * @param {string} str - The console message to be redacted.
@@ -45,24 +66,287 @@ function redactMessage(str, trimLength) {
 }
 
 /**
- * Redacts sensitive information from log messages when the log level is
- * `error` or `warn`. Runs on the raw `info.message` before any colorize /
- * splat transforms so the sensitive-token regexes don't have to contend
- * with ANSI escape sequences (whose trailing `m` would otherwise defeat
- * `\b` anchors).
+ * Applies the sensitive-pattern regexes to a string, guarding against
+ * scanning unbounded payloads by trimming very long values first.
+ * @param {string} str - The string to redact.
+ * @returns {string} - The redacted (and possibly truncated) string.
+ */
+function redactLogString(str) {
+  if (str.length <= MAX_REDACTION_STRING_LENGTH) {
+    return redactMessage(str);
+  }
+
+  const redacted = redactMessage(str.substring(0, MAX_REDACTION_STRING_LENGTH));
+  return `${redacted}... [truncated ${str.length - MAX_REDACTION_STRING_LENGTH} chars]`;
+}
+
+function isPlainRecord(value) {
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function isSensitiveMetadataKey(key) {
+  return sensitiveMetadataKey.test(key);
+}
+
+function redactRecordValue(key, value, seen, depth) {
+  return isSensitiveMetadataKey(key) ? REDACTED_VALUE : redactLogValue(value, seen, depth);
+}
+
+function defineRedactedErrorProperty(error, key, value) {
+  if (value === undefined) {
+    return;
+  }
+
+  Object.defineProperty(error, key, {
+    value: redactLogString(value),
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+}
+
+function defineRedactedDescriptor(target, key, descriptor, seen, depth) {
+  if (!('value' in descriptor)) {
+    Object.defineProperty(target, key, descriptor);
+    return;
+  }
+
+  Object.defineProperty(target, key, {
+    ...descriptor,
+    value:
+      typeof key === 'string'
+        ? redactRecordValue(key, descriptor.value, seen, depth)
+        : redactLogValue(descriptor.value, seen, depth),
+  });
+}
+
+function redactErrorValue(error, seen, depth) {
+  const redacted = Object.create(Object.getPrototypeOf(error));
+  seen.set(error, redacted);
+
+  defineRedactedErrorProperty(redacted, 'name', error.name);
+  defineRedactedErrorProperty(redacted, 'message', error.message);
+  defineRedactedErrorProperty(redacted, 'stack', error.stack);
+
+  Reflect.ownKeys(error).forEach((key) => {
+    if (typeof key === 'string' && errorStringProperties.has(key)) {
+      return;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(error, key);
+    if (descriptor === undefined) {
+      return;
+    }
+    defineRedactedDescriptor(redacted, key, descriptor, seen, depth + 1);
+  });
+  return redacted;
+}
+
+function isBufferValue(value) {
+  return typeof Buffer !== 'undefined' && Buffer.isBuffer(value);
+}
+
+function getJsonValue(value) {
+  const toJSON = value.toJSON;
+  if (typeof toJSON !== 'function') {
+    return undefined;
+  }
+
+  try {
+    const jsonValue = toJSON.call(value);
+    return jsonValue === value ? undefined : jsonValue;
+  } catch {
+    return undefined;
+  }
+}
+
+function getCustomStringValue(value) {
+  const toString = value.toString;
+  if (typeof toString !== 'function' || toString === Object.prototype.toString) {
+    return undefined;
+  }
+
+  try {
+    const stringValue = toString.call(value);
+    return typeof stringValue === 'string' ? stringValue : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function redactMapValue(value, seen, depth) {
+  const redacted = new Map();
+  seen.set(value, redacted);
+  let count = 0;
+  for (const [mapKey, mapValue] of value) {
+    if (count >= MAX_REDACTION_ENTRIES) {
+      redacted.set(REDACTION_TRUNCATED_KEY, 'Additional map entries omitted');
+      break;
+    }
+    redacted.set(
+      mapKey,
+      typeof mapKey === 'string'
+        ? redactRecordValue(mapKey, mapValue, seen, depth + 1)
+        : redactLogValue(mapValue, seen, depth + 1),
+    );
+    count += 1;
+  }
+  return redacted;
+}
+
+function redactSetValue(value, seen, depth) {
+  const redacted = new Set();
+  seen.set(value, redacted);
+  let count = 0;
+  for (const setValue of value) {
+    if (count >= MAX_REDACTION_ENTRIES) {
+      redacted.add('Additional set values omitted');
+      break;
+    }
+    redacted.add(redactLogValue(setValue, seen, depth + 1));
+    count += 1;
+  }
+  return redacted;
+}
+
+function redactObjectEntries(value, seen, depth) {
+  const record = value;
+  let redacted;
+  let count = 0;
+
+  for (const key in record) {
+    if (!Object.prototype.hasOwnProperty.call(record, key)) {
+      continue;
+    }
+    if (redacted === undefined) {
+      redacted = {};
+      seen.set(value, redacted);
+    }
+    if (count >= MAX_REDACTION_ENTRIES) {
+      redacted[REDACTION_TRUNCATED_KEY] = 'Additional object properties omitted';
+      break;
+    }
+    redacted[key] = redactRecordValue(key, record[key], seen, depth + 1);
+    count += 1;
+  }
+
+  return redacted;
+}
+
+function redactNonPlainValue(value, seen, depth) {
+  if (isBufferValue(value)) {
+    return value.length > MAX_REDACTION_BUFFER_BYTES
+      ? `[REDACTED Buffer ${value.length} bytes]`
+      : redactLogString(value.toString('utf8'));
+  }
+
+  if (value instanceof URL || value instanceof URLSearchParams) {
+    return redactLogString(value.toString());
+  }
+
+  if (value instanceof Map) {
+    return redactMapValue(value, seen, depth);
+  }
+
+  if (value instanceof Set) {
+    return redactSetValue(value, seen, depth);
+  }
+
+  const jsonValue = getJsonValue(value);
+  if (jsonValue !== undefined) {
+    return redactLogValue(jsonValue, seen, depth + 1);
+  }
+
+  const redactedEntries = redactObjectEntries(value, seen, depth);
+  if (redactedEntries !== undefined) {
+    return redactedEntries;
+  }
+
+  const stringValue = getCustomStringValue(value);
+  return stringValue !== undefined ? redactLogString(stringValue) : value;
+}
+
+/**
+ * Recursively redacts sensitive information from an arbitrary log value.
+ * Values under sensitive keys (see `sensitiveMetadataKey`) are replaced
+ * wholesale; strings are pattern-redacted via `redactMessage`. Guards
+ * against cycles (`seen`), unbounded depth (`MAX_REDACTION_DEPTH`), and
+ * oversized collections (`MAX_REDACTION_ENTRIES`). Ported from the
+ * reference implementation in
+ * `packages/data-schemas/src/config/parsers.ts`; returns a redacted copy
+ * without mutating the input.
  *
- * Note: Intentionally mutates the object.
+ * @param {unknown} value - The value to redact.
+ * @param {WeakMap<object, unknown>} [seen] - Visited-node cache for cycle safety.
+ * @param {number} [depth] - Current recursion depth.
+ * @returns {unknown} - The redacted copy.
+ */
+function redactLogValue(value, seen = new WeakMap(), depth = 0) {
+  if (typeof value === 'string') {
+    return redactLogString(value);
+  }
+
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+
+  const cached = seen.get(value);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  if (depth >= MAX_REDACTION_DEPTH) {
+    return REDACTED_VALUE;
+  }
+
+  if (Array.isArray(value)) {
+    const redacted = [];
+    seen.set(value, redacted);
+    const length = Math.min(value.length, MAX_REDACTION_ENTRIES);
+    for (let index = 0; index < length; index++) {
+      redacted.push(redactLogValue(value[index], seen, depth + 1));
+    }
+    if (value.length > MAX_REDACTION_ENTRIES) {
+      redacted.push('Additional array values omitted');
+    }
+    return redacted;
+  }
+
+  if (value instanceof Error) {
+    return redactErrorValue(value, seen, depth);
+  }
+
+  if (!isPlainRecord(value)) {
+    return redactNonPlainValue(value, seen, depth);
+  }
+
+  return redactObjectEntries(value, seen, depth) ?? {};
+}
+
+/**
+ * Redacts sensitive information from log messages at every level. Scrubs
+ * `info.message`, the winston message symbol, and the splat arguments so
+ * that both string patterns (via `redactMessage`) and values under
+ * sensitive keys (e.g. `config.headers.Authorization` on an axios error)
+ * are removed before winston interpolates or serializes them. Runs before
+ * `winston.format.splat()` in the pipeline so splat objects are redacted
+ * by key prior to interpolation.
+ *
+ * Note: Intentionally reassigns redacted copies onto the info object.
  * @param {Object} info - The log information object.
  * @returns {Object} - The modified log information object.
  */
 const redactFormat = winston.format((info) => {
-  if (info.level === 'error' || info.level === 'warn') {
-    if (typeof info.message === 'string') {
-      info.message = redactMessage(info.message);
-    }
-    if (typeof info[MESSAGE_SYMBOL] === 'string') {
-      info[MESSAGE_SYMBOL] = redactMessage(info[MESSAGE_SYMBOL]);
-    }
+  if (info.message !== undefined) {
+    info.message = redactLogValue(info.message);
+  }
+
+  if (info[MESSAGE_SYMBOL] !== undefined) {
+    info[MESSAGE_SYMBOL] = redactLogValue(info[MESSAGE_SYMBOL]);
+  }
+
+  if (info[SPLAT_SYMBOL] !== undefined) {
+    info[SPLAT_SYMBOL] = redactLogValue(info[SPLAT_SYMBOL]);
   }
   return info;
 });

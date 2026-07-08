@@ -8,6 +8,7 @@ import {
   EToolResources,
   paramEndpoints,
   isAgentsEndpoint,
+  isReasoningModel,
   replaceSpecialVars,
   providerEndpointMap,
 } from 'librechat-data-provider';
@@ -52,7 +53,7 @@ import {
 } from './tools';
 import { filterFilesByEndpointConfig } from '~/files';
 import { generateArtifactsPrompt } from '~/prompts';
-import { getProviderConfig } from '~/endpoints';
+import { getProviderConfig, suppressAnthropicThinkingForToolLoop } from '~/endpoints';
 import { primeResources } from './resources';
 
 /**
@@ -582,6 +583,20 @@ export async function initializeAgent(
     );
   }
 
+  /**
+   * OpenAI reasoning families (o-series / gpt-5.x) cannot run the multi-turn
+   * tool loop: their reasoning trace is not replayed between turns, so the
+   * follow-up request after the first tool round-trip is rejected upstream and
+   * OpenRouter surfaces it as an opaque "Provider returned error". Reject the
+   * combination up front with a structured error the client localizes; chat-only
+   * use of these models stays allowed. Covers every agent that reaches a run:
+   * ephemeral chat toggles, saved agents, and handoff/subagents. Deep Research
+   * is unaffected — it forces a non-reasoning model before this initializer runs.
+   */
+  if (isReasoningModel(agent.model) && (agent.tools?.length ?? 0) > 0) {
+    throw new Error(`{ "type": "${ErrorTypes.REASONING_MODEL_TOOLS}", "info": "${agent.model}" }`);
+  }
+
   let currentFiles: IMongoFile[] | undefined;
 
   const _modelOptions = structuredClone(
@@ -1088,6 +1103,21 @@ export async function initializeAgent(
 
   /** Check for tool presence from either full instances or definitions (event-driven mode) */
   const hasAgentTools = (structuredTools?.length ?? 0) > 0 || (toolDefinitions?.length ?? 0) > 0;
+
+  /**
+   * Anthropic extended thinking is incompatible with the multi-turn tool loop
+   * (thinking blocks aren't replayed across turns → the follow-up request 400s).
+   * The default OpenRouter path never enables it for Anthropic, but an explicit
+   * reasoning_effort (preset/param panel) does. Strip it back to the safe
+   * non-thinking default when this agent runs tools, and log so operators can
+   * see why an explicitly-requested reasoning setting was dropped.
+   */
+  if (hasAgentTools && suppressAnthropicThinkingForToolLoop(llmConfig)) {
+    logger.warn(
+      `[initializeAgent] Dropped Anthropic extended-thinking for model "${llmConfig.model}" because the agent runs tools (thinking + multi-turn tools 400s on OpenRouter). Use the model without tools to keep reasoning.`,
+    );
+  }
+
   const providerTools = resolveProviderToolConflicts({
     provider: agent.provider,
     tools: options.tools,

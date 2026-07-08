@@ -29,6 +29,7 @@ const {
   workerModelFor,
   reportModelFor,
   compressModelFor,
+  DeepResearchConfigError,
 } = require('@librechat/api');
 const { logger } = require('@librechat/data-schemas');
 const { createFileSearchTool } = require('~/app/clients/tools/util/fileSearch');
@@ -643,6 +644,22 @@ async function runNewDeepResearch(params) {
       throw new DeepResearchCapError();
     }
 
+    /**
+     * Every research node needs a non-reasoning model. `resolveDeepResearchModel`
+     * returns undefined (never a reasoning model) when a mode is misconfigured with
+     * only reasoning candidates, which would otherwise build a model with an empty
+     * slug and fail opaquely mid-run. Resolve all four slugs once and refuse up
+     * front — the catch below turns this into a clear, deterministic message
+     * instead of an internal-error banner. In the normal (correctly-configured)
+     * case every slug resolves, so this guard is a no-op.
+     */
+    const workerModelSlug = workerModelFor(tier, conversationModel);
+    const reportModelSlug = reportModelFor(tier, conversationModel);
+    const compressModelSlug = compressModelFor(tier, conversationModel);
+    if (!leadModelSlug || !workerModelSlug || !reportModelSlug || !compressModelSlug) {
+      throw new DeepResearchConfigError(leadModelSlug ?? workerModelSlug);
+    }
+
     // D2: when this message replies to a clarify prompt (turn 2), research the WHOLE dialogue
     // (original request → questions → answer); otherwise research the raw request (turn 1).
     // Fail-open: a parent-load failure → the raw request. `researchInput` is what gets masked.
@@ -723,9 +740,9 @@ async function runNewDeepResearch(params) {
 
       const [leadModel, workerModel, compressModel, reportModel] = await Promise.all([
         buildModel(leadModelSlug),
-        buildModel(workerModelFor(tier, conversationModel)),
-        buildModel(compressModelFor(tier, conversationModel)),
-        buildModel(reportModelFor(tier, conversationModel)),
+        buildModel(workerModelSlug),
+        buildModel(compressModelSlug),
+        buildModel(reportModelSlug),
       ]);
 
       const [fileSearchTool, webSearchTool] = await Promise.all([
@@ -780,7 +797,19 @@ async function runNewDeepResearch(params) {
       });
     }
   } catch (error) {
-    if (error instanceof DeepResearchCapError) {
+    if (error instanceof DeepResearchConfigError) {
+      logger.error(
+        '[deepResearchRun] Deep Research mode is misconfigured (no non-reasoning model for a research step); refusing the run',
+        error,
+      );
+      result = {
+        finalReport:
+          'Глубокое исследование сейчас недоступно из-за настроек: для шага исследования не задана подходящая модель. Обратитесь к администратору.',
+        finalizeReason: 'error',
+        usage: { input: 0, output: 0, total: 0 },
+        findings: [],
+      };
+    } else if (error instanceof DeepResearchCapError) {
       logger.warn(
         `[deepResearchRun] user ${userId} at DR concurrency cap (${otherActiveJobs} active); rejecting`,
       );

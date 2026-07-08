@@ -5,7 +5,12 @@ import {
   ReasoningSummary,
   ReasoningParameterFormat,
 } from 'librechat-data-provider';
-import { getOpenAILLMConfig, extractDefaultParams, applyDefaultParams } from './llm';
+import {
+  getOpenAILLMConfig,
+  applyDefaultParams,
+  extractDefaultParams,
+  suppressAnthropicThinkingForToolLoop,
+} from './llm';
 import type * as t from '~/types';
 
 describe('getOpenAILLMConfig', () => {
@@ -1374,6 +1379,139 @@ describe('applyDefaultParams', () => {
       });
 
       expect(result.llmConfig).toHaveProperty('maxTokens', 128000);
+    });
+  });
+
+  describe('suppressAnthropicThinkingForToolLoop (E-H9)', () => {
+    it('strips an explicit OpenRouter Anthropic thinking directive (real config path)', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'test-api-key',
+        streaming: true,
+        useOpenRouter: true,
+        modelOptions: {
+          model: 'anthropic/claude-sonnet-4.6',
+          reasoning_effort: ReasoningEffort.high,
+        },
+      });
+      // Adaptive Anthropic + explicit effort → thinking enabled
+      expect(result.llmConfig.modelKwargs).toHaveProperty('reasoning', { enabled: true });
+
+      const stripped = suppressAnthropicThinkingForToolLoop(
+        result.llmConfig as Parameters<typeof suppressAnthropicThinkingForToolLoop>[0],
+      );
+      expect(stripped).toBe(true);
+      expect(result.llmConfig.modelKwargs?.reasoning).toBeUndefined();
+    });
+
+    it('strips a non-adaptive Anthropic effort directive and clears empty modelKwargs', () => {
+      const llmConfig = {
+        model: 'anthropic/claude-3-sonnet',
+        modelKwargs: { reasoning: { effort: 'high' } as Record<string, unknown> },
+      };
+      expect(suppressAnthropicThinkingForToolLoop(llmConfig)).toBe(true);
+      expect(llmConfig.modelKwargs).toBeUndefined();
+    });
+
+    it('leaves non-Anthropic reasoning untouched (they replay reasoning fine)', () => {
+      const llmConfig = {
+        model: 'deepseek/deepseek-v3.2',
+        modelKwargs: { reasoning: { effort: 'high' } as Record<string, unknown> },
+      };
+      expect(suppressAnthropicThinkingForToolLoop(llmConfig)).toBe(false);
+      expect(llmConfig.modelKwargs.reasoning).toEqual({ effort: 'high' });
+    });
+
+    it('is a no-op for Anthropic without a thinking directive', () => {
+      const llmConfig = { model: 'anthropic/claude-sonnet-4.6' };
+      expect(suppressAnthropicThinkingForToolLoop(llmConfig)).toBe(false);
+    });
+
+    it('clears include_reasoning when set on an Anthropic config', () => {
+      const llmConfig = { model: '~anthropic/claude-opus-4.8', include_reasoning: true };
+      expect(suppressAnthropicThinkingForToolLoop(llmConfig)).toBe(true);
+      expect(llmConfig.include_reasoning).toBeUndefined();
+    });
+  });
+
+  describe('Sampling param clamp (E-M6)', () => {
+    it('clamps an out-of-range topP down to 1', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'k',
+        streaming: true,
+        modelOptions: { model: 'gpt-4', topP: 5 as unknown as number },
+      });
+      expect(result.llmConfig).toHaveProperty('topP', 1);
+    });
+
+    it('clamps a negative temperature up to 0 and an over-max temperature down to 2', () => {
+      const low = getOpenAILLMConfig({
+        apiKey: 'k',
+        streaming: true,
+        modelOptions: { model: 'gpt-4', temperature: -1 },
+      });
+      expect(low.llmConfig).toHaveProperty('temperature', 0);
+
+      const high = getOpenAILLMConfig({
+        apiKey: 'k',
+        streaming: true,
+        modelOptions: { model: 'gpt-4', temperature: 3 },
+      });
+      expect(high.llmConfig).toHaveProperty('temperature', 2);
+    });
+
+    it('leaves provider-valid mid-range sampling params untouched', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'k',
+        streaming: true,
+        modelOptions: { model: 'gpt-4', temperature: 0.7, topP: 0.9 },
+      });
+      expect(result.llmConfig).toHaveProperty('temperature', 0.7);
+      expect(result.llmConfig).toHaveProperty('topP', 0.9);
+    });
+
+    it('clamps temperature to 1.0 for Anthropic (its provider ceiling), not 2.0', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'k',
+        streaming: true,
+        useOpenRouter: true,
+        modelOptions: { model: 'anthropic/claude-sonnet-4.6', temperature: 1.5 },
+      });
+      expect(result.llmConfig).toHaveProperty('temperature', 1);
+    });
+
+    it('leaves a valid Anthropic temperature (≤1.0) untouched', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'k',
+        streaming: true,
+        useOpenRouter: true,
+        modelOptions: { model: 'anthropic/claude-opus-4.8', temperature: 0.7 },
+      });
+      expect(result.llmConfig).toHaveProperty('temperature', 0.7);
+    });
+
+    it('keeps the 2.0 ceiling for non-Anthropic models (OpenAI accepts 1.5)', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'k',
+        streaming: true,
+        modelOptions: { model: 'gpt-4', temperature: 1.5 },
+      });
+      expect(result.llmConfig).toHaveProperty('temperature', 1.5);
+    });
+  });
+
+  describe('Unknown-model maxTokens pass-through (E-M2)', () => {
+    it('leaves a large maxTokens unclamped for a model absent from the token map', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'k',
+        streaming: true,
+        useOpenRouter: true,
+        modelOptions: {
+          model: 'brand-new/unknown-model-v9',
+          max_tokens: 999999,
+        },
+      });
+      // Intentionally NOT clamped — the model may have a higher real cap
+      expect(result.llmConfig).toHaveProperty('maxTokens', 999999);
     });
   });
 });
