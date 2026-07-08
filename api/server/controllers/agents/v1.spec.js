@@ -80,6 +80,7 @@ const {
 } = require('./v1');
 
 const {
+  grantPermission,
   findAccessibleResources,
   findPubliclyAccessibleResources,
   getResourcePermissionsMap,
@@ -176,6 +177,24 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       expect(agentInDb).toBeDefined();
       expect(agentInDb.name).toBe('Test Agent');
       expect(agentInDb.author.toString()).toBe(mockReq.user.id);
+    });
+
+    test('should roll back the agent and 500 when granting owner permission fails (E-H4)', async () => {
+      grantPermission.mockRejectedValueOnce(new Error('grant failed'));
+
+      mockReq.body = {
+        name: 'Orphan Agent',
+        provider: 'openai',
+        model: 'gpt-4',
+      };
+
+      await createAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      expect(mockRes.status).not.toHaveBeenCalledWith(201);
+      // The orphaned agent must not survive — no agent left for this author
+      const orphaned = await Agent.find({ author: mockReq.user.id });
+      expect(orphaned).toHaveLength(0);
     });
 
     test('should reject creation with unauthorized fields (mass assignment protection)', async () => {

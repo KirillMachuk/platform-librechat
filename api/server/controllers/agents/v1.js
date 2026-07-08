@@ -452,6 +452,23 @@ const createAgentHandler = async (req, res) => {
         `[createAgent] Failed to grant owner permissions for agent ${agent.id}:`,
         permissionError,
       );
+      /**
+       * The agent row exists but has no owner VIEW/EDIT grant — it is orphaned
+       * (invisible to the user, reachable only by an admin). Compensate by
+       * deleting the just-created agent and fail the request, so the client
+       * doesn't believe an unusable agent was created. Log the rollback outcome
+       * too; if the delete also fails the orphan is surfaced for manual cleanup.
+       */
+      try {
+        await db.deleteAgent({ id: agent.id });
+        logger.warn(`[createAgent] Rolled back orphaned agent ${agent.id} after grant failure`);
+      } catch (rollbackError) {
+        logger.error(
+          `[createAgent] Failed to roll back orphaned agent ${agent.id}; manual cleanup required:`,
+          rollbackError,
+        );
+      }
+      return res.status(500).json({ error: 'Failed to create agent' });
     }
 
     res.status(201).json(agent);
