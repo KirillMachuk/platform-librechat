@@ -5,7 +5,12 @@ import {
   resolveDeepResearchModel,
   DEEP_RESEARCH_MODE_DEFAULTS,
 } from './modes';
-import { buildSearcherAgent, buildDeepResearchGraph, deepResearchRecursionLimit } from './graph';
+import {
+  buildSearcherAgent,
+  buildDeepResearchGraph,
+  DeepResearchConfigError,
+  deepResearchRecursionLimit,
+} from './graph';
 
 describe('resolveDeepResearchMode', () => {
   it('defaults to the deep preset when no config is provided', () => {
@@ -73,8 +78,8 @@ describe('resolveDeepResearchModel', () => {
     ).toBe('anthropic/claude-sonnet-4.6');
   });
 
-  it('returns the first candidate as a last resort when every option is reasoning', () => {
-    expect(resolveDeepResearchModel(undefined, 'openai/gpt-5', 'openai/o1')).toBe('openai/gpt-5');
+  it('returns undefined when every option is a reasoning model (never a reasoning model)', () => {
+    expect(resolveDeepResearchModel(undefined, 'openai/gpt-5', 'openai/o1')).toBeUndefined();
   });
 
   it('returns undefined when no candidate is provided', () => {
@@ -243,5 +248,31 @@ describe('buildDeepResearchGraph', () => {
     expect(config.subagentAgentConfigs).toBeUndefined();
     expect(config.recursion_limit).toBeUndefined();
     expect(warn).toHaveBeenCalled();
+  });
+
+  it('refuses the run (throws) when only reasoning models are available for the worker (E-H2)', async () => {
+    const { agent, config } = makePrimary();
+    agent.model = 'openai/o1';
+    const initializeSearcher = jest.fn(async () => null);
+    const warn = jest.fn();
+
+    await expect(
+      buildDeepResearchGraph({
+        primaryAgent: agent,
+        primaryConfig: config,
+        // Every candidate (workerModel, conversationModel, primary.model) is reasoning
+        mode: { ...DEEP_RESEARCH_MODE_DEFAULTS.deep, workerModel: 'openai/gpt-5' },
+        conversationModel: 'openai/gpt-5.4-mini',
+        webSearchAvailable: true,
+        initializeSearcher,
+        logger: { warn },
+      }),
+    ).rejects.toBeInstanceOf(DeepResearchConfigError);
+
+    // Never attempted to initialize a researcher on a reasoning model
+    expect(initializeSearcher).not.toHaveBeenCalled();
+    // No partial mutation of the primary config
+    expect(config.subagents).toBeUndefined();
+    expect(config.subagentAgentConfigs).toBeUndefined();
   });
 });
