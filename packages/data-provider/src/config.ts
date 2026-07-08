@@ -2403,6 +2403,11 @@ export enum ErrorTypes {
    */
   REASONING_MODEL_TOOLS = 'reasoning_model_tools',
   /**
+   * Deep Research mode is configured with only reasoning models for a tool node
+   * (lead/worker); the run is refused up front instead of 400-ing mid-research
+   */
+  DEEP_RESEARCH_MODEL_INCOMPATIBLE = 'deep_research_model_incompatible',
+  /**
    * Invalid Agent Provider (excluded by Admin)
    */
   INVALID_AGENT_PROVIDER = 'invalid_agent_provider',

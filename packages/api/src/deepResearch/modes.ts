@@ -46,16 +46,17 @@ export { isReasoningModel };
  * Picks the model for a Deep Research tool node. Forces the mode's configured
  * (non-thinking) model; when it is unset, skips any user-selected reasoning
  * model that would 400 on tool calls and prefers the first non-reasoning
- * fallback. Returns the first candidate only as a last resort (every candidate
- * is a reasoning model), so a misconfiguration degrades loudly rather than
- * silently inheriting the user's reasoning chat model.
+ * fallback. Returns `undefined` when EVERY candidate is a reasoning model — a
+ * misconfiguration the caller must reject with a clear error rather than send a
+ * reasoning model into DR's multi-turn tool loop (which 400s opaquely). Never
+ * returns a reasoning model.
  */
 export function resolveDeepResearchModel(
   modeModel: string | undefined,
   ...fallbacks: Array<string | undefined>
 ): string | undefined {
   const candidates = [modeModel, ...fallbacks].filter((model): model is string => Boolean(model));
-  return candidates.find((model) => !isReasoningModel(model)) ?? candidates[0];
+  return candidates.find((model) => !isReasoningModel(model));
 }
 
 /** Resolves the active Deep Research mode from tenant config, merged over defaults. */

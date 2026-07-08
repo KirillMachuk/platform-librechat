@@ -80,6 +80,7 @@ const errorMessages = {
     const model = info?.split('/').pop() ?? info ?? '';
     return localize('com_error_reasoning_model_tools', { 0: model });
   },
+  [ErrorTypes.DEEP_RESEARCH_MODEL_INCOMPATIBLE]: 'com_error_deep_research_model_incompatible',
   [ErrorTypes.STREAM_EXPIRED]: 'com_error_stream_expired',
   [ViolationTypes.BAN]:
     'Your account has been temporarily banned due to violations of our service.',

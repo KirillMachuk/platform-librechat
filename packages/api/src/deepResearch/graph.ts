@@ -1,8 +1,22 @@
-import { replaceSpecialVars } from 'librechat-data-provider';
+import { ErrorTypes, replaceSpecialVars } from 'librechat-data-provider';
 import type { ResolvedDeepResearchMode } from './types';
 import { buildOrchestratorInstructions, buildSearcherInstructions } from './prompts';
 import { isReasoningModel, resolveDeepResearchModel } from './modes';
 import { buildWebSearchContext } from '../tools/toolkits/web';
+
+/**
+ * Thrown when a Deep Research tool node (lead/worker) resolves to only reasoning
+ * models — a configuration error, not a transient failure. The caller must
+ * surface this to the user instead of degrading to a single agent, because a
+ * reasoning model would 400 opaquely inside DR's multi-turn tool loop. The
+ * message is the structured `{ type, info }` payload the client localizes.
+ */
+export class DeepResearchConfigError extends Error {
+  constructor(model?: string) {
+    super(`{ "type": "${ErrorTypes.DEEP_RESEARCH_MODEL_INCOMPATIBLE}", "info": "${model ?? ''}" }`);
+    this.name = 'DeepResearchConfigError';
+  }
+}
 
 /**
  * Minimal structural view of an agent definition / initialized run config that
@@ -169,10 +183,19 @@ export async function buildDeepResearchGraph(
     conversationModel,
     webSearchAvailable,
   });
-  if (isReasoningModel(searcherAgent.model)) {
+  /**
+   * `resolveDeepResearchModel` returns undefined when every candidate is a
+   * reasoning model, and never returns a reasoning model — so an undefined (or,
+   * defensively, still-reasoning) worker model here is a config error, not a
+   * transient failure. Refuse the run with a clear, localized error rather than
+   * letting the researcher 400 opaquely on its first tool call. The caller
+   * (initialize.js) re-throws this instead of degrading to a single agent.
+   */
+  if (searcherAgent.model == null || isReasoningModel(searcherAgent.model)) {
     logger?.warn?.(
-      `[deepResearch] Researcher model "${searcherAgent.model}" is a reasoning model that may 400 on multi-turn tool calls; set deepResearch.modes.${mode.name}.workerModel to a non-reasoning model.`,
+      `[deepResearch] No non-reasoning worker model available for mode "${mode.name}"; set deepResearch.modes.${mode.name}.workerModel to a non-reasoning model.`,
     );
+    throw new DeepResearchConfigError(searcherAgent.model);
   }
   const searcherConfig = await initializeSearcher(searcherAgent);
   if (!searcherConfig) {
