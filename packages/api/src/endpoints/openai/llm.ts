@@ -15,13 +15,11 @@ import { getModelMaxOutputTokens, findMatchingPattern, maxOutputTokensMap } from
 import { isEnabled } from '~/utils/common';
 
 /**
- * Clamps a sampling parameter to a valid range only when it is clearly
- * out-of-range (e.g. a stale/corrupt `topP: 5` or a negative temperature),
- * returning the clamped value or the original. Universal bounds are used so a
- * provider-valid mid-range value is never touched — the goal is to stop an
- * obviously-invalid value from 400-ing the whole request upstream, not to
- * enforce per-provider maxima. Returns `undefined` for non-finite input so the
- * caller can leave the param untouched.
+ * Clamps a sampling parameter to `[min, max]` only when it is out of range,
+ * returning the clamped value or the original. Used to stop an obviously-invalid
+ * value (a stale/corrupt `topP: 5`, a negative temperature, or a temperature
+ * above the provider's maximum) from 400-ing the whole request upstream. Returns
+ * `undefined` for non-finite input so the caller can leave the param untouched.
  */
 function clampSamplingParam(value: unknown, min: number, max: number): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -34,6 +32,21 @@ function clampSamplingParam(value: unknown, min: number, max: number): number | 
     return max;
   }
   return value;
+}
+
+/**
+ * Maximum valid `temperature` for a model's provider family. Anthropic rejects
+ * `temperature > 1.0` (OpenAI/most others allow up to 2.0), so clamping a
+ * too-high value to the provider's real ceiling turns an upstream 400 into a
+ * valid request. Detects Anthropic via the OpenRouter `anthropic/` prefix or a
+ * bare `claude` model name; everything else keeps the 2.0 ceiling.
+ */
+function maxTemperatureForModel(model?: string | null): number {
+  if (typeof model !== 'string') {
+    return 2;
+  }
+  const normalized = normalizeOpenRouterModel(model);
+  return normalized.startsWith('anthropic/') || normalized.includes('claude') ? 1 : 2;
 }
 
 type OpenAILLMConfig = Omit<Partial<t.OAIClientOptions>, 'verbosity'> &
@@ -683,14 +696,20 @@ export function getOpenAILLMConfig({
   }
 
   /**
-   * Clamp obviously out-of-range sampling params before they reach the provider.
-   * A stale/corrupt value saved in conversation params (e.g. topP: 5, a negative
-   * temperature) otherwise 400s the whole request. Universal bounds only — a
-   * provider-valid mid-range value is untouched. Reasoning models drop these
-   * params entirely below, so this only affects models that actually accept them.
+   * Clamp out-of-range sampling params before they reach the provider. A
+   * stale/corrupt value saved in conversation params (e.g. topP: 5, a negative
+   * temperature, or temperature 1.5 on Anthropic — valid for OpenAI, rejected by
+   * Anthropic) otherwise 400s the whole request. `temperature` uses the model's
+   * provider ceiling (Anthropic 1.0, else 2.0); a provider-valid mid-range value
+   * is untouched. Reasoning models drop these params below, so this only affects
+   * models that actually accept them.
    */
   if (llmConfig.temperature != null) {
-    const clampedTemperature = clampSamplingParam(llmConfig.temperature, 0, 2);
+    const clampedTemperature = clampSamplingParam(
+      llmConfig.temperature,
+      0,
+      maxTemperatureForModel(llmConfig.model),
+    );
     if (clampedTemperature != null && clampedTemperature !== llmConfig.temperature) {
       logger.debug(
         `[getOpenAILLMConfig] Clamped out-of-range temperature ${llmConfig.temperature} → ${clampedTemperature}`,

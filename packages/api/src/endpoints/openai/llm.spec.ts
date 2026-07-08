@@ -1412,6 +1412,35 @@ describe('applyDefaultParams', () => {
       expect(result.llmConfig).toHaveProperty('temperature', 0.7);
       expect(result.llmConfig).toHaveProperty('topP', 0.9);
     });
+
+    it('clamps temperature to 1.0 for Anthropic (its provider ceiling), not 2.0', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'k',
+        streaming: true,
+        useOpenRouter: true,
+        modelOptions: { model: 'anthropic/claude-sonnet-4.6', temperature: 1.5 },
+      });
+      expect(result.llmConfig).toHaveProperty('temperature', 1);
+    });
+
+    it('leaves a valid Anthropic temperature (≤1.0) untouched', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'k',
+        streaming: true,
+        useOpenRouter: true,
+        modelOptions: { model: 'anthropic/claude-opus-4.8', temperature: 0.7 },
+      });
+      expect(result.llmConfig).toHaveProperty('temperature', 0.7);
+    });
+
+    it('keeps the 2.0 ceiling for non-Anthropic models (OpenAI accepts 1.5)', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'k',
+        streaming: true,
+        modelOptions: { model: 'gpt-4', temperature: 1.5 },
+      });
+      expect(result.llmConfig).toHaveProperty('temperature', 1.5);
+    });
   });
 
   describe('Unknown-model maxTokens pass-through (E-M2)', () => {
