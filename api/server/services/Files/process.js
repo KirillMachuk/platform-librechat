@@ -77,6 +77,51 @@ const createSanitizedUploadWrapper = (uploadFunction) => {
 
 const hasCodeEnvRef = (file) => file?.metadata?.codeEnvRef != null;
 
+/**
+ * Compensating delete for the synchronous file_search path: storage is written
+ * first, then vectors are embedded. If the embed throws, the storage object is
+ * orphaned (no DB record is ever created) and the user gets a 500. Roll the
+ * storage object back so no orphan survives, then let the caller re-throw the
+ * original embed error. The rollback is best-effort — a failure here is logged
+ * and swallowed so it never masks the real embed error. `embedded: false`
+ * ensures the strategy delete does not attempt a (pointless) RAG delete.
+ *
+ * @param {object} params
+ * @param {ServerRequest} params.req
+ * @param {string} params.source - The storage strategy the object was written to.
+ * @param {{ filepath?: string, storageKey?: string, storageRegion?: string }} params.storageResult
+ * @param {string} params.file_id
+ * @returns {Promise<void>}
+ */
+const rollbackOrphanedStorage = async ({ req, source, storageResult, file_id }) => {
+  try {
+    const { deleteFile } = getStrategyFunctions(source);
+    if (typeof deleteFile !== 'function') {
+      logger.warn(
+        `[processFileUpload] No delete method for source ${source}; cannot roll back orphaned storage for ${file_id}`,
+      );
+      return;
+    }
+    await deleteFile(req, {
+      file_id,
+      user: req.user.id,
+      source,
+      embedded: false,
+      filepath: storageResult?.filepath,
+      storageKey: storageResult?.storageKey,
+      storageRegion: storageResult?.storageRegion,
+    });
+    logger.info(
+      `[processFileUpload] Rolled back orphaned storage for ${file_id} after embedding failure`,
+    );
+  } catch (rollbackError) {
+    logger.error(
+      `[processFileUpload] Failed to roll back orphaned storage for ${file_id} after embedding failure:`,
+      rollbackError,
+    );
+  }
+};
+
 const isMissingStorageError = (err) => {
   const code = err?.code ?? err?.status ?? err?.statusCode ?? err?.response?.status;
   if ([404, '404', 'ENOENT', 'NoSuchKey', 'NotFound', 'ResourceNotFound'].includes(code)) {
@@ -1079,12 +1124,19 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
       embeddingResult = { embedded: false, filename: file.originalname, deferred: true };
     } else {
       const { uploadVectors } = require('./VectorDB/crud');
-      embeddingResult = await uploadVectors({
-        req,
-        file,
-        file_id,
-        entity_id,
-      });
+      try {
+        embeddingResult = await uploadVectors({
+          req,
+          file,
+          file_id,
+          entity_id,
+        });
+      } catch (embedError) {
+        // Storage already succeeded above; without this the object would orphan
+        // (no DB record is created because the throw aborts before db.createFile).
+        await rollbackOrphanedStorage({ req, source, storageResult, file_id });
+        throw embedError;
+      }
     }
 
     // Vector status will be stored at root level, no need for metadata
@@ -1244,12 +1296,19 @@ const processProjectFileUpload = async ({ req, res, metadata }) => {
     embeddingResult = { embedded: false, filename: file.originalname, deferred: true };
   } else {
     const { uploadVectors } = require('./VectorDB/crud');
-    embeddingResult = await uploadVectors({
-      req,
-      file,
-      file_id,
-      entity_id,
-    });
+    try {
+      embeddingResult = await uploadVectors({
+        req,
+        file,
+        file_id,
+        entity_id,
+      });
+    } catch (embedError) {
+      // Roll back the storage object written just above so a failed embed does
+      // not leave an orphan (no DB record is created past this throw).
+      await rollbackOrphanedStorage({ req, source, storageResult, file_id });
+      throw embedError;
+    }
   }
 
   const {
