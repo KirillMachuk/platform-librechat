@@ -8,6 +8,7 @@ import {
   EToolResources,
   paramEndpoints,
   isAgentsEndpoint,
+  isReasoningModel,
   replaceSpecialVars,
   providerEndpointMap,
 } from 'librechat-data-provider';
@@ -580,6 +581,20 @@ export async function initializeAgent(
     throw new Error(
       `{ "type": "${ErrorTypes.INVALID_AGENT_PROVIDER}", "info": "${agent.provider}" }`,
     );
+  }
+
+  /**
+   * OpenAI reasoning families (o-series / gpt-5.x) cannot run the multi-turn
+   * tool loop: their reasoning trace is not replayed between turns, so the
+   * follow-up request after the first tool round-trip is rejected upstream and
+   * OpenRouter surfaces it as an opaque "Provider returned error". Reject the
+   * combination up front with a structured error the client localizes; chat-only
+   * use of these models stays allowed. Covers every agent that reaches a run:
+   * ephemeral chat toggles, saved agents, and handoff/subagents. Deep Research
+   * is unaffected — it forces a non-reasoning model before this initializer runs.
+   */
+  if (isReasoningModel(agent.model) && (agent.tools?.length ?? 0) > 0) {
+    throw new Error(`{ "type": "${ErrorTypes.REASONING_MODEL_TOOLS}", "info": "${agent.model}" }`);
   }
 
   let currentFiles: IMongoFile[] | undefined;

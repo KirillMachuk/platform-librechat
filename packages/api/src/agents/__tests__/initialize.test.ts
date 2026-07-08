@@ -317,6 +317,49 @@ describe('initializeAgent — custom provider token lookup', () => {
   });
 });
 
+describe('initializeAgent — reasoning-model tool gate (E-H1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const runWith = (model: string, tools: string[]) => {
+    const { agent, req, res, loadTools, db } = createMocks({ model });
+    agent.tools = tools;
+    return initializeAgent(
+      {
+        req,
+        res,
+        agent,
+        loadTools,
+        endpointOption: { endpoint: EModelEndpoint.agents },
+        allowedProviders: new Set(),
+        isInitialAgent: true,
+      },
+      db,
+    );
+  };
+
+  it('rejects a reasoning model when tools are present', async () => {
+    await expect(runWith('openai/gpt-5', ['file_search'])).rejects.toThrow(/reasoning_model_tools/);
+    await expect(runWith('openai/gpt-5.4-mini', ['web_search'])).rejects.toThrow(
+      /reasoning_model_tools/,
+    );
+    await expect(runWith('o1', ['file_search'])).rejects.toThrow(/reasoning_model_tools/);
+  });
+
+  it('allows a reasoning model when no tools are present (chat-only)', async () => {
+    await expect(runWith('openai/gpt-5', [])).resolves.toBeDefined();
+  });
+
+  it('allows a non-reasoning model with tools', async () => {
+    await expect(runWith('anthropic/claude-sonnet-4.6', ['file_search'])).resolves.toBeDefined();
+  });
+
+  it('allows the non-reasoning gpt-5-chat variant with tools', async () => {
+    await expect(runWith('openai/gpt-5-chat', ['file_search'])).resolves.toBeDefined();
+  });
+});
+
 describe('initializeAgent — provider web_search precedence', () => {
   const nativeWebSearchTool = {
     type: 'web_search_20250305',

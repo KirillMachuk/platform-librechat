@@ -18,6 +18,7 @@ const {
   Time,
   Tools,
   CacheKeys,
+  ErrorTypes,
   Constants,
   FileSources,
   ResourceType,
@@ -26,6 +27,7 @@ const {
   EToolResources,
   isActionTool,
   PermissionBits,
+  isReasoningModel,
   actionDelimiter,
   AgentCapabilities,
   EModelEndpoint,
@@ -423,6 +425,20 @@ const createAgentHandler = async (req, res) => {
       configServers,
     });
 
+    /**
+     * OpenAI reasoning models (o-series / gpt-5.x) 400 on the multi-turn tool
+     * loop because their reasoning trace is not replayed between turns. Reject
+     * the save up front so the user gets a clear message here instead of an
+     * opaque "Provider returned error" on the first tool call. Runs after
+     * `filterAuthorizedTools` so it gates on the tools that will actually be
+     * persisted. Chat-only reasoning agents (no tools) are unaffected.
+     */
+    if (isReasoningModel(agentData.model) && agentData.tools.length > 0) {
+      return res.status(400).json({
+        error: `{ "type": "${ErrorTypes.REASONING_MODEL_TOOLS}", "info": "${agentData.model}" }`,
+      });
+    }
+
     const agent = await db.createAgent(agentData);
 
     try {
@@ -688,6 +704,27 @@ const updateAgentHandler = async (req, res) => {
             updateData.tools = updateData.tools.filter((t) => !rejectedSet.has(t));
           }
         }
+      }
+    }
+
+    /**
+     * OpenAI reasoning models (o-series / gpt-5.x) 400 on the multi-turn tool
+     * loop (reasoning trace not replayed between turns). Block an update that
+     * would leave the agent in a reasoning-model + tools state, but only when
+     * the update actually touches `model` or `tools` — an unrelated edit (e.g.
+     * instructions) on a legacy agent already in that state is still allowed to
+     * save so the user can fix it, and it stays protected by the run-time gate
+     * in initializeAgent. Changing the model to non-reasoning or clearing tools
+     * passes the gate, so the combination is always fixable from here.
+     */
+    const touchesModelOrTools = updateData.model !== undefined || updateData.tools !== undefined;
+    if (touchesModelOrTools) {
+      const effectiveModel = updateData.model ?? existingAgent.model;
+      const effectiveTools = updateData.tools ?? existingAgent.tools ?? [];
+      if (isReasoningModel(effectiveModel) && effectiveTools.length > 0) {
+        return res.status(400).json({
+          error: `{ "type": "${ErrorTypes.REASONING_MODEL_TOOLS}", "info": "${effectiveModel}" }`,
+        });
       }
     }
 

@@ -75,6 +75,11 @@ const errorMessages = {
     return info;
   },
   [ErrorTypes.GOOGLE_TOOL_CONFLICT]: 'com_error_google_tool_conflict',
+  [ErrorTypes.REASONING_MODEL_TOOLS]: (json: TGenericError, localize: LocalizeFunction) => {
+    const { info } = json;
+    const model = info?.split('/').pop() ?? info ?? '';
+    return localize('com_error_reasoning_model_tools', { 0: model });
+  },
   [ErrorTypes.STREAM_EXPIRED]: 'com_error_stream_expired',
   [ViolationTypes.BAN]:
     'Your account has been temporarily banned due to violations of our service.',
