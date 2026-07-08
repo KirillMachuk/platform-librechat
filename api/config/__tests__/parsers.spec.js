@@ -252,12 +252,102 @@ describe('redactFormat', () => {
     expect(info.message).toContain('sk-[REDACTED]');
   });
 
-  it('leaves info.message untouched for info and debug levels', () => {
+  it('redacts sensitive patterns in info.message for info and debug levels (sovereign logs)', () => {
     const infoInfo = runFormat({ level: 'info', message: 'Bearer looksSensitive' });
-    expect(infoInfo.message).toBe('Bearer looksSensitive');
+    expect(infoInfo.message).toBe('Bearer [REDACTED]');
 
     const infoDebug = runFormat({ level: 'debug', message: 'Bearer looksSensitive' });
-    expect(infoDebug.message).toBe('Bearer looksSensitive');
+    expect(infoDebug.message).toBe('Bearer [REDACTED]');
+  });
+
+  it('leaves non-sensitive messages untouched at every level', () => {
+    for (const level of ['error', 'warn', 'info', 'debug']) {
+      const info = runFormat({ level, message: 'User signed in successfully' });
+      expect(info.message).toBe('User signed in successfully');
+    }
+  });
+
+  it('deep-redacts key-based secrets in splat metadata at every level', () => {
+    for (const level of ['error', 'warn', 'info', 'debug']) {
+      const metadata = {
+        apiKey: 'secretvalue',
+        authorization: 'secretvalue',
+        nested: { token: 'secretvalue' },
+        safe: 'keep-me',
+        'x-api-key': 'secretvalue',
+      };
+      const info = runFormat({ level, message: 'visible', [SPLAT_SYMBOL]: [metadata] });
+      const splat = info[SPLAT_SYMBOL];
+
+      expect(splat[0].apiKey).toBe('[REDACTED]');
+      expect(splat[0].authorization).toBe('[REDACTED]');
+      expect(splat[0].nested.token).toBe('[REDACTED]');
+      expect(splat[0]['x-api-key']).toBe('[REDACTED]');
+      expect(splat[0].safe).toBe('keep-me');
+      // Original object is not mutated.
+      expect(metadata.apiKey).toBe('secretvalue');
+      expect(metadata.nested.token).toBe('secretvalue');
+    }
+  });
+
+  it('redacts an axios-style error splat (config.headers.Authorization) without mutating it (E-H10)', () => {
+    const axiosError = new Error('Request failed with status code 401');
+    axiosError.config = {
+      url: 'https://api.example.test/v1/chat',
+      method: 'post',
+      headers: {
+        Authorization: 'Bearer eyJhbGciOi.leakedTokenValue',
+        'x-api-key': 'sk-leakedApiKey123',
+        'content-type': 'application/json',
+      },
+      data: { model: 'gpt-4', prompt: 'hello' },
+    };
+    axiosError.response = {
+      status: 401,
+      data: { error: { message: 'invalid api key sk-anotherLeak456' } },
+    };
+
+    const info = runFormat({
+      level: 'error',
+      message: 'upstream call failed',
+      [SPLAT_SYMBOL]: [axiosError],
+    });
+    const redacted = info[SPLAT_SYMBOL][0];
+    const serialized = JSON.stringify({
+      message: redacted.message,
+      config: redacted.config,
+      response: redacted.response,
+    });
+
+    // Secrets removed regardless of level/transport.
+    expect(serialized).not.toContain('eyJhbGciOi.leakedTokenValue');
+    expect(serialized).not.toContain('sk-leakedApiKey123');
+    expect(serialized).not.toContain('sk-anotherLeak456');
+    expect(redacted.config.headers.Authorization).toBe('[REDACTED]');
+    expect(redacted.config.headers['x-api-key']).toBe('[REDACTED]');
+    // Non-sensitive diagnostic fields survive.
+    expect(redacted.config.url).toBe('https://api.example.test/v1/chat');
+    expect(redacted.config.method).toBe('post');
+    expect(redacted.config.headers['content-type']).toBe('application/json');
+    expect(redacted.response.status).toBe(401);
+    // Returned copy is a distinct Error; original is untouched.
+    expect(redacted).toBeInstanceOf(Error);
+    expect(redacted).not.toBe(axiosError);
+    expect(axiosError.config.headers.Authorization).toBe('Bearer eyJhbGciOi.leakedTokenValue');
+  });
+
+  it('deep-redacts key-based secrets in an object-valued message on all levels', () => {
+    for (const level of ['error', 'warn', 'info', 'debug']) {
+      const message = { apiKey: 'secretvalue', nested: { password: 'hunter2' }, model: 'gpt-4' };
+      const info = runFormat({ level, message });
+      expect(info.message).toEqual({
+        apiKey: '[REDACTED]',
+        nested: { password: '[REDACTED]' },
+        model: 'gpt-4',
+      });
+      // Original not mutated.
+      expect(message.apiKey).toBe('secretvalue');
+    }
   });
 });
 
