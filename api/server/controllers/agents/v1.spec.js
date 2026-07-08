@@ -548,6 +548,22 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       const created = mockRes.json.mock.calls[0][0];
       expect(created.tools).toContain('file_search');
     });
+
+    test('should reject creating an agent with more than MAX_AGENT_TOOLS tools (E-M7)', async () => {
+      mockReq.body = {
+        provider: 'openai',
+        model: 'gpt-4',
+        name: 'Too many tools',
+        tools: Array.from({ length: 65 }, (_, i) => `tool_${i}`),
+      };
+
+      await createAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      const payload = mockRes.json.mock.calls[0][0];
+      expect(payload.error).toMatch(/at most 64 tools/);
+      expect(await Agent.countDocuments({ author: mockReq.user.id })).toBe(0);
+    });
   });
 
   describe('getAgentHandler', () => {
@@ -700,6 +716,20 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       expect(mockRes.status).not.toHaveBeenCalledWith(400);
       const agentInDb = await Agent.findOne({ id: legacy.id });
       expect(agentInDb.tools).toEqual([]);
+    });
+
+    test('should reject updating an agent to more than MAX_AGENT_TOOLS tools (E-M7)', async () => {
+      mockReq.user.id = existingAgentAuthorId.toString();
+      mockReq.params.id = existingAgentId;
+      mockReq.body = {
+        tools: Array.from({ length: 65 }, (_, i) => `tool_${i}`),
+      };
+
+      await updateAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      const payload = mockRes.json.mock.calls[0][0];
+      expect(payload.error).toMatch(/at most 64 tools/);
     });
 
     test('should reject update with unauthorized fields (mass assignment protection)', async () => {

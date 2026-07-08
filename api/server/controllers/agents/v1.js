@@ -61,6 +61,17 @@ const systemTools = {
 };
 
 const MAX_SEARCH_LEN = 100;
+
+/**
+ * Upper bound on the number of tools an agent may declare. Resolving hundreds of
+ * tools (especially MCP) on create/update is slow and memory-heavy; cap the
+ * request up front. Overridable via `MAX_AGENT_TOOLS` env (default 64).
+ */
+const MAX_AGENT_TOOLS = (() => {
+  const parsed = parseInt(process.env.MAX_AGENT_TOOLS ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 64;
+})();
+
 const escapeRegex = (str = '') => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const getSafeModelParameters = (modelParameters) => {
   const { useResponsesApi } = modelParameters ?? {};
@@ -343,6 +354,12 @@ const createAgentHandler = async (req, res) => {
     const validatedData = agentCreateSchema.parse(req.body);
     const { tools = [], ...agentData } = removeNullishValues(validatedData);
 
+    if (tools.length > MAX_AGENT_TOOLS) {
+      return res.status(400).json({
+        error: `An agent may declare at most ${MAX_AGENT_TOOLS} tools (received ${tools.length}).`,
+      });
+    }
+
     if (agentData.model_parameters && typeof agentData.model_parameters === 'object') {
       agentData.model_parameters = removeNullishValues(agentData.model_parameters, true);
     }
@@ -593,6 +610,12 @@ const updateAgentHandler = async (req, res) => {
     // Preserve explicit null for avatar to allow resetting the avatar
     const { avatar: avatarField, _id, ...rest } = validatedData;
     const updateData = removeNullishValues(rest);
+
+    if (Array.isArray(updateData.tools) && updateData.tools.length > MAX_AGENT_TOOLS) {
+      return res.status(400).json({
+        error: `An agent may declare at most ${MAX_AGENT_TOOLS} tools (received ${updateData.tools.length}).`,
+      });
+    }
 
     if (updateData.model_parameters && typeof updateData.model_parameters === 'object') {
       updateData.model_parameters = removeNullishValues(updateData.model_parameters, true);
