@@ -45,6 +45,12 @@ const mockCreateFile = jest.fn(async (data) => ({ ...data }));
 const mockSaveBuffer = jest.fn(async () => '/uploads/u1/report.pdf');
 const mockGetStrategyFunctions = jest.fn(() => ({ saveBuffer: mockSaveBuffer }));
 const mockTitleCacheSet = jest.fn(async () => {});
+// Default to valid slugs; individual tests override to undefined to exercise the
+// misconfigured-mode guard (A1 — every research node needs a non-reasoning model).
+const mockLeadModelFor = jest.fn(() => 'lead-model');
+const mockWorkerModelFor = jest.fn(() => 'worker-model');
+const mockReportModelFor = jest.fn(() => 'report-model');
+const mockCompressModelFor = jest.fn(() => 'compress-model');
 
 jest.mock('@librechat/agents', () => ({
   Providers: { OPENAI: 'openAI' },
@@ -72,10 +78,11 @@ jest.mock('@librechat/api', () => ({
   resolveDeepResearchTier: jest.fn(() => ({ name: 'balanced', wallClockMinutes: 10 })),
   sanitizeMessageForTransmit: jest.fn((m) => m),
   selectChatFileSearchInputs: jest.fn(() => []),
-  leadModelFor: jest.fn(() => 'lead-model'),
-  workerModelFor: jest.fn(() => 'worker-model'),
-  reportModelFor: jest.fn(() => 'report-model'),
-  compressModelFor: jest.fn(() => 'compress-model'),
+  leadModelFor: (...a) => mockLeadModelFor(...a),
+  workerModelFor: (...a) => mockWorkerModelFor(...a),
+  reportModelFor: (...a) => mockReportModelFor(...a),
+  compressModelFor: (...a) => mockCompressModelFor(...a),
+  DeepResearchConfigError: class DeepResearchConfigError extends Error {},
   reportToPdfBuffer: (...a) => mockReportToPdfBuffer(...a),
   getStorageMetadata: jest.fn(() => ({})),
   getProviderConfig: ({ provider, appConfig }) => ({
@@ -419,6 +426,40 @@ describe('runNewDeepResearch — D4 report PDF artifact', () => {
 
     expect(mockReportToPdfBuffer).not.toHaveBeenCalled();
     expect(mockSavedMessages.find((m) => m.messageId === 'r1').files).toBeUndefined();
+  });
+});
+
+describe('runNewDeepResearch — misconfigured-mode guard (A1)', () => {
+  it('refuses with a clear message and never runs the graph when the lead model resolves to undefined', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    // Simulate an all-reasoning mode: resolveDeepResearchModel returns undefined
+    // (never a reasoning model) for the lead node.
+    mockLeadModelFor.mockReturnValueOnce(undefined);
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.text).toContain('Глубокое исследование сейчас недоступно из-за настроек');
+  });
+
+  it('also refuses when the worker model resolves to undefined', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockWorkerModelFor.mockReturnValueOnce(undefined);
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.text).toContain('Глубокое исследование сейчас недоступно из-за настроек');
+  });
+
+  it('runs the graph normally when every model resolves (guard is a no-op)', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+
+    await runNewDeepResearch(baseParams('сравни Битрикс24 и AmoCRM по цене за 2026 год'));
+
+    expect(mockRunDeepResearch).toHaveBeenCalledTimes(1);
   });
 });
 
