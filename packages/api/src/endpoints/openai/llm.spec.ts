@@ -1376,4 +1376,57 @@ describe('applyDefaultParams', () => {
       expect(result.llmConfig).toHaveProperty('maxTokens', 128000);
     });
   });
+
+  describe('Sampling param clamp (E-M6)', () => {
+    it('clamps an out-of-range topP down to 1', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'k',
+        streaming: true,
+        modelOptions: { model: 'gpt-4', topP: 5 as unknown as number },
+      });
+      expect(result.llmConfig).toHaveProperty('topP', 1);
+    });
+
+    it('clamps a negative temperature up to 0 and an over-max temperature down to 2', () => {
+      const low = getOpenAILLMConfig({
+        apiKey: 'k',
+        streaming: true,
+        modelOptions: { model: 'gpt-4', temperature: -1 },
+      });
+      expect(low.llmConfig).toHaveProperty('temperature', 0);
+
+      const high = getOpenAILLMConfig({
+        apiKey: 'k',
+        streaming: true,
+        modelOptions: { model: 'gpt-4', temperature: 3 },
+      });
+      expect(high.llmConfig).toHaveProperty('temperature', 2);
+    });
+
+    it('leaves provider-valid mid-range sampling params untouched', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'k',
+        streaming: true,
+        modelOptions: { model: 'gpt-4', temperature: 0.7, topP: 0.9 },
+      });
+      expect(result.llmConfig).toHaveProperty('temperature', 0.7);
+      expect(result.llmConfig).toHaveProperty('topP', 0.9);
+    });
+  });
+
+  describe('Unknown-model maxTokens pass-through (E-M2)', () => {
+    it('leaves a large maxTokens unclamped for a model absent from the token map', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'k',
+        streaming: true,
+        useOpenRouter: true,
+        modelOptions: {
+          model: 'brand-new/unknown-model-v9',
+          max_tokens: 999999,
+        },
+      });
+      // Intentionally NOT clamped — the model may have a higher real cap
+      expect(result.llmConfig).toHaveProperty('maxTokens', 999999);
+    });
+  });
 });

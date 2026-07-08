@@ -1,3 +1,4 @@
+import { logger } from '@librechat/data-schemas';
 import {
   EModelEndpoint,
   ReasoningParameterFormat,
@@ -12,6 +13,28 @@ import type * as t from '~/types';
 import { sanitizeModelName, constructAzureURL } from '~/utils/azure';
 import { getModelMaxOutputTokens, findMatchingPattern, maxOutputTokensMap } from '~/utils/tokens';
 import { isEnabled } from '~/utils/common';
+
+/**
+ * Clamps a sampling parameter to a valid range only when it is clearly
+ * out-of-range (e.g. a stale/corrupt `topP: 5` or a negative temperature),
+ * returning the clamped value or the original. Universal bounds are used so a
+ * provider-valid mid-range value is never touched — the goal is to stop an
+ * obviously-invalid value from 400-ing the whole request upstream, not to
+ * enforce per-provider maxima. Returns `undefined` for non-finite input so the
+ * caller can leave the param untouched.
+ */
+function clampSamplingParam(value: unknown, min: number, max: number): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined;
+  }
+  if (value < min) {
+    return min;
+  }
+  if (value > max) {
+    return max;
+  }
+  return value;
+}
 
 type OpenAILLMConfig = Omit<Partial<t.OAIClientOptions>, 'verbosity'> &
   Omit<Partial<t.OpenAIParameters>, 'verbosity'> &
@@ -644,6 +667,44 @@ export function getOpenAILLMConfig({
       if (typeof modelMaxOutput === 'number' && llmConfig.maxTokens > modelMaxOutput) {
         llmConfig.maxTokens = modelMaxOutput;
       }
+    } else if (llmConfig.maxTokens > 0) {
+      /**
+       * The model isn't in the static output-token map, so the requested
+       * `maxTokens` is passed through unclamped by design (a newly-added model
+       * may have a higher real cap). Surface it at debug so an operator tracing
+       * an upstream 400 ("max_tokens too large") can see the value went out
+       * unbounded and add the model to the map (or rely on OpenRouter's live
+       * limits). Debug level keeps this off the prod warn stream per request.
+       */
+      logger.debug(
+        `[getOpenAILLMConfig] maxTokens=${llmConfig.maxTokens} passed through unclamped for unrecognized model "${llmConfig.model}" (not in the ${tokenEndpoint} output-token map)`,
+      );
+    }
+  }
+
+  /**
+   * Clamp obviously out-of-range sampling params before they reach the provider.
+   * A stale/corrupt value saved in conversation params (e.g. topP: 5, a negative
+   * temperature) otherwise 400s the whole request. Universal bounds only — a
+   * provider-valid mid-range value is untouched. Reasoning models drop these
+   * params entirely below, so this only affects models that actually accept them.
+   */
+  if (llmConfig.temperature != null) {
+    const clampedTemperature = clampSamplingParam(llmConfig.temperature, 0, 2);
+    if (clampedTemperature != null && clampedTemperature !== llmConfig.temperature) {
+      logger.debug(
+        `[getOpenAILLMConfig] Clamped out-of-range temperature ${llmConfig.temperature} → ${clampedTemperature}`,
+      );
+      llmConfig.temperature = clampedTemperature;
+    }
+  }
+  if (llmConfig.topP != null) {
+    const clampedTopP = clampSamplingParam(llmConfig.topP, 0, 1);
+    if (clampedTopP != null && clampedTopP !== llmConfig.topP) {
+      logger.debug(
+        `[getOpenAILLMConfig] Clamped out-of-range topP ${llmConfig.topP} → ${clampedTopP}`,
+      );
+      llmConfig.topP = clampedTopP;
     }
   }
 
