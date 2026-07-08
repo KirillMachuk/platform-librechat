@@ -25,16 +25,44 @@ const fileSearchJsonSchema = {
 };
 
 /**
+ * Clamps an env-provided integer to [1, max], falling back to `fallback` when the
+ * value is missing or non-numeric. Bounds admin-set knobs so a mistaken large
+ * value (e.g. FILE_SEARCH_K=2000) can't push the RAG query into timeout/OOM or
+ * blow up the LLM context.
+ * @param {string | undefined} raw
+ * @param {number} fallback
+ * @param {number} max
+ * @returns {number}
+ */
+const clampEnvInt = (raw, fallback, max) => {
+  const parsed = parseInt(raw ?? '', 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+  return Math.min(parsed, max);
+};
+
+/** Upper bound for chunks-per-file: beyond this, RAG latency/OOM risk outweighs recall. */
+const FILE_SEARCH_K_MAX = 50;
+/** Upper bound for merged results kept: caps how much retrieved text reaches the LLM context. */
+const FILE_SEARCH_RESULT_LIMIT_MAX = 100;
+
+/**
  * Chunks requested per file from the RAG API. Higher values improve recall for
  * clause-location and "quote the section" queries on contracts/tables, at the
- * cost of more context. Overridable via env without a code change.
+ * cost of more context. Overridable via env (clamped to FILE_SEARCH_K_MAX).
  */
-const FILE_SEARCH_K = parseInt(process.env.FILE_SEARCH_K ?? '', 10) || 12;
+const FILE_SEARCH_K = clampEnvInt(process.env.FILE_SEARCH_K, 12, FILE_SEARCH_K_MAX);
 
 /**
  * Maximum chunks kept after merging and ranking results across all files.
+ * Overridable via env (clamped to FILE_SEARCH_RESULT_LIMIT_MAX).
  */
-const FILE_SEARCH_RESULT_LIMIT = parseInt(process.env.FILE_SEARCH_RESULT_LIMIT ?? '', 10) || 20;
+const FILE_SEARCH_RESULT_LIMIT = clampEnvInt(
+  process.env.FILE_SEARCH_RESULT_LIMIT,
+  20,
+  FILE_SEARCH_RESULT_LIMIT_MAX,
+);
 
 /**
  * Hard ceiling on a single RAG `/query` call. axios has no default timeout, so
@@ -347,4 +375,11 @@ Use the EXACT anchor markers shown below (copy them verbatim) immediately after 
   );
 };
 
-module.exports = { createFileSearchTool, primeFiles, fileSearchJsonSchema };
+module.exports = {
+  createFileSearchTool,
+  primeFiles,
+  fileSearchJsonSchema,
+  clampEnvInt,
+  FILE_SEARCH_K,
+  FILE_SEARCH_RESULT_LIMIT,
+};
