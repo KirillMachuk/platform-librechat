@@ -5,7 +5,12 @@ import {
   ReasoningSummary,
   ReasoningParameterFormat,
 } from 'librechat-data-provider';
-import { getOpenAILLMConfig, extractDefaultParams, applyDefaultParams } from './llm';
+import {
+  getOpenAILLMConfig,
+  applyDefaultParams,
+  extractDefaultParams,
+  suppressAnthropicThinkingForToolLoop,
+} from './llm';
 import type * as t from '~/types';
 
 describe('getOpenAILLMConfig', () => {
@@ -1374,6 +1379,57 @@ describe('applyDefaultParams', () => {
       });
 
       expect(result.llmConfig).toHaveProperty('maxTokens', 128000);
+    });
+  });
+
+  describe('suppressAnthropicThinkingForToolLoop (E-H9)', () => {
+    it('strips an explicit OpenRouter Anthropic thinking directive (real config path)', () => {
+      const result = getOpenAILLMConfig({
+        apiKey: 'test-api-key',
+        streaming: true,
+        useOpenRouter: true,
+        modelOptions: {
+          model: 'anthropic/claude-sonnet-4.6',
+          reasoning_effort: ReasoningEffort.high,
+        },
+      });
+      // Adaptive Anthropic + explicit effort → thinking enabled
+      expect(result.llmConfig.modelKwargs).toHaveProperty('reasoning', { enabled: true });
+
+      const stripped = suppressAnthropicThinkingForToolLoop(
+        result.llmConfig as Parameters<typeof suppressAnthropicThinkingForToolLoop>[0],
+      );
+      expect(stripped).toBe(true);
+      expect(result.llmConfig.modelKwargs?.reasoning).toBeUndefined();
+    });
+
+    it('strips a non-adaptive Anthropic effort directive and clears empty modelKwargs', () => {
+      const llmConfig = {
+        model: 'anthropic/claude-3-sonnet',
+        modelKwargs: { reasoning: { effort: 'high' } as Record<string, unknown> },
+      };
+      expect(suppressAnthropicThinkingForToolLoop(llmConfig)).toBe(true);
+      expect(llmConfig.modelKwargs).toBeUndefined();
+    });
+
+    it('leaves non-Anthropic reasoning untouched (they replay reasoning fine)', () => {
+      const llmConfig = {
+        model: 'deepseek/deepseek-v3.2',
+        modelKwargs: { reasoning: { effort: 'high' } as Record<string, unknown> },
+      };
+      expect(suppressAnthropicThinkingForToolLoop(llmConfig)).toBe(false);
+      expect(llmConfig.modelKwargs.reasoning).toEqual({ effort: 'high' });
+    });
+
+    it('is a no-op for Anthropic without a thinking directive', () => {
+      const llmConfig = { model: 'anthropic/claude-sonnet-4.6' };
+      expect(suppressAnthropicThinkingForToolLoop(llmConfig)).toBe(false);
+    });
+
+    it('clears include_reasoning when set on an Anthropic config', () => {
+      const llmConfig = { model: '~anthropic/claude-opus-4.8', include_reasoning: true };
+      expect(suppressAnthropicThinkingForToolLoop(llmConfig)).toBe(true);
+      expect(llmConfig.include_reasoning).toBeUndefined();
     });
   });
 });

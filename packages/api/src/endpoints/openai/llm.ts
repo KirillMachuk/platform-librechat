@@ -217,6 +217,47 @@ function isOpenRouterAnthropicAdaptiveModel(model?: string | null): boolean {
   return normalizedModel.startsWith('anthropic/') && supportsAdaptiveThinking(model);
 }
 
+function isOpenRouterAnthropicModel(model?: string | null): boolean {
+  return typeof model === 'string' && normalizeOpenRouterModel(model).startsWith('anthropic/');
+}
+
+/**
+ * Removes an OpenRouter Anthropic extended-thinking directive from an
+ * already-built LLM config when the agent will run a tool loop. Anthropic's
+ * `thinking` blocks are not replayed across tool turns, so extended thinking +
+ * multi-turn tools makes the follow-up request 400 ("Provider returned error").
+ * The default path never enables thinking for Anthropic, but an explicit
+ * `reasoning_effort` (from a preset or the parameters panel) does — this strips
+ * it back to the safe non-thinking default for the tool case. OpenAI reasoning
+ * models are handled earlier by the reasoning-model tool gate and never reach
+ * here with tools. Returns true when a thinking directive was removed (so the
+ * caller can surface a warning).
+ */
+export function suppressAnthropicThinkingForToolLoop(llmConfig: {
+  model?: string;
+  include_reasoning?: unknown;
+  modelKwargs?: Record<string, unknown>;
+}): boolean {
+  if (!isOpenRouterAnthropicModel(llmConfig.model)) {
+    return false;
+  }
+
+  let removed = false;
+  const { modelKwargs } = llmConfig;
+  if (modelKwargs && 'reasoning' in modelKwargs) {
+    delete modelKwargs.reasoning;
+    removed = true;
+    if (Object.keys(modelKwargs).length === 0) {
+      delete llmConfig.modelKwargs;
+    }
+  }
+  if (llmConfig.include_reasoning === true) {
+    delete llmConfig.include_reasoning;
+    removed = true;
+  }
+  return removed;
+}
+
 function normalizeOpenRouterModel(model: string): string {
   return model.toLowerCase().replace(/^~/, '');
 }

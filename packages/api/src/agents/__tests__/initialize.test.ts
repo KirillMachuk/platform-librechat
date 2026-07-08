@@ -85,6 +85,10 @@ jest.mock('~/utils', () => ({
 const mockGetProviderConfig = jest.fn();
 jest.mock('~/endpoints', () => ({
   getProviderConfig: (...args: unknown[]) => mockGetProviderConfig(...args),
+  // Pure config helper — use the real implementation so the E-H9 tool-loop
+  // suppression path is exercised, not stubbed.
+  suppressAnthropicThinkingForToolLoop:
+    jest.requireActual('~/endpoints/openai/llm').suppressAnthropicThinkingForToolLoop,
 }));
 
 jest.mock('~/files', () => ({
@@ -133,6 +137,8 @@ function createMocks(overrides?: {
     parameters?: object;
   }>;
   structuredTools?: unknown[];
+  /** Extra fields merged into the mock getOptions llmConfig (e.g. modelKwargs). */
+  llmConfigExtra?: Record<string, unknown>;
 }) {
   const {
     provider = Providers.OPENAI,
@@ -146,6 +152,7 @@ function createMocks(overrides?: {
     providerTools,
     loadedToolDefinitions = [],
     structuredTools = [],
+    llmConfigExtra,
   } = overrides ?? {};
 
   const resolvedOverrideProvider = overrideProvider ?? provider;
@@ -166,7 +173,7 @@ function createMocks(overrides?: {
   const res = {} as unknown as import('express').Response;
 
   const mockGetOptions = jest.fn().mockResolvedValue({
-    llmConfig: { model, maxTokens: maxOutputTokens },
+    llmConfig: { model, maxTokens: maxOutputTokens, ...(llmConfigExtra ?? {}) },
     endpointTokenConfig,
     ...(providerTools !== undefined ? { tools: providerTools } : {}),
   } satisfies InitializeResultBase);
@@ -357,6 +364,58 @@ describe('initializeAgent — reasoning-model tool gate (E-H1)', () => {
 
   it('allows the non-reasoning gpt-5-chat variant with tools', async () => {
     await expect(runWith('openai/gpt-5-chat', ['file_search'])).resolves.toBeDefined();
+  });
+
+  it('strips Anthropic extended thinking when the agent runs tools (E-H9)', async () => {
+    const { agent, req, res, loadTools, db } = createMocks({
+      provider: Providers.OPENAI,
+      model: 'anthropic/claude-sonnet-4.6',
+      llmConfigExtra: { modelKwargs: { reasoning: { enabled: true } } },
+      // Resolved tool definitions → hasAgentTools true (event-driven path)
+      loadedToolDefinitions: [{ name: 'file_search' }],
+    });
+    agent.tools = ['file_search'];
+
+    const result = await initializeAgent(
+      {
+        req,
+        res,
+        agent,
+        loadTools,
+        endpointOption: { endpoint: EModelEndpoint.agents },
+        allowedProviders: new Set(),
+        isInitialAgent: true,
+      },
+      db,
+    );
+
+    const params = result.model_parameters as { modelKwargs?: Record<string, unknown> };
+    expect(params.modelKwargs?.reasoning).toBeUndefined();
+  });
+
+  it('keeps Anthropic thinking when the agent has NO tools (chat-only reasoning is fine)', async () => {
+    const { agent, req, res, loadTools, db } = createMocks({
+      provider: Providers.OPENAI,
+      model: 'anthropic/claude-sonnet-4.6',
+      llmConfigExtra: { modelKwargs: { reasoning: { enabled: true } } },
+    });
+    agent.tools = [];
+
+    const result = await initializeAgent(
+      {
+        req,
+        res,
+        agent,
+        loadTools,
+        endpointOption: { endpoint: EModelEndpoint.agents },
+        allowedProviders: new Set(),
+        isInitialAgent: true,
+      },
+      db,
+    );
+
+    const params = result.model_parameters as { modelKwargs?: Record<string, unknown> };
+    expect(params.modelKwargs?.reasoning).toEqual({ enabled: true });
   });
 });
 
