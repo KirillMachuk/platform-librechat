@@ -52,6 +52,45 @@ const RECONNECT_THROTTLE_MS = 10_000;
 const missingToolCache = new Map();
 const MISSING_TOOL_TTL_MS = 10_000;
 
+/**
+ * Builds the reconnect-throttle key. Scoped by tenant + user + server: `user.id`
+ * is not guaranteed globally unique across tenants, so the tenant prefix prevents
+ * one tenant's reconnect from throttling another's (mirrors the OAuth flow key).
+ * `user.id` is accessed non-optionally on purpose so a null user still fails fast
+ * here, preserving the existing early-error guard in the reconnect path.
+ * @param {{ id: string, tenantId?: string }} user
+ * @param {string} serverName
+ * @returns {string}
+ */
+function reconnectThrottleKey(user, serverName) {
+  const tenantId = user?.tenantId ?? getTenantId() ?? '';
+  return `${tenantId}:${user.id}:${serverName}`;
+}
+
+/** Removes every entry older than `ttl` from a timestamp-valued map. */
+function sweepExpired(map, ttl) {
+  const now = Date.now();
+  for (const [key, timestamp] of map) {
+    if (now - timestamp >= ttl) {
+      map.delete(key);
+    }
+  }
+}
+
+/**
+ * Active TTL eviction for the throttle/negative-cache maps. `evictStale` only
+ * fires once a map passes MAX_CACHE_SIZE, so up to ~1000 stale (already-expired)
+ * entries could linger — at 500 users × 15 servers the maps churn well below the
+ * cap yet never shrink between bursts. A periodic sweep keeps them bounded.
+ * `.unref()` so the timer never blocks process (or Jest) exit.
+ */
+const MCP_CACHE_SWEEP_INTERVAL_MS = 30_000;
+const mcpCacheSweepTimer = setInterval(() => {
+  sweepExpired(lastReconnectAttempts, RECONNECT_THROTTLE_MS);
+  sweepExpired(missingToolCache, MISSING_TOOL_TTL_MS);
+}, MCP_CACHE_SWEEP_INTERVAL_MS);
+mcpCacheSweepTimer.unref?.();
+
 async function userCanUseMCPServers(user, req) {
   if (!user?.id || !user?.role) {
     return false;
@@ -412,7 +451,7 @@ async function reconnectServer({
   // would stub out healthy tools for messages sent within the throttle window.
   const requestScoped = serverConfig ? requiresEphemeralUserConnection(serverConfig) : false;
   if (!requestScoped) {
-    const throttleKey = `${user.id}:${serverName}`;
+    const throttleKey = reconnectThrottleKey(user, serverName);
     const now = Date.now();
     const lastAttempt = lastReconnectAttempts.get(throttleKey) ?? 0;
     if (now - lastAttempt < RECONNECT_THROTTLE_MS) {
@@ -1060,4 +1099,6 @@ module.exports = {
   checkOAuthFlowStatus,
   getServerConnectionStatus,
   createUnavailableToolStub,
+  sweepExpired,
+  reconnectThrottleKey,
 };
