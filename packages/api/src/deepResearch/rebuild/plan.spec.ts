@@ -6,6 +6,7 @@ import {
   isPlanMessage,
   buildPlanPrompt,
   isStartCommand,
+  extractPlanSteps,
   isCancelCommand,
   formatPlanMessage,
   CANCELLED_MESSAGE,
@@ -104,6 +105,14 @@ describe('formatPlanMessage + isPlanMessage', () => {
     expect(isPlanMessage('## Ключевые выводы\n...')).toBe(false);
     expect(isPlanMessage(CANCELLED_MESSAGE)).toBe(false);
     expect(isPlanMessage('')).toBe(false);
+  });
+
+  it('extractPlanSteps round-trips the numbered list out of a formatted plan', () => {
+    const steps = ['Собрать вендоров', 'Сравнить цены', 'Сформировать таблицу'];
+    const msg = formatPlanMessage({ title: 'Рынок CRM', steps });
+    expect(extractPlanSteps(msg)).toEqual(steps);
+    expect(extractPlanSteps('нет шагов здесь')).toEqual([]);
+    expect(extractPlanSteps('')).toEqual([]);
   });
 });
 

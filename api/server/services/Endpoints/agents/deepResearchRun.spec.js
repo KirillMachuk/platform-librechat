@@ -41,6 +41,7 @@ const mockRunDeepResearch = jest.fn();
 const mockStartSovereignSession = jest.fn();
 const mockInitializeCustom = jest.fn();
 const mockCreateDeepResearchGraph = jest.fn(() => ({}));
+const mockEmitChunk = jest.fn();
 const mockEmitDone = jest.fn();
 const mockCompleteJob = jest.fn();
 const mockSavedMessages = [];
@@ -71,7 +72,7 @@ jest.mock('@librechat/api', () => ({
   loadWebSearchAuth: jest.fn(async () => ({ authenticated: false })),
   tierToRunBudget: jest.fn(() => ({})),
   GenerationJobManager: {
-    emitChunk: jest.fn(),
+    emitChunk: mockEmitChunk,
     emitDone: (...a) => mockEmitDone(...a),
     completeJob: (...a) => mockCompleteJob(...a),
     getActiveJobIdsForUser: jest.fn(async () => []),
@@ -160,6 +161,16 @@ jest.mock('@librechat/api', () => ({
     typeof text === 'string' && text.trimStart().startsWith('**План исследования:**'),
   isStartCommand: (text) => typeof text === 'string' && text.trim() === '▶ Начать исследование',
   isCancelCommand: (text) => typeof text === 'string' && text.trim() === '✕ Отменить исследование',
+  extractPlanSteps: (planMessage) => {
+    const steps = [];
+    for (const line of String(planMessage ?? '').split(/\r?\n/)) {
+      const m = line.match(/^\s*\d+\.\s+(.*\S)\s*$/);
+      if (m) {
+        steps.push(m[1].trim());
+      }
+    }
+    return steps;
+  },
   CANCELLED_MESSAGE: 'Исследование отменено.',
 }));
 
@@ -892,5 +903,60 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
     expect(msg.text).toContain('Иван');
     expect(msg.text).not.toContain('[PERSON_1]');
+  });
+
+  it('emits dr_progress snapshots (plan steps + current action) during a START research run', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getMessages.mockResolvedValueOnce([
+      { messageId: 'orig', isCreatedByUser: true, parentMessageId: null, text: 'изучи CRM рынок' },
+      {
+        messageId: 'p1',
+        isCreatedByUser: false,
+        parentMessageId: 'orig',
+        text: '**План исследования:** Рынок CRM\n\n1. Собрать вендоров\n2. Сравнить цены',
+      },
+    ]);
+    mockRunDeepResearch.mockImplementationOnce(async (params) => {
+      params.onProgress({ type: 'scope', jurisdiction: 'RU' });
+      params.onProgress({ type: 'research', round: 1, subQuestion: 'конкуренты 1ma в СНГ' });
+      params.onProgress({ type: 'report' });
+      return {
+        finalReport: 'Отчёт',
+        finalizeReason: 'completed',
+        usage: { input: 1, output: 1, total: 2 },
+        findings: [],
+      };
+    });
+
+    await runNewDeepResearch(planParams('▶ Начать исследование'));
+
+    const drEvents = mockEmitChunk.mock.calls.filter((c) => c[1]?.event === 'dr_progress');
+    expect(drEvents.length).toBe(3);
+    const research = drEvents.find((c) => c[1].data.phase === 'research');
+    expect(research[1].data.action).toContain('конкуренты 1ma в СНГ');
+    expect(research[1].data.steps).toEqual(['Собрать вендоров', 'Сравнить цены']);
+    expect(research[1].data.searches).toBe(1);
+    expect(research[1].data.progress).toBeGreaterThan(0);
+    expect(research[1].data.progress).toBeLessThanOrEqual(1);
+  });
+
+  it('emits NO dr_progress when the plan gate is off (legacy runs are not spammed)', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockImplementationOnce(async (params) => {
+      params.onProgress({ type: 'scope' });
+      params.onProgress({ type: 'research', round: 1, subQuestion: 'q' });
+      return {
+        finalReport: 'Отчёт',
+        finalizeReason: 'completed',
+        usage: { input: 1, output: 1, total: 2 },
+        findings: [],
+      };
+    });
+    const p = baseParams('изучи CRM'); // baseParams: deepResearch.clarify=false, no planGate
+
+    await runNewDeepResearch(p);
+
+    const drEvents = mockEmitChunk.mock.calls.filter((c) => c[1]?.event === 'dr_progress');
+    expect(drEvents).toHaveLength(0);
   });
 });

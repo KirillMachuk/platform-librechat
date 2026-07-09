@@ -145,6 +145,22 @@ export function isPlanMessage(text: string): boolean {
   return typeof text === 'string' && text.trimStart().startsWith(PLAN_MARKER);
 }
 
+/**
+ * Parses the numbered step list back out of a formatted plan message — the live
+ * progress card renders these as its checklist. Deterministic inverse of
+ * {@link formatPlanMessage} (tolerant of extra whitespace); empty if none match.
+ */
+export function extractPlanSteps(planMessage: string): string[] {
+  const steps: string[] = [];
+  for (const line of String(planMessage ?? '').split(/\r?\n/)) {
+    const match = line.match(/^\s*\d+\.\s+(.*\S)\s*$/);
+    if (match) {
+      steps.push(match[1].trim());
+    }
+  }
+  return steps;
+}
+
 /** True if a message is the exact "start research" command (button/autostart). */
 export function isStartCommand(text: string): boolean {
   return typeof text === 'string' && text.trim() === START_MARKER;

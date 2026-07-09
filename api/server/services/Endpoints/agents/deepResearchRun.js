@@ -27,6 +27,7 @@ const {
   isPlanMessage,
   isStartCommand,
   isCancelCommand,
+  extractPlanSteps,
   CANCELLED_MESSAGE,
   reportToPdfBuffer,
   getStorageMetadata,
@@ -389,6 +390,28 @@ async function buildClarifyContinuation({ userId, conversationId, parentMessageI
 /** Max DR-exchange messages walked when assembling the dialogue (bounds runaway edits). */
 const MAX_DR_CHAIN = 24;
 
+/** Coarse 0..1 progress for the live card (task #21) from a graph progress event. */
+function drProgressFraction(event, maxRounds, searchCount) {
+  if (event.type === 'scope') {
+    return 0.08;
+  }
+  if (event.type === 'report') {
+    return 0.92;
+  }
+  return 0.1 + 0.75 * Math.min((event.round || searchCount) / maxRounds, 1);
+}
+
+/** RU "current action" line for the live card (task #21) from a graph progress event. */
+function drProgressAction(event) {
+  if (event.type === 'scope') {
+    return 'Определяет область исследования';
+  }
+  if (event.type === 'report') {
+    return 'Формирует отчёт';
+  }
+  return event.subQuestion ? `Исследует: ${event.subQuestion}` : 'Исследует источники';
+}
+
 /**
  * Renders the collected DR exchange (top-down) + the current unsaved turn text as a
  * labeled transcript for the plan decision / research input. START/CANCEL command
@@ -434,7 +457,7 @@ function buildDialogueTranscript(chain, currentText) {
  * kind: 'fresh' | 'clarify-answer' | 'plan-start' | 'plan-cancel' | 'plan-edit'.
  */
 async function buildDrTurnContext({ userId, conversationId, parentMessageId, text }) {
-  const fresh = { kind: 'fresh', dialogue: null, originalRequest: text ?? '' };
+  const fresh = { kind: 'fresh', dialogue: null, originalRequest: text ?? '', parentText: '' };
   if (!parentMessageId || !conversationId || parentMessageId === Constants.NO_PARENT) {
     return fresh;
   }
@@ -486,7 +509,7 @@ async function buildDrTurnContext({ userId, conversationId, parentMessageId, tex
     } else {
       kind = 'plan-edit';
     }
-    return { kind, dialogue, originalRequest };
+    return { kind, dialogue, originalRequest, parentText: parent.text ?? '' };
   } catch (error) {
     logger.warn(
       '[deepResearchRun] failed to build DR turn context; treating as a fresh request',
@@ -782,7 +805,7 @@ async function runNewDeepResearch(params) {
   let planUsage = null;
   // The classified turn (task #21) — declared out here so the finalize tail can use
   // `turn.originalRequest` for the title fallback (the raw request, not a START marker).
-  let turn = { kind: 'fresh', dialogue: null, originalRequest: text ?? '' };
+  let turn = { kind: 'fresh', dialogue: null, originalRequest: text ?? '', parentText: '' };
   const otherActiveJobs = await countOtherActiveJobs({
     streamId,
     userId,
@@ -983,6 +1006,39 @@ async function runNewDeepResearch(params) {
         nonce: randomUUID(),
       });
 
+      // Task #21 live progress: translate the engine's coarse onProgress into `dr_progress`
+      // snapshots the frontend plan card renders (steps checklist + current action + bar).
+      // Progress is proportional (computed here — no graph changes). Steps come from the
+      // approved plan message. Gated on the plan gate + streamId; fire-and-forget so a slow
+      // emit never blocks the run, and it always ALSO logs (the shipped ops line).
+      const planSteps =
+        planGateEnabled && isPlanMessage(turn.parentText) ? extractPlanSteps(turn.parentText) : [];
+      const maxRounds = Math.max(1, tier.maxOrchestratorCycles || 6);
+      let searchCount = 0;
+      const onProgress = (event) => {
+        logger.info(
+          `[deepResearchRun] ${event.type}${event.subQuestion ? `: ${event.subQuestion}` : ''}`,
+        );
+        if (!streamId || !planGateEnabled) {
+          return;
+        }
+        if (event.type === 'research') {
+          searchCount += 1;
+        }
+        Promise.resolve(
+          GenerationJobManager.emitChunk(streamId, {
+            event: 'dr_progress',
+            data: {
+              phase: event.type,
+              steps: planSteps,
+              action: drProgressAction(event),
+              searches: searchCount,
+              progress: drProgressFraction(event, maxRounds, searchCount),
+            },
+          }),
+        ).catch(() => {});
+      };
+
       result = await runDeepResearch({
         graph,
         // Track B: the graph sees the MASKED question (sovereign) or the raw text (legacy).
@@ -998,11 +1054,7 @@ async function runNewDeepResearch(params) {
         },
         signal,
         wallClockMs: Math.max(1, tier.wallClockMinutes) * 60_000,
-        // v1: progress is logged; rendered UI progress + token streaming ship after lab SSE validation.
-        onProgress: (event) =>
-          logger.info(
-            `[deepResearchRun] ${event.type}${event.subQuestion ? `: ${event.subQuestion}` : ''}`,
-          ),
+        onProgress,
       });
     }
   } catch (error) {
