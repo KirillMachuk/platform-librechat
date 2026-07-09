@@ -40,8 +40,43 @@ jest.mock('@librechat/api', () => {
   return {
     sanitizeFilename: jest.fn((n) => n),
     parseText: jest.fn().mockResolvedValue({ text: '', bytes: 0 }),
+    parseTextNative: jest.fn().mockResolvedValue({ text: 'native-parsed', bytes: 13 }),
+    // Pass-through by default so existing tests are unaffected; individual D6
+    // tests override with mockRejectedValueOnce to simulate a timeout.
+    withTimeout: jest.fn((promise) => promise),
     processAudioFile: jest.fn(),
     getStorageMetadata: jest.fn(() => ({})),
+    // Faithful minimal limiter (same algorithm as the real one) so the D12
+    // concurrency-cap test observes real bounding rather than a pass-through.
+    createConcurrencyLimiter: (concurrency) => {
+      let active = 0;
+      const queue = [];
+      const release = () => {
+        active--;
+        const next = queue.shift();
+        if (next) next();
+      };
+      return (task) =>
+        new Promise((resolve, reject) => {
+          const run = () => {
+            active++;
+            Promise.resolve()
+              .then(task)
+              .then(
+                (value) => {
+                  release();
+                  resolve(value);
+                },
+                (error) => {
+                  release();
+                  reject(error);
+                },
+              );
+          };
+          if (active < concurrency) run();
+          else queue.push(run);
+        });
+    },
     getRetentionExpiry,
     getAgentFileRetentionExpiry: jest.fn(({ req, messageAttachment, toolResource }) => {
       const interfaceConfig = req?.config?.interfaceConfig;
@@ -127,6 +162,10 @@ jest.mock('./VectorDB/crud', () => ({
   deleteVectors: jest.fn(),
 }));
 
+jest.mock('./Embed', () => ({
+  asyncEmbedEnabled: jest.fn(() => false),
+}));
+
 jest.mock('~/server/utils', () => ({
   determineFileType: jest.fn(),
 }));
@@ -139,6 +178,8 @@ const {
   getRetentionExpiry,
   getAgentFileRetentionExpiry,
   probePdf,
+  withTimeout,
+  parseTextNative,
   routePdfBySize,
   sweepExpiredFiles: sweepExpiredFilesWithDeps,
   startExpiredFileSweep: startExpiredFileSweepWithDeps,
@@ -393,6 +434,21 @@ describe('resolveContentRouting (content-size Auto routing, behind AUTO_ROUTE_BY
     // headed to RAG: the probe text is not forwarded (RAG embeds its own chunks)
     expect(out.pdfText).toBeUndefined();
   });
+
+  it('D6: routes to file_search (RAG) when the routing probe times out', async () => {
+    withTimeout.mockRejectedValueOnce(new Error('PDF routing probe timed out'));
+    const out = await resolveContentRouting({
+      req: baseReq,
+      file: pdf,
+      toolResource: EToolResources.context,
+      isImage: false,
+    });
+    expect(out.toolResource).toBe(EToolResources.file_search);
+    // the probe never produced a decision, so size-based routing is not consulted
+    expect(routePdfBySize).not.toHaveBeenCalled();
+    // restore pass-through for the remaining suite
+    withTimeout.mockImplementation((promise) => promise);
+  });
 });
 
 describe('processAgentFileUpload', () => {
@@ -566,6 +622,32 @@ describe('processAgentFileUpload', () => {
       ).rejects.toThrow(/image-based and requires an OCR service/);
 
       expect(parseText).toHaveBeenCalled();
+    });
+
+    test('D6: a timed-out RAG /text OCR fallback degrades to an honest error, not a hang', async () => {
+      getStrategyFunctions.mockReturnValue({
+        handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
+      });
+      const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
+      // Simulate the OCR fallback exceeding its timeout: withTimeout rejects,
+      // resolveDocumentText swallows it and returns undefined, and the caller raises
+      // the same "unable to extract" error instead of blocking on the 300s parseText.
+      withTimeout.mockRejectedValueOnce(new Error('RAG /text OCR fallback timed out'));
+
+      await expect(
+        processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
+      ).rejects.toThrow(/image-based and requires an OCR service/);
+
+      // The scanned-document OCR fallback must use the GENEROUS OCR timeout (120s),
+      // not the fast 30s probe/text timeout — a short cap falsely fails real
+      // multi-page scans (KFC leases). Assert the timeout arg passed to withTimeout.
+      const ocrCall = withTimeout.mock.calls.find((call) =>
+        String(call[2] ?? '').includes('OCR fallback timed out'),
+      );
+      expect(ocrCall).toBeDefined();
+      expect(ocrCall[1]).toBe(120000);
+
+      withTimeout.mockImplementation((promise) => promise);
     });
 
     test('falls back to document_parser when configured OCR fails for a document MIME type', async () => {
@@ -1092,6 +1174,78 @@ describe('processAgentFileUpload', () => {
   });
 });
 
+describe('D3 — sync file_search embed failure rolls back orphaned storage', () => {
+  const makeFsReq = () => ({
+    user: { id: 'user-123', tenantId: 'tenant-a' },
+    file: {
+      path: '/tmp/x.pdf',
+      originalname: 'x.pdf',
+      filename: 'x.pdf',
+      mimetype: PDF_MIME,
+      size: 100,
+    },
+    body: { model: 'gpt-4o' },
+    config: { fileConfig: {}, fileStrategy: 'local' },
+  });
+  const fsMeta = () => ({
+    agent_id: 'agent-abc',
+    tool_resource: EToolResources.file_search,
+    file_id: 'file-uuid-123',
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    checkCapability.mockResolvedValue(true);
+  });
+
+  it('deletes the stored object and creates no DB record when embedding throws', async () => {
+    const deleteFile = jest.fn().mockResolvedValue(undefined);
+    const handleFileUpload = jest.fn().mockResolvedValue({
+      filepath: '/uploads/user-123/x.pdf',
+      storageKey: 'user-123/x.pdf',
+      bytes: 100,
+      filename: 'x.pdf',
+    });
+    getStrategyFunctions.mockReturnValue({ handleFileUpload, deleteFile });
+    uploadVectors.mockRejectedValueOnce(new Error('embed exploded'));
+
+    await expect(
+      processAgentFileUpload({ req: makeFsReq(), res: mockRes, metadata: fsMeta() }),
+    ).rejects.toThrow('embed exploded');
+
+    // Rollback removed the orphaned storage object with embedded:false...
+    expect(deleteFile).toHaveBeenCalledTimes(1);
+    expect(deleteFile.mock.calls[0][1]).toMatchObject({
+      file_id: 'file-uuid-123',
+      embedded: false,
+      filepath: '/uploads/user-123/x.pdf',
+    });
+    // ...and no orphan metadata record was persisted.
+    expect(db.createFile).not.toHaveBeenCalled();
+  });
+
+  it('does not roll back when embedding succeeds', async () => {
+    const deleteFile = jest.fn();
+    const handleFileUpload = jest.fn().mockResolvedValue({
+      filepath: '/uploads/user-123/x.pdf',
+      bytes: 100,
+      filename: 'x.pdf',
+    });
+    getStrategyFunctions.mockReturnValue({ handleFileUpload, deleteFile });
+    uploadVectors.mockResolvedValueOnce({
+      bytes: 100,
+      filename: 'x.pdf',
+      filepath: 'vectordb',
+      embedded: true,
+    });
+
+    await processAgentFileUpload({ req: makeFsReq(), res: mockRes, metadata: fsMeta() });
+
+    expect(deleteFile).not.toHaveBeenCalled();
+    expect(db.createFile).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('processFileURL', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -1332,6 +1486,43 @@ describe('processFileURL', () => {
 describe('processDeleteRequest', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('D12: caps concurrent storage deletes at FILE_DELETE_CONCURRENCY', async () => {
+    const prev = process.env.FILE_DELETE_CONCURRENCY;
+    process.env.FILE_DELETE_CONCURRENCY = '3';
+    let active = 0;
+    let peak = 0;
+    const deleteFile = jest.fn(async () => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active--;
+    });
+    getStrategyFunctions.mockReturnValue({ deleteFile });
+    db.deleteFiles.mockResolvedValue({ deletedCount: 10 });
+
+    const files = Array.from({ length: 10 }, (_, i) => ({
+      file_id: `f${i}`,
+      filepath: `/images/user-123/f${i}.png`,
+      source: FileSources.local,
+    }));
+
+    const result = await processDeleteRequest({
+      req: { body: {}, config: {}, user: { id: 'user-123', tenantId: 'tenant-a' } },
+      files,
+    });
+
+    expect(peak).toBeLessThanOrEqual(3);
+    expect(peak).toBeGreaterThan(1); // proves deletes actually overlapped, not serialized
+    expect(deleteFile).toHaveBeenCalledTimes(10);
+    expect(result.deletedFileIds).toHaveLength(10);
+
+    if (prev === undefined) {
+      delete process.env.FILE_DELETE_CONCURRENCY;
+    } else {
+      process.env.FILE_DELETE_CONCURRENCY = prev;
+    }
   });
 
   it('removes metadata when backing storage is already missing', async () => {

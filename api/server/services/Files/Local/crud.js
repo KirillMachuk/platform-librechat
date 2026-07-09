@@ -9,6 +9,40 @@ const { getBufferMetadata } = require('~/server/utils');
 const paths = require('~/config/paths');
 
 /**
+ * True when `target` resolves to a location inside (or equal to) `baseDir`.
+ * Uses `path.relative` (not a string prefix) so a sibling directory sharing a
+ * name prefix cannot masquerade as contained, and rejects `..`-escaping or
+ * absolute inputs.
+ *
+ * @param {string} baseDir - The directory the target must stay within.
+ * @param {string} target - A path segment or absolute path to validate.
+ * @returns {boolean}
+ */
+const isWithin = (baseDir, target) => {
+  const resolvedBase = path.resolve(baseDir);
+  const resolvedTarget = path.resolve(resolvedBase, target);
+  const rel = path.relative(resolvedBase, resolvedTarget);
+  return !rel.startsWith('..') && !path.isAbsolute(rel) && !rel.includes(`..${path.sep}`);
+};
+
+/**
+ * Asserts that `target` resolves to a location strictly inside `baseDir` and
+ * returns the resolved absolute path so callers reuse it for the filesystem
+ * operation instead of re-resolving.
+ *
+ * @param {string} baseDir - The directory the target must stay within.
+ * @param {string} target - A path segment or absolute path to validate.
+ * @returns {string} The resolved absolute path, guaranteed within `baseDir`.
+ * @throws {Error} 'Path traversal detected' when `target` escapes `baseDir`.
+ */
+const assertPathWithin = (baseDir, target) => {
+  if (!isWithin(baseDir, target)) {
+    throw new Error('Path traversal detected');
+  }
+  return path.resolve(baseDir, target);
+};
+
+/**
  * Saves a file to a specified output path with a new filename.
  *
  * @param {Express.Multer.File} file - The file object to be saved. Should contain properties like 'originalname' and 'path'.
@@ -78,12 +112,7 @@ async function saveLocalBuffer({ userId, buffer, fileName, basePath = 'images' }
       fs.mkdirSync(directoryPath, { recursive: true });
     }
 
-    const resolvedDir = path.resolve(directoryPath);
-    const resolvedPath = path.resolve(resolvedDir, fileName);
-    const rel = path.relative(resolvedDir, resolvedPath);
-    if (rel.startsWith('..') || path.isAbsolute(rel) || rel.includes(`..${path.sep}`)) {
-      throw new Error('Path traversal detected in filename');
-    }
+    const resolvedPath = assertPathWithin(directoryPath, fileName);
     fs.writeFileSync(resolvedPath, buffer);
 
     const filePath = path.posix.join('/', basePath, userId, fileName);
@@ -138,8 +167,11 @@ async function saveFileFromURL({ userId, URL, fileName, basePath = 'images' }) {
       fileName += `.${extension}`;
     }
 
-    // Save the file to the output path
-    const outputFilePath = path.join(outputPath, fileName);
+    // Save the file to the output path. Validate containment first so a
+    // `fileName` carrying `../` cannot escape the user's output directory —
+    // matching the guard `saveLocalBuffer` already applies (defense-in-depth:
+    // current callers pass server-generated names, future ones may not).
+    const outputFilePath = assertPathWithin(outputPath, fileName);
     fs.writeFileSync(outputFilePath, buffer);
 
     return {
@@ -320,15 +352,7 @@ async function getLocalFileStream(req, filepath) {
         throw new Error(`Invalid file path: ${filepath}`);
       }
 
-      const fullPath = path.join(appConfig.paths.uploads, basePath);
-      const uploadsDir = appConfig.paths.uploads;
-
-      const rel = path.relative(uploadsDir, fullPath);
-      if (rel.startsWith('..') || path.isAbsolute(rel) || rel.includes(`..${path.sep}`)) {
-        logger.warn(`Invalid relative file path: ${filepath}`);
-        throw new Error(`Invalid file path: ${filepath}`);
-      }
-
+      const fullPath = assertPathWithin(appConfig.paths.uploads, basePath);
       return fs.createReadStream(fullPath);
     } else if (filepath.includes('/images/')) {
       const basePath = filepath.split('/images/')[1];
@@ -338,18 +362,20 @@ async function getLocalFileStream(req, filepath) {
         throw new Error(`Invalid file path: ${filepath}`);
       }
 
-      const fullPath = path.join(appConfig.paths.imageOutput, basePath);
-      const publicDir = appConfig.paths.imageOutput;
-
-      const rel = path.relative(publicDir, fullPath);
-      if (rel.startsWith('..') || path.isAbsolute(rel) || rel.includes(`..${path.sep}`)) {
-        logger.warn(`Invalid relative file path: ${filepath}`);
-        throw new Error(`Invalid file path: ${filepath}`);
-      }
-
+      const fullPath = assertPathWithin(appConfig.paths.imageOutput, basePath);
       return fs.createReadStream(fullPath);
     }
-    return fs.createReadStream(filepath);
+    // No `/uploads/` or `/images/` marker: a well-formed local filepath always
+    // carries one, so this branch only sees unexpected/legacy shapes. Stream it
+    // only when it still resolves under a known storage root; otherwise reject
+    // rather than reading an arbitrary absolute path off the container FS.
+    const withinUploads = isWithin(appConfig.paths.uploads, filepath);
+    const withinImages = isWithin(appConfig.paths.imageOutput, filepath);
+    if (!withinUploads && !withinImages) {
+      logger.warn(`Refusing to stream unvalidated local file path: ${filepath}`);
+      throw new Error(`Invalid file path: ${filepath}`);
+    }
+    return fs.createReadStream(path.resolve(filepath));
   } catch (error) {
     logger.error('Error getting local file stream:', error);
     throw error;

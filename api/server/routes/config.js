@@ -6,6 +6,7 @@ const {
   resolveBuildInfo,
   resolveTitleTiming,
   sanitizeModelSpecs,
+  resolveTrustedBundlerURL,
 } = require('@librechat/api');
 const { EModelEndpoint, defaultSocialLogins } = require('librechat-data-provider');
 const { logger, getTenantId, SystemCapabilities } = require('@librechat/data-schemas');
@@ -279,8 +280,16 @@ router.get('/', async function (req, res) {
       turnstile: appConfig?.turnstileConfig,
       modelSpecs: sanitizeModelSpecs(appConfig?.modelSpecs),
       balance: balanceConfig,
-      bundlerURL: process.env.SANDPACK_BUNDLER_URL,
-      staticBundlerURL: process.env.SANDPACK_STATIC_BUNDLER_URL,
+      // Only forward a bundler URL whose origin is allowlisted — it controls the
+      // JS executed inside the Sandpack preview iframe. Unset → undefined →
+      // Sandpack's built-in default. Self-host origins are added via
+      // SANDPACK_BUNDLER_ALLOWED_ORIGINS.
+      bundlerURL: resolveTrustedBundlerURL(process.env.SANDPACK_BUNDLER_URL, process.env, 'SANDPACK_BUNDLER_URL'),
+      staticBundlerURL: resolveTrustedBundlerURL(
+        process.env.SANDPACK_STATIC_BUNDLER_URL,
+        process.env,
+        'SANDPACK_STATIC_BUNDLER_URL',
+      ),
       sharePointFilePickerEnabled,
       sharePointBaseUrl: process.env.SHAREPOINT_BASE_URL,
       sharePointPickerGraphScope: process.env.SHAREPOINT_PICKER_GRAPH_SCOPE,

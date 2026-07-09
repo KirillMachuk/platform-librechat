@@ -178,6 +178,24 @@ export const sharedOptions: SandpackProviderProps['options'] = {
   externalResources: [TAILWIND_CDN],
 };
 
+/**
+ * Defense-in-depth: the server already allowlists the bundler origin before it
+ * reaches startupConfig, but the client must not inject a non-https bundler URL
+ * into the Sandpack iframe on the off chance the config is tampered with. Only a
+ * well-formed https URL is honored; anything else falls back to Sandpack's
+ * built-in default.
+ */
+function safeBundlerURL(value?: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  try {
+    return new URL(value).protocol === 'https:' ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function buildSandpackOptions(
   template: SandpackProviderProps['template'],
   startupConfig?: TStartupConfig,
@@ -186,9 +204,13 @@ export function buildSandpackOptions(
     return sharedOptions;
   }
 
+  const bundlerURL = safeBundlerURL(
+    template === 'static' ? startupConfig.staticBundlerURL : startupConfig.bundlerURL,
+  );
+
   return {
     ...sharedOptions,
-    bundlerURL: template === 'static' ? startupConfig.staticBundlerURL : startupConfig.bundlerURL,
+    ...(bundlerURL ? { bundlerURL } : {}),
   };
 }
 

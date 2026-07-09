@@ -22,7 +22,9 @@ const { logger, runAsSystem } = require('@librechat/data-schemas');
 const {
   sanitizeFilename,
   parseText,
+  parseTextNative,
   probePdf,
+  withTimeout,
   routePdfBySize,
   isContentRoutingEnabled,
   readDocRoutingThresholds,
@@ -31,6 +33,7 @@ const {
   acceptOcrText,
   processAudioFile,
   getStorageMetadata,
+  createConcurrencyLimiter,
   sweepExpiredFiles: sweepExpiredFilesWithDeps,
   startExpiredFileSweep: startExpiredFileSweepWithDeps,
 } = require('@librechat/api');
@@ -51,6 +54,35 @@ const { getStrategyFunctions } = require('./strategies');
 const { determineFileType } = require('~/server/utils');
 const { STTService } = require('./Audio/STTService');
 const db = require('~/models');
+
+/**
+ * Upload-path ceiling for the FAST text operations: the PDF routing probe
+ * (`probePdf`, a pdfjs text-layer pass) and native/digital text extraction.
+ * `parseText` posts to rag_api with its own 300s internal cap — far too long to
+ * hold an upload response open — so the handler races these against this shorter
+ * timeout and degrades gracefully (probe → route to RAG; plain-text → native
+ * parse). NOTE: this is deliberately NOT used for scanned-document OCR, which is
+ * legitimately slow — see `DOC_OCR_TIMEOUT_MS`. Overridable via env.
+ */
+const DOC_PARSE_TIMEOUT_MS = parseInt(process.env.DOC_PARSE_TIMEOUT_MS ?? '', 10) || 30000;
+
+/**
+ * Ceiling for the scanned-document OCR fallback (a digital-parser miss → RAG
+ * `/text` → doc-gateway → Tesseract). Multi-page scans (e.g. KFC lease PDFs)
+ * legitimately take tens of seconds, so this is far more generous than the fast
+ * probe/text timeout: capping OCR at 30s would falsely fail real scanned
+ * contracts in full-text mode. Still well under `parseText`'s 300s so a truly
+ * hung rag_api can't pin the upload. For genuinely large scans prefer the async
+ * RAG route (`RAG_AUTO_ROUTE_LARGE_DOC` / `AUTO_ROUTE_BY_TEXT`). Overridable via env.
+ */
+const DOC_OCR_TIMEOUT_MS = parseInt(process.env.DOC_OCR_TIMEOUT_MS ?? '', 10) || 120000;
+
+/**
+ * Separate, more generous ceiling for image OCR (a large multi-region scan is
+ * legitimately slower than a text extract). On timeout the caller falls through
+ * to the native vision path, so this only bounds how long OCR may block first.
+ */
+const IMAGE_OCR_TIMEOUT_MS = parseInt(process.env.IMAGE_OCR_TIMEOUT_MS ?? '', 10) || 45000;
 
 /**
  * Creates a modular file upload wrapper that ensures filename sanitization
@@ -77,6 +109,63 @@ const createSanitizedUploadWrapper = (uploadFunction) => {
 
 const hasCodeEnvRef = (file) => file?.metadata?.codeEnvRef != null;
 
+/**
+ * Compensating delete for the synchronous file_search path: storage is written
+ * first, then vectors are embedded. If the embed throws, the storage object is
+ * orphaned (no DB record is ever created) and the user gets a 500. Roll the
+ * storage object back so no orphan survives, then let the caller re-throw the
+ * original embed error. The rollback is best-effort — a failure here is logged
+ * and swallowed so it never masks the real embed error. `embedded: false`
+ * ensures the strategy delete does not attempt a (pointless) RAG delete.
+ *
+ * @param {object} params
+ * @param {ServerRequest} params.req
+ * @param {string} params.source - The storage strategy the object was written to.
+ * @param {{ filepath?: string, storageKey?: string, storageRegion?: string }} params.storageResult
+ * @param {string} params.file_id
+ * @returns {Promise<void>}
+ */
+const rollbackOrphanedStorage = async ({ req, source, storageResult, file_id }) => {
+  try {
+    const { deleteFile } = getStrategyFunctions(source);
+    if (typeof deleteFile !== 'function') {
+      logger.warn(
+        `[processFileUpload] No delete method for source ${source}; cannot roll back orphaned storage for ${file_id}`,
+      );
+      return;
+    }
+    await deleteFile(req, {
+      file_id,
+      user: req.user.id,
+      source,
+      embedded: false,
+      filepath: storageResult?.filepath,
+      storageKey: storageResult?.storageKey,
+      storageRegion: storageResult?.storageRegion,
+    });
+    logger.info(
+      `[processFileUpload] Rolled back orphaned storage for ${file_id} after embedding failure`,
+    );
+  } catch (rollbackError) {
+    logger.error(
+      `[processFileUpload] Failed to roll back orphaned storage for ${file_id} after embedding failure:`,
+      rollbackError,
+    );
+  }
+};
+
+/**
+ * Bounds concurrent storage deletes in a single batch request. `DELETE /files`
+ * accepts an arbitrary `files[]`, so without a cap a large batch fans out into
+ * hundreds of simultaneous S3/local deletes, saturating the event loop and the
+ * storage backend. OpenAI-source deletes keep their own leaky-bucket throttle.
+ * Read at call time (env is set at boot) so it stays overridable and testable.
+ */
+const fileDeleteConcurrency = () => {
+  const raw = parseInt(process.env.FILE_DELETE_CONCURRENCY ?? '', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 15;
+};
+
 const isMissingStorageError = (err) => {
   const code = err?.code ?? err?.status ?? err?.statusCode ?? err?.response?.status;
   if ([404, '404', 'ENOENT', 'NoSuchKey', 'NotFound', 'ResourceNotFound'].includes(code)) {
@@ -99,6 +188,8 @@ const isMissingStorageError = (err) => {
  * @param {Set<string>} params.resolvedFileIds - File IDs whose storage delete succeeded.
  * @param {Set<string>} params.failedFileIds - File IDs whose storage delete failed.
  * @param {OpenAI | undefined} [params.openai] - If an OpenAI file, the initialized OpenAI client.
+ * @param {<T>(task: () => Promise<T>) => Promise<T>} params.limit - Concurrency limiter for
+ *   non-OpenAI storage deletes (OpenAI uses its own leaky-bucket throttle).
  */
 function enqueueDeleteOperation({
   req,
@@ -108,6 +199,7 @@ function enqueueDeleteOperation({
   resolvedFileIds,
   failedFileIds,
   openai,
+  limit,
 }) {
   if (checkOpenAIStorage(file.source)) {
     // Enqueue to leaky bucket
@@ -136,20 +228,23 @@ function enqueueDeleteOperation({
       }),
     );
   } else {
-    // Add directly to promises
+    // Run under the concurrency limiter so a large batch does not fan out into
+    // hundreds of simultaneous storage deletes.
     promises.push(
-      deleteFile(req, file)
-        .then(() => resolvedFileIds.add(file.file_id))
-        .catch((err) => {
-          if (isMissingStorageError(err)) {
-            resolvedFileIds.add(file.file_id);
-            logger.warn('File storage was already missing during delete', err);
-            return;
-          }
-          failedFileIds.add(file.file_id);
-          logger.error('Error deleting file', err);
-          return Promise.reject(err);
-        }),
+      limit(() =>
+        deleteFile(req, file)
+          .then(() => resolvedFileIds.add(file.file_id))
+          .catch((err) => {
+            if (isMissingStorageError(err)) {
+              resolvedFileIds.add(file.file_id);
+              logger.warn('File storage was already missing during delete', err);
+              return;
+            }
+            failedFileIds.add(file.file_id);
+            logger.error('Error deleting file', err);
+            return Promise.reject(err);
+          }),
+      ),
     );
   }
 }
@@ -218,6 +313,7 @@ const processDeleteRequest = async ({ req, files }) => {
   const resolvedFileIds = new Set();
   const failedFileIds = new Set();
   const deletionMethods = {};
+  const limit = createConcurrencyLimiter(fileDeleteConcurrency());
   const promises = [];
 
   /** @type {Record<string, OpenAI | undefined>} */
@@ -291,6 +387,7 @@ const processDeleteRequest = async ({ req, files }) => {
       resolvedFileIds,
       failedFileIds,
       openai,
+      limit,
     });
   }
 
@@ -756,7 +853,23 @@ const resolveContentRouting = async ({ req, file, toolResource, isImage }) => {
   if (!isFileSearchEnabled) {
     return { toolResource };
   }
-  const { pageCount, textChars, text } = await probePdf(file.path);
+  // Bound the routing probe: a pathological PDF must not hang the upload while
+  // pdfjs churns. On timeout, route to file_search (RAG) — the safe default for
+  // a large/slow document (it would head there by size anyway).
+  let probe;
+  try {
+    probe = await withTimeout(
+      probePdf(file.path),
+      DOC_PARSE_TIMEOUT_MS,
+      `PDF routing probe timed out for "${file.originalname}"`,
+    );
+  } catch (err) {
+    logger.warn(
+      `[processAgentFileUpload] ${err.message}; routing to file_search (RAG) to avoid blocking upload`,
+    );
+    return { toolResource: EToolResources.file_search };
+  }
+  const { pageCount, textChars, text } = probe;
   const routed = routePdfBySize(pageCount, textChars, readDocRoutingThresholds());
   if (routed === EToolResources.file_search) {
     logger.info(
@@ -825,7 +938,11 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
   let imageOcrText = null;
   if (isImageOcrEnabled() && isImage && tool_resource == null) {
     try {
-      const parsed = await parseText({ req, file, file_id });
+      const parsed = await withTimeout(
+        parseText({ req, file, file_id }),
+        IMAGE_OCR_TIMEOUT_MS,
+        `image OCR timed out for "${file.originalname}"`,
+      );
       if (parsed?.text && acceptOcrText(parsed.text, imageOcrMinChars())) {
         imageOcrText = parsed;
         tool_resource = EToolResources.context;
@@ -1028,7 +1145,17 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
        * the RAG API /text endpoint, which routes through doc-gateway (local Tesseract OCR), so
        * scanned contracts work in full-text mode too. No-op if RAG_API_URL is unset/unreachable. */
       try {
-        const parsed = await parseText({ req, file, file_id });
+        // Bound the OCR fallback so a hung rag_api cannot hold the upload open
+        // for its full 300s internal cap — but generously (DOC_OCR_TIMEOUT_MS),
+        // because a legitimate multi-page scan (Tesseract) takes tens of seconds
+        // and a short cap would falsely fail real scanned contracts. On timeout
+        // this rejects, the catch below logs it, resolveDocumentText returns
+        // undefined, and the caller raises an honest "unable to extract" error.
+        const parsed = await withTimeout(
+          parseText({ req, file, file_id }),
+          DOC_OCR_TIMEOUT_MS,
+          `RAG /text OCR fallback timed out for "${file.originalname}"`,
+        );
         if (parsed?.text?.trim()) {
           // filepath = original upload path (matches the native parseText branch below);
           // the extracted text itself is persisted by createTextFile alongside the
@@ -1083,7 +1210,24 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
       throw new Error(`File type ${file.mimetype} is not supported for text parsing.`);
     }
 
-    const { text, bytes } = await parseText({ req, file, file_id });
+    // For plain-text types the RAG /text pass is an optimization, not a
+    // requirement — native parsing reads the file directly and correctly. Bound
+    // the RAG attempt so a slow rag_api cannot hold the upload open, and fall
+    // back to native (fast, local) on timeout rather than failing the upload.
+    let parsedText;
+    try {
+      parsedText = await withTimeout(
+        parseText({ req, file, file_id }),
+        DOC_PARSE_TIMEOUT_MS,
+        `text parsing timed out for "${file.originalname}"`,
+      );
+    } catch (err) {
+      logger.warn(
+        `[processAgentFileUpload] ${err.message}; falling back to native text parsing`,
+      );
+      parsedText = await parseTextNative(file);
+    }
+    const { text, bytes } = parsedText;
     return await createTextFile({ text, bytes, type: file.mimetype });
   }
 
@@ -1114,12 +1258,19 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
       embeddingResult = { embedded: false, filename: file.originalname, deferred: true };
     } else {
       const { uploadVectors } = require('./VectorDB/crud');
-      embeddingResult = await uploadVectors({
-        req,
-        file,
-        file_id,
-        entity_id,
-      });
+      try {
+        embeddingResult = await uploadVectors({
+          req,
+          file,
+          file_id,
+          entity_id,
+        });
+      } catch (embedError) {
+        // Storage already succeeded above; without this the object would orphan
+        // (no DB record is created because the throw aborts before db.createFile).
+        await rollbackOrphanedStorage({ req, source, storageResult, file_id });
+        throw embedError;
+      }
     }
 
     // Vector status will be stored at root level, no need for metadata
@@ -1279,12 +1430,19 @@ const processProjectFileUpload = async ({ req, res, metadata }) => {
     embeddingResult = { embedded: false, filename: file.originalname, deferred: true };
   } else {
     const { uploadVectors } = require('./VectorDB/crud');
-    embeddingResult = await uploadVectors({
-      req,
-      file,
-      file_id,
-      entity_id,
-    });
+    try {
+      embeddingResult = await uploadVectors({
+        req,
+        file,
+        file_id,
+        entity_id,
+      });
+    } catch (embedError) {
+      // Roll back the storage object written just above so a failed embed does
+      // not leave an orphan (no DB record is created past this throw).
+      await rollbackOrphanedStorage({ req, source, storageResult, file_id });
+      throw embedError;
+    }
   }
 
   const {
