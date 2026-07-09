@@ -1,7 +1,10 @@
 import { useCallback, useMemo, memo } from 'react';
 import { useRecoilValue } from 'recoil';
+import { isDrPlanMessage, isDrStartCommand, isDrCancelCommand } from 'librechat-data-provider';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
+import type { ReactNode } from 'react';
 import type { TMessageProps, TMessageChatContext } from '~/common';
+import { PlanCard, ProgressCard, ActionChip } from '~/components/Chat/Messages/DeepResearch';
 import { useAttachments, useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
 import { cn, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import ContentParts from '~/components/Chat/Messages/Content/ContentParts';
@@ -119,6 +122,9 @@ const ContentRender = memo(function ContentRender({
     chatContext,
   });
   const maximizeChatSpace = useRecoilValue(store.maximizeChatSpace);
+  // Task #21: the live Deep Research progress snapshot for this conversation (null unless a
+  // DR run is streaming). Keyed by conversationId so the message-tree rebuilds don't drop it.
+  const drProgress = useRecoilValue(store.drProgressByConvoId(conversation?.conversationId ?? ''));
 
   const handleRegenerateMessage = useCallback(() => regenerateMessage(), [regenerateMessage]);
   const isLast = useMemo(
@@ -156,6 +162,25 @@ const ContentRender = memo(function ContentRender({
   const isUserTurn = msg.isCreatedByUser === true;
   const showUserBubble = isUserTurn && !edit;
 
+  // Task #21 Deep Research card states (all behind the plan-gate markers; a normal chat is
+  // untouched). A user START/CANCEL command → compact chip; an assistant plan message → the
+  // plan card; the active assistant response while dr_progress streams → the running card.
+  const msgText = msg.text ?? '';
+  const isDrActionChip = isUserTurn && (isDrStartCommand(msgText) || isDrCancelCommand(msgText));
+  const isDrPlanCard = !isUserTurn && isDrPlanMessage(msgText);
+  // The running card shows on the active (latest, still-generating) assistant response while
+  // a dr_progress snapshot exists; gating on isSubmitting auto-hides it on ANY terminal
+  // outcome (final/abort/error) without needing to clear the snapshot on every path.
+  const isDrRunning =
+    !isUserTurn && !isDrPlanCard && drProgress != null && isLatestMessage && isSubmitting;
+
+  let drCard: ReactNode = null;
+  if (isDrActionChip) {
+    drCard = <ActionChip text={msgText} />;
+  } else if (isDrPlanCard) {
+    drCard = <PlanCard message={msg} awaitingAction={hasNoChildren && isLatestMessage} />;
+  }
+
   return (
     <div
       id={msg.messageId}
@@ -177,24 +202,29 @@ const ContentRender = memo(function ContentRender({
               showUserBubble && 'items-end',
             )}
           >
-            <div className={cn(showUserBubble && USER_BUBBLE_CLASS)}>
-              <ContentParts
-                edit={edit}
-                isLast={isLast}
-                enterEdit={enterEdit}
-                siblingIdx={siblingIdx}
-                messageId={msg.messageId}
-                attachments={attachments}
-                searchResults={searchResults}
-                manualSkills={msg.manualSkills}
-                setSiblingIdx={setSiblingIdx}
-                isLatestMessage={isLatestMessage}
-                isSubmitting={isSubmitting}
-                isCreatedByUser={msg.isCreatedByUser}
-                createdAt={msg.createdAt ?? msg.clientTimestamp}
-                conversationId={conversation?.conversationId}
-                content={msg.content as Array<TMessageContentParts | undefined>}
-              />
+            <div className={cn(showUserBubble && !isDrActionChip && USER_BUBBLE_CLASS)}>
+              {drCard ?? (
+                <>
+                  {isDrRunning && drProgress != null && <ProgressCard data={drProgress} />}
+                  <ContentParts
+                    edit={edit}
+                    isLast={isLast}
+                    enterEdit={enterEdit}
+                    siblingIdx={siblingIdx}
+                    messageId={msg.messageId}
+                    attachments={attachments}
+                    searchResults={searchResults}
+                    manualSkills={msg.manualSkills}
+                    setSiblingIdx={setSiblingIdx}
+                    isLatestMessage={isLatestMessage}
+                    isSubmitting={isSubmitting}
+                    isCreatedByUser={msg.isCreatedByUser}
+                    createdAt={msg.createdAt ?? msg.clientTimestamp}
+                    conversationId={conversation?.conversationId}
+                    content={msg.content as Array<TMessageContentParts | undefined>}
+                  />
+                </>
+              )}
             </div>
             {/* Assistant-side file artifacts (e.g. the Deep Research report PDF):
                 Container renders message.files for USER messages only, so without this
@@ -202,7 +232,7 @@ const ContentRender = memo(function ContentRender({
                 images render through content parts/attachments. */}
             {msg.isCreatedByUser !== true && <Files message={msg} nonImageOnly />}
           </div>
-          {hasNoChildren && isSubmitting ? (
+          {hasNoChildren && isSubmitting && !isDrRunning ? (
             <PlaceholderRow />
           ) : (
             <SubRow classes={cn('text-xs', isUserTurn && 'justify-end')}>

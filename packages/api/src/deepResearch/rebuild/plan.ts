@@ -17,6 +17,12 @@ import { tolerantJsonParse } from './shared';
  * - PROCEED  → run the graph immediately (the fail-open default, and the model's
  *   choice when a plan adds nothing).
  *
+ * NOTE: the marker strings + command detectors here MUST stay identical to the
+ * frontend copies in `packages/data-provider/src/deepResearch.ts` (the client renders
+ * the card from those). They are duplicated rather than imported because the runner
+ * spec must resolve without a data-provider rebuild; both are fixed constants covered
+ * by their own tests. Keep the two in sync.
+ *
  * The request/dialogue is the user's OWN input (like SCOPE) — passed as a normal
  * message, NOT fenced as untrusted external data — so an explicit "начинай" is honored.
  */
@@ -145,6 +151,16 @@ export function isPlanMessage(text: string): boolean {
   return typeof text === 'string' && text.trimStart().startsWith(PLAN_MARKER);
 }
 
+/** True if a message is the exact "start research" command (button/autostart). */
+export function isStartCommand(text: string): boolean {
+  return typeof text === 'string' && text.trim() === START_MARKER;
+}
+
+/** True if a message is the exact "cancel research" command. */
+export function isCancelCommand(text: string): boolean {
+  return typeof text === 'string' && text.trim() === CANCEL_MARKER;
+}
+
 /**
  * Parses the numbered step list back out of a formatted plan message — the live
  * progress card renders these as its checklist. Deterministic inverse of
@@ -159,14 +175,4 @@ export function extractPlanSteps(planMessage: string): string[] {
     }
   }
   return steps;
-}
-
-/** True if a message is the exact "start research" command (button/autostart). */
-export function isStartCommand(text: string): boolean {
-  return typeof text === 'string' && text.trim() === START_MARKER;
-}
-
-/** True if a message is the exact "cancel research" command. */
-export function isCancelCommand(text: string): boolean {
-  return typeof text === 'string' && text.trim() === CANCEL_MARKER;
 }

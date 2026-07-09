@@ -1,3 +1,4 @@
+import deepResearch from './deepResearch';
 import * as artifacts from './artifacts';
 import submission from './submission';
 import isTemporary from './temporary';
@@ -13,6 +14,7 @@ import user from './user';
 import text from './text';
 import misc from './misc';
 export * from './agents';
+export * from './deepResearch';
 export * from './fileMode';
 export * from './mcp';
 export * from './favorites';
@@ -21,6 +23,7 @@ export * from './usage';
 
 export default {
   ...artifacts,
+  ...deepResearch,
   ...families,
   ...endpoints,
   ...user,
