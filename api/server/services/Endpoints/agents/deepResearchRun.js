@@ -21,6 +21,13 @@ const {
   parseClarifyOutput,
   formatClarifyMessage,
   isClarifyMessage,
+  buildPlanPrompt,
+  parsePlanDecision,
+  formatPlanMessage,
+  isPlanMessage,
+  isStartCommand,
+  isCancelCommand,
+  CANCELLED_MESSAGE,
   reportToPdfBuffer,
   getStorageMetadata,
   getProviderConfig,
@@ -310,14 +317,16 @@ async function attachReportPdf({ req, responseMessage, reportMarkdown, title, fi
 }
 
 /**
- * D2 badge-independence: TRUE when the message replies to the assistant's clarify
- * questions. The routing gate uses this so answering a clarify prompt ALWAYS continues
- * into the research — even when the frontend's `deep_research` flag was lost (toggled
- * off, dropped on the new-chat key transition, etc.). Replying to the questions IS the
- * user's intent; without this the answer fell into normal chat and a plain model
- * improvised a source-less "report". Fail-closed: any error → false (normal chat).
+ * Badge-independence (D2 + task #21): TRUE when the message replies to a DR assistant
+ * turn — a clarify-questions message OR a plan card. The routing gate uses this so
+ * answering questions, or starting/editing/cancelling a plan, ALWAYS continues into DR
+ * even when the frontend's `deep_research` flag was lost (toggled off, dropped on the
+ * new-chat key transition, etc.). Replying to a DR turn IS the user's intent; without
+ * this the reply fell into normal chat and a plain model improvised a source-less
+ * "report". Matches the shipped clarify marker too, so old chats keep working.
+ * Fail-closed: any error → false (normal chat).
  */
-async function isClarifyFollowUp({ userId, conversationId, parentMessageId }) {
+async function isDrFollowUp({ userId, conversationId, parentMessageId }) {
   if (!conversationId || !parentMessageId || parentMessageId === Constants.NO_PARENT) {
     return false;
   }
@@ -327,11 +336,13 @@ async function isClarifyFollowUp({ userId, conversationId, parentMessageId }) {
       'messageId text isCreatedByUser',
     );
     const parent = Array.isArray(messages) ? messages[0] : null;
-    return Boolean(
-      parent && parent.isCreatedByUser !== true && isClarifyMessage(parent.text ?? ''),
-    );
+    if (!parent || parent.isCreatedByUser === true) {
+      return false;
+    }
+    const parentText = parent.text ?? '';
+    return isClarifyMessage(parentText) || isPlanMessage(parentText);
   } catch (error) {
-    logger.warn('[deepResearchRun] clarify follow-up check failed; routing to normal chat', error);
+    logger.warn('[deepResearchRun] DR follow-up check failed; routing to normal chat', error);
     return false;
   }
 }
@@ -375,10 +386,121 @@ async function buildClarifyContinuation({ userId, conversationId, parentMessageI
   }
 }
 
+/** Max DR-exchange messages walked when assembling the dialogue (bounds runaway edits). */
+const MAX_DR_CHAIN = 24;
+
+/**
+ * Renders the collected DR exchange (top-down) + the current unsaved turn text as a
+ * labeled transcript for the plan decision / research input. START/CANCEL command
+ * messages carry no research content and are skipped.
+ */
+function buildDialogueTranscript(chain, currentText) {
+  const blocks = [];
+  let seenOriginal = false;
+  for (const message of chain) {
+    const text = (message.text ?? '').trim();
+    if (!text) {
+      continue;
+    }
+    if (message.isCreatedByUser === true) {
+      if (isStartCommand(text) || isCancelCommand(text)) {
+        continue;
+      }
+      blocks.push(
+        seenOriginal ? `Ответ пользователя:\n${text}` : `Исходный запрос пользователя:\n${text}`,
+      );
+      seenOriginal = true;
+    } else if (isClarifyMessage(text)) {
+      blocks.push(`Уточняющие вопросы:\n${text}`);
+    } else if (isPlanMessage(text)) {
+      blocks.push(`Предложенный план:\n${text}`);
+    }
+  }
+  const current = (currentText ?? '').trim();
+  if (current && !isStartCommand(current) && !isCancelCommand(current)) {
+    blocks.push(
+      seenOriginal ? `Ответ/правка пользователя:\n${current}` : `Запрос пользователя:\n${current}`,
+    );
+  }
+  return blocks.length > 0 ? `Диалог по задаче исследования.\n\n${blocks.join('\n\n')}` : current;
+}
+
+/**
+ * Task #21 plan gate: classifies a DR turn from its parent chain and assembles the
+ * dialogue the decision/research consumes. Walks up from the parent collecting the
+ * exchange (original request → clarify Q&A → plan → this turn) until a non-DR boundary.
+ * Fail-open: no DR parent or any load error → a fresh turn (research the raw request).
+ *
+ * kind: 'fresh' | 'clarify-answer' | 'plan-start' | 'plan-cancel' | 'plan-edit'.
+ */
+async function buildDrTurnContext({ userId, conversationId, parentMessageId, text }) {
+  const fresh = { kind: 'fresh', dialogue: null, originalRequest: text ?? '' };
+  if (!parentMessageId || !conversationId || parentMessageId === Constants.NO_PARENT) {
+    return fresh;
+  }
+  try {
+    const messages = await getMessages({ conversationId, user: userId });
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return fresh;
+    }
+    const byId = new Map(messages.map((m) => [m.messageId, m]));
+    const parent = byId.get(parentMessageId);
+    if (!parent || parent.isCreatedByUser === true) {
+      return fresh;
+    }
+    const parentIsClarify = isClarifyMessage(parent.text ?? '');
+    const parentIsPlan = isPlanMessage(parent.text ?? '');
+    if (!parentIsClarify && !parentIsPlan) {
+      return fresh;
+    }
+
+    const chain = [];
+    const guard = new Set();
+    let cursor = parent;
+    while (cursor && !guard.has(cursor.messageId) && chain.length < MAX_DR_CHAIN) {
+      guard.add(cursor.messageId);
+      chain.push(cursor);
+      const up = cursor.parentMessageId ? byId.get(cursor.parentMessageId) : null;
+      const upIsDr =
+        up && up.isCreatedByUser !== true
+          ? isClarifyMessage(up.text ?? '') || isPlanMessage(up.text ?? '')
+          : Boolean(up);
+      if (!upIsDr) {
+        break;
+      }
+      cursor = up;
+    }
+    chain.reverse();
+
+    const originalMsg = chain.find((m) => m.isCreatedByUser === true);
+    const originalRequest = (originalMsg?.text ?? '').trim() || (text ?? '');
+    const dialogue = buildDialogueTranscript(chain, text);
+
+    let kind;
+    if (parentIsClarify) {
+      kind = 'clarify-answer';
+    } else if (isStartCommand(text)) {
+      kind = 'plan-start';
+    } else if (isCancelCommand(text)) {
+      kind = 'plan-cancel';
+    } else {
+      kind = 'plan-edit';
+    }
+    return { kind, dialogue, originalRequest };
+  } catch (error) {
+    logger.warn(
+      '[deepResearchRun] failed to build DR turn context; treating as a fresh request',
+      error,
+    );
+    return fresh;
+  }
+}
+
 /**
  * D2 turn 1: ask the lead model whether the request is specific enough to research now or
  * needs clarifying questions. Runs on the MASKED question. Fail-open: any error → PROCEED
- * (research starts rather than the user being nagged with questions).
+ * (research starts rather than the user being nagged with questions). Used on the plan-gate
+ * OFF path; the plan gate ON path uses {@link runPlanDecision}.
  */
 async function runClarifyCheck({ buildModel, leadModelSlug, question, now, signal }) {
   try {
@@ -392,6 +514,29 @@ async function runClarifyCheck({ buildModel, leadModelSlug, question, now, signa
   } catch (error) {
     logger.warn('[deepResearchRun] clarify check failed; proceeding to research', error);
     return { action: 'PROCEED', questions: [], usage: null };
+  }
+}
+
+/**
+ * Task #21 plan gate turn 1/2: ask the lead model to decide CLARIFY (ask questions) /
+ * PLAN (present a plan card) / PROCEED (research now). Runs on the MASKED input. Fail-
+ * open: any error → PROCEED (research starts rather than blocking on a bad model turn).
+ */
+async function runPlanDecision({ buildModel, leadModelSlug, input, now, signal, allowClarify }) {
+  try {
+    const model = await buildModel(leadModelSlug);
+    const prompt = [
+      new SystemMessage(buildPlanPrompt({ now, allowClarify })),
+      new HumanMessage(input),
+    ];
+    const response = await model.invoke(prompt, { signal });
+    return {
+      ...parsePlanDecision(extractMessageText(response?.content), { allowClarify }),
+      usage: usageFromExchange(prompt, response),
+    };
+  } catch (error) {
+    logger.warn('[deepResearchRun] plan decision failed; proceeding to research', error);
+    return { action: 'PROCEED', questions: [], title: '', steps: [], usage: null };
   }
 }
 
@@ -631,9 +776,13 @@ async function runNewDeepResearch(params) {
   // M1: the soft DR concurrency cap short-circuits via a sentinel into the same finalize.
   let result;
   let sovereign = null;
-  // Pre-graph model spend (the clarify check) — merged into result.usage after the run
-  // for BOTH outcomes (CLARIFY short-circuit and PROCEED), so billing covers every call.
+  // Pre-graph model spend (clarify + plan decision) — merged into result.usage after the
+  // run for EVERY outcome, so billing covers each call.
   let clarifyUsage = null;
+  let planUsage = null;
+  // The classified turn (task #21) — declared out here so the finalize tail can use
+  // `turn.originalRequest` for the title fallback (the raw request, not a START marker).
+  let turn = { kind: 'fresh', dialogue: null, originalRequest: text ?? '' };
   const otherActiveJobs = await countOtherActiveJobs({
     streamId,
     userId,
@@ -660,15 +809,27 @@ async function runNewDeepResearch(params) {
       throw new DeepResearchConfigError(leadModelSlug ?? workerModelSlug);
     }
 
-    // D2: when this message replies to a clarify prompt (turn 2), research the WHOLE dialogue
-    // (original request → questions → answer); otherwise research the raw request (turn 1).
-    // Fail-open: a parent-load failure → the raw request. `researchInput` is what gets masked.
+    // Task #21 plan gate + D2 clarify: classify the turn and assemble the research input.
+    // Plan gate ON → the unified planOrClarify decision (may emit a plan card); OFF → the
+    // shipped clarify path runs byte-for-byte. Fail-open: a parent-load failure → the raw
+    // request (a fresh turn). `researchInput` (dialogue for a follow-up) is what gets masked.
     const clarifyEnabled = req.config?.deepResearch?.clarify !== false;
-    const continuation = clarifyEnabled
-      ? await buildClarifyContinuation({ userId, conversationId, parentMessageId, answer: text })
-      : null;
-    const isClarifyContinuation = continuation != null;
-    const researchInput = continuation ?? text ?? '';
+    const planGateEnabled = req.config?.deepResearch?.planGate === true;
+    if (planGateEnabled) {
+      turn = await buildDrTurnContext({ userId, conversationId, parentMessageId, text });
+    } else if (clarifyEnabled) {
+      const continuation = await buildClarifyContinuation({
+        userId,
+        conversationId,
+        parentMessageId,
+        answer: text,
+      });
+      turn =
+        continuation != null
+          ? { kind: 'clarify-answer', dialogue: continuation, originalRequest: text ?? '' }
+          : { kind: 'fresh', dialogue: null, originalRequest: text ?? '' };
+    }
+    const researchInput = turn.dialogue ?? text ?? '';
 
     // Track B (sovereign DR): mask the user's question ONCE, then run the graph in anonymizer
     // passthrough so ONLY user data (question + documents) is masked — never the public web.
@@ -693,15 +854,61 @@ async function runNewDeepResearch(params) {
     });
     passthroughHeaders = sovereign?.passthroughHeaders ?? null;
 
-    // D2 turn 1: if the request is under-specified for a targeted recommendation (and this is
-    // NOT a reply to a clarify prompt), ask up to 3 clarifying questions as ONE assistant
-    // message instead of researching. The questions flow through the SAME finalize tail below
-    // (restore de-masks, save, title, final event) — no separate path.
-    if (clarifyEnabled && !isClarifyContinuation) {
+    // Pre-graph decision / short-circuit. Every branch either sets `result` (a terminal
+    // turn — questions, a plan card, or a cancel — that flows through the SAME finalize
+    // tail below: restore de-masks, save, title, final event) or leaves it null so the
+    // graph runs on `researchInput`. Runs on the MASKED input.
+    const decisionInput = sovereign ? sovereign.maskedQuestion : researchInput;
+    if (turn.kind === 'plan-cancel') {
+      // The user dismissed the plan card: a terminal, non-error message with NO DR marker,
+      // so the NEXT user message routes to normal chat (closes the routing hole). Zero
+      // model calls.
+      result = {
+        finalReport: CANCELLED_MESSAGE,
+        finalizeReason: 'cancelled',
+        usage: { input: 0, output: 0, total: 0 },
+        findings: [],
+      };
+    } else if (planGateEnabled && turn.kind !== 'plan-start') {
+      // fresh | clarify-answer | plan-edit → run the unified decision. Never ask questions
+      // twice: allowClarify only on a fresh, clarify-enabled turn.
+      const decision = await runPlanDecision({
+        buildModel,
+        leadModelSlug,
+        input: decisionInput,
+        now: new Date().toISOString(),
+        signal,
+        allowClarify: clarifyEnabled && turn.kind === 'fresh',
+      });
+      planUsage = decision.usage;
+      logger.info(
+        `[deepResearchRun] plan decision: ${decision.action}` +
+          (decision.action === 'CLARIFY' ? ` (${decision.questions.length} questions)` : '') +
+          (decision.action === 'PLAN' ? ` (${decision.steps.length} steps)` : ''),
+      );
+      if (decision.action === 'CLARIFY') {
+        result = {
+          finalReport: formatClarifyMessage(decision.questions),
+          finalizeReason: 'clarify',
+          usage: { input: 0, output: 0, total: 0 },
+          findings: [],
+        };
+      } else if (decision.action === 'PLAN') {
+        const planTitle = decision.title || buildDeepResearchTitle(turn.originalRequest || text);
+        result = {
+          finalReport: formatPlanMessage({ title: planTitle, steps: decision.steps }),
+          finalizeReason: 'plan',
+          usage: { input: 0, output: 0, total: 0 },
+          findings: [],
+        };
+      }
+      // PROCEED → result stays null → the graph runs below on `researchInput`.
+    } else if (!planGateEnabled && clarifyEnabled && turn.kind === 'fresh') {
+      // Shipped clarify path (unchanged): under-specified turn-1 → ask up to 3 questions.
       const decision = await runClarifyCheck({
         buildModel,
         leadModelSlug,
-        question: sovereign ? sovereign.maskedQuestion : researchInput,
+        question: decisionInput,
         now: new Date().toISOString(),
         signal,
       });
@@ -719,8 +926,10 @@ async function runNewDeepResearch(params) {
         };
       }
     }
+    // plan-start (plan gate on) falls through with result === null → the graph runs on the
+    // approved dialogue (`researchInput`).
 
-    // Skip the (expensive) graph build + run when clarify already produced the turn's message.
+    // Skip the (expensive) graph build + run when the decision already produced the turn's message.
     if (!result) {
       // In passthrough the anonymizer won't mask file_search output, so we mask the user's document
       // text ourselves. If masking fails we drop the chunk (never egress raw PII), not the whole run.
@@ -836,10 +1045,13 @@ async function runNewDeepResearch(params) {
     }
   }
 
-  // The clarify check is a real lead-model call — bill it on EVERY outcome (the CLARIFY
-  // short-circuit carries zero usage of its own; the PROCEED path's graph usage is separate).
+  // The clarify/plan decision is a real lead-model call — bill it on EVERY outcome (the
+  // short-circuits carry zero usage of their own; the PROCEED path's graph usage is separate).
   if (clarifyUsage) {
     result.usage = sumUsage(result.usage, clarifyUsage);
+  }
+  if (planUsage) {
+    result.usage = sumUsage(result.usage, planUsage);
   }
 
   // Ops summary: one line telling exactly HOW the run ended and how much material it
@@ -853,10 +1065,13 @@ async function runNewDeepResearch(params) {
     logger.warn(`[deepResearchRun] node error [${nodeError.node}]: ${nodeError.message}`);
   }
 
-  // 'completed' is a full report; 'limit' is a deliberate, non-error refusal (concurrency
-  // cap); 'clarify' is a clarifying-questions message (D2) — each stands alone and must NOT
-  // get the frontend "unfinished" banner.
-  const unfinished = !['completed', 'limit', 'clarify'].includes(result.finalizeReason);
+  // 'completed' is a full report; 'limit' is a deliberate non-error refusal (concurrency
+  // cap); 'clarify' is a questions message (D2); 'plan' is a plan card and 'cancelled' is a
+  // dismissed plan (task #21) — each stands alone and must NOT get the frontend "unfinished"
+  // banner.
+  const unfinished = !['completed', 'limit', 'clarify', 'plan', 'cancelled'].includes(
+    result.finalizeReason,
+  );
   // Track B: de-mask the final report via the server-side run map (placeholders → real PII), then
   // free the map. restore never throws (worst case: placeholders remain — safe, not a leak); both
   // run for EVERY outcome incl. abort, so the partial report saved below is de-masked too.
@@ -868,20 +1083,24 @@ async function runNewDeepResearch(params) {
 
   // P6+: chat title = a model-distilled TOPIC of the (masked) request — robust to any
   // phrasing and PII-free (it runs on the masked question). Computed once here so BOTH the
-  // D4 PDF filename and the persisted conversation row reuse it. An aborted run skips the
-  // model call (its title is never persisted); fail-open to the deterministic heuristic.
-  const { title: deepResearchTitle, usage: titleUsage } =
-    result.finalizeReason === 'aborted'
-      ? { title: buildDeepResearchTitle(text), usage: null }
-      : await resolveDeepResearchTitle({
-          req,
-          endpoint,
-          buildModel,
-          leadModelSlug,
-          topicText: sovereign ? sovereign.maskedQuestion : text,
-          fallbackText: text,
-          signal,
-        });
+  // D4 PDF filename and the persisted conversation row reuse it. An aborted OR cancelled run
+  // skips the model call (an aborted title is never persisted; a cancel reuses the plan
+  // turn's title, and the raw text is a START/CANCEL command — never a topic). The fallback
+  // is the ORIGINAL request (task #21), not a turn-2 command marker. Fail-open to heuristic.
+  const titleFallbackText = turn.originalRequest || text;
+  const skipModelTitle =
+    result.finalizeReason === 'aborted' || result.finalizeReason === 'cancelled';
+  const { title: deepResearchTitle, usage: titleUsage } = skipModelTitle
+    ? { title: buildDeepResearchTitle(titleFallbackText), usage: null }
+    : await resolveDeepResearchTitle({
+        req,
+        endpoint,
+        buildModel,
+        leadModelSlug,
+        topicText: sovereign ? sovereign.maskedQuestion : titleFallbackText,
+        fallbackText: titleFallbackText,
+        signal,
+      });
   // The title is a real lead-model call too — include it before the usage is billed below.
   if (titleUsage) {
     result.usage = sumUsage(result.usage, titleUsage);
@@ -891,7 +1110,7 @@ async function runNewDeepResearch(params) {
   // eagerly polls GET /api/convos/gen_title/:conversationId (retrying 404s) for every
   // new conversation — populate the SAME cache the standard addTitle service fills, and
   // emit the same live 'title' SSE event, so DR titles behave exactly like normal chats.
-  if (result.finalizeReason !== 'aborted' && !req?.body?.isTemporary) {
+  if (!skipModelTitle && !req?.body?.isTemporary) {
     try {
       const titleCache = getLogStores(CacheKeys.GEN_TITLE);
       await titleCache.set(`${userId}-${conversationId}`, deepResearchTitle, 120000);
@@ -1017,4 +1236,4 @@ async function runNewDeepResearch(params) {
   return result;
 }
 
-module.exports = { runNewDeepResearch, buildDeepResearchTitle, isClarifyFollowUp };
+module.exports = { runNewDeepResearch, buildDeepResearchTitle, isDrFollowUp };

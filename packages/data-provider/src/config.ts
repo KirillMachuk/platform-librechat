@@ -1621,6 +1621,20 @@ export const deepResearchSchema = z.object({
    * kill-switch — no code deploy needed to disable.
    */
   clarify: z.boolean().default(true),
+  /**
+   * Present a research PLAN card (title + steps) before starting, with Start / Edit /
+   * Cancel + autostart — the ChatGPT-style plan gate (task #21). When on, the pre-graph
+   * decision returns a plan instead of running immediately; questions (clarify) remain a
+   * separate prior step. Default false → today's behaviour (no card). Pure kill-switch,
+   * no code deploy needed; flip per tenant once validated on lab.
+   */
+  planGate: z.boolean().default(false),
+  /**
+   * Seconds the plan card waits before auto-starting the research (client-side timer on
+   * the Start button). 0 → no autostart (manual Start only). Ignored when `planGate` is
+   * off. Default 60.
+   */
+  planAutoStartSec: z.number().int().min(0).max(600).default(60),
   modes: z
     .object({
       economy: deepResearchModeSchema.optional(),
