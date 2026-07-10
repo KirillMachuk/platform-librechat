@@ -97,13 +97,23 @@ function getPreliminaryResponseMessageId({ messageId, responseMessageId }) {
   return `${messageId.replace(/_+$/, '')}_`;
 }
 
-function getPreliminaryUserMessage({ messageId, parentMessageId, text }, conversationId) {
-  if (typeof messageId !== 'string' || messageId.length === 0) {
+function getPreliminaryUserMessage(
+  { messageId, parentMessageId, text, isRegenerate, overrideParentMessageId },
+  conversationId,
+) {
+  /** Stock parity (BaseClient.setMessageOptions): a REGENERATE reuses the EXISTING user
+   *  message — its id arrives as `overrideParentMessageId`, while `body.messageId` is a
+   *  fresh client placeholder. Building from the placeholder made the DR runner save a
+   *  DUPLICATE user message and branch the tree at the user level (live bug: the user
+   *  bubble "disappeared" behind a 2/2 sibling switcher after regenerating a plan card). */
+  const effectiveMessageId =
+    isRegenerate === true ? (overrideParentMessageId ?? messageId) : messageId;
+  if (typeof effectiveMessageId !== 'string' || effectiveMessageId.length === 0) {
     return null;
   }
 
   return {
-    messageId,
+    messageId: effectiveMessageId,
     parentMessageId,
     conversationId,
     text,
@@ -1166,3 +1176,5 @@ const _LegacyAgentController = async (req, res, next, initializeClient, addTitle
 };
 
 module.exports = AgentController;
+/** Test-only export: the regenerate/user-message shape has live-bug history (see JSDoc). */
+module.exports.getPreliminaryUserMessage = getPreliminaryUserMessage;

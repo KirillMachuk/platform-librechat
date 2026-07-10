@@ -96,6 +96,45 @@ describe('PlanCard', () => {
     expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
   });
 
+  it('ticks down from the MOUNT time when the live message has no createdAt (prod bug)', () => {
+    jest.useFakeTimers();
+    // Live-streamed plan messages have no createdAt until persisted; recomputing the base
+    // from Date.now() froze the counter at the full window and autostart never fired.
+    render(<PlanCard message={planMessage(undefined)} awaitingAction autoStartSec={2} />);
+    for (let i = 0; i < 3; i++) {
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+    }
+    expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+  });
+
+  it('keeps counting while the composer is merely FOCUSED but empty (prod bug)', () => {
+    jest.useFakeTimers();
+    const textarea = document.createElement('textarea');
+    textarea.id = 'prompt-textarea';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    try {
+      render(
+        <PlanCard
+          message={planMessage(new Date().toISOString())}
+          awaitingAction
+          autoStartSec={2}
+        />,
+      );
+      for (let i = 0; i < 3; i++) {
+        act(() => {
+          jest.advanceTimersByTime(1000);
+        });
+      }
+      // The composer keeps focus after sending a message — focus alone must not cancel.
+      expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+    } finally {
+      textarea.remove();
+    }
+  });
+
   it('reads the autostart window from startup config when no prop is given (R7)', () => {
     jest.useFakeTimers();
     mockStartupConfig = { deepResearch: { planGate: true, planAutoStartSec: 2 } };
