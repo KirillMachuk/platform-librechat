@@ -1,12 +1,14 @@
 const { EventSource } = require('eventsource');
-const { Time } = require('librechat-data-provider');
+const { Time, CacheKeys } = require('librechat-data-provider');
 const {
   mcpConfig,
+  cacheConfig,
   MCPManager,
   FlowStateManager,
   MCPServersRegistry,
   OAuthReconnectionManager,
 } = require('@librechat/api');
+const { assessFlowStatePersistence } = require('./flowState');
 const logger = require('./winston');
 
 global.EventSource = EventSource;
@@ -24,6 +26,14 @@ let actionFlowManager = null;
  */
 function getFlowStateManager(flowsCache) {
   if (!flowManager) {
+    const { ephemeral, warning } = assessFlowStatePersistence({
+      usesRedis: cacheConfig.USE_REDIS,
+      forcedInMemoryNamespaces: cacheConfig.FORCED_IN_MEMORY_CACHE_NAMESPACES,
+      flowsNamespace: CacheKeys.FLOWS,
+    });
+    if (ephemeral) {
+      logger.warn(warning);
+    }
     flowManager = new FlowStateManager(flowsCache, {
       ttl: mcpConfig.OAUTH_FLOW_TTL,
     });
