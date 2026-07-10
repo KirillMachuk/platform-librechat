@@ -107,7 +107,7 @@ describe('createFileSearchTool — суверенный реранк (RAG_RERANK
     );
   });
 
-  it('расширяет пул (k=candidates), реранкает кросс-файлово, relevance = rerank-score', async () => {
+  it('расширяет пул (k=candidates), реранкает кросс-файлово; реранк меняет ТОЛЬКО порядок, relevance остаётся дистанционной (урок 6)', async () => {
     getRagRerankConfig.mockReturnValue(RERANK_CONFIG);
     rerankOrder.mockResolvedValue([
       { index: 2, score: 0.93 },
@@ -130,10 +130,13 @@ describe('createFileSearchTool — суверенный реранк (RAG_RERANK
 
     const sources = msg.artifact[Tools.file_search].sources;
     expect(sources.map((s) => s.content[0])).toEqual(['Б', 'А', 'В']);
-    expect(sources[0].relevance).toBe(0.93);
+    // Метка НЕ подменяется rerank-скором (0.93): «Б» несёт свою дистанционную 1-0.3=0.7 —
+    // прод-A/B показал, что rerank-метка уводит модель в неверный пункт при ошибке реранкера.
+    expect(sources[0].relevance).toBeCloseTo(0.7);
     expect(sources[0].fileId).toBe('f1');
-    expect(sources[0].pageRelevance).toEqual({ 2: 0.93 });
-    expect(msg.content).toContain('Relevance: 0.9300');
+    expect(sources[0].pageRelevance[2]).toBeCloseTo(0.7);
+    expect(msg.content).toContain('Relevance: 0.7000');
+    expect(msg.content).not.toContain('Relevance: 0.9300');
   });
 
   it('fail-open: rerankOrder=null → порядок по дистанции и дистанционная relevance', async () => {
