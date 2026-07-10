@@ -13,6 +13,18 @@ import {
   parsePlanDecision,
 } from './plan';
 
+describe('marker literals (R6 pin)', () => {
+  it('pins the exact wire strings shared with packages/data-provider deepResearch.ts', () => {
+    // Duplicated in packages/data-provider/src/deepResearch.ts (this package cannot be
+    // imported from there). A drift silently breaks card↔runner routing, so BOTH packages
+    // pin the literals; change them together or the twin spec goes red.
+    expect(PLAN_MARKER).toBe('**План исследования:**');
+    expect(START_MARKER).toBe('▶ Начать исследование');
+    expect(CANCEL_MARKER).toBe('✕ Отменить исследование');
+    expect(CANCELLED_MESSAGE).toBe('Исследование отменено.');
+  });
+});
+
 describe('parsePlanDecision (fail-open to PROCEED)', () => {
   it('returns CLARIFY with trimmed questions when the model asks', () => {
     const out = parsePlanDecision('{"action":"CLARIFY","questions":[" Масштаб? ","Бюджет?"]}');

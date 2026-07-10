@@ -1409,6 +1409,12 @@ export type TStartupConfig = {
    * `immediate` = fetch in parallel with the active stream (default);
    * `final` = fetch only after the stream completes (legacy). */
   titleGenerationTiming?: 'immediate' | 'final';
+  /** Deep Research plan gate (task #21). Present only when the gate is enabled;
+   * `planAutoStartSec` drives the plan card's client-side autostart countdown (0 = manual). */
+  deepResearch?: {
+    planGate: boolean;
+    planAutoStartSec: number;
+  };
   analyticsGtmId?: string;
   rum?: TRumConfig;
   bundlerURL?: string;

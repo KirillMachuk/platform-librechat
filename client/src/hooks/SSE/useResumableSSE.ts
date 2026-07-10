@@ -891,6 +891,7 @@ export default function useResumableSSE(
           /** Terminal: drop any in-flight live estimate so the gauge doesn't
            *  keep counting stale streamed output after the stream ends */
           resetLive({ ...currentSubmission, userMessage });
+          setDrProgress(convoId, null);
           clearAllDrafts(convoId);
           if (optimisticStreamIdsRef.current.has(currentStreamId)) {
             clearAllDrafts(Constants.NEW_CONVO);
@@ -946,6 +947,7 @@ export default function useResumableSSE(
           sse.close();
           removeActiveJob(currentStreamId);
           resetLive({ ...currentSubmission, userMessage });
+          setDrProgress(currentSubmission.conversation?.conversationId, null);
           if (
             !createdStreamIdsRef.current.has(currentStreamId) &&
             optimisticStreamIdsRef.current.has(currentStreamId)
@@ -1032,6 +1034,7 @@ export default function useResumableSSE(
           /** Terminal: clear the in-flight live estimate like the other
            *  stop-reconnecting paths so the gauge doesn't show stale tokens */
           resetLive({ ...currentSubmission, userMessage });
+          setDrProgress(currentSubmission.conversation?.conversationId, null);
           // Optimistically remove from active jobs on max retries
           removeActiveJob(currentStreamId);
           if (
@@ -1284,6 +1287,9 @@ export default function useResumableSSE(
       } else {
         // New generation: start and then subscribe
         console.log('[ResumableSSE] Starting NEW generation');
+        // Task #21: a fresh turn must never inherit a previous run's DR progress snapshot
+        // (e.g. after an errored DR run) — clear it up front; a real DR run repopulates it.
+        setDrProgress(submission.conversation?.conversationId, null);
         const newStreamId = await startGeneration(submission, signal);
         if (signal.aborted) {
           return;

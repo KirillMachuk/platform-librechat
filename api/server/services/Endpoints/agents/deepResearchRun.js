@@ -812,10 +812,6 @@ async function runNewDeepResearch(params) {
     tenantId: req?.user?.tenantId,
   });
   try {
-    if (otherActiveJobs >= MAX_CONCURRENT_DR) {
-      throw new DeepResearchCapError();
-    }
-
     /**
      * Every research node needs a non-reasoning model. `resolveDeepResearchModel`
      * returns undefined (never a reasoning model) when a mode is misconfigured with
@@ -853,6 +849,13 @@ async function runNewDeepResearch(params) {
           : { kind: 'fresh', dialogue: null, originalRequest: text ?? '' };
     }
     const researchInput = turn.dialogue ?? text ?? '';
+
+    // The concurrency cap runs AFTER turn classification: a plan-cancel costs nothing (no
+    // model, no graph) and must always succeed — a 'limit' refusal would leave the plan as
+    // the branch tip, keeping follow-ups routed into DR with no way to dismiss it.
+    if (otherActiveJobs >= MAX_CONCURRENT_DR && turn.kind !== 'plan-cancel') {
+      throw new DeepResearchCapError();
+    }
 
     // Track B (sovereign DR): mask the user's question ONCE, then run the graph in anonymizer
     // passthrough so ONLY user data (question + documents) is masked — never the public web.

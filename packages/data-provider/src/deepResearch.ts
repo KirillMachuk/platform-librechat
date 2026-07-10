@@ -8,6 +8,10 @@
 /** Fixed first line of a PLAN card message — how a plan turn is detected. */
 export const DR_PLAN_MARKER = '**План исследования:**';
 
+/** Fixed first line of a CLARIFY message (mirrors packages/api clarify.ts CLARIFY_MARKER).
+ *  Used only to recognise a DR assistant turn when detecting the report that follows it. */
+export const DR_CLARIFY_MARKER = '**Уточните, пожалуйста, детали исследования:**';
+
 /** Exact text the "Начать" button / autostart sends as the user's turn-2 message. */
 export const DR_START_MARKER = '▶ Начать исследование';
 
@@ -20,6 +24,16 @@ export const DR_CANCELLED_MESSAGE = 'Исследование отменено.'
 /** True if a message is a PLAN card (detected by the fixed marker). */
 export function isDrPlanMessage(text: string): boolean {
   return typeof text === 'string' && text.trimStart().startsWith(DR_PLAN_MARKER);
+}
+
+/** True if a message is a DR assistant turn that a user reply continues into research —
+ *  a PLAN card or a CLARIFY questions message. Used to recognise a report by its ancestry. */
+export function isDrAssistantTurn(text: string): boolean {
+  if (typeof text !== 'string') {
+    return false;
+  }
+  const head = text.trimStart();
+  return head.startsWith(DR_PLAN_MARKER) || head.startsWith(DR_CLARIFY_MARKER);
 }
 
 /** True if a message is the exact "start research" command (button/autostart). */

@@ -4,12 +4,18 @@ import type { TMessage } from 'librechat-data-provider';
 import PlanCard from '../PlanCard';
 
 const mockSubmit = jest.fn();
+let mockStartupConfig:
+  | { deepResearch?: { planGate: boolean; planAutoStartSec: number } }
+  | undefined;
 
 jest.mock('~/hooks/Messages', () => ({
   useSubmitMessage: () => ({ submitMessage: mockSubmit }),
 }));
 jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string) => key,
+}));
+jest.mock('~/data-provider', () => ({
+  useGetStartupConfig: () => ({ data: mockStartupConfig }),
 }));
 jest.mock('~/common', () => ({ mainTextareaId: 'prompt-textarea' }));
 jest.mock('lucide-react', () => ({ Telescope: () => <svg data-testid="telescope" /> }));
@@ -39,6 +45,7 @@ describe('PlanCard', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useRealTimers();
+    mockStartupConfig = undefined;
   });
 
   it('renders the title and steps', () => {
@@ -87,6 +94,43 @@ describe('PlanCard', () => {
       });
     }
     expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+  });
+
+  it('reads the autostart window from startup config when no prop is given (R7)', () => {
+    jest.useFakeTimers();
+    mockStartupConfig = { deepResearch: { planGate: true, planAutoStartSec: 2 } };
+    render(<PlanCard message={planMessage(new Date().toISOString())} awaitingAction />);
+    for (let i = 0; i < 3; i++) {
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+    }
+    expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+  });
+
+  it('does NOT autostart while the user is composing in the main textarea (R3)', () => {
+    jest.useFakeTimers();
+    const textarea = document.createElement('textarea');
+    textarea.id = 'prompt-textarea';
+    textarea.value = 'уточни план: только РФ';
+    document.body.appendChild(textarea);
+    try {
+      render(
+        <PlanCard
+          message={planMessage(new Date().toISOString())}
+          awaitingAction
+          autoStartSec={2}
+        />,
+      );
+      for (let i = 0; i < 5; i++) {
+        act(() => {
+          jest.advanceTimersByTime(1000);
+        });
+      }
+      expect(mockSubmit).not.toHaveBeenCalled();
+    } finally {
+      textarea.remove();
+    }
   });
 
   it('does NOT autostart a plan whose window already elapsed (reopened much later)', () => {

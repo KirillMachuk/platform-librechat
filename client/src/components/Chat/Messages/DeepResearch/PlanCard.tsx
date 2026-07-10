@@ -3,12 +3,33 @@ import { Telescope } from 'lucide-react';
 import { Button } from '@librechat/client';
 import { parseDrPlanMessage, DR_START_MARKER, DR_CANCEL_MARKER } from 'librechat-data-provider';
 import type { TMessage } from 'librechat-data-provider';
+import { useGetStartupConfig } from '~/data-provider';
 import { useSubmitMessage } from '~/hooks/Messages';
 import { mainTextareaId } from '~/common';
 import { useLocalize } from '~/hooks';
 
 /** Default autostart window (seconds) for the plan card; 0 → manual start only. */
 export const DR_PLAN_AUTOSTART_SEC = 60;
+
+/** Seconds left in the autostart window, from the message's wall-clock age. */
+function remainingFrom(createdAt: string | undefined, autoStartSec: number): number | null {
+  if (!autoStartSec) {
+    return null;
+  }
+  const createdMs = createdAt ? new Date(createdAt).getTime() : Date.now();
+  const left = autoStartSec - Math.floor((Date.now() - createdMs) / 1000);
+  return left > 0 ? left : null;
+}
+
+/** True while the user is composing in the main textarea (focused or non-empty) —
+ *  autostart must never fire under someone typing a plan edit. */
+function isComposerBusy(): boolean {
+  const textarea = document.getElementById(mainTextareaId) as HTMLTextAreaElement | null;
+  if (!textarea) {
+    return false;
+  }
+  return document.activeElement === textarea || textarea.value.trim().length > 0;
+}
 
 /**
  * The ChatGPT-style Deep Research PLAN card (task #21): shows the research plan (title +
@@ -18,13 +39,14 @@ export const DR_PLAN_AUTOSTART_SEC = 60;
  *
  * `awaitingAction` is true only while the plan is the unanswered tip of the branch — once a
  * turn follows it (start/edit/cancel) the card renders statically (no timer, no buttons).
- * The countdown is anchored to the message's creation time, so a plan reopened long after it
- * was shown never surprise-starts (the window has already elapsed → manual only).
+ * The countdown derives from the message's wall-clock age on EVERY tick (immune to
+ * background-tab timer throttling), so a plan reopened after its window never surprise-
+ * starts, and typing in the composer cancels the autostart (manual mode).
  */
 export default function PlanCard({
   message,
   awaitingAction,
-  autoStartSec = DR_PLAN_AUTOSTART_SEC,
+  autoStartSec,
 }: {
   message: TMessage;
   awaitingAction: boolean;
@@ -32,17 +54,15 @@ export default function PlanCard({
 }) {
   const localize = useLocalize();
   const { submitMessage } = useSubmitMessage();
+  const { data: startupConfig } = useGetStartupConfig();
+  const effectiveAutoStartSec =
+    autoStartSec ?? startupConfig?.deepResearch?.planAutoStartSec ?? DR_PLAN_AUTOSTART_SEC;
   const { title, steps } = useMemo(() => parseDrPlanMessage(message.text ?? ''), [message.text]);
   const [acted, setActed] = useState(false);
 
-  const [remaining, setRemaining] = useState<number | null>(() => {
-    if (!awaitingAction || !autoStartSec) {
-      return null;
-    }
-    const createdMs = message.createdAt ? new Date(message.createdAt).getTime() : Date.now();
-    const left = autoStartSec - Math.floor((Date.now() - createdMs) / 1000);
-    return left > 0 ? left : null;
-  });
+  const [remaining, setRemaining] = useState<number | null>(() =>
+    awaitingAction ? remainingFrom(message.createdAt, effectiveAutoStartSec) : null,
+  );
 
   const start = useCallback(() => {
     setActed((was) => {
@@ -80,9 +100,15 @@ export default function PlanCard({
       start();
       return;
     }
-    const timer = setTimeout(() => setRemaining((r) => (r == null ? null : r - 1)), 1000);
+    const timer = setTimeout(() => {
+      if (isComposerBusy()) {
+        setRemaining(null);
+        return;
+      }
+      setRemaining(remainingFrom(message.createdAt, effectiveAutoStartSec) ?? 0);
+    }, 1000);
     return () => clearTimeout(timer);
-  }, [awaitingAction, acted, remaining, start]);
+  }, [awaitingAction, acted, remaining, start, message.createdAt, effectiveAutoStartSec]);
 
   const showControls = awaitingAction && !acted;
 
