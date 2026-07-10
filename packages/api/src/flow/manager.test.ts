@@ -293,6 +293,41 @@ describe('FlowStateManager', () => {
     });
   });
 
+  describe('completeFlow - lost flow degradation (E-H8)', () => {
+    const flowId = 'lost-flow';
+    const type = 'mcp_oauth';
+
+    it('returns false without throwing when the flow state is missing', async () => {
+      expect(await store.get(`${type}:${flowId}`)).toBeUndefined();
+
+      const result = await flowManager.completeFlow(flowId, type, 'tokens');
+
+      expect(result).toBe(false);
+    });
+
+    it('completes and stores the result when the flow exists', async () => {
+      await flowManager.initFlow(flowId, type, {});
+
+      const result = await flowManager.completeFlow(flowId, type, 'tokens');
+
+      expect(result).toBe(true);
+      const stored = (await store.get(`${type}:${flowId}`)) as FlowState<string> | undefined;
+      expect(stored?.status).toBe('COMPLETED');
+      expect(stored?.result).toBe('tokens');
+    });
+
+    it('is idempotent — a second completion of an already-completed flow is a no-op success', async () => {
+      await flowManager.initFlow(flowId, type, {});
+      await flowManager.completeFlow(flowId, type, 'tokens');
+
+      const result = await flowManager.completeFlow(flowId, type, 'other-tokens');
+
+      expect(result).toBe(true);
+      const stored = (await store.get(`${type}:${flowId}`)) as FlowState<string> | undefined;
+      expect(stored?.result).toBe('tokens');
+    });
+  });
+
   describe('createFlowWithHandler - token expiration', () => {
     const flowId = 'token-flow';
     const type = 'mcp_get_tokens';

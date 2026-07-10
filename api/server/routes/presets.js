@@ -2,7 +2,8 @@ const crypto = require('crypto');
 const express = require('express');
 const { logger } = require('@librechat/data-schemas');
 const { getPresets, savePreset, deletePresets } = require('~/models');
-const requireJwtAuth = require('~/server/middleware/requireJwtAuth');
+const { requireJwtAuth, configMiddleware } = require('~/server/middleware');
+const { stripDroppedPresetParams } = require('~/server/utils/presets');
 
 const router = express.Router();
 router.use(requireJwtAuth);
@@ -12,8 +13,11 @@ router.get('/', async (req, res) => {
   res.status(200).json(presets);
 });
 
-router.post('/', async (req, res) => {
-  const update = req.body || {};
+router.post('/', configMiddleware, async (req, res) => {
+  /** Strip parameters the endpoint drops at request time so a preset never
+   *  persists dead settings the backend would ignore (req.config resolved by
+   *  configMiddleware; a missing config safely strips nothing). */
+  const update = stripDroppedPresetParams(req.body || {}, req.config);
 
   update.presetId = update?.presetId || crypto.randomUUID();
 

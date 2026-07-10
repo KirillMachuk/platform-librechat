@@ -15,6 +15,7 @@ export * from './migration';
 export * from './openai';
 export * from './transactions';
 export * from './usage';
+export * from './balance';
 export * from './resources';
 export * from './responses';
 export * from './skills';

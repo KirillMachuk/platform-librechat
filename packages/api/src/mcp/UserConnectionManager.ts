@@ -17,6 +17,7 @@ import { MCPConnectionFactory } from '~/mcp/MCPConnectionFactory';
 import { preProcessGraphTokens } from '~/utils/graph';
 import { isMCPDomainAllowed } from '~/auth/domain';
 import { PENDING_STALE_MS } from '~/flow/manager';
+import { Semaphore, SemaphoreCapacityError } from './semaphore';
 import { MCPConnection } from './connection';
 import { processMCPEnv } from '~/utils/env';
 import { mcpConfig } from './mcpConfig';
@@ -54,6 +55,24 @@ export abstract class UserConnectionManager {
   protected userLastActivity: Map<string, number> = new Map();
   /** In-flight connection promises keyed by `userId:serverName` — coalesces concurrent attempts */
   protected pendingConnections: Map<string, PendingConnection> = new Map();
+  /**
+   * Bounds concurrent non-ephemeral, non-OAuth connection establishments across
+   * the process so a connection storm can't exhaust memory/file descriptors
+   * under load. Slots are released as each establishment settles. OAuth flows
+   * are excluded (human-paced and already bounded by OAUTH_HANDLING_TIMEOUT, so
+   * holding a slot for a multi-minute user wait would starve everyone) and are
+   * instead memory-bounded by the per-user cached-connection cap.
+   */
+  protected readonly connectionSetupSemaphore = new Semaphore(
+    mcpConfig.MAX_CONCURRENT_CONNECTION_SETUPS,
+    mcpConfig.CONNECTION_SETUP_MAX_QUEUE,
+  );
+
+  /** Cumulative connection-setup rejection counters, surfaced by getConnectionStats. */
+  protected readonly connectionSetupMetrics = {
+    setupQueueRejections: 0,
+    userCapRejections: 0,
+  };
 
   /** Updates the last activity timestamp for a user */
   protected updateUserLastActivity(userId: string): void {
@@ -358,6 +377,65 @@ export abstract class UserConnectionManager {
     }
   }
 
+  /**
+   * Enforces the per-user cached-connection cap before establishing a NEW
+   * cached server connection. Replacing an already-cached server is always
+   * allowed; ephemeral connections are never cached, so callers skip this.
+   * @throws {McpError} when the user is at the cap for a new server.
+   */
+  protected assertUserConnectionCapacity(userId: string, serverName: string): void {
+    const userServerMap = this.userConnections.get(userId);
+    if (userServerMap?.has(serverName)) {
+      return;
+    }
+    if ((userServerMap?.size ?? 0) >= mcpConfig.USER_MAX_CACHED_CONNECTIONS) {
+      this.connectionSetupMetrics.userCapRejections++;
+      logger.warn(
+        `[MCP][User: ${userId}][${serverName}] Per-user cached connection cap ` +
+          `(${mcpConfig.USER_MAX_CACHED_CONNECTIONS}) reached; rejecting new connection`,
+      );
+      throw new McpError(
+        ErrorCode.InternalError,
+        `[MCP][${serverName}] Per-user connection limit reached; close an existing connection and retry.`,
+      );
+    }
+  }
+
+  /**
+   * Acquires a concurrency slot for a cacheable, non-OAuth connection setup,
+   * returning a single-use release to call once the establishment settles.
+   * Returns a no-op release when `limited` is false (ephemeral or OAuth
+   * connections are excluded from the cap). Rejects with an `McpError` — after
+   * bumping the rejection metric — when no slot frees within the queue timeout
+   * or the wait queue is full, so setups fail fast instead of hanging.
+   */
+  protected async acquireConnectionSetupSlot(
+    userId: string,
+    serverName: string,
+    limited: boolean,
+  ): Promise<() => void> {
+    if (!limited) {
+      return () => {};
+    }
+    try {
+      return await this.connectionSetupSemaphore.acquire(mcpConfig.CONNECTION_SETUP_QUEUE_TIMEOUT);
+    } catch (error) {
+      if (error instanceof SemaphoreCapacityError) {
+        this.connectionSetupMetrics.setupQueueRejections++;
+        logger.warn(
+          `[MCP][User: ${userId}][${serverName}] Connection setup rejected (${error.reason}): ` +
+            `${this.connectionSetupSemaphore.active}/${this.connectionSetupSemaphore.limit} slots in use, ` +
+            `${this.connectionSetupSemaphore.queued} waiting`,
+        );
+        throw new McpError(
+          ErrorCode.InternalError,
+          `[MCP][${serverName}] Connection setup capacity exceeded; please retry shortly.`,
+        );
+      }
+      throw error;
+    }
+  }
+
   private async createUserConnectionInternal(
     {
       serverName,
@@ -511,23 +589,36 @@ export abstract class UserConnectionManager {
         };
       }
 
-      connection = await MCPConnectionFactory.create(basic, connectionOptions);
-
-      if (!(await connection?.isConnected())) {
-        throw new Error('Failed to establish connection after initialization attempt.');
-      }
-
       if (!ephemeralConnection) {
-        if (!this.userConnections.has(userId)) {
-          this.userConnections.set(userId, new Map());
-        }
-        this.userConnections.get(userId)?.set(serverName, connection);
+        this.assertUserConnectionCapacity(userId, serverName);
       }
 
-      logger.info(`[MCP][User: ${userId}][${serverName}] Connection successfully established`);
-      // Update timestamp on creation
-      this.updateUserLastActivity(userId);
-      return connection;
+      const releaseSetupSlot = await this.acquireConnectionSetupSlot(
+        userId,
+        serverName,
+        !ephemeralConnection && !useOAuth,
+      );
+      try {
+        connection = await MCPConnectionFactory.create(basic, connectionOptions);
+
+        if (!(await connection?.isConnected())) {
+          throw new Error('Failed to establish connection after initialization attempt.');
+        }
+
+        if (!ephemeralConnection) {
+          if (!this.userConnections.has(userId)) {
+            this.userConnections.set(userId, new Map());
+          }
+          this.userConnections.get(userId)?.set(serverName, connection);
+        }
+
+        logger.info(`[MCP][User: ${userId}][${serverName}] Connection successfully established`);
+        // Update timestamp on creation
+        this.updateUserLastActivity(userId);
+        return connection;
+      } finally {
+        releaseSetupSlot();
+      }
     } catch (error) {
       logger.error(`[MCP][User: ${userId}][${serverName}] Failed to establish connection`, error);
       // Ensure partial connection state is cleaned up if initialization fails
@@ -783,6 +874,10 @@ export abstract class UserConnectionManager {
     totalConnections: number;
     activityEntries: number;
     appConnectionCount: number;
+    activeSetups: number;
+    queuedSetups: number;
+    setupQueueRejections: number;
+    userCapRejections: number;
   } {
     let totalConnections = 0;
     for (const serverMap of this.userConnections.values()) {
@@ -793,6 +888,10 @@ export abstract class UserConnectionManager {
       totalConnections,
       activityEntries: this.userLastActivity.size,
       appConnectionCount: this.appConnections?.getConnectionCount() ?? 0,
+      activeSetups: this.connectionSetupSemaphore.active,
+      queuedSetups: this.connectionSetupSemaphore.queued,
+      setupQueueRejections: this.connectionSetupMetrics.setupQueueRejections,
+      userCapRejections: this.connectionSetupMetrics.userCapRejections,
     };
   }
 }

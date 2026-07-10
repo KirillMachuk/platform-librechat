@@ -42,3 +42,30 @@ describe('loadCustomEndpointsConfig – native provider param set', () => {
     );
   });
 });
+
+describe('loadCustomEndpointsConfig – dropParams passthrough', () => {
+  it('forwards a non-empty dropParams array to the client-facing config', () => {
+    const config = loadCustomEndpointsConfig([
+      { ...baseEndpoint, name: '1ma', dropParams: ['stop', 'web_search'] },
+    ] as unknown as TCustomEndpoints);
+
+    expect(config?.['1ma']?.dropParams).toEqual(['stop', 'web_search']);
+  });
+
+  it('omits dropParams entirely when the endpoint has none', () => {
+    const config = loadCustomEndpointsConfig([
+      { ...baseEndpoint, name: 'My-LLM' },
+    ] as unknown as TCustomEndpoints);
+
+    expect(config?.['My-LLM']).toBeDefined();
+    expect(config?.['My-LLM'] && 'dropParams' in config['My-LLM']).toBe(false);
+  });
+
+  it('omits dropParams when configured as an empty array', () => {
+    const config = loadCustomEndpointsConfig([
+      { ...baseEndpoint, name: 'My-LLM', dropParams: [] },
+    ] as unknown as TCustomEndpoints);
+
+    expect(config?.['My-LLM'] && 'dropParams' in config['My-LLM']).toBe(false);
+  });
+});
