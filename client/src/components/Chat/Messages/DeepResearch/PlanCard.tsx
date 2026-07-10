@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Telescope } from 'lucide-react';
 import { Button } from '@librechat/client';
 import { parseDrPlanMessage, DR_START_MARKER, DR_CANCEL_MARKER } from 'librechat-data-provider';
@@ -11,24 +11,34 @@ import { useLocalize } from '~/hooks';
 /** Default autostart window (seconds) for the plan card; 0 → manual start only. */
 export const DR_PLAN_AUTOSTART_SEC = 60;
 
-/** Seconds left in the autostart window, from the message's wall-clock age. */
-function remainingFrom(createdAt: string | undefined, autoStartSec: number): number | null {
+/**
+ * Seconds left in the autostart window, from the message's wall-clock age. A LIVE plan
+ * message has no `createdAt` yet (it is set on persistence), so the card's mount time is
+ * the fallback anchor — recomputing from `Date.now()` on every tick made the value freeze
+ * at the full window (same number → React bails out → the timer never rescheduled; live
+ * bug: a counter stuck at 60). Clamped to the window against server/client clock skew.
+ */
+function remainingFrom(
+  createdAt: string | undefined,
+  autoStartSec: number,
+  fallbackMs: number,
+): number | null {
   if (!autoStartSec) {
     return null;
   }
-  const createdMs = createdAt ? new Date(createdAt).getTime() : Date.now();
-  const left = autoStartSec - Math.floor((Date.now() - createdMs) / 1000);
+  const parsedMs = createdAt ? new Date(createdAt).getTime() : NaN;
+  const baseMs = Number.isFinite(parsedMs) ? parsedMs : fallbackMs;
+  const left = Math.min(autoStartSec, autoStartSec - Math.floor((Date.now() - baseMs) / 1000));
   return left > 0 ? left : null;
 }
 
-/** True while the user is composing in the main textarea (focused or non-empty) —
- *  autostart must never fire under someone typing a plan edit. */
+/** True while the user has actually TYPED something in the main textarea — autostart must
+ *  never fire under someone composing a plan edit. Focus alone is NOT a signal: the
+ *  composer keeps focus after sending a message, which killed the countdown on its very
+ *  first tick (live bug: the counter vanished and autostart never happened). */
 function isComposerBusy(): boolean {
   const textarea = document.getElementById(mainTextareaId) as HTMLTextAreaElement | null;
-  if (!textarea) {
-    return false;
-  }
-  return document.activeElement === textarea || textarea.value.trim().length > 0;
+  return textarea != null && textarea.value.trim().length > 0;
 }
 
 /**
@@ -60,8 +70,11 @@ export default function PlanCard({
   const { title, steps } = useMemo(() => parseDrPlanMessage(message.text ?? ''), [message.text]);
   const [acted, setActed] = useState(false);
 
+  const mountedAtRef = useRef<number>(Date.now());
   const [remaining, setRemaining] = useState<number | null>(() =>
-    awaitingAction ? remainingFrom(message.createdAt, effectiveAutoStartSec) : null,
+    awaitingAction
+      ? remainingFrom(message.createdAt, effectiveAutoStartSec, mountedAtRef.current)
+      : null,
   );
 
   const start = useCallback(() => {
@@ -105,7 +118,9 @@ export default function PlanCard({
         setRemaining(null);
         return;
       }
-      setRemaining(remainingFrom(message.createdAt, effectiveAutoStartSec) ?? 0);
+      setRemaining(
+        remainingFrom(message.createdAt, effectiveAutoStartSec, mountedAtRef.current) ?? 0,
+      );
     }, 1000);
     return () => clearTimeout(timer);
   }, [awaitingAction, acted, remaining, start, message.createdAt, effectiveAutoStartSec]);

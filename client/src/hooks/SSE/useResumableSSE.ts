@@ -58,7 +58,10 @@ const getStreamStartFailureData = (errorData?: Record<string, unknown>): TResDat
     metadata: markStreamStartFailedMetadata(),
   }) as unknown as TResData;
 
-const MAX_RETRIES = 5;
+/** Online-failure retry budget (offline pauses instead — see the `online`-event wait).
+ *  8 attempts ≈ 1+2+4+8+16+30+30+30s ≈ 2 min of server unavailability before giving up —
+ *  a long research run should survive a deploy/restart window, not just a blip. */
+const MAX_RETRIES = 8;
 const START_GENERATION_NETWORK_RETRIES = 3;
 const START_GENERATION_READINESS_TIMEOUT_MS = 120000;
 const SERVER_NOT_READY_CODE = 'SERVER_NOT_READY';
@@ -475,6 +478,15 @@ export default function useResumableSSE(
   const submissionRef = useRef<TSubmission | null>(null);
   const optimisticStreamIdsRef = useRef(new Set<string>());
   const createdStreamIdsRef = useRef(new Set<string>());
+  /** Pending `online`-event listener while reconnects are paused offline (one at a time). */
+  const onlineHandlerRef = useRef<(() => void) | null>(null);
+
+  const clearOnlineWait = useCallback(() => {
+    if (onlineHandlerRef.current) {
+      window.removeEventListener('online', onlineHandlerRef.current);
+      onlineHandlerRef.current = null;
+    }
+  }, []);
 
   const {
     stepHandler,
@@ -534,6 +546,10 @@ export default function useResumableSSE(
           stepHandler(event, submission);
         }
       };
+
+      // A fresh subscription supersedes any parked offline wait — without this a stale
+      // `online` handler could fire later and double-subscribe to the same stream.
+      clearOnlineWait();
 
       const baseUrl = `${apiBaseUrl()}/api/agents/chat/stream/${encodeURIComponent(currentStreamId)}`;
       const url = isResume ? `${baseUrl}?resume=true` : baseUrl;
@@ -1005,6 +1021,28 @@ export default function useResumableSSE(
           hasData: !!e.data,
         });
 
+        // Browser offline: retrying just burns the attempt budget against a dead NIC while
+        // the server-side run keeps going (live bug: a ~30s Wi-Fi blip exhausted all
+        // retries → terminal "Ошибка подключения" over a research that later completed).
+        // Park until the browser's `online` event, then resume with a fresh budget.
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          console.log('[ResumableSSE] Browser is offline — waiting for the online event');
+          sse.close();
+          clearOnlineWait();
+          const onOnline = () => {
+            clearOnlineWait();
+            reconnectAttemptRef.current = 0;
+            if (submissionRef.current) {
+              subscribeToStream(currentStreamId, submissionRef.current, true);
+            }
+          };
+          onlineHandlerRef.current = onOnline;
+          window.addEventListener('online', onOnline);
+          setIsSubmitting(true);
+          setShowStopButton(true);
+          return;
+        }
+
         if (reconnectAttemptRef.current < MAX_RETRIES) {
           // Increment counter BEFORE close() so abort handler knows we're reconnecting
           reconnectAttemptRef.current++;
@@ -1140,6 +1178,7 @@ export default function useResumableSSE(
       seedLive,
       handleDrProgress,
       setDrProgress,
+      clearOnlineWait,
     ],
   );
 
@@ -1243,6 +1282,7 @@ export default function useResumableSSE(
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
       }
+      clearOnlineWait();
       // Close SSE but do NOT dispatch cancel - navigation should not abort
       if (sseRef.current) {
         sseRef.current.close();
@@ -1336,6 +1376,7 @@ export default function useResumableSSE(
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
       }
+      clearOnlineWait();
       // Reset reconnect counter before closing (so abort handler doesn't think we're reconnecting)
       reconnectAttemptRef.current = 0;
       if (sseRef.current) {
