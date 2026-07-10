@@ -50,10 +50,12 @@ const {
   buildSkillPrimeContentParts,
   buildInitialToolSessions,
   armDeepResearchBudget,
+  createAgentTurnBalanceGuard,
 } = require('@librechat/api');
 const {
   Callback,
   Providers,
+  GraphEvents,
   TitleMethod,
   formatMessage,
   formatAgentMessages,
@@ -72,6 +74,7 @@ const {
   isAgentsEndpoint,
   isEphemeralAgentId,
   removeNullishValues,
+  supportsBalanceCheck,
   DEFAULT_MEMORY_MAX_INPUT_TOKENS,
 } = require('librechat-data-provider');
 const { filterFilesByAgentAccess } = require('~/server/services/Files/permissions');
@@ -81,7 +84,19 @@ const { resolveConfigServers } = require('~/server/services/MCP');
 const { getMCPServerTools } = require('~/server/services/Config');
 const BaseClient = require('~/app/clients/BaseClient');
 const { getMCPManager } = require('~/config');
+const { logViolation } = require('~/cache');
 const db = require('~/models');
+
+/**
+ * Optional extra safety buffer (in balance credits) for the per-turn balance
+ * recheck: the run is stopped once `balance - in-flight spend <= buffer`.
+ * Default 0 — stop only at/under an exhausted (<= 0) balance. Env-configurable
+ * so an operator can leave headroom without a code change.
+ */
+const BALANCE_RECHECK_BUFFER_CREDITS = Math.max(
+  0,
+  Number(process.env.AGENT_BALANCE_RECHECK_BUFFER_CREDITS) || 0,
+);
 
 const loadAgent = (params) => loadAgentFn(params, { getAgent: db.getAgent, getMCPServerTools });
 
@@ -1175,6 +1190,49 @@ class AgentClient extends BaseClient {
         });
       }
 
+      /**
+       * Per-turn balance recheck (E-H3): the pre-request check in `BaseClient`
+       * only fires once, so a long multi-turn tool loop (or concurrent requests
+       * draining the same balance) could overspend within a single message. Arm
+       * a read-only guard on `CHAT_MODEL_START` that, before every turn after the
+       * first, prices the run's in-flight `collectedUsage` and stops the run if
+       * the balance can no longer cover it. This adds NO new spend — the
+       * authoritative debit still happens once post-run in the `finally` below.
+       */
+      const balanceRecheckEnabled =
+        balanceConfig?.enabled === true &&
+        supportsBalanceCheck[this.options.endpointType ?? this.options.endpoint] === true;
+      if (balanceRecheckEnabled && this.options.eventHandlers) {
+        this.options.eventHandlers[GraphEvents.CHAT_MODEL_START] = createAgentTurnBalanceGuard({
+          enabled: true,
+          user: this.user ?? this.options.req.user?.id,
+          collectedUsage: this.collectedUsage,
+          findBalanceByUser: db.findBalanceByUser,
+          pricing: { getMultiplier: db.getMultiplier, getCacheMultiplier: db.getCacheMultiplier },
+          bufferCredits: BALANCE_RECHECK_BUFFER_CREDITS,
+          endpointTokenConfig: this.options.endpointTokenConfig,
+          resolveEndpointTokenConfig: (usage) => this.resolveAgentEndpointTokenConfig(usage),
+          logger,
+          onExhausted: async (errorMessage) => {
+            try {
+              await logViolation(
+                this.options.req,
+                this.options.res,
+                errorMessage.type,
+                errorMessage,
+                0,
+              );
+            } catch (violationErr) {
+              logger.warn('[AgentClient] Failed to log mid-run balance violation', violationErr);
+            }
+            const balanceError = new Error(JSON.stringify(errorMessage));
+            balanceError.balanceExhausted = true;
+            balanceError.balanceErrorMessage = errorMessage;
+            throw balanceError;
+          },
+        });
+      }
+
       /** @type {AppConfig['endpoints']['agents']} */
       const agentsEConfig = appConfig.endpoints?.[EModelEndpoint.agents];
 
@@ -1543,14 +1601,25 @@ class AgentClient extends BaseClient {
         );
       }
       if (!abortController.signal.aborted) {
-        logger.error(
-          '[api/server/controllers/agents/client.js #sendCompletion] Unhandled error type',
-          err,
-        );
-        this.contentParts.push({
-          type: ContentTypes.ERROR,
-          [ContentTypes.ERROR]: getUserFacingError(err),
-        });
+        if (err?.balanceExhausted && err.balanceErrorMessage) {
+          /** Mid-run balance recheck (E-H3) stopped the run. Surface the same
+           *  token_balance content part the client already renders instead of a
+           *  generic error, and skip the "unhandled error" log — this is an
+           *  expected, controlled stop, not a fault. */
+          this.contentParts.push({
+            type: ContentTypes.ERROR,
+            [ContentTypes.ERROR]: JSON.stringify(err.balanceErrorMessage),
+          });
+        } else {
+          logger.error(
+            '[api/server/controllers/agents/client.js #sendCompletion] Unhandled error type',
+            err,
+          );
+          this.contentParts.push({
+            type: ContentTypes.ERROR,
+            [ContentTypes.ERROR]: getUserFacingError(err),
+          });
+        }
       }
     } finally {
       /** Clear the Deep Research budget watchdog on every exit path (success,
