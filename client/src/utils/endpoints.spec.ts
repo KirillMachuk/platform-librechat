@@ -1,6 +1,14 @@
 import { EModelEndpoint, getEndpointField } from 'librechat-data-provider';
-import type { TEndpointsConfig, TConfig } from 'librechat-data-provider';
-import { getAvailableEndpoints, getEndpointsFilter, mapEndpoints } from './endpoints';
+import type { TEndpointsConfig, TConfig, SettingDefinition } from 'librechat-data-provider';
+import {
+  mapEndpoints,
+  getEndpointsFilter,
+  filterDroppedParams,
+  getAvailableEndpoints,
+} from './endpoints';
+
+const asSettings = (...keys: string[]): SettingDefinition[] =>
+  keys.map((key) => ({ key })) as unknown as SettingDefinition[];
 
 const mockEndpointsConfig: TEndpointsConfig = {
   [EModelEndpoint.openAI]: { type: undefined, iconURL: 'openAI_icon.png', order: 0 },
@@ -81,5 +89,41 @@ describe('mapEndpoints', () => {
   it('returns sorted available endpoints', () => {
     const expectedOrder = [EModelEndpoint.openAI, EModelEndpoint.google, 'Mistral'];
     expect(mapEndpoints(mockEndpointsConfig)).toEqual(expectedOrder);
+  });
+});
+
+describe('filterDroppedParams', () => {
+  it('returns the same array reference when dropParams is undefined', () => {
+    const params = asSettings('temperature', 'stop');
+    expect(filterDroppedParams(params, undefined)).toBe(params);
+  });
+
+  it('returns the same array reference when dropParams is empty', () => {
+    const params = asSettings('temperature', 'stop');
+    expect(filterDroppedParams(params, [])).toBe(params);
+  });
+
+  it('removes settings whose key is dropped', () => {
+    const params = asSettings('temperature', 'stop', 'top_p');
+    const result = filterDroppedParams(params, ['stop']);
+    expect(result.map((p) => p.key)).toEqual(['temperature', 'top_p']);
+  });
+
+  it('hides the web_search toggle when web_search is dropped', () => {
+    const params = asSettings('temperature', 'web_search');
+    const result = filterDroppedParams(params, ['web_search']);
+    expect(result.map((p) => p.key)).toEqual(['temperature']);
+  });
+
+  it('drops multiple params at once and leaves the rest untouched', () => {
+    const params = asSettings('temperature', 'stop', 'web_search', 'top_p');
+    const result = filterDroppedParams(params, ['stop', 'web_search']);
+    expect(result.map((p) => p.key)).toEqual(['temperature', 'top_p']);
+  });
+
+  it('ignores dropParams entries that match no setting', () => {
+    const params = asSettings('temperature', 'top_p');
+    const result = filterDroppedParams(params, ['nonexistent']);
+    expect(result.map((p) => p.key)).toEqual(['temperature', 'top_p']);
   });
 });

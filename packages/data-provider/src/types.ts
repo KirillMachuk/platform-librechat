@@ -451,6 +451,12 @@ export type TConfig = {
   disableBuilder?: boolean;
   retrievalModels?: string[];
   capabilities?: string[];
+  /**
+   * Model parameters the backend drops before sending to the provider
+   * (custom-endpoint `dropParams`). Surfaced to the client so the Parameters
+   * panel can hide settings that would otherwise be silently ignored.
+   */
+  dropParams?: string[];
   customParams?: {
     defaultParamsEndpoint?: string;
     reasoningFormat?: ReasoningParameterFormat;

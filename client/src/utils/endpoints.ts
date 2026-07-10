@@ -14,6 +14,23 @@ import type { LocalizeFunction, IconsRecord } from '~/common';
 import { getTimestampedValue } from './timestamps';
 
 /**
+ * Removes settings the backend will drop (`dropParams`) so the Parameters panel
+ * never renders dead, no-op controls. Matching is by setting `key`, which also
+ * covers panel toggles like `web_search` when an endpoint drops them. Returns
+ * the original array untouched when nothing is dropped.
+ */
+export function filterDroppedParams(
+  params: t.SettingDefinition[],
+  dropParams?: string[] | null,
+): t.SettingDefinition[] {
+  if (!dropParams || dropParams.length === 0) {
+    return params;
+  }
+  const dropped = new Set(dropParams);
+  return params.filter((param) => !dropped.has(param.key));
+}
+
+/**
  * Clears model for non-ephemeral agent conversations.
  * Agents use their configured model internally, so the conversation model should be undefined.
  * Mutates the template in place.

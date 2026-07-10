@@ -16,7 +16,7 @@ import { useSetIndexOptions, useLocalize } from '~/hooks';
 import { useGetEndpointsQuery } from '~/data-provider';
 import { componentMapping } from './components';
 import { useChatContext } from '~/Providers';
-import { logger } from '~/utils';
+import { filterDroppedParams, logger } from '~/utils';
 
 export default function Parameters() {
   const localize = useLocalize();
@@ -51,9 +51,12 @@ export default function Parameters() {
       overriddenEndpointKey,
       model,
     );
-    return modelAwareParams.map(
+    const resolvedParams = modelAwareParams.map(
       (param) => (overriddenParamsMap[param.key] as SettingDefinition) ?? param,
     );
+    /** Hide settings the backend drops for this endpoint (e.g. `stop`,
+     *  `web_search`) so the panel never shows dead, no-op controls. */
+    return filterDroppedParams(resolvedParams, endpointsConfig[provider]?.dropParams);
   }, [endpointType, endpointsConfig, model, provider]);
 
   useEffect(() => {

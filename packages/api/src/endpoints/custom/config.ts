@@ -35,6 +35,7 @@ export function loadCustomEndpointsConfig(
         iconURL,
         modelDisplayLabel,
         customParams,
+        dropParams,
         provider,
       } = endpoint;
       const name = normalizeEndpointName(configName);
@@ -62,6 +63,12 @@ export function loadCustomEndpointsConfig(
         customParams: resolvedCustomParams,
         modelDisplayLabel,
         iconURL,
+        /**
+         * Forward the endpoint's `dropParams` so the client can hide settings
+         * the backend will silently strip before dispatch (e.g. `stop`,
+         * `web_search`) — otherwise the panel shows dead, no-op controls.
+         */
+        ...(Array.isArray(dropParams) && dropParams.length > 0 ? { dropParams } : {}),
       };
     }
   }
