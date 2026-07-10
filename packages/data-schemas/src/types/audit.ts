@@ -19,7 +19,12 @@ export type AuditAction =
   | 'deep_research.set_active_mode'
   | 'deep_research.set_models'
   | 'apikey.create'
-  | 'apikey.revoke';
+  | 'apikey.revoke'
+  | 'billing.package_added'
+  | 'billing.threshold_80'
+  | 'billing.exhausted'
+  | 'billing.reconcile_alert'
+  | 'billing.limit_updated';
 
 export type AuditOutcome = 'success' | 'failure';
 

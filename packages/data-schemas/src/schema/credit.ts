@@ -1,0 +1,62 @@
+import { Schema } from 'mongoose';
+import type * as t from '~/types';
+
+/**
+ * Tenant credit ledger (billing «Кредиты», 1 Credit = $0.01 of actual OpenRouter cost).
+ * All money fields are integer micro-USD (1e-6 USD) — see `types/credit.ts`.
+ *
+ * Three collections:
+ *  - `creditmonths`   — one doc per Europe/Minsk calendar month: the included pool counter.
+ *  - `creditpackages` — immutable purchased lots (manual operator top-ups).
+ *  - `creditspends`   — per-request journal of actual cost (reconciliation raw material).
+ */
+
+export const creditMonthSchema: Schema<t.ICreditMonth> = new Schema<t.ICreditMonth>(
+  {
+    tenantId: { type: String, index: true },
+    /** `YYYY-MM` in Europe/Minsk. */
+    month: { type: String, required: true },
+    /** Pool size snapshot at month creation — a mid-month config change does not rewrite history. */
+    poolMicroUsd: { type: Number, required: true },
+    spentMicroUsd: { type: Number, default: 0 },
+    requestCount: { type: Number, default: 0 },
+    notified80At: { type: Date, default: null },
+    notifiedExhaustedAt: { type: Date, default: null },
+  },
+  { timestamps: true },
+);
+
+creditMonthSchema.index({ tenantId: 1, month: 1 }, { unique: true });
+
+export const creditPackageSchema: Schema<t.ICreditPackage> = new Schema<t.ICreditPackage>(
+  {
+    tenantId: { type: String, index: true },
+    credits: { type: Number, required: true },
+    microUsd: { type: Number, required: true },
+    comment: { type: String },
+    invoiceRef: { type: String },
+    addedByEmail: { type: String },
+    addedById: { type: Schema.Types.ObjectId, ref: 'User' },
+    idempotencyKey: { type: String, required: true },
+  },
+  { timestamps: true },
+);
+
+creditPackageSchema.index({ tenantId: 1, idempotencyKey: 1 }, { unique: true });
+creditPackageSchema.index({ tenantId: 1, createdAt: 1 });
+
+export const creditSpendSchema: Schema<t.ICreditSpend> = new Schema<t.ICreditSpend>(
+  {
+    tenantId: { type: String, index: true },
+    month: { type: String, required: true },
+    microUsd: { type: Number, required: true },
+    model: { type: String },
+    userId: { type: Schema.Types.ObjectId, ref: 'User' },
+    /** Upstream response id — unique so reporter retries can never double-count. */
+    sourceId: { type: String, index: { unique: true, sparse: true } },
+    context: { type: String },
+  },
+  { timestamps: { createdAt: true, updatedAt: false } },
+);
+
+creditSpendSchema.index({ tenantId: 1, month: 1 });
