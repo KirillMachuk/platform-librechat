@@ -155,6 +155,8 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
           spentAfterMicroUsd: spent,
           crossed80: false,
           crossedPool: false,
+          notified80At: existing?.notified80At ?? null,
+          notifiedExhaustedAt: existing?.notifiedExhaustedAt ?? null,
         };
       }
       throw error;
@@ -181,6 +183,8 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
       spentAfterMicroUsd: spentAfter,
       crossed80: spentBefore < threshold80 && spentAfter >= threshold80,
       crossedPool: spentBefore < pool && spentAfter >= pool,
+      notified80At: after.notified80At ?? null,
+      notifiedExhaustedAt: after.notifiedExhaustedAt ?? null,
     };
   }
 

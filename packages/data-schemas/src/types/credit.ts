@@ -82,6 +82,9 @@ export interface RecordCreditSpendResult {
   crossed80: boolean;
   /** This spend crossed the pool boundary (pool just ran out). */
   crossedPool: boolean;
+  /** Month notification flags as of this write — lets the notifier skip redundant reads. */
+  notified80At?: Date | null;
+  notifiedExhaustedAt?: Date | null;
 }
 
 export interface CreditBillingStatus {

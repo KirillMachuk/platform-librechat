@@ -134,9 +134,7 @@ describe('recordCreditSpend / monthly pool', () => {
 
   test('parallel spends aggregate atomically', async () => {
     const at = new Date('2026-07-10T12:00:00Z');
-    await Promise.all(
-      Array.from({ length: 25 }, (_, i) => spend({ microUsd: 1000 + i, at })),
-    );
+    await Promise.all(Array.from({ length: 25 }, (_, i) => spend({ microUsd: 1000 + i, at })));
     const status = await methods.getCreditBillingStatus({ poolMicroUsd: POOL, at });
     const expected = Array.from({ length: 25 }, (_, i) => 1000 + i).reduce((a, b) => a + b, 0);
     expect(status.spentMicroUsd).toBe(expected);
