@@ -52,3 +52,5 @@ export * from './feedback';
 export * from './parameterSettings';
 /* code-execution sandbox */
 export * from './codeEnvRef';
+/* deep research UX (task #21) */
+export * from './deepResearch';

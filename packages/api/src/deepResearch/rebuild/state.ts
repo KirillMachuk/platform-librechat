@@ -44,9 +44,12 @@ export interface DeepResearchNodeError {
  *  up front (per-user concurrency cap) and never gathered — a terminal, NON-error
  *  state the UI must not flag as an unfinished/failed message. 'clarify' = the runner
  *  short-circuited before the graph to ask clarifying questions (D2, also terminal
- *  and non-error). 'nodata' = the gather loop ran but produced NO usable material
- *  (dead search/scraper) — the report is an honest short notice, never a fake
- *  "completed" analytical note full of «нет данных». */
+ *  and non-error). 'plan' = the runner short-circuited to present a research PLAN card
+ *  (task #21, terminal + non-error; the user starts/edits/cancels it next turn).
+ *  'cancelled' = the user cancelled a plan card (terminal + non-error, no report).
+ *  'nodata' = the gather loop ran but produced NO usable material (dead search/scraper)
+ *  — the report is an honest short notice, never a fake "completed" analytical note
+ *  full of «нет данных». */
 export type FinalizeReason =
   | 'completed'
   | 'budget'
@@ -56,6 +59,8 @@ export type FinalizeReason =
   | 'error'
   | 'limit'
   | 'clarify'
+  | 'plan'
+  | 'cancelled'
   | 'nodata';
 
 /** Why SUPERVISOR ended the gather loop; REPORT maps it to a FinalizeReason.

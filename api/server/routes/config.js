@@ -284,7 +284,11 @@ router.get('/', async function (req, res) {
       // JS executed inside the Sandpack preview iframe. Unset → undefined →
       // Sandpack's built-in default. Self-host origins are added via
       // SANDPACK_BUNDLER_ALLOWED_ORIGINS.
-      bundlerURL: resolveTrustedBundlerURL(process.env.SANDPACK_BUNDLER_URL, process.env, 'SANDPACK_BUNDLER_URL'),
+      bundlerURL: resolveTrustedBundlerURL(
+        process.env.SANDPACK_BUNDLER_URL,
+        process.env,
+        'SANDPACK_BUNDLER_URL',
+      ),
       staticBundlerURL: resolveTrustedBundlerURL(
         process.env.SANDPACK_STATIC_BUNDLER_URL,
         process.env,
@@ -304,6 +308,16 @@ router.get('/', async function (req, res) {
     const webSearch = buildWebSearchConfig(appConfig);
     if (webSearch) {
       payload.webSearch = webSearch;
+    }
+
+    /** Deep Research plan gate (task #21): the autostart window is a CLIENT-side timer on
+     *  the plan card, so the yaml knob must reach the frontend. Exposed only while the gate
+     *  is on; models/budgets and the rest of the deepResearch config stay server-side. */
+    if (appConfig?.deepResearch?.planGate === true) {
+      payload.deepResearch = {
+        planGate: true,
+        planAutoStartSec: appConfig.deepResearch.planAutoStartSec ?? 60,
+      };
     }
 
     const buildInfo = buildBuildInfoPayload(appConfig?.interfaceConfig);

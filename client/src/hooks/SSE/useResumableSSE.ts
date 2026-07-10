@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { v4 } from 'uuid';
 import { SSE } from 'sse.js';
-import { useSetRecoilState } from 'recoil';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRecoilCallback, useSetRecoilState } from 'recoil';
 import {
   request,
   Constants,
@@ -25,6 +25,7 @@ import type {
 } from 'librechat-data-provider';
 import type { EventHandlerParams } from './useEventHandlers';
 import type { ActiveJobsResponse } from '~/data-provider';
+import type { TDeepResearchProgress } from '~/store';
 import type { TResData } from '~/common';
 import {
   clearAllDrafts,
@@ -40,9 +41,9 @@ import {
   streamStatusQueryKey,
 } from '~/data-provider';
 import useEventHandlers, { buildCreatedInitialResponse } from './useEventHandlers';
+import store, { useApplyNewAgentTemplate } from '~/store';
 import { useAuthContext } from '~/hooks/AuthContext';
 import useUsageHandler from './useUsageHandler';
-import store from '~/store';
 
 type ChatHelpers = Pick<
   EventHandlerParams,
@@ -441,6 +442,32 @@ export default function useResumableSSE(
   const setAbortScroll = useSetRecoilState(store.abortScrollFamily(runIndex));
   const setSubmission = useSetRecoilState(store.submissionByIndex(runIndex));
   const setShowStopButton = useSetRecoilState(store.showStopButtonByIndex(runIndex));
+  const applyEphemeralAgentTemplate = useApplyNewAgentTemplate();
+  // Task #21: write the latest DR progress snapshot for a conversation (keyed dynamically,
+  // so useRecoilCallback rather than a fixed useSetRecoilState). Cleared (null) on final.
+  const setDrProgress = useRecoilCallback(
+    ({ set }) =>
+      (conversationId: string | null | undefined, value: TDeepResearchProgress | null) => {
+        if (conversationId) {
+          set(store.drProgressByConvoId(conversationId), value);
+        }
+      },
+    [],
+  );
+  const handleDrProgress = useCallback(
+    (
+      data: TDeepResearchProgress,
+      currentSubmission: TSubmission,
+      currentUserMessage?: TMessage,
+    ) => {
+      const conversationId =
+        currentSubmission.conversation?.conversationId ??
+        currentUserMessage?.conversationId ??
+        currentSubmission.userMessage?.conversationId;
+      setDrProgress(conversationId, data);
+    },
+    [setDrProgress],
+  );
 
   const sseRef = useRef<SSE | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -551,6 +578,12 @@ export default function useResumableSSE(
             }
             // Clear handler maps on stream completion to prevent memory leaks
             clearStepMaps();
+            // Task #21: clear the DR progress snapshot so a finished run's running card
+            // can't linger next to the report (isSubmitting also gates it, this frees state).
+            setDrProgress(
+              data.conversation?.conversationId ?? currentSubmission.conversation?.conversationId,
+              null,
+            );
             // Optimistically remove from active jobs
             removeActiveJob(currentStreamId);
             (startupConfig?.balance?.enabled ?? false) && balanceQuery.refetch();
@@ -610,6 +643,11 @@ export default function useResumableSSE(
 
           if (data.event === UsageEvents.ON_TOKEN_USAGE) {
             usageHandler(data.data, { ...currentSubmission, userMessage });
+            return;
+          }
+
+          if (data.event === 'dr_progress' && data.data) {
+            handleDrProgress(data.data, currentSubmission, userMessage);
             return;
           }
 
@@ -775,6 +813,8 @@ export default function useResumableSSE(
               for (const pendingEvent of data.pendingEvents) {
                 if (pendingEvent.event === 'title') {
                   titleHandler(pendingEvent);
+                } else if (pendingEvent.event === 'dr_progress' && pendingEvent.data) {
+                  handleDrProgress(pendingEvent.data, resumeSubmission);
                 } else if (pendingEvent.event === UsageEvents.ON_CONTEXT_USAGE) {
                   contextHandler(pendingEvent.data, resumeSubmission);
                 } else if (pendingEvent.event === UsageEvents.ON_TOKEN_USAGE) {
@@ -851,6 +891,7 @@ export default function useResumableSSE(
           /** Terminal: drop any in-flight live estimate so the gauge doesn't
            *  keep counting stale streamed output after the stream ends */
           resetLive({ ...currentSubmission, userMessage });
+          setDrProgress(convoId, null);
           clearAllDrafts(convoId);
           if (optimisticStreamIdsRef.current.has(currentStreamId)) {
             clearAllDrafts(Constants.NEW_CONVO);
@@ -906,6 +947,7 @@ export default function useResumableSSE(
           sse.close();
           removeActiveJob(currentStreamId);
           resetLive({ ...currentSubmission, userMessage });
+          setDrProgress(currentSubmission.conversation?.conversationId, null);
           if (
             !createdStreamIdsRef.current.has(currentStreamId) &&
             optimisticStreamIdsRef.current.has(currentStreamId)
@@ -992,6 +1034,7 @@ export default function useResumableSSE(
           /** Terminal: clear the in-flight live estimate like the other
            *  stop-reconnecting paths so the gauge doesn't show stale tokens */
           resetLive({ ...currentSubmission, userMessage });
+          setDrProgress(currentSubmission.conversation?.conversationId, null);
           // Optimistically remove from active jobs on max retries
           removeActiveJob(currentStreamId);
           if (
@@ -1095,6 +1138,8 @@ export default function useResumableSSE(
       backfillUsage,
       resetLive,
       seedLive,
+      handleDrProgress,
+      setDrProgress,
     ],
   );
 
@@ -1242,6 +1287,9 @@ export default function useResumableSSE(
       } else {
         // New generation: start and then subscribe
         console.log('[ResumableSSE] Starting NEW generation');
+        // Task #21: a fresh turn must never inherit a previous run's DR progress snapshot
+        // (e.g. after an errored DR run) — clear it up front; a real DR run repopulates it.
+        setDrProgress(submission.conversation?.conversationId, null);
         const newStreamId = await startGeneration(submission, signal);
         if (signal.aborted) {
           return;
@@ -1260,6 +1308,12 @@ export default function useResumableSSE(
           if (isInitialNewConversation(submission)) {
             optimisticStreamIdsRef.current.add(newStreamId);
             replaceNewConversationUrl(newStreamId);
+            // Task #21: carry the ephemeral-agent state (the Deep Research badge) from the
+            // NEW_CONVO placeholder to the real id, so a follow-up in this fresh conversation
+            // still routes to DR. Without this the badge is lost on the id transition and a
+            // manual reply falls into normal chat. START/CANCEL/edit are badge-independent
+            // (routed by the plan parent), but a plain clarify/follow-up reply is not.
+            applyEphemeralAgentTemplate(newStreamId, Constants.NEW_CONVO);
           }
           const streamSubmission = addOptimisticConversation(newStreamId, submission);
           submissionRef.current = streamSubmission;

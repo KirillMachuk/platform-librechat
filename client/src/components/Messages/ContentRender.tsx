@@ -1,7 +1,22 @@
 import { useCallback, useMemo, memo } from 'react';
 import { useRecoilValue } from 'recoil';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  QueryKeys,
+  isDrPlanMessage,
+  isDrStartCommand,
+  isDrCancelCommand,
+} from 'librechat-data-provider';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
+import type { ReactNode } from 'react';
 import type { TMessageProps, TMessageChatContext } from '~/common';
+import {
+  PlanCard,
+  ReportCard,
+  ActionChip,
+  RunningSlot,
+  resolveDrReport,
+} from '~/components/Chat/Messages/DeepResearch';
 import { useAttachments, useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
 import { cn, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import ContentParts from '~/components/Chat/Messages/Content/ContentParts';
@@ -96,6 +111,7 @@ const ContentRender = memo(function ContentRender({
   chatContext,
 }: ContentRenderProps) {
   const localize = useLocalize();
+  const queryClient = useQueryClient();
   const { attachments, searchResults } = useAttachments({
     messageId: msg?.messageId,
     attachments: msg?.attachments,
@@ -130,6 +146,22 @@ const ContentRender = memo(function ContentRender({
 
   const { hasParallelContent } = useContentMetadata(msg);
 
+  // Task #21 phase 3: a FINISHED Deep Research report → collapsible ReportCard + reader.
+  // Gated on !isSubmitting so it never runs mid-stream (the running slot owns that window);
+  // the ancestor walk reads the flat message cache non-reactively — by the time a run
+  // finalizes the plan/clarify/start ancestors are already cached and stable. A miss (e.g.
+  // a fresh PROCEED-direct report, or a share page with no cache) → plain markdown.
+  const drReport = useMemo(() => {
+    if (!msg || isSubmitting || msg.isCreatedByUser === true) {
+      return null;
+    }
+    const messages = queryClient.getQueryData<TMessage[]>([
+      QueryKeys.messages,
+      conversation?.conversationId,
+    ]);
+    return resolveDrReport(msg, messages);
+  }, [msg, isSubmitting, conversation?.conversationId, queryClient]);
+
   if (!msg) {
     return null;
   }
@@ -156,6 +188,43 @@ const ContentRender = memo(function ContentRender({
   const isUserTurn = msg.isCreatedByUser === true;
   const showUserBubble = isUserTurn && !edit;
 
+  // Task #21 Deep Research card states (all behind the plan-gate markers; a normal chat is
+  // untouched). A user START/CANCEL command → compact chip; an assistant plan message → the
+  // plan card; the active (latest, still-generating) assistant response mounts the running
+  // slot — the slot alone subscribes to dr_progress and renders the card only during a DR
+  // run, so gating on isSubmitting auto-hides it on any terminal outcome.
+  const msgText = msg.text ?? '';
+  const isDrActionChip = isUserTurn && (isDrStartCommand(msgText) || isDrCancelCommand(msgText));
+  const isDrPlanCard = !isUserTurn && isDrPlanMessage(msgText);
+  const mountDrRunningSlot = !isUserTurn && !isDrPlanCard && isLatestMessage && isSubmitting;
+
+  let drCard: ReactNode = null;
+  if (isDrActionChip) {
+    drCard = <ActionChip text={msgText} />;
+  } else if (isDrPlanCard) {
+    drCard = <PlanCard message={msg} awaitingAction={hasNoChildren && isLatestMessage} />;
+  }
+
+  const contentPartsEl = (
+    <ContentParts
+      edit={edit}
+      isLast={isLast}
+      enterEdit={enterEdit}
+      siblingIdx={siblingIdx}
+      messageId={msg.messageId}
+      attachments={attachments}
+      searchResults={searchResults}
+      manualSkills={msg.manualSkills}
+      setSiblingIdx={setSiblingIdx}
+      isLatestMessage={isLatestMessage}
+      isSubmitting={isSubmitting}
+      isCreatedByUser={msg.isCreatedByUser}
+      createdAt={msg.createdAt ?? msg.clientTimestamp}
+      conversationId={conversation?.conversationId}
+      content={msg.content as Array<TMessageContentParts | undefined>}
+    />
+  );
+
   return (
     <div
       id={msg.messageId}
@@ -177,24 +246,20 @@ const ContentRender = memo(function ContentRender({
               showUserBubble && 'items-end',
             )}
           >
-            <div className={cn(showUserBubble && USER_BUBBLE_CLASS)}>
-              <ContentParts
-                edit={edit}
-                isLast={isLast}
-                enterEdit={enterEdit}
-                siblingIdx={siblingIdx}
-                messageId={msg.messageId}
-                attachments={attachments}
-                searchResults={searchResults}
-                manualSkills={msg.manualSkills}
-                setSiblingIdx={setSiblingIdx}
-                isLatestMessage={isLatestMessage}
-                isSubmitting={isSubmitting}
-                isCreatedByUser={msg.isCreatedByUser}
-                createdAt={msg.createdAt ?? msg.clientTimestamp}
-                conversationId={conversation?.conversationId}
-                content={msg.content as Array<TMessageContentParts | undefined>}
-              />
+            <div className={cn(showUserBubble && !isDrActionChip && USER_BUBBLE_CLASS)}>
+              {drCard ??
+                (drReport ? (
+                  <ReportCard title={drReport.title} text={msgText}>
+                    {contentPartsEl}
+                  </ReportCard>
+                ) : (
+                  <>
+                    {mountDrRunningSlot && (
+                      <RunningSlot conversationId={conversation?.conversationId} />
+                    )}
+                    {contentPartsEl}
+                  </>
+                ))}
             </div>
             {/* Assistant-side file artifacts (e.g. the Deep Research report PDF):
                 Container renders message.files for USER messages only, so without this

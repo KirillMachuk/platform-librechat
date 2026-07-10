@@ -89,6 +89,9 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('recoil', () => ({
   ...jest.requireActual('recoil'),
   useSetRecoilState: mockUseSetRecoilState,
+  // Task #21: setDrProgress uses useRecoilCallback (dynamic atom key). Return the inner
+  // callback with a no-op `set` so no RecoilRoot is needed in this hook-only test.
+  useRecoilCallback: (fn: (iface: { set: () => void }) => unknown) => fn({ set: () => {} }),
 }));
 
 jest.mock('~/store', () => ({
@@ -98,7 +101,9 @@ jest.mock('~/store', () => ({
     abortScrollFamily: jest.fn(() => mockAbortScrollAtom),
     submissionByIndex: jest.fn(() => mockSubmissionAtom),
     showStopButtonByIndex: jest.fn(() => mockShowStopButtonAtom),
+    drProgressByConvoId: jest.fn(() => ({})),
   },
+  useApplyNewAgentTemplate: () => jest.fn(),
 }));
 
 jest.mock('~/hooks/AuthContext', () => ({

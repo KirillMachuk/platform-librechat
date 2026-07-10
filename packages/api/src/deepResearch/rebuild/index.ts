@@ -18,6 +18,19 @@ export {
   isClarifyMessage,
 } from './clarify';
 export {
+  PLAN_MARKER,
+  START_MARKER,
+  CANCEL_MARKER,
+  CANCELLED_MESSAGE,
+  isPlanMessage,
+  buildPlanPrompt,
+  isStartCommand,
+  extractPlanSteps,
+  isCancelCommand,
+  formatPlanMessage,
+  parsePlanDecision,
+} from './plan';
+export {
   tierToRunBudget,
   leadModelFor,
   workerModelFor,
@@ -27,6 +40,7 @@ export {
 } from './config';
 
 export type { DeepResearchTier } from './config';
+export type { PlanAction, PlanDecision } from './plan';
 export type { AnonymizerConnection, SovereignSession } from './sovereign';
 export type { CompiledDeepResearchGraph, DeepResearchGraphDeps } from './graph';
 export type { DeepResearchProgress, RunDeepResearchParams, RunDeepResearchResult } from './run';
