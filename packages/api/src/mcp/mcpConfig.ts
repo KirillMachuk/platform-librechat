@@ -25,6 +25,14 @@ export const mcpConfig: {
   CONNECTION_CHECK_TTL: number;
   /** Idle timeout (ms) after which user connections are disconnected. Default: 15 minutes */
   USER_CONNECTION_IDLE_TIMEOUT: number;
+  /** Max cached MCP connections kept per user (peak memory/descriptor guard at scale). Default: 1000 */
+  USER_MAX_CACHED_CONNECTIONS: number;
+  /** Max concurrent non-ephemeral, non-OAuth connection establishments across the process. Default: 24 */
+  MAX_CONCURRENT_CONNECTION_SETUPS: number;
+  /** Max time (ms) a connection setup waits for a concurrency slot before being rejected. Default: 30s */
+  CONNECTION_SETUP_QUEUE_TIMEOUT: number;
+  /** Max connection setups allowed to wait for a slot; excess is rejected rather than queued. Default: 1000 */
+  CONNECTION_SETUP_MAX_QUEUE: number;
   /** Max connect/disconnect cycles before the circuit breaker trips. Default: 7 */
   CB_MAX_CYCLES: number;
   /** Sliding window (ms) for counting cycles. Default: 45s */
@@ -51,6 +59,14 @@ export const mcpConfig: {
   USER_CONNECTION_IDLE_TIMEOUT: math(
     process.env.MCP_USER_CONNECTION_IDLE_TIMEOUT ?? 15 * 60 * 1000,
   ),
+  /** Max cached MCP connections kept per user (peak memory/descriptor guard at scale). Default: 1000 */
+  USER_MAX_CACHED_CONNECTIONS: math(process.env.MCP_USER_MAX_CACHED_CONNECTIONS ?? 1000),
+  /** Max concurrent non-ephemeral, non-OAuth connection establishments across the process. Default: 24 */
+  MAX_CONCURRENT_CONNECTION_SETUPS: math(process.env.MCP_MAX_CONCURRENT_CONNECTION_SETUPS ?? 24),
+  /** Max time (ms) a connection setup waits for a concurrency slot before being rejected. Default: 30s */
+  CONNECTION_SETUP_QUEUE_TIMEOUT: math(process.env.MCP_CONNECTION_SETUP_QUEUE_TIMEOUT ?? 30_000),
+  /** Max connection setups allowed to wait for a slot; excess is rejected rather than queued. Default: 1000 */
+  CONNECTION_SETUP_MAX_QUEUE: math(process.env.MCP_CONNECTION_SETUP_MAX_QUEUE ?? 1000),
   /** Max connect/disconnect cycles before the circuit breaker trips. Default: 7 */
   CB_MAX_CYCLES: math(process.env.MCP_CB_MAX_CYCLES ?? 7),
   /** Sliding window (ms) for counting cycles. Default: 45s */
