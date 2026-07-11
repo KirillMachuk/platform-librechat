@@ -991,7 +991,9 @@ describe('useResumableSSE - 404 error path', () => {
     expect(mockErrorHandler).toHaveBeenCalledWith(
       expect.objectContaining({
         data: {
-          text: JSON.stringify({ message: 'failed to start' }),
+          // Review r2: a human-readable `message`/`error` from the server payload is
+          // surfaced verbatim (raw JSON is only the fallback for shapeless payloads).
+          text: 'failed to start',
           metadata: { streamStartFailed: true },
         },
         submission,
