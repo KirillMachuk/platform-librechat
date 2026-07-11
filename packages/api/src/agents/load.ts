@@ -3,6 +3,7 @@ import {
   Tools,
   Constants,
   isAgentsEndpoint,
+  isReasoningModel,
   isEphemeralAgentId,
   encodeEphemeralAgentId,
 } from 'librechat-data-provider';
@@ -64,10 +65,17 @@ export async function loadEphemeralAgent(
     }
   }
   const tools: string[] = [];
+  /**
+   * Reasoning families (o-series / gpt-5.x) cannot run the multi-turn tool loop, so
+   * `file_search` is never armed for them: attached documents stay readable through the
+   * forced retrieval floor, which injects retrieved chunks without any tool call. Other
+   * toggles still reach the initializer's reasoning gate and fail fast with a clear error.
+   */
+  const reasoningModel = isReasoningModel(model);
   if (ephemeralAgent?.execute_code === true || modelSpec?.executeCode === true) {
     tools.push(Tools.execute_code);
   }
-  if (ephemeralAgent?.file_search === true || modelSpec?.fileSearch === true) {
+  if ((ephemeralAgent?.file_search === true || modelSpec?.fileSearch === true) && !reasoningModel) {
     tools.push(Tools.file_search);
   }
   if (ephemeralAgent?.web_search === true || modelSpec?.webSearch === true) {

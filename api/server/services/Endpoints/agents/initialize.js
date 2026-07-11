@@ -107,6 +107,11 @@ async function applyProjectContext({ req, primaryAgent }) {
     };
 
     primaryAgent.tools = primaryAgent.tools ?? [];
+    /* Deliberately unconditional (unlike applyConversationFileContext): project
+     * sources are embedded under `entity_id=project_id`, which the forced
+     * retrieval floor skips — they are reachable ONLY through the tool. For a
+     * reasoning model this keeps the clear reasoning-gate error instead of
+     * silently answering while blind to the project's sources. */
     if (!primaryAgent.tools.includes(Tools.file_search)) {
       primaryAgent.tools.push(Tools.file_search);
     }
@@ -127,6 +132,11 @@ async function applyProjectContext({ req, primaryAgent }) {
  * `file_search` tool_resources — independent of the toggle. Only embedded
  * (RAG) files are touched; `context`/`native`-mode files are left alone. No-op
  * for new conversations or when no embedded files are bound.
+ *
+ * Reasoning models (o-series / gpt-5.x) get the resource merge but NOT the
+ * tool: they cannot run the multi-turn tool loop (the reasoning gate would
+ * reject the request), and the forced retrieval floor already injects the
+ * documents' chunks into the prompt every turn without any tool call.
  *
  * @param {{ req: import('express').Request, primaryAgent: Record<string, unknown> }} params
  * @returns {Promise<void>}
@@ -162,7 +172,7 @@ async function applyConversationFileContext({ req, primaryAgent }) {
     };
 
     primaryAgent.tools = primaryAgent.tools ?? [];
-    if (!primaryAgent.tools.includes(Tools.file_search)) {
+    if (!isReasoningModel(primaryAgent.model) && !primaryAgent.tools.includes(Tools.file_search)) {
       primaryAgent.tools.push(Tools.file_search);
     }
   } catch (error) {

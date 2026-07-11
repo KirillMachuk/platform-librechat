@@ -815,6 +815,19 @@ describe('applyConversationFileContext', () => {
     expect(primaryAgent.tool_resources.file_search).toBeUndefined();
   });
 
+  it('merges resources but does not force the tool for reasoning models (forced floor)', async () => {
+    jest.spyOn(db, 'getConvoFiles').mockResolvedValue(['file_emb_1']);
+    jest.spyOn(db, 'getFiles').mockResolvedValue([{ file_id: 'file_emb_1', embedded: true }]);
+
+    const primaryAgent = { model: 'gpt-5.4-mini', tools: [], tool_resources: {} };
+    await applyConversationFileContext({ req: makeReq('conv_1'), primaryAgent });
+
+    /** Reasoning models cannot run the tool loop — the gate would reject the turn. */
+    expect(primaryAgent.tools).not.toContain('file_search');
+    /** The forced retrieval floor still needs the resource merge to load the documents. */
+    expect(primaryAgent.tool_resources.file_search.file_ids).toContain('file_emb_1');
+  });
+
   it('is a no-op for a new conversation (no conversationId) without hitting the DB', async () => {
     const convoSpy = jest.spyOn(db, 'getConvoFiles').mockResolvedValue([]);
 

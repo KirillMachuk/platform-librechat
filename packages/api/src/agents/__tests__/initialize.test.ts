@@ -33,7 +33,7 @@ jest.mock('@librechat/agents', () => ({
 }));
 
 import { Providers } from '@librechat/agents';
-import { EModelEndpoint, Tools } from 'librechat-data-provider';
+import { EModelEndpoint, EToolResources, Tools } from 'librechat-data-provider';
 import type { Agent } from 'librechat-data-provider';
 import type { ServerRequest, InitializeResultBase, EndpointTokenConfig } from '~/types';
 import type { InitializeAgentDbMethods } from '../initialize';
@@ -364,6 +364,73 @@ describe('initializeAgent — reasoning-model tool gate (E-H1)', () => {
 
   it('allows the non-reasoning gpt-5-chat variant with tools', async () => {
     await expect(runWith('openai/gpt-5-chat', ['file_search'])).resolves.toBeDefined();
+  });
+
+  it('loads embedded conversation files for a reasoning model without the tool (forced floor)', async () => {
+    const model = 'openai/gpt-5.4-mini';
+    const { agent, req, res, loadTools, db } = createMocks({ model });
+    agent.tools = [];
+    agent.tool_resources = { file_search: { file_ids: ['file_emb_1'] } };
+    mockExtractLibreChatParams.mockReturnValue({
+      resendFiles: true,
+      maxContextTokens: undefined,
+      modelOptions: { model },
+    });
+
+    await expect(
+      initializeAgent(
+        {
+          req,
+          res,
+          agent,
+          loadTools,
+          conversationId: 'convo-1',
+          endpointOption: { endpoint: EModelEndpoint.agents },
+          allowedProviders: new Set(),
+          isInitialAgent: true,
+        },
+        db,
+      ),
+    ).resolves.toBeDefined();
+
+    /** Bound file_search resources must load even though the tool is absent —
+     *  the forced retrieval floor injects these documents each turn. */
+    const [, resourceSet] = (db.getToolFilesByIds as jest.Mock).mock.calls[0] as [
+      string[],
+      Set<EToolResources>,
+    ];
+    expect(resourceSet.has(EToolResources.file_search)).toBe(true);
+  });
+
+  it('does not load file_search resources when none are bound and the tool is absent', async () => {
+    const model = 'openai/gpt-5.4-mini';
+    const { agent, req, res, loadTools, db } = createMocks({ model });
+    agent.tools = [];
+    mockExtractLibreChatParams.mockReturnValue({
+      resendFiles: true,
+      maxContextTokens: undefined,
+      modelOptions: { model },
+    });
+
+    await initializeAgent(
+      {
+        req,
+        res,
+        agent,
+        loadTools,
+        conversationId: 'convo-1',
+        endpointOption: { endpoint: EModelEndpoint.agents },
+        allowedProviders: new Set(),
+        isInitialAgent: true,
+      },
+      db,
+    );
+
+    const [, resourceSet] = (db.getToolFilesByIds as jest.Mock).mock.calls[0] as [
+      string[],
+      Set<EToolResources>,
+    ];
+    expect(resourceSet.has(EToolResources.file_search)).toBe(false);
   });
 
   it('strips Anthropic extended thinking when the agent runs tools (E-H9)', async () => {
