@@ -72,6 +72,7 @@ function createDeps(overrides: Partial<AdminBillingDeps> = {}): AdminBillingDeps
       .mockResolvedValue({ packages: [] as CreditPackageWithRemaining[], packageSpentMicroUsd: 0 }),
     addCreditPackage: jest.fn().mockResolvedValue(addResult),
     poolMicroUsd: POOL,
+    metering: true,
     operatorEmails: ['op@1ma.ai'],
     limitHeadroom: 0.1,
     recordAudit: jest.fn(),
@@ -113,10 +114,21 @@ describe('createAdminBillingHandlers', () => {
         packagePurchasedCredits: 10_000,
         packageRemainingCredits: 10_000,
         isOperator: false,
+        metering: true,
       });
       // Display invariant: остаток + израсходовано = пул.
       expect(body.spentCredits + body.poolRemainingCredits).toBe(body.poolCredits);
       expect(JSON.stringify(body)).not.toMatch(/[Uu]sd|\$/);
+    });
+
+    it('reports metering=false when spend metering is not wired', async () => {
+      const deps = createDeps({ metering: false });
+      const handlers = createAdminBillingHandlers(deps);
+      const { req, res, json } = createReqRes();
+
+      await handlers.getSummary(req, res);
+
+      expect(json.mock.calls[0][0].metering).toBe(false);
     });
 
     it('marks operators by allowlisted email, case-insensitively', async () => {

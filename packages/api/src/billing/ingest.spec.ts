@@ -104,6 +104,30 @@ describe('createBillingIngestHandlers', () => {
       expect(deps.recordCreditSpend).not.toHaveBeenCalled();
     });
 
+    it('accepts costUsd exactly at the sanity ceiling ($100)', async () => {
+      const deps = createDeps();
+      const handlers = createBillingIngestHandlers(deps);
+      const { req, res, status } = createReqRes({ costUsd: 100 });
+
+      await handlers.postSpend(req, res);
+
+      expect(status).toHaveBeenCalledWith(200);
+      expect(deps.recordCreditSpend).toHaveBeenCalledWith(
+        expect.objectContaining({ microUsd: 100_000_000 }),
+      );
+    });
+
+    it('rejects costUsd just over the sanity ceiling ($100.01)', async () => {
+      const deps = createDeps();
+      const handlers = createBillingIngestHandlers(deps);
+      const { req, res, status } = createReqRes({ costUsd: 100.01 });
+
+      await handlers.postSpend(req, res);
+
+      expect(status).toHaveBeenCalledWith(400);
+      expect(deps.recordCreditSpend).not.toHaveBeenCalled();
+    });
+
     it('drops an invalid userId instead of failing the report', async () => {
       const deps = createDeps();
       const handlers = createBillingIngestHandlers(deps);

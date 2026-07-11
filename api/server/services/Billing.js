@@ -71,6 +71,7 @@ function getBillingWiring() {
   const reconciler = createBillingReconciler({
     openrouter,
     getCreditBillingStatus: db.getCreditBillingStatus,
+    sumCreditSpendJournal: db.sumCreditSpendJournal,
     poolMicroUsd: config.poolMicroUsd,
     sendAlert,
     recordAudit,

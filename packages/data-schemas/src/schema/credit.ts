@@ -60,3 +60,11 @@ export const creditSpendSchema: Schema<t.ICreditSpend> = new Schema<t.ICreditSpe
 );
 
 creditSpendSchema.index({ tenantId: 1, month: 1 });
+/**
+ * The journal is reconciliation raw material, not permanent history: expire rows
+ * after 400 days (> a full year plus a month boundary) so the collection stays
+ * bounded without a cron. Safe against every reader — the internal journal↔counter
+ * check and the OpenRouter reconcile only ever touch the *current* Minsk month, so
+ * TTL never removes a row they depend on.
+ */
+creditSpendSchema.index({ createdAt: 1 }, { expireAfterSeconds: 400 * 24 * 60 * 60 });

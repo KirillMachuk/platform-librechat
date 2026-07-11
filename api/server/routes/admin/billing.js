@@ -31,6 +31,7 @@ function getHandlers() {
     listCreditPackages: db.listCreditPackages,
     addCreditPackage: db.addCreditPackage,
     poolMicroUsd: config.poolMicroUsd,
+    metering: config.enabled,
     operatorEmails: config.operatorEmails,
     limitHeadroom: config.openrouter.headroom,
     openrouter,

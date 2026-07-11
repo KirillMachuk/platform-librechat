@@ -1,3 +1,4 @@
+import { logger } from '@librechat/data-schemas';
 import type { CreditBillingStatus } from '@librechat/data-schemas';
 import type { OpenRouterManagement } from './openrouter';
 import type { BillingReconcilerDeps } from './reconcile';
@@ -7,6 +8,10 @@ jest.mock('@librechat/data-schemas', () => ({
   ...jest.requireActual('@librechat/data-schemas'),
   logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() },
 }));
+
+/** Fixed mid-month timestamp — well past the Minsk boundary window, so the M5
+ *  early-month skip never fires and these tests stay deterministic. */
+const NOW = new Date('2026-07-15T12:00:00Z');
 
 function statusOf(spentMicroUsd: number): CreditBillingStatus {
   return {
@@ -41,6 +46,8 @@ function createDeps(overrides: Partial<BillingReconcilerDeps> = {}): BillingReco
   return {
     openrouter: openrouterOf(100),
     getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf(100_000_000)), // $100
+    // Journal matches the counter by default (no internal drift).
+    sumCreditSpendJournal: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 1 }),
     poolMicroUsd: 250_000_000,
     sendAlert: jest.fn().mockResolvedValue(undefined),
     recordAudit: jest.fn(),
@@ -49,9 +56,13 @@ function createDeps(overrides: Partial<BillingReconcilerDeps> = {}): BillingReco
 }
 
 describe('createBillingReconciler', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('reports unconfigured when the management key is absent', async () => {
     const deps = createDeps({ openrouter: openrouterOf(100, false) });
-    const report = await createBillingReconciler(deps).run();
+    const report = await createBillingReconciler(deps).run(NOW);
     expect(report.configured).toBe(false);
     expect(deps.sendAlert).not.toHaveBeenCalled();
   });
@@ -59,7 +70,7 @@ describe('createBillingReconciler', () => {
   it('stays quiet within the 3% tolerance', async () => {
     // Ledger $100 vs OpenRouter $102 → 1.96% — no alert.
     const deps = createDeps({ openrouter: openrouterOf(102) });
-    const report = await createBillingReconciler(deps).run();
+    const report = await createBillingReconciler(deps).run(NOW);
     expect(report.alerted).toBe(false);
     expect(report.diffPercent).toBeCloseTo(2.0, 0);
     expect(deps.sendAlert).not.toHaveBeenCalled();
@@ -68,7 +79,7 @@ describe('createBillingReconciler', () => {
   it('alerts when drift exceeds 3% and $1', async () => {
     // Ledger $100 vs OpenRouter $110 → ~9%.
     const deps = createDeps({ openrouter: openrouterOf(110) });
-    const report = await createBillingReconciler(deps).run();
+    const report = await createBillingReconciler(deps).run(NOW);
     expect(report.alerted).toBe(true);
     expect(deps.sendAlert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'reconcile' }));
     expect(deps.recordAudit).toHaveBeenCalledWith(
@@ -80,16 +91,62 @@ describe('createBillingReconciler', () => {
     // Ledger $0.50 vs OpenRouter $0.10 → 80% but only $0.40 apart.
     const deps = createDeps({
       getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf(500_000)),
+      sumCreditSpendJournal: jest.fn().mockResolvedValue({ microUsd: 500_000, count: 1 }),
       openrouter: openrouterOf(0.1),
     });
-    const report = await createBillingReconciler(deps).run();
+    const report = await createBillingReconciler(deps).run(NOW);
     expect(report.alerted).toBe(false);
     expect(deps.sendAlert).not.toHaveBeenCalled();
   });
 
+  it('flags internal journal↔counter drift in the log and report, without auto-fixing', async () => {
+    // The month counter says $100 but the journal only sums to $90 → a $10 lost increment.
+    const deps = createDeps({
+      getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf(100_000_000)),
+      sumCreditSpendJournal: jest.fn().mockResolvedValue({ microUsd: 90_000_000, count: 9 }),
+      openrouter: openrouterOf(100), // external side matched — isolate the internal check
+    });
+    const report = await createBillingReconciler(deps).run(NOW);
+    expect(report.journalMicroUsd).toBe(90_000_000);
+    expect(report.internalDriftMicroUsd).toBe(-10_000_000);
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('INTERNAL drift'));
+    // Internal drift alone must never raise an operator alert (that is for OpenRouter divergence).
+    expect(deps.sendAlert).not.toHaveBeenCalled();
+  });
+
+  it('stays silent on sub-$1 journal↔counter drift (in-flight read noise)', async () => {
+    const deps = createDeps({
+      getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf(100_000_000)),
+      sumCreditSpendJournal: jest.fn().mockResolvedValue({ microUsd: 100_500_000, count: 10 }),
+    });
+    const report = await createBillingReconciler(deps).run(NOW);
+    expect(report.internalDriftMicroUsd).toBe(500_000); // $0.50 — under the $1 tolerance
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it('skips entirely in the first 6h of a Minsk month (ledger reset, OpenRouter window not)', async () => {
+    const deps = createDeps();
+    // 2026-08-01 02:00 UTC = 05:00 Minsk → day 1, hour 5 (< 6) → skip.
+    const report = await createBillingReconciler(deps).run(new Date('2026-08-01T02:00:00Z'));
+    expect(report.reason).toMatch(/first 6h|boundary window/);
+    expect(report.alerted).toBe(false);
+    expect(deps.openrouter.getKey).not.toHaveBeenCalled();
+    expect(deps.sumCreditSpendJournal).not.toHaveBeenCalled();
+    expect(deps.sendAlert).not.toHaveBeenCalled();
+  });
+
+  it('runs normally once past the 6h Minsk boundary window', async () => {
+    const deps = createDeps();
+    // 2026-08-01 04:00 UTC = 07:00 Minsk → day 1, hour 7 (≥ 6) → no skip.
+    const report = await createBillingReconciler(deps).run(new Date('2026-08-01T04:00:00Z'));
+    expect(deps.openrouter.getKey).toHaveBeenCalled();
+    expect(deps.sumCreditSpendJournal).toHaveBeenCalled();
+    expect(report.configured).toBe(true);
+  });
+
   it('handles a missing usage_monthly field gracefully', async () => {
     const deps = createDeps({ openrouter: openrouterOf(null) });
-    const report = await createBillingReconciler(deps).run();
+    const report = await createBillingReconciler(deps).run(NOW);
     expect(report.alerted).toBe(false);
     expect(report.diffPercent).toBeNull();
     expect(report.reason).toMatch(/usage_monthly/);
@@ -102,7 +159,7 @@ describe('createBillingReconciler', () => {
       updateLimit: jest.fn(),
     };
     const deps = createDeps({ openrouter });
-    const report = await createBillingReconciler(deps).run();
+    const report = await createBillingReconciler(deps).run(NOW);
     expect(report.configured).toBe(true);
     expect(report.alerted).toBe(false);
     expect(report.reason).toBeDefined();

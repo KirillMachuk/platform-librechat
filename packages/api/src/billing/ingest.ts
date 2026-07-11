@@ -7,8 +7,13 @@ import type {
 import type { Response } from 'express';
 import type { ServerRequest } from '~/types/http';
 
-/** Sanity ceiling for a single request's cost — rejects corrupted reports. */
-const MAX_SINGLE_COST_USD = 1_000;
+/**
+ * Sanity ceiling for a single request's cost — rejects corrupted reports.
+ * One OpenRouter response costing >$100 (>5 000 Credits, ~40% of the monthly pool
+ * in a single message) is anomalous by construction; a genuine spike is still
+ * caught by the OpenRouter reconciliation, which is the backstop for under-counting.
+ */
+const MAX_SINGLE_COST_USD = 100;
 const MAX_FIELD_LEN = 300;
 
 export interface BillingIngestDeps {

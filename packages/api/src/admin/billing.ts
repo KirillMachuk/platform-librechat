@@ -44,6 +44,12 @@ export interface AdminBillingSummary {
   lots: AdminBillingLot[];
   /** Whether the current session user is a platform (1ma) operator. */
   isOperator: boolean;
+  /**
+   * Whether spend metering is actually wired (BILLING_INTERNAL_TOKEN set). When
+   * false the ledger stays at zero because the anonymizer cannot report cost — the
+   * screen shows an «учёт не активирован» banner instead of a misleading 0%.
+   */
+  metering: boolean;
 }
 
 export interface AdminBillingDeps {
@@ -57,6 +63,8 @@ export interface AdminBillingDeps {
   addCreditPackage: (input: AddCreditPackageInput) => Promise<AddCreditPackageResult>;
   poolMicroUsd: number;
   tenantId?: string;
+  /** Whether spend metering is wired (BILLING_INTERNAL_TOKEN set) — surfaced to the UI. */
+  metering: boolean;
   /** Lowercased operator allowlist (env-driven — outside client-admin control). */
   operatorEmails: string[];
   /** OpenRouter limit headroom over the allowed volume (e.g. 0.1 = +10%). */
@@ -119,6 +127,7 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
       packageRemainingCredits: Math.max(0, microUsdToCredits(status.packageRemainingMicroUsd)),
       lots: lots.packages.map(toLot),
       isOperator: isOperatorRequest(req, deps.operatorEmails),
+      metering: deps.metering,
     };
   }
 

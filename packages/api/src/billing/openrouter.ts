@@ -39,6 +39,25 @@ function toNumberOrNull(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+/**
+ * OpenRouter wraps the key in `{ data: {...} }`. A different shape means the
+ * Provisioning API contract changed under us — warn loudly (otherwise every usage
+ * field silently reads as null and the reconciler goes blind to real drift) and
+ * degrade to an empty object so callers still get a well-formed, all-null result.
+ */
+function extractKeyData(body: unknown): Record<string, unknown> {
+  if (body && typeof body === 'object' && 'data' in body) {
+    const data = (body as { data: unknown }).data;
+    if (data && typeof data === 'object') {
+      return data as Record<string, unknown>;
+    }
+  }
+  logger.warn(
+    '[openrouter] GET key returned an unexpected shape (no `data` object); usage fields read as null — verify the Provisioning API contract',
+  );
+  return {};
+}
+
 export function createOpenRouterManagement(
   options: OpenRouterManagementOptions,
 ): OpenRouterManagement {
@@ -67,8 +86,7 @@ export function createOpenRouterManagement(
     if (!res.ok) {
       throw new Error(`[openrouter] GET key failed: ${res.status}`);
     }
-    const body = (await res.json()) as { data?: Record<string, unknown> };
-    const data = body?.data ?? {};
+    const data = extractKeyData(await res.json());
     return {
       limitUsd: toNumberOrNull(data.limit),
       usageUsd: toNumberOrNull(data.usage),
