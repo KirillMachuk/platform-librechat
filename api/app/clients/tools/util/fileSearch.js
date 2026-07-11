@@ -299,9 +299,11 @@ const createFileSearchTool = async ({
 
       /* Кросс-файловый реранк расширенного пула cross-encoder'ом: pgvector-порядок шумный
        * (нужный пункт договора часто на 5-9 месте), реранкер ставит его в топ. Fail-open:
-       * null (выключен/таймаут/5xx) → остаёмся на порядке по дистанции. relevance для
-       * модели и UI берём из rerank-оценки (0..1) — дистанционная у переупорядоченного
-       * списка врала бы. */
+       * null (выключен/таймаут/5xx) → остаёмся на порядке по дистанции. Реранк меняет ТОЛЬКО
+       * ПОРЯДОК; метка Relevance остаётся дистанционной (1-distance). Живой A/B (урок 6
+       * RERANKER_Plan): подмена метки rerank-скором буквально сказала модели «(неверный) кусок
+       * самый релевантный» и увела её в соседний пункт — честная per-chunk оценка ретривера
+       * плюс лучший порядок дают выигрыш без этого рычага вреда. */
       let rankedResults = mergedResults;
       if (rerankConfig && mergedResults.length > 1) {
         const pool = mergedResults.slice(0, rerankConfig.candidates);
@@ -312,7 +314,7 @@ const createFileSearchTool = async ({
           topN: FILE_SEARCH_RESULT_LIMIT,
         });
         if (order != null) {
-          rankedResults = order.map(({ index, score }) => ({ ...pool[index], relevance: score }));
+          rankedResults = order.map(({ index }) => pool[index]);
         }
       }
 
