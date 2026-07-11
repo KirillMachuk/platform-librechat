@@ -51,9 +51,9 @@ import {
   registerFileAuthoringTools,
   isFileAuthoringToolDefinition,
 } from './tools';
+import { getProviderConfig, suppressAnthropicThinkingForToolLoop } from '~/endpoints';
 import { filterFilesByEndpointConfig } from '~/files';
 import { generateArtifactsPrompt } from '~/prompts';
-import { getProviderConfig, suppressAnthropicThinkingForToolLoop } from '~/endpoints';
 import { primeResources } from './resources';
 
 /**
