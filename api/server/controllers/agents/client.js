@@ -1202,10 +1202,15 @@ class AgentClient extends BaseClient {
       const balanceRecheckEnabled =
         balanceConfig?.enabled === true &&
         supportsBalanceCheck[this.options.endpointType ?? this.options.endpoint] === true;
-      if (balanceRecheckEnabled && this.options.eventHandlers) {
+      /** Resolve the user id up front and only arm the guard when it is a
+       *  non-empty string. A blank id would make `findBalanceByUser` query with
+       *  an empty filter (Mongoose strips `undefined`), matching an arbitrary
+       *  balance document — never gate a paid run on someone else's balance. */
+      const balanceRecheckUserId = this.user ?? this.options.req.user?.id;
+      if (balanceRecheckEnabled && balanceRecheckUserId && this.options.eventHandlers) {
         this.options.eventHandlers[GraphEvents.CHAT_MODEL_START] = createAgentTurnBalanceGuard({
           enabled: true,
-          user: this.user ?? this.options.req.user?.id,
+          user: balanceRecheckUserId,
           collectedUsage: this.collectedUsage,
           findBalanceByUser: db.findBalanceByUser,
           pricing: { getMultiplier: db.getMultiplier, getCacheMultiplier: db.getCacheMultiplier },

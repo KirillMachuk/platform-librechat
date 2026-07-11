@@ -3,7 +3,6 @@ import keyBy from 'lodash/keyBy';
 import { ControlCombobox } from '@librechat/client';
 import { ChevronLeft, RotateCcw } from 'lucide-react';
 import { useFormContext, useWatch, Controller } from 'react-hook-form';
-import { componentMapping } from '~/components/SidePanel/Parameters/components';
 import {
   alternateName,
   getSettingsKeys,
@@ -15,11 +14,12 @@ import {
 } from 'librechat-data-provider';
 import type * as t from 'librechat-data-provider';
 import type { AgentForm, AgentModelPanelProps, StringOption } from '~/common';
+import { componentMapping } from '~/components/SidePanel/Parameters/components';
 import { useGetEndpointsQuery } from '~/data-provider';
+import { cn, filterDroppedParams } from '~/utils';
 import { useLiveAnnouncer } from '~/Providers';
 import { useLocalize } from '~/hooks';
 import { Panel } from '~/common';
-import { cn } from '~/utils';
 
 export default function ModelPanel({
   providers,
@@ -88,9 +88,13 @@ export default function ModelPanel({
       overriddenEndpointKey,
       model ?? '',
     );
-    return modelAwareParams.map(
+    const resolvedParams = modelAwareParams.map(
       (param) => (overriddenParamsMap[param.key] as SettingDefinition) ?? param,
     );
+    /** Hide settings the backend drops for this endpoint (e.g. `stop`,
+     *  `web_search`) so the agent builder never shows dead, no-op controls
+     *  — mirrors the Parameters panel (E-H5). */
+    return filterDroppedParams(resolvedParams, endpointsConfig[provider]?.dropParams);
   }, [endpointType, endpointsConfig, model, provider]);
 
   const setOption = (optionKey: keyof t.AgentModelParameters) => (value: t.AgentParameterValue) => {

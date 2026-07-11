@@ -61,6 +61,15 @@ export interface AgentTurnBalanceResult {
 export async function evaluateAgentTurnBalance(
   params: EvaluateAgentTurnBalanceParams,
 ): Promise<AgentTurnBalanceResult> {
+  /**
+   * Fail open on a blank user id. `findBalanceByUser('')` / `undefined` would let
+   * Mongoose strip the filter and match an arbitrary balance document, so a
+   * missing id must never gate the run — return not-exhausted without a read.
+   */
+  if (!params.user) {
+    return { exhausted: false, balanceCredits: 0, spentCredits: 0 };
+  }
+
   const record = await params.findBalanceByUser(params.user);
   const balanceCredits = record?.tokenCredits ?? 0;
 
