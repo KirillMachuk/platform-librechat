@@ -48,6 +48,21 @@ describe('evaluateAgentTurnBalance', () => {
     });
   });
 
+  it('fails open without reading balance when the user id is blank', async () => {
+    const findBalanceByUser = jest.fn();
+    for (const user of ['', undefined as unknown as string]) {
+      const result = await evaluateAgentTurnBalance({
+        user,
+        collectedUsage: [usage(1000, 500)],
+        findBalanceByUser,
+        pricing,
+      });
+      expect(result.exhausted).toBe(false);
+      expect(result.errorMessage).toBeUndefined();
+    }
+    expect(findBalanceByUser).not.toHaveBeenCalled();
+  });
+
   it('treats a missing balance record as zero credits (exhausted)', async () => {
     const findBalanceByUser = jest.fn().mockResolvedValue(null);
     const result = await evaluateAgentTurnBalance({

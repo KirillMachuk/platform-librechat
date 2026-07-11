@@ -1,6 +1,7 @@
 // file deepcode ignore HardcodedNonCryptoSecret: No hardcoded secrets
 import { ViolationTypes, ErrorTypes, alternateName } from 'librechat-data-provider';
 import type { LocalizeFunction } from '~/common';
+import type { TranslationKeys } from '~/hooks';
 import { formatJSON, extractJson, isJson } from '~/utils/json';
 import { useLocalize } from '~/hooks';
 import CodeBlock from './CodeBlock';
@@ -106,12 +107,11 @@ const errorMessages = {
       windowInMinutes > 1 ? `${windowInMinutes} minutes` : 'minute'
     }.`;
   },
-  token_balance: (json: TTokenBalance) => {
-    const { balance, tokenCost, promptTokens, generations } = json;
-    const message = `Insufficient Funds! Balance: ${balance}. Prompt tokens: ${promptTokens}. Cost: ${tokenCost}.`;
+  token_balance: (json: TTokenBalance, localize: LocalizeFunction) => {
+    const { generations } = json;
     return (
       <>
-        {message}
+        {localize('com_error_token_balance')}
         {generations && (
           <>
             <br />
@@ -142,17 +142,17 @@ const Error = ({ text }: { text: string }) => {
 
   const json = JSON.parse(jsonString);
   const errorKey = json.code || json.type;
-  const keyExists = errorKey && errorMessages[errorKey];
+  const handler = errorKey ? errorMessages[errorKey] : undefined;
 
-  if (keyExists && typeof errorMessages[errorKey] === 'function') {
-    return errorMessages[errorKey](json, localize);
-  } else if (keyExists && keyExists.startsWith(localizedErrorPrefix)) {
-    return localize(errorMessages[errorKey]);
-  } else if (keyExists) {
-    return errorMessages[errorKey];
-  } else {
-    return defaultResponse;
+  if (typeof handler === 'function') {
+    return handler(json, localize);
   }
+  if (typeof handler === 'string') {
+    return handler.startsWith(localizedErrorPrefix)
+      ? localize(handler as TranslationKeys)
+      : handler;
+  }
+  return defaultResponse;
 };
 
 export default Error;
