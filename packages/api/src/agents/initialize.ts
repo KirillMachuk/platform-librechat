@@ -592,6 +592,12 @@ export async function initializeAgent(
    * use of these models stays allowed. Covers every agent that reaches a run:
    * ephemeral chat toggles, saved agents, and handoff/subagents. Deep Research
    * is unaffected — it forces a non-reasoning model before this initializer runs.
+   *
+   * `file_search` alone normally cannot trip this gate for chat: the ephemeral
+   * loaders and `applyConversationFileContext` skip arming it on reasoning
+   * models, whose documents are served by the forced retrieval floor instead
+   * (no tool loop needed). The gate still fires for web_search/MCP toggles,
+   * saved agents with tools, and Projects (their sources need the tool).
    */
   if (isReasoningModel(agent.model) && (agent.tools?.length ?? 0) > 0) {
     throw new Error(`{ "type": "${ErrorTypes.REASONING_MODEL_TOOLS}", "info": "${agent.model}" }`);
@@ -627,6 +633,20 @@ export async function initializeAgent(
       if (EToolResources[tool as keyof typeof EToolResources]) {
         toolResourceSet.add(EToolResources[tool as keyof typeof EToolResources]);
       }
+    }
+
+    /**
+     * Reasoning-model floor: on o-series / gpt-5.x the `file_search` tool is
+     * deliberately absent (no multi-turn tool loop), yet the conversation's
+     * embedded documents must still load so the forced retrieval floor can
+     * inject their chunks each turn. Bound `file_search` resources mark that
+     * intent, so honor them even without the tool.
+     */
+    if (
+      !toolResourceSet.has(EToolResources.file_search) &&
+      (agent.tool_resources?.[EToolResources.file_search]?.file_ids?.length ?? 0) > 0
+    ) {
+      toolResourceSet.add(EToolResources.file_search);
     }
 
     const toolFiles = (await db.getToolFilesByIds(fileIds, toolResourceSet)) as IMongoFile[];

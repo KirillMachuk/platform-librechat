@@ -3,6 +3,7 @@ import {
   Tools,
   Constants,
   isAgentsEndpoint,
+  isReasoningModel,
   isEphemeralAgentId,
   appendAgentIdSuffix,
   encodeEphemeralAgentId,
@@ -142,13 +143,18 @@ export async function loadAddedAgent(
       '';
     const ephemeralId = encodeEphemeralAgentId({ endpoint, model, sender, index: 1 });
 
+    /** Reasoning models (o-series / gpt-5.x) never carry `file_search` — the forced
+     *  retrieval floor serves documents without a tool loop (mirrors loadEphemeralAgent). */
+    const inheritedTools = isReasoningModel(model)
+      ? primaryAgent.tools.filter((tool) => tool !== Tools.file_search)
+      : [...primaryAgent.tools];
     const result: Record<string, unknown> = {
       id: ephemeralId,
       instructions: promptPrefix || '',
       provider: endpoint,
       model_parameters: {},
       model,
-      tools: [...primaryAgent.tools],
+      tools: inheritedTools,
     };
     applyModelSpecSkills(result, modelSpec);
     applyModelSpecSubagents(result, modelSpec);
@@ -170,10 +176,11 @@ export async function loadAddedAgent(
   }
 
   const tools: string[] = [];
+  const reasoningModel = isReasoningModel(model);
   if (ephemeralAgent?.execute_code === true || modelSpec?.executeCode === true) {
     tools.push(Tools.execute_code);
   }
-  if (ephemeralAgent?.file_search === true || modelSpec?.fileSearch === true) {
+  if ((ephemeralAgent?.file_search === true || modelSpec?.fileSearch === true) && !reasoningModel) {
     tools.push(Tools.file_search);
   }
   if (ephemeralAgent?.web_search === true || modelSpec?.webSearch === true) {
