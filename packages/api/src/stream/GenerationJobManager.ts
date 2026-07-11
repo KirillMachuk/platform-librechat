@@ -55,7 +55,22 @@ function getReplayStepId(event: t.ServerSentEvent): unknown {
     return result != null && typeof result === 'object' && 'id' in result ? result.id : undefined;
   }
 
+  if (event.event === 'dr_progress') {
+    return 'dr_progress';
+  }
+
   return undefined;
+}
+
+/**
+ * Deep-Research live-progress snapshots (task #21): replay-persisted so a resuming client
+ * restores the running card immediately instead of staring at nothing until the NEXT graph
+ * event (rounds are minutes apart). Single-slot by design — {@link getReplayStepId} gives
+ * every snapshot the same id, so {@link persistReplayEvent} replaces in place and exactly
+ * one (the latest) snapshot survives per job.
+ */
+function isDrProgressEvent(event: t.ServerSentEvent): boolean {
+  return 'event' in event && event.event === 'dr_progress' && event.data != null;
 }
 
 function isOAuthReplayEvent(event: t.ServerSentEvent): boolean {
@@ -1205,7 +1220,7 @@ class GenerationJobManagerClass {
    * UI state on resume but are not represented by aggregated message content.
    */
   private async trackReplayEvent(streamId: string, event: t.ServerSentEvent): Promise<void> {
-    if (!isOAuthReplayEvent(event)) {
+    if (!isOAuthReplayEvent(event) && !isDrProgressEvent(event)) {
       return;
     }
 

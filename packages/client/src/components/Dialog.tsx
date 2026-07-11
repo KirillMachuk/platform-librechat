@@ -72,7 +72,9 @@ const DialogContent: React.ForwardRefExoticComponent<
         >
           {children}
           {showCloseButton && (
-            <DialogPrimitive.Close className="absolute right-6 top-[1.6rem] rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-gray-100 dark:focus:ring-white dark:focus:ring-offset-gray-700 dark:data-[state=open]:bg-gray-800">
+            /* p-2.5/-m-2.5 pads the tap target to ~40px (mobile minimum) while the X keeps
+               its visual position and size — the icon alone was a 20px target. */
+            <DialogPrimitive.Close className="absolute right-6 top-[1.6rem] -m-2.5 rounded-sm p-2.5 opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-gray-100 dark:focus:ring-white dark:focus:ring-offset-gray-700 dark:data-[state=open]:bg-gray-800">
               <X className="h-5 w-5 text-black dark:text-white" aria-hidden="true" />
               <span className="sr-only">Close</span>
             </DialogPrimitive.Close>

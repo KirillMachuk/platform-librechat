@@ -25,7 +25,7 @@ describe('marker literals (R6 pin)', () => {
   });
 });
 
-describe('parsePlanDecision (fail-open to PROCEED)', () => {
+describe('parsePlanDecision (review r2: fails CLOSED to PLAN)', () => {
   it('returns CLARIFY with trimmed questions when the model asks', () => {
     const out = parsePlanDecision('{"action":"CLARIFY","questions":[" Масштаб? ","Бюджет?"]}');
     expect(out.action).toBe('CLARIFY');
@@ -59,20 +59,35 @@ describe('parsePlanDecision (fail-open to PROCEED)', () => {
     expect(parsePlanDecision('{"action":"PROCEED"}').action).toBe('PROCEED');
   });
 
-  it('fails open to PROCEED on garbage / empty / CLARIFY-without-Q / PLAN-without-steps', () => {
-    expect(parsePlanDecision('not json').action).toBe('PROCEED');
-    expect(parsePlanDecision('').action).toBe('PROCEED');
-    expect(parsePlanDecision('{"action":"CLARIFY","questions":[]}').action).toBe('PROCEED');
-    expect(parsePlanDecision('{"action":"PLAN","steps":[]}').action).toBe('PROCEED');
-    expect(parsePlanDecision('{"action":"PLAN","title":"T"}').action).toBe('PROCEED');
+  it('fails CLOSED to PLAN on garbage / empty / CLARIFY-without-Q / PLAN-without-steps', () => {
+    // The gate exists to demand explicit confirmation before the most expensive action —
+    // ambiguous model output must present a card (the runner substitutes fallback steps
+    // when the list is empty), never silently launch a run. Only an EXPLICIT PROCEED
+    // proceeds (previous test).
+    expect(parsePlanDecision('not json').action).toBe('PLAN');
+    expect(parsePlanDecision('').action).toBe('PLAN');
+    expect(parsePlanDecision('{"action":"CLARIFY","questions":[]}').action).toBe('PLAN');
+    expect(parsePlanDecision('{"action":"PLAN","steps":[]}').action).toBe('PLAN');
+    expect(parsePlanDecision('{"action":"PLAN","title":"T"}')).toEqual({
+      action: 'PLAN',
+      questions: [],
+      title: 'T',
+      steps: [],
+    });
   });
 
-  it('downgrades CLARIFY to PROCEED when allowClarify is false (anti-loop)', () => {
+  it('downgrades CLARIFY to PLAN when allowClarify is false (anti-loop)', () => {
     const out = parsePlanDecision('{"action":"CLARIFY","questions":["Опять?"]}', {
       allowClarify: false,
     });
-    expect(out.action).toBe('PROCEED');
+    expect(out.action).toBe('PLAN');
     expect(out.questions).toEqual([]);
+  });
+
+  it('honors an explicit PROCEED when allowClarify is false (the «начинай» reply)', () => {
+    expect(parsePlanDecision('{"action":"PROCEED"}', { allowClarify: false }).action).toBe(
+      'PROCEED',
+    );
   });
 
   it('still allows PLAN when allowClarify is false', () => {

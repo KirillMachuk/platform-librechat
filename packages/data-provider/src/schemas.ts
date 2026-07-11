@@ -806,6 +806,13 @@ export const tMessageSchema = z.object({
    * what actually ran, not the current catalog).
    */
   alwaysAppliedSkills: z.array(z.string()).optional(),
+  /**
+   * Machine-readable Deep-Research provenance (task #21), set by the DR runner when it
+   * creates the message: 'plan' | 'clarify' | 'start' | 'cancel' | 'report'. The plan
+   * card, action chips, and report card mount on THIS field — never on the display text,
+   * so prose that merely looks like a plan can't grow live controls.
+   */
+  drKind: z.enum(['plan', 'clarify', 'start', 'cancel', 'report']).optional(),
 });
 
 export type MemoryArtifact = {

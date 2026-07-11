@@ -1,12 +1,7 @@
 import { useCallback, useMemo, memo } from 'react';
 import { useRecoilValue } from 'recoil';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  QueryKeys,
-  isDrPlanMessage,
-  isDrStartCommand,
-  isDrCancelCommand,
-} from 'librechat-data-provider';
+import { QueryKeys, isDrStartCommand, isDrCancelCommand } from 'librechat-data-provider';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { TMessageProps, TMessageChatContext } from '~/common';
@@ -86,6 +81,7 @@ function areContentRenderPropsEqual(prev: ContentRenderProps, next: ContentRende
     prevMsg.unfinished === nextMsg.unfinished &&
     prevMsg.createdAt === nextMsg.createdAt &&
     prevMsg.depth === nextMsg.depth &&
+    prevMsg.drKind === nextMsg.drKind &&
     prevMsg.isCreatedByUser === nextMsg.isCreatedByUser &&
     (prevMsg.children?.length ?? 0) === (nextMsg.children?.length ?? 0) &&
     prevMsg.content === nextMsg.content &&
@@ -147,20 +143,16 @@ const ContentRender = memo(function ContentRender({
   const { hasParallelContent } = useContentMetadata(msg);
 
   // Task #21 phase 3: a FINISHED Deep Research report → collapsible ReportCard + reader.
-  // Gated on !isSubmitting so it never runs mid-stream (the running slot owns that window);
-  // the ancestor walk reads the flat message cache non-reactively — by the time a run
-  // finalizes the plan/clarify/start ancestors are already cached and stable. A miss (e.g.
-  // a fresh PROCEED-direct report, or a share page with no cache) → plain markdown.
+  // Review r2: keyed on the persisted `drKind` provenance (no text sniffing, no ancestor
+  // walk) — prose that merely looks like a report stays plain markdown, and PROCEED-direct
+  // reports get the card too. Gated on !isSubmitting so it never runs mid-stream (the
+  // running slot owns that window). Legacy pre-drKind reports render plain.
   const drReport = useMemo(() => {
     if (!msg || isSubmitting || msg.isCreatedByUser === true) {
       return null;
     }
-    const messages = queryClient.getQueryData<TMessage[]>([
-      QueryKeys.messages,
-      conversation?.conversationId,
-    ]);
-    return resolveDrReport(msg, messages);
-  }, [msg, isSubmitting, conversation?.conversationId, queryClient]);
+    return resolveDrReport(msg);
+  }, [msg, isSubmitting]);
 
   if (!msg) {
     return null;
@@ -188,21 +180,37 @@ const ContentRender = memo(function ContentRender({
   const isUserTurn = msg.isCreatedByUser === true;
   const showUserBubble = isUserTurn && !edit;
 
-  // Task #21 Deep Research card states (all behind the plan-gate markers; a normal chat is
-  // untouched). A user START/CANCEL command → compact chip; an assistant plan message → the
-  // plan card; the active (latest, still-generating) assistant response mounts the running
-  // slot — the slot alone subscribes to dr_progress and renders the card only during a DR
-  // run, so gating on isSubmitting auto-hides it on any terminal outcome.
+  // Task #21 Deep Research card states. Review r2: every card mounts on the PERSISTED
+  // `drKind` provenance the runner stamps at message creation — never on display text, so
+  // a normal-chat answer that merely starts with the plan-marker prose can never grow live
+  // buttons or an autostart fuse. The one text-assisted case is the OPTIMISTIC command
+  // message (no drKind until the server save lands): the command text counts only under a
+  // drKind-verified plan/clarify parent from the cache. The running slot alone subscribes
+  // to dr_progress and renders only during a run (isSubmitting gates it off terminally).
   const msgText = msg.text ?? '';
-  const isDrActionChip = isUserTurn && (isDrStartCommand(msgText) || isDrCancelCommand(msgText));
-  const isDrPlanCard = !isUserTurn && isDrPlanMessage(msgText);
+  const isDrCommandKind = msg.drKind === 'start' || msg.drKind === 'cancel';
+  const isDrCommandText = isDrStartCommand(msgText) || isDrCancelCommand(msgText);
+  let isDrActionChip = isUserTurn && isDrCommandKind;
+  if (!isDrActionChip && isUserTurn && isDrCommandText) {
+    const cached = queryClient.getQueryData<TMessage[]>([
+      QueryKeys.messages,
+      conversation?.conversationId,
+    ]);
+    const parent = cached?.find((m) => m.messageId === msg.parentMessageId);
+    isDrActionChip = parent?.drKind === 'plan' || parent?.drKind === 'clarify';
+  }
+  const isDrPlanCard = !isUserTurn && msg.drKind === 'plan';
   const mountDrRunningSlot = !isUserTurn && !isDrPlanCard && isLatestMessage && isSubmitting;
 
   let drCard: ReactNode = null;
   if (isDrActionChip) {
     drCard = <ActionChip text={msgText} />;
   } else if (isDrPlanCard) {
-    drCard = <PlanCard message={msg} awaitingAction={hasNoChildren && isLatestMessage} />;
+    // awaitingAction = unanswered tip of the DISPLAYED branch (isLast, not the global
+    // latestMessageId): a plan variant re-shown via the sibling switcher keeps working
+    // buttons instead of rendering permanently inert (review r2). Its autostart window
+    // derives from its own createdAt, so an old variant never surprise-starts.
+    drCard = <PlanCard message={msg} awaitingAction={hasNoChildren && isLast} />;
   }
 
   const contentPartsEl = (

@@ -14,8 +14,10 @@ import { tolerantJsonParse } from './shared';
  * - PLAN     → a PLAN card message ({@link PLAN_MARKER}); the user starts it with
  *   {@link START_MARKER} (button or autostart), edits it with free text, or cancels
  *   with {@link CANCEL_MARKER}.
- * - PROCEED  → run the graph immediately (the fail-open default, and the model's
- *   choice when a plan adds nothing).
+ * - PROCEED  → run the graph immediately — the model's EXPLICIT choice when a plan
+ *   adds nothing. Ambiguous/garbled output fails CLOSED to PLAN instead (review r2):
+ *   the gate's contract is user confirmation before the most expensive action, so a
+ *   bad model turn presents a card rather than silently launching a run.
  *
  * NOTE: the marker strings + command detectors here MUST stay identical to the
  * frontend copies in `packages/data-provider/src/deepResearch.ts` (the client renders
@@ -70,7 +72,7 @@ export function buildPlanPrompt({
 }): string {
   const clarifyRule = allowClarify
     ? `- Если для АДРЕСНОЙ рекомендации не хватает критичных вводных (масштаб бизнеса, бюджет, on-prem/облако, отрасль, юрисдикция, ключевые требования) — верни action "CLARIFY" и от 1 до ${MAX_CLARIFY_QUESTIONS} КОРОТКИХ вопросов, только самые важные. Не задавай вопросы ради вопросов.`
-    : `- Пользователю уже задавали уточнения (или он просил начинать) — БОЛЬШЕ НЕ УТОЧНЯЙ. Действие "CLARIFY" запрещено; выбирай "PLAN".`;
+    : `- Пользователю уже задавали уточнения (или он просил начинать) — БОЛЬШЕ НЕ УТОЧНЯЙ. Действие "CLARIFY" запрещено; выбирай "PLAN" или "PROCEED". Если пользователь явно просит начать/запустить исследование («начинай», «поехали», «запускай») — верни "PROCEED", не предлагай новый план.`;
   return `Ты — модуль ПЛАНИРОВАНИЯ системы глубокого исследования (Deep Research) для рынка СНГ.
 Дата: ${now}.
 
@@ -110,10 +112,12 @@ function cleanStringList(value: unknown, cap: number): string[] {
 }
 
 /**
- * Parses the decision. FAIL-OPEN: anything unparseable or ambiguous → PROCEED (start
- * research rather than block the user on a bad model turn). Only an explicit CLARIFY
- * with ≥1 question clarifies; only an explicit PLAN with ≥1 step shows a card. When
- * `allowClarify` is false a CLARIFY result is downgraded to PROCEED (anti-loop).
+ * Parses the decision. FAIL-CLOSED (review r2): anything unparseable or ambiguous → PLAN,
+ * possibly with EMPTY steps — the runner then substitutes a deterministic fallback plan.
+ * The gate's contract is explicit user confirmation before the most expensive action in
+ * the product, so a garbled model turn must present a card, never silently launch a run.
+ * Only an explicit PROCEED proceeds; only an explicit CLARIFY with ≥1 question clarifies.
+ * When `allowClarify` is false a CLARIFY result is downgraded to PLAN (anti-loop).
  */
 export function parsePlanDecision(
   text: string,
@@ -128,10 +132,10 @@ export function parsePlanDecision(
   if (action === 'CLARIFY' && allowClarify && questions.length > 0) {
     return { action: 'CLARIFY', questions, title: '', steps: [] };
   }
-  if (action === 'PLAN' && steps.length > 0) {
-    return { action: 'PLAN', questions: [], title, steps };
+  if (action === 'PROCEED') {
+    return { action: 'PROCEED', questions: [], title: '', steps: [] };
   }
-  return { action: 'PROCEED', questions: [], title: '', steps: [] };
+  return { action: 'PLAN', questions: [], title, steps };
 }
 
 /**
