@@ -206,11 +206,17 @@ const ContentRender = memo(function ContentRender({
   if (isDrActionChip) {
     drCard = <ActionChip text={msgText} />;
   } else if (isDrPlanCard) {
-    // awaitingAction = unanswered tip of the DISPLAYED branch (isLast, not the global
-    // latestMessageId): a plan variant re-shown via the sibling switcher keeps working
-    // buttons instead of rendering permanently inert (review r2). Its autostart window
-    // derives from its own createdAt, so an old variant never surprise-starts.
-    drCard = <PlanCard message={msg} awaitingAction={hasNoChildren && isLast} />;
+    // awaitingAction = the unanswered tip of the DISPLAYED branch. `isLast` (depth-based)
+    // keeps a plan variant re-shown via the sibling switcher live (review r2). But `isLast`
+    // compares msg.depth (from buildTree) to latestMessageDepth (from the latestMessage
+    // atom), and on a FOLLOW-UP turn's freshly-finalized card those two briefly disagree —
+    // the just-arrived re-plan/clarify→plan card gets no depth match, so it rendered with NO
+    // buttons/timer until a reload (task #21 live bug). `isLatestMessage` (stable id match)
+    // covers that case; ORing keeps the sibling-switcher case working. hasNoChildren still
+    // gates: once Начать/an edit is sent the card has a child and goes inert.
+    drCard = (
+      <PlanCard message={msg} awaitingAction={hasNoChildren && (isLast || isLatestMessage)} />
+    );
   }
 
   const contentPartsEl = (

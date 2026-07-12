@@ -1108,13 +1108,16 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
 });
 
 describe('runNewDeepResearch — task #21 aborted anchor (persist a re-plannable Stop)', () => {
-  it('a Stop with NO report still SAVES a stopped anchor stamped drKind=aborted', async () => {
-    // The frontend threads the follow-up onto responseMessageId (from the abort event), so
-    // the row MUST exist or the comment dangles → fresh turn (the re-plan bug). No partial
-    // was collected, so it saves an honest STOPPED notice, not a fake "partial report".
+  it('a Stop with NO findings saves the clean STOPPED anchor, IGNORING the non-empty fallback report', async () => {
+    // Live bug: runDeepResearch NEVER returns a blank finalReport — an aborted run with
+    // nothing collected still gets a buildFallbackReport that echoes the brief (for a
+    // plan-start that's the dialogue INCLUDING the plan). Keying emptiness on blank text let
+    // that useless fallback save as "Частичный отчёт" wrapping the plan. Emptiness is keyed on
+    // FINDINGS: no findings → the clean STOPPED notice, never the fallback.
     mockStartSovereignSession.mockResolvedValue(null);
     mockRunDeepResearch.mockResolvedValueOnce({
-      finalReport: '',
+      finalReport:
+        '# Аналитическая записка (частичный отчёт)\n\nЗапрос: **План исследования:** Рынок CRM\n\nПо запросу не удалось собрать данные.',
       finalizeReason: 'aborted',
       usage: { input: 5, output: 0, total: 5 },
       findings: [],
@@ -1127,19 +1130,22 @@ describe('runNewDeepResearch — task #21 aborted anchor (persist a re-plannable
     expect(msg).toBeDefined();
     expect(msg.drKind).toBe('aborted');
     expect(msg.text).toContain('Исследование остановлено');
+    // The useless fallback (the "Частичный отчёт" echoing the plan) must NOT be saved.
     expect(msg.text).not.toContain('Частичный отчёт');
+    expect(msg.text).not.toContain('План исследования');
     // A complete terminal notice (like a cancel) — NOT flagged unfinished, so no redundant
     // "unfinished message" indicator renders under an explicit stop notice.
     expect(msg.unfinished).toBe(false);
   });
 
-  it('a Stop WITH a partial report saves it under the partial banner, stamped drKind=aborted', async () => {
+  it('a Stop WITH collected findings saves the partial report under the banner, stamped drKind=aborted', async () => {
     mockStartSovereignSession.mockResolvedValue(null);
     mockRunDeepResearch.mockResolvedValueOnce({
       finalReport: 'Промежуточные данные по вендорам',
       finalizeReason: 'aborted',
       usage: { input: 5, output: 5, total: 10 },
-      findings: [],
+      // Real findings were collected → this is a genuine partial, not an empty Stop.
+      findings: [{ subQuestion: 'вендоры CRM', digest: '...', sources: [] }],
     });
 
     await runNewDeepResearch(baseParams('изучи рынок CRM'));

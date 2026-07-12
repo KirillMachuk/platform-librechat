@@ -1293,12 +1293,19 @@ async function runNewDeepResearch(params) {
   // 'completed' is a full report; 'limit' is a deliberate non-error refusal (concurrency
   // cap); 'clarify' is a questions message (D2); 'plan' is a plan card and 'cancelled' is a
   // dismissed plan (task #21) — each stands alone and must NOT get the frontend "unfinished"
-  // banner. A Stop that collected NO report saves a clean STOPPED notice — a COMPLETE
+  // banner. A Stop that collected NO findings saves a clean STOPPED notice — a COMPLETE
   // terminal message like a cancel — so it is finished too (no redundant "unfinished"
-  // indicator under an explicit stop notice); a partial abort, which DOES carry a truncated
-  // report, stays unfinished.
+  // indicator under an explicit stop notice); a partial abort that DID collect findings
+  // carries a truncated report and stays unfinished.
+  //
+  // Emptiness is keyed on FINDINGS, not on `finalReport` being blank: runDeepResearch never
+  // returns a blank report — an aborted run with nothing collected still gets a
+  // buildFallbackReport that just echoes the research brief (which, for a plan-start, is the
+  // dialogue INCLUDING the plan) + "не удалось собрать данные". Keying on empty text let that
+  // useless fallback save as a "Частичный отчёт" wrapping the plan (live bug); no findings is
+  // the real "nothing to show" signal.
   const abortedWithoutReport =
-    result.finalizeReason === 'aborted' && (result.finalReport ?? '').trim() === '';
+    result.finalizeReason === 'aborted' && (result.findings?.length ?? 0) === 0;
   const unfinished =
     !['completed', 'limit', 'clarify', 'plan', 'cancelled'].includes(result.finalizeReason) &&
     !abortedWithoutReport;
