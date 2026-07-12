@@ -55,15 +55,17 @@ jest.mock('~/data-provider', () => ({
   useGetStartupConfig: () => ({ data: { interface: {} } }),
 }));
 
-jest.mock('~/components/Chat/Input/ArtifactsSubMenu', () => ({
-  __esModule: true,
-  default: () => <div>artifacts_item</div>,
-}));
+jest.mock('~/components/Chat/Input/ArtifactsSubMenu', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const R = require('react');
+  return { __esModule: true, default: () => R.createElement('div', null, 'artifacts_item') };
+});
 
-jest.mock('~/components/Chat/Input/MCPSubMenu', () => ({
-  __esModule: true,
-  default: () => <div>mcp_item</div>,
-}));
+jest.mock('~/components/Chat/Input/MCPSubMenu', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const R = require('react');
+  return { __esModule: true, default: () => R.createElement('div', null, 'mcp_item') };
+});
 
 jest.mock('@librechat/client', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
