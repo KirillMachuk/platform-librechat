@@ -55,7 +55,7 @@ export interface IMessage extends Document {
    */
   alwaysAppliedSkills?: string[];
   /** Machine-readable Deep-Research provenance (task #21), set by the DR runner. */
-  drKind?: 'plan' | 'clarify' | 'start' | 'cancel' | 'report';
+  drKind?: 'plan' | 'clarify' | 'start' | 'cancel' | 'report' | 'aborted';
   expiredAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;

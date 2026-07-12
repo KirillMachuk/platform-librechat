@@ -808,11 +808,13 @@ export const tMessageSchema = z.object({
   alwaysAppliedSkills: z.array(z.string()).optional(),
   /**
    * Machine-readable Deep-Research provenance (task #21), set by the DR runner when it
-   * creates the message: 'plan' | 'clarify' | 'start' | 'cancel' | 'report'. The plan
-   * card, action chips, and report card mount on THIS field — never on the display text,
-   * so prose that merely looks like a plan can't grow live controls.
+   * creates the message: 'plan' | 'clarify' | 'start' | 'cancel' | 'report' | 'aborted'.
+   * The plan card, action chips, and report card mount on THIS field — never on the
+   * display text, so prose that merely looks like a plan can't grow live controls.
+   * 'aborted' (research stopped before a valid report) routes the next message back into
+   * planning; 'report' (valid terminal answer) routes it to normal chat.
    */
-  drKind: z.enum(['plan', 'clarify', 'start', 'cancel', 'report']).optional(),
+  drKind: z.enum(['plan', 'clarify', 'start', 'cancel', 'report', 'aborted']).optional(),
 });
 
 export type MemoryArtifact = {

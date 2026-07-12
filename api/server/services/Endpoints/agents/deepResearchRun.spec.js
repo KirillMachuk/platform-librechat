@@ -131,8 +131,10 @@ jest.mock('@librechat/api', () => ({
     text.trimStart().startsWith('**Уточните, пожалуйста, детали исследования:**'),
   // Task #21 plan-gate helpers — faithful mirrors of plan.ts (unit-tested there); the
   // system prompt carries the 'модуль ПЛАНИРОВАНИЯ' marker the fake model branches on.
-  buildPlanPrompt: ({ now, allowClarify = true }) =>
-    `Ты — модуль ПЛАНИРОВАНИЯ. ${now}${allowClarify ? '' : ' CLARIFY запрещено'}`,
+  buildPlanPrompt: ({ now, allowClarify = true, isRefinement = false }) =>
+    `Ты — модуль ПЛАНИРОВАНИЯ. ${now}${allowClarify ? '' : ' CLARIFY запрещено'}${
+      isRefinement ? ' РЕЖИМ ПРАВКИ ПЛАНА' : ''
+    }`,
   parsePlanDecision: (text, { allowClarify = true } = {}) => {
     let parsed = null;
     try {
@@ -713,6 +715,27 @@ describe('isDrFollowUp (badge-independent DR routing, drKind-gated — review r2
     ).resolves.toBe(true);
   });
 
+  it('is TRUE when the parent carries drKind=aborted (re-plan after a Stop, task #21)', async () => {
+    // A comment after a Stop must route back into DR so it re-plans the original plan.
+    models.getMessages.mockResolvedValueOnce([
+      { messageId: 'p1', isCreatedByUser: false, drKind: 'aborted' },
+    ]);
+    await expect(
+      isDrFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'p1' }),
+    ).resolves.toBe(true);
+  });
+
+  it('is FALSE when the parent carries drKind=report (a finished report → normal chat)', async () => {
+    // Owner decision (§5.2): a follow-up on a COMPLETED report is an ordinary chat turn,
+    // NOT a re-plan. Only an aborted (Stopped) run routes back into planning.
+    models.getMessages.mockResolvedValueOnce([
+      { messageId: 'p1', isCreatedByUser: false, drKind: 'report' },
+    ]);
+    await expect(
+      isDrFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'p1' }),
+    ).resolves.toBe(false);
+  });
+
   it('is FALSE for MARKER-LOOKALIKE prose without drKind (the P0 collision fix)', async () => {
     // A normal-chat answer that merely STARTS with the plan-marker text must not route
     // its follow-up into a research run — provenance, not prose, decides.
@@ -914,6 +937,102 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     expect(mockRunDeepResearch).not.toHaveBeenCalled();
   });
 
+  it('Stop then a comment re-plans the ORIGINAL plan (plan-edit, not a fresh turn)', async () => {
+    // The task #21 prod bug: after a Stop the follow-up landed as a FRESH turn (planned the
+    // comment in isolation). With drKind='aborted' the comment now re-plans the original.
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockPlanContent =
+      '{"action":"PLAN","title":"Реранкеры для русского языка","steps":["Отобрать реранкеры с поддержкой русского","Сравнить на русских датасетах"]}';
+    // Message tree after a Stop: original request → plan card → START → aborted anchor.
+    models.getMessages.mockResolvedValueOnce([
+      {
+        messageId: 'orig',
+        isCreatedByUser: true,
+        parentMessageId: null,
+        text: 'исследуй реранкеры',
+      },
+      {
+        messageId: 'plan1',
+        isCreatedByUser: false,
+        parentMessageId: 'orig',
+        drKind: 'plan',
+        text: '**План исследования:** Реранкеры\n\n1. Отобрать\n2. Сравнить',
+      },
+      {
+        messageId: 'start1',
+        isCreatedByUser: true,
+        parentMessageId: 'plan1',
+        drKind: 'start',
+        text: '▶ Начать исследование',
+      },
+      {
+        messageId: 'ab1',
+        isCreatedByUser: false,
+        parentMessageId: 'start1',
+        drKind: 'aborted',
+        text: 'Исследование остановлено. Напишите, что изменить в плане, — и я пересоберу его с учётом ваших правок.',
+      },
+    ]);
+    const params = planParams('с учётом русского языка');
+    params.parentMessageId = 'ab1';
+
+    const result = await runNewDeepResearch(params);
+
+    // A new PLAN card (re-plan), NOT a research run.
+    expect(result.finalizeReason).toBe('plan');
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    // The plan decision saw the ORIGINAL request AND the comment — not the comment alone.
+    const decision = mockInvokeArgs.find(
+      (msgs) =>
+        typeof msgs?.[0]?.content === 'string' && msgs[0].content.includes('модуль ПЛАНИРОВАНИЯ'),
+    );
+    expect(decision).toBeDefined();
+    expect(decision[1].content).toContain('исследуй реранкеры');
+    expect(decision[1].content).toContain('с учётом русского языка');
+    // A refinement never re-asks clarify (allowClarify off → the prompt carries the ban).
+    expect(decision[0].content).toContain('CLARIFY запрещено');
+    // Track 3: the decision runs in plan-edit refinement mode.
+    expect(decision[0].content).toContain('РЕЖИМ ПРАВКИ ПЛАНА');
+    // The aborted anchor's own notice text must NOT pollute the re-plan dialogue.
+    expect(decision[1].content).not.toContain('Исследование остановлено');
+    // The new card is stamped drKind='plan' and reflects the refinement.
+    const card = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(card.drKind).toBe('plan');
+    expect(card.text).toContain('русск');
+  });
+
+  it('a free-text comment on a live plan card (before start) re-plans in refinement mode', async () => {
+    // The card-edit path (Редактировать → type a change → the plan rebuilds): same plan-edit
+    // classification + refinement prompt as the post-Stop path, but the parent is the plan.
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockPlanContent =
+      '{"action":"PLAN","title":"CRM с упором на цену","steps":["Собрать вендоров","Сравнить цены за 2026"]}';
+    models.getMessages.mockResolvedValueOnce([
+      { messageId: 'orig', isCreatedByUser: true, parentMessageId: null, text: 'изучи CRM рынок' },
+      {
+        messageId: 'plan1',
+        isCreatedByUser: false,
+        parentMessageId: 'orig',
+        drKind: 'plan',
+        text: '**План исследования:** Рынок CRM\n\n1. Собрать\n2. Сравнить',
+      },
+    ]);
+    const params = planParams('сделай упор на цену');
+    params.parentMessageId = 'plan1';
+
+    const result = await runNewDeepResearch(params);
+
+    expect(result.finalizeReason).toBe('plan');
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    const decision = mockInvokeArgs.find(
+      (msgs) =>
+        typeof msgs?.[0]?.content === 'string' && msgs[0].content.includes('модуль ПЛАНИРОВАНИЯ'),
+    );
+    expect(decision[0].content).toContain('РЕЖИМ ПРАВКИ ПЛАНА');
+    expect(decision[1].content).toContain('изучи CRM рынок');
+    expect(decision[1].content).toContain('сделай упор на цену');
+  });
+
   it('restores (de-masks) the plan card before saving', async () => {
     mockStartSovereignSession.mockResolvedValue({
       maskedQuestion: 'изучи рынок для [PERSON_1]',
@@ -985,6 +1104,69 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
 
     const drEvents = mockEmitChunk.mock.calls.filter((c) => c[1]?.event === 'dr_progress');
     expect(drEvents).toHaveLength(0);
+  });
+});
+
+describe('runNewDeepResearch — task #21 aborted anchor (persist a re-plannable Stop)', () => {
+  it('a Stop with NO report still SAVES a stopped anchor stamped drKind=aborted', async () => {
+    // The frontend threads the follow-up onto responseMessageId (from the abort event), so
+    // the row MUST exist or the comment dangles → fresh turn (the re-plan bug). No partial
+    // was collected, so it saves an honest STOPPED notice, not a fake "partial report".
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockResolvedValueOnce({
+      finalReport: '',
+      finalizeReason: 'aborted',
+      usage: { input: 5, output: 0, total: 5 },
+      findings: [],
+    });
+
+    const result = await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(result.finalizeReason).toBe('aborted');
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg).toBeDefined();
+    expect(msg.drKind).toBe('aborted');
+    expect(msg.text).toContain('Исследование остановлено');
+    expect(msg.text).not.toContain('Частичный отчёт');
+    // A complete terminal notice (like a cancel) — NOT flagged unfinished, so no redundant
+    // "unfinished message" indicator renders under an explicit stop notice.
+    expect(msg.unfinished).toBe(false);
+  });
+
+  it('a Stop WITH a partial report saves it under the partial banner, stamped drKind=aborted', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockResolvedValueOnce({
+      finalReport: 'Промежуточные данные по вендорам',
+      finalizeReason: 'aborted',
+      usage: { input: 5, output: 5, total: 10 },
+      findings: [],
+    });
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.drKind).toBe('aborted');
+    expect(msg.text).toContain('Частичный отчёт');
+    expect(msg.text).toContain('Промежуточные данные по вендорам');
+    // A genuinely truncated report — keeps the unfinished flag (partial content follows).
+    expect(msg.unfinished).toBe(true);
+  });
+
+  it('a budget-limit partial stays drKind=report (a valid answer → normal chat, not re-plan)', async () => {
+    // Owner decision (§5.2): only a user Stop routes back into planning. A budget/time/
+    // rounds partial is a valid, if truncated, report — its follow-up is ordinary chat.
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockResolvedValueOnce({
+      finalReport: 'Отчёт, оборванный по лимиту бюджета',
+      finalizeReason: 'budget',
+      usage: { input: 5, output: 5, total: 10 },
+      findings: [],
+    });
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.drKind).toBe('report');
   });
 });
 

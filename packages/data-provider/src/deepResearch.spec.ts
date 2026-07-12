@@ -27,7 +27,7 @@ describe('deepResearch shared plan-gate primitives', () => {
   it('pins the drKind provenance values — persisted on messages, mirrored in the Mongo schema enum', () => {
     // Review r2: cards/routing mount on message.drKind, stamped by the runner. The same
     // union lives in the data-schemas message enum and tMessageSchema — change TOGETHER.
-    expect(DR_KINDS).toEqual(['plan', 'clarify', 'start', 'cancel', 'report']);
+    expect(DR_KINDS).toEqual(['plan', 'clarify', 'start', 'cancel', 'report', 'aborted']);
   });
 
   it('isDrAssistantTurn matches a plan OR a clarify message (for report ancestry)', () => {

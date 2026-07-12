@@ -117,6 +117,19 @@ describe('buildPlanPrompt', () => {
     const prompt = buildPlanPrompt({ now: '2026-07-09', allowClarify: false });
     expect(prompt).toMatch(/запрещено|БОЛЬШЕ НЕ УТОЧНЯЙ/);
   });
+
+  it('adds a plan-edit refinement instruction when isRefinement is true (task #21)', () => {
+    const prompt = buildPlanPrompt({ now: '2026-07-09', isRefinement: true });
+    // The model is told to UPDATE the plan and reflect the user's change in the steps.
+    expect(prompt).toMatch(/РЕЖИМ ПРАВКИ ПЛАНА/);
+    expect(prompt).toMatch(/ОБНОВЛ/);
+    expect(prompt).toMatch(/НЕ повторяй прежний план/);
+  });
+
+  it('omits the refinement instruction by default (a fresh plan turn)', () => {
+    const prompt = buildPlanPrompt({ now: '2026-07-09' });
+    expect(prompt).not.toMatch(/РЕЖИМ ПРАВКИ ПЛАНА/);
+  });
 });
 
 describe('formatPlanMessage + isPlanMessage', () => {

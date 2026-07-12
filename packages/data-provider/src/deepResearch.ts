@@ -12,8 +12,13 @@
  * plan (a normal chat answer starting with the marker text) must never grow live buttons
  * or route a follow-up into DR. The text markers below remain the display format and the
  * wire format of the user's start/cancel commands.
+ *
+ * 'aborted' marks a research turn the user STOPPED before it produced a valid report.
+ * Unlike 'report' (a valid terminal answer → the next message is normal chat), an
+ * 'aborted' turn routes the next user message back into planning: Stop + a follow-up
+ * comment re-plans the ORIGINAL plan with that comment, instead of starting fresh.
  */
-export const DR_KINDS = ['plan', 'clarify', 'start', 'cancel', 'report'] as const;
+export const DR_KINDS = ['plan', 'clarify', 'start', 'cancel', 'report', 'aborted'] as const;
 export type DrKind = (typeof DR_KINDS)[number];
 
 /** Fixed first line of a PLAN card message — how a plan turn is detected. */

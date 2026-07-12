@@ -54,9 +54,11 @@ function isComposerBusy(): boolean {
  * The ChatGPT-style Deep Research PLAN card (task #21): shows the research plan (title +
  * steps) with Начать / Редактировать / Отменить + a countdown autostart. Начать/Отменить
  * send a fixed marker message (the runner routes it into DR via the drKind-verified plan
- * parent); Редактировать only cancels the autostart and focuses the composer — the
- * buttons stay, so a mis-tap is never a dead end (review r2; before, one tap on
- * Редактировать hid all three buttons permanently).
+ * parent); Редактировать cancels the autostart, focuses the composer, and shows a hint —
+ * «опишите, что изменить, план пересоберётся» — so the user knows the plan is edited by
+ * typing in chat (the runner re-plans that turn). The buttons stay, so a mis-tap is never
+ * a dead end, and Начать still runs the plan as-is (review r2; before, one tap on
+ * Редактировать hid all three buttons, and its caption misleadingly said "press Start").
  *
  * `awaitingAction` is true only while the plan is the unanswered tip of the DISPLAYED
  * branch — once a turn follows it the card renders statically (no timer, no buttons).
@@ -82,6 +84,7 @@ export default function PlanCard({
   const { title, steps } = useMemo(() => parseDrPlanMessage(message.text ?? ''), [message.text]);
   const [acted, setActed] = useState(false);
   const [autoStartCancelled, setAutoStartCancelled] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [liveNote, setLiveNote] = useState('');
 
   const anchorMs = useCountdownAnchor(message.createdAt);
@@ -117,7 +120,12 @@ export default function PlanCard({
   );
 
   const edit = useCallback(() => {
-    cancelAutoStart(localize('com_ui_deep_research_autostart_cancelled'));
+    // Distinct from a typing-triggered auto-cancel: clicking Редактировать means "I want to
+    // change the plan", so the hint tells the user to describe the change in chat (the plan
+    // then rebuilds) — NOT "press Start". The buttons stay; Начать still works if they'd
+    // rather run as-is. (task #21 — the autostart-cancelled caption misled here.)
+    setEditing(true);
+    cancelAutoStart(localize('com_ui_deep_research_edit_hint'));
     const textarea = document.getElementById(mainTextareaId) as HTMLTextAreaElement | null;
     textarea?.focus();
   }, [cancelAutoStart, localize]);
@@ -176,7 +184,14 @@ export default function PlanCard({
       {showControls && (
         <>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={edit} aria-label={localize('com_ui_edit')}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={edit}
+              aria-pressed={editing}
+              aria-label={localize('com_ui_edit')}
+              className={editing ? 'ring-1 ring-border-heavy' : undefined}
+            >
               {localize('com_ui_edit')}
             </Button>
             <Button
@@ -199,9 +214,13 @@ export default function PlanCard({
               )}
             </Button>
           </div>
-          {autoStartCancelled && (
+          {(editing || autoStartCancelled) && (
             <div className="mt-2 text-right text-xs text-text-tertiary">
-              {localize('com_ui_deep_research_autostart_cancelled')}
+              {localize(
+                editing
+                  ? 'com_ui_deep_research_edit_hint'
+                  : 'com_ui_deep_research_autostart_cancelled',
+              )}
             </div>
           )}
           <span role="status" className="sr-only">

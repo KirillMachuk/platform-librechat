@@ -250,7 +250,12 @@ const PDF_ELIGIBLE_REASONS = new Set(['completed', 'budget', 'rounds', 'time']);
 /**
  * Machine-readable provenance stamped on the runner's response message (review r2): the
  * client mounts the plan card / report card on `message.drKind`, never on display text.
- * Cancel/error/limit/aborted messages carry none — they are plain terminal text.
+ * Cancel/error/limit messages carry none — they are plain terminal text.
+ *
+ * 'aborted' (a user Stop): the next user message must re-plan the ORIGINAL plan with that
+ * comment, not start fresh — so the stopped turn IS a followable DR anchor. Note that
+ * budget/time/rounds partials are 'report' (a valid, if truncated, answer → normal chat
+ * follow-up); ONLY a user Stop routes back into planning (owner decision, task #21).
  */
 function drKindForReason(finalizeReason) {
   if (finalizeReason === 'plan' || finalizeReason === 'clarify') {
@@ -258,6 +263,9 @@ function drKindForReason(finalizeReason) {
   }
   if (PDF_ELIGIBLE_REASONS.has(finalizeReason)) {
     return 'report';
+  }
+  if (finalizeReason === 'aborted') {
+    return 'aborted';
   }
   return undefined;
 }
@@ -364,7 +372,8 @@ async function isDrFollowUp({ userId, conversationId, parentMessageId }) {
     if (!parent || parent.isCreatedByUser === true) {
       return false;
     }
-    return parent.drKind === 'plan' || parent.drKind === 'clarify';
+    // 'aborted' too: a comment after a Stop re-plans the original plan (task #21 edit).
+    return parent.drKind === 'plan' || parent.drKind === 'clarify' || parent.drKind === 'aborted';
   } catch (error) {
     logger.warn('[deepResearchRun] DR follow-up check failed; routing to normal chat', error);
     return false;
@@ -445,6 +454,12 @@ function buildDialogueTranscript(chain, currentText) {
  * `currentUserMessageId` is excluded from that check: on a regenerate the current turn
  * reuses the existing START message id, which must not count as its own duplicate.
  *
+ * Task #21 plan edit after a Stop: a drKind='aborted' parent is a DR continuation too —
+ * the walk climbs past it (and past any earlier abort) to the original plan, and the
+ * comment is classified 'plan-edit', so Stop + a comment re-plans the ORIGINAL plan with
+ * that comment. The aborted anchor's own text (the STOPPED notice / partial) is NOT added
+ * to the dialogue — only [original request, plan, comment] feed the re-plan.
+ *
  * kind: 'fresh' | 'clarify-answer' | 'plan-start' | 'plan-cancel' | 'plan-edit'.
  */
 async function buildDrTurnContext({
@@ -479,7 +494,11 @@ async function buildDrTurnContext({
     }
     const parentIsClarify = parent.drKind === 'clarify';
     const parentIsPlan = parent.drKind === 'plan';
-    if (!parentIsClarify && !parentIsPlan) {
+    // A Stop leaves a drKind='aborted' anchor; a comment on it re-plans the ORIGINAL plan
+    // (task #21 edit). A completed 'report' is deliberately NOT here — a follow-up on a
+    // finished report is normal chat (owner decision).
+    const parentIsAborted = parent.drKind === 'aborted';
+    if (!parentIsClarify && !parentIsPlan && !parentIsAborted) {
       return fresh;
     }
 
@@ -492,7 +511,7 @@ async function buildDrTurnContext({
       const up = cursor.parentMessageId ? byId.get(cursor.parentMessageId) : null;
       const upIsDr =
         up && up.isCreatedByUser !== true
-          ? up.drKind === 'clarify' || up.drKind === 'plan'
+          ? up.drKind === 'clarify' || up.drKind === 'plan' || up.drKind === 'aborted'
           : Boolean(up);
       if (!upIsDr) {
         break;
@@ -508,6 +527,9 @@ async function buildDrTurnContext({
     let kind;
     if (parentIsClarify) {
       kind = 'clarify-answer';
+    } else if (parentIsAborted) {
+      // After a Stop there is no live plan card to start or cancel — any comment re-plans.
+      kind = 'plan-edit';
     } else if (isStartCommand(text)) {
       kind = 'plan-start';
     } else if (isCancelCommand(text)) {
@@ -569,11 +591,19 @@ async function runClarifyCheck({ buildModel, leadModelSlug, question, now, signa
  * is not a model failure — it returns the distinct ABORTED action and the runner exits
  * without saving a response or billing.
  */
-async function runPlanDecision({ buildModel, leadModelSlug, input, now, signal, allowClarify }) {
+async function runPlanDecision({
+  buildModel,
+  leadModelSlug,
+  input,
+  now,
+  signal,
+  allowClarify,
+  isRefinement = false,
+}) {
   try {
     const model = await buildModel(leadModelSlug);
     const prompt = [
-      new SystemMessage(buildPlanPrompt({ now, allowClarify })),
+      new SystemMessage(buildPlanPrompt({ now, allowClarify, isRefinement })),
       new HumanMessage(input),
     ];
     const response = await model.invoke(prompt, { signal });
@@ -609,6 +639,16 @@ const FALLBACK_PLAN_STEPS = [
  */
 const DUPLICATE_START_MESSAGE =
   'Это исследование уже запущено. Дождитесь завершения — отчёт появится в этом чате.';
+
+/**
+ * Terminal notice for a Stop that collected NO report text (the user aborted before the
+ * report was synthesised). It replaces the empty text a bare abort would otherwise save,
+ * so the run leaves a followable anchor (drKind='aborted') instead of a dangling id — the
+ * next user message re-plans the ORIGINAL plan with that comment (task #21 plan edit). It
+ * also answers "what now?" inline: describe the change and the plan rebuilds.
+ */
+const STOPPED_MESSAGE =
+  'Исследование остановлено. Напишите, что изменить в плане, — и я пересоберу его с учётом ваших правок.';
 
 /** The stock default conversation title — a row still carrying it has not been named yet. */
 const DEFAULT_CONVO_TITLE = 'New Chat';
@@ -912,6 +952,17 @@ async function runNewDeepResearch(params) {
       }));
     const researchInput = turn.dialogue ?? text ?? '';
 
+    // Diagnostic (task #21): the turn classification + input SHAPE, so a "plan didn't
+    // change after my comment" report can be traced to fresh-vs-plan-edit straight from the
+    // logs (the gap that made the original bug hard to see). Content is NOT logged — at this
+    // point researchInput is the RAW pre-mask user text and may carry PII; kind + whether a
+    // dialogue was assembled + its size already tell fresh (comment alone) from plan-edit
+    // (full [original + plan + comment]) apart.
+    logger.info(
+      `[deepResearchRun] turn kind=${turn.kind} dialogue=${turn.dialogue ? 'yes' : 'no'} ` +
+        `inputChars=${researchInput.length}`,
+    );
+
     // Provenance + admission persistence (review r2): stamp drKind on the user's command
     // messages and persist the question NOW — the finalize-tail save (an upsert on the
     // same messageId) merely refreshes it. Early persistence is what makes a duplicate
@@ -1006,6 +1057,9 @@ async function runNewDeepResearch(params) {
         now: new Date().toISOString(),
         signal,
         allowClarify: clarifyEnabled && turn.kind === 'fresh',
+        // A comment on an existing plan (card edit or post-Stop) → tell the model to return
+        // an UPDATED plan that reflects the change, not a near-identical one (task #21).
+        isRefinement: turn.kind === 'plan-edit',
       });
       planUsage = decision.usage;
       if (decision.action === 'ABORTED') {
@@ -1239,10 +1293,15 @@ async function runNewDeepResearch(params) {
   // 'completed' is a full report; 'limit' is a deliberate non-error refusal (concurrency
   // cap); 'clarify' is a questions message (D2); 'plan' is a plan card and 'cancelled' is a
   // dismissed plan (task #21) — each stands alone and must NOT get the frontend "unfinished"
-  // banner.
-  const unfinished = !['completed', 'limit', 'clarify', 'plan', 'cancelled'].includes(
-    result.finalizeReason,
-  );
+  // banner. A Stop that collected NO report saves a clean STOPPED notice — a COMPLETE
+  // terminal message like a cancel — so it is finished too (no redundant "unfinished"
+  // indicator under an explicit stop notice); a partial abort, which DOES carry a truncated
+  // report, stays unfinished.
+  const abortedWithoutReport =
+    result.finalizeReason === 'aborted' && (result.finalReport ?? '').trim() === '';
+  const unfinished =
+    !['completed', 'limit', 'clarify', 'plan', 'cancelled'].includes(result.finalizeReason) &&
+    !abortedWithoutReport;
   // Track B: de-mask the final report via the server-side run map (placeholders → real PII), then
   // free the map. restore never throws (worst case: placeholders remain — safe, not a leak); both
   // run for EVERY outcome incl. abort, so the partial report saved below is de-masked too.
@@ -1319,12 +1378,13 @@ async function runNewDeepResearch(params) {
   // M8: a partial report is prefixed with a localized reason banner so the user knows
   // WHY it stopped (budget/time/rounds/abort/error). Baked into the saved text so a
   // reload shows it too; the frontend's generic "unfinished" banner (C1f) complements it.
-  // Review r2: an abort that collected NOTHING yields an empty text — no banner-only
-  // "partial report" is fabricated (the response save below is skipped for it too).
-  const finalReportText =
-    (reportText ?? '').trim() === '' && result.finalizeReason === 'aborted'
-      ? ''
-      : withPartialBanner(reportText, result.finalizeReason);
+  // A Stop that collected NOTHING (aborted before the report was synthesised) has no
+  // partial to show, so instead of a banner promising content that isn't there it saves a
+  // clean STOPPED notice — and it IS saved (below), because the stopped turn must remain a
+  // followable drKind='aborted' anchor for the plan re-edit (task #21).
+  const finalReportText = abortedWithoutReport
+    ? STOPPED_MESSAGE
+    : withPartialBanner(reportText, result.finalizeReason);
   const responseMessage = {
     messageId: responseMessageId,
     conversationId,
@@ -1360,15 +1420,15 @@ async function runNewDeepResearch(params) {
 
   // Save user + response BEFORE the final event (mirrors request.js:523-546 — avoids
   // the race where a follow-up arrives before the response is persisted). The user
-  // message was already saved at admission; this upsert merely refreshes it. An abort
-  // that produced nothing saves NO response — the question stays the branch tip and the
-  // user simply starts again.
+  // message was already saved at admission; this upsert merely refreshes it. The response
+  // is saved for EVERY outcome, including a Stop that collected nothing: the frontend
+  // already threads the next message onto this responseMessageId (from the abort final
+  // event), so it must exist in the DB (drKind='aborted') or the follow-up dangles on a
+  // missing parent and falls through to a fresh turn (the task #21 re-plan bug).
   if (requestMessage) {
     await saveMessage(reqCtx, requestMessage, { context: 'deepResearchRun - user message' });
   }
-  if (!(result.finalizeReason === 'aborted' && finalReportText === '')) {
-    await saveMessage(reqCtx, responseMessage, { context: 'deepResearchRun - final report' });
-  }
+  await saveMessage(reqCtx, responseMessage, { context: 'deepResearchRun - final report' });
 
   // H4: bill the run's token usage (every outcome consumed tokens, including a Stop),
   // so Transactions/balance/spend-limits apply to DR. Runs before the abort early-return.
