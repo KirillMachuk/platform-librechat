@@ -1,6 +1,7 @@
 export { createAdminAnalyticsHandlers } from './analytics';
 export { createAdminAuditHandlers } from './audit';
 export { createAdminBalanceHandlers, TOKEN_CREDITS_PER_USD } from './balance';
+export { createAdminBillingHandlers, CREDIT_PACKAGE_SIZES } from './billing';
 export { createAdminConfigHandlers } from './config';
 export { createDeepResearchSettingsHandlers } from './deepResearch';
 export { createAdminGrantsHandlers } from './grants';
@@ -12,6 +13,7 @@ export { createAdminUsersHandlers } from './users';
 export type { AdminAnalyticsDeps } from './analytics';
 export type { AdminAuditDeps } from './audit';
 export type { AdminBalanceDeps } from './balance';
+export type { AdminBillingDeps, AdminBillingSummary, AdminBillingLot } from './billing';
 export type { AdminUsageDeps } from './usage';
 export type { AdminConfigDeps } from './config';
 export type { DeepResearchSettingsDeps, DeepResearchSettingsResponse } from './deepResearch';

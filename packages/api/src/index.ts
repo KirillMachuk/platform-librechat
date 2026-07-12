@@ -5,6 +5,8 @@ export * from './artifacts';
 export * from './admin';
 /* Audit */
 export * from './audit';
+/* Billing («Кредиты») */
+export * from './billing';
 export * from './cdn';
 /* Auth */
 export * from './auth';

@@ -113,6 +113,18 @@ function getUserFacingError(err) {
   const status =
     err?.status ?? err?.response?.status ?? (Number.isNaN(parsed) ? undefined : parsed);
 
+  /* Soft billing block (Кредиты): the anonymizer answers 402 with
+   * `type: "billing_exhausted"`. The one upstream error that gets a specific,
+   * actionable message instead of a neutral one — models are paused, the rest
+   * of the platform keeps working, access returns after a top-up / new month. */
+  const errorBody = err?.error ?? err?.response?.data?.error ?? err?.response?.data;
+  if (
+    errorBody?.type === 'billing_exhausted' ||
+    /billing_exhausted/.test(typeof err?.message === 'string' ? err.message : '')
+  ) {
+    return 'Месячный пул Кредитов исчерпан, поэтому модели временно недоступны. Остальные функции платформы (история, файлы, поиск) продолжают работать. Обратитесь к администратору: после начисления пакета Кредитов или с началом нового месяца доступ восстановится автоматически.';
+  }
+
   if (status === 402) {
     return 'Сервис временно недоступен из-за ограничения по ресурсам. Обратитесь к администратору.';
   }
