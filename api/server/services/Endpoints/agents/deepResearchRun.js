@@ -373,9 +373,7 @@ async function isDrFollowUp({ userId, conversationId, parentMessageId }) {
       return false;
     }
     // 'aborted' too: a comment after a Stop re-plans the original plan (task #21 edit).
-    return (
-      parent.drKind === 'plan' || parent.drKind === 'clarify' || parent.drKind === 'aborted'
-    );
+    return parent.drKind === 'plan' || parent.drKind === 'clarify' || parent.drKind === 'aborted';
   } catch (error) {
     logger.warn('[deepResearchRun] DR follow-up check failed; routing to normal chat', error);
     return false;

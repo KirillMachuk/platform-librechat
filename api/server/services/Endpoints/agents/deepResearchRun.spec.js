@@ -945,7 +945,12 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
       '{"action":"PLAN","title":"Реранкеры для русского языка","steps":["Отобрать реранкеры с поддержкой русского","Сравнить на русских датасетах"]}';
     // Message tree after a Stop: original request → plan card → START → aborted anchor.
     models.getMessages.mockResolvedValueOnce([
-      { messageId: 'orig', isCreatedByUser: true, parentMessageId: null, text: 'исследуй реранкеры' },
+      {
+        messageId: 'orig',
+        isCreatedByUser: true,
+        parentMessageId: null,
+        text: 'исследуй реранкеры',
+      },
       {
         messageId: 'plan1',
         isCreatedByUser: false,
