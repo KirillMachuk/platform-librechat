@@ -23,6 +23,7 @@ const { saveMessage, getMessages, getConvo } = require('~/models');
 const {
   runNewDeepResearch,
   isDrFollowUp,
+  buildDrTurnContext,
 } = require('~/server/services/Endpoints/agents/deepResearchRun');
 
 function createCloseHandler(abortController) {
@@ -210,19 +211,42 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
    *  Resolved from the agent's actual endpoint once the client is initialized. */
   let titleTiming = 'immediate';
 
-  const { allowed, pendingRequests, limit } = await checkAndIncrementPendingRequest(userId);
-  if (!allowed) {
-    const violationInfo = getViolationInfo(pendingRequests, limit);
-    await logViolation(req, res, ViolationTypes.CONCURRENT, violationInfo, violationInfo.score);
-    return res.status(429).json(violationInfo);
-  }
-
   // Generate conversationId upfront if not provided - streamId === conversationId always
   // Treat "new" as a placeholder that needs a real UUID (frontend may send "new" for new convos)
   const isNewConvo = !reqConversationId || reqConversationId === 'new';
   const conversationId = isNewConvo ? crypto.randomUUID() : reqConversationId;
   const streamId = conversationId;
   req.body.conversationId = conversationId;
+
+  /** Task #21 routing, resolved BEFORE the job is created (review r2): badge OR a reply
+   *  to a persisted DR turn (drKind-gated plan/clarify parent). Hoisting it here lets a
+   *  DR turn refuse a same-conversation double-submit WITHOUT replacing the live job —
+   *  createJob would silently swap the runtime out from under the running research,
+   *  orphan its AbortController, and let the first finalize kill the second run. */
+  const useNewDeepResearch =
+    req.config?.deepResearch?.useNewEngine === true &&
+    (req.body?.ephemeralAgent?.deep_research === true ||
+      (await isDrFollowUp({ userId, conversationId, parentMessageId })));
+
+  if (useNewDeepResearch && !isNewConvo) {
+    const activeStatus = await GenerationJobManager.getJobStatus(streamId);
+    if (activeStatus === 'running') {
+      logger.warn(
+        `[ResumableAgentController] DR turn refused: a generation is already running for ${conversationId}`,
+      );
+      return res.status(409).json({
+        error:
+          'В этом чате уже идёт генерация. Дождитесь её завершения или остановите её, затем повторите.',
+      });
+    }
+  }
+
+  const { allowed, pendingRequests, limit } = await checkAndIncrementPendingRequest(userId);
+  if (!allowed) {
+    const violationInfo = getViolationInfo(pendingRequests, limit);
+    await logViolation(req, res, ViolationTypes.CONCURRENT, violationInfo, violationInfo.score);
+    return res.status(429).json(violationInfo);
+  }
 
   let client = null;
 
@@ -334,6 +358,50 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
       }
     });
 
+    /** Task #21 (review r2): classify the DR turn ONCE, before the heavy client init.
+     *  A plan-cancel makes zero model calls and must not pay agent/tool initialization —
+     *  «Исследование отменено.» renders near-instantly. Every other DR turn still
+     *  initializes the client below and passes this classification through (the runner
+     *  then skips its own conversation load). */
+    let drTurn = null;
+    if (useNewDeepResearch) {
+      if (req.body?.ephemeralAgent?.deep_research !== true) {
+        logger.info(
+          '[AgentController] DR follow-up detected — routing to Deep Research (badge was off)',
+        );
+      }
+      drTurn = await buildDrTurnContext({
+        userId,
+        conversationId,
+        parentMessageId,
+        text,
+        currentUserMessageId: preliminaryUserMessage?.messageId,
+      });
+      if (drTurn.kind === 'plan-cancel') {
+        try {
+          await runNewDeepResearch({
+            req,
+            res,
+            streamId,
+            signal: job.abortController.signal,
+            endpoint: endpointOption.endpoint,
+            conversationModel: endpointOption.model_parameters?.model,
+            userId,
+            conversationId,
+            parentMessageId,
+            responseMessageId: preliminaryResponseMessageId,
+            userMessage: preliminaryUserMessage,
+            text,
+            turn: drTurn,
+            jobCreatedAt,
+          });
+        } finally {
+          await finishResumableRequest(req, userId);
+        }
+        return;
+      }
+    }
+
     /** @type {{ client: TAgentClient; userMCPAuthMap?: Record<string, Record<string, string>> }} */
     const result = await initializeClient({
       req,
@@ -354,20 +422,11 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
     /** New StateGraph Deep Research engine, behind `deepResearch.useNewEngine`.
      *  Runs the custom graph INSTEAD of the standard agent run and returns early.
      *  The legacy DR is the default (flag off), so this branch cannot regress it.
-     *  Routing is badge OR DR-follow-up: a reply to a clarify prompt or a plan card
-     *  (start/edit/cancel, task #21) continues into DR even when the frontend flag was
-     *  lost — otherwise the reply lands in normal chat and a plain model improvises a
-     *  source-less "report" (live-observed failure). */
-    const useNewDeepResearch =
-      req.config?.deepResearch?.useNewEngine === true &&
-      (req.body?.ephemeralAgent?.deep_research === true ||
-        (await isDrFollowUp({ userId, conversationId, parentMessageId })));
+     *  Routing (hoisted above createJob, review r2) is badge OR DR-follow-up: a reply to
+     *  a clarify prompt or a plan card (start/edit, task #21) continues into DR even when
+     *  the frontend flag was lost — otherwise the reply lands in normal chat and a plain
+     *  model improvises a source-less "report" (live-observed failure). */
     if (useNewDeepResearch) {
-      if (req.body?.ephemeralAgent?.deep_research !== true) {
-        logger.info(
-          '[AgentController] DR follow-up detected — routing to Deep Research (badge was off)',
-        );
-      }
       try {
         await runNewDeepResearch({
           req,
@@ -384,6 +443,8 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
           sender: client?.sender,
           userMessage: preliminaryUserMessage,
           text,
+          turn: drTurn,
+          jobCreatedAt,
         });
       } finally {
         // H3: this branch returns early and runs the whole DR synchronously, so the

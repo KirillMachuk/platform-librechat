@@ -50,13 +50,17 @@ type ChatHelpers = Pick<
   'setMessages' | 'getMessages' | 'setConversation' | 'setIsSubmitting' | 'newConversation'
 >;
 
-const getStreamStartFailureData = (errorData?: Record<string, unknown>): TResData =>
-  ({
-    text: errorData
-      ? JSON.stringify(errorData)
-      : 'Error connecting to server, try refreshing the page.',
-    metadata: markStreamStartFailedMetadata(),
-  }) as unknown as TResData;
+const getStreamStartFailureData = (errorData?: Record<string, unknown>): TResData => {
+  let text = 'Error connecting to server, try refreshing the page.';
+  if (typeof errorData?.error === 'string' && errorData.error !== '') {
+    text = errorData.error;
+  } else if (typeof errorData?.message === 'string' && errorData.message !== '') {
+    text = errorData.message;
+  } else if (errorData) {
+    text = JSON.stringify(errorData);
+  }
+  return { text, metadata: markStreamStartFailedMetadata() } as unknown as TResData;
+};
 
 /** Online-failure retry budget (offline pauses instead — see the `online`-event wait).
  *  8 attempts ≈ 1+2+4+8+16+30+30+30s ≈ 2 min of server unavailability before giving up —
@@ -457,6 +461,20 @@ export default function useResumableSSE(
       },
     [],
   );
+  /** Flags the live DR card as connection-stalled (offline park / reconnect backoff) so
+   *  it can say «ожидание сети» instead of pulsing as if the run were healthy. No-op
+   *  when no snapshot exists; cleared on every successful stream open. */
+  const markDrProgressStalled = useRecoilCallback(
+    ({ set }) =>
+      (conversationId: string | null | undefined, stalled: boolean) => {
+        if (conversationId) {
+          set(store.drProgressByConvoId(conversationId), (prev) =>
+            prev == null || prev.stalled === stalled ? prev : { ...prev, stalled },
+          );
+        }
+      },
+    [],
+  );
   const handleDrProgress = useCallback(
     (
       data: TDeepResearchProgress,
@@ -568,6 +586,7 @@ export default function useResumableSSE(
         setIsSubmitting(true);
         setShowStopButton(true);
         reconnectAttemptRef.current = 0;
+        markDrProgressStalled(currentSubmission.conversation?.conversationId, false);
       });
 
       sse.addEventListener('message', (e: MessageEvent) => {
@@ -812,6 +831,11 @@ export default function useResumableSSE(
                   contextHandler(replayEvent.data, resumeSubmission);
                 } else if (replayEvent.event === UsageEvents.ON_TOKEN_USAGE) {
                   usageHandler(replayEvent.data, resumeSubmission);
+                } else if (replayEvent.event === 'dr_progress' && replayEvent.data) {
+                  /** Review r2: the job persists its LATEST dr_progress snapshot as a
+                   *  replay event, so a refresh mid-research restores the running card
+                   *  immediately instead of waiting minutes for the next graph event. */
+                  handleDrProgress(replayEvent.data, resumeSubmission);
                 } else if (replayEvent.event != null) {
                   if (
                     replayEvent.event === StepEvents.ON_MESSAGE_DELTA ||
@@ -1029,6 +1053,7 @@ export default function useResumableSSE(
           console.log('[ResumableSSE] Browser is offline — waiting for the online event');
           sse.close();
           clearOnlineWait();
+          markDrProgressStalled(currentSubmission.conversation?.conversationId, true);
           const onOnline = () => {
             clearOnlineWait();
             reconnectAttemptRef.current = 0;
@@ -1046,7 +1071,14 @@ export default function useResumableSSE(
         if (reconnectAttemptRef.current < MAX_RETRIES) {
           // Increment counter BEFORE close() so abort handler knows we're reconnecting
           reconnectAttemptRef.current++;
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptRef.current - 1), 30000);
+          markDrProgressStalled(currentSubmission.conversation?.conversationId, true);
+          // Jittered exponential backoff: a server restart drops every client at once —
+          // without the random factor they all retry in lockstep, spiking the box exactly
+          // as it comes back up.
+          const delay = Math.round(
+            Math.min(1000 * Math.pow(2, reconnectAttemptRef.current - 1), 30000) *
+              (0.5 + Math.random()),
+          );
 
           console.log(
             `[ResumableSSE] Reconnecting in ${delay}ms (attempt ${reconnectAttemptRef.current}/${MAX_RETRIES})`,
@@ -1117,6 +1149,10 @@ export default function useResumableSSE(
          *  merge into the next response in this conversation. On a resume the
          *  collected usage is re-folded via backfillUsage, so nothing is lost. */
         resetLive({ ...currentSubmission, userMessage });
+        /** Same reasoning for the DR snapshot (review r2): parked stale, it would render
+         *  a ghost checklist over the NEXT generation in this conversation (a normal run
+         *  emits no dr_progress to overwrite it). A resume restores it via replay. */
+        setDrProgress(currentSubmission.conversation?.conversationId, null);
       });
 
       // Start the SSE connection
@@ -1178,6 +1214,7 @@ export default function useResumableSSE(
       seedLive,
       handleDrProgress,
       setDrProgress,
+      markDrProgressStalled,
       clearOnlineWait,
     ],
   );

@@ -5,6 +5,17 @@
  * between the runner that emits a plan message and the card that renders it.
  */
 
+/**
+ * Machine-readable provenance of a Deep-Research message, persisted as `message.drKind`
+ * by the runner when it CREATES the message. This — not the display text — is what the
+ * client card mount and the backend turn routing key on: prose that merely LOOKS like a
+ * plan (a normal chat answer starting with the marker text) must never grow live buttons
+ * or route a follow-up into DR. The text markers below remain the display format and the
+ * wire format of the user's start/cancel commands.
+ */
+export const DR_KINDS = ['plan', 'clarify', 'start', 'cancel', 'report'] as const;
+export type DrKind = (typeof DR_KINDS)[number];
+
 /** Fixed first line of a PLAN card message — how a plan turn is detected. */
 export const DR_PLAN_MARKER = '**План исследования:**';
 

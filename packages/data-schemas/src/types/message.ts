@@ -1,5 +1,5 @@
-import type { Document } from 'mongoose';
 import type { TFeedbackRating, TFeedbackTag } from 'librechat-data-provider';
+import type { Document } from 'mongoose';
 
 // @ts-ignore
 export interface IMessage extends Document {
@@ -54,6 +54,8 @@ export interface IMessage extends Document {
    * the current catalog says.
    */
   alwaysAppliedSkills?: string[];
+  /** Machine-readable Deep-Research provenance (task #21), set by the DR runner. */
+  drKind?: 'plan' | 'clarify' | 'start' | 'cancel' | 'report';
   expiredAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;

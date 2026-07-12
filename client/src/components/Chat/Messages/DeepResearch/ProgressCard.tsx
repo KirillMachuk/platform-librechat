@@ -1,5 +1,5 @@
 import { Progress } from '@librechat/client';
-import { Check, Square, Loader2 } from 'lucide-react';
+import { Check, Square, Loader2, WifiOff } from 'lucide-react';
 import type { TDeepResearchProgress } from '~/store';
 import { useChatContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
@@ -11,18 +11,25 @@ import { cn } from '~/utils';
  * Driven entirely by the latest `dr_progress` snapshot (proportional — the active step
  * is derived from the coarse progress fraction). This is what replaces the ~6 minutes of
  * silence that read as "hung". Stop reuses the standard generation abort.
+ *
+ * Review r2: `stalled` (offline park / reconnect backoff) swaps the action line for a
+ * "waiting for network" notice and freezes the busy animations — a card with no
+ * connection must not pulse as if the run were healthy. Animations also respect
+ * prefers-reduced-motion, and the Stop control carries a ≥40px hit area (the visual
+ * circle stays small; the tap target does not).
  */
 export default function ProgressCard({ data }: { data: TDeepResearchProgress }) {
   const localize = useLocalize();
   const { stopGenerating } = useChatContext();
   const steps = data.steps ?? [];
+  const stalled = data.stalled === true;
   const pct = Math.max(0, Math.min(100, Math.round((data.progress ?? 0) * 100)));
   const activeStep = steps.length
     ? Math.min(Math.floor((data.progress ?? 0) * steps.length), steps.length - 1)
     : -1;
 
   return (
-    <div className="my-2 w-full rounded-2xl border border-border-light bg-surface-primary-alt p-4">
+    <div className="my-2 w-full overflow-hidden rounded-2xl border border-border-light bg-surface-primary-alt p-4">
       {steps.length > 0 && (
         <ol className="mb-3 space-y-2.5">
           {steps.map((step, i) => {
@@ -35,12 +42,24 @@ export default function ProgressCard({ data }: { data: TDeepResearchProgress }) 
                   aria-hidden="true"
                 >
                   {done && <Check className="size-4 text-text-primary" />}
-                  {active && <Loader2 className="size-3.5 animate-spin text-text-secondary" />}
+                  {active && (
+                    <Loader2
+                      className={cn(
+                        'size-3.5 text-text-secondary',
+                        !stalled && 'animate-spin motion-reduce:animate-none',
+                      )}
+                    />
+                  )}
                   {!done && !active && (
                     <span className="size-3 rounded-full border border-border-medium" />
                   )}
                 </span>
-                <span className={cn(done || active ? 'text-text-primary' : 'text-text-tertiary')}>
+                <span
+                  className={cn(
+                    'min-w-0 [overflow-wrap:anywhere]',
+                    done || active ? 'text-text-primary' : 'text-text-tertiary',
+                  )}
+                >
                   {step}
                 </span>
               </li>
@@ -48,18 +67,36 @@ export default function ProgressCard({ data }: { data: TDeepResearchProgress }) 
           })}
         </ol>
       )}
-      {data.action && (
-        <div className="mb-3 animate-pulse text-sm text-text-secondary">{data.action}</div>
+      {stalled ? (
+        <div
+          role="status"
+          className="mb-3 flex min-h-5 items-center gap-1.5 text-sm text-text-secondary"
+        >
+          <WifiOff className="size-3.5 shrink-0" aria-hidden="true" />
+          <span>{localize('com_ui_deep_research_offline')}</span>
+        </div>
+      ) : (
+        data.action && (
+          <div className="mb-3 line-clamp-2 min-h-5 animate-pulse text-sm text-text-secondary [overflow-wrap:anywhere] motion-reduce:animate-none">
+            {data.action}
+          </div>
+        )
       )}
       <div className="flex items-center gap-3">
-        <Progress value={pct} className="h-1.5 flex-1" />
+        <Progress
+          value={pct}
+          aria-label={localize('com_ui_deep_research')}
+          className="h-1.5 flex-1"
+        />
         <button
           type="button"
           onClick={stopGenerating}
           aria-label={localize('com_ui_stop')}
-          className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border-medium text-text-secondary transition-colors hover:bg-surface-hover"
+          className="group -m-1.5 flex size-10 shrink-0 items-center justify-center"
         >
-          <Square className="size-3 fill-current" />
+          <span className="flex size-7 items-center justify-center rounded-full border border-border-medium text-text-secondary transition-colors group-hover:bg-surface-hover">
+            <Square className="size-3 fill-current" />
+          </span>
         </button>
       </div>
     </div>

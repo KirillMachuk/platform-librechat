@@ -1,4 +1,5 @@
 import {
+  DR_KINDS,
   DR_PLAN_MARKER,
   DR_START_MARKER,
   DR_CANCEL_MARKER,
@@ -21,6 +22,12 @@ describe('deepResearch shared plan-gate primitives', () => {
     expect(DR_START_MARKER).toBe('▶ Начать исследование');
     expect(DR_CANCEL_MARKER).toBe('✕ Отменить исследование');
     expect(DR_CLARIFY_MARKER).toBe('**Уточните, пожалуйста, детали исследования:**');
+  });
+
+  it('pins the drKind provenance values — persisted on messages, mirrored in the Mongo schema enum', () => {
+    // Review r2: cards/routing mount on message.drKind, stamped by the runner. The same
+    // union lives in the data-schemas message enum and tMessageSchema — change TOGETHER.
+    expect(DR_KINDS).toEqual(['plan', 'clarify', 'start', 'cancel', 'report']);
   });
 
   it('isDrAssistantTurn matches a plan OR a clarify message (for report ancestry)', () => {

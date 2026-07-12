@@ -181,4 +181,54 @@ describe('PlanCard', () => {
     });
     expect(mockSubmit).not.toHaveBeenCalled();
   });
+
+  it('keeps ticking when the client clock is BEHIND the server (createdAt in the future)', () => {
+    jest.useFakeTimers();
+    // Refetched messages carry a server createdAt; a client clock behind the server put
+    // it in the local future. The old per-tick Math.min clamp pinned the counter at the
+    // full window — same value → React bail-out → the timer never rescheduled (frozen
+    // counter, autostart never fired). The anchor now clamps ONCE to mount time.
+    const future = new Date(Date.now() + 90000).toISOString();
+    render(<PlanCard message={planMessage(future)} awaitingAction autoStartSec={2} />);
+    for (let i = 0; i < 3; i++) {
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+    }
+    expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+  });
+
+  it('Редактировать only cancels the autostart — the buttons stay (no dead end)', () => {
+    jest.useFakeTimers();
+    const { getByText, getAllByText } = render(
+      <PlanCard message={planMessage(new Date().toISOString())} awaitingAction autoStartSec={2} />,
+    );
+    fireEvent.click(getByText('com_ui_edit'));
+    expect(getByText('com_ui_deep_research_start')).toBeInTheDocument();
+    expect(getByText('com_ui_cancel')).toBeInTheDocument();
+    expect(getAllByText('com_ui_deep_research_autostart_cancelled').length).toBeGreaterThan(0);
+    for (let i = 0; i < 5; i++) {
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+    }
+    expect(mockSubmit).not.toHaveBeenCalled();
+    fireEvent.click(getByText('com_ui_deep_research_start'));
+    expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+  });
+
+  it('does NOT autostart when the server exposes no deepResearch config (rollback safety)', () => {
+    jest.useFakeTimers();
+    // planGate rolled back → /api/config stops exposing `deepResearch`. The old `?? 60`
+    // fallback kept a live fuse burning on historical plan cards; the default is now 0
+    // (manual buttons only).
+    mockStartupConfig = undefined;
+    render(<PlanCard message={planMessage(new Date().toISOString())} awaitingAction />);
+    for (let i = 0; i < 5; i++) {
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+    }
+    expect(mockSubmit).not.toHaveBeenCalled();
+  });
 });

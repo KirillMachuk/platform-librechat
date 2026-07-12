@@ -20,7 +20,6 @@ const {
   buildClarifyPrompt,
   parseClarifyOutput,
   formatClarifyMessage,
-  isClarifyMessage,
   buildPlanPrompt,
   parsePlanDecision,
   formatPlanMessage,
@@ -225,10 +224,14 @@ const MAX_CONCURRENT_DR = Number(process.env.DEEP_RESEARCH_MAX_CONCURRENT) || 3;
 class DeepResearchCapError extends Error {}
 
 /**
- * Count the user's OTHER active generation jobs (excluding this one) via the job
- * store — cluster-safe across Railway replicas (Redis-backed), unlike an in-process
- * Map. A soft proxy for DR concurrency; the economic backstop is H4 billing and the
- * precise hard cap is the Phase-3 queue. Fail-open: a counting error returns 0.
+ * Count the user's OTHER active generation jobs (excluding this one) via the job store.
+ * NOTE: the default deploy runs the IN-MEMORY store on a single replica — the count is
+ * per-process and only becomes cluster-safe when the Redis store is configured. It is
+ * also blind to a same-conversation duplicate BY CONSTRUCTION (both submissions share
+ * `streamId === conversationId`, and this filters the own id out) — that case is handled
+ * by the pre-createJob running-job guard in request.js plus the duplicateStart refusal.
+ * A soft proxy for DR concurrency; the economic backstop is H4 billing. Fail-open: a
+ * counting error returns 0.
  */
 async function countOtherActiveJobs({ streamId, userId, tenantId }) {
   try {
@@ -243,6 +246,21 @@ async function countOtherActiveJobs({ streamId, userId, tenantId }) {
 /** DR outcomes that yield a genuine, model-written report worth a PDF artifact (D4). A
  *  concurrency refusal (limit), an error fallback, and a user-aborted partial are skipped. */
 const PDF_ELIGIBLE_REASONS = new Set(['completed', 'budget', 'rounds', 'time']);
+
+/**
+ * Machine-readable provenance stamped on the runner's response message (review r2): the
+ * client mounts the plan card / report card on `message.drKind`, never on display text.
+ * Cancel/error/limit/aborted messages carry none — they are plain terminal text.
+ */
+function drKindForReason(finalizeReason) {
+  if (finalizeReason === 'plan' || finalizeReason === 'clarify') {
+    return finalizeReason;
+  }
+  if (PDF_ELIGIBLE_REASONS.has(finalizeReason)) {
+    return 'report';
+  }
+  return undefined;
+}
 
 /**
  * D4: attach the final report as a downloadable PDF on the response message. The frontend
@@ -324,7 +342,13 @@ async function attachReportPdf({ req, responseMessage, reportMarkdown, title, fi
  * even when the frontend's `deep_research` flag was lost (toggled off, dropped on the
  * new-chat key transition, etc.). Replying to a DR turn IS the user's intent; without
  * this the reply fell into normal chat and a plain model improvised a source-less
- * "report". Matches the shipped clarify marker too, so old chats keep working.
+ * "report".
+ *
+ * Review r2: keys on the persisted machine field `drKind` — NEVER on display text. A
+ * normal-chat answer that merely LOOKS like a plan (prose starting with the marker)
+ * must not route its follow-up into an expensive research run. Messages created before
+ * drKind shipped lose follow-up routing (their cards also stop rendering live buttons
+ * client-side, same gate) — accepted for the tiny test-era population.
  * Fail-closed: any error → false (normal chat).
  */
 async function isDrFollowUp({ userId, conversationId, parentMessageId }) {
@@ -334,56 +358,16 @@ async function isDrFollowUp({ userId, conversationId, parentMessageId }) {
   try {
     const messages = await getMessages(
       { conversationId, user: userId, messageId: parentMessageId },
-      'messageId text isCreatedByUser',
+      'messageId isCreatedByUser drKind',
     );
     const parent = Array.isArray(messages) ? messages[0] : null;
     if (!parent || parent.isCreatedByUser === true) {
       return false;
     }
-    const parentText = parent.text ?? '';
-    return isClarifyMessage(parentText) || isPlanMessage(parentText);
+    return parent.drKind === 'plan' || parent.drKind === 'clarify';
   } catch (error) {
     logger.warn('[deepResearchRun] DR follow-up check failed; routing to normal chat', error);
     return false;
-  }
-}
-
-/**
- * D2 turn 2: if this message replies to a clarify prompt, assemble the whole dialogue
- * (original request → clarify questions → this answer) so the research uses the full
- * context. Returns null when it is NOT a clarify continuation, or on any load error
- * (fail-open → the runner treats the message as a fresh request).
- */
-async function buildClarifyContinuation({ userId, conversationId, parentMessageId, answer }) {
-  if (!parentMessageId || !conversationId) {
-    return null;
-  }
-  try {
-    const messages = await getMessages({ conversationId, user: userId });
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return null;
-    }
-    const byId = new Map(messages.map((m) => [m.messageId, m]));
-    const parent = byId.get(parentMessageId);
-    if (!parent || !isClarifyMessage(parent.text ?? '')) {
-      return null;
-    }
-    const original = parent.parentMessageId ? byId.get(parent.parentMessageId) : null;
-    const originalText = (original?.text ?? '').trim();
-    return [
-      'Диалог уточнения задачи исследования.',
-      originalText ? `\nИсходный запрос пользователя:\n${originalText}` : '',
-      `\nУточняющие вопросы:\n${(parent.text ?? '').trim()}`,
-      `\nОтвет пользователя:\n${(answer ?? '').trim()}`,
-    ]
-      .filter(Boolean)
-      .join('\n');
-  } catch (error) {
-    logger.warn(
-      '[deepResearchRun] failed to load clarify parent; treating as a fresh request',
-      error,
-    );
-    return null;
   }
 }
 
@@ -433,9 +417,9 @@ function buildDialogueTranscript(chain, currentText) {
         seenOriginal ? `Ответ пользователя:\n${text}` : `Исходный запрос пользователя:\n${text}`,
       );
       seenOriginal = true;
-    } else if (isClarifyMessage(text)) {
+    } else if (message.drKind === 'clarify') {
       blocks.push(`Уточняющие вопросы:\n${text}`);
-    } else if (isPlanMessage(text)) {
+    } else if (message.drKind === 'plan') {
       blocks.push(`Предложенный план:\n${text}`);
     }
   }
@@ -454,15 +438,37 @@ function buildDialogueTranscript(chain, currentText) {
  * exchange (original request → clarify Q&A → plan → this turn) until a non-DR boundary.
  * Fail-open: no DR parent or any load error → a fresh turn (research the raw request).
  *
+ * Review r2: parent/boundary detection keys on the persisted `drKind` field (provenance),
+ * not display text. `duplicateStart` flags a plan-start whose plan ALREADY has another
+ * persisted START child — the second tab of a double-submit, or a re-click after the run
+ * finished — so the runner refuses instead of launching a second identical research.
+ * `currentUserMessageId` is excluded from that check: on a regenerate the current turn
+ * reuses the existing START message id, which must not count as its own duplicate.
+ *
  * kind: 'fresh' | 'clarify-answer' | 'plan-start' | 'plan-cancel' | 'plan-edit'.
  */
-async function buildDrTurnContext({ userId, conversationId, parentMessageId, text }) {
-  const fresh = { kind: 'fresh', dialogue: null, originalRequest: text ?? '', parentText: '' };
+async function buildDrTurnContext({
+  userId,
+  conversationId,
+  parentMessageId,
+  text,
+  currentUserMessageId,
+}) {
+  const fresh = {
+    kind: 'fresh',
+    dialogue: null,
+    originalRequest: text ?? '',
+    parentText: '',
+    duplicateStart: false,
+  };
   if (!parentMessageId || !conversationId || parentMessageId === Constants.NO_PARENT) {
     return fresh;
   }
   try {
-    const messages = await getMessages({ conversationId, user: userId });
+    const messages = await getMessages(
+      { conversationId, user: userId },
+      'messageId parentMessageId text isCreatedByUser drKind',
+    );
     if (!Array.isArray(messages) || messages.length === 0) {
       return fresh;
     }
@@ -471,8 +477,8 @@ async function buildDrTurnContext({ userId, conversationId, parentMessageId, tex
     if (!parent || parent.isCreatedByUser === true) {
       return fresh;
     }
-    const parentIsClarify = isClarifyMessage(parent.text ?? '');
-    const parentIsPlan = isPlanMessage(parent.text ?? '');
+    const parentIsClarify = parent.drKind === 'clarify';
+    const parentIsPlan = parent.drKind === 'plan';
     if (!parentIsClarify && !parentIsPlan) {
       return fresh;
     }
@@ -486,7 +492,7 @@ async function buildDrTurnContext({ userId, conversationId, parentMessageId, tex
       const up = cursor.parentMessageId ? byId.get(cursor.parentMessageId) : null;
       const upIsDr =
         up && up.isCreatedByUser !== true
-          ? isClarifyMessage(up.text ?? '') || isPlanMessage(up.text ?? '')
+          ? up.drKind === 'clarify' || up.drKind === 'plan'
           : Boolean(up);
       if (!upIsDr) {
         break;
@@ -509,7 +515,16 @@ async function buildDrTurnContext({ userId, conversationId, parentMessageId, tex
     } else {
       kind = 'plan-edit';
     }
-    return { kind, dialogue, originalRequest, parentText: parent.text ?? '' };
+    const duplicateStart =
+      kind === 'plan-start' &&
+      messages.some(
+        (m) =>
+          m.parentMessageId === parent.messageId &&
+          m.isCreatedByUser === true &&
+          m.drKind === 'start' &&
+          m.messageId !== currentUserMessageId,
+      );
+    return { kind, dialogue, originalRequest, parentText: parent.text ?? '', duplicateStart };
   } catch (error) {
     logger.warn(
       '[deepResearchRun] failed to build DR turn context; treating as a fresh request',
@@ -535,6 +550,9 @@ async function runClarifyCheck({ buildModel, leadModelSlug, question, now, signa
       usage: usageFromExchange(prompt, response),
     };
   } catch (error) {
+    if (signal?.aborted) {
+      return { action: 'ABORTED', questions: [], usage: null };
+    }
     logger.warn('[deepResearchRun] clarify check failed; proceeding to research', error);
     return { action: 'PROCEED', questions: [], usage: null };
   }
@@ -542,8 +560,14 @@ async function runClarifyCheck({ buildModel, leadModelSlug, question, now, signa
 
 /**
  * Task #21 plan gate turn 1/2: ask the lead model to decide CLARIFY (ask questions) /
- * PLAN (present a plan card) / PROCEED (research now). Runs on the MASKED input. Fail-
- * open: any error → PROCEED (research starts rather than blocking on a bad model turn).
+ * PLAN (present a plan card) / PROCEED (research now). Runs on the MASKED input.
+ *
+ * Review r2 — the gate fails CLOSED: a model error or unparseable output returns PLAN
+ * (the runner substitutes {@link FALLBACK_PLAN_STEPS}), because the gate's whole contract
+ * is explicit user confirmation before the most expensive action in the product; a model
+ * hiccup must present a card, never silently launch a run. A user Stop during the call
+ * is not a model failure — it returns the distinct ABORTED action and the runner exits
+ * without saving a response or billing.
  */
 async function runPlanDecision({ buildModel, leadModelSlug, input, now, signal, allowClarify }) {
   try {
@@ -558,10 +582,36 @@ async function runPlanDecision({ buildModel, leadModelSlug, input, now, signal, 
       usage: usageFromExchange(prompt, response),
     };
   } catch (error) {
-    logger.warn('[deepResearchRun] plan decision failed; proceeding to research', error);
-    return { action: 'PROCEED', questions: [], title: '', steps: [], usage: null };
+    if (signal?.aborted) {
+      return { action: 'ABORTED', questions: [], title: '', steps: [], usage: null };
+    }
+    logger.warn('[deepResearchRun] plan decision failed; failing CLOSED to a plan card', error);
+    return { action: 'PLAN', questions: [], title: '', steps: [], usage: null };
   }
 }
+
+/**
+ * Deterministic plan shown when the decision model failed or returned garbage — keeps
+ * the confirmation gate standing with zero model dependency. Начать then runs the graph
+ * as usual (which surfaces its own clear error if the provider is still down).
+ */
+const FALLBACK_PLAN_STEPS = [
+  'Собрать и изучить источники по теме запроса',
+  'Проверить и сопоставить ключевые факты и данные',
+  'Сформировать структурированный отчёт с выводами',
+];
+
+/**
+ * Terminal refusal for a duplicate START (review r2): the plan already has another
+ * persisted START child — a second tab fired the same start, or the user re-clicked
+ * after the run finished. Carries no marker/drKind, so follow-ups route to normal chat;
+ * the original run keeps its stream untouched.
+ */
+const DUPLICATE_START_MESSAGE =
+  'Это исследование уже запущено. Дождитесь завершения — отчёт появится в этом чате.';
+
+/** The stock default conversation title — a row still carrying it has not been named yet. */
+const DEFAULT_CONVO_TITLE = 'New Chat';
 
 /**
  * Reliable-first (v1) runner for the rebuilt StateGraph Deep Research engine.
@@ -731,6 +781,12 @@ async function billDeepResearchUsage({ userId, conversationId, messageId, model,
  * @param {string} params.sender
  * @param {object} params.userMessage  The preliminary user message (for the final event).
  * @param {string} params.text         The user's research request.
+ * @param {object} [params.turn]       Precomputed DR turn context (request.js classifies
+ *                                     once for routing; passing it avoids a second
+ *                                     full-conversation load here).
+ * @param {number} [params.jobCreatedAt]  This run's job creation timestamp — the stale-job
+ *                                     guard skips the final emit when another submission
+ *                                     replaced the job mid-run.
  */
 async function runNewDeepResearch(params) {
   const {
@@ -747,6 +803,8 @@ async function runNewDeepResearch(params) {
     sender,
     userMessage,
     text,
+    turn: precomputedTurn = null,
+    jobCreatedAt = null,
   } = params;
 
   // The user message must leave the run in the normal-path shape (sender/isCreatedByUser,
@@ -756,6 +814,12 @@ async function runNewDeepResearch(params) {
   const requestMessage = userMessage
     ? { conversationId, ...userMessage, sender: 'User', isCreatedByUser: true }
     : null;
+
+  const reqCtx = {
+    userId,
+    isTemporary: req?.body?.isTemporary,
+    interfaceConfig: req?.config?.interfaceConfig,
+  };
 
   // H1: emit `created` up front so the job is flagged createdEventEmitted=true and the
   // user message is persisted to the job store. Without it, a Stop during the (content-
@@ -829,26 +893,39 @@ async function runNewDeepResearch(params) {
     }
 
     // Task #21 plan gate + D2 clarify: classify the turn and assemble the research input.
-    // Plan gate ON → the unified planOrClarify decision (may emit a plan card); OFF → the
-    // shipped clarify path runs byte-for-byte. Fail-open: a parent-load failure → the raw
-    // request (a fresh turn). `researchInput` (dialogue for a follow-up) is what gets masked.
+    // Review r2: classification is UNCONDITIONAL (flag-independent) — buildDrTurnContext
+    // recognises plan/clarify parents via the persisted drKind, so START/CANCEL on an
+    // existing plan card keep working even after a planGate rollback (before, a rollback
+    // made the runner research the literal '▶ Начать исследование' marker as the topic).
+    // The flags below only control which NEW gate turns are emitted. Fail-open: a parent-
+    // load failure → the raw request (a fresh turn). `researchInput` is what gets masked.
     const clarifyEnabled = req.config?.deepResearch?.clarify !== false;
     const planGateEnabled = req.config?.deepResearch?.planGate === true;
-    if (planGateEnabled) {
-      turn = await buildDrTurnContext({ userId, conversationId, parentMessageId, text });
-    } else if (clarifyEnabled) {
-      const continuation = await buildClarifyContinuation({
+    turn =
+      precomputedTurn ??
+      (await buildDrTurnContext({
         userId,
         conversationId,
         parentMessageId,
-        answer: text,
-      });
-      turn =
-        continuation != null
-          ? { kind: 'clarify-answer', dialogue: continuation, originalRequest: text ?? '' }
-          : { kind: 'fresh', dialogue: null, originalRequest: text ?? '' };
-    }
+        text,
+        currentUserMessageId: requestMessage?.messageId,
+      }));
     const researchInput = turn.dialogue ?? text ?? '';
+
+    // Provenance + admission persistence (review r2): stamp drKind on the user's command
+    // messages and persist the question NOW — the finalize-tail save (an upsert on the
+    // same messageId) merely refreshes it. Early persistence is what makes a duplicate
+    // START from another tab detectable, and the question survives a deploy mid-run.
+    if (requestMessage) {
+      if (turn.kind === 'plan-start') {
+        requestMessage.drKind = 'start';
+      } else if (turn.kind === 'plan-cancel') {
+        requestMessage.drKind = 'cancel';
+      }
+      await saveMessage(reqCtx, requestMessage, {
+        context: 'deepResearchRun - user message (admission)',
+      });
+    }
 
     // The concurrency cap runs AFTER turn classification: a plan-cancel costs nothing (no
     // model, no graph) and must always succeed — a 'limit' refusal would leave the plan as
@@ -857,45 +934,69 @@ async function runNewDeepResearch(params) {
       throw new DeepResearchCapError();
     }
 
-    // Track B (sovereign DR): mask the user's question ONCE, then run the graph in anonymizer
-    // passthrough so ONLY user data (question + documents) is masked — never the public web.
-    // Best-effort: any failure leaves `sovereign` null and DR runs the legacy full-masking path
-    // (anonymizer masks all egress), which is safe — it just over-masks public content.
-    let connection = null;
-    try {
-      connection = await resolveAnonymizerConnection({ req, db, endpoint, model: leadModelSlug });
-    } catch (error) {
-      logger.warn(
-        '[deepResearchRun] anonymizer connection unresolved; sovereign masking off',
-        error,
-      );
-    }
-    sovereign = await startSovereignSession({
-      connection,
-      runId,
-      passthroughToken: process.env.ANON_PASSTHROUGH_TOKEN || '',
-      question: researchInput,
-      signal,
-      logger,
-    });
-    passthroughHeaders = sovereign?.passthroughHeaders ?? null;
-
-    // Pre-graph decision / short-circuit. Every branch either sets `result` (a terminal
-    // turn — questions, a plan card, or a cancel — that flows through the SAME finalize
-    // tail below: restore de-masks, save, title, final event) or leaves it null so the
-    // graph runs on `researchInput`. Runs on the MASKED input.
-    const decisionInput = sovereign ? sovereign.maskedQuestion : researchInput;
-    if (turn.kind === 'plan-cancel') {
-      // The user dismissed the plan card: a terminal, non-error message with NO DR marker,
-      // so the NEXT user message routes to normal chat (closes the routing hole). Zero
-      // model calls.
+    // Model-free short-circuits (review r2) — resolved BEFORE the anonymizer session, so a
+    // cancel or a duplicate START costs zero anonymizer/model round-trips. A duplicate
+    // START (a second tab already launched this plan, or a re-click after completion) is
+    // refused with a terminal message instead of silently running the same research twice.
+    if (turn.kind === 'plan-start' && turn.duplicateStart === true) {
+      logger.warn(`[deepResearchRun] duplicate START for conversation ${conversationId}; refusing`);
+      result = {
+        finalReport: DUPLICATE_START_MESSAGE,
+        finalizeReason: 'limit',
+        usage: { input: 0, output: 0, total: 0 },
+        findings: [],
+      };
+    } else if (turn.kind === 'plan-cancel') {
+      // The user dismissed the plan card: a terminal, non-error message with NO DR marker
+      // or drKind, so the NEXT user message routes to normal chat (closes the routing
+      // hole). Zero model calls.
       result = {
         finalReport: CANCELLED_MESSAGE,
         finalizeReason: 'cancelled',
         usage: { input: 0, output: 0, total: 0 },
         findings: [],
       };
-    } else if (planGateEnabled && turn.kind !== 'plan-start') {
+    }
+
+    if (result == null) {
+      // Track B (sovereign DR): mask the user's question ONCE, then run the graph in
+      // anonymizer passthrough so ONLY user data (question + documents) is masked — never
+      // the public web. Best-effort: any failure leaves `sovereign` null and DR runs the
+      // legacy full-masking path (anonymizer masks all egress), which is safe — it just
+      // over-masks public content.
+      let connection = null;
+      try {
+        connection = await resolveAnonymizerConnection({
+          req,
+          db,
+          endpoint,
+          model: leadModelSlug,
+        });
+      } catch (error) {
+        logger.warn(
+          '[deepResearchRun] anonymizer connection unresolved; sovereign masking off',
+          error,
+        );
+      }
+      sovereign = await startSovereignSession({
+        connection,
+        runId,
+        passthroughToken: process.env.ANON_PASSTHROUGH_TOKEN || '',
+        question: researchInput,
+        signal,
+        logger,
+      });
+      passthroughHeaders = sovereign?.passthroughHeaders ?? null;
+    }
+
+    // Pre-graph decision. Either sets `result` (a terminal turn — questions or a plan
+    // card — that flows through the SAME finalize tail below: restore de-masks, save,
+    // title, final event) or leaves it null so the graph runs on `researchInput`. Runs
+    // on the MASKED input. A user Stop during the decision (ABORTED) exits without a
+    // response — stopping the gate must not fabricate a "partial report" for research
+    // that never ran.
+    const decisionInput = sovereign ? sovereign.maskedQuestion : researchInput;
+    if (result == null && planGateEnabled && turn.kind !== 'plan-start') {
       // fresh | clarify-answer | plan-edit → run the unified decision. Never ask questions
       // twice: allowClarify only on a fresh, clarify-enabled turn.
       const decision = await runPlanDecision({
@@ -907,6 +1008,13 @@ async function runNewDeepResearch(params) {
         allowClarify: clarifyEnabled && turn.kind === 'fresh',
       });
       planUsage = decision.usage;
+      if (decision.action === 'ABORTED') {
+        logger.info('[deepResearchRun] stopped during the plan decision; no response emitted');
+        if (sovereign) {
+          await sovereign.drop();
+        }
+        return null;
+      }
       logger.info(
         `[deepResearchRun] plan decision: ${decision.action}` +
           (decision.action === 'CLARIFY' ? ` (${decision.questions.length} questions)` : '') +
@@ -921,15 +1029,16 @@ async function runNewDeepResearch(params) {
         };
       } else if (decision.action === 'PLAN') {
         const planTitle = decision.title || buildDeepResearchTitle(turn.originalRequest || text);
+        const planSteps = decision.steps.length > 0 ? decision.steps : FALLBACK_PLAN_STEPS;
         result = {
-          finalReport: formatPlanMessage({ title: planTitle, steps: decision.steps }),
+          finalReport: formatPlanMessage({ title: planTitle, steps: planSteps }),
           finalizeReason: 'plan',
           usage: { input: 0, output: 0, total: 0 },
           findings: [],
         };
       }
       // PROCEED → result stays null → the graph runs below on `researchInput`.
-    } else if (!planGateEnabled && clarifyEnabled && turn.kind === 'fresh') {
+    } else if (result == null && !planGateEnabled && clarifyEnabled && turn.kind === 'fresh') {
       // Shipped clarify path (unchanged): under-specified turn-1 → ask up to 3 questions.
       const decision = await runClarifyCheck({
         buildModel,
@@ -939,6 +1048,13 @@ async function runNewDeepResearch(params) {
         signal,
       });
       clarifyUsage = decision.usage;
+      if (decision.action === 'ABORTED') {
+        logger.info('[deepResearchRun] stopped during the clarify check; no response emitted');
+        if (sovereign) {
+          await sovereign.drop();
+        }
+        return null;
+      }
       logger.info(
         `[deepResearchRun] clarify decision: ${decision.action}` +
           (decision.questions.length ? ` (${decision.questions.length} questions)` : ''),
@@ -1137,16 +1253,32 @@ async function runNewDeepResearch(params) {
   }
 
   // P6+: chat title = a model-distilled TOPIC of the (masked) request — robust to any
-  // phrasing and PII-free (it runs on the masked question). Computed once here so BOTH the
-  // D4 PDF filename and the persisted conversation row reuse it. An aborted OR cancelled run
-  // skips the model call (an aborted title is never persisted; a cancel reuses the plan
-  // turn's title, and the raw text is a START/CANCEL command — never a topic). The fallback
-  // is the ORIGINAL request (task #21), not a turn-2 command marker. Fail-open to heuristic.
+  // phrasing and PII-free (it runs on the masked question). Review r2 (title-once): the
+  // model call runs ONCE per conversation — the first gate turn names the chat; every
+  // later turn (start/edit/report) reuses the persisted row's title, which also respects
+  // a user's manual rename. Before, EVERY plan-gate turn burned a title LLM call
+  // (clarify → plan → start = 3 calls, +1-3s latency apiece). An aborted OR cancelled
+  // run also skips the call. The fallback is the ORIGINAL request (task #21), not a
+  // turn-2 command marker. The row loaded here is reused by the M9/M10 block below.
   const titleFallbackText = turn.originalRequest || text;
+  let existingConvo = null;
+  try {
+    existingConvo = await getConvo(userId, conversationId);
+  } catch (error) {
+    logger.warn('[deepResearchRun] failed to load conversation for title reuse', error);
+  }
+  const existingTitle =
+    typeof existingConvo?.title === 'string' &&
+    existingConvo.title.trim() !== '' &&
+    existingConvo.title !== DEFAULT_CONVO_TITLE
+      ? existingConvo.title
+      : null;
   const skipModelTitle =
-    result.finalizeReason === 'aborted' || result.finalizeReason === 'cancelled';
+    existingTitle != null ||
+    result.finalizeReason === 'aborted' ||
+    result.finalizeReason === 'cancelled';
   const { title: deepResearchTitle, usage: titleUsage } = skipModelTitle
-    ? { title: buildDeepResearchTitle(titleFallbackText), usage: null }
+    ? { title: existingTitle ?? buildDeepResearchTitle(titleFallbackText), usage: null }
     : await resolveDeepResearchTitle({
         req,
         endpoint,
@@ -1187,7 +1319,12 @@ async function runNewDeepResearch(params) {
   // M8: a partial report is prefixed with a localized reason banner so the user knows
   // WHY it stopped (budget/time/rounds/abort/error). Baked into the saved text so a
   // reload shows it too; the frontend's generic "unfinished" banner (C1f) complements it.
-  const finalReportText = withPartialBanner(reportText, result.finalizeReason);
+  // Review r2: an abort that collected NOTHING yields an empty text — no banner-only
+  // "partial report" is fabricated (the response save below is skipped for it too).
+  const finalReportText =
+    (reportText ?? '').trim() === '' && result.finalizeReason === 'aborted'
+      ? ''
+      : withPartialBanner(reportText, result.finalizeReason);
   const responseMessage = {
     messageId: responseMessageId,
     conversationId,
@@ -1205,12 +1342,11 @@ async function runNewDeepResearch(params) {
     unfinished,
     error: false,
   };
-
-  const reqCtx = {
-    userId,
-    isTemporary: req?.body?.isTemporary,
-    interfaceConfig: req?.config?.interfaceConfig,
-  };
+  // Provenance (review r2): the client mounts the plan card / report card on this field.
+  const responseDrKind = drKindForReason(result.finalizeReason);
+  if (responseDrKind) {
+    responseMessage.drKind = responseDrKind;
+  }
 
   // D4: attach the report as a downloadable PDF chip on the response message — BEFORE it is
   // saved, so the persisted message carries the file. Fail-open; skips temp/non-report runs.
@@ -1223,11 +1359,16 @@ async function runNewDeepResearch(params) {
   });
 
   // Save user + response BEFORE the final event (mirrors request.js:523-546 — avoids
-  // the race where a follow-up arrives before the response is persisted).
+  // the race where a follow-up arrives before the response is persisted). The user
+  // message was already saved at admission; this upsert merely refreshes it. An abort
+  // that produced nothing saves NO response — the question stays the branch tip and the
+  // user simply starts again.
   if (requestMessage) {
     await saveMessage(reqCtx, requestMessage, { context: 'deepResearchRun - user message' });
   }
-  await saveMessage(reqCtx, responseMessage, { context: 'deepResearchRun - final report' });
+  if (!(result.finalizeReason === 'aborted' && finalReportText === '')) {
+    await saveMessage(reqCtx, responseMessage, { context: 'deepResearchRun - final report' });
+  }
 
   // H4: bill the run's token usage (every outcome consumed tokens, including a Stop),
   // so Transactions/balance/spend-limits apply to DR. Runs before the abort early-return.
@@ -1251,9 +1392,9 @@ async function runNewDeepResearch(params) {
   // show nothing until reload and the final event would carry an empty conversation.
   // Persist the row (with a deterministic title, never "New Chat") and build the final
   // object from it. A persistence hiccup degrades to a minimal object, never a failed run.
-  let conversation = null;
+  // The row was already loaded once for the title-once check above — reused here.
+  let conversation = existingConvo;
   try {
-    conversation = await getConvo(userId, conversationId);
     if (!conversation) {
       const saved = await saveConvo(
         reqCtx,
@@ -1281,8 +1422,22 @@ async function runNewDeepResearch(params) {
   };
 
   if (streamId) {
-    await GenerationJobManager.emitDone(streamId, finalEvent);
-    GenerationJobManager.completeJob(streamId);
+    // Parity with the standard path's stale-job guard (review r2): if ANOTHER submission
+    // replaced this job mid-run (e.g. a normal message sent from a second tab during the
+    // research), the replacement owns the stream now — emitting done/completeJob here
+    // would inject a stale final into its subscribers and ABORT its run. The report
+    // itself is already persisted above, so nothing is lost.
+    const currentJob = await GenerationJobManager.getJob(streamId);
+    const jobWasReplaced =
+      !currentJob || (jobCreatedAt != null && currentJob.createdAt !== jobCreatedAt);
+    if (jobWasReplaced) {
+      logger.warn(
+        `[deepResearchRun] job ${streamId} was replaced mid-run; skipping the final emit`,
+      );
+    } else {
+      await GenerationJobManager.emitDone(streamId, finalEvent);
+      GenerationJobManager.completeJob(streamId);
+    }
   } else {
     sendEvent(res, finalEvent);
     res.end();
@@ -1291,4 +1446,4 @@ async function runNewDeepResearch(params) {
   return result;
 }
 
-module.exports = { runNewDeepResearch, buildDeepResearchTitle, isDrFollowUp };
+module.exports = { runNewDeepResearch, buildDeepResearchTitle, isDrFollowUp, buildDrTurnContext };

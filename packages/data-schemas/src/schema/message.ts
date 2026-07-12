@@ -146,6 +146,18 @@ const messageSchema: Schema<IMessage> = new Schema(
      * the user bubble to preserve the audit trail of what actually ran.
      */
     alwaysAppliedSkills: { type: [String], default: undefined },
+    /**
+     * Machine-readable Deep-Research provenance (task #21): which DR artifact this
+     * message IS ('plan' card, 'clarify' questions, user 'start'/'cancel' command,
+     * final 'report'). Set only by the DR runner at message creation. The client mounts
+     * cards and the backend routes follow-ups on this field — display text alone must
+     * never be able to arm live controls or route a turn into Deep Research.
+     */
+    drKind: {
+      type: String,
+      enum: ['plan', 'clarify', 'start', 'cancel', 'report'],
+      default: undefined,
+    },
     /*
     attachments: {
       type: [

@@ -12,6 +12,9 @@ export interface TDeepResearchProgress {
   action: string;
   searches: number;
   progress: number;
+  /** Set by useResumableSSE while the stream is offline/reconnecting — the card swaps
+   *  its action line for a "waiting for network" notice instead of pulsing as healthy. */
+  stalled?: boolean;
 }
 
 /**

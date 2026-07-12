@@ -56,6 +56,10 @@ const mockLeadModelFor = jest.fn(() => 'lead-model');
 const mockWorkerModelFor = jest.fn(() => 'worker-model');
 const mockReportModelFor = jest.fn(() => 'report-model');
 const mockCompressModelFor = jest.fn(() => 'compress-model');
+// The stale-job guard reads the CURRENT job before the final emit; the default matches
+// the run's own jobCreatedAt-less invocation (guard passes). Tests override to simulate
+// a replaced job.
+const mockGetJob = jest.fn(async () => ({ streamId: 'stream-1', createdAt: 1 }));
 
 jest.mock('@librechat/agents', () => ({
   Providers: { OPENAI: 'openAI' },
@@ -76,6 +80,7 @@ jest.mock('@librechat/api', () => ({
     emitDone: (...a) => mockEmitDone(...a),
     completeJob: (...a) => mockCompleteJob(...a),
     getActiveJobIdsForUser: jest.fn(async () => []),
+    getJob: (...a) => mockGetJob(...a),
   },
   buildFallbackReport: jest.fn(() => 'FALLBACK'),
   recordCollectedUsage: jest.fn(async () => {}),
@@ -148,10 +153,12 @@ jest.mock('@librechat/api', () => ({
     if (action === 'CLARIFY' && allowClarify && questions.length) {
       return { action: 'CLARIFY', questions, title: '', steps: [] };
     }
-    if (action === 'PLAN' && steps.length) {
-      return { action: 'PLAN', questions: [], title, steps };
+    if (action === 'PROCEED') {
+      return { action: 'PROCEED', questions: [], title: '', steps: [] };
     }
-    return { action: 'PROCEED', questions: [], title: '', steps: [] };
+    // Review r2: ambiguity fails CLOSED to PLAN (possibly with empty steps — the runner
+    // substitutes its deterministic fallback plan). Mirrors plan.ts.
+    return { action: 'PLAN', questions: [], title, steps };
   },
   formatPlanMessage: ({ title, steps }) =>
     `${`**План исследования:** ${title}`.trimEnd()}\n\n${steps
@@ -193,7 +200,9 @@ jest.mock('~/cache/getLogStores', () =>
 jest.mock('~/models', () => ({
   createFile: (...a) => mockCreateFile(...a),
   getFiles: jest.fn(async () => []),
-  getConvo: jest.fn(async () => ({ conversationId: 'c1', title: 't' })),
+  // Default = no persisted row (a NEW conversation): the model-title path runs. Tests for
+  // title-once (review r2) override with a titled row and assert the call is skipped.
+  getConvo: jest.fn(async () => null),
   getMessages: jest.fn(async () => []),
   saveConvo: jest.fn(async () => ({ conversationId: 'c1' })),
   saveMessage: jest.fn(async (ctx, msg) => {
@@ -565,10 +574,12 @@ describe('runNewDeepResearch — D2 clarify (two-turn)', () => {
   it('turn 2: a reply to a clarify prompt researches the whole dialogue and skips a 2nd clarify', async () => {
     mockStartSovereignSession.mockResolvedValue(null);
     models.getMessages.mockResolvedValueOnce([
-      { messageId: 'q0', parentMessageId: null, text: 'посоветуй CRM' },
+      { messageId: 'q0', parentMessageId: null, isCreatedByUser: true, text: 'посоветуй CRM' },
       {
         messageId: 'p1',
         parentMessageId: 'q0',
+        isCreatedByUser: false,
+        drKind: 'clarify',
         text: '**Уточните, пожалуйста, детали исследования:**\n1. Масштаб?',
       },
     ]);
@@ -578,7 +589,8 @@ describe('runNewDeepResearch — D2 clarify (two-turn)', () => {
 
     expect(mockRunDeepResearch).toHaveBeenCalledTimes(1);
     const input = mockRunDeepResearch.mock.calls[0][0].input.messages[0].content;
-    expect(input).toContain('Диалог уточнения');
+    expect(input).toContain('Диалог по задаче исследования');
+    expect(input).toContain('Уточняющие вопросы');
     expect(input).toContain('посоветуй CRM');
     expect(input).toContain('малый бизнес');
   });
@@ -675,28 +687,35 @@ describe('runNewDeepResearch — user message persisted as a real user turn', ()
   });
 });
 
-describe('isDrFollowUp (badge-independent DR routing for clarify + plan replies)', () => {
+describe('isDrFollowUp (badge-independent DR routing, drKind-gated — review r2)', () => {
   const models = require('~/models');
   const NO_PARENT = '00000000-0000-0000-0000-000000000000';
 
-  it('is TRUE when the parent is the assistant clarify message', async () => {
+  it('is TRUE when the parent carries drKind=clarify', async () => {
     models.getMessages.mockResolvedValueOnce([
-      {
-        messageId: 'p1',
-        isCreatedByUser: false,
-        text: '**Уточните, пожалуйста, детали исследования:**\n1. Масштаб?',
-      },
+      { messageId: 'p1', isCreatedByUser: false, drKind: 'clarify' },
     ]);
     await expect(
       isDrFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'p1' }),
     ).resolves.toBe(true);
     expect(models.getMessages).toHaveBeenCalledWith(
       { conversationId: 'c1', user: 'u1', messageId: 'p1' },
-      'messageId text isCreatedByUser',
+      'messageId isCreatedByUser drKind',
     );
   });
 
-  it('is TRUE when the parent is a plan card (task #21)', async () => {
+  it('is TRUE when the parent carries drKind=plan (task #21)', async () => {
+    models.getMessages.mockResolvedValueOnce([
+      { messageId: 'p1', isCreatedByUser: false, drKind: 'plan' },
+    ]);
+    await expect(
+      isDrFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'p1' }),
+    ).resolves.toBe(true);
+  });
+
+  it('is FALSE for MARKER-LOOKALIKE prose without drKind (the P0 collision fix)', async () => {
+    // A normal-chat answer that merely STARTS with the plan-marker text must not route
+    // its follow-up into a research run — provenance, not prose, decides.
     models.getMessages.mockResolvedValueOnce([
       {
         messageId: 'p1',
@@ -706,7 +725,7 @@ describe('isDrFollowUp (badge-independent DR routing for clarify + plan replies)
     ]);
     await expect(
       isDrFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'p1' }),
-    ).resolves.toBe(true);
+    ).resolves.toBe(false);
   });
 
   it('is FALSE for a normal parent, a user-authored parent, and a missing parent', async () => {
@@ -718,11 +737,7 @@ describe('isDrFollowUp (badge-independent DR routing for clarify + plan replies)
     ).resolves.toBe(false);
 
     models.getMessages.mockResolvedValueOnce([
-      {
-        messageId: 'p1',
-        isCreatedByUser: true,
-        text: '**Уточните, пожалуйста, детали исследования:** копия',
-      },
+      { messageId: 'p1', isCreatedByUser: true, drKind: 'plan' },
     ]);
     await expect(
       isDrFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'p1' }),
@@ -831,6 +846,7 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
         messageId: 'p1',
         isCreatedByUser: false,
         parentMessageId: 'orig',
+        drKind: 'plan',
         text: '**План исследования:** Рынок CRM\n\n1. Собрать\n2. Сравнить',
       },
     ]);
@@ -842,6 +858,9 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     const graphInput = mockRunDeepResearch.mock.calls[0][0].input.messages[0].content;
     expect(graphInput).toContain('изучи CRM рынок');
     expect(graphInput).not.toContain('▶ Начать исследование');
+    // Review r2: the START command message is stamped and persisted at admission.
+    const userMsg = mockSavedMessages.find((m) => m.messageId === 'um1');
+    expect(userMsg.drKind).toBe('start');
   });
 
   it('CANCEL on a plan parent: terminal cancelled message, no graph, no model calls', async () => {
@@ -852,6 +871,7 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
         messageId: 'p1',
         isCreatedByUser: false,
         parentMessageId: 'orig',
+        drKind: 'plan',
         text: '**План исследования:** Рынок CRM\n\n1. Собрать',
       },
     ]);
@@ -861,9 +881,14 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     expect(result.finalizeReason).toBe('cancelled');
     expect(mockRunDeepResearch).not.toHaveBeenCalled();
     expect(mockInvokeArgs).toHaveLength(0); // no decision + no title model call
+    // Review r2: cancel/duplicate short-circuit BEFORE the anonymizer — zero sessions.
+    expect(mockStartSovereignSession).not.toHaveBeenCalled();
     const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
     expect(msg.text).toBe('Исследование отменено.');
     expect(msg.unfinished).toBe(false);
+    expect(msg.drKind).toBeUndefined();
+    const userMsg = mockSavedMessages.find((m) => m.messageId === 'um1');
+    expect(userMsg.drKind).toBe('cancel');
   });
 
   it('reply to a clarify prompt: produces a PLAN card and never asks a 2nd clarify', async () => {
@@ -876,6 +901,7 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
         messageId: 'p1',
         isCreatedByUser: false,
         parentMessageId: 'orig',
+        drKind: 'clarify',
         text: '**Уточните, пожалуйста, детали исследования:**\n1. Масштаб?',
       },
     ]);
@@ -913,6 +939,7 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
         messageId: 'p1',
         isCreatedByUser: false,
         parentMessageId: 'orig',
+        drKind: 'plan',
         text: '**План исследования:** Рынок CRM\n\n1. Собрать вендоров\n2. Сравнить цены',
       },
     ]);
@@ -958,5 +985,181 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
 
     const drEvents = mockEmitChunk.mock.calls.filter((c) => c[1]?.event === 'dr_progress');
     expect(drEvents).toHaveLength(0);
+  });
+});
+
+describe('runNewDeepResearch — review r2 hardening', () => {
+  const models = require('~/models');
+
+  function planParams(text, extra = {}) {
+    const p = baseParams(text);
+    p.req.config.deepResearch = { planGate: true, ...extra };
+    return p;
+  }
+
+  /** Plan parent + original request; `children` appends extra siblings under the plan. */
+  function planChain(children = []) {
+    return [
+      { messageId: 'orig', isCreatedByUser: true, parentMessageId: null, text: 'изучи CRM рынок' },
+      {
+        messageId: 'p1',
+        isCreatedByUser: false,
+        parentMessageId: 'orig',
+        drKind: 'plan',
+        text: '**План исследования:** Рынок CRM\n\n1. Собрать\n2. Сравнить',
+      },
+      ...children,
+    ];
+  }
+
+  it('refuses a DUPLICATE START (another tab already launched this plan): no graph, no session', async () => {
+    models.getMessages.mockResolvedValueOnce(
+      planChain([
+        {
+          messageId: 'other-start',
+          isCreatedByUser: true,
+          parentMessageId: 'p1',
+          drKind: 'start',
+          text: '▶ Начать исследование',
+        },
+      ]),
+    );
+
+    const result = await runNewDeepResearch(planParams('▶ Начать исследование'));
+
+    expect(result.finalizeReason).toBe('limit');
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    expect(mockStartSovereignSession).not.toHaveBeenCalled();
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.text).toContain('уже запущено');
+    expect(msg.drKind).toBeUndefined();
+  });
+
+  it('does NOT count the CURRENT message as its own duplicate (regenerate reuses the START id)', async () => {
+    models.getMessages.mockResolvedValueOnce(
+      planChain([
+        {
+          messageId: 'um1', // === baseParams userMessage.messageId → the regenerated turn itself
+          isCreatedByUser: true,
+          parentMessageId: 'p1',
+          drKind: 'start',
+          text: '▶ Начать исследование',
+        },
+      ]),
+    );
+
+    await runNewDeepResearch(planParams('▶ Начать исследование'));
+
+    expect(mockRunDeepResearch).toHaveBeenCalledTimes(1);
+  });
+
+  it('ROLLBACK safety: planGate OFF still honors START on a plan parent (researches the dialogue, not the marker)', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getMessages.mockResolvedValueOnce(planChain());
+    const p = baseParams('▶ Начать исследование'); // no planGate, clarify:false
+
+    await runNewDeepResearch(p);
+
+    expect(mockRunDeepResearch).toHaveBeenCalledTimes(1);
+    const graphInput = mockRunDeepResearch.mock.calls[0][0].input.messages[0].content;
+    expect(graphInput).toContain('изучи CRM рынок');
+    expect(graphInput).not.toContain('▶ Начать исследование');
+  });
+
+  it('ROLLBACK safety: planGate OFF still honors CANCEL on a plan parent (terminal, free)', async () => {
+    models.getMessages.mockResolvedValueOnce(planChain());
+    const p = baseParams('✕ Отменить исследование');
+
+    const result = await runNewDeepResearch(p);
+
+    expect(result.finalizeReason).toBe('cancelled');
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+  });
+
+  it('fails CLOSED to a fallback PLAN card when the decision model errors (gate survives outages)', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockTitleThrows = true; // every model.invoke throws → decision error path
+
+    const result = await runNewDeepResearch(planParams('изучи CRM рынок'));
+
+    expect(result.finalizeReason).toBe('plan');
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.text).toContain('**План исследования:**');
+    expect(msg.text).toContain('1. Собрать и изучить источники по теме запроса');
+    expect(msg.drKind).toBe('plan');
+  });
+
+  it('a Stop during the plan decision exits WITHOUT a response message or final emit', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockTitleThrows = true; // the invoke throws; the aborted signal marks it a user Stop
+    const p = planParams('изучи CRM рынок');
+    p.signal = { aborted: true };
+
+    const result = await runNewDeepResearch(p);
+
+    expect(result).toBeNull();
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    expect(mockEmitDone).not.toHaveBeenCalled();
+    expect(mockSavedMessages.find((m) => m.messageId === 'r1')).toBeUndefined();
+  });
+
+  it('title-once: an already-titled conversation makes ZERO title model calls and reuses the title', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getConvo.mockResolvedValueOnce({ conversationId: 'c1', title: 'Рынок CRM в СНГ' });
+    models.getMessages.mockResolvedValueOnce(planChain());
+
+    await runNewDeepResearch(planParams('▶ Начать исследование'));
+
+    // START skips the decision; with the title reused, NO model.invoke happens at all.
+    expect(mockInvokeArgs).toHaveLength(0);
+    const finalEvent = mockEmitDone.mock.calls[0][1];
+    expect(finalEvent.title).toBe('Рынок CRM в СНГ');
+  });
+
+  it('stamps drKind on the runner messages: plan card → plan, completed report → report', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+
+    await runNewDeepResearch(planParams('изучи CRM рынок'));
+    const planMsg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(planMsg.drKind).toBe('plan');
+
+    mockSavedMessages.length = 0;
+    models.getMessages.mockResolvedValueOnce(planChain());
+    await runNewDeepResearch(planParams('▶ Начать исследование'));
+    const reportMsg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(reportMsg.drKind).toBe('report');
+  });
+
+  it('skips the final emit when the job was REPLACED mid-run (stale-job guard parity)', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getMessages.mockResolvedValueOnce(planChain());
+    mockGetJob.mockResolvedValueOnce({ streamId: 'stream-1', createdAt: 999 });
+    const p = planParams('▶ Начать исследование');
+    p.jobCreatedAt = 1;
+
+    await runNewDeepResearch(p);
+
+    expect(mockEmitDone).not.toHaveBeenCalled();
+    expect(mockCompleteJob).not.toHaveBeenCalled();
+    // The report itself is still persisted — nothing is lost, only the stale emit.
+    expect(mockSavedMessages.find((m) => m.messageId === 'r1')).toBeDefined();
+  });
+
+  it('accepts a precomputed turn (request.js classification) and skips its own conversation load', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    const p = planParams('✕ Отменить исследование');
+    p.turn = {
+      kind: 'plan-cancel',
+      dialogue: null,
+      originalRequest: 'изучи CRM рынок',
+      parentText: '**План исследования:** Рынок CRM',
+      duplicateStart: false,
+    };
+
+    const result = await runNewDeepResearch(p);
+
+    expect(result.finalizeReason).toBe('cancelled');
+    expect(models.getMessages).not.toHaveBeenCalled();
   });
 });
