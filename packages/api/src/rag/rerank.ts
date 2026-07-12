@@ -72,7 +72,11 @@ export function getRagRerankConfig(env: NodeJS.ProcessEnv = process.env): RagRer
     url,
     token: env.RAG_RERANKER_TOKEN?.trim() ?? '',
     candidates: intEnv(env.RAG_RERANK_CANDIDATES, 36, 2, 64),
-    timeoutMs: intEnv(env.RAG_RERANKER_TIMEOUT_MS, 2500, 100, 30_000),
+    // 8000, не 2500: дефолтный пул 36 длинных чанков (512 ток.) на CPU-cross-encoder = 3-4.5с/вызов
+    // (прод-замер v2-m3 int8). Слишком низкий дефолт молча ронял бы КАЖДЫЙ реранк в таймаут →
+    // тихий откат к дистанции, фича не работает и это незаметно. Под многопользовательскую/мульти-
+    // файловую нагрузку (сериализация на реранкере) поднимать env'ом до 10000+.
+    timeoutMs: intEnv(env.RAG_RERANKER_TIMEOUT_MS, 8000, 100, 30_000),
   };
 }
 
