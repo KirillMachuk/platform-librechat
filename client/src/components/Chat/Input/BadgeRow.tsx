@@ -34,6 +34,9 @@ interface BadgeRowProps {
   specName?: string | null;
   isSubmitting?: boolean;
   isInChat: boolean;
+  /** Active model is an OpenAI reasoning family (o-series / gpt-5.x) that cannot run
+   *  the tool loop — hide the tool toggles that would arm one (see ChatForm). */
+  isReasoningModelActive?: boolean;
 }
 
 interface BadgeWrapperProps {
@@ -151,6 +154,7 @@ function BadgeRow({
   onChange,
   onToggle,
   isInChat,
+  isReasoningModelActive,
 }: BadgeRowProps) {
   const [orderedBadges, setOrderedBadges] = useState<BadgeItem[]>([]);
   const [dragState, dispatch] = useReducer(dragReducer, {
@@ -329,6 +333,7 @@ function BadgeRow({
       conversationId={conversationId}
       specName={specName}
       isSubmitting={isSubmitting}
+      isReasoningModelActive={isReasoningModelActive}
     >
       <div ref={containerRef} className="relative flex flex-wrap items-center gap-2">
         {showEphemeralBadges === true && <ToolsDropdown />}
@@ -374,13 +379,17 @@ function BadgeRow({
         {showEphemeralBadges === true && (
           <>
             <FileMode />
-            <WebSearch />
+            {/* Tool toggles hidden for reasoning models (o-series / gpt-5.x): they
+                cannot run the tool loop, so the backend drops these tools anyway.
+                Deep Research (forces a non-reasoning model) and Artifacts (not a
+                tool) stay available. */}
+            {!isReasoningModelActive && <WebSearch />}
             <DeepResearch />
-            <CodeInterpreter />
-            <FileSearch />
+            {!isReasoningModelActive && <CodeInterpreter />}
+            {!isReasoningModelActive && <FileSearch />}
             <Skills />
             <Artifacts />
-            <MCPSelect />
+            {!isReasoningModelActive && <MCPSelect />}
           </>
         )}
         {ghostBadge && (

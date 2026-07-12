@@ -143,11 +143,12 @@ export async function loadAddedAgent(
       '';
     const ephemeralId = encodeEphemeralAgentId({ endpoint, model, sender, index: 1 });
 
-    /** Reasoning models (o-series / gpt-5.x) never carry `file_search` — the forced
-     *  retrieval floor serves documents without a tool loop (mirrors loadEphemeralAgent). */
-    const inheritedTools = isReasoningModel(model)
-      ? primaryAgent.tools.filter((tool) => tool !== Tools.file_search)
-      : [...primaryAgent.tools];
+    /** Reasoning models (o-series / gpt-5.x) run chat-only: they cannot run the
+     *  multi-turn tool loop, so any inherited tool would trip the initializer's
+     *  reasoning gate. Drop them all — the added pane can carry a different model
+     *  than the primary, so a reasoning added model must not inherit the primary's
+     *  tools. Documents still load via the forced retrieval floor. */
+    const inheritedTools = isReasoningModel(model) ? [] : [...primaryAgent.tools];
     const result: Record<string, unknown> = {
       id: ephemeralId,
       instructions: promptPrefix || '',
@@ -176,19 +177,24 @@ export async function loadAddedAgent(
   }
 
   const tools: string[] = [];
+  /** Reasoning models run chat-only — no tool toggle is armed (see loadEphemeralAgent). */
   const reasoningModel = isReasoningModel(model);
-  if (ephemeralAgent?.execute_code === true || modelSpec?.executeCode === true) {
+  if (
+    (ephemeralAgent?.execute_code === true || modelSpec?.executeCode === true) &&
+    !reasoningModel
+  ) {
     tools.push(Tools.execute_code);
   }
   if ((ephemeralAgent?.file_search === true || modelSpec?.fileSearch === true) && !reasoningModel) {
     tools.push(Tools.file_search);
   }
-  if (ephemeralAgent?.web_search === true || modelSpec?.webSearch === true) {
+  if ((ephemeralAgent?.web_search === true || modelSpec?.webSearch === true) && !reasoningModel) {
     tools.push(Tools.web_search);
   }
 
   const addedServers = new Set<string>();
-  for (const mcpServer of mcpServers) {
+  const mcpServersToLoad = reasoningModel ? new Set<string>() : mcpServers;
+  for (const mcpServer of mcpServersToLoad) {
     if (addedServers.has(mcpServer)) {
       continue;
     }

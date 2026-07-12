@@ -16,6 +16,9 @@ interface BadgeRowContextType {
   conversationId?: string | null;
   storageContextKey?: string;
   agentsConfig?: TAgentsEndpoint | null;
+  /** Active model is an OpenAI reasoning family (o-series / gpt-5.x); tool toggles
+   *  that arm the tool loop are hidden for it (mirrors the backend gating). */
+  isReasoningModelActive?: boolean;
   skills: ReturnType<typeof useToolToggle>;
   webSearch: ReturnType<typeof useToolToggle>;
   deepResearch: ReturnType<typeof useToolToggle>;
@@ -37,6 +40,7 @@ interface BadgeRowProviderProps {
   isSubmitting?: boolean;
   conversationId?: string | null;
   specName?: string | null;
+  isReasoningModelActive?: boolean;
 }
 
 export default function BadgeRowProvider({
@@ -44,6 +48,7 @@ export default function BadgeRowProvider({
   isSubmitting,
   conversationId,
   specName,
+  isReasoningModelActive,
 }: BadgeRowProviderProps) {
   const lastContextKeyRef = useRef<string>('');
   const hasInitializedRef = useRef(false);
@@ -276,6 +281,7 @@ export default function BadgeRowProvider({
     codeInterpreter,
     searchApiKeyForm,
     mcpServerManager,
+    isReasoningModelActive,
   };
 
   return <BadgeRowContext.Provider value={value}>{children}</BadgeRowContext.Provider>;

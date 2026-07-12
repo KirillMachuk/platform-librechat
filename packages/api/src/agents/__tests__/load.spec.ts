@@ -129,7 +129,7 @@ describe('loadAgent', () => {
     }
   });
 
-  test('should not arm file_search for reasoning models (forced floor serves documents)', async () => {
+  test('should arm no tool toggles for reasoning models (chat-only, forced floor serves docs)', async () => {
     const { EPHEMERAL_AGENT_ID } = Constants;
 
     const makeReq = () => ({
@@ -138,6 +138,7 @@ describe('loadAgent', () => {
         ephemeralAgent: {
           file_search: true,
           web_search: true,
+          execute_code: true,
         } as TEphemeralAgent,
       },
     });
@@ -152,9 +153,9 @@ describe('loadAgent', () => {
       deps,
     );
 
-    expect(reasoning?.tools).not.toContain('file_search');
-    /** Toggles without a floor fallback still reach the reasoning gate downstream. */
-    expect(reasoning?.tools).toContain('web_search');
+    /** No tool is armed — any tool would trip the initializer's reasoning gate.
+     *  Documents still work through the forced retrieval floor (no tool loop). */
+    expect(reasoning?.tools).toEqual([]);
 
     const standard = await loadAgent(
       {
@@ -168,6 +169,41 @@ describe('loadAgent', () => {
 
     expect(standard?.tools).toContain('file_search');
     expect(standard?.tools).toContain('web_search');
+    expect(standard?.tools).toContain('execute_code');
+  });
+
+  test('should not arm MCP tools for reasoning models', async () => {
+    const { EPHEMERAL_AGENT_ID } = Constants;
+    mockGetMCPServerTools.mockImplementation(async (_userId: string, server: string) =>
+      server === 'server1' ? { tool1_mcp_server1: {} } : null,
+    );
+
+    const makeReq = () => ({
+      user: { id: 'user123' },
+      body: { ephemeralAgent: { mcp: ['server1'] } as TEphemeralAgent },
+    });
+
+    const reasoning = await loadAgent(
+      {
+        req: makeReq(),
+        agent_id: EPHEMERAL_AGENT_ID as string,
+        endpoint: 'openai',
+        model_parameters: { model: 'gpt-5.4-mini' } as unknown as AgentModelParameters,
+      },
+      deps,
+    );
+    expect(reasoning?.tools).toEqual([]);
+
+    const standard = await loadAgent(
+      {
+        req: makeReq(),
+        agent_id: EPHEMERAL_AGENT_ID as string,
+        endpoint: 'openai',
+        model_parameters: { model: 'claude-sonnet-4.6' } as unknown as AgentModelParameters,
+      },
+      deps,
+    );
+    expect(standard?.tools).toContain('tool1_mcp_server1');
   });
 
   test('should skip cached tools for servers made request-scoped by a config overlay', async () => {
@@ -502,7 +538,7 @@ describe('loadAgent', () => {
     expect(result?.subagents).toBeUndefined();
   });
 
-  test('should drop inherited file_search when the added model is a reasoning model', async () => {
+  test('should drop ALL inherited tools when the added model is a reasoning model', async () => {
     const { EPHEMERAL_AGENT_ID } = Constants;
 
     const makeParams = (model: string) => ({
@@ -524,14 +560,16 @@ describe('loadAgent', () => {
       } as LibreChatAgent,
     });
 
+    /** The added pane can carry a reasoning model even when the primary does not,
+     *  so none of the primary's tools may be inherited — any tool trips the gate. */
     const reasoning = await loadAddedAgent(makeParams('gpt-5.4-mini'), deps);
-    expect(reasoning?.tools).toEqual(['web_search']);
+    expect(reasoning?.tools).toEqual([]);
 
     const standard = await loadAddedAgent(makeParams('claude-sonnet-4.6'), deps);
     expect(standard?.tools).toEqual(['file_search', 'web_search']);
   });
 
-  test('should not arm file_search from toggles for an added reasoning model', async () => {
+  test('should arm no tool toggles for an added reasoning model', async () => {
     const makeParams = (model: string) => ({
       req: {
         user: { id: 'user123' },
@@ -544,17 +582,17 @@ describe('loadAgent', () => {
       conversation: {
         endpoint: 'openai',
         model,
-        ephemeralAgent: { file_search: true, web_search: true },
+        ephemeralAgent: { file_search: true, web_search: true, execute_code: true },
       } as unknown as TConversation,
     });
 
     const reasoning = await loadAddedAgent(makeParams('gpt-5.4-mini'), deps);
-    expect(reasoning?.tools).not.toContain('file_search');
-    expect(reasoning?.tools).toContain('web_search');
+    expect(reasoning?.tools).toEqual([]);
 
     const standard = await loadAddedAgent(makeParams('claude-sonnet-4.6'), deps);
     expect(standard?.tools).toContain('file_search');
     expect(standard?.tools).toContain('web_search');
+    expect(standard?.tools).toContain('execute_code');
   });
 
   test('should ignore request subagents for added ephemeral agents', async () => {
