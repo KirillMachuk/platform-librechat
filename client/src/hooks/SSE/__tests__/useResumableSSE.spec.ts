@@ -243,6 +243,11 @@ const advanceRetryTimer = async (ms: number) => {
 
 describe('useResumableSSE - 404 error path', () => {
   beforeEach(() => {
+    // Reconnect backoff is jittered (`delay * (0.5 + Math.random())`) to avoid a
+    // thundering herd after a server restart. Seed random to 0.5 → factor exactly 1.0 →
+    // the deterministic base delay the timer-advance assertions below rely on (attempt 1
+    // = 1000ms), while still exercising the jitter code path.
+    jest.spyOn(Math, 'random').mockReturnValue(0.5);
     mockSSEInstances.length = 0;
     localStorage.clear();
     mockErrorHandler.mockClear();
@@ -268,6 +273,7 @@ describe('useResumableSSE - 404 error path', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+    jest.restoreAllMocks();
   });
 
   const seedDraft = (conversationId: string) => {
