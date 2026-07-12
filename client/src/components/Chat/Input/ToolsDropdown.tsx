@@ -78,7 +78,12 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
     mcpServerManager,
     codeInterpreter,
     searchApiKeyForm,
+    isReasoningModelActive,
   } = context ?? {};
+  /** Reasoning models (o-series / gpt-5.x) run chat-only — omit the tool toggles
+   *  that arm the tool loop (the backend drops them too). Deep Research and
+   *  Artifacts remain, mirroring the badge row. */
+  const toolLoopAvailable = !isReasoningModelActive;
 
   const { setIsDialogOpen: setIsSearchDialogOpen, menuTriggerRef: searchMenuTriggerRef } =
     searchApiKeyForm ?? {};
@@ -156,7 +161,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
 
   const dropdownItems: MenuItemProps[] = [];
 
-  if (fileSearchEnabled && canUseFileSearch) {
+  if (fileSearchEnabled && canUseFileSearch && toolLoopAvailable) {
     dropdownItems.push({
       onClick: handleFileSearchToggle,
       hideOnClick: false,
@@ -188,7 +193,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
     });
   }
 
-  if (canUseWebSearch && webSearchEnabled) {
+  if (canUseWebSearch && webSearchEnabled && toolLoopAvailable) {
     dropdownItems.push({
       onClick: handleWebSearchToggle,
       hideOnClick: false,
@@ -306,7 +311,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
     });
   }
 
-  if (canRunCode && codeEnabled) {
+  if (canRunCode && codeEnabled && toolLoopAvailable) {
     dropdownItems.push({
       onClick: handleCodeInterpreterToggle,
       hideOnClick: false,
@@ -358,7 +363,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
   }
 
   const { availableMCPServers } = mcpServerManager ?? {};
-  if (canUseMcp && availableMCPServers && availableMCPServers.length > 0) {
+  if (canUseMcp && availableMCPServers && availableMCPServers.length > 0 && toolLoopAvailable) {
     dropdownItems.push({
       hideOnClick: false,
       render: (props) => <MCPSubMenu {...props} placeholder={mcpPlaceholder} />,

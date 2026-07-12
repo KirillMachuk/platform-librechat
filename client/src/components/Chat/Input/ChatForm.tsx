@@ -2,7 +2,12 @@ import { memo, useRef, useMemo, useEffect, useState, useCallback } from 'react';
 import { useWatch } from 'react-hook-form';
 import { TextareaAutosize } from '@librechat/client';
 import { useRecoilState, useRecoilValue } from 'recoil';
-import { Constants, isAssistantsEndpoint, isAgentsEndpoint } from 'librechat-data-provider';
+import {
+  Constants,
+  isReasoningModel,
+  isAgentsEndpoint,
+  isAssistantsEndpoint,
+} from 'librechat-data-provider';
 import type { TConversation } from 'librechat-data-provider';
 import type { ExtendedFile, FileSetter, ConvoGenerator } from '~/common';
 import {
@@ -111,6 +116,16 @@ const ChatForm = memo(function ChatForm({
     [conversation?.spec, startupConfig],
   );
   const hideBadgeRow = modelSpec?.hideBadgeRow === true;
+  /** Reasoning models (o-series / gpt-5.x) run chat-only — they cannot run the
+   *  multi-turn tool loop, so the tool toggles that arm one are hidden. Mirrors
+   *  the backend, which drops those tools for the same models (shared predicate).
+   *  Deep Research and Artifacts stay: DR forces a non-reasoning lead model, and
+   *  Artifacts is not a tool. Matches the model the backend sees for the ephemeral
+   *  agent (`conversation.model`). */
+  const isReasoningModelActive = useMemo(
+    () => isReasoningModel(conversation?.model),
+    [conversation?.model],
+  );
   const conversationId = useMemo(
     () => conversation?.conversationId ?? Constants.NEW_CONVO,
     [conversation?.conversationId],
@@ -374,6 +389,7 @@ const ChatForm = memo(function ChatForm({
                 isSubmitting={isSubmitting}
                 conversationId={conversationId}
                 specName={conversation?.spec}
+                isReasoningModelActive={isReasoningModelActive}
                 onChange={setBadges}
                 isInChat={
                   Array.isArray(conversation?.messages) && conversation.messages.length >= 1

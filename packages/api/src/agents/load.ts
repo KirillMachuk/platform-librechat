@@ -67,23 +67,29 @@ export async function loadEphemeralAgent(
   const tools: string[] = [];
   /**
    * Reasoning families (o-series / gpt-5.x) cannot run the multi-turn tool loop, so
-   * `file_search` is never armed for them: attached documents stay readable through the
-   * forced retrieval floor, which injects retrieved chunks without any tool call. Other
-   * toggles still reach the initializer's reasoning gate and fail fast with a clear error.
+   * NONE of the ephemeral tool toggles are armed for them — the initializer's reasoning
+   * gate would otherwise reject the whole turn. These models run chat-only: attached
+   * documents stay readable through the forced retrieval floor (which injects retrieved
+   * chunks without any tool call), and Deep Research still works because it forces a
+   * non-reasoning lead model before this loader runs. The UI mirrors this by hiding the
+   * same toggles (see BadgeRow / ToolsDropdown), so the two layers share one predicate.
    */
   const reasoningModel = isReasoningModel(model);
-  if (ephemeralAgent?.execute_code === true || modelSpec?.executeCode === true) {
+  if (
+    (ephemeralAgent?.execute_code === true || modelSpec?.executeCode === true) &&
+    !reasoningModel
+  ) {
     tools.push(Tools.execute_code);
   }
   if ((ephemeralAgent?.file_search === true || modelSpec?.fileSearch === true) && !reasoningModel) {
     tools.push(Tools.file_search);
   }
-  if (ephemeralAgent?.web_search === true || modelSpec?.webSearch === true) {
+  if ((ephemeralAgent?.web_search === true || modelSpec?.webSearch === true) && !reasoningModel) {
     tools.push(Tools.web_search);
   }
 
   const addedServers = new Set<string>();
-  if (mcpServers.size > 0) {
+  if (mcpServers.size > 0 && !reasoningModel) {
     for (const mcpServer of mcpServers) {
       if (addedServers.has(mcpServer)) {
         continue;
