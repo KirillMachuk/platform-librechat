@@ -1021,6 +1021,7 @@
   "com_ui_deep_research_autostart_cancelled": "Autostart cancelled — press Start when ready",
   "com_ui_deep_research_autostart_in": "Research starts automatically in {{0}} s",
   "com_ui_deep_research_contents": "Contents",
+  "com_ui_deep_research_edit_hint": "Describe what to change in the plan — it will be rebuilt",
   "com_ui_deep_research_offline": "No connection — waiting for network…",
   "com_ui_deep_research_start": "Start",
   "com_ui_deep_research_started": "Research started",

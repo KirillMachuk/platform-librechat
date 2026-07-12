@@ -20,8 +20,15 @@ jest.mock('~/data-provider', () => ({
 jest.mock('~/common', () => ({ mainTextareaId: 'prompt-textarea' }));
 jest.mock('lucide-react', () => ({ Telescope: () => <svg data-testid="telescope" /> }));
 jest.mock('@librechat/client', () => ({
-  Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
-    <button onClick={onClick}>{children}</button>
+  // Faithful enough to assert forwarded DOM props (aria-pressed/label, className); the real
+  // Button drops the custom variant/size into class variants, so strip them off the mock.
+  Button: ({
+    children,
+    variant: _variant,
+    size: _size,
+    ...rest
+  }: React.ComponentProps<'button'> & { variant?: string; size?: string }) => (
+    <button {...rest}>{children}</button>
   ),
 }));
 jest.mock('librechat-data-provider', () => ({
@@ -198,15 +205,22 @@ describe('PlanCard', () => {
     expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
   });
 
-  it('Редактировать only cancels the autostart — the buttons stay (no dead end)', () => {
+  it('Редактировать shows the edit hint (not "press Start"), keeps the buttons, marks the mode', () => {
     jest.useFakeTimers();
-    const { getByText, getAllByText } = render(
+    const { getByText, getAllByText, queryByText } = render(
       <PlanCard message={planMessage(new Date().toISOString())} awaitingAction autoStartSec={2} />,
     );
     fireEvent.click(getByText('com_ui_edit'));
+    // Buttons stay — a mis-tap is never a dead end.
     expect(getByText('com_ui_deep_research_start')).toBeInTheDocument();
     expect(getByText('com_ui_cancel')).toBeInTheDocument();
-    expect(getAllByText('com_ui_deep_research_autostart_cancelled').length).toBeGreaterThan(0);
+    // The hint tells the user to describe the change in chat (task #21) — the misleading
+    // "press Start" autostart caption must NOT be what a plan edit shows.
+    expect(getAllByText('com_ui_deep_research_edit_hint').length).toBeGreaterThan(0);
+    expect(queryByText('com_ui_deep_research_autostart_cancelled')).not.toBeInTheDocument();
+    // The Edit button reads as the active mode.
+    expect(getByText('com_ui_edit').closest('button')).toHaveAttribute('aria-pressed', 'true');
+    // Autostart is cancelled — it never fires — but Начать still works if they run as-is.
     for (let i = 0; i < 5; i++) {
       act(() => {
         jest.advanceTimersByTime(1000);

@@ -874,6 +874,7 @@
   "com_ui_deep_research_autostart_in": "Исследование начнётся автоматически через {{0}} сек",
   "com_ui_deep_research_cancelled": "Исследование отменено",
   "com_ui_deep_research_contents": "Содержание",
+  "com_ui_deep_research_edit_hint": "Опишите, что изменить в плане, — и он пересоберётся",
   "com_ui_deep_research_offline": "Нет соединения — ожидание сети…",
   "com_ui_deep_research_start": "Начать",
   "com_ui_deep_research_started": "Исследование запущено",

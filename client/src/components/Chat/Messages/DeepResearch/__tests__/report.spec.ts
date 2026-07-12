@@ -37,6 +37,8 @@ describe('resolveDrReport (review r2: keyed on the persisted drKind provenance)'
   it('ignores other drKind values and user messages', () => {
     expect(resolveDrReport(msg({ drKind: 'plan', text: REPORT }))).toBeNull();
     expect(resolveDrReport(msg({ drKind: 'clarify', text: REPORT }))).toBeNull();
+    // A stopped run (task #21) is a plain notice, never a report card.
+    expect(resolveDrReport(msg({ drKind: 'aborted', text: REPORT }))).toBeNull();
     expect(
       resolveDrReport(msg({ drKind: 'report', isCreatedByUser: true, text: REPORT })),
     ).toBeNull();
