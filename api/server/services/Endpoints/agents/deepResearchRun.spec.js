@@ -1138,13 +1138,14 @@ describe('runNewDeepResearch — task #21 aborted anchor (persist a re-plannable
     expect(msg.unfinished).toBe(false);
   });
 
-  it('a Stop WITH collected findings saves the partial report under the banner, stamped drKind=aborted', async () => {
+  it('a Stop WITH collected findings STILL saves only the clean STOPPED notice (owner: Stop = nothing)', async () => {
+    // Owner decision 2026-07-13: a Stop is "I don't want this" — it never yields a report,
+    // even if findings were gathered. No partial banner, no findings dump; just STOPPED.
     mockStartSovereignSession.mockResolvedValue(null);
     mockRunDeepResearch.mockResolvedValueOnce({
       finalReport: 'Промежуточные данные по вендорам',
       finalizeReason: 'aborted',
       usage: { input: 5, output: 5, total: 10 },
-      // Real findings were collected → this is a genuine partial, not an empty Stop.
       findings: [{ subQuestion: 'вендоры CRM', digest: '...', sources: [] }],
     });
 
@@ -1152,10 +1153,10 @@ describe('runNewDeepResearch — task #21 aborted anchor (persist a re-plannable
 
     const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
     expect(msg.drKind).toBe('aborted');
-    expect(msg.text).toContain('Частичный отчёт');
-    expect(msg.text).toContain('Промежуточные данные по вендорам');
-    // A genuinely truncated report — keeps the unfinished flag (partial content follows).
-    expect(msg.unfinished).toBe(true);
+    expect(msg.text).toContain('Исследование остановлено');
+    expect(msg.text).not.toContain('Частичный отчёт');
+    // A clean terminal notice — not an unfinished generation.
+    expect(msg.unfinished).toBe(false);
   });
 
   it('a budget-limit partial stays drKind=report (a valid answer → normal chat, not re-plan)', async () => {

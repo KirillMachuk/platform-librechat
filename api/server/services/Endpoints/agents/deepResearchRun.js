@@ -1298,17 +1298,14 @@ async function runNewDeepResearch(params) {
   // indicator under an explicit stop notice); a partial abort that DID collect findings
   // carries a truncated report and stays unfinished.
   //
-  // Emptiness is keyed on FINDINGS, not on `finalReport` being blank: runDeepResearch never
-  // returns a blank report — an aborted run with nothing collected still gets a
-  // buildFallbackReport that just echoes the research brief (which, for a plan-start, is the
-  // dialogue INCLUDING the plan) + "не удалось собрать данные". Keying on empty text let that
-  // useless fallback save as a "Частичный отчёт" wrapping the plan (live bug); no findings is
-  // the real "nothing to show" signal.
-  const abortedWithoutReport =
-    result.finalizeReason === 'aborted' && (result.findings?.length ?? 0) === 0;
+  // A user Stop (aborted) ALWAYS saves a clean STOPPED notice and NEVER a report — owner
+  // decision (2026-07-13): Stop = "I don't want this", so no partial, no findings dump,
+  // regardless of how much was gathered. It is a COMPLETE terminal message (like a cancel),
+  // so it is NOT "unfinished" (no redundant interrupted-generation indicator under it).
+  const abortedStop = result.finalizeReason === 'aborted';
   const unfinished =
     !['completed', 'limit', 'clarify', 'plan', 'cancelled'].includes(result.finalizeReason) &&
-    !abortedWithoutReport;
+    !abortedStop;
   // Track B: de-mask the final report via the server-side run map (placeholders → real PII), then
   // free the map. restore never throws (worst case: placeholders remain — safe, not a leak); both
   // run for EVERY outcome incl. abort, so the partial report saved below is de-masked too.
@@ -1382,14 +1379,12 @@ async function runNewDeepResearch(params) {
     }
   }
 
-  // M8: a partial report is prefixed with a localized reason banner so the user knows
-  // WHY it stopped (budget/time/rounds/abort/error). Baked into the saved text so a
-  // reload shows it too; the frontend's generic "unfinished" banner (C1f) complements it.
-  // A Stop that collected NOTHING (aborted before the report was synthesised) has no
-  // partial to show, so instead of a banner promising content that isn't there it saves a
-  // clean STOPPED notice — and it IS saved (below), because the stopped turn must remain a
-  // followable drKind='aborted' anchor for the plan re-edit (task #21).
-  const finalReportText = abortedWithoutReport
+  // A Stop ALWAYS renders the clean STOPPED notice (owner decision) — never a report, even
+  // if findings were gathered; it also stays a followable drKind='aborted' anchor for the
+  // plan re-edit (task #21). NON-abort outcomes keep the M8 partial banner FOR NOW; PR-2's
+  // synthesis-reservation (Ф6a/Ф6b) will replace budget/time/rounds partials with a real
+  // model report so the banner drops there too.
+  const finalReportText = abortedStop
     ? STOPPED_MESSAGE
     : withPartialBanner(reportText, result.finalizeReason);
   const responseMessage = {
