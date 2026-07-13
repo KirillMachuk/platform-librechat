@@ -6,7 +6,8 @@ import type * as t from '~/types';
  * All money fields are integer micro-USD (1e-6 USD) — see `types/credit.ts`.
  *
  * Three collections:
- *  - `creditmonths`   — one doc per Europe/Minsk calendar month: the included pool counter.
+ *  - `creditmonths`   — one doc per billing period (rolling «month of service»,
+ *                       Europe/Minsk): the included pool counter.
  *  - `creditpackages` — immutable purchased lots (manual operator top-ups).
  *  - `creditspends`   — per-request journal of actual cost (reconciliation raw material).
  */
@@ -14,12 +15,15 @@ import type * as t from '~/types';
 export const creditMonthSchema: Schema<t.ICreditMonth> = new Schema<t.ICreditMonth>(
   {
     tenantId: { type: String, index: true },
-    /** `YYYY-MM` in Europe/Minsk. */
+    /** Billing-period key = the Minsk period-start date `YYYY-MM-DD` (`YYYY-MM-01` when anchorDay=1). */
     month: { type: String, required: true },
-    /** Pool size snapshot at month creation — a mid-month config change does not rewrite history. */
+    /** Pool size snapshot at period creation — a mid-period config change does not rewrite history. */
     poolMicroUsd: { type: Number, required: true },
     spentMicroUsd: { type: Number, default: 0 },
     requestCount: { type: Number, default: 0 },
+    /** Period bounds `[start, end)` (instants) captured at creation — for display only. */
+    periodStart: { type: Date, default: null },
+    periodEnd: { type: Date, default: null },
     notified80At: { type: Date, default: null },
     notifiedExhaustedAt: { type: Date, default: null },
   },

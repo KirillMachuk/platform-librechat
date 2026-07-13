@@ -30,7 +30,11 @@ export interface AdminBillingLot {
 
 /** Client-admin-safe summary: Credits and percentages only — no $, no tokens. */
 export interface AdminBillingSummary {
+  /** Billing-period key (`YYYY-MM-DD`, the Minsk period-start date). */
   month: string;
+  /** Period bounds as ISO instants — the UI renders «период 15 июля — 14 августа». */
+  periodStart?: string | null;
+  periodEnd?: string | null;
   blocked: boolean;
   warn80: boolean;
   poolCredits: number;
@@ -50,12 +54,18 @@ export interface AdminBillingSummary {
    * screen shows an «учёт не активирован» banner instead of a misleading 0%.
    */
   metering: boolean;
+  /**
+   * Whether the ledger's unique indexes failed to build (idempotency/dedupe degraded).
+   * Surfaced so the operator screen can warn instead of trusting the numbers silently.
+   */
+  degraded: boolean;
 }
 
 export interface AdminBillingDeps {
   getCreditBillingStatus: (params: {
     poolMicroUsd: number;
     tenantId?: string;
+    anchorDay?: number;
   }) => Promise<CreditBillingStatus>;
   listCreditPackages: (params?: {
     tenantId?: string;
@@ -63,8 +73,12 @@ export interface AdminBillingDeps {
   addCreditPackage: (input: AddCreditPackageInput) => Promise<AddCreditPackageResult>;
   poolMicroUsd: number;
   tenantId?: string;
+  /** Service-period anchor day (1–31; defaults to 1 = calendar month). */
+  anchorDay?: number;
   /** Whether spend metering is wired (BILLING_INTERNAL_TOKEN set) — surfaced to the UI. */
   metering: boolean;
+  /** Live getter for ledger index health — true when unique indexes failed to build. */
+  getDegraded?: () => boolean;
   /** Lowercased operator allowlist (env-driven — outside client-admin control). */
   operatorEmails: string[];
   /** OpenRouter limit headroom over the allowed volume (e.g. 0.1 = +10%). */
@@ -106,7 +120,11 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
 } {
   async function buildSummary(req: ServerRequest): Promise<AdminBillingSummary> {
     const [status, lots] = await Promise.all([
-      deps.getCreditBillingStatus({ poolMicroUsd: deps.poolMicroUsd, tenantId: deps.tenantId }),
+      deps.getCreditBillingStatus({
+        poolMicroUsd: deps.poolMicroUsd,
+        tenantId: deps.tenantId,
+        anchorDay: deps.anchorDay,
+      }),
       deps.listCreditPackages({ tenantId: deps.tenantId }),
     ]);
     /* Display math is done once, in whole Credits, so «остаток + израсходовано»
@@ -117,6 +135,8 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
       status.poolMicroUsd > 0 ? Math.round((status.spentMicroUsd / status.poolMicroUsd) * 100) : 0;
     return {
       month: status.month,
+      periodStart: status.periodStart ? new Date(status.periodStart).toISOString() : null,
+      periodEnd: status.periodEnd ? new Date(status.periodEnd).toISOString() : null,
       blocked: status.blocked,
       warn80: percentUsed >= 80,
       poolCredits,
@@ -128,6 +148,7 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
       lots: lots.packages.map(toLot),
       isOperator: isOperatorRequest(req, deps.operatorEmails),
       metering: deps.metering,
+      degraded: deps.getDegraded ? deps.getDegraded() : false,
     };
   }
 
@@ -152,6 +173,7 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
     const status = await deps.getCreditBillingStatus({
       poolMicroUsd: deps.poolMicroUsd,
       tenantId: deps.tenantId,
+      anchorDay: deps.anchorDay,
     });
     const allowedMicroUsd = deps.poolMicroUsd + Math.max(0, status.packageRemainingMicroUsd);
     const recommendedLimitUsd = Math.ceil(

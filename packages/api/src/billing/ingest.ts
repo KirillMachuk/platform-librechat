@@ -18,12 +18,19 @@ const MAX_FIELD_LEN = 300;
 
 export interface BillingIngestDeps {
   recordCreditSpend: (input: RecordCreditSpendInput) => Promise<RecordCreditSpendResult>;
-  getCreditBillingStatus: (params: {
+  /**
+   * Read-only gate status — the anonymizer polls this per request, so it must not
+   * upsert (see `getCreditGateStatus`). A period with no document yet reads as not blocked.
+   */
+  getCreditGateStatus: (params: {
     poolMicroUsd: number;
     tenantId?: string;
+    anchorDay?: number;
   }) => Promise<CreditBillingStatus>;
   poolMicroUsd: number;
   tenantId?: string;
+  /** Service-period anchor day (1–31; defaults to 1 = calendar month). */
+  anchorDay?: number;
   /** Fire-and-forget hook for threshold notifications; must never throw. */
   onSpendRecorded?: (result: RecordCreditSpendResult) => void;
 }
@@ -71,6 +78,7 @@ export function createBillingIngestHandlers(deps: BillingIngestDeps): {
         microUsd: usdToMicroUsd(costUsd),
         poolMicroUsd: deps.poolMicroUsd,
         tenantId: deps.tenantId,
+        anchorDay: deps.anchorDay,
         model: cleanString(body.model),
         userId: userId && isValidObjectIdString(userId) ? userId : undefined,
         sourceId: cleanString(body.sourceId),
@@ -94,9 +102,10 @@ export function createBillingIngestHandlers(deps: BillingIngestDeps): {
 
   async function getStatusHandler(_req: ServerRequest, res: Response) {
     try {
-      const status = await deps.getCreditBillingStatus({
+      const status = await deps.getCreditGateStatus({
         poolMicroUsd: deps.poolMicroUsd,
         tenantId: deps.tenantId,
+        anchorDay: deps.anchorDay,
       });
       return res.status(200).json({
         blocked: status.blocked,

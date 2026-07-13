@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const express = require('express');
-const { createBillingIngestHandlers } = require('@librechat/api');
+const rateLimit = require('express-rate-limit');
+const { createBillingIngestHandlers, limiterCache } = require('@librechat/api');
 const { logger } = require('@librechat/data-schemas');
 const { getBillingWiring } = require('~/server/services/Billing');
 
@@ -30,8 +31,9 @@ function getHandlers() {
   const { config, notifier } = getBillingWiring();
   handlers = createBillingIngestHandlers({
     recordCreditSpend: db.recordCreditSpend,
-    getCreditBillingStatus: db.getCreditBillingStatus,
+    getCreditGateStatus: db.getCreditGateStatus,
     poolMicroUsd: config.poolMicroUsd,
+    anchorDay: config.anchorDay,
     onSpendRecorded: (result) => {
       notifier.handleSpendResult(result).catch((err) => {
         logger.error('[billing] notifier failed:', err);
@@ -40,6 +42,24 @@ function getHandlers() {
   });
   return handlers;
 }
+
+/**
+ * Defence-in-depth backstop for these token-guarded, service-to-service endpoints.
+ * The ceiling (per IP) sits far above any legitimate anonymizer volume — one contour
+ * reports a handful of spends per second at most — so it never throttles real billing
+ * traffic, only a token-brute-force / DoS loop (which runs orders of magnitude faster).
+ */
+const ingestLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 12_000, // 200 req/s per IP — pure abuse backstop, not a functional limit
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip || 'billing-internal',
+  handler: (_req, res) => res.status(429).json({ error: 'too many billing requests' }),
+  store: limiterCache('billing_ingest_limiter'),
+});
+
+router.use(ingestLimiter);
 
 router.use((req, res, next) => {
   const { config } = getBillingWiring();

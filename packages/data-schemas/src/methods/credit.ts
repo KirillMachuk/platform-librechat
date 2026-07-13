@@ -18,22 +18,165 @@ const DUP_KEY_CODE = 11000;
 const POOL_NOTIFY_RATIO = 0.8;
 
 /**
- * The billing month boundary is the client's calendar: Europe/Minsk (UTC+3, no DST).
- * The month document is created lazily on first touch, so the «1st of month reset»
- * needs no cron — a new Minsk month simply keys a fresh document with spent = 0.
+ * Billing period = a rolling «month of service» anchored to the contour's service
+ * start day, in the client's calendar (Europe/Minsk, UTC+3, no DST). `anchorDay` is
+ * the day-of-month the service went live; period n is
+ * `[anchorDay of month m+n, anchorDay of month m+n+1)`. `anchorDay` defaults to 1,
+ * which reproduces exact calendar-month billing bit-for-bit (just keyed `YYYY-MM-01`).
+ *
+ * The period document is created lazily on the first spend of a period, so the
+ * «reset at the start of each period» needs no cron — a new period simply keys a
+ * fresh document (its key is the Minsk period-start date, `YYYY-MM-DD`) with spent = 0.
+ *
+ * Clamp: when `anchorDay` (29/30/31) does not exist in a month, that month's boundary
+ * is its last day; the next month returns to `anchorDay` where it exists. E.g.
+ * `anchorDay = 31` → 01-31, 02-28, 03-31, 04-30, 05-31 …
  */
-const MINSK_MONTH_FMT = new Intl.DateTimeFormat('en-CA', {
+
+/** Civil (wall-clock) fields in Europe/Minsk for an instant. */
+const MINSK_CIVIL_FMT = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Europe/Minsk',
   year: 'numeric',
   month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
 });
 
-/** Returns the `YYYY-MM` Europe/Minsk month key for a timestamp. */
-export function minskMonthKey(at: Date = new Date()): string {
-  const parts = MINSK_MONTH_FMT.formatToParts(at);
-  const year = parts.find((p) => p.type === 'year')?.value;
-  const month = parts.find((p) => p.type === 'month')?.value;
-  return `${year}-${month}`;
+interface CivilParts {
+  year: number;
+  month: number; // 1-12
+  day: number; // 1-31
+  hour: number; // 0-23
+  minute: number;
+  second: number;
+}
+
+function minskCivil(at: Date): CivilParts {
+  const parts = MINSK_CIVIL_FMT.formatToParts(at);
+  const get = (type: string): number => Number(parts.find((p) => p.type === type)?.value);
+  return {
+    year: get('year'),
+    month: get('month'),
+    day: get('day'),
+    hour: get('hour'),
+    minute: get('minute'),
+    second: get('second'),
+  };
+}
+
+/** Days in a civil month (month is 1-12; day 0 of month+1 is the last of month). */
+function daysInCivilMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/**
+ * Normalises an anchor day to an integer in [1, 31]; anything invalid falls back to
+ * 1 (calendar-month billing), so a missing/garbled config can never break billing.
+ */
+export function normalizeAnchorDay(day: number | undefined | null): number {
+  if (typeof day !== 'number' || !Number.isFinite(day)) {
+    return 1;
+  }
+  const d = Math.trunc(day);
+  if (d < 1) {
+    return 1;
+  }
+  if (d > 31) {
+    return 31;
+  }
+  return d;
+}
+
+/** The anchor day clamped into a given month (e.g. 31 → 28 in a non-leap February). */
+function clampAnchorToMonth(year: number, month: number, anchorDay: number): number {
+  return Math.min(anchorDay, daysInCivilMonth(year, month));
+}
+
+/**
+ * The UTC instant of Minsk 00:00 on a civil date. Minsk observes no DST, so the zone
+ * offset at the civil date's UTC guess equals the offset at true local midnight — a
+ * single correction is exact (no iteration needed). Used only for display bounds; the
+ * period *key* is pure civil-date arithmetic and never depends on this instant.
+ */
+function minskMidnightInstant(year: number, month: number, day: number): Date {
+  const utcGuess = Date.UTC(year, month - 1, day, 0, 0, 0);
+  const civil = minskCivil(new Date(utcGuess));
+  const asUtc = Date.UTC(
+    civil.year,
+    civil.month - 1,
+    civil.day,
+    civil.hour,
+    civil.minute,
+    civil.second,
+  );
+  const offsetMs = asUtc - utcGuess; // +3h for Minsk
+  return new Date(utcGuess - offsetMs);
+}
+
+/** The civil {year, month, day} that the period containing `at` starts on. */
+function periodStartCivil(
+  at: Date,
+  anchorDay: number,
+): { year: number; month: number; day: number } {
+  const { year, month, day } = minskCivil(at);
+  const anchorThisMonth = clampAnchorToMonth(year, month, anchorDay);
+  if (day >= anchorThisMonth) {
+    return { year, month, day: anchorThisMonth };
+  }
+  // Before this month's anchor → the period started in the previous month.
+  let py = year;
+  let pm = month - 1;
+  if (pm === 0) {
+    pm = 12;
+    py -= 1;
+  }
+  return { year: py, month: pm, day: clampAnchorToMonth(py, pm, anchorDay) };
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/**
+ * The `YYYY-MM-DD` key of the service period containing `at` (its Minsk start date).
+ * `anchorDay` defaults to 1 → `YYYY-MM-01`, i.e. exact calendar-month keys.
+ */
+export function servicePeriodKey(at: Date = new Date(), anchorDay: number = 1): string {
+  const { year, month, day } = periodStartCivil(at, normalizeAnchorDay(anchorDay));
+  return `${year}-${pad2(month)}-${pad2(day)}`;
+}
+
+/** The [start, end) instants of the service period containing `at` (end exclusive). */
+export function servicePeriodBounds(
+  at: Date = new Date(),
+  anchorDay: number = 1,
+): { start: Date; end: Date } {
+  const anchor = normalizeAnchorDay(anchorDay);
+  const s = periodStartCivil(at, anchor);
+  let ny = s.year;
+  let nm = s.month + 1;
+  if (nm === 13) {
+    nm = 1;
+    ny += 1;
+  }
+  const nextDay = clampAnchorToMonth(ny, nm, anchor);
+  return {
+    start: minskMidnightInstant(s.year, s.month, s.day),
+    end: minskMidnightInstant(ny, nm, nextDay),
+  };
+}
+
+/** Immutable fields seeded into a period document the first time it is touched. */
+function periodInsertFields(
+  at: Date,
+  anchorDay: number,
+  poolMicroUsd: number,
+): { poolMicroUsd: number; periodStart: Date; periodEnd: Date } {
+  const { start, end } = servicePeriodBounds(at, anchorDay);
+  return { poolMicroUsd: Math.round(poolMicroUsd), periodStart: start, periodEnd: end };
 }
 
 function isDupKeyError(error: unknown): boolean {
@@ -55,6 +198,19 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
   getCreditBillingStatus: (params: {
     poolMicroUsd: number;
     tenantId?: string;
+    anchorDay?: number;
+    at?: Date;
+  }) => Promise<CreditBillingStatus>;
+  /**
+   * Read-only variant of {@link getCreditBillingStatus} for the per-request soft-block
+   * gate: never upserts, so the hot polling path performs no write. A period with no
+   * document yet reads as spent = 0 (not blocked) — the document is created on the
+   * first actual spend.
+   */
+  getCreditGateStatus: (params: {
+    poolMicroUsd: number;
+    tenantId?: string;
+    anchorDay?: number;
     at?: Date;
   }) => Promise<CreditBillingStatus>;
   addCreditPackage: (input: AddCreditPackageInput) => Promise<AddCreditPackageResult>;
@@ -69,6 +225,16 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
   getCreditMonth: (params: { month: string; tenantId?: string }) => Promise<ICreditMonth | null>;
   sumCreditSpendJournal: (params: {
     month: string;
+    tenantId?: string;
+  }) => Promise<{ microUsd: number; count: number }>;
+  /**
+   * Journal sum over a wall-clock instant range (by `createdAt`) — used for the
+   * external OpenRouter reconciliation, whose `usage_monthly` window is a UTC
+   * calendar month independent of the billing period.
+   */
+  sumCreditSpendJournalRange: (params: {
+    from: Date;
+    to: Date;
     tenantId?: string;
   }) => Promise<{ microUsd: number; count: number }>;
 } {
@@ -127,7 +293,8 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
       throw new Error(`[credit] invalid poolMicroUsd: ${input.poolMicroUsd}`);
     }
     const at = input.at ?? new Date();
-    const month = minskMonthKey(at);
+    const anchorDay = normalizeAnchorDay(input.anchorDay);
+    const month = servicePeriodKey(at, anchorDay);
     const microUsd = Math.round(input.microUsd);
 
     try {
@@ -166,7 +333,7 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
       { ...tenantFilter<ICreditMonth>(input.tenantId), month },
       {
         $inc: { spentMicroUsd: microUsd, requestCount: 1 },
-        $setOnInsert: { poolMicroUsd: Math.round(input.poolMicroUsd) },
+        $setOnInsert: periodInsertFields(at, anchorDay, input.poolMicroUsd),
       },
     );
 
@@ -225,12 +392,15 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
   async function getCreditBillingStatus(params: {
     poolMicroUsd: number;
     tenantId?: string;
+    anchorDay?: number;
     at?: Date;
   }): Promise<CreditBillingStatus> {
-    const month = minskMonthKey(params.at ?? new Date());
+    const at = params.at ?? new Date();
+    const anchorDay = normalizeAnchorDay(params.anchorDay);
+    const month = servicePeriodKey(at, anchorDay);
     const doc = await upsertMonth(
       { ...tenantFilter<ICreditMonth>(params.tenantId), month },
-      { $setOnInsert: { poolMicroUsd: Math.round(params.poolMicroUsd) } },
+      { $setOnInsert: periodInsertFields(at, anchorDay, params.poolMicroUsd) },
     );
     const { purchasedMicroUsd, packageSpentMicroUsd } = await getPackageTotals(params.tenantId);
     const packageRemainingMicroUsd = purchasedMicroUsd - packageSpentMicroUsd;
@@ -245,6 +415,48 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
       blocked: doc.spentMicroUsd >= doc.poolMicroUsd && packageRemainingMicroUsd <= 0,
       notified80At: doc.notified80At ?? null,
       notifiedExhaustedAt: doc.notifiedExhaustedAt ?? null,
+      periodStart: doc.periodStart ?? null,
+      periodEnd: doc.periodEnd ?? null,
+    };
+  }
+
+  /**
+   * Read-only status for the per-request soft-block gate. Unlike
+   * {@link getCreditBillingStatus} it never upserts, so the hot polling path does no
+   * write. A period whose document does not exist yet reads as spent = 0 (never
+   * blocked): the pool is positive, and the document will be created by the first
+   * actual spend. Package totals are still global (across all periods).
+   */
+  async function getCreditGateStatus(params: {
+    poolMicroUsd: number;
+    tenantId?: string;
+    anchorDay?: number;
+    at?: Date;
+  }): Promise<CreditBillingStatus> {
+    const at = params.at ?? new Date();
+    const anchorDay = normalizeAnchorDay(params.anchorDay);
+    const month = servicePeriodKey(at, anchorDay);
+    const doc = await CreditMonth()
+      .findOne({ ...tenantFilter<ICreditMonth>(params.tenantId), month })
+      .lean<ICreditMonth>();
+    const { purchasedMicroUsd, packageSpentMicroUsd } = await getPackageTotals(params.tenantId);
+    const packageRemainingMicroUsd = purchasedMicroUsd - packageSpentMicroUsd;
+    const poolMicroUsd = doc?.poolMicroUsd ?? Math.round(params.poolMicroUsd);
+    const spentMicroUsd = doc?.spentMicroUsd ?? 0;
+    const bounds = servicePeriodBounds(at, anchorDay);
+    return {
+      month,
+      poolMicroUsd,
+      spentMicroUsd,
+      requestCount: doc?.requestCount ?? 0,
+      purchasedMicroUsd,
+      packageSpentMicroUsd,
+      packageRemainingMicroUsd,
+      blocked: spentMicroUsd >= poolMicroUsd && packageRemainingMicroUsd <= 0,
+      notified80At: doc?.notified80At ?? null,
+      notifiedExhaustedAt: doc?.notifiedExhaustedAt ?? null,
+      periodStart: doc?.periodStart ?? bounds.start,
+      periodEnd: doc?.periodEnd ?? bounds.end,
     };
   }
 
@@ -272,7 +484,7 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
         addedById: input.addedById,
         idempotencyKey: input.idempotencyKey,
       });
-      const month = minskMonthKey(input.at ?? new Date());
+      const month = servicePeriodKey(input.at ?? new Date(), normalizeAnchorDay(input.anchorDay));
       await CreditMonth()
         .updateOne(
           { ...tenantFilter<ICreditMonth>(input.tenantId), month },
@@ -361,7 +573,7 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
       .lean<ICreditMonth>();
   }
 
-  /** Journal sum for a month — must equal the month counter (rounding-convergence check). */
+  /** Journal sum for a period — must equal the period counter (rounding-convergence check). */
   async function sumCreditSpendJournal(params: {
     month: string;
     tenantId?: string;
@@ -373,14 +585,39 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     return { microUsd: row?.microUsd ?? 0, count: row?.count ?? 0 };
   }
 
+  /**
+   * Journal sum over a wall-clock instant range (by `createdAt`, `[from, to)`).
+   * Independent of the billing-period key — the external OpenRouter reconciliation
+   * compares against `usage_monthly`, whose window is a UTC calendar month. The
+   * `createdAt` TTL index serves this range scan.
+   */
+  async function sumCreditSpendJournalRange(params: {
+    from: Date;
+    to: Date;
+    tenantId?: string;
+  }): Promise<{ microUsd: number; count: number }> {
+    const [row] = await CreditSpend().aggregate<{ microUsd: number; count: number }>([
+      {
+        $match: {
+          ...tenantFilter(params.tenantId),
+          createdAt: { $gte: params.from, $lt: params.to },
+        },
+      },
+      { $group: { _id: null, microUsd: { $sum: '$microUsd' }, count: { $sum: 1 } } },
+    ]);
+    return { microUsd: row?.microUsd ?? 0, count: row?.count ?? 0 };
+  }
+
   return {
     recordCreditSpend,
     getCreditBillingStatus,
+    getCreditGateStatus,
     addCreditPackage,
     listCreditPackages,
     markCreditMonthNotified,
     getCreditMonth,
     sumCreditSpendJournal,
+    sumCreditSpendJournalRange,
   };
 }
 

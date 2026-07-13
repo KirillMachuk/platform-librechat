@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { creditsToMicroUsd, microUsdToCredits, usdToMicroUsd } from '~/common/credit';
-import { createCreditMethods, minskMonthKey } from './credit';
+import { createCreditMethods, servicePeriodKey, servicePeriodBounds } from './credit';
 import { createModels } from '~/models';
 
 jest.mock('~/config/winston', () => ({
@@ -23,6 +23,7 @@ function spend(params: {
   at?: Date;
   sourceId?: string;
   model?: string;
+  anchorDay?: number;
 }) {
   return methods.recordCreditSpend({
     microUsd: params.microUsd ?? creditsToMicroUsd(params.credits ?? 0),
@@ -30,6 +31,7 @@ function spend(params: {
     at: params.at,
     sourceId: params.sourceId,
     model: params.model,
+    anchorDay: params.anchorDay,
   });
 }
 
@@ -57,13 +59,55 @@ beforeEach(async () => {
   ]);
 });
 
-describe('minskMonthKey', () => {
-  test('keys by the Europe/Minsk (UTC+3) calendar, not UTC', () => {
+describe('servicePeriodKey (rolling «month of service»)', () => {
+  test('anchorDay=1 reproduces calendar-month keys, in Europe/Minsk (UTC+3) not UTC', () => {
     // 20:59 UTC on Jul 31 is 23:59 in Minsk — still July.
-    expect(minskMonthKey(new Date('2026-07-31T20:59:00Z'))).toBe('2026-07');
+    expect(servicePeriodKey(new Date('2026-07-31T20:59:00Z'), 1)).toBe('2026-07-01');
     // 21:00 UTC on Jul 31 is 00:00 Aug 1 in Minsk — the pool resets here.
-    expect(minskMonthKey(new Date('2026-07-31T21:00:00Z'))).toBe('2026-08');
-    expect(minskMonthKey(new Date('2026-12-31T21:00:00Z'))).toBe('2027-01');
+    expect(servicePeriodKey(new Date('2026-07-31T21:00:00Z'), 1)).toBe('2026-08-01');
+    expect(servicePeriodKey(new Date('2026-12-31T21:00:00Z'), 1)).toBe('2027-01-01');
+    // Default anchor is 1.
+    expect(servicePeriodKey(new Date('2026-07-15T12:00:00Z'))).toBe('2026-07-01');
+  });
+
+  test('anchorDay=15: the period runs 15th→15th (Minsk midnight boundary)', () => {
+    // Mid-period.
+    expect(servicePeriodKey(new Date('2026-07-20T12:00:00Z'), 15)).toBe('2026-07-15');
+    // Before the anchor → previous period.
+    expect(servicePeriodKey(new Date('2026-07-10T12:00:00Z'), 15)).toBe('2026-06-15');
+    // 21:00 UTC on Jul 14 = 00:00 Jul 15 Minsk → the new period starts exactly here.
+    expect(servicePeriodKey(new Date('2026-07-14T20:59:00Z'), 15)).toBe('2026-06-15');
+    expect(servicePeriodKey(new Date('2026-07-14T21:00:00Z'), 15)).toBe('2026-07-15');
+  });
+
+  test('anchorDay=31 clamps to the last day where the 31st does not exist', () => {
+    // Jan has 31; period keyed 01-31.
+    expect(servicePeriodKey(new Date('2026-01-31T12:00:00Z'), 31)).toBe('2026-01-31');
+    // Feb (28 days, 2026 non-leap): the period that started Jan 31 clamps to Feb 28.
+    expect(servicePeriodKey(new Date('2026-02-15T12:00:00Z'), 31)).toBe('2026-01-31');
+    // On Feb 28 the next period begins (clamped anchor).
+    expect(servicePeriodKey(new Date('2026-02-28T12:00:00Z'), 31)).toBe('2026-02-28');
+    // March has 31 again → the anchor returns to 31.
+    expect(servicePeriodKey(new Date('2026-03-15T12:00:00Z'), 31)).toBe('2026-02-28');
+    expect(servicePeriodKey(new Date('2026-03-31T12:00:00Z'), 31)).toBe('2026-03-31');
+    // The period [03-31, 04-30) ends on Apr 30 (April has no 31st) → Apr 29 is still 03-31.
+    expect(servicePeriodKey(new Date('2026-04-29T12:00:00Z'), 31)).toBe('2026-03-31');
+    // Apr 30 begins the next period (clamped anchor 30) → [04-30, 05-31).
+    expect(servicePeriodKey(new Date('2026-04-30T12:00:00Z'), 31)).toBe('2026-04-30');
+    expect(servicePeriodKey(new Date('2026-05-01T12:00:00Z'), 31)).toBe('2026-04-30');
+  });
+
+  test('leap February: anchorDay=30 clamps to Feb 29 in a leap year', () => {
+    // 2028 is a leap year.
+    expect(servicePeriodKey(new Date('2028-02-29T12:00:00Z'), 30)).toBe('2028-02-29');
+    expect(servicePeriodKey(new Date('2028-02-28T12:00:00Z'), 30)).toBe('2028-01-30');
+  });
+
+  test('servicePeriodBounds returns Minsk-midnight [start, end); anchor=31 through Feb', () => {
+    const { start, end } = servicePeriodBounds(new Date('2026-02-10T12:00:00Z'), 31);
+    // Period [Jan 31 00:00 Minsk, Feb 28 00:00 Minsk) = [Jan 30 21:00 UTC, Feb 27 21:00 UTC).
+    expect(start.toISOString()).toBe('2026-01-30T21:00:00.000Z');
+    expect(end.toISOString()).toBe('2026-02-27T21:00:00.000Z');
   });
 });
 
@@ -72,7 +116,7 @@ describe('recordCreditSpend / monthly pool', () => {
     const at = new Date('2026-07-10T12:00:00Z');
 
     let r = await spend({ credits: 79, at });
-    expect(r.month).toBe('2026-07');
+    expect(r.month).toBe('2026-07-01');
     expect(r.crossed80).toBe(false);
     expect(r.crossedPool).toBe(false);
 
@@ -100,7 +144,7 @@ describe('recordCreditSpend / monthly pool', () => {
     expect(julyStatus.blocked).toBe(true);
 
     const augustStatus = await methods.getCreditBillingStatus({ poolMicroUsd: POOL, at: august });
-    expect(augustStatus.month).toBe('2026-08');
+    expect(augustStatus.month).toBe('2026-08-01');
     expect(augustStatus.spentMicroUsd).toBe(0);
     expect(augustStatus.blocked).toBe(false);
 
@@ -117,7 +161,7 @@ describe('recordCreditSpend / monthly pool', () => {
     expect(retry.duplicate).toBe(true);
     expect(retry.spentAfterMicroUsd).toBe(creditsToMicroUsd(5));
 
-    const journal = await methods.sumCreditSpendJournal({ month: '2026-07' });
+    const journal = await methods.sumCreditSpendJournal({ month: '2026-07-01' });
     expect(journal.count).toBe(1);
     expect(journal.microUsd).toBe(creditsToMicroUsd(5));
   });
@@ -211,7 +255,7 @@ describe('addCreditPackage idempotency & unblocking', () => {
 
     let status = await methods.getCreditBillingStatus({ poolMicroUsd: POOL, at });
     expect(status.blocked).toBe(true);
-    expect(await methods.markCreditMonthNotified({ month: '2026-07', kind: 'exhausted' })).toBe(
+    expect(await methods.markCreditMonthNotified({ month: '2026-07-01', kind: 'exhausted' })).toBe(
       true,
     );
 
@@ -224,7 +268,7 @@ describe('addCreditPackage idempotency & unblocking', () => {
     await spend({ credits: 49, at });
     status = await methods.getCreditBillingStatus({ poolMicroUsd: POOL, at });
     expect(status.blocked).toBe(true);
-    expect(await methods.markCreditMonthNotified({ month: '2026-07', kind: 'exhausted' })).toBe(
+    expect(await methods.markCreditMonthNotified({ month: '2026-07-01', kind: 'exhausted' })).toBe(
       true,
     );
   });
@@ -236,11 +280,11 @@ describe('notification single-winner', () => {
     await spend({ credits: 81, at });
 
     const [a, b] = await Promise.all([
-      methods.markCreditMonthNotified({ month: '2026-07', kind: '80' }),
-      methods.markCreditMonthNotified({ month: '2026-07', kind: '80' }),
+      methods.markCreditMonthNotified({ month: '2026-07-01', kind: '80' }),
+      methods.markCreditMonthNotified({ month: '2026-07-01', kind: '80' }),
     ]);
     expect([a, b].filter(Boolean)).toHaveLength(1);
-    expect(await methods.markCreditMonthNotified({ month: '2026-07', kind: '80' })).toBe(false);
+    expect(await methods.markCreditMonthNotified({ month: '2026-07-01', kind: '80' })).toBe(false);
   });
 });
 
@@ -257,7 +301,7 @@ describe('rounding convergence (micro-USD ledger)', () => {
     }
 
     const status = await methods.getCreditBillingStatus({ poolMicroUsd: POOL, at });
-    const journal = await methods.sumCreditSpendJournal({ month: '2026-07' });
+    const journal = await methods.sumCreditSpendJournal({ month: '2026-07-01' });
 
     expect(status.spentMicroUsd).toBe(expectedMicro);
     expect(journal.microUsd).toBe(expectedMicro);
@@ -267,5 +311,94 @@ describe('rounding convergence (micro-USD ledger)', () => {
     // rounding happens once at display, not per request.
     const trueUsd = costsUsd.reduce((a, b) => a + b, 0);
     expect(Math.abs(microUsdToCredits(status.spentMicroUsd) - trueUsd * 100)).toBeLessThan(1);
+  });
+});
+
+describe('service-period anchor end-to-end', () => {
+  const ANCHOR = 15;
+
+  test('spend + status use the anchored period key and expose its bounds', async () => {
+    const at = new Date('2026-07-20T12:00:00Z'); // inside [Jul 15, Aug 15)
+    const r = await spend({ credits: 10, at, anchorDay: ANCHOR });
+    expect(r.month).toBe('2026-07-15');
+
+    const status = await methods.getCreditBillingStatus({
+      poolMicroUsd: POOL,
+      at,
+      anchorDay: ANCHOR,
+    });
+    expect(status.month).toBe('2026-07-15');
+    expect(status.spentMicroUsd).toBe(creditsToMicroUsd(10));
+    // [Jul 15 00:00 Minsk, Aug 15 00:00 Minsk) = [Jul 14 21:00 UTC, Aug 14 21:00 UTC).
+    expect(status.periodStart?.toISOString()).toBe('2026-07-14T21:00:00.000Z');
+    expect(status.periodEnd?.toISOString()).toBe('2026-08-14T21:00:00.000Z');
+  });
+
+  test('crossing the anchor boundary starts a fresh pool with no rollover', async () => {
+    const before = new Date('2026-07-14T20:59:00Z'); // 23:59 Minsk Jul 14 → period Jun 15
+    const after = new Date('2026-07-14T21:00:00Z'); //  00:00 Minsk Jul 15 → period Jul 15
+
+    await spend({ credits: 101, at: before, anchorDay: ANCHOR });
+    const prev = await methods.getCreditBillingStatus({
+      poolMicroUsd: POOL,
+      at: before,
+      anchorDay: ANCHOR,
+    });
+    expect(prev.month).toBe('2026-06-15');
+    expect(prev.blocked).toBe(true);
+
+    const next = await methods.getCreditBillingStatus({
+      poolMicroUsd: POOL,
+      at: after,
+      anchorDay: ANCHOR,
+    });
+    expect(next.month).toBe('2026-07-15');
+    expect(next.spentMicroUsd).toBe(0);
+    expect(next.blocked).toBe(false);
+    // The previous period's overspend still drains packages globally (1 credit overflow).
+    expect(next.packageSpentMicroUsd).toBe(creditsToMicroUsd(1));
+  });
+
+  test('getCreditGateStatus is read-only: a gate check creates no period document', async () => {
+    const at = new Date('2026-07-20T12:00:00Z');
+    const gate = await methods.getCreditGateStatus({ poolMicroUsd: POOL, at, anchorDay: ANCHOR });
+    expect(gate.month).toBe('2026-07-15');
+    expect(gate.spentMicroUsd).toBe(0);
+    expect(gate.blocked).toBe(false);
+    // Unlike getCreditBillingStatus, the gate must NOT have upserted a document.
+    expect(await methods.getCreditMonth({ month: '2026-07-15' })).toBeNull();
+  });
+
+  test('getCreditGateStatus reflects a real spend and blocks when the pool is exhausted', async () => {
+    const at = new Date('2026-07-20T12:00:00Z');
+    await spend({ credits: 101, at, anchorDay: ANCHOR });
+    const gate = await methods.getCreditGateStatus({ poolMicroUsd: POOL, at, anchorDay: ANCHOR });
+    expect(gate.spentMicroUsd).toBe(creditsToMicroUsd(101));
+    expect(gate.blocked).toBe(true);
+  });
+});
+
+describe('sumCreditSpendJournalRange (external reconcile window, by createdAt)', () => {
+  test('sums journal rows whose createdAt falls in [from, to)', async () => {
+    // createdAt is the real insertion time, independent of the period `at`; use a
+    // window around "now" so the assertion holds regardless of the wall clock.
+    await spend({ credits: 3, at: new Date('2026-07-05T10:00:00Z'), anchorDay: 15, sourceId: 'a' });
+    await spend({ credits: 7, at: new Date('2026-07-25T10:00:00Z'), anchorDay: 15, sourceId: 'b' });
+
+    const now = Date.now();
+    const wide = await methods.sumCreditSpendJournalRange({
+      from: new Date(now - 60 * 60 * 1000),
+      to: new Date(now + 60 * 60 * 1000),
+    });
+    expect(wide.count).toBe(2);
+    expect(wide.microUsd).toBe(creditsToMicroUsd(10));
+
+    // A window entirely in the past excludes both rows.
+    const past = await methods.sumCreditSpendJournalRange({
+      from: new Date(now - 48 * 60 * 60 * 1000),
+      to: new Date(now - 24 * 60 * 60 * 1000),
+    });
+    expect(past.count).toBe(0);
+    expect(past.microUsd).toBe(0);
   });
 });

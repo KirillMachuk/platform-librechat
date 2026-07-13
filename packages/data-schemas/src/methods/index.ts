@@ -58,7 +58,7 @@ import { createTransactionMethods, type TransactionMethods } from './transaction
 import { createAuditMethods, type AuditMethods } from './audit';
 import { createCreditMethods, type CreditMethods } from './credit';
 
-export { minskMonthKey } from './credit';
+export { servicePeriodKey, servicePeriodBounds, normalizeAnchorDay } from './credit';
 import { createAnalyticsMethods, type AnalyticsMethods } from './analytics';
 import { createSpendTokensMethods, type SpendTokensMethods } from './spendTokens';
 import { createPromptMethods, type PromptMethods, type PromptDeps } from './prompt';

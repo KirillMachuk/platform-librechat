@@ -64,6 +64,7 @@ function getBillingWiring() {
     getCreditBillingStatus: db.getCreditBillingStatus,
     markCreditMonthNotified: db.markCreditMonthNotified,
     poolMicroUsd: config.poolMicroUsd,
+    anchorDay: config.anchorDay,
     sendAlert,
     recordAudit,
   });
@@ -72,7 +73,9 @@ function getBillingWiring() {
     openrouter,
     getCreditBillingStatus: db.getCreditBillingStatus,
     sumCreditSpendJournal: db.sumCreditSpendJournal,
+    sumCreditSpendJournalRange: db.sumCreditSpendJournalRange,
     poolMicroUsd: config.poolMicroUsd,
+    anchorDay: config.anchorDay,
     sendAlert,
     recordAudit,
   });
@@ -84,6 +87,45 @@ function getBillingWiring() {
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** First reconcile shortly after boot (give Mongo/config time), then daily. */
 const FIRST_RECONCILE_DELAY_MS = 10 * 60 * 1000;
+
+/**
+ * Ledger index health. The unique indexes back idempotency (`creditpackages`) and
+ * source-dedupe (`creditspends`); if a build fails (e.g. disk pressure, as seen once
+ * during deploy) those guarantees silently degrade. We track the state, surface it to
+ * the admin «Расходы» screen, and retry on every reconcile tick so a transient failure
+ * self-heals.
+ */
+const creditIndexHealth = { degraded: false, error: null, lastAttempt: null };
+
+/** Live snapshot for the admin summary (read through a getter so retries are visible). */
+function getCreditIndexHealth() {
+  return creditIndexHealth;
+}
+
+/** (Re)builds the ledger's unique indexes; updates {@link creditIndexHealth}. Never throws. */
+async function syncCreditIndexes() {
+  creditIndexHealth.lastAttempt = new Date();
+  try {
+    const mongoose = require('mongoose');
+    await Promise.all(
+      ['CreditMonth', 'CreditPackage', 'CreditSpend'].map((name) =>
+        mongoose.models[name]?.syncIndexes(),
+      ),
+    );
+    if (creditIndexHealth.degraded) {
+      logger.info('[billing] credit index sync recovered — unique indexes rebuilt');
+    }
+    creditIndexHealth.degraded = false;
+    creditIndexHealth.error = null;
+  } catch (err) {
+    creditIndexHealth.degraded = true;
+    creditIndexHealth.error = err && err.message ? String(err.message) : String(err);
+    logger.error(
+      '[billing] credit index sync FAILED — idempotency/dedupe guarantees are degraded until it succeeds (retried on the next reconcile tick):',
+      err,
+    );
+  }
+}
 
 /**
  * Startup hook: guarantees the ledger's unique indexes (idempotency and
@@ -101,24 +143,20 @@ function startBillingSchedule() {
   }
   const { config, reconciler } = billing;
 
-  try {
-    const mongoose = require('mongoose');
-    Promise.all(
-      ['CreditMonth', 'CreditPackage', 'CreditSpend'].map((name) =>
-        mongoose.models[name]?.syncIndexes(),
-      ),
-    ).catch((err) => logger.warn('[billing] credit index sync failed:', err));
-  } catch (err) {
-    logger.warn('[billing] credit index sync failed:', err);
-  }
+  // Build the ledger's unique indexes at boot (independent of MONGO_AUTO_INDEX).
+  void syncCreditIndexes();
 
   if (!config.enabled) {
     logger.warn(
       '[billing] BILLING_INTERNAL_TOKEN is not set — ingest/status endpoints are disabled, Кредиты не считаются',
     );
   } else {
+    const cycle =
+      config.anchorDay === 1
+        ? 'calendar month'
+        : `rolling «month of service», anchor day ${config.anchorDay}${config.serviceStartDate ? ` (start ${config.serviceStartDate})` : ''}`;
     logger.info(
-      `[billing] enabled: pool=${config.poolCredits} credits/month, operators=${config.operatorEmails.length}, openrouter mgmt=${billing.openrouter.isConfigured ? 'on' : 'off'}`,
+      `[billing] enabled: pool=${config.poolCredits} credits/period, cycle=${cycle}, operators=${config.operatorEmails.length}, openrouter mgmt=${billing.openrouter.isConfigured ? 'on' : 'off'}`,
     );
   }
 
@@ -127,7 +165,10 @@ function startBillingSchedule() {
   }
 
   const tick = () => {
-    reconciler.run().catch(() => {});
+    // Retry the index sync each tick so a transient failure (disk pressure) self-heals.
+    syncCreditIndexes()
+      .then(() => reconciler.run())
+      .catch(() => {});
   };
   const first = setTimeout(tick, FIRST_RECONCILE_DELAY_MS);
   if (typeof first.unref === 'function') {
@@ -141,4 +182,4 @@ function startBillingSchedule() {
   return timer;
 }
 
-module.exports = { getBillingWiring, startBillingSchedule };
+module.exports = { getBillingWiring, startBillingSchedule, getCreditIndexHealth };
