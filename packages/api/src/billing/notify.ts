@@ -10,6 +10,7 @@ export interface BillingNotifierDeps {
   getCreditBillingStatus: (params: {
     poolMicroUsd: number;
     tenantId?: string;
+    anchorDay?: number;
   }) => Promise<CreditBillingStatus>;
   markCreditMonthNotified: (params: {
     month: string;
@@ -18,6 +19,8 @@ export interface BillingNotifierDeps {
   }) => Promise<boolean>;
   poolMicroUsd: number;
   tenantId?: string;
+  /** Service-period anchor day (1–31; defaults to 1). */
+  anchorDay?: number;
   /** Delivers the alert (email/whatever the stack has); errors are logged, not thrown. */
   sendAlert: (alert: BillingAlert) => Promise<void>;
   /** Fire-and-forget audit recorder. */
@@ -67,6 +70,7 @@ export function createBillingNotifier(deps: BillingNotifierDeps): {
     const status = await deps.getCreditBillingStatus({
       poolMicroUsd: deps.poolMicroUsd,
       tenantId: deps.tenantId,
+      anchorDay: deps.anchorDay,
     });
     if (!status.blocked) {
       return;

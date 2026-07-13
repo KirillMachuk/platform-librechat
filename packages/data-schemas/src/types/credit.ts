@@ -6,16 +6,20 @@ import type { Document, Types } from 'mongoose';
  *   1 Credit = $0.01 of actual OpenRouter cost; storage unit = integer micro-USD.
  */
 
-/** One document per calendar month (Europe/Minsk) per tenant: the included pool. */
+/** One document per billing period (rolling «month of service», Europe/Minsk) per tenant. */
 export interface ICreditMonth extends Document {
   tenantId?: string;
-  /** Calendar month key in Europe/Minsk, e.g. `2026-07`. */
+  /** Period key = the Minsk period-start date `YYYY-MM-DD` (`YYYY-MM-01` when anchorDay=1). */
   month: string;
-  /** Pool size snapshot taken when the month document is created (µ$). */
+  /** Pool size snapshot taken when the period document is created (µ$). */
   poolMicroUsd: number;
-  /** Actual OpenRouter cost attributed to this month (µ$), pool + package overflow. */
+  /** Actual OpenRouter cost attributed to this period (µ$), pool + package overflow. */
   spentMicroUsd: number;
   requestCount: number;
+  /** Period start instant (inclusive) — captured at creation, for display. */
+  periodStart?: Date | null;
+  /** Period end instant (exclusive = next period start) — captured at creation, for display. */
+  periodEnd?: Date | null;
   /** Set once when the ~80% pool notification is sent (single-winner). */
   notified80At?: Date | null;
   /** Set once when the «pool + packages exhausted» notification is sent; reset on package add. */
@@ -60,14 +64,16 @@ export interface ICreditSpend extends Document {
 export interface RecordCreditSpendInput {
   /** Cost of one request in µ$ (already rounded to integer). */
   microUsd: number;
-  /** Pool size to snapshot if this spend creates the month document (µ$). */
+  /** Pool size to snapshot if this spend creates the period document (µ$). */
   poolMicroUsd: number;
   tenantId?: string;
   model?: string;
   userId?: string;
   sourceId?: string;
   context?: string;
-  /** Spend timestamp (defaults to now); determines the Minsk month. */
+  /** Service-period anchor day (1–31; defaults to 1 = calendar month). */
+  anchorDay?: number;
+  /** Spend timestamp (defaults to now); determines the billing period. */
   at?: Date;
 }
 
@@ -88,17 +94,21 @@ export interface RecordCreditSpendResult {
 }
 
 export interface CreditBillingStatus {
+  /** Period key = the Minsk period-start date `YYYY-MM-DD`. */
   month: string;
   poolMicroUsd: number;
   spentMicroUsd: number;
   requestCount: number;
   purchasedMicroUsd: number;
-  /** Total package spend so far = Σ over months of max(0, spent − pool). */
+  /** Total package spend so far = Σ over periods of max(0, spent − pool). */
   packageSpentMicroUsd: number;
   /** May be ≤ 0 after a boundary overrun (concurrent requests) — clamp for display. */
   packageRemainingMicroUsd: number;
-  /** Soft block: monthly pool exhausted AND no package credits remain. */
+  /** Soft block: the period pool is exhausted AND no package credits remain. */
   blocked: boolean;
+  /** Period bounds `[start, end)` — for display («период 15 июля — 14 августа»). */
+  periodStart?: Date | null;
+  periodEnd?: Date | null;
   notified80At?: Date | null;
   notifiedExhaustedAt?: Date | null;
 }
@@ -111,6 +121,8 @@ export interface AddCreditPackageInput {
   addedById?: string;
   idempotencyKey: string;
   tenantId?: string;
+  /** Service-period anchor day (1–31; defaults to 1) — which period's exhausted flag to re-arm. */
+  anchorDay?: number;
   at?: Date;
 }
 

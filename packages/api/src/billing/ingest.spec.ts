@@ -14,7 +14,7 @@ const POOL = 250_000_000; // 25 000 credits in µ$
 function spendResult(overrides: Partial<RecordCreditSpendResult> = {}): RecordCreditSpendResult {
   return {
     duplicate: false,
-    month: '2026-07',
+    month: '2026-07-01',
     poolMicroUsd: POOL,
     spentBeforeMicroUsd: 0,
     spentAfterMicroUsd: 12_340,
@@ -37,8 +37,8 @@ function createReqRes(body: Record<string, unknown> = {}) {
 function createDeps(overrides: Partial<BillingIngestDeps> = {}): BillingIngestDeps {
   return {
     recordCreditSpend: jest.fn().mockResolvedValue(spendResult()),
-    getCreditBillingStatus: jest.fn().mockResolvedValue({
-      month: '2026-07',
+    getCreditGateStatus: jest.fn().mockResolvedValue({
+      month: '2026-07-01',
       poolMicroUsd: POOL,
       spentMicroUsd: 0,
       requestCount: 0,
@@ -183,8 +183,8 @@ describe('createBillingIngestHandlers', () => {
   describe('getStatus', () => {
     it('returns the gate fields', async () => {
       const deps = createDeps({
-        getCreditBillingStatus: jest.fn().mockResolvedValue({
-          month: '2026-07',
+        getCreditGateStatus: jest.fn().mockResolvedValue({
+          month: '2026-07-01',
           poolMicroUsd: POOL,
           spentMicroUsd: POOL + 5,
           requestCount: 10,
@@ -201,7 +201,7 @@ describe('createBillingIngestHandlers', () => {
 
       expect(json.mock.calls[0][0]).toMatchObject({
         blocked: true,
-        month: '2026-07',
+        month: '2026-07-01',
         poolMicroUsd: POOL,
       });
     });

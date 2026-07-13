@@ -9,13 +9,13 @@ jest.mock('@librechat/data-schemas', () => ({
   logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() },
 }));
 
-/** Fixed mid-month timestamp — well past the Minsk boundary window, so the M5
+/** Fixed mid-month timestamp — well past the UTC boundary window, so the
  *  early-month skip never fires and these tests stay deterministic. */
 const NOW = new Date('2026-07-15T12:00:00Z');
 
 function statusOf(spentMicroUsd: number): CreditBillingStatus {
   return {
-    month: '2026-07',
+    month: '2026-07-01',
     poolMicroUsd: 250_000_000,
     spentMicroUsd,
     requestCount: 1,
@@ -46,8 +46,10 @@ function createDeps(overrides: Partial<BillingReconcilerDeps> = {}): BillingReco
   return {
     openrouter: openrouterOf(100),
     getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf(100_000_000)), // $100
-    // Journal matches the counter by default (no internal drift).
+    // Period journal matches the period counter by default (no internal drift).
     sumCreditSpendJournal: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 1 }),
+    // UTC-month journal = the external ledger figure compared to OpenRouter usage_monthly.
+    sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 1 }),
     poolMicroUsd: 250_000_000,
     sendAlert: jest.fn().mockResolvedValue(undefined),
     recordAudit: jest.fn(),
@@ -92,6 +94,7 @@ describe('createBillingReconciler', () => {
     const deps = createDeps({
       getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf(500_000)),
       sumCreditSpendJournal: jest.fn().mockResolvedValue({ microUsd: 500_000, count: 1 }),
+      sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 500_000, count: 1 }),
       openrouter: openrouterOf(0.1),
     });
     const report = await createBillingReconciler(deps).run(NOW);
@@ -124,23 +127,25 @@ describe('createBillingReconciler', () => {
     expect(logger.error).not.toHaveBeenCalled();
   });
 
-  it('skips entirely in the first 6h of a Minsk month (ledger reset, OpenRouter window not)', async () => {
+  it('skips entirely in the first 6h of a UTC month (both sides read ~0)', async () => {
     const deps = createDeps();
-    // 2026-08-01 02:00 UTC = 05:00 Minsk → day 1, hour 5 (< 6) → skip.
+    // 2026-08-01 02:00 UTC → UTC day 1, hour 2 (< 6) → skip.
     const report = await createBillingReconciler(deps).run(new Date('2026-08-01T02:00:00Z'));
-    expect(report.reason).toMatch(/first 6h|boundary window/);
+    expect(report.reason).toMatch(/first 6h/);
     expect(report.alerted).toBe(false);
     expect(deps.openrouter.getKey).not.toHaveBeenCalled();
     expect(deps.sumCreditSpendJournal).not.toHaveBeenCalled();
+    expect(deps.sumCreditSpendJournalRange).not.toHaveBeenCalled();
     expect(deps.sendAlert).not.toHaveBeenCalled();
   });
 
-  it('runs normally once past the 6h Minsk boundary window', async () => {
+  it('runs normally once past the 6h UTC boundary window', async () => {
     const deps = createDeps();
-    // 2026-08-01 04:00 UTC = 07:00 Minsk → day 1, hour 7 (≥ 6) → no skip.
-    const report = await createBillingReconciler(deps).run(new Date('2026-08-01T04:00:00Z'));
+    // 2026-08-01 07:00 UTC → UTC day 1, hour 7 (≥ 6) → no skip.
+    const report = await createBillingReconciler(deps).run(new Date('2026-08-01T07:00:00Z'));
     expect(deps.openrouter.getKey).toHaveBeenCalled();
     expect(deps.sumCreditSpendJournal).toHaveBeenCalled();
+    expect(deps.sumCreditSpendJournalRange).toHaveBeenCalled();
     expect(report.configured).toBe(true);
   });
 

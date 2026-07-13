@@ -23,6 +23,7 @@ const connect = require('./connect');
 (async () => {
   await connect();
   const db = require('~/models');
+  const config = readBillingConfig();
 
   console.purple('--------------------------------');
   console.purple('Начисление пакета Кредитов (1ma)');
@@ -65,6 +66,7 @@ const connect = require('./connect');
     invoiceRef: invoiceRef || undefined,
     addedByEmail,
     idempotencyKey,
+    anchorDay: config.anchorDay,
   });
 
   if (result.created) {
@@ -83,12 +85,14 @@ const connect = require('./connect');
     console.orange('Пакет с этим ключом идемпотентности уже начислён ранее — ничего не изменено.');
   }
 
-  const config = readBillingConfig();
-  const status = await db.getCreditBillingStatus({ poolMicroUsd: config.poolMicroUsd });
+  const status = await db.getCreditBillingStatus({
+    poolMicroUsd: config.poolMicroUsd,
+    anchorDay: config.anchorDay,
+  });
   const packageRemaining = Math.max(0, microUsdToCredits(status.packageRemainingMicroUsd));
   console.purple('--------------------------------');
   console.purple(
-    `Месяц ${status.month}: израсходовано ${microUsdToCredits(status.spentMicroUsd).toLocaleString('ru-RU')} из ${microUsdToCredits(status.poolMicroUsd).toLocaleString('ru-RU')} Кредитов пула`,
+    `Период ${status.month}: израсходовано ${microUsdToCredits(status.spentMicroUsd).toLocaleString('ru-RU')} из ${microUsdToCredits(status.poolMicroUsd).toLocaleString('ru-RU')} Кредитов пула`,
   );
   console.purple(`Остаток пакетов: ${packageRemaining.toLocaleString('ru-RU')} Кредитов`);
   console.purple(`Мягкая блокировка: ${status.blocked ? 'АКТИВНА' : 'нет'}`);

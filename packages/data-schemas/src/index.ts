@@ -7,7 +7,9 @@ export * from './utils';
 export { createModels } from './models';
 export {
   createMethods,
-  minskMonthKey,
+  servicePeriodKey,
+  servicePeriodBounds,
+  normalizeAnchorDay,
   RoleConflictError,
   DEFAULT_REFRESH_TOKEN_EXPIRY,
   DEFAULT_SESSION_EXPIRY,
