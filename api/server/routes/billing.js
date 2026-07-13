@@ -45,16 +45,19 @@ function getHandlers() {
 
 /**
  * Defence-in-depth backstop for these token-guarded, service-to-service endpoints.
- * The ceiling (per IP) sits far above any legitimate anonymizer volume — one contour
- * reports a handful of spends per second at most — so it never throttles real billing
- * traffic, only a token-brute-force / DoS loop (which runs orders of magnitude faster).
+ * A single GLOBAL ceiling (all callers share one bucket — these endpoints have exactly
+ * one legitimate caller, the anonymizer on the internal network) sits far above any real
+ * volume — one contour reports a handful of spends per second at most — so it never
+ * throttles real billing traffic, only a token-brute-force / DoS loop (orders of
+ * magnitude faster). Keyed by a constant, not by IP, so there is no per-IP / IPv6-subnet
+ * concern to reason about (express-rate-limit's ipKeyGenerator caveat does not apply).
  */
 const ingestLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 12_000, // 200 req/s per IP — pure abuse backstop, not a functional limit
+  max: 12_000, // ~200 req/s total — pure abuse backstop, not a functional limit
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip || 'billing-internal',
+  keyGenerator: () => 'billing-ingest',
   handler: (_req, res) => res.status(429).json({ error: 'too many billing requests' }),
   store: limiterCache('billing_ingest_limiter'),
 });
