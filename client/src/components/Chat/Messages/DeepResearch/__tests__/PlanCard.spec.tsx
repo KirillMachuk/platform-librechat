@@ -103,6 +103,30 @@ describe('PlanCard', () => {
     expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
   });
 
+  it('arms the countdown when awaitingAction flips true AFTER mount (follow-up card, no deadlock)', () => {
+    jest.useFakeTimers();
+    const created = new Date().toISOString();
+    // A follow-up plan card mounts NON-actionable: the latestMessage atom that gates
+    // awaitingAction settles a render later (the runner's final event has no `depth`, so the
+    // depth-based isLast lags the id-based isLatestMessage). `remaining` is seeded once, so
+    // without the re-arm effect it stays null here and the countdown never starts — buttons
+    // would show but the timer never would (the live bug).
+    const { rerender, getByText, queryByText } = render(
+      <PlanCard message={planMessage(created)} awaitingAction={false} autoStartSec={2} />,
+    );
+    expect(queryByText('com_ui_deep_research_start')).not.toBeInTheDocument();
+    // It becomes the actionable tip a render later.
+    rerender(<PlanCard message={planMessage(created)} awaitingAction autoStartSec={2} />);
+    expect(getByText('com_ui_deep_research_start')).toBeInTheDocument();
+    // The countdown is live (not deadlocked on a null `remaining`) — it elapses and autostarts.
+    for (let i = 0; i < 3; i++) {
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+    }
+    expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+  });
+
   it('ticks down from the MOUNT time when the live message has no createdAt (prod bug)', () => {
     jest.useFakeTimers();
     // Live-streamed plan messages have no createdAt until persisted; recomputing the base
