@@ -132,6 +132,22 @@ export default function PlanCard({
 
   const countdownActive = awaitingAction && !acted && !autoStartCancelled && remaining != null;
 
+  // Seed `remaining` the moment the card becomes actionable. It is initialised ONCE by
+  // useState, but a follow-up plan card can mount with awaitingAction=false — the
+  // latestMessage atom that gates it settles a render later, and the runner's final event
+  // carries no `depth`, so the depth-based `isLast` stays false until the id-based
+  // `isLatestMessage` flips it (ContentRender). That late flip would leave `remaining` stuck
+  // at null, and the countdown — gated on `remaining != null` — would never arm: buttons
+  // show but the timer never does (the live follow-up-card bug). Seeding here closes the
+  // gap; an already-expired window stays null, so a reopened card shows buttons with no
+  // timer and never surprise-starts (`remainingFrom` returns null past the window).
+  useEffect(() => {
+    if (!awaitingAction || acted || autoStartCancelled) {
+      return;
+    }
+    setRemaining((prev) => (prev == null ? remainingFrom(anchorMs, effectiveAutoStartSec) : prev));
+  }, [awaitingAction, acted, autoStartCancelled, anchorMs, effectiveAutoStartSec]);
+
   useEffect(() => {
     if (!countdownActive) {
       return;
