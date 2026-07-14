@@ -176,6 +176,14 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
         alerted: shouldAlert,
       };
 
+      /* Always report the comparison, not only on drift: a silent reconciler is
+       * indistinguishable from one that never ran, so «нет алерта» could never be
+       * trusted as «леджер сходится с ключом». This one line is how an operator
+       * verifies that Credits track the real OpenRouter key spend. */
+      logger.info(
+        `[billingReconcile] UTC-month ledger $${ledgerUsd.toFixed(6)} (${report.ledgerCredits} Cr, ${utcMonthJournal.count} rows) vs OpenRouter usage_monthly $${openrouterUsd.toFixed(6)} → diff ${diffPercent}% ($${diffUsd.toFixed(6)}); alert=${shouldAlert} (needs >${threshold * 100}% AND >$${minAbsUsd}). Period ${status.month}: journal=${periodJournal.microUsd}µ$ counter=${status.spentMicroUsd}µ$ drift=${internalDriftMicroUsd}µ$`,
+      );
+
       if (shouldAlert) {
         deps.recordAudit({
           action: 'billing.reconcile_alert',
