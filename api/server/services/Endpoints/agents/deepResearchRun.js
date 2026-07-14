@@ -841,16 +841,6 @@ async function runNewDeepResearch(params) {
     jobCreatedAt = null,
   } = params;
 
-  // A Stop must not be finalized by the generic abort path: DR streams no tokens outside the
-  // report, so the job's buffer is empty and that path would ship an EMPTY final — which the
-  // client accepts as THE final (it closes the stream on the first one), hiding the real
-  // "исследование остановлено" notice until a reload. Claiming finalization here (before any
-  // slow work, so a fast Stop can't beat the flag) keeps this run the single author of its
-  // terminal message; the abort route then only signals the stop.
-  if (streamId) {
-    await GenerationJobManager.updateMetadata(streamId, { producerFinalizesOnAbort: true });
-  }
-
   // The user message must leave the run in the normal-path shape (sender/isCreatedByUser,
   // else saveMessage persists an authorless AI turn) — enriched ONCE and reused for the
   // created event, the DB save, and the final event. conversationId precedes the spread

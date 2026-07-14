@@ -280,6 +280,12 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
       model: responseModel,
       responseMessageId: preliminaryResponseMessageId,
       userMessage: preliminaryUserMessage,
+      // A DR run persists its own terminal message on a Stop, so the generic abort must not
+      // synthesise a final from the job buffer — DR streams no tokens outside the report, so
+      // that final would be EMPTY, and the client takes the FIRST final as THE final. Claimed
+      // in this first metadata write (not inside the run, which is several awaits further on)
+      // so a Stop can't land in between and still get the empty one.
+      producerFinalizesOnAbort: useNewDeepResearch,
     });
 
     // Note: We no longer use res.on('close') to abort since we send JSON immediately.
