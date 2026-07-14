@@ -82,7 +82,7 @@ describe('runDeepResearch', () => {
       wallClockMs: 60_000,
     });
     expect(result.finalizeReason).toBe('aborted');
-    expect(result.finalReport).toContain('частичный отчёт');
+    expect(result.finalReport).toContain('Не удалось сформировать отчёт');
   });
 
   it('returns a time-limited partial report when the wall-clock cap is hit', async () => {
@@ -93,7 +93,7 @@ describe('runDeepResearch', () => {
       wallClockMs: 5,
     });
     expect(result.finalizeReason).toBe('time');
-    expect(result.finalReport).toContain('частичный отчёт');
+    expect(result.finalReport).toContain('Не удалось сформировать отчёт');
   });
 
   it('streams the REPORT tokens and surfaces research progress', async () => {
@@ -163,6 +163,6 @@ describe('runDeepResearch', () => {
     });
 
     expect(result.finalizeReason).toBe('rounds');
-    expect(result.finalReport).toContain('частичный отчёт');
+    expect(result.finalReport).toContain('Не удалось сформировать отчёт');
   });
 });

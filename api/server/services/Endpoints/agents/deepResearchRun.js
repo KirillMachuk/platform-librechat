@@ -60,24 +60,6 @@ const {
   bulkInsertTransactions,
 } = require('~/models');
 
-/** Partial-report reasons → user-facing RU phrase for the M8 banner (no infra detail). */
-const PARTIAL_REASONS = {
-  budget: 'исчерпан бюджет токенов',
-  time: 'превышен лимит времени исследования',
-  rounds: 'достигнут лимит этапов исследования',
-  aborted: 'исследование остановлено',
-  error: 'произошла ошибка во время исследования',
-};
-
-/** Prefixes a localized "partial report" banner when the run did not complete (M8). */
-function withPartialBanner(text, finalizeReason) {
-  const reason = PARTIAL_REASONS[finalizeReason];
-  if (!reason) {
-    return text;
-  }
-  return `> ⚠️ Частичный отчёт: ${reason}. Ниже — то, что удалось собрать.\n\n${text}`;
-}
-
 /** Leading imperative research phrases stripped so the title reads as a TOPIC, not a
  *  command ("проведи исследование рынка CRM" → "Исследование рынка CRM") — the P6 fix. */
 const RESEARCH_IMPERATIVE =
@@ -1381,12 +1363,11 @@ async function runNewDeepResearch(params) {
 
   // A Stop ALWAYS renders the clean STOPPED notice (owner decision) — never a report, even
   // if findings were gathered; it also stays a followable drKind='aborted' anchor for the
-  // plan re-edit (task #21). NON-abort outcomes keep the M8 partial banner FOR NOW; PR-2's
-  // synthesis-reservation (Ф6a/Ф6b) will replace budget/time/rounds partials with a real
-  // model report so the banner drops there too.
-  const finalReportText = abortedStop
-    ? STOPPED_MESSAGE
-    : withPartialBanner(reportText, result.finalizeReason);
+  // plan re-edit (task #21). Every OTHER outcome saves its text verbatim: with the graph's
+  // synthesis reserve (Ф6a) a budget/rounds/time-limited run is a REAL model report, not a
+  // partial — no "Частичный отчёт" banner (PR-2); a genuine failure already carries the
+  // honest 'error'/'nodata' notice from the report node.
+  const finalReportText = abortedStop ? STOPPED_MESSAGE : reportText;
   const responseMessage = {
     messageId: responseMessageId,
     conversationId,
