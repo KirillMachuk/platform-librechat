@@ -40,13 +40,15 @@ export interface ReportNodeDeps {
   nonce: string;
 }
 
-/** Maps the supervisor's stop reason to the run's finalize reason. Budget and round
- *  caps yield a deliberate PARTIAL (they fire rarely, and the label tells the UI why
- *  gathering stopped). The TIME gate (A1) is different: it fires on most healthy runs
- *  (gathering usually fills the time budget), and it hands off to the model WITH a
- *  synthesis reserve — a full model-written report, not a degradation. So it maps to
- *  'completed' (no "partial" banner); a genuine time DEGRADATION only comes from the
- *  hard wall-clock watchdog in the run wrapper, which sets 'time' directly. */
+/** Maps the supervisor's stop reason to the run's finalize reason. Every branch here ends
+ *  in a REAL model-written report — the gates all reserve a synthesis window, so none of
+ *  them is a degradation (PR-2: there are no partial reports). Budget and round caps keep
+ *  their own reason: they fire rarely and mark a report whose GATHERING was cut short, which
+ *  is the one case the UI still flags as possibly incomplete. The TIME gate (A1) instead
+ *  maps to 'completed': it fires on most healthy runs (gathering usually fills the time
+ *  budget) and is the designed hand-off to synthesis, not a truncation. A genuine time
+ *  DEGRADATION only comes from the hard wall-clock watchdog in the run wrapper, which sets
+ *  'time' directly — and that outcome carries an honest notice, never a report. */
 export function concludeToFinalize(reason: SupervisorConcludeReason | null): FinalizeReason {
   if (reason === 'budget') {
     return 'budget';

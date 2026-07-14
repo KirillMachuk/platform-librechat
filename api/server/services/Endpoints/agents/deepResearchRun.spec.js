@@ -626,7 +626,7 @@ describe('runNewDeepResearch — title parity with the standard pipeline (gen_ti
 });
 
 describe('runNewDeepResearch — honest nodata outcome', () => {
-  it('a nodata run gets NO PDF and keeps the unfinished flag', async () => {
+  it('a nodata run gets NO PDF and is NOT flagged unfinished (the notice stands alone)', async () => {
     mockStartSovereignSession.mockResolvedValue(null);
     mockRunDeepResearch.mockResolvedValueOnce({
       finalReport: '## Не удалось собрать материал\n…',
@@ -641,8 +641,53 @@ describe('runNewDeepResearch — honest nodata outcome', () => {
     expect(mockReportToPdfBuffer).not.toHaveBeenCalled();
     const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
     expect(msg.files).toBeUndefined();
-    expect(msg.unfinished).toBe(true);
+    // The notice IS the whole message — nothing usable sits above it, so the frontend
+    // indicator ("…results shown above are still usable") would contradict it.
+    expect(msg.unfinished).toBe(false);
     expect(msg.text).toContain('Не удалось собрать материал');
+  });
+});
+
+describe('runNewDeepResearch — a failure notice never poses as a report', () => {
+  it('a hard-watchdog time-out gets NO PDF, NO report card and NO unfinished flag', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    // The run wrapper reports 'time' ONLY when the graph produced no report at all
+    // (`resultFrom`: a real report keeps its own reason), so the text is the honest notice.
+    mockRunDeepResearch.mockResolvedValueOnce({
+      finalReport: '## Не удалось сформировать отчёт\nпревышен лимит времени исследования',
+      finalizeReason: 'time',
+      usage: { input: 5, output: 5, total: 10 },
+      findings: [{ round: 1, subQuestion: 'q', digest: 'd', sources: [], tokens: 10 }],
+      errors: [],
+    });
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    // A PDF whose only content is "не удалось сформировать отчёт" is a useless file.
+    expect(mockReportToPdfBuffer).not.toHaveBeenCalled();
+    expect(msg.files).toBeUndefined();
+    expect(msg.drKind).toBeUndefined();
+    expect(msg.unfinished).toBe(false);
+  });
+
+  it('a budget-capped run IS a real report: PDF, report card, and the unfinished hint', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockResolvedValueOnce({
+      finalReport: '## Ключевые выводы\nрынок растёт',
+      finalizeReason: 'budget',
+      usage: { input: 5, output: 5, total: 10 },
+      findings: [{ round: 1, subQuestion: 'q', digest: 'd', sources: [], tokens: 10 }],
+      errors: [],
+    });
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.files).toHaveLength(1);
+    expect(msg.drKind).toBe('report');
+    // Gathering really was cut short above a real report — here the hint tells the truth.
+    expect(msg.unfinished).toBe(true);
   });
 });
 
@@ -1109,15 +1154,16 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
 
 describe('runNewDeepResearch — task #21 aborted anchor (persist a re-plannable Stop)', () => {
   it('a Stop with NO findings saves the clean STOPPED anchor, IGNORING the non-empty fallback report', async () => {
-    // Live bug: runDeepResearch NEVER returns a blank finalReport — an aborted run with
-    // nothing collected still gets a buildFallbackReport that echoes the brief (for a
-    // plan-start that's the dialogue INCLUDING the plan). Keying emptiness on blank text let
-    // that useless fallback save as "Частичный отчёт" wrapping the plan. Emptiness is keyed on
-    // FINDINGS: no findings → the clean STOPPED notice, never the fallback.
+    // runDeepResearch NEVER returns a blank finalReport — an aborted run with nothing
+    // collected still carries the fallback notice. The runner must IGNORE that text
+    // outright: a Stop is keyed on the reason alone, never on the report being blank (which
+    // it never is) nor on findings. This case and its WITH-findings sibling below pin BOTH
+    // sides of that, so no findings-keyed branch can creep back in.
     mockStartSovereignSession.mockResolvedValue(null);
     mockRunDeepResearch.mockResolvedValueOnce({
-      finalReport:
-        '# Аналитическая записка (частичный отчёт)\n\nЗапрос: **План исследования:** Рынок CRM\n\nПо запросу не удалось собрать данные.',
+      // Deliberately plan-bearing text, so the assertions below have teeth: whatever the
+      // graph hands back, none of it may reach the saved Stop message.
+      finalReport: 'Аналитическая записка\n\n**План исследования:** Рынок CRM\n\nДанных нет.',
       finalizeReason: 'aborted',
       usage: { input: 5, output: 0, total: 5 },
       findings: [],
