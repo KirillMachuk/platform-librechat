@@ -383,7 +383,35 @@ describe('GenerationJobManager Integration Tests', () => {
       expect(abortResult.finalEvent).toBeNull();
       // And the job must outlive the abort: deleting it here would make the producer's own
       // emit path read the missing job as "replaced mid-run" and skip its final too.
-      expect(await GenerationJobManager.getJob(streamId)).not.toBeNull();
+      // (toBeDefined, not not.toBeNull: getJob resolves UNDEFINED when the job is gone, so
+      // not.toBeNull would pass on a deleted job and never catch that regression.)
+      expect(await GenerationJobManager.getJob(streamId)).toBeDefined();
+      // But it must stop looking RUNNABLE at once, or the follow-up turn the user sends
+      // right after the Stop is refused by the running-job guard while this run unwinds.
+      expect(await GenerationJobManager.getJobStatus(streamId)).toBe('aborted');
+      expect(await GenerationJobManager.getActiveJobIdsForUser('user-1')).not.toContain(streamId);
+
+      await GenerationJobManager.destroy();
+    });
+
+    test('producerFinalizesOnAbort: the producer can still finalize after the abort', async () => {
+      const services = createStreamServices({ useRedis: true, redisClient: ioredisClient });
+      GenerationJobManager.configure(services);
+      GenerationJobManager.initialize();
+
+      const streamId = `redis-abort-producer-final-${Date.now()}`;
+      await GenerationJobManager.createJob(streamId, 'user-1');
+      await GenerationJobManager.updateMetadata(streamId, { producerFinalizesOnAbort: true });
+      await GenerationJobManager.abortJob(streamId);
+
+      // The whole point: marking the job terminal above must not cut the producer off — it
+      // still has to deliver the REAL terminal message the user is waiting for.
+      const finalEvent = { final: true, responseMessage: { text: 'остановлено' } };
+      await expect(
+        GenerationJobManager.emitDone(streamId, finalEvent as never),
+      ).resolves.toBeUndefined();
+      await GenerationJobManager.completeJob(streamId);
+      expect(await GenerationJobManager.getJob(streamId)).toBeUndefined();
 
       await GenerationJobManager.destroy();
     });

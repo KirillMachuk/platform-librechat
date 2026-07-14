@@ -657,6 +657,14 @@ class GenerationJobManagerClass {
   async completeJob(streamId: string, error?: string): Promise<void> {
     const runtime = this.runtimeState.get(streamId);
 
+    /**
+     * Read BEFORE the abort below, which would otherwise make every job look aborted.
+     * True only for a producer that finalizes its own Stop: any other abort already tore
+     * the runtime down, so this reads undefined and the outcome stays 'completed' — the
+     * label must follow the user's intent, not the fact that the producer got to finish.
+     */
+    const wasAborted = runtime?.abortController.signal.aborted === true;
+
     // Abort the controller to signal all pending operations (e.g., OAuth flow monitors)
     // that the job is done and they should clean up
     if (runtime) {
@@ -710,7 +718,7 @@ class GenerationJobManagerClass {
 
     this.runningJobs.delete(streamId);
     this.syncRunningJobMetrics();
-    recordGenerationJob(this.storeLabel, 'completed');
+    recordGenerationJob(this.storeLabel, wasAborted ? 'aborted' : 'completed');
     logger.debug(`[GenerationJobManager] Job completed: ${streamId}`);
   }
 
@@ -774,6 +782,18 @@ class GenerationJobManagerClass {
      * missing job as "replaced mid-run" and stay silent too. Its `completeJob` does both.
      */
     if (jobData.producerFinalizesOnAbort) {
+      /**
+       * The job must still stop looking RUNNABLE this instant, even though the producer
+       * keeps writing to it: a follow-up turn is refused while a job for the conversation
+       * reads 'running', and it counts against the per-user concurrency cap — so a user who
+       * Stops and immediately comments (the whole point of a Stop here) would be turned
+       * away for as long as the run takes to unwind. Marking it terminal drops it from the
+       * running/user sets and puts the hash on the completed TTL, which still outlives the
+       * producer's emit; only `deleteJob` would break that, and completeJob owns it.
+       */
+      await this.jobStore.updateJob(streamId, { status: 'aborted', completedAt: Date.now() });
+      this.runningJobs.delete(streamId);
+      this.syncRunningJobMetrics();
       logger.debug(
         `[GenerationJobManager] Abort signalled for ${streamId}; producer owns finalization`,
       );
