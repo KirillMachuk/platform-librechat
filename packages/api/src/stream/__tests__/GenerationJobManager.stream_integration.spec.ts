@@ -362,6 +362,31 @@ describe('GenerationJobManager Integration Tests', () => {
 
       await GenerationJobManager.destroy();
     });
+
+    test('producerFinalizesOnAbort: signals the stop but leaves the final and the job alone', async () => {
+      const services = createStreamServices({ useRedis: true, redisClient: ioredisClient });
+      GenerationJobManager.configure(services);
+      GenerationJobManager.initialize();
+
+      const streamId = `redis-abort-producer-${Date.now()}`;
+      const job = await GenerationJobManager.createJob(streamId, 'user-1');
+      await GenerationJobManager.updateMetadata(streamId, { producerFinalizesOnAbort: true });
+
+      const abortResult = await GenerationJobManager.abortJob(streamId);
+
+      // The stop still has to reach the run — that half of abort is unconditional.
+      expect(job.abortController.signal.aborted).toBe(true);
+      // But NOT the finalization: a synthetic final would ship this producer's empty buffer
+      // as THE final (the client closes the stream on the first one), masking the real
+      // terminal message it is about to emit.
+      expect(abortResult.success).toBe(true);
+      expect(abortResult.finalEvent).toBeNull();
+      // And the job must outlive the abort: deleting it here would make the producer's own
+      // emit path read the missing job as "replaced mid-run" and skip its final too.
+      expect(await GenerationJobManager.getJob(streamId)).not.toBeNull();
+
+      await GenerationJobManager.destroy();
+    });
   });
 
   describe('Cross-Mode Consistency', () => {

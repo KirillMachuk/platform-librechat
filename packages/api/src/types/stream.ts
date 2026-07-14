@@ -12,6 +12,8 @@ export interface GenerationJobMetadata {
   responseMessageId?: string;
   /** Sender label for the response (e.g., "GPT-4.1", "Claude") */
   sender?: string;
+  /** Opt-in: the producer emits its own final on abort; see `SerializableJobData`. */
+  producerFinalizesOnAbort?: boolean;
   /** Endpoint identifier for abort handling */
   endpoint?: string;
   /** Icon URL for UI display */

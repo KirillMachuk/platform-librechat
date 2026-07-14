@@ -764,6 +764,29 @@ class GenerationJobManagerClass {
       ? parseTextParts(abortContent as TMessageContentParts[])
       : '';
 
+    /**
+     * Opt-in producers finalize themselves: the stop signal emitted above is ALL that abort
+     * owes them. Synthesising a final here would ship the job's buffered content — empty for
+     * such a producer, since its answer is a terminal message it persists on the way out —
+     * and the client closes the stream on the FIRST final, so that empty event would
+     * permanently mask the real one (only a reload would reveal it). Cleanup is skipped for
+     * the same reason: deleting the job now would make the producer's own emit path read a
+     * missing job as "replaced mid-run" and stay silent too. Its `completeJob` does both.
+     */
+    if (jobData.producerFinalizesOnAbort) {
+      logger.debug(
+        `[GenerationJobManager] Abort signalled for ${streamId}; producer owns finalization`,
+      );
+      return {
+        success: true,
+        jobData,
+        content: abortContent,
+        finalEvent: null,
+        text,
+        collectedUsage,
+      };
+    }
+
     /** Detect "early abort" - aborted before any generation happened (e.g., during tool loading)
     In this case, no messages were saved to DB, so frontend shouldn't navigate to conversation */
     const isEarlyAbort = !shouldPersistAbortContent && jobData.createdEventEmitted !== true;
@@ -1367,6 +1390,9 @@ class GenerationJobManagerClass {
     }
     if (metadata.promptTokens !== undefined) {
       updates.promptTokens = metadata.promptTokens;
+    }
+    if (metadata.producerFinalizesOnAbort !== undefined) {
+      updates.producerFinalizesOnAbort = metadata.producerFinalizesOnAbort;
     }
     await this.jobStore.updateJob(streamId, updates);
   }

@@ -841,6 +841,16 @@ async function runNewDeepResearch(params) {
     jobCreatedAt = null,
   } = params;
 
+  // A Stop must not be finalized by the generic abort path: DR streams no tokens outside the
+  // report, so the job's buffer is empty and that path would ship an EMPTY final — which the
+  // client accepts as THE final (it closes the stream on the first one), hiding the real
+  // "исследование остановлено" notice until a reload. Claiming finalization here (before any
+  // slow work, so a fast Stop can't beat the flag) keeps this run the single author of its
+  // terminal message; the abort route then only signals the stop.
+  if (streamId) {
+    await GenerationJobManager.updateMetadata(streamId, { producerFinalizesOnAbort: true });
+  }
+
   // The user message must leave the run in the normal-path shape (sender/isCreatedByUser,
   // else saveMessage persists an authorless AI turn) — enriched ONCE and reused for the
   // created event, the DB save, and the final event. conversationId precedes the spread
@@ -1429,13 +1439,13 @@ async function runNewDeepResearch(params) {
     usage: result.usage,
   });
 
-  // H1: on a user Stop the /abort route's abortJob already owns the SSE finalization
-  // (and job cleanup), and the partial report is persisted above, so a reload shows it.
-  // Emitting our own done here would double-finalize. Wall-clock/budget/rounds/error
-  // partials are NOT user-aborted, so those still finalize through us below.
-  if (result.finalizeReason === 'aborted') {
-    return result;
-  }
+  // A user Stop finalizes through here like every other outcome. It used to return early,
+  // leaving the /abort route's synthetic final to speak for us — but that final carries the
+  // job's buffered content, which for DR is EMPTY, so the client showed nothing and only a
+  // reload revealed the persisted "исследование остановлено" notice (and its drKind anchor,
+  // without which the plan-edit follow-up never rendered). `producerFinalizesOnAbort` (set at
+  // the top of this run) makes abort signal-only, so emitting here is the ONLY final, not a
+  // double one.
 
   // M9/M10: a NEW DR chat has no persisted Conversation row yet, so the sidebar would
   // show nothing until reload and the final event would carry an empty conversation.

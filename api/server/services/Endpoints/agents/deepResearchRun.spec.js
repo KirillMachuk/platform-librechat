@@ -60,6 +60,7 @@ const mockCompressModelFor = jest.fn(() => 'compress-model');
 // the run's own jobCreatedAt-less invocation (guard passes). Tests override to simulate
 // a replaced job.
 const mockGetJob = jest.fn(async () => ({ streamId: 'stream-1', createdAt: 1 }));
+const mockUpdateMetadata = jest.fn(async () => {});
 
 jest.mock('@librechat/agents', () => ({
   Providers: { OPENAI: 'openAI' },
@@ -81,6 +82,7 @@ jest.mock('@librechat/api', () => ({
     completeJob: (...a) => mockCompleteJob(...a),
     getActiveJobIdsForUser: jest.fn(async () => []),
     getJob: (...a) => mockGetJob(...a),
+    updateMetadata: (...a) => mockUpdateMetadata(...a),
   },
   buildFallbackReport: jest.fn(() => 'FALLBACK'),
   recordCollectedUsage: jest.fn(async () => {}),
@@ -645,6 +647,44 @@ describe('runNewDeepResearch — honest nodata outcome', () => {
     // indicator ("…results shown above are still usable") would contradict it.
     expect(msg.unfinished).toBe(false);
     expect(msg.text).toContain('Не удалось собрать материал');
+  });
+});
+
+describe('runNewDeepResearch — a Stop reaches the client LIVE (no reload needed)', () => {
+  it('claims finalization up front so the abort route only signals the stop', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    // Must be claimed for the WHOLE run, not just the abort branch: the flag is what stops
+    // the generic abort path from shipping an empty synthetic final in our place.
+    expect(mockUpdateMetadata).toHaveBeenCalledWith('stream-1', {
+      producerFinalizesOnAbort: true,
+    });
+  });
+
+  it('EMITS the stopped notice on a Stop instead of leaving the client hanging', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockResolvedValueOnce({
+      finalReport: 'что-то собранное',
+      finalizeReason: 'aborted',
+      usage: { input: 5, output: 5, total: 10 },
+      findings: [{ round: 1, subQuestion: 'q', digest: 'd', sources: [], tokens: 10 }],
+      errors: [],
+    });
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    // The live bug: this run used to return early and stay silent, so the client only ever
+    // saw the abort route's EMPTY synthetic final and the real notice appeared on reload.
+    expect(mockEmitDone).toHaveBeenCalledTimes(1);
+    const [streamId, finalEvent] = mockEmitDone.mock.calls[0];
+    expect(streamId).toBe('stream-1');
+    expect(finalEvent.final).toBe(true);
+    expect(finalEvent.responseMessage.text).toContain('Исследование остановлено');
+    // Without drKind the follow-up comment can't re-plan the original plan (task #21).
+    expect(finalEvent.responseMessage.drKind).toBe('aborted');
+    expect(mockCompleteJob).toHaveBeenCalledWith('stream-1');
   });
 });
 
