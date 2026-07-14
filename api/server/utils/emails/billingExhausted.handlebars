@@ -6,13 +6,13 @@
     <div style='max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 8px; padding: 24px;'>
       <h2 style='margin: 0 0 12px; color: #b42318;'>⛔ Кредиты исчерпаны — модели остановлены</h2>
       <p style='margin: 0 0 16px; line-height: 1.5;'>
-        Контур <strong>1ma</strong>, месяц <strong>{{month}}</strong> (Europe/Minsk).
-        Месячный пул и докупленные пакеты израсходованы полностью — включена мягкая блокировка:
+        Контур <strong>1ma</strong>, период оказания услуг <strong>{{month}}</strong> (Europe/Minsk).
+        Пул периода и докупленные пакеты израсходованы полностью — включена мягкая блокировка:
         запросы к моделям не выполняются, остальные функции платформы работают.
       </p>
       <table style='border-collapse: collapse; width: 100%;'>
         <tr>
-          <td style='padding: 6px 0; color: #666;'>Израсходовано за месяц</td>
+          <td style='padding: 6px 0; color: #666;'>Израсходовано за период</td>
           <td style='padding: 6px 0; text-align: right;'><strong>{{spentCredits}}</strong> Кредитов (пул {{poolCredits}})</td>
         </tr>
         <tr>
@@ -22,7 +22,7 @@
       </table>
       <p style='margin: 16px 0 0; line-height: 1.5; color: #666;'>
         Доступ восстановится автоматически после начисления пакета (экран «Расходы» → «Начислить
-        пакет» или CLI <code>npm run add-credit-package</code>) либо с началом нового месяца.
+        пакет» или CLI <code>npm run add-credit-package</code>) либо с началом нового месяца оказания услуг.
       </p>
     </div>
   </body>

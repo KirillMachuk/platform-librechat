@@ -38,19 +38,26 @@ function csv(value: string | undefined): string[] {
 }
 
 /**
- * Derives the service-period anchor day from `BILLING_SERVICE_START_DATE` (`YYYY-MM-DD`).
- * Only the day-of-month matters — the period recurs on it every month. Unset or
- * unparseable → day 1 (calendar-month billing), so a missing config never breaks billing.
+ * Derives the service-period anchor day from `BILLING_SERVICE_START_DATE`. Only the
+ * day-of-month matters — the period recurs on it every month. Lenient on padding
+ * (`2026-8-5` == `2026-08-05`) but validates real month/day ranges. Unset or
+ * unparseable → day 1 (calendar-month billing), so a missing/garbled config never
+ * breaks billing (a set-but-unparseable value is flagged at boot in Billing.js).
  */
 function parseServiceAnchorDay(serviceStartDate: string | null): number {
   if (!serviceStartDate) {
     return 1;
   }
-  const match = /^\d{4}-\d{2}-(\d{2})$/.exec(serviceStartDate);
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(serviceStartDate.trim());
   if (!match) {
     return 1;
   }
-  return normalizeAnchorDay(Number(match[1]));
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return 1;
+  }
+  return normalizeAnchorDay(day);
 }
 
 /**

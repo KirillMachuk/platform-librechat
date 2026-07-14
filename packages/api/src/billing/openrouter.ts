@@ -15,7 +15,12 @@ export interface OpenRouterKeyInfo {
   limitUsd: number | null;
   /** Lifetime usage in USD. */
   usageUsd: number | null;
-  /** Current-month usage in USD (OpenRouter's own monthly window, UTC). */
+  /**
+   * Usage in the current UTC CALENDAR month. OpenRouter's monthly window resets at
+   * 00:00 UTC on the 1st (per its Provisioning API docs — daily=midnight UTC,
+   * weekly=Mon–Sun, monthly=calendar 1st). The reconciler's journal window is aligned
+   * to exactly this (`startOfUtcMonth(now)` → now), so the two are directly comparable.
+   */
   usageMonthlyUsd: number | null;
   disabled: boolean;
   raw: unknown;

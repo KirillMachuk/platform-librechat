@@ -44,17 +44,17 @@ function getHandlers() {
 }
 
 /**
- * Defence-in-depth backstop for these token-guarded, service-to-service endpoints.
- * A single GLOBAL ceiling (all callers share one bucket — these endpoints have exactly
- * one legitimate caller, the anonymizer on the internal network) sits far above any real
- * volume — one contour reports a handful of spends per second at most — so it never
- * throttles real billing traffic, only a token-brute-force / DoS loop (orders of
- * magnitude faster). Keyed by a constant, not by IP, so there is no per-IP / IPv6-subnet
- * concern to reason about (express-rate-limit's ipKeyGenerator caveat does not apply).
+ * Post-auth backstop against a *runaway legitimate caller* (a buggy anonymizer looping
+ * on /spend). Placed AFTER the token check below, so an unauthenticated flood is rejected
+ * with a cheap constant-time 401 without ever incrementing this bucket — that ordering is
+ * what prevents a public flood from starving the one real caller. Because only the
+ * token-holding anonymizer reaches here, a single global-keyed ceiling is correct (there
+ * is exactly one caller) and sidesteps any per-IP / IPv6 keying concern. 12000/min sits
+ * far above any real volume — one contour reports a handful of spends per second at most.
  */
 const ingestLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 12_000, // ~200 req/s total — pure abuse backstop, not a functional limit
+  max: 12_000, // ~200 req/s — pure abuse backstop, not a functional limit
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: () => 'billing-ingest',
@@ -62,12 +62,12 @@ const ingestLimiter = rateLimit({
   store: limiterCache('billing_ingest_limiter'),
 });
 
-router.use(ingestLimiter);
-
+// Authenticate FIRST — see the limiter note above: rejecting unauthenticated traffic here,
+// before the rate limiter, is what stops a public flood from exhausting the shared bucket.
 router.use((req, res, next) => {
   const { config } = getBillingWiring();
   if (!config.enabled) {
-    return res.status(503).json({ error: 'billing is disabled (BILLING_INTERNAL_TOKEN not set)' });
+    return res.status(503).json({ error: 'billing is disabled' });
   }
   const token = req.headers['x-billing-token'];
   if (typeof token !== 'string' || !token || !tokenEqual(token, config.internalToken)) {
@@ -75,6 +75,8 @@ router.use((req, res, next) => {
   }
   return next();
 });
+
+router.use(ingestLimiter);
 
 router.post('/spend', (req, res) => getHandlers().postSpend(req, res));
 router.get('/status', (req, res) => getHandlers().getStatus(req, res));

@@ -87,6 +87,8 @@ function getBillingWiring() {
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** First reconcile shortly after boot (give Mongo/config time), then daily. */
 const FIRST_RECONCILE_DELAY_MS = 10 * 60 * 1000;
+/** Index self-heal cadence — independent of reconciliation, so it runs even without OpenRouter mgmt. */
+const INDEX_RESYNC_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Ledger index health. The unique indexes back idempotency (`creditpackages`) and
@@ -158,6 +160,26 @@ function startBillingSchedule() {
     logger.info(
       `[billing] enabled: pool=${config.poolCredits} credits/period, cycle=${cycle}, operators=${config.operatorEmails.length}, openrouter mgmt=${billing.openrouter.isConfigured ? 'on' : 'off'}`,
     );
+    // Loudly flag a set-but-unparseable service start date: it silently fell back to the
+    // calendar month (anchor 1), which the operator likely did NOT intend.
+    if (
+      config.serviceStartDate &&
+      config.anchorDay === 1 &&
+      !/^\d{4}-\d{1,2}-0*1$/.test(config.serviceStartDate)
+    ) {
+      logger.warn(
+        `[billing] BILLING_SERVICE_START_DATE="${config.serviceStartDate}" did not parse to a valid day-of-month — falling back to calendar-month billing (anchor 1). Expected YYYY-MM-DD.`,
+      );
+    }
+    // Retry the index sync on its OWN cadence — independent of OpenRouter mgmt, so a
+    // transient boot-time failure (disk pressure) self-heals even when reconciliation
+    // is never scheduled (mgmt off). syncIndexes on a healthy set is a cheap no-op.
+    const indexTimer = setInterval(() => {
+      void syncCreditIndexes();
+    }, INDEX_RESYNC_MS);
+    if (typeof indexTimer.unref === 'function') {
+      indexTimer.unref();
+    }
   }
 
   if (!billing.openrouter.isConfigured) {
@@ -165,10 +187,7 @@ function startBillingSchedule() {
   }
 
   const tick = () => {
-    // Retry the index sync each tick so a transient failure (disk pressure) self-heals.
-    syncCreditIndexes()
-      .then(() => reconciler.run())
-      .catch(() => {});
+    reconciler.run().catch(() => {});
   };
   const first = setTimeout(tick, FIRST_RECONCILE_DELAY_MS);
   if (typeof first.unref === 'function') {

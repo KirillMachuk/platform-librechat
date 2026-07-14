@@ -6,8 +6,9 @@
     <div style='max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 8px; padding: 24px;'>
       <h2 style='margin: 0 0 12px; color: #b45309;'>🔎 Сверка биллинга: расхождение {{diffPercent}}%</h2>
       <p style='margin: 0 0 16px; line-height: 1.5;'>
-        Контур <strong>1ma</strong>, месяц <strong>{{month}}</strong>. Внутренний леджер Кредитов и
-        фактический расход по ключу OpenRouter разошлись сильнее допуска (~3%).
+        Контур <strong>1ma</strong>. За текущий календарный месяц (UTC) внутренний журнал списаний
+        Кредитов и фактический расход по ключу OpenRouter (usage_monthly) разошлись сильнее допуска
+        (~3%).
       </p>
       <table style='border-collapse: collapse; width: 100%;'>
         <tr>
@@ -20,10 +21,10 @@
         </tr>
       </table>
       <p style='margin: 16px 0 0; line-height: 1.5; color: #666;'>
-        Возможные причины: недоставленные отчёты анонимайзера (см. его логи/метрики
-        billing_report_*), рестарт с потерей очереди ретраев, обращение к ключу мимо контура,
-        сдвиг окон (леджер — месяц по Минску, OpenRouter — по UTC). Журнал списаний:
-        коллекция <code>creditspends</code>.
+        Оба значения — за один и тот же календарный месяц UTC, поэтому расхождение указывает на:
+        недоставленные отчёты анонимайзера (см. его логи/метрики billing_report_*), рестарт с
+        потерей очереди ретраев, обращение к ключу мимо контура либо лаг учёта OpenRouter. Журнал
+        списаний: коллекция <code>creditspends</code>.
       </p>
     </div>
   </body>
