@@ -40,13 +40,15 @@ export interface ReportNodeDeps {
   nonce: string;
 }
 
-/** Maps the supervisor's stop reason to the run's finalize reason. Budget and round
- *  caps yield a deliberate PARTIAL (they fire rarely, and the label tells the UI why
- *  gathering stopped). The TIME gate (A1) is different: it fires on most healthy runs
- *  (gathering usually fills the time budget), and it hands off to the model WITH a
- *  synthesis reserve — a full model-written report, not a degradation. So it maps to
- *  'completed' (no "partial" banner); a genuine time DEGRADATION only comes from the
- *  hard wall-clock watchdog in the run wrapper, which sets 'time' directly. */
+/** Maps the supervisor's stop reason to the run's finalize reason. Every branch here ends
+ *  in a REAL model-written report — the gates all reserve a synthesis window, so none of
+ *  them is a degradation (PR-2: there are no partial reports). Budget and round caps keep
+ *  their own reason: they fire rarely and mark a report whose GATHERING was cut short, which
+ *  is the one case the UI still flags as possibly incomplete. The TIME gate (A1) instead
+ *  maps to 'completed': it fires on most healthy runs (gathering usually fills the time
+ *  budget) and is the designed hand-off to synthesis, not a truncation. A genuine time
+ *  DEGRADATION only comes from the hard wall-clock watchdog in the run wrapper, which sets
+ *  'time' directly — and that outcome carries an honest notice, never a report. */
 export function concludeToFinalize(reason: SupervisorConcludeReason | null): FinalizeReason {
   if (reason === 'budget') {
     return 'budget';
@@ -78,42 +80,29 @@ function formatFindings(findings: DeepResearchFinding[], perDigestCap: number): 
     .join('\n\n');
 }
 
-/** Deterministic report assembled WITHOUT the model — the last-resort guarantee. */
-export function buildFallbackReport(params: {
-  brief: string;
-  jurisdiction: string;
-  findings: DeepResearchFinding[];
-  reason: string;
-}): string {
-  const { brief, jurisdiction, findings, reason } = params;
-  const header =
-    `# Аналитическая записка (частичный отчёт)\n\n` +
-    `Юрисдикция: ${jurisdiction || 'не определена'}\n` +
-    `Запрос: ${brief}\n\n` +
-    `> Примечание: отчёт собран автоматически из найденных материалов (генерация моделью недоступна: ${reason}).`;
-  if (findings.length === 0) {
-    return `${header}\n\nПо запросу не удалось собрать данные.`;
-  }
-  const body = findings
-    .map((finding, i) => {
-      // One source per line (Markdown list) rather than a comma-joined run: long URLs
-      // wrap cleanly per-line on a ~380px mobile screen instead of overflowing.
-      const sources =
-        finding.sources.length > 0
-          ? `\n\n**Источники:**\n${finding.sources.map((source) => `- ${source}`).join('\n')}`
-          : '';
-      return `## ${i + 1}. ${finding.subQuestion}\n${finding.digest}${sources}`;
-    })
-    .join('\n\n');
-  return `${header}\n\n## Собранные материалы\n\n${body}`;
+/**
+ * Honest short notice for when a real report could NOT be produced — the synthesis model
+ * failed, or the hard watchdog killed the run before REPORT. It deliberately does NOT dump
+ * the raw findings: a half-synthesised digest list has no analytical value and misleads
+ * (owner decision 2026-07-13 — no partial reports). The user is told to retry or narrow the
+ * query instead. Echoes neither the brief nor the dialogue (which can embed the plan).
+ */
+export function buildFallbackReport(params: { reason: string }): string {
+  return (
+    `## Не удалось сформировать отчёт\n\n` +
+    `Исследование не удалось довести до готового отчёта: ${params.reason}. ` +
+    `Черновые материалы не сведены в отчёт — неполная выжимка только ввела бы в заблуждение.\n\n` +
+    `Что можно сделать: повторите исследование или сузьте запрос — конкретнее по теме, региону или периоду.`
+  );
 }
 
 /**
  * Composes the final report with truncate-retry: on a context-limit error it
- * halves each finding's digest and retries (up to `maxRetries`); on any other
- * error, an empty response, or after exhausting retries, it returns a
- * deterministic fallback assembled from the findings. NEVER throws except on a
- * real abort (a control signal the run wrapper handles).
+ * halves each finding's digest and retries (up to `maxRetries`). On any other
+ * error, an empty response, or after exhausting retries, it returns the honest
+ * "couldn't produce a report" notice with `fellBack: true` — the caller maps that
+ * to an 'error' outcome so a failed synthesis is never saved as a report. NEVER
+ * throws except on a real abort (a control signal the run wrapper handles).
  */
 export async function composeReport(params: {
   reportModel: ReportModel;
@@ -126,7 +115,7 @@ export async function composeReport(params: {
   nonce: string;
   signal?: AbortSignal;
   maxRetries?: number;
-}): Promise<{ text: string; usage: Partial<DeepResearchTokenUsage> }> {
+}): Promise<{ text: string; usage: Partial<DeepResearchTokenUsage>; fellBack: boolean }> {
   const { reportModel, request, brief, jurisdiction, findings, digestCap, now, nonce, signal } =
     params;
   const maxRetries = params.maxRetries ?? DEFAULT_MAX_RETRIES;
@@ -141,11 +130,12 @@ export async function composeReport(params: {
       const response = await reportModel.invoke(prompt, { signal });
       const text = extractText(response).trim();
       if (text) {
-        return { text, usage: usageFromExchange(prompt, response) };
+        return { text, usage: usageFromExchange(prompt, response), fellBack: false };
       }
       return {
-        text: buildFallbackReport({ brief, jurisdiction, findings, reason: 'пустой ответ модели' }),
+        text: buildFallbackReport({ reason: 'пустой ответ модели' }),
         usage: usageFromExchange(prompt, response),
+        fellBack: true,
       };
     } catch (error) {
       if (signal?.aborted) {
@@ -153,25 +143,17 @@ export async function composeReport(params: {
       }
       if (!isContextLimitError(error) || attempt === maxRetries) {
         return {
-          text: buildFallbackReport({
-            brief,
-            jurisdiction,
-            findings,
-            reason: sanitizeErrorForUser(error),
-          }),
+          text: buildFallbackReport({ reason: sanitizeErrorForUser(error) }),
           usage: {},
+          fellBack: true,
         };
       }
     }
   }
   return {
-    text: buildFallbackReport({
-      brief,
-      jurisdiction,
-      findings,
-      reason: 'превышены лимиты контекста',
-    }),
+    text: buildFallbackReport({ reason: 'превышены лимиты контекста' }),
     usage: {},
+    fellBack: true,
   };
 }
 
@@ -220,12 +202,7 @@ export function createReportNode(deps: ReportNodeDeps): DeepResearchNode {
     if (!state.findings.some(hasResearchMaterial)) {
       const supervisorFailed = state.concludeReason === 'error';
       const text = supervisorFailed
-        ? buildFallbackReport({
-            brief: state.researchBrief,
-            jurisdiction: state.jurisdiction,
-            findings: [],
-            reason: 'внутренняя ошибка оркестратора',
-          })
+        ? buildFallbackReport({ reason: 'внутренняя ошибка оркестратора' })
         : buildNoDataReport({ request, findings: state.findings });
       return {
         finalReport: text,
@@ -233,7 +210,7 @@ export function createReportNode(deps: ReportNodeDeps): DeepResearchNode {
         messages: [new AIMessage(text)],
       };
     }
-    const { text, usage } = await composeReport({
+    const { text, usage, fellBack } = await composeReport({
       reportModel: deps.reportModel,
       request,
       brief: state.researchBrief,
@@ -246,7 +223,9 @@ export function createReportNode(deps: ReportNodeDeps): DeepResearchNode {
     });
     return {
       finalReport: text,
-      finalizeReason,
+      // A failed synthesis (`fellBack`) is an 'error' outcome — the honest notice, never
+      // saved as a report/PDF. A real model report keeps the concluded reason.
+      finalizeReason: fellBack ? 'error' : finalizeReason,
       messages: [new AIMessage(text)],
       tokenUsage: usage,
     };

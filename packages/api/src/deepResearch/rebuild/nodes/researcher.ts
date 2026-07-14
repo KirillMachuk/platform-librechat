@@ -59,6 +59,12 @@ export interface ResearcherNodeDeps {
   now: string;
   /** Per-run spotlighting nonce for fencing untrusted tool output (H5). */
   nonce: string;
+  /**
+   * Injected wall-clock reader for the gather time gate (A1); defaults to `Date.now`.
+   * Same contract as the supervisor's clock — a test passes a fake so the gate is
+   * deterministic (hence injected rather than calling `Date.now()` in the node).
+   */
+  clock?: () => number;
 }
 
 export interface ResearchLoopResult {
@@ -115,14 +121,25 @@ export async function runResearchLoop(params: {
   tokenCap: number;
   nonce: string;
   signal?: AbortSignal;
+  /** Gather deadline (ms) — stop STARTING new turns past it so REPORT keeps its reserved
+   *  synthesis window. Reads the injected clock; unset (either) → time arm off (A1). */
+  deadlineMs?: number;
+  clock?: () => number;
 }): Promise<ResearchLoopResult> {
-  const { caller, tools, system, question, maxTurns, tokenCap, nonce, signal } = params;
+  const { caller, tools, system, question, maxTurns, tokenCap, nonce, signal, deadlineMs, clock } =
+    params;
   const toolsByName = new Map(tools.map((t) => [t.name, t]));
   const messages: BaseMessage[] = [new SystemMessage(system), new HumanMessage(question)];
   const toolOutputs: string[] = [];
   let usage = ZERO_USAGE;
 
   for (let turn = 0; turn < Math.max(1, maxTurns); turn++) {
+    // Time gate (A1): once the gather deadline has passed, stop starting new turns so the
+    // supervisor concludes and REPORT synthesises within its reserve — instead of a long
+    // round blowing past the hard wall-clock and killing the run into a fallback dump.
+    if (deadlineMs != null && clock != null && clock() >= deadlineMs) {
+      break;
+    }
     const response = await caller.invoke(messages, { signal });
     usage = mergeUsage(usage, usageFromExchange(messages, response));
     messages.push(response);
@@ -251,8 +268,9 @@ export async function researchOne(params: {
   jurisdiction: string;
   tokenCap: number;
   signal?: AbortSignal;
+  deadlineMs?: number;
 }): Promise<ResearchOneResult> {
-  const { caller, deps, subQuestion, round, jurisdiction, tokenCap, signal } = params;
+  const { caller, deps, subQuestion, round, jurisdiction, tokenCap, signal, deadlineMs } = params;
   try {
     const { toolOutputs, usage: loopUsage } = await runResearchLoop({
       caller,
@@ -269,6 +287,10 @@ export async function researchOne(params: {
       tokenCap,
       nonce: deps.nonce,
       signal,
+      deadlineMs,
+      // Default to Date.now like the supervisor's gate — production wires no clock, so
+      // without this the time arm would silently never fire (tests pass a fake).
+      clock: deps.clock ?? Date.now,
     });
     const gathered = boundToolOutputs(toolOutputs);
     const { digest, usage: compressUsage } = await compressResearch({
@@ -342,7 +364,11 @@ export function createResearcherNode(deps: ResearcherNodeDeps): DeepResearchNode
     }
 
     const signal = config.signal;
-    const budget = (config.configurable as DeepResearchConfigurable | undefined)?.budget;
+    const configurable = config.configurable as DeepResearchConfigurable | undefined;
+    const budget = configurable?.budget;
+    // Same gather deadline the supervisor gate concludes on (A1) — each researcher stops
+    // starting new turns past it so the round can't overrun into REPORT's reserve.
+    const deadlineMs = configurable?.softDeadlineMs;
     // Remaining gather headroom, SPLIT across the batch: the researchers run concurrently
     // and cannot see each other's spend, so each gets an equal slice to keep the batch
     // within the run's budget. Unbudgeted runs get no cap.
@@ -364,6 +390,7 @@ export function createResearcherNode(deps: ResearcherNodeDeps): DeepResearchNode
           jurisdiction: state.jurisdiction,
           tokenCap: perResearcherCap,
           signal,
+          deadlineMs,
         }),
       ),
     );

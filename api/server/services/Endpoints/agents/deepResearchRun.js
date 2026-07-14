@@ -60,24 +60,6 @@ const {
   bulkInsertTransactions,
 } = require('~/models');
 
-/** Partial-report reasons → user-facing RU phrase for the M8 banner (no infra detail). */
-const PARTIAL_REASONS = {
-  budget: 'исчерпан бюджет токенов',
-  time: 'превышен лимит времени исследования',
-  rounds: 'достигнут лимит этапов исследования',
-  aborted: 'исследование остановлено',
-  error: 'произошла ошибка во время исследования',
-};
-
-/** Prefixes a localized "partial report" banner when the run did not complete (M8). */
-function withPartialBanner(text, finalizeReason) {
-  const reason = PARTIAL_REASONS[finalizeReason];
-  if (!reason) {
-    return text;
-  }
-  return `> ⚠️ Частичный отчёт: ${reason}. Ниже — то, что удалось собрать.\n\n${text}`;
-}
-
 /** Leading imperative research phrases stripped so the title reads as a TOPIC, not a
  *  command ("проведи исследование рынка CRM" → "Исследование рынка CRM") — the P6 fix. */
 const RESEARCH_IMPERATIVE =
@@ -243,9 +225,20 @@ async function countOtherActiveJobs({ streamId, userId, tenantId }) {
   }
 }
 
-/** DR outcomes that yield a genuine, model-written report worth a PDF artifact (D4). A
- *  concurrency refusal (limit), an error fallback, and a user-aborted partial are skipped. */
-const PDF_ELIGIBLE_REASONS = new Set(['completed', 'budget', 'rounds', 'time']);
+/** DR outcomes that yield a genuine, model-written report worth a PDF artifact (D4).
+ *  Everything else carries a self-contained notice instead of a report and is skipped: a
+ *  concurrency refusal ('limit'), a user Stop ('aborted'), a failed synthesis ('error'),
+ *  an empty gather ('nodata') — and 'time', which the run wrapper sets ONLY when the graph
+ *  produced NO report (`resultFrom`: a report keeps its own reason), i.e. the text is the
+ *  honest "не удалось сформировать отчёт" notice. A PDF of that notice is a useless file. */
+const PDF_ELIGIBLE_REASONS = new Set(['completed', 'budget', 'rounds']);
+
+/** Outcomes whose saved text IS a real model report, but with gathering cut short behind it
+ *  — the only case where the frontend's "may be incomplete … results above are still usable"
+ *  indicator tells the truth. Every other outcome is a COMPLETE message (a full report, a
+ *  plan, a Stop, or an honest failure notice with nothing above it), so it must not carry an
+ *  indicator promising usable results (PR-2: no partial reports → no partial indicator). */
+const TRUNCATED_REASONS = new Set(['budget', 'rounds']);
 
 /**
  * Machine-readable provenance stamped on the runner's response message (review r2): the
@@ -253,9 +246,10 @@ const PDF_ELIGIBLE_REASONS = new Set(['completed', 'budget', 'rounds', 'time']);
  * Cancel/error/limit messages carry none — they are plain terminal text.
  *
  * 'aborted' (a user Stop): the next user message must re-plan the ORIGINAL plan with that
- * comment, not start fresh — so the stopped turn IS a followable DR anchor. Note that
- * budget/time/rounds partials are 'report' (a valid, if truncated, answer → normal chat
- * follow-up); ONLY a user Stop routes back into planning (owner decision, task #21).
+ * comment, not start fresh — so the stopped turn IS a followable DR anchor. Note that a
+ * budget/rounds run is 'report' (a real model answer, just with gathering cut short →
+ * normal chat follow-up); ONLY a user Stop routes back into planning (owner decision,
+ * task #21). A failure notice ('time'/'error'/'nodata') carries no drKind — plain text.
  */
 function drKindForReason(finalizeReason) {
   if (finalizeReason === 'plan' || finalizeReason === 'clarify') {
@@ -1257,12 +1251,7 @@ async function runNewDeepResearch(params) {
     } else {
       logger.error('[deepResearchRun] failed to assemble or run DR; using fallback report', error);
       result = {
-        finalReport: buildFallbackReport({
-          brief: text ?? '',
-          jurisdiction: '',
-          findings: [],
-          reason: sanitizeErrorForUser(error),
-        }),
+        finalReport: buildFallbackReport({ reason: sanitizeErrorForUser(error) }),
         finalizeReason: 'error',
         usage: { input: 0, output: 0, total: 0 },
         findings: [],
@@ -1290,25 +1279,21 @@ async function runNewDeepResearch(params) {
     logger.warn(`[deepResearchRun] node error [${nodeError.node}]: ${nodeError.message}`);
   }
 
-  // 'completed' is a full report; 'limit' is a deliberate non-error refusal (concurrency
-  // cap); 'clarify' is a questions message (D2); 'plan' is a plan card and 'cancelled' is a
-  // dismissed plan (task #21) — each stands alone and must NOT get the frontend "unfinished"
-  // banner. A Stop that collected NO findings saves a clean STOPPED notice — a COMPLETE
-  // terminal message like a cancel — so it is finished too (no redundant "unfinished"
-  // indicator under an explicit stop notice); a partial abort that DID collect findings
-  // carries a truncated report and stays unfinished.
+  // The frontend "unfinished" indicator reads "…may be incomplete… Any results shown above
+  // are still usable", so it may ONLY go under a message that HAS usable results above it
+  // and really was cut short — i.e. budget/rounds, where the model wrote a real report but
+  // gathering stopped at its gate. Every other outcome now saves a COMPLETE, self-contained
+  // message: a full report ('completed'), a plan/clarify card, a concurrency refusal
+  // ('limit'), a dismissed plan ('cancelled'), a clean STOPPED notice ('aborted'), or an
+  // honest failure notice with nothing above it ('time'/'error'/'nodata') — putting
+  // "results above are still usable" under those would be a lie. Hence an ALLOW-list: with
+  // no partial reports left (PR-2), "unfinished" is the exception, not the default.
   //
-  // Emptiness is keyed on FINDINGS, not on `finalReport` being blank: runDeepResearch never
-  // returns a blank report — an aborted run with nothing collected still gets a
-  // buildFallbackReport that just echoes the research brief (which, for a plan-start, is the
-  // dialogue INCLUDING the plan) + "не удалось собрать данные". Keying on empty text let that
-  // useless fallback save as a "Частичный отчёт" wrapping the plan (live bug); no findings is
-  // the real "nothing to show" signal.
-  const abortedWithoutReport =
-    result.finalizeReason === 'aborted' && (result.findings?.length ?? 0) === 0;
-  const unfinished =
-    !['completed', 'limit', 'clarify', 'plan', 'cancelled'].includes(result.finalizeReason) &&
-    !abortedWithoutReport;
+  // A user Stop (aborted) ALWAYS saves a clean STOPPED notice and NEVER a report — owner
+  // decision (2026-07-13): Stop = "I don't want this", so no partial, no findings dump,
+  // regardless of how much was gathered.
+  const abortedStop = result.finalizeReason === 'aborted';
+  const unfinished = TRUNCATED_REASONS.has(result.finalizeReason);
   // Track B: de-mask the final report via the server-side run map (placeholders → real PII), then
   // free the map. restore never throws (worst case: placeholders remain — safe, not a leak); both
   // run for EVERY outcome incl. abort, so the partial report saved below is de-masked too.
@@ -1382,16 +1367,13 @@ async function runNewDeepResearch(params) {
     }
   }
 
-  // M8: a partial report is prefixed with a localized reason banner so the user knows
-  // WHY it stopped (budget/time/rounds/abort/error). Baked into the saved text so a
-  // reload shows it too; the frontend's generic "unfinished" banner (C1f) complements it.
-  // A Stop that collected NOTHING (aborted before the report was synthesised) has no
-  // partial to show, so instead of a banner promising content that isn't there it saves a
-  // clean STOPPED notice — and it IS saved (below), because the stopped turn must remain a
-  // followable drKind='aborted' anchor for the plan re-edit (task #21).
-  const finalReportText = abortedWithoutReport
-    ? STOPPED_MESSAGE
-    : withPartialBanner(reportText, result.finalizeReason);
+  // A Stop ALWAYS renders the clean STOPPED notice (owner decision) — never a report, even
+  // if findings were gathered; it also stays a followable drKind='aborted' anchor for the
+  // plan re-edit (task #21). Every OTHER outcome saves its text verbatim: with the graph's
+  // synthesis reserve (Ф6a) a budget/rounds/time-limited run is a REAL model report, not a
+  // partial — no "Частичный отчёт" banner (PR-2); a genuine failure already carries the
+  // honest 'error'/'nodata' notice from the report node.
+  const finalReportText = abortedStop ? STOPPED_MESSAGE : reportText;
   const responseMessage = {
     messageId: responseMessageId,
     conversationId,

@@ -113,6 +113,7 @@ export function createDeepResearchGraph(deps: DeepResearchGraphDeps) {
         tier: deps.tier,
         now: deps.now,
         nonce: deps.nonce,
+        clock: deps.clock,
       }),
       report: createReportNode({
         reportModel: deps.reportModel,

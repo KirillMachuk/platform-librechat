@@ -62,26 +62,15 @@ describe('concludeToFinalize', () => {
 });
 
 describe('buildFallbackReport', () => {
-  it('assembles a report from findings without a model', () => {
-    const report = buildFallbackReport({
-      brief: 'b',
-      jurisdiction: 'RU',
-      findings: [finding('Q1')],
-      reason: 'тест',
-    });
-    expect(report).toContain('частичный отчёт');
-    expect(report).toContain('Q1');
-    expect(report).toContain('cbr.ru');
-  });
-
-  it('handles empty findings', () => {
-    const report = buildFallbackReport({
-      brief: 'b',
-      jurisdiction: 'RU',
-      findings: [],
-      reason: 'тест',
-    });
-    expect(report).toContain('не удалось собрать данные');
+  it('is an honest short notice — no raw findings dump, no brief echo (owner: no partial reports)', () => {
+    const report = buildFallbackReport({ reason: 'пустой ответ модели' });
+    expect(report).toContain('Не удалось сформировать отчёт');
+    expect(report).toContain('пустой ответ модели');
+    // The dump the owner disliked must be gone: no findings, no "Собранные материалы",
+    // no "Запрос:" echo of the (plan-bearing) dialogue.
+    expect(report).not.toContain('Собранные материалы');
+    expect(report).not.toContain('Запрос:');
+    expect(report).toContain('сузьте запрос');
   });
 });
 
@@ -104,6 +93,7 @@ describe('composeReport', () => {
       }),
     });
     expect(result.text).toContain('Ключевые выводы');
+    expect(result.fellBack).toBe(false);
   });
 
   it('retries on a context-limit error, then succeeds', async () => {
@@ -131,8 +121,9 @@ describe('composeReport', () => {
       },
     };
     const result = await composeReport({ ...base, reportModel: broken, maxRetries: 3 });
-    expect(result.text).toContain('частичный отчёт');
-    expect(result.text).toContain('Q1');
+    expect(result.fellBack).toBe(true);
+    expect(result.text).toContain('Не удалось сформировать отчёт');
+    expect(result.text).not.toContain('Q1'); // no findings dump
     expect(calls).toBe(1);
   });
 
@@ -143,7 +134,8 @@ describe('composeReport', () => {
       },
     };
     const result = await composeReport({ ...base, reportModel: alwaysBig, maxRetries: 2 });
-    expect(result.text).toContain('частичный отчёт');
+    expect(result.fellBack).toBe(true);
+    expect(result.text).toContain('Не удалось сформировать отчёт');
   });
 
   it('re-throws on a real abort', async () => {
@@ -221,6 +213,20 @@ describe('createReportNode', () => {
     const update = await node(stateWith({ findings: [], concludeReason: 'error' }), emptyConfig);
     expect(spy).not.toHaveBeenCalled();
     expect(update.finalizeReason).toBe('error');
-    expect(update.finalReport).toContain('частичный отчёт');
+    expect(update.finalReport).toContain('Не удалось сформировать отчёт');
+  });
+
+  it('a failed synthesis (model fell back) becomes an error outcome, not a mislabeled report', async () => {
+    // With material present but the model unavailable, the node must NOT save the fallback
+    // notice as a (budget) report — it flips finalizeReason to 'error' so no PDF/report chip.
+    const broken = new FakeListChatModel({ responses: [''] });
+    jest.spyOn(broken, 'invoke').mockRejectedValue(new Error('500 internal error'));
+    const node = createReportNode({ reportModel: broken, tier: TIER, now: NOW, nonce: NONCE });
+    const update = await node(
+      stateWith({ findings: [finding('Q1')], concludeReason: 'budget' }),
+      emptyConfig,
+    );
+    expect(update.finalizeReason).toBe('error');
+    expect(update.finalReport).toContain('Не удалось сформировать отчёт');
   });
 });

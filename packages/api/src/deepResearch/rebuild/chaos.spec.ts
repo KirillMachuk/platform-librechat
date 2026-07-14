@@ -66,7 +66,7 @@ const run = (graph: ReturnType<typeof createDeepResearchGraph>) =>
   });
 
 describe('chaos — REPORT always fires', () => {
-  it('still produces a report when the report model fails (5xx)', async () => {
+  it('degrades gracefully (honest notice, no throw) when the report model fails (5xx)', async () => {
     const graph = createDeepResearchGraph({
       leadModel: new FakeListChatModel({
         responses: [
@@ -85,9 +85,11 @@ describe('chaos — REPORT always fires', () => {
     });
 
     const result = await run(graph);
-    expect(result.finalReport).toContain('частичный отчёт');
+    // No throw, no faked "completed": a report-model failure is an honest 'error' notice,
+    // never the old raw findings dump (owner: no partial reports).
+    expect(result.finalReport).toContain('Не удалось сформировать отчёт');
     expect(result.findings).toHaveLength(1);
-    expect(result.finalizeReason).toBe('completed');
+    expect(result.finalizeReason).toBe('error');
   });
 
   it('terminates with a report when the supervisor returns non-JSON garbage', async () => {
