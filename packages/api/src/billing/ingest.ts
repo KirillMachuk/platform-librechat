@@ -93,6 +93,14 @@ export function createBillingIngestHandlers(deps: BillingIngestDeps): {
         }
       }
 
+      /* The money path must leave an audit trail: the anonymizer's own logger is not
+       * always visible in the platform logs, so this line is the one place an operator
+       * can SEE that a report arrived and was ledgered (or deduped). Low volume — one
+       * line per model response. */
+      logger.info(
+        `[billingIngest] spend recorded: $${costUsd.toFixed(6)} model=${cleanString(body.model) ?? '-'} period=${result.month} duplicate=${result.duplicate} spentAfter=${result.spentAfterMicroUsd}µ$`,
+      );
+
       return res.status(200).json({ ok: true, month: result.month, duplicate: result.duplicate });
     } catch (error) {
       logger.error('[billingIngest] postSpend error:', error);

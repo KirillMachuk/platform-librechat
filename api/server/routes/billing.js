@@ -63,6 +63,13 @@ router.use((req, res, next) => {
   }
   const token = req.headers['x-billing-token'];
   if (typeof token !== 'string' || !token || !tokenEqual(token, config.internalToken)) {
+    /* Audit trail for the money path: a token mismatch between the anonymizer
+     * (BILLING_TOKEN) and this service (BILLING_INTERNAL_TOKEN) silently zeroes the
+     * ledger — the anonymizer drops rejected reports without retry, and its own logs
+     * are not always visible. This line makes the failure diagnosable from one side. */
+    logger.warn(
+      `[billing] rejected ${req.method} ${req.path}: invalid x-billing-token (ip=${req.ip}, tokenPresent=${Boolean(token)})`,
+    );
     return res.status(401).json({ error: 'invalid billing token' });
   }
   return next();
