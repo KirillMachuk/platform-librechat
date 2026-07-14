@@ -168,6 +168,32 @@ describe('runResearchLoop', () => {
     expect(calls).toBe(1);
   });
 
+  it('stops STARTING new turns once the gather deadline has passed (A1 time gate)', async () => {
+    let calls = 0;
+    const caller: ToolCaller = {
+      invoke: async () => {
+        calls += 1;
+        return toolCallChunk('web_search', { query: 'q' }, `c${calls}`);
+      },
+    };
+    // Injected clock crosses the deadline after the first turn: turn 0's pre-check sees
+    // clock < deadline and runs; turn 1's pre-check sees clock >= deadline and breaks — so
+    // exactly ONE model call, and the round yields to the supervisor → REPORT keeps its reserve.
+    let tick = 0;
+    await runResearchLoop({
+      caller,
+      tools: [okTool],
+      system: 's',
+      question: 'q',
+      nonce: NONCE,
+      tokenCap: Infinity,
+      maxTurns: 10,
+      deadlineMs: 1000,
+      clock: () => (tick++ === 0 ? 0 : 5000),
+    });
+    expect(calls).toBe(1);
+  });
+
   it('caps tool-call width per turn but answers every tool_call (M4)', async () => {
     const sevenCalls = new AIMessageChunk({
       content: '',
