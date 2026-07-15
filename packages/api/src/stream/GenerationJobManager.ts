@@ -24,6 +24,9 @@ import { filterPersistableAbortContent } from './abortContent';
 /** Error surfaced to any client still attached when a stale/hung job is reaped. */
 const REAPED_JOB_ERROR = 'Generation timed out';
 const OAUTH_TOOL_CALL_PREFIX = `oauth${Constants.mcp_delimiter}`;
+/** How often `waitForJobEnd` re-reads the job. Short enough that a Stop still feels
+ *  immediate, long enough that a 15s wait costs the store ~75 reads, not thousands. */
+const JOB_END_POLL_INTERVAL_MS = 200;
 
 function getToolCallName(toolCall: unknown): unknown {
   return toolCall != null && typeof toolCall === 'object' && 'name' in toolCall
@@ -891,6 +894,50 @@ class GenerationJobManagerClass {
       text,
       collectedUsage,
     };
+  }
+
+  /**
+   * Wait for a job signalled by `producerFinalizesOnAbort` to actually finish finalizing.
+   *
+   * The abort caller needs this because the client tears its stream subscription down as
+   * soon as the abort request answers: without the wait, the producer's final — the only
+   * one there is for such a job — is emitted into a socket nobody is reading, and the user
+   * sees an empty message until a reload fetches the persisted one.
+   *
+   * "Finished" is any state that is no longer this abort's: the job is gone (`completeJob`
+   * deleted it — the default), reached a terminal status, or was replaced by a newer run.
+   * Every producer exit reaches one of those: its own emit path, and — if it throws — the
+   * controller's catch, which calls `completeJob` with the error. So the timeout guards
+   * exactly one thing: a producer still wedged in a request that outlives the wait. Timing
+   * out loses the final, which is the behaviour this wait exists to prevent — the caller
+   * answers anyway rather than hold the request, and the user gets the notice on reload.
+   *
+   * @param streamId - The aborted job
+   * @param timeoutMs - Upper bound on the wait
+   * @returns true if the job finalized, false if the wait timed out
+   */
+  async waitForJobEnd(streamId: string, timeoutMs = 15000): Promise<boolean> {
+    const startedAt = Date.now();
+    const deadline = startedAt + timeoutMs;
+
+    for (;;) {
+      const job = await this.jobStore.getJob(streamId);
+      if (!job || job.status !== 'aborted') {
+        /** At `info` because this is the only place the unwind cost is observable, and it
+         *  is what says whether `timeoutMs` is still generous: one line per user Stop. */
+        logger.info(
+          `[GenerationJobManager] ${streamId} finalized ${Date.now() - startedAt}ms after the abort signal`,
+        );
+        return true;
+      }
+      if (Date.now() + JOB_END_POLL_INTERVAL_MS >= deadline) {
+        logger.warn(
+          `[GenerationJobManager] Gave up after ${Date.now() - startedAt}ms waiting for ${streamId} to finalize`,
+        );
+        return false;
+      }
+      await new Promise((resolve) => setTimeout(resolve, JOB_END_POLL_INTERVAL_MS));
+    }
   }
 
   /**

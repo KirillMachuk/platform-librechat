@@ -1417,7 +1417,38 @@ async function runNewDeepResearch(params) {
   if (requestMessage) {
     await saveMessage(reqCtx, requestMessage, { context: 'deepResearchRun - user message' });
   }
-  await saveMessage(reqCtx, responseMessage, { context: 'deepResearchRun - final report' });
+  const savedResponse = await saveMessage(reqCtx, responseMessage, {
+    context: 'deepResearchRun - final report',
+  });
+
+  /**
+   * The live final MUST carry the persisted timestamps, or the message the client shows now
+   * differs from the one it refetches later — and the chat reads that difference as "the
+   * assistant is still mid-stream". `responseMessageId` is `<userMessageId>_` (the
+   * preliminary id from request.js), and a trailing-underscore assistant message with no
+   * `createdAt` is exactly `hasPendingAssistantParent`'s signature (client
+   * useChatFunctions.ts:75-81): while it is the conversation tip, `ask` refuses EVERY
+   * submit — composer silently, plan card with a toast. Only a reload cleared it, because
+   * Mongo hands the same message back stamped.
+   *
+   * Ordinary chats are safe for a different reason than this fix — do not read one into the
+   * other: their finals are equally timestamp-less, but their response id is a fresh UUID
+   * (BaseClient.js:218), so they fail the `endsWith('_')` clause first. This run is the only
+   * path that puts a preliminary id in a final, which is why it is the only one that has to
+   * stamp it. Keeping that `_` id is deliberate — the next turn threads onto it
+   * (`getAppendParentMessageId`) — so the timestamps are what must give.
+   *
+   * Only they are lifted across; `_id`/`__v` are Mongo's business. `saveMessage` answers
+   * with nothing only when it never wrote (invalid conversation id) or when its
+   * duplicate-key fallback cannot re-read the row — both leave the object as it was, which
+   * is the pre-existing behaviour, never a crash. Must stay ABOVE the emit: `emitDone`
+   * serialises the event for late and cross-replica subscribers, so stamping afterwards
+   * would still ship them an unstamped final.
+   */
+  if (savedResponse?.createdAt) {
+    responseMessage.createdAt = savedResponse.createdAt;
+    responseMessage.updatedAt = savedResponse.updatedAt ?? savedResponse.createdAt;
+  }
 
   // H4: bill the run's token usage (every outcome consumed tokens, including a Stop),
   // so Transactions/balance/spend-limits apply to DR. Runs before the abort early-return.
