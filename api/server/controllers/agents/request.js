@@ -849,7 +849,11 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
 
         if (wasAborted) {
           logger.debug(`[ResumableAgentController] Generation aborted for ${streamId}`);
-          // abortJob already handled emitDone and completeJob
+          // abortJob already handled emitDone and completeJob — which holds only for producers
+          // that let it finalize. One that sets `producerFinalizesOnAbort` owns its own final,
+          // and staying silent here would hang its client. Deep Research is the only such
+          // producer and never reaches this path (it returns before `startGeneration` runs),
+          // so this stays correct — but a second one would have to be handled here.
         } else {
           logger.error(`[ResumableAgentController] Generation error for ${streamId}:`, error);
           await GenerationJobManager.emitError(streamId, error.message || 'Generation failed');

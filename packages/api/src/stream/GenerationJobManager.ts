@@ -788,8 +788,14 @@ class GenerationJobManagerClass {
        * reads 'running', and it counts against the per-user concurrency cap — so a user who
        * Stops and immediately comments (the whole point of a Stop here) would be turned
        * away for as long as the run takes to unwind. Marking it terminal drops it from the
-       * running/user sets and puts the hash on the completed TTL, which still outlives the
-       * producer's emit; only `deleteJob` would break that, and completeJob owns it.
+       * running/user sets; only `deleteJob` would cut the producer off, and completeJob owns it.
+       *
+       * It also moves the hash from the running TTL to the completed one, which puts the
+       * producer on a clock: from this moment it has `completedTtl` (5 min by default) to
+       * reach its emit, since the eval-based HSET does not refresh the TTL. Past that the
+       * hash expires, the producer's stale-job guard reads the miss as "replaced mid-run"
+       * and stays silent, and the client waits for the reaper. Unwinding a stopped run takes
+       * seconds, so the margin is wide — but it is a bound, not a guarantee.
        */
       await this.jobStore.updateJob(streamId, { status: 'aborted', completedAt: Date.now() });
       this.runningJobs.delete(streamId);

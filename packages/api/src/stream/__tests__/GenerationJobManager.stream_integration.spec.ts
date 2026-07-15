@@ -415,6 +415,36 @@ describe('GenerationJobManager Integration Tests', () => {
 
       await GenerationJobManager.destroy();
     });
+
+    test('producerFinalizesOnAbort: a NEW job on the same stream never inherits the flag', async () => {
+      const services = createStreamServices({ useRedis: true, redisClient: ioredisClient });
+      GenerationJobManager.configure(services);
+      GenerationJobManager.initialize();
+
+      // The streamId IS the conversationId, so this is one conversation's second turn: the
+      // user stops a Deep Research run and immediately sends an ordinary message — the very
+      // flow this feature exists to allow. `createJob` HSETs over whatever is still at the
+      // key (unlike the in-memory store, which replaces the entry), and an aborted job's
+      // hash is now deliberately kept alive for its producer — so the previous turn's flag
+      // is sitting right there. Inheriting it would make the ordinary chat's Stop emit
+      // nothing at all and hang the client, curable only by a reload.
+      // Read through the store, not GenerationJobManager.getJob: that one returns a facade
+      // (emitter proxy, abortController) which does not carry this field.
+      const streamId = `redis-abort-producer-inherit-${Date.now()}`;
+      await GenerationJobManager.createJob(streamId, 'user-1');
+      await GenerationJobManager.updateMetadata(streamId, { producerFinalizesOnAbort: true });
+      await GenerationJobManager.abortJob(streamId);
+      expect((await services.jobStore.getJob(streamId))?.producerFinalizesOnAbort).toBe(true);
+
+      await GenerationJobManager.createJob(streamId, 'user-1');
+
+      // Structural, not incidental: today the runner also overwrites the flag on its first
+      // metadata write, but that is a few milliseconds later and one refactor away from
+      // being skipped for non-DR turns. A fresh job must start clean on its own.
+      expect((await services.jobStore.getJob(streamId))?.producerFinalizesOnAbort).toBe(false);
+
+      await GenerationJobManager.destroy();
+    });
   });
 
   describe('Cross-Mode Consistency', () => {
