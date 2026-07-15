@@ -143,7 +143,7 @@ describe('useChatFunctions ask refusals', () => {
     expect(mockSetShowStopButton).not.toHaveBeenCalled();
   });
 
-  it('refuses empty text silently — no toast for an empty composer', () => {
+  it('refuses empty text silently — no toast, and the composer stays clearable', () => {
     const { result, setSubmission } = renderAsk(false);
 
     let returned: unknown;
@@ -151,10 +151,14 @@ describe('useChatFunctions ask refusals', () => {
       returned = result.current.ask({ text: '   ' });
     });
 
-    expect(returned).toBe(false);
     expect(setSubmission).not.toHaveBeenCalled();
+    // An empty box explains itself; a toast here would be absurd.
     expect(mockShowToast).not.toHaveBeenCalled();
     expect(mockSetShowStopButton).not.toHaveBeenCalled();
+    // NOT `false`: there is no text to preserve, and `false` would stop useSubmitMessage
+    // from clearing a whitespace-only composer — a behaviour change this fix has no
+    // business making. Kept exactly as upstream had it.
+    expect(returned).toBeUndefined();
   });
 
   it('an accepted submit still resets the Stop button', () => {

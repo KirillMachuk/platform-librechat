@@ -267,19 +267,27 @@ export default function useChatFunctions({
   ) => {
     text = text.trim();
     if (text === '') {
-      return false;
+      /** Deliberately `void`, not `false`: there is no text for a caller to preserve, and
+       *  `false` would stop `useSubmitMessage` from clearing a whitespace-only composer. */
+      return;
     }
 
     /**
-     * Every refusal below returns `false` — the caller's only signal that nothing was sent,
-     * and what keeps a refused submit from destroying the state it was refused from:
-     * `useSubmitMessage`/`AudioRecorder` keep the user's text instead of resetting the
-     * composer over it, and `PlanCard` keeps its buttons instead of going blank. Refusals
-     * used to return `undefined`, which reads as success, so a chat pinned by a stale
-     * `isSubmitting` swallowed the text AND the card's buttons — the dead plan card that
-     * only an F5 could revive. Nothing above this line may mutate UI state for the same
-     * reason: `setShowStopButton(false)` ran first and hid Stop on a refused submit,
-     * stranding the very generation the user was trying to stop.
+     * Refusals return `false` — upstream's contract from #13619 ("preserve refused submit
+     * state", "propagate refused submit result"): it is the caller's only signal that
+     * nothing was sent, so `useSubmitMessage`/`AudioRecorder` keep the user's text instead
+     * of resetting the composer over it, and `PlanCard` keeps its buttons instead of going
+     * blank. Upstream wired it to one guard; the rest still answered `undefined`, which
+     * reads as success — so a chat pinned by a stale `isSubmitting` swallowed the text AND
+     * the card's buttons, the dead plan card only an F5 could revive.
+     *
+     * Nothing above this line may mutate UI state for the same reason: `setShowStopButton`
+     * ran first and hid Stop on a refused submit, stranding the very generation the user
+     * was trying to stop.
+     *
+     * The composer itself never lands here — Enter is already gated on `isSubmitting`
+     * (useTextarea) and Send becomes Stop — so this speaks for the callers that are not
+     * gated: the DR plan card's buttons, edit-and-resubmit, query-param autosubmit.
      */
     if (isSubmitting) {
       showToast({ message: localize('com_ui_send_while_submitting'), status: 'warning' });
