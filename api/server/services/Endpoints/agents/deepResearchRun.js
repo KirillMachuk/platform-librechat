@@ -1417,7 +1417,29 @@ async function runNewDeepResearch(params) {
   if (requestMessage) {
     await saveMessage(reqCtx, requestMessage, { context: 'deepResearchRun - user message' });
   }
-  await saveMessage(reqCtx, responseMessage, { context: 'deepResearchRun - final report' });
+  const savedResponse = await saveMessage(reqCtx, responseMessage, {
+    context: 'deepResearchRun - final report',
+  });
+
+  /**
+   * The live final MUST carry the persisted timestamps, or the message the client shows now
+   * differs from the one it refetches later — and the chat treats that difference as "the
+   * assistant is still mid-stream". `responseMessageId` is `<userMessageId>_` (the
+   * preliminary id from request.js), and a trailing-underscore message with no `createdAt`
+   * is exactly `hasPendingAssistantParent`'s signature (client useChatFunctions.ts:75-81):
+   * while it is the conversation tip, `ask` refuses EVERY submit — composer silently, plan
+   * card with a toast. Only a reload cleared it, because Mongo hands back the same message
+   * WITH `createdAt`. Ordinary chats never hit this: their finals carry saved messages.
+   *
+   * Only the timestamps are lifted across — `_id`/`__v` are Mongo's business, and the `_`
+   * id must stay as-is: the next turn threads onto it (`getAppendParentMessageId`).
+   * A save that returned nothing (invalid convo id, duplicate-key fallback) leaves the
+   * object untouched: no timestamps is the pre-existing behaviour, never a crash.
+   */
+  if (savedResponse?.createdAt) {
+    responseMessage.createdAt = savedResponse.createdAt;
+    responseMessage.updatedAt = savedResponse.updatedAt ?? savedResponse.createdAt;
+  }
 
   // H4: bill the run's token usage (every outcome consumed tokens, including a Stop),
   // so Transactions/balance/spend-limits apply to DR. Runs before the abort early-return.

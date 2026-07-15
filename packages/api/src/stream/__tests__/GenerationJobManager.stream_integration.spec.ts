@@ -416,6 +416,65 @@ describe('GenerationJobManager Integration Tests', () => {
       await GenerationJobManager.destroy();
     });
 
+    /**
+     * The abort caller has to hold its HTTP response until the producer's final is out, or
+     * the client — which tears the stream down as soon as that response lands — never sees
+     * it and shows an empty message until a reload. `waitForJobEnd` is that hold.
+     */
+    test('waitForJobEnd: resolves as soon as the producer finalizes', async () => {
+      const services = createStreamServices({ useRedis: true, redisClient: ioredisClient });
+      GenerationJobManager.configure(services);
+      GenerationJobManager.initialize();
+
+      const streamId = `redis-wait-job-end-${Date.now()}`;
+      await GenerationJobManager.createJob(streamId, 'user-1');
+      await GenerationJobManager.updateMetadata(streamId, { producerFinalizesOnAbort: true });
+      await GenerationJobManager.abortJob(streamId);
+
+      // The producer is still unwinding: the wait must NOT return yet.
+      let finalized = false;
+      const waiting = GenerationJobManager.waitForJobEnd(streamId, 5000).then((ok) => {
+        finalized = ok;
+        return ok;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(finalized).toBe(false);
+
+      await GenerationJobManager.completeJob(streamId);
+      await expect(waiting).resolves.toBe(true);
+
+      await GenerationJobManager.destroy();
+    });
+
+    test('waitForJobEnd: gives up rather than hanging when the producer never finalizes', async () => {
+      const services = createStreamServices({ useRedis: true, redisClient: ioredisClient });
+      GenerationJobManager.configure(services);
+      GenerationJobManager.initialize();
+
+      const streamId = `redis-wait-job-end-timeout-${Date.now()}`;
+      await GenerationJobManager.createJob(streamId, 'user-1');
+      await GenerationJobManager.updateMetadata(streamId, { producerFinalizesOnAbort: true });
+      await GenerationJobManager.abortJob(streamId);
+
+      // Timing out is a degraded path, not a failure: the caller answers anyway and the user
+      // gets the pre-wait behaviour (the notice on reload) instead of a stuck Stop button.
+      await expect(GenerationJobManager.waitForJobEnd(streamId, 600)).resolves.toBe(false);
+
+      await GenerationJobManager.destroy();
+    });
+
+    test('waitForJobEnd: returns immediately for a job that is already gone', async () => {
+      const services = createStreamServices({ useRedis: true, redisClient: ioredisClient });
+      GenerationJobManager.configure(services);
+      GenerationJobManager.initialize();
+
+      await expect(
+        GenerationJobManager.waitForJobEnd(`redis-wait-missing-${Date.now()}`, 5000),
+      ).resolves.toBe(true);
+
+      await GenerationJobManager.destroy();
+    });
+
     test('producerFinalizesOnAbort: a NEW job on the same stream never inherits the flag', async () => {
       const services = createStreamServices({ useRedis: true, redisClient: ioredisClient });
       GenerationJobManager.configure(services);

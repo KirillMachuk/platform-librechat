@@ -45,6 +45,8 @@ const mockEmitChunk = jest.fn();
 const mockEmitDone = jest.fn();
 const mockCompleteJob = jest.fn();
 const mockSavedMessages = [];
+/** What Mongo stamps on the saved message; the emitted final must carry it. */
+const mockSavedAt = new Date('2026-07-15T10:00:00.000Z');
 const mockReportToPdfBuffer = jest.fn(async () => Buffer.from('%PDF-1.4 fake'));
 const mockCreateFile = jest.fn(async (data) => ({ ...data }));
 const mockSaveBuffer = jest.fn(async () => '/uploads/u1/report.pdf');
@@ -209,7 +211,11 @@ jest.mock('~/models', () => ({
   saveConvo: jest.fn(async () => ({ conversationId: 'c1' })),
   saveMessage: jest.fn(async (ctx, msg) => {
     mockSavedMessages.push(msg);
-    return msg;
+    /** Faithful to the real one: Mongo's `timestamps: true` stamps the doc on write and
+     *  `saveMessage` hands back the PERSISTED object (findOneAndUpdate + toObject), not the
+     *  argument. Returning the argument verbatim is what let the live/persisted divergence
+     *  ship — the emitted final looked stamped in tests and wasn't in production. */
+    return { ...msg, createdAt: mockSavedAt, updatedAt: mockSavedAt };
   }),
   spendTokens: jest.fn(),
   getMultiplier: jest.fn(),
@@ -671,6 +677,70 @@ describe('runNewDeepResearch — a Stop reaches the client LIVE (no reload neede
     // Without drKind the follow-up comment can't re-plan the original plan (task #21).
     expect(finalEvent.responseMessage.drKind).toBe('aborted');
     expect(mockCompleteJob).toHaveBeenCalledWith('stream-1');
+  });
+});
+
+/**
+ * The live final and the one a reload refetches must be the SAME message. They were not:
+ * the emitted object was hand-built and carried no timestamps, while `responseMessageId` is
+ * the preliminary `<userMessageId>_`. A trailing-underscore assistant message with no
+ * `createdAt` is precisely what the chat calls a still-streaming placeholder
+ * (`hasPendingAssistantParent`, client useChatFunctions.ts:75-81) — so while it sat at the
+ * tip, `ask` refused every submit: the composer went silently dead and the plan card's
+ * Начать did nothing. A reload "fixed" it only because Mongo returns the message stamped.
+ */
+describe('runNewDeepResearch — the live final is the persisted message, not a placeholder', () => {
+  it.each([
+    ['a report', { finalReport: '# Отчёт', finalizeReason: 'completed' }],
+    ['a Stop', { finalReport: 'собранное', finalizeReason: 'aborted' }],
+  ])('%s final carries the persisted timestamps', async (_label, runResult) => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockResolvedValueOnce({
+      usage: { input: 5, output: 5, total: 10 },
+      findings: [],
+      errors: [],
+      ...runResult,
+    });
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const { responseMessage } = mockEmitDone.mock.calls[0][1];
+    expect(responseMessage.createdAt).toEqual(mockSavedAt);
+    expect(responseMessage.updatedAt).toEqual(mockSavedAt);
+    // The id stays preliminary on purpose — the next turn threads onto it. It is the
+    // MISSING TIMESTAMP that made the pair look unfinished, not the id.
+    expect(responseMessage.messageId).toBe('r1');
+    // Mongo's own bookkeeping is not the client's business.
+    expect(responseMessage._id).toBeUndefined();
+    expect(responseMessage.__v).toBeUndefined();
+  });
+
+  it('survives a save that returns nothing — no timestamps, but never a crash', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockResolvedValueOnce({
+      finalReport: '# Отчёт',
+      finalizeReason: 'completed',
+      usage: { input: 5, output: 5, total: 10 },
+      findings: [],
+      errors: [],
+    });
+    const { saveMessage } = require('~/models');
+    const persist = saveMessage.getMockImplementation();
+    // Keyed on the context, not on call order: the run saves more than once, so a bare
+    // `mockImplementationOnce` would starve the wrong call.
+    saveMessage.mockImplementation(async (ctx, msg, meta) =>
+      meta?.context === 'deepResearchRun - final report' ? undefined : persist(ctx, msg, meta),
+    );
+
+    try {
+      await expect(runNewDeepResearch(baseParams('изучи рынок CRM'))).resolves.toBeDefined();
+    } finally {
+      saveMessage.mockImplementation(persist);
+    }
+
+    const { responseMessage } = mockEmitDone.mock.calls[0][1];
+    expect(responseMessage.createdAt).toBeUndefined();
+    expect(responseMessage.text).toContain('Отчёт');
   });
 });
 
