@@ -316,8 +316,17 @@ router.post('/chat/abort', async (req, res) => {
     // CRITICAL: Save partial response BEFORE returning to prevent race condition.
     // If user sends a follow-up immediately after abort, the parentMessageId must exist in DB.
     // Only save if we have a valid responseMessageId (skip early aborts before generation started)
+    //
+    // Never for a producer that finalizes itself: this writes the SAME `responseMessageId`
+    // the producer just persisted, and the wait above now puts this save LAST — so anything
+    // salvaged from the job buffer would overwrite the producer's real terminal message and
+    // the `drKind` anchor the plan-edit follow-up threads onto. Today the buffer is empty
+    // for such a producer and the block is skipped anyway, but that is a property of what
+    // Deep Research happens to stream, not a rule: wiring `onToken` for a live report would
+    // silently turn this into a clobber. The producer owns its message, full stop.
     if (
       abortResult.success &&
+      !abortResult.jobData?.producerFinalizesOnAbort &&
       abortResult.jobData?.userMessage?.messageId &&
       abortResult.jobData?.responseMessageId &&
       hasPersistableAbortContent(abortResult.content)

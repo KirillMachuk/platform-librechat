@@ -907,26 +907,32 @@ class GenerationJobManagerClass {
    * "Finished" is any state that is no longer this abort's: the job is gone (`completeJob`
    * deleted it — the default), reached a terminal status, or was replaced by a newer run.
    * Every producer exit reaches one of those: its own emit path, and — if it throws — the
-   * controller's catch, which calls `completeJob` with the error. The timeout is the
-   * backstop for the ones that cannot: a job whose hash expired, or a producer wedged in a
-   * request that outlives the wait. Timing out is not a failure — it degrades to exactly
-   * the pre-wait behaviour, so the caller may answer regardless of the result.
+   * controller's catch, which calls `completeJob` with the error. So the timeout guards
+   * exactly one thing: a producer still wedged in a request that outlives the wait. Timing
+   * out loses the final, which is the behaviour this wait exists to prevent — the caller
+   * answers anyway rather than hold the request, and the user gets the notice on reload.
    *
    * @param streamId - The aborted job
    * @param timeoutMs - Upper bound on the wait
    * @returns true if the job finalized, false if the wait timed out
    */
   async waitForJobEnd(streamId: string, timeoutMs = 15000): Promise<boolean> {
-    const deadline = Date.now() + timeoutMs;
+    const startedAt = Date.now();
+    const deadline = startedAt + timeoutMs;
 
     for (;;) {
       const job = await this.jobStore.getJob(streamId);
       if (!job || job.status !== 'aborted') {
+        /** At `info` because this is the only place the unwind cost is observable, and it
+         *  is what says whether `timeoutMs` is still generous: one line per user Stop. */
+        logger.info(
+          `[GenerationJobManager] ${streamId} finalized ${Date.now() - startedAt}ms after the abort signal`,
+        );
         return true;
       }
       if (Date.now() + JOB_END_POLL_INTERVAL_MS >= deadline) {
         logger.warn(
-          `[GenerationJobManager] Timed out after ${timeoutMs}ms waiting for ${streamId} to finalize`,
+          `[GenerationJobManager] Gave up after ${Date.now() - startedAt}ms waiting for ${streamId} to finalize`,
         );
         return false;
       }

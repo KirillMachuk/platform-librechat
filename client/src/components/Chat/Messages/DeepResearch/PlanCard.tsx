@@ -9,14 +9,20 @@ import { mainTextareaId } from '~/common';
 import { useLocalize } from '~/hooks';
 
 /**
- * The autostart anchor, fixed ONCE per `createdAt` value. Three cases, all safe:
- * - live message (no `createdAt` yet — it is set on persistence) → mount time;
- * - refetched message with a past `createdAt` → that timestamp, so an F5 mid-countdown
- *   resumes at the correct remaining time and an expired window stays manual;
+ * The autostart anchor: when the plan was made, so the window means the same thing live and
+ * after an F5. Cases, all safe:
+ * - a plan card carries `createdAt` from its first render — live finals ship the persisted
+ *   message — so the window counts from the plan, not from whenever this card mounted (a
+ *   backgrounded tab must not be handed a fresh full window);
+ * - refetched mid-countdown → the same timestamp → the count resumes where it was, and an
+ *   expired window stays manual;
  * - client clock BEHIND the server (`createdAt` in the local future) → clamped to mount
- *   time. Recomputing the clamp per tick froze the counter at the full window forever
- *   (same value → React bails out — the mechanism of the shipped frozen-timer bug), so
- *   the anchor is resolved once and only moves when `createdAt` itself changes.
+ *   time. A clock AHEAD by more than the window reads it as already expired: no timer,
+ *   manual buttons only — the fail-safe direction, and the same thing a refetched card has
+ *   always done.
+ * Fixed ONCE per `createdAt` value: recomputing the clamp per tick froze the counter at the
+ * full window forever (same value → React bails out — the mechanism of the shipped
+ * frozen-timer bug), so the anchor only moves when `createdAt` itself changes.
  */
 function useCountdownAnchor(createdAt: string | undefined): number {
   const anchorRef = useRef<{ key: string | undefined; ms: number } | null>(null);
