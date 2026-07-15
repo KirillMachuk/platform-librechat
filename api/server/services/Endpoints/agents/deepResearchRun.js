@@ -1429,13 +1429,13 @@ async function runNewDeepResearch(params) {
     usage: result.usage,
   });
 
-  // H1: on a user Stop the /abort route's abortJob already owns the SSE finalization
-  // (and job cleanup), and the partial report is persisted above, so a reload shows it.
-  // Emitting our own done here would double-finalize. Wall-clock/budget/rounds/error
-  // partials are NOT user-aborted, so those still finalize through us below.
-  if (result.finalizeReason === 'aborted') {
-    return result;
-  }
+  // A user Stop finalizes through here like every other outcome. It used to return early,
+  // leaving the /abort route's synthetic final to speak for us — but that final carries the
+  // job's buffered content, which for DR is EMPTY, so the client showed nothing and only a
+  // reload revealed the persisted "исследование остановлено" notice (and its drKind anchor,
+  // without which the plan-edit follow-up never rendered). `producerFinalizesOnAbort` (set at
+  // the top of this run) makes abort signal-only, so emitting here is the ONLY final, not a
+  // double one.
 
   // M9/M10: a NEW DR chat has no persisted Conversation row yet, so the sidebar would
   // show nothing until reload and the final event would carry an empty conversation.
