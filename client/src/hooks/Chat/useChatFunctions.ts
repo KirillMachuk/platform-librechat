@@ -1,6 +1,7 @@
 import { v4 } from 'uuid';
 import { cloneDeep } from 'lodash';
 import { useNavigate } from 'react-router-dom';
+import { useToastContext } from '@librechat/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSetRecoilState, useRecoilValue, useRecoilCallback } from 'recoil';
 import {
@@ -37,9 +38,9 @@ import useFocusRegeneratedResponse from '~/hooks/Chat/useFocusRegeneratedRespons
 import useSetFilesToDelete from '~/hooks/Files/useSetFilesToDelete';
 import useGetSender from '~/hooks/Conversations/useGetSender';
 import store, { useGetEphemeralAgent } from '~/store';
+import { useLocalize, useAuthContext } from '~/hooks';
 import { startupConfigKey } from '~/data-provider';
 import useUserKey from '~/hooks/Input/useUserKey';
-import { useAuthContext } from '~/hooks';
 
 const logChatRequest = (request: Record<string, unknown>) => {
   logger.log('=====================================\nAsk function called with:');
@@ -205,9 +206,11 @@ export default function useChatFunctions({
   setSubmission: SetterOrUpdater<TSubmission | null>;
 }) {
   const navigate = useNavigate();
+  const localize = useLocalize();
   const getSender = useGetSender();
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
+  const { showToast } = useToastContext();
   const setFilesToDelete = useSetFilesToDelete();
   const getEphemeralAgent = useGetEphemeralAgent();
   const isTemporary = useRecoilValue(store.isTemporary);
@@ -262,11 +265,25 @@ export default function useChatFunctions({
       addedConvo,
     } = {},
   ) => {
-    setShowStopButton(false);
-
     text = text.trim();
-    if (!!isSubmitting || text === '') {
-      return;
+    if (text === '') {
+      return false;
+    }
+
+    /**
+     * Every refusal below returns `false` — the caller's only signal that nothing was sent,
+     * and what keeps a refused submit from destroying the state it was refused from:
+     * `useSubmitMessage`/`AudioRecorder` keep the user's text instead of resetting the
+     * composer over it, and `PlanCard` keeps its buttons instead of going blank. Refusals
+     * used to return `undefined`, which reads as success, so a chat pinned by a stale
+     * `isSubmitting` swallowed the text AND the card's buttons — the dead plan card that
+     * only an F5 could revive. Nothing above this line may mutate UI state for the same
+     * reason: `setShowStopButton(false)` ran first and hid Stop on a refused submit,
+     * stranding the very generation the user was trying to stop.
+     */
+    if (isSubmitting) {
+      showToast({ message: localize('com_ui_send_while_submitting'), status: 'warning' });
+      return false;
     }
 
     const conversation = cloneDeep(immutableConversation);
@@ -274,18 +291,18 @@ export default function useChatFunctions({
     const endpoint = conversation?.endpoint;
     if (endpoint === null) {
       console.error('No endpoint available');
-      return;
+      return false;
     }
 
     conversationId = conversationId ?? conversation?.conversationId ?? null;
     if (conversationId == 'search') {
       console.error('cannot send any message under search view!');
-      return;
+      return false;
     }
 
     if (isContinued && !latestMessage) {
       console.error('cannot continue AI message without latestMessage!');
-      return;
+      return false;
     }
 
     if (parentMessageId == null && hasPendingAssistantParent(latestMessage)) {
@@ -295,6 +312,8 @@ export default function useChatFunctions({
       );
       return false;
     }
+
+    setShowStopButton(false);
 
     const ephemeralAgent = getEphemeralAgent(conversationId ?? Constants.NEW_CONVO);
     /**

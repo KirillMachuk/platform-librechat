@@ -92,23 +92,34 @@ export default function PlanCard({
     awaitingAction ? remainingFrom(anchorMs, effectiveAutoStartSec) : null,
   );
 
-  const start = useCallback(() => {
-    setActed((was) => {
-      if (!was) {
-        submitMessage({ text: DR_START_MARKER });
+  /**
+   * `acted` hides the buttons, so it may only follow a submit the chat actually TOOK:
+   * `submitMessage` returns false while another generation still streams, and flipping
+   * `acted` regardless left the card with no buttons and nothing running — a dead end
+   * only F5 could clear (the shipped bug). A refusal now leaves the card untouched, so
+   * the same tap works once the chat frees up; `ask` explains the refusal via a toast.
+   * The ref (not a side effect inside the state updater — that one fires twice under
+   * StrictMode) blocks the second tap of a double-tap, which lands before the re-render
+   * that removes the buttons. `act` is synchronous throughout, so nothing can interleave.
+   */
+  const actedRef = useRef(false);
+  const act = useCallback(
+    (marker: string): boolean => {
+      if (actedRef.current) {
+        return false;
       }
+      if (submitMessage({ text: marker }) === false) {
+        return false;
+      }
+      actedRef.current = true;
+      setActed(true);
       return true;
-    });
-  }, [submitMessage]);
+    },
+    [submitMessage],
+  );
 
-  const cancel = useCallback(() => {
-    setActed((was) => {
-      if (!was) {
-        submitMessage({ text: DR_CANCEL_MARKER });
-      }
-      return true;
-    });
-  }, [submitMessage]);
+  const start = useCallback(() => act(DR_START_MARKER), [act]);
+  const cancel = useCallback(() => act(DR_CANCEL_MARKER), [act]);
 
   const cancelAutoStart = useCallback(
     (announcement: string) => {
@@ -160,7 +171,13 @@ export default function PlanCard({
       }
       const left = remainingFrom(anchorMs, effectiveAutoStartSec);
       if (left == null) {
-        start();
+        // A refused autostart must not retry. Past the window `remaining` stops advancing,
+        // so this branch fires every tick: without cancelling, a chat busy with another
+        // generation would collect one refused start — and one toast — per second. Parking
+        // the card on its buttons is what the cancelled caption already tells the user.
+        if (!start()) {
+          cancelAutoStart(localize('com_ui_deep_research_autostart_cancelled'));
+        }
         return;
       }
       if (left === 30 || left === 10) {
