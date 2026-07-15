@@ -1,7 +1,6 @@
 import { v4 } from 'uuid';
 import { cloneDeep } from 'lodash';
 import { useNavigate } from 'react-router-dom';
-import { useToastContext } from '@librechat/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSetRecoilState, useRecoilValue, useRecoilCallback } from 'recoil';
 import {
@@ -38,9 +37,9 @@ import useFocusRegeneratedResponse from '~/hooks/Chat/useFocusRegeneratedRespons
 import useSetFilesToDelete from '~/hooks/Files/useSetFilesToDelete';
 import useGetSender from '~/hooks/Conversations/useGetSender';
 import store, { useGetEphemeralAgent } from '~/store';
-import { useLocalize, useAuthContext } from '~/hooks';
 import { startupConfigKey } from '~/data-provider';
 import useUserKey from '~/hooks/Input/useUserKey';
+import { useAuthContext } from '~/hooks';
 
 const logChatRequest = (request: Record<string, unknown>) => {
   logger.log('=====================================\nAsk function called with:');
@@ -206,11 +205,9 @@ export default function useChatFunctions({
   setSubmission: SetterOrUpdater<TSubmission | null>;
 }) {
   const navigate = useNavigate();
-  const localize = useLocalize();
   const getSender = useGetSender();
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
-  const { showToast } = useToastContext();
   const setFilesToDelete = useSetFilesToDelete();
   const getEphemeralAgent = useGetEphemeralAgent();
   const isTemporary = useRecoilValue(store.isTemporary);
@@ -281,16 +278,15 @@ export default function useChatFunctions({
      * reads as success — so a chat pinned by a stale `isSubmitting` swallowed the text AND
      * the card's buttons, the dead plan card only an F5 could revive.
      *
+     * Announcing the refusal is the CALLER's job, not this hook's (AudioRecorder is
+     * upstream's own example) — the composer never even lands here, since Enter is gated on
+     * `isSubmitting` upstream of it and Send becomes Stop.
+     *
      * Nothing above this line may mutate UI state for the same reason: `setShowStopButton`
      * ran first and hid Stop on a refused submit, stranding the very generation the user
      * was trying to stop.
-     *
-     * The composer itself never lands here — Enter is already gated on `isSubmitting`
-     * (useTextarea) and Send becomes Stop — so this speaks for the callers that are not
-     * gated: the DR plan card's buttons, edit-and-resubmit, query-param autosubmit.
      */
     if (isSubmitting) {
-      showToast({ message: localize('com_ui_send_while_submitting'), status: 'warning' });
       return false;
     }
 

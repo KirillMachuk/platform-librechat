@@ -4,6 +4,7 @@ import type { TMessage } from 'librechat-data-provider';
 import PlanCard from '../PlanCard';
 
 const mockSubmit = jest.fn();
+const mockShowToast = jest.fn();
 let mockStartupConfig:
   | { deepResearch?: { planGate: boolean; planAutoStartSec: number } }
   | undefined;
@@ -30,6 +31,7 @@ jest.mock('@librechat/client', () => ({
   }: React.ComponentProps<'button'> & { variant?: string; size?: string }) => (
     <button {...rest}>{children}</button>
   ),
+  useToastContext: () => ({ showToast: mockShowToast }),
 }));
 jest.mock('librechat-data-provider', () => ({
   DR_START_MARKER: '▶ Начать исследование',
@@ -270,6 +272,12 @@ describe('PlanCard', () => {
     expect(mockSubmit).toHaveBeenCalledTimes(1);
     expect(getByText('com_ui_deep_research_start')).toBeInTheDocument();
     expect(getByText('com_ui_cancel')).toBeInTheDocument();
+    // A button that visibly does nothing is the complaint being fixed — say why. These
+    // buttons are not gated on isSubmitting the way the composer is, so this is the one
+    // caller that has to speak. (Announcing at the call site is upstream's own pattern.)
+    expect(mockShowToast).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'com_ui_send_while_submitting' }),
+    );
 
     // ...and the very same tap works once the chat frees up — no reload needed.
     mockSubmit.mockReturnValue(undefined);

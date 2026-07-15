@@ -4,7 +4,6 @@ import type { TConversation, TMessage } from 'librechat-data-provider';
 import useChatFunctions from '../useChatFunctions';
 
 const mockNavigate = jest.fn();
-const mockShowToast = jest.fn();
 const mockSetShowStopButton = jest.fn();
 const mockSetIsSubmitting = jest.fn();
 const mockGetEphemeralAgent = jest.fn(() => null);
@@ -15,10 +14,6 @@ const mockGetQueryData = jest.fn(() => ({}));
 
 jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
-}));
-
-jest.mock('@librechat/client', () => ({
-  useToastContext: () => ({ showToast: mockShowToast }),
 }));
 
 jest.mock('@tanstack/react-query', () => ({
@@ -46,7 +41,6 @@ jest.mock('~/hooks/Conversations/useGetSender', () => () => mockGetSender);
 jest.mock('~/hooks/Input/useUserKey', () => () => ({ getExpiry: mockGetExpiry }));
 jest.mock('~/hooks', () => ({
   useAuthContext: () => ({ user: null }),
-  useLocalize: () => (key: string) => key,
 }));
 jest.mock('~/store', () => ({
   __esModule: true,
@@ -111,13 +105,16 @@ const renderAsk = (isSubmitting: boolean, messages: TMessage[] = []) => {
 };
 
 /**
- * A refused submit must leave the chat exactly as it found it. `ask` returns `false` so the
- * caller can tell nothing was sent — `useSubmitMessage`/`AudioRecorder` keep the user's text
- * instead of resetting the composer over it, and `PlanCard` keeps its buttons. Refusals used
- * to return `undefined` (indistinguishable from success) and hid the Stop button on the way
- * out, which is how a chat pinned by a stale `isSubmitting` ate the text, blanked the plan
- * card's buttons, and stranded the running generation with no way to stop it — all silently,
- * and all only curable by an F5.
+ * A refused submit must leave the chat exactly as it found it. `ask` answers `false` so the
+ * caller can tell nothing was sent — upstream's contract (#13619: "preserve refused submit
+ * state" / "propagate refused submit result"), which `useSubmitMessage` and `AudioRecorder`
+ * already honour by keeping the user's text instead of resetting the composer over it.
+ * Upstream wired it to one guard; the rest answered `undefined`, indistinguishable from
+ * success, and hid the Stop button on the way out. That is how a chat pinned by a stale
+ * `isSubmitting` ate the text, blanked the plan card's buttons, and stranded the running
+ * generation with no way to stop it — silently, and only curable by an F5.
+ *
+ * Announcing a refusal is the caller's job, not this hook's (see PlanCard.spec).
  */
 describe('useChatFunctions ask refusals', () => {
   beforeEach(() => {
@@ -125,7 +122,7 @@ describe('useChatFunctions ask refusals', () => {
     mockGetQueryData.mockReturnValue({});
   });
 
-  it('refuses while a generation is running: says so, sends nothing, and leaves Stop alone', () => {
+  it('refuses while a generation is running: sends nothing and leaves Stop alone', () => {
     const { result, setSubmission } = renderAsk(true);
 
     let returned: unknown;
@@ -135,15 +132,12 @@ describe('useChatFunctions ask refusals', () => {
 
     expect(returned).toBe(false);
     expect(setSubmission).not.toHaveBeenCalled();
-    expect(mockShowToast).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'com_ui_send_while_submitting' }),
-    );
     // The refused call must not hide the Stop button of the generation it refused to
     // interrupt — that left the user with a running response and no way to stop it.
     expect(mockSetShowStopButton).not.toHaveBeenCalled();
   });
 
-  it('refuses empty text silently — no toast, and the composer stays clearable', () => {
+  it('refuses empty text as `void`, so the composer stays clearable', () => {
     const { result, setSubmission } = renderAsk(false);
 
     let returned: unknown;
@@ -152,8 +146,6 @@ describe('useChatFunctions ask refusals', () => {
     });
 
     expect(setSubmission).not.toHaveBeenCalled();
-    // An empty box explains itself; a toast here would be absurd.
-    expect(mockShowToast).not.toHaveBeenCalled();
     expect(mockSetShowStopButton).not.toHaveBeenCalled();
     // NOT `false`: there is no text to preserve, and `false` would stop useSubmitMessage
     // from clearing a whitespace-only composer — a behaviour change this fix has no
@@ -171,6 +163,5 @@ describe('useChatFunctions ask refusals', () => {
 
     expect(setSubmission).toHaveBeenCalled();
     expect(mockSetShowStopButton).toHaveBeenCalledWith(false);
-    expect(mockShowToast).not.toHaveBeenCalled();
   });
 });

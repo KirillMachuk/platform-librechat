@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Telescope } from 'lucide-react';
-import { Button } from '@librechat/client';
+import { Button, useToastContext } from '@librechat/client';
 import { parseDrPlanMessage, DR_START_MARKER, DR_CANCEL_MARKER } from 'librechat-data-provider';
 import type { TMessage } from 'librechat-data-provider';
 import { useGetStartupConfig } from '~/data-provider';
@@ -78,6 +78,7 @@ export default function PlanCard({
   autoStartSec?: number;
 }) {
   const localize = useLocalize();
+  const { showToast } = useToastContext();
   const { submitMessage } = useSubmitMessage();
   const { data: startupConfig } = useGetStartupConfig();
   const effectiveAutoStartSec = autoStartSec ?? startupConfig?.deepResearch?.planAutoStartSec ?? 0;
@@ -97,10 +98,18 @@ export default function PlanCard({
    * `submitMessage` returns false while another generation still streams, and flipping
    * `acted` regardless left the card with no buttons and nothing running — a dead end
    * only F5 could clear (the shipped bug). A refusal now leaves the card untouched, so
-   * the same tap works once the chat frees up; `ask` explains the refusal via a toast.
-   * The ref (not a side effect inside the state updater — that one fires twice under
-   * StrictMode) blocks the second tap of a double-tap, which lands before the re-render
-   * that removes the buttons. `act` is synchronous throughout, so nothing can interleave.
+   * the same tap works once the chat frees up.
+   *
+   * These buttons are the reason the refusal needs saying out loud: unlike the composer
+   * (Enter is gated on `isSubmitting`, Send turns into Stop) nothing stops the user from
+   * pressing them mid-generation, and a button that visibly does nothing is the complaint
+   * this fixes. Announcing at the call site is upstream's own pattern — `ask` reports the
+   * refusal by return value and leaves the UX to whoever asked (AudioRecorder does the same).
+   *
+   * The ref — not a side effect inside a state updater — blocks the second tap of a
+   * double-tap, which lands before the re-render that removes the buttons: an updater must
+   * be pure, since React may re-invoke it when rebasing a concurrent render. `act` is
+   * synchronous end to end, so a tap can never interleave with a countdown tick inside it.
    */
   const actedRef = useRef(false);
   const act = useCallback(
@@ -109,13 +118,14 @@ export default function PlanCard({
         return false;
       }
       if (submitMessage({ text: marker }) === false) {
+        showToast({ message: localize('com_ui_send_while_submitting'), status: 'warning' });
         return false;
       }
       actedRef.current = true;
       setActed(true);
       return true;
     },
-    [submitMessage],
+    [submitMessage, showToast, localize],
   );
 
   const start = useCallback(() => act(DR_START_MARKER), [act]);
@@ -174,7 +184,12 @@ export default function PlanCard({
         // A refused autostart must not retry. Past the window `remaining` stops advancing,
         // so this branch fires every tick: without cancelling, a chat busy with another
         // generation would collect one refused start — and one toast — per second. Parking
-        // the card on its buttons is what the cancelled caption already tells the user.
+        // the card on its buttons is what the cancelled caption already tells the user, and
+        // it is deliberate that one refusal disarms autostart for good: the refusal that
+        // matters (a chat pinned by a stale `isSubmitting`) does not heal on its own.
+        // `start()` is also false for "already acted", which cannot reach here (a click
+        // flips `acted`, tearing this interval down first) and would be silent anyway —
+        // the caption unmounts with the controls.
         if (!start()) {
           cancelAutoStart(localize('com_ui_deep_research_autostart_cancelled'));
         }
