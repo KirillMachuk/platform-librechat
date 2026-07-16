@@ -1,7 +1,7 @@
+import { StandardGraph } from '@librechat/agents';
 import { StepTypes } from 'librechat-data-provider';
 import type { Agents } from 'librechat-data-provider';
 import type { Redis, Cluster } from 'ioredis';
-import { StandardGraph } from '@librechat/agents';
 
 /** Suppress winston Console transport output (survives jest.resetModules) */
 jest.spyOn(console, 'log').mockImplementation();
@@ -152,6 +152,121 @@ describe('RedisJobStore Integration Tests', () => {
 
       const job = await store.getJob(streamId);
       expect(job).toBeNull();
+
+      await store.destroy();
+    });
+
+    test('recordHeartbeat stamps lastHeartbeatAt and it survives the Redis round-trip', async () => {
+      if (!ioredisClient) {
+        return;
+      }
+
+      const { RedisJobStore } = await import('../implementations/RedisJobStore');
+      const store = new RedisJobStore(ioredisClient);
+      await store.initialize();
+
+      const streamId = `test-stream-hb-${Date.now()}`;
+      await store.createJob(streamId, 'user-1', streamId);
+      expect((await store.getJob(streamId))?.lastHeartbeatAt).toBeUndefined();
+
+      const before = Date.now();
+      await store.recordHeartbeat(streamId);
+
+      const beat = (await store.getJob(streamId))?.lastHeartbeatAt;
+      expect(typeof beat).toBe('number');
+      expect(beat).toBeGreaterThanOrEqual(before);
+
+      await store.destroy();
+    });
+
+    test('recordHeartbeat on a missing job is a no-op (creates nothing)', async () => {
+      if (!ioredisClient) {
+        return;
+      }
+
+      const { RedisJobStore } = await import('../implementations/RedisJobStore');
+      const store = new RedisJobStore(ioredisClient);
+      await store.initialize();
+
+      const streamId = `test-stream-ghost-${Date.now()}`;
+      await expect(store.recordHeartbeat(streamId)).resolves.toBeUndefined();
+      expect(await store.getJob(streamId)).toBeNull();
+
+      await store.destroy();
+    });
+
+    test('createJob clears an inherited heartbeat so a reused conversation is not false-reaped', async () => {
+      if (!ioredisClient) {
+        return;
+      }
+
+      const { RedisJobStore } = await import('../implementations/RedisJobStore');
+      const { STALE_HEARTBEAT_MS } = await import('../interfaces/IJobStore');
+      const store = new RedisJobStore(ioredisClient);
+      await store.initialize();
+
+      // streamId === conversationId is stable across turns, and the hash survives a turn, so
+      // `createJob`'s merge can inherit a prior DR turn's heartbeat. A non-heartbeat turn
+      // (an ordinary chat) that inherited it would be reaped as a dead producer mid-run.
+      const streamId = `test-stream-reuse-${Date.now()}`;
+      await store.createJob(streamId, 'user-1', streamId);
+      // A prior DR turn that heartbeated long ago (or died): a STALE beat left on the hash.
+      await store.updateJob(streamId, {
+        lastHeartbeatAt: Date.now() - STALE_HEARTBEAT_MS - 10_000,
+      });
+
+      // The conversation's next turn reuses the streamId. The fresh job must carry no beat.
+      await store.createJob(streamId, 'user-1', streamId);
+      expect((await store.getJob(streamId))?.lastHeartbeatAt).toBeUndefined();
+
+      // End-to-end: without the reset, the inherited stale beat would reap this live,
+      // beat-less job on the next sweep. It must survive.
+      await store.cleanup();
+      expect(await store.getJob(streamId)).not.toBeNull();
+
+      await store.destroy();
+    });
+
+    test('recordHeartbeat does not beat a job that is no longer running', async () => {
+      if (!ioredisClient) {
+        return;
+      }
+
+      const { RedisJobStore } = await import('../implementations/RedisJobStore');
+      const store = new RedisJobStore(ioredisClient);
+      await store.initialize();
+
+      const streamId = `test-stream-done-hb-${Date.now()}`;
+      await store.createJob(streamId, 'user-1', streamId);
+      await store.updateJob(streamId, { status: 'complete', completedAt: Date.now() });
+
+      // A stray unwind beat must neither stamp a heartbeat nor refresh the completed TTL.
+      await store.recordHeartbeat(streamId);
+      expect((await store.getJob(streamId))?.lastHeartbeatAt).toBeUndefined();
+
+      await store.destroy();
+    });
+
+    test('cleanup reaps a running job whose heartbeat went stale', async () => {
+      if (!ioredisClient) {
+        return;
+      }
+
+      const { RedisJobStore } = await import('../implementations/RedisJobStore');
+      const { STALE_HEARTBEAT_MS } = await import('../interfaces/IJobStore');
+      const store = new RedisJobStore(ioredisClient);
+      await store.initialize();
+
+      const streamId = `test-stream-stale-hb-${Date.now()}`;
+      await store.createJob(streamId, 'user-1', streamId);
+      // A producer that beat once, then died: last beat older than the stale window.
+      // createdAt stays fresh, so only the heartbeat path can reap it.
+      await store.updateJob(streamId, { lastHeartbeatAt: Date.now() - STALE_HEARTBEAT_MS - 1000 });
+
+      const cleaned = await store.cleanup();
+
+      expect(cleaned).toBeGreaterThanOrEqual(1);
+      expect(await store.getJob(streamId)).toBeNull();
 
       await store.destroy();
     });

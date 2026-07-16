@@ -9,6 +9,7 @@ import type {
   IJobStore,
   JobStatus,
 } from '~/stream/interfaces/IJobStore';
+import { STALE_HEARTBEAT_MS } from '~/stream/interfaces/IJobStore';
 
 /**
  * Key prefixes for Redis storage.
@@ -175,6 +176,9 @@ export class RedisJobStore implements IJobStore {
     // The job key uses hash tag {streamId}, runningJobs and userJobs are on different slots
     if (this.isCluster) {
       await this.redis.hset(key, this.serializeJob(job));
+      // The merge above can leave a prior turn's heartbeat behind (see below); drop it so a
+      // non-heartbeat turn that reuses this conversation is never judged by a stale beat.
+      await this.redis.hdel(key, 'lastHeartbeatAt');
       await this.redis.expire(key, this.ttl.running);
       await this.redis.sadd(KEYS.runningJobs, streamId);
       await this.redis.sadd(userJobsKey, streamId);
@@ -184,6 +188,17 @@ export class RedisJobStore implements IJobStore {
     } else {
       const pipeline = this.redis.pipeline();
       pipeline.hset(key, this.serializeJob(job));
+      /**
+       * `hset` MERGES, and this key survives a turn (an aborted producer keeps its hash),
+       * so a fresh turn inherits the previous one's `lastHeartbeatAt`. Left in place, a
+       * non-heartbeat turn — an ordinary chat reusing this conversation — would carry a
+       * frozen beat it never refreshes, and the reaper would kill the LIVE generation as a
+       * dead producer. `serializeJob` skips the undefined fresh value, so it cannot
+       * overwrite the stale one; delete it outright. `false`-style sentinels won't do — a
+       * numeric `0` reads as a 1970 heartbeat and reaps instantly. Mirrors the explicit
+       * `producerFinalizesOnAbort: false` reset above.
+       */
+      pipeline.hdel(key, 'lastHeartbeatAt');
       pipeline.expire(key, this.ttl.running);
       pipeline.sadd(KEYS.runningJobs, streamId);
       pipeline.sadd(userJobsKey, streamId);
@@ -370,6 +385,20 @@ export class RedisJobStore implements IJobStore {
             }
             this.localGraphCache.delete(streamId);
             this.localCollectedUsageCache.delete(streamId);
+            return 1;
+          }
+
+          // Dead heartbeat producer: a job that opted into heartbeats (Deep Research) but
+          // has not stamped one within the stale window has lost its producer — a container
+          // restart, a crash — so reap it now instead of waiting out the 20-minute total-age
+          // failsafe below. GenerationJobManager.cleanup, seeing the job gone, then tells any
+          // still-attached client (REAPED_JOB_ERROR) so it unsticks in ~1–2 min (stale window
+          // plus up to the 60s cleanup cadence), not ~twenty. Jobs that never heartbeat
+          // (ordinary chats) skip this and keep the age failsafe.
+          if (job.lastHeartbeatAt != null && now - job.lastHeartbeatAt > STALE_HEARTBEAT_MS) {
+            logger.warn(`[RedisJobStore] Reaping job with a dead heartbeat: ${streamId}`);
+            const userJobsKey = job.userId ? KEYS.userJobs(job.userId, job.tenantId) : null;
+            await this.deleteJobInternal(streamId, userJobsKey);
             return 1;
           }
 
@@ -651,6 +680,27 @@ export class RedisJobStore implements IJobStore {
    * Uses XADD for efficient append-only storage.
    * Sets TTL on first chunk to ensure cleanup if job crashes.
    */
+  /**
+   * Stamp `lastHeartbeatAt` and refresh the job key's TTL — but only while the job is still
+   * `running`. Gating on status (not just EXISTS) matters: a beat from a producer still
+   * unwinding after its job flipped to `complete`/`aborted` must NOT bump that hash's
+   * shorter completed-TTL back up to the running one, which would keep a finished job around
+   * far longer than intended. A missing key's `HGET` returns nil — also a no-op — so a tick
+   * after the job was reaped is harmless. The TTL refresh keeps a genuinely long live run's
+   * hash alive past the 20-minute running TTL; the timestamp is what the reaper reads to tell
+   * that same live run apart from a producer that died mid-flight.
+   */
+  async recordHeartbeat(streamId: string): Promise<void> {
+    const key = KEYS.job(streamId);
+    await this.redis.eval(
+      'if redis.call("HGET", KEYS[1], "status") == "running" then redis.call("HSET", KEYS[1], "lastHeartbeatAt", ARGV[1]) redis.call("EXPIRE", KEYS[1], ARGV[2]) return 1 else return 0 end',
+      1,
+      key,
+      String(Date.now()),
+      String(this.ttl.running),
+    );
+  }
+
   async appendChunk(streamId: string, event: unknown): Promise<void> {
     const key = KEYS.chunks(streamId);
     // Pipeline XADD + EXPIRE in a single round-trip.
@@ -925,6 +975,7 @@ export class RedisJobStore implements IJobStore {
       responseMessageId: data.responseMessageId || undefined,
       createdEventEmitted: data.createdEventEmitted === '1',
       producerFinalizesOnAbort: data.producerFinalizesOnAbort === '1',
+      lastHeartbeatAt: data.lastHeartbeatAt ? parseInt(data.lastHeartbeatAt, 10) : undefined,
       sender: data.sender || undefined,
       syncSent: data.syncSent === '1',
       finalEvent: data.finalEvent || undefined,

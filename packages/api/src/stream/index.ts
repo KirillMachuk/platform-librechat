@@ -12,6 +12,7 @@ export type {
   JobStatus,
   IJobStore,
 } from './interfaces/IJobStore';
+export { HEARTBEAT_INTERVAL_MS, STALE_HEARTBEAT_MS } from './interfaces/IJobStore';
 
 export { createStreamServices } from './createStreamServices';
 export type { StreamServicesConfig, StreamServices } from './createStreamServices';

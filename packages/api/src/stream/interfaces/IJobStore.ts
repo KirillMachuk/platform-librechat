@@ -7,6 +7,22 @@ import type { Agents } from 'librechat-data-provider';
 export type JobStatus = 'running' | 'complete' | 'error' | 'aborted';
 
 /**
+ * How often a heartbeat-driven producer (Deep Research) stamps `lastHeartbeatAt`.
+ * Must stay well below {@link STALE_HEARTBEAT_MS} so a single missed tick — a GC pause, a
+ * slow Redis round-trip — never trips the reaper; the gap here is 6 beats.
+ */
+export const HEARTBEAT_INTERVAL_MS = 15_000;
+
+/**
+ * A running job whose last heartbeat is older than this is treated as a dead producer and
+ * reaped. Chosen for stability over speed: long enough to ride out event-loop lag under a
+ * heavy graph step, short enough that a run killed by a container restart is cleared — and
+ * its waiting client told — in ~1–2 min, versus the 20-minute total-age failsafe. Only
+ * jobs that actually stamp a heartbeat are judged by it; the rest are untouched.
+ */
+export const STALE_HEARTBEAT_MS = 90_000;
+
+/**
  * Serializable job data - no object references, suitable for Redis/external storage
  */
 export interface SerializableJobData {
@@ -73,6 +89,16 @@ export interface SerializableJobData {
   iconURL?: string;
   model?: string;
   promptTokens?: number;
+
+  /**
+   * Opt-in producer-liveness timestamp (epoch ms), refreshed by a producer that does not
+   * stream token chunks and so cannot be watched by the chunk-based activity failsafe.
+   * The reaper treats a running job whose heartbeat has gone stale as a dead producer and
+   * reaps it — how a run killed by a container restart is detected in ~a minute instead of
+   * waiting out the 20-minute total-age TTL. Absent on jobs that never opt in (ordinary
+   * chats stream chunks); those keep the age-based failsafe unchanged.
+   */
+  lastHeartbeatAt?: number;
 }
 
 /**
@@ -238,6 +264,17 @@ export interface IJobStore {
    * @param streamId - The stream identifier
    */
   recordActivity?(streamId: string): void;
+
+  /**
+   * Stamp a running job's `lastHeartbeatAt` (and refresh its key TTL) so the reaper can
+   * tell a live-but-quiet producer from a dead one. Distinct from `recordActivity`: that
+   * marks a chunk flowing to a client, this marks the producer itself alive — the signal a
+   * non-streaming producer (Deep Research) has no other way to send. A no-op if the job is
+   * already gone (finished or reaped), so a late timer tick is harmless.
+   *
+   * @param streamId - The stream identifier
+   */
+  recordHeartbeat(streamId: string): Promise<void>;
 
   /** Get total job count */
   getJobCount(): Promise<number>;
