@@ -33,6 +33,12 @@ jest.mock('~/server/services/Config', () => ({
 
 jest.mock('./crud', () => ({
   embedStoredFile: jest.fn(),
+  purgeStoredVectors: jest.fn(),
+  fetchDocMetadata: jest.fn().mockResolvedValue(null),
+  /* Real values, not stubs: the lease clamp sums them with the embed timeout, and the whole point
+   * of that clamp is that one claim never outlives its lease (a re-claim = duplicate vectors). */
+  METADATA_TIMEOUT_MS: () => 60_000,
+  PURGE_TIMEOUT_MS: 60_000,
   logAxiosError: jest.fn(),
 }));
 
@@ -41,7 +47,7 @@ jest.mock('~/server/services/Projects/context', () => ({
 }));
 
 require('module-alias/register');
-const { embedStoredFile } = require('./crud');
+const { embedStoredFile, purgeStoredVectors, fetchDocMetadata } = require('./crud');
 const { backoffMs, claimNext, processClaimed } = require('./worker');
 
 const APP_CONFIG = { paths: { uploads: '/tmp' } };
@@ -156,6 +162,53 @@ describe('embed worker state machine', () => {
     );
   });
 
+  it('persists document metadata alongside the ready transition', async () => {
+    await seed({ file_id: 'meta-1' });
+    embedStoredFile.mockResolvedValueOnce({ embedded: true });
+    fetchDocMetadata.mockResolvedValueOnce({
+      docType: 'договор',
+      parties: ['Ромашка', 'Юнифуд'],
+      primaryDate: '2024-01-15',
+      primaryLocation: 'Минск',
+      identifiers: [{ type: 'DOC_NO', value: '312/24' }],
+      columns: [],
+    });
+
+    const claimed = await claimNext();
+    await processClaimed(claimed, APP_CONFIG);
+
+    const record = await File.findOne({ file_id: 'meta-1' }).lean();
+    expect(record.embeddingStatus).toBe('ready');
+    expect(record.docMetadata.docType).toBe('договор');
+    expect(record.docMetadata.parties).toEqual(['Ромашка', 'Юнифуд']);
+    expect(record.docMetadata.primaryLocation).toBe('Минск');
+    expect(record.docMetadata.identifiers).toEqual([{ type: 'DOC_NO', value: '312/24' }]);
+  });
+
+  it('metadata is extracted only AFTER a successful embed (a failed file is not parsed)', async () => {
+    await seed({ file_id: 'noembed-1' });
+    embedStoredFile.mockRejectedValueOnce(new Error('boom'));
+
+    const claimed = await claimNext();
+    await processClaimed(claimed, APP_CONFIG);
+
+    expect(fetchDocMetadata).not.toHaveBeenCalled();
+  });
+
+  it('fail-open: no metadata still marks the file ready and searchable', async () => {
+    await seed({ file_id: 'nometa-1' });
+    embedStoredFile.mockResolvedValueOnce({ embedded: true });
+    fetchDocMetadata.mockResolvedValueOnce(null);
+
+    const claimed = await claimNext();
+    await processClaimed(claimed, APP_CONFIG);
+
+    const record = await File.findOne({ file_id: 'nometa-1' }).lean();
+    expect(record.embeddingStatus).toBe('ready');
+    expect(record.embedded).toBe(true);
+    expect(record.docMetadata).toBeUndefined();
+  });
+
   it('reschedules with backoff on a transient failure (503)', async () => {
     await seed({ file_id: 'busy-1' });
     const error = new Error('busy');
@@ -239,5 +292,111 @@ describe('embed worker state machine', () => {
       process.env.RAG_EMBED_LEASE_MS = prev.lease;
       process.env.RAG_EMBED_TIMEOUT_MS = prev.timeout;
     }
+  });
+});
+
+/**
+ * `/embed` APPENDS vectors — it never replaces them. So an attempt that dies AFTER the vectors are
+ * committed (response timeout, dropped connection, worker crash) leaves them behind, and the retry
+ * writes a second full copy. Seen on the lab: one file ended up with exactly RAG_EMBED_MAX_ATTEMPTS
+ * copies of every chunk (1420 rows for 284 unique) and then `failed` — silently unsearchable, its
+ * duplicates crowding other documents out of the shared retrieval pool.
+ */
+describe('идемпотентность ретрая: дубли векторов', () => {
+  let mongoServer;
+  let File;
+
+  beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+    await mongoose.connect(mongoServer.getUri());
+    File = mongoose.models.File || mongoose.model('File', fileSchema);
+  }, 30000);
+
+  afterAll(async () => {
+    await mongoose.disconnect();
+    await mongoServer.stop();
+  });
+
+  beforeEach(async () => {
+    await File.deleteMany({});
+    jest.clearAllMocks();
+  });
+
+  const seedPending = (file_id) =>
+    File.create({
+      user: new mongoose.Types.ObjectId(),
+      file_id,
+      filename: 'contract.pdf',
+      filepath: '/uploads/u1/contract.pdf',
+      source: 'local',
+      type: 'application/pdf',
+      bytes: 1024,
+      embeddingStatus: 'pending',
+      embedNextAt: new Date(Date.now() - 1000),
+      embedAttempts: 0,
+    });
+
+  it('первая попытка НЕ платит за удаление: удалять нечего у свежего file_id', async () => {
+    await seedPending('fresh');
+    const claimed = await claimNext();
+    expect(claimed.embedAttempts).toBe(1);
+
+    await processClaimed(claimed, APP_CONFIG);
+
+    expect(purgeStoredVectors).not.toHaveBeenCalled();
+    expect(embedStoredFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('РЕТРАЙ снимает прежние векторы ПЕРЕД повторным эмбеддингом', async () => {
+    await seedPending('retry');
+    // Первая попытка падает уже ПОСЛЕ коммита векторов — они остаются в базе.
+    embedStoredFile.mockRejectedValueOnce(
+      Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }),
+    );
+    await processClaimed(await claimNext(), APP_CONFIG);
+    expect(await File.findOne({ file_id: 'retry' }).then((f) => f.embeddingStatus)).toBe('pending');
+
+    await File.updateOne({ file_id: 'retry' }, { embedNextAt: new Date(Date.now() - 1000) });
+    const retry = await claimNext();
+    expect(retry.embedAttempts).toBe(2);
+    await processClaimed(retry, APP_CONFIG);
+
+    expect(purgeStoredVectors).toHaveBeenCalledTimes(1);
+    expect(purgeStoredVectors).toHaveBeenCalledWith({
+      file: expect.objectContaining({ file_id: 'retry' }),
+    });
+    // Порядок решает: удалить ПОСЛЕ эмбеддинга = стереть только что записанное.
+    expect(purgeStoredVectors.mock.invocationCallOrder[0]).toBeLessThan(
+      embedStoredFile.mock.invocationCallOrder[1],
+    );
+    expect(await File.findOne({ file_id: 'retry' }).then((f) => f.embeddingStatus)).toBe('ready');
+  });
+
+  it('не смогли снять векторы — НЕ эмбеддим: иначе получим ровно тот дубль, от которого лечимся', async () => {
+    await seedPending('purge-fails');
+    embedStoredFile.mockRejectedValueOnce(new Error('timeout'));
+    await processClaimed(await claimNext(), APP_CONFIG);
+
+    await File.updateOne({ file_id: 'purge-fails' }, { embedNextAt: new Date(Date.now() - 1000) });
+    purgeStoredVectors.mockRejectedValueOnce(new Error('rag_api down'));
+    await processClaimed(await claimNext(), APP_CONFIG);
+
+    expect(embedStoredFile).toHaveBeenCalledTimes(1); // только неудачная первая
+    const after = await File.findOne({ file_id: 'purge-fails' });
+    expect(after.embeddingStatus).toBe('pending'); // отложили, а не испортили индекс
+  });
+
+  it('исчерпание попыток: файл не остаётся с копиями от каждой попытки', async () => {
+    await seedPending('exhaust');
+    embedStoredFile.mockRejectedValue(new Error('timeout'));
+    for (let i = 0; i < 5; i++) {
+      await File.updateOne({ file_id: 'exhaust' }, { embedNextAt: new Date(Date.now() - 1000) });
+      await processClaimed(await claimNext(), APP_CONFIG);
+    }
+    const after = await File.findOne({ file_id: 'exhaust' });
+    expect(after.embeddingStatus).toBe('failed');
+    // 5 попыток = 5 эмбеддингов, но каждая, кроме первой, начиналась с очистки → копия одна.
+    expect(embedStoredFile).toHaveBeenCalledTimes(5);
+    expect(purgeStoredVectors).toHaveBeenCalledTimes(4);
   });
 });

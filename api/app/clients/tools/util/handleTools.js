@@ -43,6 +43,7 @@ const {
 } = require('~/server/services/MCP');
 const { getMCPRequestContext } = require('~/server/services/MCPRequestContext');
 const { createFileSearchTool, primeFiles: primeSearchFiles } = require('./fileSearch');
+const { createLibrarySearchTool } = require('./librarySearch');
 const { primeFiles: primeCodeFiles } = require('~/server/services/Files/Code/process');
 const { getUserPluginAuthValue } = require('~/server/services/PluginService');
 const { loadAuthValues } = require('~/server/services/Tools/credentials');
@@ -333,6 +334,30 @@ const loadTools = async ({
           userId: user,
           files,
           entity_id: agent?.id,
+          fileCitations,
+        });
+      };
+      continue;
+    } else if (tool === Tools.library_search) {
+      requestedTools[tool] = async () => {
+        /** @type {boolean | undefined} */
+        let fileCitations;
+        if (options.req?.user != null) {
+          try {
+            fileCitations = await checkAccess({
+              user: options.req.user,
+              permissionType: PermissionTypes.FILE_CITATIONS,
+              permissions: [Permissions.USE],
+              getRoleByName,
+            });
+          } catch (error) {
+            logger.error('[handleTools] FILE_CITATIONS permission check failed:', error);
+            fileCitations = false;
+          }
+        }
+        return createLibrarySearchTool({
+          userId: user,
+          tenantId: options.req?.user?.tenantId,
           fileCitations,
         });
       };

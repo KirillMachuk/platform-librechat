@@ -110,7 +110,10 @@ const categorizeFileForToolResources = ({
     return;
   }
 
-  if (file.embedded === true) {
+  // `embeddingScope === 'library'` files are context documents indexed only for
+  // cross-chat library_search; they must NOT enter file_search resources, or the
+  // floor would inject their chunks on top of their already-inlined full text.
+  if (file.embedded === true && file.embeddingScope !== 'library') {
     addFileToResource({
       file,
       resourceType: EToolResources.file_search,

@@ -1055,6 +1055,26 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         storageRegion: stored.storageRegion,
       });
 
+      /* "Index everything" for cross-chat library_search: a `context` file is
+       * read as full text in this chat, but we ALSO embed it (async) so the
+       * library tool can find it from other chats. `embeddingScope: 'library'`
+       * keeps it out of this conversation's retrieval floor (its full text is
+       * already inlined — see the floor guards in client.js / resources.ts), so
+       * there is no double injection. The stored original is retained above, so
+       * the background /embed can stream it.
+       *
+       * Privacy is FAIL-CLOSED on the temp-chat boundary: we require BOTH the
+       * absence of a retention deadline AND the absence of an explicit
+       * isTemporary flag. Uploads can precede conversation persistence, so
+       * `expiredAt` alone can be null for a temp upload whose convo isn't saved
+       * yet — the explicit flag closes that gap so a temporary/incognito
+       * document is never made cross-chat findable. Also skipped when the async
+       * worker is off (no one would drain the queue). */
+      const { asyncEmbedEnabled } = require('./Embed');
+      const isTemporaryUpload = req.body?.isTemporary === true || req.body?.isTemporary === 'true';
+      const indexForLibrary =
+        asyncEmbedEnabled() && !retentionExpiry.expiredAt && !isTemporaryUpload;
+
       const fileInfo = {
         ...removeNullishValues({
           text,
@@ -1070,6 +1090,15 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
           filepath: stored.filepath,
           source: storageSource,
           ...storageMetadata,
+          ...(indexForLibrary
+            ? {
+                embeddingStatus: 'pending',
+                embedNextAt: new Date(),
+                embedAttempts: 0,
+                embedEntityId: entity_id,
+                embeddingScope: 'library',
+              }
+            : {}),
         }),
         ...retentionExpiry,
       };
@@ -1222,9 +1251,7 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         `text parsing timed out for "${file.originalname}"`,
       );
     } catch (err) {
-      logger.warn(
-        `[processAgentFileUpload] ${err.message}; falling back to native text parsing`,
-      );
+      logger.warn(`[processAgentFileUpload] ${err.message}; falling back to native text parsing`);
       parsedText = await parseTextNative(file);
     }
     const { text, bytes } = parsedText;

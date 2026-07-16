@@ -181,11 +181,11 @@ describe('createFileSearchTool — RAG query-path hardening (D4/D5/D16)', () => 
       { file_id: 'f2', filename: 'good.pdf' },
     ];
     axios.post.mockReset();
-    axios.post
-      .mockRejectedValueOnce(new Error('timeout'))
-      .mockResolvedValueOnce({
-        data: [[{ page_content: 'срок 5 лет', metadata: { source: '/uploads/good.pdf', page: 1 } }, 0.2]],
-      });
+    axios.post.mockRejectedValueOnce(new Error('timeout')).mockResolvedValueOnce({
+      data: [
+        [{ page_content: 'срок 5 лет', metadata: { source: '/uploads/good.pdf', page: 1 } }, 0.2],
+      ],
+    });
 
     const searchTool = await createFileSearchTool({ userId: 'u1', files });
     const msg = await invoke(searchTool);

@@ -1,10 +1,10 @@
-import { primeResources } from './resources';
 import { logger } from '@librechat/data-schemas';
 import { EModelEndpoint, EToolResources, AgentCapabilities } from 'librechat-data-provider';
 import type { TAgentsEndpoint, TFile } from 'librechat-data-provider';
 import type { IUser, AppConfig } from '@librechat/data-schemas';
 import type { Request as ServerRequest } from 'express';
 import type { TGetFiles, TFilterFilesByAgentAccess } from './resources';
+import { primeResources } from './resources';
 
 // Mock logger
 jest.mock('@librechat/data-schemas', () => ({
@@ -177,6 +177,37 @@ describe('primeResources', () => {
 
       expect(result.attachments).toEqual(mockFiles);
       expect(result.tool_resources?.[EToolResources.file_search]?.files).toEqual(mockFiles);
+    });
+
+    it('should NOT put embeddingScope="library" files into file_search resources (no floor double-injection)', async () => {
+      const mockFiles: TFile[] = [
+        {
+          user: 'user1',
+          file_id: 'lib1',
+          filename: 'contract.pdf',
+          filepath: '/uploads/contract.pdf',
+          object: 'file',
+          type: 'application/pdf',
+          bytes: 512,
+          embedded: true,
+          embeddingScope: 'library',
+          usage: 0,
+        },
+      ];
+
+      const result = await primeResources({
+        req: mockReq,
+        appConfig: mockAppConfig,
+        getFiles: mockGetFiles,
+        requestFileSet,
+        attachments: Promise.resolve(mockFiles),
+        tool_resources: {},
+      });
+
+      // Still returned as an attachment (its full text is inlined elsewhere), but
+      // never added to the file_search floor resource.
+      expect(result.attachments).toEqual(mockFiles);
+      expect(result.tool_resources?.[EToolResources.file_search]?.files).toBeUndefined();
     });
 
     it('should process image files in requestFileSet as image_edit resources', async () => {

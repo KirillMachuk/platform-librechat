@@ -11,7 +11,9 @@ export function createFileMethods(mongoose: typeof import('mongoose')): {
     filter: FilterQuery<IMongoFile>,
     _sortOptions?: Record<string, SortOrder> | null,
     selectFields?: Record<string, 0 | 1> | string | null,
+    limit?: number,
   ) => Promise<IMongoFile[] | null>;
+  countFiles: (filter: FilterQuery<IMongoFile>) => Promise<number>;
   getExpiredFiles: (limit?: number, now?: Date) => Promise<IMongoFile[]>;
   getToolFilesByIds: (
     fileIds: string[],
@@ -87,6 +89,7 @@ export function createFileMethods(mongoose: typeof import('mongoose')): {
     filter: FilterQuery<IMongoFile>,
     _sortOptions?: Record<string, SortOrder> | null,
     selectFields?: string | Record<string, 0 | 1> | null | undefined,
+    limit?: number,
   ): Promise<IMongoFile[] | null> {
     const File = mongoose.models.File as Model<IMongoFile>;
     const sortOptions = { updatedAt: -1 as SortOrder, ..._sortOptions };
@@ -101,7 +104,21 @@ export function createFileMethods(mongoose: typeof import('mongoose')): {
        * payload (previewText can be up to ~512KB per office file). */
       query.select({ text: 0, previewText: 0 });
     }
-    return await query.sort(sortOptions).lean<IMongoFile[]>();
+    query.sort(sortOptions);
+    /* Bound the result set when a caller passes a cap (e.g. library_search sends
+     * the file_ids to a single vector query — an unbounded scope would ship
+     * thousands of ids and force a sequential scan). Combined with the default
+     * updatedAt:-1 sort this returns the most recent `limit` files. */
+    if (typeof limit === 'number' && limit > 0) {
+      query.limit(limit);
+    }
+    return await query.lean<IMongoFile[]>();
+  }
+
+  /** Count matching files without materializing them (cheap for status/scope counts). */
+  async function countFiles(filter: FilterQuery<IMongoFile>): Promise<number> {
+    const File = mongoose.models.File as Model<IMongoFile>;
+    return await File.countDocuments(filter);
   }
 
   async function getExpiredFiles(limit = 100, now: Date = new Date()): Promise<IMongoFile[]> {
@@ -561,6 +578,7 @@ export function createFileMethods(mongoose: typeof import('mongoose')): {
   return {
     findFileById,
     getFiles,
+    countFiles,
     getExpiredFiles,
     getToolFilesByIds,
     getCodeGeneratedFiles,

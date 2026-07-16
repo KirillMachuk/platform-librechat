@@ -153,8 +153,11 @@ async function applyConversationFileContext({ req, primaryAgent }) {
       return;
     }
 
+    // Exclude embeddingScope==='library' files: those are full-text context
+    // documents indexed only for cross-chat library_search. Their full text is
+    // already inlined; merging them into the file_search floor would double-inject.
     const embeddedFiles = await db.getFiles(
-      { file_id: { $in: convoFileIds }, embedded: true },
+      { file_id: { $in: convoFileIds }, embedded: true, embeddingScope: { $ne: 'library' } },
       null,
       { text: 0 },
     );

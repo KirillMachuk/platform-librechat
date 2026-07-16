@@ -82,7 +82,11 @@ export async function loadEphemeralAgent(
     tools.push(Tools.execute_code);
   }
   if ((ephemeralAgent?.file_search === true || modelSpec?.fileSearch === true) && !reasoningModel) {
+    // One toggle, two tools: file_search covers documents attached to THIS chat (also
+    // force-armed by applyConversationFileContext), library_search covers the user's whole
+    // library. The model routes between them by their descriptions. (Owner decision §7-1.)
     tools.push(Tools.file_search);
+    tools.push(Tools.library_search);
   }
   if ((ephemeralAgent?.web_search === true || modelSpec?.webSearch === true) && !reasoningModel) {
     tools.push(Tools.web_search);

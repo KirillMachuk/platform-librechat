@@ -411,10 +411,17 @@ class AgentClient extends BaseClient {
      * `entity_id=project_id` and the augmented-prompt path queries the RAG API
      * without an `entity_id` (it would miss that namespace). Those keep working
      * through the `file_search` tool, which sends the correct `entity_id`.
+     *
+     * `embeddingScope === 'library'` files are also excluded: those are
+     * full-text `context` documents indexed only so library_search can find
+     * them across chats. Their full text is already inlined in the prompt, so
+     * injecting their chunks here too would be a double injection.
      */
     const embeddedResourceFiles = (
       this.options.agent?.tool_resources?.[EToolResources.file_search]?.files ?? []
-    ).filter((file) => file?.embedded === true && !file.project_id);
+    ).filter(
+      (file) => file?.embedded === true && !file.project_id && file.embeddingScope !== 'library',
+    );
 
     /**
      * Forced retrieval floor: run the conversation's embedded documents
@@ -488,7 +495,7 @@ class AgentClient extends BaseClient {
       if (this.message_file_map && this.message_file_map[message.messageId]) {
         const attachments = this.message_file_map[message.messageId];
         for (const file of attachments) {
-          if (file.embedded) {
+          if (file.embedded && file.embeddingScope !== 'library') {
             this.contextHandlers?.processFile(file);
             continue;
           }

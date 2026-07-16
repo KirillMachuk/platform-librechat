@@ -22,6 +22,7 @@ import {
   BashCall,
   SubagentCall,
 } from './Parts';
+import { isBashProgrammaticToolCall } from './routing';
 import { ErrorMessage } from './MessageContent';
 import RetrievalCall from './RetrievalCall';
 import { getCachedPreview } from '~/utils';
@@ -31,7 +32,6 @@ import Container from './Container';
 import WebSearch from './WebSearch';
 import ToolCall from './ToolCall';
 import Image from './Image';
-import { isBashProgrammaticToolCall } from './routing';
 
 type PartProps = {
   part?: TMessageContentParts;
@@ -267,7 +267,14 @@ const Part = memo(function Part({
           onExpand={onToolExpand}
         />
       );
-    } else if (isToolCall && (toolCall.name === 'file_search' || toolCall.name === 'retrieval')) {
+    } else if (
+      isToolCall &&
+      (toolCall.name === 'file_search' ||
+        toolCall.name === 'retrieval' ||
+        toolCall.name === 'library_search')
+    ) {
+      // library_search reuses the file_search retrieval UI: it emits the same
+      // `file_search` artifact (source cards) and reads as "searching documents".
       return (
         <RetrievalCall
           initialProgress={toolCall.progress ?? 0.1}

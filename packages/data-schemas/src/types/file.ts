@@ -1,5 +1,5 @@
 import { Document, Types } from 'mongoose';
-import type { CodeEnvRef } from 'librechat-data-provider';
+import type { CodeEnvRef, TDocMetadata } from 'librechat-data-provider';
 
 export interface IMongoFile extends Omit<Document, 'model'> {
   user: Types.ObjectId;
@@ -82,6 +82,20 @@ export interface IMongoFile extends Omit<Document, 'model'> {
    * use verbatim — retrieval queries the same namespace.
    */
   embedEntityId?: string;
+  /**
+   * Why the file is embedded. 'chat' (or absent) = participates in the chat
+   * retrieval floor / file_search tool. 'library' = a full-text context file
+   * indexed only for cross-chat library_search; excluded from the floor to
+   * avoid double injection on top of its inlined full text.
+   */
+  embeddingScope?: 'chat' | 'library';
+  /**
+   * Document-level facts from the document's header, extracted at indexing time (doc-gateway
+   * `/metadata`): what it is, its parties, its own date/place, its identifiers. Powers attribute
+   * filters and the document card in library_search. Absent when extraction failed or was
+   * skipped — treat as unknown, never as "no parties".
+   */
+  docMetadata?: TDocMetadata;
   type: string;
   context?: string;
   usage: number;

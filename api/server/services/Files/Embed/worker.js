@@ -1,7 +1,14 @@
 const { logger, runAsSystem } = require('@librechat/data-schemas');
 const { getAppConfig } = require('~/server/services/Config');
 const { invalidateProjectContext } = require('~/server/services/Projects/context');
-const { embedStoredFile, logAxiosError } = require('./crud');
+const {
+  embedStoredFile,
+  purgeStoredVectors,
+  fetchDocMetadata,
+  METADATA_TIMEOUT_MS,
+  PURGE_TIMEOUT_MS,
+  logAxiosError,
+} = require('./crud');
 const { claimNextEmbedFile, updateFile } = require('~/models');
 
 /**
@@ -29,11 +36,15 @@ const intEnv = (name, fallback) => {
 
 const POLL_MS = () => intEnv('RAG_EMBED_POLL_MS', 3_000);
 const TIMEOUT_MS = () => intEnv('RAG_EMBED_TIMEOUT_MS', 30 * 60_000);
-/* The lease MUST exceed the embed timeout, otherwise the lease can expire
- * while the first worker is still embedding and a second worker re-claims the
- * file — a duplicate parse at the (serialized) doc-gateway. Clamp to
- * TIMEOUT + 60s regardless of the configured value. */
-const LEASE_MS = () => Math.max(intEnv('RAG_EMBED_LEASE_MS', 40 * 60_000), TIMEOUT_MS() + 60_000);
+/* The lease MUST exceed everything one claim does, otherwise it can expire while the first worker
+ * is still working and a second worker re-claims the file — a duplicate parse at the (serialized)
+ * doc-gateway and a second copy of the vectors. A claim runs the purge, the embed AND the metadata
+ * call, so the clamp accounts for all three regardless of the configured value. */
+const LEASE_MS = () =>
+  Math.max(
+    intEnv('RAG_EMBED_LEASE_MS', 40 * 60_000),
+    PURGE_TIMEOUT_MS + TIMEOUT_MS() + METADATA_TIMEOUT_MS() + 60_000,
+  );
 const MAX_ATTEMPTS = () => intEnv('RAG_EMBED_MAX_ATTEMPTS', 5);
 const CONCURRENCY = () => intEnv('RAG_EMBED_CONCURRENCY', 1);
 
@@ -63,13 +74,30 @@ async function claimNext() {
 /** Embeds one claimed record and commits the resulting state transition. */
 async function processClaimed(file, appConfig) {
   const startedAt = Date.now();
+  const attempt = file.embedAttempts ?? 1;
   try {
+    /* Retries must not stack a second copy of the vectors on top of the first: `/embed` appends,
+     * so an attempt that died after committing them left them behind (see `purgeStoredVectors`).
+     * Only on a retry — the first attempt of a freshly uploaded file_id has nothing to purge, and
+     * the happy path should not pay for a delete that can never match anything.
+     *
+     * A failed purge deliberately fails the whole attempt: embedding on top of vectors we could
+     * not remove IS the duplication this prevents. Better a delayed document than a corrupt index. */
+    if (attempt > 1) {
+      await purgeStoredVectors({ file });
+    }
     await embedStoredFile({ appConfig, file, timeoutMs: TIMEOUT_MS() });
+    /* Document metadata rides the same state transition: it is fail-open (null on any failure),
+     * so the file is marked ready either way — losing attribute filters must not cost the user a
+     * searchable document. Extracted after the embed, never before: no point parsing a file that
+     * failed to index. */
+    const docMetadata = await fetchDocMetadata({ appConfig, file });
     const updated = await updateFile({
       file_id: file.file_id,
       embedded: true,
       embeddingStatus: 'ready',
       embedError: null,
+      ...(docMetadata ? { docMetadata } : {}),
     });
     if (!updated) {
       logger.debug(`[embedWorker] ${file.file_id}: record gone after embed (deleted mid-flight)`);
@@ -84,12 +112,12 @@ async function processClaimed(file, appConfig) {
       await invalidateProjectContext(String(file.user), file.project_id);
     }
     logger.info(
-      `[embedWorker] embedded ${file.file_id} (${file.filename}) in ${Date.now() - startedAt}ms, attempt ${file.embedAttempts}`,
+      `[embedWorker] embedded ${file.file_id} (${file.filename}) in ${Date.now() - startedAt}ms, attempt ${attempt}`,
     );
   } catch (error) {
     logAxiosError({ error, message: `[embedWorker] embed failed for ${file.file_id}` });
     const permanent = isPermanentFailure(error);
-    const exhausted = (file.embedAttempts ?? 1) >= MAX_ATTEMPTS();
+    const exhausted = attempt >= MAX_ATTEMPTS();
     if (permanent || exhausted) {
       await updateFile({
         file_id: file.file_id,
@@ -101,7 +129,7 @@ async function processClaimed(file, appConfig) {
     await updateFile({
       file_id: file.file_id,
       embeddingStatus: 'pending',
-      embedNextAt: new Date(Date.now() + backoffMs(file.embedAttempts ?? 1)),
+      embedNextAt: new Date(Date.now() + backoffMs(attempt)),
       embedError: null,
     });
   }
