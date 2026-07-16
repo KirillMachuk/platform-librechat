@@ -1,7 +1,7 @@
-import { getLibrarySearchConfig, searchLibrary, LibrarySearchUnavailableError } from './library';
 import type { TDocMetadata } from 'librechat-data-provider';
 import type { LibrarySearchConfig, LibrarySearchParams } from './library';
 import type { RagRerankConfig } from './rerank';
+import { getLibrarySearchConfig, searchLibrary, LibrarySearchUnavailableError } from './library';
 
 jest.mock('@librechat/data-schemas', () => ({
   logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn(), info: jest.fn() },

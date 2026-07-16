@@ -4,8 +4,8 @@ import { Spinner, Button, DataTable } from '@librechat/client';
 import type { DataTableConfig } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import FilePreviewDialog from '~/components/Chat/Messages/Content/FilePreviewDialog';
-import { MyFilesModal } from '~/components/Chat/Input/Files/MyFilesModal';
 import { useLocalize, useAttachFileToChat, useLibraryUpload } from '~/hooks';
+import { MyFilesModal } from '~/components/Chat/Input/Files/MyFilesModal';
 import { useGetFiles } from '~/data-provider';
 import { buildColumns } from './PanelColumns';
 

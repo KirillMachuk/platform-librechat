@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useSetRecoilState } from 'recoil';
 import { Upload } from 'lucide-react';
+import { useSetRecoilState } from 'recoil';
 import { FileSources, FileContext } from 'librechat-data-provider';
 import {
   Button,
@@ -14,8 +14,8 @@ import {
 } from '@librechat/client';
 import type { DataTableConfig } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
-import FilePreviewDialog from '~/components/Chat/Messages/Content/FilePreviewDialog';
 import { useAttachFileToChat, useDeleteFilesFromTable, useLibraryUpload } from '~/hooks/Files';
+import FilePreviewDialog from '~/components/Chat/Messages/Content/FilePreviewDialog';
 import { buildColumns, filenameContextMap } from './Table/Columns';
 import { useGetFiles } from '~/data-provider';
 import { useLocalize } from '~/hooks';

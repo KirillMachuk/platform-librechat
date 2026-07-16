@@ -1,7 +1,7 @@
 import { logger } from '@librechat/data-schemas';
-import { rerankOrder } from './rerank';
 import type { TDocMetadata } from 'librechat-data-provider';
 import type { RagRerankConfig } from './rerank';
+import { rerankOrder } from './rerank';
 
 /**
  * Поиск по всей библиотеке файлов пользователя (в отличие от file_search, который ищет
