@@ -2459,6 +2459,12 @@ export enum ErrorTypes {
    * SSE stream 404 — job completed, expired, or was deleted before the subscriber connected
    */
   STREAM_EXPIRED = 'stream_expired',
+  /**
+   * A running generation's producer died mid-run — a server restart, a crash — and the
+   * reaper cut the orphaned job loose. Distinct from STREAM_EXPIRED (a 404 before subscribe):
+   * here the client was watching a live run that stopped producing.
+   */
+  GENERATION_INTERRUPTED = 'generation_interrupted',
 }
 
 /**

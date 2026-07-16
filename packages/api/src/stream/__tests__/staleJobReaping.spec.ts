@@ -10,6 +10,8 @@
  * @see https://github.com/danny-avila/LibreChat/issues/13391
  */
 
+import { ErrorTypes } from 'librechat-data-provider';
+
 /** Suppress winston Console transport output (survives jest.resetModules) */
 jest.spyOn(console, 'log').mockImplementation();
 
@@ -252,7 +254,7 @@ describe('GenerationJobManager - dead-heartbeat producer notifies its client', (
       // The producer dies: no more beats. Advance past the stale window + a cleanup tick.
       await jest.advanceTimersByTimeAsync(STALE_HEARTBEAT_MS + 61000);
 
-      expect(errors).toContain('Generation timed out');
+      expect(errors).toContain(JSON.stringify({ type: ErrorTypes.GENERATION_INTERRUPTED }));
       expect(await manager.hasJob('conv-hb')).toBe(false);
 
       subscription?.unsubscribe();
@@ -362,7 +364,7 @@ describe('GenerationJobManager - generation abort on reaping', () => {
       // Hung generation: no chunks emitted; advance past the stale timeout + cleanup tick.
       await jest.advanceTimersByTimeAsync(61000);
 
-      expect(errors).toContain('Generation timed out');
+      expect(errors).toContain(JSON.stringify({ type: ErrorTypes.GENERATION_INTERRUPTED }));
       expect(await manager.hasJob('conv-3')).toBe(false);
 
       subscription?.unsubscribe();

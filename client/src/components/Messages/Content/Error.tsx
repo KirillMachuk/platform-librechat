@@ -83,6 +83,7 @@ const errorMessages = {
   },
   [ErrorTypes.DEEP_RESEARCH_MODEL_INCOMPATIBLE]: 'com_error_deep_research_model_incompatible',
   [ErrorTypes.STREAM_EXPIRED]: 'com_error_stream_expired',
+  [ErrorTypes.GENERATION_INTERRUPTED]: 'com_error_generation_interrupted',
   [ViolationTypes.BAN]:
     'Your account has been temporarily banned due to violations of our service.',
   [ViolationTypes.ILLEGAL_MODEL_REQUEST]: (json: TGenericError, localize: LocalizeFunction) => {
