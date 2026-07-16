@@ -7,6 +7,7 @@ import type {
   IJobStore,
   JobStatus,
 } from '~/stream/interfaces/IJobStore';
+import { STALE_HEARTBEAT_MS } from '~/stream/interfaces/IJobStore';
 
 /**
  * Content state for a job - volatile, in-memory only.
@@ -155,6 +156,22 @@ export class InMemoryJobStore implements IJobStore {
     }
   }
 
+  /**
+   * Stamp `lastHeartbeatAt` for a non-streaming producer (Deep Research). Also refreshes
+   * `lastActivity`, since a heartbeat is proof of life just like a chunk — this keeps the
+   * existing inactivity failsafe honest for a run that streams nothing. A no-op once the job
+   * is gone, so a late timer tick cannot resurrect a reaped entry.
+   */
+  async recordHeartbeat(streamId: string): Promise<void> {
+    const job = this.jobs.get(streamId);
+    if (!job) {
+      return;
+    }
+    const now = Date.now();
+    job.lastHeartbeatAt = now;
+    this.lastActivity.set(streamId, now);
+  }
+
   async hasJob(streamId: string): Promise<boolean> {
     return this.jobs.has(streamId);
   }
@@ -181,17 +198,26 @@ export class InMemoryJobStore implements IJobStore {
         if (this.ttlAfterComplete === 0 || now - job.completedAt > this.ttlAfterComplete) {
           toDelete.push(streamId);
         }
-      } else if (this.staleJobTimeout > 0 && job.status === 'running') {
-        // Failsafe: reap jobs stuck in "running" with no generation activity for
-        // longer than the stale timeout. These are crashed/hung generations that
-        // never reached a terminal state; without this they accumulate their
-        // content state in memory until the process OOMs. Reaping keys off last
-        // activity (not creation time) so a long but live stream is never reaped,
-        // mirroring RedisJobStore refreshing the running TTL on each chunk.
-        const lastActive = this.lastActivity.get(streamId) ?? job.createdAt;
-        if (now - lastActive > this.staleJobTimeout) {
+      } else if (job.status === 'running') {
+        // Dead heartbeat producer: a job that opted into heartbeats (Deep Research) whose
+        // last beat is older than the stale window has lost its producer — reap it fast,
+        // rather than waiting out the 20-minute inactivity failsafe below, so the client
+        // is told (via GenerationJobManager.cleanup) in ~a minute. Mirrors RedisJobStore.
+        if (job.lastHeartbeatAt != null && now - job.lastHeartbeatAt > STALE_HEARTBEAT_MS) {
           toDelete.push(streamId);
           staleRunning++;
+        } else if (this.staleJobTimeout > 0) {
+          // Failsafe: reap jobs stuck in "running" with no generation activity for
+          // longer than the stale timeout. These are crashed/hung generations that
+          // never reached a terminal state; without this they accumulate their
+          // content state in memory until the process OOMs. Reaping keys off last
+          // activity (not creation time) so a long but live stream is never reaped,
+          // mirroring RedisJobStore refreshing the running TTL on each chunk.
+          const lastActive = this.lastActivity.get(streamId) ?? job.createdAt;
+          if (now - lastActive > this.staleJobTimeout) {
+            toDelete.push(streamId);
+            staleRunning++;
+          }
         }
       }
     }

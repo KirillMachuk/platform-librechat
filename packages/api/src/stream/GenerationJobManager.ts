@@ -1433,6 +1433,17 @@ class GenerationJobManagerClass {
   }
 
   /**
+   * Mark a running job's producer alive. A producer that streams token chunks is watched
+   * automatically (each chunk calls `recordActivity`); one that does not — Deep Research
+   * emits progress, not tokens — has no such signal, so it drives this on a timer. The
+   * reaper reaps a running job whose heartbeat has gone stale and notifies its client,
+   * turning a run killed by a restart into a prompt error instead of a 20-minute hang.
+   */
+  async recordHeartbeat(streamId: string): Promise<void> {
+    await this.jobStore.recordHeartbeat(streamId);
+  }
+
+  /**
    * Update job metadata.
    */
   async updateMetadata(

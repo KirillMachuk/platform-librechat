@@ -5,6 +5,7 @@ const {
   getViolationInfo,
   buildMessageFiles,
   resolveTitleTiming,
+  HEARTBEAT_INTERVAL_MS,
   GenerationJobManager,
   filterPersistableAbortContent,
   decrementPendingRequest,
@@ -433,6 +434,22 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
      *  the frontend flag was lost — otherwise the reply lands in normal chat and a plain
      *  model improvises a source-less "report" (live-observed failure). */
     if (useNewDeepResearch) {
+      /**
+       * Deep Research runs synchronously in this request and streams progress, not token
+       * chunks, so the job's chunk-based liveness signal never fires — a run killed by a
+       * container restart would look "running" until the 20-minute age failsafe. A timer
+       * beats liveness onto the job instead; the reaper reaps a job whose heartbeat has
+       * stopped and tells the reconnected client, so it unsticks in ~a minute. Beat once up
+       * front so the job carries a heartbeat from t=0, and `unref` so it never holds the
+       * event loop open. The `finally` clears it — no beat can outlive the run.
+       */
+      GenerationJobManager.recordHeartbeat(streamId).catch(() => {});
+      const heartbeat = setInterval(() => {
+        GenerationJobManager.recordHeartbeat(streamId).catch(() => {});
+      }, HEARTBEAT_INTERVAL_MS);
+      if (typeof heartbeat.unref === 'function') {
+        heartbeat.unref();
+      }
       try {
         await runNewDeepResearch({
           req,
@@ -453,6 +470,7 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
           jobCreatedAt,
         });
       } finally {
+        clearInterval(heartbeat);
         // H3: this branch returns early and runs the whole DR synchronously, so the
         // normal background-completion cleanup never fires for it. Release the pending-
         // request slot and dispose the heavy agent client here. Nulling `client` stops
