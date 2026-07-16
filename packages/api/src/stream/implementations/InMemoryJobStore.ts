@@ -189,7 +189,8 @@ export class InMemoryJobStore implements IJobStore {
   async cleanup(): Promise<number> {
     const now = Date.now();
     const toDelete: string[] = [];
-    let staleRunning = 0;
+    let staleHeartbeat = 0;
+    let staleAge = 0;
 
     for (const [streamId, job] of this.jobs) {
       const isFinished = ['complete', 'error', 'aborted'].includes(job.status);
@@ -201,11 +202,14 @@ export class InMemoryJobStore implements IJobStore {
       } else if (job.status === 'running') {
         // Dead heartbeat producer: a job that opted into heartbeats (Deep Research) whose
         // last beat is older than the stale window has lost its producer — reap it fast,
-        // rather than waiting out the 20-minute inactivity failsafe below, so the client
-        // is told (via GenerationJobManager.cleanup) in ~a minute. Mirrors RedisJobStore.
+        // rather than waiting out the 20-minute inactivity failsafe below, so the client is
+        // told (via GenerationJobManager.cleanup) in ~1–2 min. Mirrors RedisJobStore. This
+        // check is intentionally independent of `staleJobTimeout`: a producer that declared
+        // itself alive and then went silent is dead regardless of the age-failsafe setting,
+        // so heartbeat reaping stays on even when `staleJobTimeout=0` disables the age path.
         if (job.lastHeartbeatAt != null && now - job.lastHeartbeatAt > STALE_HEARTBEAT_MS) {
           toDelete.push(streamId);
-          staleRunning++;
+          staleHeartbeat++;
         } else if (this.staleJobTimeout > 0) {
           // Failsafe: reap jobs stuck in "running" with no generation activity for
           // longer than the stale timeout. These are crashed/hung generations that
@@ -216,7 +220,7 @@ export class InMemoryJobStore implements IJobStore {
           const lastActive = this.lastActivity.get(streamId) ?? job.createdAt;
           if (now - lastActive > this.staleJobTimeout) {
             toDelete.push(streamId);
-            staleRunning++;
+            staleAge++;
           }
         }
       }
@@ -237,9 +241,14 @@ export class InMemoryJobStore implements IJobStore {
       await this.deleteJob(id);
     }
 
-    if (staleRunning > 0) {
+    if (staleHeartbeat > 0) {
       logger.warn(
-        `[InMemoryJobStore] Reaped ${staleRunning} stale running job(s) exceeding ${this.staleJobTimeout}ms (likely crashed/hung generations)`,
+        `[InMemoryJobStore] Reaped ${staleHeartbeat} running job(s) with a dead heartbeat (>${STALE_HEARTBEAT_MS}ms since last beat)`,
+      );
+    }
+    if (staleAge > 0) {
+      logger.warn(
+        `[InMemoryJobStore] Reaped ${staleAge} stale running job(s) exceeding ${this.staleJobTimeout}ms (likely crashed/hung generations)`,
       );
     }
 

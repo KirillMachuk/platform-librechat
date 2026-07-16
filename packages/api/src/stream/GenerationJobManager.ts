@@ -1433,11 +1433,14 @@ class GenerationJobManagerClass {
   }
 
   /**
-   * Mark a running job's producer alive. A producer that streams token chunks is watched
-   * automatically (each chunk calls `recordActivity`); one that does not — Deep Research
-   * emits progress, not tokens — has no such signal, so it drives this on a timer. The
-   * reaper reaps a running job whose heartbeat has gone stale and notifies its client,
-   * turning a run killed by a restart into a prompt error instead of a 20-minute hang.
+   * Mark a running job's producer alive. A token-streaming producer is watched for free —
+   * each chunk calls `recordActivity`, which in Redis refreshes the running-TTL. Deep
+   * Research emits `dr_progress`, not tokens; that still reaches `recordActivity`, but in
+   * Redis `recordActivity` is a no-op and the reaper judges a running job purely by age
+   * (20 min), so a DR run killed by a restart looks alive until then. Beating on a timer
+   * gives the reaper a real liveness timestamp: it reaps a job whose heartbeat has gone
+   * stale and notifies the client, turning a restart-killed run into a prompt error in
+   * ~1–2 min instead of a 20-minute hang.
    */
   async recordHeartbeat(streamId: string): Promise<void> {
     await this.jobStore.recordHeartbeat(streamId);
@@ -1671,6 +1674,11 @@ class GenerationJobManagerClass {
         if (runtime && !runtime.abortController.signal.aborted) {
           runtime.abortController.abort();
         }
+        // A job vanished from the store while its runtime lingered here: the reaper killed
+        // it (dead heartbeat or age) or a replacement took its streamId. Count it — a rising
+        // reap rate is the signal that runs are being killed (e.g. deploys restarting the
+        // container mid-run), the very problem the heartbeat only mitigates the symptom of.
+        recordGenerationJob(this.storeLabel, 'reaped');
         // If a client is still attached when the job is reaped, send a terminal
         // error first so the SSE connection closes instead of hanging open with no
         // final/done event (the route only ends the response from onDone/onError).

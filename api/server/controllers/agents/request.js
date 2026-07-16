@@ -435,11 +435,12 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
      *  model improvises a source-less "report" (live-observed failure). */
     if (useNewDeepResearch) {
       /**
-       * Deep Research runs synchronously in this request and streams progress, not token
-       * chunks, so the job's chunk-based liveness signal never fires — a run killed by a
-       * container restart would look "running" until the 20-minute age failsafe. A timer
-       * beats liveness onto the job instead; the reaper reaps a job whose heartbeat has
-       * stopped and tells the reconnected client, so it unsticks in ~a minute. Beat once up
+       * Deep Research runs synchronously in this request and emits `dr_progress`, not token
+       * chunks. That progress does reach `recordActivity`, but in Redis (prod) that is a
+       * no-op and the reaper judges a running job purely by age, so a run killed by a
+       * container restart looks "running" until the 20-minute failsafe. A timer beats a real
+       * liveness timestamp onto the job instead; the reaper reaps a job whose heartbeat has
+       * stopped and tells the reconnected client, so it unsticks in ~1–2 min. Beat once up
        * front so the job carries a heartbeat from t=0, and `unref` so it never holds the
        * event loop open. The `finally` clears it — no beat can outlive the run.
        */

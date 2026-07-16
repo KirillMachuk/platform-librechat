@@ -129,7 +129,13 @@ export interface PrometheusMetrics {
 
 export type OpenIDUserLookupResult = 'found' | 'not_found' | 'migration' | 'auth_failed' | 'error';
 export type GenerationJobStore = 'memory' | 'redis';
-export type GenerationJobResult = 'created' | 'completed' | 'error' | 'aborted' | 'abort_failed';
+export type GenerationJobResult =
+  | 'created'
+  | 'completed'
+  | 'error'
+  | 'aborted'
+  | 'abort_failed'
+  | 'reaped';
 export type GenerationStreamSubscriptionType = 'initial' | 'resume' | 'resume_state';
 export type GenerationStreamSubscriptionResult =
   | 'success'
