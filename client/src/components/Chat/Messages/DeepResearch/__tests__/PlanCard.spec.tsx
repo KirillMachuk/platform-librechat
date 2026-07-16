@@ -4,6 +4,7 @@ import type { TMessage } from 'librechat-data-provider';
 import PlanCard from '../PlanCard';
 
 const mockSubmit = jest.fn();
+const mockShowToast = jest.fn();
 let mockStartupConfig:
   | { deepResearch?: { planGate: boolean; planAutoStartSec: number } }
   | undefined;
@@ -20,9 +21,17 @@ jest.mock('~/data-provider', () => ({
 jest.mock('~/common', () => ({ mainTextareaId: 'prompt-textarea' }));
 jest.mock('lucide-react', () => ({ Telescope: () => <svg data-testid="telescope" /> }));
 jest.mock('@librechat/client', () => ({
-  Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
-    <button onClick={onClick}>{children}</button>
+  // Faithful enough to assert forwarded DOM props (aria-pressed/label, className); the real
+  // Button drops the custom variant/size into class variants, so strip them off the mock.
+  Button: ({
+    children,
+    variant: _variant,
+    size: _size,
+    ...rest
+  }: React.ComponentProps<'button'> & { variant?: string; size?: string }) => (
+    <button {...rest}>{children}</button>
   ),
+  useToastContext: () => ({ showToast: mockShowToast }),
 }));
 jest.mock('librechat-data-provider', () => ({
   DR_START_MARKER: '▶ Начать исследование',
@@ -46,6 +55,9 @@ describe('PlanCard', () => {
     jest.clearAllMocks();
     jest.useRealTimers();
     mockStartupConfig = undefined;
+    // `clearAllMocks` clears calls but NOT return values, so a refusal set by one test would
+    // leak into the next. `undefined` is what the real `submitMessage` returns on success.
+    mockSubmit.mockReturnValue(undefined);
   });
 
   it('renders the title and steps', () => {
@@ -88,6 +100,30 @@ describe('PlanCard', () => {
     expect(mockSubmit).not.toHaveBeenCalled();
     // Advance one second per act() so React flushes the state update (and reschedules the
     // next tick) between fires — a single advanceTimersByTime wouldn't process the reschedule.
+    for (let i = 0; i < 3; i++) {
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+    }
+    expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+  });
+
+  it('arms the countdown when awaitingAction flips true AFTER mount (follow-up card, no deadlock)', () => {
+    jest.useFakeTimers();
+    const created = new Date().toISOString();
+    // A follow-up plan card mounts NON-actionable: the latestMessage atom that gates
+    // awaitingAction settles a render later (the runner's final event has no `depth`, so the
+    // depth-based isLast lags the id-based isLatestMessage). `remaining` is seeded once, so
+    // without the re-arm effect it stays null here and the countdown never starts — buttons
+    // would show but the timer never would (the live bug).
+    const { rerender, getByText, queryByText } = render(
+      <PlanCard message={planMessage(created)} awaitingAction={false} autoStartSec={2} />,
+    );
+    expect(queryByText('com_ui_deep_research_start')).not.toBeInTheDocument();
+    // It becomes the actionable tip a render later.
+    rerender(<PlanCard message={planMessage(created)} awaitingAction autoStartSec={2} />);
+    expect(getByText('com_ui_deep_research_start')).toBeInTheDocument();
+    // The countdown is live (not deadlocked on a null `remaining`) — it elapses and autostarts.
     for (let i = 0; i < 3; i++) {
       act(() => {
         jest.advanceTimersByTime(1000);
@@ -198,15 +234,22 @@ describe('PlanCard', () => {
     expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
   });
 
-  it('Редактировать only cancels the autostart — the buttons stay (no dead end)', () => {
+  it('Редактировать shows the edit hint (not "press Start"), keeps the buttons, marks the mode', () => {
     jest.useFakeTimers();
-    const { getByText, getAllByText } = render(
+    const { getByText, getAllByText, queryByText } = render(
       <PlanCard message={planMessage(new Date().toISOString())} awaitingAction autoStartSec={2} />,
     );
     fireEvent.click(getByText('com_ui_edit'));
+    // Buttons stay — a mis-tap is never a dead end.
     expect(getByText('com_ui_deep_research_start')).toBeInTheDocument();
     expect(getByText('com_ui_cancel')).toBeInTheDocument();
-    expect(getAllByText('com_ui_deep_research_autostart_cancelled').length).toBeGreaterThan(0);
+    // The hint tells the user to describe the change in chat (task #21) — the misleading
+    // "press Start" autostart caption must NOT be what a plan edit shows.
+    expect(getAllByText('com_ui_deep_research_edit_hint').length).toBeGreaterThan(0);
+    expect(queryByText('com_ui_deep_research_autostart_cancelled')).not.toBeInTheDocument();
+    // The Edit button reads as the active mode.
+    expect(getByText('com_ui_edit').closest('button')).toHaveAttribute('aria-pressed', 'true');
+    // Autostart is cancelled — it never fires — but Начать still works if they run as-is.
     for (let i = 0; i < 5; i++) {
       act(() => {
         jest.advanceTimersByTime(1000);
@@ -215,6 +258,54 @@ describe('PlanCard', () => {
     expect(mockSubmit).not.toHaveBeenCalled();
     fireEvent.click(getByText('com_ui_deep_research_start'));
     expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+  });
+
+  it('a REFUSED Начать keeps the buttons — the card never goes blank on a busy chat', () => {
+    // `submitMessage` returns false while another generation still streams. Marking the card
+    // as acted anyway hid the buttons with nothing running: a dead end only F5 could clear
+    // (the shipped bug the user hit — "план без кнопок").
+    mockSubmit.mockReturnValue(false);
+    const { getByText } = render(
+      <PlanCard message={planMessage()} awaitingAction autoStartSec={0} />,
+    );
+    fireEvent.click(getByText('com_ui_deep_research_start'));
+    expect(mockSubmit).toHaveBeenCalledTimes(1);
+    expect(getByText('com_ui_deep_research_start')).toBeInTheDocument();
+    expect(getByText('com_ui_cancel')).toBeInTheDocument();
+    // A button that visibly does nothing is the complaint being fixed — say why. These
+    // buttons are not gated on isSubmitting the way the composer is, so this is the one
+    // caller that has to speak. (Announcing at the call site is upstream's own pattern.)
+    expect(mockShowToast).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'com_ui_send_while_submitting' }),
+    );
+
+    // ...and the very same tap works once the chat frees up — no reload needed.
+    mockSubmit.mockReturnValue(undefined);
+    fireEvent.click(getByText('com_ui_deep_research_start'));
+    expect(mockSubmit).toHaveBeenCalledTimes(2);
+    expect(mockSubmit).toHaveBeenLastCalledWith({ text: '▶ Начать исследование' });
+  });
+
+  it('a REFUSED autostart stops retrying instead of firing every second', () => {
+    jest.useFakeTimers();
+    // Past the window `remaining` stops advancing, so the autostart branch fires on every
+    // tick. Now that a refusal no longer marks the card acted (which used to stop the timer
+    // as a side effect), the countdown must cancel itself — otherwise a busy chat collects
+    // one refused start, and one toast, per second.
+    mockSubmit.mockReturnValue(false);
+    const { getByText, getAllByText } = render(
+      <PlanCard message={planMessage(new Date().toISOString())} awaitingAction autoStartSec={2} />,
+    );
+    for (let i = 0; i < 6; i++) {
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+    }
+    expect(mockSubmit).toHaveBeenCalledTimes(1);
+    // It parks on its buttons — exactly what the cancelled caption tells the user to do.
+    // (The caption renders twice: the visible line and the sr-only live region.)
+    expect(getByText('com_ui_deep_research_start')).toBeInTheDocument();
+    expect(getAllByText('com_ui_deep_research_autostart_cancelled').length).toBeGreaterThan(0);
   });
 
   it('does NOT autostart when the server exposes no deepResearch config (rollback safety)', () => {

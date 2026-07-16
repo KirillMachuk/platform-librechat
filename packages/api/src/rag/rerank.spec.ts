@@ -9,7 +9,7 @@ const CONFIG: RagRerankConfig = {
   url: 'http://reranker.internal:8000/v1/rerank',
   token: 'secret-token',
   candidates: 36,
-  timeoutMs: 2500,
+  timeoutMs: 8000,
 };
 
 const DOCS = ['пункт о расторжении', 'шумовой текст', 'пеня за просрочку'];
@@ -29,7 +29,7 @@ describe('getRagRerankConfig', () => {
 
   it('parses defaults and clamps out-of-range values', () => {
     const config = getRagRerankConfig({ RAG_RERANKER_URL: CONFIG.url });
-    expect(config).toEqual({ url: CONFIG.url, token: '', candidates: 36, timeoutMs: 2500 });
+    expect(config).toEqual({ url: CONFIG.url, token: '', candidates: 36, timeoutMs: 8000 });
 
     const clamped = getRagRerankConfig({
       RAG_RERANKER_URL: CONFIG.url,

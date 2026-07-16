@@ -45,6 +45,17 @@ const mockEmitChunk = jest.fn();
 const mockEmitDone = jest.fn();
 const mockCompleteJob = jest.fn();
 const mockSavedMessages = [];
+/** What Mongo stamps on the saved message; the emitted final must carry it. */
+const mockSavedAt = new Date('2026-07-15T10:00:00.000Z');
+/** Mongo bookkeeping the emitted final must NOT carry. */
+const mockSavedObjectId = 'ffffffffffffffffffffffff';
+/**
+ * What each `emitDone` actually put on the wire, snapshotted through JSON exactly as the
+ * real one does before storing the event for late/cross-replica subscribers. Asserting on
+ * `mockEmitDone.mock.calls` alone cannot see ordering: it holds a live reference, so a
+ * message stamped AFTER the emit would still look stamped by the time a test reads it.
+ */
+const mockEmittedFinals = [];
 const mockReportToPdfBuffer = jest.fn(async () => Buffer.from('%PDF-1.4 fake'));
 const mockCreateFile = jest.fn(async (data) => ({ ...data }));
 const mockSaveBuffer = jest.fn(async () => '/uploads/u1/report.pdf');
@@ -77,7 +88,10 @@ jest.mock('@librechat/api', () => ({
   tierToRunBudget: jest.fn(() => ({})),
   GenerationJobManager: {
     emitChunk: mockEmitChunk,
-    emitDone: (...a) => mockEmitDone(...a),
+    emitDone: (streamId, event) => {
+      mockEmittedFinals.push(JSON.parse(JSON.stringify(event)));
+      return mockEmitDone(streamId, event);
+    },
     completeJob: (...a) => mockCompleteJob(...a),
     getActiveJobIdsForUser: jest.fn(async () => []),
     getJob: (...a) => mockGetJob(...a),
@@ -131,8 +145,10 @@ jest.mock('@librechat/api', () => ({
     text.trimStart().startsWith('**Уточните, пожалуйста, детали исследования:**'),
   // Task #21 plan-gate helpers — faithful mirrors of plan.ts (unit-tested there); the
   // system prompt carries the 'модуль ПЛАНИРОВАНИЯ' marker the fake model branches on.
-  buildPlanPrompt: ({ now, allowClarify = true }) =>
-    `Ты — модуль ПЛАНИРОВАНИЯ. ${now}${allowClarify ? '' : ' CLARIFY запрещено'}`,
+  buildPlanPrompt: ({ now, allowClarify = true, isRefinement = false }) =>
+    `Ты — модуль ПЛАНИРОВАНИЯ. ${now}${allowClarify ? '' : ' CLARIFY запрещено'}${
+      isRefinement ? ' РЕЖИМ ПРАВКИ ПЛАНА' : ''
+    }`,
   parsePlanDecision: (text, { allowClarify = true } = {}) => {
     let parsed = null;
     try {
@@ -207,7 +223,20 @@ jest.mock('~/models', () => ({
   saveConvo: jest.fn(async () => ({ conversationId: 'c1' })),
   saveMessage: jest.fn(async (ctx, msg) => {
     mockSavedMessages.push(msg);
-    return msg;
+    /** Faithful to the real one: Mongo's `timestamps: true` stamps the doc on write and
+     *  `saveMessage` hands back the PERSISTED object (findOneAndUpdate + toObject), not the
+     *  argument. Returning the argument verbatim is what let the live/persisted divergence
+     *  ship — the emitted final looked stamped in tests and wasn't in production. The
+     *  Mongo-only fields are here so that a fix which copies the doc wholesale into the
+     *  emitted message is caught leaking them, rather than passing on a mock too poor to
+     *  carry them. */
+    return {
+      ...msg,
+      _id: mockSavedObjectId,
+      __v: 0,
+      createdAt: mockSavedAt,
+      updatedAt: mockSavedAt,
+    };
   }),
   spendTokens: jest.fn(),
   getMultiplier: jest.fn(),
@@ -249,6 +278,7 @@ const REPORT = 'Отчёт про [PERSON_1] и публичную компан�
 beforeEach(() => {
   jest.clearAllMocks();
   mockSavedMessages.length = 0;
+  mockEmittedFinals.length = 0;
   mockModelCtorArgs.length = 0;
   mockInvokeArgs.length = 0;
   mockInvokeOptions.length = 0;
@@ -624,7 +654,7 @@ describe('runNewDeepResearch — title parity with the standard pipeline (gen_ti
 });
 
 describe('runNewDeepResearch — honest nodata outcome', () => {
-  it('a nodata run gets NO PDF and keeps the unfinished flag', async () => {
+  it('a nodata run gets NO PDF and is NOT flagged unfinished (the notice stands alone)', async () => {
     mockStartSovereignSession.mockResolvedValue(null);
     mockRunDeepResearch.mockResolvedValueOnce({
       finalReport: '## Не удалось собрать материал\n…',
@@ -639,8 +669,147 @@ describe('runNewDeepResearch — honest nodata outcome', () => {
     expect(mockReportToPdfBuffer).not.toHaveBeenCalled();
     const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
     expect(msg.files).toBeUndefined();
-    expect(msg.unfinished).toBe(true);
+    // The notice IS the whole message — nothing usable sits above it, so the frontend
+    // indicator ("…results shown above are still usable") would contradict it.
+    expect(msg.unfinished).toBe(false);
     expect(msg.text).toContain('Не удалось собрать материал');
+  });
+});
+
+describe('runNewDeepResearch — a Stop reaches the client LIVE (no reload needed)', () => {
+  it('EMITS the stopped notice on a Stop instead of leaving the client hanging', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockResolvedValueOnce({
+      finalReport: 'что-то собранное',
+      finalizeReason: 'aborted',
+      usage: { input: 5, output: 5, total: 10 },
+      findings: [{ round: 1, subQuestion: 'q', digest: 'd', sources: [], tokens: 10 }],
+      errors: [],
+    });
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    // The live bug: this run used to return early and stay silent, so the client only ever
+    // saw the abort route's EMPTY synthetic final and the real notice appeared on reload.
+    expect(mockEmitDone).toHaveBeenCalledTimes(1);
+    const [streamId, finalEvent] = mockEmitDone.mock.calls[0];
+    expect(streamId).toBe('stream-1');
+    expect(finalEvent.final).toBe(true);
+    expect(finalEvent.responseMessage.text).toContain('Исследование остановлено');
+    // Without drKind the follow-up comment can't re-plan the original plan (task #21).
+    expect(finalEvent.responseMessage.drKind).toBe('aborted');
+    expect(mockCompleteJob).toHaveBeenCalledWith('stream-1');
+  });
+});
+
+/**
+ * The live final and the one a reload refetches must be the SAME message. They were not:
+ * the emitted object was hand-built and carried no timestamps, while `responseMessageId` is
+ * the preliminary `<userMessageId>_`. A trailing-underscore assistant message with no
+ * `createdAt` is precisely what the chat calls a still-streaming placeholder
+ * (`hasPendingAssistantParent`, client useChatFunctions.ts:75-81) — so while it sat at the
+ * tip, `ask` refused every submit: the composer went silently dead and the plan card's
+ * Начать did nothing. A reload "fixed" it only because Mongo returns the message stamped.
+ */
+describe('runNewDeepResearch — the live final is the persisted message, not a placeholder', () => {
+  it.each([
+    ['a report', { finalReport: '# Отчёт', finalizeReason: 'completed' }],
+    ['a Stop', { finalReport: 'собранное', finalizeReason: 'aborted' }],
+  ])('%s final carries the persisted timestamps', async (_label, runResult) => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockResolvedValueOnce({
+      usage: { input: 5, output: 5, total: 10 },
+      findings: [],
+      errors: [],
+      ...runResult,
+    });
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    // Read the JSON snapshot taken AT emit time, not the live object: stamping the message
+    // after the emit would leave late and cross-replica subscribers with the unstamped one
+    // (`emitDone` serialises the event), yet a test reading the live reference could not
+    // tell the difference.
+    const { responseMessage } = mockEmittedFinals[0];
+    expect(responseMessage.createdAt).toBe(mockSavedAt.toISOString());
+    expect(responseMessage.updatedAt).toBe(mockSavedAt.toISOString());
+    // The id stays preliminary on purpose — the next turn threads onto it. It is the
+    // MISSING TIMESTAMP that made the pair look unfinished, not the id.
+    expect(responseMessage.messageId).toBe('r1');
+    // Mongo's own bookkeeping is not the client's business.
+    expect(responseMessage._id).toBeUndefined();
+    expect(responseMessage.__v).toBeUndefined();
+  });
+
+  it('survives a save that returns nothing — no timestamps, but never a crash', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockResolvedValueOnce({
+      finalReport: '# Отчёт',
+      finalizeReason: 'completed',
+      usage: { input: 5, output: 5, total: 10 },
+      findings: [],
+      errors: [],
+    });
+    const { saveMessage } = require('~/models');
+    const persist = saveMessage.getMockImplementation();
+    // Keyed on the context, not on call order: the run saves more than once, so a bare
+    // `mockImplementationOnce` would starve the wrong call.
+    saveMessage.mockImplementation(async (ctx, msg, meta) =>
+      meta?.context === 'deepResearchRun - final report' ? undefined : persist(ctx, msg, meta),
+    );
+
+    try {
+      await expect(runNewDeepResearch(baseParams('изучи рынок CRM'))).resolves.toBeDefined();
+    } finally {
+      saveMessage.mockImplementation(persist);
+    }
+
+    const { responseMessage } = mockEmittedFinals[0];
+    expect(responseMessage.createdAt).toBeUndefined();
+    expect(responseMessage.text).toContain('Отчёт');
+  });
+});
+
+describe('runNewDeepResearch — a failure notice never poses as a report', () => {
+  it('a hard-watchdog time-out gets NO PDF, NO report card and NO unfinished flag', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    // The run wrapper reports 'time' ONLY when the graph produced no report at all
+    // (`resultFrom`: a real report keeps its own reason), so the text is the honest notice.
+    mockRunDeepResearch.mockResolvedValueOnce({
+      finalReport: '## Не удалось сформировать отчёт\nпревышен лимит времени исследования',
+      finalizeReason: 'time',
+      usage: { input: 5, output: 5, total: 10 },
+      findings: [{ round: 1, subQuestion: 'q', digest: 'd', sources: [], tokens: 10 }],
+      errors: [],
+    });
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    // A PDF whose only content is "не удалось сформировать отчёт" is a useless file.
+    expect(mockReportToPdfBuffer).not.toHaveBeenCalled();
+    expect(msg.files).toBeUndefined();
+    expect(msg.drKind).toBeUndefined();
+    expect(msg.unfinished).toBe(false);
+  });
+
+  it('a budget-capped run IS a real report: PDF, report card, and the unfinished hint', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockResolvedValueOnce({
+      finalReport: '## Ключевые выводы\nрынок растёт',
+      finalizeReason: 'budget',
+      usage: { input: 5, output: 5, total: 10 },
+      findings: [{ round: 1, subQuestion: 'q', digest: 'd', sources: [], tokens: 10 }],
+      errors: [],
+    });
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.files).toHaveLength(1);
+    expect(msg.drKind).toBe('report');
+    // Gathering really was cut short above a real report — here the hint tells the truth.
+    expect(msg.unfinished).toBe(true);
   });
 });
 
@@ -711,6 +880,27 @@ describe('isDrFollowUp (badge-independent DR routing, drKind-gated — review r2
     await expect(
       isDrFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'p1' }),
     ).resolves.toBe(true);
+  });
+
+  it('is TRUE when the parent carries drKind=aborted (re-plan after a Stop, task #21)', async () => {
+    // A comment after a Stop must route back into DR so it re-plans the original plan.
+    models.getMessages.mockResolvedValueOnce([
+      { messageId: 'p1', isCreatedByUser: false, drKind: 'aborted' },
+    ]);
+    await expect(
+      isDrFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'p1' }),
+    ).resolves.toBe(true);
+  });
+
+  it('is FALSE when the parent carries drKind=report (a finished report → normal chat)', async () => {
+    // Owner decision (§5.2): a follow-up on a COMPLETED report is an ordinary chat turn,
+    // NOT a re-plan. Only an aborted (Stopped) run routes back into planning.
+    models.getMessages.mockResolvedValueOnce([
+      { messageId: 'p1', isCreatedByUser: false, drKind: 'report' },
+    ]);
+    await expect(
+      isDrFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'p1' }),
+    ).resolves.toBe(false);
   });
 
   it('is FALSE for MARKER-LOOKALIKE prose without drKind (the P0 collision fix)', async () => {
@@ -914,6 +1104,102 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     expect(mockRunDeepResearch).not.toHaveBeenCalled();
   });
 
+  it('Stop then a comment re-plans the ORIGINAL plan (plan-edit, not a fresh turn)', async () => {
+    // The task #21 prod bug: after a Stop the follow-up landed as a FRESH turn (planned the
+    // comment in isolation). With drKind='aborted' the comment now re-plans the original.
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockPlanContent =
+      '{"action":"PLAN","title":"Реранкеры для русского языка","steps":["Отобрать реранкеры с поддержкой русского","Сравнить на русских датасетах"]}';
+    // Message tree after a Stop: original request → plan card → START → aborted anchor.
+    models.getMessages.mockResolvedValueOnce([
+      {
+        messageId: 'orig',
+        isCreatedByUser: true,
+        parentMessageId: null,
+        text: 'исследуй реранкеры',
+      },
+      {
+        messageId: 'plan1',
+        isCreatedByUser: false,
+        parentMessageId: 'orig',
+        drKind: 'plan',
+        text: '**План исследования:** Реранкеры\n\n1. Отобрать\n2. Сравнить',
+      },
+      {
+        messageId: 'start1',
+        isCreatedByUser: true,
+        parentMessageId: 'plan1',
+        drKind: 'start',
+        text: '▶ Начать исследование',
+      },
+      {
+        messageId: 'ab1',
+        isCreatedByUser: false,
+        parentMessageId: 'start1',
+        drKind: 'aborted',
+        text: 'Исследование остановлено. Напишите, что изменить в плане, — и я пересоберу его с учётом ваших правок.',
+      },
+    ]);
+    const params = planParams('с учётом русского языка');
+    params.parentMessageId = 'ab1';
+
+    const result = await runNewDeepResearch(params);
+
+    // A new PLAN card (re-plan), NOT a research run.
+    expect(result.finalizeReason).toBe('plan');
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    // The plan decision saw the ORIGINAL request AND the comment — not the comment alone.
+    const decision = mockInvokeArgs.find(
+      (msgs) =>
+        typeof msgs?.[0]?.content === 'string' && msgs[0].content.includes('модуль ПЛАНИРОВАНИЯ'),
+    );
+    expect(decision).toBeDefined();
+    expect(decision[1].content).toContain('исследуй реранкеры');
+    expect(decision[1].content).toContain('с учётом русского языка');
+    // A refinement never re-asks clarify (allowClarify off → the prompt carries the ban).
+    expect(decision[0].content).toContain('CLARIFY запрещено');
+    // Track 3: the decision runs in plan-edit refinement mode.
+    expect(decision[0].content).toContain('РЕЖИМ ПРАВКИ ПЛАНА');
+    // The aborted anchor's own notice text must NOT pollute the re-plan dialogue.
+    expect(decision[1].content).not.toContain('Исследование остановлено');
+    // The new card is stamped drKind='plan' and reflects the refinement.
+    const card = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(card.drKind).toBe('plan');
+    expect(card.text).toContain('русск');
+  });
+
+  it('a free-text comment on a live plan card (before start) re-plans in refinement mode', async () => {
+    // The card-edit path (Редактировать → type a change → the plan rebuilds): same plan-edit
+    // classification + refinement prompt as the post-Stop path, but the parent is the plan.
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockPlanContent =
+      '{"action":"PLAN","title":"CRM с упором на цену","steps":["Собрать вендоров","Сравнить цены за 2026"]}';
+    models.getMessages.mockResolvedValueOnce([
+      { messageId: 'orig', isCreatedByUser: true, parentMessageId: null, text: 'изучи CRM рынок' },
+      {
+        messageId: 'plan1',
+        isCreatedByUser: false,
+        parentMessageId: 'orig',
+        drKind: 'plan',
+        text: '**План исследования:** Рынок CRM\n\n1. Собрать\n2. Сравнить',
+      },
+    ]);
+    const params = planParams('сделай упор на цену');
+    params.parentMessageId = 'plan1';
+
+    const result = await runNewDeepResearch(params);
+
+    expect(result.finalizeReason).toBe('plan');
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    const decision = mockInvokeArgs.find(
+      (msgs) =>
+        typeof msgs?.[0]?.content === 'string' && msgs[0].content.includes('модуль ПЛАНИРОВАНИЯ'),
+    );
+    expect(decision[0].content).toContain('РЕЖИМ ПРАВКИ ПЛАНА');
+    expect(decision[1].content).toContain('изучи CRM рынок');
+    expect(decision[1].content).toContain('сделай упор на цену');
+  });
+
   it('restores (de-masks) the plan card before saving', async () => {
     mockStartSovereignSession.mockResolvedValue({
       maskedQuestion: 'изучи рынок для [PERSON_1]',
@@ -985,6 +1271,77 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
 
     const drEvents = mockEmitChunk.mock.calls.filter((c) => c[1]?.event === 'dr_progress');
     expect(drEvents).toHaveLength(0);
+  });
+});
+
+describe('runNewDeepResearch — task #21 aborted anchor (persist a re-plannable Stop)', () => {
+  it('a Stop with NO findings saves the clean STOPPED anchor, IGNORING the non-empty fallback report', async () => {
+    // runDeepResearch NEVER returns a blank finalReport — an aborted run with nothing
+    // collected still carries the fallback notice. The runner must IGNORE that text
+    // outright: a Stop is keyed on the reason alone, never on the report being blank (which
+    // it never is) nor on findings. This case and its WITH-findings sibling below pin BOTH
+    // sides of that, so no findings-keyed branch can creep back in.
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockResolvedValueOnce({
+      // Deliberately plan-bearing text, so the assertions below have teeth: whatever the
+      // graph hands back, none of it may reach the saved Stop message.
+      finalReport: 'Аналитическая записка\n\n**План исследования:** Рынок CRM\n\nДанных нет.',
+      finalizeReason: 'aborted',
+      usage: { input: 5, output: 0, total: 5 },
+      findings: [],
+    });
+
+    const result = await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(result.finalizeReason).toBe('aborted');
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg).toBeDefined();
+    expect(msg.drKind).toBe('aborted');
+    expect(msg.text).toContain('Исследование остановлено');
+    // The useless fallback (the "Частичный отчёт" echoing the plan) must NOT be saved.
+    expect(msg.text).not.toContain('Частичный отчёт');
+    expect(msg.text).not.toContain('План исследования');
+    // A complete terminal notice (like a cancel) — NOT flagged unfinished, so no redundant
+    // "unfinished message" indicator renders under an explicit stop notice.
+    expect(msg.unfinished).toBe(false);
+  });
+
+  it('a Stop WITH collected findings STILL saves only the clean STOPPED notice (owner: Stop = nothing)', async () => {
+    // Owner decision 2026-07-13: a Stop is "I don't want this" — it never yields a report,
+    // even if findings were gathered. No partial banner, no findings dump; just STOPPED.
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockResolvedValueOnce({
+      finalReport: 'Промежуточные данные по вендорам',
+      finalizeReason: 'aborted',
+      usage: { input: 5, output: 5, total: 10 },
+      findings: [{ subQuestion: 'вендоры CRM', digest: '...', sources: [] }],
+    });
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.drKind).toBe('aborted');
+    expect(msg.text).toContain('Исследование остановлено');
+    expect(msg.text).not.toContain('Частичный отчёт');
+    // A clean terminal notice — not an unfinished generation.
+    expect(msg.unfinished).toBe(false);
+  });
+
+  it('a budget-limit partial stays drKind=report (a valid answer → normal chat, not re-plan)', async () => {
+    // Owner decision (§5.2): only a user Stop routes back into planning. A budget/time/
+    // rounds partial is a valid, if truncated, report — its follow-up is ordinary chat.
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockResolvedValueOnce({
+      finalReport: 'Отчёт, оборванный по лимиту бюджета',
+      finalizeReason: 'budget',
+      usage: { input: 5, output: 5, total: 10 },
+      findings: [],
+    });
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.drKind).toBe('report');
   });
 });
 

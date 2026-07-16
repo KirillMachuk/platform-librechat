@@ -54,14 +54,7 @@ function resultFrom(
   finalizeReason: FinalizeReason,
   fallbackReason: string,
 ): RunDeepResearchResult {
-  const finalReport =
-    values?.finalReport ||
-    buildFallbackReport({
-      brief: values?.researchBrief ?? '',
-      jurisdiction: values?.jurisdiction ?? '',
-      findings: values?.findings ?? [],
-      reason: fallbackReason,
-    });
+  const finalReport = values?.finalReport || buildFallbackReport({ reason: fallbackReason });
   return {
     finalReport,
     finalizeReason: values?.finalReport

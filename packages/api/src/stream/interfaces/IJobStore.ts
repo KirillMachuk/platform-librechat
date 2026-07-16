@@ -35,6 +35,18 @@ export interface SerializableJobData {
   /** Whether the user-message created event has been emitted */
   createdEventEmitted?: boolean;
 
+  /**
+   * Opt-in: the producer emits its OWN final event when aborted, so `abortJob` must only
+   * signal the stop and leave finalization (and job cleanup) to it.
+   *
+   * The default abort synthesises a final from the job's buffered content — right for a
+   * chat run, where that buffer IS the partial answer. A producer that instead persists a
+   * meaningful terminal message (Deep Research saves an "исследование остановлено" notice)
+   * has an empty buffer, so the synthetic final would deliver an EMPTY message and, since
+   * the client closes the stream on the first final, permanently mask the real one.
+   */
+  producerFinalizesOnAbort?: boolean;
+
   /** Sender name for UI display */
   sender?: string;
 

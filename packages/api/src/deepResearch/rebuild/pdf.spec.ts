@@ -57,10 +57,10 @@ describe('reportToDocDefinition (Markdown → pdfmake doc)', () => {
     expect(ol.ol).toHaveLength(2);
   });
 
-  it('renders a blockquote (partial-report banner) as italic text', () => {
-    const quote = blocks('> Частичный отчёт: превышен лимит времени.')[0] as ContentText;
+  it('renders a blockquote as italic text', () => {
+    const quote = blocks('> Оценки экспертов расходятся.')[0] as ContentText;
     expect(quote.italics).toBe(true);
-    expect((quote.text as ContentText[])[0].text).toContain('Частичный отчёт');
+    expect((quote.text as ContentText[])[0].text).toContain('Оценки экспертов');
   });
 
   it('renders a horizontal rule as a canvas line', () => {

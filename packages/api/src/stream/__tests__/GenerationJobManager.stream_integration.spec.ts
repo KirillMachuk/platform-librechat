@@ -362,6 +362,148 @@ describe('GenerationJobManager Integration Tests', () => {
 
       await GenerationJobManager.destroy();
     });
+
+    test('producerFinalizesOnAbort: signals the stop but leaves the final and the job alone', async () => {
+      const services = createStreamServices({ useRedis: true, redisClient: ioredisClient });
+      GenerationJobManager.configure(services);
+      GenerationJobManager.initialize();
+
+      const streamId = `redis-abort-producer-${Date.now()}`;
+      const job = await GenerationJobManager.createJob(streamId, 'user-1');
+      await GenerationJobManager.updateMetadata(streamId, { producerFinalizesOnAbort: true });
+
+      const abortResult = await GenerationJobManager.abortJob(streamId);
+
+      // The stop still has to reach the run — that half of abort is unconditional.
+      expect(job.abortController.signal.aborted).toBe(true);
+      // But NOT the finalization: a synthetic final would ship this producer's empty buffer
+      // as THE final (the client closes the stream on the first one), masking the real
+      // terminal message it is about to emit.
+      expect(abortResult.success).toBe(true);
+      expect(abortResult.finalEvent).toBeNull();
+      // And the job must outlive the abort: deleting it here would make the producer's own
+      // emit path read the missing job as "replaced mid-run" and skip its final too.
+      // (toBeDefined, not not.toBeNull: getJob resolves UNDEFINED when the job is gone, so
+      // not.toBeNull would pass on a deleted job and never catch that regression.)
+      expect(await GenerationJobManager.getJob(streamId)).toBeDefined();
+      // But it must stop looking RUNNABLE at once, or the follow-up turn the user sends
+      // right after the Stop is refused by the running-job guard while this run unwinds.
+      expect(await GenerationJobManager.getJobStatus(streamId)).toBe('aborted');
+      expect(await GenerationJobManager.getActiveJobIdsForUser('user-1')).not.toContain(streamId);
+
+      await GenerationJobManager.destroy();
+    });
+
+    test('producerFinalizesOnAbort: the producer can still finalize after the abort', async () => {
+      const services = createStreamServices({ useRedis: true, redisClient: ioredisClient });
+      GenerationJobManager.configure(services);
+      GenerationJobManager.initialize();
+
+      const streamId = `redis-abort-producer-final-${Date.now()}`;
+      await GenerationJobManager.createJob(streamId, 'user-1');
+      await GenerationJobManager.updateMetadata(streamId, { producerFinalizesOnAbort: true });
+      await GenerationJobManager.abortJob(streamId);
+
+      // The whole point: marking the job terminal above must not cut the producer off — it
+      // still has to deliver the REAL terminal message the user is waiting for.
+      const finalEvent = { final: true, responseMessage: { text: 'остановлено' } };
+      await expect(
+        GenerationJobManager.emitDone(streamId, finalEvent as never),
+      ).resolves.toBeUndefined();
+      await GenerationJobManager.completeJob(streamId);
+      expect(await GenerationJobManager.getJob(streamId)).toBeUndefined();
+
+      await GenerationJobManager.destroy();
+    });
+
+    /**
+     * The abort caller has to hold its HTTP response until the producer's final is out, or
+     * the client — which tears the stream down as soon as that response lands — never sees
+     * it and shows an empty message until a reload. `waitForJobEnd` is that hold.
+     */
+    test('waitForJobEnd: resolves as soon as the producer finalizes', async () => {
+      const services = createStreamServices({ useRedis: true, redisClient: ioredisClient });
+      GenerationJobManager.configure(services);
+      GenerationJobManager.initialize();
+
+      const streamId = `redis-wait-job-end-${Date.now()}`;
+      await GenerationJobManager.createJob(streamId, 'user-1');
+      await GenerationJobManager.updateMetadata(streamId, { producerFinalizesOnAbort: true });
+      await GenerationJobManager.abortJob(streamId);
+
+      // The producer is still unwinding: the wait must NOT return yet.
+      let finalized = false;
+      const waiting = GenerationJobManager.waitForJobEnd(streamId, 5000).then((ok) => {
+        finalized = ok;
+        return ok;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(finalized).toBe(false);
+
+      await GenerationJobManager.completeJob(streamId);
+      await expect(waiting).resolves.toBe(true);
+
+      await GenerationJobManager.destroy();
+    });
+
+    test('waitForJobEnd: gives up rather than hanging when the producer never finalizes', async () => {
+      const services = createStreamServices({ useRedis: true, redisClient: ioredisClient });
+      GenerationJobManager.configure(services);
+      GenerationJobManager.initialize();
+
+      const streamId = `redis-wait-job-end-timeout-${Date.now()}`;
+      await GenerationJobManager.createJob(streamId, 'user-1');
+      await GenerationJobManager.updateMetadata(streamId, { producerFinalizesOnAbort: true });
+      await GenerationJobManager.abortJob(streamId);
+
+      // Timing out is a degraded path, not a failure: the caller answers anyway and the user
+      // gets the pre-wait behaviour (the notice on reload) instead of a stuck Stop button.
+      await expect(GenerationJobManager.waitForJobEnd(streamId, 600)).resolves.toBe(false);
+
+      await GenerationJobManager.destroy();
+    });
+
+    test('waitForJobEnd: returns immediately for a job that is already gone', async () => {
+      const services = createStreamServices({ useRedis: true, redisClient: ioredisClient });
+      GenerationJobManager.configure(services);
+      GenerationJobManager.initialize();
+
+      await expect(
+        GenerationJobManager.waitForJobEnd(`redis-wait-missing-${Date.now()}`, 5000),
+      ).resolves.toBe(true);
+
+      await GenerationJobManager.destroy();
+    });
+
+    test('producerFinalizesOnAbort: a NEW job on the same stream never inherits the flag', async () => {
+      const services = createStreamServices({ useRedis: true, redisClient: ioredisClient });
+      GenerationJobManager.configure(services);
+      GenerationJobManager.initialize();
+
+      // The streamId IS the conversationId, so this is one conversation's second turn: the
+      // user stops a Deep Research run and immediately sends an ordinary message — the very
+      // flow this feature exists to allow. `createJob` HSETs over whatever is still at the
+      // key (unlike the in-memory store, which replaces the entry), and an aborted job's
+      // hash is now deliberately kept alive for its producer — so the previous turn's flag
+      // is sitting right there. Inheriting it would make the ordinary chat's Stop emit
+      // nothing at all and hang the client, curable only by a reload.
+      // Read through the store, not GenerationJobManager.getJob: that one returns a facade
+      // (emitter proxy, abortController) which does not carry this field.
+      const streamId = `redis-abort-producer-inherit-${Date.now()}`;
+      await GenerationJobManager.createJob(streamId, 'user-1');
+      await GenerationJobManager.updateMetadata(streamId, { producerFinalizesOnAbort: true });
+      await GenerationJobManager.abortJob(streamId);
+      expect((await services.jobStore.getJob(streamId))?.producerFinalizesOnAbort).toBe(true);
+
+      await GenerationJobManager.createJob(streamId, 'user-1');
+
+      // Structural, not incidental: today the runner also overwrites the flag on its first
+      // metadata write, but that is a few milliseconds later and one refactor away from
+      // being skipped for non-DR turns. A fresh job must start clean on its own.
+      expect((await services.jobStore.getJob(streamId))?.producerFinalizesOnAbort).toBe(false);
+
+      await GenerationJobManager.destroy();
+    });
   });
 
   describe('Cross-Mode Consistency', () => {

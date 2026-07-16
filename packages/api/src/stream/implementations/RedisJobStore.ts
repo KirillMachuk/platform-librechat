@@ -156,6 +156,16 @@ export class RedisJobStore implements IJobStore {
       createdAt: Date.now(),
       conversationId,
       syncSent: false,
+      /**
+       * Written explicitly, unlike the in-memory store which replaces the whole entry:
+       * `hset` below MERGES into whatever is still at this key, and `streamId` IS the
+       * conversationId — so the next turn of a conversation lands on the previous turn's
+       * hash. That hash now routinely outlives its turn (an aborted job is kept alive on
+       * purpose so its producer can still finalize), and `serializeJob` skips `undefined`,
+       * so an omitted field would leave the old `'1'` standing and hand an ordinary chat a
+       * flag that silences its Stop. `false` here overwrites it; nothing inherits.
+       */
+      producerFinalizesOnAbort: false,
     };
 
     const key = KEYS.job(streamId);
@@ -914,6 +924,7 @@ export class RedisJobStore implements IJobStore {
       userMessage: data.userMessage ? JSON.parse(data.userMessage) : undefined,
       responseMessageId: data.responseMessageId || undefined,
       createdEventEmitted: data.createdEventEmitted === '1',
+      producerFinalizesOnAbort: data.producerFinalizesOnAbort === '1',
       sender: data.sender || undefined,
       syncSent: data.syncSent === '1',
       finalEvent: data.finalEvent || undefined,

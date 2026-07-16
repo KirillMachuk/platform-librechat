@@ -24,6 +24,9 @@ import { filterPersistableAbortContent } from './abortContent';
 /** Error surfaced to any client still attached when a stale/hung job is reaped. */
 const REAPED_JOB_ERROR = 'Generation timed out';
 const OAUTH_TOOL_CALL_PREFIX = `oauth${Constants.mcp_delimiter}`;
+/** How often `waitForJobEnd` re-reads the job. Short enough that a Stop still feels
+ *  immediate, long enough that a 15s wait costs the store ~75 reads, not thousands. */
+const JOB_END_POLL_INTERVAL_MS = 200;
 
 function getToolCallName(toolCall: unknown): unknown {
   return toolCall != null && typeof toolCall === 'object' && 'name' in toolCall
@@ -657,6 +660,14 @@ class GenerationJobManagerClass {
   async completeJob(streamId: string, error?: string): Promise<void> {
     const runtime = this.runtimeState.get(streamId);
 
+    /**
+     * Read BEFORE the abort below, which would otherwise make every job look aborted.
+     * True only for a producer that finalizes its own Stop: any other abort already tore
+     * the runtime down, so this reads undefined and the outcome stays 'completed' — the
+     * label must follow the user's intent, not the fact that the producer got to finish.
+     */
+    const wasAborted = runtime?.abortController.signal.aborted === true;
+
     // Abort the controller to signal all pending operations (e.g., OAuth flow monitors)
     // that the job is done and they should clean up
     if (runtime) {
@@ -710,7 +721,7 @@ class GenerationJobManagerClass {
 
     this.runningJobs.delete(streamId);
     this.syncRunningJobMetrics();
-    recordGenerationJob(this.storeLabel, 'completed');
+    recordGenerationJob(this.storeLabel, wasAborted ? 'aborted' : 'completed');
     logger.debug(`[GenerationJobManager] Job completed: ${streamId}`);
   }
 
@@ -763,6 +774,47 @@ class GenerationJobManagerClass {
     const text = shouldPersistAbortContent
       ? parseTextParts(abortContent as TMessageContentParts[])
       : '';
+
+    /**
+     * Opt-in producers finalize themselves: the stop signal emitted above is ALL that abort
+     * owes them. Synthesising a final here would ship the job's buffered content — empty for
+     * such a producer, since its answer is a terminal message it persists on the way out —
+     * and the client closes the stream on the FIRST final, so that empty event would
+     * permanently mask the real one (only a reload would reveal it). Cleanup is skipped for
+     * the same reason: deleting the job now would make the producer's own emit path read a
+     * missing job as "replaced mid-run" and stay silent too. Its `completeJob` does both.
+     */
+    if (jobData.producerFinalizesOnAbort) {
+      /**
+       * The job must still stop looking RUNNABLE this instant, even though the producer
+       * keeps writing to it: a follow-up turn is refused while a job for the conversation
+       * reads 'running', and it counts against the per-user concurrency cap — so a user who
+       * Stops and immediately comments (the whole point of a Stop here) would be turned
+       * away for as long as the run takes to unwind. Marking it terminal drops it from the
+       * running/user sets; only `deleteJob` would cut the producer off, and completeJob owns it.
+       *
+       * It also moves the hash from the running TTL to the completed one, which puts the
+       * producer on a clock: from this moment it has `completedTtl` (5 min by default) to
+       * reach its emit, since the eval-based HSET does not refresh the TTL. Past that the
+       * hash expires, the producer's stale-job guard reads the miss as "replaced mid-run"
+       * and stays silent, and the client waits for the reaper. Unwinding a stopped run takes
+       * seconds, so the margin is wide — but it is a bound, not a guarantee.
+       */
+      await this.jobStore.updateJob(streamId, { status: 'aborted', completedAt: Date.now() });
+      this.runningJobs.delete(streamId);
+      this.syncRunningJobMetrics();
+      logger.debug(
+        `[GenerationJobManager] Abort signalled for ${streamId}; producer owns finalization`,
+      );
+      return {
+        success: true,
+        jobData,
+        content: abortContent,
+        finalEvent: null,
+        text,
+        collectedUsage,
+      };
+    }
 
     /** Detect "early abort" - aborted before any generation happened (e.g., during tool loading)
     In this case, no messages were saved to DB, so frontend shouldn't navigate to conversation */
@@ -842,6 +894,50 @@ class GenerationJobManagerClass {
       text,
       collectedUsage,
     };
+  }
+
+  /**
+   * Wait for a job signalled by `producerFinalizesOnAbort` to actually finish finalizing.
+   *
+   * The abort caller needs this because the client tears its stream subscription down as
+   * soon as the abort request answers: without the wait, the producer's final — the only
+   * one there is for such a job — is emitted into a socket nobody is reading, and the user
+   * sees an empty message until a reload fetches the persisted one.
+   *
+   * "Finished" is any state that is no longer this abort's: the job is gone (`completeJob`
+   * deleted it — the default), reached a terminal status, or was replaced by a newer run.
+   * Every producer exit reaches one of those: its own emit path, and — if it throws — the
+   * controller's catch, which calls `completeJob` with the error. So the timeout guards
+   * exactly one thing: a producer still wedged in a request that outlives the wait. Timing
+   * out loses the final, which is the behaviour this wait exists to prevent — the caller
+   * answers anyway rather than hold the request, and the user gets the notice on reload.
+   *
+   * @param streamId - The aborted job
+   * @param timeoutMs - Upper bound on the wait
+   * @returns true if the job finalized, false if the wait timed out
+   */
+  async waitForJobEnd(streamId: string, timeoutMs = 15000): Promise<boolean> {
+    const startedAt = Date.now();
+    const deadline = startedAt + timeoutMs;
+
+    for (;;) {
+      const job = await this.jobStore.getJob(streamId);
+      if (!job || job.status !== 'aborted') {
+        /** At `info` because this is the only place the unwind cost is observable, and it
+         *  is what says whether `timeoutMs` is still generous: one line per user Stop. */
+        logger.info(
+          `[GenerationJobManager] ${streamId} finalized ${Date.now() - startedAt}ms after the abort signal`,
+        );
+        return true;
+      }
+      if (Date.now() + JOB_END_POLL_INTERVAL_MS >= deadline) {
+        logger.warn(
+          `[GenerationJobManager] Gave up after ${Date.now() - startedAt}ms waiting for ${streamId} to finalize`,
+        );
+        return false;
+      }
+      await new Promise((resolve) => setTimeout(resolve, JOB_END_POLL_INTERVAL_MS));
+    }
   }
 
   /**
@@ -1367,6 +1463,9 @@ class GenerationJobManagerClass {
     }
     if (metadata.promptTokens !== undefined) {
       updates.promptTokens = metadata.promptTokens;
+    }
+    if (metadata.producerFinalizesOnAbort !== undefined) {
+      updates.producerFinalizesOnAbort = metadata.producerFinalizesOnAbort;
     }
     await this.jobStore.updateJob(streamId, updates);
   }

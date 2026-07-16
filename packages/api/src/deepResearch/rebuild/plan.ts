@@ -62,24 +62,35 @@ export interface PlanDecision {
  * dialogue so far) is provided as a SEPARATE message, as in SCOPE. When
  * `allowClarify` is false (the dialogue already contains a clarify round) the model
  * is told NOT to ask again — the anti-loop the parser also enforces.
+ *
+ * `isRefinement` (task #21 plan edit): the turn is a comment on an existing plan — a
+ * free-text edit on the card, or a comment after a Stop. The dialogue then carries the
+ * prior «Предложенный план» + the user's change, and the model is told to return an
+ * UPDATED plan that EXPLICITLY reflects that change, not a near-identical one (the live
+ * bug: the refinement was ignored, so the re-plan looked "1-в-1").
  */
 export function buildPlanPrompt({
   now,
   allowClarify = true,
+  isRefinement = false,
 }: {
   now: string;
   allowClarify?: boolean;
+  isRefinement?: boolean;
 }): string {
   const clarifyRule = allowClarify
     ? `- Если для АДРЕСНОЙ рекомендации не хватает критичных вводных (масштаб бизнеса, бюджет, on-prem/облако, отрасль, юрисдикция, ключевые требования) — верни action "CLARIFY" и от 1 до ${MAX_CLARIFY_QUESTIONS} КОРОТКИХ вопросов, только самые важные. Не задавай вопросы ради вопросов.`
     : `- Пользователю уже задавали уточнения (или он просил начинать) — БОЛЬШЕ НЕ УТОЧНЯЙ. Действие "CLARIFY" запрещено; выбирай "PLAN" или "PROCEED". Если пользователь явно просит начать/запустить исследование («начинай», «поехали», «запускай») — верни "PROCEED", не предлагай новый план.`;
+  const refinementRule = isRefinement
+    ? `\n\nРЕЖИМ ПРАВКИ ПЛАНА: в диалоге есть блок «Предложенный план», а последнее сообщение пользователя — ПРАВКА к нему. Верни action "PLAN" — ОБНОВЛЁННЫЙ план, в котором правка пользователя ЯВНО учтена в шагах (требование по языку, региону, бюджету, источникам или формату вырази отдельным шагом или условием внутри шагов). НЕ повторяй прежний план дословно и НЕ игнорируй правку.`
+    : '';
   return `Ты — модуль ПЛАНИРОВАНИЯ системы глубокого исследования (Deep Research) для рынка СНГ.
 Дата: ${now}.
 
 Тебе дан запрос пользователя (или диалог уточнения). Реши, что вернуть:
 ${clarifyRule}
 - Иначе верни action "PLAN": короткий ПЛАН исследования из 3–6 шагов. Каждый шаг — сжатая формулировка действия (глагол в инфинитиве). ПОСЛЕДНИЙ шаг ВСЕГДА описывает формат результата (например, «Сформировать сравнительную таблицу и рекомендацию»). Также верни "title" — короткую ТЕМУ исследования в именительном падеже (3–7 слов, это тема, а не команда, без кавычек).
-- Если запрос предельно ясен и план не нужен — верни action "PROCEED".
+- Если запрос предельно ясен и план не нужен — верни action "PROCEED".${refinementRule}
 
 Язык вопросов, шагов и заголовка = язык запроса пользователя.
 

@@ -294,11 +294,39 @@ router.post('/chat/abort', async (req, res) => {
       abortResultResponseMessageId: abortResult.jobData?.responseMessageId,
     });
 
+    /**
+     * A producer that finalizes itself emits the ONLY final this job will ever have, and it
+     * emits it after unwinding — while this handler answers in milliseconds. The client
+     * tears its subscription down the moment we answer (`stopGenerating` clears the
+     * submission, whose effect cleanup closes the stream), so answering first drops that
+     * final into a socket nobody reads: the user is left with the empty placeholder until a
+     * reload fetches the persisted message. Holding the response until the producer is done
+     * restores the ordering this route's own contract promises — "the abort endpoint will
+     * cause the backend to emit a `done` event ... which cleans up the UI".
+     *
+     * Cost: Stop takes as long as the run needs to unwind, which is the honest reading of
+     * "stopping". A timeout answers anyway and degrades to the old behaviour rather than
+     * hanging. Jobs without the flag are untouched — abort already emitted their final
+     * inline, so there is nothing to wait for.
+     */
+    if (abortResult.success && abortResult.jobData?.producerFinalizesOnAbort) {
+      await GenerationJobManager.waitForJobEnd(jobStreamId);
+    }
+
     // CRITICAL: Save partial response BEFORE returning to prevent race condition.
     // If user sends a follow-up immediately after abort, the parentMessageId must exist in DB.
     // Only save if we have a valid responseMessageId (skip early aborts before generation started)
+    //
+    // Never for a producer that finalizes itself: this writes the SAME `responseMessageId`
+    // the producer just persisted, and the wait above now puts this save LAST — so anything
+    // salvaged from the job buffer would overwrite the producer's real terminal message and
+    // the `drKind` anchor the plan-edit follow-up threads onto. Today the buffer is empty
+    // for such a producer and the block is skipped anyway, but that is a property of what
+    // Deep Research happens to stream, not a rule: wiring `onToken` for a live report would
+    // silently turn this into a clobber. The producer owns its message, full stop.
     if (
       abortResult.success &&
+      !abortResult.jobData?.producerFinalizesOnAbort &&
       abortResult.jobData?.userMessage?.messageId &&
       abortResult.jobData?.responseMessageId &&
       hasPersistableAbortContent(abortResult.content)

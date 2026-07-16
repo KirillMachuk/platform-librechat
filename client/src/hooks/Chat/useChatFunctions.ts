@@ -262,11 +262,32 @@ export default function useChatFunctions({
       addedConvo,
     } = {},
   ) => {
-    setShowStopButton(false);
-
     text = text.trim();
-    if (!!isSubmitting || text === '') {
+    if (text === '') {
+      /** Deliberately `void`, not `false`: there is no text for a caller to preserve, and
+       *  `false` would stop `useSubmitMessage` from clearing a whitespace-only composer. */
       return;
+    }
+
+    /**
+     * Refusals return `false` — upstream's contract from #13619 ("preserve refused submit
+     * state", "propagate refused submit result"): it is the caller's only signal that
+     * nothing was sent, so `useSubmitMessage`/`AudioRecorder` keep the user's text instead
+     * of resetting the composer over it, and `PlanCard` keeps its buttons instead of going
+     * blank. Upstream wired it to one guard; the rest still answered `undefined`, which
+     * reads as success — so a chat pinned by a stale `isSubmitting` swallowed the text AND
+     * the card's buttons, the dead plan card only an F5 could revive.
+     *
+     * Announcing the refusal is the CALLER's job, not this hook's (AudioRecorder is
+     * upstream's own example) — the composer never even lands here, since Enter is gated on
+     * `isSubmitting` upstream of it and Send becomes Stop.
+     *
+     * Nothing above this line may mutate UI state for the same reason: `setShowStopButton`
+     * ran first and hid Stop on a refused submit, stranding the very generation the user
+     * was trying to stop.
+     */
+    if (isSubmitting) {
+      return false;
     }
 
     const conversation = cloneDeep(immutableConversation);
@@ -274,18 +295,18 @@ export default function useChatFunctions({
     const endpoint = conversation?.endpoint;
     if (endpoint === null) {
       console.error('No endpoint available');
-      return;
+      return false;
     }
 
     conversationId = conversationId ?? conversation?.conversationId ?? null;
     if (conversationId == 'search') {
       console.error('cannot send any message under search view!');
-      return;
+      return false;
     }
 
     if (isContinued && !latestMessage) {
       console.error('cannot continue AI message without latestMessage!');
-      return;
+      return false;
     }
 
     if (parentMessageId == null && hasPendingAssistantParent(latestMessage)) {
@@ -295,6 +316,8 @@ export default function useChatFunctions({
       );
       return false;
     }
+
+    setShowStopButton(false);
 
     const ephemeralAgent = getEphemeralAgent(conversationId ?? Constants.NEW_CONVO);
     /**

@@ -4,6 +4,7 @@ const categories = require('./categories');
 const adminAuth = require('./admin/auth');
 const adminAnalytics = require('./admin/analytics');
 const adminAudit = require('./admin/audit');
+const adminBilling = require('./admin/billing');
 const adminConfig = require('./admin/config');
 const adminDeepResearch = require('./admin/deepResearch');
 const adminGrants = require('./admin/grants');
@@ -21,6 +22,7 @@ const projects = require('./projects');
 const prompts = require('./prompts');
 const skills = require('./skills');
 const balance = require('./balance');
+const billing = require('./billing');
 const actions = require('./actions');
 const apiKeys = require('./apiKeys');
 const banner = require('./banner');
@@ -47,6 +49,7 @@ module.exports = {
   adminAuth,
   adminAnalytics,
   adminAudit,
+  adminBilling,
   adminConfig,
   adminDeepResearch,
   adminGrants,
@@ -75,6 +78,7 @@ module.exports = {
   actions,
   presets,
   balance,
+  billing,
   messages,
   memories,
   endpoints,

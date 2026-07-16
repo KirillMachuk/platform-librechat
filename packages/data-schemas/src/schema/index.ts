@@ -9,6 +9,7 @@ export { default as categoriesSchema } from './categories';
 export { default as chatProjectSchema } from './chatProject';
 export { default as conversationTagSchema } from './conversationTag';
 export { default as convoSchema } from './convo';
+export { creditMonthSchema, creditPackageSchema, creditSpendSchema } from './credit';
 export { default as fileSchema } from './file';
 export { default as keySchema } from './key';
 export { default as messageSchema } from './message';

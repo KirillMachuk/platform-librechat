@@ -280,6 +280,12 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
       model: responseModel,
       responseMessageId: preliminaryResponseMessageId,
       userMessage: preliminaryUserMessage,
+      // A DR run persists its own terminal message on a Stop, so the generic abort must not
+      // synthesise a final from the job buffer — DR streams no tokens outside the report, so
+      // that final would be EMPTY, and the client takes the FIRST final as THE final. Claimed
+      // in this first metadata write (not inside the run, which is several awaits further on)
+      // so a Stop can't land in between and still get the empty one.
+      producerFinalizesOnAbort: useNewDeepResearch,
     });
 
     // Note: We no longer use res.on('close') to abort since we send JSON immediately.
@@ -843,7 +849,11 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
 
         if (wasAborted) {
           logger.debug(`[ResumableAgentController] Generation aborted for ${streamId}`);
-          // abortJob already handled emitDone and completeJob
+          // abortJob already handled emitDone and completeJob — which holds only for producers
+          // that let it finalize. One that sets `producerFinalizesOnAbort` owns its own final,
+          // and staying silent here would hang its client. Deep Research is the only such
+          // producer and never reaches this path (it returns before `startGeneration` runs),
+          // so this stays correct — but a second one would have to be handled here.
         } else {
           logger.error(`[ResumableAgentController] Generation error for ${streamId}:`, error);
           await GenerationJobManager.emitError(streamId, error.message || 'Generation failed');
