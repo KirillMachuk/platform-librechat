@@ -33,6 +33,10 @@ jest.mock('@librechat/api', () => ({
   sanitizeFilename: jest.fn((n) => n),
   parseText: jest.fn().mockResolvedValue({ text: '', bytes: 0 }),
   processAudioFile: jest.fn(),
+  /* process.js runs agent-reference cleanup through the limiter, so a bare `jest.fn()` returns
+   * undefined and every delete test throws. The double runs each task immediately — these tests
+   * exercise the cleanup logic, not the throttling (which has its own unit tests). */
+  createConcurrencyLimiter: jest.fn(() => (task) => task()),
 }));
 
 jest.mock('~/server/controllers/assistants/v2', () => ({

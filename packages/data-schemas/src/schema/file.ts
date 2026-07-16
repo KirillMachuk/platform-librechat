@@ -1,6 +1,20 @@
 import mongoose, { Schema } from 'mongoose';
 import { FileContext, FileSources } from 'librechat-data-provider';
+import type { TDocIdentifier } from 'librechat-data-provider';
 import type { IMongoFile } from '~/types';
+
+/**
+ * Exact keys of a document (contract number, article, phone, email, tax id) extracted at
+ * indexing time. A standalone schema because Mongoose reads an inline `type` key as the
+ * element's type declaration; `_id: false` keeps these value objects id-less.
+ */
+const docIdentifierSchema = new Schema<TDocIdentifier>(
+  {
+    type: { type: String },
+    value: { type: String },
+  },
+  { _id: false },
+);
 
 const file: Schema<IMongoFile> = new Schema(
   {
@@ -91,6 +105,43 @@ const file: Schema<IMongoFile> = new Schema(
        * namespace, so the background /embed MUST reuse this value
        * verbatim — a mismatch makes retrieval silently return nothing. */
       type: String,
+    },
+    embeddingScope: {
+      /* Why the file was embedded into pgvector, distinct from the
+       * overloaded `embedded` flag. Absent or 'chat' = a file_search-routed
+       * document that participates in the per-turn retrieval floor and the
+       * file_search tool of its conversation (current behaviour). 'library' =
+       * a full-text `context` document that was ALSO indexed purely so the
+       * library_search tool can find it across chats; it is embedded
+       * (`embedded: true`) but MUST be excluded from the chat floor, or its
+       * chunks would be injected on top of its already-inlined full text
+       * (double injection). Floor/file_search selectors guard on this. */
+      type: String,
+      enum: ['chat', 'library'],
+    },
+    docMetadata: {
+      /* Document-level facts extracted at indexing time (doc-gateway `/metadata`): what the
+       * document IS, its counterparties, its own date/place, its identifiers. They answer
+       * enumeration queries ("all contracts with X / briefs from 2025") that retrieval cannot:
+       * top-K does not fit a set (measured: dense top-5 set-recall 0.54 vs filter 1.00).
+       *
+       * Written fail-open AFTER a successful embed — extraction must never block indexing — so
+       * absence means "unknown", never "no parties". Every field comes from the document's
+       * HEADER: a company or city named in the body is content for hybrid search, not metadata.
+       *
+       * `identifiers` is declared as a sub-schema rather than inline: an inline `{ type: ... }`
+       * key inside an array element is read by Mongoose as the element's TYPE declaration, not
+       * as a field named "type". */
+      /* No index: measured, the planner rejects a standalone `docMetadata.docType` index on every
+       * query this feature makes — the compound `{user, embedded, updatedAt}` always wins, because
+       * the scope is one user's few hundred files while a bare kind index spans every tenant. It
+       * would only add a write on each file insert and each `updatedAt` touch, for no reader. */
+      docType: { type: String },
+      parties: { type: [String], default: undefined },
+      primaryDate: { type: String },
+      primaryLocation: { type: String },
+      identifiers: { type: [docIdentifierSchema], default: undefined },
+      columns: { type: [String], default: undefined },
     },
     type: {
       type: String,
@@ -215,6 +266,12 @@ const file: Schema<IMongoFile> = new Schema(
 file.index({ expiredAt: 1 });
 file.index({ createdAt: 1, updatedAt: 1 });
 file.index({ embeddingStatus: 1, embedNextAt: 1 });
+/* library_search scope queries: the ready-file query filters {user, embedded}
+ * sorted by updatedAt (this index also serves the LIBRARY_SEARCH_MAX_FILES cap),
+ * and the pending/failed status counts filter {user, embeddingStatus}. Without
+ * these, every tool call is a per-user collection scan. */
+file.index({ user: 1, embedded: 1, updatedAt: -1 });
+file.index({ user: 1, embeddingStatus: 1 });
 file.index(
   { filename: 1, conversationId: 1, context: 1, tenantId: 1 },
   { unique: true, partialFilterExpression: { context: FileContext.execute_code } },

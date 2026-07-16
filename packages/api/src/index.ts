@@ -67,6 +67,10 @@ export * from './tools';
 export * from './web';
 /* RAG rerank (суверенный реранкер) */
 export * from './rag/rerank';
+/* Поиск по всей библиотеке файлов пользователя */
+export * from './rag/library';
+/* Метаданные документа при индексации (фильтры библиотеки + карточка документа) */
+export * from './rag/metadata';
 /* Langfuse */
 export * from './langfuse';
 /* Cache */

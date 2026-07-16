@@ -60,7 +60,7 @@ export function getToolIconType(name: string): ToolIconType {
   if (name === 'image_gen_oai' || name === 'image_edit_oai' || name === 'gemini_image_gen') {
     return 'image_gen';
   }
-  if (name === 'file_search' || name === 'retrieval') {
+  if (name === 'file_search' || name === 'retrieval' || name === 'library_search') {
     return 'file_search';
   }
   if (name === 'code_interpreter') {

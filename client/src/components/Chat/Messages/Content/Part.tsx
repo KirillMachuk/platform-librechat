@@ -267,7 +267,14 @@ const Part = memo(function Part({
           onExpand={onToolExpand}
         />
       );
-    } else if (isToolCall && (toolCall.name === 'file_search' || toolCall.name === 'retrieval')) {
+    } else if (
+      isToolCall &&
+      (toolCall.name === 'file_search' ||
+        toolCall.name === 'retrieval' ||
+        toolCall.name === 'library_search')
+    ) {
+      // library_search reuses the file_search retrieval UI: it emits the same
+      // `file_search` artifact (source cards) and reads as "searching documents".
       return (
         <RetrievalCall
           initialProgress={toolCall.progress ?? 0.1}

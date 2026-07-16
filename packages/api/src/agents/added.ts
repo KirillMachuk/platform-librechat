@@ -186,7 +186,10 @@ export async function loadAddedAgent(
     tools.push(Tools.execute_code);
   }
   if ((ephemeralAgent?.file_search === true || modelSpec?.fileSearch === true) && !reasoningModel) {
+    // One toggle arms both file_search (attached docs) and library_search (whole library) —
+    // mirrors loadEphemeralAgent so multi-conversation additions behave identically.
     tools.push(Tools.file_search);
+    tools.push(Tools.library_search);
   }
   if ((ephemeralAgent?.web_search === true || modelSpec?.webSearch === true) && !reasoningModel) {
     tools.push(Tools.web_search);

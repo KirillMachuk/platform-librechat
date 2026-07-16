@@ -103,6 +103,48 @@ export type FileConfigInput = {
   checkType?: (fileType: string, supportedTypes: RegExp[]) => boolean;
 };
 
+/**
+ * Keys that identify the DOCUMENT itself — its number, its articles. Contacts and tax ids the
+ * extractor also finds are deliberately not kept: they identify parties, not the document, they
+ * are personal data in a card shown to the model, and hybrid search already finds them in the
+ * text (measured: the exact-row needle scores 1.00).
+ */
+export type TDocIdentifier = {
+  type: 'DOC_NO' | 'ARTICLE';
+  value: string;
+};
+
+/**
+ * Document-level facts extracted at indexing time (doc-gateway `/metadata`), used to filter the
+ * library by attribute and to head each `library_search` result with a document card.
+ *
+ * Answers enumeration queries ("show ALL contracts with X / briefs from 2025") that retrieval
+ * cannot: top-K does not fit a set. Measured (RESULTS_META.md): the production dense top-5 path
+ * scores set-recall 0.54, a filter over these fields 1.00 at precision 1.00.
+ *
+ * Deliberately universal — no domain fields (landlord / lease subject): those do not carry over
+ * to briefs, tables or regulations.
+ *
+ * Every field describes the document's OWN header (title, preamble, requisites), never its body:
+ * a city or company named in the body is CONTENT, which hybrid search retrieves — treating it as
+ * metadata drops the "contracts in Minsk" filter to 0.85 precision (measured). The extractor
+ * also derives entities/dates/amounts across the whole zone; those are not persisted because no
+ * filter or card uses them, and a partial list would silently lie to a filter.
+ */
+export type TDocMetadata = {
+  /** What the document IS: договор / положение / бриф / таблица / приказ / … */
+  docType: string;
+  /** Counterparties named in the header preamble — what the card shows and `org` filters. */
+  parties: string[];
+  /** Date the document was drawn up, from its header — not any date it mentions. */
+  primaryDate?: string | null;
+  /** Place the document was drawn up, from its header. */
+  primaryLocation?: string | null;
+  identifiers: TDocIdentifier[];
+  /** Column names of a row-structured file (CSV/XLSX); empty otherwise. */
+  columns: string[];
+};
+
 export type TFile = {
   _id?: string;
   __v?: number;
@@ -124,6 +166,27 @@ export type TFile = {
    * ready (the file is already searchable).
    */
   embeddingStatus?: 'pending' | 'processing' | 'ready' | 'failed';
+  /**
+   * Why the file is embedded. `'chat'`/absent = participates in the chat
+   * retrieval floor and file_search tool. `'library'` = a full-text context
+   * document indexed only for cross-chat library_search; excluded from the
+   * floor to avoid double injection over its inlined full text.
+   */
+  embeddingScope?: 'chat' | 'library';
+  /**
+   * Project this file is a source of. Such files are embedded under the project's own namespace
+   * and are deliberately OUT of the cross-chat library, so the assistant only finds them inside
+   * that project — the Files table must not promise otherwise.
+   */
+  project_id?: string;
+  /** Retention deadline of a temporary/incognito chat's file; also keeps it out of the library. */
+  expiredAt?: string | Date | null;
+  /**
+   * Document-level facts extracted at indexing time. Absent on legacy records, on files whose
+   * text could not be resolved, and on non-indexed files — clients MUST treat undefined as
+   * "unknown", never as "no parties/no date".
+   */
+  docMetadata?: TDocMetadata;
   filename: string;
   filepath: string;
   object: 'file';

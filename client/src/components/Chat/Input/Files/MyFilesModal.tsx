@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useSetRecoilState } from 'recoil';
+import { Upload } from 'lucide-react';
 import { FileSources, FileContext } from 'librechat-data-provider';
 import {
   Button,
@@ -14,8 +15,8 @@ import {
 import type { DataTableConfig } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import FilePreviewDialog from '~/components/Chat/Messages/Content/FilePreviewDialog';
+import { useAttachFileToChat, useDeleteFilesFromTable, useLibraryUpload } from '~/hooks/Files';
 import { buildColumns, filenameContextMap } from './Table/Columns';
-import { useAttachFileToChat, useDeleteFilesFromTable } from '~/hooks/Files';
 import { useGetFiles } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 import store from '~/store';
@@ -36,6 +37,7 @@ export function MyFilesModal({
   const [isDeleting, setIsDeleting] = useState(false);
   const setSelectedFiles = useSetRecoilState(store.filesByIndex(0));
   const { deleteFiles } = useDeleteFilesFromTable(() => setIsDeleting(false));
+  const { fileInputRef, handleFileUpload, isUploading, uploadStatusLabel } = useLibraryUpload();
 
   const { data: files = [] } = useGetFiles<TFile[]>({
     select: (files) =>
@@ -90,29 +92,64 @@ export function MyFilesModal({
           <OGDialogHeader>
             <OGDialogTitle>{localize('com_nav_my_files')}</OGDialogTitle>
           </OGDialogHeader>
+          {isUploading && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex items-center gap-2 rounded-md border border-border-light bg-surface-secondary px-2 py-1.5 text-xs text-text-secondary"
+            >
+              <Spinner className="size-3 shrink-0" size={12} />
+              <span className="shimmer min-w-0 flex-1 truncate">{uploadStatusLabel}</span>
+            </div>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            tabIndex={-1}
+            aria-hidden="true"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
           <DataTable
             columns={columns}
             data={filesWithIds}
             config={config}
             onRowClick={(row) => attachFile(row as TFile)}
             customActionsRenderer={({ selectedRows }) => (
-              <Button
-                variant="outline"
-                disabled={selectedRows.length === 0 || isDeleting}
-                onClick={() => {
-                  setIsDeleting(true);
-                  deleteFiles({ files: selectedRows as TFile[], setFiles: setSelectedFiles });
-                }}
-                className="ml-2"
-                aria-label={localize('com_ui_delete')}
-              >
-                {isDeleting ? (
-                  <Spinner className="size-4" />
-                ) : (
-                  <TrashIcon className="size-4 text-red-400" />
-                )}
-                <span className="ml-2 hidden sm:inline">{localize('com_ui_delete')}</span>
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  disabled={isUploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="ml-2"
+                  aria-label={localize('com_ui_upload_files')}
+                >
+                  {isUploading ? (
+                    <Spinner className="size-4" />
+                  ) : (
+                    <Upload className="size-4" aria-hidden="true" />
+                  )}
+                  <span className="ml-2 hidden sm:inline">{localize('com_ui_upload')}</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={selectedRows.length === 0 || isDeleting}
+                  onClick={() => {
+                    setIsDeleting(true);
+                    deleteFiles({ files: selectedRows as TFile[], setFiles: setSelectedFiles });
+                  }}
+                  className="ml-2"
+                  aria-label={localize('com_ui_delete')}
+                >
+                  {isDeleting ? (
+                    <Spinner className="size-4" />
+                  ) : (
+                    <TrashIcon className="size-4 text-red-400" />
+                  )}
+                  <span className="ml-2 hidden sm:inline">{localize('com_ui_delete')}</span>
+                </Button>
+              </>
             )}
           />
         </OGDialogContent>

@@ -508,7 +508,12 @@ async function processRequiredActions(client, requiredActions) {
  * }>} The agent tools and registry.
  */
 /** Native LibreChat tools that are not in the manifest */
-const nativeTools = new Set([Tools.execute_code, Tools.file_search, Tools.web_search]);
+const nativeTools = new Set([
+  Tools.execute_code,
+  Tools.file_search,
+  Tools.library_search,
+  Tools.web_search,
+]);
 
 /** Checks if a tool name is a known built-in tool */
 const isBuiltInTool = (toolName) =>
@@ -563,7 +568,7 @@ async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, to
   const canUseMCP = hasMCPTools ? await mcpPermissionContext.canUseServers(req.user) : true;
 
   const filteredTools = agent.tools?.filter((tool) => {
-    if (tool === Tools.file_search) {
+    if (tool === Tools.file_search || tool === Tools.library_search) {
       return checkCapability(AgentCapabilities.file_search);
     }
     if (tool === Tools.execute_code) {
@@ -1117,7 +1122,7 @@ async function loadAgentTools({
 
   let includesWebSearch = false;
   const _agentTools = agent.tools?.filter((tool) => {
-    if (tool === Tools.file_search) {
+    if (tool === Tools.file_search || tool === Tools.library_search) {
       return checkCapability(AgentCapabilities.file_search);
     } else if (tool === Tools.execute_code) {
       return checkCapability(AgentCapabilities.execute_code);
@@ -1198,7 +1203,12 @@ async function loadAgentTools({
   const agentTools = [];
   for (let i = 0; i < loadedTools.length; i++) {
     const tool = loadedTools[i];
-    if (tool.name && (tool.name === Tools.execute_code || tool.name === Tools.file_search)) {
+    if (
+      tool.name &&
+      (tool.name === Tools.execute_code ||
+        tool.name === Tools.file_search ||
+        tool.name === Tools.library_search)
+    ) {
       agentTools.push(tool);
       continue;
     }

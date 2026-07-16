@@ -31,6 +31,7 @@ const contextMap: Record<string, TranslationKeys> = {
 
 export const filenameContextMap: Record<string, TranslationKeys> = {
   filename: 'com_ui_name',
+  embeddingStatus: 'com_ui_index_status',
   updatedAt: 'com_ui_date',
   filterSource: 'com_ui_storage',
   context: 'com_ui_context',
@@ -72,6 +73,43 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
     },
   },
   {
+    accessorKey: 'embeddingStatus',
+    header: () => {
+      const localize = useLocalize();
+      return localize('com_ui_index_status');
+    },
+    /* Search-index state so a file that is still embedding (or failed) is not
+     * mistaken for one that library_search can already find. Ready is shown too
+     * so the column reads clearly; files that are not indexed at all (images,
+     * avatars) show a neutral dash.
+     *
+     * "Ready" means the assistant finds it ANYWHERE — so it requires the same
+     * scope library_search uses (primeLibraryScope): project sources and
+     * temporary-chat files are indexed under their own namespace and stay out of
+     * the library, and a green "Ready" on them would promise a search that comes
+     * back empty. */
+    cell: ({ row }) => {
+      const localize = useLocalize();
+      const file = row.original;
+      const status = file.embeddingStatus;
+      if (status === 'pending' || status === 'processing') {
+        return <span className="text-amber-600">{localize('com_ui_indexing')}</span>;
+      }
+      if (status === 'failed') {
+        return <span className="text-red-500">{localize('com_ui_index_failed')}</span>;
+      }
+      if (file.embedded === true || status === 'ready') {
+        const libraryWide = file.project_id == null && file.expiredAt == null;
+        return libraryWide ? (
+          <span className="text-green-600">{localize('com_ui_indexed')}</span>
+        ) : (
+          <span className="text-text-secondary">{localize('com_ui_indexed_scoped')}</span>
+        );
+      }
+      return <span className="text-text-secondary">—</span>;
+    },
+  },
+  {
     accessorKey: 'updatedAt',
     header: () => {
       const localize = useLocalize();
@@ -81,10 +119,11 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
       const isSmallScreen = useMediaQuery('(max-width: 768px)');
       return formatDate(row.original.updatedAt?.toString() ?? '', isSmallScreen);
     },
+    meta: { desktopOnly: true },
   },
   {
     accessorKey: 'filterSource',
-    meta: { customHeader: true },
+    meta: { customHeader: true, desktopOnly: true },
     header: ({ column }) => {
       const localize = useLocalize();
       return (
@@ -136,7 +175,7 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
   },
   {
     accessorKey: 'context',
-    meta: { customHeader: true },
+    meta: { customHeader: true, desktopOnly: true },
     header: ({ column }) => {
       const localize = useLocalize();
       return (
@@ -176,6 +215,7 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
       }
       return `${value} MB`;
     },
+    meta: { desktopOnly: true },
   },
   {
     id: 'preview',

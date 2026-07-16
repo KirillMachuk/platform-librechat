@@ -107,7 +107,11 @@
     "migrate:shared-link-permissions:batch": "node config/migrate-shared-link-permissions.js --batch-size=50",
     "migrate:orphaned-agent-files:dry-run": "node config/migrate-orphaned-agent-files.js --dry-run",
     "migrate:orphaned-agent-files": "node config/migrate-orphaned-agent-files.js",
-    "migrate:orphaned-agent-files:batch": "node config/migrate-orphaned-agent-files.js --batch-size=50"
+    "migrate:orphaned-agent-files:batch": "node config/migrate-orphaned-agent-files.js --batch-size=50",
+    "backfill:library-index:dry-run": "node config/backfill-library-index.js --dry-run",
+    "backfill:library-index": "node config/backfill-library-index.js",
+    "backfill:doc-metadata:dry-run": "node config/backfill-doc-metadata.js --dry-run",
+    "backfill:doc-metadata": "node config/backfill-doc-metadata.js"
   },
   "repository": {
     "type": "git",
