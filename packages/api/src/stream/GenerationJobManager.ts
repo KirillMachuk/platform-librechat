@@ -1674,10 +1674,10 @@ class GenerationJobManagerClass {
         if (runtime && !runtime.abortController.signal.aborted) {
           runtime.abortController.abort();
         }
-        // A job vanished from the store while its runtime lingered here: the reaper killed
-        // it (dead heartbeat or age) or a replacement took its streamId. Count it — a rising
-        // reap rate is the signal that runs are being killed (e.g. deploys restarting the
-        // container mid-run), the very problem the heartbeat only mitigates the symptom of.
+        // A job vanished from the store while its runtime lingered here — reaped for a dead
+        // heartbeat or by the age failsafe, or its streamId was taken by a replacement.
+        // Count it: a rising reap rate is the signal that runs are being killed (e.g. deploys
+        // restarting the container mid-run), the problem the heartbeat only softens.
         recordGenerationJob(this.storeLabel, 'reaped');
         // If a client is still attached when the job is reaped, send a terminal
         // error first so the SSE connection closes instead of hanging open with no
