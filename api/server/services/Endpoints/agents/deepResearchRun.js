@@ -1012,12 +1012,16 @@ async function runNewDeepResearch(params) {
       });
     }
 
-    // The concurrency caps run AFTER turn classification: a plan-cancel costs nothing (no
-    // model, no graph) and must always succeed — a 'limit' refusal would leave the plan as
-    // the branch tip, keeping follow-ups routed into DR with no way to dismiss it. The
-    // per-user cap is checked first (its message is the more actionable one), and only a
-    // start that clears it pays for the global scan.
-    if (turn.kind !== 'plan-cancel') {
+    // The concurrency caps run AFTER turn classification but skip the model-free terminal
+    // turns handled just below — a plan-cancel and a duplicate START run no graph, so a cap
+    // would only swap their own terminal message (dismiss / "already running") for a busy
+    // notice and, for the global arm, waste a store scan. A cancel especially must always
+    // succeed, or the plan stays the branch tip and follow-ups keep routing into DR. The
+    // per-user cap is checked first (its message is the more actionable one); only a start
+    // that clears it pays for the global scan.
+    const isModelFreeTerminal =
+      turn.kind === 'plan-cancel' || (turn.kind === 'plan-start' && turn.duplicateStart === true);
+    if (!isModelFreeTerminal) {
       if (otherActiveJobs >= MAX_CONCURRENT_DR) {
         throw new DeepResearchCapError('user');
       }

@@ -1434,6 +1434,31 @@ describe('runNewDeepResearch — review r2 hardening', () => {
     expect(msg.drKind).toBeUndefined();
   });
 
+  it('a DUPLICATE START skips the caps: gets the duplicate notice even when the server is saturated', async () => {
+    const api = require('@librechat/api');
+    models.getMessages.mockResolvedValueOnce(
+      planChain([
+        {
+          messageId: 'other-start',
+          isCreatedByUser: true,
+          parentMessageId: 'p1',
+          drKind: 'start',
+          text: '▶ Начать исследование',
+        },
+      ]),
+    );
+
+    const result = await runNewDeepResearch(planParams('▶ Начать исследование'));
+
+    expect(result.finalizeReason).toBe('limit');
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    // The duplicate notice, NOT the global-cap "сервис загружен" — a model-free terminal
+    // is never subject to the concurrency caps, so the global scan is never even paid for.
+    expect(msg.text).toContain('уже запущено');
+    expect(msg.text).not.toContain('сервис загружен');
+    expect(api.GenerationJobManager.getActiveDeepResearchCount).not.toHaveBeenCalled();
+  });
+
   it('does NOT count the CURRENT message as its own duplicate (regenerate reuses the START id)', async () => {
     models.getMessages.mockResolvedValueOnce(
       planChain([
