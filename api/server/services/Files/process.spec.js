@@ -179,7 +179,6 @@ const {
   getAgentFileRetentionExpiry,
   probePdf,
   withTimeout,
-  parseTextNative,
   routePdfBySize,
   sweepExpiredFiles: sweepExpiredFilesWithDeps,
   startExpiredFileSweep: startExpiredFileSweepWithDeps,

@@ -363,14 +363,15 @@ function DataTable<TData extends RowWithId, TValue>({
     onRowClickRef.current = onRowClick;
   }, [onRowClick]);
 
+  const hasRowClick = onRowClick != null;
   const stableOnRowClick = useMemo<((row: TData) => void) | undefined>(
     () =>
-      onRowClick == null
-        ? undefined
-        : (row: TData) => {
+      hasRowClick
+        ? (row: TData) => {
             onRowClickRef.current?.(row);
-          },
-    [onRowClick == null],
+          }
+        : undefined,
+    [hasRowClick],
   );
 
   const rowStyle = useMemo<React.CSSProperties>(() => ({ height: rowHeight }), [rowHeight]);
