@@ -94,6 +94,7 @@ jest.mock('@librechat/api', () => ({
     },
     completeJob: (...a) => mockCompleteJob(...a),
     getActiveJobIdsForUser: jest.fn(async () => []),
+    getActiveDeepResearchCount: jest.fn(async () => 0),
     getJob: (...a) => mockGetJob(...a),
   },
   buildFallbackReport: jest.fn(() => 'FALLBACK'),
@@ -515,6 +516,47 @@ describe('runNewDeepResearch — D4 report PDF artifact', () => {
 
     expect(mockReportToPdfBuffer).not.toHaveBeenCalled();
     expect(mockSavedMessages.find((m) => m.messageId === 'r1').files).toBeUndefined();
+  });
+});
+
+describe('runNewDeepResearch — global concurrency cap (M2)', () => {
+  const api = require('@librechat/api');
+
+  beforeEach(() => {
+    mockStartSovereignSession.mockResolvedValue(null);
+  });
+
+  it('refuses a start when the server is saturated, without running the graph', async () => {
+    api.GenerationJobManager.getActiveDeepResearchCount.mockResolvedValueOnce(20);
+
+    const result = await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(result.finalizeReason).toBe('limit');
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.text).toContain('сервис загружен');
+    // A refusal carries no report marker, so the next turn drops back to normal chat.
+    expect(msg.drKind).toBeUndefined();
+  });
+
+  it('lets a start through when the server is just under the cap', async () => {
+    api.GenerationJobManager.getActiveDeepResearchCount.mockResolvedValueOnce(19);
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(mockRunDeepResearch).toHaveBeenCalledTimes(1);
+  });
+
+  it('checks the per-user cap first and skips the global scan when it trips', async () => {
+    api.GenerationJobManager.getActiveJobIdsForUser.mockResolvedValueOnce(['a', 'b', 'c']);
+
+    const result = await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(result.finalizeReason).toBe('limit');
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.text).toContain('уже выполняется несколько задач');
+    // Per-user refusal short-circuits before the global scan is ever paid for.
+    expect(api.GenerationJobManager.getActiveDeepResearchCount).not.toHaveBeenCalled();
   });
 });
 

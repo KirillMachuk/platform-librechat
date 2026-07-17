@@ -1798,6 +1798,33 @@ class GenerationJobManagerClass {
   }
 
   /**
+   * Count Deep Research runs currently active across ALL users, for the global DR
+   * admission cap.
+   *
+   * The marker is `producerFinalizesOnAbort`: it is set to `useNewDeepResearch` when the
+   * job is created (api/server/controllers/agents/request.js), so a running job carrying
+   * it is a new-engine Deep Research run and nothing else sets it. Counting off that flag
+   * keeps this free of any new per-job state — which the Redis hash merge across turns
+   * makes error-prone (see the `lastHeartbeatAt` inheritance regression) — at the cost of
+   * the coupling documented right here: if that flag ever gets set for a non-DR job, this
+   * count and the global cap move together, so keep the two meanings in sync.
+   *
+   * @param excludeStreamId - the admitting run's own streamId; excluded so a run does not
+   *   count itself (its job row already exists, status `running`, by admission time).
+   * @returns the number of OTHER active Deep Research runs server-wide
+   */
+  async getActiveDeepResearchCount(excludeStreamId?: string): Promise<number> {
+    const running = await this.jobStore.getRunningJobs();
+    let count = 0;
+    for (const job of running) {
+      if (job.producerFinalizesOnAbort === true && job.streamId !== excludeStreamId) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
    * Destroy the manager.
    * Cleans up all resources including runtime state, buffers, and stores.
    */
