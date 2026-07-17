@@ -1,9 +1,9 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Provider as JotaiProvider } from 'jotai';
-import DataTable from './DataTable';
-import type { TableColumn } from './DataTable.types';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { SortingState } from '@tanstack/react-table';
+import type { TableColumn } from './DataTable.types';
+import DataTable from './DataTable';
 
 // Mock utilities
 jest.mock('~/utils', () => ({
