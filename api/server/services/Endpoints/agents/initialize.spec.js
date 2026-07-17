@@ -1,9 +1,12 @@
 const mongoose = require('mongoose');
 const {
+  Permissions,
   ResourceType,
   PermissionBits,
   PrincipalType,
   PrincipalModel,
+  PermissionTypes,
+  AgentCapabilities,
   MAX_SUBAGENT_DEPTH,
   MAX_SUBAGENT_GRAPH_NODES,
 } = require('librechat-data-provider');
@@ -11,6 +14,7 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 
 const mockInitializeAgent = jest.fn();
 const mockValidateAgentModel = jest.fn();
+const mockBuildDeepResearchGraph = jest.fn();
 
 jest.mock('@librechat/agents', () => ({
   ...jest.requireActual('@librechat/agents'),
@@ -20,10 +24,14 @@ jest.mock('@librechat/agents', () => ({
   })),
 }));
 
+/** `checkAccess` is deliberately left as the real implementation — the Deep Research
+ *  RBAC tests below drive it through a real permission object and only control the
+ *  role lookup itself. */
 jest.mock('@librechat/api', () => ({
   ...jest.requireActual('@librechat/api'),
   initializeAgent: (...args) => mockInitializeAgent(...args),
   validateAgentModel: (...args) => mockValidateAgentModel(...args),
+  buildDeepResearchGraph: (...args) => mockBuildDeepResearchGraph(...args),
   GenerationJobManager: { setCollectedUsage: jest.fn() },
   getCustomEndpointConfig: jest.fn(),
   createSequentialChainEdges: jest.fn(),
@@ -860,5 +868,127 @@ describe('applyConversationFileContext', () => {
       applyConversationFileContext({ req: makeReq('conv_1'), primaryAgent }),
     ).resolves.toBeUndefined();
     expect(primaryAgent.tools).not.toContain('file_search');
+  });
+});
+
+describe('initializeClient — Deep Research RBAC gate', () => {
+  const db = require('~/models');
+
+  let mongoServer;
+  let testUser;
+
+  beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+    await mongoose.connect(mongoServer.getUri());
+  });
+
+  afterAll(async () => {
+    await mongoose.disconnect();
+    await mongoServer.stop();
+  });
+
+  beforeEach(async () => {
+    await mongoose.connection.dropDatabase();
+    jest.clearAllMocks();
+    jest.spyOn(logger, 'error').mockImplementation(() => {});
+
+    testUser = await User.create({
+      email: 'dr@example.com',
+      name: 'DR User',
+      username: 'druser',
+      role: 'USER',
+    });
+
+    mockValidateAgentModel.mockResolvedValue({ isValid: true });
+    mockInitializeAgent.mockResolvedValue({
+      id: PRIMARY_ID,
+      endpoint: 'agents',
+      edges: [],
+      toolDefinitions: [],
+      toolRegistry: new Map(),
+      userMCPAuthMap: null,
+      tool_resources: {},
+      resendFiles: true,
+      maxContextTokens: 4096,
+    });
+  });
+
+  /** Controls only the role document the real `checkAccess` reads. */
+  const setWebSearchPermission = (allowed) =>
+    jest.spyOn(db, 'getRoleByName').mockResolvedValue({
+      permissions: { [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: allowed } },
+    });
+
+  const makeReq = (ephemeralAgent = { deep_research: true }) => ({
+    user: { id: testUser._id.toString(), role: 'USER' },
+    body: { conversationId: 'conv_dr', files: [], ephemeralAgent },
+    config: {
+      endpoints: { agents: { capabilities: [AgentCapabilities.deep_research] } },
+    },
+    _resumableStreamId: null,
+  });
+
+  const run = (req) =>
+    initializeClient({
+      req,
+      res: {},
+      signal: new AbortController().signal,
+      endpointOption: {
+        agent: Promise.resolve({
+          id: PRIMARY_ID,
+          name: 'Primary',
+          provider: 'openai',
+          model: 'gpt-4',
+          tools: [],
+        }),
+        model_parameters: { model: 'gpt-4' },
+        endpoint: 'agents',
+      },
+    });
+
+  it('assembles the research graph when the role carries the Web Search permission', async () => {
+    setWebSearchPermission(true);
+
+    await run(makeReq());
+
+    expect(mockBuildDeepResearchGraph).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs the turn as an ordinary chat when the role lacks the Web Search permission', async () => {
+    setWebSearchPermission(false);
+
+    await run(makeReq());
+
+    expect(mockBuildDeepResearchGraph).not.toHaveBeenCalled();
+  });
+
+  it('fails closed — a permission lookup that throws denies the run', async () => {
+    jest.spyOn(db, 'getRoleByName').mockRejectedValue(new Error('mongo unreachable'));
+
+    await run(makeReq());
+
+    expect(mockBuildDeepResearchGraph).not.toHaveBeenCalled();
+  });
+
+  it('ignores the toggle when the tenant capability is off, without consulting the role', async () => {
+    const roleLookup = setWebSearchPermission(true);
+    const req = makeReq();
+    req.config.endpoints.agents.capabilities = [];
+
+    await run(req);
+
+    expect(mockBuildDeepResearchGraph).not.toHaveBeenCalled();
+    expect(roleLookup).not.toHaveBeenCalled();
+  });
+
+  /** The gate sits behind the toggle, so an ordinary chat turn — the overwhelming
+   *  majority — never pays for the role lookup this PR adds. */
+  it('costs an ordinary chat turn nothing: no role lookup when the toggle is off', async () => {
+    const roleLookup = setWebSearchPermission(true);
+
+    await run(makeReq({}));
+
+    expect(mockBuildDeepResearchGraph).not.toHaveBeenCalled();
+    expect(roleLookup).not.toHaveBeenCalled();
   });
 });

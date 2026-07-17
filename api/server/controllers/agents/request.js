@@ -5,6 +5,7 @@ const {
   getViolationInfo,
   buildMessageFiles,
   resolveTitleTiming,
+  canUseDeepResearch,
   HEARTBEAT_INTERVAL_MS,
   GenerationJobManager,
   filterPersistableAbortContent,
@@ -20,12 +21,43 @@ const {
 } = require('~/server/services/MCPRequestContext');
 const { handleAbortError } = require('~/server/middleware');
 const { logViolation } = require('~/cache');
-const { saveMessage, getMessages, getConvo } = require('~/models');
+const { saveMessage, getMessages, getConvo, getRoleByName } = require('~/models');
 const {
   runNewDeepResearch,
   isDrFollowUp,
   buildDrTurnContext,
 } = require('~/server/services/Endpoints/agents/deepResearchRun');
+
+/**
+ * Whether this turn is routed into the rebuilt Deep Research engine.
+ *
+ * Two ways in: the badge, or a reply to a persisted DR turn (`isDrFollowUp` —
+ * drKind-gated plan/clarify/aborted parent, i.e. the badge is off but the user is
+ * answering a clarify prompt or pressing Start/Edit on a plan card).
+ *
+ * The Web Search permission gates BOTH arms. The badge arm is the obvious one; the
+ * follow-up arm needs it too, or a role whose permission was revoked could keep
+ * answering its own older plan/clarify turns and resurrect research indefinitely.
+ *
+ * Both arms are admission: the graph itself runs later, inside `runNewDeepResearch`.
+ * A denial here can only stop a run from starting — it can never cut a running one
+ * short. Keep it that way; an admitted run must reach its end.
+ *
+ * @param {{ req: Express.Request, userId: string, conversationId: string, parentMessageId: string }} params
+ * @returns {Promise<boolean>}
+ */
+async function shouldRunNewDeepResearch({ req, userId, conversationId, parentMessageId }) {
+  if (req.config?.deepResearch?.useNewEngine !== true) {
+    return false;
+  }
+  const requested =
+    req.body?.ephemeralAgent?.deep_research === true ||
+    (await isDrFollowUp({ userId, conversationId, parentMessageId }));
+  if (!requested) {
+    return false;
+  }
+  return canUseDeepResearch({ req, getRoleByName });
+}
 
 function createCloseHandler(abortController) {
   return function (manual) {
@@ -224,10 +256,12 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
    *  DR turn refuse a same-conversation double-submit WITHOUT replacing the live job —
    *  createJob would silently swap the runtime out from under the running research,
    *  orphan its AbortController, and let the first finalize kill the second run. */
-  const useNewDeepResearch =
-    req.config?.deepResearch?.useNewEngine === true &&
-    (req.body?.ephemeralAgent?.deep_research === true ||
-      (await isDrFollowUp({ userId, conversationId, parentMessageId })));
+  const useNewDeepResearch = await shouldRunNewDeepResearch({
+    req,
+    userId,
+    conversationId,
+    parentMessageId,
+  });
 
   if (useNewDeepResearch && !isNewConvo) {
     const activeStatus = await GenerationJobManager.getJobStatus(streamId);
@@ -1268,3 +1302,6 @@ const _LegacyAgentController = async (req, res, next, initializeClient, addTitle
 module.exports = AgentController;
 /** Test-only export: the regenerate/user-message shape has live-bug history (see JSDoc). */
 module.exports.getPreliminaryUserMessage = getPreliminaryUserMessage;
+/** Test-only export: this is the gate that decides whether a turn becomes a research
+ *  run, so it is worth asserting directly rather than through the whole controller. */
+module.exports.shouldRunNewDeepResearch = shouldRunNewDeepResearch;
