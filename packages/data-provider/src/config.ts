@@ -1232,6 +1232,14 @@ export const interfaceSchema = z
       })
       .optional(),
     fileSearch: z.boolean().optional(),
+    /**
+     * Starting state of the «Поиск файлов» toggle for a user who has never touched it.
+     * `fileSearch` above controls whether the badge EXISTS; this controls whether it starts ON.
+     * A user's own choice (persisted per browser) always wins over this default. Off by default —
+     * enabling it is a per-deployment product decision (employees should not need to discover a
+     * toggle for the library to answer).
+     */
+    fileSearchDefault: z.boolean().optional(),
     fileCitations: z.boolean().optional(),
     buildInfo: z.boolean().optional(),
     remoteAgents: z
