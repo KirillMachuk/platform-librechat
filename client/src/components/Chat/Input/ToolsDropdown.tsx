@@ -216,7 +216,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
                   'hover:bg-surface-secondary hover:shadow-sm',
                   'text-text-secondary hover:text-text-primary',
                 )}
-                aria-label="Configure web search"
+                aria-label={localize('com_ui_web_search_configure')}
                 ref={searchMenuTriggerRef}
               >
                 <div className="h-4 w-4">
@@ -380,7 +380,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
         <Ariakit.MenuButton
           disabled={isDisabled}
           id="tools-dropdown-button"
-          aria-label="Tools Options"
+          aria-label={localize('com_ui_tools_options')}
           className={cn(
             'flex size-9 items-center justify-center rounded-full p-1 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-opacity-50',
             isPopoverActive && 'bg-surface-hover',
