@@ -89,6 +89,12 @@ export default function BadgeRowProvider({
     if (isSubmitting) {
       return;
     }
+    /* Startup config carries deployment defaults for the toggles below; it loads async. Running
+     * init before it lands would burn the one-shot `hasInitializedRef` with defaults missing —
+     * waiting is safe, the effect re-runs when the query resolves. */
+    if (startupConfig == null) {
+      return;
+    }
     if (specName) {
       // Spec active: applyModelSpecEphemeralAgent handles all state (spec base + localStorage
       // overrides for existing conversations). Reset init flag so switching back to non-spec
@@ -137,6 +143,11 @@ export default function BadgeRowProvider({
         } catch (e) {
           console.error('Failed to parse file search toggle value:', e);
         }
+      } else if (startupConfig?.interface?.fileSearchDefault === true) {
+        /* Deployment-level starting state: the library should answer without every employee
+         * discovering a toggle first. Applies ONLY when this browser has no persisted choice —
+         * a user who turned it off stays off (their choice lands in localStorage above). */
+        initialValues[Tools.file_search] = true;
       }
 
       if (artifactsToggleValue !== null) {
@@ -201,7 +212,7 @@ export default function BadgeRowProvider({
         return changed ? result : prev;
       });
     }
-  }, [storageSuffix, specName, isSubmitting, setEphemeralAgent]);
+  }, [storageSuffix, specName, isSubmitting, setEphemeralAgent, startupConfig]);
 
   /** CodeInterpreter hook — sandbox auth is handled server-side by the
    *  agents library, so the toggle no longer has an auth dialog gate. */

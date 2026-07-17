@@ -58,6 +58,7 @@ export async function loadDefaultInterface({
     webSearch: interfaceConfig?.webSearch,
     deepResearch: interfaceConfig?.deepResearch,
     fileSearch: interfaceConfig?.fileSearch,
+    fileSearchDefault: interfaceConfig?.fileSearchDefault,
     fileCitations: interfaceConfig?.fileCitations,
     peoplePicker: interfaceConfig?.peoplePicker,
     marketplace: interfaceConfig?.marketplace,
