@@ -1,5 +1,5 @@
 import { logger, getTenantId, SYSTEM_TENANT_ID } from '@librechat/data-schemas';
-import { Constants, UsageEvents, parseTextParts } from 'librechat-data-provider';
+import { Constants, ErrorTypes, UsageEvents, parseTextParts } from 'librechat-data-provider';
 import type { Agents, TMessageContentParts } from 'librechat-data-provider';
 import type { StandardGraph } from '@librechat/agents';
 import type {
@@ -21,8 +21,12 @@ import { InMemoryEventTransport } from './implementations/InMemoryEventTransport
 import { InMemoryJobStore } from './implementations/InMemoryJobStore';
 import { filterPersistableAbortContent } from './abortContent';
 
-/** Error surfaced to any client still attached when a stale/hung job is reaped. */
-const REAPED_JOB_ERROR = 'Generation timed out';
+/**
+ * Error surfaced to any client still attached when a stale/hung job is reaped. Emitted as the
+ * `{"type":...}` JSON the client localizes (Error.tsx maps it to `com_error_generation_interrupted`)
+ * — a raw sentence would render verbatim and untranslated, which is what it used to do.
+ */
+const REAPED_JOB_ERROR = JSON.stringify({ type: ErrorTypes.GENERATION_INTERRUPTED });
 const OAUTH_TOOL_CALL_PREFIX = `oauth${Constants.mcp_delimiter}`;
 /** How often `waitForJobEnd` re-reads the job. Short enough that a Stop still feels
  *  immediate, long enough that a 15s wait costs the store ~75 reads, not thousands. */
