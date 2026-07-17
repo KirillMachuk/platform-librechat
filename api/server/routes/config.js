@@ -96,7 +96,7 @@ function buildPreLoginPayload() {
       isBirthday() ||
       isEnabled(process.env.SHOW_BIRTHDAY_ICON) ||
       process.env.SHOW_BIRTHDAY_ICON === '',
-    helpAndFaqURL: process.env.HELP_AND_FAQ_URL || 'https://1ma.ai',
+    helpAndFaqURL: process.env.HELP_AND_FAQ_URL || 'https://help.1ma.ai',
     sharedLinksEnabled,
     publicSharedLinksEnabled,
     analyticsGtmId: process.env.ANALYTICS_GTM_ID,
@@ -150,7 +150,7 @@ function buildPostLoginPayload() {
       isBirthday() ||
       isEnabled(process.env.SHOW_BIRTHDAY_ICON) ||
       process.env.SHOW_BIRTHDAY_ICON === '',
-    helpAndFaqURL: process.env.HELP_AND_FAQ_URL || 'https://librechat.ai',
+    helpAndFaqURL: process.env.HELP_AND_FAQ_URL || 'https://help.1ma.ai',
     sharedLinksEnabled,
     publicSharedLinksEnabled,
     openidReuseTokens,
