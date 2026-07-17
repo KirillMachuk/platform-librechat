@@ -83,11 +83,7 @@ function DataTable<TData extends RowWithId, TValue>({
 
   const cfg = config ?? {};
   const { enableRowSelection = true, showCheckboxes = true } = cfg.selection ?? {};
-  const {
-    enableSearch = true,
-    debounce: debounceDelay = 300,
-    filterColumn,
-  } = cfg.search ?? {};
+  const { enableSearch = true, debounce: debounceDelay = 300, filterColumn } = cfg.search ?? {};
   const { count: skeletonCount = 10 } = cfg.skeleton ?? {};
   const {
     overscan = 10,
@@ -101,10 +97,8 @@ function DataTable<TData extends RowWithId, TValue>({
     enablePagination = false,
     pageSize: configuredPageSize = 10,
   } = cfg.behavior ?? {};
-  const {
-    enabled: columnVisibilityEnabled = false,
-    contextMap: columnVisibilityContextMap,
-  } = cfg.columnVisibility ?? {};
+  const { enabled: columnVisibilityEnabled = false, contextMap: columnVisibilityContextMap } =
+    cfg.columnVisibility ?? {};
 
   const paginationActive = enablePagination;
   const virtualizationActive = !paginationActive && data.length >= minRows;
@@ -748,7 +742,9 @@ function DataTable<TData extends RowWithId, TValue>({
                         isDesktopOnly && 'hidden md:table-cell',
                       )}
                       style={widthStyle}
-                      onClick={wrapperSortable ? header.column.getToggleSortingHandler() : undefined}
+                      onClick={
+                        wrapperSortable ? header.column.getToggleSortingHandler() : undefined
+                      }
                       onKeyDown={wrapperSortable ? handleSortingKeyDown : undefined}
                       role={wrapperSortable ? 'button' : undefined}
                       tabIndex={wrapperSortable ? 0 : undefined}
