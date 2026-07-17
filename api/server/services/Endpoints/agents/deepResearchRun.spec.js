@@ -80,6 +80,22 @@ jest.mock('@librechat/agents', () => ({
 
 jest.mock('@librechat/api', () => ({
   sendEvent: jest.fn(),
+  // Faithful subset of the real helpers (whose own logic is covered by the headers/env
+  // unit tests): createSafeUser keeps id/role, resolveConfigHeaders substitutes the
+  // {{LIBRECHAT_USER_ID}} placeholder in defaultHeaders in place. Enough to prove
+  // buildNodeModel wires them so the user-id billing header is resolved, not left literal.
+  createSafeUser: (u) => (u == null ? {} : { id: u.id, role: u.role }),
+  resolveConfigHeaders: ({ llmConfig, user }) => {
+    const headers = llmConfig?.configuration?.defaultHeaders;
+    if (headers == null) {
+      return;
+    }
+    for (const key of Object.keys(headers)) {
+      if (typeof headers[key] === 'string') {
+        headers[key] = headers[key].replace(/\{\{LIBRECHAT_USER_ID\}\}/g, user?.id ?? '');
+      }
+    }
+  },
   initializeCustom: (...a) => mockInitializeCustom(...a),
   runDeepResearch: (...a) => mockRunDeepResearch(...a),
   startSovereignSession: (...a) => mockStartSovereignSession(...a),
@@ -1585,5 +1601,37 @@ describe('runNewDeepResearch — review r2 hardening', () => {
 
     expect(result.finalizeReason).toBe('cancelled');
     expect(models.getMessages).not.toHaveBeenCalled();
+  });
+});
+
+describe('runNewDeepResearch — spend attribution (x-librechat-user-id)', () => {
+  /** Build params whose req carries a real user id, so the header can resolve to it. */
+  const attributedParams = (text, userId) => {
+    const p = baseParams(text);
+    return { ...p, req: { ...p.req, user: { id: userId, role: 'user' } } };
+  };
+
+  beforeEach(() => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockInitializeCustom.mockResolvedValue({
+      llmConfig: { apiKey: 'sk-client', provider: 'openAI' },
+      configOptions: {
+        baseURL: 'http://anon.internal:8000/v1',
+        // The live `1ma` endpoint ships this placeholder header; the anonymizer forwards
+        // the resolved id to the credit ledger to attribute the spend.
+        defaultHeaders: { 'x-librechat-user-id': '{{LIBRECHAT_USER_ID}}' },
+      },
+      provider: 'openAI',
+    });
+  });
+
+  it('resolves the placeholder to the real user id on every model the run builds', async () => {
+    await runNewDeepResearch(attributedParams('изучи рынок CRM', 'user-abc-123'));
+
+    expect(mockModelCtorArgs.length).toBeGreaterThanOrEqual(1);
+    for (const opts of mockModelCtorArgs) {
+      expect(opts.configuration.defaultHeaders['x-librechat-user-id']).toBe('user-abc-123');
+      expect(opts.configuration.defaultHeaders['x-librechat-user-id']).not.toContain('{{');
+    }
   });
 });
