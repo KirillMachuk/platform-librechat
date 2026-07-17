@@ -119,6 +119,15 @@ const file: Schema<IMongoFile> = new Schema(
       type: String,
       enum: ['chat', 'library'],
     },
+    temporary: {
+      /* Privacy marker written at upload time, when the temp-chat status is reliably known.
+       * Distinct from `expiredAt` on purpose: under `retentionMode: ALL` EVERY file carries a
+       * retention deadline, so "has an expiry" stopped meaning "temporary" — a retention-dated
+       * file is a живой library document until that date, while a temp-chat file must never be
+       * cross-chat findable. Absent on legacy records = unknown; the library scope then falls
+       * back to the conservative `expiredAt: null` rule (fail-closed for privacy). */
+      type: Boolean,
+    },
     docMetadata: {
       /* Document-level facts extracted at indexing time (doc-gateway `/metadata`): what the
        * document IS, its counterparties, its own date/place, its identifiers. They answer

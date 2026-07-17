@@ -204,6 +204,7 @@ const {
   startExpiredFileSweep,
   resolveLargeDocRouting,
   resolveContentRouting,
+  resolveUploadPrivacy,
 } = require('./process');
 
 const PDF_MIME = 'application/pdf';
@@ -1807,5 +1808,47 @@ describe('startExpiredFileSweep', () => {
       }),
     );
     expect(interval).toBe('sweep-interval');
+  });
+});
+
+describe('resolveUploadPrivacy — маркер приватности файла', () => {
+  /* `temporary` пишется в запись файла в момент загрузки — единственный момент, когда temp-статус
+   * известен достоверно. Из `expiredAt` его потом не восстановить: под retentionMode ALL дату
+   * несёт каждый файл (это срок хранения, не приватность). */
+  const reqWith = ({ isTemporary, retentionMode } = {}) => ({
+    body: { isTemporary },
+    config: { interfaceConfig: retentionMode ? { retentionMode } : {} },
+  });
+
+  it('явный флаг temp-чата всегда выигрывает (в т.ч. строкой из multipart)', () => {
+    expect(
+      resolveUploadPrivacy({ req: reqWith({ isTemporary: true }), retentionExpiry: {} }).temporary,
+    ).toBe(true);
+    expect(
+      resolveUploadPrivacy({ req: reqWith({ isTemporary: 'true' }), retentionExpiry: {} })
+        .temporary,
+    ).toBe(true);
+  });
+
+  it('вне ALL дата ретеншна может прийти только от temp-чата → temp даже без флага', () => {
+    expect(
+      resolveUploadPrivacy({
+        req: reqWith({}),
+        retentionExpiry: { expiredAt: new Date() },
+      }).temporary,
+    ).toBe(true);
+  });
+
+  it('под ALL дата универсальна и о приватности не говорит: без флага файл НЕ temp', () => {
+    expect(
+      resolveUploadPrivacy({
+        req: reqWith({ retentionMode: 'all' }),
+        retentionExpiry: { expiredAt: new Date() },
+      }).temporary,
+    ).toBe(false);
+  });
+
+  it('обычная загрузка без даты и флага — не temp', () => {
+    expect(resolveUploadPrivacy({ req: reqWith({}), retentionExpiry: {} }).temporary).toBe(false);
   });
 });

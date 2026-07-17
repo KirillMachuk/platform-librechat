@@ -179,8 +179,18 @@ export type TFile = {
    * that project — the Files table must not promise otherwise.
    */
   project_id?: string;
-  /** Retention deadline of a temporary/incognito chat's file; also keeps it out of the library. */
+  /**
+   * Deadline after which the file is swept. Under `retentionMode: ALL` this is a retention
+   * date EVERY file carries (the file is a live library document until then); on a temp-chat
+   * file it is the privacy deadline. The `temporary` flag tells the two apart.
+   */
   expiredAt?: string | Date | null;
+  /**
+   * Privacy marker written at upload time: `true` = temp-chat file, never cross-chat findable.
+   * Absent on legacy records = unknown (the library scope treats those fail-closed when they
+   * carry an expiry date).
+   */
+  temporary?: boolean;
   /**
    * Document-level facts extracted at indexing time. Absent on legacy records, on files whose
    * text could not be resolved, and on non-indexed files — clients MUST treat undefined as

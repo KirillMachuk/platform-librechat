@@ -90,6 +90,13 @@ export interface IMongoFile extends Omit<Document, 'model'> {
    */
   embeddingScope?: 'chat' | 'library';
   /**
+   * Privacy marker written at upload time: `true` = the file belongs to a temporary/incognito
+   * chat and must never be cross-chat findable. Deliberately separate from `expiredAt` — under
+   * `retentionMode: ALL` every file carries a retention deadline, so an expiry date stopped
+   * implying "temporary". Absent on legacy records = unknown (scope treats it fail-closed).
+   */
+  temporary?: boolean;
+  /**
    * Document-level facts from the document's header, extracted at indexing time (doc-gateway
    * `/metadata`): what it is, its parties, its own date/place, its identifiers. Powers attribute
    * filters and the document card in library_search. Absent when extraction failed or was

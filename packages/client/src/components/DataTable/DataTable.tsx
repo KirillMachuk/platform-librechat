@@ -505,16 +505,26 @@ function DataTable<TData extends RowWithId, TValue>({
   }, [filterValue]);
 
   useEffect(() => {
-    if (debouncedTerm === filterValue) return;
     if (onFilterChange) {
-      onFilterChange(debouncedTerm);
-      setOptimizedRowSelection({});
+      /* Controlled mode: the echo guard compares against the prop so a parent
+       * round-tripping the same value doesn't loop. */
+      if (debouncedTerm !== filterValue) {
+        onFilterChange(debouncedTerm);
+        setOptimizedRowSelection({});
+      }
       return;
     }
     if (!manualFiltering && filterColumn) {
+      /* Uncontrolled mode: compare against the column's actual filter, NOT the
+       * `filterValue` prop — that prop defaults to '' here, and clearing the
+       * input also yields '', so a prop-based guard swallowed the reset and the
+       * table stayed filtered on the previous term forever. */
       const column = table.getColumn(filterColumn);
-      column?.setFilterValue(debouncedTerm.length > 0 ? debouncedTerm : undefined);
-      setOptimizedRowSelection({});
+      const next = debouncedTerm.length > 0 ? debouncedTerm : undefined;
+      if (column && column.getFilterValue() !== next) {
+        column.setFilterValue(next);
+        setOptimizedRowSelection({});
+      }
     }
   }, [
     debouncedTerm,

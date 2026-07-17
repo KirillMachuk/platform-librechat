@@ -4,9 +4,10 @@ import { useLibraryUpload } from './useLibraryUpload';
 const mockMutateAsync = jest.fn();
 const mockShowToast = jest.fn();
 const mockValidateFiles = jest.fn();
+let mockFilesList: Array<{ filename: string }> = [];
 
 jest.mock('~/data-provider', () => ({
-  useGetFiles: () => ({ data: [] }),
+  useGetFiles: () => ({ data: mockFilesList }),
   useUploadFileMutation: () => ({ mutateAsync: mockMutateAsync }),
   useGetFileConfig: () => ({ data: {} }),
 }));
@@ -36,8 +37,17 @@ function formDataAt(call: number): FormData {
   return mockMutateAsync.mock.calls[call][0] as FormData;
 }
 
+function dropEvent(files: File[]) {
+  return {
+    dataTransfer: { files, types: ['Files'] },
+    preventDefault: jest.fn(),
+    stopPropagation: jest.fn(),
+  } as unknown as React.DragEvent;
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
+  mockFilesList = [];
   mockMutateAsync.mockResolvedValue({});
   mockValidateFiles.mockReturnValue(true); // valid by default
 });
@@ -136,5 +146,60 @@ describe('useLibraryUpload', () => {
       await result.current.handleFileUpload(changeEvent([]));
     });
     expect(mockMutateAsync).not.toHaveBeenCalled();
+  });
+});
+
+describe('useLibraryUpload — drag-and-drop и дубликаты', () => {
+  it('drop загружает файлы и глушит чатовый dropzone (stopPropagation)', async () => {
+    const { result } = renderHook(() => useLibraryUpload());
+    const doc = new File(['contract'], 'lease.pdf', { type: 'application/pdf' });
+    const event = dropEvent([doc]);
+    await act(async () => {
+      result.current.dropHandlers.onDrop(event);
+    });
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(event.stopPropagation).toHaveBeenCalled();
+    expect(mockMutateAsync).toHaveBeenCalledTimes(1);
+    expect(formDataAt(0).get('tool_resource')).toBe('context');
+  });
+
+  it('drag чего-то, кроме файлов (текст со страницы), полностью игнорируется', async () => {
+    const { result } = renderHook(() => useLibraryUpload());
+    const event = {
+      dataTransfer: { files: [], types: ['text/plain'] },
+      preventDefault: jest.fn(),
+      stopPropagation: jest.fn(),
+    } as unknown as React.DragEvent;
+    await act(async () => {
+      result.current.dropHandlers.onDrop(event);
+    });
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('повторная загрузка существующего имени: файл грузится, но пользователю называют дубль', async () => {
+    /* «0 реакции» на повторную загрузку выглядело как «не загрузилось» — теперь исход назван. */
+    mockFilesList = [{ filename: 'lease.pdf' }];
+    const { result } = renderHook(() => useLibraryUpload());
+    const doc = new File(['contract v2'], 'lease.pdf', { type: 'application/pdf' });
+    await act(async () => {
+      await result.current.handleFileUpload(changeEvent([doc]));
+    });
+    expect(mockMutateAsync).toHaveBeenCalledTimes(1);
+    expect(mockShowToast).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'com_ui_library_duplicate_names', status: 'info' }),
+    );
+  });
+
+  it('новое имя дубль-тоста не вызывает', async () => {
+    mockFilesList = [{ filename: 'other.pdf' }];
+    const { result } = renderHook(() => useLibraryUpload());
+    const doc = new File(['contract'], 'lease.pdf', { type: 'application/pdf' });
+    await act(async () => {
+      await result.current.handleFileUpload(changeEvent([doc]));
+    });
+    expect(mockShowToast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'com_ui_library_duplicate_names' }),
+    );
   });
 });

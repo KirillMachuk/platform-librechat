@@ -51,14 +51,19 @@ describe('primeLibraryScope — ACL-собранный скоуп библиот
     );
     const scope = await primeLibraryScope('user-1', 'tenant-1');
 
-    // Ready query: own files, temp (expiredAt) + project excluded, tenant belt-and-suspenders, capped.
+    // Ready query: own files, project excluded, tenant belt-and-suspenders, visibility rule, capped.
     const [filter, sort, select, limit] = getFiles.mock.calls[0];
     expect(filter).toEqual({
       user: 'user-1',
       tenantId: 'tenant-1',
-      expiredAt: null,
       project_id: null,
       embedded: true,
+      $and: [
+        {
+          temporary: { $ne: true },
+          $or: [{ expiredAt: null }, { temporary: false, expiredAt: { $gt: expect.any(Date) } }],
+        },
+      ],
     });
     expect(sort).toBeNull();
     expect(select).toEqual({ file_id: 1, filename: 1, docMetadata: 1 });
@@ -196,7 +201,9 @@ describe('фильтры по атрибутам (Ф3) — сужение ско
     const scope = await primeLibraryScope('user-1', undefined, { doc_type: 'договор' });
 
     const [filter] = getFiles.mock.calls[0];
-    expect(filter.$or).toEqual([
+    /* Атрибутные ветки живут во ВТОРОМ элементе $and: первый занят правилом видимости, и оба
+     * несут собственный $or — на корне они бы затёрли друг друга. */
+    expect(filter.$and[1].$or).toEqual([
       { 'docMetadata.docType': { $regex: '^договор$', $options: 'i' } },
       { docMetadata: { $exists: false } },
       { 'docMetadata.docType': { $in: [null, '', 'иное'] } },
@@ -212,9 +219,12 @@ describe('фильтры по атрибутам (Ф3) — сужение ско
     const [filter] = getFiles.mock.calls[0];
     expect(filter.user).toBe('user-1');
     expect(filter.tenantId).toBe('tenant-1');
-    expect(filter.expiredAt).toBeNull();
     expect(filter.project_id).toBeNull();
     expect(filter.embedded).toBe(true);
+    expect(filter.$and[0]).toEqual({
+      temporary: { $ne: true },
+      $or: [{ expiredAt: null }, { temporary: false, expiredAt: { $gt: expect.any(Date) } }],
+    });
   });
 
   it('без фильтров запрос ровно такой же, как до Ф3 (никакого $or)', async () => {

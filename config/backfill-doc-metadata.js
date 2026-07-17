@@ -4,6 +4,7 @@ const { createConcurrencyLimiter } = require('@librechat/api');
 
 require('module-alias')({ base: path.resolve(__dirname, '..', 'api') });
 const connect = require('./connect');
+const { withLibraryVisibility } = require('~/app/clients/tools/util/librarySearch');
 const { fetchDocMetadata } = require('~/server/services/Files/Embed/crud');
 const { getAppConfig } = require('~/server/services/Config');
 
@@ -23,7 +24,8 @@ const DETAIL_SAMPLE_LIMIT = 50;
  * Selection (idempotent — safe and cheap to re-run):
  *   - `embedded: true`            in the vector store, i.e. actually part of the library
  *   - `docMetadata` absent        not extracted yet — a failed file is simply picked up next run
- *   - `expiredAt: null`           not a temporary/incognito chat file
+ *   - library visibility          same rule the search scope uses (`withLibraryVisibility`):
+ *                                 temp files never, retention-dated files yes while alive
  *
  * Re-running IS the retry strategy: extraction is fail-open (a busy doc-gateway answers 503 →
  * null → the file keeps no metadata and stays selected). Run until `remaining` reaches 0.
@@ -59,11 +61,10 @@ async function backfillDocMetadata({
     }
 
     const appConfig = await getAppConfig();
-    const selector = {
+    const selector = withLibraryVisibility({
       embedded: true,
       docMetadata: { $exists: false },
-      expiredAt: null,
-    };
+    });
 
     const total = await File.countDocuments(selector);
     logger.info(`Found ${total} indexed file(s) without document metadata`);
