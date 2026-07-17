@@ -23,7 +23,14 @@ const TABLE_CONFIG: DataTableConfig = {
 export default function FilesPanel({ onClose }: { onClose?: () => void }) {
   const localize = useLocalize();
   const { data: filesList = [] } = useGetFiles<TFile[]>();
-  const { fileInputRef, handleFileUpload, isUploading, uploadStatusLabel } = useLibraryUpload();
+  const {
+    fileInputRef,
+    handleFileUpload,
+    isUploading,
+    uploadStatusLabel,
+    dropHandlers,
+    isDragActive,
+  } = useLibraryUpload();
 
   const [showFilesModal, setShowFilesModal] = useState(false);
   const [previewFile, setPreviewFile] = useState<TFile | null>(null);
@@ -45,7 +52,18 @@ export default function FilesPanel({ onClose }: { onClose?: () => void }) {
   const columns = useMemo(() => buildColumns({ onAttach: attachFile }), [attachFile]);
 
   return (
-    <div className="flex h-full w-full flex-col gap-2 px-3 pb-3 pt-2">
+    <div className="relative flex h-full w-full flex-col gap-2 px-3 pb-3 pt-2" {...dropHandlers}>
+      {isDragActive && (
+        <div
+          className="bg-surface-primary/90 pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-lg border-2 border-dashed border-border-heavy"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="px-4 text-center text-sm font-medium text-text-primary">
+            {localize('com_ui_library_drop_here')}
+          </span>
+        </div>
+      )}
       {isUploading && (
         <div
           role="status"

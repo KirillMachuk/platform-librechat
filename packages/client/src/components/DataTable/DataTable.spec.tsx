@@ -1,9 +1,9 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Provider as JotaiProvider } from 'jotai';
-import DataTable from './DataTable';
-import type { TableColumn } from './DataTable.types';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { SortingState } from '@tanstack/react-table';
+import type { TableColumn } from './DataTable.types';
+import DataTable from './DataTable';
 
 // Mock utilities
 jest.mock('~/utils', () => ({
@@ -371,6 +371,41 @@ describe('DataTable', () => {
       );
 
       expect(screen.getByText('com_ui_no_data')).toBeInTheDocument();
+    });
+
+    it('clearing the search restores the unfiltered list (uncontrolled mode)', async () => {
+      // Regression: with the default `filterValue = ''`, the apply-effect's
+      // `debouncedTerm === filterValue` guard swallowed the reset — clearing
+      // the input left the column filter stuck on the previous term forever.
+      const columns = createTestColumns();
+      const data = createTestData(5); // names: "Item 0" … "Item 4"
+
+      render(
+        <TestWrapper>
+          <DataTable
+            columns={columns}
+            data={data}
+            isLoading={false}
+            config={{
+              behavior: { manualFiltering: false, enablePagination: true, pageSize: 10 },
+              search: { filterColumn: 'name', debounce: 1 },
+            }}
+          />
+        </TestWrapper>,
+      );
+
+      const searchInput = screen.getByTestId('search-input');
+      fireEvent.change(searchInput, { target: { value: 'Item 3' } });
+      await waitFor(() => {
+        expect(screen.queryByText('Item 0')).not.toBeInTheDocument();
+      });
+      expect(screen.getByText('Item 3')).toBeInTheDocument();
+
+      fireEvent.change(searchInput, { target: { value: '' } });
+      await waitFor(() => {
+        expect(screen.getByText('Item 0')).toBeInTheDocument();
+      });
+      expect(screen.getByText('Item 4')).toBeInTheDocument();
     });
 
     it('should show "No search results" when filtered to empty', () => {

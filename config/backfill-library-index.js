@@ -3,6 +3,7 @@ const { logger, runAsSystem } = require('@librechat/data-schemas');
 
 require('module-alias')({ base: path.resolve(__dirname, '..', 'api') });
 const connect = require('./connect');
+const { withLibraryVisibility } = require('~/app/clients/tools/util/librarySearch');
 
 const { File } = require('~/db/models');
 
@@ -27,7 +28,8 @@ const DETAIL_SAMPLE_LIMIT = 50;
  *   - `source !== 'text'`               a durable ORIGINAL is retained, so the
  *                                        background /embed can stream it (legacy
  *                                        text-source records have no original)
- *   - `expiredAt: null`                 not a temporary/incognito chat file
+ *   - library visibility                same rule the search scope uses (withLibraryVisibility):
+ *                                        temp files never, retention-dated files while alive
  *   - `project_id: null`                not a project source (own namespace)
  *
  * The async embed worker (RAG_ASYNC_EMBED=true) drains the queue afterwards;
@@ -43,14 +45,13 @@ async function backfillLibraryIndex({ dryRun = true, batchSize = 100 } = {}) {
   logger.info('Starting Library Index Backfill', { dryRun, batchSize });
 
   return runAsSystem(async () => {
-    const selector = {
+    const selector = withLibraryVisibility({
       embedded: { $ne: true },
       embeddingStatus: { $exists: false },
       text: { $exists: true, $ne: null },
       source: { $ne: 'text' },
-      expiredAt: null,
       project_id: null,
-    };
+    });
 
     const total = await File.countDocuments(selector);
     logger.info(`Found ${total} context file(s) eligible for library indexing`);

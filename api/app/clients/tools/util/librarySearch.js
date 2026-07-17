@@ -209,6 +209,33 @@ const buildUnfilterableClause = ({ doc_type, org, location, date_from, date_to }
 };
 
 /**
+ * Ограничивает запрос файлами, ВИДИМЫМИ библиотеке. Правило приватности/ретеншна:
+ *   1) `temporary: true` — файл temp-чата, в библиотеку не попадает НИКОГДА;
+ *   2) без даты `expiredAt` — обычный вечный файл, виден (как и был);
+ *   3) `temporary: false` + живая дата — ретеншн-файл (`retentionMode: ALL` даёт срок хранения
+ *      КАЖДОМУ файлу): это полноценный документ библиотеки до истечения срока. Правило
+ *      «expiredAt: null» здесь молча опустошало всю библиотеку — воспроизведено на лабе;
+ *   4) легаси-запись без маркера, но с датой — temp-статус НЕИЗВЕСТЕН → вне библиотеки
+ *      (fail-closed: приватность важнее полноты; повторная загрузка файла возвращает его).
+ *
+ * Оформлено `$and`-обёрткой: и клауза видимости, и фильтры по атрибутам несут собственный
+ * `$or`, а два `$or` в одном объекте затирают друг друга object-spread'ом.
+ */
+const withLibraryVisibility = (query) => {
+  const { $or, ...rest } = query;
+  const conditions = [
+    {
+      temporary: { $ne: true },
+      $or: [{ expiredAt: null }, { temporary: false, expiredAt: { $gt: new Date() } }],
+    },
+  ];
+  if ($or) {
+    conditions.push({ $or });
+  }
+  return { ...rest, $and: conditions };
+};
+
+/**
  * ACL-префильтр: собирает проиндексированные файлы пользователя из его библиотеки.
  * `/query_multiple` (rag_api) авторизации не выполняет — единственная граница доступа
  * это набор file_id, который мы сюда кладём. Собираем строго по `req.user.id`, НИКОГДА
@@ -217,8 +244,8 @@ const buildUnfilterableClause = ({ doc_type, org, location, date_from, date_to }
  * входят — они ищутся внутри своих агентов (иначе library_search обошёл бы agent-ACL);
  * скоуп = собственные файлы пользователя (решение владельца §7-2).
  *
- * Исключаем: `expiredAt: null` — файлы временных/incognito-чатов (ретеншн-дедлайн) не
- * попадают, приватность сохраняется; `project_id: null` — проектные файлы embedded под
+ * Исключаем: temp-файлы и легаси-записи с датой без маркера (см. `withLibraryVisibility`);
+ * `project_id: null` — проектные файлы embedded под
  * своим namespace. `tenantId` (когда известен) — belt-and-suspenders поверх плагина
  * tenant-изоляции: user уже однозначно определяет тенант, но явный фильтр защищает, если
  * ALS-контекст потерян в resumable/SSE-пути (non-strict режим иначе не инжектит фильтр).
@@ -226,6 +253,13 @@ const buildUnfilterableClause = ({ doc_type, org, location, date_from, date_to }
  * Фильтры модели (Ф3) сужают скоуп ДО векторного запроса — это бесплатно и отвечает на
  * перечисления, которые ретривал не умеет (замер: dense top-5 set-recall 0.54 vs фильтр 1.00).
  * Они применяются ПОВЕРХ ACL-базы, НИКОГДА вместо неё.
+ *
+ * **Видимость по ретеншну/приватности** (см. `withLibraryVisibility`): маркер `temporary` — а не
+ * дата `expiredAt` — отвечает на вопрос «можно ли файлу в библиотеку». Под `retentionMode: ALL`
+ * дату несёт КАЖДЫЙ файл (это срок хранения, документ живой до него), и старое правило
+ * «expiredAt: null» молча опустошало всю библиотеку на этом конфиге — ровно это и произошло на
+ * лабе. Легаси-записи без маркера остаются под консервативным правилом (дата = вне библиотеки):
+ * у них temp-статус неизвестен, а приватность важнее полноты.
  *
  * **Документ без метаданных фильтр НЕ выбрасывает — он просто не фильтруется.** Иначе включение
  * фильтров молча спрятало бы всё, что проиндексировано до Ф3 или где извлечение не удалось:
@@ -242,15 +276,17 @@ const buildUnfilterableClause = ({ doc_type, org, location, date_from, date_to }
  *   unfilterableCount: number }>}
  */
 const primeLibraryScope = async (userId, tenantId, filters) => {
-  const base = { user: userId, expiredAt: null, project_id: null };
+  const base = { user: userId, project_id: null };
   if (tenantId != null) {
     base.tenantId = tenantId;
   }
   const filterClause = buildFilterClause(filters);
   const unfilterable = buildUnfilterableClause(filters);
-  const scopeQuery = filterClause
-    ? { ...base, embedded: true, $or: [filterClause, ...unfilterable.$or] }
-    : { ...base, embedded: true };
+  const scopeQuery = withLibraryVisibility(
+    filterClause
+      ? { ...base, embedded: true, $or: [filterClause, ...unfilterable.$or] }
+      : { ...base, embedded: true },
+  );
 
   /* unfilterable считаем ОТДЕЛЬНЫМ запросом, а не вычитанием из `fileIds`: список обрезан по
    * LIBRARY_SEARCH_MAX_FILES, и арифметика по нему врала бы на большой библиотеке.
@@ -267,12 +303,16 @@ const primeLibraryScope = async (userId, tenantId, filters) => {
       { file_id: 1, filename: 1, docMetadata: 1 },
       LIBRARY_SEARCH_MAX_FILES,
     ),
-    countFiles({ ...base, embeddingStatus: { $in: ['pending', 'processing'] } }),
-    countFiles({ ...base, embeddingStatus: 'failed' }),
-    unfilterable ? countFiles({ ...base, embedded: true, ...unfilterable }) : Promise.resolve(0),
+    countFiles(
+      withLibraryVisibility({ ...base, embeddingStatus: { $in: ['pending', 'processing'] } }),
+    ),
+    countFiles(withLibraryVisibility({ ...base, embeddingStatus: 'failed' })),
+    unfilterable
+      ? countFiles(withLibraryVisibility({ ...base, embedded: true, ...unfilterable }))
+      : Promise.resolve(0),
     filterClause
       ? getFiles(
-          { ...base, embedded: true, ...filterClause },
+          withLibraryVisibility({ ...base, embedded: true, ...filterClause }),
           null,
           { file_id: 1, filename: 1, docMetadata: 1 },
           LIBRARY_FILTER_LIST_MAX + 1,
@@ -282,7 +322,7 @@ const primeLibraryScope = async (userId, tenantId, filters) => {
   const matchedAll = matched ?? [];
   const matchedTruncated = matchedAll.length > LIBRARY_FILTER_LIST_MAX;
   const matchedCount = matchedTruncated
-    ? await countFiles({ ...base, embedded: true, ...filterClause })
+    ? await countFiles(withLibraryVisibility({ ...base, embedded: true, ...filterClause }))
     : matchedAll.length;
   const readyFiles = ready ?? [];
   const fileIds = [];
@@ -398,6 +438,12 @@ const createLibrarySearchTool = async ({
         return ['The library search could not be completed due to an unexpected error.', undefined];
       }
       const { fileIds, fileNames } = scope;
+      /* PII-safe observability: одна строка на вызов отвечает на «почему ничего не нашлось» —
+       * скоуп пуст / всё ещё индексируется / сработал фильтр — без чтения кода и без содержимого
+       * запроса. Ровно этой строки не хватило, чтобы диагностировать пустую библиотеку на лабе. */
+      logger.info(
+        `[${Tools.library_search}] scope: files=${fileIds.length} indexing=${scope.indexingCount} failed=${scope.failedCount} truncated=${scope.truncated} filtered=${scope.filtered}${scope.filtered ? ` matched=${scope.matchedCount} unfilterable=${scope.unfilterableCount}` : ''} query_chars=${query?.length ?? 0}`,
+      );
       const statusNote = buildStatusNote(scope);
       if (fileIds.length === 0) {
         if (scope.filtered) {
@@ -485,6 +531,7 @@ const createLibrarySearchTool = async ({
 module.exports = {
   createLibrarySearchTool,
   primeLibraryScope,
+  withLibraryVisibility,
   buildFilterClause,
   buildUnfilterableClause,
   buildStatusNote,

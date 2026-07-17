@@ -8,6 +8,7 @@ const {
   FileContext,
   FileSources,
   imageExtRegex,
+  RetentionMode,
   EModelEndpoint,
   EToolResources,
   mergeFileConfig,
@@ -54,6 +55,28 @@ const { getStrategyFunctions } = require('./strategies');
 const { determineFileType } = require('~/server/utils');
 const { STTService } = require('./Audio/STTService');
 const db = require('~/models');
+
+/**
+ * Resolves the privacy marker persisted on a new file record. `temporary: true` = the file
+ * belongs to a temporary/incognito chat and must never become cross-chat findable.
+ *
+ * Why this cannot be inferred from `expiredAt` later: under `retentionMode: ALL` EVERY file
+ * carries a retention deadline, so "has an expiry date" stopped meaning "temporary" — treating
+ * it that way silently emptied the whole library on that config (measured on the lab: every
+ * post-retention upload was excluded). Upload time is the one moment the temp status is
+ * reliably known, so it is persisted as its own field:
+ *   - the explicit `isTemporary` flag always wins (sent by the client for temp chats, and it
+ *     also covers uploads racing conversation persistence);
+ *   - outside ALL, a retention deadline can only come from a temp chat, so it implies temp —
+ *     this closes the "upload into an already-persisted temp chat without the flag" gap;
+ *   - under ALL the deadline is universal and means nothing about privacy.
+ */
+const resolveUploadPrivacy = ({ req, retentionExpiry }) => {
+  const isTemporaryUpload = req.body?.isTemporary === true || req.body?.isTemporary === 'true';
+  const retentionAll = req.config?.interfaceConfig?.retentionMode === RetentionMode.ALL;
+  const temporary = isTemporaryUpload || (!retentionAll && retentionExpiry?.expiredAt != null);
+  return { isTemporaryUpload, temporary };
+};
 
 /**
  * Upload-path ceiling for the FAST text operations: the PDF routing probe
@@ -1063,17 +1086,14 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
        * there is no double injection. The stored original is retained above, so
        * the background /embed can stream it.
        *
-       * Privacy is FAIL-CLOSED on the temp-chat boundary: we require BOTH the
-       * absence of a retention deadline AND the absence of an explicit
-       * isTemporary flag. Uploads can precede conversation persistence, so
-       * `expiredAt` alone can be null for a temp upload whose convo isn't saved
-       * yet — the explicit flag closes that gap so a temporary/incognito
-       * document is never made cross-chat findable. Also skipped when the async
-       * worker is off (no one would drain the queue). */
+       * Privacy gates on the persisted `temporary` marker (see
+       * resolveUploadPrivacy) — NOT on the retention deadline: under
+       * retentionMode ALL every file carries one, and gating on it silently
+       * kept the entire library empty on that config. Also skipped when the
+       * async worker is off (no one would drain the queue). */
       const { asyncEmbedEnabled } = require('./Embed');
-      const isTemporaryUpload = req.body?.isTemporary === true || req.body?.isTemporary === 'true';
-      const indexForLibrary =
-        asyncEmbedEnabled() && !retentionExpiry.expiredAt && !isTemporaryUpload;
+      const { temporary } = resolveUploadPrivacy({ req, retentionExpiry });
+      const indexForLibrary = asyncEmbedEnabled() && !temporary;
 
       const fileInfo = {
         ...removeNullishValues({
@@ -1089,6 +1109,7 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
           tenantId: req.user.tenantId,
           filepath: stored.filepath,
           source: storageSource,
+          temporary,
           ...storageMetadata,
           ...(indexForLibrary
             ? {
@@ -1369,6 +1390,7 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
     messageAttachment,
     tool_resource,
   });
+  const { temporary } = resolveUploadPrivacy({ req, retentionExpiry });
   const fileInfo = {
     ...removeNullishValues({
       user: req.user.id,
@@ -1386,6 +1408,7 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
       source,
       height,
       width,
+      temporary,
       tenantId: req.user.tenantId,
       /* Deferred embedding (RAG_ASYNC_EMBED): persist the queue state the
        * background worker claims. `embedEntityId` records the namespace
@@ -1870,4 +1893,5 @@ module.exports = {
   retrieveAndProcessFile,
   resolveLargeDocRouting,
   resolveContentRouting,
+  resolveUploadPrivacy,
 };

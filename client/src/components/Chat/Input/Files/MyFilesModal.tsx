@@ -37,7 +37,14 @@ export function MyFilesModal({
   const [isDeleting, setIsDeleting] = useState(false);
   const setSelectedFiles = useSetRecoilState(store.filesByIndex(0));
   const { deleteFiles } = useDeleteFilesFromTable(() => setIsDeleting(false));
-  const { fileInputRef, handleFileUpload, isUploading, uploadStatusLabel } = useLibraryUpload();
+  const {
+    fileInputRef,
+    handleFileUpload,
+    isUploading,
+    uploadStatusLabel,
+    dropHandlers,
+    isDragActive,
+  } = useLibraryUpload();
 
   const { data: files = [] } = useGetFiles<TFile[]>({
     select: (files) =>
@@ -88,7 +95,20 @@ export function MyFilesModal({
         <OGDialogContent
           title={localize('com_nav_my_files')}
           className="w-11/12 bg-background text-text-primary shadow-2xl"
+          {...dropHandlers}
         >
+          {isDragActive && (
+            <div
+              className="bg-surface-primary/90 pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-xl border-2 border-dashed border-border-heavy"
+              role="status"
+              aria-live="polite"
+            >
+              <div className="flex items-center gap-2 text-base font-medium text-text-primary">
+                <Upload className="size-5" aria-hidden="true" />
+                {localize('com_ui_library_drop_here')}
+              </div>
+            </div>
+          )}
           <OGDialogHeader>
             <OGDialogTitle>{localize('com_nav_my_files')}</OGDialogTitle>
           </OGDialogHeader>

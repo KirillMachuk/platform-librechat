@@ -83,11 +83,7 @@ function DataTable<TData extends RowWithId, TValue>({
 
   const cfg = config ?? {};
   const { enableRowSelection = true, showCheckboxes = true } = cfg.selection ?? {};
-  const {
-    enableSearch = true,
-    debounce: debounceDelay = 300,
-    filterColumn,
-  } = cfg.search ?? {};
+  const { enableSearch = true, debounce: debounceDelay = 300, filterColumn } = cfg.search ?? {};
   const { count: skeletonCount = 10 } = cfg.skeleton ?? {};
   const {
     overscan = 10,
@@ -101,10 +97,8 @@ function DataTable<TData extends RowWithId, TValue>({
     enablePagination = false,
     pageSize: configuredPageSize = 10,
   } = cfg.behavior ?? {};
-  const {
-    enabled: columnVisibilityEnabled = false,
-    contextMap: columnVisibilityContextMap,
-  } = cfg.columnVisibility ?? {};
+  const { enabled: columnVisibilityEnabled = false, contextMap: columnVisibilityContextMap } =
+    cfg.columnVisibility ?? {};
 
   const paginationActive = enablePagination;
   const virtualizationActive = !paginationActive && data.length >= minRows;
@@ -369,14 +363,15 @@ function DataTable<TData extends RowWithId, TValue>({
     onRowClickRef.current = onRowClick;
   }, [onRowClick]);
 
+  const hasRowClick = onRowClick != null;
   const stableOnRowClick = useMemo<((row: TData) => void) | undefined>(
     () =>
-      onRowClick == null
-        ? undefined
-        : (row: TData) => {
+      hasRowClick
+        ? (row: TData) => {
             onRowClickRef.current?.(row);
-          },
-    [onRowClick == null],
+          }
+        : undefined,
+    [hasRowClick],
   );
 
   const rowStyle = useMemo<React.CSSProperties>(() => ({ height: rowHeight }), [rowHeight]);
@@ -505,16 +500,26 @@ function DataTable<TData extends RowWithId, TValue>({
   }, [filterValue]);
 
   useEffect(() => {
-    if (debouncedTerm === filterValue) return;
     if (onFilterChange) {
-      onFilterChange(debouncedTerm);
-      setOptimizedRowSelection({});
+      /* Controlled mode: the echo guard compares against the prop so a parent
+       * round-tripping the same value doesn't loop. */
+      if (debouncedTerm !== filterValue) {
+        onFilterChange(debouncedTerm);
+        setOptimizedRowSelection({});
+      }
       return;
     }
     if (!manualFiltering && filterColumn) {
+      /* Uncontrolled mode: compare against the column's actual filter, NOT the
+       * `filterValue` prop — that prop defaults to '' here, and clearing the
+       * input also yields '', so a prop-based guard swallowed the reset and the
+       * table stayed filtered on the previous term forever. */
       const column = table.getColumn(filterColumn);
-      column?.setFilterValue(debouncedTerm.length > 0 ? debouncedTerm : undefined);
-      setOptimizedRowSelection({});
+      const next = debouncedTerm.length > 0 ? debouncedTerm : undefined;
+      if (column && column.getFilterValue() !== next) {
+        column.setFilterValue(next);
+        setOptimizedRowSelection({});
+      }
     }
   }, [
     debouncedTerm,
@@ -738,7 +743,9 @@ function DataTable<TData extends RowWithId, TValue>({
                         isDesktopOnly && 'hidden md:table-cell',
                       )}
                       style={widthStyle}
-                      onClick={wrapperSortable ? header.column.getToggleSortingHandler() : undefined}
+                      onClick={
+                        wrapperSortable ? header.column.getToggleSortingHandler() : undefined
+                      }
                       onKeyDown={wrapperSortable ? handleSortingKeyDown : undefined}
                       role={wrapperSortable ? 'button' : undefined}
                       tabIndex={wrapperSortable ? 0 : undefined}

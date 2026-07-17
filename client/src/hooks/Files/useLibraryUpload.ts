@@ -99,14 +99,11 @@ export function useLibraryUpload() {
     [fileConfig, showToast],
   );
 
-  const handleFileUpload = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const selected = e.target.files;
-      e.target.value = '';
-      if (!selected?.length) {
+  const processFiles = useCallback(
+    async (all: File[]) => {
+      if (all.length === 0) {
         return;
       }
-      const all = Array.from(selected);
       if (all.length > LIBRARY_UPLOAD_MAX_BATCH) {
         showToast({
           message: localize('com_ui_library_upload_too_many', {
@@ -179,8 +176,92 @@ export function useLibraryUpload() {
           status: 'info',
         });
       }
+      /* The user re-uploading a document they already have is usually intentional (a new
+       * version), so we never block it — but silently growing a second identical row reads as
+       * "nothing happened". Name the duplicates so the outcome is legible. */
+      const existingNames = new Set(filesList.map((f) => f.filename));
+      const duplicates = all.filter((f) => existingNames.has(f.name)).map((f) => f.name);
+      if (duplicates.length > 0 && failed < total) {
+        const shown = duplicates.slice(0, 3).join(', ');
+        showToast({
+          message: localize('com_ui_library_duplicate_names', {
+            0: String(duplicates.length),
+            1: duplicates.length > 3 ? `${shown}, …` : shown,
+          }),
+          status: 'info',
+        });
+      }
     },
-    [conversation?.endpoint, localize, removePending, showToast, uploadFileMutation, validateBatch],
+    [
+      conversation?.endpoint,
+      filesList,
+      localize,
+      removePending,
+      showToast,
+      uploadFileMutation,
+      validateBatch,
+    ],
+  );
+
+  const handleFileUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const selected = e.target.files;
+      e.target.value = '';
+      if (!selected?.length) {
+        return;
+      }
+      await processFiles(Array.from(selected));
+    },
+    [processFiles],
+  );
+
+  /* Counter, not boolean: dragenter/dragleave fire for every child the cursor crosses, and a
+   * boolean flickers off while still inside the dialog. */
+  const dragDepthRef = useRef(0);
+  const [isDragActive, setIsDragActive] = useState(false);
+
+  const dropHandlers = useMemo(
+    () => ({
+      onDragEnter: (e: React.DragEvent) => {
+        if (!e.dataTransfer.types.includes('Files')) {
+          return;
+        }
+        e.preventDefault();
+        dragDepthRef.current += 1;
+        setIsDragActive(true);
+      },
+      onDragOver: (e: React.DragEvent) => {
+        if (!e.dataTransfer.types.includes('Files')) {
+          return;
+        }
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      },
+      onDragLeave: (e: React.DragEvent) => {
+        if (!e.dataTransfer.types.includes('Files')) {
+          return;
+        }
+        e.preventDefault();
+        dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+        if (dragDepthRef.current === 0) {
+          setIsDragActive(false);
+        }
+      },
+      onDrop: (e: React.DragEvent) => {
+        if (!e.dataTransfer.types.includes('Files')) {
+          return;
+        }
+        /* Both are load-bearing: preventDefault stops the browser from navigating to the file,
+         * stopPropagation keeps the chat's global dropzone (attach-to-message) from also
+         * claiming a drop that was aimed at the library dialog. */
+        e.preventDefault();
+        e.stopPropagation();
+        dragDepthRef.current = 0;
+        setIsDragActive(false);
+        void processFiles(Array.from(e.dataTransfer.files));
+      },
+    }),
+    [processFiles],
   );
 
   const visiblePending = useMemo(() => {
@@ -202,5 +283,12 @@ export function useLibraryUpload() {
     return localize('com_ui_uploading_files_count', { 0: String(visiblePending.length) });
   }, [localize, visiblePending]);
 
-  return { fileInputRef, handleFileUpload, isUploading, uploadStatusLabel };
+  return {
+    fileInputRef,
+    handleFileUpload,
+    isUploading,
+    uploadStatusLabel,
+    dropHandlers,
+    isDragActive,
+  };
 }

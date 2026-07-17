@@ -12,6 +12,7 @@ import {
   inferMimeType,
   excelMimeTypes,
   EToolResources,
+  documentParserMimeTypes,
   fileConfig as defaultFileConfig,
 } from 'librechat-data-provider';
 import type { TFile, EndpointFileConfig, FileConfig } from 'librechat-data-provider';
@@ -274,10 +275,16 @@ export const validateFiles = ({
 
     let mimeTypesToCheck = supportedMimeTypes;
     if (toolResource === EToolResources.context) {
+      /* Mirror the server's context route exactly (process.js): a document is accepted when it
+       * matches text, configured OCR, STT — or the BUILT-IN document parser, which the server
+       * consults regardless of the OCR config (`shouldUseDocumentParser`). Without that last
+       * set, narrowing `fileConfig.ocr.supportedMimeTypes` to scans (image+pdf, as our yaml
+       * does) made the client reject docx/xlsx that the server parses fine via doc-gateway. */
       mimeTypesToCheck = [
         ...(fileConfig?.text?.supportedMimeTypes || []),
         ...(fileConfig?.ocr?.supportedMimeTypes || []),
         ...(fileConfig?.stt?.supportedMimeTypes || []),
+        ...documentParserMimeTypes,
       ];
     }
 
