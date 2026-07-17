@@ -1,8 +1,8 @@
 import { logger } from '@librechat/data-schemas';
 import { Permissions, PermissionTypes } from 'librechat-data-provider';
-import { checkAccess } from '../middleware/access';
-import type { Request as ServerRequest } from 'express';
 import type { IRole, IUser } from '@librechat/data-schemas';
+import type { Request as ServerRequest } from 'express';
+import { checkAccess } from '../middleware/access';
 
 export interface CanUseDeepResearchParams {
   req: ServerRequest;
