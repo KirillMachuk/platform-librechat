@@ -22,9 +22,12 @@ export const mcpValuesAtomFamily = atomFamily((conversationId: string | null) =>
 });
 
 /**
- * Global storage atom for MCP pinned state (shared across all conversations)
+ * Global storage atom for MCP pinned state (shared across all conversations).
+ * Default `false`: the MCP badge is not shown in a fresh chat — MCP lives in the
+ * Tools dropdown, and users can pin the badge from there. An explicit pin/unpin
+ * (the only path that writes `PIN_MCP_`) is preserved.
  */
-export const mcpPinnedAtom = atomWithStorage<boolean>(LocalStorageKeys.PIN_MCP_, true, undefined, {
+export const mcpPinnedAtom = atomWithStorage<boolean>(LocalStorageKeys.PIN_MCP_, false, undefined, {
   getOnInit: true,
 });
 
