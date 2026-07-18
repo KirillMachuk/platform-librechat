@@ -37,14 +37,8 @@ export function MyFilesModal({
   const [isDeleting, setIsDeleting] = useState(false);
   const setSelectedFiles = useSetRecoilState(store.filesByIndex(0));
   const { deleteFiles } = useDeleteFilesFromTable(() => setIsDeleting(false));
-  const {
-    fileInputRef,
-    handleFileUpload,
-    isUploading,
-    uploadStatusLabel,
-    dropHandlers,
-    isDragActive,
-  } = useLibraryUpload();
+  const { openFilePicker, isUploading, uploadStatusLabel, dropHandlers, isDragActive } =
+    useLibraryUpload();
 
   const { data: files = [] } = useGetFiles<TFile[]>({
     select: (files) =>
@@ -95,6 +89,10 @@ export function MyFilesModal({
         <OGDialogContent
           title={localize('com_nav_my_files')}
           className="w-11/12 bg-background text-text-primary shadow-2xl"
+          /* Keep the dialog open when the window loses focus — the OS file picker, DevTools, or an
+           * alt-tab must not dismiss it. A real click outside (onPointerDownOutside) and Escape
+           * still close it. Without this, opening the picker closed the modal mid-upload. */
+          onFocusOutside={(e) => e.preventDefault()}
           {...dropHandlers}
         >
           {isDragActive && (
@@ -122,15 +120,6 @@ export function MyFilesModal({
               <span className="shimmer min-w-0 flex-1 truncate">{uploadStatusLabel}</span>
             </div>
           )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            tabIndex={-1}
-            aria-hidden="true"
-            className="hidden"
-            onChange={handleFileUpload}
-          />
           <DataTable
             columns={columns}
             data={filesWithIds}
@@ -141,7 +130,7 @@ export function MyFilesModal({
                 <Button
                   variant="outline"
                   disabled={isUploading}
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={openFilePicker}
                   className="ml-2"
                   aria-label={localize('com_ui_upload_files')}
                 >

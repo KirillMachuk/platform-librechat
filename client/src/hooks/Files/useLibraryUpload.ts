@@ -1,12 +1,27 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { v4 } from 'uuid';
 import { useToastContext } from '@librechat/client';
-import { EToolResources, mergeFileConfig, getEndpointFileConfig } from 'librechat-data-provider';
+import {
+  EModelEndpoint,
+  EToolResources,
+  mergeFileConfig,
+  getEndpointFileConfig,
+} from 'librechat-data-provider';
 import type { TFile } from 'librechat-data-provider';
 import { useGetFiles, useUploadFileMutation, useGetFileConfig } from '~/data-provider';
-import { useChatContext } from '~/Providers/ChatContext';
 import { validateFiles } from '~/utils';
 import { useLocalize } from '~/hooks';
+
+/**
+ * Endpoint stamped on the upload FormData. The library is a STANDALONE store, not the active
+ * chat: the `/files` route sends anything that isn't an assistants endpoint through
+ * `processAgentFileUpload`, which owns the context + library-indexing branch — so a fixed
+ * `agents` value is correct here and, crucially, needs no chat context. Reading it from
+ * `useChatContext()` (as this hook first did) threw whenever the Files modal was opened from the
+ * global sidebar / account menu, which live OUTSIDE `ChatContext.Provider` — the upload silently
+ * died before any request left the browser.
+ */
+const LIBRARY_UPLOAD_ENDPOINT = EModelEndpoint.agents;
 
 /** Concurrent uploads: bounded so a large batch can't open hundreds of parallel
  * requests (browser stalls, doc-gateway/embed overload). */
@@ -61,11 +76,9 @@ async function runWithConcurrency<T, R>(
 export function useLibraryUpload() {
   const localize = useLocalize();
   const { showToast } = useToastContext();
-  const { conversation } = useChatContext();
   const { data: filesList = [] } = useGetFiles<TFile[]>();
   const { data: fileConfig = null } = useGetFileConfig({ select: (data) => mergeFileConfig(data) });
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadFileMutation = useUploadFileMutation();
 
@@ -114,7 +127,7 @@ export function useLibraryUpload() {
         return;
       }
 
-      const endpoint = conversation?.endpoint ?? 'default';
+      const endpoint = LIBRARY_UPLOAD_ENDPOINT;
       const images = all.filter((f) => f.type.startsWith('image/'));
       const docs = all.filter((f) => !f.type.startsWith('image/'));
 
@@ -192,28 +205,51 @@ export function useLibraryUpload() {
         });
       }
     },
-    [
-      conversation?.endpoint,
-      filesList,
-      localize,
-      removePending,
-      showToast,
-      uploadFileMutation,
-      validateBatch,
-    ],
+    [filesList, localize, removePending, showToast, uploadFileMutation, validateBatch],
   );
 
-  const handleFileUpload = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const selected = e.target.files;
-      e.target.value = '';
-      if (!selected?.length) {
+  /**
+   * Opens the OS file picker via an input created OUTSIDE the React tree (on document.body).
+   *
+   * Why not a rendered `<input ref>` inside the modal: opening the native picker blurs the
+   * window, and both dialog libraries here (MyFilesModal = Radix, the sidebar Files panel =
+   * Headless UI) close on focus-loss. That unmounts an in-tree input before its `change` fires —
+   * the file goes nowhere, no request leaves the browser, no error (the production bug: "выбираю
+   * файл, Открыть, ничего"). A body-level input is immune: it survives the dialog closing, so
+   * `change` always lands. Cleanup covers both outcomes — pick (`change`) and cancel (the input
+   * is removed on the next window focus, since `cancel` isn't emitted by every browser).
+   */
+  const openFilePicker = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.style.display = 'none';
+
+    let settled = false;
+    const cleanup = () => {
+      if (settled) {
         return;
       }
-      await processFiles(Array.from(selected));
-    },
-    [processFiles],
-  );
+      settled = true;
+      window.removeEventListener('focus', onWindowFocus);
+      input.remove();
+    };
+    const onWindowFocus = () => {
+      // Fires when the OS picker closes (pick OR cancel). Defer so a real `change` runs first.
+      window.setTimeout(cleanup, 300);
+    };
+
+    input.addEventListener('change', () => {
+      const files = input.files ? Array.from(input.files) : [];
+      cleanup();
+      if (files.length > 0) {
+        void processFiles(files);
+      }
+    });
+    window.addEventListener('focus', onWindowFocus);
+    document.body.appendChild(input);
+    input.click();
+  }, [processFiles]);
 
   /* Counter, not boolean: dragenter/dragleave fire for every child the cursor crosses, and a
    * boolean flickers off while still inside the dialog. */
@@ -284,8 +320,7 @@ export function useLibraryUpload() {
   }, [localize, visiblePending]);
 
   return {
-    fileInputRef,
-    handleFileUpload,
+    openFilePicker,
     isUploading,
     uploadStatusLabel,
     dropHandlers,
