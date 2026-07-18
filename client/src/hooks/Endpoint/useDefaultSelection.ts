@@ -20,13 +20,15 @@ interface UseDefaultSelectionParams {
  *   2. `interface.defaultAgentId` (yaml) — a DB-backed agent, only when nothing is selected.
  *   3. `interface.defaultModel` (yaml) — the configured LLM (e.g. Sonnet 5). Applied on the
  *      first run per mount even if a model was restored from localStorage, so it is the model
- *      the user sees on entry rather than their last-used one.
+ *      the user sees on app entry rather than their last-used one.
  *   4. No default configured — the restored / last-used selection is left as-is.
  *
- * Once-per-mount: `seededForRef` short-circuits after the first run for a conversationId, so a
- * user's in-session model pick is preserved, while a New Chat navigation (fresh mount) re-applies
- * the default. Idempotent under React strict-mode double-mount and resilient against
- * agentsMap/newConversation reference churn. Pass `newConversation` from the chat shell. */
+ * Once-per-mount: `seededForRef` short-circuits after the first run, so the default is applied
+ * once on app entry (a fresh ChatView mount / hard reload). ChatView is a single long-lived
+ * instance (no route `key`), so an in-session model pick and a subsequent New Chat both keep the
+ * last-used model — only the next hard reload re-applies the default. Idempotent under React
+ * strict-mode double-mount and resilient against agentsMap/newConversation reference churn.
+ * Pass `newConversation` from the chat shell. */
 export default function useDefaultSelection({
   index = 0,
   conversationId,
@@ -42,17 +44,6 @@ export default function useDefaultSelection({
   const defaultAgentId = startupConfig?.interface?.defaultAgentId;
   const defaultModel = startupConfig?.interface?.defaultModel;
   const seededForRef = useRef<string | null>(null);
-
-  /** ChatView is a single long-lived instance (no route `key`), so `seededForRef`
-   *  persists across New Chat. Clear it once a real conversation is active so the
-   *  next blank conversation re-applies the default — a user's in-session pick on
-   *  the current blank conversation is still preserved (it is guarded by
-   *  `seededForRef` until they navigate away). */
-  useEffect(() => {
-    if (conversationId && conversationId !== Constants.NEW_CONVO) {
-      seededForRef.current = null;
-    }
-  }, [conversationId]);
 
   useEffect(() => {
     const isBlankConvo = !conversationId || conversationId === Constants.NEW_CONVO;
