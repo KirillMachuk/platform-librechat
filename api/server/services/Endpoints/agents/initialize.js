@@ -176,7 +176,18 @@ async function applyConversationFileContext({ req, primaryAgent }) {
     };
 
     primaryAgent.tools = primaryAgent.tools ?? [];
-    if (!isReasoningModel(primaryAgent.model) && !primaryAgent.tools.includes(Tools.file_search)) {
+    // When the "search files" toggle is on, library_search is armed and already searches this
+    // chat's embedded attachments (it unions these same file_ids into its scope — see
+    // createLibrarySearchTool). Arming file_search too would recreate the two-tool ambiguity that
+    // made the model dead-end on attachment-only search. Force file_search ONLY when
+    // library_search is absent (toggle off), to keep this chat's own embedded documents reachable
+    // without expanding the search to the whole library.
+    const librarySearchArmed = primaryAgent.tools.includes(Tools.library_search);
+    if (
+      !isReasoningModel(primaryAgent.model) &&
+      !librarySearchArmed &&
+      !primaryAgent.tools.includes(Tools.file_search)
+    ) {
       primaryAgent.tools.push(Tools.file_search);
     }
   } catch (error) {

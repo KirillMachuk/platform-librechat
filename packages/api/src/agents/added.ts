@@ -186,9 +186,10 @@ export async function loadAddedAgent(
     tools.push(Tools.execute_code);
   }
   if ((ephemeralAgent?.file_search === true || modelSpec?.fileSearch === true) && !reasoningModel) {
-    // One toggle arms both file_search (attached docs) and library_search (whole library) —
-    // mirrors loadEphemeralAgent so multi-conversation additions behave identically.
-    tools.push(Tools.file_search);
+    // The "search files" toggle arms library_search alone (searches the whole library plus this
+    // chat's attachments) — mirrors loadEphemeralAgent so multi-conversation additions behave
+    // identically. file_search is force-armed separately by applyConversationFileContext only
+    // when the toggle is off; see loadEphemeralAgent for the full rationale.
     tools.push(Tools.library_search);
   }
   if ((ephemeralAgent?.web_search === true || modelSpec?.webSearch === true) && !reasoningModel) {
