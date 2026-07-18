@@ -4,8 +4,10 @@ const { HumanMessage, SystemMessage } = require('@langchain/core/messages');
 const { Providers, getChatModelClass, createSearchTool } = require('@librechat/agents');
 const {
   sendEvent,
+  createSafeUser,
   initializeCustom,
   runDeepResearch,
+  resolveConfigHeaders,
   loadWebSearchAuth,
   tierToRunBudget,
   GenerationJobManager,
@@ -202,8 +204,27 @@ function sumUsage(a, b) {
 /** Soft per-user cap on concurrent active generations gating a new DR start (M1). */
 const MAX_CONCURRENT_DR = Number(process.env.DEEP_RESEARCH_MAX_CONCURRENT) || 3;
 
-/** Sentinel: the user is over the DR concurrency cap; short-circuits to a busy report. */
-class DeepResearchCapError extends Error {}
+/**
+ * Soft GLOBAL cap on concurrent Deep Research runs across ALL users (M2). A backstop
+ * against a pathological burst — a whole team starting a run in the same minute — not a
+ * normal-use limit, so the default sits well above the realistic peak (a few to a dozen
+ * at ~100 seats). Admission only: exactly like the per-user cap, it can refuse a START
+ * but never interrupt a run already in flight, so an admitted research always finishes.
+ * Tune via env; 0 or an unparseable value falls back to the default rather than disabling.
+ */
+const MAX_GLOBAL_DR = Number(process.env.DEEP_RESEARCH_MAX_GLOBAL) || 20;
+
+/**
+ * Sentinel: a new DR start is refused at the concurrency cap; short-circuits to a busy
+ * report. `scope` selects the message — 'user' (this user has too many running) vs
+ * 'global' (the server is saturated) — so the user gets an actionable reason.
+ */
+class DeepResearchCapError extends Error {
+  constructor(scope = 'user') {
+    super();
+    this.scope = scope;
+  }
+}
 
 /**
  * Count the user's OTHER active generation jobs (excluding this one) via the job store.
@@ -221,6 +242,23 @@ async function countOtherActiveJobs({ streamId, userId, tenantId }) {
     return ids.filter((id) => id !== streamId).length;
   } catch (error) {
     logger.warn('[deepResearchRun] DR admission count failed; allowing run (fail-open)', error);
+    return 0;
+  }
+}
+
+/**
+ * Count OTHER active Deep Research runs server-wide (excluding this one) for the global
+ * cap. Fail-open: a counting error returns 0 and the run is allowed — a backstop must
+ * never itself become a new way for DR to break.
+ */
+async function countOtherActiveDrJobs(streamId) {
+  try {
+    return await GenerationJobManager.getActiveDeepResearchCount(streamId);
+  } catch (error) {
+    logger.warn(
+      '[deepResearchRun] global DR admission count failed; allowing run (fail-open)',
+      error,
+    );
     return 0;
   }
 }
@@ -679,6 +717,22 @@ async function buildNodeModel({ req, db, endpoint, model, passthroughHeaders }) 
         defaultHeaders: { ...(configOptions?.defaultHeaders ?? {}), ...passthroughHeaders },
       }
     : configOptions;
+  /**
+   * Resolve header placeholders before the model is built, exactly as the normal agent
+   * path does (packages/api/src/agents/run.ts). `initializeCustom` leaves `{{LIBRECHAT_*}}`
+   * templates unexpanded, so without this the `1ma` endpoint's
+   * `x-librechat-user-id: {{LIBRECHAT_USER_ID}}` header — the one the anonymizer forwards
+   * to the credit ledger so a spend is attributed to a user — reaches the anonymizer as the
+   * literal placeholder, fails the ledger's ObjectId check, and lands the whole DR run's
+   * cost against no user. The header is internal-only (never forwarded upstream) and the id
+   * is an opaque ObjectId, so this restores intended billing metadata without crossing the
+   * PII boundary. Mutates `finalConfig.defaultHeaders` in place; idempotent under reuse.
+   */
+  resolveConfigHeaders({
+    llmConfig: { configuration: finalConfig },
+    user: createSafeUser(req?.user),
+    body: req?.body,
+  });
   const ModelClass = getChatModelClass(resolvedProvider);
   return new ModelClass({ ...clientOptions, configuration: finalConfig });
 }
@@ -909,6 +963,10 @@ async function runNewDeepResearch(params) {
     userId,
     tenantId: req?.user?.tenantId,
   });
+  // Computed lazily below (only when past turn classification and under the per-user cap),
+  // so a plan-cancel or a user already at their own cap never pays for the global scan.
+  // Kept in this scope so the catch tail can report the count it refused on.
+  let otherActiveDrJobs = 0;
   try {
     /**
      * Every research node needs a non-reasoning model. `resolveDeepResearchModel`
@@ -972,11 +1030,23 @@ async function runNewDeepResearch(params) {
       });
     }
 
-    // The concurrency cap runs AFTER turn classification: a plan-cancel costs nothing (no
-    // model, no graph) and must always succeed — a 'limit' refusal would leave the plan as
-    // the branch tip, keeping follow-ups routed into DR with no way to dismiss it.
-    if (otherActiveJobs >= MAX_CONCURRENT_DR && turn.kind !== 'plan-cancel') {
-      throw new DeepResearchCapError();
+    // The concurrency caps run AFTER turn classification but skip the model-free terminal
+    // turns handled just below — a plan-cancel and a duplicate START run no graph, so a cap
+    // would only swap their own terminal message (dismiss / "already running") for a busy
+    // notice and, for the global arm, waste a store scan. A cancel especially must always
+    // succeed, or the plan stays the branch tip and follow-ups keep routing into DR. The
+    // per-user cap is checked first (its message is the more actionable one); only a start
+    // that clears it pays for the global scan.
+    const isModelFreeTerminal =
+      turn.kind === 'plan-cancel' || (turn.kind === 'plan-start' && turn.duplicateStart === true);
+    if (!isModelFreeTerminal) {
+      if (otherActiveJobs >= MAX_CONCURRENT_DR) {
+        throw new DeepResearchCapError('user');
+      }
+      otherActiveDrJobs = await countOtherActiveDrJobs(streamId);
+      if (otherActiveDrJobs >= MAX_GLOBAL_DR) {
+        throw new DeepResearchCapError('global');
+      }
     }
 
     // Model-free short-circuits (review r2) — resolved BEFORE the anonymizer session, so a
@@ -1238,12 +1308,16 @@ async function runNewDeepResearch(params) {
         findings: [],
       };
     } else if (error instanceof DeepResearchCapError) {
+      const isGlobal = error.scope === 'global';
       logger.warn(
-        `[deepResearchRun] user ${userId} at DR concurrency cap (${otherActiveJobs} active); rejecting`,
+        isGlobal
+          ? `[deepResearchRun] global DR cap reached (${otherActiveDrJobs} active, max ${MAX_GLOBAL_DR}); rejecting user ${userId}`
+          : `[deepResearchRun] user ${userId} at DR concurrency cap (${otherActiveJobs} active); rejecting`,
       );
       result = {
-        finalReport:
-          'У вас уже выполняется несколько задач одновременно. Дождитесь завершения текущих исследований и запустите это снова.',
+        finalReport: isGlobal
+          ? 'Сейчас одновременно выполняется много исследований — сервис загружен. Пожалуйста, запустите это исследование через несколько минут.'
+          : 'У вас уже выполняется несколько задач одновременно. Дождитесь завершения текущих исследований и запустите это снова.',
         finalizeReason: 'limit',
         usage: { input: 0, output: 0, total: 0 },
         findings: [],

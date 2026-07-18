@@ -275,7 +275,7 @@ const withLibraryVisibility = (query) => {
  *   failedCount: number; truncated: boolean; filtered: boolean; matchedCount: number;
  *   unfilterableCount: number }>}
  */
-const primeLibraryScope = async (userId, tenantId, filters) => {
+const primeLibraryScope = async (userId, tenantId, filters, conversationFileIds = []) => {
   const base = { user: userId, project_id: null };
   if (tenantId != null) {
     base.tenantId = tenantId;
@@ -296,40 +296,63 @@ const primeLibraryScope = async (userId, tenantId, filters) => {
    * десятки МБ чтений (`docMetadata.*` идёт residual-фильтром, limit его не подрезает). Берём на
    * одну запись больше кэпа: пришло меньше — длина и есть полный размер набора, пришло больше —
    * набор реально обрезан, и только тогда доплачиваем счётчиком. */
-  const [ready, indexingCount, failedCount, unfilterableCount, matched] = await Promise.all([
-    getFiles(
-      scopeQuery,
-      null,
-      { file_id: 1, filename: 1, docMetadata: 1 },
-      LIBRARY_SEARCH_MAX_FILES,
-    ),
-    countFiles(
-      withLibraryVisibility({ ...base, embeddingStatus: { $in: ['pending', 'processing'] } }),
-    ),
-    countFiles(withLibraryVisibility({ ...base, embeddingStatus: 'failed' })),
-    unfilterable
-      ? countFiles(withLibraryVisibility({ ...base, embedded: true, ...unfilterable }))
-      : Promise.resolve(0),
-    filterClause
-      ? getFiles(
-          withLibraryVisibility({ ...base, embedded: true, ...filterClause }),
-          null,
-          { file_id: 1, filename: 1, docMetadata: 1 },
-          LIBRARY_FILTER_LIST_MAX + 1,
-        )
-      : Promise.resolve([]),
-  ]);
+  /* Documents attached to THIS chat are searched ALONGSIDE the library — the "search files"
+   * toggle arms library_search alone, so it must cover attachments too. They are re-fetched here
+   * strictly under the user's own ACL (`user: userId`), NEVER trusting the ids blindly, and
+   * deliberately WITHOUT the library-visibility/`project_id` gate: the user explicitly attached
+   * these to the current chat, so a project-scoped or retention file they attached is in-scope
+   * here even though a blind library sweep would exclude it. No metadata filter is applied — an
+   * explicitly attached file stays semantically searchable regardless of doc_type/date. */
+  const attachedScope =
+    Array.isArray(conversationFileIds) && conversationFileIds.length > 0
+      ? { user: userId, file_id: { $in: conversationFileIds }, embedded: true }
+      : null;
+  const [ready, indexingCount, failedCount, unfilterableCount, matched, attached] =
+    await Promise.all([
+      getFiles(
+        scopeQuery,
+        null,
+        { file_id: 1, filename: 1, docMetadata: 1 },
+        LIBRARY_SEARCH_MAX_FILES,
+      ),
+      countFiles(
+        withLibraryVisibility({ ...base, embeddingStatus: { $in: ['pending', 'processing'] } }),
+      ),
+      countFiles(withLibraryVisibility({ ...base, embeddingStatus: 'failed' })),
+      unfilterable
+        ? countFiles(withLibraryVisibility({ ...base, embedded: true, ...unfilterable }))
+        : Promise.resolve(0),
+      filterClause
+        ? getFiles(
+            withLibraryVisibility({ ...base, embedded: true, ...filterClause }),
+            null,
+            { file_id: 1, filename: 1, docMetadata: 1 },
+            LIBRARY_FILTER_LIST_MAX + 1,
+          )
+        : Promise.resolve([]),
+      attachedScope
+        ? getFiles(
+            attachedScope,
+            null,
+            { file_id: 1, filename: 1, docMetadata: 1 },
+            LIBRARY_SEARCH_MAX_FILES,
+          )
+        : Promise.resolve([]),
+    ]);
   const matchedAll = matched ?? [];
   const matchedTruncated = matchedAll.length > LIBRARY_FILTER_LIST_MAX;
   const matchedCount = matchedTruncated
     ? await countFiles(withLibraryVisibility({ ...base, embedded: true, ...filterClause }))
     : matchedAll.length;
   const readyFiles = ready ?? [];
+  const attachedFiles = attached ?? [];
   const fileIds = [];
   const fileNames = new Map();
   const fileMetadata = new Map();
-  for (const file of readyFiles) {
-    if (!file.file_id) {
+  /* Library scope first, then this chat's attachments; `fileNames` doubles as the dedup set, so a
+   * file present in both (an attachment that also lives in the library) is included exactly once. */
+  for (const file of [...readyFiles, ...attachedFiles]) {
+    if (!file.file_id || fileNames.has(file.file_id)) {
       continue;
     }
     fileIds.push(file.file_id);
@@ -348,6 +371,7 @@ const primeLibraryScope = async (userId, tenantId, filters) => {
     filtered: filterClause != null,
     matchedCount,
     unfilterableCount,
+    attachedCount: attachedFiles.length,
     /* Перечисление отдаём набором целиком (решение владельца): выдача ограничена topDocuments,
      * поэтому «покажи ВСЕ договоры в Минске» иначе оборвалось бы на 5 из 9. Лишнюю запись,
      * взятую сверх кэпа только чтобы распознать обрезку, модели не показываем. */
@@ -406,12 +430,15 @@ const buildStatusNote = ({
  * @param {boolean} [options.fileCitations=false]
  * @param {(content: string) => Promise<string>} [options.transformContent] Sovereign anonymizer:
  *   masks the user's document text before it egresses to the model (same seam as file_search).
+ * @param {string[]} [options.conversationFileIds] file_ids attached to the current chat, unioned
+ *   into the search scope so the one tool covers the library AND this chat's own documents.
  */
 const createLibrarySearchTool = async ({
   userId,
   tenantId,
   fileCitations = false,
   transformContent,
+  conversationFileIds = [],
 }) => {
   return tool(
     async ({ query, doc_type, org, location, date_from, date_to }) => {
@@ -432,7 +459,7 @@ const createLibrarySearchTool = async ({
        * relay — the failure mode this tool avoids everywhere else. */
       let scope;
       try {
-        scope = await primeLibraryScope(userId, tenantId, filters);
+        scope = await primeLibraryScope(userId, tenantId, filters, conversationFileIds);
       } catch (error) {
         logger.error(`[${Tools.library_search}] scope assembly failed`, error);
         return ['The library search could not be completed due to an unexpected error.', undefined];
@@ -442,7 +469,7 @@ const createLibrarySearchTool = async ({
        * скоуп пуст / всё ещё индексируется / сработал фильтр — без чтения кода и без содержимого
        * запроса. Ровно этой строки не хватило, чтобы диагностировать пустую библиотеку на лабе. */
       logger.info(
-        `[${Tools.library_search}] scope: files=${fileIds.length} indexing=${scope.indexingCount} failed=${scope.failedCount} truncated=${scope.truncated} filtered=${scope.filtered}${scope.filtered ? ` matched=${scope.matchedCount} unfilterable=${scope.unfilterableCount}` : ''} query_chars=${query?.length ?? 0}`,
+        `[${Tools.library_search}] scope: files=${fileIds.length} attached=${scope.attachedCount} indexing=${scope.indexingCount} failed=${scope.failedCount} truncated=${scope.truncated} filtered=${scope.filtered}${scope.filtered ? ` matched=${scope.matchedCount} unfilterable=${scope.unfilterableCount}` : ''} query_chars=${query?.length ?? 0}`,
       );
       const statusNote = buildStatusNote(scope);
       if (fileIds.length === 0) {

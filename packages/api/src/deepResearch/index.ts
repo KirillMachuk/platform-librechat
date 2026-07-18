@@ -5,6 +5,7 @@ export {
   DEEP_RESEARCH_MODE_DEFAULTS,
 } from './modes';
 export { buildDeepResearchGraph, buildSearcherAgent, DeepResearchConfigError } from './graph';
+export { canUseDeepResearch } from './permissions';
 export { armDeepResearchBudget, sumUsageTokens } from './budget';
 export { buildOrchestratorInstructions, buildSearcherInstructions } from './prompts';
 export type { DeepResearchBudget, DeepResearchUsageRecord } from './budget';

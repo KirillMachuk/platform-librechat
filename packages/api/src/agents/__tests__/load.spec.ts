@@ -167,7 +167,10 @@ describe('loadAgent', () => {
       deps,
     );
 
-    expect(standard?.tools).toContain('file_search');
+    // The "search files" toggle arms library_search alone (it covers the whole library plus this
+    // chat's attachments); file_search is force-armed elsewhere only when the toggle is off.
+    expect(standard?.tools).toContain('library_search');
+    expect(standard?.tools).not.toContain('file_search');
     expect(standard?.tools).toContain('web_search');
     expect(standard?.tools).toContain('execute_code');
   });
@@ -590,7 +593,9 @@ describe('loadAgent', () => {
     expect(reasoning?.tools).toEqual([]);
 
     const standard = await loadAddedAgent(makeParams('claude-sonnet-4.6'), deps);
-    expect(standard?.tools).toContain('file_search');
+    // Toggle arms library_search alone (mirrors loadEphemeralAgent); file_search is not toggle-armed.
+    expect(standard?.tools).toContain('library_search');
+    expect(standard?.tools).not.toContain('file_search');
     expect(standard?.tools).toContain('web_search');
     expect(standard?.tools).toContain('execute_code');
   });

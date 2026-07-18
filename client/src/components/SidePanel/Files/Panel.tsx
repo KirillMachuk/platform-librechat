@@ -23,14 +23,8 @@ const TABLE_CONFIG: DataTableConfig = {
 export default function FilesPanel({ onClose }: { onClose?: () => void }) {
   const localize = useLocalize();
   const { data: filesList = [] } = useGetFiles<TFile[]>();
-  const {
-    fileInputRef,
-    handleFileUpload,
-    isUploading,
-    uploadStatusLabel,
-    dropHandlers,
-    isDragActive,
-  } = useLibraryUpload();
+  const { openFilePicker, isUploading, uploadStatusLabel, dropHandlers, isDragActive } =
+    useLibraryUpload();
 
   const [showFilesModal, setShowFilesModal] = useState(false);
   const [previewFile, setPreviewFile] = useState<TFile | null>(null);
@@ -81,21 +75,12 @@ export default function FilesPanel({ onClose }: { onClose?: () => void }) {
         onRowClick={(row) => handlePreview(row as TFile)}
         className="h-auto max-h-[calc(100vh-16rem)] flex-1"
       />
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        tabIndex={-1}
-        aria-hidden="true"
-        className="hidden"
-        onChange={handleFileUpload}
-      />
       <div className="flex w-full gap-2">
         <Button
           variant="outline"
           size="sm"
           className="flex-1"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={openFilePicker}
           aria-label={localize('com_ui_upload_files')}
           disabled={isUploading}
         >

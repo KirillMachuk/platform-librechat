@@ -371,10 +371,20 @@ export async function mintCodeApiToken(req: ServerRequest): Promise<string> {
   return token;
 }
 
+/**
+ * Auth headers for the code-execution API.
+ * JWT tenancy mode (`CODEAPI_JWT_ENABLED` / managed provider) mints a per-request
+ * Bearer token; otherwise falls back to a static `x-api-key` from
+ * `LIBRECHAT_CODE_API_KEY` for self-hosted single-tenant backends.
+ */
 export async function getCodeApiAuthHeaders(req?: ServerRequest): Promise<Record<string, string>> {
-  if (!req || !isCodeApiJwtAuthEnabled()) {
-    return {};
+  if (isCodeApiJwtAuthEnabled()) {
+    if (!req) {
+      return {};
+    }
+    const token = await mintCodeApiToken(req);
+    return token ? { Authorization: `Bearer ${token}` } : {};
   }
-  const token = await mintCodeApiToken(req);
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  const apiKey = process.env.LIBRECHAT_CODE_API_KEY?.trim();
+  return apiKey ? { 'x-api-key': apiKey } : {};
 }

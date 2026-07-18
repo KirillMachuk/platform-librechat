@@ -82,10 +82,16 @@ export async function loadEphemeralAgent(
     tools.push(Tools.execute_code);
   }
   if ((ephemeralAgent?.file_search === true || modelSpec?.fileSearch === true) && !reasoningModel) {
-    // One toggle, two tools: file_search covers documents attached to THIS chat (also
-    // force-armed by applyConversationFileContext), library_search covers the user's whole
-    // library. The model routes between them by their descriptions. (Owner decision §7-1.)
-    tools.push(Tools.file_search);
+    // The "search files" toggle arms library_search ALONE. It searches the user's whole
+    // library AND this chat's attached documents (their ids are unioned into its scope — see
+    // createLibrarySearchTool), so it is the single "search my documents" tool.
+    //
+    // It used to also arm file_search, but two overlapping tools made the model pick
+    // file_search every time (its name mirrors the toggle) — and file_search sees only THIS
+    // chat's attachments, so a fresh chat dead-ended on "No files to search" while the library
+    // sat unsearched (measured on prod: 118 file_search calls, 0 library_search). file_search
+    // now serves the toggle-OFF case only, where applyConversationFileContext force-arms it to
+    // keep a chat's own embedded documents reachable without expanding the search to the library.
     tools.push(Tools.library_search);
   }
   if ((ephemeralAgent?.web_search === true || modelSpec?.webSearch === true) && !reasoningModel) {

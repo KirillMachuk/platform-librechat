@@ -80,6 +80,22 @@ jest.mock('@librechat/agents', () => ({
 
 jest.mock('@librechat/api', () => ({
   sendEvent: jest.fn(),
+  // Faithful subset of the real helpers (whose own logic is covered by the headers/env
+  // unit tests): createSafeUser keeps id/role, resolveConfigHeaders substitutes the
+  // {{LIBRECHAT_USER_ID}} placeholder in defaultHeaders in place. Enough to prove
+  // buildNodeModel wires them so the user-id billing header is resolved, not left literal.
+  createSafeUser: (u) => (u == null ? {} : { id: u.id, role: u.role }),
+  resolveConfigHeaders: ({ llmConfig, user }) => {
+    const headers = llmConfig?.configuration?.defaultHeaders;
+    if (headers == null) {
+      return;
+    }
+    for (const key of Object.keys(headers)) {
+      if (typeof headers[key] === 'string') {
+        headers[key] = headers[key].replace(/\{\{LIBRECHAT_USER_ID\}\}/g, user?.id ?? '');
+      }
+    }
+  },
   initializeCustom: (...a) => mockInitializeCustom(...a),
   runDeepResearch: (...a) => mockRunDeepResearch(...a),
   startSovereignSession: (...a) => mockStartSovereignSession(...a),
@@ -94,6 +110,7 @@ jest.mock('@librechat/api', () => ({
     },
     completeJob: (...a) => mockCompleteJob(...a),
     getActiveJobIdsForUser: jest.fn(async () => []),
+    getActiveDeepResearchCount: jest.fn(async () => 0),
     getJob: (...a) => mockGetJob(...a),
   },
   buildFallbackReport: jest.fn(() => 'FALLBACK'),
@@ -515,6 +532,47 @@ describe('runNewDeepResearch — D4 report PDF artifact', () => {
 
     expect(mockReportToPdfBuffer).not.toHaveBeenCalled();
     expect(mockSavedMessages.find((m) => m.messageId === 'r1').files).toBeUndefined();
+  });
+});
+
+describe('runNewDeepResearch — global concurrency cap (M2)', () => {
+  const api = require('@librechat/api');
+
+  beforeEach(() => {
+    mockStartSovereignSession.mockResolvedValue(null);
+  });
+
+  it('refuses a start when the server is saturated, without running the graph', async () => {
+    api.GenerationJobManager.getActiveDeepResearchCount.mockResolvedValueOnce(20);
+
+    const result = await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(result.finalizeReason).toBe('limit');
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.text).toContain('сервис загружен');
+    // A refusal carries no report marker, so the next turn drops back to normal chat.
+    expect(msg.drKind).toBeUndefined();
+  });
+
+  it('lets a start through when the server is just under the cap', async () => {
+    api.GenerationJobManager.getActiveDeepResearchCount.mockResolvedValueOnce(19);
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(mockRunDeepResearch).toHaveBeenCalledTimes(1);
+  });
+
+  it('checks the per-user cap first and skips the global scan when it trips', async () => {
+    api.GenerationJobManager.getActiveJobIdsForUser.mockResolvedValueOnce(['a', 'b', 'c']);
+
+    const result = await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(result.finalizeReason).toBe('limit');
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.text).toContain('уже выполняется несколько задач');
+    // Per-user refusal short-circuits before the global scan is ever paid for.
+    expect(api.GenerationJobManager.getActiveDeepResearchCount).not.toHaveBeenCalled();
   });
 });
 
@@ -1392,6 +1450,31 @@ describe('runNewDeepResearch — review r2 hardening', () => {
     expect(msg.drKind).toBeUndefined();
   });
 
+  it('a DUPLICATE START skips the caps: gets the duplicate notice even when the server is saturated', async () => {
+    const api = require('@librechat/api');
+    models.getMessages.mockResolvedValueOnce(
+      planChain([
+        {
+          messageId: 'other-start',
+          isCreatedByUser: true,
+          parentMessageId: 'p1',
+          drKind: 'start',
+          text: '▶ Начать исследование',
+        },
+      ]),
+    );
+
+    const result = await runNewDeepResearch(planParams('▶ Начать исследование'));
+
+    expect(result.finalizeReason).toBe('limit');
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    // The duplicate notice, NOT the global-cap "сервис загружен" — a model-free terminal
+    // is never subject to the concurrency caps, so the global scan is never even paid for.
+    expect(msg.text).toContain('уже запущено');
+    expect(msg.text).not.toContain('сервис загружен');
+    expect(api.GenerationJobManager.getActiveDeepResearchCount).not.toHaveBeenCalled();
+  });
+
   it('does NOT count the CURRENT message as its own duplicate (regenerate reuses the START id)', async () => {
     models.getMessages.mockResolvedValueOnce(
       planChain([
@@ -1518,5 +1601,37 @@ describe('runNewDeepResearch — review r2 hardening', () => {
 
     expect(result.finalizeReason).toBe('cancelled');
     expect(models.getMessages).not.toHaveBeenCalled();
+  });
+});
+
+describe('runNewDeepResearch — spend attribution (x-librechat-user-id)', () => {
+  /** Build params whose req carries a real user id, so the header can resolve to it. */
+  const attributedParams = (text, userId) => {
+    const p = baseParams(text);
+    return { ...p, req: { ...p.req, user: { id: userId, role: 'user' } } };
+  };
+
+  beforeEach(() => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockInitializeCustom.mockResolvedValue({
+      llmConfig: { apiKey: 'sk-client', provider: 'openAI' },
+      configOptions: {
+        baseURL: 'http://anon.internal:8000/v1',
+        // The live `1ma` endpoint ships this placeholder header; the anonymizer forwards
+        // the resolved id to the credit ledger to attribute the spend.
+        defaultHeaders: { 'x-librechat-user-id': '{{LIBRECHAT_USER_ID}}' },
+      },
+      provider: 'openAI',
+    });
+  });
+
+  it('resolves the placeholder to the real user id on every model the run builds', async () => {
+    await runNewDeepResearch(attributedParams('изучи рынок CRM', 'user-abc-123'));
+
+    expect(mockModelCtorArgs.length).toBeGreaterThanOrEqual(1);
+    for (const opts of mockModelCtorArgs) {
+      expect(opts.configuration.defaultHeaders['x-librechat-user-id']).toBe('user-abc-123');
+      expect(opts.configuration.defaultHeaders['x-librechat-user-id']).not.toContain('{{');
+    }
   });
 });
