@@ -1,6 +1,6 @@
 import { useState, memo, useRef } from 'react';
-import * as Menu from '@ariakit/react/menu';
 import { LogOut } from 'lucide-react';
+import * as Menu from '@ariakit/react/menu';
 import { LinkIcon, GearIcon, DropdownMenuSeparator, Avatar } from '@librechat/client';
 import { useGetStartupConfig, useGetUserBalance } from '~/data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';

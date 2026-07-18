@@ -3,8 +3,8 @@ import { RecoilRoot } from 'recoil';
 import { renderHook } from '@testing-library/react';
 import { Constants, EModelEndpoint } from 'librechat-data-provider';
 import type { TConversation } from 'librechat-data-provider';
-import store from '~/store';
 import useDefaultSelection from '../useDefaultSelection';
+import store from '~/store';
 
 /* Дефолт-модель на входе: раньше сид применялся только пользователю с ПУСТЫМ стором, поэтому
  * существующий юзер с восстановленной из localStorage моделью никогда не видел defaultModel.
