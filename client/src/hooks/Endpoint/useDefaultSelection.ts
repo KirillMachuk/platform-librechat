@@ -13,16 +13,20 @@ interface UseDefaultSelectionParams {
   newConversation: ConvoGenerator;
 }
 
-/** Seeds a default endpoint/model on every blank new conversation.
+/** Seeds a default endpoint/model on a blank new conversation.
  *
- * Priority order:
- *   1. `interface.defaultAgentId` (yaml) — picks a DB-backed agent (future Auto orchestrator).
- *   2. `interface.defaultModel` (yaml) — picks a raw LLM (current behavior, e.g. Sonnet).
- *   3. No-op — LibreChat falls back to its own last-used / first-available default.
+ * Priority order (blank conversation only; never touches an existing one):
+ *   1. Restored/selected agent — always respected; the model default never overrides it.
+ *   2. `interface.defaultAgentId` (yaml) — a DB-backed agent, only when nothing is selected.
+ *   3. `interface.defaultModel` (yaml) — the configured LLM (e.g. Sonnet 5). Applied on the
+ *      first run per mount even if a model was restored from localStorage, so it is the model
+ *      the user sees on entry rather than their last-used one.
+ *   4. No default configured — the restored / last-used selection is left as-is.
  *
- * Pass `newConversation` from the chat shell (reuses the existing instance from useChatHelpers).
- * Idempotent under React strict-mode double-mount and resilient against agentsMap/newConversation
- * reference churn — the effect short-circuits if the same conversationId has already been seeded. */
+ * Once-per-mount: `seededForRef` short-circuits after the first run for a conversationId, so a
+ * user's in-session model pick is preserved, while a New Chat navigation (fresh mount) re-applies
+ * the default. Idempotent under React strict-mode double-mount and resilient against
+ * agentsMap/newConversation reference churn. Pass `newConversation` from the chat shell. */
 export default function useDefaultSelection({
   index = 0,
   conversationId,
@@ -46,12 +50,16 @@ export default function useDefaultSelection({
     const convoKey = conversationId ?? Constants.NEW_CONVO;
     if (seededForRef.current === convoKey) return;
 
-    if (endpoint || model || agent_id) {
+    /** An agent selection (restored or picked) is always respected — the model
+     *  default never overrides an agent. */
+    if (agent_id) {
       seededForRef.current = convoKey;
       return;
     }
 
-    if (defaultAgentId && agentsMap && defaultAgentId in agentsMap) {
+    /** Agent default: only when nothing is selected yet (never overrides a
+     *  restored model). */
+    if (defaultAgentId && agentsMap && defaultAgentId in agentsMap && !endpoint && !model) {
       seededForRef.current = convoKey;
       localStorage.setItem(`${LocalStorageKeys.AGENT_ID_PREFIX}${index}`, defaultAgentId);
       newConversation({
@@ -64,17 +72,33 @@ export default function useDefaultSelection({
       return;
     }
 
+    /** Model default: apply on the first run per mount even when a model was
+     *  restored from localStorage, so the configured default (e.g. Sonnet 5) is
+     *  the entry model rather than the last-used one — the previous behaviour
+     *  only seeded users with an empty store. A user's in-session pick is still
+     *  respected because `seededForRef` blocks re-seeding after this first run,
+     *  and a New Chat navigation legitimately re-applies the default. */
     if (defaultModel?.endpoint && defaultModel?.model) {
       const availableModels = modelsByEndpoint?.[defaultModel.endpoint];
+      /** Default not available yet (models still loading, or misconfigured) —
+       *  leave the restored model and retry when the query resolves. */
       if (!availableModels?.includes(defaultModel.model)) return;
 
       seededForRef.current = convoKey;
+      /** Already on the default — nothing to rebuild. */
+      if (endpoint === defaultModel.endpoint && model === defaultModel.model) return;
       newConversation({
         template: {
           endpoint: defaultModel.endpoint as EModelEndpoint,
           model: defaultModel.model,
         },
       });
+      return;
+    }
+
+    /** No default configured — preserve the restored selection as-is. */
+    if (endpoint || model) {
+      seededForRef.current = convoKey;
     }
   }, [
     conversationId,
