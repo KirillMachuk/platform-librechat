@@ -50,7 +50,7 @@ export default function Instructions() {
         >
           {localize('com_ui_instructions')}
         </label>
-        <div className="ml-auto" title="Add variables to instructions">
+        <div className="ml-auto" title={localize('com_ui_variables')}>
           <DropdownPopup
             portal={true}
             mountByState={true}
@@ -61,7 +61,7 @@ export default function Instructions() {
             trigger={
               <Menu.MenuButton
                 id="variables-menu-button"
-                aria-label="Add variable to instructions"
+                aria-label={localize('com_ui_variables')}
                 className="flex h-7 items-center gap-1 rounded-md border border-border-medium bg-surface-secondary px-2 py-0 text-sm text-text-primary transition-colors duration-200 hover:bg-surface-tertiary"
               >
                 <PlusCircle className="mr-1 h-3 w-3 text-text-secondary" aria-hidden={true} />
@@ -73,7 +73,6 @@ export default function Instructions() {
               onClick: () => handleAddVariable(option.label, option.value),
             }))}
             menuId={menuId}
-            className="z-30"
           />
         </div>
       </div>
