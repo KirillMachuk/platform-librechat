@@ -3,6 +3,7 @@ const { createContentAggregator } = require('@librechat/agents');
 const {
   loadSkillStates,
   initializeAgent,
+  canUseDeepResearch,
   primeInvokedSkills,
   validateAgentModel,
   extractManualSkills,
@@ -432,7 +433,8 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
    *  lead-model override is applied before model validation. */
   const deepResearchActive =
     req.body?.ephemeralAgent?.deep_research === true &&
-    enabledCapabilities.has(AgentCapabilities.deep_research);
+    enabledCapabilities.has(AgentCapabilities.deep_research) &&
+    (await canUseDeepResearch({ req, getRoleByName: db.getRoleByName }));
   const deepResearchMode = deepResearchActive
     ? resolveDeepResearchMode(appConfig?.deepResearch)
     : null;
