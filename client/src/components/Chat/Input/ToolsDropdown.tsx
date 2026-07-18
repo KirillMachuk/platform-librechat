@@ -182,7 +182,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
               'hover:bg-surface-secondary hover:shadow-sm',
               !isFileSearchPinned && 'text-text-secondary hover:text-text-primary',
             )}
-            aria-label={isFileSearchPinned ? 'Unpin' : 'Pin'}
+            aria-label={isFileSearchPinned ? localize('com_ui_unpin') : localize('com_ui_pin')}
           >
             <div className="h-4 w-4">
               <PinIcon unpin={isFileSearchPinned} />
@@ -235,7 +235,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
                 'hover:bg-surface-secondary hover:shadow-sm',
                 !isSearchPinned && 'text-text-secondary hover:text-text-primary',
               )}
-              aria-label={isSearchPinned ? 'Unpin' : 'Pin'}
+              aria-label={isSearchPinned ? localize('com_ui_unpin') : localize('com_ui_pin')}
             >
               <div className="h-4 w-4">
                 <PinIcon unpin={isSearchPinned} />
@@ -333,7 +333,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
                 'hover:bg-surface-secondary hover:shadow-sm',
                 !isCodePinned && 'text-text-primary hover:text-text-primary',
               )}
-              aria-label={isCodePinned ? 'Unpin' : 'Pin'}
+              aria-label={isCodePinned ? localize('com_ui_unpin') : localize('com_ui_pin')}
             >
               <div className="h-4 w-4">
                 <PinIcon unpin={isCodePinned} />
