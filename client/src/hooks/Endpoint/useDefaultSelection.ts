@@ -43,6 +43,17 @@ export default function useDefaultSelection({
   const defaultModel = startupConfig?.interface?.defaultModel;
   const seededForRef = useRef<string | null>(null);
 
+  /** ChatView is a single long-lived instance (no route `key`), so `seededForRef`
+   *  persists across New Chat. Clear it once a real conversation is active so the
+   *  next blank conversation re-applies the default — a user's in-session pick on
+   *  the current blank conversation is still preserved (it is guarded by
+   *  `seededForRef` until they navigate away). */
+  useEffect(() => {
+    if (conversationId && conversationId !== Constants.NEW_CONVO) {
+      seededForRef.current = null;
+    }
+  }, [conversationId]);
+
   useEffect(() => {
     const isBlankConvo = !conversationId || conversationId === Constants.NEW_CONVO;
     if (!isBlankConvo) return;

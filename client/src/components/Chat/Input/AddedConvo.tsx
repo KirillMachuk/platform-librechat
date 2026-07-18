@@ -56,7 +56,7 @@ export default function AddedConvo({
       <button
         className="text-token-text-secondary flex-shrink-0"
         type="button"
-        aria-label={localize('com_ui_close')}
+        aria-label={localize('com_ui_close_added_convo')}
         onClick={() => setAddedConvo(null)}
       >
         <svg

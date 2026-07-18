@@ -109,6 +109,11 @@ const AuthContextProvider = ({
         return;
       }
       setError(undefined);
+      /** Explicit login (not silent-refresh on reload): drop any role snapshot
+       *  from a prior user/tenant on this browser so their permission gates never
+       *  seed this session's sidebar. Reload keeps its snapshot (silent-refresh
+       *  does not run this), preserving the instant-render benefit. */
+      clearRoleSnapshots();
       setUserContext({ token, isAuthenticated: true, user, redirect: '/c/new' });
     },
     onError: (error: TResError | unknown) => {

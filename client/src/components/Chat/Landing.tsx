@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
+import { useMemo, useCallback, useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { EModelEndpoint } from 'librechat-data-provider';
 import {
   getIconEndpoint,
@@ -157,15 +157,20 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
       ? getGreeting()
       : getGreeting() + (user?.name ? ', ' + user.name : '');
 
-  useEffect(() => {
+  /** Measure wrapped line count before paint (useLayoutEffect) so the dynamic
+   *  bottom margin settles without a visible post-paint recenter on narrow
+   *  screens. Observe the block-level container (reliable ResizeObserver target
+   *  across devices) while measuring the inline greeting's line boxes. */
+  useLayoutEffect(() => {
     const element = greetingRef.current;
-    if (!element) {
+    const container = contentRef.current;
+    if (!element || !container) {
       return;
     }
     const measure = () => handleLineCountChange(element.getClientRects().length || 1);
     measure();
     const observer = new ResizeObserver(measure);
-    observer.observe(element);
+    observer.observe(container);
     return () => observer.disconnect();
   }, [name, greetingText, handleLineCountChange]);
 

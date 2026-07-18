@@ -66,6 +66,36 @@ describe('loadDefaultInterface', () => {
     expect(interfaceConfig?.buildInfo).toBe(true);
   });
 
+  it('forwards webSearchDefault to the client (must be in the interface allowlist)', async () => {
+    const config: Partial<TCustomConfig> = {
+      interface: {
+        webSearchDefault: true,
+      },
+    };
+
+    const interfaceConfig = await loadDefaultInterface({
+      config,
+      configDefaults: getConfigDefaults(),
+    });
+
+    expect(interfaceConfig?.webSearchDefault).toBe(true);
+  });
+
+  it('forwards fileSearchDefault to the client', async () => {
+    const config: Partial<TCustomConfig> = {
+      interface: {
+        fileSearchDefault: true,
+      },
+    };
+
+    const interfaceConfig = await loadDefaultInterface({
+      config,
+      configDefaults: getConfigDefaults(),
+    });
+
+    expect(interfaceConfig?.fileSearchDefault).toBe(true);
+  });
+
   it('disables context cost by default', async () => {
     const interfaceConfig = await loadDefaultInterface({
       config: {},

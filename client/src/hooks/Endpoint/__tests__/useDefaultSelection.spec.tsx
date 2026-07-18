@@ -113,4 +113,26 @@ describe('useDefaultSelection — дефолт-модель на входе', ()
     );
     expect(newConversation).not.toHaveBeenCalled();
   });
+
+  it('New Chat снова применяет дефолт после реального чата (сброс seededForRef)', () => {
+    const newConversation = jest.fn();
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <RecoilRoot>{children}</RecoilRoot>
+    );
+    const { rerender } = renderHook(
+      ({ conversationId }: { conversationId: string }) =>
+        useDefaultSelection({ index: 0, conversationId, newConversation }),
+      { wrapper, initialProps: { conversationId: Constants.NEW_CONVO as string } },
+    );
+    /** Вход: пустой чат → дефолт применён. */
+    expect(newConversation).toHaveBeenCalledTimes(1);
+
+    /** Переход в реальный чат: сид не применяется, guard сбрасывается. */
+    rerender({ conversationId: 'real-convo-1' });
+    expect(newConversation).toHaveBeenCalledTimes(1);
+
+    /** New Chat: дефолт применяется повторно. */
+    rerender({ conversationId: Constants.NEW_CONVO as string });
+    expect(newConversation).toHaveBeenCalledTimes(2);
+  });
 });
