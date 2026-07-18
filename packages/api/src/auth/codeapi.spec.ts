@@ -33,6 +33,7 @@ const ENV_KEYS = [
   'CODEAPI_JWT_SINGLE_TENANT_ID',
   'TENANT_ISOLATION_STRICT',
   'OPENID_REUSE_TOKENS',
+  'LIBRECHAT_CODE_API_KEY',
 ] as const;
 
 type Claims = Record<string, unknown>;
@@ -118,6 +119,7 @@ describe('Code API JWT minting', () => {
     delete process.env.CODEAPI_JWT_SINGLE_TENANT_ID;
     delete process.env.TENANT_ISOLATION_STRICT;
     delete process.env.OPENID_REUSE_TOKENS;
+    delete process.env.LIBRECHAT_CODE_API_KEY;
     mockGetTenantId.mockReset();
   });
 
@@ -268,7 +270,7 @@ describe('Code API JWT minting', () => {
     expect(afterCacheWindow).not.toBe(first);
   });
 
-  it('returns Authorization headers only when a request and managed auth are present', async () => {
+  it('returns Bearer under managed JWT auth and falls back to x-api-key otherwise', async () => {
     await expect(getCodeApiAuthHeaders()).resolves.toEqual({});
     await expect(getCodeApiAuthHeaders(baseRequest())).resolves.toEqual({
       Authorization: expect.stringMatching(/^Bearer /),
@@ -277,5 +279,10 @@ describe('Code API JWT minting', () => {
     process.env.CODEAPI_AUTH_PROVIDER = 'legacy-api-key';
     delete process.env.CODEAPI_JWT_ENABLED;
     await expect(getCodeApiAuthHeaders(baseRequest())).resolves.toEqual({});
+
+    process.env.LIBRECHAT_CODE_API_KEY = '  static-code-key  ';
+    await expect(getCodeApiAuthHeaders(baseRequest())).resolves.toEqual({
+      'x-api-key': 'static-code-key',
+    });
   });
 });
