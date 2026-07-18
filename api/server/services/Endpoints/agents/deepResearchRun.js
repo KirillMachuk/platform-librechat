@@ -4,8 +4,10 @@ const { HumanMessage, SystemMessage } = require('@langchain/core/messages');
 const { Providers, getChatModelClass, createSearchTool } = require('@librechat/agents');
 const {
   sendEvent,
+  createSafeUser,
   initializeCustom,
   runDeepResearch,
+  resolveConfigHeaders,
   loadWebSearchAuth,
   tierToRunBudget,
   GenerationJobManager,
@@ -715,6 +717,22 @@ async function buildNodeModel({ req, db, endpoint, model, passthroughHeaders }) 
         defaultHeaders: { ...(configOptions?.defaultHeaders ?? {}), ...passthroughHeaders },
       }
     : configOptions;
+  /**
+   * Resolve header placeholders before the model is built, exactly as the normal agent
+   * path does (packages/api/src/agents/run.ts). `initializeCustom` leaves `{{LIBRECHAT_*}}`
+   * templates unexpanded, so without this the `1ma` endpoint's
+   * `x-librechat-user-id: {{LIBRECHAT_USER_ID}}` header — the one the anonymizer forwards
+   * to the credit ledger so a spend is attributed to a user — reaches the anonymizer as the
+   * literal placeholder, fails the ledger's ObjectId check, and lands the whole DR run's
+   * cost against no user. The header is internal-only (never forwarded upstream) and the id
+   * is an opaque ObjectId, so this restores intended billing metadata without crossing the
+   * PII boundary. Mutates `finalConfig.defaultHeaders` in place; idempotent under reuse.
+   */
+  resolveConfigHeaders({
+    llmConfig: { configuration: finalConfig },
+    user: createSafeUser(req?.user),
+    body: req?.body,
+  });
   const ModelClass = getChatModelClass(resolvedProvider);
   return new ModelClass({ ...clientOptions, configuration: finalConfig });
 }
