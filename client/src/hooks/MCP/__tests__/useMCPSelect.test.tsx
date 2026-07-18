@@ -54,7 +54,7 @@ describe('useMCPSelect', () => {
       });
 
       expect(result.current.mcpValues).toEqual([]);
-      expect(result.current.isPinned).toBe(true); // Default value from mcpPinnedAtom is true
+      expect(result.current.isPinned).toBe(false); // Default value from mcpPinnedAtom is false
       expect(typeof result.current.setMCPValues).toBe('function');
       expect(typeof result.current.setIsPinned).toBe('function');
     });
@@ -117,22 +117,22 @@ describe('useMCPSelect', () => {
         wrapper: Wrapper,
       });
 
-      // Default is true
-      expect(result.current.isPinned).toBe(true);
-
-      // Toggle to false
-      act(() => {
-        result.current.setIsPinned(false);
-      });
-
+      // Default is false
       expect(result.current.isPinned).toBe(false);
 
-      // Toggle back to true
+      // Toggle to true
       act(() => {
         result.current.setIsPinned(true);
       });
 
       expect(result.current.isPinned).toBe(true);
+
+      // Toggle back to false
+      act(() => {
+        result.current.setIsPinned(false);
+      });
+
+      expect(result.current.isPinned).toBe(false);
     });
   });
 

@@ -182,7 +182,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
               'hover:bg-surface-secondary hover:shadow-sm',
               !isFileSearchPinned && 'text-text-secondary hover:text-text-primary',
             )}
-            aria-label={isFileSearchPinned ? 'Unpin' : 'Pin'}
+            aria-label={isFileSearchPinned ? localize('com_ui_unpin') : localize('com_ui_pin')}
           >
             <div className="h-4 w-4">
               <PinIcon unpin={isFileSearchPinned} />
@@ -216,7 +216,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
                   'hover:bg-surface-secondary hover:shadow-sm',
                   'text-text-secondary hover:text-text-primary',
                 )}
-                aria-label="Configure web search"
+                aria-label={localize('com_ui_web_search_configure')}
                 ref={searchMenuTriggerRef}
               >
                 <div className="h-4 w-4">
@@ -235,7 +235,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
                 'hover:bg-surface-secondary hover:shadow-sm',
                 !isSearchPinned && 'text-text-secondary hover:text-text-primary',
               )}
-              aria-label={isSearchPinned ? 'Unpin' : 'Pin'}
+              aria-label={isSearchPinned ? localize('com_ui_unpin') : localize('com_ui_pin')}
             >
               <div className="h-4 w-4">
                 <PinIcon unpin={isSearchPinned} />
@@ -333,7 +333,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
                 'hover:bg-surface-secondary hover:shadow-sm',
                 !isCodePinned && 'text-text-primary hover:text-text-primary',
               )}
-              aria-label={isCodePinned ? 'Unpin' : 'Pin'}
+              aria-label={isCodePinned ? localize('com_ui_unpin') : localize('com_ui_pin')}
             >
               <div className="h-4 w-4">
                 <PinIcon unpin={isCodePinned} />
@@ -380,7 +380,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
         <Ariakit.MenuButton
           disabled={isDisabled}
           id="tools-dropdown-button"
-          aria-label="Tools Options"
+          aria-label={localize('com_ui_tools_options')}
           className={cn(
             'flex size-9 items-center justify-center rounded-full p-1 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-opacity-50',
             isPopoverActive && 'bg-surface-hover',

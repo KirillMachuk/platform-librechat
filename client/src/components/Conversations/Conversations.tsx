@@ -9,7 +9,6 @@ import { Spinner, TooltipAnchor, NewChatIcon, useMediaQuery } from '@librechat/c
 import type { TConversation } from 'librechat-data-provider';
 import {
   useLocalize,
-  TranslationKeys,
   useFavorites,
   useShowMarketplace,
   useNewConvo,
@@ -138,26 +137,8 @@ const ChatsHeader: FC<ChatsHeaderProps> = memo(({ isExpanded, onToggle }) => {
 
 ChatsHeader.displayName = 'ChatsHeader';
 
-const DateLabel: FC<{ groupName: string; isFirst?: boolean }> = memo(({ groupName, isFirst }) => {
-  const localize = useLocalize();
-  return (
-    <h2
-      aria-label={localize('com_a11y_chats_date_section', {
-        date: localize(groupName as TranslationKeys) || groupName,
-      })}
-      className={cn('pl-1 pt-1 text-text-secondary', isFirst === true ? 'mt-0' : 'mt-2')}
-      style={{ fontSize: '0.7rem' }}
-    >
-      {localize(groupName as TranslationKeys) || groupName}
-    </h2>
-  );
-});
-
-DateLabel.displayName = 'DateLabel';
-
 type FlattenedItem =
   | { type: 'favorites' }
-  | { type: 'header'; groupName: string }
   | { type: 'convo'; convo: TConversation }
   | { type: 'loading' };
 
@@ -220,8 +201,7 @@ const Conversations: FC<ConversationsProps> = ({
     }
 
     if (isChatsExpanded) {
-      groupedConversations.forEach(([groupName, convos]) => {
-        items.push({ type: 'header', groupName });
+      groupedConversations.forEach(([, convos]) => {
         items.push(...convos.map((convo) => ({ type: 'convo' as const, convo })));
       });
 
@@ -249,10 +229,6 @@ const Conversations: FC<ConversationsProps> = ({
           }
           if (item.type === 'favorites') {
             return `favorites-${favoritesContentKeyRef.current}`;
-          }
-          if (item.type === 'header') {
-            const firstHeaderIndex = flattenedItemsRef.current[0]?.type === 'favorites' ? 1 : 0;
-            return `header-${item.groupName}-${index === firstHeaderIndex ? 'first' : 'sub'}`;
           }
           if (item.type === 'convo') {
             return `convo-${item.convo.conversationId}`;
@@ -320,16 +296,6 @@ const Conversations: FC<ConversationsProps> = ({
         return (
           <MeasuredRow key={key} {...rowProps}>
             <FavoritesList isSmallScreen={isSmallScreen} toggleNav={toggleNav} />
-          </MeasuredRow>
-        );
-      }
-
-      if (item.type === 'header') {
-        // First date header index depends on whether the favorites row is included
-        const firstHeaderIndex = flattenedItems[0]?.type === 'favorites' ? 1 : 0;
-        return (
-          <MeasuredRow key={key} {...rowProps}>
-            <DateLabel groupName={item.groupName} isFirst={index === firstHeaderIndex} />
           </MeasuredRow>
         );
       }
@@ -410,5 +376,4 @@ const Conversations: FC<ConversationsProps> = ({
   );
 };
 
-export { DateLabel };
 export default memo(Conversations);

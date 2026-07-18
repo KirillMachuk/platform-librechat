@@ -250,6 +250,12 @@ export const CustomMenuItem = React.forwardRef<HTMLDivElement, CustomMenuItemPro
           // However, since we're in a menu context, we also close all parent
           // menus.
           menu?.hideAll();
+          // iOS/iPadOS WebKit forces the combobox to `virtualFocus: false`
+          // (Ariakit `isTouchSafari`), moving real focus onto the tapped row and
+          // defeating this close on select. Re-assert it on the next frame, once
+          // the focus churn has settled. On desktop the menu is already closed,
+          // so this is a harmless no-op.
+          requestAnimationFrame(() => menu?.hideAll());
           return true;
         }}
       />

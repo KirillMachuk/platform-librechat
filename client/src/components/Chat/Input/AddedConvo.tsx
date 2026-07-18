@@ -5,6 +5,7 @@ import type { SetterOrUpdater } from 'recoil';
 import { useGetEndpointsQuery } from '~/data-provider';
 import { EndpointIcon } from '~/components/Endpoints';
 import { useAgentsMapContext } from '~/Providers';
+import { useLocalize } from '~/hooks';
 
 export default function AddedConvo({
   addedConvo,
@@ -13,6 +14,7 @@ export default function AddedConvo({
   addedConvo: TConversation | null;
   setAddedConvo: SetterOrUpdater<TConversation | null>;
 }) {
+  const localize = useLocalize();
   const agentsMap = useAgentsMapContext();
   const { data: endpointsConfig } = useGetEndpointsQuery();
   const title = useMemo(() => {
@@ -54,7 +56,7 @@ export default function AddedConvo({
       <button
         className="text-token-text-secondary flex-shrink-0"
         type="button"
-        aria-label="Close added conversation"
+        aria-label={localize('com_ui_close_added_convo')}
         onClick={() => setAddedConvo(null)}
       >
         <svg

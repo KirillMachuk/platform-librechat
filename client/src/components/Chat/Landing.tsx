@@ -1,6 +1,4 @@
-import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
-import { easings } from '@react-spring/web';
-import { SplitText } from '@librechat/client';
+import { useMemo, useCallback, useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { EModelEndpoint } from 'librechat-data-provider';
 import {
   getIconEndpoint,
@@ -43,6 +41,7 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
   const [lineCount, setLineCount] = useState(1);
   const [contentHeight, setContentHeight] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
+  const greetingRef = useRef<HTMLSpanElement>(null);
 
   const endpointType = useMemo(() => {
     let ep = conversation?.endpoint ?? '';
@@ -158,6 +157,23 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
       ? getGreeting()
       : getGreeting() + (user?.name ? ', ' + user.name : '');
 
+  /** Measure wrapped line count before paint (useLayoutEffect) so the dynamic
+   *  bottom margin settles without a visible post-paint recenter on narrow
+   *  screens. Observe the block-level container (reliable ResizeObserver target
+   *  across devices) while measuring the inline greeting's line boxes. */
+  useLayoutEffect(() => {
+    const element = greetingRef.current;
+    const container = contentRef.current;
+    if (!element || !container) {
+      return;
+    }
+    const measure = () => handleLineCountChange(element.getClientRects().length || 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [name, greetingText, handleLineCountChange]);
+
   return (
     <div
       className={`flex h-full transform-gpu flex-col items-center justify-center pb-16 transition-all duration-200 ${centerFormOnLanding ? 'max-h-full sm:max-h-0' : 'max-h-full'} ${getDynamicMargin}`}
@@ -165,34 +181,16 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
       <div ref={contentRef} className="flex flex-col items-center gap-0 p-2">
         {((isAgent || isAssistant) && name) || name ? (
           <div className="flex flex-col items-center gap-0 p-2">
-            <SplitText
-              key={`split-text-${name}`}
-              text={name}
-              className={`${getTextSizeClass(name)} font-medium text-text-primary`}
-              delay={50}
-              textAlign="center"
-              animationFrom={{ opacity: 0, transform: 'translate3d(0,50px,0)' }}
-              animationTo={{ opacity: 1, transform: 'translate3d(0,0,0)' }}
-              easing={easings.easeOutCubic}
-              threshold={0}
-              rootMargin="0px"
-              onLineCountChange={handleLineCountChange}
-            />
+            <h1 className={`${getTextSizeClass(name)} text-center font-medium text-text-primary`}>
+              <span ref={greetingRef}>{name}</span>
+            </h1>
           </div>
         ) : (
-          <SplitText
-            key={`split-text-${greetingText}${user?.name ? '-user' : ''}`}
-            text={greetingText}
-            className={`${getTextSizeClass(greetingText)} font-medium text-text-primary`}
-            delay={50}
-            textAlign="center"
-            animationFrom={{ opacity: 0, transform: 'translate3d(0,50px,0)' }}
-            animationTo={{ opacity: 1, transform: 'translate3d(0,0,0)' }}
-            easing={easings.easeOutCubic}
-            threshold={0}
-            rootMargin="0px"
-            onLineCountChange={handleLineCountChange}
-          />
+          <h1
+            className={`${getTextSizeClass(greetingText)} text-center font-medium text-text-primary`}
+          >
+            <span ref={greetingRef}>{greetingText}</span>
+          </h1>
         )}
         {description &&
           (descriptionIsHTML ? (

@@ -21,6 +21,15 @@ const uniqueText = (prefix: string) => `${prefix} ${Date.now()}-${Math.floor(Mat
 
 const mcpBadge = (page: Page) => page.getByRole('button', { name: new RegExp(MCP_SERVER_TITLE) });
 
+/** Pin the MCP badge before navigation. The badge is no longer pinned by default
+ *  (it lives in the Tools menu), but this suite exercises MCP-selection
+ *  persistence, so it opts the composer badge in explicitly as its precondition. */
+async function pinMcpBadge(page: Page) {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('PIN_MCP_', 'true');
+  });
+}
+
 /** Select the MCP server from the composer's ephemeral MCP dropdown. */
 async function selectEphemeralMCP(page: Page) {
   await page.getByRole('button', { name: 'MCP Servers', exact: true }).click();
@@ -41,6 +50,7 @@ function requestMCP(response: Response): string[] | undefined {
 test.describe('ephemeral MCP selection persistence', () => {
   test('keeps the MCP selection when switching models on a new chat', async ({ page }) => {
     test.setTimeout(120000);
+    await pinMcpBadge(page);
     await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
 
     await selectMockEndpoint(page, PROVIDER_C);
@@ -58,6 +68,7 @@ test.describe('ephemeral MCP selection persistence', () => {
 
   test('keeps the MCP selection when regenerating after a model switch', async ({ page }) => {
     test.setTimeout(120000);
+    await pinMcpBadge(page);
     await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
 
     await selectMockEndpoint(page, PROVIDER_C);

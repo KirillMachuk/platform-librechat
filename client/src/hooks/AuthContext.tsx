@@ -8,8 +8,8 @@ import {
   createContext,
 } from 'react';
 import { debounce } from 'lodash';
-import { useRecoilState, useSetRecoilState } from 'recoil';
 import { useNavigate } from 'react-router-dom';
+import { useRecoilState, useSetRecoilState } from 'recoil';
 import {
   apiBaseUrl,
   SystemRoles,
@@ -28,6 +28,7 @@ import {
 } from '~/data-provider';
 import { TAuthConfig, TUserContext, TAuthContext, TResError } from '~/common';
 import { SESSION_KEY, isSafeRedirect, getPostLoginRedirect } from '~/utils';
+import { clearRoleSnapshots } from '~/utils/rolesCache';
 import useTimeout from './useTimeout';
 import store from '~/store';
 
@@ -108,6 +109,11 @@ const AuthContextProvider = ({
         return;
       }
       setError(undefined);
+      /** Explicit login (not silent-refresh on reload): drop any role snapshot
+       *  from a prior user/tenant on this browser so their permission gates never
+       *  seed this session's sidebar. Reload keeps its snapshot (silent-refresh
+       *  does not run this), preserving the instant-render benefit. */
+      clearRoleSnapshots();
       setUserContext({ token, isAuthenticated: true, user, redirect: '/c/new' });
     },
     onError: (error: TResError | unknown) => {
@@ -160,6 +166,7 @@ const AuthContextProvider = ({
       if (redirect) {
         logoutRedirectRef.current = redirect;
       }
+      clearRoleSnapshots();
       logoutUser.mutate(undefined);
     },
     [logoutUser],
@@ -237,6 +244,7 @@ const AuthContextProvider = ({
     if (token == null || !token || !isAuthenticated) {
       silentRefresh();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- doSetError is a stable useTimeout callback; refresh effect is intentionally scoped
   }, [
     token,
     isAuthenticated,
@@ -283,6 +291,7 @@ const AuthContextProvider = ({
       isAuthenticated,
     }),
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- login is an unstable inline fn; including it (and logout) would recompute the context value every render
     [
       user,
       error,
