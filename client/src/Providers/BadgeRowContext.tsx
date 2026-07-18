@@ -135,6 +135,11 @@ export default function BadgeRowProvider({
         } catch (e) {
           console.error('Failed to parse web search toggle value:', e);
         }
+      } else if (startupConfig?.interface?.webSearchDefault === true) {
+        /* Deployment-level starting state: web search on by default (ChatGPT-style — the model
+         * decides per message whether to search). Applies ONLY when this browser has no persisted
+         * choice — a user who turned it off stays off (their choice lands in localStorage above). */
+        initialValues[Tools.web_search] = true;
       }
 
       if (fileSearchToggleValue !== null) {
