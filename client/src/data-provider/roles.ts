@@ -16,16 +16,26 @@ import type {
   UseQueryOptions,
 } from '@tanstack/react-query';
 import type * as t from 'librechat-data-provider';
+import { readRoleSnapshot, writeRoleSnapshot } from '~/utils/rolesCache';
 
 export const useGetRole = (
   roleName: string,
   config?: UseQueryOptions<t.TRole>,
 ): QueryObserverResult<t.TRole> => {
+  const snapshot = readRoleSnapshot(roleName);
   return useQuery<t.TRole>([QueryKeys.roles, roleName], () => dataService.getRole(roleName), {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: false,
+    /** Seed the cache from a localStorage snapshot so sidebar permission gates
+     *  resolve on first paint; `initialDataUpdatedAt: 0` marks it stale so a
+     *  single background refetch revalidates it on load, while `staleTime` keeps
+     *  in-session remounts from refetching (preserving the prior behaviour). */
+    refetchOnMount: true,
+    staleTime: 5 * 60 * 1000,
     retry: false,
+    initialData: snapshot?.data,
+    initialDataUpdatedAt: snapshot != null ? 0 : undefined,
+    onSuccess: (data) => writeRoleSnapshot(roleName, data),
     ...config,
   });
 };

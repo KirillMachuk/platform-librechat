@@ -28,6 +28,7 @@ import {
 } from '~/data-provider';
 import { TAuthConfig, TUserContext, TAuthContext, TResError } from '~/common';
 import { SESSION_KEY, isSafeRedirect, getPostLoginRedirect } from '~/utils';
+import { clearRoleSnapshots } from '~/utils/rolesCache';
 import useTimeout from './useTimeout';
 import store from '~/store';
 
@@ -160,6 +161,7 @@ const AuthContextProvider = ({
       if (redirect) {
         logoutRedirectRef.current = redirect;
       }
+      clearRoleSnapshots();
       logoutUser.mutate(undefined);
     },
     [logoutUser],
