@@ -97,6 +97,37 @@ describe('primeLibraryScope — ACL-собранный скоуп библиот
     const empty = await primeLibraryScope('user-1');
     expect(empty.fileIds).toEqual([]);
   });
+
+  it('unions this chat’s attached files into the scope, ACL-fetched and deduped', async () => {
+    getFiles
+      .mockResolvedValueOnce([{ file_id: 'f1', filename: 'lease.pdf' }]) // library scope
+      .mockResolvedValueOnce([
+        { file_id: 'f1', filename: 'lease.pdf' }, // also in the library → counted once
+        { file_id: 'a1', filename: 'attached.pdf' }, // attachment-only (e.g. project/retention file)
+      ]); // attached scope
+    countFiles.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
+
+    const scope = await primeLibraryScope('user-1', undefined, undefined, ['a1', 'f1']);
+
+    // Attachments are re-fetched under the user's OWN ACL (never the raw ids), embedded-only, and
+    // deliberately WITHOUT the project_id/visibility gate the library sweep applies.
+    expect(getFiles.mock.calls[1][0]).toEqual({
+      user: 'user-1',
+      file_id: { $in: ['a1', 'f1'] },
+      embedded: true,
+    });
+    // Library first, then attachments; the shared f1 appears once.
+    expect(scope.fileIds).toEqual(['f1', 'a1']);
+    expect(scope.attachedCount).toBe(2);
+    expect(scope.fileNames.get('a1')).toBe('attached.pdf');
+  });
+
+  it('does not query attachments when none are provided', async () => {
+    mockScope([{ file_id: 'f1', filename: 'lease.pdf' }]);
+    const scope = await primeLibraryScope('user-1');
+    expect(getFiles).toHaveBeenCalledTimes(1);
+    expect(scope.attachedCount).toBe(0);
+  });
 });
 
 describe('buildStatusNote', () => {

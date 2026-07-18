@@ -355,10 +355,17 @@ const loadTools = async ({
             fileCitations = false;
           }
         }
+        /* Documents attached to THIS chat, so library_search covers them alongside the whole
+         * library (the "search files" toggle arms library_search alone). applyConversationFileContext
+         * merges this conversation's embedded, non-library file_ids into this same resource slot;
+         * primeLibraryScope re-fetches them under the user's own ACL before trusting them. */
+        const conversationFileIds =
+          options.tool_resources?.[EToolResources.file_search]?.file_ids ?? [];
         return createLibrarySearchTool({
           userId: user,
           tenantId: options.req?.user?.tenantId,
           fileCitations,
+          conversationFileIds,
         });
       };
       continue;
