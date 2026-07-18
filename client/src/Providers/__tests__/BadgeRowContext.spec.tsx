@@ -103,3 +103,24 @@ describe('BadgeRowProvider — серверный дефолт тумблера 
     });
   });
 });
+
+describe('BadgeRowProvider — серверный дефолт тумблера «Веб-поиск»', () => {
+  it('webSearchDefault: true включает тумблер пользователю без сохранённого выбора', async () => {
+    mockStartupConfig = { interface: { webSearchDefault: true } } as Partial<TStartupConfig>;
+    const { last } = renderProvider();
+    await waitFor(() => {
+      expect(last()?.[Tools.web_search]).toBe(true);
+    });
+  });
+
+  it('выбор пользователя сильнее дефолта: выключил — остаётся выключенным', async () => {
+    mockStartupConfig = { interface: { webSearchDefault: true } } as Partial<TStartupConfig>;
+    const suffix = Constants.NEW_CONVO as string;
+    localStorage.setItem(`LAST_WEB_SEARCH_TOGGLE_${suffix}`, 'false');
+    localStorage.setItem(`LAST_WEB_SEARCH_TOGGLE_${suffix}:timestamp`, new Date().toISOString());
+    const { last } = renderProvider();
+    await waitFor(() => {
+      expect(last()?.[Tools.web_search]).toBe(false);
+    });
+  });
+});

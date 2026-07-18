@@ -1210,6 +1210,14 @@ export const interfaceSchema = z
     retainAgentFiles: z.boolean().optional(),
     runCode: z.boolean().optional(),
     webSearch: z.boolean().optional(),
+    /**
+     * Starting state of the «Веб-поиск» toggle for a user who has never touched it.
+     * `webSearch` above controls whether the badge EXISTS; this controls whether it starts ON.
+     * A user's own choice (persisted per browser) always wins over this default. The model still
+     * decides per message whether to actually search, so an unrelated prompt (e.g. «напиши стих»)
+     * does not trigger a web query. Mirrors `fileSearchDefault`.
+     */
+    webSearchDefault: z.boolean().optional(),
     deepResearch: z.boolean().optional(),
     contextUsage: z.boolean().optional(),
     contextCost: z.boolean().optional(),
