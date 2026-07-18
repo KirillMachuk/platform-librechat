@@ -244,6 +244,7 @@ const AuthContextProvider = ({
     if (token == null || !token || !isAuthenticated) {
       silentRefresh();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- doSetError is a stable useTimeout callback; refresh effect is intentionally scoped
   }, [
     token,
     isAuthenticated,
@@ -290,6 +291,7 @@ const AuthContextProvider = ({
       isAuthenticated,
     }),
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- login is an unstable inline fn; including it (and logout) would recompute the context value every render
     [
       user,
       error,
