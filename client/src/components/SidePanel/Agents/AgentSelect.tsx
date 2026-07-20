@@ -1,6 +1,6 @@
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { EarthIcon } from 'lucide-react';
 import { ControlCombobox } from '@librechat/client';
-import { memo, useCallback, useEffect, useRef } from 'react';
 import { useFormContext, Controller } from 'react-hook-form';
 import { AgentCapabilities, defaultAgentFormValues } from 'librechat-data-provider';
 import type { UseMutationResult, QueryObserverResult } from '@tanstack/react-query';
@@ -81,6 +81,9 @@ function AgentSelect({
         category: fullAgent.category || 'general',
         // Make sure support_contact is properly loaded
         support_contact: fullAgent.support_contact,
+        /** Reset explicitly: an agent without these must clear the previous agent's */
+        conversation_starters: fullAgent.conversation_starters ?? [],
+        is_promoted: fullAgent.is_promoted ?? false,
         avatar_file: null,
         avatar_preview: fullAgent.avatar?.filepath ?? '',
         avatar_action: null,

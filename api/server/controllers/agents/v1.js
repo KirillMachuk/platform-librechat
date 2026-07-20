@@ -21,6 +21,7 @@ const {
   ErrorTypes,
   Constants,
   FileSources,
+  SystemRoles,
   ResourceType,
   AccessRoleIds,
   PrincipalType,
@@ -610,6 +611,15 @@ const updateAgentHandler = async (req, res) => {
     // Preserve explicit null for avatar to allow resetting the avatar
     const { avatar: avatarField, _id, ...rest } = validatedData;
     const updateData = removeNullishValues(rest);
+
+    /**
+     * Promotion curates the shared catalog, so only an admin may change it. The field
+     * is deliberately absent from the zod schema — unknown keys are stripped, so a
+     * non-admin cannot set it even by crafting the payload.
+     */
+    if (req.user.role === SystemRoles.ADMIN && typeof req.body.is_promoted === 'boolean') {
+      updateData.is_promoted = req.body.is_promoted;
+    }
 
     if (Array.isArray(updateData.tools) && updateData.tools.length > MAX_AGENT_TOOLS) {
       return res.status(400).json({

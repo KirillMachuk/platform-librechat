@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { dataService, MutationKeys, PermissionBits, QueryKeys } from 'librechat-data-provider';
-import type * as t from 'librechat-data-provider';
 import type { QueryClient, UseMutationResult } from '@tanstack/react-query';
+import type * as t from 'librechat-data-provider';
 
 /**
  * AGENTS
@@ -405,4 +405,10 @@ export const useRevertAgentVersionMutation = (
 
 export const invalidateAgentMarketplaceQueries = (queryClient: QueryClient) => {
   queryClient.invalidateQueries([QueryKeys.marketplaceAgents]);
+  /**
+   * Categories carry per-category counts and the synthetic "promoted" tab, both of
+   * which change when an agent is created, deleted, recategorized, or promoted.
+   * Without this the catalog keeps a stale tab list for its full staleTime.
+   */
+  queryClient.invalidateQueries([QueryKeys.agentCategories]);
 };

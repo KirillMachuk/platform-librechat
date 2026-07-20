@@ -6,6 +6,7 @@ import { Controller, useWatch, useFormContext } from 'react-hook-form';
 import {
   EModelEndpoint,
   PermissionTypes,
+  SystemRoles,
   Permissions,
   QueryKeys,
   dataService,
@@ -20,11 +21,12 @@ import {
   getIconKey,
   cn,
 } from '~/utils';
+import ConversationStarters from '~/components/SidePanel/Builder/AssistantConversationStarters';
+import { useLocalize, useVisibleTools, useHasAccess, useAuthContext } from '~/hooks';
 import { ToolSelectDialog, MCPToolSelectDialog } from '~/components/Tools';
 import useAgentCapabilities from '~/hooks/Agents/useAgentCapabilities';
 import { useListSkillsQuery, useGetAgentFiles } from '~/data-provider';
 import { useFileMapContext, useAgentPanelContext } from '~/Providers';
-import { useLocalize, useVisibleTools, useHasAccess } from '~/hooks';
 import { SkillSelectDialog } from '~/components/Skills/dialogs';
 import AgentCategorySelector from './AgentCategorySelector';
 import Action from '~/components/SidePanel/Builder/Action';
@@ -57,6 +59,7 @@ const inputClass = cn(
 
 export default function AgentConfig() {
   const localize = useLocalize();
+  const { user } = useAuthContext();
   const fileMap = useFileMapContext();
   const { showToast } = useToastContext();
   const methods = useFormContext<AgentForm>();
@@ -334,8 +337,43 @@ export default function AgentConfig() {
           </label>
           <AgentCategorySelector className="w-full" />
         </div>
+        {/* Promotion (admin-only; server rejects it for everyone else) */}
+        {user?.role === SystemRoles.ADMIN && agent_id && (
+          <div className="mb-4 flex items-center justify-between">
+            <label className="text-token-text-primary text-sm" htmlFor="is_promoted">
+              {localize('com_ui_agent_promote')}
+            </label>
+            <Controller
+              name="is_promoted"
+              control={control}
+              render={({ field }) => (
+                <Switch
+                  id="is_promoted"
+                  checked={field.value === true}
+                  onCheckedChange={field.onChange}
+                  aria-label={localize('com_ui_agent_promote')}
+                  data-testid="agent-promote-switch"
+                />
+              )}
+            />
+          </div>
+        )}
         {/* Instructions */}
         <Instructions />
+        {/* Conversation Starters */}
+        <div className="mb-4">
+          <Controller
+            name="conversation_starters"
+            control={control}
+            render={({ field }) => (
+              <ConversationStarters
+                field={{ ...field, value: field.value ?? [] }}
+                inputClass={inputClass}
+                labelClass={labelClass}
+              />
+            )}
+          />
+        </div>
         {/* Model and Provider */}
         <div className="mb-4">
           <label className={labelClass} htmlFor="provider">
