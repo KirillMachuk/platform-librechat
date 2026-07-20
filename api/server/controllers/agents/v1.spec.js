@@ -1256,8 +1256,76 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
         mockReq,
         expect.objectContaining({ filepath: '/images/avatar.png' }),
       );
-      expect(db.deleteFileByFilter).toHaveBeenCalledWith({ filepath: '/images/avatar.png' });
+      expect(db.deleteFileByFilter).toHaveBeenCalledWith({
+        user: mockReq.user.id,
+        filepath: '/images/avatar.png',
+      });
       expect(await Agent.findOne({ id: agent.id })).toBeNull();
+    });
+
+    /** `avatar.filepath` is client-supplied at create time, so an unscoped delete filter
+     *  would let anyone point a throwaway agent at someone else's file and remove it. */
+    test('deleteAgentHandler must scope the file delete to the agent owner', async () => {
+      const deleteFile = jest.fn().mockResolvedValue(undefined);
+      const { getStrategyFunctions } = require('~/server/services/Files/strategies');
+      getStrategyFunctions.mockReturnValueOnce({ deleteFile });
+      const db = require('~/models');
+      const attackerId = mockReq.user.id;
+      const victimPath = '/images/victim-user/private.png';
+
+      const agent = await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Crafted Avatar',
+        provider: 'openai',
+        model: 'gpt-4',
+        author: attackerId,
+        avatar: { filepath: victimPath, source: FileSources.vectordb },
+      });
+
+      mockReq.params.id = agent.id;
+
+      await deleteAgentHandler(mockReq, mockRes);
+
+      expect(db.deleteFileByFilter).toHaveBeenCalledWith({
+        user: attackerId,
+        filepath: victimPath,
+      });
+      expect(db.deleteFileByFilter).not.toHaveBeenCalledWith({ filepath: victimPath });
+    });
+
+    /** Duplicates inherit the original's avatar reference; deleting the copy must not
+     *  unlink the blob the original still shows. */
+    test('deleteAgentHandler must not delete an avatar another agent still references', async () => {
+      const deleteFile = jest.fn().mockResolvedValue(undefined);
+      const { getStrategyFunctions } = require('~/server/services/Files/strategies');
+      getStrategyFunctions.mockReturnValue({ deleteFile });
+      const db = require('~/models');
+      const sharedPath = '/images/shared-avatar.png';
+
+      await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Original',
+        provider: 'openai',
+        model: 'gpt-4',
+        author: mockReq.user.id,
+        avatar: { filepath: sharedPath, source: FileSources.local },
+      });
+      const copy = await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Copy',
+        provider: 'openai',
+        model: 'gpt-4',
+        author: mockReq.user.id,
+        avatar: { filepath: sharedPath, source: FileSources.local },
+      });
+
+      mockReq.params.id = copy.id;
+
+      await deleteAgentHandler(mockReq, mockRes);
+
+      expect(deleteFile).not.toHaveBeenCalled();
+      expect(db.deleteFileByFilter).not.toHaveBeenCalled();
+      expect(await Agent.findOne({ id: copy.id })).toBeNull();
     });
 
     test('deleteAgentHandler should still succeed when avatar cleanup fails', async () => {
