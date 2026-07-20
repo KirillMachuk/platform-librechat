@@ -3,8 +3,10 @@ const { tool } = require('@librechat/agents/langchain/tools');
 const {
   searchLibrary,
   getRagRerankConfig,
+  librarySearchSchema,
   generateShortLivedToken,
   getLibrarySearchConfig,
+  librarySearchDescription,
   LibrarySearchUnavailableError,
 } = require('@librechat/api');
 const { Tools } = require('librechat-data-provider');
@@ -33,64 +35,12 @@ const LIBRARY_FILTER_LIST_MAX = parseInt(process.env.LIBRARY_FILTER_LIST_MAX ?? 
  */
 const DEFAULT_DOC_TYPE = 'иное';
 
-/**
- * Канонические виды документов: извлекатель кладёт РОВНО одно из этих значений (правила
- * `DOC_TYPE_RULES` в doc-gateway `app/meta.py` схлопывают синонимы: контракт/соглашение →
- * «договор», регламент/инструкция/устав → «положение»). Модель обязана прислать значение
- * отсюда, а не то, как вид назван в самом документе, — иначе фильтр не совпадёт ни с чем.
+/*
+ * Схема и базовое описание тула живут в `@librechat/api` (tools/registry/definitions.ts) —
+ * ЕДИНЫЙ источник для event-driven реестра определений и для этого рантайм-инстанса.
+ * Локальная копия здесь уже приводила к расхождению: тул вооружался, но реестр его молча
+ * выбрасывал (запись отсутствовала) — модель получала ноль инструментов.
  */
-const DOC_TYPES = [
-  'договор',
-  'положение',
-  'приказ',
-  'бриф',
-  'таблица',
-  'акт',
-  'счёт',
-  'протокол',
-  'доверенность',
-  'письмо',
-  'отчёт',
-  'резюме',
-];
-
-const librarySearchJsonSchema = {
-  type: 'object',
-  properties: {
-    query: {
-      type: 'string',
-      description:
-        "A natural language query describing the document(s) or information to find across the user's whole library. Be specific — include any names, identifiers (document/article/invoice numbers, phone numbers, emails), dates, or topics the user mentions.",
-    },
-    doc_type: {
-      type: 'string',
-      enum: DOC_TYPES,
-      description:
-        'Optional. Narrow to one kind of document, ONLY when the user explicitly names it. The library stores ONE canonical kind per document — pass a value from the enum EXACTLY, never the wording used on the document or by the user. Map synonyms yourself: контракт/соглашение → "договор"; регламент/инструкция/политика/устав/правила/порядок/методика → "положение"; распоряжение → "приказ"; счёт-фактура/инвойс → "счёт"; CSV/Excel → "таблица". A kind that is not in the enum cannot be filtered — leave doc_type out and describe it in "query" instead.',
-    },
-    org: {
-      type: 'string',
-      description:
-        'Optional. Narrow to documents whose parties include this company or entrepreneur, ONLY when the user names one. Pass the bare name without the legal form: "Ромашка", not "ООО «Ромашка»".',
-    },
-    location: {
-      type: 'string',
-      description:
-        'Optional. The city from the document HEADER — where it was signed/drawn up (место составления). NOT the city the document is ABOUT: a lease signed in Минск over premises in Могилёв is location "Минск". So use this ONLY when the user asks where a document was made; if they may mean the subject (leased premises, branch, delivery address), leave it out and put the city in "query" instead. Bare city name: "Минск".',
-    },
-    date_from: {
-      type: 'string',
-      description:
-        "Optional. Earliest document date, ISO YYYY-MM-DD. For a whole year use 2025-01-01. Matches the document's OWN date, not dates mentioned in its text.",
-    },
-    date_to: {
-      type: 'string',
-      description:
-        'Optional. Latest document date, ISO YYYY-MM-DD. For a whole year use 2025-12-31.',
-    },
-  },
-  required: ['query'],
-};
 
 /** ISO date (YYYY-MM-DD) — сравнение таких строк лексикографически совпадает с хронологическим. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -536,21 +486,11 @@ const createLibrarySearchTool = async ({
       name: Tools.library_search,
       responseFormat: 'content_and_artifact',
       description:
-        `Searches the user's ENTIRE document library — every file they have uploaded — not only the documents attached to this chat. ` +
-        `Use it when the user wants to find or answer from a document that may be anywhere in their library, whatever its kind: contracts and agreements ("find the lease with company X"), ` +
-        `client tables and spreadsheets ("whose phone number is +375…", "find the contact for client Y"), regulations and policies ("what does article 119 say", "how do I arrange a business trip"), ` +
-        `briefs and reports ("the campaign brief for product Z"). Returns the most relevant documents grouped with their matching passages. ` +
-        `For documents explicitly attached to THIS chat, prefer "${Tools.file_search}".\n\n` +
-        `**FILTERS (doc_type / org / location / date_from / date_to)** narrow the library by attributes extracted from each document's header. ` +
-        `Set one ONLY when the user explicitly states that attribute ("все договоры с Ромашкой за 2024" → doc_type: "договор", org: "Ромашка", date_from: "2024-01-01", date_to: "2024-12-31"). ` +
-        `They are how you answer "покажи ВСЕ …" questions: plain search returns only the most relevant few, a filter returns the whole matching set. ` +
-        `Leave them out when the user did not name the attribute — a wrong filter hides the very document they want. ` +
-        `Never invent an attribute to "help" the search; put descriptive wording in "query" instead. ` +
-        `If a filtered search comes back empty, retry WITHOUT the filters before telling the user anything is missing.` +
+        librarySearchDescription +
         (fileCitations
           ? `\n\n**CITE LIBRARY SEARCH RESULTS:** Use the EXACT anchor markers shown in the results (copy them verbatim, e.g. \\ue202turn0file0) immediately after statements derived from a document, and mention the filename in your text. NEVER use markdown links or footnotes.`
           : ''),
-      schema: librarySearchJsonSchema,
+      schema: librarySearchSchema,
     },
   );
 };
@@ -562,5 +502,4 @@ module.exports = {
   buildFilterClause,
   buildUnfilterableClause,
   buildStatusNote,
-  librarySearchJsonSchema,
 };

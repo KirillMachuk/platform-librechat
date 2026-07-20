@@ -1,18 +1,25 @@
 const { Tools } = require('librechat-data-provider');
 
-jest.mock('@librechat/api', () => ({
-  generateShortLivedToken: jest.fn(() => 'jwt-token'),
-  getRagRerankConfig: jest.fn(() => null),
-  getLibrarySearchConfig: jest.fn(() => ({
-    poolSize: 48,
-    topDocuments: 5,
-    chunksPerDocument: 3,
-    timeoutMs: 30000,
-    rerankTimeoutMs: 8000,
-  })),
-  searchLibrary: jest.fn(),
-  LibrarySearchUnavailableError: class LibrarySearchUnavailableError extends Error {},
-}));
+jest.mock('@librechat/api', () => {
+  /* Schema/description come from the real registry (single source of truth) so these tests
+   * exercise the exact schema the model sees — only network/config seams are stubbed. */
+  const { librarySearchSchema, librarySearchDescription } = jest.requireActual('@librechat/api');
+  return {
+    librarySearchSchema,
+    librarySearchDescription,
+    generateShortLivedToken: jest.fn(() => 'jwt-token'),
+    getRagRerankConfig: jest.fn(() => null),
+    getLibrarySearchConfig: jest.fn(() => ({
+      poolSize: 48,
+      topDocuments: 5,
+      chunksPerDocument: 3,
+      timeoutMs: 30000,
+      rerankTimeoutMs: 8000,
+    })),
+    searchLibrary: jest.fn(),
+    LibrarySearchUnavailableError: class LibrarySearchUnavailableError extends Error {},
+  };
+});
 jest.mock('~/models', () => ({ getFiles: jest.fn(), countFiles: jest.fn() }));
 
 const { searchLibrary, LibrarySearchUnavailableError } = require('@librechat/api');
