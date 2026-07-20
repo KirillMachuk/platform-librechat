@@ -279,7 +279,14 @@ function relevanceOf(chunk: LibraryChunk): number {
 /**
  * Группировка ранжированных чанков по документам с сохранением порядка (лучший фрагмент
  * определяет позицию документа — «max score per doc»). Берём topDocuments документов,
- * на каждый — до chunksPerDocument лучших фрагментов.
+ * каждому гарантируем до chunksPerDocument лучших фрагментов.
+ *
+ * `chunksPerDocument` — это ГАРАНТИЯ на документ, а не жёсткий потолок: общий бюджет выдачи
+ * (`topDocuments * chunksPerDocument`, тот же, что и раньше) после раздачи гарантий
+ * распределяется по документам в порядке релевантности. Когда выдача схлопывается в один
+ * документ («что сказано в договоре с Ромашкой про расторжение»), он получает всю глубину
+ * вместо трёх фрагментов, а остальные 45 чанков пула больше не выбрасываются впустую.
+ * Выдача из topDocuments документов побайтово совпадает с прежней — потолок токенов не растёт.
  */
 function groupByDocument(
   rankedChunks: LibraryChunk[],
@@ -287,11 +294,21 @@ function groupByDocument(
   chunksPerDocument: number,
 ): LibraryChunk[][] {
   const byDoc = new Map<string, LibraryChunk[]>();
+  /** Чанки сверх гарантии, в порядке релевантности — источник для добора из общего бюджета. */
+  const spare = new Map<string, LibraryChunk[]>();
+
   for (const chunk of rankedChunks) {
     const existing = byDoc.get(chunk.fileId);
     if (existing) {
       if (existing.length < chunksPerDocument) {
         existing.push(chunk);
+      } else {
+        const extra = spare.get(chunk.fileId);
+        if (extra) {
+          extra.push(chunk);
+        } else {
+          spare.set(chunk.fileId, [chunk]);
+        }
       }
       continue;
     }
@@ -299,6 +316,29 @@ function groupByDocument(
       continue;
     }
     byDoc.set(chunk.fileId, [chunk]);
+  }
+
+  let remaining = topDocuments * chunksPerDocument;
+  for (const chunks of byDoc.values()) {
+    remaining -= chunks.length;
+  }
+  if (remaining > 0) {
+    /* Map сохраняет порядок вставки = порядок релевантности документов, поэтому добор идёт
+     * сверху вниз: самый релевантный документ раскрывается первым. */
+    for (const [fileId, chunks] of byDoc) {
+      const extra = spare.get(fileId);
+      if (!extra) {
+        continue;
+      }
+      const take = Math.min(remaining, extra.length);
+      for (let i = 0; i < take; i++) {
+        chunks.push(extra[i]);
+      }
+      remaining -= take;
+      if (remaining === 0) {
+        break;
+      }
+    }
   }
   return [...byDoc.values()];
 }
