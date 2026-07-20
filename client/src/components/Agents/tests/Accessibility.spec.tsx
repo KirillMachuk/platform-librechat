@@ -1,12 +1,12 @@
 import React from 'react';
+import * as t from 'librechat-data-provider';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CategoryTabs from '../CategoryTabs';
+import ErrorDisplay from '../ErrorDisplay';
 import AgentGrid from '../AgentGrid';
 import AgentCard from '../AgentCard';
 import SearchBar from '../SearchBar';
-import ErrorDisplay from '../ErrorDisplay';
-import * as t from 'librechat-data-provider';
 
 // Mock matchMedia
 Object.defineProperty(window, 'matchMedia', {
@@ -56,6 +56,8 @@ const mockLocalize = jest.fn((key: string, options?: any) => {
     com_agents_grid_announcement: `Showing ${options?.count} agents in ${options?.category} category`,
     com_agents_load_more_label: `Load more agents from ${options?.category} category`,
     com_agents_error_retry: 'Try Again',
+    com_agents_error_retry_label: `Retry action. ${options?.[0]}`,
+    com_agents_error_suggestion_label: `Suggestion: ${options?.[0]}`,
     com_agents_loading: 'Loading...',
     com_agents_empty_state_heading: 'No agents found',
     com_agents_search_empty_heading: 'No search results',

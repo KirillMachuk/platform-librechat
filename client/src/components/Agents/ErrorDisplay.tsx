@@ -192,7 +192,7 @@ export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({ error, onRetry, cont
               stroke="currentColor"
               aria-hidden="true"
               role="img"
-              aria-label="Error icon"
+              aria-label={localize('com_ui_error_icon')}
             >
               <path
                 strokeLinecap="round"
@@ -219,7 +219,7 @@ export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({ error, onRetry, cont
             className="text-sm text-gray-500 dark:text-gray-500"
             id="error-suggestion"
             role="note"
-            aria-label={`Suggestion: ${suggestion}`}
+            aria-label={localize('com_agents_error_suggestion_label', { 0: suggestion })}
           >
             💡 {suggestion}
           </p>
@@ -237,7 +237,7 @@ export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({ error, onRetry, cont
                 'dark:border-red-600 dark:text-red-400 dark:hover:bg-red-900/20 dark:focus:ring-red-400',
               )}
               aria-describedby="error-message error-suggestion"
-              aria-label={`Retry action. ${message}`}
+              aria-label={localize('com_agents_error_retry_label', { 0: message })}
             >
               {localize('com_agents_error_retry')}
             </Button>

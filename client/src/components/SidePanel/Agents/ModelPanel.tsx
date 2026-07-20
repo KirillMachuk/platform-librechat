@@ -51,18 +51,21 @@ export default function ModelPanel({
     const _model = model ?? '';
     if (provider && _model) {
       const modelExists = models.includes(_model);
+      /** Persist only the resolved model — writing the stale value back would re-poison the next form init */
+      const resolvedModel = modelExists ? _model : (models[0] ?? '');
       if (!modelExists) {
-        const newModels = modelsData[provider] ?? [];
-        setValue('model', newModels[0] ?? '');
+        setValue('model', resolvedModel);
       }
-      localStorage.setItem(LocalStorageKeys.LAST_AGENT_MODEL, _model);
-      localStorage.setItem(LocalStorageKeys.LAST_AGENT_PROVIDER, provider);
+      if (resolvedModel) {
+        localStorage.setItem(LocalStorageKeys.LAST_AGENT_MODEL, resolvedModel);
+        localStorage.setItem(LocalStorageKeys.LAST_AGENT_PROVIDER, provider);
+      }
     }
 
     if (provider && !_model) {
       setValue('model', models[0] ?? '');
     }
-  }, [provider, models, modelsData, setValue, model]);
+  }, [provider, models, setValue, model]);
 
   const { data: endpointsConfig = {} } = useGetEndpointsQuery();
 

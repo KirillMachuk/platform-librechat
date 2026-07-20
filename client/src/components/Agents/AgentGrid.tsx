@@ -3,8 +3,8 @@ import { Spinner } from '@librechat/client';
 import { PermissionBits } from 'librechat-data-provider';
 import type t from 'librechat-data-provider';
 import { useMarketplaceAgentsInfiniteQuery } from '~/data-provider/Agents';
-import { useAgentCategories, useLocalize } from '~/hooks';
 import { useInfiniteScroll } from '~/hooks/useInfiniteScroll';
+import { useAgentCategories, useLocalize } from '~/hooks';
 import { useHasData } from './SmartLoader';
 import ErrorDisplay from './ErrorDisplay';
 import AgentCard from './AgentCard';
@@ -12,7 +12,9 @@ import AgentCard from './AgentCard';
 interface AgentGridProps {
   category: string;
   searchQuery: string;
-  onSelectAgent: (agent: t.Agent) => void;
+  onSelectAgent?: (agent: t.Agent) => void;
+  onEditAgent?: (agent: t.Agent) => void;
+  onStartChat?: () => void;
   scrollElementRef?: React.RefObject<HTMLElement>;
 }
 
@@ -23,6 +25,8 @@ const AgentGrid: React.FC<AgentGridProps> = ({
   category,
   searchQuery,
   onSelectAgent,
+  onEditAgent,
+  onStartChat,
   scrollElementRef,
 }) => {
   const localize = useLocalize();
@@ -119,7 +123,7 @@ const AgentGrid: React.FC<AgentGridProps> = ({
       return localize('com_agents_top_picks');
     }
     if (categoryValue === 'all') {
-      return 'All';
+      return localize('com_agents_all_category');
     }
 
     // Simple capitalization for unknown categories
@@ -137,7 +141,7 @@ const AgentGrid: React.FC<AgentGridProps> = ({
   if (error) {
     return (
       <ErrorDisplay
-        error={error || 'Unknown error occurred'}
+        error={error || localize('com_ui_error_unexpected')}
         onRetry={() => refetch()}
         context={{
           searchQuery,
@@ -193,7 +197,12 @@ const AgentGrid: React.FC<AgentGridProps> = ({
             >
               {currentAgents.map((agent: t.Agent, index: number) => (
                 <div key={`${agent.id}-${index}`} role="gridcell">
-                  <AgentCard agent={agent} onSelect={onSelectAgent} />
+                  <AgentCard
+                    agent={agent}
+                    onSelect={onSelectAgent}
+                    onEdit={onEditAgent}
+                    onStartChat={onStartChat}
+                  />
                 </div>
               ))}
             </div>

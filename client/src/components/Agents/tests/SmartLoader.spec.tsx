@@ -313,58 +313,23 @@ describe('useHasData', () => {
     expect(screen.getByTestId('result')).toHaveTextContent('no-data');
   });
 
-  it('detects empty agents array as no data', () => {
-    render(<TestComponent data={{ agents: [] }} />);
+  it('detects an empty agent list page as no data', () => {
+    render(<TestComponent data={{ data: [], has_more: false }} />);
     expect(screen.getByTestId('result')).toHaveTextContent('no-data');
   });
 
-  it('detects non-empty agents array as has data', () => {
-    render(<TestComponent data={{ agents: [{ id: '1', name: 'Test' }] }} />);
+  it('detects a non-empty agent list page as has data', () => {
+    render(<TestComponent data={{ data: [{ id: 'agent_1', name: 'Test' }], has_more: false }} />);
     expect(screen.getByTestId('result')).toHaveTextContent('has-data');
   });
 
-  it('detects invalid agents property as no data', () => {
-    render(<TestComponent data={{ agents: 'not-array' }} />);
+  it('detects a malformed data property as no data', () => {
+    render(<TestComponent data={{ data: 'not-array' }} />);
     expect(screen.getByTestId('result')).toHaveTextContent('no-data');
   });
 
-  it('detects empty array as no data', () => {
-    render(<TestComponent data={[]} />);
-    expect(screen.getByTestId('result')).toHaveTextContent('no-data');
-  });
-
-  it('detects non-empty array as has data', () => {
-    render(<TestComponent data={[{ name: 'category1' }]} />);
-    expect(screen.getByTestId('result')).toHaveTextContent('has-data');
-  });
-
-  it('detects agent with id as has data', () => {
-    render(<TestComponent data={{ id: '123', name: 'Test Agent' }} />);
-    expect(screen.getByTestId('result')).toHaveTextContent('has-data');
-  });
-
-  it('detects agent with name only as has data', () => {
-    render(<TestComponent data={{ name: 'Test Agent' }} />);
-    expect(screen.getByTestId('result')).toHaveTextContent('has-data');
-  });
-
-  it('detects object without id or name as no data', () => {
-    render(<TestComponent data={{ description: 'Some description' }} />);
-    expect(screen.getByTestId('result')).toHaveTextContent('no-data');
-  });
-
-  it('handles string data as no data', () => {
-    render(<TestComponent data="some string" />);
-    expect(screen.getByTestId('result')).toHaveTextContent('no-data');
-  });
-
-  it('handles number data as no data', () => {
-    render(<TestComponent data={42} />);
-    expect(screen.getByTestId('result')).toHaveTextContent('no-data');
-  });
-
-  it('handles boolean data as no data', () => {
-    render(<TestComponent data={true} />);
+  it('detects an object without a data property as no data', () => {
+    render(<TestComponent data={{ agents: [{ id: 'agent_1' }] }} />);
     expect(screen.getByTestId('result')).toHaveTextContent('no-data');
   });
 });

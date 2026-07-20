@@ -380,7 +380,12 @@ router.post('/chat/abort', async (req, res) => {
   return res.status(404).json({ error: 'Job not found', streamId: jobStreamId });
 });
 
-router.use('/', v1);
+/**
+ * CRUD needs `req.config` for capability-aware validation (subagent grants are
+ * checked against `endpoints.agents.capabilities`); without it those guards
+ * silently no-op. The config is cached, so this adds no per-request I/O.
+ */
+router.use('/', configMiddleware, v1);
 
 const chatRouter = express.Router();
 chatRouter.use(configMiddleware);

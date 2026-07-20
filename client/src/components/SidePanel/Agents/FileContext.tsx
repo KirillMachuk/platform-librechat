@@ -51,7 +51,7 @@ function FileContext({
   const { handleSharePointFiles, isProcessing, downloadProgress } =
     useSharePointFileHandlingNoChatContext(
       {
-        additionalMetadata: { agent_id, tool_resource: EToolResources.file_search },
+        additionalMetadata: { agent_id, tool_resource: EToolResources.context },
         endpointOverride,
         endpointTypeOverride: endpointType,
         fileSetter: setFiles,

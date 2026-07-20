@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo, memo } from 'react';
-import { Plus, ChevronLeft } from 'lucide-react';
 import { Button } from '@librechat/client';
+import { Plus, ChevronLeft } from 'lucide-react';
 import { PermissionTypes, Permissions } from 'librechat-data-provider';
 import type t from 'librechat-data-provider';
 import { useGetAgentCategoriesQuery, useGetEndpointsQuery } from '~/data-provider';
@@ -9,8 +9,6 @@ import { useLocalize, useHasAccess } from '~/hooks';
 import CategoryTabs from './CategoryTabs';
 import SearchBar from './SearchBar';
 import AgentGrid from './AgentGrid';
-
-type View = 'catalog' | 'builder';
 
 function resolveCategoryLabel(
   category: string,
@@ -28,10 +26,16 @@ function resolveCategoryLabel(
   return found?.label ?? category;
 }
 
-function CatalogView() {
+function CatalogView({
+  onEditAgent,
+  onStartChat,
+}: {
+  onEditAgent: (agent: t.Agent) => void;
+  onStartChat?: () => void;
+}) {
   const localize = useLocalize();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [displayCategory, setDisplayCategory] = useState<string>('promoted');
+  const [displayCategory, setDisplayCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   useGetEndpointsQuery();
@@ -43,9 +47,18 @@ function CatalogView() {
     refetchOnMount: false,
   });
 
-  const handleAgentSelect = useCallback((_agent: t.Agent) => {
-    // AgentCard opens AgentDetailContent dialog internally; nothing else needed.
-  }, []);
+  /**
+   * The server only includes the synthetic "promoted" tab when promoted agents
+   * exist; defaulting to it unconditionally rendered an empty catalog. Fall back
+   * to "all" until the user picks a tab.
+   */
+  const activeCategory = useMemo(() => {
+    if (displayCategory !== null) {
+      return displayCategory;
+    }
+    const hasPromoted = categoriesQuery.data?.some((cat) => cat.value === 'promoted') ?? false;
+    return hasPromoted ? 'promoted' : 'all';
+  }, [displayCategory, categoriesQuery.data]);
 
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query.trim());
@@ -58,8 +71,8 @@ function CatalogView() {
   const topPicksLabel = localize('com_agents_top_picks');
   const allLabel = localize('com_agents_all');
   const headingLabel = useMemo(
-    () => resolveCategoryLabel(displayCategory, categoriesQuery.data, topPicksLabel, allLabel),
-    [displayCategory, categoriesQuery.data, topPicksLabel, allLabel],
+    () => resolveCategoryLabel(activeCategory, categoriesQuery.data, topPicksLabel, allLabel),
+    [activeCategory, categoriesQuery.data, topPicksLabel, allLabel],
   );
 
   return (
@@ -74,7 +87,7 @@ function CatalogView() {
           </div>
           <CategoryTabs
             categories={categoriesQuery.data || []}
-            activeTab={displayCategory}
+            activeTab={activeCategory}
             isLoading={categoriesQuery.isLoading}
             onChange={handleTabChange}
           />
@@ -87,10 +100,11 @@ function CatalogView() {
           </div>
         )}
         <AgentGrid
-          key={`grid-${displayCategory}`}
-          category={displayCategory}
+          key={`grid-${activeCategory}`}
+          category={activeCategory}
           searchQuery={searchQuery}
-          onSelectAgent={handleAgentSelect}
+          onEditAgent={onEditAgent}
+          onStartChat={onStartChat}
           scrollElementRef={scrollContainerRef}
         />
       </div>
@@ -98,21 +112,23 @@ function CatalogView() {
   );
 }
 
-function AgentsPanel() {
+function AgentsPanel({ onClose }: { onClose?: () => void }) {
   const localize = useLocalize();
-  const [view, setView] = useState<View>('catalog');
+  /** `null` = catalog view; `''` = builder with a blank form; `agent_xxx` = builder editing that agent */
+  const [builderTarget, setBuilderTarget] = useState<string | null>(null);
   const canCreateAgents = useHasAccess({
     permissionType: PermissionTypes.AGENTS,
     permission: Permissions.CREATE,
   });
 
-  const goBuilder = useCallback(() => setView('builder'), []);
-  const goCatalog = useCallback(() => setView('catalog'), []);
+  const goNewAgent = useCallback(() => setBuilderTarget(''), []);
+  const goCatalog = useCallback(() => setBuilderTarget(null), []);
+  const handleEditAgent = useCallback((agent: t.Agent) => setBuilderTarget(agent.id), []);
 
   return (
     <div className="flex h-full w-full flex-col">
       <div className="flex items-center justify-between border-b border-border-light px-4 py-2">
-        {view === 'catalog' ? (
+        {builderTarget === null ? (
           <>
             <span className="text-sm font-medium text-text-primary">
               {localize('com_ui_agents')}
@@ -122,7 +138,7 @@ function AgentsPanel() {
                 variant="default"
                 size="sm"
                 className="h-8 gap-1.5 rounded-lg px-3"
-                onClick={goBuilder}
+                onClick={goNewAgent}
                 data-testid="agents-create-button"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
@@ -144,7 +160,11 @@ function AgentsPanel() {
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
-        {view === 'catalog' ? <CatalogView /> : <AgentPanelSwitch />}
+        {builderTarget === null ? (
+          <CatalogView onEditAgent={handleEditAgent} onStartChat={onClose} />
+        ) : (
+          <AgentPanelSwitch agentId={builderTarget} />
+        )}
       </div>
     </div>
   );

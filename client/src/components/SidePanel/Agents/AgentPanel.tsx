@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useRef, useState } from 'react';
+import React, { useMemo, useCallback, useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button, useToastContext } from '@librechat/client';
 import { useWatch, useForm, FormProvider } from 'react-hook-form';
@@ -9,6 +9,7 @@ import {
   ResourceType,
   EModelEndpoint,
   PermissionBits,
+  LocalStorageKeys,
   isAssistantsEndpoint,
 } from 'librechat-data-provider';
 import type { FieldNamesMarkedBoolean } from 'react-hook-form';
@@ -22,7 +23,11 @@ import {
   useGetExpandedAgentByIdQuery,
   useUploadAgentAvatarMutation,
 } from '~/data-provider';
-import { createProviderOption, getDefaultAgentFormValues } from '~/utils';
+import {
+  createProviderOption,
+  getDefaultAgentFormValues,
+  resolveDefaultProviderModel,
+} from '~/utils';
 import { useResourcePermissions } from '~/hooks/useResourcePermissions';
 import { useSelectAgent, useLocalize, useAuthContext } from '~/hooks';
 import { useAgentPanelContext } from '~/Providers/AgentPanelContext';
@@ -322,6 +327,48 @@ export default function AgentPanel() {
     [endpointsConfig, allowedProviders],
   );
 
+  /**
+   * Self-heal a fresh form seeded from stale localStorage: a provider/model pin
+   * that is no longer configured would otherwise pass the truthiness checks and
+   * fail on the server. Runs only for new agents and untouched fields.
+   */
+  useEffect(() => {
+    if (agent_id) {
+      return;
+    }
+    if (providers.length === 0 || Object.keys(models).length === 0) {
+      return;
+    }
+    if (dirtyFields.provider != null || dirtyFields.model != null) {
+      return;
+    }
+    const currentProvider = getValues('provider');
+    const providerValue =
+      (typeof currentProvider === 'string'
+        ? currentProvider
+        : (currentProvider as StringOption | undefined)?.value) ?? '';
+    const currentModel = getValues('model') ?? '';
+    const resolved = resolveDefaultProviderModel({
+      providers: providers.map((option) => `${option.value}`),
+      modelsData: models,
+      storedProvider: providerValue,
+      storedModel: currentModel,
+    });
+    if (resolved.provider === providerValue && resolved.model === currentModel) {
+      return;
+    }
+    if (resolved.provider !== providerValue) {
+      setValue('provider', createProviderOption(resolved.provider));
+    }
+    if (resolved.model !== currentModel) {
+      setValue('model', resolved.model);
+    }
+    if (resolved.provider && resolved.model) {
+      localStorage.setItem(LocalStorageKeys.LAST_AGENT_PROVIDER, resolved.provider);
+      localStorage.setItem(LocalStorageKeys.LAST_AGENT_MODEL, resolved.model);
+    }
+  }, [agent_id, providers, models, dirtyFields.provider, dirtyFields.model, getValues, setValue]);
+
   /* Mutations */
   const update = useUpdateAgentMutation({
     onMutate: () => {
@@ -446,7 +493,8 @@ export default function AgentPanel() {
         return;
       }
 
-      if (!provider || !model) {
+      const isKnownProvider = providers.some((option) => option.value === provider);
+      if (!provider || !model || !isKnownProvider) {
         return showToast({
           message: localize('com_agents_missing_provider_model'),
           status: 'error',
@@ -461,7 +509,7 @@ export default function AgentPanel() {
 
       create.mutate({ ...basePayload, model, tools, provider });
     },
-    [agent_id, create, dirtyFields, handleAvatarUpload, update, showToast, localize],
+    [agent_id, create, providers, dirtyFields, handleAvatarUpload, update, showToast, localize],
   );
 
   const handleSelectAgent = useCallback(() => {
