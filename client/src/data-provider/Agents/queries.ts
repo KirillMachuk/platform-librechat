@@ -185,7 +185,12 @@ export const useMarketplaceAgentsInfiniteQuery = (
     cacheTime: 10 * 60 * 1000, // 10 minutes
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: false,
+    /**
+     * Must stay refetch-on-mount: the catalog unmounts whenever the builder opens, so
+     * creating or deleting an agent invalidates a query that is inactive at that moment.
+     * With `false` the remount served the stale list and the change only appeared after a
+     * hard refresh. `staleTime` still suppresses refetches for untouched data.
+     */
     ...config,
   });
 };

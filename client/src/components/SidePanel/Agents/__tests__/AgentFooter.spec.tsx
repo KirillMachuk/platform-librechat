@@ -312,6 +312,18 @@ describe('AgentFooter', () => {
       expect(screen.queryByTestId('version-button')).not.toBeInTheDocument();
     });
 
+    test('hides the submit button on the model sub-panel so the agent is only saved from the builder', () => {
+      render(<AgentFooter {...defaultProps} activePanel={Panel.model} />);
+      expect(screen.queryByText('Save')).not.toBeInTheDocument();
+      expect(screen.queryByText('Create')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('delete-button')).not.toBeInTheDocument();
+    });
+
+    test('hides the submit button on the advanced sub-panel', () => {
+      render(<AgentFooter {...defaultProps} activePanel={Panel.advanced} />);
+      expect(screen.queryByText('Save')).not.toBeInTheDocument();
+    });
+
     test('adjusts UI based on agent ID existence', () => {
       mockUseWatch.mockImplementation(({ name }) => {
         if (name === 'agent') {
