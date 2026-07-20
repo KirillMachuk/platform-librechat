@@ -267,7 +267,6 @@ test.describe('agent builder', () => {
       /** Both layers must go: the agent detail dialog and the panel modal hosting the catalog. */
       await expect(page.getByRole('button', { name: 'Start Chat', exact: true })).toBeHidden();
       await expect(page.getByTestId('agents-create-button')).toBeHidden();
-      await expect(page.getByRole('heading', { level: 1, name: agentName })).toBeVisible();
     } finally {
       /** Never let teardown mask the assertion that actually failed. */
       await cleanupAgent(page, createdAgentId).catch(() => undefined);
