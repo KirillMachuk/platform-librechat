@@ -1829,6 +1829,56 @@ describe('Agent Methods', () => {
       expect(revertedAgent.description).toBe('Original description');
     });
 
+    test('should not restore promotion when reverting — reverting needs only EDIT', async () => {
+      const agentId = `agent_${uuidv4()}`;
+      const Agent = mongoose.models.Agent;
+
+      await createAgent({
+        id: agentId,
+        name: 'Original Agent',
+        provider: 'test',
+        model: 'test-model',
+        author: new mongoose.Types.ObjectId(),
+      });
+
+      /** An admin promotes it, so the snapshot taken afterwards carries the flag */
+      await Agent.updateOne({ id: agentId }, { $set: { is_promoted: true } });
+      await updateAgent({ id: agentId }, { name: 'Promoted Era' });
+      await Agent.updateOne({ id: agentId }, { $set: { is_promoted: false } });
+      await updateAgent({ id: agentId }, { name: 'Demoted Era' });
+
+      const agentBefore = await Agent.findOne({ id: agentId }).lean();
+      const promotedVersionIndex = (agentBefore!.versions as unknown[]).length - 2;
+      const revertedAgent = await revertAgentVersion({ id: agentId }, promotedVersionIndex);
+
+      expect(revertedAgent.is_promoted).not.toBe(true);
+      const agentInDb = await Agent.findOne({ id: agentId }).lean();
+      expect(agentInDb!.is_promoted).not.toBe(true);
+    });
+
+    /** A promotion-only update must still be written. Excluding `is_promoted` from the
+     *  duplicate-version comparison makes such an update look like a no-op change, and
+     *  the duplicate branch returns without applying it — the toggle silently fails. */
+    test('should persist a promotion-only update even when nothing else changed', async () => {
+      const agentId = `agent_${uuidv4()}`;
+      const Agent = mongoose.models.Agent;
+
+      await createAgent({
+        id: agentId,
+        name: 'Original Agent',
+        provider: 'test',
+        model: 'test-model',
+        author: new mongoose.Types.ObjectId(),
+      });
+      await updateAgent({ id: agentId }, { name: 'Settled Agent' });
+
+      await updateAgent({ id: agentId }, { is_promoted: true });
+      expect((await Agent.findOne({ id: agentId }).lean())!.is_promoted).toBe(true);
+
+      await updateAgent({ id: agentId }, { is_promoted: false });
+      expect((await Agent.findOne({ id: agentId }).lean())!.is_promoted).toBe(false);
+    });
+
     test('should prune deleted skill ids when reverting to an older version', async () => {
       const agentId = `agent_${uuidv4()}`;
       const authorId = new mongoose.Types.ObjectId();
