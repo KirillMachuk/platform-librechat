@@ -11,11 +11,11 @@ import {
 import type { TAttachment } from 'librechat-data-provider';
 import { useLocalize, useProgress, useExpandCollapse } from '~/hooks';
 import { ToolIcon, getToolIconType, isError } from './ToolOutput';
+import { logger, parseToolName } from '~/utils';
 import { useMCPIconMap } from '~/hooks/MCP';
 import { AttachmentGroup } from './Parts';
 import ToolCallInfo from './ToolCallInfo';
 import ProgressText from './ProgressText';
-import { logger } from '~/utils';
 import store from '~/store';
 
 export default function ToolCall({
@@ -106,6 +106,14 @@ export default function ToolCall({
   }, [name, parsedAuthUrl]);
 
   const toolIconType = useMemo(() => getToolIconType(name), [name]);
+
+  /* Native tools show their localized friendly name, exactly as ToolCallGroup already does
+   * for grouped headers — a raw id like "open_document" is developer-speak, not UI. MCP and
+   * action ids never match the friendly map, so their display is unchanged. */
+  const displayName = useMemo(() => {
+    const { friendlyKey } = parseToolName(name ?? '');
+    return friendlyKey != null ? localize(friendlyKey) : function_name;
+  }, [name, function_name, localize]);
   const mcpIconMap = useMCPIconMap();
   const mcpIconUrl = isMCPToolCall ? mcpIconMap.get(mcpServerName) : undefined;
 
@@ -195,7 +203,7 @@ export default function ToolCall({
     if (domain != null && domain && domain.length !== Constants.ENCODED_DOMAIN_LENGTH) {
       return localize('com_assistants_completed_action', { 0: domain });
     }
-    return localize('com_assistants_completed_function', { 0: function_name });
+    return localize('com_assistants_completed_function', { 0: displayName });
   };
 
   if (!isLast && (!function_name || function_name.length === 0) && !output) {
@@ -207,8 +215,8 @@ export default function ToolCall({
       <span className="sr-only" aria-live="polite" aria-atomic="true">
         {(() => {
           if (progress < 1 && !showCancelled) {
-            return function_name
-              ? localize('com_assistants_running_var', { 0: function_name })
+            return displayName
+              ? localize('com_assistants_running_var', { 0: displayName })
               : localize('com_assistants_running_action');
           }
           return getFinishedText();
@@ -219,8 +227,8 @@ export default function ToolCall({
           progress={progress}
           onClick={handleToggleInfo}
           inProgressText={
-            function_name
-              ? localize('com_assistants_running_var', { 0: function_name })
+            displayName
+              ? localize('com_assistants_running_var', { 0: displayName })
               : localize('com_assistants_running_action')
           }
           authText={

@@ -189,8 +189,9 @@ export async function loadAddedAgent(
     // The "search files" toggle arms library_search alone (searches the whole library plus this
     // chat's attachments) — mirrors loadEphemeralAgent so multi-conversation additions behave
     // identically. file_search is force-armed separately by applyConversationFileContext only
-    // when the toggle is off; see loadEphemeralAgent for the full rationale.
-    tools.push(Tools.library_search);
+    // when the toggle is off; see loadEphemeralAgent for the full rationale. open_document rides
+    // along so a found document can also be read in full.
+    tools.push(Tools.library_search, Tools.open_document);
   }
   if ((ephemeralAgent?.web_search === true || modelSpec?.webSearch === true) && !reasoningModel) {
     tools.push(Tools.web_search);

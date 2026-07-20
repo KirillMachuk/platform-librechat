@@ -433,7 +433,7 @@ function formatMatchedList(
   }
   const lines = documents.map((doc, index) => {
     const card = renderCard(doc.docMetadata);
-    return `${index + 1}. ${doc.filename}${card ? ` — ${card}` : ''}`;
+    return `${index + 1}. ${doc.filename}${card ? ` — ${card}` : ''} — Document ID: ${doc.fileId}`;
   });
   const truncated = total > documents.length;
   const head = truncated
@@ -482,7 +482,12 @@ function formatResult(
       citationIndex += 1;
       return `${anchor}\nRelevance: ${relevance.toFixed(4)}\nContent: ${chunk.content}`;
     });
-    blocks.push(`Document: ${filename}${card ? `\n${card}` : ''}${chunkLines.join('\n')}`);
+    /* The stable handle for the second step: passages are excerpts, so when the user asks about
+     * one of these documents in depth the model needs an id to pass to open_document. */
+    const documentId = group[0]?.fileId ?? '';
+    blocks.push(
+      `Document: ${filename}${card ? `\n${card}` : ''}\nDocument ID: ${documentId}${chunkLines.join('\n')}`,
+    );
   }
   return { content: blocks.join('\n\n---\n\n'), sources };
 }

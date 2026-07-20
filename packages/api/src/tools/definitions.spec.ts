@@ -192,18 +192,19 @@ describe('definitions.ts', () => {
         expect(calcDef?.parameters).toBeDefined();
       });
 
-      it('resolves library_search and file_search — the search toggle tools must never be dropped', async () => {
+      it('resolves the document tools — library_search, open_document and file_search must never be dropped', async () => {
         /* Regression: library_search was armed (nativeTools/handleTools all wired) but had NO
            registry entry, so this loader silently dropped it — streaming chats ran with ZERO
-           tools and the model claimed no documents were accessible. */
-        mockIsBuiltInTool.mockImplementation(
-          (name) => name === 'library_search' || name === 'file_search',
-        );
+           tools and the model claimed no documents were accessible. open_document is the second
+           half of the same workflow and is armed by the same toggle, so it is guarded here too:
+           without it the model can find a document but never read one. */
+        const documentTools = ['library_search', 'open_document', 'file_search'];
+        mockIsBuiltInTool.mockImplementation((name) => documentTools.includes(name));
 
         const params: LoadToolDefinitionsParams = {
           userId: 'user-123',
           agentId: 'agent-123',
-          tools: ['library_search', 'file_search'],
+          tools: documentTools,
         };
 
         const deps: LoadToolDefinitionsDeps = {
@@ -213,12 +214,18 @@ describe('definitions.ts', () => {
 
         const result = await loadToolDefinitions(params, deps);
 
+        for (const name of documentTools) {
+          expect(result.toolDefinitions.find((d) => d.name === name)).toBeDefined();
+          expect(result.toolRegistry.has(name)).toBe(true);
+        }
+
         const libraryDef = result.toolDefinitions.find((d) => d.name === 'library_search');
-        expect(libraryDef).toBeDefined();
         expect(libraryDef?.parameters?.required).toEqual(['query']);
         expect(libraryDef?.parameters?.properties).toHaveProperty('doc_type');
-        expect(result.toolRegistry.has('library_search')).toBe(true);
-        expect(result.toolDefinitions.find((d) => d.name === 'file_search')).toBeDefined();
+
+        const openDef = result.toolDefinitions.find((d) => d.name === 'open_document');
+        expect(openDef?.parameters?.required).toEqual(['document_id']);
+        expect(openDef?.parameters?.properties).toHaveProperty('offset');
       });
 
       it('does not resolve `execute_code` as a builtin tool definition (registered by initializeAgent instead)', async () => {

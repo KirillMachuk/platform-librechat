@@ -69,7 +69,7 @@ export function getToolIconType(name: string): ToolIconType {
   if (name === 'skill') {
     return 'skill';
   }
-  if (name === 'read_file') {
+  if (name === 'read_file' || name === 'open_document') {
     return 'read_file';
   }
   if (name === 'bash_tool' || name === Constants.BASH_PROGRAMMATIC_TOOL_CALLING) {
