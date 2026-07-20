@@ -121,6 +121,14 @@ export async function loadEphemeralAgent(
     }
   }
 
+  /* Observability for the "toggle is green but no tool fired" class: one line per ephemeral
+   * turn showing what the CLIENT sent (toggle booleans — no user content) versus what was
+   * armed. Splits frontend transmission bugs (file_search absent here despite a green toggle)
+   * from backend arming bugs (file_search=true here but tools empty) without redeploying. */
+  logger.info(
+    `[loadEphemeralAgent] armed=[${tools.join(',')}] sent={file_search:${ephemeralAgent?.file_search ?? 'unset'},web_search:${ephemeralAgent?.web_search ?? 'unset'},execute_code:${ephemeralAgent?.execute_code ?? 'unset'},mcp:${mcpServers.size}} model=${model} reasoning=${reasoningModel} spec=${spec ?? ''}`,
+  );
+
   const requestPromptPrefix = req.body?.promptPrefix;
   const { promptPrefix: modelPromptPrefix, ...safeModelParameters } =
     model_parameters as ModelParametersWithPromptPrefix;
