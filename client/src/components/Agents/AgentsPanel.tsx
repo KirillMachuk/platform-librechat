@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo, memo } from 'react';
-import { Plus, ChevronLeft } from 'lucide-react';
 import { Button } from '@librechat/client';
+import { Plus, ChevronLeft } from 'lucide-react';
 import { PermissionTypes, Permissions } from 'librechat-data-provider';
 import type t from 'librechat-data-provider';
 import { useGetAgentCategoriesQuery, useGetEndpointsQuery } from '~/data-provider';
@@ -26,7 +26,13 @@ function resolveCategoryLabel(
   return found?.label ?? category;
 }
 
-function CatalogView({ onEditAgent }: { onEditAgent: (agent: t.Agent) => void }) {
+function CatalogView({
+  onEditAgent,
+  onStartChat,
+}: {
+  onEditAgent: (agent: t.Agent) => void;
+  onStartChat?: () => void;
+}) {
   const localize = useLocalize();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [displayCategory, setDisplayCategory] = useState<string | null>(null);
@@ -98,6 +104,7 @@ function CatalogView({ onEditAgent }: { onEditAgent: (agent: t.Agent) => void })
           category={activeCategory}
           searchQuery={searchQuery}
           onEditAgent={onEditAgent}
+          onStartChat={onStartChat}
           scrollElementRef={scrollContainerRef}
         />
       </div>
@@ -105,7 +112,7 @@ function CatalogView({ onEditAgent }: { onEditAgent: (agent: t.Agent) => void })
   );
 }
 
-function AgentsPanel() {
+function AgentsPanel({ onClose }: { onClose?: () => void }) {
   const localize = useLocalize();
   /** `null` = catalog view; `''` = builder with a blank form; `agent_xxx` = builder editing that agent */
   const [builderTarget, setBuilderTarget] = useState<string | null>(null);
@@ -154,7 +161,7 @@ function AgentsPanel() {
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
         {builderTarget === null ? (
-          <CatalogView onEditAgent={handleEditAgent} />
+          <CatalogView onEditAgent={handleEditAgent} onStartChat={onClose} />
         ) : (
           <AgentPanelSwitch agentId={builderTarget} />
         )}

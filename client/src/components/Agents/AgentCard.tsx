@@ -9,13 +9,20 @@ interface AgentCardProps {
   agent: t.Agent;
   onSelect?: (agent: t.Agent) => void;
   onEdit?: (agent: t.Agent) => void;
+  onStartChat?: () => void;
   className?: string;
 }
 
 /**
  * Card component to display agent information with integrated detail dialog
  */
-const AgentCard: React.FC<AgentCardProps> = ({ agent, onSelect, onEdit, className = '' }) => {
+const AgentCard: React.FC<AgentCardProps> = ({
+  agent,
+  onSelect,
+  onEdit,
+  onStartChat,
+  className = '',
+}) => {
   const localize = useLocalize();
   const { categories } = useAgentCategories();
   const [isOpen, setIsOpen] = useState(false);
@@ -125,7 +132,7 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent, onSelect, onEdit, classNam
         </div>
       </OGDialogTrigger>
 
-      <AgentDetailContent agent={agent} onEdit={handleEdit} />
+      <AgentDetailContent agent={agent} onEdit={handleEdit} onStartChat={onStartChat} />
     </OGDialog>
   );
 };

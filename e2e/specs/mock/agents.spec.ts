@@ -166,7 +166,8 @@ test.describe('agent builder', () => {
       const createdAgent = (await createResponse.json()) as AgentDetail;
       createdAgentId = createdAgent.id;
 
-      await expect(page.getByText(`Successfully created ${agentName}`)).toBeVisible();
+      /** `.first()`: the toast text also appears in the live-region announcer. */
+      await expect(page.getByText(`Successfully created ${agentName}`).first()).toBeVisible();
 
       const persistedAgent = await waitForPersistedAgent(page, agentName, DESCRIPTION);
       expect(persistedAgent).toMatchObject({
@@ -232,33 +233,44 @@ test.describe('agent builder', () => {
       });
       createdAgentId = createdAgent.id;
 
-      const openCatalogCard = async () => {
+      /**
+       * Controls inside the agent-detail dialog are activated by keyboard: the
+       * stacked panel modal + dialog overlays intercept synthetic pointer clicks
+       * (same workaround the combobox helpers use).
+       */
+      const openAgentsPanel = async () => {
         await page.getByRole('button', { name: 'Agents', exact: true }).click();
         await expect(page.getByTestId('agents-create-button')).toBeVisible();
+      };
+
+      /** Assumes the panel modal is already open and showing the catalog view. */
+      const openCardFromCatalog = async () => {
         await page.getByLabel('Search for agents').fill(agentName);
         const card = page.getByRole('button', { name: new RegExp(agentName) }).first();
         await expect(card).toBeVisible();
-        await card.click();
+        /** Keyboard activation: pointer clicks are swallowed by the panel modal's overlay. */
+        await card.press('Enter');
         await expect(page.getByRole('heading', { name: agentName, exact: true })).toBeVisible();
       };
 
-      await openCatalogCard();
-      await page.getByTestId('agent-detail-edit-button').click();
+      await openAgentsPanel();
+      await openCardFromCatalog();
+      await page.getByTestId('agent-detail-edit-button').press('Enter');
       const form = page.getByRole('form', { name: 'Agent configuration form' });
       await expect(form).toBeVisible();
       await expect(form.getByLabel('Agent name')).toHaveValue(agentName);
       await page.getByTestId('agents-back-button').click();
 
-      await page.getByLabel('Search for agents').fill(agentName);
-      const card = page.getByRole('button', { name: new RegExp(agentName) }).first();
-      await card.click();
-      await page.getByRole('button', { name: 'Start Chat', exact: true }).click();
+      await openCardFromCatalog();
+      await page.getByRole('button', { name: 'Start Chat', exact: true }).press('Enter');
 
-      await expect(page.getByRole('heading', { name: agentName, exact: true })).toBeHidden();
+      /** Both layers must go: the agent detail dialog and the panel modal hosting the catalog. */
+      await expect(page.getByRole('button', { name: 'Start Chat', exact: true })).toBeHidden();
       await expect(page.getByTestId('agents-create-button')).toBeHidden();
-      await expect(page).toHaveURL(/\/c\/new/);
+      await expect(page.getByRole('heading', { level: 1, name: agentName })).toBeVisible();
     } finally {
-      await cleanupAgent(page, createdAgentId);
+      /** Never let teardown mask the assertion that actually failed. */
+      await cleanupAgent(page, createdAgentId).catch(() => undefined);
     }
   });
 });

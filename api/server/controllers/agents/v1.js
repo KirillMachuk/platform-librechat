@@ -837,6 +837,8 @@ const duplicateAgentHandler = async (req, res) => {
       tool_resources: _tool_resources = {},
       versions: _versions,
       __v: _v,
+      /** Promotion is a catalog-curation decision about the original, not a copyable trait */
+      is_promoted: _is_promoted,
       ...cloneData
     } = agent;
     cloneData.name = `${agent.name} (${new Date().toLocaleString('en-US', {
@@ -966,6 +968,19 @@ const duplicateAgentHandler = async (req, res) => {
         `[duplicateAgent] Failed to grant owner permissions for duplicated agent ${newAgent.id}:`,
         permissionError,
       );
+      /** Mirrors createAgent: an agent without an owner grant is invisible to its creator */
+      try {
+        await db.deleteAgent({ id: newAgent.id });
+        logger.warn(
+          `[duplicateAgent] Rolled back orphaned agent ${newAgent.id} after grant failure`,
+        );
+      } catch (rollbackError) {
+        logger.error(
+          `[duplicateAgent] Failed to roll back orphaned agent ${newAgent.id}; manual cleanup required:`,
+          rollbackError,
+        );
+      }
+      return res.status(500).json({ error: 'Failed to duplicate agent' });
     }
 
     return res.status(201).json({
@@ -976,6 +991,31 @@ const duplicateAgentHandler = async (req, res) => {
     logger.error('[/Agents/:id/duplicate] Error duplicating Agent:', error);
 
     res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * Removes an agent's avatar blob and its File record. Best-effort: a storage
+ * failure must not fail the agent deletion that already succeeded, but leaving
+ * the blob behind orphans it forever (the avatar-replace path cleans up the same way).
+ * @param {ServerRequest} req
+ * @param {Agent} agent
+ */
+const deleteAgentAvatarFile = async (req, agent) => {
+  const avatar = agent?.avatar;
+  if (!avatar?.source || !avatar.filepath) {
+    return;
+  }
+  try {
+    const { deleteFile } = getStrategyFunctions(avatar.source);
+    await deleteFile(req, {
+      filepath: avatar.filepath,
+      user: agent.author?.toString?.() ?? req.user.id,
+      tenantId: req.user.tenantId,
+    });
+    await db.deleteFileByFilter({ filepath: avatar.filepath });
+  } catch (error) {
+    logger.error(`[deleteAgent] Error deleting avatar for agent ${agent.id}`, error);
   }
 };
 
@@ -995,6 +1035,7 @@ const deleteAgentHandler = async (req, res) => {
       return res.status(404).json({ error: 'Agent not found' });
     }
     await db.deleteAgent({ id });
+    await deleteAgentAvatarFile(req, agent);
     return res.json({ message: 'Agent deleted' });
   } catch (error) {
     logger.error('[/Agents/:id] Error deleting Agent', error);

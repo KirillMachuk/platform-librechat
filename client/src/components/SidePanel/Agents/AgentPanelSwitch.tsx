@@ -23,17 +23,28 @@ export default function AgentPanelSwitch({ agentId }: { agentId?: string }) {
 function AgentPanelSwitchWithContext({ agentId }: { agentId?: string }) {
   const { activePanel, setCurrentAgentId } = useAgentPanelContext();
   const conversationAgentId = useRecoilValue(store.conversationAgentIdByIndex(0));
+  const isControlled = agentId !== undefined;
+
+  /**
+   * Seeds the builder target and re-seeds only when the caller picks a different
+   * agent — the in-panel agent switcher owns the selection from then on.
+   */
+  useEffect(() => {
+    if (!isControlled) {
+      return;
+    }
+    setCurrentAgentId(agentId);
+  }, [setCurrentAgentId, agentId, isControlled]);
 
   useEffect(() => {
-    if (agentId !== undefined) {
-      setCurrentAgentId(agentId);
+    if (isControlled) {
       return;
     }
     const agent_id = conversationAgentId ?? '';
     if (!isEphemeralAgent(agent_id)) {
       setCurrentAgentId(agent_id);
     }
-  }, [setCurrentAgentId, conversationAgentId, agentId]);
+  }, [setCurrentAgentId, conversationAgentId, isControlled]);
 
   if (activePanel === Panel.actions) {
     return <ActionsPanel />;

@@ -589,6 +589,20 @@ async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, to
     return true;
   });
 
+  /**
+   * A tool configured on the agent but dropped here never reaches the model and the
+   * user sees no sign of it — surface the gap for operators diagnosing "the agent
+   * ignores its tools" reports.
+   */
+  if (agent.tools?.length && filteredTools && filteredTools.length !== agent.tools.length) {
+    const droppedTools = agent.tools.filter((tool) => !filteredTools.includes(tool));
+    logger.warn(
+      `[loadToolDefinitions] Capability disabled despite configured tool(s) for agent ${
+        agent.id ?? 'unknown'
+      }: ${droppedTools.join(', ')}`,
+    );
+  }
+
   if (!filteredTools || filteredTools.length === 0) {
     return { toolDefinitions: [] };
   }

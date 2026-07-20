@@ -1,9 +1,9 @@
 import React from 'react';
 import { RecoilRoot } from 'recoil';
+import { MessagesSquare, NotebookPen } from 'lucide-react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { render, fireEvent, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MessagesSquare, NotebookPen } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { NavLink } from '~/common';
 
@@ -211,8 +211,8 @@ describe('ExpandedPanel', () => {
     });
   });
 
-  describe('navigation closes PanelDialog', () => {
-    it('closes the open dialog when the app navigates, including to the same pathname', async () => {
+  describe('unrelated navigation keeps PanelDialog open', () => {
+    it('stays open when the app navigates for its own reasons (panel content dismisses itself)', async () => {
       renderPanelWithNavigation();
 
       fireEvent.click(screen.getByRole('button', { name: 'com_ui_prompts' }));
@@ -220,7 +220,7 @@ describe('ExpandedPanel', () => {
 
       fireEvent.click(screen.getByTestId('navigate-away'));
 
-      await waitFor(() => expect(screen.queryByTestId('panel-dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.getByTestId('panel-dialog')).toBeInTheDocument());
     });
   });
 });

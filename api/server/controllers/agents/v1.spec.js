@@ -74,6 +74,7 @@ const {
   createAgent: createAgentHandler,
   getAgent: getAgentHandler,
   duplicateAgent: duplicateAgentHandler,
+  deleteAgent: deleteAgentHandler,
   revertAgentVersion: revertAgentVersionHandler,
   updateAgent: updateAgentHandler,
   getListAgents: getListAgentsHandler,
@@ -1177,6 +1178,103 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       const { agent } = mockRes.json.mock.calls[0][0];
       expect(agent.author.toString()).toBe(cloneAuthorId.toString());
       expect(agent.tool_resources.context.file_ids).toEqual([cloneAuthorFileId]);
+    });
+
+    test('deleteAgentHandler should remove the avatar blob and its file record', async () => {
+      const deleteFile = jest.fn().mockResolvedValue(undefined);
+      const { getStrategyFunctions } = require('~/server/services/Files/strategies');
+      getStrategyFunctions.mockReturnValueOnce({ deleteFile });
+      const db = require('~/models');
+
+      const agent = await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Agent With Avatar',
+        provider: 'openai',
+        model: 'gpt-4',
+        author: mockReq.user.id,
+        avatar: { filepath: '/images/avatar.png', source: FileSources.local },
+      });
+
+      mockReq.params.id = agent.id;
+
+      await deleteAgentHandler(mockReq, mockRes);
+
+      expect(getStrategyFunctions).toHaveBeenCalledWith(FileSources.local);
+      expect(deleteFile).toHaveBeenCalledWith(
+        mockReq,
+        expect.objectContaining({ filepath: '/images/avatar.png' }),
+      );
+      expect(db.deleteFileByFilter).toHaveBeenCalledWith({ filepath: '/images/avatar.png' });
+      expect(await Agent.findOne({ id: agent.id })).toBeNull();
+    });
+
+    test('deleteAgentHandler should still succeed when avatar cleanup fails', async () => {
+      const { getStrategyFunctions } = require('~/server/services/Files/strategies');
+      getStrategyFunctions.mockReturnValueOnce({
+        deleteFile: jest.fn().mockRejectedValue(new Error('storage down')),
+      });
+
+      const agent = await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Agent With Avatar',
+        provider: 'openai',
+        model: 'gpt-4',
+        author: mockReq.user.id,
+        avatar: { filepath: '/images/avatar.png', source: FileSources.local },
+      });
+
+      mockReq.params.id = agent.id;
+
+      await deleteAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.json).toHaveBeenCalledWith({ message: 'Agent deleted' });
+      expect(await Agent.findOne({ id: agent.id })).toBeNull();
+    });
+
+    test('duplicateAgentHandler should not carry over promotion to the copy', async () => {
+      const sourceAgent = await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Promoted Agent',
+        provider: 'openai',
+        model: 'gpt-4',
+        author: new mongoose.Types.ObjectId(),
+        category: 'hr',
+        is_promoted: true,
+      });
+
+      const db = require('~/models');
+      jest.spyOn(db, 'getActions').mockResolvedValueOnce([]);
+
+      mockReq.params.id = sourceAgent.id;
+
+      await duplicateAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+      const { agent } = mockRes.json.mock.calls[0][0];
+      expect(agent.is_promoted).toBe(false);
+      expect(agent.category).toBe('hr');
+    });
+
+    test('duplicateAgentHandler should roll back the copy when owner grants fail', async () => {
+      const sourceAgent = await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Source Agent',
+        provider: 'openai',
+        model: 'gpt-4',
+        author: new mongoose.Types.ObjectId(),
+      });
+
+      const db = require('~/models');
+      jest.spyOn(db, 'getActions').mockResolvedValueOnce([]);
+      grantPermission.mockRejectedValueOnce(new Error('grant failed'));
+
+      mockReq.params.id = sourceAgent.id;
+
+      await duplicateAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      const agentsAfter = await Agent.find({ author: mockReq.user.id });
+      expect(agentsAfter).toHaveLength(0);
     });
 
     test('revertAgentVersionHandler should prune restored file_ids not owned by the agent author', async () => {

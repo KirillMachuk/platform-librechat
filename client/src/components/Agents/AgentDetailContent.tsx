@@ -1,6 +1,6 @@
 import React from 'react';
-import { Link, Pencil, Pin, PinOff } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Link, Pencil, Pin, PinOff } from 'lucide-react';
 import { OGDialogContent, Button, useToastContext } from '@librechat/client';
 import {
   QueryKeys,
@@ -30,13 +30,15 @@ interface AgentWithSupport extends t.Agent {
 interface AgentDetailContentProps {
   agent: AgentWithSupport;
   onEdit?: () => void;
+  /** Dismisses the surrounding panel modal once the chat has been opened underneath it */
+  onStartChat?: () => void;
 }
 
 /**
  * Dialog content for displaying agent details
  * Used inside OGDialog with OGDialogTrigger for proper focus management
  */
-const AgentDetailContent: React.FC<AgentDetailContentProps> = ({ agent, onEdit }) => {
+const AgentDetailContent: React.FC<AgentDetailContentProps> = ({ agent, onEdit, onStartChat }) => {
   const localize = useLocalize();
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
@@ -95,6 +97,13 @@ const AgentDetailContent: React.FC<AgentDetailContentProps> = ({ agent, onEdit }
         template: currentConvo,
         preset: template,
       });
+
+      /**
+       * The catalog lives inside a panel modal that survives navigation, so the new
+       * chat would open behind it. Upstream's catalog was a route, which unmounted
+       * on navigate; here the dismissal has to be explicit.
+       */
+      onStartChat?.();
     }
   };
 
