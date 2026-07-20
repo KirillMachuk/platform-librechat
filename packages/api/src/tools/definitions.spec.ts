@@ -192,6 +192,35 @@ describe('definitions.ts', () => {
         expect(calcDef?.parameters).toBeDefined();
       });
 
+      it('resolves library_search and file_search — the search toggle tools must never be dropped', async () => {
+        /* Regression: library_search was armed (nativeTools/handleTools all wired) but had NO
+           registry entry, so this loader silently dropped it — streaming chats ran with ZERO
+           tools and the model claimed no documents were accessible. */
+        mockIsBuiltInTool.mockImplementation(
+          (name) => name === 'library_search' || name === 'file_search',
+        );
+
+        const params: LoadToolDefinitionsParams = {
+          userId: 'user-123',
+          agentId: 'agent-123',
+          tools: ['library_search', 'file_search'],
+        };
+
+        const deps: LoadToolDefinitionsDeps = {
+          getOrFetchMCPServerTools: mockGetOrFetchMCPServerTools,
+          isBuiltInTool: mockIsBuiltInTool,
+        };
+
+        const result = await loadToolDefinitions(params, deps);
+
+        const libraryDef = result.toolDefinitions.find((d) => d.name === 'library_search');
+        expect(libraryDef).toBeDefined();
+        expect(libraryDef?.parameters?.required).toEqual(['query']);
+        expect(libraryDef?.parameters?.properties).toHaveProperty('doc_type');
+        expect(result.toolRegistry.has('library_search')).toBe(true);
+        expect(result.toolDefinitions.find((d) => d.name === 'file_search')).toBeDefined();
+      });
+
       it('does not resolve `execute_code` as a builtin tool definition (registered by initializeAgent instead)', async () => {
         /* Phase 8: the legacy `CodeExecutionToolDefinition` is no longer in
            the registry. `execute_code` stays in `agent.tools` as the

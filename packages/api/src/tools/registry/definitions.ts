@@ -350,6 +350,84 @@ export const fileSearchSchema: ExtendedJsonSchema = {
   required: ['query'],
 };
 
+/**
+ * Library Search tool JSON schema — the single source of truth, consumed by BOTH the
+ * event-driven definitions path (this registry) and the runtime tool instance
+ * (`api/app/clients/tools/util/librarySearch.js`). The runtime instance alone is not
+ * enough: `loadToolDefinitions` silently drops any armed tool that has no registry
+ * entry, which shipped as "toggle on, zero tools armed" on streaming chats.
+ *
+ * `doc_type` enum mirrors the canonical kinds the metadata extractor emits (doc-gateway
+ * `app/meta.py` DOC_TYPE_RULES collapses synonyms) — a value outside this enum can never
+ * match a stored document.
+ */
+export const librarySearchSchema: ExtendedJsonSchema = {
+  type: 'object',
+  properties: {
+    query: {
+      type: 'string',
+      description:
+        "A natural language query describing the document(s) or information to find across the user's whole library. Be specific — include any names, identifiers (document/article/invoice numbers, phone numbers, emails), dates, or topics the user mentions.",
+    },
+    doc_type: {
+      type: 'string',
+      enum: [
+        'договор',
+        'положение',
+        'приказ',
+        'бриф',
+        'таблица',
+        'акт',
+        'счёт',
+        'протокол',
+        'доверенность',
+        'письмо',
+        'отчёт',
+        'резюме',
+      ],
+      description:
+        'Optional. Narrow to one kind of document, ONLY when the user explicitly names it. The library stores ONE canonical kind per document — pass a value from the enum EXACTLY, never the wording used on the document or by the user. Map synonyms yourself: контракт/соглашение → "договор"; регламент/инструкция/политика/устав/правила/порядок/методика → "положение"; распоряжение → "приказ"; счёт-фактура/инвойс → "счёт"; CSV/Excel → "таблица". A kind that is not in the enum cannot be filtered — leave doc_type out and describe it in "query" instead.',
+    },
+    org: {
+      type: 'string',
+      description:
+        'Optional. Narrow to documents whose parties include this company or entrepreneur, ONLY when the user names one. Pass the bare name without the legal form: "Ромашка", not "ООО «Ромашка»".',
+    },
+    location: {
+      type: 'string',
+      description:
+        'Optional. The city from the document HEADER — where it was signed/drawn up (место составления). NOT the city the document is ABOUT: a lease signed in Минск over premises in Могилёв is location "Минск". So use this ONLY when the user asks where a document was made; if they may mean the subject (leased premises, branch, delivery address), leave it out and put the city in "query" instead. Bare city name: "Минск".',
+    },
+    date_from: {
+      type: 'string',
+      description:
+        "Optional. Earliest document date, ISO YYYY-MM-DD. For a whole year use 2025-01-01. Matches the document's OWN date, not dates mentioned in its text.",
+    },
+    date_to: {
+      type: 'string',
+      description:
+        'Optional. Latest document date, ISO YYYY-MM-DD. For a whole year use 2025-12-31.',
+    },
+  },
+  required: ['query'],
+};
+
+/**
+ * Base library_search description shared by the registry entry and the runtime tool
+ * (which appends a citation-format block when the user has FILE_CITATIONS).
+ */
+export const librarySearchDescription =
+  `Searches the user's documents: their ENTIRE library — every file they have uploaded — plus any documents attached to this chat. ` +
+  `Use it whenever the user wants to find or answer from a document, whatever its kind: contracts and agreements ("find the lease with company X"), ` +
+  `client tables and spreadsheets ("whose phone number is +375…", "find the contact for client Y"), regulations and policies ("what does article 119 say", "how do I arrange a business trip"), ` +
+  `briefs and reports ("the campaign brief for product Z"). Returns the most relevant documents grouped with their matching passages.\n\n` +
+  `**FILTERS (doc_type / org / location / date_from / date_to)** narrow the library by attributes extracted from each document's header. ` +
+  `Set one ONLY when the user explicitly states that attribute ("все договоры с Ромашкой за 2024" → doc_type: "договор", org: "Ромашка", date_from: "2024-01-01", date_to: "2024-12-31"). ` +
+  `They are how you answer "покажи ВСЕ …" questions: plain search returns only the most relevant few, a filter returns the whole matching set. ` +
+  `Leave them out when the user did not name the attribute — a wrong filter hides the very document they want. ` +
+  `Never invent an attribute to "help" the search; put descriptive wording in "query" instead. ` +
+  `If a filtered search comes back empty, retry WITHOUT the filters before telling the user anything is missing.`;
+
 /** Tool definitions registry - maps tool names to their definitions */
 export const toolDefinitions: Record<string, ToolRegistryDefinition> = {
   google: {
@@ -421,6 +499,13 @@ export const toolDefinitions: Record<string, ToolRegistryDefinition> = {
     description:
       'Performs semantic search across attached "file_search" documents using natural language queries. This tool analyzes the content of uploaded files to find relevant information, quotes, and passages that best match your query.',
     schema: fileSearchSchema,
+    toolType: 'builtin',
+    responseFormat: 'content_and_artifact',
+  },
+  library_search: {
+    name: 'library_search',
+    description: librarySearchDescription,
+    schema: librarySearchSchema,
     toolType: 'builtin',
     responseFormat: 'content_and_artifact',
   },
