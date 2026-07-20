@@ -1,5 +1,6 @@
 import React from 'react';
 import { RecoilRoot } from 'recoil';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { render, fireEvent, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MessagesSquare, NotebookPen } from 'lucide-react';
@@ -98,7 +99,9 @@ function renderPanel({
 } = {}) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={createQueryClient()}>
-      <RecoilRoot>{children}</RecoilRoot>
+      <RecoilRoot>
+        <MemoryRouter initialEntries={['/c/new']}>{children}</MemoryRouter>
+      </RecoilRoot>
     </QueryClientProvider>
   );
 
@@ -108,6 +111,40 @@ function renderPanel({
   );
 
   return { ...result, onCollapse, onExpand };
+}
+
+/** Renders a navigate button alongside the panel to simulate in-app navigation (e.g. "Start chat"). */
+function renderPanelWithNavigation(links = createLinks()) {
+  const NavigateButton = () => {
+    const navigate = useNavigate();
+    return (
+      <button
+        data-testid="navigate-away"
+        aria-label="navigate-away"
+        onClick={() => navigate('/c/new')}
+      />
+    );
+  };
+
+  return render(
+    <QueryClientProvider client={createQueryClient()}>
+      <RecoilRoot>
+        <MemoryRouter initialEntries={['/c/new']}>
+          <Routes>
+            <Route
+              path="*"
+              element={
+                <>
+                  <ExpandedPanel links={links} expanded />
+                  <NavigateButton />
+                </>
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </RecoilRoot>
+    </QueryClientProvider>,
+  );
 }
 
 describe('ExpandedPanel', () => {
@@ -171,6 +208,19 @@ describe('ExpandedPanel', () => {
 
       expect(screen.getByTestId('panel-dialog')).toBeInTheDocument();
       expect(screen.getByTestId('panel-dialog')).toHaveTextContent('com_ui_prompts');
+    });
+  });
+
+  describe('navigation closes PanelDialog', () => {
+    it('closes the open dialog when the app navigates, including to the same pathname', async () => {
+      renderPanelWithNavigation();
+
+      fireEvent.click(screen.getByRole('button', { name: 'com_ui_prompts' }));
+      expect(screen.getByTestId('panel-dialog')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('navigate-away'));
+
+      await waitFor(() => expect(screen.queryByTestId('panel-dialog')).not.toBeInTheDocument());
     });
   });
 });

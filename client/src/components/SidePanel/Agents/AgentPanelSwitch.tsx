@@ -7,24 +7,33 @@ import ActionsPanel from './ActionsPanel';
 import AgentPanel from './AgentPanel';
 import store from '~/store';
 
-export default function AgentPanelSwitch() {
+/**
+ * `agentId` is the explicit builder target: `''` opens a blank form, an agent id
+ * opens that agent. When omitted, the builder follows the active conversation's
+ * agent (legacy side-panel behavior).
+ */
+export default function AgentPanelSwitch({ agentId }: { agentId?: string }) {
   return (
     <AgentPanelProvider>
-      <AgentPanelSwitchWithContext />
+      <AgentPanelSwitchWithContext agentId={agentId} />
     </AgentPanelProvider>
   );
 }
 
-function AgentPanelSwitchWithContext() {
+function AgentPanelSwitchWithContext({ agentId }: { agentId?: string }) {
   const { activePanel, setCurrentAgentId } = useAgentPanelContext();
-  const agentId = useRecoilValue(store.conversationAgentIdByIndex(0));
+  const conversationAgentId = useRecoilValue(store.conversationAgentIdByIndex(0));
 
   useEffect(() => {
-    const agent_id = agentId ?? '';
+    if (agentId !== undefined) {
+      setCurrentAgentId(agentId);
+      return;
+    }
+    const agent_id = conversationAgentId ?? '';
     if (!isEphemeralAgent(agent_id)) {
       setCurrentAgentId(agent_id);
     }
-  }, [setCurrentAgentId, agentId]);
+  }, [setCurrentAgentId, conversationAgentId, agentId]);
 
   if (activePanel === Panel.actions) {
     return <ActionsPanel />;

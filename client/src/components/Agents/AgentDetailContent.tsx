@@ -1,17 +1,20 @@
 import React from 'react';
-import { Link, Pin, PinOff } from 'lucide-react';
+import { Link, Pencil, Pin, PinOff } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { OGDialogContent, Button, useToastContext } from '@librechat/client';
 import {
   QueryKeys,
   Constants,
+  SystemRoles,
+  ResourceType,
   EModelEndpoint,
   PermissionBits,
   LocalStorageKeys,
   AgentListResponse,
 } from 'librechat-data-provider';
 import type t from 'librechat-data-provider';
-import { useLocalize, useDefaultConvo, useFavorites } from '~/hooks';
+import { useLocalize, useDefaultConvo, useFavorites, useAuthContext } from '~/hooks';
+import { useResourcePermissions } from '~/hooks/useResourcePermissions';
 import { renderAgentAvatar, clearMessagesCache } from '~/utils';
 import { useChatContext } from '~/Providers';
 
@@ -26,20 +29,29 @@ interface AgentWithSupport extends t.Agent {
 
 interface AgentDetailContentProps {
   agent: AgentWithSupport;
+  onEdit?: () => void;
 }
 
 /**
  * Dialog content for displaying agent details
  * Used inside OGDialog with OGDialogTrigger for proper focus management
  */
-const AgentDetailContent: React.FC<AgentDetailContentProps> = ({ agent }) => {
+const AgentDetailContent: React.FC<AgentDetailContentProps> = ({ agent, onEdit }) => {
   const localize = useLocalize();
+  const { user } = useAuthContext();
   const queryClient = useQueryClient();
   const { showToast } = useToastContext();
   const getDefaultConversation = useDefaultConvo();
   const { conversation, newConversation } = useChatContext();
   const { isFavoriteAgent, toggleFavoriteAgent } = useFavorites();
   const isFavorite = isFavoriteAgent(agent?.id);
+
+  const { hasPermission } = useResourcePermissions(ResourceType.AGENT, agent?._id ?? '');
+  const canEditAgent =
+    onEdit != null &&
+    (agent?.author === user?.id ||
+      user?.role === SystemRoles.ADMIN ||
+      hasPermission(PermissionBits.EDIT));
 
   const handleFavoriteClick = () => {
     if (agent) {
@@ -181,6 +193,18 @@ const AgentDetailContent: React.FC<AgentDetailContentProps> = ({ agent }) => {
         >
           <Link className="h-4 w-4" aria-hidden="true" />
         </Button>
+        {canEditAgent && (
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={onEdit}
+            title={localize('com_ui_edit')}
+            aria-label={localize('com_ui_edit')}
+            data-testid="agent-detail-edit-button"
+          >
+            <Pencil className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        )}
         <Button
           variant="submit"
           className="w-full max-w-xs"

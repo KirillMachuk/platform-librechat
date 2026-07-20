@@ -1,5 +1,6 @@
-import { memo, useCallback, useState, lazy, Suspense } from 'react';
+import { memo, useCallback, useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { useRecoilValue } from 'recoil';
 import { SquarePen } from 'lucide-react';
 import { QueryKeys } from 'librechat-data-provider';
@@ -120,6 +121,24 @@ function ExpandedPanel({
   const localize = useLocalize();
   const [activeLink, setActiveLink] = useState<NavLink | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  /**
+   * Panel content (Agents "Start chat", Skills/Prompts items) can navigate the app
+   * under the open dialog; close it on any navigation so the user lands on the
+   * destination instead of behind the modal. Keyed on `location.key` because
+   * "start chat" from a fresh chat re-navigates to the same `/c/new` pathname.
+   * In-panel interactions only touch local state, so this never fires mid-browsing.
+   */
+  const location = useLocation();
+  const prevLocationKeyRef = useRef(location.key);
+  useEffect(() => {
+    if (prevLocationKeyRef.current === location.key) {
+      return;
+    }
+    prevLocationKeyRef.current = location.key;
+    setDialogOpen(false);
+    setActiveLink(null);
+  }, [location.key]);
 
   const toggleLabel = expanded ? 'com_nav_close_sidebar' : 'com_nav_open_sidebar';
   const toggleClick = expanded ? onCollapse : onExpand;

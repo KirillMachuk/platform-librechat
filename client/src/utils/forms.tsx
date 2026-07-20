@@ -57,6 +57,28 @@ export const getDefaultAgentFormValues = () => ({
   avatar_action: null,
 });
 
+/**
+ * Resolves a valid provider+model pair for a fresh agent form. localStorage may
+ * hold a pin from an endpoint that no longer exists; fall back to the first
+ * configured provider and its first model so the form never submits a stale pin.
+ */
+export const resolveDefaultProviderModel = ({
+  providers,
+  modelsData,
+  storedProvider,
+  storedModel,
+}: {
+  providers: string[];
+  modelsData: Record<string, string[] | undefined>;
+  storedProvider: string;
+  storedModel: string;
+}): { provider: string; model: string } => {
+  const provider = providers.includes(storedProvider) ? storedProvider : (providers[0] ?? '');
+  const providerModels = modelsData[provider] ?? [];
+  const model = providerModels.includes(storedModel) ? storedModel : (providerModels[0] ?? '');
+  return { provider, model };
+};
+
 export const processAgentOption = ({
   agent: _agent,
   fileMap,

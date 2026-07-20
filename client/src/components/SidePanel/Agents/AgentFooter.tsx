@@ -8,7 +8,7 @@ import {
   PermissionBits,
   PermissionTypes,
 } from 'librechat-data-provider';
-import type { AgentForm, AgentPanelProps } from '~/common';
+import type { AgentForm, AgentPanelProps, StringOption } from '~/common';
 import { useLocalize, useAuthContext, useHasAccess, useResourcePermissions } from '~/hooks';
 import { GenericGrantAccessDialog } from '~/components/Sharing';
 import { useUpdateAgentMutation } from '~/data-provider';
@@ -41,6 +41,17 @@ export default function AgentFooter({
   const { control } = methods;
   const agent = useWatch({ control, name: 'agent' });
   const agent_id = useWatch({ control, name: 'id' });
+  const name = useWatch({ control, name: 'name' });
+  const model = useWatch({ control, name: 'model' });
+  const providerOption = useWatch({ control, name: 'provider' });
+  const providerValue =
+    (typeof providerOption === 'string'
+      ? providerOption
+      : (providerOption as StringOption | undefined)?.value) ?? '';
+  const isIncomplete = !name?.trim() || !model || !providerValue;
+  const incompleteMessage = !name?.trim()
+    ? localize('com_agents_missing_name')
+    : localize('com_agents_missing_provider_model');
   const hasAccessToShareAgents = useHasAccess({
     permissionType: PermissionTypes.AGENTS,
     permission: Permissions.SHARE,
@@ -125,8 +136,9 @@ export default function AgentFooter({
         <button
           className="btn btn-primary focus:shadow-outline flex h-9 w-full items-center justify-center px-4 py-2 font-semibold text-white hover:bg-green-600 focus:border-green-500"
           type="submit"
-          disabled={isSaving}
+          disabled={isSaving || isIncomplete}
           aria-busy={isSaving}
+          title={isIncomplete ? incompleteMessage : undefined}
         >
           {renderSaveButton()}
         </button>
