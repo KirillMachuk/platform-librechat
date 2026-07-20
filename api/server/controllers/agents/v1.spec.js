@@ -649,6 +649,58 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       expect(agentInDb.name).toBe('Updated Agent');
     });
 
+    test('should ignore is_promoted from a non-admin', async () => {
+      mockReq.user.id = existingAgentAuthorId.toString();
+      mockReq.user.role = 'USER';
+      mockReq.params.id = existingAgentId;
+      mockReq.body = { name: 'Self Promoted', is_promoted: true };
+
+      await updateAgentHandler(mockReq, mockRes);
+
+      const agentInDb = await Agent.findOne({ id: existingAgentId });
+      expect(agentInDb.name).toBe('Self Promoted');
+      expect(agentInDb.is_promoted).toBe(false);
+    });
+
+    test('should apply is_promoted from an admin', async () => {
+      mockReq.user.id = existingAgentAuthorId.toString();
+      mockReq.user.role = 'ADMIN';
+      mockReq.params.id = existingAgentId;
+      mockReq.body = { is_promoted: true };
+
+      await updateAgentHandler(mockReq, mockRes);
+
+      const agentInDb = await Agent.findOne({ id: existingAgentId });
+      expect(agentInDb.is_promoted).toBe(true);
+    });
+
+    test('should let an admin demote a promoted agent', async () => {
+      await Agent.updateOne({ id: existingAgentId }, { $set: { is_promoted: true } });
+      mockReq.user.id = existingAgentAuthorId.toString();
+      mockReq.user.role = 'ADMIN';
+      mockReq.params.id = existingAgentId;
+      mockReq.body = { is_promoted: false };
+
+      await updateAgentHandler(mockReq, mockRes);
+
+      const agentInDb = await Agent.findOne({ id: existingAgentId });
+      expect(agentInDb.is_promoted).toBe(false);
+    });
+
+    test('should persist conversation_starters', async () => {
+      mockReq.user.id = existingAgentAuthorId.toString();
+      mockReq.params.id = existingAgentId;
+      mockReq.body = { conversation_starters: ['Как оформить отпуск?', 'Сроки согласования?'] };
+
+      await updateAgentHandler(mockReq, mockRes);
+
+      const agentInDb = await Agent.findOne({ id: existingAgentId });
+      expect(agentInDb.conversation_starters).toEqual([
+        'Как оформить отпуск?',
+        'Сроки согласования?',
+      ]);
+    });
+
     test('should reject switching to a reasoning model while tools are present (E-H1)', async () => {
       // Give the existing agent a tool, then try to switch its model to a reasoning one
       await Agent.updateOne({ id: existingAgentId }, { $set: { tools: ['file_search'] } });

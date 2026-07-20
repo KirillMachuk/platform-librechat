@@ -1,6 +1,7 @@
 import { memo, useCallback } from 'react';
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react';
 import type { NavLink } from '~/common';
+import { PanelDismissProvider } from './dismiss';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
@@ -75,7 +76,9 @@ function PanelDialog({ link, open, onOpenChange }: PanelDialogProps) {
                 </button>
               </DialogTitle>
               <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden text-text-primary">
-                {Component ? <Component onClose={handleClose} /> : null}
+                <PanelDismissProvider onDismiss={handleClose}>
+                  {Component ? <Component onClose={handleClose} /> : null}
+                </PanelDismissProvider>
               </div>
             </DialogPanel>
           </div>

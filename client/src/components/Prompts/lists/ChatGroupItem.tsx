@@ -1,9 +1,8 @@
 import { useState, memo, useRef, useCallback, useId, useMemo } from 'react';
 import * as Ariakit from '@ariakit/react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Ellipsis, Eye, SquarePen, Trash, EarthIcon, User } from 'lucide-react';
 import { PermissionBits, ResourceType } from 'librechat-data-provider';
-import type { TPromptGroup } from 'librechat-data-provider';
+import { Ellipsis, Eye, SquarePen, Trash, EarthIcon, User } from 'lucide-react';
 import {
   Label,
   Button,
@@ -14,12 +13,14 @@ import {
   OGDialogTemplate,
   useToastContext,
 } from '@librechat/client';
+import type { TPromptGroup } from 'librechat-data-provider';
 import { useLocalize, useAuthContext, useSubmitMessage, useResourcePermissions } from '~/hooks';
 import { useRecordPromptUsage, useDeletePromptGroup } from '~/data-provider';
-import { useLiveAnnouncer } from '~/Providers';
+import { usePanelDismiss } from '~/components/UnifiedSidebar/dismiss';
 import VariableDialog from '../dialogs/VariableDialog';
 import PreviewPrompt from '../dialogs/PreviewPrompt';
 import CategoryIcon from '../utils/CategoryIcon';
+import { useLiveAnnouncer } from '~/Providers';
 import { detectVariables, cn } from '~/utils';
 
 const PROMPT_PATH = '/prompts';
@@ -33,6 +34,7 @@ function ChatGroupItem({
 }) {
   const localize = useLocalize();
   const navigate = useNavigate();
+  const dismissPanel = usePanelDismiss();
   const params = useParams();
   const { user } = useAuthContext();
   const { submitPrompt } = useSubmitMessage();
@@ -120,7 +122,10 @@ function ChatGroupItem({
     if (canEdit) {
       items.push({
         label: localize('com_ui_edit'),
-        onClick: () => navigate(`${PROMPT_PATH}/${group._id}`),
+        onClick: () => {
+          navigate(`${PROMPT_PATH}/${group._id}`);
+          dismissPanel();
+        },
         icon: <SquarePen className="icon-sm mr-2 text-text-primary" aria-hidden="true" />,
       });
     }
@@ -132,7 +137,7 @@ function ChatGroupItem({
       });
     }
     return items;
-  }, [localize, canEdit, canDelete, group._id, navigate]);
+  }, [localize, canEdit, canDelete, group._id, navigate, dismissPanel]);
 
   return (
     <>

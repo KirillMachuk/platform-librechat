@@ -286,6 +286,8 @@ export type Agent = {
   isPublic?: boolean;
   version?: number;
   category?: string;
+  /** Surfaces the agent in the catalog's "Top Picks" tab; admin-curated. */
+  is_promoted?: boolean;
   support_contact?: SupportContact;
   /** Per-tool configuration options (deferred loading, allowed callers, etc.) */
   tool_options?: AgentToolOptions;

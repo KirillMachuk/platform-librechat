@@ -1,9 +1,10 @@
 import { memo, useState, useMemo, useCallback } from 'react';
-import { ScrollText, ChevronDown, ChevronRight, Folder, Pin } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { FixedSizeTree } from 'react-vtree';
+import { useNavigate } from 'react-router-dom';
+import { ScrollText, ChevronDown, ChevronRight, Folder, Pin } from 'lucide-react';
 import type { FixedSizeNodeData, TreeWalkerValue, TreeWalker } from 'react-vtree';
 import type { TSkill, TSkillFile } from 'librechat-data-provider';
+import { usePanelDismiss } from '~/components/UnifiedSidebar/dismiss';
 import { useListSkillFilesQuery } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -262,6 +263,7 @@ function SkillListItem({
   onToggleExpand,
 }: SkillListItemProps) {
   const navigate = useNavigate();
+  const dismissPanel = usePanelDismiss();
   const localize = useLocalize();
 
   // Fetch files for active skill (always, since cached fileCount may be stale)
@@ -275,10 +277,11 @@ function SkillListItem({
 
   const handleSkillClick = useCallback(() => {
     navigate(`/skills/${skill._id}`);
+    dismissPanel();
     if (hasFiles && !isExpanded) {
       onToggleExpand(skill._id);
     }
-  }, [navigate, skill._id, hasFiles, isExpanded, onToggleExpand]);
+  }, [navigate, dismissPanel, skill._id, hasFiles, isExpanded, onToggleExpand]);
 
   const handleChevronClick = useCallback(
     (e: React.MouseEvent) => {
@@ -291,8 +294,9 @@ function SkillListItem({
   const handleFileClick = useCallback(
     (path: string) => {
       navigate(`/skills/${skill._id}?file=${encodeURIComponent(path)}`);
+      dismissPanel();
     },
-    [navigate, skill._id],
+    [navigate, dismissPanel, skill._id],
   );
 
   return (

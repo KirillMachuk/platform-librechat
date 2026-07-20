@@ -79,6 +79,8 @@ export function composeAgentUpdatePayload(data: AgentForm, agent_id?: string | n
     hide_sequential_outputs,
     recursion_limit,
     category,
+    conversation_starters,
+    is_promoted,
     support_contact,
     tool_options,
     skills,
@@ -108,6 +110,9 @@ export function composeAgentUpdatePayload(data: AgentForm, agent_id?: string | n
       hide_sequential_outputs,
       recursion_limit,
       category,
+      conversation_starters,
+      /** Server-side admin gate decides whether this is honored */
+      is_promoted,
       support_contact,
       tool_options,
       skills,
