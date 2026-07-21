@@ -75,6 +75,12 @@ export interface AdminUsersDeps {
   updateUser: (userId: string, updateData: Partial<IUser>) => Promise<IUser | null>;
   hashPassword: (password: string) => Promise<string>;
   getBalanceConfig?: () => Promise<BalanceConfig | undefined>;
+  /**
+   * Lowercased platform-operator emails (the billing allowlist). Those accounts are the
+   * only principals allowed to move money and to see $ figures, so they are shielded
+   * from everyone else's user management — see {@link createAdminUsersHandlers}.
+   */
+  protectedEmails?: string[];
 }
 
 export function createAdminUsersHandlers(deps: AdminUsersDeps): {
@@ -96,6 +102,33 @@ export function createAdminUsersHandlers(deps: AdminUsersDeps): {
     deleteConfig,
     deleteAclEntries,
   } = deps;
+
+  const protectedEmails = deps.protectedEmails ?? [];
+
+  function isProtectedEmail(email?: string | null): boolean {
+    return Boolean(email && protectedEmails.includes(email.toLowerCase()));
+  }
+
+  /**
+   * Whether `req` may not touch an account carrying `targetEmail`.
+   *
+   * The platform-operator allowlist lives in env precisely so the client's own admin
+   * cannot grant themselves the right to move money. But that admin holds MANAGE_USERS,
+   * so without this guard they could set the operator's password and simply sign in as
+   * them: the allowlist would still «hold» while the account behind it changed hands.
+   * Operators may still manage each other and themselves.
+   */
+  function refusesProtectedTarget(req: ServerRequest, targetEmail?: string | null): boolean {
+    return isProtectedEmail(targetEmail) && !isProtectedEmail(req.user?.email);
+  }
+
+  async function loadTargetEmail(id: string): Promise<string | undefined> {
+    if (protectedEmails.length === 0) {
+      return undefined;
+    }
+    const [target] = await findUsers({ _id: id }, 'email', { limit: 1 });
+    return target?.email ?? undefined;
+  }
 
   async function listUsersHandler(req: ServerRequest, res: Response) {
     try {
@@ -170,6 +203,12 @@ export function createAdminUsersHandlers(deps: AdminUsersDeps): {
         return res.status(403).json({ error: 'Cannot delete your own account' });
       }
 
+      if (refusesProtectedTarget(req, await loadTargetEmail(id))) {
+        return res
+          .status(403)
+          .json({ error: 'Удалить аккаунт оператора платформы 1ma может только оператор' });
+      }
+
       const [targetUser] = await findUsers({ _id: id }, 'role', { limit: 1 });
       if (targetUser?.role === SystemRoles.ADMIN) {
         const adminCount = await countUsers({ role: SystemRoles.ADMIN });
@@ -234,6 +273,10 @@ export function createAdminUsersHandlers(deps: AdminUsersDeps): {
       const role = body.role ?? SystemRoles.USER;
       if (!ASSIGNABLE_ROLES.has(role)) {
         return res.status(400).json({ error: 'Invalid role' });
+      }
+
+      if (refusesProtectedTarget(req, email)) {
+        return res.status(403).json({ error: 'Этот адрес закреплён за оператором платформы 1ma' });
       }
 
       const existing = await findUser({ email }, '_id');
@@ -313,6 +356,12 @@ export function createAdminUsersHandlers(deps: AdminUsersDeps): {
       }
       if (Object.keys(update).length === 0) {
         return res.status(400).json({ error: 'No updatable fields provided' });
+      }
+
+      if (refusesProtectedTarget(req, await loadTargetEmail(id))) {
+        return res
+          .status(403)
+          .json({ error: 'Изменить аккаунт оператора платформы 1ma может только оператор' });
       }
 
       const callerId = req.user?._id?.toString() ?? req.user?.id;

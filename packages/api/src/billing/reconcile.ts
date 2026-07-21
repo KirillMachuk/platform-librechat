@@ -5,9 +5,9 @@ import {
   MICRO_USD_PER_USD,
 } from '@librechat/data-schemas';
 import type { AuditLogInput, CreditBillingStatus } from '@librechat/data-schemas';
-import type { OpenRouterManagement } from './openrouter';
+import type { OpenRouterManagement, OpenRouterKeyInfo } from './openrouter';
 import type { BillingAlert } from './types';
-import { computeKeyLimitUsd } from './openrouter';
+import { computeKeyLimitUsd, shouldApplyKeyLimit } from './openrouter';
 
 /** Alert when internal ledger vs OpenRouter drift exceeds ~3%… */
 const DEFAULT_THRESHOLD_RATIO = 0.03;
@@ -111,22 +111,43 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
    * moves on its own — a new billing period, drained packages, a changed pool size.
    * PATCHes only on an actual change, and a failure never aborts the reconciliation:
    * a stale fuse is a risk to flag, not a reason to also lose the drift check.
+   *
+   * Never lands the fuse at or below what the key has ALREADY burned in this UTC
+   * window. Packages drain, so the computed limit legitimately falls during a month —
+   * and a limit under the accrued usage does not «tighten» anything, it trips the key
+   * instantly and kills every model contour-wide while the client still has pool left.
+   * That is the exact outage this whole fuse exists to prevent, so the sync declines to
+   * cause it and says so; the real ceiling is the soft block, which is period-accurate.
    */
-  async function syncKeyLimit(status: CreditBillingStatus, currentLimitUsd: number | null) {
+  async function syncKeyLimit(status: CreditBillingStatus, key: OpenRouterKeyInfo) {
     const desiredLimitUsd = computeKeyLimitUsd({
       poolMicroUsd: deps.poolMicroUsd,
       packageRemainingMicroUsd: status.packageRemainingMicroUsd,
       anchorDay: deps.anchorDay,
       headroom: deps.headroom,
     });
-    if (currentLimitUsd === desiredLimitUsd) {
+    if (!shouldApplyKeyLimit(key, desiredLimitUsd)) {
+      if (key.limitUsd !== desiredLimitUsd) {
+        logger.warn(
+          `[billingReconcile] REFUSING to set the key limit to $${desiredLimitUsd}: the key has already used $${key.usageMonthlyUsd?.toFixed(2)} this UTC month, so that limit would cut every model immediately. Fuse left at $${key.limitUsd ?? 'unlimited'}.`,
+        );
+      }
       return;
     }
     try {
       await deps.openrouter.updateLimit(desiredLimitUsd);
+      /* The admin and CLI paths audit every fuse move; an unattended one must too, or a
+       * contour-wide cut has no record of who narrowed the limit and when. */
+      deps.recordAudit({
+        actorRole: 'RECONCILER',
+        action: 'billing.limit_updated',
+        targetType: 'billing',
+        targetId: 'openrouter-key',
+        metadata: { limitUsd: desiredLimitUsd, previousLimitUsd: key.limitUsd ?? 0 },
+      });
     } catch (error) {
       logger.error(
-        `[billingReconcile] key limit sync failed (fuse stays at $${currentLimitUsd ?? 'unlimited'}, wanted $${desiredLimitUsd}):`,
+        `[billingReconcile] key limit sync failed (fuse stays at $${key.limitUsd ?? 'unlimited'}, wanted $${desiredLimitUsd}):`,
         error,
       );
     }
@@ -159,7 +180,7 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
         deps.getFirstCreditSpendAt({ tenantId: deps.tenantId }),
       ]);
 
-      await syncKeyLimit(status, key.limitUsd);
+      await syncKeyLimit(status, key);
 
       /* Internal consistency: the current period's per-request journal sum must equal
        * the period counter — both are written from the same rounded µ$ value. Persistent
@@ -200,9 +221,14 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
        * moment metering was switched on. In the month that happens the difference is
        * pre-metering spend, not lost spend — the two are indistinguishable here, and
        * this case is GUARANTEED at go-live. Report the numbers, hold the alert: from the
-       * next UTC month both windows start together and drift means what it says. */
+       * next UTC month both windows start together and drift means what it says.
+       *
+       * An EMPTY ledger is only innocent while the key has spent nothing either. Once it
+       * shows real money against a ledger that has never recorded anything, that is the
+       * reporter being down — the loudest possible symptom, not a reason to stay quiet. */
       const meteringStartedThisMonth = firstSpendAt != null && firstSpendAt >= utcMonthStart;
-      const partialLedger = firstSpendAt == null || meteringStartedThisMonth;
+      const partialLedger =
+        meteringStartedThisMonth || (firstSpendAt == null && openrouterUsd <= minAbsUsd);
       const shouldAlert = !partialLedger && ratio > threshold && Math.abs(diffUsd) > minAbsUsd;
 
       const report: ReconcileReport = {
@@ -219,7 +245,7 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
         ...(partialLedger && {
           reason: meteringStartedThisMonth
             ? 'alert held: metering started mid-month — the difference includes spend from before it was counted'
-            : 'alert held: the ledger is empty (metering has never recorded anything)',
+            : 'alert held: nothing metered yet and the key has spent nothing either',
         }),
       };
 

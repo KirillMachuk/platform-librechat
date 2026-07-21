@@ -4,9 +4,11 @@ require('module-alias')({ base: path.resolve(__dirname, '..', 'api') });
 const {
   readBillingConfig,
   createOpenRouterManagement,
+  computeKeyLimitUsd,
+  shouldApplyKeyLimit,
   CREDIT_PACKAGE_SIZES,
 } = require('@librechat/api');
-const { microUsdToCredits, MICRO_USD_PER_USD } = require('@librechat/data-schemas');
+const { microUsdToCredits } = require('@librechat/data-schemas');
 const { askQuestion, silentExit } = require('./helpers');
 const connect = require('./connect');
 
@@ -97,14 +99,25 @@ const connect = require('./connect');
   console.purple(`Остаток пакетов: ${packageRemaining.toLocaleString('ru-RU')} Кредитов`);
   console.purple(`Мягкая блокировка: ${status.blocked ? 'АКТИВНА' : 'нет'}`);
 
-  /* Жёсткий предохранитель: лимит ключа OpenRouter = (пул + остаток пакетов) + headroom. */
-  const allowedMicroUsd = config.poolMicroUsd + Math.max(0, status.packageRemainingMicroUsd);
-  const recommendedLimitUsd = Math.ceil(
-    (allowedMicroUsd / MICRO_USD_PER_USD) * (1 + config.openrouter.headroom),
-  );
+  /* Жёсткий предохранитель: та же формула, что у админ-панели и суточной сверки —
+   * при якорном дне ≠ 1 в одно окно ключа попадают ДВА периода (см. computeKeyLimitUsd).
+   * Своя арифметика тут однажды уже разошлась с общей и опускала лимит ниже нужного. */
+  const recommendedLimitUsd = computeKeyLimitUsd({
+    poolMicroUsd: config.poolMicroUsd,
+    packageRemainingMicroUsd: status.packageRemainingMicroUsd,
+    anchorDay: config.anchorDay,
+    headroom: config.openrouter.headroom,
+  });
   const openrouter = createOpenRouterManagement(config.openrouter);
   if (result.created && openrouter.isConfigured) {
     try {
+      const key = await openrouter.getKey();
+      if (!shouldApplyKeyLimit(key, recommendedLimitUsd)) {
+        console.orange(
+          `Лимит ключа НЕ меняем: текущий $${key.limitUsd ?? 'без лимита'}, расчётный $${recommendedLimitUsd} — он не выше уже потраченного за месяц ($${key.usageMonthlyUsd ?? '?'}), это отключило бы модели сразу.`,
+        );
+        return silentExit(0);
+      }
       await openrouter.updateLimit(recommendedLimitUsd);
       await db.recordAuditLog({
         actorEmail: addedByEmail,

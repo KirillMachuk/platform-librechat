@@ -46,6 +46,17 @@ function lotOf(overrides: Partial<CreditPackageWithRemaining> = {}): CreditPacka
   };
 }
 
+/** A key mock: current fuse and what it has already burned this UTC month. */
+function keyOf(limitUsd: number | null, usageMonthlyUsd: number | null) {
+  return jest.fn().mockResolvedValue({
+    limitUsd,
+    usageUsd: usageMonthlyUsd,
+    usageMonthlyUsd,
+    disabled: false,
+    raw: {},
+  });
+}
+
 function createReqRes(params: { email?: string; body?: Record<string, unknown> } = {}) {
   const req = {
     params: {},
@@ -220,6 +231,57 @@ describe('createAdminBillingHandlers', () => {
       );
     });
 
+    it('does not tighten the key limit below the money already spent (clawback path)', async () => {
+      /* A negative adjustment lowers the computed limit. Writing it while the key has
+       * already burned more than that would cut every model instantly — the outage the
+       * fuse exists to prevent, now reachable from the admin screen. */
+      const updateLimit = jest.fn().mockResolvedValue(undefined);
+      const deps = createDeps({
+        getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf()),
+        openrouter: { isConfigured: true, getKey: keyOf(605, 400), updateLimit },
+      });
+      const handlers = createAdminBillingHandlers(deps);
+      const { req, res, json } = createReqRes({
+        email: 'op@1ma.ai',
+        body: {
+          kind: 'adjustment',
+          credits: -5_000,
+          comment: 'откат',
+          idempotencyKey: 'adj-cut',
+        },
+      });
+
+      await handlers.addPackage(req, res);
+
+      expect(updateLimit).not.toHaveBeenCalled();
+      expect(json.mock.calls[0][0].limitUpdate).toMatchObject({ mode: 'unchanged' });
+    });
+
+    it('withholds an adjustment comment from a client admin, keeps it for the operator', async () => {
+      const lots = {
+        packages: [
+          lotOf({ kind: 'adjustment', credits: -1_000, comment: 'возврат за перерасход ключа' }),
+          lotOf({ kind: 'package', comment: 'Счёт №7' }),
+        ],
+        packageSpentMicroUsd: 0,
+      };
+      const handlers = createAdminBillingHandlers(
+        createDeps({
+          listCreditPackages: jest.fn().mockResolvedValue(lots),
+        }),
+      );
+
+      const client = createReqRes({ email: 'client@corp.by' });
+      await handlers.getSummary(client.req, client.res);
+      const clientLots = client.json.mock.calls[0][0].lots;
+      expect(clientLots[0].comment).toBeUndefined();
+      expect(clientLots[1].comment).toBe('Счёт №7');
+
+      const operator = createReqRes({ email: 'op@1ma.ai' });
+      await handlers.getSummary(operator.req, operator.res);
+      expect(operator.json.mock.calls[0][0].lots[0].comment).toBe('возврат за перерасход ключа');
+    });
+
     it('requires a comment on an adjustment (its only paper trail)', async () => {
       const deps = createDeps();
       const handlers = createAdminBillingHandlers(deps);
@@ -300,7 +362,7 @@ describe('createAdminBillingHandlers', () => {
         getCreditBillingStatus: jest
           .fn()
           .mockResolvedValue(statusOf({ packageRemainingMicroUsd: 50_000_000 })),
-        openrouter: { isConfigured: true, getKey: jest.fn(), updateLimit },
+        openrouter: { isConfigured: true, getKey: keyOf(100, 10), updateLimit },
       });
       const handlers = createAdminBillingHandlers(deps);
       const { req, res, json } = createReqRes({ email: 'op@1ma.ai', body: validBody });

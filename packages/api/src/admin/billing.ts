@@ -8,10 +8,10 @@ import type {
   CreditPackageWithRemaining,
 } from '@librechat/data-schemas';
 import type { Response } from 'express';
-import type { ServerRequest } from '~/types/http';
-import type { ReconcileReport } from '~/billing/reconcile';
 import type { OpenRouterManagement } from '~/billing/openrouter';
-import { computeKeyLimitUsd } from '~/billing/openrouter';
+import type { ReconcileReport } from '~/billing/reconcile';
+import type { ServerRequest } from '~/types/http';
+import { computeKeyLimitUsd, shouldApplyKeyLimit } from '~/billing/openrouter';
 import { auditRequestContext } from '~/audit/service';
 
 /** Contract package sizes (Credits). Anything else is a validation error. */
@@ -106,13 +106,21 @@ function isOperatorRequest(req: ServerRequest, operatorEmails: string[]): boolea
   return Boolean(email && operatorEmails.includes(email));
 }
 
-function toLot(pkg: CreditPackageWithRemaining): AdminBillingLot {
+/**
+ * An adjustment's comment is mandatory and free-form, so it is where an operator writes
+ * the real reason — «возврат $37 за перерасход ключа», an invoice, an internal note. The
+ * lot table is visible to the CLIENT admin, who contractually sees only Credits and
+ * percentages, so that text is withheld from everyone but the operator. Package comments
+ * stay visible: they are invoice references the client needs for акты.
+ */
+function toLot(pkg: CreditPackageWithRemaining, isOperator: boolean): AdminBillingLot {
+  const hideComment = pkg.kind === 'adjustment' && !isOperator;
   return {
     id: pkg.id,
     kind: pkg.kind,
     credits: pkg.credits,
     remainingCredits: Math.max(0, microUsdToCredits(pkg.remainingMicroUsd)),
-    comment: pkg.comment,
+    comment: hideComment ? undefined : pkg.comment,
     invoiceRef: pkg.invoiceRef,
     addedByEmail: pkg.addedByEmail,
     createdAt: pkg.createdAt ? new Date(pkg.createdAt).toISOString() : undefined,
@@ -147,6 +155,7 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
     const spentCredits = microUsdToCredits(status.spentMicroUsd);
     const percentUsed =
       status.poolMicroUsd > 0 ? Math.round((status.spentMicroUsd / status.poolMicroUsd) * 100) : 0;
+    const isOperator = isOperatorRequest(req, deps.operatorEmails);
     return {
       month: status.month,
       periodStart: status.periodStart ? new Date(status.periodStart).toISOString() : null,
@@ -158,9 +167,12 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
       poolRemainingCredits: Math.max(0, poolCredits - spentCredits),
       percentUsed,
       packagePurchasedCredits: microUsdToCredits(status.purchasedMicroUsd),
-      packageRemainingCredits: Math.max(0, microUsdToCredits(status.packageRemainingMicroUsd)),
-      lots: lots.packages.map(toLot),
-      isOperator: isOperatorRequest(req, deps.operatorEmails),
+      /* NOT clamped at 0: an over-clawback leaves a real debt, and hiding it as «0»
+       * means a freshly paid package silently vanishes into it while the contour stays
+       * blocked — the operator would see no reason and charge the client twice. */
+      packageRemainingCredits: microUsdToCredits(status.packageRemainingMicroUsd),
+      lots: lots.packages.map((lot) => toLot(lot, isOperator)),
+      isOperator,
       metering: deps.metering,
       degraded: deps.getDegraded ? deps.getDegraded() : false,
     };
@@ -181,9 +193,11 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
    * volume instead of cutting in ahead of the soft block. Best-effort: when
    * unconfigured/failed, the operator gets the recommended number to set manually.
    */
-  async function syncOpenRouterLimit(
-    req: ServerRequest,
-  ): Promise<{ mode: 'auto' | 'manual'; limitUsd?: number; recommendedLimitUsd: number }> {
+  async function syncOpenRouterLimit(req: ServerRequest): Promise<{
+    mode: 'auto' | 'manual' | 'unchanged';
+    limitUsd?: number;
+    recommendedLimitUsd: number;
+  }> {
     const status = await deps.getCreditBillingStatus({
       poolMicroUsd: deps.poolMicroUsd,
       tenantId: deps.tenantId,
@@ -199,6 +213,13 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
       return { mode: 'manual', recommendedLimitUsd };
     }
     try {
+      /* A negative adjustment LOWERS the computed limit, so this path can now ask for a
+       * tighter fuse — which OpenRouter turns into an instant contour-wide cut whenever
+       * it lands under the usage already accrued this month. Same rule as the daily sync. */
+      const key = await deps.openrouter.getKey();
+      if (!shouldApplyKeyLimit(key, recommendedLimitUsd)) {
+        return { mode: 'unchanged', limitUsd: key.limitUsd ?? undefined, recommendedLimitUsd };
+      }
       await deps.openrouter.updateLimit(recommendedLimitUsd);
       deps.recordAudit({
         ...actorFields(req),
@@ -282,6 +303,10 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
         addedByEmail: req.user?.email,
         addedById: req.user?._id?.toString() ?? req.user?.id,
         tenantId: deps.tenantId,
+        /* Without it the «exhausted» flag is cleared on the WRONG period document
+         * whenever the anchor is not the 1st, and the contour then goes silent on its
+         * next exhaustion. The CLI has always passed it; this path had not. */
+        anchorDay: deps.anchorDay,
       });
 
       /* A replayed idempotency key must not double anything — including audit. */

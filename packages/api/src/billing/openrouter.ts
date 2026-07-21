@@ -58,6 +58,27 @@ function toNumberOrNull(value: unknown): number | null {
  * stops a runaway (a fail-open gate plus a loop), while the precise, period-accurate
  * ceiling remains the soft block.
  */
+/**
+ * Whether moving the key's fuse to `desiredLimitUsd` is safe to do automatically.
+ *
+ * The computed limit legitimately FALLS during a month — packages drain, a clawback is
+ * applied — and OpenRouter disables a key the moment its limit is at or below what it
+ * has already used. So an automatic «tightening» that lands under the accrued usage does
+ * not tighten anything: it kills every model contour-wide, mid-month, while the client
+ * still has pool left. That is the exact outage the fuse exists to prevent, so both the
+ * daily sync and the admin top-up path route through this check rather than each
+ * remembering the rule.
+ */
+export function shouldApplyKeyLimit(
+  key: Pick<OpenRouterKeyInfo, 'limitUsd' | 'usageMonthlyUsd'>,
+  desiredLimitUsd: number,
+): boolean {
+  if (key.limitUsd === desiredLimitUsd) {
+    return false;
+  }
+  return key.usageMonthlyUsd == null || desiredLimitUsd > key.usageMonthlyUsd;
+}
+
 export function computeKeyLimitUsd(params: {
   poolMicroUsd: number;
   packageRemainingMicroUsd?: number;

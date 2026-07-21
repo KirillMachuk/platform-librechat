@@ -856,4 +856,90 @@ describe('createAdminUsersHandlers', () => {
       expect(json).toHaveBeenCalledWith({ error: 'Failed to update user' });
     });
   });
+
+  /**
+   * The billing operator allowlist lives in env so the client's own admin cannot grant
+   * themselves the right to move money. That only holds while they also cannot take the
+   * operator's ACCOUNT — they hold MANAGE_USERS, so a password reset would hand it over.
+   */
+  describe('platform-operator accounts are shielded from client admins', () => {
+    const OPERATOR = 'op@1ma.ai';
+    const operatorDeps = (overrides: Partial<AdminUsersDeps> = {}) =>
+      createDeps({
+        protectedEmails: [OPERATOR],
+        findUsers: jest.fn().mockResolvedValue([mockUser({ email: OPERATOR })]),
+        ...overrides,
+      });
+    const asClientAdmin = (body: Record<string, unknown>) =>
+      createReqRes({
+        params: { id: validUserId },
+        body,
+        user: { _id: new Types.ObjectId(), role: 'ADMIN', email: 'client@corp.by' },
+      } as Parameters<typeof createReqRes>[0]);
+
+    it('refuses to reset an operator password from a client admin', async () => {
+      const deps = operatorDeps();
+      const handlers = createAdminUsersHandlers(deps);
+      const { req, res, status } = asClientAdmin({ password: 'takeover-123456' });
+
+      await handlers.updateUser(req, res);
+
+      expect(status).toHaveBeenCalledWith(403);
+      expect(deps.updateUser).not.toHaveBeenCalled();
+    });
+
+    it('refuses to delete an operator account from a client admin', async () => {
+      const deps = operatorDeps();
+      const handlers = createAdminUsersHandlers(deps);
+      const { req, res, status } = asClientAdmin({});
+
+      await handlers.deleteUser(req, res);
+
+      expect(status).toHaveBeenCalledWith(403);
+      expect(deps.deleteUserById).not.toHaveBeenCalled();
+    });
+
+    it('refuses to create an account on an operator address from a client admin', async () => {
+      const deps = operatorDeps();
+      const handlers = createAdminUsersHandlers(deps);
+      const { req, res, status } = createReqRes({
+        body: { email: OPERATOR, password: 'whatever-123456' },
+        user: { _id: new Types.ObjectId(), role: 'ADMIN', email: 'client@corp.by' },
+      } as Parameters<typeof createReqRes>[0]);
+
+      await handlers.createUser(req, res);
+
+      expect(status).toHaveBeenCalledWith(403);
+      expect(deps.createUser).not.toHaveBeenCalled();
+    });
+
+    it('lets an operator manage an operator account', async () => {
+      const deps = operatorDeps();
+      const handlers = createAdminUsersHandlers(deps);
+      const { req, res, status } = createReqRes({
+        params: { id: validUserId },
+        body: { name: 'Оператор' },
+        user: { _id: new Types.ObjectId(), role: 'ADMIN', email: OPERATOR },
+      } as Parameters<typeof createReqRes>[0]);
+
+      await handlers.updateUser(req, res);
+
+      expect(status).toHaveBeenCalledWith(200);
+      expect(deps.updateUser).toHaveBeenCalled();
+    });
+
+    it('leaves ordinary accounts alone', async () => {
+      const deps = createDeps({
+        protectedEmails: [OPERATOR],
+        findUsers: jest.fn().mockResolvedValue([mockUser({ email: 'staff@corp.by' })]),
+      });
+      const handlers = createAdminUsersHandlers(deps);
+      const { req, res, status } = asClientAdmin({ name: 'Сотрудник' });
+
+      await handlers.updateUser(req, res);
+
+      expect(status).toHaveBeenCalledWith(200);
+      expect(deps.updateUser).toHaveBeenCalled();
+    });
+  });
 });
