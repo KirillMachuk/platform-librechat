@@ -92,6 +92,14 @@ const roleSchema: Schema<IRole> = new Schema({
   permissions: {
     type: rolePermissionsSchema,
   },
+  /**
+   * Fingerprint of the `interface` config subset that last seeded this role's permissions.
+   * Startup re-applies the config only when this differs, so an administrator's edits
+   * survive restarts while a genuine config change still takes effect once.
+   */
+  interfaceSeedHash: {
+    type: String,
+  },
   tenantId: {
     type: String,
     index: true,
