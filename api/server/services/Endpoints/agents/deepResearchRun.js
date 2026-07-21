@@ -781,7 +781,10 @@ async function buildChatFileSearchTool({ req, userId, conversationId, transformC
       return null;
     }
     const embeddedFiles =
-      (await getFiles({ file_id: { $in: convoFileIds }, embedded: true }, null, { text: 0 })) ?? [];
+      (await getFiles({ file_id: { $in: convoFileIds }, embedded: true }, null, {
+        text: 0,
+        fullText: 0,
+      })) ?? [];
     const authorized = await filterRequestFilesByAccess({
       files: embeddedFiles,
       userId,

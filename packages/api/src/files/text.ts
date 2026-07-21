@@ -143,3 +143,86 @@ export async function parseTextNative(file: Express.Multer.File): Promise<{
     source: FileSources.text,
   };
 }
+
+/** Extracted text above this is not stored: it would not fit the record, and a silently
+ *  truncated contract is worse than an honest "search only" answer — the model cannot see
+ *  where the text stopped and would report a missing clause as absent. */
+export const FULL_TEXT_MAX_BYTES = 15 * 1024 * 1024;
+
+export interface ExtractDocumentTextParams {
+  /** Stream/buffer of the stored original — the same bytes that went to `/embed`. */
+  file: NodeJS.ReadableStream | Buffer;
+  fileId: string;
+  filename: string;
+  contentType?: string;
+  jwtToken: string;
+  ragApiUrl: string;
+  timeoutMs?: number;
+}
+
+/**
+ * Full text of an already-stored document, for on-demand reading (`open_document`) rather
+ * than for the prompt. Counterpart to {@link parseText}, which takes a freshly uploaded
+ * multer file; this one takes what the embed worker already has — a download stream.
+ *
+ * **Fail-open**: any failure (network, backpressure, oversized text) returns `null` and the
+ * document stays fully searchable, just not readable end to end. Indexing must never fail
+ * over text that is a convenience on top of it.
+ *
+ * The parse itself is effectively free here: doc-gateway caches by content hash across
+ * `/embed`, `/metadata` and `/text`, so a document embedded moments earlier is already parsed
+ * — a scan is never OCR'd twice.
+ */
+export async function extractDocumentText({
+  file,
+  fileId,
+  filename,
+  contentType,
+  jwtToken,
+  ragApiUrl,
+  timeoutMs = 300000,
+}: ExtractDocumentTextParams): Promise<string | null> {
+  const formData = new FormData();
+  formData.append('file_id', fileId);
+  formData.append('file', file, {
+    filename,
+    contentType: contentType || 'application/octet-stream',
+  });
+
+  try {
+    const response = await axios.post(`${ragApiUrl}/text`, formData, {
+      headers: {
+        Authorization: `Bearer ${jwtToken}`,
+        accept: 'application/json',
+        ...formData.getHeaders(),
+      },
+      timeout: timeoutMs,
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    });
+
+    const text = response.data?.text;
+    if (typeof text !== 'string' || text.length === 0) {
+      logger.debug(`[documentText] ${fileId}: service returned no text`);
+      return null;
+    }
+
+    const bytes = Buffer.byteLength(text, 'utf8');
+    if (bytes > FULL_TEXT_MAX_BYTES) {
+      logger.info(
+        `[documentText] ${fileId}: extracted text is ${Math.round(bytes / 1024 / 1024)}MB, above the ${Math.round(
+          FULL_TEXT_MAX_BYTES / 1024 / 1024,
+        )}MB store limit — indexed for search only`,
+      );
+      return null;
+    }
+    return text;
+  } catch (error) {
+    logger.warn(
+      `[documentText] ${fileId}: extraction failed, document stays searchable but not readable in full: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return null;
+  }
+}

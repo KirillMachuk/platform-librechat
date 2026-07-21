@@ -80,6 +80,43 @@ describe('open_document — доступ к документу', () => {
     expect(projection).toMatchObject({ text: 1 });
   });
 
+  /* Документы RAG-маршрута (большой PDF, источник проекта, вложение в режиме «поиск») текст
+   * держат в `fullText` — в `text` его класть НЕЛЬЗЯ, иначе путь вложений начнёт инлайнить
+   * весь документ в каждое сообщение. Тул обязан читать оба поля. */
+  it('читает документ, у которого текст лежит в fullText (RAG-маршрут)', async () => {
+    getFiles.mockResolvedValueOnce([
+      { file_id: 'f1', filename: 'big-contract.pdf', fullText: LEASE_TEXT },
+    ]);
+
+    const openTool = await createOpenDocumentTool({ userId: 'user-1' });
+    const result = await read(openTool);
+
+    expect(contentOf(result)).toContain('big-contract.pdf');
+    expect(contentOf(result)).toContain('Односторонний отказ');
+  });
+
+  it('запрашивает оба текстовых поля из Mongo', async () => {
+    getFiles.mockResolvedValueOnce([{ file_id: 'f1', filename: 'lease.pdf', text: LEASE_TEXT }]);
+
+    const openTool = await createOpenDocumentTool({ userId: 'user-1' });
+    await read(openTool);
+
+    const [, , projection] = getFiles.mock.calls[0];
+    expect(projection).toMatchObject({ text: 1, fullText: 1 });
+  });
+
+  it('инлайн-текст имеет приоритет над fullText', async () => {
+    getFiles.mockResolvedValueOnce([
+      { file_id: 'f1', filename: 'lease.pdf', text: 'ИНЛАЙН', fullText: 'ПО ТРЕБОВАНИЮ' },
+    ]);
+
+    const openTool = await createOpenDocumentTool({ userId: 'user-1' });
+    const content = contentOf(await read(openTool));
+
+    expect(content).toContain('ИНЛАЙН');
+    expect(content).not.toContain('ПО ТРЕБОВАНИЮ');
+  });
+
   it('чужой или несуществующий документ не открывается', async () => {
     getFiles.mockResolvedValueOnce([]);
 
@@ -216,11 +253,15 @@ describe('open_document — чтение длинного документа', (
     expect(content).toContain(`of ${longText.length}`);
   });
 
-  it('старый файл без сохранённого текста просит перезалить', async () => {
-    getFiles.mockResolvedValueOnce([{ file_id: 'f1', filename: 'legacy.pdf' }]);
+  /* Совет «перезагрузите файл» для документа, который слишком велик для хранения текста,
+   * НЕВЕРЕН — он поедет тем же маршрутом. Модель нужно направить к поиску по нему. */
+  it('без текста направляет к поиску по документу, а не в тупик', async () => {
+    getFiles.mockResolvedValueOnce([{ file_id: 'f1', filename: 'huge.pdf' }]);
 
     const openTool = await createOpenDocumentTool({ userId: 'user-1' });
+    const content = contentOf(await read(openTool));
 
-    expect(contentOf(await read(openTool))).toContain('re-upload');
+    expect(content).toContain('library_search');
+    expect(content).toContain('indexed for search only');
   });
 });

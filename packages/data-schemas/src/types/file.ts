@@ -11,6 +11,13 @@ export interface IMongoFile extends Omit<Document, 'model'> {
   bytes: number;
   text?: string;
   /**
+   * Extracted text kept for on-demand reading (`open_document`) rather than for the
+   * prompt. Set on documents routed to RAG, where `text` is deliberately absent so the
+   * attachment path never inlines them. Read `text ?? fullText` when you want "the
+   * document's text, whatever route it took".
+   */
+  fullText?: string;
+  /**
    * Format of the `text` field — `'html'` when the backend produced
    * a sanitized full-document HTML preview (e.g. office types via
    * `bufferToOfficeHtml`), `'text'` for plain-text extracts (e.g.

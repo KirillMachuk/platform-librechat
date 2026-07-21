@@ -54,8 +54,12 @@ export async function openDocumentSlice({
   tokenLimit: number;
   tokenCountFn?: TokenCountFn;
 }): Promise<string> {
+  /* Two different documents land here and the advice must fit both: one indexed for search
+   * only (too large for full-text storage, or uploaded straight to RAG), and one uploaded
+   * before full text was kept at all. "Re-upload it" is wrong for the first — the document
+   * would take the same route again — so point at the mechanism that DOES reach it. */
   if (!text) {
-    return `The full text of "${filename}" is not stored (it was uploaded before the library kept full documents). Tell the user to re-upload this file, then read it again.`;
+    return `The full text of "${filename}" is not stored, so it cannot be read end to end — it is indexed for search only. Use library_search to find the relevant passages inside it and answer from those. (If the user needs the whole document read and it is an older upload, re-uploading it to the library may store the text.)`;
   }
 
   const total = text.length;

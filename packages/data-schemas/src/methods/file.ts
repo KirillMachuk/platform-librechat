@@ -97,12 +97,14 @@ export function createFileMethods(mongoose: typeof import('mongoose')): {
     if (selectFields != null) {
       query.select(selectFields);
     } else {
-      /* Exclude the two large preview blobs from list queries: `text` (the
-       * model's extracted content) and `previewText` (rendered office HTML).
-       * Neither is used by file-list views — previews are fetched via the
+      /* Exclude the large text blobs from list queries: `text` (the model's
+       * extracted content), `fullText` (the same content kept for on-demand
+       * reading on RAG-routed documents) and `previewText` (rendered office
+       * HTML). None is used by file-list views — previews are fetched via the
        * dedicated `/files/:id/preview` route — and shipping them bloats the
-       * payload (previewText can be up to ~512KB per office file). */
-      query.select({ text: 0, previewText: 0 });
+       * payload (previewText can be up to ~512KB per office file, and a large
+       * contract's fullText is several hundred KB on its own). */
+      query.select({ text: 0, fullText: 0, previewText: 0 });
     }
     query.sort(sortOptions);
     /* Bound the result set when a caller passes a cap (e.g. library_search sends
@@ -165,7 +167,7 @@ export function createFileMethods(mongoose: typeof import('mongoose')): {
         $or: orConditions,
       };
 
-      const selectFields: SelectProjection = { text: 0 };
+      const selectFields: SelectProjection = { text: 0, fullText: 0 };
       const sortOptions = { updatedAt: -1 as SortOrder };
 
       const results = await getFiles(filter, sortOptions, selectFields);
@@ -236,7 +238,7 @@ export function createFileMethods(mongoose: typeof import('mongoose')): {
         'metadata.codeEnvRef': { $exists: true },
       };
 
-      const selectFields: SelectProjection = { text: 0 };
+      const selectFields: SelectProjection = { text: 0, fullText: 0 };
       const sortOptions = { createdAt: 1 as SortOrder };
 
       const results = await getFiles(filter, sortOptions, selectFields);
@@ -266,7 +268,7 @@ export function createFileMethods(mongoose: typeof import('mongoose')): {
         'metadata.codeEnvRef': { $exists: true },
       };
 
-      const selectFields: SelectProjection = { text: 0 };
+      const selectFields: SelectProjection = { text: 0, fullText: 0 };
       const sortOptions = { createdAt: 1 as SortOrder };
 
       const results = await getFiles(filter, sortOptions, selectFields);

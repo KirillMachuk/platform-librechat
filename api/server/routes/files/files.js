@@ -124,6 +124,7 @@ router.get('/agent/:agent_id', async (req, res) => {
 
     const files = await db.getFiles({ file_id: { $in: agentFileIds }, user: agent.author }, null, {
       text: 0,
+      fullText: 0,
     });
 
     res.status(200).json(files);

@@ -3,6 +3,7 @@ const { getAppConfig } = require('~/server/services/Config');
 const { invalidateProjectContext } = require('~/server/services/Projects/context');
 const {
   embedStoredFile,
+  fetchFullText,
   purgeStoredVectors,
   fetchDocMetadata,
   METADATA_TIMEOUT_MS,
@@ -91,13 +92,21 @@ async function processClaimed(file, appConfig) {
      * so the file is marked ready either way — losing attribute filters must not cost the user a
      * searchable document. Extracted after the embed, never before: no point parsing a file that
      * failed to index. */
-    const docMetadata = await fetchDocMetadata({ appConfig, file });
+    /* Metadata and full text are both fail-open riders on this same state transition, and both
+     * land on doc-gateway's content-hash cache (the embed above already parsed the document), so
+     * they are fetched together rather than in sequence. Losing either must not cost the user a
+     * searchable document, hence neither can reject: both resolve to null instead. */
+    const [docMetadata, fullText] = await Promise.all([
+      fetchDocMetadata({ appConfig, file }),
+      fetchFullText({ appConfig, file }),
+    ]);
     const updated = await updateFile({
       file_id: file.file_id,
       embedded: true,
       embeddingStatus: 'ready',
       embedError: null,
       ...(docMetadata ? { docMetadata } : {}),
+      ...(fullText ? { fullText } : {}),
     });
     if (!updated) {
       logger.debug(`[embedWorker] ${file.file_id}: record gone after embed (deleted mid-flight)`);
