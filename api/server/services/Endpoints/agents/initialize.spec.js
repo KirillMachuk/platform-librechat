@@ -809,6 +809,7 @@ describe('applyConversationFileContext', () => {
     /** getFiles is scoped to embedded:true. */
     expect(db.getFiles).toHaveBeenCalledWith(expect.objectContaining({ embedded: true }), null, {
       text: 0,
+      fullText: 0,
     });
   });
 

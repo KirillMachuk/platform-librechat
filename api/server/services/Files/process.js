@@ -24,6 +24,7 @@ const {
   sanitizeFilename,
   parseText,
   parseTextNative,
+  FULL_TEXT_MAX_BYTES,
   probePdf,
   withTimeout,
   routePdfBySize,
@@ -1284,6 +1285,8 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
   const isImageFile = file.mimetype.startsWith('image');
   const source = getFileStrategy(appConfig, { isImage: isImageFile });
 
+  /** Full document text for `open_document`, populated on the synchronous embed path only. */
+  let ragFullText;
   if (tool_resource === EToolResources.file_search) {
     // FIRST: Upload to Storage for permanent backup (S3/local/etc.)
     const { handleFileUpload } = getStrategyFunctions(source);
@@ -1318,6 +1321,27 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         // (no DB record is created because the throw aborts before db.createFile).
         await rollbackOrphanedStorage({ req, source, storageResult, file_id });
         throw embedError;
+      }
+
+      /* Full text for on-demand reading (`open_document`). Written to `fullText`, never to
+       * `text`: the attachment path routes on `text` being present, so a large RAG-routed
+       * document there would be inlined into every message.
+       *
+       * Only on the SYNCHRONOUS embed path — under RAG_ASYNC_EMBED the background worker does
+       * this after its embed, where a slow parse costs nobody a held-open upload. Here the
+       * document was just parsed by `/embed`, so doc-gateway serves this from its content-hash
+       * cache and a scan is never OCR'd twice.
+       *
+       * Fail-open: the document stays searchable, it just cannot be read end to end. */
+      try {
+        const parsed = await parseText({ req, file, file_id });
+        if (parsed?.text && Buffer.byteLength(parsed.text, 'utf8') <= FULL_TEXT_MAX_BYTES) {
+          ragFullText = parsed.text;
+        }
+      } catch (textError) {
+        logger.warn(
+          `[processAgentFileUpload] full text unavailable for "${file.originalname}", document stays searchable: ${textError.message}`,
+        );
       }
     }
 
@@ -1405,6 +1429,7 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
       metadata: fileInfoMetadata,
       type: file.mimetype,
       embedded,
+      fullText: ragFullText,
       source,
       height,
       width,

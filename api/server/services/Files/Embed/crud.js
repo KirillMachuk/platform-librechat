@@ -1,7 +1,12 @@
 const axios = require('axios');
 const FormData = require('form-data');
 const { logger } = require('@librechat/data-schemas');
-const { logAxiosError, generateShortLivedToken, extractDocMetadata } = require('@librechat/api');
+const {
+  logAxiosError,
+  extractDocMetadata,
+  extractDocumentText,
+  generateShortLivedToken,
+} = require('@librechat/api');
 const { getStrategyFunctions } = require('~/server/services/Files/strategies');
 
 /**
@@ -209,10 +214,53 @@ async function fetchDocMetadata({ appConfig, file }) {
   }
 }
 
+/**
+ * Full text of a stored document, for on-demand reading by `open_document`. Written to
+ * `fullText`, never to `text`: the attachment path routes on `text` being present, so putting a
+ * large RAG-routed document there would inline it into every message — the blow-up the size
+ * routing exists to prevent.
+ *
+ * Unlike `fetchDocMetadata` this does NOT skip project sources: a document in a project is one
+ * the company keeps, and the owner's rule is "if it parsed, the model can read it in full".
+ *
+ * Fail-open (null on anything): the document stays searchable, it just cannot be read end to end.
+ * Runs after the embed for the same reason metadata does — no point parsing what failed to index —
+ * and lands on doc-gateway's content-hash cache, so the parse costs nothing and a scan is never
+ * OCR'd twice.
+ * @returns {Promise<string|null>}
+ */
+async function fetchFullText({ appConfig, file }) {
+  if (!process.env.RAG_API_URL) {
+    return null;
+  }
+  try {
+    const { getDownloadStream } = getStrategyFunctions(file.source);
+    if (!getDownloadStream) {
+      return null;
+    }
+    const stream = await getDownloadStream({ config: appConfig }, file.filepath);
+    return await extractDocumentText({
+      file: stream,
+      fileId: file.file_id,
+      filename: file.filename,
+      contentType: file.type,
+      jwtToken: generateShortLivedToken(file.user.toString()),
+      ragApiUrl: process.env.RAG_API_URL,
+      timeoutMs: METADATA_TIMEOUT_MS(),
+    });
+  } catch (error) {
+    logger.warn(
+      `[documentText] ${file.file_id}: could not read stored file, skipping full text: ${error.message}`,
+    );
+    return null;
+  }
+}
+
 module.exports = {
   embedStoredFile,
   purgeStoredVectors,
   fetchDocMetadata,
+  fetchFullText,
   METADATA_TIMEOUT_MS,
   PURGE_TIMEOUT_MS,
   logAxiosError,

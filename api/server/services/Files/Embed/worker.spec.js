@@ -35,6 +35,7 @@ jest.mock('./crud', () => ({
   embedStoredFile: jest.fn(),
   purgeStoredVectors: jest.fn(),
   fetchDocMetadata: jest.fn().mockResolvedValue(null),
+  fetchFullText: jest.fn().mockResolvedValue(null),
   /* Real values, not stubs: the lease clamp sums them with the embed timeout, and the whole point
    * of that clamp is that one claim never outlives its lease (a re-claim = duplicate vectors). */
   METADATA_TIMEOUT_MS: () => 60_000,
@@ -47,7 +48,7 @@ jest.mock('~/server/services/Projects/context', () => ({
 }));
 
 require('module-alias/register');
-const { embedStoredFile, purgeStoredVectors, fetchDocMetadata } = require('./crud');
+const { embedStoredFile, purgeStoredVectors, fetchDocMetadata, fetchFullText } = require('./crud');
 const { backoffMs, claimNext, processClaimed } = require('./worker');
 
 const APP_CONFIG = { paths: { uploads: '/tmp' } };
@@ -183,6 +184,39 @@ describe('embed worker state machine', () => {
     expect(record.docMetadata.parties).toEqual(['Ромашка', 'Юнифуд']);
     expect(record.docMetadata.primaryLocation).toBe('Минск');
     expect(record.docMetadata.identifiers).toEqual([{ type: 'DOC_NO', value: '312/24' }]);
+  });
+
+  /* Документы RAG-маршрута читаются `open_document`-ом ТОЛЬКО если воркер сохранил текст.
+   * Поле обязано быть `fullText`, а не `text`: путь вложений роутит по наличию `text` и
+   * начал бы инлайнить весь документ в каждое сообщение. */
+  it('сохраняет полный текст в fullText — и НИКОГДА в text', async () => {
+    await seed({ file_id: 'text-1' });
+    embedStoredFile.mockResolvedValueOnce({ embedded: true });
+    fetchFullText.mockResolvedValueOnce('Договор аренды. 14.7. Односторонний отказ...');
+
+    const claimed = await claimNext();
+    await processClaimed(claimed, APP_CONFIG);
+
+    const record = await File.findOne({ file_id: 'text-1' }).lean();
+    expect(record.embeddingStatus).toBe('ready');
+    expect(record.fullText).toContain('Односторонний отказ');
+    expect(record.text).toBeUndefined();
+  });
+
+  /* Текст — удобство поверх индексации: его потеря не должна стоить пользователю
+   * искомого документа (та же политика, что у метаданных). */
+  it('fail-open: без текста файл всё равно становится ready и искомым', async () => {
+    await seed({ file_id: 'text-2' });
+    embedStoredFile.mockResolvedValueOnce({ embedded: true });
+    fetchFullText.mockResolvedValueOnce(null);
+
+    const claimed = await claimNext();
+    await processClaimed(claimed, APP_CONFIG);
+
+    const record = await File.findOne({ file_id: 'text-2' }).lean();
+    expect(record.embeddingStatus).toBe('ready');
+    expect(record.embedded).toBe(true);
+    expect(record.fullText).toBeUndefined();
   });
 
   it('metadata is extracted only AFTER a successful embed (a failed file is not parsed)', async () => {

@@ -23,6 +23,7 @@ router.get('/', async (req, res) => {
     }
     const files = await db.getFiles({ user: req.user.id, project_id: req.params.projectId }, null, {
       text: 0,
+      fullText: 0,
     });
     res.status(200).json(files);
   } catch (error) {

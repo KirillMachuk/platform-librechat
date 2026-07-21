@@ -159,6 +159,15 @@ const file: Schema<IMongoFile> = new Schema(
     text: {
       type: String,
     },
+    fullText: {
+      /* Extracted text kept for ON-DEMAND reading (`open_document`), NOT for the prompt.
+       * Deliberately separate from `text`: the attachment path routes on `text` being
+       * present (BaseClient.processAttachments / extractFileContext), so writing a large
+       * RAG-routed document there would inline it into every message — the exact blow-up
+       * the size routing exists to prevent. Two fields, two meanings: `text` = "inline
+       * this now", `fullText` = "available if asked for". */
+      type: String,
+    },
     textFormat: {
       /* 'html' when the backend produced a sanitized HTML preview
        * (office-type CDN/mammoth output), 'text' for plain-text

@@ -95,7 +95,8 @@ const primeFiles = async (options) => {
   const resourceFiles = tool_resources?.[EToolResources.file_search]?.files ?? [];
 
   // Get all files first
-  const allFiles = (await getFiles({ file_id: { $in: file_ids } }, null, { text: 0 })) ?? [];
+  const allFiles =
+    (await getFiles({ file_id: { $in: file_ids } }, null, { text: 0, fullText: 0 })) ?? [];
 
   // Project source files are pre-authorised: applyProjectContext already called
   // db.getProjectById(userId, projectId) before injecting them, so membership

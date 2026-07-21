@@ -779,7 +779,8 @@ const primeFiles = async (options) => {
   );
 
   // Get all files first
-  const allFiles = (await getFiles({ file_id: { $in: file_ids } }, null, { text: 0 })) ?? [];
+  const allFiles =
+    (await getFiles({ file_id: { $in: file_ids } }, null, { text: 0, fullText: 0 })) ?? [];
 
   // Filter by access if user and agent are provided
   let dbFiles;

@@ -78,7 +78,7 @@ const createOpenDocumentTool = async ({ userId, tenantId, req, conversationFileI
         files = await getFiles(
           attachedIds.has(documentId) ? ownerScope : withLibraryVisibility(ownerScope),
           null,
-          { file_id: 1, filename: 1, text: 1 },
+          { file_id: 1, filename: 1, text: 1, fullText: 1 },
           1,
         );
       } catch (error) {
@@ -91,6 +91,11 @@ const createOpenDocumentTool = async ({ userId, tenantId, req, conversationFileI
         return `No document with ID "${documentId.slice(0, 60)}" is available. Use library_search first and copy the "Document ID" exactly as printed in its results.`;
       }
 
+      /* `text` is set on documents read as full text; `fullText` on those routed to RAG,
+       * where `text` is deliberately absent so the attachment path never inlines them.
+       * Either one is "the document's text" as far as reading goes. */
+      const documentText = file.text || file.fullText;
+
       /* Reading is inside the try for the same reason the lookup is: an exception escaping a
        * tool aborts the whole chat turn, while a returned string degrades into something the
        * model can relay. Tokenising a 200k-character contract is the realistic failure here. */
@@ -99,7 +104,7 @@ const createOpenDocumentTool = async ({ userId, tenantId, req, conversationFileI
         slice = await openDocumentSlice({
           documentId,
           filename: file.filename ?? 'unknown',
-          text: file.text,
+          text: documentText,
           offset,
           tokenLimit,
           tokenCountFn: (text) => countTokens(text),
@@ -109,14 +114,14 @@ const createOpenDocumentTool = async ({ userId, tenantId, req, conversationFileI
         return 'The document could not be read due to an unexpected error.';
       }
 
-      const nextReads = file.text ? reads + 1 : reads;
-      if (file.text) {
+      const nextReads = documentText ? reads + 1 : reads;
+      if (documentText) {
         readsByRequest.set(counterKey, nextReads);
       }
       /* PII-safe: answers "was it called, on what, and did it hit the cap" without content.
        * The exact character range read is on the debug line inside openDocumentSlice. */
       logger.info(
-        `[${Tools.open_document}] file=${documentId} total=${file.text?.length ?? 0} offset=${Math.trunc(Number(offset)) || 0} reads=${nextReads}/${MAX_OPEN_CALLS_PER_TURN}`,
+        `[${Tools.open_document}] file=${documentId} total=${documentText?.length ?? 0} offset=${Math.trunc(Number(offset)) || 0} reads=${nextReads}/${MAX_OPEN_CALLS_PER_TURN}`,
       );
       return slice;
     },

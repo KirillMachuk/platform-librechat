@@ -49,6 +49,7 @@ async function getProjectContext(user, projectId) {
 
   const projectFiles = await db.getFiles({ user, project_id: projectId, embedded: true }, null, {
     text: 0,
+    fullText: 0,
   });
 
   /** @type {ProjectChatContext} */

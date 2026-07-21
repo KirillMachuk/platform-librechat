@@ -160,7 +160,7 @@ async function applyConversationFileContext({ req, primaryAgent }) {
     const embeddedFiles = await db.getFiles(
       { file_id: { $in: convoFileIds }, embedded: true, embeddingScope: { $ne: 'library' } },
       null,
-      { text: 0 },
+      { text: 0, fullText: 0 },
     );
     const embeddedFileIds = embeddedFiles.map((f) => f.file_id).filter(Boolean);
     if (embeddedFileIds.length === 0) {
