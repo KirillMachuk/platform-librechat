@@ -37,6 +37,10 @@ export enum PermissionTypes {
    */
   WEB_SEARCH = 'WEB_SEARCH',
   /**
+   * Type for using the "Deep Research" feature
+   */
+  DEEP_RESEARCH = 'DEEP_RESEARCH',
+  /**
    * Type for People Picker Permissions
    */
   PEOPLE_PICKER = 'PEOPLE_PICKER',
@@ -84,6 +88,7 @@ export const PERMISSION_TYPE_INTERFACE_FIELDS: Record<PermissionTypes, string> =
   [PermissionTypes.TEMPORARY_CHAT]: 'temporaryChat',
   [PermissionTypes.RUN_CODE]: 'runCode',
   [PermissionTypes.WEB_SEARCH]: 'webSearch',
+  [PermissionTypes.DEEP_RESEARCH]: 'deepResearch',
   [PermissionTypes.FILE_SEARCH]: 'fileSearch',
   [PermissionTypes.FILE_CITATIONS]: 'fileCitations',
   [PermissionTypes.PEOPLE_PICKER]: 'peoplePicker',
@@ -198,6 +203,11 @@ export const webSearchPermissionsSchema = z.object({
 });
 export type TWebSearchPermissions = z.infer<typeof webSearchPermissionsSchema>;
 
+export const deepResearchPermissionsSchema = z.object({
+  [Permissions.USE]: z.boolean().default(true),
+});
+export type TDeepResearchPermissions = z.infer<typeof deepResearchPermissionsSchema>;
+
 export const peoplePickerPermissionsSchema = z.object({
   [Permissions.VIEW_USERS]: z.boolean().default(true),
   [Permissions.VIEW_GROUPS]: z.boolean().default(true),
@@ -262,6 +272,7 @@ export const permissionsSchema = z.object({
   [PermissionTypes.TEMPORARY_CHAT]: temporaryChatPermissionsSchema,
   [PermissionTypes.RUN_CODE]: runCodePermissionsSchema,
   [PermissionTypes.WEB_SEARCH]: webSearchPermissionsSchema,
+  [PermissionTypes.DEEP_RESEARCH]: deepResearchPermissionsSchema,
   [PermissionTypes.PEOPLE_PICKER]: peoplePickerPermissionsSchema,
   [PermissionTypes.MARKETPLACE]: marketplacePermissionsSchema,
   [PermissionTypes.FILE_SEARCH]: fileSearchPermissionsSchema,

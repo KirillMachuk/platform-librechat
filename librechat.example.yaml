@@ -201,17 +201,17 @@ interface:
   # - share: Allow users to share MCP servers with other users
   # - public: Allow users to share MCP servers publicly (with everyone)
 
-    # Creation / edit MCP server config Dialog config example
-    # trustCheckbox:
-    #   label:
-    #     en: 'I understand and I want to continue'
-    #     de: 'Ich verstehe und möchte fortfahren'
-    #     de-DE: 'Ich verstehe und möchte fortfahren' # You can narrow translation to regions like (de-DE or de-CH)
-    #   subLabel:
-    #     en: |
-    #       1ma hasn't reviewed this MCP server. Attackers may attempt to steal your data or trick the model into taking unintended actions, including destroying data. <a href="https://google.de" target="_blank"><strong>Learn more.</strong></a>
-    #     de: |
-    #       1ma hat diesen MCP-Server nicht überprüft. Angreifer könnten versuchen, Ihre Daten zu stehlen oder das Modell zu unbeabsichtigten Aktionen zu verleiten, einschließlich der Zerstörung von Daten. <a href="https://google.de" target="_blank"><strong>Mehr erfahren.</strong></a>
+  # Creation / edit MCP server config Dialog config example
+  # trustCheckbox:
+  #   label:
+  #     en: 'I understand and I want to continue'
+  #     de: 'Ich verstehe und möchte fortfahren'
+  #     de-DE: 'Ich verstehe und möchte fortfahren' # You can narrow translation to regions like (de-DE or de-CH)
+  #   subLabel:
+  #     en: |
+  #       1ma hasn't reviewed this MCP server. Attackers may attempt to steal your data or trick the model into taking unintended actions, including destroying data. <a href="https://google.de" target="_blank"><strong>Learn more.</strong></a>
+  #     de: |
+  #       1ma hat diesen MCP-Server nicht überprüft. Angreifer könnten versuchen, Ihre Daten zu stehlen oder das Modell zu unbeabsichtigten Aktionen zu verleiten, einschließlich der Zerstörung von Daten. <a href="https://google.de" target="_blank"><strong>Mehr erfahren.</strong></a>
 
   # Temporary chat retention period in hours (default: 720, min: 1, max: 8760)
   # temporaryChatRetention: 1
@@ -846,8 +846,14 @@ endpoints:
 # + the sovereign file_search RAG). Requires web search (above) configured. The
 # composer toggle only turns DR on/off; the depth tier is tenant-wide (admin) via
 # `activeMode`. `leadModel` = orchestrator/planner/synthesis, `workerModel` =
-# researchers; when unset, the conversation's selected model is used. Toggle
-# visibility per tenant with `interface.deepResearch` (default: true).
+# researchers; when unset, the conversation's selected model is used.
+#
+# ACCESS: `interface.deepResearch` (default: true) seeds the DEEP_RESEARCH.USE role
+# permission at startup, which is what the badge and the server admission gate both
+# read. It is deliberately separate from `interface.webSearch`: a research run costs
+# orders of magnitude more than a single search, so a role can lose research while
+# keeping ordinary web search. Per-role changes belong in the role permissions editor;
+# changing the value here re-applies it to the roles on restart.
 #
 # MODEL STACK — finalized from the price/quality benchmark
 # (dr-model-bench/REPORT_dr_model_stack.md, 2026-06-23). The quality bottleneck is

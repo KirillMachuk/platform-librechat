@@ -47,6 +47,11 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
     permission: Permissions.USE,
   });
 
+  const canUseDeepResearch = useHasAccess({
+    permissionType: PermissionTypes.DEEP_RESEARCH,
+    permission: Permissions.USE,
+  });
+
   const canRunCode = useHasAccess({
     permissionType: PermissionTypes.RUN_CODE,
     permission: Permissions.USE,
@@ -247,7 +252,9 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
     });
   }
 
-  if (canUseWebSearch && deepResearchEnabled && startupConfig?.interface?.deepResearch !== false) {
+  /** `interface.deepResearch` seeds this permission at startup, so checking the flag here
+   *  as well would override whatever an admin later set on the role. */
+  if (canUseDeepResearch && deepResearchEnabled) {
     dropdownItems.push({
       onClick: handleDeepResearchToggle,
       hideOnClick: false,
