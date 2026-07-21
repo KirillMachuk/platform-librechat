@@ -8,7 +8,8 @@ import type * as t from '~/types';
  * Three collections:
  *  - `creditmonths`   — one doc per billing period (rolling «month of service»,
  *                       Europe/Minsk): the included pool counter.
- *  - `creditpackages` — immutable purchased lots (manual operator top-ups).
+ *  - `creditpackages` — immutable lots: purchased packages and manual operator
+ *                       adjustments (signed — refunds and clawbacks).
  *  - `creditspends`   — per-request journal of actual cost (reconciliation raw material).
  */
 
@@ -35,6 +36,8 @@ creditMonthSchema.index({ tenantId: 1, month: 1 }, { unique: true });
 export const creditPackageSchema: Schema<t.ICreditPackage> = new Schema<t.ICreditPackage>(
   {
     tenantId: { type: String, index: true },
+    /** Lots written before adjustments existed carry no `kind` — readers treat it as `package`. */
+    kind: { type: String, enum: ['package', 'adjustment'], default: 'package' },
     credits: { type: Number, required: true },
     microUsd: { type: Number, required: true },
     comment: { type: String },

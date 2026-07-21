@@ -28,11 +28,15 @@ function statusOf(spentMicroUsd: number): CreditBillingStatus {
   };
 }
 
-function openrouterOf(usageMonthlyUsd: number | null, configured = true): OpenRouterManagement {
+function openrouterOf(
+  usageMonthlyUsd: number | null,
+  configured = true,
+  limitUsd: number | null = 300,
+): OpenRouterManagement {
   return {
     isConfigured: configured,
     getKey: jest.fn().mockResolvedValue({
-      limitUsd: 300,
+      limitUsd,
       usageUsd: 500,
       usageMonthlyUsd,
       disabled: false,
@@ -155,6 +159,34 @@ describe('createBillingReconciler', () => {
     expect(report.alerted).toBe(false);
     expect(report.diffPercent).toBeNull();
     expect(report.reason).toMatch(/usage_monthly/);
+  });
+
+  it('raises the key limit to the worst-case window when the fuse is too low', async () => {
+    /* $250 pool on a mid-month anchor → one UTC key window can legitimately hold two
+     * periods → $550 fuse. The $300 key would have hard-cut the contour first. */
+    const deps = createDeps({ openrouter: openrouterOf(100, true, 300), anchorDay: 15 });
+    await createBillingReconciler(deps).run(NOW);
+    expect(deps.openrouter.updateLimit).toHaveBeenCalledWith(550);
+  });
+
+  it('leaves the key limit untouched when it already matches', async () => {
+    const deps = createDeps({ openrouter: openrouterOf(100, true, 275), anchorDay: 1 });
+    await createBillingReconciler(deps).run(NOW);
+    expect(deps.openrouter.updateLimit).not.toHaveBeenCalled();
+  });
+
+  it('still reconciles when the key limit sync fails', async () => {
+    const openrouter = openrouterOf(100, true, 300);
+    (openrouter.updateLimit as jest.Mock).mockRejectedValue(new Error('429'));
+    const deps = createDeps({ openrouter, anchorDay: 15 });
+
+    const report = await createBillingReconciler(deps).run(NOW);
+
+    expect(report.diffPercent).toBeDefined();
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('key limit sync failed'),
+      expect.any(Error),
+    );
   });
 
   it('never throws when OpenRouter errors', async () => {

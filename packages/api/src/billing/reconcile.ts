@@ -7,6 +7,7 @@ import {
 import type { AuditLogInput, CreditBillingStatus } from '@librechat/data-schemas';
 import type { OpenRouterManagement } from './openrouter';
 import type { BillingAlert } from './types';
+import { computeKeyLimitUsd } from './openrouter';
 
 /** Alert when internal ledger vs OpenRouter drift exceeds ~3%… */
 const DEFAULT_THRESHOLD_RATIO = 0.03;
@@ -79,6 +80,8 @@ export interface BillingReconcilerDeps {
   anchorDay?: number;
   sendAlert: (alert: BillingAlert) => Promise<void>;
   recordAudit: (event: AuditLogInput) => void;
+  /** OpenRouter key-limit headroom over the allowed volume (e.g. 0.1 = +10%). */
+  headroom?: number;
   thresholdRatio?: number;
   minAbsUsd?: number;
 }
@@ -99,6 +102,33 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
 } {
   const threshold = deps.thresholdRatio ?? DEFAULT_THRESHOLD_RATIO;
   const minAbsUsd = deps.minAbsUsd ?? DEFAULT_MIN_ABS_USD;
+
+  /**
+   * Keeps the key's hard fuse aligned with the volume the contour may currently spend.
+   * A package top-up syncs it immediately (admin path); this daily pass covers what
+   * moves on its own — a new billing period, drained packages, a changed pool size.
+   * PATCHes only on an actual change, and a failure never aborts the reconciliation:
+   * a stale fuse is a risk to flag, not a reason to also lose the drift check.
+   */
+  async function syncKeyLimit(status: CreditBillingStatus, currentLimitUsd: number | null) {
+    const desiredLimitUsd = computeKeyLimitUsd({
+      poolMicroUsd: deps.poolMicroUsd,
+      packageRemainingMicroUsd: status.packageRemainingMicroUsd,
+      anchorDay: deps.anchorDay,
+      headroom: deps.headroom,
+    });
+    if (currentLimitUsd === desiredLimitUsd) {
+      return;
+    }
+    try {
+      await deps.openrouter.updateLimit(desiredLimitUsd);
+    } catch (error) {
+      logger.error(
+        `[billingReconcile] key limit sync failed (fuse stays at $${currentLimitUsd ?? 'unlimited'}, wanted $${desiredLimitUsd}):`,
+        error,
+      );
+    }
+  }
 
   async function run(now: Date = new Date()): Promise<ReconcileReport> {
     if (!deps.openrouter.isConfigured) {
@@ -125,6 +155,8 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
         deps.sumCreditSpendJournal({ month: periodKey, tenantId: deps.tenantId }),
         deps.sumCreditSpendJournalRange({ from: utcMonthStart, to: now, tenantId: deps.tenantId }),
       ]);
+
+      await syncKeyLimit(status, key.limitUsd);
 
       /* Internal consistency: the current period's per-request journal sum must equal
        * the period counter — both are written from the same rounded µ$ value. Persistent

@@ -1,6 +1,6 @@
 export { createBillingIngestHandlers } from './ingest';
 export { createBillingNotifier } from './notify';
-export { createOpenRouterManagement } from './openrouter';
+export { createOpenRouterManagement, computeKeyLimitUsd } from './openrouter';
 export { createBillingReconciler } from './reconcile';
 export { readBillingConfig, DEFAULT_POOL_CREDITS, DEFAULT_LIMIT_HEADROOM } from './config';
 export type { BillingIngestDeps } from './ingest';

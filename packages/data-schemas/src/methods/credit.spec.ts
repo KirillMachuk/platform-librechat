@@ -274,6 +274,104 @@ describe('addCreditPackage idempotency & unblocking', () => {
   });
 });
 
+describe('manual adjustments (refunds and clawbacks)', () => {
+  const at = new Date('2026-07-10T12:00:00Z');
+
+  test('a lot defaults to kind=package and a package may not be negative', async () => {
+    await methods.addCreditPackage({ credits: 50, idempotencyKey: 'plain', at });
+    const { packages } = await methods.listCreditPackages();
+    expect(packages[0].kind).toBe('package');
+
+    await expect(
+      methods.addCreditPackage({ credits: -50, idempotencyKey: 'bad', at }),
+    ).rejects.toThrow(/cannot be negative/);
+    await expect(
+      methods.addCreditPackage({ kind: 'adjustment', credits: 0, idempotencyKey: 'zero', at }),
+    ).rejects.toThrow(/invalid lot size/);
+  });
+
+  test('a positive adjustment grants credits and lifts the soft block', async () => {
+    await spend({ credits: 101, at });
+    expect((await methods.getCreditBillingStatus({ poolMicroUsd: POOL, at })).blocked).toBe(true);
+
+    await methods.addCreditPackage({
+      kind: 'adjustment',
+      credits: 40,
+      comment: 'возврат: сбой 2026-07-10',
+      idempotencyKey: 'refund-1',
+      at,
+    });
+
+    const status = await methods.getCreditBillingStatus({ poolMicroUsd: POOL, at });
+    expect(status.blocked).toBe(false);
+    expect(status.packageRemainingMicroUsd).toBe(creditsToMicroUsd(39));
+  });
+
+  test('a negative adjustment claws credits back and can re-block the contour', async () => {
+    await methods.addCreditPackage({ credits: 50, idempotencyKey: 'lot-1', at });
+    await spend({ credits: 120, at });
+
+    let status = await methods.getCreditBillingStatus({ poolMicroUsd: POOL, at });
+    expect(status.blocked).toBe(false);
+    expect(status.packageRemainingMicroUsd).toBe(creditsToMicroUsd(30));
+
+    await methods.addCreditPackage({
+      kind: 'adjustment',
+      credits: -30,
+      comment: 'откат ошибочного начисления',
+      idempotencyKey: 'clawback-1',
+      at,
+    });
+
+    status = await methods.getCreditBillingStatus({ poolMicroUsd: POOL, at });
+    expect(status.packageRemainingMicroUsd).toBe(0);
+    expect(status.blocked).toBe(true);
+  });
+
+  test('a negative adjustment does NOT re-arm the exhausted notification', async () => {
+    await spend({ credits: 101, at });
+    expect(await methods.markCreditMonthNotified({ month: '2026-07-01', kind: 'exhausted' })).toBe(
+      true,
+    );
+
+    await methods.addCreditPackage({
+      kind: 'adjustment',
+      credits: -10,
+      comment: 'клавбек',
+      idempotencyKey: 'clawback-2',
+      at,
+    });
+
+    const status = await methods.getCreditBillingStatus({ poolMicroUsd: POOL, at });
+    expect(status.notifiedExhaustedAt).not.toBeNull();
+  });
+
+  test('the lot table still reconciles with the headline remainder', async () => {
+    /* The regression this guards: a negative lot flowing through the per-lot FIFO
+     * arithmetic ran the drain backwards, so the rows on screen no longer summed to
+     * the «Остаток пакетов» above them. */
+    await methods.addCreditPackage({ credits: 50, idempotencyKey: 'lot-1', at });
+    await methods.addCreditPackage({ credits: 100, idempotencyKey: 'lot-2', at });
+    await methods.addCreditPackage({
+      kind: 'adjustment',
+      credits: -20,
+      comment: 'клавбек',
+      idempotencyKey: 'adj-1',
+      at,
+    });
+    await spend({ credits: 170, at });
+
+    const status = await methods.getCreditBillingStatus({ poolMicroUsd: POOL, at });
+    const { packages } = await methods.listCreditPackages();
+    const shownTotal = packages.reduce((sum, lot) => sum + lot.remainingMicroUsd, 0);
+
+    expect(status.packageRemainingMicroUsd).toBe(creditsToMicroUsd(60));
+    expect(shownTotal).toBe(status.packageRemainingMicroUsd);
+    // Oldest positive lot drains first; the adjustment itself holds no balance.
+    expect(packages.map((lot) => lot.remainingMicroUsd)).toEqual([0, creditsToMicroUsd(60), 0]);
+  });
+});
+
 describe('notification single-winner', () => {
   test('markCreditMonthNotified wins exactly once per kind', async () => {
     const at = new Date('2026-07-10T12:00:00Z');

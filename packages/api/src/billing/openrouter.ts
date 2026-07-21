@@ -1,4 +1,5 @@
-import { logger } from '@librechat/data-schemas';
+import { logger, normalizeAnchorDay, MICRO_USD_PER_USD } from '@librechat/data-schemas';
+import { DEFAULT_LIMIT_HEADROOM } from './config';
 
 /**
  * Minimal OpenRouter key-management client (Provisioning/Management API).
@@ -42,6 +43,32 @@ export interface OpenRouterManagementOptions {
 
 function toNumberOrNull(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * The key limit (USD) that keeps the hard fuse just above the volume the contour may
+ * legitimately spend inside ONE key window.
+ *
+ * The key resets on the UTC calendar month (`limit_reset: 'monthly'`), while the billing
+ * period is a rolling «month of service» anchored to `anchorDay`. With any anchor other
+ * than the 1st, one UTC month straddles the tail of one period and the head of the next,
+ * so up to TWO full pools can be spent legitimately inside a single key window. A limit
+ * sized for one pool would hard-cut the key — every model dead contour-wide — *before*
+ * the soft block ever engages. Sizing for that worst case keeps the fuse a fuse: it still
+ * stops a runaway (a fail-open gate plus a loop), while the precise, period-accurate
+ * ceiling remains the soft block.
+ */
+export function computeKeyLimitUsd(params: {
+  poolMicroUsd: number;
+  packageRemainingMicroUsd?: number;
+  anchorDay?: number;
+  headroom?: number;
+}): number {
+  const poolsPerKeyWindow = normalizeAnchorDay(params.anchorDay) === 1 ? 1 : 2;
+  const packageRemaining = Math.max(0, params.packageRemainingMicroUsd ?? 0);
+  const worstCaseMicroUsd = params.poolMicroUsd * poolsPerKeyWindow + packageRemaining;
+  const headroom = params.headroom ?? DEFAULT_LIMIT_HEADROOM;
+  return Math.ceil((worstCaseMicroUsd / MICRO_USD_PER_USD) * (1 + headroom));
 }
 
 /**

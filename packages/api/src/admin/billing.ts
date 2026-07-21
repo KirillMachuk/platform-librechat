@@ -1,8 +1,9 @@
-import { logger, microUsdToCredits, MICRO_USD_PER_USD } from '@librechat/data-schemas';
+import { logger, microUsdToCredits } from '@librechat/data-schemas';
 import type {
   AddCreditPackageInput,
   AddCreditPackageResult,
   AuditLogInput,
+  CreditLotKind,
   CreditBillingStatus,
   CreditPackageWithRemaining,
 } from '@librechat/data-schemas';
@@ -10,16 +11,28 @@ import type { Response } from 'express';
 import type { ServerRequest } from '~/types/http';
 import type { ReconcileReport } from '~/billing/reconcile';
 import type { OpenRouterManagement } from '~/billing/openrouter';
+import { computeKeyLimitUsd } from '~/billing/openrouter';
 import { auditRequestContext } from '~/audit/service';
 
 /** Contract package sizes (Credits). Anything else is a validation error. */
 export const CREDIT_PACKAGE_SIZES = [5_000, 10_000, 30_000] as const;
+
+/**
+ * Ceiling on a single manual adjustment (Credits, either sign). Adjustments exist for
+ * refunds, clawbacks and off-contract top-ups paid by bank transfer — all human-scale.
+ * A larger correction is a typo far more often than an intent, and at this size the
+ * damage (a wrongly unblocked or blocked contour) outlives the mistake.
+ */
+export const MAX_ADJUSTMENT_CREDITS = 50_000;
+
+type PackageSize = (typeof CREDIT_PACKAGE_SIZES)[number];
 
 const MAX_COMMENT_LEN = 500;
 const MAX_IDEMPOTENCY_KEY_LEN = 128;
 
 export interface AdminBillingLot {
   id: string;
+  kind: CreditLotKind;
   credits: number;
   remainingCredits: number;
   comment?: string;
@@ -96,6 +109,7 @@ function isOperatorRequest(req: ServerRequest, operatorEmails: string[]): boolea
 function toLot(pkg: CreditPackageWithRemaining): AdminBillingLot {
   return {
     id: pkg.id,
+    kind: pkg.kind,
     credits: pkg.credits,
     remainingCredits: Math.max(0, microUsdToCredits(pkg.remainingMicroUsd)),
     comment: pkg.comment,
@@ -162,10 +176,10 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
   }
 
   /**
-   * Updates the OpenRouter key's monthly limit to (pool + package remaining) ×
-   * (1 + headroom) so the hard fuse stays just above the allowed volume.
-   * Best-effort: when unconfigured/failed, the operator gets the recommended
-   * number to set manually in the dashboard.
+   * Updates the OpenRouter key's monthly limit to the worst-case volume of one key
+   * window (see {@link computeKeyLimitUsd}) so the hard fuse stays above the allowed
+   * volume instead of cutting in ahead of the soft block. Best-effort: when
+   * unconfigured/failed, the operator gets the recommended number to set manually.
    */
   async function syncOpenRouterLimit(
     req: ServerRequest,
@@ -175,10 +189,12 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
       tenantId: deps.tenantId,
       anchorDay: deps.anchorDay,
     });
-    const allowedMicroUsd = deps.poolMicroUsd + Math.max(0, status.packageRemainingMicroUsd);
-    const recommendedLimitUsd = Math.ceil(
-      (allowedMicroUsd / MICRO_USD_PER_USD) * (1 + deps.limitHeadroom),
-    );
+    const recommendedLimitUsd = computeKeyLimitUsd({
+      poolMicroUsd: deps.poolMicroUsd,
+      packageRemainingMicroUsd: status.packageRemainingMicroUsd,
+      anchorDay: deps.anchorDay,
+      headroom: deps.limitHeadroom,
+    });
     if (!deps.openrouter?.isConfigured) {
       return { mode: 'manual', recommendedLimitUsd };
     }
@@ -208,35 +224,57 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
       }
 
       const body = (req.body ?? {}) as {
+        kind?: unknown;
         credits?: unknown;
         comment?: unknown;
         invoiceRef?: unknown;
         idempotencyKey?: unknown;
       };
+      const kind: CreditLotKind = body.kind === 'adjustment' ? 'adjustment' : 'package';
       const credits = body.credits;
-      if (
-        typeof credits !== 'number' ||
-        !CREDIT_PACKAGE_SIZES.includes(credits as (typeof CREDIT_PACKAGE_SIZES)[number])
-      ) {
+      const comment =
+        typeof body.comment === 'string'
+          ? body.comment.trim().slice(0, MAX_COMMENT_LEN)
+          : undefined;
+
+      if (typeof credits !== 'number' || !Number.isFinite(credits)) {
+        return res.status(400).json({ error: 'credits must be a number' });
+      }
+      if (kind === 'package' && !CREDIT_PACKAGE_SIZES.includes(credits as PackageSize)) {
         return res
           .status(400)
           .json({ error: `credits must be one of: ${CREDIT_PACKAGE_SIZES.join(', ')}` });
       }
+      if (kind === 'adjustment') {
+        if (!Number.isInteger(credits) || credits === 0) {
+          return res
+            .status(400)
+            .json({ error: 'Корректировка должна быть целым числом Кредитов, не равным нулю' });
+        }
+        if (Math.abs(credits) > MAX_ADJUSTMENT_CREDITS) {
+          return res.status(400).json({
+            error: `Корректировка не может превышать ${MAX_ADJUSTMENT_CREDITS} Кредитов по модулю`,
+          });
+        }
+        /* A package carries its own paper trail (fixed size, invoice); an adjustment is
+         * an off-contract movement of money whose only trace is what the operator types. */
+        if (!comment) {
+          return res.status(400).json({ error: 'Для корректировки обязателен комментарий' });
+        }
+      }
+
       const idempotencyKey =
         typeof body.idempotencyKey === 'string' ? body.idempotencyKey.trim() : '';
       if (!idempotencyKey || idempotencyKey.length > MAX_IDEMPOTENCY_KEY_LEN) {
         return res.status(400).json({ error: 'idempotencyKey is required' });
       }
-      const comment =
-        typeof body.comment === 'string'
-          ? body.comment.trim().slice(0, MAX_COMMENT_LEN)
-          : undefined;
       const invoiceRef =
         typeof body.invoiceRef === 'string'
           ? body.invoiceRef.trim().slice(0, MAX_COMMENT_LEN)
           : undefined;
 
       const result = await deps.addCreditPackage({
+        kind,
         credits,
         comment,
         invoiceRef,
@@ -250,7 +288,7 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
       if (result.created) {
         deps.recordAudit({
           ...actorFields(req),
-          action: 'billing.package_added',
+          action: kind === 'adjustment' ? 'billing.adjustment_added' : 'billing.package_added',
           targetType: 'billing',
           targetId: String(result.package._id),
           metadata: {

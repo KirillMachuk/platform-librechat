@@ -1,5 +1,5 @@
 import { logger } from '@librechat/data-schemas';
-import { createOpenRouterManagement } from './openrouter';
+import { createOpenRouterManagement, computeKeyLimitUsd } from './openrouter';
 
 jest.mock('@librechat/data-schemas', () => ({
   ...jest.requireActual('@librechat/data-schemas'),
@@ -87,5 +87,47 @@ describe('createOpenRouterManagement', () => {
         body: JSON.stringify({ limit: 330, limit_reset: 'monthly' }),
       }),
     );
+  });
+});
+
+describe('computeKeyLimitUsd', () => {
+  /** $250 pool — the contract default (25 000 Credits). */
+  const poolMicroUsd = 250_000_000;
+
+  it('sizes for one pool when billing follows the calendar month (anchor 1)', () => {
+    expect(computeKeyLimitUsd({ poolMicroUsd, anchorDay: 1, headroom: 0.1 })).toBe(275);
+  });
+
+  it('sizes for TWO pools when the anchor is not the 1st', () => {
+    /* The key window is a UTC calendar month while the period is anchor→anchor, so one
+     * window holds the tail of one period and the head of the next. A one-pool limit
+     * would hard-cut the key mid-contract — this is the regression that matters. */
+    expect(computeKeyLimitUsd({ poolMicroUsd, anchorDay: 15, headroom: 0.1 })).toBe(550);
+  });
+
+  it('treats a missing anchor as the calendar month and defaults the headroom', () => {
+    expect(computeKeyLimitUsd({ poolMicroUsd })).toBe(275);
+  });
+
+  it('adds the remaining package balance on top of the worst-case pools', () => {
+    expect(
+      computeKeyLimitUsd({
+        poolMicroUsd,
+        packageRemainingMicroUsd: 100_000_000,
+        anchorDay: 15,
+        headroom: 0.1,
+      }),
+    ).toBe(660);
+  });
+
+  it('ignores a negative package balance (boundary overrun must not lower the fuse)', () => {
+    expect(
+      computeKeyLimitUsd({
+        poolMicroUsd,
+        packageRemainingMicroUsd: -50_000_000,
+        anchorDay: 1,
+        headroom: 0.1,
+      }),
+    ).toBe(275);
   });
 });

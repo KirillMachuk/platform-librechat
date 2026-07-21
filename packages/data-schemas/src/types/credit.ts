@@ -28,12 +28,22 @@ export interface ICreditMonth extends Document {
   updatedAt?: Date;
 }
 
-/** A purchased credit package (immutable lot; needed for акты/refunds). */
+/**
+ * What a lot represents. `package` — a purchased contract package (positive, fixed
+ * sizes). `adjustment` — a manual operator correction of any sign: a goodwill refund
+ * for an outage we caused, a clawback of a mistaken grant, or a non-standard top-up
+ * after a bank transfer the service never sees.
+ */
+export type CreditLotKind = 'package' | 'adjustment';
+
+/** A credit lot: a purchased package or a manual adjustment (immutable; needed for акты/refunds). */
 export interface ICreditPackage extends Document {
   tenantId?: string;
-  /** Package size in whole Credits (5 000 / 10 000 / 30 000). */
+  /** Absent on documents written before adjustments existed — read as `package`. */
+  kind?: CreditLotKind;
+  /** Lot size in whole Credits. Packages are positive; adjustments may be negative. */
   credits: number;
-  /** Same amount in µ$ (credits × 10 000). */
+  /** Same amount in µ$ (credits × 10 000); signed, like `credits`. */
   microUsd: number;
   /** Operator comment / invoice number. */
   comment?: string;
@@ -114,6 +124,8 @@ export interface CreditBillingStatus {
 }
 
 export interface AddCreditPackageInput {
+  /** Defaults to `package`. Adjustments accept a negative `credits`. */
+  kind?: CreditLotKind;
   credits: number;
   comment?: string;
   invoiceRef?: string;
@@ -135,8 +147,10 @@ export interface AddCreditPackageResult {
 /** A lot with its FIFO-derived remaining amount (oldest lots are drained first). */
 export interface CreditPackageWithRemaining {
   id: string;
+  kind: CreditLotKind;
   credits: number;
   microUsd: number;
+  /** Always 0 for non-positive lots — a negative adjustment holds no balance, it drains one. */
   remainingMicroUsd: number;
   comment?: string;
   invoiceRef?: string;

@@ -76,6 +76,7 @@ function getBillingWiring() {
     sumCreditSpendJournalRange: db.sumCreditSpendJournalRange,
     poolMicroUsd: config.poolMicroUsd,
     anchorDay: config.anchorDay,
+    headroom: config.openrouter.headroom,
     sendAlert,
     recordAudit,
   });

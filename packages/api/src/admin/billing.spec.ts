@@ -35,6 +35,7 @@ function statusOf(overrides: Partial<CreditBillingStatus> = {}): CreditBillingSt
 function lotOf(overrides: Partial<CreditPackageWithRemaining> = {}): CreditPackageWithRemaining {
   return {
     id: new Types.ObjectId().toString(),
+    kind: 'package',
     credits: 5_000,
     microUsd: 50_000_000,
     remainingMicroUsd: 50_000_000,
@@ -165,6 +166,82 @@ describe('createAdminBillingHandlers', () => {
         const { req, res, status } = createReqRes({
           email: 'op@1ma.ai',
           body: { credits, idempotencyKey: 'k' },
+        });
+
+        await handlers.addPackage(req, res);
+
+        expect(status).toHaveBeenCalledWith(400);
+        expect(deps.addCreditPackage).not.toHaveBeenCalled();
+      },
+    );
+
+    it('accepts a negative adjustment and audits it as an adjustment', async () => {
+      const deps = createDeps();
+      const handlers = createAdminBillingHandlers(deps);
+      const { req, res, status } = createReqRes({
+        email: 'op@1ma.ai',
+        body: {
+          kind: 'adjustment',
+          credits: -1_500,
+          comment: 'откат ошибочного начисления',
+          idempotencyKey: 'adj-1',
+        },
+      });
+
+      await handlers.addPackage(req, res);
+
+      expect(status).toHaveBeenCalledWith(201);
+      expect(deps.addCreditPackage).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'adjustment', credits: -1_500 }),
+      );
+      expect(deps.recordAudit).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'billing.adjustment_added' }),
+      );
+    });
+
+    it('accepts an off-contract positive adjustment (bank transfer the service never sees)', async () => {
+      const deps = createDeps();
+      const handlers = createAdminBillingHandlers(deps);
+      const { req, res, status } = createReqRes({
+        email: 'op@1ma.ai',
+        body: {
+          kind: 'adjustment',
+          credits: 7_500,
+          comment: 'оплата п/п №15',
+          idempotencyKey: 'adj-2',
+        },
+      });
+
+      await handlers.addPackage(req, res);
+
+      expect(status).toHaveBeenCalledWith(201);
+      expect(deps.addCreditPackage).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'adjustment', credits: 7_500 }),
+      );
+    });
+
+    it('requires a comment on an adjustment (its only paper trail)', async () => {
+      const deps = createDeps();
+      const handlers = createAdminBillingHandlers(deps);
+      const { req, res, status } = createReqRes({
+        email: 'op@1ma.ai',
+        body: { kind: 'adjustment', credits: 100, idempotencyKey: 'adj-3' },
+      });
+
+      await handlers.addPackage(req, res);
+
+      expect(status).toHaveBeenCalledWith(400);
+      expect(deps.addCreditPackage).not.toHaveBeenCalled();
+    });
+
+    it.each([[0], [1.5], [60_000], [-60_000]])(
+      'rejects out-of-range adjustment %p',
+      async (credits) => {
+        const deps = createDeps();
+        const handlers = createAdminBillingHandlers(deps);
+        const { req, res, status } = createReqRes({
+          email: 'op@1ma.ai',
+          body: { kind: 'adjustment', credits, comment: 'c', idempotencyKey: 'adj-4' },
         });
 
         await handlers.addPackage(req, res);
