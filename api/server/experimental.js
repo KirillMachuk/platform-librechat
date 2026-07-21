@@ -33,6 +33,7 @@ const { jwtLogin, ldapLogin, passportLogin } = require('~/strategies');
 const { updateInterfacePermissions: updateInterfacePerms } = require('@librechat/api');
 const {
   getRoleByName,
+  updateRoleByName,
   updateAccessPermissions,
   seedDatabase,
   sweepOrphanedPreviews,
@@ -303,7 +304,12 @@ if (cluster.isMaster) {
     expiredFileSweepOptions = { appConfig, loadAppConfig: getAppConfig };
     startExpiredFileSweepOnce();
     await performStartupChecks(appConfig);
-    await updateInterfacePerms({ appConfig, getRoleByName, updateAccessPermissions });
+    await updateInterfacePerms({
+      appConfig,
+      getRoleByName,
+      updateAccessPermissions,
+      updateRoleByName,
+    });
 
     /** Load index.html for SPA serving */
     const indexPath = path.join(appConfig.paths.dist, 'index.html');

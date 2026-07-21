@@ -6,6 +6,7 @@ import { updateInterfacePermissions } from './permissions';
 
 const mockUpdateAccessPermissions = jest.fn();
 const mockGetRoleByName = jest.fn();
+const mockUpdateRoleByName = jest.fn();
 
 describe('updateInterfacePermissions - permissions', () => {
   beforeEach(() => {
@@ -59,6 +60,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const expectedPermissionsForUser = {
@@ -244,6 +246,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const expectedPermissionsForUser = {
@@ -414,6 +417,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const expectedPermissionsForUser = {
@@ -597,6 +601,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const expectedPermissionsForUser = {
@@ -767,6 +772,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const expectedPermissionsForUser = {
@@ -953,6 +959,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     // Should be called with all permissions EXCEPT prompts and agents (which already exist)
@@ -1129,6 +1136,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     // Should update prompts (explicitly configured) and all other permissions that don't exist
@@ -1274,6 +1282,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -1304,6 +1313,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     expect(mockUpdateAccessPermissions).toHaveBeenCalledTimes(2);
@@ -1346,6 +1356,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     // Should call getRoleByName exactly twice (once for USER, once for ADMIN)
@@ -1391,6 +1402,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -1485,6 +1497,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -1584,6 +1597,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     // Should only update permissions that don't exist
@@ -1657,6 +1671,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -1708,6 +1723,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const expectedMemoryPermissions = {
@@ -1757,6 +1773,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     // Check USER role call - should use role defaults for non-USE permissions
@@ -1835,6 +1852,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     // Check USER role call
@@ -1903,6 +1921,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     // Check USER role call - memory should be re-enabled
@@ -1970,6 +1989,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const expectedMemoryPermissions = {
@@ -2060,6 +2080,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2124,6 +2145,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2190,6 +2212,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2255,6 +2278,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2318,6 +2342,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2369,6 +2394,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2398,6 +2424,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2436,6 +2463,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2464,6 +2492,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2492,6 +2521,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2541,6 +2571,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2579,6 +2610,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2603,6 +2635,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2641,6 +2674,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2688,6 +2722,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2727,6 +2762,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2775,6 +2811,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2808,6 +2845,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2845,6 +2883,7 @@ describe('updateInterfacePermissions - permissions', () => {
       appConfig,
       getRoleByName: mockGetRoleByName,
       updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
     });
 
     const userCall = mockUpdateAccessPermissions.mock.calls.find(
@@ -2856,5 +2895,112 @@ describe('updateInterfacePermissions - permissions', () => {
       [Permissions.SHARE]: true,
       [Permissions.SHARE_PUBLIC]: true,
     });
+  });
+});
+
+describe('updateInterfacePermissions - config seed fingerprint', () => {
+  /** A role that already carries every permission type, so `addPermissionIfNeeded`
+   *  only fires for explicitly-configured values rather than for missing types. */
+  const seededRole = (overrides: Record<string, unknown> = {}) => ({
+    name: SystemRoles.USER,
+    permissions: JSON.parse(JSON.stringify(roleDefaults[SystemRoles.USER].permissions)),
+    ...overrides,
+  });
+
+  const buildAppConfig = async (webSearch: boolean) => {
+    const config = { interface: { webSearch } } as Partial<TCustomConfig>;
+    const configDefaults = { interface: {} } as TConfigDefaults;
+    const interfaceConfig = await loadDefaultInterface({ config, configDefaults });
+    return { config, interfaceConfig } as unknown as AppConfig;
+  };
+
+  const run = async (appConfig: AppConfig) =>
+    updateInterfacePermissions({
+      appConfig,
+      getRoleByName: mockGetRoleByName,
+      updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
+    });
+
+  const webSearchUpdateFor = (role: SystemRoles) =>
+    mockUpdateAccessPermissions.mock.calls.find((call) => call[0] === role)?.[1]?.[
+      PermissionTypes.WEB_SEARCH
+    ];
+
+  const fingerprintWrittenFor = (role: SystemRoles) =>
+    mockUpdateRoleByName.mock.calls.find((call) => call[0] === role)?.[1]?.interfaceSeedHash;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('applies the configured value and records a fingerprint on the first run', async () => {
+    mockGetRoleByName.mockResolvedValue(seededRole());
+
+    await run(await buildAppConfig(false));
+
+    expect(webSearchUpdateFor(SystemRoles.USER)).toEqual({ [Permissions.USE]: false });
+    expect(fingerprintWrittenFor(SystemRoles.USER)).toEqual(expect.any(String));
+  });
+
+  it('preserves an administrator change when the config has not changed since', async () => {
+    const appConfig = await buildAppConfig(false);
+    mockGetRoleByName.mockResolvedValue(seededRole());
+    await run(appConfig);
+    const fingerprint = fingerprintWrittenFor(SystemRoles.USER);
+
+    jest.clearAllMocks();
+    /** The administrator has since turned web search back on for this role. */
+    const adminEdited = seededRole({ interfaceSeedHash: fingerprint });
+    adminEdited.permissions[PermissionTypes.WEB_SEARCH] = { [Permissions.USE]: true };
+    mockGetRoleByName.mockResolvedValue(adminEdited);
+
+    await run(appConfig);
+
+    expect(webSearchUpdateFor(SystemRoles.USER)).toBeUndefined();
+    expect(mockUpdateRoleByName).not.toHaveBeenCalled();
+  });
+
+  it('re-applies the configured value once the config itself changes', async () => {
+    mockGetRoleByName.mockResolvedValue(seededRole());
+    await run(await buildAppConfig(false));
+    const oldFingerprint = fingerprintWrittenFor(SystemRoles.USER);
+
+    jest.clearAllMocks();
+    const adminEdited = seededRole({ interfaceSeedHash: oldFingerprint });
+    adminEdited.permissions[PermissionTypes.WEB_SEARCH] = { [Permissions.USE]: false };
+    mockGetRoleByName.mockResolvedValue(adminEdited);
+
+    await run(await buildAppConfig(true));
+
+    expect(webSearchUpdateFor(SystemRoles.USER)).toEqual({ [Permissions.USE]: true });
+    expect(fingerprintWrittenFor(SystemRoles.USER)).not.toBe(oldFingerprint);
+  });
+
+  /** Existing installations have no fingerprint stored; they must seed once, not never. */
+  it('treats a role without a fingerprint as never seeded', async () => {
+    const adminEdited = seededRole();
+    adminEdited.permissions[PermissionTypes.WEB_SEARCH] = { [Permissions.USE]: true };
+    mockGetRoleByName.mockResolvedValue(adminEdited);
+
+    await run(await buildAppConfig(false));
+
+    expect(webSearchUpdateFor(SystemRoles.USER)).toEqual({ [Permissions.USE]: false });
+  });
+
+  it('still seeds a permission type the role is missing, fingerprint or not', async () => {
+    const appConfig = await buildAppConfig(false);
+    mockGetRoleByName.mockResolvedValue(seededRole());
+    await run(appConfig);
+    const fingerprint = fingerprintWrittenFor(SystemRoles.USER);
+
+    jest.clearAllMocks();
+    const missingType = seededRole({ interfaceSeedHash: fingerprint });
+    delete missingType.permissions[PermissionTypes.WEB_SEARCH];
+    mockGetRoleByName.mockResolvedValue(missingType);
+
+    await run(appConfig);
+
+    expect(webSearchUpdateFor(SystemRoles.USER)).toEqual({ [Permissions.USE]: false });
   });
 });

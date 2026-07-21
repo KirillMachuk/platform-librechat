@@ -32,6 +32,7 @@ const { connectDb, indexSync } = require('~/db');
 const {
   updateAccessPermissions,
   sweepOrphanedPreviews,
+  updateRoleByName,
   getRoleByName,
   seedDatabase,
 } = require('~/models');
@@ -141,7 +142,12 @@ const startServer = async () => {
   startEmbedWorker();
   await runAsSystem(async () => {
     await performStartupChecks(appConfig);
-    await updateInterfacePermissions({ appConfig, getRoleByName, updateAccessPermissions });
+    await updateInterfacePermissions({
+      appConfig,
+      getRoleByName,
+      updateAccessPermissions,
+      updateRoleByName,
+    });
   });
 
   const indexPath = path.join(appConfig.paths.dist, 'index.html');
