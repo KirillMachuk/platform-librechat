@@ -93,6 +93,19 @@ cache: true
 #         # tenantId: your-tenant-id
 
 # Custom interface configuration
+# HOW THE PERMISSION-BEARING KEYS BELOW BEHAVE
+#   Keys such as `webSearch`, `deepResearch`, `fileSearch`, `agents`, `prompts` and
+#   `marketplace` seed role permissions at startup rather than being read live. Startup
+#   fingerprints this subset of the file and stores it on each role, so:
+#     - first start, or a role that has never been seeded → the values here are applied;
+#     - restart with this file unchanged → role permissions are LEFT ALONE, which is what
+#       lets an administrator's changes in the admin panel survive a redeploy;
+#     - this file actually changed → the new values are applied once, overriding the
+#       administrator for the keys present here, and then settle again.
+#   So both paths stay open: day-to-day tuning belongs in the admin panel, and an operator
+#   can still force a value from here by editing it and redeploying. A permission type that
+#   is missing from a role entirely is always seeded, fingerprint or not — that is how new
+#   permission types arrive on upgrade.
 interface:
   customWelcome: 'Welcome to 1ma! Enjoy your experience.'
   # Enable/disable file search as a chatarea selection (default: true)

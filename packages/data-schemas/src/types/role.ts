@@ -6,6 +6,8 @@ import { CursorPaginationParams } from '~/common';
 export interface IRole extends Document {
   name: string;
   description?: string;
+  /** Fingerprint of the `interface` config subset that last seeded these permissions. */
+  interfaceSeedHash?: string;
   permissions: {
     [PermissionTypes.BOOKMARKS]?: {
       [Permissions.USE]?: boolean;
