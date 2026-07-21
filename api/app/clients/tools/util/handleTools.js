@@ -44,6 +44,7 @@ const {
 const { getMCPRequestContext } = require('~/server/services/MCPRequestContext');
 const { createFileSearchTool, primeFiles: primeSearchFiles } = require('./fileSearch');
 const { createLibrarySearchTool } = require('./librarySearch');
+const { createOpenDocumentTool } = require('./openDocument');
 const { primeFiles: primeCodeFiles } = require('~/server/services/Files/Code/process');
 const { getUserPluginAuthValue } = require('~/server/services/PluginService');
 const { loadAuthValues } = require('~/server/services/Tools/credentials');
@@ -368,6 +369,18 @@ const loadTools = async ({
           conversationFileIds,
         });
       };
+      continue;
+    } else if (tool === Tools.open_document) {
+      /* conversationFileIds mirrors the library_search branch above: an id the user attached
+       * to THIS chat may be opened even where the library visibility gate would hide it
+       * (temp chat, retention, project source) — an explicit attachment is always in scope. */
+      requestedTools[tool] = async () =>
+        createOpenDocumentTool({
+          userId: user,
+          tenantId: options.req?.user?.tenantId,
+          req: options.req,
+          conversationFileIds: options.tool_resources?.[EToolResources.file_search]?.file_ids ?? [],
+        });
       continue;
     } else if (tool === Tools.web_search) {
       const result = await loadWebSearchAuth({

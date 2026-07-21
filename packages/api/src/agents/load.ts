@@ -92,7 +92,12 @@ export async function loadEphemeralAgent(
     // sat unsearched (measured on prod: 118 file_search calls, 0 library_search). file_search
     // now serves the toggle-OFF case only, where applyConversationFileContext force-arms it to
     // keep a chat's own embedded documents reachable without expanding the search to the library.
-    tools.push(Tools.library_search);
+    //
+    // open_document is the second half of the same workflow: search returns matching passages,
+    // this reads a found document in full when the user asks about it in depth. Armed together
+    // because one without the other is a dead end — finding a contract you cannot read, or
+    // reading one you cannot find.
+    tools.push(Tools.library_search, Tools.open_document);
   }
   if ((ephemeralAgent?.web_search === true || modelSpec?.webSearch === true) && !reasoningModel) {
     tools.push(Tools.web_search);

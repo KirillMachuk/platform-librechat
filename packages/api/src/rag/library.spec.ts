@@ -149,7 +149,7 @@ describe('searchLibrary', () => {
     });
   });
 
-  it('caps documents at topDocuments and chunks at chunksPerDocument', async () => {
+  it('caps documents at topDocuments and the total chunk budget', async () => {
     const fetchImpl = jest.fn(async () =>
       jsonResponse([
         row('f1', 'a', 0.1),
@@ -166,9 +166,33 @@ describe('searchLibrary', () => {
       }),
     );
     expect(result.documentCount).toBe(2);
-    // f1 keeps 2 of its 3 chunks; f3 is dropped (beyond topDocuments).
-    expect(result.sources.filter((s) => s.fileId === 'f1')).toHaveLength(2);
+    // f3 is dropped (beyond topDocuments); f1 + f2 stay within the 2*2 chunk budget.
     expect(result.sources.some((s) => s.fileId === 'f3')).toBe(false);
+    expect(result.sources).toHaveLength(4);
+    // f1 ranks first, so it absorbs the chunk f2 did not need — depth follows relevance.
+    expect(result.sources.filter((s) => s.fileId === 'f1')).toHaveLength(3);
+    expect(result.sources.filter((s) => s.fileId === 'f2')).toHaveLength(1);
+  });
+
+  it('gives a single matching document the whole chunk budget (named-document deep dive)', async () => {
+    /* "Что сказано в договоре с Ромашкой про расторжение" collapses the result to one document.
+     * Its extra passages must not be discarded just because chunksPerDocument is 3 — the budget
+     * (topDocuments * chunksPerDocument) is what bounds the answer. */
+    const fetchImpl = jest.fn(async () =>
+      jsonResponse(
+        Array.from({ length: 20 }, (_, i) => row('only-doc', `chunk-${i}`, 0.1 + i * 0.01)),
+      ),
+    );
+    const result = await searchLibrary(
+      baseParams({
+        config: { ...CONFIG, topDocuments: 5, chunksPerDocument: 3 },
+        fetchImpl: fetchImpl as never,
+      }),
+    );
+    expect(result.documentCount).toBe(1);
+    expect(result.sources).toHaveLength(15);
+    // Depth is rank-ordered: the best passage still leads.
+    expect(result.sources[0].content).toContain('chunk-0');
   });
 
   it('treats a 404 (rag_api empty result) as "nothing found", not an error', async () => {
@@ -500,6 +524,26 @@ describe('searchLibrary — карточка документа и перечи�
     expect(result.content).toContain('1. lease-romashka.pdf — Type: договор');
     expect(result.content).toContain('2. lease-vasilek.pdf');
     expect(result.content).toContain('Passages from the most relevant of them:');
+  });
+
+  /* Связка двух этапов: найти → открыть. Без стабильного handle в выдаче модели нечего
+   * передать в open_document — она видит имя файла, а тул принимает id. Проверяем ОБА места,
+   * где документ показывается: блок с фрагментами и перечисление по фильтру. */
+  it('выдача несёт Document ID — иначе второй этап (open_document) нечем вызвать', async () => {
+    const result = await searchLibrary(
+      baseParams({
+        fetchImpl: fetchOne() as never,
+        fileMetadata: new Map([['f1', LEASE_META]]),
+        matchedDocuments: [
+          { fileId: 'f1', filename: 'lease-romashka.pdf', docMetadata: LEASE_META },
+          { fileId: 'f9', filename: 'lease-vasilek.pdf' },
+        ],
+        matchedTotal: 2,
+      }),
+    );
+    expect(result.content).toContain('Document: lease-romashka.pdf');
+    expect(result.content).toContain('Document ID: f1');
+    expect(result.content).toContain('2. lease-vasilek.pdf — Document ID: f9');
   });
 
   it('обрезанный список честно говорит модели, что он неполный', async () => {

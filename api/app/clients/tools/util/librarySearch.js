@@ -247,15 +247,29 @@ const primeLibraryScope = async (userId, tenantId, filters, conversationFileIds 
    * одну запись больше кэпа: пришло меньше — длина и есть полный размер набора, пришло больше —
    * набор реально обрезан, и только тогда доплачиваем счётчиком. */
   /* Documents attached to THIS chat are searched ALONGSIDE the library — the "search files"
-   * toggle arms library_search alone, so it must cover attachments too. They are re-fetched here
-   * strictly under the user's own ACL (`user: userId`), NEVER trusting the ids blindly, and
-   * deliberately WITHOUT the library-visibility/`project_id` gate: the user explicitly attached
-   * these to the current chat, so a project-scoped or retention file they attached is in-scope
-   * here even though a blind library sweep would exclude it. No metadata filter is applied — an
-   * explicitly attached file stays semantically searchable regardless of doc_type/date. */
+   * toggle arms library_search alone, so it must cover attachments too.
+   *
+   * ACL spine is identical to the library sweep — own files (`user`) plus the tenant
+   * belt-and-suspenders — the ids are NEVER trusted blindly. What is deliberately dropped is the
+   * `project_id`/visibility gate: the user explicitly attached these to the current chat, so a
+   * project-scoped or retention file they attached is in-scope here even though a blind library
+   * sweep would exclude it. No metadata filter either — an explicitly attached file stays
+   * semantically searchable regardless of doc_type/date.
+   *
+   * Ids are capped like every other scope query: `applyProjectContext` merges EVERY project
+   * source into this same resource slot, so an unbounded `$in` would otherwise reach Mongo from
+   * a large project. */
+  const attachedIds = Array.isArray(conversationFileIds)
+    ? conversationFileIds.slice(0, LIBRARY_SEARCH_MAX_FILES)
+    : [];
   const attachedScope =
-    Array.isArray(conversationFileIds) && conversationFileIds.length > 0
-      ? { user: userId, file_id: { $in: conversationFileIds }, embedded: true }
+    attachedIds.length > 0
+      ? {
+          user: userId,
+          ...(tenantId != null ? { tenantId } : {}),
+          file_id: { $in: attachedIds },
+          embedded: true,
+        }
       : null;
   const [ready, indexingCount, failedCount, unfilterableCount, matched, attached] =
     await Promise.all([

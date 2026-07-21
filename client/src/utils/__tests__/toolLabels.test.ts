@@ -27,6 +27,13 @@ describe('parseToolName', () => {
     });
   });
 
+  /* The two document tools must both read as documents, not as raw ids: the toggle arms
+   * library_search to find and open_document to read, and both show up in tool tickers. */
+  it('gives the document tools their own friendly labels', () => {
+    expect(parseToolName('library_search').friendlyKey).toBe('com_ui_tool_name_file_search');
+    expect(parseToolName('open_document').friendlyKey).toBe('com_ui_tool_name_open_document');
+  });
+
   it('returns empty mcpServer + no friendlyKey for an unknown native tool', () => {
     const parsed = parseToolName('custom_tool');
     expect(parsed).toEqual({

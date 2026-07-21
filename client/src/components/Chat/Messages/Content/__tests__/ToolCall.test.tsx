@@ -19,6 +19,7 @@ jest.mock('~/hooks', () => ({
       com_assistants_allow_sites_you_trust: 'Only allow sites you trust',
       com_ui_via_server: `via ${values?.[0]}`,
       com_ui_tool_failed: 'failed',
+      com_ui_tool_name_open_document: 'Reading Document',
     };
     return translations[key] || key;
   },
@@ -96,6 +97,8 @@ jest.mock('~/utils', () => ({
     error: jest.fn(),
   },
   cn: (...classes: any[]) => classes.filter(Boolean).join(' '),
+  /* Real helper on purpose: the friendly-label behaviour under test lives in it. */
+  parseToolName: jest.requireActual('~/utils/toolLabels').parseToolName,
 }));
 
 describe('ToolCall', () => {
@@ -390,6 +393,22 @@ describe('ToolCall', () => {
 
       const attachmentGroup = screen.getByTestId('attachment-group');
       expect(JSON.parse(attachmentGroup.textContent!)).toEqual(complexAttachments);
+    });
+  });
+
+  describe('native tool friendly label', () => {
+    /* Grouped headers (ToolCallGroup) already localize native tool names; the single card
+     * must match — "Completed open_document" is developer-speak leaking into the chat. */
+    it('shows the localized name for a native tool instead of its raw id', () => {
+      renderWithRecoil(<ToolCall {...mockProps} name="open_document" />);
+
+      expect(screen.getByTestId('progress-text')).toHaveTextContent('Completed Reading Document');
+    });
+
+    it('keeps the raw name for tools without a friendly mapping', () => {
+      renderWithRecoil(<ToolCall {...mockProps} name="testFunction" />);
+
+      expect(screen.getByTestId('progress-text')).toHaveTextContent('Completed testFunction');
     });
   });
 

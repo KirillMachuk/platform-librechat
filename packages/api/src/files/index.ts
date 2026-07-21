@@ -8,6 +8,7 @@ export * from './encode';
 export * from './filter';
 export * from './mistral/crud';
 export * from './ocr';
+export * from './open';
 export * from './parse';
 export * from './rag';
 export * from './retention';

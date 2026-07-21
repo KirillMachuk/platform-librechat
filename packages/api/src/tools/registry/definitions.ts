@@ -426,7 +426,41 @@ export const librarySearchDescription =
   `They are how you answer "покажи ВСЕ …" questions: plain search returns only the most relevant few, a filter returns the whole matching set. ` +
   `Leave them out when the user did not name the attribute — a wrong filter hides the very document they want. ` +
   `Never invent an attribute to "help" the search; put descriptive wording in "query" instead. ` +
-  `If a filtered search comes back empty, retry WITHOUT the filters before telling the user anything is missing.`;
+  `If a filtered search comes back empty, retry WITHOUT the filters before telling the user anything is missing.\n\n` +
+  `**READING ONE DOCUMENT IN FULL:** every result carries a \`Document ID\`. The passages shown are only the excerpts that matched — ` +
+  `when the user asks about a SPECIFIC document in depth (risks in it, an exact clause or wording, a summary, a comparison), ` +
+  `call open_document with that id and answer from the full text instead of guessing from the excerpts.`;
+
+/**
+ * Second half of the two-step document workflow: `library_search` finds documents and
+ * shows their `Document ID`, `open_document` reads one in full. Registered here for the
+ * same reason as `library_search` — an armed tool with no registry entry is silently
+ * dropped before it ever reaches the model.
+ */
+export const openDocumentSchema: ExtendedJsonSchema = {
+  type: 'object',
+  properties: {
+    document_id: {
+      type: 'string',
+      description:
+        'The "Document ID" shown with a document in library_search results. Copy it exactly as printed.',
+    },
+    offset: {
+      type: 'number',
+      description:
+        'Optional. Character position to resume reading from. Omit to start at the beginning of the document; when a previous read came back truncated, pass the offset that result told you to use.',
+    },
+  },
+  required: ['document_id'],
+};
+
+/** Base open_document description shared by the registry entry and the runtime tool. */
+export const openDocumentDescription =
+  `Reads the FULL text of ONE document from the user's library — the same content they would get by attaching the file to the chat.\n\n` +
+  `Use it after library_search whenever the user asks about a specific document in depth: assessing risks in a contract, finding an exact clause or wording, summarising it, or comparing two documents. ` +
+  `Search returns only the passages that matched the query, so the clause the user is asking about may not be among them — read the document itself before answering questions about its content.\n\n` +
+  `Pass the "Document ID" from the search results. Long documents are returned in parts: when a result says it was truncated, call again with the offset it gives you to continue. ` +
+  `Do NOT use this tool to FIND documents — use library_search for that, then open what it found.`;
 
 /** Tool definitions registry - maps tool names to their definitions */
 export const toolDefinitions: Record<string, ToolRegistryDefinition> = {
@@ -508,6 +542,12 @@ export const toolDefinitions: Record<string, ToolRegistryDefinition> = {
     schema: librarySearchSchema,
     toolType: 'builtin',
     responseFormat: 'content_and_artifact',
+  },
+  open_document: {
+    name: 'open_document',
+    description: openDocumentDescription,
+    schema: openDocumentSchema,
+    toolType: 'builtin',
   },
   image_gen_oai: {
     name: oaiToolkit.image_gen_oai.name,

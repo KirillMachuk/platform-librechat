@@ -20,6 +20,7 @@ export const TOOL_FRIENDLY_NAME_KEYS: Record<string, TranslationKeys> = {
   gemini_image_gen: 'com_ui_tool_name_image_gen',
   file_search: 'com_ui_tool_name_file_search',
   library_search: 'com_ui_tool_name_file_search',
+  open_document: 'com_ui_tool_name_open_document',
   code_interpreter: 'com_ui_tool_name_code_analysis',
   retrieval: 'com_ui_tool_name_file_search',
 };

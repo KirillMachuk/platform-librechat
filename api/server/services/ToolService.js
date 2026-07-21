@@ -512,8 +512,19 @@ const nativeTools = new Set([
   Tools.execute_code,
   Tools.file_search,
   Tools.library_search,
+  Tools.open_document,
   Tools.web_search,
 ]);
+
+/**
+ * The document tools all ride the single `file_search` capability: the "search files"
+ * toggle arms `library_search` to find documents and `open_document` to read one in full,
+ * while `file_search` covers chat attachments and project sources. Gating them apart would
+ * let an operator enable finding documents but not reading them.
+ */
+const documentTools = new Set([Tools.file_search, Tools.library_search, Tools.open_document]);
+
+const isDocumentTool = (toolName) => documentTools.has(toolName);
 
 /** Checks if a tool name is a known built-in tool */
 const isBuiltInTool = (toolName) =>
@@ -568,7 +579,7 @@ async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, to
   const canUseMCP = hasMCPTools ? await mcpPermissionContext.canUseServers(req.user) : true;
 
   const filteredTools = agent.tools?.filter((tool) => {
-    if (tool === Tools.file_search || tool === Tools.library_search) {
+    if (isDocumentTool(tool)) {
       return checkCapability(AgentCapabilities.file_search);
     }
     if (tool === Tools.execute_code) {
@@ -1136,7 +1147,7 @@ async function loadAgentTools({
 
   let includesWebSearch = false;
   const _agentTools = agent.tools?.filter((tool) => {
-    if (tool === Tools.file_search || tool === Tools.library_search) {
+    if (isDocumentTool(tool)) {
       return checkCapability(AgentCapabilities.file_search);
     } else if (tool === Tools.execute_code) {
       return checkCapability(AgentCapabilities.execute_code);
@@ -1217,12 +1228,7 @@ async function loadAgentTools({
   const agentTools = [];
   for (let i = 0; i < loadedTools.length; i++) {
     const tool = loadedTools[i];
-    if (
-      tool.name &&
-      (tool.name === Tools.execute_code ||
-        tool.name === Tools.file_search ||
-        tool.name === Tools.library_search)
-    ) {
+    if (tool.name && (tool.name === Tools.execute_code || isDocumentTool(tool.name))) {
       agentTools.push(tool);
       continue;
     }
