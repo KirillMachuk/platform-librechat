@@ -8,6 +8,7 @@ const {
   isAgentsEndpoint,
   isEphemeralAgentId,
 } = require('librechat-data-provider');
+const { canManageResourceType } = require('~/server/middleware/roles/capabilities');
 const { checkPermission } = require('~/server/services/PermissionService');
 const { canAccessResource } = require('./canAccessResource');
 const db = require('~/models');
@@ -92,7 +93,7 @@ const checkAddedConvoAccess = (requiredPermission) => async (req, res, next) => 
       return next();
     }
 
-    if (req.user.role === SystemRoles.ADMIN) {
+    if (await canManageResourceType(req.user, ResourceType.AGENT)) {
       return next();
     }
 

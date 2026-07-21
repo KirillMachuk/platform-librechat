@@ -3542,6 +3542,33 @@ describe('Support Contact Field', () => {
       expect(result.data[0].name).toBe('Agent A1');
     });
 
+    test('should return every agent when accessibleIds is null (management capability)', async () => {
+      const result = await getListAgentsByAccess({
+        accessibleIds: null,
+        otherParams: {},
+      });
+
+      expect(result.data.map((agent) => agent.id).sort()).toEqual(
+        [agentA1.id, agentA2.id, agentA3.id].sort(),
+      );
+    });
+
+    test('should still apply otherParams filters when accessibleIds is null', async () => {
+      const result = await getListAgentsByAccess({
+        accessibleIds: null,
+        otherParams: { name: 'Agent A2' },
+      });
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].id).toBe(agentA2.id);
+    });
+
+    test('should treat an omitted accessibleIds as "nothing accessible", never as null', async () => {
+      const result = await getListAgentsByAccess({ otherParams: {} });
+
+      expect(result.data).toHaveLength(0);
+    });
+
     test('should omit skill configuration from the default list projection', async () => {
       const skillDocs = await mongoose.models.Skill.create([
         {

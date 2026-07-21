@@ -5,7 +5,6 @@ import { OGDialogContent, Button, useToastContext } from '@librechat/client';
 import {
   QueryKeys,
   Constants,
-  SystemRoles,
   ResourceType,
   EModelEndpoint,
   PermissionBits,
@@ -50,10 +49,7 @@ const AgentDetailContent: React.FC<AgentDetailContentProps> = ({ agent, onEdit, 
 
   const { hasPermission } = useResourcePermissions(ResourceType.AGENT, agent?._id ?? '');
   const canEditAgent =
-    onEdit != null &&
-    (agent?.author === user?.id ||
-      user?.role === SystemRoles.ADMIN ||
-      hasPermission(PermissionBits.EDIT));
+    onEdit != null && (agent?.author === user?.id || hasPermission(PermissionBits.EDIT));
 
   const handleFavoriteClick = () => {
     if (agent) {

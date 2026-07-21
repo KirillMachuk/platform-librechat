@@ -1,8 +1,8 @@
+import { logger } from '@librechat/data-schemas';
+import { ResourceType, PermissionBits } from 'librechat-data-provider';
 import type { IUser } from '@librechat/data-schemas';
 import type { Response } from 'express';
 import type { Types } from 'mongoose';
-import { logger } from '@librechat/data-schemas';
-import { SystemRoles, ResourceType, PermissionBits } from 'librechat-data-provider';
 import type { ServerRequest } from '~/types';
 
 export type AgentUploadAuthResult =
@@ -29,6 +29,8 @@ export interface AgentUploadAuthDeps {
     resourceId: string | Types.ObjectId;
     requiredPermission: number;
   }) => Promise<boolean>;
+  /** Resolves the caller's `manage:agents` capability; must fail closed. */
+  canManageAgents: () => Promise<boolean>;
 }
 
 export async function checkAgentUploadAuth(
@@ -36,14 +38,14 @@ export async function checkAgentUploadAuth(
   deps: AgentUploadAuthDeps,
 ): Promise<AgentUploadAuthResult> {
   const { userId, userRole, agentId, toolResource, messageFile } = params;
-  const { getAgent, checkPermission } = deps;
+  const { getAgent, checkPermission, canManageAgents } = deps;
 
   const isMessageAttachment = messageFile === true || messageFile === 'true';
   if (!agentId || toolResource == null || isMessageAttachment) {
     return { allowed: true };
   }
 
-  if (userRole === SystemRoles.ADMIN) {
+  if (await canManageAgents()) {
     return { allowed: true };
   }
 
@@ -86,12 +88,14 @@ export async function verifyAgentUploadPermission({
   metadata,
   getAgent,
   checkPermission,
+  canManageAgents,
 }: {
   req: ServerRequest;
   res: Response;
   metadata: { agent_id?: string; tool_resource?: string | null; message_file?: boolean | string };
   getAgent: AgentUploadAuthDeps['getAgent'];
   checkPermission: AgentUploadAuthDeps['checkPermission'];
+  canManageAgents: AgentUploadAuthDeps['canManageAgents'];
 }): Promise<boolean> {
   const user = req.user as IUser;
   const result = await checkAgentUploadAuth(
@@ -102,7 +106,7 @@ export async function verifyAgentUploadPermission({
       toolResource: metadata.tool_resource,
       messageFile: metadata.message_file,
     },
-    { getAgent, checkPermission },
+    { getAgent, checkPermission, canManageAgents },
   );
 
   if (!result.allowed) {

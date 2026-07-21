@@ -9,7 +9,7 @@ jest.mock('@librechat/data-schemas', () => ({
   SYSTEM_TENANT_ID: '__SYSTEM__',
 }));
 
-const { AccessRoleIds, ResourceType, PrincipalType } =
+const { AccessRoleIds, ResourceType, PrincipalType, PermissionBits } =
   jest.requireActual('librechat-data-provider');
 
 jest.mock('librechat-data-provider', () => ({
@@ -48,9 +48,16 @@ jest.mock('~/server/services/GraphApiService', () => ({
   searchEntraIdPrincipals: jest.fn(),
 }));
 
+jest.mock('~/server/middleware/roles/capabilities', () => ({
+  canManageResourceType: jest.fn().mockResolvedValue(false),
+}));
+
 const db = require('~/models');
+const { canManageResourceType } = require('~/server/middleware/roles/capabilities');
+const { getEffectivePermissions } = require('~/server/services/PermissionService');
 const {
   updateResourcePermissions,
+  getUserEffectivePermissions,
   searchPrincipals,
   getResourcePermissions,
 } = require('../PermissionsController');
@@ -76,6 +83,49 @@ describe('PermissionsController', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetTenantId.mockReturnValue(undefined);
+    canManageResourceType.mockResolvedValue(false);
+  });
+
+  describe('getUserEffectivePermissions', () => {
+    const ALL_BITS =
+      PermissionBits.VIEW | PermissionBits.EDIT | PermissionBits.DELETE | PermissionBits.SHARE;
+
+    test('reports full permissions for holders of the management capability', async () => {
+      canManageResourceType.mockResolvedValue(true);
+      const res = createMockRes();
+
+      await getUserEffectivePermissions(createMockReq(), res);
+
+      expect(res.json).toHaveBeenCalledWith({ permissionBits: ALL_BITS });
+      expect(getEffectivePermissions).not.toHaveBeenCalled();
+    });
+
+    test('falls back to the ACL lookup without the capability', async () => {
+      getEffectivePermissions.mockResolvedValue(PermissionBits.VIEW);
+      const res = createMockRes();
+
+      await getUserEffectivePermissions(createMockReq(), res);
+
+      expect(getEffectivePermissions).toHaveBeenCalledWith({
+        userId: 'user-1',
+        role: 'USER',
+        resourceType: ResourceType.AGENT,
+        resourceId: '507f1f77bcf86cd799439011',
+      });
+      expect(res.json).toHaveBeenCalledWith({ permissionBits: PermissionBits.VIEW });
+    });
+
+    test('rejects unknown resource types before checking capabilities', async () => {
+      const res = createMockRes();
+
+      await getUserEffectivePermissions(
+        createMockReq({ params: { resourceType: 'not-a-resource', resourceId: 'x' } }),
+        res,
+      );
+
+      expect(canManageResourceType).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(500);
+    });
   });
 
   describe('searchPrincipals', () => {

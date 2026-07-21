@@ -39,6 +39,10 @@ jest.mock('~/server/services/Files/process', () => ({
   filterFile: jest.fn(),
 }));
 
+jest.mock('~/server/middleware/roles/capabilities', () => ({
+  canManageResourceType: jest.fn().mockResolvedValue(false),
+}));
+
 jest.mock('~/server/services/PermissionService', () => ({
   findAccessibleResources: jest.fn().mockResolvedValue([]),
   findPubliclyAccessibleResources: jest.fn().mockResolvedValue([]),
@@ -87,6 +91,8 @@ const {
   getResourcePermissionsMap,
 } = require('~/server/services/PermissionService');
 
+const { canManageResourceType } = require('~/server/middleware/roles/capabilities');
+
 const { refreshS3Url } = require('@librechat/api');
 
 /**
@@ -120,6 +126,7 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
 
     // Reset all mocks
     jest.clearAllMocks();
+    canManageResourceType.mockResolvedValue(false);
 
     // Setup mock request and response objects
     mockReq = {
@@ -649,7 +656,7 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       expect(agentInDb.name).toBe('Updated Agent');
     });
 
-    test('should ignore is_promoted from a non-admin', async () => {
+    test('should ignore is_promoted without the agent management capability', async () => {
       mockReq.user.id = existingAgentAuthorId.toString();
       mockReq.user.role = 'USER';
       mockReq.params.id = existingAgentId;
@@ -662,9 +669,9 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       expect(agentInDb.is_promoted).toBe(false);
     });
 
-    test('should apply is_promoted from an admin', async () => {
+    test('should apply is_promoted from an agent manager', async () => {
+      canManageResourceType.mockResolvedValue(true);
       mockReq.user.id = existingAgentAuthorId.toString();
-      mockReq.user.role = 'ADMIN';
       mockReq.params.id = existingAgentId;
       mockReq.body = { is_promoted: true };
 
@@ -674,10 +681,10 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       expect(agentInDb.is_promoted).toBe(true);
     });
 
-    test('should let an admin demote a promoted agent', async () => {
+    test('should let an agent manager demote a promoted agent', async () => {
+      canManageResourceType.mockResolvedValue(true);
       await Agent.updateOne({ id: existingAgentId }, { $set: { is_promoted: true } });
       mockReq.user.id = existingAgentAuthorId.toString();
-      mockReq.user.role = 'ADMIN';
       mockReq.params.id = existingAgentId;
       mockReq.body = { is_promoted: false };
 
@@ -1685,6 +1692,52 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       expect(response.data).toHaveLength(1);
       expect(response.data[0].id).toBe(agentA1.id);
       expect(response.data[0].name).toBe('Agent A1');
+    });
+
+    describe('agent management capability', () => {
+      test('should list every agent without consulting the ACL', async () => {
+        mockReq.user.id = userB.toString();
+        canManageResourceType.mockResolvedValue(true);
+        findAccessibleResources.mockResolvedValue([]);
+        findPubliclyAccessibleResources.mockResolvedValue([]);
+
+        await getListAgentsHandler(mockReq, mockRes);
+
+        expect(findAccessibleResources).not.toHaveBeenCalledWith(
+          expect.objectContaining({ resourceType: ResourceType.AGENT }),
+        );
+
+        const response = mockRes.json.mock.calls[0][0];
+        expect(response.data.map((agent) => agent.id).sort()).toEqual(
+          [agentA1.id, agentA2.id, agentA3.id, agentB1.id].sort(),
+        );
+      });
+
+      test('should still honor query filters while unfiltered by ACL', async () => {
+        mockReq.user.id = userB.toString();
+        mockReq.query.category = 'productivity';
+        canManageResourceType.mockResolvedValue(true);
+
+        await getListAgentsHandler(mockReq, mockRes);
+
+        const response = mockRes.json.mock.calls[0][0];
+        expect(response.data).toHaveLength(1);
+        expect(response.data[0].id).toBe(agentA3.id);
+      });
+
+      test('should fall back to ACL filtering once the capability is revoked', async () => {
+        mockReq.user.id = userB.toString();
+        canManageResourceType.mockResolvedValue(false);
+        findAccessibleResources.mockResolvedValue([agentA1._id]);
+        findPubliclyAccessibleResources.mockResolvedValue([]);
+
+        await getListAgentsHandler(mockReq, mockRes);
+
+        expect(findAccessibleResources).toHaveBeenCalled();
+        const response = mockRes.json.mock.calls[0][0];
+        expect(response.data).toHaveLength(1);
+        expect(response.data[0].id).toBe(agentA1.id);
+      });
     });
 
     test('should return only expected safe list fields for VIEW callers', async () => {

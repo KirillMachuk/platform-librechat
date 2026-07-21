@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const { logger, getTenantId, SYSTEM_TENANT_ID } = require('@librechat/data-schemas');
 const { ResourceType, PrincipalType, PermissionBits } = require('librechat-data-provider');
 const { enrichRemoteAgentPrincipals, backfillRemoteAgentPermissions } = require('@librechat/api');
+const { canManageResourceType } = require('~/server/middleware/roles/capabilities');
 const {
   bulkUpdateResourcePermissions,
   ensureGroupPrincipalExists,
@@ -20,6 +21,9 @@ const {
   searchEntraIdPrincipals,
 } = require('~/server/services/GraphApiService');
 const db = require('~/models');
+
+const ALL_PERMISSION_BITS =
+  PermissionBits.VIEW | PermissionBits.EDIT | PermissionBits.DELETE | PermissionBits.SHARE;
 
 const matchesCurrentTenant = (principal, tenantId) => {
   if (!tenantId || tenantId === SYSTEM_TENANT_ID) {
@@ -373,6 +377,15 @@ const getUserEffectivePermissions = async (req, res) => {
     validateResourceType(resourceType);
 
     const { id: userId } = req.user;
+
+    /**
+     * `canAccessResource` lets management capabilities through regardless of ACL
+     * grants, so this endpoint must report the same thing — otherwise the UI hides
+     * actions the server would happily perform.
+     */
+    if (await canManageResourceType(req.user, resourceType)) {
+      return res.status(200).json({ permissionBits: ALL_PERMISSION_BITS });
+    }
 
     const permissionBits = await getEffectivePermissions({
       userId,
