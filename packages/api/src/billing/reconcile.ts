@@ -74,6 +74,8 @@ export interface BillingReconcilerDeps {
     to: Date;
     tenantId?: string;
   }) => Promise<{ microUsd: number; count: number }>;
+  /** When metering first recorded anything — guards the comparison in its first month. */
+  getFirstCreditSpendAt: (params?: { tenantId?: string }) => Promise<Date | null>;
   poolMicroUsd: number;
   tenantId?: string;
   /** Service-period anchor day (1–31; defaults to 1). */
@@ -144,7 +146,7 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
     try {
       const periodKey = servicePeriodKey(now, deps.anchorDay);
       const utcMonthStart = startOfUtcMonth(now);
-      const [status, key, periodJournal, utcMonthJournal] = await Promise.all([
+      const [status, key, periodJournal, utcMonthJournal, firstSpendAt] = await Promise.all([
         deps.getCreditBillingStatus({
           poolMicroUsd: deps.poolMicroUsd,
           tenantId: deps.tenantId,
@@ -154,6 +156,7 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
         deps.openrouter.getKey(),
         deps.sumCreditSpendJournal({ month: periodKey, tenantId: deps.tenantId }),
         deps.sumCreditSpendJournalRange({ from: utcMonthStart, to: now, tenantId: deps.tenantId }),
+        deps.getFirstCreditSpendAt({ tenantId: deps.tenantId }),
       ]);
 
       await syncKeyLimit(status, key.limitUsd);
@@ -193,7 +196,14 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
       const base = Math.max(Math.abs(ledgerUsd), Math.abs(openrouterUsd));
       const ratio = base > 0 ? Math.abs(diffUsd) / base : 0;
       const diffPercent = base > 0 ? Math.round(ratio * 1000) / 10 : 0;
-      const shouldAlert = ratio > threshold && Math.abs(diffUsd) > minAbsUsd;
+      /* The key's usage_monthly counts from the 1st; the ledger only counts from the
+       * moment metering was switched on. In the month that happens the difference is
+       * pre-metering spend, not lost spend — the two are indistinguishable here, and
+       * this case is GUARANTEED at go-live. Report the numbers, hold the alert: from the
+       * next UTC month both windows start together and drift means what it says. */
+      const meteringStartedThisMonth = firstSpendAt != null && firstSpendAt >= utcMonthStart;
+      const partialLedger = firstSpendAt == null || meteringStartedThisMonth;
+      const shouldAlert = !partialLedger && ratio > threshold && Math.abs(diffUsd) > minAbsUsd;
 
       const report: ReconcileReport = {
         configured: true,
@@ -206,6 +216,11 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
         internalDriftMicroUsd,
         diffPercent,
         alerted: shouldAlert,
+        ...(partialLedger && {
+          reason: meteringStartedThisMonth
+            ? 'alert held: metering started mid-month — the difference includes spend from before it was counted'
+            : 'alert held: the ledger is empty (metering has never recorded anything)',
+        }),
       };
 
       /* Always report the comparison, not only on drift: a silent reconciler is
@@ -213,7 +228,7 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
        * trusted as «леджер сходится с ключом». This one line is how an operator
        * verifies that Credits track the real OpenRouter key spend. */
       logger.info(
-        `[billingReconcile] UTC-month ledger $${ledgerUsd.toFixed(6)} (${report.ledgerCredits} Cr, ${utcMonthJournal.count} rows) vs OpenRouter usage_monthly $${openrouterUsd.toFixed(6)} → diff ${diffPercent}% ($${diffUsd.toFixed(6)}); alert=${shouldAlert} (needs >${threshold * 100}% AND >$${minAbsUsd}). Period ${status.month}: journal=${periodJournal.microUsd}µ$ counter=${status.spentMicroUsd}µ$ drift=${internalDriftMicroUsd}µ$`,
+        `[billingReconcile] UTC-month ledger $${ledgerUsd.toFixed(6)} (${report.ledgerCredits} Cr, ${utcMonthJournal.count} rows) vs OpenRouter usage_monthly $${openrouterUsd.toFixed(6)} → diff ${diffPercent}% ($${diffUsd.toFixed(6)}); alert=${shouldAlert} (needs >${threshold * 100}% AND >$${minAbsUsd}${partialLedger ? ', HELD — ' + report.reason : ''}). Period ${status.month}: journal=${periodJournal.microUsd}µ$ counter=${status.spentMicroUsd}µ$ drift=${internalDriftMicroUsd}µ$`,
       );
 
       if (shouldAlert) {

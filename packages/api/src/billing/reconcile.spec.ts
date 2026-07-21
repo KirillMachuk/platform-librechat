@@ -54,6 +54,8 @@ function createDeps(overrides: Partial<BillingReconcilerDeps> = {}): BillingReco
     sumCreditSpendJournal: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 1 }),
     // UTC-month journal = the external ledger figure compared to OpenRouter usage_monthly.
     sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 1 }),
+    /** Metering has been running since well before this UTC month → honest comparison. */
+    getFirstCreditSpendAt: jest.fn().mockResolvedValue(new Date('2026-05-01T00:00:00Z')),
     poolMicroUsd: 250_000_000,
     sendAlert: jest.fn().mockResolvedValue(undefined),
     recordAudit: jest.fn(),
@@ -159,6 +161,51 @@ describe('createBillingReconciler', () => {
     expect(report.alerted).toBe(false);
     expect(report.diffPercent).toBeNull();
     expect(report.reason).toMatch(/usage_monthly/);
+  });
+
+  it('holds the alert in the month metering started (pre-metering spend is not lost spend)', async () => {
+    /* Reproduces the live 2026-07 case: the key had spent since the 1st, the ledger only
+     * since the 13th → a 62% «drift» that was entirely spend from before metering. */
+    const deps = createDeps({
+      openrouter: openrouterOf(3.35),
+      sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 1_262_601, count: 390 }),
+      getFirstCreditSpendAt: jest.fn().mockResolvedValue(new Date('2026-07-13T10:43:48Z')),
+    });
+
+    const report = await createBillingReconciler(deps).run(NOW);
+
+    expect(report.diffPercent).toBeGreaterThan(3);
+    expect(report.alerted).toBe(false);
+    expect(report.reason).toMatch(/metering started mid-month/);
+    expect(deps.sendAlert).not.toHaveBeenCalled();
+    expect(deps.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('holds the alert when the ledger has never recorded anything', async () => {
+    const deps = createDeps({
+      openrouter: openrouterOf(50),
+      sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 0, count: 0 }),
+      getFirstCreditSpendAt: jest.fn().mockResolvedValue(null),
+    });
+
+    const report = await createBillingReconciler(deps).run(NOW);
+
+    expect(report.alerted).toBe(false);
+    expect(report.reason).toMatch(/ledger is empty/);
+    expect(deps.sendAlert).not.toHaveBeenCalled();
+  });
+
+  it('alerts once metering predates the month under comparison', async () => {
+    const deps = createDeps({
+      openrouter: openrouterOf(3.35),
+      sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 1_262_601, count: 390 }),
+      getFirstCreditSpendAt: jest.fn().mockResolvedValue(new Date('2026-06-13T00:00:00Z')),
+    });
+
+    const report = await createBillingReconciler(deps).run(NOW);
+
+    expect(report.alerted).toBe(true);
+    expect(deps.sendAlert).toHaveBeenCalled();
   });
 
   it('raises the key limit to the worst-case window when the fuse is too low', async () => {

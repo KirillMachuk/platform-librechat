@@ -237,6 +237,8 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     to: Date;
     tenantId?: string;
   }) => Promise<{ microUsd: number; count: number }>;
+  /** Instant of the earliest journal row, or null when nothing was ever metered. */
+  getFirstCreditSpendAt: (params?: { tenantId?: string }) => Promise<Date | null>;
 } {
   function CreditMonth(): Model<ICreditMonth> {
     return mongoose.models.CreditMonth as Model<ICreditMonth>;
@@ -622,6 +624,21 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     return { microUsd: row?.microUsd ?? 0, count: row?.count ?? 0 };
   }
 
+  /**
+   * When metering first recorded anything, or null on an empty journal. The external
+   * reconciliation needs it to tell «we are losing spend» from «the key was already
+   * spending before we started counting it» — the two look identical in a month-to-date
+   * comparison, and the second is guaranteed to happen in the month metering goes live.
+   */
+  async function getFirstCreditSpendAt(params?: { tenantId?: string }): Promise<Date | null> {
+    const row = await CreditSpend()
+      .findOne(tenantFilter<ICreditSpend>(params?.tenantId))
+      .sort({ createdAt: 1 })
+      .select({ createdAt: 1 })
+      .lean<Pick<ICreditSpend, 'createdAt'>>();
+    return row?.createdAt ?? null;
+  }
+
   return {
     recordCreditSpend,
     getCreditBillingStatus,
@@ -632,6 +649,7 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     getCreditMonth,
     sumCreditSpendJournal,
     sumCreditSpendJournalRange,
+    getFirstCreditSpendAt,
   };
 }
 
