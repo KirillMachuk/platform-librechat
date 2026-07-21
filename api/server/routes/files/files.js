@@ -1,6 +1,6 @@
 const fs = require('fs').promises;
 const express = require('express');
-const { logger, SystemCapabilities } = require('@librechat/data-schemas');
+const { logger } = require('@librechat/data-schemas');
 const {
   logAxiosError,
   refreshS3FileUrls,
@@ -30,7 +30,7 @@ const {
 const { fileAccess } = require('~/server/middleware/accessResources/fileAccess');
 const { getStrategyFunctions } = require('~/server/services/Files/strategies');
 const { getOpenAIClient } = require('~/server/controllers/assistants/helpers');
-const { hasCapability } = require('~/server/middleware/roles/capabilities');
+const { canManageResourceType } = require('~/server/middleware/roles/capabilities');
 const { checkPermission } = require('~/server/services/PermissionService');
 const { hasAccessToFilesViaAgent } = require('~/server/services/Files');
 const { cleanFileName, getContentDisposition } = require('~/server/utils/files');
@@ -39,6 +39,29 @@ const { Readable } = require('stream');
 const db = require('~/models');
 
 const router = express.Router();
+
+/**
+ * Whether the caller may act on an agent's attached files: its author, an agent
+ * manager, or an explicit ACL editor.
+ * @param {import('express').Request} req
+ * @param {{ _id: import('mongoose').Types.ObjectId, author?: unknown }} agent
+ * @returns {Promise<boolean>}
+ */
+const canEditAgentFiles = async (req, agent) => {
+  if (agent.author?.toString() === req.user.id.toString()) {
+    return true;
+  }
+  if (await canManageResourceType(req.user, ResourceType.AGENT)) {
+    return true;
+  }
+  return checkPermission({
+    userId: req.user.id,
+    role: req.user.role,
+    resourceType: ResourceType.AGENT,
+    resourceId: agent._id,
+    requiredPermission: PermissionBits.EDIT,
+  });
+};
 
 router.get('/', async (req, res) => {
   try {
@@ -72,7 +95,6 @@ router.get('/', async (req, res) => {
 router.get('/agent/:agent_id', async (req, res) => {
   try {
     const { agent_id } = req.params;
-    const userId = req.user.id;
 
     if (!agent_id) {
       return res.status(400).json({ error: 'Agent ID is required' });
@@ -83,18 +105,8 @@ router.get('/agent/:agent_id', async (req, res) => {
       return res.status(200).json([]);
     }
 
-    if (agent.author.toString() !== userId) {
-      const hasEditPermission = await checkPermission({
-        userId,
-        role: req.user.role,
-        resourceType: ResourceType.AGENT,
-        resourceId: agent._id,
-        requiredPermission: PermissionBits.EDIT,
-      });
-
-      if (!hasEditPermission) {
-        return res.status(200).json([]);
-      }
+    if (!(await canEditAgentFiles(req, agent))) {
+      return res.status(200).json([]);
     }
 
     const agentFileIds = [];
@@ -224,16 +236,7 @@ router.delete('/', async (req, res) => {
       const agentFiles = files
         .filter((f) => toolResourceFiles.includes(f.file_id))
         .map((file) => ({ tool_resource: req.body.tool_resource, file_id: file.file_id }));
-      const hasAgentEditAccess =
-        agent.author?.toString() === req.user.id.toString() ||
-        (await checkPermission({
-          userId: req.user.id,
-          role: req.user.role,
-          resourceType: ResourceType.AGENT,
-          resourceId: agent._id,
-          requiredPermission: PermissionBits.EDIT,
-        }));
-      const unauthorizedFiles = hasAgentEditAccess ? [] : agentFiles;
+      const unauthorizedFiles = (await canEditAgentFiles(req, agent)) ? [] : agentFiles;
       if (unauthorizedFiles.length > 0) {
         return res.status(403).json({
           message: 'You can only delete files you have access to',
@@ -801,24 +804,16 @@ router.post('/', async (req, res) => {
       return await processFileUpload({ req, res, metadata });
     }
 
-    let skipUploadAuth = false;
-    try {
-      skipUploadAuth = await hasCapability(req.user, SystemCapabilities.MANAGE_AGENTS);
-    } catch (err) {
-      logger.warn(`[/files] capability check failed, denying bypass: ${err.message}`);
-    }
-
-    if (!skipUploadAuth) {
-      const denied = await verifyAgentUploadPermission({
-        req,
-        res,
-        metadata,
-        getAgent: db.getAgent,
-        checkPermission,
-      });
-      if (denied) {
-        return;
-      }
+    const denied = await verifyAgentUploadPermission({
+      req,
+      res,
+      metadata,
+      getAgent: db.getAgent,
+      checkPermission,
+      canManageAgents: () => canManageResourceType(req.user, ResourceType.AGENT),
+    });
+    if (denied) {
+      return;
     }
 
     return await processAgentFileUpload({ req, res, metadata });

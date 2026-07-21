@@ -102,15 +102,14 @@ export default function AgentFooter({
       {user?.role === SystemRoles.ADMIN && <AdminSettings />}
       {/* Context Button */}
       <div className="flex items-center justify-end gap-2">
-        {(agent?.author === user?.id || user?.role === SystemRoles.ADMIN || canDeleteThisAgent) &&
-          !permissionsLoading && (
-            <DeleteButton
-              agent_id={agent_id}
-              setCurrentAgentId={setCurrentAgentId}
-              createMutation={createMutation}
-            />
-          )}
-        {(agent?.author === user?.id || user?.role === SystemRoles.ADMIN || canShareThisAgent) &&
+        {(agent?.author === user?.id || canDeleteThisAgent) && !permissionsLoading && (
+          <DeleteButton
+            agent_id={agent_id}
+            setCurrentAgentId={setCurrentAgentId}
+            createMutation={createMutation}
+          />
+        )}
+        {(agent?.author === user?.id || canShareThisAgent) &&
           hasAccessToShareAgents &&
           !permissionsLoading && (
             <GenericGrantAccessDialog
@@ -120,7 +119,7 @@ export default function AgentFooter({
               resourceType={ResourceType.AGENT}
             />
           )}
-        {(agent?.author === user?.id || user?.role === SystemRoles.ADMIN || canShareRemoteAgent) &&
+        {(agent?.author === user?.id || canShareRemoteAgent) &&
           hasAccessToShareRemoteAgents &&
           !remotePermissionsLoading &&
           agent?._id && (
@@ -139,8 +138,9 @@ export default function AgentFooter({
               </button>
             </GenericGrantAccessDialog>
           )}
-        {(agent?.author === user?.id || user?.role === SystemRoles.ADMIN || canEditThisAgent) &&
-          !permissionsLoading && <DuplicateAgent agent_id={agent_id} />}
+        {(agent?.author === user?.id || canEditThisAgent) && !permissionsLoading && (
+          <DuplicateAgent agent_id={agent_id} />
+        )}
         {/* Submit Button */}
         <button
           className="btn btn-primary focus:shadow-outline flex h-9 w-full items-center justify-center px-4 py-2 font-semibold text-white hover:bg-green-600 focus:border-green-500"

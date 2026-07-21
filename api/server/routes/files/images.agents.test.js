@@ -65,6 +65,7 @@ describe('POST /images - Agent Upload Permission Check (Integration)', () => {
     AclEntry = models.AclEntry;
 
     await methods.seedDefaultRoles();
+    await methods.seedSystemGrants();
   });
 
   afterAll(async () => {
@@ -166,7 +167,7 @@ describe('POST /images - Agent Upload Permission Check (Integration)', () => {
     expect(processAgentFileUpload).toHaveBeenCalled();
   });
 
-  it('should allow upload for admin regardless of ownership', async () => {
+  it('should allow upload for an agent manager regardless of ownership', async () => {
     await createAgent({
       id: agentCustomId,
       name: 'Test Agent',

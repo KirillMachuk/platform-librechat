@@ -21,7 +21,6 @@ const {
   ErrorTypes,
   Constants,
   FileSources,
-  SystemRoles,
   ResourceType,
   AccessRoleIds,
   PrincipalType,
@@ -41,6 +40,7 @@ const {
   hasPublicPermission,
   grantPermission,
 } = require('~/server/services/PermissionService');
+const { canManageResourceType } = require('~/server/middleware/roles/capabilities');
 const { getStrategyFunctions } = require('~/server/services/Files/strategies');
 const { resizeAvatar } = require('~/server/services/Files/images/avatar');
 const { getFileStrategy } = require('~/server/utils/getFileStrategy');
@@ -613,11 +613,15 @@ const updateAgentHandler = async (req, res) => {
     const updateData = removeNullishValues(rest);
 
     /**
-     * Promotion curates the shared catalog, so only an admin may change it. The field
-     * is deliberately absent from the zod schema — unknown keys are stripped, so a
-     * non-admin cannot set it even by crafting the payload.
+     * Promotion curates the shared catalog, so it takes the agent management capability
+     * rather than the raw role — revoking the grant revokes this too. The field is
+     * deliberately absent from the zod schema: unknown keys are stripped, so a caller
+     * without the capability cannot set it even by crafting the payload.
      */
-    if (req.user.role === SystemRoles.ADMIN && typeof req.body.is_promoted === 'boolean') {
+    if (
+      typeof req.body.is_promoted === 'boolean' &&
+      (await canManageResourceType(req.user, ResourceType.AGENT))
+    ) {
       updateData.is_promoted = req.body.is_promoted;
     }
 
@@ -1109,13 +1113,21 @@ const getListAgentsHandler = async (req, res) => {
       filter.$or = [{ name: regex }, { description: regex }];
     }
 
-    // Get agent IDs the user has VIEW access to via ACL
-    const accessibleIds = await findAccessibleResources({
-      userId,
-      role: req.user.role,
-      resourceType: ResourceType.AGENT,
-      requiredPermissions: requiredPermission,
-    });
+    /**
+     * Agent managers administer every agent on the platform, so their listing is not
+     * narrowed by ACL grants. `null` disables the filter entirely — an empty array
+     * would mean the opposite ("nothing accessible"). Tenant isolation still applies
+     * at the model layer, so this never reaches across companies.
+     */
+    const managesAgents = await canManageResourceType(req.user, ResourceType.AGENT);
+    const accessibleIds = managesAgents
+      ? null
+      : await findAccessibleResources({
+          userId,
+          role: req.user.role,
+          resourceType: ResourceType.AGENT,
+          requiredPermissions: requiredPermission,
+        });
 
     const publiclyAccessibleIds = await findPubliclyAccessibleResources({
       resourceType: ResourceType.AGENT,

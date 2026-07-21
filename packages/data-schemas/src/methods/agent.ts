@@ -296,7 +296,7 @@ export function createAgentMethods(
     after,
     includeSkillConfig,
   }: {
-    accessibleIds?: Types.ObjectId[];
+    accessibleIds?: Types.ObjectId[] | null;
     otherParams?: Record<string, unknown>;
     limit?: number | null;
     after?: string | null;
@@ -808,7 +808,7 @@ export function createAgentMethods(
     after = null,
     includeSkillConfig = false,
   }: {
-    accessibleIds?: Types.ObjectId[];
+    accessibleIds?: Types.ObjectId[] | null;
     otherParams?: Record<string, unknown>;
     limit?: number | null;
     after?: string | null;
@@ -827,9 +827,11 @@ export function createAgentMethods(
       ? Math.min(Math.max(1, parseInt(String(limit)) || 20), 1000)
       : null;
 
+    /** `null` means "no ACL narrowing" (caller holds a management capability);
+     *  `[]` means "nothing is accessible" — the two must never collapse. */
     const baseQuery: Record<string, unknown> = {
       ...otherParams,
-      _id: { $in: accessibleIds },
+      ...(accessibleIds === null ? {} : { _id: { $in: accessibleIds } }),
     };
 
     if (after) {

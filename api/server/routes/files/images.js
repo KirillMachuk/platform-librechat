@@ -3,12 +3,13 @@ const fs = require('fs').promises;
 const express = require('express');
 const { logger } = require('@librechat/data-schemas');
 const { verifyAgentUploadPermission, resolveUploadErrorMessage } = require('@librechat/api');
-const { isAssistantsEndpoint } = require('librechat-data-provider');
+const { ResourceType, isAssistantsEndpoint } = require('librechat-data-provider');
 const {
   processAgentFileUpload,
   processImageFile,
   filterFile,
 } = require('~/server/services/Files/process');
+const { canManageResourceType } = require('~/server/middleware/roles/capabilities');
 const { checkPermission } = require('~/server/services/PermissionService');
 const db = require('~/models');
 
@@ -31,6 +32,7 @@ router.post('/', async (req, res) => {
         metadata,
         getAgent: db.getAgent,
         checkPermission,
+        canManageAgents: () => canManageResourceType(req.user, ResourceType.AGENT),
       });
       if (denied) {
         return;

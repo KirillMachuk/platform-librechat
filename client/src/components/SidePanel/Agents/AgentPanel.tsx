@@ -5,7 +5,6 @@ import { useWatch, useForm, FormProvider } from 'react-hook-form';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
 import {
   Tools,
-  SystemRoles,
   ResourceType,
   EModelEndpoint,
   PermissionBits,
@@ -29,8 +28,8 @@ import {
   resolveDefaultProviderModel,
 } from '~/utils';
 import { useResourcePermissions } from '~/hooks/useResourcePermissions';
-import { useSelectAgent, useLocalize, useAuthContext } from '~/hooks';
 import { useAgentPanelContext } from '~/Providers/AgentPanelContext';
+import { useSelectAgent, useLocalize } from '~/hooks';
 import AgentPanelSkeleton from './AgentPanelSkeleton';
 import AdvancedPanel from './Advanced/AdvancedPanel';
 import { Panel, isEphemeralAgent } from '~/common';
@@ -228,7 +227,6 @@ export const isAvatarUploadOnlyDirty = (
 
 export default function AgentPanel() {
   const localize = useLocalize();
-  const { user } = useAuthContext();
   const { showToast } = useToastContext();
   const {
     activePanel,
@@ -527,17 +525,19 @@ export default function AgentPanel() {
     }
   }, [agent_id, onSelectAgent]);
 
+  /**
+   * Admins are covered by `canEdit`: the effective-permissions endpoint reports full
+   * bits for holders of `manage:agents`. Short-circuiting on the raw role instead would
+   * render the form while the expanded query stays disabled, hydrating it from the
+   * VIEW-redacted payload — and saving that wipes instructions, tools and starters.
+   */
   const canEditAgent = useMemo(() => {
     if (!agentQuery.data?.id) {
       return true;
     }
 
-    if (user?.role === SystemRoles.ADMIN) {
-      return true;
-    }
-
     return canEdit;
-  }, [agentQuery.data?.id, user?.role, canEdit]);
+  }, [agentQuery.data?.id, canEdit]);
 
   return (
     <FormProvider {...methods}>

@@ -20,6 +20,7 @@ const {
   validateActionDomain,
   validateAndParseOpenAPISpec,
 } = require('librechat-data-provider');
+const { canManageResourceType } = require('~/server/middleware/roles/capabilities');
 const { encryptMetadata, domainParser } = require('~/server/services/ActionService');
 const { findAccessibleResources } = require('~/server/services/PermissionService');
 const db = require('~/models');
@@ -48,12 +49,15 @@ const checkAgentCreate = generateCheckAccess({
 router.get('/', async (req, res) => {
   try {
     const userId = req.user.id;
-    const editableAgentObjectIds = await findAccessibleResources({
-      userId,
-      role: req.user.role,
-      resourceType: ResourceType.AGENT,
-      requiredPermissions: PermissionBits.EDIT,
-    });
+    /** `null` skips ACL narrowing for agent managers — see `getListAgentsByAccess`. */
+    const editableAgentObjectIds = (await canManageResourceType(req.user, ResourceType.AGENT))
+      ? null
+      : await findAccessibleResources({
+          userId,
+          role: req.user.role,
+          resourceType: ResourceType.AGENT,
+          requiredPermissions: PermissionBits.EDIT,
+        });
 
     const agentsResponse = await db.getListAgentsByAccess({
       accessibleIds: editableAgentObjectIds,

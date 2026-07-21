@@ -100,11 +100,14 @@ describe('AgentDetailContent', () => {
       expect(screen.getByTestId('agent-detail-edit-button')).toBeInTheDocument();
     });
 
-    it('is shown to an admin', () => {
+    /** The raw role no longer grants edit rights client-side: the server reports full
+     *  permission bits for holders of `manage:agents`, so revoking that capability
+     *  actually hides the control instead of leaving a button the API would reject. */
+    it('is hidden from an admin whose effective permissions carry no EDIT bit', () => {
       mockUser = { id: 'user_other', role: 'ADMIN' };
       renderContent({ onEdit: jest.fn() });
 
-      expect(screen.getByTestId('agent-detail-edit-button')).toBeInTheDocument();
+      expect(screen.queryByTestId('agent-detail-edit-button')).not.toBeInTheDocument();
     });
 
     it('is shown to a user granted the EDIT permission bit', () => {

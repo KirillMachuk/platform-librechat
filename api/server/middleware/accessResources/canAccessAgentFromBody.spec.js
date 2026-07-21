@@ -8,7 +8,7 @@ const {
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const { canAccessAgentFromBody } = require('./canAccessAgentFromBody');
 const { User, Role, AclEntry } = require('~/db/models');
-const { createAgent } = require('~/models');
+const { createAgent, seedSystemGrants } = require('~/models');
 
 describe('canAccessAgentFromBody middleware', () => {
   let mongoServer;
@@ -27,6 +27,7 @@ describe('canAccessAgentFromBody middleware', () => {
 
   beforeEach(async () => {
     await mongoose.connection.dropDatabase();
+    await seedSystemGrants();
 
     await Role.create({
       name: 'test-role',
@@ -336,7 +337,7 @@ describe('canAccessAgentFromBody middleware', () => {
       expect(req.resolvedAddedAgent._id.toString()).toBe(addedAgent._id.toString());
     });
 
-    test('ADMIN bypasses agent resource ACL for addedConvo', async () => {
+    test('agent managers bypass the agent resource ACL for addedConvo', async () => {
       req.user.role = SystemRoles.ADMIN;
       req.body.addedConvo = { agent_id: addedAgent.id, endpoint: 'agents', model: 'gpt-4' };
 
