@@ -862,11 +862,13 @@ endpoints:
 # researchers; when unset, the conversation's selected model is used.
 #
 # ACCESS: `interface.deepResearch` (default: true) seeds the DEEP_RESEARCH.USE role
-# permission at startup, which is what the badge and the server admission gate both
-# read. It is deliberately separate from `interface.webSearch`: a research run costs
-# orders of magnitude more than a single search, so a role can lose research while
-# keeping ordinary web search. Per-role changes belong in the role permissions editor;
-# changing the value here re-applies it to the roles on restart.
+# permission at startup, which is what the badge and the server admission gate both read.
+# A run additionally requires WEB_SEARCH.USE, because research reaches the open internet:
+# revoking a role's web search stops its research too. The separate permission narrows
+# rather than replaces it — a research run costs orders of magnitude more than a single
+# search, so a role can keep ordinary search while losing research. Per-role changes
+# belong in the role permissions editor; see the note above `interface:` for how a change
+# here interacts with them.
 #
 # MODEL STACK — finalized from the price/quality benchmark
 # (dr-model-bench/REPORT_dr_model_stack.md, 2026-06-23). The quality bottleneck is

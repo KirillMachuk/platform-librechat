@@ -12,9 +12,12 @@ export interface CanUseDeepResearchParams {
 /**
  * Whether this request's user may run Deep Research.
  *
- * Deep Research has its own permission, seeded from `interface.deepResearch`, so a role
- * can lose research without losing ordinary web search — the two differ by orders of
- * magnitude in cost. The `deep_research` agent capability is not a substitute: it is one
+ * Requires BOTH `WEB_SEARCH.USE` and `DEEP_RESEARCH.USE`. Research reaches the open
+ * internet, so revoking web search has to stop it too — otherwise an operator who
+ * believes they cut a role off from the internet would still have it browsing. The
+ * separate `DEEP_RESEARCH` permission then narrows that further: research costs orders of
+ * magnitude more than a single search, so a role can keep ordinary search while losing
+ * research. The `deep_research` agent capability is not a substitute for either: it is one
  * switch for the whole tenant and cannot express "this role may not research", so on its
  * own it let any request carrying `ephemeralAgent.deep_research` run a full research
  * graph regardless of role.
@@ -34,20 +37,23 @@ export async function canUseDeepResearch({
   getRoleByName,
 }: CanUseDeepResearchParams): Promise<boolean> {
   try {
-    const allowed = await checkAccess({
-      req,
-      user: req.user as IUser,
-      permissionType: PermissionTypes.DEEP_RESEARCH,
-      permissions: [Permissions.USE],
-      getRoleByName,
-    });
-    if (!allowed) {
-      const user = req.user as IUser | undefined;
-      logger.warn(
-        `[deepResearch] Denied for user ${user?.id}: role "${user?.role}" lacks ${PermissionTypes.DEEP_RESEARCH}.${Permissions.USE}. Running the turn as an ordinary chat.`,
-      );
+    for (const permissionType of [PermissionTypes.WEB_SEARCH, PermissionTypes.DEEP_RESEARCH]) {
+      const allowed = await checkAccess({
+        req,
+        user: req.user as IUser,
+        permissionType,
+        permissions: [Permissions.USE],
+        getRoleByName,
+      });
+      if (!allowed) {
+        const user = req.user as IUser | undefined;
+        logger.warn(
+          `[deepResearch] Denied for user ${user?.id}: role "${user?.role}" lacks ${permissionType}.${Permissions.USE}. Running the turn as an ordinary chat.`,
+        );
+        return false;
+      }
     }
-    return allowed;
+    return true;
   } catch (error) {
     logger.error('[deepResearch] Permission check failed; denying the run', error);
     return false;

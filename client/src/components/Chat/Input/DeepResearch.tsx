@@ -7,9 +7,14 @@ import { useBadgeRowContext } from '~/Providers';
 
 function DeepResearch() {
   const localize = useLocalize();
-  /** Deep Research has its own permission, seeded from `interface.deepResearch`; checking
-   *  that flag here as well would override whatever an admin later set on the role. The
-   *  `deep_research` agent capability must also be on, else the backend ignores the toggle. */
+  /** Mirrors the server admission gate: research reaches the open internet, so it takes
+   *  web search AND its own permission. Checking `interface.deepResearch` here as well
+   *  would override whatever an admin later set on the role. The `deep_research` agent
+   *  capability must also be on, else the backend ignores the toggle. */
+  const canUseWebSearch = useHasAccess({
+    permissionType: PermissionTypes.WEB_SEARCH,
+    permission: Permissions.USE,
+  });
   const canUseDeepResearch = useHasAccess({
     permissionType: PermissionTypes.DEEP_RESEARCH,
     permission: Permissions.USE,
@@ -18,7 +23,7 @@ function DeepResearch() {
   const { deepResearchEnabled } = useAgentCapabilities(
     context?.agentsConfig?.capabilities ?? defaultAgentCapabilities,
   );
-  if (!context || !deepResearchEnabled || !canUseDeepResearch) {
+  if (!context || !deepResearchEnabled || !canUseWebSearch || !canUseDeepResearch) {
     return null;
   }
   const { deepResearch: deepResearchData } = context;

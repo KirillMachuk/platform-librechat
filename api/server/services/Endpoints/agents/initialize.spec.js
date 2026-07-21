@@ -914,10 +914,14 @@ describe('initializeClient — Deep Research RBAC gate', () => {
     });
   });
 
-  /** Controls only the role document the real `checkAccess` reads. */
+  /** Controls only the role document the real `checkAccess` reads. Research takes web
+   *  search as well, so the happy path has to carry both. */
   const setDeepResearchPermission = (allowed) =>
     jest.spyOn(db, 'getRoleByName').mockResolvedValue({
-      permissions: { [PermissionTypes.DEEP_RESEARCH]: { [Permissions.USE]: allowed } },
+      permissions: {
+        [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: true },
+        [PermissionTypes.DEEP_RESEARCH]: { [Permissions.USE]: allowed },
+      },
     });
 
   const makeReq = (ephemeralAgent = { deep_research: true }) => ({
@@ -993,11 +997,25 @@ describe('initializeClient — Deep Research RBAC gate', () => {
     expect(roleLookup).not.toHaveBeenCalled();
   });
 
-  /** Deep Research is gated separately from plain web search precisely so an operator
-   *  can revoke the expensive one while leaving ordinary search in place. */
-  it('is denied on Web Search alone, now that the permissions are separate', async () => {
+  /** The separate permission narrows web search rather than replacing it: an operator can
+   *  revoke the expensive path while leaving ordinary search in place. */
+  it('is denied on Web Search alone, without its own permission', async () => {
     jest.spyOn(db, 'getRoleByName').mockResolvedValue({
       permissions: { [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: true } },
+    });
+
+    await run(makeReq());
+
+    expect(mockBuildDeepResearchGraph).not.toHaveBeenCalled();
+  });
+
+  /** Revoking a role's internet access has to stop research too. */
+  it('is denied when Web Search is revoked, even with its own permission', async () => {
+    jest.spyOn(db, 'getRoleByName').mockResolvedValue({
+      permissions: {
+        [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: false },
+        [PermissionTypes.DEEP_RESEARCH]: { [Permissions.USE]: true },
+      },
     });
 
     await run(makeReq());
