@@ -45,6 +45,44 @@ const createForm = (): AgentForm => ({
 });
 
 describe('composeAgentUpdatePayload', () => {
+  /**
+   * A viewer-level agent response is a redacted whitelist that omits these keys, so the
+   * form holds `undefined` rather than a real value. Sending a default would demote the
+   * agent out of the catalog showcase and erase its starters on an unrelated save.
+   */
+  it('omits conversation_starters and is_promoted when the form never received them', () => {
+    const form = createForm();
+    form.conversation_starters = undefined;
+    form.is_promoted = undefined;
+
+    const { payload } = composeAgentUpdatePayload(form, 'agent_123');
+
+    expect('conversation_starters' in payload).toBe(false);
+    expect('is_promoted' in payload).toBe(false);
+  });
+
+  it('sends an empty starters list when the form genuinely holds one', () => {
+    const form = createForm();
+    form.conversation_starters = [];
+    form.is_promoted = false;
+
+    const { payload } = composeAgentUpdatePayload(form, 'agent_123');
+
+    expect(payload.conversation_starters).toEqual([]);
+    expect(payload.is_promoted).toBe(false);
+  });
+
+  it('carries through populated values', () => {
+    const form = createForm();
+    form.conversation_starters = ['Проверь договор'];
+    form.is_promoted = true;
+
+    const { payload } = composeAgentUpdatePayload(form, 'agent_123');
+
+    expect(payload.conversation_starters).toEqual(['Проверь договор']);
+    expect(payload.is_promoted).toBe(true);
+  });
+
   it('includes avatar: null when resetting a persistent agent', () => {
     const form = createForm();
     form.avatar_action = 'reset';

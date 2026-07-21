@@ -110,9 +110,13 @@ export function composeAgentUpdatePayload(data: AgentForm, agent_id?: string | n
       hide_sequential_outputs,
       recursion_limit,
       category,
-      conversation_starters,
-      /** Server-side admin gate decides whether this is honored */
-      is_promoted,
+      /**
+       * Left out entirely when undefined — the form was hydrated from a redacted
+       * viewer-level response that never carried them, so sending a default would
+       * erase the real value. `is_promoted` is additionally admin-gated server-side.
+       */
+      ...(conversation_starters !== undefined ? { conversation_starters } : {}),
+      ...(is_promoted !== undefined ? { is_promoted } : {}),
       support_contact,
       tool_options,
       skills,

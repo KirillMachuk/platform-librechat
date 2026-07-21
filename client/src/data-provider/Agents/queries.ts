@@ -148,7 +148,11 @@ export const useGetAgentCategoriesQuery = (
     {
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
-      refetchOnMount: false,
+      /**
+       * No `refetchOnMount: false` here: promoting an agent adds the synthetic "Top Picks"
+       * tab, and that invalidation lands while the catalog is unmounted. Opting out would
+       * serve the stale tab list on the way back — `staleTime` already covers the rest.
+       */
       staleTime: 5 * 60 * 1000, // Cache for 5 minutes
       ...config,
     },

@@ -83,6 +83,7 @@ function ChatGroupItem({
   const onCardClick = useCallback(() => {
     if (!isChatRoute) {
       navigate(`${PROMPT_PATH}/${group._id}`, { replace: true });
+      dismissPanel();
       return;
     }
 
@@ -100,7 +101,7 @@ function ChatGroupItem({
     if (group._id) {
       recordUsage.mutate(group._id);
     }
-  }, [group, submitPrompt, recordUsage, isChatRoute, navigate]);
+  }, [group, submitPrompt, recordUsage, isChatRoute, navigate, dismissPanel]);
 
   const snippet =
     typeof group.oneliner === 'string' && group.oneliner.length > 0
