@@ -940,6 +940,10 @@ export function createAgentMethods(
     delete revertToVersion.versions;
     delete revertToVersion.author;
     delete revertToVersion.updatedBy;
+    /** Promotion is admin-curated catalog state, not agent config. Reverting needs only
+     *  EDIT, so restoring a snapshot taken while an admin had promoted the agent would
+     *  hand a non-admin the showcase slot the update handler denies them. */
+    delete revertToVersion.is_promoted;
 
     /** Version snapshots can predate skill deletions; restoring one verbatim
      *  would resurrect dangling allowlist ids that scope the catalog to

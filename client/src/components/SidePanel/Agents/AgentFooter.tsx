@@ -86,11 +86,20 @@ export default function AgentFooter({
 
   const showButtons = activePanel === Panel.builder;
 
+  /**
+   * Sub-panels (model parameters, advanced) are configuration steps reached from the
+   * builder and left via "Back to builder". Showing Create/Save there made users submit
+   * the agent from the model screen and then find an unexplained "no changes" on return.
+   */
+  if (!showButtons) {
+    return null;
+  }
+
   return (
     <div className="mb-1 flex w-full flex-col gap-2">
-      {showButtons && <AdvancedButton setActivePanel={setActivePanel} />}
-      {showButtons && agent_id && <VersionButton setActivePanel={setActivePanel} />}
-      {user?.role === SystemRoles.ADMIN && showButtons && <AdminSettings />}
+      <AdvancedButton setActivePanel={setActivePanel} />
+      {agent_id && <VersionButton setActivePanel={setActivePanel} />}
+      {user?.role === SystemRoles.ADMIN && <AdminSettings />}
       {/* Context Button */}
       <div className="flex items-center justify-end gap-2">
         {(agent?.author === user?.id || user?.role === SystemRoles.ADMIN || canDeleteThisAgent) &&

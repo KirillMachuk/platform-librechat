@@ -132,7 +132,9 @@ const AgentCard: React.FC<AgentCardProps> = ({
         </div>
       </OGDialogTrigger>
 
-      <AgentDetailContent agent={agent} onEdit={handleEdit} onStartChat={onStartChat} />
+      {/* Radix renders Root children eagerly, so mounting this unconditionally fired a
+          permissions request per card in the grid. The body is invisible until open. */}
+      {isOpen && <AgentDetailContent agent={agent} onEdit={handleEdit} onStartChat={onStartChat} />}
     </OGDialog>
   );
 };

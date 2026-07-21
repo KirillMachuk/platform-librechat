@@ -40,11 +40,15 @@ function CatalogView({
 
   useGetEndpointsQuery();
 
+  /**
+   * Same reason as the agent list: promoting an agent adds the "Top Picks" tab, but the
+   * invalidation lands while this view is unmounted, so skipping the mount refetch left
+   * the tab missing until the cache expired.
+   */
   const categoriesQuery = useGetAgentCategoriesQuery({
     staleTime: 1000 * 60 * 15,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: false,
   });
 
   /**

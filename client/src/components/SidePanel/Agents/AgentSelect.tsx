@@ -81,9 +81,17 @@ function AgentSelect({
         category: fullAgent.category || 'general',
         // Make sure support_contact is properly loaded
         support_contact: fullAgent.support_contact,
-        /** Reset explicitly: an agent without these must clear the previous agent's */
-        conversation_starters: fullAgent.conversation_starters ?? [],
-        is_promoted: fullAgent.is_promoted ?? false,
+        /**
+         * Key presence, not value: a viewer-level response is a redacted whitelist that
+         * omits these keys entirely, and coercing them to empty would make the next save
+         * wipe the agent's starters and drop it out of the catalog showcase. When the key
+         * is present, an empty value is genuine and must clear the previous agent's.
+         */
+        conversation_starters:
+          'conversation_starters' in fullAgent
+            ? (fullAgent.conversation_starters ?? [])
+            : undefined,
+        is_promoted: 'is_promoted' in fullAgent ? (fullAgent.is_promoted ?? false) : undefined,
         avatar_file: null,
         avatar_preview: fullAgent.avatar?.filepath ?? '',
         avatar_action: null,

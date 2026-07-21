@@ -1016,14 +1016,26 @@ const deleteAgentAvatarFile = async (req, agent) => {
   if (!avatar?.source || !avatar.filepath) {
     return;
   }
+  /** Duplicated agents inherit the original's avatar reference, so deleting a copy
+   *  must not unlink a blob another agent still points at. */
+  const stillReferenced = await db.getAgent({ 'avatar.filepath': avatar.filepath });
+  if (stillReferenced) {
+    return;
+  }
+  const ownerId = agent.author?.toString?.();
+  if (!ownerId) {
+    return;
+  }
   try {
     const { deleteFile } = getStrategyFunctions(avatar.source);
     await deleteFile(req, {
       filepath: avatar.filepath,
-      user: agent.author?.toString?.() ?? req.user.id,
+      user: ownerId,
       tenantId: req.user.tenantId,
     });
-    await db.deleteFileByFilter({ filepath: avatar.filepath });
+    /** Scope by owner: `filepath` comes off the agent document and is client-supplied at
+     *  create time, so an unscoped filter would delete whichever File matches first. */
+    await db.deleteFileByFilter({ user: ownerId, filepath: avatar.filepath });
   } catch (error) {
     logger.error(`[deleteAgent] Error deleting avatar for agent ${agent.id}`, error);
   }
