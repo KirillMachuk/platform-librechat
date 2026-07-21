@@ -346,6 +346,26 @@ describe('manual adjustments (refunds and clawbacks)', () => {
     expect(status.notifiedExhaustedAt).not.toBeNull();
   });
 
+  test('a clawback larger than every grant drains the lots and keeps the block on', async () => {
+    await methods.addCreditPackage({ credits: 50, idempotencyKey: 'lot-1', at });
+    await methods.addCreditPackage({
+      kind: 'adjustment',
+      credits: -80,
+      comment: 'полный откат',
+      idempotencyKey: 'adj-big',
+      at,
+    });
+    await spend({ credits: 100, at });
+
+    const status = await methods.getCreditBillingStatus({ poolMicroUsd: POOL, at });
+    const { packages } = await methods.listCreditPackages();
+
+    expect(status.packageRemainingMicroUsd).toBeLessThan(0);
+    expect(status.blocked).toBe(true);
+    // Nothing is left to show as remaining, and no row goes negative on screen.
+    expect(packages.every((lot) => lot.remainingMicroUsd === 0)).toBe(true);
+  });
+
   test('the lot table still reconciles with the headline remainder', async () => {
     /* The regression this guards: a negative lot flowing through the per-lot FIFO
      * arithmetic ran the drain backwards, so the rows on screen no longer summed to
