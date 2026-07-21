@@ -1,9 +1,11 @@
 const {
   Tools,
   Constants,
+  Permissions,
   EModelEndpoint,
   isActionTool,
   actionDelimiter,
+  PermissionTypes,
   AgentCapabilities,
   defaultAgentCapabilities,
 } = require('librechat-data-provider');
@@ -74,8 +76,10 @@ jest.mock('../ActionService', () => ({
 jest.mock('~/server/services/Threads', () => ({
   recordUsage: jest.fn(),
 }));
+const mockGetRoleByName = jest.fn();
 jest.mock('~/models', () => ({
   findPluginAuthsByKeys: jest.fn(),
+  getRoleByName: (...args) => mockGetRoleByName(...args),
 }));
 jest.mock('~/config', () => ({
   getFlowStateManager: jest.fn(() => mockFlowManager),
@@ -105,7 +109,7 @@ const { PENDING_STALE_MS } = require('@librechat/api');
 
 function createMockReq(capabilities) {
   return {
-    user: { id: 'user_123' },
+    user: { id: 'user_123', role: 'USER' },
     config: {
       endpoints: {
         [EModelEndpoint.agents]: {
@@ -138,6 +142,12 @@ describe('ToolService - Action Capability Gating', () => {
     mockGetServerConfig.mockResolvedValue(undefined);
     mockFlowManager.getFlowState.mockResolvedValue(undefined);
     mockResolveConfigServers.mockResolvedValue({});
+    mockGetRoleByName.mockResolvedValue({
+      permissions: {
+        [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: true },
+        [PermissionTypes.FILE_SEARCH]: { [Permissions.USE]: true },
+      },
+    });
   });
 
   describe('resolveAgentCapabilities', () => {
@@ -208,6 +218,98 @@ describe('ToolService - Action Capability Gating', () => {
       // the guard interprets as the MCP suffix.
       const edgeCaseTool = `getData${actionDelimiter}api_mcp_internal_com`;
       expect(isActionTool(edgeCaseTool)).toBe(false);
+    });
+  });
+
+  describe('role permissions gate the tools an operator can switch off', () => {
+    const setPermissions = ({ webSearch, fileSearch }) =>
+      mockGetRoleByName.mockResolvedValue({
+        permissions: {
+          [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: webSearch },
+          [PermissionTypes.FILE_SEARCH]: { [Permissions.USE]: fileSearch },
+        },
+      });
+
+    const toolCapabilities = [
+      AgentCapabilities.tools,
+      AgentCapabilities.web_search,
+      AgentCapabilities.file_search,
+    ];
+
+    const armTools = async (tools) => {
+      const req = createMockReq(toolCapabilities);
+      mockGetEndpointsConfig.mockResolvedValue(createEndpointsConfig(toolCapabilities));
+
+      await loadAgentTools({
+        req,
+        res: {},
+        agent: { id: 'agent_123', tools },
+        definitionsOnly: true,
+      });
+
+      const [callArgs] = mockLoadToolDefinitions.mock.calls[0];
+      return callArgs.tools;
+    };
+
+    it('arms web search and the document tools when the role holds both permissions', async () => {
+      setPermissions({ webSearch: true, fileSearch: true });
+
+      const tools = await armTools([Tools.web_search, Tools.library_search, 'calculator']);
+
+      expect(tools).toEqual(
+        expect.arrayContaining([Tools.web_search, Tools.library_search, 'calculator']),
+      );
+    });
+
+    it('withholds web search from a role that lost the permission', async () => {
+      setPermissions({ webSearch: false, fileSearch: true });
+
+      const tools = await armTools([Tools.web_search, Tools.library_search]);
+
+      expect(tools).not.toContain(Tools.web_search);
+      expect(tools).toContain(Tools.library_search);
+    });
+
+    /** file_search, library_search and open_document ride one permission — arming only
+     *  some of them produces agents that find documents but cannot read them. */
+    it('withholds every document tool from a role that lost file search', async () => {
+      setPermissions({ webSearch: true, fileSearch: false });
+
+      const tools = await armTools([
+        Tools.file_search,
+        Tools.library_search,
+        Tools.open_document,
+        Tools.web_search,
+      ]);
+
+      expect(tools).toEqual([Tools.web_search]);
+    });
+
+    it('leaves tools without a role permission untouched', async () => {
+      setPermissions({ webSearch: false, fileSearch: false });
+
+      const tools = await armTools(['calculator', Tools.web_search]);
+
+      expect(tools).toEqual(['calculator']);
+    });
+
+    it('fails closed when the role lookup throws', async () => {
+      mockGetRoleByName.mockRejectedValue(new Error('mongo unreachable'));
+
+      const tools = await armTools([Tools.web_search, Tools.file_search, 'calculator']);
+
+      expect(tools).toEqual(['calculator']);
+    });
+
+    /** The overwhelming majority of agents declare neither tool; they should not pay
+     *  for a role lookup on every turn. */
+    it('skips the lookup entirely for an agent declaring neither kind of tool', async () => {
+      setPermissions({ webSearch: true, fileSearch: true });
+
+      const tools = await armTools(['calculator']);
+
+      expect(tools).toEqual(['calculator']);
+      expect(mockGetRoleByName).not.toHaveBeenCalled();
     });
   });
 

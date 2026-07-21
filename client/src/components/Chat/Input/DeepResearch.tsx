@@ -3,29 +3,22 @@ import { Telescope } from 'lucide-react';
 import { CheckboxButton } from '@librechat/client';
 import { Permissions, PermissionTypes, defaultAgentCapabilities } from 'librechat-data-provider';
 import { useLocalize, useHasAccess, useAgentCapabilities } from '~/hooks';
-import { useGetStartupConfig } from '~/data-provider';
 import { useBadgeRowContext } from '~/Providers';
 
 function DeepResearch() {
   const localize = useLocalize();
-  const { data: startupConfig } = useGetStartupConfig();
-  /** P1: Deep Research reuses the Web Search permission for RBAC; the per-tenant
-   *  on/off is the `deepResearch` interface flag, AND the `deep_research` agent
-   *  capability must be enabled (else the backend ignores the toggle). */
+  /** Deep Research has its own permission, seeded from `interface.deepResearch`; checking
+   *  that flag here as well would override whatever an admin later set on the role. The
+   *  `deep_research` agent capability must also be on, else the backend ignores the toggle. */
   const canUseDeepResearch = useHasAccess({
-    permissionType: PermissionTypes.WEB_SEARCH,
+    permissionType: PermissionTypes.DEEP_RESEARCH,
     permission: Permissions.USE,
   });
   const context = useBadgeRowContext();
   const { deepResearchEnabled } = useAgentCapabilities(
     context?.agentsConfig?.capabilities ?? defaultAgentCapabilities,
   );
-  if (
-    !context ||
-    !deepResearchEnabled ||
-    !canUseDeepResearch ||
-    startupConfig?.interface?.deepResearch === false
-  ) {
+  if (!context || !deepResearchEnabled || !canUseDeepResearch) {
     return null;
   }
   const { deepResearch: deepResearchData } = context;

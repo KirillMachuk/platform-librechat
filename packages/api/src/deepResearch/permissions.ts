@@ -12,11 +12,12 @@ export interface CanUseDeepResearchParams {
 /**
  * Whether this request's user may run Deep Research.
  *
- * Deep Research reuses the Web Search permission for RBAC — the same gate the badge
- * checks (client/src/components/Chat/Input/DeepResearch.tsx). The `deep_research` agent
- * capability is not a substitute: it is one switch for the whole tenant and cannot
- * express "this role may not research", so on its own it let any request carrying
- * `ephemeralAgent.deep_research` run a full research graph regardless of role.
+ * Deep Research has its own permission, seeded from `interface.deepResearch`, so a role
+ * can lose research without losing ordinary web search — the two differ by orders of
+ * magnitude in cost. The `deep_research` agent capability is not a substitute: it is one
+ * switch for the whole tenant and cannot express "this role may not research", so on its
+ * own it let any request carrying `ephemeralAgent.deep_research` run a full research
+ * graph regardless of role.
  *
  * Call this at admission — where a turn is *routed* into Deep Research — never on the
  * run path. A run that has been admitted must reach its end; this must not be able to
@@ -36,14 +37,14 @@ export async function canUseDeepResearch({
     const allowed = await checkAccess({
       req,
       user: req.user as IUser,
-      permissionType: PermissionTypes.WEB_SEARCH,
+      permissionType: PermissionTypes.DEEP_RESEARCH,
       permissions: [Permissions.USE],
       getRoleByName,
     });
     if (!allowed) {
       const user = req.user as IUser | undefined;
       logger.warn(
-        `[deepResearch] Denied for user ${user?.id}: role "${user?.role}" lacks ${PermissionTypes.WEB_SEARCH}.${Permissions.USE}. Running the turn as an ordinary chat.`,
+        `[deepResearch] Denied for user ${user?.id}: role "${user?.role}" lacks ${PermissionTypes.DEEP_RESEARCH}.${Permissions.USE}. Running the turn as an ordinary chat.`,
       );
     }
     return allowed;

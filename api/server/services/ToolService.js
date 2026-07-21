@@ -28,6 +28,7 @@ const {
   buildMCPAuthRunStepDeltaEvent,
   buildMCPAuthRunStepCompletedEvent,
   isFileAuthoringToolDefinition,
+  checkAccessWithRequestCache,
 } = require('@librechat/api');
 const {
   Time,
@@ -36,6 +37,8 @@ const {
   CacheKeys,
   ErrorTypes,
   ContentTypes,
+  Permissions,
+  PermissionTypes,
   imageGenTools,
   EModelEndpoint,
   EToolResources,
@@ -73,7 +76,7 @@ const { getMCPRequestContext } = require('~/server/services/MCPRequestContext');
 const { recordUsage } = require('~/server/services/Threads');
 const { loadTools } = require('~/app/clients/tools/util');
 const { redactMessage } = require('~/config/parsers');
-const { findPluginAuthsByKeys } = require('~/models');
+const { findPluginAuthsByKeys, getRoleByName } = require('~/models');
 const { getFlowStateManager, getMCPServersRegistry } = require('~/config');
 const { getLogStores } = require('~/cache');
 
@@ -526,6 +529,51 @@ const documentTools = new Set([Tools.file_search, Tools.library_search, Tools.op
 
 const isDocumentTool = (toolName) => documentTools.has(toolName);
 
+/**
+ * Role-level permissions for the tools an operator can switch off per role. The agent
+ * capability answers "does this deployment offer the feature"; these answer "may this
+ * caller's role use it". Both must hold, so revoking the role permission actually stops
+ * the tool from reaching the model instead of only hiding its badge.
+ *
+ * Fails closed, like the Deep Research and file-citation gates: a role lookup that throws
+ * withholds the tool rather than handing it to a role that may have lost it. Agents that
+ * declare neither kind of tool — the common case — never pay for the lookup.
+ * @param {ServerRequest} req
+ * @param {string[]} [tools] - The agent's declared tools
+ * @returns {Promise<{ webSearch: boolean, fileSearch: boolean }>}
+ */
+const resolveToolRolePermissions = async (req, tools) => {
+  const wantsWebSearch = tools?.includes(Tools.web_search) === true;
+  const wantsFileSearch = tools?.some(isDocumentTool) === true;
+  if (!wantsWebSearch && !wantsFileSearch) {
+    return { webSearch: false, fileSearch: false };
+  }
+
+  const check = async (permissionType) => {
+    try {
+      return await checkAccessWithRequestCache({
+        req,
+        user: req.user,
+        permissionType,
+        permissions: [Permissions.USE],
+        getRoleByName,
+      });
+    } catch (error) {
+      logger.error(
+        `[ToolService] ${permissionType} permission check failed; withholding the tool`,
+        error,
+      );
+      return false;
+    }
+  };
+
+  const [webSearch, fileSearch] = await Promise.all([
+    wantsWebSearch ? check(PermissionTypes.WEB_SEARCH) : false,
+    wantsFileSearch ? check(PermissionTypes.FILE_SEARCH) : false,
+  ]);
+  return { webSearch, fileSearch };
+};
+
 /** Checks if a tool name is a known built-in tool */
 const isBuiltInTool = (toolName) =>
   Boolean(
@@ -577,16 +625,17 @@ async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, to
   const hasMCPTools = agent.tools?.some((tool) => tool?.includes(Constants.mcp_delimiter));
   const mcpPermissionContext = createMCPPermissionContext(req);
   const canUseMCP = hasMCPTools ? await mcpPermissionContext.canUseServers(req.user) : true;
+  const rolePermissions = await resolveToolRolePermissions(req, agent.tools);
 
   const filteredTools = agent.tools?.filter((tool) => {
     if (isDocumentTool(tool)) {
-      return checkCapability(AgentCapabilities.file_search);
+      return checkCapability(AgentCapabilities.file_search) && rolePermissions.fileSearch;
     }
     if (tool === Tools.execute_code) {
       return checkCapability(AgentCapabilities.execute_code);
     }
     if (tool === Tools.web_search) {
-      return checkCapability(AgentCapabilities.web_search);
+      return checkCapability(AgentCapabilities.web_search) && rolePermissions.webSearch;
     }
     if (isActionTool(tool)) {
       return actionsEnabled;
@@ -1144,15 +1193,17 @@ async function loadAgentTools({
   const hasMCPTools = agent.tools?.some((tool) => tool?.includes(Constants.mcp_delimiter));
   const mcpPermissionContext = createMCPPermissionContext(req);
   const canUseMCP = hasMCPTools ? await mcpPermissionContext.canUseServers(req.user) : true;
+  const rolePermissions = await resolveToolRolePermissions(req, agent.tools);
 
   let includesWebSearch = false;
   const _agentTools = agent.tools?.filter((tool) => {
     if (isDocumentTool(tool)) {
-      return checkCapability(AgentCapabilities.file_search);
+      return checkCapability(AgentCapabilities.file_search) && rolePermissions.fileSearch;
     } else if (tool === Tools.execute_code) {
       return checkCapability(AgentCapabilities.execute_code);
     } else if (tool === Tools.web_search) {
-      includesWebSearch = checkCapability(AgentCapabilities.web_search);
+      includesWebSearch =
+        checkCapability(AgentCapabilities.web_search) && rolePermissions.webSearch;
       return includesWebSearch;
     } else if (isActionTool(tool)) {
       return actionsEnabled;

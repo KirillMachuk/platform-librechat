@@ -10,6 +10,7 @@ import {
   runCodePermissionsSchema,
   bookmarkPermissionsSchema,
   webSearchPermissionsSchema,
+  deepResearchPermissionsSchema,
   fileSearchPermissionsSchema,
   multiConvoPermissionsSchema,
   mcpServersPermissionsSchema,
@@ -77,6 +78,9 @@ const defaultRolesSchema = z.object({
         [Permissions.USE]: z.boolean().default(true),
       }),
       [PermissionTypes.WEB_SEARCH]: webSearchPermissionsSchema.extend({
+        [Permissions.USE]: z.boolean().default(true),
+      }),
+      [PermissionTypes.DEEP_RESEARCH]: deepResearchPermissionsSchema.extend({
         [Permissions.USE]: z.boolean().default(true),
       }),
       [PermissionTypes.PEOPLE_PICKER]: peoplePickerPermissionsSchema.extend({
@@ -173,6 +177,9 @@ export const roleDefaults = defaultRolesSchema.parse({
       [PermissionTypes.WEB_SEARCH]: {
         [Permissions.USE]: true,
       },
+      [PermissionTypes.DEEP_RESEARCH]: {
+        [Permissions.USE]: true,
+      },
       [PermissionTypes.PEOPLE_PICKER]: {
         [Permissions.VIEW_USERS]: true,
         [Permissions.VIEW_GROUPS]: true,
@@ -234,6 +241,7 @@ export const roleDefaults = defaultRolesSchema.parse({
       [PermissionTypes.TEMPORARY_CHAT]: {},
       [PermissionTypes.RUN_CODE]: {},
       [PermissionTypes.WEB_SEARCH]: {},
+      [PermissionTypes.DEEP_RESEARCH]: {},
       [PermissionTypes.PEOPLE_PICKER]: {
         [Permissions.VIEW_USERS]: false,
         [Permissions.VIEW_GROUPS]: false,

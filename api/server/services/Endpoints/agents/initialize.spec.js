@@ -914,9 +914,9 @@ describe('initializeClient — Deep Research RBAC gate', () => {
   });
 
   /** Controls only the role document the real `checkAccess` reads. */
-  const setWebSearchPermission = (allowed) =>
+  const setDeepResearchPermission = (allowed) =>
     jest.spyOn(db, 'getRoleByName').mockResolvedValue({
-      permissions: { [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: allowed } },
+      permissions: { [PermissionTypes.DEEP_RESEARCH]: { [Permissions.USE]: allowed } },
     });
 
   const makeReq = (ephemeralAgent = { deep_research: true }) => ({
@@ -946,16 +946,16 @@ describe('initializeClient — Deep Research RBAC gate', () => {
       },
     });
 
-  it('assembles the research graph when the role carries the Web Search permission', async () => {
-    setWebSearchPermission(true);
+  it('assembles the research graph when the role carries the Deep Research permission', async () => {
+    setDeepResearchPermission(true);
 
     await run(makeReq());
 
     expect(mockBuildDeepResearchGraph).toHaveBeenCalledTimes(1);
   });
 
-  it('runs the turn as an ordinary chat when the role lacks the Web Search permission', async () => {
-    setWebSearchPermission(false);
+  it('runs the turn as an ordinary chat when the role lacks the Deep Research permission', async () => {
+    setDeepResearchPermission(false);
 
     await run(makeReq());
 
@@ -971,7 +971,7 @@ describe('initializeClient — Deep Research RBAC gate', () => {
   });
 
   it('ignores the toggle when the tenant capability is off, without consulting the role', async () => {
-    const roleLookup = setWebSearchPermission(true);
+    const roleLookup = setDeepResearchPermission(true);
     const req = makeReq();
     req.config.endpoints.agents.capabilities = [];
 
@@ -984,11 +984,23 @@ describe('initializeClient — Deep Research RBAC gate', () => {
   /** The gate sits behind the toggle, so an ordinary chat turn — the overwhelming
    *  majority — never pays for the role lookup this PR adds. */
   it('costs an ordinary chat turn nothing: no role lookup when the toggle is off', async () => {
-    const roleLookup = setWebSearchPermission(true);
+    const roleLookup = setDeepResearchPermission(true);
 
     await run(makeReq({}));
 
     expect(mockBuildDeepResearchGraph).not.toHaveBeenCalled();
     expect(roleLookup).not.toHaveBeenCalled();
+  });
+
+  /** Deep Research is gated separately from plain web search precisely so an operator
+   *  can revoke the expensive one while leaving ordinary search in place. */
+  it('is denied on Web Search alone, now that the permissions are separate', async () => {
+    jest.spyOn(db, 'getRoleByName').mockResolvedValue({
+      permissions: { [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: true } },
+    });
+
+    await run(makeReq());
+
+    expect(mockBuildDeepResearchGraph).not.toHaveBeenCalled();
   });
 });

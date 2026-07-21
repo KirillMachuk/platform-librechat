@@ -33,6 +33,8 @@ function hasExplicitConfig(
       return interfaceConfig?.runCode !== undefined;
     case PermissionTypes.WEB_SEARCH:
       return interfaceConfig?.webSearch !== undefined;
+    case PermissionTypes.DEEP_RESEARCH:
+      return interfaceConfig?.deepResearch !== undefined;
     case PermissionTypes.PEOPLE_PICKER:
       return interfaceConfig?.peoplePicker !== undefined;
     case PermissionTypes.MARKETPLACE:
@@ -335,6 +337,13 @@ export async function updateInterfacePermissions({
           loadedInterface.webSearch,
           defaultPerms[PermissionTypes.WEB_SEARCH]?.[Permissions.USE],
           defaults.webSearch,
+        ),
+      },
+      [PermissionTypes.DEEP_RESEARCH]: {
+        [Permissions.USE]: getPermissionValue(
+          loadedInterface.deepResearch,
+          defaultPerms[PermissionTypes.DEEP_RESEARCH]?.[Permissions.USE],
+          defaults.deepResearch,
         ),
       },
       [PermissionTypes.PEOPLE_PICKER]: {
