@@ -1,6 +1,7 @@
 /**
- * NOTE: hasCapability, requireCapability, hasConfigCapability, and
- * capabilityContextMiddleware are intentionally NOT re-exported here.
+ * NOTE: hasCapability, requireCapability, hasConfigCapability,
+ * canManageResourceType, and capabilityContextMiddleware are intentionally
+ * NOT re-exported here.
  *
  * capabilities.js depends on ~/models, and the middleware barrel
  * (middleware/index.js) is frequently required by modules that are
@@ -10,8 +11,4 @@
  * Always import capability helpers directly:
  *   require('~/server/middleware/roles/capabilities')
  */
-const checkAdmin = require('./admin');
-
-module.exports = {
-  checkAdmin,
-};
+module.exports = {};

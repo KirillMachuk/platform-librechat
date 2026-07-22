@@ -1,5 +1,4 @@
 export * from './access';
-export * from './admin';
 export * from './error';
 export * from './notFound';
 export * from './balance';
