@@ -1,6 +1,10 @@
 const bcrypt = require('bcryptjs');
 const express = require('express');
-const { createAdminUsersHandlers, createAdminBalanceHandlers } = require('@librechat/api');
+const {
+  createAdminUsersHandlers,
+  createAdminBalanceHandlers,
+  readBillingConfig,
+} = require('@librechat/api');
 const { SystemCapabilities } = require('@librechat/data-schemas');
 const { getAppConfig } = require('~/server/services/Config');
 const { requireCapability } = require('~/server/middleware/roles/capabilities');
@@ -14,7 +18,12 @@ const requireAdminAccess = requireCapability(SystemCapabilities.ACCESS_ADMIN);
 const requireReadUsers = requireCapability(SystemCapabilities.READ_USERS);
 const requireManageUsers = requireCapability(SystemCapabilities.MANAGE_USERS);
 
+/* Operator accounts move money and see $ figures; the client's own admin holds
+ * MANAGE_USERS, so they are shielded here from being taken over via a password reset. */
+const { operatorEmails } = readBillingConfig();
+
 const handlers = createAdminUsersHandlers({
+  protectedEmails: operatorEmails,
   findUsers: db.findUsers,
   countUsers: db.countUsers,
   findUser: db.findUser,

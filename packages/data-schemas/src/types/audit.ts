@@ -21,6 +21,7 @@ export type AuditAction =
   | 'apikey.create'
   | 'apikey.revoke'
   | 'billing.package_added'
+  | 'billing.adjustment_added'
   | 'billing.threshold_80'
   | 'billing.exhausted'
   | 'billing.reconcile_alert'

@@ -28,11 +28,15 @@ function statusOf(spentMicroUsd: number): CreditBillingStatus {
   };
 }
 
-function openrouterOf(usageMonthlyUsd: number | null, configured = true): OpenRouterManagement {
+function openrouterOf(
+  usageMonthlyUsd: number | null,
+  configured = true,
+  limitUsd: number | null = 300,
+): OpenRouterManagement {
   return {
     isConfigured: configured,
     getKey: jest.fn().mockResolvedValue({
-      limitUsd: 300,
+      limitUsd,
       usageUsd: 500,
       usageMonthlyUsd,
       disabled: false,
@@ -50,6 +54,8 @@ function createDeps(overrides: Partial<BillingReconcilerDeps> = {}): BillingReco
     sumCreditSpendJournal: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 1 }),
     // UTC-month journal = the external ledger figure compared to OpenRouter usage_monthly.
     sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 1 }),
+    /** Metering has been running since well before this UTC month → honest comparison. */
+    getFirstCreditSpendAt: jest.fn().mockResolvedValue(new Date('2026-05-01T00:00:00Z')),
     poolMicroUsd: 250_000_000,
     sendAlert: jest.fn().mockResolvedValue(undefined),
     recordAudit: jest.fn(),
@@ -155,6 +161,119 @@ describe('createBillingReconciler', () => {
     expect(report.alerted).toBe(false);
     expect(report.diffPercent).toBeNull();
     expect(report.reason).toMatch(/usage_monthly/);
+  });
+
+  it('holds the alert in the month metering started (pre-metering spend is not lost spend)', async () => {
+    /* Reproduces the live 2026-07 case: the key had spent since the 1st, the ledger only
+     * since the 13th → a 62% «drift» that was entirely spend from before metering. */
+    const deps = createDeps({
+      openrouter: openrouterOf(3.35),
+      sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 1_262_601, count: 390 }),
+      getFirstCreditSpendAt: jest.fn().mockResolvedValue(new Date('2026-07-13T10:43:48Z')),
+    });
+
+    const report = await createBillingReconciler(deps).run(NOW);
+
+    expect(report.diffPercent).toBeGreaterThan(3);
+    expect(report.alerted).toBe(false);
+    expect(report.reason).toMatch(/metering started mid-month/);
+    expect(deps.sendAlert).not.toHaveBeenCalled();
+    expect(deps.recordAudit).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'billing.reconcile_alert' }),
+    );
+  });
+
+  it('holds the alert when nothing is metered AND the key has spent nothing', async () => {
+    const deps = createDeps({
+      openrouter: openrouterOf(0),
+      sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 0, count: 0 }),
+      getFirstCreditSpendAt: jest.fn().mockResolvedValue(null),
+    });
+
+    const report = await createBillingReconciler(deps).run(NOW);
+
+    expect(report.alerted).toBe(false);
+    expect(deps.sendAlert).not.toHaveBeenCalled();
+  });
+
+  it('ALERTS when the key is burning money and the ledger has never recorded anything', async () => {
+    /* The reporter being down looks exactly like «metering just started» — but a key
+     * spending real money against an empty ledger is the loudest symptom there is, and
+     * suppressing it would let the contour burn invisibly for a whole month. */
+    const deps = createDeps({
+      openrouter: openrouterOf(50),
+      sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 0, count: 0 }),
+      getFirstCreditSpendAt: jest.fn().mockResolvedValue(null),
+    });
+
+    const report = await createBillingReconciler(deps).run(NOW);
+
+    expect(report.alerted).toBe(true);
+    expect(deps.sendAlert).toHaveBeenCalled();
+  });
+
+  it('alerts once metering predates the month under comparison', async () => {
+    const deps = createDeps({
+      openrouter: openrouterOf(3.35),
+      sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 1_262_601, count: 390 }),
+      getFirstCreditSpendAt: jest.fn().mockResolvedValue(new Date('2026-06-13T00:00:00Z')),
+    });
+
+    const report = await createBillingReconciler(deps).run(NOW);
+
+    expect(report.alerted).toBe(true);
+    expect(deps.sendAlert).toHaveBeenCalled();
+  });
+
+  it('raises the key limit to the worst-case window when the fuse is too low', async () => {
+    /* $250 pool on a mid-month anchor → one UTC key window can legitimately hold two
+     * periods → $550 fuse. The $300 key would have hard-cut the contour first. */
+    const deps = createDeps({ openrouter: openrouterOf(100, true, 300), anchorDay: 15 });
+    await createBillingReconciler(deps).run(NOW);
+    expect(deps.openrouter.updateLimit).toHaveBeenCalledWith(550);
+  });
+
+  it('refuses to set a limit below what the key already burned this month', async () => {
+    /* Packages drain, so the computed limit legitimately falls mid-month. Writing it
+     * when it has fallen under the accrued usage would trip the key instantly and kill
+     * every model while the client still has pool left — the exact outage the fuse
+     * exists to prevent. $250 pool on anchor 1 → $275 desired, vs $340 already used. */
+    const openrouter = openrouterOf(340, true, 385);
+    const deps = createDeps({ openrouter, anchorDay: 1 });
+
+    await createBillingReconciler(deps).run(NOW);
+
+    expect(deps.openrouter.updateLimit).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('REFUSING'));
+  });
+
+  it('still tightens the limit while it stays clear of the accrued usage', async () => {
+    const openrouter = openrouterOf(20, true, 385);
+    const deps = createDeps({ openrouter, anchorDay: 1 });
+
+    await createBillingReconciler(deps).run(NOW);
+
+    expect(deps.openrouter.updateLimit).toHaveBeenCalledWith(275);
+  });
+
+  it('leaves the key limit untouched when it already matches', async () => {
+    const deps = createDeps({ openrouter: openrouterOf(100, true, 275), anchorDay: 1 });
+    await createBillingReconciler(deps).run(NOW);
+    expect(deps.openrouter.updateLimit).not.toHaveBeenCalled();
+  });
+
+  it('still reconciles when the key limit sync fails', async () => {
+    const openrouter = openrouterOf(100, true, 300);
+    (openrouter.updateLimit as jest.Mock).mockRejectedValue(new Error('429'));
+    const deps = createDeps({ openrouter, anchorDay: 15 });
+
+    const report = await createBillingReconciler(deps).run(NOW);
+
+    expect(report.diffPercent).toBeDefined();
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('key limit sync failed'),
+      expect.any(Error),
+    );
   });
 
   it('never throws when OpenRouter errors', async () => {

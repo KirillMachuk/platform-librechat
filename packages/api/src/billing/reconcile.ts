@@ -5,8 +5,9 @@ import {
   MICRO_USD_PER_USD,
 } from '@librechat/data-schemas';
 import type { AuditLogInput, CreditBillingStatus } from '@librechat/data-schemas';
-import type { OpenRouterManagement } from './openrouter';
+import type { OpenRouterManagement, OpenRouterKeyInfo } from './openrouter';
 import type { BillingAlert } from './types';
+import { computeKeyLimitUsd, shouldApplyKeyLimit } from './openrouter';
 
 /** Alert when internal ledger vs OpenRouter drift exceeds ~3%… */
 const DEFAULT_THRESHOLD_RATIO = 0.03;
@@ -73,12 +74,16 @@ export interface BillingReconcilerDeps {
     to: Date;
     tenantId?: string;
   }) => Promise<{ microUsd: number; count: number }>;
+  /** When metering first recorded anything — guards the comparison in its first month. */
+  getFirstCreditSpendAt: (params?: { tenantId?: string }) => Promise<Date | null>;
   poolMicroUsd: number;
   tenantId?: string;
   /** Service-period anchor day (1–31; defaults to 1). */
   anchorDay?: number;
   sendAlert: (alert: BillingAlert) => Promise<void>;
   recordAudit: (event: AuditLogInput) => void;
+  /** OpenRouter key-limit headroom over the allowed volume (e.g. 0.1 = +10%). */
+  headroom?: number;
   thresholdRatio?: number;
   minAbsUsd?: number;
 }
@@ -100,6 +105,54 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
   const threshold = deps.thresholdRatio ?? DEFAULT_THRESHOLD_RATIO;
   const minAbsUsd = deps.minAbsUsd ?? DEFAULT_MIN_ABS_USD;
 
+  /**
+   * Keeps the key's hard fuse aligned with the volume the contour may currently spend.
+   * A package top-up syncs it immediately (admin path); this daily pass covers what
+   * moves on its own — a new billing period, drained packages, a changed pool size.
+   * PATCHes only on an actual change, and a failure never aborts the reconciliation:
+   * a stale fuse is a risk to flag, not a reason to also lose the drift check.
+   *
+   * Never lands the fuse at or below what the key has ALREADY burned in this UTC
+   * window. Packages drain, so the computed limit legitimately falls during a month —
+   * and a limit under the accrued usage does not «tighten» anything, it trips the key
+   * instantly and kills every model contour-wide while the client still has pool left.
+   * That is the exact outage this whole fuse exists to prevent, so the sync declines to
+   * cause it and says so; the real ceiling is the soft block, which is period-accurate.
+   */
+  async function syncKeyLimit(status: CreditBillingStatus, key: OpenRouterKeyInfo) {
+    const desiredLimitUsd = computeKeyLimitUsd({
+      poolMicroUsd: deps.poolMicroUsd,
+      packageRemainingMicroUsd: status.packageRemainingMicroUsd,
+      anchorDay: deps.anchorDay,
+      headroom: deps.headroom,
+    });
+    if (!shouldApplyKeyLimit(key, desiredLimitUsd)) {
+      if (key.limitUsd !== desiredLimitUsd) {
+        logger.warn(
+          `[billingReconcile] REFUSING to set the key limit to $${desiredLimitUsd}: the key has already used $${key.usageMonthlyUsd?.toFixed(2)} this UTC month, so that limit would cut every model immediately. Fuse left at $${key.limitUsd ?? 'unlimited'}.`,
+        );
+      }
+      return;
+    }
+    try {
+      await deps.openrouter.updateLimit(desiredLimitUsd);
+      /* The admin and CLI paths audit every fuse move; an unattended one must too, or a
+       * contour-wide cut has no record of who narrowed the limit and when. */
+      deps.recordAudit({
+        actorRole: 'RECONCILER',
+        action: 'billing.limit_updated',
+        targetType: 'billing',
+        targetId: 'openrouter-key',
+        metadata: { limitUsd: desiredLimitUsd, previousLimitUsd: key.limitUsd ?? 0 },
+      });
+    } catch (error) {
+      logger.error(
+        `[billingReconcile] key limit sync failed (fuse stays at $${key.limitUsd ?? 'unlimited'}, wanted $${desiredLimitUsd}):`,
+        error,
+      );
+    }
+  }
+
   async function run(now: Date = new Date()): Promise<ReconcileReport> {
     if (!deps.openrouter.isConfigured) {
       return { configured: false, reason: 'management key / key hash not configured' };
@@ -114,7 +167,7 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
     try {
       const periodKey = servicePeriodKey(now, deps.anchorDay);
       const utcMonthStart = startOfUtcMonth(now);
-      const [status, key, periodJournal, utcMonthJournal] = await Promise.all([
+      const [status, key, periodJournal, utcMonthJournal, firstSpendAt] = await Promise.all([
         deps.getCreditBillingStatus({
           poolMicroUsd: deps.poolMicroUsd,
           tenantId: deps.tenantId,
@@ -124,7 +177,10 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
         deps.openrouter.getKey(),
         deps.sumCreditSpendJournal({ month: periodKey, tenantId: deps.tenantId }),
         deps.sumCreditSpendJournalRange({ from: utcMonthStart, to: now, tenantId: deps.tenantId }),
+        deps.getFirstCreditSpendAt({ tenantId: deps.tenantId }),
       ]);
+
+      await syncKeyLimit(status, key);
 
       /* Internal consistency: the current period's per-request journal sum must equal
        * the period counter — both are written from the same rounded µ$ value. Persistent
@@ -161,7 +217,19 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
       const base = Math.max(Math.abs(ledgerUsd), Math.abs(openrouterUsd));
       const ratio = base > 0 ? Math.abs(diffUsd) / base : 0;
       const diffPercent = base > 0 ? Math.round(ratio * 1000) / 10 : 0;
-      const shouldAlert = ratio > threshold && Math.abs(diffUsd) > minAbsUsd;
+      /* The key's usage_monthly counts from the 1st; the ledger only counts from the
+       * moment metering was switched on. In the month that happens the difference is
+       * pre-metering spend, not lost spend — the two are indistinguishable here, and
+       * this case is GUARANTEED at go-live. Report the numbers, hold the alert: from the
+       * next UTC month both windows start together and drift means what it says.
+       *
+       * An EMPTY ledger is only innocent while the key has spent nothing either. Once it
+       * shows real money against a ledger that has never recorded anything, that is the
+       * reporter being down — the loudest possible symptom, not a reason to stay quiet. */
+      const meteringStartedThisMonth = firstSpendAt != null && firstSpendAt >= utcMonthStart;
+      const partialLedger =
+        meteringStartedThisMonth || (firstSpendAt == null && openrouterUsd <= minAbsUsd);
+      const shouldAlert = !partialLedger && ratio > threshold && Math.abs(diffUsd) > minAbsUsd;
 
       const report: ReconcileReport = {
         configured: true,
@@ -174,6 +242,11 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
         internalDriftMicroUsd,
         diffPercent,
         alerted: shouldAlert,
+        ...(partialLedger && {
+          reason: meteringStartedThisMonth
+            ? 'alert held: metering started mid-month — the difference includes spend from before it was counted'
+            : 'alert held: nothing metered yet and the key has spent nothing either',
+        }),
       };
 
       /* Always report the comparison, not only on drift: a silent reconciler is
@@ -181,7 +254,7 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
        * trusted as «леджер сходится с ключом». This one line is how an operator
        * verifies that Credits track the real OpenRouter key spend. */
       logger.info(
-        `[billingReconcile] UTC-month ledger $${ledgerUsd.toFixed(6)} (${report.ledgerCredits} Cr, ${utcMonthJournal.count} rows) vs OpenRouter usage_monthly $${openrouterUsd.toFixed(6)} → diff ${diffPercent}% ($${diffUsd.toFixed(6)}); alert=${shouldAlert} (needs >${threshold * 100}% AND >$${minAbsUsd}). Period ${status.month}: journal=${periodJournal.microUsd}µ$ counter=${status.spentMicroUsd}µ$ drift=${internalDriftMicroUsd}µ$`,
+        `[billingReconcile] UTC-month ledger $${ledgerUsd.toFixed(6)} (${report.ledgerCredits} Cr, ${utcMonthJournal.count} rows) vs OpenRouter usage_monthly $${openrouterUsd.toFixed(6)} → diff ${diffPercent}% ($${diffUsd.toFixed(6)}); alert=${shouldAlert} (needs >${threshold * 100}% AND >$${minAbsUsd}${partialLedger ? ', HELD — ' + report.reason : ''}). Period ${status.month}: journal=${periodJournal.microUsd}µ$ counter=${status.spentMicroUsd}µ$ drift=${internalDriftMicroUsd}µ$`,
       );
 
       if (shouldAlert) {

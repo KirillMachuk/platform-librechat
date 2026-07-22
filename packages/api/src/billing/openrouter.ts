@@ -1,4 +1,5 @@
-import { logger } from '@librechat/data-schemas';
+import { logger, normalizeAnchorDay, MICRO_USD_PER_USD } from '@librechat/data-schemas';
+import { DEFAULT_LIMIT_HEADROOM } from './config';
 
 /**
  * Minimal OpenRouter key-management client (Provisioning/Management API).
@@ -42,6 +43,53 @@ export interface OpenRouterManagementOptions {
 
 function toNumberOrNull(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * The key limit (USD) that keeps the hard fuse just above the volume the contour may
+ * legitimately spend inside ONE key window.
+ *
+ * The key resets on the UTC calendar month (`limit_reset: 'monthly'`), while the billing
+ * period is a rolling «month of service» anchored to `anchorDay`. With any anchor other
+ * than the 1st, one UTC month straddles the tail of one period and the head of the next,
+ * so up to TWO full pools can be spent legitimately inside a single key window. A limit
+ * sized for one pool would hard-cut the key — every model dead contour-wide — *before*
+ * the soft block ever engages. Sizing for that worst case keeps the fuse a fuse: it still
+ * stops a runaway (a fail-open gate plus a loop), while the precise, period-accurate
+ * ceiling remains the soft block.
+ */
+/**
+ * Whether moving the key's fuse to `desiredLimitUsd` is safe to do automatically.
+ *
+ * The computed limit legitimately FALLS during a month — packages drain, a clawback is
+ * applied — and OpenRouter disables a key the moment its limit is at or below what it
+ * has already used. So an automatic «tightening» that lands under the accrued usage does
+ * not tighten anything: it kills every model contour-wide, mid-month, while the client
+ * still has pool left. That is the exact outage the fuse exists to prevent, so both the
+ * daily sync and the admin top-up path route through this check rather than each
+ * remembering the rule.
+ */
+export function shouldApplyKeyLimit(
+  key: Pick<OpenRouterKeyInfo, 'limitUsd' | 'usageMonthlyUsd'>,
+  desiredLimitUsd: number,
+): boolean {
+  if (key.limitUsd === desiredLimitUsd) {
+    return false;
+  }
+  return key.usageMonthlyUsd == null || desiredLimitUsd > key.usageMonthlyUsd;
+}
+
+export function computeKeyLimitUsd(params: {
+  poolMicroUsd: number;
+  packageRemainingMicroUsd?: number;
+  anchorDay?: number;
+  headroom?: number;
+}): number {
+  const poolsPerKeyWindow = normalizeAnchorDay(params.anchorDay) === 1 ? 1 : 2;
+  const packageRemaining = Math.max(0, params.packageRemainingMicroUsd ?? 0);
+  const worstCaseMicroUsd = params.poolMicroUsd * poolsPerKeyWindow + packageRemaining;
+  const headroom = params.headroom ?? DEFAULT_LIMIT_HEADROOM;
+  return Math.ceil((worstCaseMicroUsd / MICRO_USD_PER_USD) * (1 + headroom));
 }
 
 /**

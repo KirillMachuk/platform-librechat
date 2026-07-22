@@ -35,6 +35,7 @@ function statusOf(overrides: Partial<CreditBillingStatus> = {}): CreditBillingSt
 function lotOf(overrides: Partial<CreditPackageWithRemaining> = {}): CreditPackageWithRemaining {
   return {
     id: new Types.ObjectId().toString(),
+    kind: 'package',
     credits: 5_000,
     microUsd: 50_000_000,
     remainingMicroUsd: 50_000_000,
@@ -43,6 +44,17 @@ function lotOf(overrides: Partial<CreditPackageWithRemaining> = {}): CreditPacka
     createdAt: new Date('2026-07-01T10:00:00Z'),
     ...overrides,
   };
+}
+
+/** A key mock: current fuse and what it has already burned this UTC month. */
+function keyOf(limitUsd: number | null, usageMonthlyUsd: number | null) {
+  return jest.fn().mockResolvedValue({
+    limitUsd,
+    usageUsd: usageMonthlyUsd,
+    usageMonthlyUsd,
+    disabled: false,
+    raw: {},
+  });
 }
 
 function createReqRes(params: { email?: string; body?: Record<string, unknown> } = {}) {
@@ -174,6 +186,133 @@ describe('createAdminBillingHandlers', () => {
       },
     );
 
+    it('accepts a negative adjustment and audits it as an adjustment', async () => {
+      const deps = createDeps();
+      const handlers = createAdminBillingHandlers(deps);
+      const { req, res, status } = createReqRes({
+        email: 'op@1ma.ai',
+        body: {
+          kind: 'adjustment',
+          credits: -1_500,
+          comment: 'откат ошибочного начисления',
+          idempotencyKey: 'adj-1',
+        },
+      });
+
+      await handlers.addPackage(req, res);
+
+      expect(status).toHaveBeenCalledWith(201);
+      expect(deps.addCreditPackage).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'adjustment', credits: -1_500 }),
+      );
+      expect(deps.recordAudit).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'billing.adjustment_added' }),
+      );
+    });
+
+    it('accepts an off-contract positive adjustment (bank transfer the service never sees)', async () => {
+      const deps = createDeps();
+      const handlers = createAdminBillingHandlers(deps);
+      const { req, res, status } = createReqRes({
+        email: 'op@1ma.ai',
+        body: {
+          kind: 'adjustment',
+          credits: 7_500,
+          comment: 'оплата п/п №15',
+          idempotencyKey: 'adj-2',
+        },
+      });
+
+      await handlers.addPackage(req, res);
+
+      expect(status).toHaveBeenCalledWith(201);
+      expect(deps.addCreditPackage).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'adjustment', credits: 7_500 }),
+      );
+    });
+
+    it('does not tighten the key limit below the money already spent (clawback path)', async () => {
+      /* A negative adjustment lowers the computed limit. Writing it while the key has
+       * already burned more than that would cut every model instantly — the outage the
+       * fuse exists to prevent, now reachable from the admin screen. */
+      const updateLimit = jest.fn().mockResolvedValue(undefined);
+      const deps = createDeps({
+        getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf()),
+        openrouter: { isConfigured: true, getKey: keyOf(605, 400), updateLimit },
+      });
+      const handlers = createAdminBillingHandlers(deps);
+      const { req, res, json } = createReqRes({
+        email: 'op@1ma.ai',
+        body: {
+          kind: 'adjustment',
+          credits: -5_000,
+          comment: 'откат',
+          idempotencyKey: 'adj-cut',
+        },
+      });
+
+      await handlers.addPackage(req, res);
+
+      expect(updateLimit).not.toHaveBeenCalled();
+      expect(json.mock.calls[0][0].limitUpdate).toMatchObject({ mode: 'unchanged' });
+    });
+
+    it('withholds an adjustment comment from a client admin, keeps it for the operator', async () => {
+      const lots = {
+        packages: [
+          lotOf({ kind: 'adjustment', credits: -1_000, comment: 'возврат за перерасход ключа' }),
+          lotOf({ kind: 'package', comment: 'Счёт №7' }),
+        ],
+        packageSpentMicroUsd: 0,
+      };
+      const handlers = createAdminBillingHandlers(
+        createDeps({
+          listCreditPackages: jest.fn().mockResolvedValue(lots),
+        }),
+      );
+
+      const client = createReqRes({ email: 'client@corp.by' });
+      await handlers.getSummary(client.req, client.res);
+      const clientLots = client.json.mock.calls[0][0].lots;
+      expect(clientLots[0].comment).toBeUndefined();
+      expect(clientLots[1].comment).toBe('Счёт №7');
+
+      const operator = createReqRes({ email: 'op@1ma.ai' });
+      await handlers.getSummary(operator.req, operator.res);
+      expect(operator.json.mock.calls[0][0].lots[0].comment).toBe('возврат за перерасход ключа');
+    });
+
+    it('requires a comment on an adjustment (its only paper trail)', async () => {
+      const deps = createDeps();
+      const handlers = createAdminBillingHandlers(deps);
+      const { req, res, status } = createReqRes({
+        email: 'op@1ma.ai',
+        body: { kind: 'adjustment', credits: 100, idempotencyKey: 'adj-3' },
+      });
+
+      await handlers.addPackage(req, res);
+
+      expect(status).toHaveBeenCalledWith(400);
+      expect(deps.addCreditPackage).not.toHaveBeenCalled();
+    });
+
+    it.each([[0], [1.5], [60_000], [-60_000]])(
+      'rejects out-of-range adjustment %p',
+      async (credits) => {
+        const deps = createDeps();
+        const handlers = createAdminBillingHandlers(deps);
+        const { req, res, status } = createReqRes({
+          email: 'op@1ma.ai',
+          body: { kind: 'adjustment', credits, comment: 'c', idempotencyKey: 'adj-4' },
+        });
+
+        await handlers.addPackage(req, res);
+
+        expect(status).toHaveBeenCalledWith(400);
+        expect(deps.addCreditPackage).not.toHaveBeenCalled();
+      },
+    );
+
     it('requires an idempotencyKey', async () => {
       const deps = createDeps();
       const handlers = createAdminBillingHandlers(deps);
@@ -223,7 +362,7 @@ describe('createAdminBillingHandlers', () => {
         getCreditBillingStatus: jest
           .fn()
           .mockResolvedValue(statusOf({ packageRemainingMicroUsd: 50_000_000 })),
-        openrouter: { isConfigured: true, getKey: jest.fn(), updateLimit },
+        openrouter: { isConfigured: true, getKey: keyOf(100, 10), updateLimit },
       });
       const handlers = createAdminBillingHandlers(deps);
       const { req, res, json } = createReqRes({ email: 'op@1ma.ai', body: validBody });

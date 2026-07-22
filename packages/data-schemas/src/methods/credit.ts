@@ -237,6 +237,8 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     to: Date;
     tenantId?: string;
   }) => Promise<{ microUsd: number; count: number }>;
+  /** Instant of the earliest journal row, or null when nothing was ever metered. */
+  getFirstCreditSpendAt: (params?: { tenantId?: string }) => Promise<Date | null>;
 } {
   function CreditMonth(): Model<ICreditMonth> {
     return mongoose.models.CreditMonth as Model<ICreditMonth>;
@@ -357,7 +359,7 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
 
   /**
    * Package totals across the whole contract term:
-   *   purchased = Σ lot sizes;
+   *   purchased = Σ lot sizes, SIGNED — a negative adjustment reduces the granted total;
    *   spent     = Σ over months of max(0, monthSpent − monthPool).
    * Lots are immutable — the split is *derived*, so concurrent spends can never
    * corrupt per-lot balances (a boundary overrun only shows as remaining < 0).
@@ -461,14 +463,19 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
   }
 
   /**
-   * Adds a purchased package lot. Idempotent by `idempotencyKey` (unique index):
-   * a replay returns the existing lot with `created: false` and changes nothing.
-   * On a real insert the current month's «exhausted» notification flag is reset,
-   * so a *later* re-exhaustion notifies again.
+   * Adds a credit lot — a purchased package or a manual adjustment. Idempotent by
+   * `idempotencyKey` (unique index): a replay returns the existing lot with
+   * `created: false` and changes nothing. A *positive* insert resets the current
+   * month's «exhausted» notification flag so a later re-exhaustion notifies again;
+   * a negative adjustment must not re-arm it (nothing was granted).
    */
   async function addCreditPackage(input: AddCreditPackageInput): Promise<AddCreditPackageResult> {
-    if (!Number.isInteger(input.credits) || input.credits <= 0) {
-      throw new Error(`[credit] invalid package size: ${input.credits}`);
+    const kind = input.kind ?? 'package';
+    if (!Number.isInteger(input.credits) || input.credits === 0) {
+      throw new Error(`[credit] invalid lot size: ${input.credits}`);
+    }
+    if (kind === 'package' && input.credits < 0) {
+      throw new Error(`[credit] a package cannot be negative: ${input.credits}`);
     }
     if (!input.idempotencyKey || typeof input.idempotencyKey !== 'string') {
       throw new Error('[credit] idempotencyKey is required');
@@ -476,6 +483,7 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     try {
       const created = await CreditPackage().create({
         ...(input.tenantId ? { tenantId: input.tenantId } : {}),
+        kind,
         credits: input.credits,
         microUsd: creditsToMicroUsd(input.credits),
         comment: input.comment,
@@ -484,15 +492,17 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
         addedById: input.addedById,
         idempotencyKey: input.idempotencyKey,
       });
-      const month = servicePeriodKey(input.at ?? new Date(), normalizeAnchorDay(input.anchorDay));
-      await CreditMonth()
-        .updateOne(
-          { ...tenantFilter<ICreditMonth>(input.tenantId), month },
-          { $set: { notifiedExhaustedAt: null } },
-        )
-        .catch((error) => {
-          logger.warn('[credit] failed to reset exhausted-notification flag:', error);
-        });
+      if (input.credits > 0) {
+        const month = servicePeriodKey(input.at ?? new Date(), normalizeAnchorDay(input.anchorDay));
+        await CreditMonth()
+          .updateOne(
+            { ...tenantFilter<ICreditMonth>(input.tenantId), month },
+            { $set: { notifiedExhaustedAt: null } },
+          )
+          .catch((error) => {
+            logger.warn('[credit] failed to reset exhausted-notification flag:', error);
+          });
+      }
       return { created: true, package: created.toObject() as ICreditPackage };
     } catch (error) {
       if (!isDupKeyError(error)) {
@@ -512,9 +522,14 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
   }
 
   /**
-   * Lots with FIFO-derived remaining amounts (oldest purchases drain first),
-   * newest-first for display. The last partially-drained lot absorbs any
-   * boundary overrun (its remaining is clamped at 0 for callers to display).
+   * Lots with FIFO-derived remaining amounts (oldest positive lots drain first),
+   * newest-first for display. The last partially-drained lot absorbs any boundary
+   * overrun (its remaining is clamped at 0 for callers to display).
+   *
+   * A negative adjustment holds no balance of its own — it *is* a drain. Summing it
+   * into `toDrain` (rather than letting it flow through the per-lot arithmetic, where
+   * a negative `lot.microUsd` would run the drain backwards) keeps the screen honest:
+   * Σ of the displayed remainders equals the headline `packageRemainingMicroUsd`.
    */
   async function listCreditPackages(params?: {
     tenantId?: string;
@@ -525,15 +540,16 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
       .sort({ createdAt: 1, _id: 1 })
       .lean<ICreditPackage[]>();
 
-    let toDrain = packageSpentMicroUsd;
+    let toDrain = lots.reduce((sum, lot) => sum + Math.max(0, -lot.microUsd), packageSpentMicroUsd);
     const withRemaining: CreditPackageWithRemaining[] = lots.map((lot) => {
-      const drained = Math.min(Math.max(toDrain, 0), lot.microUsd);
+      const drained = lot.microUsd > 0 ? Math.min(Math.max(toDrain, 0), lot.microUsd) : 0;
       toDrain -= drained;
       return {
         id: String(lot._id),
+        kind: lot.kind ?? 'package',
         credits: lot.credits,
         microUsd: lot.microUsd,
-        remainingMicroUsd: lot.microUsd - drained,
+        remainingMicroUsd: lot.microUsd > 0 ? lot.microUsd - drained : 0,
         comment: lot.comment,
         invoiceRef: lot.invoiceRef,
         addedByEmail: lot.addedByEmail,
@@ -608,6 +624,21 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     return { microUsd: row?.microUsd ?? 0, count: row?.count ?? 0 };
   }
 
+  /**
+   * When metering first recorded anything, or null on an empty journal. The external
+   * reconciliation needs it to tell «we are losing spend» from «the key was already
+   * spending before we started counting it» — the two look identical in a month-to-date
+   * comparison, and the second is guaranteed to happen in the month metering goes live.
+   */
+  async function getFirstCreditSpendAt(params?: { tenantId?: string }): Promise<Date | null> {
+    const row = await CreditSpend()
+      .findOne(tenantFilter<ICreditSpend>(params?.tenantId))
+      .sort({ createdAt: 1 })
+      .select({ createdAt: 1 })
+      .lean<Pick<ICreditSpend, 'createdAt'>>();
+    return row?.createdAt ?? null;
+  }
+
   return {
     recordCreditSpend,
     getCreditBillingStatus,
@@ -618,6 +649,7 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     getCreditMonth,
     sumCreditSpendJournal,
     sumCreditSpendJournalRange,
+    getFirstCreditSpendAt,
   };
 }
 
