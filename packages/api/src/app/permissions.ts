@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { logger, tenantStorage, SYSTEM_TENANT_ID } from '@librechat/data-schemas';
 import {
   SystemRoles,
@@ -5,6 +6,7 @@ import {
   roleDefaults,
   PermissionTypes,
   getConfigDefaults,
+  INTERFACE_PERMISSION_FIELDS,
 } from 'librechat-data-provider';
 import type { IRole, AppConfig } from '@librechat/data-schemas';
 import { isMemoryEnabled } from '~/memory/config';
@@ -56,10 +58,32 @@ function hasExplicitConfig(
   }
 }
 
+/**
+ * Fingerprints the `interface` config fields that seed role permissions, so startup can
+ * tell "the operator edited the config" from "the config is simply present again".
+ *
+ * Without it, every restart re-applied the configured values and silently reverted an
+ * administrator's changes; with it, the configured values are applied once per edit and
+ * the role permissions are then left alone until the file actually changes.
+ *
+ * Only permission-bearing fields are hashed — an unrelated `interface` edit (a welcome
+ * message, a placeholder) must not reset anyone's permissions.
+ */
+function interfaceSeedFingerprint(interfaceConfig: AppConfig['interfaceConfig']): string {
+  const seeded: Record<string, unknown> = {};
+  for (const field of Object.keys(interfaceConfig ?? {}).sort()) {
+    if (INTERFACE_PERMISSION_FIELDS.has(field)) {
+      seeded[field] = (interfaceConfig as Record<string, unknown>)[field];
+    }
+  }
+  return createHash('sha256').update(JSON.stringify(seeded)).digest('hex');
+}
+
 export async function updateInterfacePermissions({
   appConfig,
   getRoleByName,
   updateAccessPermissions,
+  updateRoleByName,
   tenantId,
 }: {
   appConfig: AppConfig;
@@ -70,6 +94,8 @@ export async function updateInterfacePermissions({
 
     roleData?: IRole | null,
   ) => Promise<void>;
+  /** Persists the applied config fingerprint so the next restart can skip re-seeding. */
+  updateRoleByName: (roleName: string, updates: Partial<IRole>) => Promise<IRole>;
   /**
    * Optional tenant ID for scoping role updates to a specific tenant.
    * When provided (and not SYSTEM_TENANT_ID), runs inside `tenantStorage.run({ tenantId })`.
@@ -79,7 +105,12 @@ export async function updateInterfacePermissions({
 }): Promise<void> {
   if (tenantId && tenantId !== SYSTEM_TENANT_ID) {
     return tenantStorage.run({ tenantId }, async () =>
-      updateInterfacePermissions({ appConfig, getRoleByName, updateAccessPermissions }),
+      updateInterfacePermissions({
+        appConfig,
+        getRoleByName,
+        updateAccessPermissions,
+        updateRoleByName,
+      }),
     );
   }
 
@@ -113,6 +144,7 @@ export async function updateInterfacePermissions({
   };
 
   const defaults = getConfigDefaults().interface;
+  const seedFingerprint = interfaceSeedFingerprint(interfaceConfig);
 
   // Permission precedence order:
   // 1. Explicit user configuration (from librechat.yaml)
@@ -125,6 +157,12 @@ export async function updateInterfacePermissions({
     const existingPermissions = existingRole?.permissions as
       | Partial<Record<PermissionTypes, Record<string, boolean | undefined>>>
       | undefined;
+    /**
+     * The configured values were already applied to this role and the config has not
+     * changed since, so treat it as unconfigured: whatever the role carries now is either
+     * that same seed or a deliberate administrator change, and both must survive.
+     */
+    const seedAlreadyApplied = existingRole?.interfaceSeedHash === seedFingerprint;
     const permissionsToUpdate: Partial<
       Record<PermissionTypes, Record<string, boolean | undefined>>
     > = {};
@@ -138,7 +176,7 @@ export async function updateInterfacePermissions({
     ) => {
       const permTypeExists = existingPermissions?.[permType];
       const isExplicitlyConfigured =
-        interfaceConfig && hasExplicitConfig(interfaceConfig, permType);
+        !seedAlreadyApplied && interfaceConfig && hasExplicitConfig(interfaceConfig, permType);
       const isMemoryDisabled = permType === PermissionTypes.MEMORIES && isMemoryExplicitlyDisabled;
       const isMemoryReenabling =
         permType === PermissionTypes.MEMORIES &&
@@ -737,6 +775,17 @@ export async function updateInterfacePermissions({
     // Update permissions if any need updating
     if (Object.keys(permissionsToUpdate).length > 0) {
       await updateAccessPermissions(roleName, permissionsToUpdate, existingRole);
+    }
+
+    if (!seedAlreadyApplied) {
+      await updateRoleByName(roleName, { interfaceSeedHash: seedFingerprint });
+      logger.info(
+        `Role '${roleName}': interface config applied; further restarts will preserve permission changes until the config changes`,
+      );
+    } else {
+      logger.debug(
+        `Role '${roleName}': interface config unchanged since it was applied; existing permissions preserved`,
+      );
     }
   }
 }

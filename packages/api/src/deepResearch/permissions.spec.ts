@@ -11,8 +11,9 @@ const roleWith = (permissions: IRole['permissions']) =>
 describe('canUseDeepResearch', () => {
   const user = { id: 'user-1', role: 'USER' };
 
-  test('allows the run when the role holds DEEP_RESEARCH.USE', async () => {
+  test('allows the run when the role holds both web search and deep research', async () => {
     const getRoleByName = roleWith({
+      [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: true },
       [PermissionTypes.DEEP_RESEARCH]: { [Permissions.USE]: true },
     });
 
@@ -21,6 +22,7 @@ describe('canUseDeepResearch', () => {
 
   test('denies the run when the role lacks DEEP_RESEARCH.USE', async () => {
     const getRoleByName = roleWith({
+      [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: true },
       [PermissionTypes.DEEP_RESEARCH]: { [Permissions.USE]: false },
     });
 
@@ -37,13 +39,15 @@ describe('canUseDeepResearch', () => {
     await expect(canUseDeepResearch({ req: buildReq(user), getRoleByName })).resolves.toBe(false);
   });
 
-  test('allows deep research for a role that lost plain web search', async () => {
+  /** Research browses the open internet, so revoking web search has to stop it too —
+   *  otherwise revoking internet access for a role would leave research browsing. */
+  test('denies deep research to a role that lost plain web search', async () => {
     const getRoleByName = roleWith({
       [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: false },
       [PermissionTypes.DEEP_RESEARCH]: { [Permissions.USE]: true },
     });
 
-    await expect(canUseDeepResearch({ req: buildReq(user), getRoleByName })).resolves.toBe(true);
+    await expect(canUseDeepResearch({ req: buildReq(user), getRoleByName })).resolves.toBe(false);
   });
 
   test('fails closed when the role lookup throws', async () => {
@@ -56,6 +60,7 @@ describe('canUseDeepResearch', () => {
 
   test('denies an unauthenticated request', async () => {
     const getRoleByName = roleWith({
+      [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: true },
       [PermissionTypes.DEEP_RESEARCH]: { [Permissions.USE]: true },
     });
 

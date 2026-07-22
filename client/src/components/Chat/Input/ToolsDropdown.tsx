@@ -252,9 +252,10 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
     });
   }
 
-  /** `interface.deepResearch` seeds this permission at startup, so checking the flag here
-   *  as well would override whatever an admin later set on the role. */
-  if (canUseDeepResearch && deepResearchEnabled) {
+  /** Mirrors the server admission gate: research takes web search AND its own permission.
+   *  `interface.deepResearch` seeds the latter at startup, so checking the flag here as
+   *  well would override whatever an admin later set on the role. */
+  if (canUseWebSearch && canUseDeepResearch && deepResearchEnabled) {
     dropdownItems.push({
       onClick: handleDeepResearchToggle,
       hideOnClick: false,
