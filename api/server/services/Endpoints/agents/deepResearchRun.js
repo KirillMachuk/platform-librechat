@@ -92,8 +92,12 @@ function buildDeepResearchTitle(text) {
   return capitalizeAndTruncateTitle(topic);
 }
 
-/** Anonymizer PII placeholders (PERSON_1, PHONE_2, EMAIL_1…) that must never surface in a title. */
-const TITLE_PII_PLACEHOLDER = /\b[A-ZА-Я][A-ZА-Я]{2,}_\d+\b/g;
+/**
+ * Anonymizer PII placeholders that must never surface in a title. Matches the bare core
+ * (`PERSON_1`, `PHONE_2`) AND the bracketed token form (`[[PERSON_1]]`) — the anonymizer emits the
+ * bracketed form, so stripping only the core left orphan `[[]]`. Optional 0–2 brackets each side.
+ */
+const TITLE_PII_PLACEHOLDER = /\[{0,2}\b[A-ZА-Я][A-ZА-Я]{2,}_\d+\b\]{0,2}/g;
 
 /** Normalizes a model-proposed title: first non-empty line, no quotes/markdown/placeholders/trailing dot. */
 function cleanModelTitle(raw) {
