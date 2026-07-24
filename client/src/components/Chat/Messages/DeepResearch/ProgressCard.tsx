@@ -57,7 +57,11 @@ export default function ProgressCard({ data }: { data: TDeepResearchProgress }) 
             const done = i < activeStep;
             const active = i === activeStep;
             return (
-              <li key={i} className="flex items-start gap-2.5 text-sm">
+              <li
+                key={i}
+                aria-current={active ? 'step' : undefined}
+                className="flex items-start gap-2.5 text-sm"
+              >
                 <span
                   className="mt-0.5 flex size-4 shrink-0 items-center justify-center"
                   aria-hidden="true"

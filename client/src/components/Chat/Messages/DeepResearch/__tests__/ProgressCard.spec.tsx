@@ -52,5 +52,13 @@ describe('ProgressCard', () => {
     // not the 0.5 fraction (which would place the active mark differently).
     expect(getAllByTestId('icon-check')).toHaveLength(1);
     expect(getAllByTestId('icon-loader')).toHaveLength(1);
+    // The active phase is marked for assistive tech (VoiceOver reads it as the current step).
+    expect(getByText('com_ui_deep_research_phase_research').closest('li')).toHaveAttribute(
+      'aria-current',
+      'step',
+    );
+    expect(getByText('com_ui_deep_research_phase_scope').closest('li')).not.toHaveAttribute(
+      'aria-current',
+    );
   });
 });
