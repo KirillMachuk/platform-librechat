@@ -46,5 +46,20 @@ export default function useSpeechSettingsInit(isAuthenticated: boolean) {
         setter(value as any);
       }
     });
+
+    /**
+     * When the server has a sovereign STT provider configured, surface the mic by
+     * default and pin the engine to the server ('external') instead of the browser's
+     * Web Speech API, which streams audio to Google. A user's own choice is persisted
+     * in localStorage and is never overridden here.
+     */
+    if (data.sttExternal) {
+      if (localStorage.getItem('speechToText') === null) {
+        setters.speechToText(true);
+      }
+      if (localStorage.getItem('engineSTT') === null) {
+        setters.engineSTT('external');
+      }
+    }
   }, [isAuthenticated, data, setters]);
 }
