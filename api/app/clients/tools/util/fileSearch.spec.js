@@ -139,6 +139,17 @@ describe('createFileSearchTool — суверенный реранк (RAG_RERANK
     expect(msg.content).not.toContain('Relevance: 0.9300');
   });
 
+  it('пул ≤ показываемого среза (candidates=16 ≤ limit=20) → реранк выключен: набор не изменится, экономим секунды CPU', async () => {
+    getRagRerankConfig.mockReturnValue({ ...RERANK_CONFIG, candidates: 16 });
+    const searchTool = await createFileSearchTool({ userId: 'u1', files: TWO_FILES });
+    const msg = await invoke(searchTool);
+
+    expect(rerankOrder).not.toHaveBeenCalled();
+    expect(axios.post.mock.calls[0][1].k).toBe(12);
+    const sources = msg.artifact[Tools.file_search].sources;
+    expect(sources.map((s) => s.content[0])).toEqual(['А', 'В', 'Б']);
+  });
+
   it('fail-open: rerankOrder=null → порядок по дистанции и дистанционная relevance', async () => {
     getRagRerankConfig.mockReturnValue(RERANK_CONFIG);
     rerankOrder.mockResolvedValue(null);

@@ -209,9 +209,18 @@ const createFileSearchTool = async ({
       /* Суверенный реранк (RAG_RERANKER_URL, фаза 3a): при включённом реранке запрашиваем у
        * rag_api БОЛЬШЕ кандидатов на файл — расширенный пул и есть источник качества (реранк
        * только штатных k бесполезен: все чанки и так уйдут в контекст). Выключен = ровно
-       * прежнее поведение. */
+       * прежнее поведение.
+       *
+       * Реранк на этом пути активен ТОЛЬКО когда пул шире показываемого среза. Модель читает
+       * top-RESULT_LIMIT целиком, а метка Relevance остаётся дистанционной (урок 6), поэтому
+       * при пуле ≤ лимита реранк не меняет НАБОР — только порядок строк внутри выдачи тула,
+       * т.е. секунды CPU-латентности (~0.5с/чанк на hoster без avx512_vnni) за перестановку,
+       * которую модель всё равно прочтёт. С дефолтами (candidates=16 ≤ limit=20) реранк здесь
+       * выключен; поднятие RAG_RERANK_CANDIDATES выше лимита возвращает ему силу отбора. */
       const rerankConfig = getRagRerankConfig();
-      const perFileK = rerankConfig
+      const rerankActive =
+        rerankConfig != null && rerankConfig.candidates > FILE_SEARCH_RESULT_LIMIT;
+      const perFileK = rerankActive
         ? Math.max(FILE_SEARCH_K, rerankConfig.candidates)
         : FILE_SEARCH_K;
 
@@ -306,7 +315,7 @@ const createFileSearchTool = async ({
        * самый релевантный» и увела её в соседний пункт — честная per-chunk оценка ретривера
        * плюс лучший порядок дают выигрыш без этого рычага вреда. */
       let rankedResults = mergedResults;
-      if (rerankConfig && mergedResults.length > 1) {
+      if (rerankActive && mergedResults.length > 1) {
         const pool = mergedResults.slice(0, rerankConfig.candidates);
         const order = await rerankOrder({
           config: rerankConfig,
