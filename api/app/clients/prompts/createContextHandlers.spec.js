@@ -6,6 +6,10 @@ jest.mock('@librechat/api', () => ({
   logAxiosError: jest.fn(),
   // Pass-through limiter: run each task immediately so tests observe the calls.
   createConcurrencyLimiter: jest.fn(() => (task) => task()),
+  // Rerank OFF by default so the existing forced-floor assertions are unchanged;
+  // the R1 suite below opts in per-test.
+  getRagRerankConfig: jest.fn(() => null),
+  rerankOrder: jest.fn(),
 }));
 
 const axios = require('axios');
@@ -147,5 +151,136 @@ describe('createContextHandlers — RAG query-path hardening (D4/D5/D7/D16)', ()
     const prompt = await handlers.createContext();
     expect(prompt).toContain('weird.pdf');
     expect(prompt).not.toMatch(/temporarily unavailable/i);
+  });
+});
+
+describe('createContextHandlers — forced-floor rerank (R1)', () => {
+  const ORIGINAL_ENV = process.env;
+  const { isEnabled, getRagRerankConfig, rerankOrder } = require('@librechat/api');
+
+  const RERANK = {
+    url: 'http://reranker.test/v1/rerank',
+    token: '',
+    candidates: 36,
+    timeoutMs: 8000,
+  };
+  const chunk = (text) => [{ page_content: text }, 0.1];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env = { ...ORIGINAL_ENV, RAG_API_URL: 'http://rag.test' };
+    delete process.env.RAG_FORCED_CONTEXT_K;
+    isEnabled.mockReturnValue(false);
+    axios.post.mockResolvedValue({ data: [] });
+  });
+
+  afterEach(() => {
+    process.env = ORIGINAL_ENV;
+  });
+
+  it('widens the per-file /query pool to the candidate count when rerank is enabled', async () => {
+    getRagRerankConfig.mockReturnValue(RERANK);
+    rerankOrder.mockResolvedValue(null);
+
+    const handlers = createContextHandlers({ user: { id: 'u1' } }, 'q');
+    await handlers.processFile(embeddedFile());
+    await handlers.createContext();
+
+    // pool = max(forcedFloorK=8, candidates=36); rerank cuts back to 8 afterwards
+    expect(axios.post.mock.calls[0][1].k).toBe(36);
+  });
+
+  it('keeps k = forcedFloorK (no wider pool) when rerank is disabled', async () => {
+    getRagRerankConfig.mockReturnValue(null);
+
+    const handlers = createContextHandlers({ user: { id: 'u1' } }, 'q');
+    await handlers.processFile(embeddedFile());
+    await handlers.createContext();
+
+    expect(axios.post.mock.calls[0][1].k).toBe(8);
+    expect(rerankOrder).not.toHaveBeenCalled();
+  });
+
+  it('reorders chunks by the reranker and cuts to forcedFloorK', async () => {
+    process.env.RAG_FORCED_CONTEXT_K = '2';
+    getRagRerankConfig.mockReturnValue({ ...RERANK, candidates: 4 });
+    axios.post.mockResolvedValue({
+      data: [chunk('ALPHA'), chunk('BRAVO'), chunk('CHARLIE'), chunk('DELTA')],
+    });
+    rerankOrder.mockResolvedValue([
+      { index: 2, score: 0.9 },
+      { index: 0, score: 0.8 },
+    ]);
+
+    const handlers = createContextHandlers({ user: { id: 'u1' } }, 'какой пункт?');
+    await handlers.processFile(embeddedFile());
+    const prompt = await handlers.createContext();
+
+    // reranker was handed the file's chunk texts and asked for the floor depth
+    expect(rerankOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: 'какой пункт?',
+        documents: ['ALPHA', 'BRAVO', 'CHARLIE', 'DELTA'],
+        topN: 2,
+      }),
+    );
+    // top-2 reranked = CHARLIE then ALPHA; BRAVO/DELTA dropped by the cut
+    expect(prompt.indexOf('CHARLIE')).toBeGreaterThan(-1);
+    expect(prompt.indexOf('CHARLIE')).toBeLessThan(prompt.indexOf('ALPHA'));
+    expect(prompt).not.toContain('BRAVO');
+    expect(prompt).not.toContain('DELTA');
+  });
+
+  it('fail-open: a null rerank order keeps distance order, cut to forcedFloorK', async () => {
+    process.env.RAG_FORCED_CONTEXT_K = '2';
+    getRagRerankConfig.mockReturnValue({ ...RERANK, candidates: 4 });
+    axios.post.mockResolvedValue({
+      data: [chunk('ALPHA'), chunk('BRAVO'), chunk('CHARLIE'), chunk('DELTA')],
+    });
+    rerankOrder.mockResolvedValue(null); // reranker down/timeout/5xx
+
+    const handlers = createContextHandlers({ user: { id: 'u1' } }, 'q');
+    await handlers.processFile(embeddedFile());
+    const prompt = await handlers.createContext();
+
+    // degrades to exactly the pre-rerank output: distance-order top-2
+    expect(prompt).toContain('ALPHA');
+    expect(prompt).toContain('BRAVO');
+    expect(prompt).not.toContain('CHARLIE');
+    expect(prompt).not.toContain('DELTA');
+  });
+
+  it('reranks each file independently (per-file top-k, no cross-file merge)', async () => {
+    process.env.RAG_FORCED_CONTEXT_K = '1';
+    getRagRerankConfig.mockReturnValue({ ...RERANK, candidates: 2 });
+    axios.post
+      .mockResolvedValueOnce({ data: [chunk('A_ONE'), chunk('A_TWO')] })
+      .mockResolvedValueOnce({ data: [chunk('B_ONE'), chunk('B_TWO')] });
+    // each file: pick its second chunk
+    rerankOrder.mockResolvedValue([{ index: 1, score: 0.9 }]);
+
+    const handlers = createContextHandlers({ user: { id: 'u1' } }, 'q');
+    await handlers.processFile(embeddedFile({ file_id: 'f1', filename: 'a.pdf' }));
+    await handlers.processFile(embeddedFile({ file_id: 'f2', filename: 'b.pdf' }));
+    const prompt = await handlers.createContext();
+
+    expect(rerankOrder).toHaveBeenCalledTimes(2);
+    expect(prompt).toContain('A_TWO');
+    expect(prompt).toContain('B_TWO');
+    expect(prompt).not.toContain('A_ONE');
+    expect(prompt).not.toContain('B_ONE');
+  });
+
+  it('does not rerank in full-context mode (whole-document path)', async () => {
+    isEnabled.mockReturnValue(true); // RAG_USE_FULL_CONTEXT on
+    axios.get.mockResolvedValue({ data: 'full document text' });
+
+    const handlers = createContextHandlers({ user: { id: 'u1' } }, 'q');
+    await handlers.processFile(embeddedFile());
+    await handlers.createContext();
+
+    expect(getRagRerankConfig).not.toHaveBeenCalled();
+    expect(rerankOrder).not.toHaveBeenCalled();
+    expect(axios.get).toHaveBeenCalled();
   });
 });

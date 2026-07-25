@@ -2,7 +2,9 @@ const axios = require('axios');
 const { logger } = require('@librechat/data-schemas');
 const {
   isEnabled,
+  rerankOrder,
   logAxiosError,
+  getRagRerankConfig,
   generateShortLivedToken,
   createConcurrencyLimiter,
 } = require('@librechat/api');
@@ -56,6 +58,19 @@ function createContextHandlers(req, userMessageContent) {
    * `RAG_FORCED_CONTEXT_K` tunes it without a rebuild.
    */
   const forcedFloorK = parseInt(process.env.RAG_FORCED_CONTEXT_K, 10) || 8;
+  /**
+   * Sovereign rerank on the forced-floor path. This retrieval runs every turn
+   * for embedded files but, unlike file_search, was never reranked — yet its
+   * small k is exactly where a cross-encoder helps most (UDA-bench: +7–13pp of
+   * Top-1 evidence coverage on table-dense docs). When enabled we fetch a wider
+   * candidate pool per file and keep the reranked top `forcedFloorK`. Disabled
+   * (empty RAG_RERANKER_URL → null) = byte-for-byte the previous behavior, and
+   * it never applies to whole-document full-context mode.
+   */
+  const rerankConfig = useFullContext ? null : getRagRerankConfig();
+  const forcedFloorPoolK = rerankConfig
+    ? Math.max(forcedFloorK, rerankConfig.candidates)
+    : forcedFloorK;
   const limit = createConcurrencyLimiter(RAG_QUERY_CONCURRENCY);
 
   const query = (file) => {
@@ -71,7 +86,7 @@ function createContextHandlers(req, userMessageContent) {
     const body = {
       file_id: file.file_id,
       query: userMessageContent,
-      k: forcedFloorK,
+      k: forcedFloorPoolK,
     };
     /* Query the same entity namespace the file was embedded under (agent_id for
      * agent knowledge, project_id for legacy project sources). Mirrors the
@@ -90,6 +105,37 @@ function createContextHandlers(req, userMessageContent) {
       },
       timeout: RAG_API_TIMEOUT_MS,
     });
+  };
+
+  /**
+   * Order one file's candidate chunks and cut to the forced-floor depth. With
+   * rerank enabled we asked rag_api for a wider pool (`forcedFloorPoolK`); the
+   * cross-encoder reorders it and we keep the top `forcedFloorK`. Fail-open: a
+   * null order (rerank disabled, fewer than 2 candidates, timeout, 5xx, or a
+   * malformed body) keeps pgvector's distance order — degrading to exactly the
+   * pre-rerank output (distance-ordered top-`forcedFloorK`). Order changes only;
+   * chunk content is never altered.
+   * @param {unknown} data raw `/query` response for one file (array of `[doc, distance]`).
+   * @returns {Promise<Array>} ordered, sliced chunk rows for context assembly.
+   */
+  const rerankFileChunks = async (data) => {
+    if (!rerankConfig) {
+      return Array.isArray(data) ? data : [];
+    }
+    const rows = (Array.isArray(data) ? data : []).filter(
+      (item) => item?.[0]?.page_content != null,
+    );
+    if (rows.length < 2) {
+      return rows;
+    }
+    const order = await rerankOrder({
+      config: rerankConfig,
+      query: userMessageContent,
+      documents: rows.map((item) => item[0].page_content),
+      topN: forcedFloorK,
+    });
+    const ordered = order != null ? order.map(({ index }) => rows[index]) : rows;
+    return ordered.slice(0, forcedFloorK);
   };
 
   const processFile = async (file) => {
@@ -161,36 +207,39 @@ function createContextHandlers(req, userMessageContent) {
         return '\n\tNote: the document search service was temporarily unavailable, so no context could be retrieved from the attached documents for this message.';
       }
 
-      const context = successful
-        .map(({ file, data }) => {
-          const generateContext = (currentContext) =>
-            `
+      const contextBlocks = await Promise.all(
+        successful.map(({ file, data }) =>
+          limit(async () => {
+            const generateContext = (currentContext) =>
+              `
           <file>
             <filename>${file.filename}</filename>
             <context>${currentContext}
             </context>
           </file>`;
 
-          if (useFullContext) {
-            return generateContext(`\n${data}`);
-          }
+            if (useFullContext) {
+              return generateContext(`\n${data}`);
+            }
 
-          const contextItems = (Array.isArray(data) ? data : [])
-            .map((item) => {
-              const pageContent = item?.[0]?.page_content;
-              if (pageContent == null) {
-                return '';
-              }
-              return `
+            const contextItems = (await rerankFileChunks(data))
+              .map((item) => {
+                const pageContent = item?.[0]?.page_content;
+                if (pageContent == null) {
+                  return '';
+                }
+                return `
             <contextItem>
               <![CDATA[${pageContent.trim()}]]>
             </contextItem>`;
-            })
-            .join('');
+              })
+              .join('');
 
-          return generateContext(contextItems);
-        })
-        .join('');
+            return generateContext(contextItems);
+          }),
+        ),
+      );
+      const context = contextBlocks.join('');
 
       if (useFullContext) {
         const prompt = `${header}
