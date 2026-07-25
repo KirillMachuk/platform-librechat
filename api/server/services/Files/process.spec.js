@@ -624,6 +624,22 @@ describe('processAgentFileUpload', () => {
       expect(parseText).toHaveBeenCalled();
     });
 
+    /* doc-gateway OCRs one scan at a time and 503s the rest (DOCGW_SCAN_QUEUE_TIMEOUT_S). That
+     * is a queue wait, not an unreadable file — telling the user their document is image-based
+     * sends them chasing a problem they do not have (seen live: a batch upload of scans). */
+    test('a saturated scan lane reports the real, retryable cause instead of blaming the document', async () => {
+      getStrategyFunctions.mockReturnValue({
+        handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
+      });
+      const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
+      const { parseText } = require('@librechat/api');
+      parseText.mockResolvedValueOnce({ text: '', bytes: 0, retryable: true });
+
+      await expect(
+        processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
+      ).rejects.toThrow(/busy processing another scan/);
+    });
+
     test('D6: a timed-out RAG /text OCR fallback degrades to an honest error, not a hang', async () => {
       getStrategyFunctions.mockReturnValue({
         handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
