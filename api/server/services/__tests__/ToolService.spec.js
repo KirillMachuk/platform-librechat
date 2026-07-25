@@ -222,11 +222,12 @@ describe('ToolService - Action Capability Gating', () => {
   });
 
   describe('role permissions gate the tools an operator can switch off', () => {
-    const setPermissions = ({ webSearch, fileSearch }) =>
+    const setPermissions = ({ webSearch, fileSearch, runCode = true }) =>
       mockGetRoleByName.mockResolvedValue({
         permissions: {
           [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: webSearch },
           [PermissionTypes.FILE_SEARCH]: { [Permissions.USE]: fileSearch },
+          [PermissionTypes.RUN_CODE]: { [Permissions.USE]: runCode },
         },
       });
 
@@ -234,6 +235,7 @@ describe('ToolService - Action Capability Gating', () => {
       AgentCapabilities.tools,
       AgentCapabilities.web_search,
       AgentCapabilities.file_search,
+      AgentCapabilities.execute_code,
     ];
 
     const armTools = async (tools) => {
@@ -283,6 +285,24 @@ describe('ToolService - Action Capability Gating', () => {
       ]);
 
       expect(tools).toEqual([Tools.web_search]);
+    });
+
+    it('arms code execution for a role that holds the permission', async () => {
+      setPermissions({ webSearch: true, fileSearch: true, runCode: true });
+
+      const tools = await armTools([Tools.execute_code, 'calculator']);
+
+      expect(tools).toContain(Tools.execute_code);
+    });
+
+    /** The toggle is hidden in the UI for a role without RUN_CODE, but hiding a control is
+     *  not enforcing it: the flag rides in the request body, so the server has to check. */
+    it('withholds code execution from a role that lost the permission', async () => {
+      setPermissions({ webSearch: true, fileSearch: true, runCode: false });
+
+      const tools = await armTools([Tools.execute_code, 'calculator']);
+
+      expect(tools).toEqual(['calculator']);
     });
 
     it('leaves tools without a role permission untouched', async () => {

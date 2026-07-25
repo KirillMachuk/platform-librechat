@@ -686,6 +686,23 @@ const DUPLICATE_START_MESSAGE =
 const STOPPED_MESSAGE =
   'Исследование остановлено. Напишите, что изменить в плане, — и я пересоберу его с учётом ваших правок.';
 
+/**
+ * Terminal result for a Stop that lands before the graph runs (during the clarify check or
+ * the plan decision). It exists because a DR run owns its own finalization: abort sets
+ * `producerFinalizesOnAbort`, so `abortJob` deliberately emits NO final and waits for this
+ * run to emit one (packages/api/src/stream/GenerationJobManager.ts). Returning early from
+ * the gate emitted nothing at all, so the client kept spinning until the reaper noticed —
+ * the very failure the abort contract is written to avoid. Routing the stop through the
+ * shared finalize tail instead reuses the graph-phase behaviour verbatim: the STOPPED
+ * notice, a re-plannable `drKind='aborted'` anchor, no model title call, sovereign dropped.
+ */
+const STOPPED_RESULT = () => ({
+  finalReport: STOPPED_MESSAGE,
+  finalizeReason: 'aborted',
+  usage: { input: 0, output: 0, total: 0 },
+  findings: [],
+});
+
 /** The stock default conversation title — a row still carrying it has not been named yet. */
 const DEFAULT_CONVO_TITLE = 'New Chat';
 
@@ -738,7 +755,20 @@ async function buildNodeModel({ req, db, endpoint, model, passthroughHeaders }) 
     body: req?.body,
   });
   const ModelClass = getChatModelClass(resolvedProvider);
-  return new ModelClass({ ...clientOptions, configuration: finalConfig });
+  /**
+   * Non-streaming on purpose. Every DR node calls `model.invoke()` and consumes the whole
+   * answer at once (see the v1 note above — no token streaming), but `getOpenAIConfig`
+   * defaults `streaming: true`, and with it LangChain's `_generate` takes the stream branch
+   * and finishes by ESTIMATING usage: `_getEstimatedTokenCountFromPrompt` +
+   * `_getNumTokensFromGenerations` both call `getNumTokens`, which downloads the tiktoken
+   * ranks from tiktoken.pages.dev. That host is unreachable from a sovereign deployment, and
+   * the download sits behind @langchain/core's module-level AsyncCaller (6 retries, ~105 s
+   * per ladder, not abort-aware), so every DR model call was paying ~200 s of dead retries —
+   * which read as "Deep Research hangs" and pushed the finalize tail past the point where the
+   * client is still listening. The non-streaming branch reads the provider's real `usage`
+   * instead, so this is also the more accurate path.
+   */
+  return new ModelClass({ ...clientOptions, streaming: false, configuration: finalConfig });
 }
 
 /**
@@ -1134,11 +1164,8 @@ async function runNewDeepResearch(params) {
       });
       planUsage = decision.usage;
       if (decision.action === 'ABORTED') {
-        logger.info('[deepResearchRun] stopped during the plan decision; no response emitted');
-        if (sovereign) {
-          await sovereign.drop();
-        }
-        return null;
+        logger.info('[deepResearchRun] stopped during the plan decision; saving a STOPPED anchor');
+        result = STOPPED_RESULT();
       }
       logger.info(
         `[deepResearchRun] plan decision: ${decision.action}` +
@@ -1174,11 +1201,8 @@ async function runNewDeepResearch(params) {
       });
       clarifyUsage = decision.usage;
       if (decision.action === 'ABORTED') {
-        logger.info('[deepResearchRun] stopped during the clarify check; no response emitted');
-        if (sovereign) {
-          await sovereign.drop();
-        }
-        return null;
+        logger.info('[deepResearchRun] stopped during the clarify check; saving a STOPPED anchor');
+        result = STOPPED_RESULT();
       }
       logger.info(
         `[deepResearchRun] clarify decision: ${decision.action}` +
@@ -1559,7 +1583,16 @@ async function runNewDeepResearch(params) {
     if (!conversation) {
       const saved = await saveConvo(
         reqCtx,
-        { conversationId, endpoint, model: leadModelSlug, title: deepResearchTitle },
+        {
+          conversationId,
+          endpoint,
+          model: leadModelSlug,
+          title: deepResearchTitle,
+          /** A DR run bypasses AgentClient, so it also bypasses the getSaveOptions hop that
+           *  files a chat under its Project — without this, research started inside a project
+           *  lands outside it and stays outside after a reload. */
+          ...(req?.body?.project_id ? { project_id: req.body.project_id } : {}),
+        },
         { context: 'deepResearchRun - persist new conversation' },
       );
       conversation = saved && saved.conversationId ? saved : null;

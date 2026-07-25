@@ -84,6 +84,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
     codeInterpreter,
     searchApiKeyForm,
     isReasoningModelActive,
+    activeModel,
   } = context ?? {};
   /** Reasoning models (o-series / gpt-5.x) run chat-only — omit the tool toggles
    *  that arm the tool loop (the backend drops them too). Deep Research and
@@ -375,6 +376,31 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
     dropdownItems.push({
       hideOnClick: false,
       render: (props) => <MCPSubMenu {...props} placeholder={mcpPlaceholder} />,
+    });
+  }
+
+  /** A reasoning model hides every tool toggle above, which on its own reads as "the tools
+   *  vanished" — and if a toggle was left on under a previous model, the user then watches
+   *  that model answer "I have no access to your library". Say why, and name the model so it
+   *  is clear that switching models brings the tools back. Non-interactive: nothing to click.
+   *
+   *  The width cap is load-bearing: the menu is an Ariakit popover sized `width: max-content`,
+   *  so one long unbreakable line stretches the WHOLE menu — measured at 1104px on a 375px
+   *  phone, which pushed every pin button off-screen. Capping the row makes the sentence wrap
+   *  instead, and `--popover-available-width` keeps it inside the viewport on a narrow screen. */
+  if (isReasoningModelActive) {
+    dropdownItems.push({
+      disabled: true,
+      hideOnClick: false,
+      render: (props) => (
+        <div
+          {...props}
+          className="max-w-[min(18rem,var(--popover-available-width,18rem))] whitespace-normal break-words px-3 py-2 text-sm text-text-secondary"
+        >
+          {localize('com_ui_tools_unavailable_reasoning')}
+          {activeModel ? <span className="mt-0.5 block opacity-70">{activeModel}</span> : null}
+        </div>
+      ),
     });
   }
 

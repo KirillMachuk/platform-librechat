@@ -1530,7 +1530,7 @@ describe('runNewDeepResearch — review r2 hardening', () => {
     expect(msg.drKind).toBe('plan');
   });
 
-  it('a Stop during the plan decision exits WITHOUT a response message or final emit', async () => {
+  it('a Stop during the plan decision emits the final itself, as the abort contract requires', async () => {
     mockStartSovereignSession.mockResolvedValue(null);
     mockTitleThrows = true; // the invoke throws; the aborted signal marks it a user Stop
     const p = planParams('изучи CRM рынок');
@@ -1538,10 +1538,15 @@ describe('runNewDeepResearch — review r2 hardening', () => {
 
     const result = await runNewDeepResearch(p);
 
-    expect(result).toBeNull();
+    expect(result.finalizeReason).toBe('aborted');
     expect(mockRunDeepResearch).not.toHaveBeenCalled();
-    expect(mockEmitDone).not.toHaveBeenCalled();
-    expect(mockSavedMessages.find((m) => m.messageId === 'r1')).toBeUndefined();
+    /** `producerFinalizesOnAbort` means abortJob emits nothing and waits for THIS emit;
+     *  returning early left the client spinning until the reaper (live: "Gave up after
+     *  14865ms waiting for … to finalize"). */
+    expect(mockEmitDone).toHaveBeenCalled();
+    const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(msg.text).toContain('Исследование остановлено');
+    expect(msg.drKind).toBe('aborted');
   });
 
   it('title-once: an already-titled conversation makes ZERO title model calls and reuses the title', async () => {
@@ -1633,5 +1638,37 @@ describe('runNewDeepResearch — spend attribution (x-librechat-user-id)', () =>
       expect(opts.configuration.defaultHeaders['x-librechat-user-id']).toBe('user-abc-123');
       expect(opts.configuration.defaultHeaders['x-librechat-user-id']).not.toContain('{{');
     }
+  });
+});
+
+describe('runNewDeepResearch — node models are non-streaming', () => {
+  it('never builds a streaming model, so no run pays for LangChain token estimation', async () => {
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(mockModelCtorArgs.length).toBeGreaterThanOrEqual(1);
+    for (const opts of mockModelCtorArgs) {
+      expect(opts.streaming).toBe(false);
+    }
+  });
+});
+
+describe('runNewDeepResearch — a research chat stays in its Project', () => {
+  const models = require('~/models');
+
+  it('files the new conversation under the project the request came from', async () => {
+    const p = baseParams('изучи рынок CRM');
+    p.req.body = { project_id: 'proj-42' };
+
+    await runNewDeepResearch(p);
+
+    const [, fields] = models.saveConvo.mock.calls.at(-1);
+    expect(fields.project_id).toBe('proj-42');
+  });
+
+  it('writes no project field for a chat outside any project', async () => {
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const [, fields] = models.saveConvo.mock.calls.at(-1);
+    expect(fields).not.toHaveProperty('project_id');
   });
 });

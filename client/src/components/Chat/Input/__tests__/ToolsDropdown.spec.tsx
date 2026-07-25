@@ -11,6 +11,7 @@ import ToolsDropdown from '../ToolsDropdown';
  */
 
 let mockIsReasoningModelActive = false;
+const mockActiveModel = 'openai/gpt-5.6-luna';
 
 const makeToggle = () => ({
   toggleState: false,
@@ -24,6 +25,7 @@ jest.mock('~/Providers', () => ({
   useBadgeRowContext: () => ({
     agentsConfig: { capabilities: [] },
     isReasoningModelActive: mockIsReasoningModelActive,
+    activeModel: mockActiveModel,
     skills: makeToggle(),
     webSearch: makeToggle(),
     deepResearch: makeToggle(),
@@ -115,5 +117,31 @@ describe('ToolsDropdown — reasoning-model tool gating', () => {
     expect(screen.getByText('com_ui_deep_research')).toBeInTheDocument();
     expect(screen.getByText('artifacts_item')).toBeInTheDocument();
     expect(screen.getByText('com_ui_skills')).toBeInTheDocument();
+  });
+
+  it('explains why the toggles are gone instead of just dropping them', () => {
+    mockIsReasoningModelActive = true;
+    render(<ToolsDropdown />);
+
+    expect(screen.getByText('com_ui_tools_unavailable_reasoning')).toBeInTheDocument();
+    expect(screen.getByText(mockActiveModel)).toBeInTheDocument();
+  });
+
+  /** The menu is sized to its widest row, so an uncapped sentence stretched it to 1104px on a
+   *  375px phone and pushed the pin buttons off-screen. */
+  it('caps the note so a long sentence cannot stretch the menu', () => {
+    mockIsReasoningModelActive = true;
+    render(<ToolsDropdown />);
+
+    const note = screen.getByText('com_ui_tools_unavailable_reasoning');
+    expect(note.className).toContain('max-w-[min(18rem,var(--popover-available-width,18rem))]');
+    expect(note.className).toContain('whitespace-normal');
+  });
+
+  it('adds no such note for a model that can use tools', () => {
+    mockIsReasoningModelActive = false;
+    render(<ToolsDropdown />);
+
+    expect(screen.queryByText('com_ui_tools_unavailable_reasoning')).not.toBeInTheDocument();
   });
 });

@@ -3084,3 +3084,159 @@ describe('AgentClient - finalizeSubagentContent', () => {
     ]);
   });
 });
+
+describe('AgentClient - getSaveOptions carries the project link', () => {
+  const baseOptions = () => ({
+    req: { user: { id: 'user-123' }, body: {}, config: { endpoints: {} } },
+    res: {},
+    agent: {
+      id: 'agent-123',
+      endpoint: EModelEndpoint.openAI,
+      provider: EModelEndpoint.openAI,
+      model_parameters: { model: 'gpt-4' },
+    },
+    endpointTokenConfig: {},
+  });
+
+  it('saves project_id so a chat started in a project is filed under it', () => {
+    const client = new AgentClient({ ...baseOptions(), project_id: 'proj-42' });
+
+    expect(client.getSaveOptions().project_id).toBe('proj-42');
+  });
+
+  it('omits project_id entirely for a chat outside any project', () => {
+    const client = new AgentClient(baseOptions());
+
+    expect(client.getSaveOptions()).not.toHaveProperty('project_id');
+  });
+});
+
+describe('getUserFacingError - anonymizer messages reach the user', () => {
+  const { getUserFacingError } = AgentClient;
+
+  it('passes the anonymizer document refusal through verbatim', () => {
+    const message =
+      'В режиме обезличивания вложения-документы (PDF/DOCX как «оригинальный файл») не поддерживаются: их нельзя обезличить. Прикрепите документ как текст/поиск или переключите режим анонимизации.';
+    const err = { status: 400, error: { type: 'anonymizer_document_blocked', message } };
+
+    expect(getUserFacingError(err)).toBe(message);
+  });
+
+  it('keeps passing it when the service still answers the older 415', () => {
+    const message = 'В режиме обезличивания вложения-документы не поддерживаются.';
+    const err = { status: 415, error: { type: 'anonymizer_document_blocked', message } };
+
+    expect(getUserFacingError(err)).toBe(message);
+  });
+
+  it('does not show the perimeter size limit, which is written for an API client', () => {
+    const err = {
+      status: 413,
+      error: {
+        type: 'anonymizer_input_too_large',
+        message: 'input too large to anonymize (> 500000 chars)',
+      },
+    };
+
+    const shown = getUserFacingError(err);
+    expect(shown).not.toContain('500000');
+    expect(shown).not.toContain('anonymize');
+    expect(shown).toMatch(/[А-Яа-я]/);
+  });
+
+  it('still answers neutrally for a provider error, however chatty', () => {
+    const err = {
+      status: 400,
+      error: {
+        type: 'invalid_request_error',
+        message: 'openrouter: model xyz rejected key sk-...',
+      },
+    };
+
+    const shown = getUserFacingError(err);
+    expect(shown).not.toContain('openrouter');
+    expect(shown).not.toContain('sk-');
+  });
+
+  it('never surfaces a 5xx body, even one wearing an anonymizer type', () => {
+    const err = {
+      status: 502,
+      error: { type: 'anonymizer_internal', message: 'traceback: /app/anonymizer/main.py line 42' },
+    };
+
+    expect(getUserFacingError(err)).not.toContain('traceback');
+  });
+});
+
+describe('AgentClient - a run with nothing to show says so', () => {
+  const makeSendCompletionClient = (contentParts) => {
+    const client = new AgentClient({
+      req: { user: { id: 'user-123' }, body: {}, config: { endpoints: {} } },
+      res: {},
+      agent: {
+        id: 'agent-123',
+        endpoint: EModelEndpoint.openAI,
+        provider: EModelEndpoint.openAI,
+        model_parameters: { model: 'deepseek/deepseek-chat-v3.1' },
+      },
+      endpointTokenConfig: {},
+    });
+    client.chatCompletion = jest.fn().mockResolvedValue(undefined);
+    client.buildResponseMetadata = jest.fn().mockReturnValue(undefined);
+    client.contentParts = contentParts;
+    return client;
+  };
+
+  it('flags a reasoning-only answer instead of persisting an empty bubble', async () => {
+    const client = makeSendCompletionClient([{ type: 'think', think: 'долго думал' }]);
+
+    const { completion } = await client.sendCompletion({}, {});
+
+    const error = completion.find((part) => part.type === 'error');
+    expect(error).toBeDefined();
+    expect(error.error).toContain('только рассуждения');
+    expect(error.error).toContain('«Мысли»');
+  });
+
+  it('does not send the user after reasoning that is not there', async () => {
+    const client = makeSendCompletionClient([]);
+
+    const { completion } = await client.sendCompletion({}, {});
+
+    const error = completion.find((part) => part.type === 'error');
+    expect(error).toBeDefined();
+    expect(error.error).toBe('Модель не вернула ответ. Повторите запрос.');
+  });
+
+  it('leaves a normal answer alone', async () => {
+    const client = makeSendCompletionClient([
+      { type: 'think', think: 'подумал' },
+      { type: 'text', text: 'Берлин' },
+    ]);
+
+    const { completion } = await client.sendCompletion({}, {});
+
+    expect(completion.some((part) => part.type === 'error')).toBe(false);
+  });
+
+  it('treats a tool call as real output, since not every tool prints text', async () => {
+    const client = makeSendCompletionClient([
+      { type: 'tool_call', tool_call: { id: 'c1', name: 'image_gen', args: '{}' } },
+    ]);
+
+    const { completion } = await client.sendCompletion({}, {});
+
+    expect(completion.some((part) => part.type === 'error')).toBe(false);
+  });
+
+  it('stays silent when the user pressed Stop', async () => {
+    const client = makeSendCompletionClient([{ type: 'think', think: 'начал думать' }]);
+
+    const { completion } = await client.sendCompletion(
+      {},
+      { abortController: { signal: { aborted: true } } },
+    );
+
+    expect(completion.some((part) => part.type === 'error')).toBe(false);
+  });
+});

@@ -100,6 +100,13 @@ const BALANCE_RECHECK_BUFFER_CREDITS = Math.max(
 
 const loadAgent = (params) => loadAgentFn(params, { getAgent: db.getAgent, getMCPServerTools });
 
+/** Anonymizer refusals whose message is written for the end user, in Russian, and says what to
+ *  do instead. Everything else the service returns is addressed to an API client. */
+const USER_READY_ANONYMIZER_ERRORS = new Set([
+  'anonymizer_document_blocked',
+  'anonymizer_image_blocked',
+]);
+
 /**
  * Maps an upstream/model-provider error to a clean, neutral message for the
  * end user. The precise technical reason (status/code/provider/raw) is logged
@@ -125,6 +132,20 @@ function getUserFacingError(err) {
     return 'Пул Кредитов на текущий месяц оказания услуг исчерпан, поэтому модели временно недоступны. Остальные функции платформы (история, файлы, поиск) продолжают работать. Обратитесь к администратору: после начисления пакета Кредитов или с началом нового месяца оказания услуг доступ восстановится автоматически.';
   }
 
+  /* Our own perimeter service (the anonymizer) refuses an attachment with a message written
+   * FOR the user: which attachment it refused and what to do instead — something no neutral
+   * wording here can express. Surface exactly those verbatim. The list is explicit rather
+   * than an `anonymizer_` prefix match because the service's other errors are addressed to
+   * an API client, in English, quoting internal limits ("input too large to anonymize
+   * (> 500000 chars)"), which is not something to show a Russian-speaking user. */
+  if (
+    USER_READY_ANONYMIZER_ERRORS.has(errorBody?.type) &&
+    typeof errorBody?.message === 'string' &&
+    errorBody.message.trim() !== ''
+  ) {
+    return errorBody.message.trim();
+  }
+
   if (status === 402) {
     return 'Сервис временно недоступен из-за ограничения по ресурсам. Обратитесь к администратору.';
   }
@@ -143,6 +164,21 @@ function getUserFacingError(err) {
   return 'Произошла ошибка при обработке запроса. Попробуйте ещё раз.';
 }
 const MEMORY_INPUT_CHARS_PER_TOKEN = 8;
+
+/**
+ * Whether a finished run left the user anything to look at. Reasoning parts do not count:
+ * the UI folds them into a collapsed "Thoughts" toggle, so a reply that exists only there
+ * reads as an empty message.
+ * @param {Array<{ type?: string, text?: string | { value?: string } }>} contentParts
+ */
+const hasRenderableContent = (contentParts) =>
+  contentParts.some((part) => {
+    if (part?.type === ContentTypes.TEXT) {
+      const text = typeof part.text === 'string' ? part.text : part.text?.value;
+      return typeof text === 'string' && text.trim() !== '';
+    }
+    return part?.type === ContentTypes.ERROR || part?.type === ContentTypes.TOOL_CALL;
+  });
 
 class AgentClient extends BaseClient {
   constructor(options = {}) {
@@ -303,6 +339,7 @@ class AgentClient extends BaseClient {
           spec: this.options.spec,
           iconURL: this.options.iconURL,
           chatProjectId: this.options.chatProjectId,
+          project_id: this.options.project_id,
           endpoint: this.options.endpoint,
           agent_id: this.options.agent.id,
           modelLabel: this.options.modelLabel,
@@ -942,6 +979,34 @@ class AgentClient extends BaseClient {
     });
 
     const completion = filterMalformedContentParts(this.contentParts);
+    /**
+     * A run that ends with nothing renderable is saved as a perfectly ordinary success —
+     * text '', error false — and the user gets an empty bubble with no way to tell whether
+     * the model said nothing or the platform lost the answer. It happens when a model puts
+     * its whole reply in the reasoning channel (seen intermittently on deepseek-chat-v3.1):
+     * the single `think` part collapses into the "Thoughts" toggle and nothing is left.
+     * Say so with the same ERROR part the catch below uses. Tool calls count as renderable
+     * (image generation, code, skill cards legitimately carry no text), and an aborted run
+     * is excluded — a Stop is the user's own doing, not a failure.
+     */
+    if (!opts.abortController?.signal?.aborted && !hasRenderableContent(completion)) {
+      logger.warn('[AgentClient] Run finished with no renderable content', {
+        model: this.model,
+        messageId: this.responseMessageId,
+        conversationId: this.conversationId,
+        partTypes: completion.map((part) => part?.type),
+      });
+      /** Point at the «Мысли» toggle only when there is actually reasoning behind it; a run
+       *  that produced nothing at all must not send the user looking for a control that the
+       *  message does not have. */
+      const hasReasoning = completion.some((part) => part?.type === ContentTypes.THINK);
+      completion.push({
+        type: ContentTypes.ERROR,
+        [ContentTypes.ERROR]: hasReasoning
+          ? 'Модель вернула только рассуждения без ответа. Разверните «Мысли» или повторите запрос.'
+          : 'Модель не вернула ответ. Повторите запрос.',
+      });
+    }
     const metadata = this.buildResponseMetadata();
     return metadata ? { completion, metadata } : { completion };
   }
@@ -2058,3 +2123,6 @@ class AgentClient extends BaseClient {
 }
 
 module.exports = AgentClient;
+/** Exposed for tests: the mapping from an upstream error to what the user reads is the
+ *  difference between "нельзя обезличить этот файл" and a generic "что-то пошло не так". */
+module.exports.getUserFacingError = getUserFacingError;

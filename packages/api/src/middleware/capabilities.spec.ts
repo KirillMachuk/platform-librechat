@@ -127,7 +127,10 @@ describe('generateCapabilityCheck', () => {
 
       expect(mockNext).not.toHaveBeenCalled();
       expect(statusMock).toHaveBeenCalledWith(403);
-      expect(jsonMock).toHaveBeenCalledWith({ message: 'Forbidden' });
+      expect(jsonMock).toHaveBeenCalledWith({
+        message: 'Forbidden',
+        error_code: 'MISSING_CAPABILITY',
+      });
     });
 
     it('returns 401 when no user is present', async () => {

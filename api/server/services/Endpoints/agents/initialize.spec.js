@@ -146,6 +146,19 @@ describe('initializeClient — processAgent ACL gate', () => {
     maxContextTokens: 4096,
   });
 
+  it('hands the project link to the client, which is what files the chat under a project', async () => {
+    mockInitializeAgent.mockResolvedValue(makePrimaryConfig([]));
+
+    await initializeClient({
+      req: makeReq(),
+      res: {},
+      signal: new AbortController().signal,
+      endpointOption: { ...makeEndpointOption(), project_id: 'proj-42' },
+    });
+
+    expect(agentClientArgs.project_id).toBe('proj-42');
+  });
+
   it('should skip handoff agent and filter its edge when user lacks VIEW access', async () => {
     await createAgent({
       id: TARGET_ID,
