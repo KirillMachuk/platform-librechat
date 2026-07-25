@@ -624,16 +624,45 @@ describe('processAgentFileUpload', () => {
       expect(parseText).toHaveBeenCalled();
     });
 
-    /* doc-gateway OCRs one scan at a time and 503s the rest (DOCGW_SCAN_QUEUE_TIMEOUT_S). That
-     * is a queue wait, not an unreadable file — telling the user their document is image-based
-     * sends them chasing a problem they do not have (seen live: a batch upload of scans). */
-    test('a saturated scan lane reports the real, retryable cause instead of blaming the document', async () => {
+    /* doc-gateway OCRs one scan at a time and 503s the rest (DOCGW_SCAN_QUEUE_TIMEOUT_S). That is
+     * a queue wait, not an unreadable file, so the upload must survive it (seen live: a batch of
+     * scans where every file after the first was rejected). */
+    test('a saturated scan lane defers the scan to file_search so the embed worker parses it later', async () => {
+      getStrategyFunctions.mockImplementation((src) =>
+        src === FileSources.document_parser
+          ? {
+              handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
+            }
+          : {
+              handleFileUpload: jest
+                .fn()
+                .mockResolvedValue({ filepath: '/uploads/scan.pdf', bytes: 100 }),
+            },
+      );
+      const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
+      const { parseText } = require('@librechat/api');
+      parseText.mockResolvedValueOnce({ text: '', bytes: 0, retryable: true });
+      const { asyncEmbedEnabled } = require('./Embed');
+      asyncEmbedEnabled.mockReturnValueOnce(true);
+
+      await expect(
+        processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
+      ).resolves.not.toThrow();
+
+      // Landed in the background pipeline instead of being rejected.
+      const persisted = db.createFile.mock.calls.at(-1)[0];
+      expect(persisted.embeddingStatus).toBe('pending');
+      expect(persisted.embedded).toBe(false);
+    });
+
+    test('with file_search unavailable there is nowhere to defer to — the honest busy error stands', async () => {
       getStrategyFunctions.mockReturnValue({
         handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
       });
       const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
       const { parseText } = require('@librechat/api');
       parseText.mockResolvedValueOnce({ text: '', bytes: 0, retryable: true });
+      checkCapability.mockResolvedValue(false);
 
       await expect(
         processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),

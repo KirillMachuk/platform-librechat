@@ -1240,50 +1240,71 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         const { text, bytes } = ocrResult;
         return await createTextFile({ text, bytes });
       }
-      throw new Error(
-        parserSaturated
-          ? `The document parser is busy processing another scan and could not get to "${file.originalname}" in time. Please upload it again in a few minutes.`
-          : `Unable to extract text from "${file.originalname}". The document may be image-based and requires an OCR service to process.`,
+      /* A saturated scan lane means "another OCR is running", not "this document is unreadable"
+       * — rejecting the upload would lose a perfectly good scan because of someone else's job.
+       * Degrade the route instead: file_search below stores the file and leaves it to the async
+       * embed worker, which is built for exactly this (it queues, retries with backoff, and
+       * doc-gateway OCRs it whenever the lane frees up). The document arrives searchable with
+       * its full text a few minutes later instead of not arriving at all.
+       *
+       * Only when file_search is actually available — with the capability off there is nowhere
+       * to degrade to, so the honest "busy, retry" error is all we can offer. */
+      const canDeferToSearch =
+        parserSaturated && (await checkCapability(req, AgentCapabilities.file_search));
+      if (!canDeferToSearch) {
+        throw new Error(
+          parserSaturated
+            ? `The document parser is busy processing another scan and could not get to "${file.originalname}" in time. Please upload it again in a few minutes.`
+            : `Unable to extract text from "${file.originalname}". The document may be image-based and requires an OCR service to process.`,
+        );
+      }
+      logger.info(
+        `[processAgentFileUpload] scan lane saturated for "${file.originalname}"; deferring to file_search so the embed worker parses it in the background`,
       );
+      tool_resource = EToolResources.file_search;
     }
 
-    const shouldUseSTT = fileConfig.checkType(
-      file.mimetype,
-      fileConfig.stt?.supportedMimeTypes || [],
-    );
-
-    if (shouldUseSTT) {
-      const sttService = await STTService.getInstance();
-      const { text, bytes } = await processAudioFile({ req, file, sttService });
-      return await createTextFile({ text, bytes });
-    }
-
-    const shouldUseText = fileConfig.checkType(
-      file.mimetype,
-      fileConfig.text?.supportedMimeTypes || [],
-    );
-
-    if (!shouldUseText) {
-      throw new Error(`File type ${file.mimetype} is not supported for text parsing.`);
-    }
-
-    // For plain-text types the RAG /text pass is an optimization, not a
-    // requirement — native parsing reads the file directly and correctly. Bound
-    // the RAG attempt so a slow rag_api cannot hold the upload open, and fall
-    // back to native (fast, local) on timeout rather than failing the upload.
-    let parsedText;
-    try {
-      parsedText = await withTimeout(
-        parseText({ req, file, file_id }),
-        DOC_PARSE_TIMEOUT_MS,
-        `text parsing timed out for "${file.originalname}"`,
+    /* Skipped when the OCR branch above degraded the route to file_search — execution then falls
+     * through to the RAG pipeline below instead of continuing down the full-text path. */
+    if (tool_resource === EToolResources.context) {
+      const shouldUseSTT = fileConfig.checkType(
+        file.mimetype,
+        fileConfig.stt?.supportedMimeTypes || [],
       );
-    } catch (err) {
-      logger.warn(`[processAgentFileUpload] ${err.message}; falling back to native text parsing`);
-      parsedText = await parseTextNative(file);
+
+      if (shouldUseSTT) {
+        const sttService = await STTService.getInstance();
+        const { text, bytes } = await processAudioFile({ req, file, sttService });
+        return await createTextFile({ text, bytes });
+      }
+
+      const shouldUseText = fileConfig.checkType(
+        file.mimetype,
+        fileConfig.text?.supportedMimeTypes || [],
+      );
+
+      if (!shouldUseText) {
+        throw new Error(`File type ${file.mimetype} is not supported for text parsing.`);
+      }
+
+      // For plain-text types the RAG /text pass is an optimization, not a
+      // requirement — native parsing reads the file directly and correctly. Bound
+      // the RAG attempt so a slow rag_api cannot hold the upload open, and fall
+      // back to native (fast, local) on timeout rather than failing the upload.
+      let parsedText;
+      try {
+        parsedText = await withTimeout(
+          parseText({ req, file, file_id }),
+          DOC_PARSE_TIMEOUT_MS,
+          `text parsing timed out for "${file.originalname}"`,
+        );
+      } catch (err) {
+        logger.warn(`[processAgentFileUpload] ${err.message}; falling back to native text parsing`);
+        parsedText = await parseTextNative(file);
+      }
+      const { text, bytes } = parsedText;
+      return await createTextFile({ text, bytes, type: file.mimetype });
     }
-    const { text, bytes } = parsedText;
-    return await createTextFile({ text, bytes, type: file.mimetype });
   }
 
   // Dual storage pattern for RAG files: Storage + Vector DB
