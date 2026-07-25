@@ -207,13 +207,24 @@ const createFileSearchTool = async ({
       }
 
       /* Суверенный реранк (RAG_RERANKER_URL, фаза 3a): при включённом реранке запрашиваем у
-       * rag_api БОЛЬШЕ кандидатов на файл — расширенный пул и есть источник качества (реранк
-       * только штатных k бесполезен: все чанки и так уйдут в контекст). Выключен = ровно
-       * прежнее поведение. */
+       * rag_api БОЛЬШЕ кандидатов на файл — расширенный пул и есть источник качества.
+       *
+       * Реранк на этом пути активен ТОЛЬКО когда пул шире показываемого среза (см. срез ниже:
+       * при успехе реранка выдача = только пул, хвост merged отбрасывается). При пуле ≤ лимита
+       * (после #166: candidates=16 ≤ limit=20) реранк не отбирал, а УРЕЗАЛ выдачу до 16 чанков
+       * и стоил секунды CPU (~0.5с/чанк на hoster без avx512_vnni). Гейт возвращает честный
+       * top-limit по дистанции; поднятие RAG_RERANK_CANDIDATES выше лимита возвращает реранку
+       * силу отбора.
+       *
+       * Без реранка пофайловый fetch держит пол = RESULT_LIMIT, чтобы одиночный файл заполнял
+       * весь показываемый бюджет: UDA-замер дал coverage @20 > @12 на +0.02..0.06 (fin
+       * 0.914→0.933), и top-20 — многонедельный прод-базлайн этого пути. */
       const rerankConfig = getRagRerankConfig();
-      const perFileK = rerankConfig
+      const rerankActive =
+        rerankConfig != null && rerankConfig.candidates > FILE_SEARCH_RESULT_LIMIT;
+      const perFileK = rerankActive
         ? Math.max(FILE_SEARCH_K, rerankConfig.candidates)
-        : FILE_SEARCH_K;
+        : Math.max(FILE_SEARCH_K, FILE_SEARCH_RESULT_LIMIT);
 
       /**
        * @param {import('librechat-data-provider').TFile} file
@@ -306,7 +317,7 @@ const createFileSearchTool = async ({
        * самый релевантный» и увела её в соседний пункт — честная per-chunk оценка ретривера
        * плюс лучший порядок дают выигрыш без этого рычага вреда. */
       let rankedResults = mergedResults;
-      if (rerankConfig && mergedResults.length > 1) {
+      if (rerankActive && mergedResults.length > 1) {
         const pool = mergedResults.slice(0, rerankConfig.candidates);
         const order = await rerankOrder({
           config: rerankConfig,
