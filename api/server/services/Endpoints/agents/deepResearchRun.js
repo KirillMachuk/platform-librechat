@@ -1583,7 +1583,16 @@ async function runNewDeepResearch(params) {
     if (!conversation) {
       const saved = await saveConvo(
         reqCtx,
-        { conversationId, endpoint, model: leadModelSlug, title: deepResearchTitle },
+        {
+          conversationId,
+          endpoint,
+          model: leadModelSlug,
+          title: deepResearchTitle,
+          /** A DR run bypasses AgentClient, so it also bypasses the getSaveOptions hop that
+           *  files a chat under its Project — without this, research started inside a project
+           *  lands outside it and stays outside after a reload. */
+          ...(req?.body?.project_id ? { project_id: req.body.project_id } : {}),
+        },
         { context: 'deepResearchRun - persist new conversation' },
       );
       conversation = saved && saved.conversationId ? saved : null;

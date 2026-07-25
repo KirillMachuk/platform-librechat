@@ -1651,3 +1651,24 @@ describe('runNewDeepResearch — node models are non-streaming', () => {
     }
   });
 });
+
+describe('runNewDeepResearch — a research chat stays in its Project', () => {
+  const models = require('~/models');
+
+  it('files the new conversation under the project the request came from', async () => {
+    const p = baseParams('изучи рынок CRM');
+    p.req.body = { project_id: 'proj-42' };
+
+    await runNewDeepResearch(p);
+
+    const [, fields] = models.saveConvo.mock.calls.at(-1);
+    expect(fields.project_id).toBe('proj-42');
+  });
+
+  it('writes no project field for a chat outside any project', async () => {
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const [, fields] = models.saveConvo.mock.calls.at(-1);
+    expect(fields).not.toHaveProperty('project_id');
+  });
+});
