@@ -29,7 +29,7 @@ describe('getRagRerankConfig', () => {
 
   it('parses defaults and clamps out-of-range values', () => {
     const config = getRagRerankConfig({ RAG_RERANKER_URL: CONFIG.url });
-    expect(config).toEqual({ url: CONFIG.url, token: '', candidates: 36, timeoutMs: 8000 });
+    expect(config).toEqual({ url: CONFIG.url, token: '', candidates: 16, timeoutMs: 10000 });
 
     const clamped = getRagRerankConfig({
       RAG_RERANKER_URL: CONFIG.url,
