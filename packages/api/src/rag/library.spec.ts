@@ -333,6 +333,47 @@ describe('searchLibrary', () => {
     );
   });
 
+  it('caps the rerank input at candidates but keeps every candidate chunk (timeout-fit pool)', async () => {
+    // 5 chunks, candidates=2 → only the top-2 by distance go to the cross-encoder (so the call
+    // fits the reranker timeout); the other 3 stay in distance order, so all 5 docs still group.
+    let rerankDocCount = -1;
+    const fetchImpl = jest.fn(async (url: string, opts?: RequestInit) => {
+      if (url === RERANK_URL) {
+        rerankDocCount = JSON.parse(opts!.body as string).documents.length;
+        return jsonResponse({
+          results: [
+            { index: 1, relevance_score: 0.9 },
+            { index: 0, relevance_score: 0.8 },
+          ],
+        });
+      }
+      return jsonResponse([
+        row('f1', 'aaa', 0.1),
+        row('f2', 'bbb', 0.2),
+        row('f3', 'ccc', 0.3),
+        row('f4', 'ddd', 0.4),
+        row('f5', 'eee', 0.5),
+      ]);
+    });
+    const result = await searchLibrary(
+      baseParams({
+        fileIds: ['f1', 'f2', 'f3', 'f4', 'f5'],
+        fileNames: new Map([
+          ['f1', 'a.pdf'],
+          ['f2', 'b.pdf'],
+          ['f3', 'c.pdf'],
+          ['f4', 'd.pdf'],
+          ['f5', 'e.pdf'],
+        ]),
+        config: { ...CONFIG, topDocuments: 5 },
+        rerankConfig: { ...RERANK_CONFIG, candidates: 2 },
+        fetchImpl: fetchImpl as never,
+      }),
+    );
+    expect(rerankDocCount).toBe(2); // only `candidates` chunks reach the cross-encoder
+    expect(result.documentCount).toBe(5); // tail preserved — no candidate document dropped
+  });
+
   it('caps parsed chunks at poolSize even if the server over-returns (OOM defense)', async () => {
     const overReturn = Array.from({ length: 200 }, (_, i) => row('f1', `chunk ${i}`, 0.001 * i));
     const fetchImpl = jest.fn(async () => jsonResponse(overReturn));

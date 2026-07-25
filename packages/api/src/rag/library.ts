@@ -572,23 +572,29 @@ export async function searchLibrary(params: LibrarySearchParams): Promise<Librar
   let ranked =
     kind === 'hybrid' ? chunks.slice() : chunks.slice().sort((a, b) => a.distance - b.distance);
   if (rerankConfig && ranked.length > 1) {
+    // Cap the rerank INPUT to `candidates` (the timeout-fit pool, ~16). The v2-m3 int8
+    // cross-encoder is ~0.55 s/chunk on CPU (prod-measured, all 8 cores), so reranking the
+    // full poolSize=48 (server-clamped to 24 ≈ 13.5 s) blew past rerankTimeoutMs and every
+    // call silently fell back to distance order. Rerank the top-`candidates` by distance/RRF;
+    // the loop below re-appends the untouched tail so grouping still sees every candidate doc.
+    const pool = ranked.slice(0, rerankConfig.candidates);
     const order = await rerankOrder({
       // Library-specific timeout: a wide pool of long RU chunks needs more than the
       // shared 2500 ms default, or the rerank silently times out to distance order.
       config: { ...rerankConfig, timeoutMs: config.rerankTimeoutMs },
       query,
-      documents: ranked.map((chunk) => chunk.content),
-      topN: ranked.length,
+      documents: pool.map((chunk) => chunk.content),
+      topN: pool.length,
       fetchImpl: params.fetchImpl,
     });
     if (order != null) {
-      // Order-only: reorder by the reranked positions, but APPEND any pool chunk the
-      // reranker didn't return (server top_n cap / dropped indices) so the tail is
-      // never lost — grouping still needs every candidate document.
+      // Order-only: reorder by the reranked positions, but APPEND every chunk the reranker
+      // didn't return — both the beyond-pool tail (i >= pool.length) and any in-pool index
+      // the server dropped (top_n cap) — so grouping still sees every candidate document.
       const seen = new Set(order.map((o) => o.index));
-      const reordered = order.map(({ index }) => ranked[index]);
+      const reordered = order.map(({ index }) => pool[index]);
       for (let i = 0; i < ranked.length; i++) {
-        if (!seen.has(i)) {
+        if (i >= pool.length || !seen.has(i)) {
           reordered.push(ranked[i]);
         }
       }

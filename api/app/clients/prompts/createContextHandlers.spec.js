@@ -40,22 +40,22 @@ describe('createContextHandlers — forced-floor retrieval depth (k)', () => {
     return axios.post.mock.calls[0][1];
   };
 
-  it('defaults the forced-floor depth to 8 (Stage-5 recall result)', async () => {
+  it('defaults the forced-floor depth to 12 (UDA coverage result)', async () => {
     const body = await runQuery();
-    expect(body.k).toBe(8);
+    expect(body.k).toBe(12);
     expect(body.file_id).toBe('f1');
   });
 
   it('honors the RAG_FORCED_CONTEXT_K override', async () => {
-    process.env.RAG_FORCED_CONTEXT_K = '12';
+    process.env.RAG_FORCED_CONTEXT_K = '20';
     const body = await runQuery();
-    expect(body.k).toBe(12);
+    expect(body.k).toBe(20);
   });
 
-  it('falls back to 8 when the override is non-numeric', async () => {
+  it('falls back to 12 when the override is non-numeric', async () => {
     process.env.RAG_FORCED_CONTEXT_K = 'oops';
     const body = await runQuery();
-    expect(body.k).toBe(8);
+    expect(body.k).toBe(12);
   });
 
   it('degrades gracefully when RAG is unavailable, without throwing', async () => {
