@@ -139,13 +139,13 @@ describe('createFileSearchTool — суверенный реранк (RAG_RERANK
     expect(msg.content).not.toContain('Relevance: 0.9300');
   });
 
-  it('пул ≤ показываемого среза (candidates=16 ≤ limit=20) → реранк выключен: набор не изменится, экономим секунды CPU', async () => {
+  it('пул ≤ показываемого среза (candidates=16 ≤ limit=20) → реранк выключен, fetch держит пол limit: выдача = честный top-limit по дистанции', async () => {
     getRagRerankConfig.mockReturnValue({ ...RERANK_CONFIG, candidates: 16 });
     const searchTool = await createFileSearchTool({ userId: 'u1', files: TWO_FILES });
     const msg = await invoke(searchTool);
 
     expect(rerankOrder).not.toHaveBeenCalled();
-    expect(axios.post.mock.calls[0][1].k).toBe(12);
+    expect(axios.post.mock.calls[0][1].k).toBe(20);
     const sources = msg.artifact[Tools.file_search].sources;
     expect(sources.map((s) => s.content[0])).toEqual(['А', 'В', 'Б']);
   });
@@ -161,11 +161,11 @@ describe('createFileSearchTool — суверенный реранк (RAG_RERANK
     expect(sources[0].relevance).toBeCloseTo(0.9);
   });
 
-  it('выключен (config=null) → прежнее поведение: k=12, реранкер не вызывается', async () => {
+  it('выключен (config=null) → реранкер не вызывается, fetch держит пол limit (одиночный файл заполняет показываемый бюджет)', async () => {
     const searchTool = await createFileSearchTool({ userId: 'u1', files: TWO_FILES });
     const msg = await invoke(searchTool);
 
-    expect(axios.post.mock.calls[0][1].k).toBe(12);
+    expect(axios.post.mock.calls[0][1].k).toBe(20);
     expect(rerankOrder).not.toHaveBeenCalled();
     const sources = msg.artifact[Tools.file_search].sources;
     expect(sources.map((s) => s.content[0])).toEqual(['А', 'В', 'Б']);
