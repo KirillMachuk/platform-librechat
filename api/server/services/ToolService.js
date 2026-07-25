@@ -1827,6 +1827,7 @@ async function loadActionToolsForExecution({
 
 module.exports = {
   loadTools,
+  nativeTools,
   isBuiltInTool,
   getToolkitKey,
   loadAgentTools,

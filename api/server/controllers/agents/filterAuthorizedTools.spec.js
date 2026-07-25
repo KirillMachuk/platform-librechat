@@ -135,6 +135,28 @@ describe('MCP Tool Authorization', () => {
     const userId = 'test-user-123';
     const testUser = { id: userId, role: 'USER' };
 
+    test("keeps the fork's built-in tools, which never appear in the plugin cache", async () => {
+      const result = await filterAuthorizedTools({
+        tools: ['library_search', 'open_document', 'file_search', 'execute_code'],
+        userId,
+        user: testUser,
+        availableTools,
+      });
+
+      expect(result).toEqual(['library_search', 'open_document', 'file_search', 'execute_code']);
+    });
+
+    test('still drops a tool this server does not know at all', async () => {
+      const result = await filterAuthorizedTools({
+        tools: ['library_search', 'totally_bogus_tool'],
+        userId,
+        user: testUser,
+        availableTools,
+      });
+
+      expect(result).toEqual(['library_search']);
+    });
+
     test('should keep authorized MCP tools and strip unauthorized ones', async () => {
       const result = await filterAuthorizedTools({
         tools: [`toolA${d}authorizedServer`, `toolB${d}forbiddenServer`, 'web_search'],

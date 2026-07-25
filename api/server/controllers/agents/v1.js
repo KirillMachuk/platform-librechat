@@ -16,7 +16,6 @@ const {
 } = require('@librechat/api');
 const {
   Time,
-  Tools,
   CacheKeys,
   ErrorTypes,
   Constants,
@@ -46,6 +45,7 @@ const { resizeAvatar } = require('~/server/services/Files/images/avatar');
 const { getFileStrategy } = require('~/server/utils/getFileStrategy');
 const { filterFile } = require('~/server/services/Files/process');
 const { getCachedTools } = require('~/server/services/Config');
+const { nativeTools } = require('~/server/services/ToolService');
 const {
   createMCPPermissionContext,
   resolveConfigServers,
@@ -55,11 +55,14 @@ const { getMCPServersRegistry } = require('~/config');
 const { getLogStores } = require('~/cache');
 const db = require('~/models');
 
-const systemTools = {
-  [Tools.execute_code]: true,
-  [Tools.file_search]: true,
-  [Tools.web_search]: true,
-};
+/**
+ * Built-in tools live outside the plugin manifest, so `getCachedTools()` never lists them and
+ * a create request naming one would be filtered down to nothing. The set belongs to
+ * ToolService, which is what actually loads them — keeping a second copy here is how
+ * `library_search` and `open_document` came to be silently dropped from every agent created
+ * through the API while an identical PATCH kept them (update only re-checks new MCP tools).
+ */
+const systemTools = nativeTools;
 
 const MAX_SEARCH_LEN = 100;
 
@@ -242,7 +245,7 @@ const filterAuthorizedTools = async ({
     const isMCPTool = tool?.includes(Constants.mcp_delimiter) && !isActionToolName;
 
     if (!isMCPTool) {
-      if (availableTools[tool] || systemTools[tool] || isActionToolName) {
+      if (availableTools[tool] || systemTools.has(tool) || isActionToolName) {
         filteredTools.push(tool);
       }
       continue;
