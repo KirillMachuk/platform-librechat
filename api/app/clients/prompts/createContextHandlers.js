@@ -52,10 +52,13 @@ function createContextHandlers(req, userMessageContent) {
    * Forced-floor retrieval depth (chunks fetched per embedded file every turn).
    * Recall measured on real KFC lease contracts (parser-bench/rag-recall):
    * recall@4=0.90 vs recall@8=0.96 — most misses sat just outside k=4, so the
-   * floor depth, not the embeddings, was the bottleneck. Default raised 4→8;
-   * `RAG_FORCED_CONTEXT_K` tunes it without a rebuild.
+   * floor depth, not the embeddings, was the bottleneck. Raised 4→8, now 8→12:
+   * UDA-benchmark on the prod stack showed evidence coverage of the shown context
+   * still climbing at 12 (fin 0.903→0.914, nq 0.763→0.787, paper 0.818→0.866).
+   * Since this path injects ALL k chunks, a wider floor beats reranking here — and
+   * 12 aligns with the file_search tool's k. `RAG_FORCED_CONTEXT_K` tunes it live.
    */
-  const forcedFloorK = parseInt(process.env.RAG_FORCED_CONTEXT_K, 10) || 8;
+  const forcedFloorK = parseInt(process.env.RAG_FORCED_CONTEXT_K, 10) || 12;
   const limit = createConcurrencyLimiter(RAG_QUERY_CONCURRENCY);
 
   const query = (file) => {
