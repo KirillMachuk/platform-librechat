@@ -101,6 +101,7 @@ jest.mock('@librechat/api', () => {
     acceptOcrText: jest.fn(() => false),
     isOfficeHtmlPreviewable: jest.fn(() => false),
     renderOfficePreview: jest.fn(),
+    hashFileContent: jest.fn().mockResolvedValue('sha-of-bytes'),
   };
 });
 
@@ -124,6 +125,7 @@ jest.mock('~/server/services/Tools/credentials', () => ({
 }));
 
 jest.mock('~/models', () => ({
+  getFiles: jest.fn().mockResolvedValue([]),
   createFile: jest.fn().mockResolvedValue({ file_id: 'created-file-id' }),
   updateFile: jest.fn().mockResolvedValue({}),
   updateFileUsage: jest.fn(),
@@ -993,6 +995,94 @@ describe('processAgentFileUpload', () => {
           tool_resource: EToolResources.file_search,
         }),
       );
+    });
+
+    /* Measured on the client's corpus: 115 of 296 vectors were duplicate content (a 32-page scan
+     * uploaded twice, plus a browser's "(1)" copy) — embedding the same bytes again is the most
+     * expensive thing this pipeline can do for zero gain. */
+    describe('duplicate content', () => {
+      const indexed = {
+        file_id: 'already-indexed',
+        filename: 'Договор.pdf',
+        embedded: true,
+        contentHash: 'sha-of-bytes',
+      };
+
+      test('reuses the already-indexed record instead of embedding the same bytes again', async () => {
+        setupStoredFileUpload();
+        db.getFiles.mockResolvedValueOnce([indexed]);
+        const req = makeReq({ mimetype: 'text/plain', ocrConfig: null });
+
+        await processAgentFileUpload({
+          req,
+          res: mockRes,
+          metadata: { ...makeMetadata(), tool_resource: EToolResources.file_search },
+        });
+
+        expect(uploadVectors).not.toHaveBeenCalled();
+        expect(db.createFile).not.toHaveBeenCalled();
+        // The client matches its upload placeholder on temp_file_id, so it must come back.
+        expect(mockRes.json).toHaveBeenCalledWith(
+          expect.objectContaining({ file_id: 'already-indexed', temp_file_id: null }),
+        );
+      });
+
+      test('looks the duplicate up within one owner and embed namespace only', async () => {
+        setupStoredFileUpload();
+        const req = makeReq({ mimetype: 'text/plain', ocrConfig: null });
+
+        await processAgentFileUpload({
+          req,
+          res: mockRes,
+          metadata: { ...makeMetadata(), tool_resource: EToolResources.file_search },
+        });
+
+        expect(db.getFiles).toHaveBeenCalledWith(
+          expect.objectContaining({
+            user: 'user-123',
+            contentHash: 'sha-of-bytes',
+            embedded: true,
+          }),
+          expect.anything(),
+          null,
+          1,
+        );
+      });
+
+      test('persists the hash so a later upload of the same document finds this record', async () => {
+        setupStoredFileUpload();
+        const req = makeReq({ mimetype: 'text/plain', ocrConfig: null });
+
+        await processAgentFileUpload({
+          req,
+          res: mockRes,
+          metadata: { ...makeMetadata(), tool_resource: EToolResources.file_search },
+        });
+
+        expect(db.createFile).toHaveBeenCalledWith(
+          expect.objectContaining({ contentHash: 'sha-of-bytes' }),
+          true,
+        );
+      });
+
+      afterEach(() => {
+        delete process.env.FILE_DEDUP;
+      });
+
+      test('FILE_DEDUP=false keeps every upload separate', async () => {
+        process.env.FILE_DEDUP = 'false';
+        setupStoredFileUpload();
+        const req = makeReq({ mimetype: 'text/plain', ocrConfig: null });
+
+        await processAgentFileUpload({
+          req,
+          res: mockRes,
+          metadata: { ...makeMetadata(), tool_resource: EToolResources.file_search },
+        });
+
+        expect(db.getFiles).not.toHaveBeenCalled();
+        expect(uploadVectors).toHaveBeenCalled();
+      });
     });
 
     test('applies all-data retention metadata to persistent agent file-search files', async () => {
