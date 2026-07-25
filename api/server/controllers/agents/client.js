@@ -100,6 +100,13 @@ const BALANCE_RECHECK_BUFFER_CREDITS = Math.max(
 
 const loadAgent = (params) => loadAgentFn(params, { getAgent: db.getAgent, getMCPServerTools });
 
+/** Anonymizer refusals whose message is written for the end user, in Russian, and says what to
+ *  do instead. Everything else the service returns is addressed to an API client. */
+const USER_READY_ANONYMIZER_ERRORS = new Set([
+  'anonymizer_document_blocked',
+  'anonymizer_image_blocked',
+]);
+
 /**
  * Maps an upstream/model-provider error to a clean, neutral message for the
  * end user. The precise technical reason (status/code/provider/raw) is logged
@@ -125,18 +132,16 @@ function getUserFacingError(err) {
     return 'Пул Кредитов на текущий месяц оказания услуг исчерпан, поэтому модели временно недоступны. Остальные функции платформы (история, файлы, поиск) продолжают работать. Обратитесь к администратору: после начисления пакета Кредитов или с началом нового месяца оказания услуг доступ восстановится автоматически.';
   }
 
-  /* Our own perimeter service (the anonymizer) answers 4xx with a message written FOR the
-   * user — it knows exactly which attachment it refused and what to do instead, which no
-   * neutral wording here can express. Surface those verbatim. The gate is the `anonymizer_`
-   * type prefix, not the status: a provider or transport error cannot carry it, so this
-   * cannot become a leak of provider names or internals. */
+  /* Our own perimeter service (the anonymizer) refuses an attachment with a message written
+   * FOR the user: which attachment it refused and what to do instead — something no neutral
+   * wording here can express. Surface exactly those verbatim. The list is explicit rather
+   * than an `anonymizer_` prefix match because the service's other errors are addressed to
+   * an API client, in English, quoting internal limits ("input too large to anonymize
+   * (> 500000 chars)"), which is not something to show a Russian-speaking user. */
   if (
-    typeof errorBody?.type === 'string' &&
-    errorBody.type.startsWith('anonymizer_') &&
+    USER_READY_ANONYMIZER_ERRORS.has(errorBody?.type) &&
     typeof errorBody?.message === 'string' &&
-    errorBody.message.trim() !== '' &&
-    status >= 400 &&
-    status < 500
+    errorBody.message.trim() !== ''
   ) {
     return errorBody.message.trim();
   }
@@ -991,10 +996,15 @@ class AgentClient extends BaseClient {
         conversationId: this.conversationId,
         partTypes: completion.map((part) => part?.type),
       });
+      /** Point at the «Мысли» toggle only when there is actually reasoning behind it; a run
+       *  that produced nothing at all must not send the user looking for a control that the
+       *  message does not have. */
+      const hasReasoning = completion.some((part) => part?.type === ContentTypes.THINK);
       completion.push({
         type: ContentTypes.ERROR,
-        [ContentTypes.ERROR]:
-          'Модель вернула только рассуждения без ответа. Разверните «Размышления» или повторите запрос.',
+        [ContentTypes.ERROR]: hasReasoning
+          ? 'Модель вернула только рассуждения без ответа. Разверните «Мысли» или повторите запрос.'
+          : 'Модель не вернула ответ. Повторите запрос.',
       });
     }
     const metadata = this.buildResponseMetadata();

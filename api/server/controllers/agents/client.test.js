@@ -3117,9 +3117,31 @@ describe('getUserFacingError - anonymizer messages reach the user', () => {
   it('passes the anonymizer document refusal through verbatim', () => {
     const message =
       'В режиме обезличивания вложения-документы (PDF/DOCX как «оригинальный файл») не поддерживаются: их нельзя обезличить. Прикрепите документ как текст/поиск или переключите режим анонимизации.';
+    const err = { status: 400, error: { type: 'anonymizer_document_blocked', message } };
+
+    expect(getUserFacingError(err)).toBe(message);
+  });
+
+  it('keeps passing it when the service still answers the older 415', () => {
+    const message = 'В режиме обезличивания вложения-документы не поддерживаются.';
     const err = { status: 415, error: { type: 'anonymizer_document_blocked', message } };
 
     expect(getUserFacingError(err)).toBe(message);
+  });
+
+  it('does not show the perimeter size limit, which is written for an API client', () => {
+    const err = {
+      status: 413,
+      error: {
+        type: 'anonymizer_input_too_large',
+        message: 'input too large to anonymize (> 500000 chars)',
+      },
+    };
+
+    const shown = getUserFacingError(err);
+    expect(shown).not.toContain('500000');
+    expect(shown).not.toContain('anonymize');
+    expect(shown).toMatch(/[А-Яа-я]/);
   });
 
   it('still answers neutrally for a provider error, however chatty', () => {
@@ -3170,6 +3192,17 @@ describe('AgentClient - a run with nothing to show says so', () => {
     const error = completion.find((part) => part.type === 'error');
     expect(error).toBeDefined();
     expect(error.error).toContain('только рассуждения');
+    expect(error.error).toContain('«Мысли»');
+  });
+
+  it('does not send the user after reasoning that is not there', async () => {
+    const client = makeSendCompletionClient([]);
+
+    const { completion } = await client.sendCompletion({}, {});
+
+    const error = completion.find((part) => part.type === 'error');
+    expect(error).toBeDefined();
+    expect(error.error).toBe('Модель не вернула ответ. Повторите запрос.');
   });
 
   it('leaves a normal answer alone', async () => {
