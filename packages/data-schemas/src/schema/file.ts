@@ -106,6 +106,13 @@ const file: Schema<IMongoFile> = new Schema(
        * verbatim — a mismatch makes retrieval silently return nothing. */
       type: String,
     },
+    contentHash: {
+      /* SHA-256 of the uploaded bytes, so a second upload of the same document
+       * (the "(1)" copy a browser download leaves behind) can reuse the record
+       * that was already embedded instead of paying the embedding cost twice.
+       * Indexed together with `user`: the lookup never crosses owners. */
+      type: String,
+    },
     embeddingScope: {
       /* Why the file was embedded into pgvector, distinct from the
        * overloaded `embedded` flag. Absent or 'chat' = a file_search-routed
@@ -289,6 +296,10 @@ file.index({ embeddingStatus: 1, embedNextAt: 1 });
  * and the pending/failed status counts filter {user, embeddingStatus}. Without
  * these, every tool call is a per-user collection scan. */
 file.index({ user: 1, embedded: 1, updatedAt: -1 });
+/* Dedup lookup on upload: always scoped to one owner, so a duplicate is only
+ * ever reused within the uploader's own files. Sparse — pre-dedup records have
+ * no hash and must not bloat the index. */
+file.index({ user: 1, contentHash: 1 }, { sparse: true });
 file.index({ user: 1, embeddingStatus: 1 });
 file.index(
   { filename: 1, conversationId: 1, context: 1, tenantId: 1 },

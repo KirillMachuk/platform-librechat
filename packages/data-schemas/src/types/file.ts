@@ -90,6 +90,12 @@ export interface IMongoFile extends Omit<Document, 'model'> {
    */
   embedEntityId?: string;
   /**
+   * SHA-256 of the uploaded bytes. Lets a re-upload of the same document reuse
+   * the record that was already indexed instead of paying for the embedding
+   * again. Absent on records created before dedup existed.
+   */
+  contentHash?: string;
+  /**
    * Why the file is embedded. 'chat' (or absent) = participates in the chat
    * retrieval floor / file_search tool. 'library' = a full-text context file
    * indexed only for cross-chat library_search; excluded from the floor to

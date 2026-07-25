@@ -6,6 +6,7 @@ export * from './documents/crud';
 export * from './documents/ondemand';
 export * from './encode';
 export * from './filter';
+export * from './hash';
 export * from './mistral/crud';
 export * from './ocr';
 export * from './open';
