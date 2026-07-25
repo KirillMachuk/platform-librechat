@@ -181,17 +181,38 @@ export function checkVariables(): void {
 /**
  * Checks the health of auxiliary API's by attempting a fetch request to their respective `/health` endpoints.
  * Logs information or warning based on the API's availability and response.
+ *
+ * Retries, because a single probe raced the RAG API's own startup: this server finished
+ * booting first and warned that file uploads would break, while the RAG API bound its port
+ * seconds later and served the whole session. An operator reading the log at 3am cannot tell
+ * that false alarm from the real thing, so the warning must only fire once the service has
+ * actually had time to come up. A non-200 answer is reported immediately — it means the
+ * service is up and unhappy, which retrying would only hide.
  */
-export async function checkHealth(): Promise<void> {
-  try {
-    const response = await fetch(`${process.env.RAG_API_URL}/health`);
-    if (response?.ok && response?.status === 200) {
-      logger.info(`RAG API is running and reachable at ${process.env.RAG_API_URL}.`);
+export async function checkHealth(attempts = 10, delayMs = 3000): Promise<void> {
+  const url = `${process.env.RAG_API_URL}/health`;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const response = await fetch(url);
+      if (response?.status === 200) {
+        logger.info(`RAG API is running and reachable at ${process.env.RAG_API_URL}.`);
+      } else {
+        logger.warn(
+          `RAG API at ${url} answered ${response?.status}; file uploads may fall back to native extraction.`,
+        );
+      }
+      return;
+    } catch {
+      if (attempt === attempts) {
+        logger.warn(
+          `RAG API is either not running or not reachable at ${process.env.RAG_API_URL} after ${attempts} attempts over ${Math.round((attempts * delayMs) / 1000)}s, you may experience errors with file uploads.`,
+        );
+        return;
+      }
+      await new Promise((resolve) => {
+        setTimeout(resolve, delayMs).unref?.();
+      });
     }
-  } catch {
-    logger.warn(
-      `RAG API is either not running or not reachable at ${process.env.RAG_API_URL}, you may experience errors with file uploads.`,
-    );
   }
 }
 
@@ -285,7 +306,9 @@ export async function performStartupChecks(appConfig?: AppConfig): Promise<void>
   if (appConfig?.config?.rateLimits) {
     handleRateLimits(appConfig.config.rateLimits);
   }
-  await checkHealth();
+  /** Not awaited: nothing depends on the result, it is only logged, and a genuinely
+   *  unreachable RAG API would otherwise add its whole retry window to boot. */
+  void checkHealth();
 }
 
 /**

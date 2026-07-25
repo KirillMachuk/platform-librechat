@@ -7,12 +7,13 @@ jest.mock('@librechat/data-schemas', () => ({
   ...jest.requireActual('@librechat/data-schemas'),
   logger: {
     debug: jest.fn(),
+    info: jest.fn(),
     warn: jest.fn(),
   },
 }));
 
 import { handleRateLimits } from './limits';
-import { checkWebSearchConfig, assertStrongJwtSecrets } from './checks';
+import { checkWebSearchConfig, assertStrongJwtSecrets, checkHealth } from './checks';
 import { logger } from '@librechat/data-schemas';
 import { extractVariableName as extract } from 'librechat-data-provider';
 
@@ -407,5 +408,51 @@ describe('handleRateLimits', () => {
     expect(process.env.STT_IP_WINDOW).toEqual('50');
     expect(process.env.STT_USER_MAX).toEqual('30');
     expect(process.env.STT_USER_WINDOW).toEqual('20');
+  });
+});
+
+describe('checkHealth', () => {
+  const realFetch = global.fetch;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.RAG_API_URL = 'http://doc-gateway:8000';
+  });
+
+  afterAll(() => {
+    global.fetch = realFetch;
+  });
+
+  it('does not cry wolf while the RAG API is still binding its port', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('ECONNREFUSED'))
+      .mockRejectedValueOnce(new Error('ECONNREFUSED'))
+      .mockResolvedValueOnce({ status: 200 });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await checkHealth(5, 0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('running and reachable'));
+  });
+
+  it('warns once the whole window is spent unreachable', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('ECONNREFUSED')) as unknown as typeof fetch;
+
+    await checkHealth(3, 0);
+
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('after 3 attempts'));
+  });
+
+  it('reports an unhealthy answer immediately instead of retrying it away', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({ status: 503 });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await checkHealth(5, 0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('answered 503'));
   });
 });
