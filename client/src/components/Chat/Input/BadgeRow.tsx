@@ -37,6 +37,8 @@ interface BadgeRowProps {
   /** Active model is an OpenAI reasoning family (o-series / gpt-5.x) that cannot run
    *  the tool loop — hide the tool toggles that would arm one (see ChatForm). */
   isReasoningModelActive?: boolean;
+  /** Its name, so the tools menu can say which model cannot use them. */
+  activeModel?: string | null;
 }
 
 interface BadgeWrapperProps {
@@ -155,6 +157,7 @@ function BadgeRow({
   onToggle,
   isInChat,
   isReasoningModelActive,
+  activeModel,
 }: BadgeRowProps) {
   const [orderedBadges, setOrderedBadges] = useState<BadgeItem[]>([]);
   const [dragState, dispatch] = useReducer(dragReducer, {
@@ -334,6 +337,7 @@ function BadgeRow({
       specName={specName}
       isSubmitting={isSubmitting}
       isReasoningModelActive={isReasoningModelActive}
+      activeModel={activeModel}
     >
       <div ref={containerRef} className="relative flex flex-wrap items-center gap-2">
         {showEphemeralBadges === true && <ToolsDropdown />}

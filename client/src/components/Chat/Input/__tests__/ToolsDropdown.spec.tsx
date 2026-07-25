@@ -11,6 +11,7 @@ import ToolsDropdown from '../ToolsDropdown';
  */
 
 let mockIsReasoningModelActive = false;
+const mockActiveModel = 'openai/gpt-5.6-luna';
 
 const makeToggle = () => ({
   toggleState: false,
@@ -24,6 +25,7 @@ jest.mock('~/Providers', () => ({
   useBadgeRowContext: () => ({
     agentsConfig: { capabilities: [] },
     isReasoningModelActive: mockIsReasoningModelActive,
+    activeModel: mockActiveModel,
     skills: makeToggle(),
     webSearch: makeToggle(),
     deepResearch: makeToggle(),
@@ -115,5 +117,19 @@ describe('ToolsDropdown — reasoning-model tool gating', () => {
     expect(screen.getByText('com_ui_deep_research')).toBeInTheDocument();
     expect(screen.getByText('artifacts_item')).toBeInTheDocument();
     expect(screen.getByText('com_ui_skills')).toBeInTheDocument();
+  });
+
+  it('explains why the toggles are gone instead of just dropping them', () => {
+    mockIsReasoningModelActive = true;
+    render(<ToolsDropdown />);
+
+    expect(screen.getByText('com_error_reasoning_model_tools')).toBeInTheDocument();
+  });
+
+  it('adds no such note for a model that can use tools', () => {
+    mockIsReasoningModelActive = false;
+    render(<ToolsDropdown />);
+
+    expect(screen.queryByText('com_error_reasoning_model_tools')).not.toBeInTheDocument();
   });
 });

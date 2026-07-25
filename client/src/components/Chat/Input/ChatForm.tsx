@@ -390,6 +390,7 @@ const ChatForm = memo(function ChatForm({
                 conversationId={conversationId}
                 specName={conversation?.spec}
                 isReasoningModelActive={isReasoningModelActive}
+                activeModel={conversation?.model}
                 onChange={setBadges}
                 isInChat={
                   Array.isArray(conversation?.messages) && conversation.messages.length >= 1

@@ -84,6 +84,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
     codeInterpreter,
     searchApiKeyForm,
     isReasoningModelActive,
+    activeModel,
   } = context ?? {};
   /** Reasoning models (o-series / gpt-5.x) run chat-only — omit the tool toggles
    *  that arm the tool loop (the backend drops them too). Deep Research and
@@ -375,6 +376,22 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
     dropdownItems.push({
       hideOnClick: false,
       render: (props) => <MCPSubMenu {...props} placeholder={mcpPlaceholder} />,
+    });
+  }
+
+  /** A reasoning model hides every tool toggle above, which on its own reads as "the tools
+   *  vanished" — and if a toggle was left on under a previous model, the user then watches
+   *  that model answer "I have no access to your library". Say which model cannot use tools
+   *  and that switching models brings them back. Non-interactive: there is nothing to click. */
+  if (isReasoningModelActive) {
+    dropdownItems.push({
+      disabled: true,
+      hideOnClick: false,
+      render: (props) => (
+        <div {...props} className="px-3 py-2 text-sm text-text-secondary">
+          {localize('com_error_reasoning_model_tools', { 0: activeModel ?? '' })}
+        </div>
+      ),
     });
   }
 

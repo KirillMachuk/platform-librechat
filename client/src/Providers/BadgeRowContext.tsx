@@ -19,6 +19,8 @@ interface BadgeRowContextType {
   /** Active model is an OpenAI reasoning family (o-series / gpt-5.x); tool toggles
    *  that arm the tool loop are hidden for it (mirrors the backend gating). */
   isReasoningModelActive?: boolean;
+  /** Name of that model, so the menu can say WHICH one cannot use tools. */
+  activeModel?: string | null;
   skills: ReturnType<typeof useToolToggle>;
   webSearch: ReturnType<typeof useToolToggle>;
   deepResearch: ReturnType<typeof useToolToggle>;
@@ -41,6 +43,7 @@ interface BadgeRowProviderProps {
   conversationId?: string | null;
   specName?: string | null;
   isReasoningModelActive?: boolean;
+  activeModel?: string | null;
 }
 
 export default function BadgeRowProvider({
@@ -49,6 +52,7 @@ export default function BadgeRowProvider({
   conversationId,
   specName,
   isReasoningModelActive,
+  activeModel,
 }: BadgeRowProviderProps) {
   const lastContextKeyRef = useRef<string>('');
   const hasInitializedRef = useRef(false);
@@ -298,6 +302,7 @@ export default function BadgeRowProvider({
     searchApiKeyForm,
     mcpServerManager,
     isReasoningModelActive,
+    activeModel,
   };
 
   return <BadgeRowContext.Provider value={value}>{children}</BadgeRowContext.Provider>;
