@@ -123,13 +123,25 @@ describe('ToolsDropdown — reasoning-model tool gating', () => {
     mockIsReasoningModelActive = true;
     render(<ToolsDropdown />);
 
-    expect(screen.getByText('com_error_reasoning_model_tools')).toBeInTheDocument();
+    expect(screen.getByText('com_ui_tools_unavailable_reasoning')).toBeInTheDocument();
+    expect(screen.getByText(mockActiveModel)).toBeInTheDocument();
+  });
+
+  /** The menu is sized to its widest row, so an uncapped sentence stretched it to 1104px on a
+   *  375px phone and pushed the pin buttons off-screen. */
+  it('caps the note so a long sentence cannot stretch the menu', () => {
+    mockIsReasoningModelActive = true;
+    render(<ToolsDropdown />);
+
+    const note = screen.getByText('com_ui_tools_unavailable_reasoning');
+    expect(note.className).toContain('max-w-[min(18rem,var(--popover-available-width,18rem))]');
+    expect(note.className).toContain('whitespace-normal');
   });
 
   it('adds no such note for a model that can use tools', () => {
     mockIsReasoningModelActive = false;
     render(<ToolsDropdown />);
 
-    expect(screen.queryByText('com_error_reasoning_model_tools')).not.toBeInTheDocument();
+    expect(screen.queryByText('com_ui_tools_unavailable_reasoning')).not.toBeInTheDocument();
   });
 });

@@ -4,6 +4,7 @@ import { render } from '@testing-library/react';
 import { I18nextProvider, initReactI18next } from 'react-i18next';
 import translationEn from '~/locales/en/translation.json';
 import translationRu from '~/locales/ru/translation.json';
+import appI18n from '~/locales/i18n';
 import Error from '../Error';
 
 jest.mock('../CodeBlock', () => ({
@@ -70,5 +71,34 @@ describe('Error – token_balance rendering', () => {
     const { queryByTestId, container } = renderError(withGenerations, 'en');
     expect(container.textContent).toContain("You've run out of available balance");
     expect(queryByTestId('generations-codeblock')).toBeTruthy();
+  });
+});
+
+/** The suite-wide react-i18next mock (test/setupTests.js) ignores I18nextProvider and reads the
+ *  app's own i18n instance, so language is switched there — and the ru bundle, which the app
+ *  lazy-loads, is registered by hand first. */
+describe('Error – a plain message keeps one language', () => {
+  const serverMessage = 'Модель не вернула ответ. Повторите запрос.';
+
+  afterEach(async () => {
+    await appI18n.changeLanguage('en');
+  });
+
+  it('does not put an English lead-in in front of a Russian message', async () => {
+    appI18n.addResourceBundle('ru', 'translation', translationRu, true, true);
+    await appI18n.changeLanguage('ru');
+
+    const { container } = render(<Error text={serverMessage} />);
+
+    expect(container.textContent).toContain(serverMessage);
+    expect(container.textContent).not.toContain('Something went wrong');
+  });
+
+  it('leaves the English wording as it was', () => {
+    const { container } = render(<Error text="Upstream exploded" />);
+
+    expect(container.textContent).toBe(
+      "Something went wrong. Here's the specific error message we encountered: Upstream exploded",
+    );
   });
 });

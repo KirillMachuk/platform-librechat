@@ -545,8 +545,9 @@ const isDocumentTool = (toolName) => documentTools.has(toolName);
 const resolveToolRolePermissions = async (req, tools) => {
   const wantsWebSearch = tools?.includes(Tools.web_search) === true;
   const wantsFileSearch = tools?.some(isDocumentTool) === true;
-  if (!wantsWebSearch && !wantsFileSearch) {
-    return { webSearch: false, fileSearch: false };
+  const wantsRunCode = tools?.includes(Tools.execute_code) === true;
+  if (!wantsWebSearch && !wantsFileSearch && !wantsRunCode) {
+    return { webSearch: false, fileSearch: false, runCode: false };
   }
 
   const check = async (permissionType) => {
@@ -567,11 +568,12 @@ const resolveToolRolePermissions = async (req, tools) => {
     }
   };
 
-  const [webSearch, fileSearch] = await Promise.all([
+  const [webSearch, fileSearch, runCode] = await Promise.all([
     wantsWebSearch ? check(PermissionTypes.WEB_SEARCH) : false,
     wantsFileSearch ? check(PermissionTypes.FILE_SEARCH) : false,
+    wantsRunCode ? check(PermissionTypes.RUN_CODE) : false,
   ]);
-  return { webSearch, fileSearch };
+  return { webSearch, fileSearch, runCode };
 };
 
 /** Checks if a tool name is a known built-in tool */
@@ -632,7 +634,7 @@ async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, to
       return checkCapability(AgentCapabilities.file_search) && rolePermissions.fileSearch;
     }
     if (tool === Tools.execute_code) {
-      return checkCapability(AgentCapabilities.execute_code);
+      return checkCapability(AgentCapabilities.execute_code) && rolePermissions.runCode;
     }
     if (tool === Tools.web_search) {
       return checkCapability(AgentCapabilities.web_search) && rolePermissions.webSearch;
@@ -1200,7 +1202,7 @@ async function loadAgentTools({
     if (isDocumentTool(tool)) {
       return checkCapability(AgentCapabilities.file_search) && rolePermissions.fileSearch;
     } else if (tool === Tools.execute_code) {
-      return checkCapability(AgentCapabilities.execute_code);
+      return checkCapability(AgentCapabilities.execute_code) && rolePermissions.runCode;
     } else if (tool === Tools.web_search) {
       includesWebSearch =
         checkCapability(AgentCapabilities.web_search) && rolePermissions.webSearch;

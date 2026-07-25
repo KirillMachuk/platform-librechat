@@ -135,7 +135,10 @@ const Error = ({ text }: { text: string }) => {
   const localize = useLocalize();
   const jsonString = extractJson(text);
   const errorMessage = text.length > 512 && !jsonString ? text.slice(0, 512) + '...' : text;
-  const defaultResponse = `Something went wrong. Here's the specific error message we encountered: ${errorMessage}`;
+  /** Localized: the server already answers in the user's language (getUserFacingError returns
+   *  curated Russian sentences), so a hardcoded English lead-in put two languages in one
+   *  bubble. The English wording is unchanged. */
+  const defaultResponse = localize('com_error_generic_prefix', { 0: errorMessage });
 
   if (!isJson(jsonString)) {
     return defaultResponse;
