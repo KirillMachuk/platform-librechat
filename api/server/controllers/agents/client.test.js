@@ -3142,3 +3142,65 @@ describe('getUserFacingError - anonymizer messages reach the user', () => {
     expect(getUserFacingError(err)).not.toContain('traceback');
   });
 });
+
+describe('AgentClient - a run with nothing to show says so', () => {
+  const makeSendCompletionClient = (contentParts) => {
+    const client = new AgentClient({
+      req: { user: { id: 'user-123' }, body: {}, config: { endpoints: {} } },
+      res: {},
+      agent: {
+        id: 'agent-123',
+        endpoint: EModelEndpoint.openAI,
+        provider: EModelEndpoint.openAI,
+        model_parameters: { model: 'deepseek/deepseek-chat-v3.1' },
+      },
+      endpointTokenConfig: {},
+    });
+    client.chatCompletion = jest.fn().mockResolvedValue(undefined);
+    client.buildResponseMetadata = jest.fn().mockReturnValue(undefined);
+    client.contentParts = contentParts;
+    return client;
+  };
+
+  it('flags a reasoning-only answer instead of persisting an empty bubble', async () => {
+    const client = makeSendCompletionClient([{ type: 'think', think: 'долго думал' }]);
+
+    const { completion } = await client.sendCompletion({}, {});
+
+    const error = completion.find((part) => part.type === 'error');
+    expect(error).toBeDefined();
+    expect(error.error).toContain('только рассуждения');
+  });
+
+  it('leaves a normal answer alone', async () => {
+    const client = makeSendCompletionClient([
+      { type: 'think', think: 'подумал' },
+      { type: 'text', text: 'Берлин' },
+    ]);
+
+    const { completion } = await client.sendCompletion({}, {});
+
+    expect(completion.some((part) => part.type === 'error')).toBe(false);
+  });
+
+  it('treats a tool call as real output, since not every tool prints text', async () => {
+    const client = makeSendCompletionClient([
+      { type: 'tool_call', tool_call: { id: 'c1', name: 'image_gen', args: '{}' } },
+    ]);
+
+    const { completion } = await client.sendCompletion({}, {});
+
+    expect(completion.some((part) => part.type === 'error')).toBe(false);
+  });
+
+  it('stays silent when the user pressed Stop', async () => {
+    const client = makeSendCompletionClient([{ type: 'think', think: 'начал думать' }]);
+
+    const { completion } = await client.sendCompletion(
+      {},
+      { abortController: { signal: { aborted: true } } },
+    );
+
+    expect(completion.some((part) => part.type === 'error')).toBe(false);
+  });
+});
