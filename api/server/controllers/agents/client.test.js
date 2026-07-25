@@ -3147,7 +3147,10 @@ describe('getUserFacingError - anonymizer messages reach the user', () => {
   it('still answers neutrally for a provider error, however chatty', () => {
     const err = {
       status: 400,
-      error: { type: 'invalid_request_error', message: 'openrouter: model xyz rejected key sk-...' },
+      error: {
+        type: 'invalid_request_error',
+        message: 'openrouter: model xyz rejected key sk-...',
+      },
     };
 
     const shown = getUserFacingError(err);

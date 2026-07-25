@@ -439,7 +439,9 @@ describe('checkHealth', () => {
   });
 
   it('warns once the whole window is spent unreachable', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new Error('ECONNREFUSED')) as unknown as typeof fetch;
+    global.fetch = jest
+      .fn()
+      .mockRejectedValue(new Error('ECONNREFUSED')) as unknown as typeof fetch;
 
     await checkHealth(3, 0);
 
