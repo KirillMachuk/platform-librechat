@@ -368,5 +368,54 @@ describe('text', () => {
         expect.objectContaining({ timeout: 300000 }),
       );
     });
+
+    /* doc-gateway OCRs one scan at a time and answers 503 + Retry-After for the rest. Native
+     * parsing reads only a text layer, so a scanned PDF comes back empty either way — only this
+     * flag lets the caller tell "the queue was full, retry" from "the document is unreadable". */
+    describe('saturated document parser (503)', () => {
+      const scan = { ...mockFile, originalname: 'scan.pdf', mimetype: 'application/pdf' };
+
+      beforeEach(() => {
+        process.env.RAG_API_URL = 'http://rag-api.test';
+        mockedAxios.get.mockResolvedValue({ status: 200, statusText: 'OK' });
+        mockedFs.createReadStream.mockReturnValue('stream' as unknown as ReadStream);
+        mockedFormData.mockImplementation(
+          () =>
+            ({
+              append: jest.fn(),
+              getHeaders: jest.fn().mockReturnValue({}),
+            }) as unknown as FormData,
+        );
+      });
+
+      it('flags the retryable cause when the lane is saturated and native parsing finds nothing', async () => {
+        mockedAxios.post.mockRejectedValue({ response: { status: 503 } });
+        mockedReadFileAsString.mockResolvedValue({ content: '', bytes: 0 });
+
+        const result = await parseText({ req: mockReq, file: scan, file_id: mockFileId });
+
+        expect(result.text).toBe('');
+        expect(result.retryable).toBe(true);
+      });
+
+      it('does not flag other upstream failures', async () => {
+        mockedAxios.post.mockRejectedValue({ response: { status: 500 } });
+        mockedReadFileAsString.mockResolvedValue({ content: '', bytes: 0 });
+
+        const result = await parseText({ req: mockReq, file: scan, file_id: mockFileId });
+
+        expect(result.retryable).toBeUndefined();
+      });
+
+      it('does not flag a 503 when native parsing still recovered the text (digital PDF)', async () => {
+        mockedAxios.post.mockRejectedValue({ response: { status: 503 } });
+        mockedReadFileAsString.mockResolvedValue({ content: 'договор аренды', bytes: 26 });
+
+        const result = await parseText({ req: mockReq, file: scan, file_id: mockFileId });
+
+        expect(result.text).toBe('договор аренды');
+        expect(result.retryable).toBeUndefined();
+      });
+    });
   });
 });

@@ -49,7 +49,7 @@ export async function parseText({
   req: ServerRequest;
   file: Express.Multer.File;
   file_id: string;
-}): Promise<{ text: string; bytes: number; source: string }> {
+}): Promise<{ text: string; bytes: number; source: string; retryable?: boolean }> {
   if (!process.env.RAG_API_URL) {
     logger.debug('[parseText] RAG_API_URL not defined, falling back to native text parsing');
     return parseTextNative(file);
@@ -118,7 +118,17 @@ export async function parseText({
       message: '[parseText] RAG API text parsing failed, falling back to native parsing',
       error,
     });
-    return parseTextNative(file);
+    const parsed = await parseTextNative(file);
+    /* doc-gateway answers 503 + Retry-After when its scan lane is saturated (it OCRs one
+     * document at a time). Native parsing reads only a PDF's text layer, so a scan yields
+     * nothing here and the caller would report it as "image-based, needs OCR" — a permanent
+     * verdict for what is really a queue wait. Flag the retryable cause so the caller can say
+     * so honestly instead of blaming the document. */
+    const upstreamStatus = (error as { response?: { status?: number } })?.response?.status;
+    if (!parsed.text.trim() && upstreamStatus === 503) {
+      return { ...parsed, retryable: true };
+    }
+    return parsed;
   }
 }
 

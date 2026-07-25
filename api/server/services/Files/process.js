@@ -1156,6 +1156,7 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
 
     const shouldUseOCR = shouldUseConfiguredOCR || shouldUseDocumentParser;
 
+    let parserSaturated = false;
     const resolveDocumentText = async () => {
       if (shouldUseConfiguredOCR) {
         try {
@@ -1218,6 +1219,9 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
             text: parsed.text,
           };
         }
+        // Empty because doc-gateway's scan lane was saturated (503), not because the
+        // document is unreadable — remember it so the caller reports the real cause.
+        parserSaturated = parsed?.retryable === true;
       } catch (err) {
         logger.error(
           `[processAgentFileUpload] RAG /text OCR fallback failed for "${file.originalname}":`,
@@ -1237,7 +1241,9 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         return await createTextFile({ text, bytes });
       }
       throw new Error(
-        `Unable to extract text from "${file.originalname}". The document may be image-based and requires an OCR service to process.`,
+        parserSaturated
+          ? `The document parser is busy processing another scan and could not get to "${file.originalname}" in time. Please upload it again in a few minutes.`
+          : `Unable to extract text from "${file.originalname}". The document may be image-based and requires an OCR service to process.`,
       );
     }
 
