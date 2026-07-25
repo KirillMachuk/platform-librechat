@@ -3084,3 +3084,29 @@ describe('AgentClient - finalizeSubagentContent', () => {
     ]);
   });
 });
+
+describe('AgentClient - getSaveOptions carries the project link', () => {
+  const baseOptions = () => ({
+    req: { user: { id: 'user-123' }, body: {}, config: { endpoints: {} } },
+    res: {},
+    agent: {
+      id: 'agent-123',
+      endpoint: EModelEndpoint.openAI,
+      provider: EModelEndpoint.openAI,
+      model_parameters: { model: 'gpt-4' },
+    },
+    endpointTokenConfig: {},
+  });
+
+  it('saves project_id so a chat started in a project is filed under it', () => {
+    const client = new AgentClient({ ...baseOptions(), project_id: 'proj-42' });
+
+    expect(client.getSaveOptions().project_id).toBe('proj-42');
+  });
+
+  it('omits project_id entirely for a chat outside any project', () => {
+    const client = new AgentClient(baseOptions());
+
+    expect(client.getSaveOptions()).not.toHaveProperty('project_id');
+  });
+});

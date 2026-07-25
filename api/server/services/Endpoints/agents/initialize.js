@@ -1216,6 +1216,11 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
     spec: endpointOption.spec,
     iconURL: endpointOption.iconURL,
     chatProjectId: endpointOption.chatProjectId,
+    /** The link between a chat and a Project. `applyProjectContext` above already read it
+     *  off the body to merge the project's instructions, but the conversation is saved from
+     *  `getSaveOptions()`, which reads client options — so without this hop a chat started
+     *  inside a project answered by the project's rules and then filed itself outside it. */
+    project_id: endpointOption.project_id,
     attachments: primaryConfig.requestAttachments ?? primaryConfig.attachments,
     agentContextAttachmentsByAgentId,
     endpointType: endpointOption.endpointType,
