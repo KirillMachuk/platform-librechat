@@ -125,6 +125,22 @@ function getUserFacingError(err) {
     return 'Пул Кредитов на текущий месяц оказания услуг исчерпан, поэтому модели временно недоступны. Остальные функции платформы (история, файлы, поиск) продолжают работать. Обратитесь к администратору: после начисления пакета Кредитов или с началом нового месяца оказания услуг доступ восстановится автоматически.';
   }
 
+  /* Our own perimeter service (the anonymizer) answers 4xx with a message written FOR the
+   * user — it knows exactly which attachment it refused and what to do instead, which no
+   * neutral wording here can express. Surface those verbatim. The gate is the `anonymizer_`
+   * type prefix, not the status: a provider or transport error cannot carry it, so this
+   * cannot become a leak of provider names or internals. */
+  if (
+    typeof errorBody?.type === 'string' &&
+    errorBody.type.startsWith('anonymizer_') &&
+    typeof errorBody?.message === 'string' &&
+    errorBody.message.trim() !== '' &&
+    status >= 400 &&
+    status < 500
+  ) {
+    return errorBody.message.trim();
+  }
+
   if (status === 402) {
     return 'Сервис временно недоступен из-за ограничения по ресурсам. Обратитесь к администратору.';
   }
@@ -2059,3 +2075,6 @@ class AgentClient extends BaseClient {
 }
 
 module.exports = AgentClient;
+/** Exposed for tests: the mapping from an upstream error to what the user reads is the
+ *  difference between "нельзя обезличить этот файл" and a generic "что-то пошло не так". */
+module.exports.getUserFacingError = getUserFacingError;

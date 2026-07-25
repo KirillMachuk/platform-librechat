@@ -3110,3 +3110,35 @@ describe('AgentClient - getSaveOptions carries the project link', () => {
     expect(client.getSaveOptions()).not.toHaveProperty('project_id');
   });
 });
+
+describe('getUserFacingError - anonymizer messages reach the user', () => {
+  const { getUserFacingError } = AgentClient;
+
+  it('passes the anonymizer document refusal through verbatim', () => {
+    const message =
+      'В режиме обезличивания вложения-документы (PDF/DOCX как «оригинальный файл») не поддерживаются: их нельзя обезличить. Прикрепите документ как текст/поиск или переключите режим анонимизации.';
+    const err = { status: 415, error: { type: 'anonymizer_document_blocked', message } };
+
+    expect(getUserFacingError(err)).toBe(message);
+  });
+
+  it('still answers neutrally for a provider error, however chatty', () => {
+    const err = {
+      status: 400,
+      error: { type: 'invalid_request_error', message: 'openrouter: model xyz rejected key sk-...' },
+    };
+
+    const shown = getUserFacingError(err);
+    expect(shown).not.toContain('openrouter');
+    expect(shown).not.toContain('sk-');
+  });
+
+  it('never surfaces a 5xx body, even one wearing an anonymizer type', () => {
+    const err = {
+      status: 502,
+      error: { type: 'anonymizer_internal', message: 'traceback: /app/anonymizer/main.py line 42' },
+    };
+
+    expect(getUserFacingError(err)).not.toContain('traceback');
+  });
+});
