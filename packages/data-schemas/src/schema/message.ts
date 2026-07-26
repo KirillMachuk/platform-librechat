@@ -209,6 +209,14 @@ messageSchema.index({ messageId: 1, user: 1, tenantId: 1 }, { unique: true });
 messageSchema.index({ isCreatedByUser: 1, createdAt: -1 });
 messageSchema.index({ user: 1, isCreatedByUser: 1, createdAt: -1 });
 
+// Analytics joins a page of requests to the ratings left on their answers. Partial, so
+// it holds only rated messages — a handful next to the whole collection — and costs
+// nothing on the write path for the messages nobody rates.
+messageSchema.index(
+  { parentMessageId: 1 },
+  { partialFilterExpression: { feedback: { $exists: true } } },
+);
+
 // index for MeiliSearch sync operations
 messageSchema.index({ _meiliIndex: 1, isTemporary: 1, expiredAt: 1 });
 

@@ -20,7 +20,6 @@ const defaultInterface = getConfigDefaults().interface;
 function Header() {
   const { data: startupConfig } = useGetStartupConfig();
   const navVisible = useRecoilValue(store.sidebarExpanded);
-  const showPresetsMenu = useRecoilValue(store.showPresetsMenu);
   const showBookmarksMenu = useRecoilValue(store.showBookmarksMenu);
   const conversation = useRecoilValue(store.conversationByIndex(0));
   const projectId = conversation?.project_id;
@@ -83,9 +82,7 @@ function Header() {
             >
               {projectBadge}
               <ModelSelector startupConfig={startupConfig} />
-              {interfaceConfig.presets === true &&
-                interfaceConfig.modelSelect &&
-                showPresetsMenu && <PresetsMenu />}
+              {interfaceConfig.presets === true && interfaceConfig.modelSelect && <PresetsMenu />}
               {hasAccessToBookmarks === true && showBookmarksMenu && <BookmarkMenu />}
               {hasAccessToMultiConvo === true && <AddMultiConvo />}
               {isSmallScreen && (

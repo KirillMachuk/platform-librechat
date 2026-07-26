@@ -22,7 +22,10 @@ export default function useCombobox({
     if (!searchValue) {
       return options;
     }
-    const keys = ['label', 'value'];
+    /** `modelId` carries the provider ('anthropic/claude-sonnet-5') that the visible
+     *  label drops, so searching by vendor keeps working. Options without it are
+     *  unaffected — matchSorter skips keys a row does not have. */
+    const keys = ['label', 'value', 'modelId'];
     const matches = matchSorter(options, searchValue, { keys });
     // Radix Select does not work if we don't render the selected item, so we
     // make sure to include it in the list of matches.

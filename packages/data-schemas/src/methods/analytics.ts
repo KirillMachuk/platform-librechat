@@ -235,13 +235,16 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')): Ana
    * Maps each request to the rating left on its answer.
    *
    * A rating lives on the assistant reply, while the feed and the export are built
-   * from the employee's prompts, so the two have to be joined. Querying by the
-   * page's conversations (an indexed field) and matching parents in memory keeps
-   * this to one extra read, where a correlated `$lookup` would run per row against
-   * an unindexed `parentMessageId`.
+   * from the employee's prompts, so the two have to be joined. Asking for the answers
+   * of exactly these prompts keeps the read proportional to the page; joining by
+   * conversation instead would drag in every message of every conversation the page
+   * touches, across their whole history rather than the export's date window.
+   *
+   * `feedback: { $exists: true }` must stay in the filter — it is what lets the partial
+   * index over rated messages serve this query (see the message schema).
    */
   async function fetchFeedbackByPrompt(
-    rows: Array<{ messageId: string; conversationId: string }>,
+    rows: Array<{ messageId: string }>,
     tenantId?: string,
   ): Promise<Map<string, AnalyticsFeedback>> {
     if (!rows.length) {
@@ -249,7 +252,7 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')): Ana
     }
     const Message = mongoose.models.Message as Model<IMessage>;
     const filter: FilterQuery<IMessage> = {
-      conversationId: { $in: [...new Set(rows.map((r) => r.conversationId))] },
+      parentMessageId: { $in: rows.map((r) => r.messageId) },
       isCreatedByUser: false,
       feedback: { $exists: true, $ne: null },
     };

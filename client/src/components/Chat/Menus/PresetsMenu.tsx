@@ -35,6 +35,12 @@ const PresetsMenu: FC = () => {
     confirmDeletePreset,
   } = usePresets();
   const preset = useRecoilValue(store.presetByIndex(0));
+  /**
+   * The switch hides the menu, not the feature: `usePresets` above is the only place
+   * that loads a user's default preset and applies it to a new chat, so the gate has
+   * to sit below the hook rather than around this component.
+   */
+  const showPresetsMenu = useRecoilValue(store.showPresetsMenu);
 
   const handleDeleteDialogChange = (open: boolean) => {
     setShowDeleteDialog(open);
@@ -44,6 +50,10 @@ const PresetsMenu: FC = () => {
       }, 0);
     }
   };
+
+  if (!showPresetsMenu) {
+    return null;
+  }
 
   return (
     <Root>
