@@ -56,8 +56,11 @@ export interface ICreditPackage extends Document {
   updatedAt?: Date;
 }
 
-/** Per-request spend journal row (actual cost; raw material for reconciliation). */
-export interface ICreditSpend extends Document {
+/** Per-request spend journal row (actual cost; raw material for reconciliation).
+ *  `Omit<Document, 'model'>`: the row's `model` field (LLM name) collides with
+ *  mongoose's `Document.model()` method; spend rows are insert/read-only, so
+ *  dropping the method from the type is safe. */
+export interface ICreditSpend extends Omit<Document, 'model'> {
   tenantId?: string;
   /** Month key the spend was attributed to (Europe/Minsk). */
   month: string;
