@@ -50,6 +50,7 @@ jest.mock('~/store', () => ({
   showPromptsPopoverFamily: (idx: number) => `showPromptsPopoverFamily-${idx}`,
   showMentionPopoverFamily: (idx: number) => `showMentionPopoverFamily-${idx}`,
   showPlusPopoverFamily: (idx: number) => `showPlusPopoverFamily-${idx}`,
+  plusPopoverFromButtonFamily: (idx: number) => `plusPopoverFromButtonFamily-${idx}`,
   showSkillsPopoverFamily: (idx: number) => `showSkillsPopoverFamily-${idx}`,
   effectiveEndpointByIndex: (idx: number) => `effectiveEndpointByIndex-${idx}`,
   atCommand: 'atCommand',

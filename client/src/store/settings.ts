@@ -1,7 +1,7 @@
 import { atom } from 'recoil';
 import { SettingsViews, LocalStorageKeys } from 'librechat-data-provider';
-import { atomWithLocalStorage } from '~/store/utils';
 import type { TOptionSettings } from '~/common';
+import { atomWithLocalStorage } from '~/store/utils';
 
 // Static atoms without localStorage
 const staticAtoms = {
@@ -35,10 +35,17 @@ const localStorageAtoms = {
   autoExpandTools: atomWithLocalStorage(LocalStorageKeys.AUTO_EXPAND_TOOLS, false),
   saveDrafts: atomWithLocalStorage('saveDrafts', true),
   showScrollButton: atomWithLocalStorage('showScrollButton', true),
-  forkSetting: atomWithLocalStorage('forkSetting', ''),
-  splitAtTarget: atomWithLocalStorage('splitAtTarget', false),
-  rememberDefaultFork: atomWithLocalStorage(LocalStorageKeys.REMEMBER_FORK_OPTION, false),
   saveBadgesState: atomWithLocalStorage('saveBadgesState', false),
+
+  /**
+   * Power-user surfaces, off unless asked for: they cost every employee a button
+   * they have to rule out, and reward the few who want them. The admin still holds
+   * the master switches (interface.presets / .parameters, the BOOKMARKS permission);
+   * these only decide whether an allowed feature takes up room by default.
+   */
+  showPresetsMenu: atomWithLocalStorage('showPresetsMenu', false),
+  showParametersPanel: atomWithLocalStorage('showParametersPanel', false),
+  showBookmarksMenu: atomWithLocalStorage('showBookmarksMenu', false),
 
   // Beta features settings
   modularChat: atomWithLocalStorage('modularChat', true),

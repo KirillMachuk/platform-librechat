@@ -1,8 +1,8 @@
 import { memo, useState, useRef, useEffect } from 'react';
-import { useRecoilValue, useSetRecoilState } from 'recoil';
 import { AutoSizer, List } from 'react-virtualized';
 import { Spinner, useCombobox } from '@librechat/client';
 import { EModelEndpoint } from 'librechat-data-provider';
+import { useRecoilValue, useSetRecoilState } from 'recoil';
 import type { RecoilState } from 'recoil';
 import type { MentionOption, ConvoGenerator } from '~/common';
 import { useGetConversation, useLocalize, TranslationKeys } from '~/hooks';
@@ -23,6 +23,8 @@ type MentionProps = {
   commandChar?: string;
   placeholder?: TranslationKeys;
   includeAssistants?: boolean;
+  /** False when opened by a button: the composer holds a draft, not a command. */
+  adoptComposerText?: boolean;
 };
 
 function MentionContent({
@@ -32,6 +34,7 @@ function MentionContent({
   commandChar = '@',
   placeholder = 'com_ui_mention',
   includeAssistants = true,
+  adoptComposerText = true,
 }: Omit<MentionProps, 'index'>) {
   const localize = useLocalize();
   const getConversation = useGetConversation(0);
@@ -72,6 +75,7 @@ function MentionContent({
     commandChar,
     setSearchValue,
     setOpen,
+    adoptComposerText,
   });
 
   const handleSelect = (mention?: MentionOption) => {
@@ -85,7 +89,7 @@ function MentionContent({
       setShowPopover(false);
       onSelectMention?.(mention);
 
-      if (textAreaRef.current) {
+      if (textAreaRef.current && adoptComposerText) {
         removeCharIfLast(textAreaRef.current, commandChar);
       }
     };

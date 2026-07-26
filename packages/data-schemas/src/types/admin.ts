@@ -234,6 +234,15 @@ export type AnalyticsInteraction = {
   createdAt: Date;
 };
 
+/** How an employee rated an answer, as stored on the assistant message. */
+export type AnalyticsFeedback = {
+  rating: 'thumbsUp' | 'thumbsDown';
+  /** Reason tag key chosen in the UI (e.g. `not_helpful`). */
+  tag?: string;
+  /** Free-text comment left with the rating. */
+  text?: string;
+};
+
 /** A single export row (method output) — like a feed row but with the FULL request text. */
 export type AnalyticsExportRow = {
   createdAt: Date;
@@ -244,6 +253,8 @@ export type AnalyticsExportRow = {
   agentName?: string;
   /** Full request text (not truncated). */
   text: string;
+  /** Rating left on the answer to this request, when the employee gave one. */
+  feedback?: AnalyticsFeedback;
 };
 
 /** A single message within a full conversation (method output). */
@@ -257,6 +268,8 @@ export type AnalyticsConversationMessage = {
   model?: string;
   endpoint?: string;
   createdAt?: Date;
+  /** Rating the employee left on this answer (assistant messages only). */
+  feedback?: AnalyticsFeedback;
 };
 
 /** A full conversation with its messages (method output). */

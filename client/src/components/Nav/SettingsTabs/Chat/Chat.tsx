@@ -1,8 +1,7 @@
 import { memo } from 'react';
 import { showThinkingAtom } from '~/store/showThinking';
-import AdvancedPrompts from './AdvancedPrompts';
 import FontSizeSelector from './FontSizeSelector';
-import { ForkSettings } from './ForkSettings';
+import AdvancedPrompts from './AdvancedPrompts';
 import ChatDirection from './ChatDirection';
 import ToggleSwitch from '../ToggleSwitch';
 import store from '~/store';
@@ -99,6 +98,27 @@ const toggleSwitchConfigs = [
     hoverCardText: 'com_nav_info_default_temporary_chat' as const,
     key: 'defaultTemporaryChat',
   },
+  {
+    stateAtom: store.showPresetsMenu,
+    localizationKey: 'com_nav_show_presets_menu' as const,
+    switchId: 'showPresetsMenu',
+    hoverCardText: 'com_nav_info_show_presets_menu' as const,
+    key: 'showPresetsMenu',
+  },
+  {
+    stateAtom: store.showParametersPanel,
+    localizationKey: 'com_nav_show_parameters_panel' as const,
+    switchId: 'showParametersPanel',
+    hoverCardText: 'com_nav_info_show_parameters_panel' as const,
+    key: 'showParametersPanel',
+  },
+  {
+    stateAtom: store.showBookmarksMenu,
+    localizationKey: 'com_nav_show_bookmarks_menu' as const,
+    switchId: 'showBookmarksMenu',
+    hoverCardText: 'com_nav_info_show_bookmarks_menu' as const,
+    key: 'showBookmarksMenu',
+  },
 ];
 
 function Chat() {
@@ -123,7 +143,6 @@ function Chat() {
       <div className="pb-3">
         <AdvancedPrompts />
       </div>
-      <ForkSettings />
     </div>
   );
 }

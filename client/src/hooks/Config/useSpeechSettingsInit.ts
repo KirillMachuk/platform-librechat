@@ -48,18 +48,17 @@ export default function useSpeechSettingsInit(isAuthenticated: boolean) {
     });
 
     /**
-     * When the server has a sovereign STT provider configured, surface the mic by
-     * default and pin the engine to the server ('external') instead of the browser's
-     * Web Speech API, which streams audio to Google. A user's own choice is persisted
-     * in localStorage and is never overridden here.
+     * When the server has a sovereign STT provider configured, pin the engine to the
+     * server ('external') instead of the browser's Web Speech API, which streams audio
+     * to Google. A user's own choice is persisted in localStorage and is never
+     * overridden here.
+     *
+     * The mic itself stays off until asked for (Settings → Speech): dictation is slow
+     * enough that most people never reach for it, so it does not earn a permanent seat
+     * in the composer.
      */
-    if (data.sttExternal) {
-      if (localStorage.getItem('speechToText') === null) {
-        setters.speechToText(true);
-      }
-      if (localStorage.getItem('engineSTT') === null) {
-        setters.engineSTT('external');
-      }
+    if (data.sttExternal && localStorage.getItem('engineSTT') === null) {
+      setters.engineSTT('external');
     }
   }, [isAuthenticated, data, setters]);
 }

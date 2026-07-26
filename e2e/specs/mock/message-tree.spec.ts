@@ -618,6 +618,7 @@ async function expectCanCycleSiblingTexts(page: Page, previousText: string, next
   throw new Error(`Expected either sibling "${previousText}" or "${nextText}" to be visible`);
 }
 
+/** One click forks the visible branch — there is no strategy popover to choose from. */
 async function clickForkVisibleMessages(
   page: Page,
   messageTextValue: string,
@@ -625,7 +626,6 @@ async function clickForkVisibleMessages(
   const render = messageRender(page, messageTextValue);
   await render.scrollIntoViewIfNeeded();
   await render.hover();
-  await render.getByRole('button', { name: 'Open Fork Menu' }).click();
 
   const [response] = await Promise.all([
     page.waitForResponse(
@@ -635,7 +635,7 @@ async function clickForkVisibleMessages(
         res.status() === 200,
       { timeout: 30000 },
     ),
-    page.getByRole('button', { name: 'Visible messages only', exact: true }).click(),
+    render.getByTestId('fork-button').click(),
   ]);
 
   return (await response.json()) as ForkResponse;

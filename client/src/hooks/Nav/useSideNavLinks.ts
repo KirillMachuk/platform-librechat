@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useRecoilValue } from 'recoil';
 import { MCPIcon, AttachmentIcon, OpenAIMinimalIcon } from '@librechat/client';
 import { Bot, Folder, NotebookPen, ScrollText, SlidersHorizontal } from 'lucide-react';
 import {
@@ -22,9 +23,10 @@ import PanelSwitch from '~/components/SidePanel/Builder/PanelSwitch';
 import Parameters from '~/components/SidePanel/Parameters/Panel';
 import FilesPanel from '~/components/SidePanel/Files/Panel';
 import AgentsPanel from '~/components/Agents/AgentsPanel';
-import { ProjectsPanel } from '~/components/Projects';
 import { PromptsAccordion } from '~/components/Prompts';
+import { ProjectsPanel } from '~/components/Projects';
 import { SkillsAccordion } from '~/components/Skills';
+import store from '~/store';
 
 export default function useSideNavLinks({
   keyProvided,
@@ -62,6 +64,7 @@ export default function useSideNavLinks({
     permission: Permissions.CREATE,
   });
   const { availableMCPServers } = useMCPServerManager();
+  const showParametersPanel = useRecoilValue(store.showParametersPanel);
 
   const { agentsConfig } = useGetAgentsConfig({ endpointsConfig });
   const { skillsEnabled } = useAgentCapabilities(agentsConfig?.capabilities);
@@ -140,6 +143,7 @@ export default function useSideNavLinks({
 
     if (
       interfaceConfig.parameters === true &&
+      showParametersPanel &&
       isParamEndpoint(endpoint ?? '', endpointType ?? '') === true &&
       !isAgentsEndpoint(endpoint) &&
       keyProvided
@@ -176,6 +180,7 @@ export default function useSideNavLinks({
     hasAccessToSkills,
     skillsEnabled,
     interfaceConfig.parameters,
+    showParametersPanel,
     endpointType,
     availableMCPServers,
     hasAccessToUseMCPSettings,

@@ -95,6 +95,7 @@ const ChatForm = memo(function ChatForm({
   const [isEditingBadges, setIsEditingBadges] = useRecoilState(store.isEditingBadges);
   const [showStopButton, setShowStopButton] = useRecoilState(store.showStopButtonByIndex(index));
   const plusPopoverAtom = useMemo(() => store.showPlusPopoverFamily(index), [index]);
+  const plusPopoverFromButton = useRecoilValue(store.plusPopoverFromButtonFamily(index));
   const mentionPopoverAtom = useMemo(() => store.showMentionPopoverFamily(index), [index]);
 
   const { requiresKey } = useRequiresKey();
@@ -274,6 +275,7 @@ const ChatForm = memo(function ChatForm({
             commandChar="+"
             placeholder="com_ui_add_model_preset"
             includeAssistants={false}
+            adoptComposerText={!plusPopoverFromButton}
           />
           <Mention
             index={index}

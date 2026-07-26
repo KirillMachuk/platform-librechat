@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useSetRecoilState, useRecoilValue } from 'recoil';
 import { PermissionTypes, Permissions, isAssistantsEndpoint } from 'librechat-data-provider';
 import useAgentCapabilities from '~/hooks/Agents/useAgentCapabilities';
+import { useLatestMessage } from '~/hooks/Messages/useLatestMessage';
 import useGetAgentsConfig from '~/hooks/Agents/useGetAgentsConfig';
 import useHasAccess from '~/hooks/Roles/useHasAccess';
-import { useLatestMessage } from '~/hooks/Messages/useLatestMessage';
 import store from '~/store';
 
 /** Event keys that shouldn't trigger a command */
@@ -74,6 +74,7 @@ const useHandleKeyUp = ({
   const endpoint = useRecoilValue(store.effectiveEndpointByIndex(index));
   const setShowMentionPopover = useSetRecoilState(store.showMentionPopoverFamily(index));
   const setShowPlusPopover = useSetRecoilState(store.showPlusPopoverFamily(index));
+  const setPlusFromButton = useSetRecoilState(store.plusPopoverFromButtonFamily(index));
   const setShowPromptsPopover = useSetRecoilState(store.showPromptsPopoverFamily(index));
   const setShowSkillsPopover = useSetRecoilState(store.showSkillsPopoverFamily(index));
 
@@ -100,9 +101,17 @@ const useHandleKeyUp = ({
       return;
     }
     if (shouldTriggerCommand(textAreaRef, '+')) {
+      setPlusFromButton(false);
       setShowPlusPopover(true);
     }
-  }, [textAreaRef, setShowPlusPopover, plusCommandEnabled, hasMultiConvoAccess, endpoint]);
+  }, [
+    textAreaRef,
+    setShowPlusPopover,
+    setPlusFromButton,
+    plusCommandEnabled,
+    hasMultiConvoAccess,
+    endpoint,
+  ]);
 
   const handlePromptsCommand = useCallback(() => {
     if (!hasPromptsAccess || !slashCommandEnabled) {
