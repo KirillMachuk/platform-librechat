@@ -28,7 +28,13 @@ jest.mock('@librechat/client', () => {
 
 const PopoverProbe = () => {
   const show = useRecoilValue(store.showPlusPopoverFamily(0));
-  return <span data-testid="popover-state">{String(show)}</span>;
+  const fromButton = useRecoilValue(store.plusPopoverFromButtonFamily(0));
+  return (
+    <>
+      <span data-testid="popover-state">{String(show)}</span>
+      <span data-testid="popover-from-button">{String(fromButton)}</span>
+    </>
+  );
 };
 
 const AddedConvoProbe = () => {
@@ -60,6 +66,8 @@ describe('AddMultiConvo', () => {
 
     expect(screen.getByTestId('popover-state')).toHaveTextContent('true');
     expect(screen.getByTestId('added-convo')).toHaveTextContent('none');
+    /** Marks the picker as button-opened so it leaves the composer draft alone. */
+    expect(screen.getByTestId('popover-from-button')).toHaveTextContent('true');
   });
 
   it('renders nothing without an endpoint', () => {

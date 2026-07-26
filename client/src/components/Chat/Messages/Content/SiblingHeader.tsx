@@ -6,6 +6,7 @@ import type { TMessage, Agent } from 'librechat-data-provider';
 import MessageTimestamp from '~/components/Chat/Messages/ui/MessageTimestamp';
 import { useBranchMessageMutation } from '~/data-provider/Messages';
 import MessageIcon from '~/components/Share/MessageIcon';
+import { useGetEndpointsQuery } from '~/data-provider';
 import { useAgentsMapContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -35,6 +36,7 @@ export default function SiblingHeader({
   isSubmitting,
 }: SiblingHeaderProps) {
   const agentsMap = useAgentsMapContext();
+  const { data: endpointsConfig } = useGetEndpointsQuery();
   const localize = useLocalize();
   const { showToast } = useToastContext();
 
@@ -79,8 +81,19 @@ export default function SiblingHeader({
       // Try to parse as ephemeral agent ID (endpoint__model___sender format)
       const parsed = parseEphemeralAgentId(agentId);
       if (parsed) {
+        /**
+         * The sender falls back to the endpoint's modelDisplayLabel, which is one
+         * shared string for every model it serves — so side-by-side answers would
+         * carry the same name, hiding the very thing being compared. Name the model
+         * in that case, and keep the sender when it says something per-model.
+         */
+        const endpointLabel = endpointsConfig?.[parsed.endpoint ?? '']?.modelDisplayLabel;
+        const senderIsEndpointLabel = parsed.sender != null && parsed.sender === endpointLabel;
         return {
-          displayName: parsed.sender || parsed.model || 'AI',
+          displayName:
+            (senderIsEndpointLabel ? parsed.model || parsed.sender : parsed.sender) ||
+            parsed.model ||
+            'AI',
           displayEndpoint: parsed.endpoint,
           displayModel: parsed.model,
           agent: undefined,
@@ -103,7 +116,7 @@ export default function SiblingHeader({
       displayModel: undefined,
       agent: undefined,
     };
-  }, [agentId, agentsMap]);
+  }, [agentId, agentsMap, endpointsConfig]);
 
   return (
     <div className="mb-2 flex items-center justify-between gap-2 border-b border-border-light pb-2">

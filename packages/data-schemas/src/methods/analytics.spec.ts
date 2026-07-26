@@ -355,13 +355,14 @@ describe('message feedback', () => {
   });
 
   test('a regenerated answer contributes its newest rating', async () => {
-    await rateAnswer('m1-old', 'm1', { rating: 'thumbsUp' }, new Date('2026-01-01T10:00:07.000Z'));
+    /** Inserted newest-first so a missing sort would return the stale rating. */
     await rateAnswer(
       'm1-new',
       'm1',
       { rating: 'thumbsDown', tag: 'inaccurate' },
       new Date('2026-01-01T10:00:09.000Z'),
     );
+    await rateAnswer('m1-old', 'm1', { rating: 'thumbsUp' }, new Date('2026-01-01T10:00:07.000Z'));
 
     const { rows } = await methods.exportInteractions({}, { limit: 100 });
 
@@ -387,17 +388,63 @@ describe('message feedback', () => {
   });
 
   test('ratings never cross a tenant boundary', async () => {
+    /** The prompt must live in the queried tenant, or the export returns nothing and
+     *  the assertion below would pass without testing anything. Written through the
+     *  driver: the tenant-isolation plugin strips tenantId from mongoose updates. */
+    await Message.collection.updateMany({ conversationId: 'c1' }, { $set: { tenantId: 'ours' } });
     await rateAnswer(
       'm1-other-tenant',
       'm1',
       { rating: 'thumbsDown', tag: 'inaccurate' },
       new Date('2026-01-01T10:00:07.000Z'),
     );
-    await Message.updateOne({ messageId: 'm1-other-tenant' }, { $set: { tenantId: 'other' } });
+    await Message.collection.updateOne(
+      { messageId: 'm1-other-tenant' },
+      { $set: { tenantId: 'other' } },
+    );
 
     const { rows } = await methods.exportInteractions({ tenantId: 'ours' }, { limit: 100 });
 
-    expect(rows.every((r) => r.feedback === undefined)).toBe(true);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].feedback).toBeUndefined();
+  });
+
+  test('a rating an employee sent as an array does not become a broken row', async () => {
+    await Message.collection.insertOne({
+      messageId: 'm1-junk',
+      parentMessageId: 'm1',
+      conversationId: 'c1',
+      user: aliceId,
+      isCreatedByUser: false,
+      text: 'ответ',
+      feedback: { rating: 'thumbsDown', tag: ['a;b'], text: { nested: true } },
+      createdAt: new Date('2026-01-01T10:00:07.000Z'),
+    });
+
+    const { rows } = await methods.exportInteractions({}, { limit: 100 });
+
+    expect(rows.find((r) => r.text === 'Составь договор аренды')?.feedback).toEqual({
+      rating: 'thumbsDown',
+      tag: undefined,
+      text: undefined,
+    });
+  });
+
+  test('an unrecognised rating value is dropped rather than surfaced', async () => {
+    await Message.collection.insertOne({
+      messageId: 'm1-bogus',
+      parentMessageId: 'm1',
+      conversationId: 'c1',
+      user: aliceId,
+      isCreatedByUser: false,
+      text: 'ответ',
+      feedback: { rating: 'bogus_rating' },
+      createdAt: new Date('2026-01-01T10:00:07.000Z'),
+    });
+
+    const { rows } = await methods.exportInteractions({}, { limit: 100 });
+
+    expect(rows.find((r) => r.text === 'Составь договор аренды')?.feedback).toBeUndefined();
   });
 });
 

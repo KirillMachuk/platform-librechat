@@ -262,6 +262,16 @@ const showPlusPopoverFamily = atomFamily<boolean, string | number | null>({
   default: false,
 });
 
+/**
+ * True when the model picker was opened from the header button rather than by typing
+ * `+`. Typing it means the composer holds a command the picker should take over; a
+ * button press means it holds the user's draft, which it must leave alone.
+ */
+const plusPopoverFromButtonFamily = atomFamily<boolean, string | number | null>({
+  key: 'plusPopoverFromButtonByIndex',
+  default: false,
+});
+
 const showPromptsPopoverFamily = atomFamily<boolean, string | number | null>({
   key: 'showPromptsPopoverByIndex',
   default: false,
@@ -446,6 +456,7 @@ export default {
   globalAudioPlayingFamily,
   globalAudioFetchingFamily,
   showPlusPopoverFamily,
+  plusPopoverFromButtonFamily,
   activePromptByIndex,
   useClearSubmissionState,
   showPromptsPopoverFamily,

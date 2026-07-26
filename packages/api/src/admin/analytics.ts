@@ -36,8 +36,9 @@ const EXPORT_HEADERS = [
  * `com_ui_feedback_tag_*`; a CSV is written server-side, where that machinery does
  * not exist, so the labels are repeated here in the language of the other headers.
  * An unknown key (a tag added later) is written through as-is rather than dropped.
+ * Null-prototype so a tag named `toString` misses instead of resolving to a function.
  */
-const FEEDBACK_TAG_LABELS: Record<string, string> = {
+const FEEDBACK_TAG_LABELS: Record<string, string> = Object.assign(Object.create(null), {
   accurate_reliable: 'Точный и надёжный',
   attention_to_detail: 'Внимание к деталям',
   bad_style: 'Плохой стиль или тон',
@@ -49,7 +50,7 @@ const FEEDBACK_TAG_LABELS: Record<string, string> = {
   not_matched: 'Не соответствовало запросу',
   other: 'Другое',
   unjustified_refusal: 'Отказ без объяснения причин',
-};
+});
 /**
  * Field delimiter. Semicolon (not comma) because Russian/European Excel and
  * macOS Numbers use `;` as the list separator in those locales — a comma-
@@ -153,7 +154,10 @@ function csvCell(value: string): string {
   return /["\n\r;]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
 }
 
-const RATING_LABELS: Record<string, string> = { thumbsUp: 'Хорошо', thumbsDown: 'Плохо' };
+const RATING_LABELS: Record<string, string> = Object.assign(Object.create(null), {
+  thumbsUp: 'Хорошо',
+  thumbsDown: 'Плохо',
+});
 
 /** Renders export rows as a UTF-8 CSV (BOM so Excel reads Cyrillic; CRLF line endings). */
 function buildCsv(rows: AnalyticsExportRow[]): string {

@@ -47,6 +47,30 @@ function resolveText(text?: string, content?: unknown[]): string {
 }
 
 /**
+ * Narrows a stored rating to the shape consumers may render.
+ *
+ * `Message.feedback` is written straight from the request body onto a `Mixed`
+ * subdocument, so `tag` and `text` can be any JSON an employee sends — an array
+ * there used to reach a CSV cell (and the admin panel) and throw. Anything that
+ * is not a string is dropped rather than passed on; an unrecognised `rating`
+ * drops the whole rating, since it is the field every consumer branches on.
+ */
+function normalizeFeedback(feedback: unknown): AnalyticsFeedback | undefined {
+  if (feedback == null || typeof feedback !== 'object') {
+    return undefined;
+  }
+  const { rating, tag, text } = feedback as Record<string, unknown>;
+  if (rating !== 'thumbsUp' && rating !== 'thumbsDown') {
+    return undefined;
+  }
+  return {
+    rating,
+    tag: typeof tag === 'string' ? tag : undefined,
+    text: typeof text === 'string' ? text : undefined,
+  };
+}
+
+/**
  * Resolves a human-readable model + (real) agent name from raw join fields.
  * The default 1ma chat wraps a model in an *ephemeral* agent whose id encodes
  * `endpoint__model___sender` — that is a model, not a real agent, so we surface
@@ -233,15 +257,18 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')): Ana
       filter.tenantId = tenantId;
     }
     const rated = await Message.find(filter)
-      .select('parentMessageId feedback -_id')
+      .select('parentMessageId feedback createdAt -_id')
+      /** Regenerating produces sibling answers, each ratable; oldest first so the
+       *  newest overwrites the rest below. Without it Mongo's order is arbitrary. */
+      .sort({ createdAt: 1 })
       .maxTimeMS(MAX_QUERY_MS)
       .lean<Pick<IMessage, 'parentMessageId' | 'feedback'>[]>();
 
     const byPrompt = new Map<string, AnalyticsFeedback>();
     for (const m of rated) {
-      /** Regenerating produces sibling answers; the newest rating wins. */
-      if (m.parentMessageId && m.feedback) {
-        byPrompt.set(m.parentMessageId, m.feedback as AnalyticsFeedback);
+      const feedback = normalizeFeedback(m.feedback);
+      if (m.parentMessageId && feedback) {
+        byPrompt.set(m.parentMessageId, feedback);
       }
     }
     return byPrompt;
@@ -617,7 +644,7 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')): Ana
       model: m.model ?? undefined,
       endpoint: m.endpoint,
       createdAt: m.createdAt,
-      feedback: (m.feedback as AnalyticsFeedback | undefined) ?? undefined,
+      feedback: normalizeFeedback(m.feedback),
     }));
 
     let userEmail: string | undefined;

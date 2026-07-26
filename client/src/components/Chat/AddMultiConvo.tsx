@@ -13,15 +13,18 @@ function AddMultiConvo() {
   const localize = useLocalize();
   const endpoint = useRecoilValue(store.conversationEndpointByIndex(ROOT_INDEX));
   const setShowPlusPopover = useSetRecoilState(store.showPlusPopoverFamily(ROOT_INDEX));
+  const setOpenedFromButton = useSetRecoilState(store.plusPopoverFromButtonFamily(ROOT_INDEX));
 
   /**
    * Opens the same picker the `+` command opens, rather than cloning the current
    * model: a second answer from the identical model is rarely what's wanted, and
-   * the `+` command was the only way to choose — undiscoverable.
+   * the `+` command was the only way to choose — undiscoverable. The flag keeps the
+   * picker from swallowing a draft that happens to start with `+`.
    */
   const clickHandler = useCallback(() => {
+    setOpenedFromButton(true);
     setShowPlusPopover(true);
-  }, [setShowPlusPopover]);
+  }, [setShowPlusPopover, setOpenedFromButton]);
 
   if (!endpoint) {
     return null;

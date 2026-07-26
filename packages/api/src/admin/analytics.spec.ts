@@ -433,6 +433,33 @@ describe('createAdminAnalyticsHandlers', () => {
       expect(send.mock.calls[0][0] as string).toContain('Хорошо;tag_added_later');
     });
 
+    it('does not resolve a tag named after an Object prototype member', async () => {
+      const exportInteractions = jest.fn().mockResolvedValue({
+        rows: [
+          {
+            createdAt: new Date('2026-03-15T00:00:00.000Z'),
+            userId: 'u1',
+            userEmail: 'alice@x.io',
+            userName: 'Alice',
+            model: 'gpt-x',
+            text: 'запрос',
+            feedback: { rating: 'thumbsUp', tag: 'toString' },
+          },
+        ],
+        truncated: false,
+      });
+      const deps = createDeps({ exportInteractions });
+      const handlers = createAdminAnalyticsHandlers(deps);
+      const { req, res, send, status } = createReqRes();
+
+      await handlers.export(req, res);
+
+      expect(status).toHaveBeenCalledWith(200);
+      const csv = send.mock.calls[0][0] as string;
+      expect(csv).toContain('Хорошо;toString');
+      expect(csv).not.toContain('native code');
+    });
+
     it('neutralizes spreadsheet formula injection in employee-controlled cells', async () => {
       const exportInteractions = jest.fn().mockResolvedValue({
         rows: [

@@ -74,6 +74,7 @@ const useHandleKeyUp = ({
   const endpoint = useRecoilValue(store.effectiveEndpointByIndex(index));
   const setShowMentionPopover = useSetRecoilState(store.showMentionPopoverFamily(index));
   const setShowPlusPopover = useSetRecoilState(store.showPlusPopoverFamily(index));
+  const setPlusFromButton = useSetRecoilState(store.plusPopoverFromButtonFamily(index));
   const setShowPromptsPopover = useSetRecoilState(store.showPromptsPopoverFamily(index));
   const setShowSkillsPopover = useSetRecoilState(store.showSkillsPopoverFamily(index));
 
@@ -100,9 +101,17 @@ const useHandleKeyUp = ({
       return;
     }
     if (shouldTriggerCommand(textAreaRef, '+')) {
+      setPlusFromButton(false);
       setShowPlusPopover(true);
     }
-  }, [textAreaRef, setShowPlusPopover, plusCommandEnabled, hasMultiConvoAccess, endpoint]);
+  }, [
+    textAreaRef,
+    setShowPlusPopover,
+    setPlusFromButton,
+    plusCommandEnabled,
+    hasMultiConvoAccess,
+    endpoint,
+  ]);
 
   const handlePromptsCommand = useCallback(() => {
     if (!hasPromptsAccess || !slashCommandEnabled) {

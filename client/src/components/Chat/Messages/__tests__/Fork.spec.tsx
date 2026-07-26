@@ -7,6 +7,7 @@ import Fork from '../Fork';
 const mockMutate = jest.fn();
 const mockNavigateToConvo = jest.fn();
 const mockShowToast = jest.fn();
+let mockIsLoading = false;
 let mutationHandlers: {
   onSuccess?: (data: { conversation: { conversationId: string } }) => void;
   onError?: (error: unknown) => void;
@@ -15,7 +16,7 @@ let mutationHandlers: {
 jest.mock('~/data-provider', () => ({
   useForkConvoMutation: (handlers: typeof mutationHandlers) => {
     mutationHandlers = handlers;
-    return { mutate: mockMutate };
+    return { mutate: mockMutate, isLoading: mockIsLoading };
   },
 }));
 
@@ -38,6 +39,7 @@ const defaultProps = {
 describe('Fork button', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsLoading = false;
   });
 
   it('forks the visible thread up to this message in one click, without a popover', async () => {
@@ -55,6 +57,16 @@ describe('Fork button', () => {
     });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('ignores a second click while the first fork is still running', async () => {
+    mockIsLoading = true;
+
+    render(<Fork {...defaultProps} />);
+    await userEvent.click(screen.getByTestId('fork-button'));
+
+    /** Otherwise a double click leaves two identical copies of the conversation. */
+    expect(mockMutate).not.toHaveBeenCalled();
   });
 
   it('navigates to the new conversation and confirms it', () => {

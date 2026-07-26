@@ -80,6 +80,9 @@ export default function Fork({
   return (
     <button
       className={buttonStyle}
+      /** A second click while the first is in flight forks the conversation twice,
+       *  leaving a duplicate copy behind — cheap to hit now that one click forks. */
+      disabled={forkConvo.isLoading}
       onClick={() =>
         forkConvo.mutate({
           messageId,

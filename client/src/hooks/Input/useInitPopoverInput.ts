@@ -1,18 +1,27 @@
 import { useCallback } from 'react';
 
-/** Creates a callback ref that focuses the popover input, transfers the command text as a search prefix, and clears the textarea. */
+/**
+ * Creates a callback ref that focuses the popover input, transfers the command text as
+ * a search prefix, and clears the textarea.
+ *
+ * `adoptComposerText` is false when the popover was opened by a button rather than by
+ * typing the command: the composer then holds the user's draft, and taking it over
+ * would silently empty their message.
+ */
 const useInitPopoverInput = ({
   inputRef,
   textAreaRef,
   commandChar,
   setSearchValue,
   setOpen,
+  adoptComposerText = true,
 }: {
   inputRef: React.MutableRefObject<HTMLInputElement | null>;
   textAreaRef: React.MutableRefObject<HTMLTextAreaElement | null>;
   commandChar: string;
   setSearchValue: (value: string) => void;
   setOpen: (value: boolean) => void;
+  adoptComposerText?: boolean;
 }) =>
   useCallback(
     (node: HTMLInputElement | null) => {
@@ -23,7 +32,7 @@ const useInitPopoverInput = ({
       node.focus();
       setOpen(true);
       const textarea = textAreaRef.current;
-      if (!textarea) {
+      if (!textarea || !adoptComposerText) {
         return;
       }
       const text = textarea.value;
@@ -36,7 +45,7 @@ const useInitPopoverInput = ({
         textarea.dispatchEvent(new Event('input', { bubbles: true }));
       }
     },
-    [inputRef, textAreaRef, commandChar, setSearchValue, setOpen],
+    [inputRef, textAreaRef, commandChar, setSearchValue, setOpen, adoptComposerText],
   );
 
 export default useInitPopoverInput;
