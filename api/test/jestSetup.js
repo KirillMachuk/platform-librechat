@@ -27,8 +27,11 @@ process.env.BAN_VIOLATIONS = 'true';
 process.env.BAN_DURATION = '7200000';
 process.env.BAN_INTERVAL = '20';
 process.env.CI = 'true';
-process.env.JWT_SECRET = 'test';
-process.env.JWT_REFRESH_SECRET = 'test';
+// 64-hex dummies: the server startup guard refuses JWT secrets shorter than
+// 32 chars (process.exit(1)), which crashed every suite that boots the real
+// server (index.metrics.spec) as a jest-worker "child process exception".
+process.env.JWT_SECRET = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+process.env.JWT_REFRESH_SECRET = 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
 process.env.CREDS_KEY = 'test';
 process.env.CREDS_IV = 'test';
 process.env.ALLOW_EMAIL_LOGIN = 'true';

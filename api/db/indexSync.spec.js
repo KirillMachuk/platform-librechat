@@ -140,8 +140,8 @@ describe('performSync() - syncThreshold logic', () => {
     const indexSync = require('./indexSync');
     await indexSync();
 
-    // Assert: No countDocuments calls
-    expect(Message.countDocuments).not.toHaveBeenCalled();
+    // Assert: no decision-driven counts — Message.countDocuments belongs to the
+    // index-coverage probe (observability, 2026-06); Conversation stays untouched.
     expect(Conversation.countDocuments).not.toHaveBeenCalled();
 
     // Assert: Message sync triggered because 1050 > 1000
@@ -154,6 +154,30 @@ describe('performSync() - syncThreshold logic', () => {
     );
 
     // Assert: Conversation sync NOT triggered (already complete)
+    expect(Conversation.syncWithMeili).not.toHaveBeenCalled();
+  });
+
+  test('coverage probe counts messages for observability without affecting sync decisions', async () => {
+    Message.getSyncProgress.mockResolvedValue({
+      totalProcessed: 100,
+      totalDocuments: 100,
+      isComplete: true,
+    });
+    Conversation.getSyncProgress.mockResolvedValue({
+      totalProcessed: 50,
+      totalDocuments: 50,
+      isComplete: true,
+    });
+    Message.countDocuments.mockResolvedValue(0);
+
+    const indexSync = require('./indexSync');
+    await indexSync();
+
+    // The probe fires its Message counts even when everything is synced…
+    expect(Message.countDocuments).toHaveBeenCalled();
+    // …but never touches Conversation counts and never triggers a sync.
+    expect(Conversation.countDocuments).not.toHaveBeenCalled();
+    expect(Message.syncWithMeili).not.toHaveBeenCalled();
     expect(Conversation.syncWithMeili).not.toHaveBeenCalled();
   });
 
@@ -177,8 +201,8 @@ describe('performSync() - syncThreshold logic', () => {
     const indexSync = require('./indexSync');
     await indexSync();
 
-    // Assert: No countDocuments calls
-    expect(Message.countDocuments).not.toHaveBeenCalled();
+    // Assert: no decision-driven counts — Message.countDocuments belongs to the
+    // index-coverage probe (observability, 2026-06); Conversation stays untouched.
     expect(Conversation.countDocuments).not.toHaveBeenCalled();
 
     // Assert: Message sync NOT triggered because 50 < 1000
@@ -214,8 +238,8 @@ describe('performSync() - syncThreshold logic', () => {
     const indexSync = require('./indexSync');
     await indexSync();
 
-    // Assert: No countDocuments calls
-    expect(Message.countDocuments).not.toHaveBeenCalled();
+    // Assert: no decision-driven counts — Message.countDocuments belongs to the
+    // index-coverage probe (observability, 2026-06); Conversation stays untouched.
 
     // Assert: Message sync NOT triggered because 1000 is NOT > 1000
     expect(Message.syncWithMeili).not.toHaveBeenCalled();
@@ -249,8 +273,8 @@ describe('performSync() - syncThreshold logic', () => {
     const indexSync = require('./indexSync');
     await indexSync();
 
-    // Assert: No countDocuments calls
-    expect(Message.countDocuments).not.toHaveBeenCalled();
+    // Assert: no decision-driven counts — Message.countDocuments belongs to the
+    // index-coverage probe (observability, 2026-06); Conversation stays untouched.
 
     // Assert: Message sync triggered because 1001 > 1000
     expect(Message.syncWithMeili).toHaveBeenCalledTimes(1);
@@ -284,8 +308,8 @@ describe('performSync() - syncThreshold logic', () => {
     const indexSync = require('./indexSync');
     await indexSync();
 
-    // Assert: No countDocuments calls (the optimization)
-    expect(Message.countDocuments).not.toHaveBeenCalled();
+    // Assert: no decision-driven counts — Message.countDocuments belongs to the
+    // index-coverage probe (observability, 2026-06); Conversation stays untouched.
     expect(Conversation.countDocuments).not.toHaveBeenCalled();
 
     // Assert: Only conversation sync triggered
@@ -317,8 +341,8 @@ describe('performSync() - syncThreshold logic', () => {
     const indexSync = require('./indexSync');
     await indexSync();
 
-    // Assert: No countDocuments calls
-    expect(Message.countDocuments).not.toHaveBeenCalled();
+    // Assert: no decision-driven counts — Message.countDocuments belongs to the
+    // index-coverage probe (observability, 2026-06); Conversation stays untouched.
     expect(Conversation.countDocuments).not.toHaveBeenCalled();
 
     // Assert: No sync triggered

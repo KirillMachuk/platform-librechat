@@ -81,10 +81,15 @@ describe('getPreliminaryUserMessage (DR turn shape)', () => {
 describe('shouldRunNewDeepResearch — routing + RBAC', () => {
   const ROUTE = { userId: 'u1', conversationId: 'c1', parentMessageId: 'p1' };
 
-  /** Controls only the role document the real `checkAccess` reads. */
+  /** Controls only the role document the real `checkAccess` reads.
+   *  canUseDeepResearch requires BOTH WEB_SEARCH.USE and DEEP_RESEARCH.USE,
+   *  so the helper grants/denies them together. */
   const setWebSearchPermission = (allowed) =>
     mockGetRoleByName.mockResolvedValue({
-      permissions: { [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: allowed } },
+      permissions: {
+        [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: allowed },
+        [PermissionTypes.DEEP_RESEARCH]: { [Permissions.USE]: allowed },
+      },
     });
 
   const makeReq = ({ badge = true, useNewEngine = true } = {}) => ({
