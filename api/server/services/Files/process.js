@@ -854,6 +854,35 @@ const resolveLargeDocRouting = async ({ req, file, toolResource, isImage }) => {
 };
 
 /**
+ * Extracted-text twin of {@link resolveContentRouting} for formats that have no
+ * pre-parse probe (DOCX/XLSX/ODS via the parser branch, plain text via /text).
+ * Their character count is only known AFTER parsing, so the size check must run
+ * at that point — the byte checks alone let an 82 KB DOCX with 830k characters
+ * inline whole (~200k prompt tokens on every question, prod 26.07). Same flag,
+ * threshold, and capability gates as the PDF probe. Returns the tool resource
+ * to continue with; on reroute the caller falls through to the RAG pipeline,
+ * mirroring the saturated-scan degrade path.
+ * @param {{ req: ServerRequest, toolResource: string, textChars: number, filename: string }} params
+ * @returns {Promise<string>}
+ */
+const resolveExtractedTextRouting = async ({ req, toolResource, textChars, filename }) => {
+  if (toolResource !== EToolResources.context || !isContentRoutingEnabled()) {
+    return toolResource;
+  }
+  const { maxContextChars } = readDocRoutingThresholds();
+  if (textChars <= maxContextChars) {
+    return toolResource;
+  }
+  if (!(await checkCapability(req, AgentCapabilities.file_search))) {
+    return toolResource;
+  }
+  logger.info(
+    `[processAgentFileUpload] content-routed "${filename}" (${textChars} chars > ${maxContextChars}) from full-text to file_search (RAG)`,
+  );
+  return EToolResources.file_search;
+};
+
+/**
  * Content-based variant of {@link resolveLargeDocRouting}: routes a PDF to
  * full-text `context` vs `file_search` by its extracted-text size (digital) or
  * page count (scanned) rather than its byte size — a scan is heavy in bytes
@@ -1241,30 +1270,42 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
       const ocrResult = await resolveDocumentText();
       if (ocrResult) {
         const { text, bytes } = ocrResult;
-        return await createTextFile({ text, bytes });
-      }
-      /* A saturated scan lane means "another OCR is running", not "this document is unreadable"
-       * — rejecting the upload would lose a perfectly good scan because of someone else's job.
-       * Degrade the route instead: file_search below stores the file and leaves it to the async
-       * embed worker, which is built for exactly this (it queues, retries with backoff, and
-       * doc-gateway OCRs it whenever the lane frees up). The document arrives searchable with
-       * its full text a few minutes later instead of not arriving at all.
-       *
-       * Only when file_search is actually available — with the capability off there is nowhere
-       * to degrade to, so the honest "busy, retry" error is all we can offer. */
-      const canDeferToSearch =
-        parserSaturated && (await checkCapability(req, AgentCapabilities.file_search));
-      if (!canDeferToSearch) {
-        throw new Error(
-          parserSaturated
-            ? `The document parser is busy processing another scan and could not get to "${file.originalname}" in time. Please upload it again in a few minutes.`
-            : `Unable to extract text from "${file.originalname}". The document may be image-based and requires an OCR service to process.`,
+        tool_resource = await resolveExtractedTextRouting({
+          req,
+          toolResource: tool_resource,
+          textChars: text?.length ?? 0,
+          filename: file.originalname,
+        });
+        if (tool_resource === EToolResources.context) {
+          return await createTextFile({ text, bytes });
+        }
+        /* Over-threshold text: fall through to the RAG pipeline below, like the
+         * saturated-scan degrade. The extracted text is not lost — doc-gateway
+         * serves /embed and the worker's fullText from its content-hash cache. */
+      } else {
+        /* A saturated scan lane means "another OCR is running", not "this document is unreadable"
+         * — rejecting the upload would lose a perfectly good scan because of someone else's job.
+         * Degrade the route instead: file_search below stores the file and leaves it to the async
+         * embed worker, which is built for exactly this (it queues, retries with backoff, and
+         * doc-gateway OCRs it whenever the lane frees up). The document arrives searchable with
+         * its full text a few minutes later instead of not arriving at all.
+         *
+         * Only when file_search is actually available — with the capability off there is nowhere
+         * to degrade to, so the honest "busy, retry" error is all we can offer. */
+        const canDeferToSearch =
+          parserSaturated && (await checkCapability(req, AgentCapabilities.file_search));
+        if (!canDeferToSearch) {
+          throw new Error(
+            parserSaturated
+              ? `The document parser is busy processing another scan and could not get to "${file.originalname}" in time. Please upload it again in a few minutes.`
+              : `Unable to extract text from "${file.originalname}". The document may be image-based and requires an OCR service to process.`,
+          );
+        }
+        logger.info(
+          `[processAgentFileUpload] scan lane saturated for "${file.originalname}"; deferring to file_search so the embed worker parses it in the background`,
         );
+        tool_resource = EToolResources.file_search;
       }
-      logger.info(
-        `[processAgentFileUpload] scan lane saturated for "${file.originalname}"; deferring to file_search so the embed worker parses it in the background`,
-      );
-      tool_resource = EToolResources.file_search;
     }
 
     /* Skipped when the OCR branch above degraded the route to file_search — execution then falls
@@ -1306,7 +1347,16 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         parsedText = await parseTextNative(file);
       }
       const { text, bytes } = parsedText;
-      return await createTextFile({ text, bytes, type: file.mimetype });
+      tool_resource = await resolveExtractedTextRouting({
+        req,
+        toolResource: tool_resource,
+        textChars: text?.length ?? 0,
+        filename: file.originalname,
+      });
+      if (tool_resource === EToolResources.context) {
+        return await createTextFile({ text, bytes, type: file.mimetype });
+      }
+      /* Over-threshold plain text: fall through to the RAG pipeline below. */
     }
   }
 
@@ -1999,6 +2049,7 @@ module.exports = {
   processProjectFileUpload,
   retrieveAndProcessFile,
   resolveLargeDocRouting,
+  resolveExtractedTextRouting,
   resolveContentRouting,
   resolveUploadPrivacy,
 };
