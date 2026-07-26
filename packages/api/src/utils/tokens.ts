@@ -61,6 +61,8 @@ const openAIModels = {
   'gpt-5.4-nano': 400000,
   'gpt-5.5': 1050000,
   'gpt-5.5-pro': 1050000,
+  'gpt-5.6': 1050000,
+  'gpt-5.6-pro': 1050000,
   'chat-latest': 400000,
   'gpt-5-mini': 400000,
   'gpt-5-nano': 400000,
@@ -156,6 +158,7 @@ const anthropicModels = {
   'claude-sonnet-4': 200000,
   'claude-sonnet-4-5': 200000,
   'claude-sonnet-4-6': 1000000,
+  'claude-sonnet-5': 1000000,
   'claude-opus-4-6': 1000000,
   'claude-opus-4-7': 1000000,
   'claude-opus-4-8': 1000000,
@@ -343,6 +346,24 @@ const xAIModels = {
   'grok-4-1-fast': 2000000, // 2M context (covers reasoning & non-reasoning variants)
 };
 
+/**
+ * Context-window twin of {@link openRouterMaxOutputs}. OpenRouter (custom endpoint) serves
+ * `vendor/model` ids that use dots (`anthropic/claude-sonnet-4.6`), while the built-in maps
+ * are dash-keyed, so `findMatchingPattern` falls back to a shorter, older key —
+ * `claude-sonnet-4.6` matched `claude-sonnet-4` and resolved 200k instead of 1M. Only the
+ * output side had dot aliases, so context stayed silently wrong; these keys close that gap.
+ * Values mirror the dash-keyed entries above — keep the two in sync when adding a model.
+ */
+const openRouterMaxTokens = {
+  'claude-haiku-4.5': 200000,
+  'claude-sonnet-4.5': 200000,
+  'claude-sonnet-4.6': 1000000,
+  'claude-opus-4.5': 200000,
+  'claude-opus-4.6': 1000000,
+  'claude-opus-4.7': 1000000,
+  'claude-opus-4.8': 1000000,
+};
+
 const aggregateModels = {
   // GLM models (Zhipu AI)
   glm4: 128000,
@@ -362,6 +383,8 @@ const aggregateModels = {
   ...xAIModels,
   ...googleModels,
   ...bedrockModels,
+  // Dot-format aliases for OpenRouter ids; keys are unique, so spread order is not load-bearing
+  ...openRouterMaxTokens,
   // OpenAI last — reverse iteration checks last-spread keys first for same-length ties
   ...openAIModels,
 };
@@ -408,6 +431,7 @@ const anthropicMaxOutputs = {
   'claude-haiku-4-5': 64000,
   'claude-sonnet-4': 64000,
   'claude-sonnet-4-6': 64000,
+  'claude-sonnet-5': 128000,
   'claude-opus-4': 32000,
   'claude-opus-4-5': 64000,
   'claude-opus-4-6': 128000,
@@ -444,6 +468,7 @@ const openRouterMaxOutputs = {
   'claude-opus-4.5': 64000,
   'claude-opus-4.6': 128000,
   'claude-opus-4.7': 128000,
+  'claude-opus-4.8': 128000,
   'gemini-2.5-flash': 65536,
   'gemini-2.5-pro': 65536,
 };
