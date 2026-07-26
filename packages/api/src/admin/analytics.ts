@@ -153,6 +153,8 @@ function csvCell(value: string): string {
   return /["\n\r;]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
 }
 
+const RATING_LABELS: Record<string, string> = { thumbsUp: 'Хорошо', thumbsDown: 'Плохо' };
+
 /** Renders export rows as a UTF-8 CSV (BOM so Excel reads Cyrillic; CRLF line endings). */
 function buildCsv(rows: AnalyticsExportRow[]): string {
   const lines = [EXPORT_HEADERS.join(CSV_DELIMITER)];
@@ -167,7 +169,7 @@ function buildCsv(rows: AnalyticsExportRow[]): string {
         r.userEmail ?? '',
         modelAgent,
         r.text ?? '',
-        rating == null ? '' : rating === 'thumbsUp' ? 'Хорошо' : 'Плохо',
+        rating == null ? '' : (RATING_LABELS[rating] ?? rating),
         tag == null ? '' : (FEEDBACK_TAG_LABELS[tag] ?? tag),
         r.feedback?.text ?? '',
       ]

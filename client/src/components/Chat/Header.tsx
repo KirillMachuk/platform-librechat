@@ -83,9 +83,9 @@ function Header() {
             >
               {projectBadge}
               <ModelSelector startupConfig={startupConfig} />
-              {interfaceConfig.presets === true && interfaceConfig.modelSelect && showPresetsMenu && (
-                <PresetsMenu />
-              )}
+              {interfaceConfig.presets === true &&
+                interfaceConfig.modelSelect &&
+                showPresetsMenu && <PresetsMenu />}
               {hasAccessToBookmarks === true && showBookmarksMenu && <BookmarkMenu />}
               {hasAccessToMultiConvo === true && <AddMultiConvo />}
               {isSmallScreen && (
