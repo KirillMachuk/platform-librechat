@@ -219,3 +219,87 @@ describe('createFileSearchTool — RAG query-path hardening (D4/D5/D16)', () => 
     expect(msg.content).toMatch(/No content found/i);
   });
 });
+
+describe('createFileSearchTool — entity_id scoping (upstream #13693 adapted)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.RAG_API_URL = 'http://rag.internal:8000';
+    axios.post.mockResolvedValue(RAG_RESULT);
+  });
+
+  const queryBody = () => axios.post.mock.calls[0][1];
+
+  it('user message attachment (fromAgent=false, no own entity): the agent entity_id fallback is suppressed', async () => {
+    const searchTool = await createFileSearchTool({
+      userId: 'u1',
+      files: [{ file_id: 'f-usr', filename: 'договор.pdf', fromAgent: false }],
+      entity_id: 'agent-1',
+    });
+    await invoke(searchTool);
+    expect(queryBody()).not.toHaveProperty('entity_id');
+  });
+
+  it('agent KB file without embedEntityId (legacy record): keeps the agent entity_id fallback', async () => {
+    const searchTool = await createFileSearchTool({
+      userId: 'u1',
+      files: [{ file_id: 'f-kb', filename: 'kb.pdf', fromAgent: true }],
+      entity_id: 'agent-1',
+    });
+    await invoke(searchTool);
+    expect(queryBody().entity_id).toBe('agent-1');
+  });
+
+  it('per-file entity_id (project source) wins regardless of the flag', async () => {
+    const searchTool = await createFileSearchTool({
+      userId: 'u1',
+      files: [{ file_id: 'f-prj', filename: 'src.pdf', entity_id: 'proj-1', fromAgent: false }],
+      entity_id: 'agent-1',
+    });
+    await invoke(searchTool);
+    expect(queryBody().entity_id).toBe('proj-1');
+  });
+
+  it('files passed without the flag (DR rebuild path) keep the legacy fallback', async () => {
+    const searchTool = await createFileSearchTool({
+      userId: 'u1',
+      files: [{ file_id: 'f-dr', filename: 'dr.pdf' }],
+      entity_id: 'agent-1',
+    });
+    await invoke(searchTool);
+    expect(queryBody().entity_id).toBe('agent-1');
+  });
+});
+
+describe('primeFiles — fromAgent flag for entity scoping', () => {
+  const { getFiles } = require('~/models');
+  const { filterFilesByAgentAccess } = require('~/server/services/Files/permissions');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    filterFilesByAgentAccess.mockImplementation(({ files }) => Promise.resolve(files));
+  });
+
+  it('marks agent KB files fromAgent=true and user attachments fromAgent=false', async () => {
+    getFiles.mockResolvedValue([{ file_id: 'f-kb', filename: 'kb.pdf', embedEntityId: 'agent-1' }]);
+    const { primeFiles } = require('./fileSearch');
+
+    // Message attachments arrive as pre-loaded objects in tool_resources.files,
+    // not via the agent file_ids lookup — mirror that flow.
+    const { files } = await primeFiles({
+      req: { user: { id: 'u1', role: 'USER' } },
+      agentId: 'agent-1',
+      tool_resources: {
+        file_search: {
+          file_ids: ['f-kb'],
+          files: [{ file_id: 'f-usr', filename: 'договор.pdf' }],
+        },
+      },
+    });
+
+    expect(files).toEqual([
+      expect.objectContaining({ file_id: 'f-kb', entity_id: 'agent-1', fromAgent: true }),
+      expect.objectContaining({ file_id: 'f-usr', fromAgent: false }),
+    ]);
+    expect(files[1].entity_id).toBeUndefined();
+  });
+});
