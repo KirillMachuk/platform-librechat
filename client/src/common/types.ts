@@ -557,6 +557,8 @@ export type MentionOption = OptionWithIcon & {
   type: string;
   value: string;
   description?: string;
+  /** Full model id for `type: 'model'`, whose label is shortened for display. */
+  modelId?: string;
 };
 export type PromptOption = MentionOption & {
   id: string;
