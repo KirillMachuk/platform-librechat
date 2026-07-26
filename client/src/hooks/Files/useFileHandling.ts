@@ -18,13 +18,13 @@ import type { EModelEndpoint, TEndpointsConfig, TError } from 'librechat-data-pr
 import type { TConversation } from 'librechat-data-provider';
 import type { ExtendedFile, FileSetter } from '~/common';
 import { logger, validateFiles, cachePreview, getCachedPreview, removePreviewEntry } from '~/utils';
+import store, { ephemeralAgentByConvoId, fileModeByConvoId } from '~/store';
 import { useGetFileConfig, useUploadFileMutation } from '~/data-provider';
+import { resolveFileToolResource, type FileMode } from '~/utils/fileMode';
 import useLocalize, { TranslationKeys } from '~/hooks/useLocalize';
 import { useDelayedUploadToast } from './useDelayedUploadToast';
-import { resolveFileToolResource, type FileMode } from '~/utils/fileMode';
 import { processFileForUpload } from '~/utils/heicConverter';
 import { useChatContext } from '~/Providers/ChatContext';
-import store, { ephemeralAgentByConvoId, fileModeByConvoId } from '~/store';
 import useClientResize from './useClientResize';
 import useUpdateFiles from './useUpdateFiles';
 

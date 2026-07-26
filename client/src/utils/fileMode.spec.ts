@@ -1,5 +1,5 @@
-import { autoModeDisplayFromFile, resolveFileToolResource } from './fileMode';
 import { EToolResources } from 'librechat-data-provider';
+import { autoModeDisplayFromFile, resolveFileToolResource } from './fileMode';
 
 describe('autoModeDisplayFromFile', () => {
   it('returns null while the file is still uploading', () => {
