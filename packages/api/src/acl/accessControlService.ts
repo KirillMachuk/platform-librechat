@@ -159,7 +159,7 @@ export class AccessControlService {
     role,
   }: {
     userId: string | Types.ObjectId;
-    role?: string;
+    role?: string | null;
   }): Promise<ResolvedPrincipal[]> {
     return await this._dbMethods.getUserPrincipals({ userId, role });
   }
@@ -347,7 +347,7 @@ export class AccessControlService {
     requiredPermission,
   }: {
     userId: string;
-    role?: string;
+    role?: string | null;
     resourceType: ResourceType;
     resourceId: string | Types.ObjectId;
     requiredPermission: number;

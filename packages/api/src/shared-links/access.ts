@@ -1,8 +1,8 @@
-import { getTenantId, runAsSystem, tenantStorage } from '@librechat/data-schemas';
 import { ResourceType, PermissionBits } from 'librechat-data-provider';
+import { getTenantId, runAsSystem, tenantStorage } from '@librechat/data-schemas';
 import type { Request, Response, NextFunction } from 'express';
-import type { Types, Model } from 'mongoose';
 import type { IUser } from '@librechat/data-schemas';
+import type { Types, Model } from 'mongoose';
 import { AccessControlService } from '~/acl/accessControlService';
 import { autoMigrateLegacyLink } from './service';
 import { isEnabled } from '~/utils';
@@ -119,7 +119,12 @@ export function createSharedLinkAccessMiddleware(deps: SharedLinkAccessDeps) {
 
       const hasAccess = await aclService.checkPermission({
         userId,
-        role: user.role,
+        // Trust the viewer's role only for a same-tenant view (upstream #14137):
+        // the ACL check below runs under the SHARE's tenant, so a role name from
+        // another tenant must not resolve to that tenant's ROLE principal.
+        // null suppresses the ROLE principal without triggering the DB role
+        // lookup that undefined would.
+        role: rawShare.tenantId === user.tenantId ? user.role : null,
         resourceType: ResourceType.SHARED_LINK,
         resourceId,
         requiredPermission: PermissionBits.VIEW,
