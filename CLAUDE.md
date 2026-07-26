@@ -44,7 +44,7 @@ Upstream remote: `upstream` → `https://github.com/danny-avila/LibreChat.git`
 - **Two-tab Model Selector** — Agents | LLM picker with `defaultModel`/`defaultAgentId` config
 - **Search Chats popup** — centered search dialog replacing inline SearchBar
 - **Inter Variable font** — with Cyrillic + OpenType features
-- **Railway deploy** — Docker entrypoint with volume permission fix
+- **Docker entrypoint volume-permission fix** — originally for Railway (now retired), still used on the qsr box
 
 ---
 
@@ -197,44 +197,58 @@ Multi-line imports count total character length across all lines. Consolidate va
 
 ---
 
-## Deployment Pipeline (1ma Lab)
+## Deployment (single stand: qsr)
 
-Production URL: **https://lab.1ma.ai**
+Production URL: **https://qsr.1ma.ai** — one VPS at a local hoster (`ssh qsr`), being handed
+over to the client starting August 2026. Treat every deploy as touching a client system.
 
-### How it works
+> **History & near future, so you don't repeat past agents' mistakes:** the Railway
+> project is retired and the `lab.1ma.ai` stand is **temporarily switched off**
+> (July 2026, see `HOSTER_MIGRATION_Plan.md`) — the team pays for one stand while qsr
+> serves the client. After qsr is handed over (August 2026), lab.1ma.ai is planned to
+> come back as the internal test stand. Until that happens there is **no test stand and
+> no auto-deploy anywhere** — do not describe merges as "deploying to the lab".
+> `*.railway.internal` hostnames still present in `1ma-lab/librechat.yaml` are legacy
+> names, NOT live Railway services — `1ma-lab/deploy/scripts/render-config.sh` rewrites
+> `<service>.railway.internal` → `<service>` (plain Docker network names) at deploy time.
+
+### How a change reaches prod
 
 ```
-push to platform-librechat/main
-  → GitHub Actions (.github/workflows/docker-image.yml)
-      → builds Docker image
-      → pushes to ghcr.io/kirillmachuk/platform-librechat:main
-      → calls Railway GraphQL API → triggers redeploy of service "1ma-lab"
-          → Railway pulls fresh ghcr.io image → deploys
+merge PR to platform-librechat/main
+  → .github/workflows/docker-image.yml builds & pushes
+    ghcr.io/kirillmachuk/platform-librechat:sha-<short-sha>   (~4 min, push to main only)
+  → bump the FROM pin in 1ma-lab/Dockerfile to the new sha- tag → merge that PR
+  → ssh qsr 'cd /opt/1ma/1ma-lab/deploy && ./scripts/update.sh'
 ```
+
+- **Merging to `main` does NOT deploy anything by itself.** It only publishes an image.
+  The `FROM` pin in `1ma-lab/Dockerfile` is the single source of truth for what runs in prod.
+- Rollback = restore the previous `sha-` pin in `1ma-lab/Dockerfile`, then `update.sh`
+  (see `STABILIZATION_Handoff.md` for a worked example).
+- `gen-env.sh` does not overwrite `stack.env`; `render-config.sh` regenerates
+  `runtime/librechat.yaml` from the repo — manual config edits on the box get lost.
 
 ### Repos involved
 
 | Repo | Role |
 |---|---|
 | `KirillMachuk/platform-librechat` | Source code (this repo) — all code changes go here |
-| `KirillMachuk/1ma-lab` | Deployment config — its `Dockerfile` does `FROM ghcr.io/kirillmachuk/platform-librechat:main`. Railway's connected source, but deploys are now triggered via direct API call (not git push), so commits here are no longer needed. |
-
-### Required GitHub secrets (in platform-librechat)
-
-| Secret | Value |
-|---|---|
-| `RAILWAY_TOKEN` | Railway workspace API token (Account → Tokens → Create Token, attach to workspace) |
-| `RAILWAY_PROJECT_ID` | UUID from the Railway project URL: `railway.com/project/<UUID>` |
+| `KirillMachuk/1ma-lab` | Deploy config for the qsr box: image pin (`Dockerfile`), `librechat.yaml`, env generation, `update.sh` |
 
 ### Important notes for agents
 
-- **Never push directly to `1ma-lab`** for code changes — it is deploy-only. All code lives here in `platform-librechat`.
-- A push to `main` here automatically deploys to production (~7–10 min build + deploy).
-- **Batch deploys — do not deploy per PR.** Every merge to `main` triggers a full image build and a production deploy. Merging five PRs one by one means five builds and five production restarts. Merge the batch, then let a single build ship it. This matters for CI minutes on private repos, for build queue time, and because each deploy restarts the service for live users.
-- **GitHub Actions minutes are only free while this repo is public.** It was switched to private once and burned ~1800 minutes of the 2000/month plan in three weeks — the inherited upstream workflows (Playwright E2E, Frontend Unit Tests, ESLint, Docker Smoke) run on every push. Keep it public; if it ever must go private, disable those inherited workflows first.
-- The Railway API call resolves the service named `1ma-lab` and the environment named `production`. If either is renamed, update the lookup in `.github/workflows/docker-image.yml`.
-- If a deploy is needed without a code change: re-run the workflow (`gh workflow run "Build & Push Docker Image"`) or manually click Redeploy in Railway.
-- **CI scope gotcha:** the frontend test suite (`.github/workflows/frontend-review.yml`, jobs "Tests: Ubuntu/Windows") runs **only on pull requests** that touch `client/**`, `packages/client/**`, or `packages/data-provider/**` — **never on push to `main`**. So a green `main` only means the Docker image built; it does **not** mean the frontend tests pass. Broken client tests can land on `main` silently (and api-only PRs never run them). To gauge frontend-test health, look at a client PR's checks, not `main`'s.
+- **Never push code to `1ma-lab`** — it is deploy-config only. All code lives here.
+- **Batch merges; the pin bump is the deploy unit.** Land related PRs together, then move
+  the pin once — each pin bump restarts the service for live users.
+- **GitHub Actions minutes are only free while this repo is public.** It was switched to
+  private once and burned ~1800 of the 2000/month minutes in three weeks. Keep it public;
+  if it ever must go private, disable the inherited upstream workflows first.
+- **CI scope gotcha:** the frontend test suite (`.github/workflows/frontend-review.yml`)
+  runs only on PRs touching `client/**`, `packages/client/**`, or `packages/data-provider/**`,
+  and the backend `api/` + `packages/api` jest suites have no CI workflow at all — run them
+  locally (`cd api && npx jest <pattern>`, `cd packages/api && npx jest <pattern>`) before
+  merging backend changes. A green `main` only means the Docker image built.
 
 ---
 
