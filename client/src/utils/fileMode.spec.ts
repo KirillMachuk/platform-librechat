@@ -11,12 +11,10 @@ describe('autoModeDisplayFromFile', () => {
    * and the false label sent both the owner and the debugging down a wrong path
    * (prod, 26.07). */
   it('shows a library-scoped (full-text) document as text, not search', () => {
-    expect(
-      autoModeDisplayFromFile({ embedded: true, embeddingScope: 'library' }),
-    ).toBe('text');
-    expect(
-      autoModeDisplayFromFile({ embeddingStatus: 'ready', embeddingScope: 'library' }),
-    ).toBe('text');
+    expect(autoModeDisplayFromFile({ embedded: true, embeddingScope: 'library' })).toBe('text');
+    expect(autoModeDisplayFromFile({ embeddingStatus: 'ready', embeddingScope: 'library' })).toBe(
+      'text',
+    );
   });
 
   it('shows a chat-scoped embedded document as search', () => {

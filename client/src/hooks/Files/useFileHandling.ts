@@ -399,16 +399,12 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
           });
           if (resolved != null) {
             initialExtendedFile.tool_resource = resolved;
-            // RAG needs the file_search tool enabled on the ephemeral agent so
-            // the model can query the vector store at chat time. Mirror what the
-            // legacy "+" menu did — this is model-independent, so Auto's RAG
-            // choice works on any model (not just the file-search spec).
-            if (resolved === EToolResources.file_search) {
-              setEphemeralAgent((prev) => ({
-                ...prev,
-                [EToolResources.file_search]: true,
-              }));
-            }
+            // Deliberately NOT toggling the ephemeral file_search flag here.
+            // That flag arms library_search — the whole-library toggle the user
+            // did not ask for (it lit up the "Поиск файлов" badge on its own).
+            // A search-mode attachment is reachable without it: the server
+            // force-arms file_search from the request/conversation files (see
+            // applyConversationFileContext), including the first turn.
           }
         }
 
