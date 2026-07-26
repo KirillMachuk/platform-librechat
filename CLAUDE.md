@@ -202,12 +202,15 @@ Multi-line imports count total character length across all lines. Consolidate va
 Production URL: **https://qsr.1ma.ai** — one VPS at a local hoster (`ssh qsr`), being handed
 over to the client starting August 2026. Treat every deploy as touching a client system.
 
-> **History, so you don't repeat past agents' mistakes:** the Railway project and the
-> `lab.1ma.ai` stand are **gone** (deactivated July 2026, see `HOSTER_MIGRATION_Plan.md`).
-> There is no auto-deploy anywhere. `*.railway.internal` hostnames still present in
-> `1ma-lab/librechat.yaml` are legacy names, NOT live Railway services —
-> `1ma-lab/deploy/scripts/render-config.sh` rewrites `<service>.railway.internal` →
-> `<service>` (plain Docker network names) at deploy time on the box.
+> **History & near future, so you don't repeat past agents' mistakes:** the Railway
+> project is retired and the `lab.1ma.ai` stand is **temporarily switched off**
+> (July 2026, see `HOSTER_MIGRATION_Plan.md`) — the team pays for one stand while qsr
+> serves the client. After qsr is handed over (August 2026), lab.1ma.ai is planned to
+> come back as the internal test stand. Until that happens there is **no test stand and
+> no auto-deploy anywhere** — do not describe merges as "deploying to the lab".
+> `*.railway.internal` hostnames still present in `1ma-lab/librechat.yaml` are legacy
+> names, NOT live Railway services — `1ma-lab/deploy/scripts/render-config.sh` rewrites
+> `<service>.railway.internal` → `<service>` (plain Docker network names) at deploy time.
 
 ### How a change reaches prod
 
