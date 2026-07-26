@@ -1986,3 +1986,93 @@ describe('resolveUploadPrivacy — маркер приватности файл�
     expect(resolveUploadPrivacy({ req: reqWith({}), retentionExpiry: {} }).temporary).toBe(false);
   });
 });
+
+/* Content-size routing existed only for PDFs (routePdfBySize probes the file before
+ * the mode branch). Every other format learns its text length AFTER parsing — and told
+ * no one: an 82 KB DOCX with 830k characters sailed past the byte checks and was
+ * inlined whole, ~200k prompt tokens on EVERY question (prod, 26.07). These pin the
+ * extracted-text twin of that routing at the two points where the text is known. */
+describe('resolveExtractedTextRouting (non-PDF content-size routing)', () => {
+  const db = require('~/models');
+  const BIG_TEXT = 'а'.repeat(50_000);
+  const SMALL_TEXT = 'а'.repeat(1_000);
+
+  const { isContentRoutingEnabled } = require('@librechat/api');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    /* The module mock pins the flag to false (line ~97); the env var is NOT read
+     * through it. Drive the mocked function directly, like resolveContentRouting's
+     * own tests do. readDocRoutingThresholds stays real and DOES read env. */
+    isContentRoutingEnabled.mockReturnValue(true);
+    checkCapability.mockResolvedValue(true);
+    mergeFileConfig.mockReturnValue(makeFileConfig());
+  });
+  afterEach(() => {
+    isContentRoutingEnabled.mockReturnValue(false);
+  });
+
+  const uploadDocxWithText = async (text) => {
+    const handleFileUpload = jest.fn().mockResolvedValue({
+      text,
+      bytes: Buffer.byteLength(text, 'utf8'),
+      filename: 'contract.docx',
+      filepath: '/uploads/contract.docx',
+    });
+    getStrategyFunctions.mockReturnValue({ handleFileUpload });
+    const req = makeReq({ mimetype: DOCX_MIME, ocrConfig: null });
+    await processAgentFileUpload({
+      req,
+      res: mockRes,
+      metadata: { ...makeMetadata(), tool_resource: EToolResources.context },
+    });
+  };
+
+  it('reroutes an over-threshold DOCX from context to the vector store', async () => {
+    await uploadDocxWithText(BIG_TEXT);
+
+    expect(uploadVectors).toHaveBeenCalled();
+    const [stored] = db.createFile.mock.calls[0];
+    expect(stored.text).toBeUndefined();
+  });
+
+  it('keeps a small DOCX on the full-text path', async () => {
+    await uploadDocxWithText(SMALL_TEXT);
+
+    expect(uploadVectors).not.toHaveBeenCalled();
+    const [stored] = db.createFile.mock.calls[0];
+    expect(stored.text).toBe(SMALL_TEXT);
+  });
+
+  it('does not reroute when the routing flag is off', async () => {
+    isContentRoutingEnabled.mockReturnValue(false);
+    await uploadDocxWithText(BIG_TEXT);
+
+    expect(uploadVectors).not.toHaveBeenCalled();
+    const [stored] = db.createFile.mock.calls[0];
+    expect(stored.text).toBe(BIG_TEXT);
+  });
+
+  it('does not reroute when file_search capability is disabled', async () => {
+    checkCapability.mockImplementation(
+      async (_req, capability) => capability !== AgentCapabilities.file_search,
+    );
+    await uploadDocxWithText(BIG_TEXT);
+
+    expect(uploadVectors).not.toHaveBeenCalled();
+    const [stored] = db.createFile.mock.calls[0];
+    expect(stored.text).toBe(BIG_TEXT);
+  });
+
+  it('honours a raised maxContextChars threshold', async () => {
+    /* Thresholds are mocked at line ~98 (fixed 40k); the env var is not read
+     * through the mock. Raise the mocked threshold instead. */
+    const { readDocRoutingThresholds } = require('@librechat/api');
+    readDocRoutingThresholds.mockReturnValueOnce({
+      maxContextChars: 100000,
+      maxContextScanPages: 12,
+    });
+    await uploadDocxWithText(BIG_TEXT);
+    expect(uploadVectors).not.toHaveBeenCalled();
+  });
+});
