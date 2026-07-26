@@ -586,6 +586,8 @@ export interface ExtendedFile {
   embedded?: boolean;
   /** Async RAG embedding lifecycle (RAG_ASYNC_EMBED); see TFile.embeddingStatus. */
   embeddingStatus?: t.TFile['embeddingStatus'];
+  /** 'library' = indexed only for cross-chat library_search (full-text doc); see TFile.embeddingScope. */
+  embeddingScope?: t.TFile['embeddingScope'];
   tool_resource?: string;
   metadata?: t.TFile['metadata'];
 }

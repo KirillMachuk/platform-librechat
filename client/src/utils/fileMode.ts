@@ -153,9 +153,18 @@ export const autoModeDisplayFromFile = (file: {
   progress?: number;
   embedded?: boolean;
   embeddingStatus?: TFile['embeddingStatus'];
+  embeddingScope?: TFile['embeddingScope'];
 }): Exclude<FileMode, 'auto'> | null => {
   if ((file.progress ?? 1) < 1) {
     return null;
+  }
+  /* Full-text documents are ALSO embedded — for the cross-chat library
+   * (`embeddingScope: 'library'`), not for retrieval in this chat. Treating any
+   * embedding as "search" made the chip claim retrieval for a document that was
+   * inlined whole (observed on prod 26.07 and misdiagnosed twice because of it).
+   * Only a non-library embed means this chat actually searches the file. */
+  if (file.embeddingScope === 'library') {
+    return 'text';
   }
   if (file.embedded === true || file.embeddingStatus != null) {
     return 'search';

@@ -167,6 +167,10 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
               source: data.source,
               embedded: data.embedded,
               embeddingStatus: data.embeddingStatus,
+              // Distinguishes a library-only (full-text) embed from a real
+              // search embed — without it the mode chip shows "search" for
+              // documents that were inlined whole (see autoModeDisplayFromFile).
+              embeddingScope: data.embeddingScope,
             },
             assistant_id ? true : false,
           );
