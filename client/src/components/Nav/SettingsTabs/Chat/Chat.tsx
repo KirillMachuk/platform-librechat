@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { showThinkingAtom } from '~/store/showThinking';
-import AdvancedPrompts from './AdvancedPrompts';
 import FontSizeSelector from './FontSizeSelector';
+import AdvancedPrompts from './AdvancedPrompts';
 import ChatDirection from './ChatDirection';
 import ToggleSwitch from '../ToggleSwitch';
 import store from '~/store';

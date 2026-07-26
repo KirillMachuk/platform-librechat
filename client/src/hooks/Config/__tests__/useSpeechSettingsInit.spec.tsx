@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
 import { RecoilRoot, useRecoilValue } from 'recoil';
+import { render, screen } from '@testing-library/react';
 import useSpeechSettingsInit from '../useSpeechSettingsInit';
 import store from '~/store';
 

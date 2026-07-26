@@ -1,8 +1,8 @@
 import { Types } from 'mongoose';
 import type { AnalyticsConversation, AnalyticsInteraction } from '@librechat/data-schemas';
 import type { Response } from 'express';
-import type { ServerRequest } from '~/types/http';
 import type { AdminAnalyticsDeps } from './analytics';
+import type { ServerRequest } from '~/types/http';
 import { createAdminAnalyticsHandlers } from './analytics';
 
 jest.mock('@librechat/data-schemas', () => ({

@@ -1,5 +1,4 @@
 import { parseTextParts, parseEphemeralAgentId } from 'librechat-data-provider';
-import { getTenantId } from '~/config/tenantContext';
 import type { PipelineStage, FilterQuery, Model } from 'mongoose';
 import type {
   IUser,
@@ -12,6 +11,7 @@ import type {
   AnalyticsConversationMessage,
   AnalyticsInteractionFilter,
 } from '~/types';
+import { getTenantId } from '~/config/tenantContext';
 
 /** Max characters of request text returned in the feed preview. */
 const PREVIEW_LEN = 280;

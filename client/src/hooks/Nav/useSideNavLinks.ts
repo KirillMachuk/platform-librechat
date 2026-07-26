@@ -23,8 +23,8 @@ import PanelSwitch from '~/components/SidePanel/Builder/PanelSwitch';
 import Parameters from '~/components/SidePanel/Parameters/Panel';
 import FilesPanel from '~/components/SidePanel/Files/Panel';
 import AgentsPanel from '~/components/Agents/AgentsPanel';
-import { ProjectsPanel } from '~/components/Projects';
 import { PromptsAccordion } from '~/components/Prompts';
+import { ProjectsPanel } from '~/components/Projects';
 import { SkillsAccordion } from '~/components/Skills';
 import store from '~/store';
 

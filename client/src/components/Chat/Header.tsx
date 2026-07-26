@@ -1,11 +1,11 @@
 import { memo, useMemo } from 'react';
-import { ChevronRight } from 'lucide-react';
 import { useRecoilValue } from 'recoil';
+import { ChevronRight } from 'lucide-react';
 import { useMediaQuery } from '@librechat/client';
 import { getConfigDefaults, PermissionTypes, Permissions } from 'librechat-data-provider';
-import ModelSelector from './Menus/Endpoints/ModelSelector';
-import { useGetProjectQuery, useGetStartupConfig } from '~/data-provider';
 import { resolveIcon, resolveColor } from '~/components/Projects/iconOptions';
+import { useGetProjectQuery, useGetStartupConfig } from '~/data-provider';
+import ModelSelector from './Menus/Endpoints/ModelSelector';
 import ExportAndShareMenu from './ExportAndShareMenu';
 import { OpenSidebar, PresetsMenu } from './Menus';
 import BookmarkMenu from './Menus/BookmarkMenu';
