@@ -61,18 +61,10 @@ const renderHeader = (overrides?: (snapshot: MutableSnapshot) => void) =>
   );
 
 describe('Chat header power-user menus', () => {
-  it('hides the presets and bookmarks menus by default', () => {
+  it('hides the bookmarks menu by default', () => {
     renderHeader();
 
     expect(screen.getByTestId('model-selector')).toBeInTheDocument();
-    expect(screen.queryByTestId('presets-menu')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('bookmark-menu')).not.toBeInTheDocument();
-  });
-
-  it('shows the presets menu once the user turns it on', () => {
-    renderHeader(({ set }) => set(store.showPresetsMenu, true));
-
-    expect(screen.getByTestId('presets-menu')).toBeInTheDocument();
     expect(screen.queryByTestId('bookmark-menu')).not.toBeInTheDocument();
   });
 
@@ -80,7 +72,14 @@ describe('Chat header power-user menus', () => {
     renderHeader(({ set }) => set(store.showBookmarksMenu, true));
 
     expect(screen.getByTestId('bookmark-menu')).toBeInTheDocument();
-    expect(screen.queryByTestId('presets-menu')).not.toBeInTheDocument();
+  });
+
+  /** The presets switch lives inside PresetsMenu, below the hook that loads a user's
+   *  default preset — see its own spec. The header only honours the admin's config. */
+  it('mounts the presets menu whenever the config allows it', () => {
+    renderHeader();
+
+    expect(screen.getByTestId('presets-menu')).toBeInTheDocument();
   });
 
   it('keeps the model comparison button, which is not gated', () => {

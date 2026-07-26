@@ -1,7 +1,7 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { logger } = require('@librechat/data-schemas');
-const { ContentTypes, isAssistantsEndpoint } = require('librechat-data-provider');
+const { ContentTypes, isAssistantsEndpoint, feedbackSchema } = require('librechat-data-provider');
 const {
   unescapeLaTeX,
   countTokens,
@@ -387,11 +387,26 @@ router.put('/:conversationId/:messageId/feedback', validateMessageReq, async (re
     const { conversationId, messageId } = req.params;
     const { feedback } = req.body;
 
+    /**
+     * The rating is stored on a Mixed subdocument, so whatever arrives here is what
+     * the admin export and transcript later read back. Validate at the boundary
+     * against the same shape the client sends: a known rating, a known reason tag,
+     * and a comment the schema bounds.
+     */
+    let validFeedback = null;
+    if (feedback != null) {
+      const parsed = feedbackSchema.safeParse(feedback);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid feedback' });
+      }
+      validFeedback = parsed.data;
+    }
+
     const updatedMessage = await db.updateMessage(
       req?.user?.id,
       {
         messageId,
-        feedback: feedback || null,
+        feedback: validFeedback,
       },
       { context: 'updateFeedback' },
     );

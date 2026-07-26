@@ -334,6 +334,15 @@ describe('message feedback', () => {
       createdAt,
     });
 
+  test('the join is served by an index that holds only rated messages', async () => {
+    /** Without it the join reads every message of every conversation on the page. */
+    await Message.init();
+    const indexes = await Message.collection.indexes();
+
+    const partial = indexes.find((i) => i.key?.parentMessageId === 1);
+    expect(partial?.partialFilterExpression).toEqual({ feedback: { $exists: true } });
+  });
+
   test('export carries the rating left on the answer to this request', async () => {
     await rateAnswer(
       'm1-rated',

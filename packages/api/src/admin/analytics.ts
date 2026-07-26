@@ -35,11 +35,13 @@ const EXPORT_HEADERS = [
  * Reason tags, resolved for the spreadsheet. The client localizes these from
  * `com_ui_feedback_tag_*`; a CSV is written server-side, where that machinery does
  * not exist, so the labels are repeated here in the language of the other headers.
+ * Keep the wording identical to the Russian locale — an admin comparing the export
+ * against what the employee saw should read the same sentence.
  * An unknown key (a tag added later) is written through as-is rather than dropped.
  * Null-prototype so a tag named `toString` misses instead of resolving to a function.
  */
 const FEEDBACK_TAG_LABELS: Record<string, string> = Object.assign(Object.create(null), {
-  accurate_reliable: 'Точный и надёжный',
+  accurate_reliable: 'Точный и надежный',
   attention_to_detail: 'Внимание к деталям',
   bad_style: 'Плохой стиль или тон',
   clear_well_written: 'Ясно и хорошо написано',
@@ -47,8 +49,8 @@ const FEEDBACK_TAG_LABELS: Record<string, string> = Object.assign(Object.create(
   inaccurate: 'Неточный или неправильный ответ',
   missing_image: 'Ожидаемое изображение',
   not_helpful: 'Не хватало полезной информации',
-  not_matched: 'Не соответствовало запросу',
-  other: 'Другое',
+  not_matched: 'Не соответствовало моему запросу',
+  other: 'Другой вопрос',
   unjustified_refusal: 'Отказ без объяснения причин',
 });
 /**

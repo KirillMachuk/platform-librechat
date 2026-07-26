@@ -133,7 +133,9 @@ export default function SiblingHeader({
             agent={agent || undefined}
           />
         </div>
-        <span className="truncate text-sm font-medium text-text-primary">{displayName}</span>
+        <span className="truncate text-sm font-medium text-text-primary" title={displayName ?? ''}>
+          {displayName}
+        </span>
         <MessageTimestamp value={createdAt} />
       </div>
       <button
