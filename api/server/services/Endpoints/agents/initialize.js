@@ -145,12 +145,14 @@ async function applyProjectContext({ req, primaryAgent }) {
 async function applyConversationFileContext({ req, primaryAgent }) {
   try {
     const conversationId = req.body?.conversationId;
-    if (!conversationId) {
-      return;
-    }
-
-    const convoFileIds = (await db.getConvoFiles(conversationId)) ?? [];
-    if (convoFileIds.length === 0) {
+    const convoFileIds = conversationId ? ((await db.getConvoFiles(conversationId)) ?? []) : [];
+    /* The first message of a new conversation has no conversationId yet, but the
+     * request itself carries the just-attached files. Without them the core
+     * "attach → ask" flow armed nothing and an embedded attachment was
+     * unreachable until the second turn (armed=[], zero /query — prod 26.07). */
+    const requestFileIds = (req.body?.files ?? []).map((file) => file?.file_id).filter(Boolean);
+    const candidateFileIds = Array.from(new Set([...convoFileIds, ...requestFileIds]));
+    if (candidateFileIds.length === 0) {
       return;
     }
 
@@ -158,7 +160,7 @@ async function applyConversationFileContext({ req, primaryAgent }) {
     // documents indexed only for cross-chat library_search. Their full text is
     // already inlined; merging them into the file_search floor would double-inject.
     const embeddedFiles = await db.getFiles(
-      { file_id: { $in: convoFileIds }, embedded: true, embeddingScope: { $ne: 'library' } },
+      { file_id: { $in: candidateFileIds }, embedded: true, embeddingScope: { $ne: 'library' } },
       null,
       { text: 0, fullText: 0 },
     );
