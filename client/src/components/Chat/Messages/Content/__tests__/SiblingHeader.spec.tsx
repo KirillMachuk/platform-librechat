@@ -56,7 +56,7 @@ describe('SiblingHeader name of a parallel answer', () => {
     /** Two columns on the same custom endpoint would otherwise read identically. */
     renderHeader('1ma__anthropic/claude-sonnet-5___Все модели');
 
-    expect(screen.getByText('anthropic/claude-sonnet-5')).toBeInTheDocument();
+    expect(screen.getByText('claude-sonnet-5')).toBeInTheDocument();
     expect(screen.queryByText('Все модели')).not.toBeInTheDocument();
   });
 
