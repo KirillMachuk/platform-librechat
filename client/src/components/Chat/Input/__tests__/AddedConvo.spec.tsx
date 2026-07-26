@@ -37,7 +37,8 @@ describe('AddedConvo title', () => {
   it('names the model, not the endpoint label shared by every model', () => {
     renderTitle({ endpoint: '1ma', model: 'anthropic/claude-sonnet-5' });
 
-    expect(screen.getByText('+ anthropic/claude-sonnet-5')).toBeInTheDocument();
+    /** Short name, as the model selector and the picker write it. */
+    expect(screen.getByText('+ claude-sonnet-5')).toBeInTheDocument();
     expect(screen.queryByText('+ Все модели')).not.toBeInTheDocument();
   });
 
