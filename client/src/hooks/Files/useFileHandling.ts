@@ -18,13 +18,13 @@ import type { EModelEndpoint, TEndpointsConfig, TError } from 'librechat-data-pr
 import type { TConversation } from 'librechat-data-provider';
 import type { ExtendedFile, FileSetter } from '~/common';
 import { logger, validateFiles, cachePreview, getCachedPreview, removePreviewEntry } from '~/utils';
+import store, { ephemeralAgentByConvoId, fileModeByConvoId } from '~/store';
 import { useGetFileConfig, useUploadFileMutation } from '~/data-provider';
+import { resolveFileToolResource, type FileMode } from '~/utils/fileMode';
 import useLocalize, { TranslationKeys } from '~/hooks/useLocalize';
 import { useDelayedUploadToast } from './useDelayedUploadToast';
-import { resolveFileToolResource, type FileMode } from '~/utils/fileMode';
 import { processFileForUpload } from '~/utils/heicConverter';
 import { useChatContext } from '~/Providers/ChatContext';
-import store, { ephemeralAgentByConvoId, fileModeByConvoId } from '~/store';
 import useClientResize from './useClientResize';
 import useUpdateFiles from './useUpdateFiles';
 
@@ -167,6 +167,10 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
               source: data.source,
               embedded: data.embedded,
               embeddingStatus: data.embeddingStatus,
+              // Distinguishes a library-only (full-text) embed from a real
+              // search embed — without it the mode chip shows "search" for
+              // documents that were inlined whole (see autoModeDisplayFromFile).
+              embeddingScope: data.embeddingScope,
             },
             assistant_id ? true : false,
           );
@@ -395,16 +399,12 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
           });
           if (resolved != null) {
             initialExtendedFile.tool_resource = resolved;
-            // RAG needs the file_search tool enabled on the ephemeral agent so
-            // the model can query the vector store at chat time. Mirror what the
-            // legacy "+" menu did — this is model-independent, so Auto's RAG
-            // choice works on any model (not just the file-search spec).
-            if (resolved === EToolResources.file_search) {
-              setEphemeralAgent((prev) => ({
-                ...prev,
-                [EToolResources.file_search]: true,
-              }));
-            }
+            // Deliberately NOT toggling the ephemeral file_search flag here.
+            // That flag arms library_search — the whole-library toggle the user
+            // did not ask for (it lit up the "Поиск файлов" badge on its own).
+            // A search-mode attachment is reachable without it: the server
+            // force-arms file_search from the request/conversation files (see
+            // applyConversationFileContext), including the first turn.
           }
         }
 

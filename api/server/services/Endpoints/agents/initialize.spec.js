@@ -799,8 +799,8 @@ describe('initializeClient — subagent loading', () => {
 describe('applyConversationFileContext', () => {
   const db = require('~/models');
 
-  const makeReq = (conversationId) => ({
-    body: { conversationId },
+  const makeReq = (conversationId, files) => ({
+    body: { conversationId, files },
     user: { id: 'user_1', role: 'USER' },
   });
 
@@ -850,14 +850,83 @@ describe('applyConversationFileContext', () => {
     expect(primaryAgent.tool_resources.file_search.file_ids).toContain('file_emb_1');
   });
 
-  it('is a no-op for a new conversation (no conversationId) without hitting the DB', async () => {
+  it('is a no-op for a new conversation with no request files, without hitting the DB', async () => {
     const convoSpy = jest.spyOn(db, 'getConvoFiles').mockResolvedValue([]);
+    const filesSpy = jest.spyOn(db, 'getFiles').mockResolvedValue([]);
 
     const primaryAgent = { tools: [], tool_resources: {} };
     await applyConversationFileContext({ req: makeReq(undefined), primaryAgent });
 
     expect(convoSpy).not.toHaveBeenCalled();
+    expect(filesSpy).not.toHaveBeenCalled();
     expect(primaryAgent.tools).not.toContain('file_search');
+  });
+
+  /* The "attach → ask" flow: the first message of a new conversation has no
+   * conversationId yet, but the request itself carries the just-attached files.
+   * Ignoring them left an embedded attachment unreachable (armed=[], zero /query)
+   * until the second turn — observed on prod 26.07. */
+  it('first turn: arms file_search from the request files when the conversation does not exist yet', async () => {
+    const convoSpy = jest.spyOn(db, 'getConvoFiles').mockResolvedValue([]);
+    jest.spyOn(db, 'getFiles').mockResolvedValue([{ file_id: 'file_emb_1', embedded: true }]);
+
+    const primaryAgent = { tools: [], tool_resources: {} };
+    await applyConversationFileContext({
+      req: makeReq(undefined, [{ file_id: 'file_emb_1' }, { file_id: null }]),
+      primaryAgent,
+    });
+
+    expect(convoSpy).not.toHaveBeenCalled();
+    expect(db.getFiles).toHaveBeenCalledWith(
+      expect.objectContaining({ file_id: { $in: ['file_emb_1'] } }),
+      null,
+      { text: 0, fullText: 0 },
+    );
+    expect(primaryAgent.tools).toContain('file_search');
+    expect(primaryAgent.tool_resources.file_search.file_ids).toContain('file_emb_1');
+  });
+
+  it('first turn with only full-text (library-scoped) request files stays a no-op', async () => {
+    /* The library-scope filter lives in the getFiles query; a full-text attachment
+     * comes back empty from it and must not arm anything. */
+    jest.spyOn(db, 'getFiles').mockResolvedValue([]);
+
+    const primaryAgent = { tools: [], tool_resources: {} };
+    await applyConversationFileContext({
+      req: makeReq(undefined, [{ file_id: 'file_fulltext_1' }]),
+      primaryAgent,
+    });
+
+    expect(db.getFiles).toHaveBeenCalledWith(
+      expect.objectContaining({ embeddingScope: { $ne: 'library' } }),
+      null,
+      { text: 0, fullText: 0 },
+    );
+    expect(primaryAgent.tools).not.toContain('file_search');
+    expect(primaryAgent.tool_resources.file_search).toBeUndefined();
+  });
+
+  it('unions request files with conversation files on follow-up turns', async () => {
+    jest.spyOn(db, 'getConvoFiles').mockResolvedValue(['file_emb_1']);
+    jest.spyOn(db, 'getFiles').mockResolvedValue([
+      { file_id: 'file_emb_1', embedded: true },
+      { file_id: 'file_emb_2', embedded: true },
+    ]);
+
+    const primaryAgent = { tools: [], tool_resources: {} };
+    await applyConversationFileContext({
+      req: makeReq('conv_1', [{ file_id: 'file_emb_2' }]),
+      primaryAgent,
+    });
+
+    expect(db.getFiles).toHaveBeenCalledWith(
+      expect.objectContaining({ file_id: { $in: ['file_emb_1', 'file_emb_2'] } }),
+      null,
+      { text: 0, fullText: 0 },
+    );
+    expect(primaryAgent.tool_resources.file_search.file_ids).toEqual(
+      expect.arrayContaining(['file_emb_1', 'file_emb_2']),
+    );
   });
 
   it('does not duplicate file_search when already enabled', async () => {
