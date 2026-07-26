@@ -290,8 +290,12 @@ jobs:
       - name: Prepare .env.test file
         run: cp api/test/.env.test.example api/test/.env.test
 
+      # Our fork's api suite is much heavier than upstream's (heapUsage shows
+      # 1.4–1.7 GB per hot suite). Default worker count on 4-core runners OOMs
+      # the workers ("Jest worker encountered N child process exceptions").
+      # Two workers + idle-memory recycling bound the accumulation.
       - name: Run unit tests (shard ${{ matrix.shard }}/3)
-        run: cd api && npm run test:ci -- --shard=${{ matrix.shard }}/3
+        run: cd api && npm run test:ci -- --shard=${{ matrix.shard }}/3 --maxWorkers=2 --workerIdleMemoryLimit=1600MB
 
   test-data-provider:
     name: 'Tests: data-provider'
@@ -430,5 +434,6 @@ jobs:
           name: build-api
           path: packages/api/dist
 
+      # Same worker-memory bounds as test-api (see comment there).
       - name: Run unit tests (shard ${{ matrix.shard }}/4)
-        run: cd packages/api && npm run test:ci -- --shard=${{ matrix.shard }}/4
+        run: cd packages/api && npm run test:ci -- --shard=${{ matrix.shard }}/4 --maxWorkers=2 --workerIdleMemoryLimit=1600MB
