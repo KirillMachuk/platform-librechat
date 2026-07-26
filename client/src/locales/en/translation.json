@@ -1161,6 +1161,7 @@
   "com_ui_finance": "Finance",
   "com_ui_fork": "Fork",
   "com_ui_fork_all_target": "Include all to/from here",
+  "com_ui_fork_branch_here": "Branch to a new chat from here",
   "com_ui_fork_branches": "Include related branches",
   "com_ui_fork_change_default": "Default fork option",
   "com_ui_fork_default": "Use default fork option",

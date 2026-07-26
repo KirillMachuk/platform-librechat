@@ -1016,6 +1016,7 @@
   "com_ui_finance": "Финансы",
   "com_ui_fork": "Разделить",
   "com_ui_fork_all_target": "Включить все сюда",
+  "com_ui_fork_branch_here": "Продолжить в новом чате отсюда",
   "com_ui_fork_branches": "Включить связанные ветки",
   "com_ui_fork_change_default": "Изменить вариант ветвления по умолчанию",
   "com_ui_fork_default": "Использовать вариант по умолчанию",

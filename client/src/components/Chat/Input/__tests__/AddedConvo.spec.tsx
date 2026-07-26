@@ -27,10 +27,11 @@ jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string) => key,
 }));
 
-const renderTitle = (addedConvo: Partial<TConversation> | null) =>
-  render(
-    <AddedConvo addedConvo={addedConvo as TConversation | null} setAddedConvo={jest.fn()} />,
-  );
+/** Custom endpoints ('1ma') are plain strings at runtime, unlike the built-in enum. */
+type ConvoFixture = Omit<Partial<TConversation>, 'endpoint'> & { endpoint?: string | null };
+
+const renderTitle = (addedConvo: ConvoFixture | null) =>
+  render(<AddedConvo addedConvo={addedConvo as TConversation | null} setAddedConvo={jest.fn()} />);
 
 describe('AddedConvo title', () => {
   it('names the model, not the endpoint label shared by every model', () => {
