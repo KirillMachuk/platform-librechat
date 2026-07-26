@@ -229,8 +229,7 @@ describe('canAccessSharedLink', () => {
   describe('cross-tenant role suppression (upstream #14137)', () => {
     // The middleware runs the ACL check under the SHARE's tenant, so grants must
     // be written under that tenant too — as production (tenant-scoped requests) does.
-    const inShareTenant = <T>(fn: () => Promise<T>) =>
-      tenantStorage.run({ tenantId: 't1' }, fn);
+    const inShareTenant = <T>(fn: () => Promise<T>) => tenantStorage.run({ tenantId: 't1' }, fn);
 
     beforeAll(async () => {
       // AccessRole definitions are tenant-scoped as well: seed them under the
