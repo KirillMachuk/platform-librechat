@@ -98,6 +98,27 @@ const toggleSwitchConfigs = [
     hoverCardText: 'com_nav_info_default_temporary_chat' as const,
     key: 'defaultTemporaryChat',
   },
+  {
+    stateAtom: store.showPresetsMenu,
+    localizationKey: 'com_nav_show_presets_menu' as const,
+    switchId: 'showPresetsMenu',
+    hoverCardText: 'com_nav_info_show_presets_menu' as const,
+    key: 'showPresetsMenu',
+  },
+  {
+    stateAtom: store.showParametersPanel,
+    localizationKey: 'com_nav_show_parameters_panel' as const,
+    switchId: 'showParametersPanel',
+    hoverCardText: 'com_nav_info_show_parameters_panel' as const,
+    key: 'showParametersPanel',
+  },
+  {
+    stateAtom: store.showBookmarksMenu,
+    localizationKey: 'com_nav_show_bookmarks_menu' as const,
+    switchId: 'showBookmarksMenu',
+    hoverCardText: 'com_nav_info_show_bookmarks_menu' as const,
+    key: 'showBookmarksMenu',
+  },
 ];
 
 function Chat() {

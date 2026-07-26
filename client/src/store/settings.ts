@@ -37,6 +37,16 @@ const localStorageAtoms = {
   showScrollButton: atomWithLocalStorage('showScrollButton', true),
   saveBadgesState: atomWithLocalStorage('saveBadgesState', false),
 
+  /**
+   * Power-user surfaces, off unless asked for: they cost every employee a button
+   * they have to rule out, and reward the few who want them. The admin still holds
+   * the master switches (interface.presets / .parameters, the BOOKMARKS permission);
+   * these only decide whether an allowed feature takes up room by default.
+   */
+  showPresetsMenu: atomWithLocalStorage('showPresetsMenu', false),
+  showParametersPanel: atomWithLocalStorage('showParametersPanel', false),
+  showBookmarksMenu: atomWithLocalStorage('showBookmarksMenu', false),
+
   // Beta features settings
   modularChat: atomWithLocalStorage('modularChat', true),
   LaTeXParsing: atomWithLocalStorage('LaTeXParsing', true),
