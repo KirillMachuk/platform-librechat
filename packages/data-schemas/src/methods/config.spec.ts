@@ -1,9 +1,9 @@
 import mongoose, { Types } from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { PrincipalType, PrincipalModel } from 'librechat-data-provider';
+import type { IConfig } from '~/types';
 import { createConfigMethods } from './config';
 import configSchema from '~/schema/config';
-import type { IConfig } from '~/types';
 
 let mongoServer: MongoMemoryServer;
 let methods: ReturnType<typeof createConfigMethods>;
@@ -14,6 +14,7 @@ beforeAll(async () => {
   if (!mongoose.models.Config) {
     mongoose.model<IConfig>('Config', configSchema);
   }
+  await mongoose.models.Config.init();
   methods = createConfigMethods(mongoose);
 });
 
