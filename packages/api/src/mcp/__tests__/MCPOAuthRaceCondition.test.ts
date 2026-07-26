@@ -41,7 +41,14 @@ jest.mock('~/auth/domain', () => ({
 }));
 
 jest.mock('~/mcp/mcpConfig', () => ({
-  mcpConfig: { CONNECTION_CHECK_TTL: 0, USER_CONNECTION_IDLE_TIMEOUT: 30 * 60 * 1000 },
+  // Spread the real config: the connection-setup semaphore reads
+  // MAX_CONCURRENT_CONNECTION_SETUPS / CONNECTION_SETUP_MAX_QUEUE from it, and a
+  // partial mock left them undefined — "capacity exceeded" on every concurrent test.
+  mcpConfig: {
+    ...jest.requireActual('~/mcp/mcpConfig').mcpConfig,
+    CONNECTION_CHECK_TTL: 0,
+    USER_CONNECTION_IDLE_TIMEOUT: 30 * 60 * 1000,
+  },
 }));
 
 const mockLogger = logger as jest.Mocked<typeof logger>;

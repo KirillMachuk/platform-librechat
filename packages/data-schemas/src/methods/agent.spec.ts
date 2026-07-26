@@ -1847,12 +1847,12 @@ describe('Agent Methods', () => {
       await Agent.updateOne({ id: agentId }, { $set: { is_promoted: false } });
       await updateAgent({ id: agentId }, { name: 'Demoted Era' });
 
-      const agentBefore = await Agent.findOne({ id: agentId }).lean();
+      const agentBefore = await Agent.findOne({ id: agentId }).lean<IAgent>();
       const promotedVersionIndex = (agentBefore!.versions as unknown[]).length - 2;
       const revertedAgent = await revertAgentVersion({ id: agentId }, promotedVersionIndex);
 
       expect(revertedAgent.is_promoted).not.toBe(true);
-      const agentInDb = await Agent.findOne({ id: agentId }).lean();
+      const agentInDb = await Agent.findOne({ id: agentId }).lean<IAgent>();
       expect(agentInDb!.is_promoted).not.toBe(true);
     });
 
@@ -1873,10 +1873,10 @@ describe('Agent Methods', () => {
       await updateAgent({ id: agentId }, { name: 'Settled Agent' });
 
       await updateAgent({ id: agentId }, { is_promoted: true });
-      expect((await Agent.findOne({ id: agentId }).lean())!.is_promoted).toBe(true);
+      expect((await Agent.findOne({ id: agentId }).lean<IAgent>())!.is_promoted).toBe(true);
 
       await updateAgent({ id: agentId }, { is_promoted: false });
-      expect((await Agent.findOne({ id: agentId }).lean())!.is_promoted).toBe(false);
+      expect((await Agent.findOne({ id: agentId }).lean<IAgent>())!.is_promoted).toBe(false);
     });
 
     test('should prune deleted skill ids when reverting to an older version', async () => {

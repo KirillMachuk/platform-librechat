@@ -92,19 +92,11 @@ function buildPreLoginPayload() {
       !!process.env.EMAIL_PASSWORD &&
       !!process.env.EMAIL_FROM,
     passwordResetEnabled,
-    showBirthdayIcon:
-      isBirthday() ||
-      isEnabled(process.env.SHOW_BIRTHDAY_ICON) ||
-      process.env.SHOW_BIRTHDAY_ICON === '',
-    helpAndFaqURL: process.env.HELP_AND_FAQ_URL || 'https://1ma.ai',
-    sharedLinksEnabled,
-    publicSharedLinksEnabled,
-    analyticsGtmId: process.env.ANALYTICS_GTM_ID,
-    openidReuseTokens,
-    /** Read inline (not module-level) for per-request evaluation and test isolation */
-    allowAccountDeletion:
-      process.env.ALLOW_ACCOUNT_DELETION === undefined ||
-      isEnabled(process.env.ALLOW_ACCOUNT_DELETION),
+    /* showBirthdayIcon, helpAndFaqURL, sharedLinksEnabled, publicSharedLinksEnabled,
+     * analyticsGtmId, openidReuseTokens and allowAccountDeletion are deliberately
+     * absent here: they are post-login fields (buildPostLoginPayload) stripped from
+     * the unauthenticated response (#12688); analyticsGtmId/customFooter reach
+     * anonymous share views via buildPublicSharePayload only. */
   };
 
   const minPasswordLength = parseInt(process.env.MIN_PASSWORD_LENGTH, 10);
@@ -150,7 +142,7 @@ function buildPostLoginPayload() {
       isBirthday() ||
       isEnabled(process.env.SHOW_BIRTHDAY_ICON) ||
       process.env.SHOW_BIRTHDAY_ICON === '',
-    helpAndFaqURL: process.env.HELP_AND_FAQ_URL || 'https://librechat.ai',
+    helpAndFaqURL: process.env.HELP_AND_FAQ_URL || 'https://1ma.ai',
     sharedLinksEnabled,
     publicSharedLinksEnabled,
     openidReuseTokens,

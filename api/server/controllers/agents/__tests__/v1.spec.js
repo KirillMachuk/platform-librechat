@@ -4,6 +4,13 @@ const { nanoid } = require('nanoid');
 
 jest.mock('~/models');
 jest.mock('nanoid');
+// duplicateAgent now grants owner VIEW/EDIT ACL entries on the duplicate (and
+// rolls the agent back if that fails); the ACL layer needs seeded AccessRoles
+// and a real DB, both out of scope for this controller-level spec.
+jest.mock('~/server/services/PermissionService', () => ({
+  ...jest.requireActual('~/server/services/PermissionService'),
+  grantPermission: jest.fn().mockResolvedValue({}),
+}));
 
 describe('duplicateAgent', () => {
   let req, res;
@@ -11,7 +18,7 @@ describe('duplicateAgent', () => {
   beforeEach(() => {
     req = {
       params: { id: 'agent_123' },
-      user: { id: 'user_456' },
+      user: { id: '64b0c0ffee0ddf00d5ec1a2b' },
     };
     res = {
       status: jest.fn().mockReturnThis(),
@@ -36,6 +43,9 @@ describe('duplicateAgent', () => {
     };
 
     const mockNewAgent = {
+      // duplicateAgent grants owner ACL by the created agent's Mongo _id;
+      // grantPermission validates it as an ObjectId.
+      _id: '64b0c0ffee0ddf00d5ec1a2c',
       id: 'agent_new_123',
       name: 'Test Agent (1/2/23, 12:34)',
       description: 'Test Description',
@@ -44,7 +54,7 @@ describe('duplicateAgent', () => {
       model: 'gpt-4',
       tools: ['file_search'],
       actions: [],
-      author: 'user_456',
+      author: '64b0c0ffee0ddf00d5ec1a2b',
       versions: [
         {
           name: 'Test Agent (1/2/23, 12:34)',
@@ -72,7 +82,7 @@ describe('duplicateAgent', () => {
     expect(createAgent).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'agent_new_123',
-        author: 'user_456',
+        author: '64b0c0ffee0ddf00d5ec1a2b',
         name: expect.stringContaining('Test Agent ('),
         description: 'Test Description',
         instructions: 'Test Instructions',
@@ -113,6 +123,9 @@ describe('duplicateAgent', () => {
     };
 
     const mockNewAgent = {
+      // duplicateAgent grants owner ACL by the created agent's Mongo _id;
+      // grantPermission validates it as an ObjectId.
+      _id: '64b0c0ffee0ddf00d5ec1a2c',
       id: 'agent_new_123',
       name: 'Test Agent (1/2/23, 12:34)',
       description: 'Test Description',

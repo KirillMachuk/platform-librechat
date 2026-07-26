@@ -19,6 +19,10 @@ jest.mock('@librechat/data-schemas', () => ({
 
 jest.mock('librechat-data-provider', () => ({
   CacheKeys: { GEN_TITLE: 'GEN_TITLE' },
+  // title.js destructures this at import; omitting it made resolveTitleTimeoutMs
+  // throw (undefined is not a function) inside addTitle's try, silently early-returning
+  // every test through the mocked logger — all 10 assertions saw zero calls.
+  isReasoningModel: jest.fn(() => false),
 }));
 
 jest.mock('~/cache/getLogStores', () => jest.fn(() => mockCache));
@@ -340,7 +344,9 @@ describe('agents addTitle', () => {
   it('returns undefined when no title is produced (e.g. model timed out)', async () => {
     // A timed-out / empty title generation resolves to a falsy title; the
     // controller relies on this to trigger its fallback regeneration.
-    const client = makeClient(undefined);
+    // null, not undefined: makeClient's default parameter would replace
+    // undefined with 'Generated Title'.
+    const client = makeClient(null);
 
     const result = await addTitle(makeReq(), {
       text: 'hi',

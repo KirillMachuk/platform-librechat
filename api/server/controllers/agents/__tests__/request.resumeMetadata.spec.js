@@ -81,6 +81,10 @@ jest.mock('@librechat/data-schemas', () => ({
 }));
 
 jest.mock('@librechat/api', () => ({
+  // The require chain (strategies.js, storage crud) constructs services at load
+  // time (ImageService, createAxiosInstance, …) — spread the real module and
+  // override only what this suite controls.
+  ...jest.requireActual('@librechat/api'),
   sendEvent: jest.fn(),
   getViolationInfo: jest.fn(),
   buildMessageFiles: jest.fn(() => []),
@@ -296,12 +300,12 @@ describe('ResumableAgentController resume metadata', () => {
         iconURL: 'https://example.com/spec-icon.png',
         model: 'gpt-3.5-turbo',
         responseMessageId: 'follow-up-user_',
-        userMessage: {
+        userMessage: expect.objectContaining({
           messageId: 'follow-up-user',
           parentMessageId: 'original-response',
           conversationId,
           text: 'Check Google Workspace availability.',
-        },
+        }),
       }),
     );
     expect(mockGenerationJobManager.updateMetadata.mock.invocationCallOrder[0]).toBeLessThan(

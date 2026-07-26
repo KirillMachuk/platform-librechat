@@ -1,0 +1,441 @@
+name: Backend Unit Tests
+on:
+  # Also run on push to main (not just PRs) for the same reason as
+  # frontend-review.yml: a green main should reflect the backend suites,
+  # not only the Docker build. Restored 2026-07-26 from upstream after being
+  # removed with the secrets-dependent workflows — the suites now run on
+  # mongodb-memory-server and need no upstream secrets (the secrets env block
+  # in test-api was dropped: absent secrets would inject empty-string env vars
+  # that override api/test/.env.test values).
+  push:
+    branches:
+      - main
+    paths:
+      - 'api/**'
+      - 'packages/**'
+      - '!**.md'
+  pull_request:
+    paths:
+      - 'api/**'
+      - 'packages/**'
+      - '!**.md'
+      - '.github/workflows/backend-review.yml'
+
+permissions:
+  contents: read
+
+env:
+  NODE_ENV: CI
+  NODE_OPTIONS: '--max-old-space-size=${{ secrets.NODE_MAX_OLD_SPACE_SIZE || 6144 }}'
+
+jobs:
+  build:
+    name: Build packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 24.16.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            api/node_modules
+            packages/api/node_modules
+            packages/data-provider/node_modules
+            packages/data-schemas/node_modules
+          key: node-modules-backend-${{ runner.os }}-24.16.0-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Restore data-provider build cache
+        id: cache-data-provider
+        uses: actions/cache@v4
+        with:
+          path: packages/data-provider/dist
+          key: build-data-provider-${{ runner.os }}-${{ hashFiles('packages/data-provider/src/**', 'packages/data-provider/tsconfig*.json', 'packages/data-provider/tsdown.config.mjs', 'packages/data-provider/package.json') }}
+
+      - name: Build data-provider
+        if: steps.cache-data-provider.outputs.cache-hit != 'true'
+        run: npm run build:data-provider
+
+      - name: Restore data-schemas build cache
+        id: cache-data-schemas
+        uses: actions/cache@v4
+        with:
+          path: packages/data-schemas/dist
+          key: build-data-schemas-${{ runner.os }}-${{ hashFiles('packages/data-schemas/src/**', 'packages/data-schemas/tsconfig*.json', 'packages/data-schemas/tsdown.config.mjs', 'packages/data-schemas/package.json', 'packages/data-provider/src/**', 'packages/data-provider/tsconfig*.json', 'packages/data-provider/tsdown.config.mjs', 'packages/data-provider/package.json') }}
+
+      - name: Build data-schemas
+        if: steps.cache-data-schemas.outputs.cache-hit != 'true'
+        run: npm run build:data-schemas
+
+      - name: Restore api build cache
+        id: cache-api
+        uses: actions/cache@v4
+        with:
+          path: packages/api/dist
+          key: build-api-${{ runner.os }}-${{ hashFiles('packages/api/src/**', 'packages/api/tsconfig*.json', 'packages/api/tsdown.config.mjs', 'packages/api/package.json', 'packages/data-provider/src/**', 'packages/data-provider/tsconfig*.json', 'packages/data-provider/tsdown.config.mjs', 'packages/data-provider/package.json', 'packages/data-schemas/src/**', 'packages/data-schemas/tsconfig*.json', 'packages/data-schemas/tsdown.config.mjs', 'packages/data-schemas/package.json') }}
+
+      - name: Build api
+        if: steps.cache-api.outputs.cache-hit != 'true'
+        run: npm run build:api
+
+      - name: Upload data-provider build
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-data-provider
+          path: packages/data-provider/dist
+          retention-days: 2
+
+      - name: Upload data-schemas build
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-data-schemas
+          path: packages/data-schemas/dist
+          retention-days: 2
+
+      - name: Upload api build
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-api
+          path: packages/api/dist
+          retention-days: 2
+
+  typecheck:
+    name: TypeScript type checks
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 24.16.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            api/node_modules
+            packages/api/node_modules
+            packages/data-provider/node_modules
+            packages/data-schemas/node_modules
+          key: node-modules-backend-${{ runner.os }}-24.16.0-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Download data-provider build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-data-provider
+          path: packages/data-provider/dist
+
+      - name: Download data-schemas build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-data-schemas
+          path: packages/data-schemas/dist
+
+      - name: Download api build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-api
+          path: packages/api/dist
+
+      - name: Type check data-provider
+        run: npx tsc --noEmit -p packages/data-provider/tsconfig.json
+
+      - name: Type check data-schemas
+        run: npx tsc --noEmit -p packages/data-schemas/tsconfig.json
+
+      - name: Type check @librechat/api
+        run: npx tsc --noEmit -p packages/api/tsconfig.json
+
+      # @librechat/client type check lives in frontend-review.yml; its deps are
+      # not in this workflow's node_modules cache list, so checking it here
+      # would flake on cache hits.
+
+  circular-deps:
+    name: Circular dependency checks
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 24.16.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            api/node_modules
+            packages/api/node_modules
+            packages/data-provider/node_modules
+            packages/data-schemas/node_modules
+          key: node-modules-backend-${{ runner.os }}-24.16.0-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Download data-provider build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-data-provider
+          path: packages/data-provider/dist
+
+      - name: Download data-schemas build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-data-schemas
+          path: packages/data-schemas/dist
+
+      - name: Rebuild @librechat/api and check for circular dependencies
+        run: |
+          output=$(npm run build:api 2>&1)
+          echo "$output"
+          if echo "$output" | grep -q "Circular depend"; then
+            echo "Error: Circular dependency detected in @librechat/api!"
+            exit 1
+          fi
+
+      - name: Detect circular dependencies in rollup
+        working-directory: ./packages/data-provider
+        run: |
+          output=$(npm run rollup:api)
+          echo "$output"
+          if echo "$output" | grep -q "Circular dependency"; then
+            echo "Error: Circular dependency detected!"
+            exit 1
+          fi
+
+  test-api:
+    name: 'Tests: api (shard ${{ matrix.shard }}/3)'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 24.16.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            api/node_modules
+            packages/api/node_modules
+            packages/data-provider/node_modules
+            packages/data-schemas/node_modules
+          key: node-modules-backend-${{ runner.os }}-24.16.0-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Download data-provider build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-data-provider
+          path: packages/data-provider/dist
+
+      - name: Download data-schemas build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-data-schemas
+          path: packages/data-schemas/dist
+
+      - name: Download api build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-api
+          path: packages/api/dist
+
+      - name: Create empty auth.json file
+        run: |
+          mkdir -p api/data
+          echo '{}' > api/data/auth.json
+
+      - name: Prepare .env.test file
+        run: cp api/test/.env.test.example api/test/.env.test
+
+      # Our fork's api suite is much heavier than upstream's (heapUsage shows
+      # 1.4–1.7 GB per hot suite). Default worker count on 4-core runners OOMs
+      # the workers ("Jest worker encountered N child process exceptions").
+      # Two workers + idle-memory recycling bound the accumulation.
+      - name: Run unit tests (shard ${{ matrix.shard }}/3)
+        run: cd api && npm run test:ci -- --shard=${{ matrix.shard }}/3 --maxWorkers=2 --workerIdleMemoryLimit=1600MB
+
+  test-data-provider:
+    name: 'Tests: data-provider'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 24.16.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            api/node_modules
+            packages/api/node_modules
+            packages/data-provider/node_modules
+            packages/data-schemas/node_modules
+          key: node-modules-backend-${{ runner.os }}-24.16.0-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Download data-provider build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-data-provider
+          path: packages/data-provider/dist
+
+      - name: Run unit tests
+        run: cd packages/data-provider && npm run test:ci
+
+  test-data-schemas:
+    name: 'Tests: data-schemas'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 24.16.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            api/node_modules
+            packages/api/node_modules
+            packages/data-provider/node_modules
+            packages/data-schemas/node_modules
+          key: node-modules-backend-${{ runner.os }}-24.16.0-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Download data-provider build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-data-provider
+          path: packages/data-provider/dist
+
+      - name: Download data-schemas build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-data-schemas
+          path: packages/data-schemas/dist
+
+      # Same worker-memory bounds as test-api: 48 suites on mongodb-memory-server
+      # flaked once on a 7 GB runner without them.
+      - name: Run unit tests
+        run: cd packages/data-schemas && npm run test:ci -- --maxWorkers=2 --workerIdleMemoryLimit=1600MB
+
+  test-packages-api:
+    name: 'Tests: @librechat/api (shard ${{ matrix.shard }}/4)'
+    needs: build
+    runs-on: ubuntu-latest
+    # Suite typically completes in ~5 min on a warm runner, but tail-latency
+    # cancellations have started showing up: tests are actively passing right
+    # up to the timeout, then the job is killed mid-suite. Sharding splits the
+    # suite across runners; per-shard headroom still absorbs runner variance.
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 24.16.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      - name: Restore node_modules cache
+        id: cache-node-modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            api/node_modules
+            packages/api/node_modules
+            packages/data-provider/node_modules
+            packages/data-schemas/node_modules
+          key: node-modules-backend-${{ runner.os }}-24.16.0-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Download data-provider build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-data-provider
+          path: packages/data-provider/dist
+
+      - name: Download data-schemas build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-data-schemas
+          path: packages/data-schemas/dist
+
+      - name: Download api build
+        uses: actions/download-artifact@v4
+        with:
+          name: build-api
+          path: packages/api/dist
+
+      # Same worker-memory bounds as test-api (see comment there).
+      - name: Run unit tests (shard ${{ matrix.shard }}/4)
+        run: cd packages/api && npm run test:ci -- --shard=${{ matrix.shard }}/4 --maxWorkers=2 --workerIdleMemoryLimit=1600MB

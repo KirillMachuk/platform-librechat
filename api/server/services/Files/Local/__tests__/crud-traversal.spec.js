@@ -1,4 +1,12 @@
-jest.mock('@librechat/api', () => ({ deleteRagFile: jest.fn() }));
+// Passthrough stubs for the remote-download caps (upstream #13978): this suite
+// tests only path containment, not fetch limits.
+jest.mock('@librechat/api', () => ({
+  deleteRagFile: jest.fn(),
+  assertRemoteFileURL: jest.fn((url) => url),
+  getRemoteFileFetchMaxBytes: jest.fn(() => 10 * 1024 * 1024),
+  getRemoteFileFetchTimeoutMs: jest.fn(() => 5000),
+  assertRemoteFileContentLength: jest.fn(),
+}));
 jest.mock('@librechat/data-schemas', () => ({
   logger: { warn: jest.fn(), error: jest.fn() },
 }));
