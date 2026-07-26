@@ -850,6 +850,11 @@ describe('initializeAgent — attachment scoping', () => {
     // The cross-user file never reaches primeResources (and thus the prompt).
     const primedAttachments = await primeResources.mock.calls[0][0].attachments;
     expect(primedAttachments).toEqual([ownFile]);
+    // Upstream #13918: usage updates carry the tenant so owner scoping is fail-closed.
+    expect(db.updateFilesUsage).toHaveBeenCalledWith([ownFile, victimFile], undefined, {
+      user: 'user-1',
+      tenantId: undefined,
+    });
   });
 });
 
@@ -1927,13 +1932,17 @@ describe('initializeAgent — code-generated file thread filter (regression)', (
     );
 
     expect(getCodeGeneratedFiles).toHaveBeenCalledTimes(1);
-    expect(getCodeGeneratedFiles).toHaveBeenCalledWith('conv-1', [
-      'file-pptx-skill',
-      'file-output-csv',
-    ]);
+    expect(getCodeGeneratedFiles).toHaveBeenCalledWith(
+      'conv-1',
+      ['file-pptx-skill', 'file-output-csv'],
+      { userId: 'user-1', tenantId: undefined },
+    );
     /* Both functions now share the same primary anchor — symmetric
      * design that closes the sibling-branch hole. */
-    expect(getUserCodeFiles).toHaveBeenCalledWith(['file-pptx-skill', 'file-output-csv']);
+    expect(getUserCodeFiles).toHaveBeenCalledWith(['file-pptx-skill', 'file-output-csv'], {
+      userId: 'user-1',
+      tenantId: undefined,
+    });
   });
 
   it('selects messages.attachments alongside messages.files (regression)', async () => {
@@ -2021,7 +2030,10 @@ describe('initializeAgent — code-generated file thread filter (regression)', (
       { ...db, getMessages, getCodeGeneratedFiles, getUserCodeFiles },
     );
 
-    expect(getCodeGeneratedFiles).toHaveBeenCalledWith('conv-1', []);
+    expect(getCodeGeneratedFiles).toHaveBeenCalledWith('conv-1', [], {
+      userId: 'user-1',
+      tenantId: undefined,
+    });
     /* `getUserCodeFiles` is gated on a non-empty array at the call site,
      * so it shouldn't be invoked at all. `getCodeGeneratedFiles`'s own
      * empty-guard is exercised by data-schemas tests. */
