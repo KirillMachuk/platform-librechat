@@ -5,7 +5,7 @@ jest.mock('@librechat/data-schemas', () => ({
 
 import mongoose, { Types, Model } from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { createModels, createMethods } from '@librechat/data-schemas';
+import { createModels, createMethods, tenantStorage } from '@librechat/data-schemas';
 import { ResourceType, PrincipalType, AccessRoleIds } from 'librechat-data-provider';
 import type { Request, Response, NextFunction } from 'express';
 import type { IAclEntry, ISharedLink } from '@librechat/data-schemas';
@@ -223,6 +223,113 @@ describe('canAccessSharedLink', () => {
 
       expect(next).toHaveBeenCalled();
       expect((req as unknown as Record<string, unknown>).shareResourceId).toBe(link._id.toString());
+    });
+  });
+
+  describe('cross-tenant role suppression (upstream #14137)', () => {
+    // The middleware runs the ACL check under the SHARE's tenant, so grants must
+    // be written under that tenant too — as production (tenant-scoped requests) does.
+    const inShareTenant = <T>(fn: () => Promise<T>) => tenantStorage.run({ tenantId: 't1' }, fn);
+
+    beforeAll(async () => {
+      // AccessRole definitions are tenant-scoped as well: seed them under the
+      // share's tenant so grantPermission can resolve sharedLink_viewer there.
+      await inShareTenant(() => createMethods(mongoose).seedDefaultRoles());
+    });
+
+    async function grantRoleViewer(resourceId: Types.ObjectId, roleName: string) {
+      await inShareTenant(() =>
+        aclService.grantPermission({
+          principalType: PrincipalType.ROLE,
+          principalId: roleName,
+          resourceType: ResourceType.SHARED_LINK,
+          resourceId,
+          accessRoleId: AccessRoleIds.SHARED_LINK_VIEWER,
+          grantedBy: userId,
+        }),
+      );
+    }
+
+    /** Mirrors the real getUserPrincipals contract: role === null suppresses the ROLE principal. */
+    function mockPrincipalsHonouringRole(uid: Types.ObjectId) {
+      mockGetUserPrincipals.mockImplementation(async ({ role }: { role?: string | null }) => [
+        { principalType: PrincipalType.USER, principalId: uid },
+        ...(role ? [{ principalType: PrincipalType.ROLE, principalId: role }] : []),
+      ]);
+    }
+
+    test('same-tenant viewer keeps their role', async () => {
+      const link = await createTestLink({ tenantId: 't1' });
+      const viewer = new Types.ObjectId();
+      await inShareTenant(() => grantUserViewer(link._id, viewer));
+      mockPrincipalsHonouringRole(viewer);
+
+      const req = createReq({
+        params: { shareId: link.shareId },
+        user: { id: viewer.toString(), _id: viewer, role: 'ADMIN', tenantId: 't1' },
+      });
+      const res = createRes();
+      const next = jest.fn();
+      await canAccessSharedLink(req, res, next as unknown as NextFunction);
+
+      expect(next).toHaveBeenCalled();
+      expect(mockGetUserPrincipals).toHaveBeenCalledWith(
+        expect.objectContaining({ role: 'ADMIN' }),
+      );
+    });
+
+    test('cross-tenant viewer has the role suppressed to null (not undefined)', async () => {
+      const link = await createTestLink({ tenantId: 't1' });
+      const viewer = new Types.ObjectId();
+      await inShareTenant(() => grantUserViewer(link._id, viewer));
+      mockPrincipalsHonouringRole(viewer);
+
+      const req = createReq({
+        params: { shareId: link.shareId },
+        user: { id: viewer.toString(), _id: viewer, role: 'ADMIN', tenantId: 't2' },
+      });
+      const res = createRes();
+      const next = jest.fn();
+      await canAccessSharedLink(req, res, next as unknown as NextFunction);
+
+      expect(next).toHaveBeenCalled();
+      const roleArg = mockGetUserPrincipals.mock.calls[0][0].role;
+      expect(roleArg).toBeNull();
+    });
+
+    test('role-only ACL grant does not admit a viewer from another tenant', async () => {
+      const link = await createTestLink({ tenantId: 't1' });
+      const outsider = new Types.ObjectId();
+      await grantRoleViewer(link._id, 'ADMIN');
+      mockPrincipalsHonouringRole(outsider);
+
+      const req = createReq({
+        params: { shareId: link.shareId },
+        user: { id: outsider.toString(), _id: outsider, role: 'ADMIN', tenantId: 't2' },
+      });
+      const res = createRes();
+      const next = jest.fn();
+      await canAccessSharedLink(req, res, next as unknown as NextFunction);
+
+      expect(res._status).toBe(403);
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    test('role-only ACL grant still admits a same-tenant viewer', async () => {
+      const link = await createTestLink({ tenantId: 't1' });
+      const insider = new Types.ObjectId();
+      await grantRoleViewer(link._id, 'ADMIN');
+      mockPrincipalsHonouringRole(insider);
+
+      const req = createReq({
+        params: { shareId: link.shareId },
+        user: { id: insider.toString(), _id: insider, role: 'ADMIN', tenantId: 't1' },
+      });
+      const res = createRes();
+      const next = jest.fn();
+      await canAccessSharedLink(req, res, next as unknown as NextFunction);
+
+      expect(next).toHaveBeenCalled();
     });
   });
 
