@@ -19,8 +19,37 @@ const MAX_SEARCH_LEN = 200;
 const MAX_OFFSET = 100000;
 /** Safety cap on rows returned by a single CSV export. */
 const MAX_EXPORT_ROWS = 50000;
-/** CSV header row — mirrors the visible feed columns. */
-const EXPORT_HEADERS = ['Время', 'Сотрудник', 'Email', 'Модель/агент', 'Запрос'];
+/** CSV header row — mirrors the visible feed columns, plus how the answer was rated. */
+const EXPORT_HEADERS = [
+  'Время',
+  'Сотрудник',
+  'Email',
+  'Модель/агент',
+  'Запрос',
+  'Оценка',
+  'Причина',
+  'Комментарий',
+];
+
+/**
+ * Reason tags, resolved for the spreadsheet. The client localizes these from
+ * `com_ui_feedback_tag_*`; a CSV is written server-side, where that machinery does
+ * not exist, so the labels are repeated here in the language of the other headers.
+ * An unknown key (a tag added later) is written through as-is rather than dropped.
+ */
+const FEEDBACK_TAG_LABELS: Record<string, string> = {
+  accurate_reliable: 'Точный и надёжный',
+  attention_to_detail: 'Внимание к деталям',
+  bad_style: 'Плохой стиль или тон',
+  clear_well_written: 'Ясно и хорошо написано',
+  creative_solution: 'Креативное решение',
+  inaccurate: 'Неточный или неправильный ответ',
+  missing_image: 'Ожидаемое изображение',
+  not_helpful: 'Не хватало полезной информации',
+  not_matched: 'Не соответствовало запросу',
+  other: 'Другое',
+  unjustified_refusal: 'Отказ без объяснения причин',
+};
 /**
  * Field delimiter. Semicolon (not comma) because Russian/European Excel and
  * macOS Numbers use `;` as the list separator in those locales — a comma-
@@ -129,6 +158,8 @@ function buildCsv(rows: AnalyticsExportRow[]): string {
   const lines = [EXPORT_HEADERS.join(CSV_DELIMITER)];
   for (const r of rows) {
     const modelAgent = r.agentName ? `${r.model ?? ''} · агент: ${r.agentName}` : (r.model ?? '');
+    const rating = r.feedback?.rating;
+    const tag = r.feedback?.tag;
     lines.push(
       [
         r.createdAt ? new Date(r.createdAt).toISOString() : '',
@@ -136,6 +167,9 @@ function buildCsv(rows: AnalyticsExportRow[]): string {
         r.userEmail ?? '',
         modelAgent,
         r.text ?? '',
+        rating == null ? '' : rating === 'thumbsUp' ? 'Хорошо' : 'Плохо',
+        tag == null ? '' : (FEEDBACK_TAG_LABELS[tag] ?? tag),
+        r.feedback?.text ?? '',
       ]
         .map(csvCell)
         .join(CSV_DELIMITER),

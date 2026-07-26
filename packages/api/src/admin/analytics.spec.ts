@@ -373,6 +373,66 @@ describe('createAdminAnalyticsHandlers', () => {
       expect(recordAudit.mock.calls[0][0].metadata.truncated).toBe(false);
     });
 
+    it('writes the rating, its reason and the comment as their own columns', async () => {
+      const exportInteractions = jest.fn().mockResolvedValue({
+        rows: [
+          {
+            createdAt: new Date('2026-03-15T00:00:00.000Z'),
+            userId: 'u1',
+            userEmail: 'alice@x.io',
+            userName: 'Alice',
+            model: 'gpt-x',
+            text: 'запрос с оценкой',
+            feedback: { rating: 'thumbsDown', tag: 'not_helpful', text: 'ответ ни о чём' },
+          },
+          {
+            createdAt: new Date('2026-03-15T00:00:00.000Z'),
+            userId: 'u2',
+            userEmail: 'bob@x.io',
+            userName: 'Bob',
+            model: 'gpt-x',
+            text: 'запрос без оценки',
+          },
+        ],
+        truncated: false,
+      });
+      const deps = createDeps({ exportInteractions });
+      const handlers = createAdminAnalyticsHandlers(deps);
+      const { req, res, send } = createReqRes();
+
+      await handlers.export(req, res);
+
+      const csv = send.mock.calls[0][0] as string;
+      expect(csv).toContain('Запрос;Оценка;Причина;Комментарий');
+      expect(csv).toContain('запрос с оценкой;Плохо;Не хватало полезной информации;ответ ни о чём');
+      /** An unrated request leaves the three cells empty, keeping the row shape. */
+      expect(csv).toContain('запрос без оценки;;;');
+    });
+
+    it('writes an unknown reason tag through instead of dropping it', async () => {
+      const exportInteractions = jest.fn().mockResolvedValue({
+        rows: [
+          {
+            createdAt: new Date('2026-03-15T00:00:00.000Z'),
+            userId: 'u1',
+            userEmail: 'alice@x.io',
+            userName: 'Alice',
+            model: 'gpt-x',
+            text: 'запрос',
+            feedback: { rating: 'thumbsUp', tag: 'tag_added_later' },
+          },
+        ],
+        truncated: false,
+      });
+      const deps = createDeps({ exportInteractions });
+      const handlers = createAdminAnalyticsHandlers(deps);
+      const { req, res, send } = createReqRes();
+
+      await handlers.export(req, res);
+
+      expect(send.mock.calls[0][0] as string).toContain('Хорошо;tag_added_later');
+    });
+
     it('neutralizes spreadsheet formula injection in employee-controlled cells', async () => {
       const exportInteractions = jest.fn().mockResolvedValue({
         rows: [

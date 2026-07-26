@@ -314,6 +314,93 @@ describe('exportInteractions', () => {
   });
 });
 
+describe('message feedback', () => {
+  /** A rating lives on the answer; the export and the feed are built from requests. */
+  const rateAnswer = (
+    messageId: string,
+    parentMessageId: string,
+    feedback: { rating: string; tag?: string; text?: string },
+    createdAt: Date,
+  ) =>
+    Message.create({
+      messageId,
+      parentMessageId,
+      conversationId: 'c1',
+      user: aliceId,
+      isCreatedByUser: false,
+      sender: 'Assistant',
+      text: 'ответ',
+      feedback,
+      createdAt,
+    });
+
+  test('export carries the rating left on the answer to this request', async () => {
+    await rateAnswer(
+      'm1-rated',
+      'm1',
+      { rating: 'thumbsDown', tag: 'not_helpful', text: 'мимо' },
+      new Date('2026-01-01T10:00:07.000Z'),
+    );
+
+    const { rows } = await methods.exportInteractions({}, { limit: 100 });
+
+    const rated = rows.find((r) => r.text === 'Составь договор аренды');
+    expect(rated?.feedback).toMatchObject({
+      rating: 'thumbsDown',
+      tag: 'not_helpful',
+      text: 'мимо',
+    });
+    /** An unrated request must stay empty rather than inherit a neighbour's rating. */
+    expect(rows.find((r) => r.text === 'Сделай отчёт по продажам')?.feedback).toBeUndefined();
+  });
+
+  test('a regenerated answer contributes its newest rating', async () => {
+    await rateAnswer('m1-old', 'm1', { rating: 'thumbsUp' }, new Date('2026-01-01T10:00:07.000Z'));
+    await rateAnswer(
+      'm1-new',
+      'm1',
+      { rating: 'thumbsDown', tag: 'inaccurate' },
+      new Date('2026-01-01T10:00:09.000Z'),
+    );
+
+    const { rows } = await methods.exportInteractions({}, { limit: 100 });
+
+    expect(rows.find((r) => r.text === 'Составь договор аренды')?.feedback).toMatchObject({
+      rating: 'thumbsDown',
+      tag: 'inaccurate',
+    });
+  });
+
+  test('conversation detail shows the rating against the answer that got it', async () => {
+    await rateAnswer(
+      'm1-rated',
+      'm1',
+      { rating: 'thumbsUp', tag: 'accurate_reliable' },
+      new Date('2026-01-01T10:00:07.000Z'),
+    );
+
+    const detail = await methods.getConversationDetail('c1');
+
+    const rated = detail?.messages.find((m) => m.messageId === 'm1-rated');
+    expect(rated?.feedback).toMatchObject({ rating: 'thumbsUp', tag: 'accurate_reliable' });
+    expect(detail?.messages.find((m) => m.messageId === 'm1')?.feedback).toBeUndefined();
+  });
+
+  test('ratings never cross a tenant boundary', async () => {
+    await rateAnswer(
+      'm1-other-tenant',
+      'm1',
+      { rating: 'thumbsDown', tag: 'inaccurate' },
+      new Date('2026-01-01T10:00:07.000Z'),
+    );
+    await Message.updateOne({ messageId: 'm1-other-tenant' }, { $set: { tenantId: 'other' } });
+
+    const { rows } = await methods.exportInteractions({ tenantId: 'ours' }, { limit: 100 });
+
+    expect(rows.every((r) => r.feedback === undefined)).toBe(true);
+  });
+});
+
 describe('listInteractionsByIds (MeiliSearch hydration)', () => {
   test('hydrates ids into feed rows, preserving the input ranking order', async () => {
     // Pass ids out of chronological order — the result must follow the input order,

@@ -5,6 +5,7 @@ import type {
   IUser,
   IMessage,
   IConversation,
+  AnalyticsFeedback,
   AnalyticsConversation,
   AnalyticsInteraction,
   AnalyticsExportRow,
@@ -78,6 +79,7 @@ type ConversationMessageRow = Pick<
   | 'model'
   | 'endpoint'
   | 'createdAt'
+  | 'feedback'
 >;
 
 /** Raw projection of the interactions aggregation, before model/agent resolution. */
@@ -98,6 +100,8 @@ type RawInteractionRow = {
 
 /** Raw projection of the export aggregation (full request text, before resolution). */
 type RawExportRow = {
+  messageId: string;
+  conversationId: string;
   userId: string;
   userEmail?: string;
   userName?: string;
@@ -201,6 +205,46 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')): Ana
       .maxTimeMS(MAX_QUERY_MS)
       .lean<{ id: string; name?: string }[]>();
     return new Map(agents.filter((a) => a.name).map((a) => [a.id, a.name as string]));
+  }
+
+  /**
+   * Maps each request to the rating left on its answer.
+   *
+   * A rating lives on the assistant reply, while the feed and the export are built
+   * from the employee's prompts, so the two have to be joined. Querying by the
+   * page's conversations (an indexed field) and matching parents in memory keeps
+   * this to one extra read, where a correlated `$lookup` would run per row against
+   * an unindexed `parentMessageId`.
+   */
+  async function fetchFeedbackByPrompt(
+    rows: Array<{ messageId: string; conversationId: string }>,
+    tenantId?: string,
+  ): Promise<Map<string, AnalyticsFeedback>> {
+    if (!rows.length) {
+      return new Map();
+    }
+    const Message = mongoose.models.Message as Model<IMessage>;
+    const filter: FilterQuery<IMessage> = {
+      conversationId: { $in: [...new Set(rows.map((r) => r.conversationId))] },
+      isCreatedByUser: false,
+      feedback: { $exists: true, $ne: null },
+    };
+    if (tenantId) {
+      filter.tenantId = tenantId;
+    }
+    const rated = await Message.find(filter)
+      .select('parentMessageId feedback -_id')
+      .maxTimeMS(MAX_QUERY_MS)
+      .lean<Pick<IMessage, 'parentMessageId' | 'feedback'>[]>();
+
+    const byPrompt = new Map<string, AnalyticsFeedback>();
+    for (const m of rated) {
+      /** Regenerating produces sibling answers; the newest rating wins. */
+      if (m.parentMessageId && m.feedback) {
+        byPrompt.set(m.parentMessageId, m.feedback as AnalyticsFeedback);
+      }
+    }
+    return byPrompt;
   }
 
   /** Conversation ids belonging to a given agent (scoped to tenant when provided). */
@@ -467,6 +511,8 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')): Ana
       {
         $project: {
           _id: 0,
+          messageId: 1,
+          conversationId: 1,
           userId: '$user',
           userEmail: '$usr.email',
           userName: '$usr.name',
@@ -490,6 +536,7 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')): Ana
       ),
     ];
     const agentNames = await fetchAgentNames(realAgentIds);
+    const feedbackByPrompt = await fetchFeedbackByPrompt(page, filter.tenantId);
 
     const rows = page.map((r) => {
       const { model, agentName } = resolveModelAgent(r.agentId, r.model, r.convoModel, agentNames);
@@ -501,6 +548,7 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')): Ana
         model,
         agentName,
         text: r.text,
+        feedback: feedbackByPrompt.get(r.messageId),
       };
     });
     return { rows, truncated };
@@ -551,7 +599,7 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')): Ana
     const docs = await Message.find(msgFilter)
       .sort({ createdAt: 1 })
       .select(
-        'messageId parentMessageId isCreatedByUser sender text content model endpoint createdAt',
+        'messageId parentMessageId isCreatedByUser sender text content model endpoint createdAt feedback',
       )
       .limit(MAX_CONVERSATION_MESSAGES + 1)
       .maxTimeMS(MAX_QUERY_MS)
@@ -569,6 +617,7 @@ export function createAnalyticsMethods(mongoose: typeof import('mongoose')): Ana
       model: m.model ?? undefined,
       endpoint: m.endpoint,
       createdAt: m.createdAt,
+      feedback: (m.feedback as AnalyticsFeedback | undefined) ?? undefined,
     }));
 
     let userEmail: string | undefined;
