@@ -18,7 +18,12 @@ export default function AddedConvo({
   const agentsMap = useAgentsMapContext();
   const { data: endpointsConfig } = useGetEndpointsQuery();
   const title = useMemo(() => {
-    // Priority: agent name > modelDisplayLabel > modelLabel > model
+    /**
+     * The whole point of a second conversation is comparing it against the first,
+     * so name what differs — the model. An endpoint's modelDisplayLabel is the same
+     * string for every model it serves, which reads as if the picker did nothing.
+     * Priority: agent name > modelLabel > model > modelDisplayLabel
+     */
     if (isAgentsEndpoint(addedConvo?.endpoint) && addedConvo?.agent_id) {
       const agent = agentsMap?.[addedConvo.agent_id];
       if (agent?.name) {
@@ -28,7 +33,7 @@ export default function AddedConvo({
 
     const endpointConfig = endpointsConfig?.[addedConvo?.endpoint ?? ''];
     const displayLabel =
-      endpointConfig?.modelDisplayLabel || addedConvo?.modelLabel || addedConvo?.model || 'AI';
+      addedConvo?.modelLabel || addedConvo?.model || endpointConfig?.modelDisplayLabel || 'AI';
 
     return `+ ${displayLabel}`;
   }, [addedConvo, agentsMap, endpointsConfig]);

@@ -3,30 +3,25 @@ import { useSetRecoilState, useRecoilValue } from 'recoil';
 import { PlusCircle } from 'lucide-react';
 import { TooltipAnchor } from '@librechat/client';
 import { isAssistantsEndpoint } from 'librechat-data-provider';
-import type { TConversation } from 'librechat-data-provider';
-import { useGetConversation, useLocalize } from '~/hooks';
-import { mainTextareaId } from '~/common';
+import { useLocalize } from '~/hooks';
 import store from '~/store';
+
+/** Index of the conversation this button belongs to; the added one is 1. */
+const ROOT_INDEX = 0;
 
 function AddMultiConvo() {
   const localize = useLocalize();
-  const getConversation = useGetConversation(0);
-  const endpoint = useRecoilValue(store.conversationEndpointByIndex(0));
-  const setAddedConvo = useSetRecoilState(store.conversationByIndex(1));
+  const endpoint = useRecoilValue(store.conversationEndpointByIndex(ROOT_INDEX));
+  const setShowPlusPopover = useSetRecoilState(store.showPlusPopoverFamily(ROOT_INDEX));
 
+  /**
+   * Opens the same picker the `+` command opens, rather than cloning the current
+   * model: a second answer from the identical model is rarely what's wanted, and
+   * the `+` command was the only way to choose — undiscoverable.
+   */
   const clickHandler = useCallback(() => {
-    const conversation = getConversation();
-    const { title: _t, ...convo } = conversation ?? ({} as TConversation);
-    setAddedConvo({
-      ...convo,
-      title: '',
-    } as TConversation);
-
-    const textarea = document.getElementById(mainTextareaId);
-    if (textarea) {
-      textarea.focus();
-    }
-  }, [getConversation, setAddedConvo]);
+    setShowPlusPopover(true);
+  }, [setShowPlusPopover]);
 
   if (!endpoint) {
     return null;

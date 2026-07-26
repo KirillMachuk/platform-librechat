@@ -632,7 +632,7 @@
   "com_ui_add_mcp": "Добавить MCP",
   "com_ui_add_mcp_server": "Добавить MCP сервер",
   "com_ui_add_model_preset": "Добавить модель или пресет для дополнительного ответа",
-  "com_ui_add_multi_conversation": "Добавить несколько бесед",
+  "com_ui_add_multi_conversation": "Сравнить с другой моделью",
   "com_ui_adding_details": "Добавление деталей",
   "com_ui_additional_details": "Дополнительные детали",
   "com_ui_admin": "Администратор",
