@@ -322,7 +322,7 @@ export default function useSelectMention({
         const modelSpec = modelSpecs.find((spec) => spec.name === key);
         onSelectSpec(modelSpec);
       } else if (option.type === 'model') {
-        onSelectEndpoint(key, { model: option.label });
+        onSelectEndpoint(key, { model: option.modelId ?? option.label });
       } else if (option.type === 'endpoint') {
         onSelectEndpoint(key);
       } else if (isAssistantsEndpoint(option.type)) {

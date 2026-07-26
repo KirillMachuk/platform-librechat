@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
 import {
   Permissions,
-  alternateName,
   PermissionBits,
   EModelEndpoint,
   PermissionTypes,
@@ -18,6 +17,8 @@ import {
   useListAgentsQuery,
   useGetStartupConfig,
 } from '~/data-provider';
+import { getModelBrandIcon } from '~/components/Chat/Menus/Endpoints/components/brand';
+import { stripProviderPrefix } from '~/components/Chat/Menus/Endpoints/utils';
 import useAssistantListMap from '~/hooks/Assistants/useAssistantListMap';
 import { useAgentsMapContext } from '~/Providers/AgentsMapContext';
 import { mapEndpoints, getPresetTitle } from '~/utils';
@@ -180,16 +181,21 @@ export default function useMentions({
         return [];
       }
 
+      /** Named and drawn like the model selector: a picker that lists the same models
+       *  under different names and a generic icon reads as a different set entirely. */
       const models = (modelsConfig?.[endpoint] ?? []).map((model) => ({
         value: endpoint,
-        label: model,
+        label: stripProviderPrefix(model),
+        modelId: model,
         type: 'model' as const,
-        icon: EndpointIcon({
-          conversation: { endpoint, model },
-          endpointsConfig,
-          context: 'menu-item',
-          size: 20,
-        }),
+        icon:
+          getModelBrandIcon(model, 20) ??
+          EndpointIcon({
+            conversation: { endpoint, model },
+            endpointsConfig,
+            context: 'menu-item',
+            size: 20,
+          }),
       }));
       return models;
     });
@@ -210,17 +216,13 @@ export default function useMentions({
         }),
         type: 'modelSpec' as const,
       })),
-      ...(interfaceConfig.modelSelect === true ? validEndpoints : []).map((endpoint) => ({
-        value: endpoint,
-        label: alternateName[endpoint as string] ?? endpoint ?? '',
-        type: 'endpoint' as const,
-        icon: EndpointIcon({
-          conversation: { endpoint },
-          endpointsConfig,
-          context: 'menu-item',
-          size: 20,
-        }),
-      })),
+      /**
+       * Endpoints themselves are deliberately absent. Each one only opened a nested
+       * list of what this list already holds — every model of that endpoint, every
+       * agent — so the rows read as mystery entries ("1ma", "My Agents") next to the
+       * things they contain, and "My Agents" opened an empty list for anyone with no
+       * agents yet.
+       */
       ...(interfaceConfig.modelSelect === true && validEndpointSet.has(EModelEndpoint.agents)
         ? (agentsList ?? [])
         : []),
