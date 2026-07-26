@@ -84,7 +84,7 @@ const RAG_QUERY_CONCURRENCY = parseInt(process.env.RAG_QUERY_CONCURRENCY ?? '', 
  * @param {Agent['tool_resources']} options.tool_resources
  * @param {string} [options.agentId] - The agent ID for file access control
  * @returns {Promise<{
- *   files: Array<{ file_id: string; filename: string }>,
+ *   files: Array<{ file_id: string; filename: string; entity_id?: string; fromAgent: boolean }>,
  *   toolContext: string
  * }>}
  */
@@ -172,6 +172,13 @@ const primeFiles = async (options) => {
       // relying on the tool-level fallback. Falls back to project_id for
       // legacy/sync records that predate the field.
       entity_id: file.embedEntityId ?? file.project_id ?? undefined,
+      // Whether the file belongs to the agent's knowledge base. Message
+      // attachments are embedded WITHOUT an entity (process.js nulls
+      // entity_id for them), so createQueryBody must not fall back to the
+      // tool-level agent id for them — the RAG entity filter would return
+      // nothing (upstream #13693). Agent KB files keep the fallback so
+      // legacy records that predate embedEntityId still resolve.
+      fromAgent: agentResourceIds.has(file.file_id),
     });
   }
 
@@ -181,7 +188,7 @@ const primeFiles = async (options) => {
 /**
  * @param {Object} options
  * @param {string} options.userId
- * @param {Array<{ file_id: string; filename: string }>} options.files
+ * @param {Array<{ file_id: string; filename: string; entity_id?: string; fromAgent?: boolean }>} options.files
  * @param {string} [options.entity_id]
  * @param {boolean} [options.fileCitations=false] - Whether to include citation instructions
  * @param {(content: string) => Promise<string>} [options.transformContent] Sovereign DR (Track B):
@@ -227,7 +234,7 @@ const createFileSearchTool = async ({
         : Math.max(FILE_SEARCH_K, FILE_SEARCH_RESULT_LIMIT);
 
       /**
-       * @param {import('librechat-data-provider').TFile} file
+       * @param {import('librechat-data-provider').TFile & { fromAgent?: boolean }} file
        * @returns {{ file_id: string, query: string, k: number, entity_id?: string }}
        */
       const createQueryBody = (file) => {
@@ -240,7 +247,13 @@ const createFileSearchTool = async ({
         // priority over the tool-level entity_id (agent id). This ensures that
         // project files embedded under entity_id=project_id are queried in the
         // correct RAG namespace rather than the agent's namespace.
-        const effectiveEntityId = file.entity_id ?? entity_id;
+        // For user message attachments (fromAgent === false) the tool-level
+        // fallback is suppressed: they are embedded without an entity, and
+        // querying them with the agent's entity_id makes the RAG filter
+        // return nothing. Files passed without the flag (e.g. the DR rebuild
+        // path) keep the legacy fallback behaviour.
+        const effectiveEntityId =
+          file.entity_id ?? (file.fromAgent === false ? undefined : entity_id);
         if (!effectiveEntityId) {
           return body;
         }
