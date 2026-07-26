@@ -376,8 +376,10 @@ jobs:
           name: build-data-schemas
           path: packages/data-schemas/dist
 
+      # Same worker-memory bounds as test-api: 48 suites on mongodb-memory-server
+      # flaked once on a 7 GB runner without them.
       - name: Run unit tests
-        run: cd packages/data-schemas && npm run test:ci
+        run: cd packages/data-schemas && npm run test:ci -- --maxWorkers=2 --workerIdleMemoryLimit=1600MB
 
   test-packages-api:
     name: 'Tests: @librechat/api (shard ${{ matrix.shard }}/4)'

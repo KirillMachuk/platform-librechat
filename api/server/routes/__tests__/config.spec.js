@@ -81,6 +81,7 @@ afterEach(() => {
   delete process.env.START_BALANCE;
   delete process.env.SANDPACK_BUNDLER_URL;
   delete process.env.SANDPACK_STATIC_BUNDLER_URL;
+  delete process.env.SANDPACK_BUNDLER_ALLOWED_ORIGINS;
   delete process.env.CONVERSATION_IMPORT_MAX_FILE_SIZE_BYTES;
   delete process.env.ALLOW_REGISTRATION;
   delete process.env.ALLOW_SOCIAL_LOGIN;
@@ -369,6 +370,10 @@ describe('GET /api/config', () => {
       mockGetAppConfig.mockResolvedValue(baseAppConfig);
       process.env.SANDPACK_BUNDLER_URL = 'https://bundler.test';
       process.env.SANDPACK_STATIC_BUNDLER_URL = 'https://static-bundler.test';
+      // Since the artifacts hardening (#114), bundler URLs are served only when
+      // their origin is allowlisted.
+      process.env.SANDPACK_BUNDLER_ALLOWED_ORIGINS =
+        'https://bundler.test,https://static-bundler.test';
       process.env.CONVERSATION_IMPORT_MAX_FILE_SIZE_BYTES = '5000000';
       const app = createApp(mockUser);
 
