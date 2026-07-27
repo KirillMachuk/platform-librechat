@@ -31,4 +31,16 @@ auditLogSchema.index({ tenantId: 1, createdAt: -1 });
 auditLogSchema.index({ actorId: 1, createdAt: -1 });
 auditLogSchema.index({ action: 1, createdAt: -1 });
 
+/**
+ * Retention. Append-only means entries are never rewritten — it does not mean
+ * they are kept forever, and one row per model call makes "forever" a growing
+ * problem on a single-VM deployment. A year plus a month covers any audit that
+ * asks for "the last calendar year" without a cron to run.
+ *
+ * MongoDB fixes `expireAfterSeconds` when the index is built: changing the
+ * number here does not move an index that already exists. To change retention,
+ * drop `createdAt_1` and restart so it is rebuilt with the new value.
+ */
+auditLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 400 * 24 * 60 * 60 });
+
 export default auditLogSchema;
