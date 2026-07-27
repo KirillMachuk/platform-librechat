@@ -1944,10 +1944,11 @@ describe('Agent Methods', () => {
       const agentInDb = await Agent.findOne({ id: agentId }).lean<IAgent>();
       expect(agentInDb!.subagents).toBeUndefined();
       expect(agentInDb!.description).toBe('Original description');
-      /** Bookkeeping the revert must keep */
+      /** Bookkeeping the revert must keep. Timestamps are outside `IAgent`, so they
+       *  are read off the raw document. */
       expect(agentInDb!.author).toBeDefined();
       expect(agentInDb!.versions).toHaveLength(2);
-      expect(agentInDb!.createdAt).toBeDefined();
+      expect((agentInDb as unknown as Record<string, unknown>).createdAt).toBeDefined();
     });
 
     test('should detect action metadata changes and force version update', async () => {

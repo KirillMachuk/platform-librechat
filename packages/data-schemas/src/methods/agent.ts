@@ -980,7 +980,7 @@ export function createAgentMethods(
       'updatedAt',
       'tenantId',
     ]);
-    const staleKeys = Object.keys(agent.toObject() as Record<string, unknown>).filter(
+    const staleKeys = Object.keys(agent.toObject() as unknown as Record<string, unknown>).filter(
       (key) => !(key in revertToVersion) && !preservedKeys.has(key),
     );
 
