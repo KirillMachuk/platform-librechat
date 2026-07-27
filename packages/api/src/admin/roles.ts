@@ -183,6 +183,24 @@ export function createAdminRolesHandlers(deps: AdminRolesDeps): {
     }
   }
 
+  /**
+   * A role created with no permissions of its own would deny its members
+   * everything — `checkAccess` is fail-closed and reads only what the role
+   * carries — so a new role starts as a copy of USER, the shape an admin
+   * expects to narrow down. The live USER role is copied rather than the
+   * built-in defaults: the customer may have tuned it, and inheriting the
+   * tuned version is what "как у сотрудника" means on their installation.
+   */
+  async function defaultPermissionsForNewRole(): Promise<IRole['permissions']> {
+    try {
+      const baseline = await getRoleByName(SystemRoles.USER);
+      return baseline?.permissions ?? {};
+    } catch (error) {
+      logger.warn('[adminRoles] could not read USER permissions for a new role:', error);
+      return {};
+    }
+  }
+
   async function createRoleHandler(req: ServerRequest, res: Response) {
     try {
       const { name, description, permissions } = req.body as {
@@ -206,7 +224,7 @@ export function createAdminRolesHandlers(deps: AdminRolesDeps): {
       }
       const roleData: Partial<IRole> = {
         name: (name as string).trim(),
-        permissions: permissions ?? {},
+        permissions: permissions ?? (await defaultPermissionsForNewRole()),
       };
       if (description !== undefined) {
         roleData.description = description;
