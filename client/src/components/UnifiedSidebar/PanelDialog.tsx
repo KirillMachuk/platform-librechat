@@ -18,7 +18,13 @@ function PanelDialog({ link, open, onOpenChange }: PanelDialogProps) {
 
   return (
     <Transition appear show={open}>
-      <Dialog as="div" className="relative z-50" onClose={() => onOpenChange(false)}>
+      {/**
+       * z-120 sits in the gap between the mobile drawer (z-110, UnifiedSidebar.tsx) and the
+       * OGDialog layer (overlay 130 / content 140, OriginalDialog.tsx) on purpose: the panel
+       * must cover the drawer, while a dialog or a dropdown opened from inside a panel
+       * (e.g. ProjectEditDialog, or the z-125 prompt menus) must still land above it.
+       */}
+      <Dialog as="div" className="relative z-[120]" onClose={() => onOpenChange(false)}>
         <TransitionChild
           enter="ease-out duration-200"
           enterFrom="opacity-0"
