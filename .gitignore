@@ -51,7 +51,11 @@ __blobstorage__/**/*
 # Dependency directorys
 # Deployed apps should consider commenting these lines out:
 # see https://npmjs.org/doc/faq.html#Should-I-check-my-node_modules-folder-into-git
-node_modules/
+# Bare `node_modules` (no trailing slash) so it also ignores node_modules SYMLINKS, not
+# just directories: git worktrees created for parallel work symlink node_modules to the
+# main checkout, and `node_modules/` (dir-only) let `git add -A` stage those symlinks —
+# which broke CI (`npm install` → ENOTDIR: mkdir over the checked-out symlink).
+node_modules
 meili_data/
 api/node_modules/
 client/node_modules/
