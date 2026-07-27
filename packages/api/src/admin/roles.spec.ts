@@ -234,6 +234,46 @@ describe('createAdminRolesHandlers', () => {
       });
     });
 
+    /**
+     * `checkAccess` reads only what the role carries, so a role born empty
+     * denies its members everything — including features they had a minute
+     * earlier under USER.
+     */
+    it('starts a new role as a copy of USER when no permissions are given', async () => {
+      const userPermissions = {
+        AGENTS: { USE: true },
+        WEB_SEARCH: { USE: false },
+      } as unknown as IRole['permissions'];
+      const deps = createDeps({
+        getRoleByName: jest.fn().mockResolvedValue(mockRole({ permissions: userPermissions })),
+        createRoleByName: jest.fn().mockResolvedValue(mockRole()),
+      });
+      const handlers = createAdminRolesHandlers(deps);
+      const { req, res } = createReqRes({ body: { name: 'manager' } });
+
+      await handlers.createRole(req, res);
+
+      expect(deps.getRoleByName).toHaveBeenCalledWith('USER');
+      expect(deps.createRoleByName).toHaveBeenCalledWith({
+        name: 'manager',
+        permissions: userPermissions,
+      });
+    });
+
+    it('creates the role anyway when USER cannot be read', async () => {
+      const deps = createDeps({
+        getRoleByName: jest.fn().mockRejectedValue(new Error('db down')),
+        createRoleByName: jest.fn().mockResolvedValue(mockRole()),
+      });
+      const handlers = createAdminRolesHandlers(deps);
+      const { req, res, status } = createReqRes({ body: { name: 'manager' } });
+
+      await handlers.createRole(req, res);
+
+      expect(status).toHaveBeenCalledWith(201);
+      expect(deps.createRoleByName).toHaveBeenCalledWith({ name: 'manager', permissions: {} });
+    });
+
     it('passes provided permissions to createRoleByName', async () => {
       const perms = { chat: { read: true, write: false } } as unknown as IRole['permissions'];
       const role = mockRole({ permissions: perms });
