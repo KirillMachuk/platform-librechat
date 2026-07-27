@@ -2,9 +2,14 @@ import { Types } from 'mongoose';
 import { logger } from '@librechat/data-schemas';
 
 import type { IUser } from '@librechat/data-schemas';
-import type { AdminRefreshDeps, RefreshTokenset } from './refresh';
+import type { AdminRefreshDeps, LocalAdminRefreshDeps, RefreshTokenset } from './refresh';
 
-import { applyAdminRefresh, AdminRefreshError, buildOpenIDRefreshParams } from './refresh';
+import {
+  applyAdminRefresh,
+  applyLocalAdminRefresh,
+  AdminRefreshError,
+  buildOpenIDRefreshParams,
+} from './refresh';
 
 jest.mock('@librechat/data-schemas', () => ({
   ...jest.requireActual('@librechat/data-schemas'),
@@ -637,6 +642,125 @@ describe('applyAdminRefresh', () => {
 
       expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('admin@example.com'));
     });
+  });
+});
+
+describe('applyLocalAdminRefresh', () => {
+  const REFRESH_TOKEN = 'librechat-refresh-token';
+
+  function makeLocalDeps(
+    user: IUser | undefined,
+    overrides: Partial<LocalAdminRefreshDeps> = {},
+  ): LocalAdminRefreshDeps {
+    return {
+      verifyRefreshToken: jest.fn().mockResolvedValue({
+        status: 'valid',
+        payload: { id: user?._id?.toString(), sessionId: 'session-1' },
+      }),
+      findSession: jest.fn().mockResolvedValue({ _id: 'session-1' }),
+      getUserById: jest.fn().mockResolvedValue(user ?? null),
+      mintToken: jest.fn().mockResolvedValue({ token: 'minted-jwt', expiresAt: 1234567890 }),
+      ...overrides,
+    };
+  }
+
+  it('mints a bearer for a live local session and echoes the refresh token back', async () => {
+    const user = makeUser({ provider: 'local', openidId: undefined });
+    const deps = makeLocalDeps(user);
+
+    const result = await applyLocalAdminRefresh(REFRESH_TOKEN, deps);
+
+    expect(result).toMatchObject({
+      token: 'minted-jwt',
+      refreshToken: REFRESH_TOKEN,
+      expiresAt: 1234567890,
+    });
+    expect(result?.user.email).toBe('admin@example.com');
+    expect(deps.findSession).toHaveBeenCalledWith({
+      userId: user._id?.toString(),
+      refreshToken: REFRESH_TOKEN,
+    });
+  });
+
+  it('returns null for a token this server did not sign, so the caller can try the IdP path', async () => {
+    const deps = makeLocalDeps(makeUser(), {
+      verifyRefreshToken: jest.fn().mockResolvedValue({ status: 'foreign' }),
+    });
+
+    await expect(applyLocalAdminRefresh('idp-opaque-token', deps)).resolves.toBeNull();
+    expect(deps.findSession).not.toHaveBeenCalled();
+  });
+
+  /** Expired proves the session was local; falling through would post our JWT to the IdP. */
+  it('rejects an expired local token instead of forwarding it to the identity provider', async () => {
+    const deps = makeLocalDeps(makeUser(), {
+      verifyRefreshToken: jest.fn().mockResolvedValue({ status: 'expired' }),
+    });
+
+    await expect(applyLocalAdminRefresh(REFRESH_TOKEN, deps)).rejects.toMatchObject({
+      code: 'SESSION_EXPIRED',
+      status: 401,
+    });
+    expect(deps.findSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects a verified token that carries no user reference', async () => {
+    const deps = makeLocalDeps(makeUser(), {
+      verifyRefreshToken: jest
+        .fn()
+        .mockResolvedValue({ status: 'valid', payload: { sessionId: 'session-1' } }),
+    });
+
+    await expect(applyLocalAdminRefresh(REFRESH_TOKEN, deps)).rejects.toMatchObject({
+      code: 'INVALID_REFRESH_TOKEN',
+      status: 401,
+    });
+  });
+
+  it('rejects when the session is gone (logged out or expired)', async () => {
+    const deps = makeLocalDeps(makeUser(), {
+      findSession: jest.fn().mockResolvedValue(null),
+    });
+
+    await expect(applyLocalAdminRefresh(REFRESH_TOKEN, deps)).rejects.toMatchObject({
+      code: 'SESSION_NOT_FOUND',
+      status: 401,
+    });
+  });
+
+  it('rejects when the user no longer exists', async () => {
+    const deps = makeLocalDeps(undefined, {
+      verifyRefreshToken: jest.fn().mockResolvedValue({
+        status: 'valid',
+        payload: { id: new Types.ObjectId().toString() },
+      }),
+    });
+
+    await expect(applyLocalAdminRefresh(REFRESH_TOKEN, deps)).rejects.toMatchObject({
+      code: 'USER_NOT_FOUND',
+      status: 401,
+    });
+  });
+
+  it('rejects a user resolved outside the request tenant', async () => {
+    const user = makeUser({ tenantId: 'tenant-a' });
+    const deps = makeLocalDeps(user);
+
+    await expect(
+      applyLocalAdminRefresh(REFRESH_TOKEN, deps, { tenantId: 'tenant-b' }),
+    ).rejects.toMatchObject({ code: 'TENANT_MISMATCH', status: 401 });
+  });
+
+  it('refuses to reissue a bearer once admin access is revoked', async () => {
+    const deps = makeLocalDeps(makeUser(), {
+      canAccessAdmin: jest.fn().mockResolvedValue(false),
+    });
+
+    await expect(applyLocalAdminRefresh(REFRESH_TOKEN, deps)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      status: 403,
+    });
+    expect(deps.mintToken).not.toHaveBeenCalled();
   });
 });
 

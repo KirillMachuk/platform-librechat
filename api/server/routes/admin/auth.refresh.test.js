@@ -43,6 +43,8 @@ jest.mock('@librechat/api', () => {
     tenantContextMiddleware: jest.fn((req, res, next) => next()),
     preAuthTenantMiddleware: jest.fn((req, res, next) => next()),
     applyAdminRefresh: jest.fn(),
+    /** Null = "not a LibreChat refresh token", so the route falls through to the IdP path. */
+    applyLocalAdminRefresh: jest.fn(() => Promise.resolve(null)),
     AdminRefreshError,
     buildOpenIDRefreshParams: jest.fn(() => {
       const params = {};
@@ -72,6 +74,7 @@ jest.mock('~/server/controllers/auth/oauth', () => ({
 
 jest.mock('~/models', () => ({
   findBalanceByUser: jest.fn(),
+  findSession: jest.fn(),
   findUsers: jest.fn(),
   generateToken: jest.fn(() => Promise.resolve('minted-token')),
   getUserById: jest.fn(),
@@ -104,7 +107,12 @@ jest.mock('~/server/middleware', () => ({
 
 const openIdClient = require('openid-client');
 const { logger } = require('@librechat/data-schemas');
-const { isEnabled, applyAdminRefresh, buildOpenIDRefreshParams } = require('@librechat/api');
+const {
+  isEnabled,
+  applyAdminRefresh,
+  applyLocalAdminRefresh,
+  buildOpenIDRefreshParams,
+} = require('@librechat/api');
 const { getOpenIdConfig } = require('~/strategies');
 const adminAuthRouter = require('./auth');
 
@@ -137,6 +145,7 @@ describe('admin auth OpenID refresh route', () => {
     app.use('/api/admin', adminAuthRouter);
 
     isEnabled.mockReturnValue(true);
+    applyLocalAdminRefresh.mockResolvedValue(null);
     getOpenIdConfig.mockReturnValue(openIdConfig);
     openIdClient.refreshTokenGrant.mockResolvedValue(tokenset);
     applyAdminRefresh.mockResolvedValue({
@@ -246,5 +255,85 @@ describe('admin auth OpenID refresh route', () => {
     expect(debugOutput).not.toContain('new-admin-id');
     expect(debugOutput).not.toContain('new-admin-refresh');
     expect(debugOutput).not.toContain('https://api.example.com');
+  });
+
+  describe('local-password admin sessions', () => {
+    const localResponse = {
+      token: 'admin-jwt',
+      refreshToken: 'incoming-refresh-token',
+      user: { id: 'user-id', email: 'admin@example.com' },
+      expiresAt: 1234567890,
+    };
+
+    it('answers from the local path without ever contacting the IdP', async () => {
+      applyLocalAdminRefresh.mockResolvedValue(localResponse);
+
+      const response = await request(app)
+        .post('/api/admin/oauth/refresh')
+        .send({ refresh_token: 'librechat-refresh-token' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(localResponse);
+      expect(openIdClient.refreshTokenGrant).not.toHaveBeenCalled();
+      expect(applyAdminRefresh).not.toHaveBeenCalled();
+    });
+
+    /** Local admins must not be blocked by an IdP-only setting they have nothing to do with. */
+    it('serves a local session even when OpenID token reuse is disabled', async () => {
+      isEnabled.mockReturnValue(false);
+      applyLocalAdminRefresh.mockResolvedValue(localResponse);
+
+      const response = await request(app)
+        .post('/api/admin/oauth/refresh')
+        .send({ refresh_token: 'librechat-refresh-token' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.token).toBe('admin-jwt');
+    });
+
+    it('reports a revoked local session with its own status, not a 500', async () => {
+      const { AdminRefreshError } = require('@librechat/api');
+      applyLocalAdminRefresh.mockRejectedValue(
+        new AdminRefreshError(
+          'SESSION_NOT_FOUND',
+          401,
+          'No live session matches this refresh token',
+        ),
+      );
+
+      const response = await request(app)
+        .post('/api/admin/oauth/refresh')
+        .send({ refresh_token: 'librechat-refresh-token' });
+
+      expect(response.status).toBe(401);
+      expect(response.body).toEqual({
+        error: 'No live session matches this refresh token',
+        error_code: 'SESSION_NOT_FOUND',
+      });
+    });
+
+    /** The panel sent camelCase for months; rejecting it would log every admin out on rollout. */
+    it('accepts refreshToken as an alias for refresh_token', async () => {
+      applyLocalAdminRefresh.mockResolvedValue(localResponse);
+
+      const response = await request(app)
+        .post('/api/admin/oauth/refresh')
+        .send({ refreshToken: 'librechat-refresh-token' });
+
+      expect(response.status).toBe(200);
+      expect(applyLocalAdminRefresh).toHaveBeenCalledWith(
+        'librechat-refresh-token',
+        expect.any(Object),
+        expect.any(Object),
+      );
+    });
+
+    it('still rejects a request with neither spelling', async () => {
+      const response = await request(app).post('/api/admin/oauth/refresh').send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body.error_code).toBe('MISSING_REFRESH_TOKEN');
+      expect(applyLocalAdminRefresh).not.toHaveBeenCalled();
+    });
   });
 });

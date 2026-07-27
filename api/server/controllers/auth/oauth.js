@@ -11,7 +11,7 @@ const { setAuthTokens, setOpenIDAuthTokens } = require('~/server/services/AuthSe
 const { recordAudit, auditRequestContext } = require('~/server/services/Audit');
 const getLogStores = require('~/cache/getLogStores');
 const { checkBan } = require('~/server/middleware');
-const { generateToken } = require('~/models');
+const { createSession, generateToken } = require('~/models');
 
 const domains = {
   client: process.env.DOMAIN_CLIENT,
@@ -64,10 +64,20 @@ function createOAuthHandler(redirectUri = domains.client) {
         const token = await generateToken(req.user, sessionExpiry);
 
         /** Get refresh token from tokenset for OpenID users */
-        const refreshToken =
+        const idpRefreshToken =
           req.user.provider === 'openid' && isEnabled(process.env.OPENID_REUSE_TOKENS) === true
             ? req.user.tokenset?.refresh_token || req.user.federatedTokens?.refresh_token
             : undefined;
+        /**
+         * Without a refresh token the panel's session simply ends at
+         * SESSION_EXPIRY — 15 minutes by default — and the admin is dropped
+         * back on the login page. The IdP only supplies one when token reuse is
+         * enabled and the provider was asked for offline access, so a
+         * LibreChat-issued one is minted otherwise; `/api/admin/oauth/refresh`
+         * serves both kinds.
+         */
+        const refreshToken =
+          idpRefreshToken ?? (await createSession(req.user._id.toString())).refreshToken;
         const expiresAt = Date.now() + sessionExpiry;
 
         const callbackUrl = new URL(redirectUri);

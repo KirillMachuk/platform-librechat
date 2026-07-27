@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 import { logger } from '@librechat/data-schemas';
 
-import type { IUser } from '@librechat/data-schemas';
+import type { ISession, IUser } from '@librechat/data-schemas';
 import type { FilterQuery } from 'mongoose';
 import type { AdminExchangeResponse } from '~/auth/exchange';
 
@@ -117,6 +117,110 @@ export class AdminRefreshError extends Error {
     super(message);
     this.name = 'AdminRefreshError';
   }
+}
+
+/** Payload of a LibreChat-issued refresh token (see `generateRefreshToken`). */
+export interface LocalRefreshPayload {
+  id?: string;
+  sessionId?: string;
+}
+
+/**
+ * Outcome of verifying a refresh token against this server's signing key.
+ * `expired` is kept apart from "not ours": an expired token proves the session
+ * was local, and treating it as unknown would forward a LibreChat-signed JWT to
+ * the customer's identity provider.
+ */
+export type LocalRefreshVerification =
+  | { status: 'valid'; payload: LocalRefreshPayload }
+  | { status: 'expired' }
+  | { status: 'foreign' };
+
+export interface LocalAdminRefreshDeps {
+  /** Verifies the token against this server's refresh-token key. */
+  verifyRefreshToken: (refreshToken: string) => Promise<LocalRefreshVerification>;
+  /** Resolves the stored session bound to this refresh token, if it is still live. */
+  findSession: (params: { userId: string; refreshToken: string }) => Promise<ISession | null>;
+  getUserById: (id: string, projection: string) => Promise<IUser | null>;
+  /** Same admin-access invariant the OAuth callback enforces; see `AdminRefreshDeps`. */
+  canAccessAdmin?: (user: IUser) => Promise<boolean>;
+  mintToken: (user: IUser) => Promise<MintedToken>;
+}
+
+/**
+ * Refreshes an admin-panel bearer for a session that was opened with a
+ * LibreChat-issued refresh token — a local-password login (the owner's
+ * superadmin and the client's break-glass account), as opposed to the IdP
+ * tokens `applyAdminRefresh` handles.
+ *
+ * Returns `null` — rather than throwing — when the token was not issued by
+ * this server, so the route can fall through to the IdP path with a single
+ * endpoint serving both kinds of admin session.
+ *
+ * The refresh token is deliberately *not* rotated: it lives only in the admin
+ * panel's server-side session (never in a browser), its lifetime is already
+ * bounded by the stored session's expiration, and rotating would log an admin
+ * out for good every time a response is lost in flight.
+ */
+export async function applyLocalAdminRefresh(
+  refreshToken: string,
+  deps: LocalAdminRefreshDeps,
+  options: { tenantId?: string } = {},
+): Promise<AdminExchangeResponse | null> {
+  const verification = await deps.verifyRefreshToken(refreshToken);
+  if (verification.status === 'foreign') {
+    return null;
+  }
+  if (verification.status === 'expired') {
+    throw new AdminRefreshError('SESSION_EXPIRED', 401, 'Refresh token has expired');
+  }
+
+  const userId = verification.payload.id;
+  if (!userId) {
+    throw new AdminRefreshError(
+      'INVALID_REFRESH_TOKEN',
+      401,
+      'Refresh token carries no user reference',
+    );
+  }
+
+  const session = await deps.findSession({ userId, refreshToken });
+  if (!session) {
+    throw new AdminRefreshError(
+      'SESSION_NOT_FOUND',
+      401,
+      'No live session matches this refresh token',
+    );
+  }
+
+  const user = await deps.getUserById(userId, SAFE_USER_PROJECTION);
+  if (!user) {
+    throw new AdminRefreshError('USER_NOT_FOUND', 401, 'No user found for the refresh token');
+  }
+
+  if (options.tenantId && user.tenantId !== options.tenantId) {
+    throw new AdminRefreshError(
+      'TENANT_MISMATCH',
+      401,
+      'Refresh token resolves outside the request tenant',
+    );
+  }
+
+  if (deps.canAccessAdmin && !(await deps.canAccessAdmin(user))) {
+    throw new AdminRefreshError('FORBIDDEN', 403, 'User does not have admin access');
+  }
+
+  const minted = await deps.mintToken(user);
+  const responseUser = serializeUserForExchange(user);
+
+  logger.debug(`[adminRefresh] Refreshed local admin session for user: ${responseUser.email}`);
+
+  return {
+    token: minted.token,
+    refreshToken,
+    user: responseUser,
+    expiresAt: minted.expiresAt,
+  };
 }
 
 export function buildOpenIDRefreshParams(): OpenIDRefreshParams {
