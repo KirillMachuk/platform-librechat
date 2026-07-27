@@ -8,6 +8,7 @@ const mockSetOpenIDAuthTokens = jest.fn();
 const mockGetLogStores = jest.fn();
 const mockCheckBan = jest.fn();
 const mockGenerateToken = jest.fn();
+const mockCreateSession = jest.fn();
 const mockLogger = { info: jest.fn(), error: jest.fn() };
 
 jest.mock('librechat-data-provider', () => ({
@@ -48,6 +49,7 @@ jest.mock('~/server/middleware', () => ({
 
 jest.mock('~/models', () => ({
   generateToken: (...args) => mockGenerateToken(...args),
+  createSession: (...args) => mockCreateSession(...args),
 }));
 
 const { createOAuthHandler } = require('./oauth');
@@ -91,6 +93,7 @@ describe('createOAuthHandler', () => {
     mockGetLogStores.mockReturnValue({});
     mockCheckBan.mockResolvedValue(undefined);
     mockGenerateToken.mockResolvedValue('jwt-token');
+    mockCreateSession.mockResolvedValue({ refreshToken: 'librechat-refresh-token' });
     mockGenerateAdminExchangeCode.mockResolvedValue('exchange-code');
   });
 
@@ -98,7 +101,12 @@ describe('createOAuthHandler', () => {
     process.env = ORIGINAL_ENV;
   });
 
-  it('omits refresh token from admin exchange when OPENID_REUSE_TOKENS is disabled', async () => {
+  /**
+   * Without a refresh token the panel's session ends at SESSION_EXPIRY and the
+   * admin is dropped back on the login page — for an SSO-only customer that is
+   * every admin, every 15 minutes.
+   */
+  it('mints a LibreChat refresh token when the IdP supplies none', async () => {
     const handler = createOAuthHandler('http://admin.example.com/auth/openid/callback');
     const req = buildReq();
     const res = buildRes();
@@ -106,11 +114,12 @@ describe('createOAuthHandler', () => {
 
     await handler(req, res, next);
 
+    expect(mockCreateSession).toHaveBeenCalledWith('user-123');
     expect(mockGenerateAdminExchangeCode).toHaveBeenCalledWith(
       {},
       req.user,
       'jwt-token',
-      undefined,
+      'librechat-refresh-token',
       'http://admin.example.com',
       'pkce-challenge',
       expect.any(Number),
@@ -123,7 +132,7 @@ describe('createOAuthHandler', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('includes refresh token in admin exchange when OPENID_REUSE_TOKENS is enabled', async () => {
+  it('prefers the IdP refresh token when token reuse is enabled', async () => {
     process.env.OPENID_REUSE_TOKENS = 'true';
     const handler = createOAuthHandler('http://admin.example.com/auth/openid/callback');
     const req = buildReq();
@@ -141,6 +150,7 @@ describe('createOAuthHandler', () => {
       'pkce-challenge',
       expect.any(Number),
     );
+    expect(mockCreateSession).not.toHaveBeenCalled();
     expect(res.redirect).toHaveBeenCalledWith(
       'http://admin.example.com/auth/openid/callback?code=exchange-code',
     );
