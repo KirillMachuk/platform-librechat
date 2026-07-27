@@ -1,7 +1,10 @@
+const os = require('os');
+const path = require('path');
+const fsPromises = require('fs/promises');
 const mongoose = require('mongoose');
 const { nanoid } = require('nanoid');
 const { v4: uuidv4 } = require('uuid');
-const { agentSchema, fileSchema } = require('@librechat/data-schemas');
+const { agentSchema, fileSchema, actionSchema } = require('@librechat/data-schemas');
 const { FileSources, PermissionBits, ResourceType } = require('librechat-data-provider');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 
@@ -82,6 +85,7 @@ const {
   revertAgentVersion: revertAgentVersionHandler,
   updateAgent: updateAgentHandler,
   getListAgents: getListAgentsHandler,
+  uploadAgentAvatar: uploadAgentAvatarHandler,
 } = require('./v1');
 
 const {
@@ -104,6 +108,7 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
   let mongoServer;
   let mockReq;
   let mockRes;
+  const tempUploads = [];
 
   beforeAll(async () => {
     mongoServer = await MongoMemoryServer.create();
@@ -113,9 +118,12 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
     // Register File so orphan-pruning tests (and the tool_resources validation
     // test, which now needs real File docs for its ids) have a working model.
     mongoose.models.File || mongoose.model('File', fileSchema);
+    // Agent deletion cascades to the agent's actions.
+    mongoose.models.Action || mongoose.model('Action', actionSchema);
   }, 20000);
 
   afterAll(async () => {
+    await Promise.all(tempUploads.map((file) => fsPromises.rm(file, { force: true })));
     await mongoose.disconnect();
     await mongoServer.stop();
   });
@@ -123,6 +131,7 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
   beforeEach(async () => {
     await Agent.deleteMany({});
     await mongoose.models.File.deleteMany({});
+    await mongoose.models.Action.deleteMany({});
 
     // Reset all mocks
     jest.clearAllMocks();
@@ -1356,6 +1365,159 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
 
       expect(mockRes.json).toHaveBeenCalledWith({ message: 'Agent deleted' });
       expect(await Agent.findOne({ id: agent.id })).toBeNull();
+    });
+
+    /** Action metadata holds the external API's credentials, so an orphaned action doc
+     *  keeps a live secret for an agent nobody can see anymore. */
+    test('deleteAgentHandler should remove the agent actions along with the agent', async () => {
+      const Action = mongoose.models.Action;
+      const agent = await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Agent With Action',
+        provider: 'openai',
+        model: 'gpt-4',
+        author: mockReq.user.id,
+      });
+      await Action.create({
+        action_id: nanoid(),
+        agent_id: agent.id,
+        user: mockReq.user.id,
+        metadata: { domain: 'example.com', api_key: 'secret' },
+      });
+      const survivor = await Action.create({
+        action_id: nanoid(),
+        agent_id: `agent_${uuidv4()}`,
+        user: mockReq.user.id,
+        metadata: { domain: 'other.com' },
+      });
+
+      mockReq.params.id = agent.id;
+
+      await deleteAgentHandler(mockReq, mockRes);
+
+      expect(await Action.countDocuments({ agent_id: agent.id })).toBe(0);
+      expect(await Action.findOne({ action_id: survivor.action_id })).not.toBeNull();
+    });
+
+    /** The handler reads the upload off disk and pushes it through the storage strategy,
+     *  so an avatar replacement needs a real temp file and a working `processAvatar`. */
+    const stageAvatarUpload = async (newPath = '/images/new-avatar.png') => {
+      const deleteFile = jest.fn().mockResolvedValue(undefined);
+      const { getStrategyFunctions } = require('~/server/services/Files/strategies');
+      const { resizeAvatar } = require('~/server/services/Files/images/avatar');
+      getStrategyFunctions.mockReturnValue({
+        deleteFile,
+        processAvatar: jest.fn().mockResolvedValue(newPath),
+      });
+      resizeAvatar.mockResolvedValue(Buffer.alloc(1));
+
+      const uploadPath = path.join(os.tmpdir(), `avatar-${uuidv4()}.png`);
+      await fsPromises.writeFile(uploadPath, Buffer.alloc(1));
+      tempUploads.push(uploadPath);
+
+      mockReq.config = { fileStrategy: FileSources.local };
+      mockReq.file = { path: uploadPath };
+
+      return { deleteFile, uploadPath };
+    };
+
+    /** Replacing an avatar must respect the same shared-blob rule as deleting one:
+     *  a duplicate inherits the reference and would lose its picture. */
+    test('uploadAgentAvatarHandler must not delete an avatar a duplicate still references', async () => {
+      const { deleteFile, uploadPath } = await stageAvatarUpload();
+      const db = require('~/models');
+      const sharedPath = '/images/shared-avatar.png';
+
+      const original = await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Original',
+        provider: 'openai',
+        model: 'gpt-4',
+        author: mockReq.user.id,
+        avatar: { filepath: sharedPath, source: FileSources.local },
+      });
+      await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Copy',
+        provider: 'openai',
+        model: 'gpt-4',
+        author: mockReq.user.id,
+        avatar: { filepath: sharedPath, source: FileSources.local },
+      });
+
+      mockReq.params.agent_id = original.id;
+      mockReq.file = { path: uploadPath };
+
+      await uploadAgentAvatarHandler(mockReq, mockRes);
+
+      expect(deleteFile).not.toHaveBeenCalled();
+      expect(db.deleteFileByFilter).not.toHaveBeenCalled();
+      const updated = await Agent.findOne({ id: original.id });
+      expect(updated.avatar.filepath).not.toBe(sharedPath);
+    });
+
+    test('uploadAgentAvatarHandler should remove the replaced avatar when nothing else uses it', async () => {
+      const { deleteFile, uploadPath } = await stageAvatarUpload();
+      const db = require('~/models');
+      const oldPath = '/images/old-avatar.png';
+
+      const agent = await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Sole Owner',
+        provider: 'openai',
+        model: 'gpt-4',
+        author: mockReq.user.id,
+        avatar: { filepath: oldPath, source: FileSources.local },
+      });
+
+      mockReq.params.agent_id = agent.id;
+      mockReq.file = { path: uploadPath };
+
+      await uploadAgentAvatarHandler(mockReq, mockRes);
+
+      expect(deleteFile).toHaveBeenCalledWith(
+        mockReq,
+        expect.objectContaining({ filepath: oldPath }),
+      );
+      expect(db.deleteFileByFilter).toHaveBeenCalledWith({
+        user: mockReq.user.id,
+        filepath: oldPath,
+      });
+    });
+
+    /** Clearing the avatar drops the only reference to the blob — the same orphan the
+     *  delete path already cleans up. */
+    test('updateAgentHandler should remove the avatar file when the avatar is cleared', async () => {
+      const deleteFile = jest.fn().mockResolvedValue(undefined);
+      const { getStrategyFunctions } = require('~/server/services/Files/strategies');
+      getStrategyFunctions.mockReturnValue({ deleteFile });
+      const db = require('~/models');
+      const avatarPath = '/images/cleared-avatar.png';
+
+      const agent = await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Agent Losing Avatar',
+        provider: 'openai',
+        model: 'gpt-4',
+        author: mockReq.user.id,
+        avatar: { filepath: avatarPath, source: FileSources.local },
+      });
+
+      mockReq.params.id = agent.id;
+      mockReq.body = { avatar: null };
+
+      await updateAgentHandler(mockReq, mockRes);
+
+      expect(deleteFile).toHaveBeenCalledWith(
+        mockReq,
+        expect.objectContaining({ filepath: avatarPath }),
+      );
+      expect(db.deleteFileByFilter).toHaveBeenCalledWith({
+        user: mockReq.user.id,
+        filepath: avatarPath,
+      });
+      const updated = await Agent.findOne({ id: agent.id });
+      expect(updated.avatar).toBeNull();
     });
 
     test('duplicateAgentHandler should not carry over promotion to the copy', async () => {

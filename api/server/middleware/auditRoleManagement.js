@@ -110,6 +110,29 @@ function resolveRoleAudit(req) {
  * Attach per route — a router-level mount would not see `:name`/`:userId`,
  * which Express fills in only when the route layer runs.
  */
+/**
+ * Records the per-permission-type role updates served outside /api/admin/roles
+ * (`PUT /api/roles/:roleName/agents` and its siblings, which the in-chat admin
+ * panels call). They change exactly what `role.permissions_update` describes —
+ * an admin flipping sharing on for every employee, say — so they carry the same
+ * action, and the body is nested under its permission type to keep the summary
+ * readable (`AGENTS.SHARE=true`).
+ *
+ * @param {string} permissionType - the `PermissionTypes` value this route writes
+ * @returns {import('express').RequestHandler}
+ */
+const auditRolePermissionUpdate = (permissionType) =>
+  createAuditOnFinish((req) => ({
+    action: 'role.permissions_update',
+    targetType: 'role',
+    targetId: req.params?.roleName,
+    metadata: (() => {
+      const permissions = summarizePermissions({ [permissionType]: req.body });
+      return permissions ? { permissions } : {};
+    })(),
+  }));
+
 module.exports = createAuditOnFinish(resolveRoleAudit);
 module.exports.resolveRoleAudit = resolveRoleAudit;
 module.exports.ROLE_AUDIT_ACTIONS = ROLE_AUDIT_ACTIONS;
+module.exports.auditRolePermissionUpdate = auditRolePermissionUpdate;

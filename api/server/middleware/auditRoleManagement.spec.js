@@ -90,6 +90,61 @@ describe('auditRoleManagement', () => {
     expect(event.metadata).toEqual({ newName: 'LEAD' });
   });
 
+  /**
+   * The in-chat admin panels write role permissions through `/api/roles`, not the
+   * admin router — granting every employee agent sharing from there used to leave
+   * no trace at all.
+   */
+  describe('auditRolePermissionUpdate (the in-chat /api/roles routes)', () => {
+    const { auditRolePermissionUpdate } = auditRoleManagement;
+
+    const buildRolesApp = (status = 200) => {
+      const app = express();
+      const router = express.Router();
+      router.use((req, res, next) => {
+        req.user = { _id: 'admin1', email: 'admin@x.io', role: 'ADMIN' };
+        next();
+      });
+      router.put('/:roleName/agents', auditRolePermissionUpdate('AGENTS'), (req, res) =>
+        res.status(status).json({ ok: true }),
+      );
+      app.use(express.json());
+      app.use('/api/roles', router);
+      return app;
+    };
+
+    it('records the permission bits an admin flipped, against the right role', async () => {
+      await request(buildRolesApp()).put('/api/roles/USER/agents').send({ SHARE: true });
+
+      expect(mockRecordAudit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'role.permissions_update',
+          targetType: 'role',
+          targetId: 'USER',
+          metadata: { permissions: 'AGENTS.SHARE=true' },
+        }),
+      );
+    });
+
+    it('records nothing when the update is rejected', async () => {
+      await request(buildRolesApp(400)).put('/api/roles/USER/agents').send({ SHARE: true });
+
+      expect(mockRecordAudit).not.toHaveBeenCalled();
+    });
+
+    /** Every permission route the router serves has to carry the hook, or the
+     *  trail goes quiet exactly where someone widens a permission. */
+    it('guards every permission route the roles router registers', () => {
+      const source = readFileSync(join(__dirname, '../routes/roles.js'), 'utf8');
+
+      expect(source).toMatch(/router\.put\([\s\S]*?auditRolePermissionUpdate\(/);
+      const unguarded = [
+        ...source.matchAll(/router\.put\(\s*[`'][^`']+[`'],([\s\S]*?)\);/g),
+      ].filter(([, rest]) => !rest.includes('auditRolePermissionUpdate'));
+      expect(unguarded).toEqual([]);
+    });
+  });
+
   it('separates removing a member from deleting the role', async () => {
     await request(buildApp()).delete('/api/admin/roles/MANAGER/members/u7');
     expect(mockRecordAudit.mock.calls[0][0]).toMatchObject({
