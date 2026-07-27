@@ -583,9 +583,14 @@ router.post(
         {
           verifyRefreshToken: async (token) => {
             try {
-              return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
-            } catch {
-              return null;
+              return {
+                status: 'valid',
+                payload: jwt.verify(token, process.env.JWT_REFRESH_SECRET),
+              };
+            } catch (err) {
+              /* Expired proves the token is ours; forwarding it to the IdP would
+                 hand a LibreChat-signed JWT to the customer's provider. */
+              return { status: err?.name === 'TokenExpiredError' ? 'expired' : 'foreign' };
             }
           },
           findSession: (params) => findSession(params),

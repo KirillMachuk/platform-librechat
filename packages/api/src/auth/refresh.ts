@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 import { logger } from '@librechat/data-schemas';
 
-import type { IUser } from '@librechat/data-schemas';
+import type { ISession, IUser } from '@librechat/data-schemas';
 import type { FilterQuery } from 'mongoose';
 import type { AdminExchangeResponse } from '~/auth/exchange';
 
@@ -125,18 +125,22 @@ export interface LocalRefreshPayload {
   sessionId?: string;
 }
 
+/**
+ * Outcome of verifying a refresh token against this server's signing key.
+ * `expired` is kept apart from "not ours": an expired token proves the session
+ * was local, and treating it as unknown would forward a LibreChat-signed JWT to
+ * the customer's identity provider.
+ */
+export type LocalRefreshVerification =
+  | { status: 'valid'; payload: LocalRefreshPayload }
+  | { status: 'expired' }
+  | { status: 'foreign' };
+
 export interface LocalAdminRefreshDeps {
-  /**
-   * Verifies the token as a LibreChat-issued refresh token. Resolves `null`
-   * when the token was not signed by this server — the signal for the caller
-   * to fall through to the IdP refresh path.
-   */
-  verifyRefreshToken: (refreshToken: string) => Promise<LocalRefreshPayload | null>;
+  /** Verifies the token against this server's refresh-token key. */
+  verifyRefreshToken: (refreshToken: string) => Promise<LocalRefreshVerification>;
   /** Resolves the stored session bound to this refresh token, if it is still live. */
-  findSession: (params: {
-    userId: string;
-    refreshToken: string;
-  }) => Promise<Record<string, unknown> | null>;
+  findSession: (params: { userId: string; refreshToken: string }) => Promise<ISession | null>;
   getUserById: (id: string, projection: string) => Promise<IUser | null>;
   /** Same admin-access invariant the OAuth callback enforces; see `AdminRefreshDeps`. */
   canAccessAdmin?: (user: IUser) => Promise<boolean>;
@@ -163,12 +167,15 @@ export async function applyLocalAdminRefresh(
   deps: LocalAdminRefreshDeps,
   options: { tenantId?: string } = {},
 ): Promise<AdminExchangeResponse | null> {
-  const payload = await deps.verifyRefreshToken(refreshToken);
-  if (!payload) {
+  const verification = await deps.verifyRefreshToken(refreshToken);
+  if (verification.status === 'foreign') {
     return null;
   }
+  if (verification.status === 'expired') {
+    throw new AdminRefreshError('SESSION_EXPIRED', 401, 'Refresh token has expired');
+  }
 
-  const userId = payload.id;
+  const userId = verification.payload.id;
   if (!userId) {
     throw new AdminRefreshError(
       'INVALID_REFRESH_TOKEN',

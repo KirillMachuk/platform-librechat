@@ -653,9 +653,10 @@ describe('applyLocalAdminRefresh', () => {
     overrides: Partial<LocalAdminRefreshDeps> = {},
   ): LocalAdminRefreshDeps {
     return {
-      verifyRefreshToken: jest
-        .fn()
-        .mockResolvedValue({ id: user?._id?.toString(), sessionId: 'session-1' }),
+      verifyRefreshToken: jest.fn().mockResolvedValue({
+        status: 'valid',
+        payload: { id: user?._id?.toString(), sessionId: 'session-1' },
+      }),
       findSession: jest.fn().mockResolvedValue({ _id: 'session-1' }),
       getUserById: jest.fn().mockResolvedValue(user ?? null),
       mintToken: jest.fn().mockResolvedValue({ token: 'minted-jwt', expiresAt: 1234567890 }),
@@ -683,16 +684,31 @@ describe('applyLocalAdminRefresh', () => {
 
   it('returns null for a token this server did not sign, so the caller can try the IdP path', async () => {
     const deps = makeLocalDeps(makeUser(), {
-      verifyRefreshToken: jest.fn().mockResolvedValue(null),
+      verifyRefreshToken: jest.fn().mockResolvedValue({ status: 'foreign' }),
     });
 
     await expect(applyLocalAdminRefresh('idp-opaque-token', deps)).resolves.toBeNull();
     expect(deps.findSession).not.toHaveBeenCalled();
   });
 
+  /** Expired proves the session was local; falling through would post our JWT to the IdP. */
+  it('rejects an expired local token instead of forwarding it to the identity provider', async () => {
+    const deps = makeLocalDeps(makeUser(), {
+      verifyRefreshToken: jest.fn().mockResolvedValue({ status: 'expired' }),
+    });
+
+    await expect(applyLocalAdminRefresh(REFRESH_TOKEN, deps)).rejects.toMatchObject({
+      code: 'SESSION_EXPIRED',
+      status: 401,
+    });
+    expect(deps.findSession).not.toHaveBeenCalled();
+  });
+
   it('rejects a verified token that carries no user reference', async () => {
     const deps = makeLocalDeps(makeUser(), {
-      verifyRefreshToken: jest.fn().mockResolvedValue({ sessionId: 'session-1' }),
+      verifyRefreshToken: jest
+        .fn()
+        .mockResolvedValue({ status: 'valid', payload: { sessionId: 'session-1' } }),
     });
 
     await expect(applyLocalAdminRefresh(REFRESH_TOKEN, deps)).rejects.toMatchObject({
@@ -714,7 +730,10 @@ describe('applyLocalAdminRefresh', () => {
 
   it('rejects when the user no longer exists', async () => {
     const deps = makeLocalDeps(undefined, {
-      verifyRefreshToken: jest.fn().mockResolvedValue({ id: new Types.ObjectId().toString() }),
+      verifyRefreshToken: jest.fn().mockResolvedValue({
+        status: 'valid',
+        payload: { id: new Types.ObjectId().toString() },
+      }),
     });
 
     await expect(applyLocalAdminRefresh(REFRESH_TOKEN, deps)).rejects.toMatchObject({
