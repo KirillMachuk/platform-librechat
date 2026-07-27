@@ -22,7 +22,7 @@ import {
 } from '@librechat/client';
 import type { PermissionConfig } from '~/components/ui';
 import { useUpdateRemoteAgentsPermissionsMutation } from '~/data-provider';
-import { useLocalize } from '~/hooks';
+import { useHasAccess, useLocalize } from '~/hooks';
 import { AdminSettingsDialog } from '~/components/ui';
 
 function CreateKeyDialog({ onKeyCreated }: { onKeyCreated?: () => void }) {
@@ -222,6 +222,10 @@ function KeyItem({
 function ApiKeysContent({ isOpen }: { isOpen: boolean }) {
   const localize = useLocalize();
   const { data, isLoading, error } = useGetAgentApiKeysQuery({ enabled: isOpen });
+  const canCreateKeys = useHasAccess({
+    permissionType: PermissionTypes.REMOTE_AGENTS,
+    permission: Permissions.CREATE,
+  });
 
   if (error) {
     return <div className="text-sm text-red-500">{localize('com_ui_api_keys_load_error')}</div>;
@@ -231,7 +235,7 @@ function ApiKeysContent({ isOpen }: { isOpen: boolean }) {
     <div className="space-y-4">
       <div className="flex items-center justify-end gap-2">
         <RemoteAgentsAdminSettings />
-        <CreateKeyDialog />
+        {canCreateKeys && <CreateKeyDialog />}
       </div>
 
       <div className="max-h-[400px] space-y-2 overflow-y-auto">
