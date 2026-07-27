@@ -26,6 +26,7 @@ const {
 } = require('@librechat/api');
 const { getStrategyFunctions } = require('~/server/services/Files/strategies');
 const { resizeAvatar } = require('~/server/services/Files/images/avatar');
+const { recordAudit } = require('~/server/services/Audit');
 const { findUser, createUser, updateUser, findRolesByNames } = require('~/models');
 const { getAppConfig } = require('~/server/services/Config');
 const getLogStores = require('~/cache/getLogStores');
@@ -557,6 +558,21 @@ async function applyOpenIdRoleSync({
 }
 
 /**
+ * Builds a policy rejection that names the identifier it denied, so the audit
+ * trail answers "who was refused, and why" — an SSO deployment has no other
+ * record of a denied sign-in.
+ *
+ * @param {string} message - Reason, surfaced to the user by the failure redirect.
+ * @param {string | undefined} email - Identifier the IdP presented.
+ * @returns {Error & { email?: string }}
+ */
+function loginRejection(message, email) {
+  const error = new Error(message);
+  error.email = email;
+  return error;
+}
+
+/**
  * Process OpenID authentication tokenset and userinfo
  * This is the core logic extracted from the passport strategy callback
  * Can be reused by both the passport strategy and proxy authentication
@@ -584,7 +600,7 @@ async function processOpenIDAuth(tokenset, existingUsersOnly = false) {
     logger.error(
       `[OpenID Strategy] Authentication blocked - email domain not allowed [Identifier: ${email}]`,
     );
-    throw new Error('Email domain not allowed');
+    throw loginRejection('Email domain not allowed', email);
   }
 
   const result = await findOpenIDUser({
@@ -599,7 +615,7 @@ async function processOpenIDAuth(tokenset, existingUsersOnly = false) {
   const error = result.error;
 
   if (error) {
-    throw new Error(ErrorTypes.AUTH_FAILED);
+    throw loginRejection(ErrorTypes.AUTH_FAILED, email);
   }
 
   const appConfig = user?.tenantId ? await resolveAppConfigForUser(getAppConfig, user) : baseConfig;
@@ -608,7 +624,7 @@ async function processOpenIDAuth(tokenset, existingUsersOnly = false) {
     logger.error(
       `[OpenID Strategy] Authentication blocked - email domain not allowed [Identifier: ${email}]`,
     );
-    throw new Error('Email domain not allowed');
+    throw loginRejection('Email domain not allowed', email);
   }
 
   const fullName = getFullName(userinfo);
@@ -656,7 +672,7 @@ async function processOpenIDAuth(tokenset, existingUsersOnly = false) {
         requiredRoles.length === 1
           ? `"${requiredRoles[0]}"`
           : `one of: ${requiredRoles.map((r) => `"${r}"`).join(', ')}`;
-      throw new Error(`You must have ${rolesList} role to log in.`);
+      throw loginRejection(`You must have ${rolesList} role to log in.`, email);
     }
 
     const roleValues = Array.isArray(roles) ? roles : roles.split(/[\s,]+/).filter(Boolean);
@@ -666,7 +682,7 @@ async function processOpenIDAuth(tokenset, existingUsersOnly = false) {
         requiredRoles.length === 1
           ? `"${requiredRoles[0]}"`
           : `one of: ${requiredRoles.map((r) => `"${r}"`).join(', ')}`;
-      throw new Error(`You must have ${rolesList} role to log in.`);
+      throw loginRejection(`You must have ${rolesList} role to log in.`, email);
     }
   }
 
@@ -780,7 +796,7 @@ async function processOpenIDAuth(tokenset, existingUsersOnly = false) {
         logger.error(
           `[OpenID Strategy] Authentication blocked after role sync - email domain not allowed [Identifier: ${email}]`,
         );
-        throw new Error('Email domain not allowed');
+        throw loginRejection('Email domain not allowed', email);
       }
     }
   }
@@ -854,13 +870,24 @@ function createOpenIDCallback(existingUsersOnly) {
       const user = await processOpenIDAuth(tokenset, existingUsersOnly);
       done(null, user);
     } catch (err) {
-      if (err.message === 'Email domain not allowed') {
-        return done(null, false, { message: err.message });
-      }
-      if (err.message === ErrorTypes.AUTH_FAILED) {
-        return done(null, false, { message: err.message });
-      }
-      if (err.message && err.message.includes('role to log in')) {
+      /**
+       * Every policy rejection funnels through here, for both the chat app and
+       * the admin panel, so this is the one place a denied federated sign-in
+       * can be recorded. The IdP callback has no Express request, hence no
+       * client address — the reverse-proxy access log carries that.
+       */
+      const denied =
+        err.message === 'Email domain not allowed' ||
+        err.message === ErrorTypes.AUTH_FAILED ||
+        (err.message && err.message.includes('role to log in'));
+
+      if (denied) {
+        recordAudit({
+          actorEmail: err.email,
+          action: 'auth.login_failed',
+          outcome: 'failure',
+          metadata: { provider: 'openid', reason: err.message },
+        });
         return done(null, false, { message: err.message });
       }
       logger.error('[openidStrategy] login failed', err);

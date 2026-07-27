@@ -8,6 +8,7 @@ const {
 } = require('@librechat/api');
 const { syncUserEntraGroupMemberships } = require('~/server/services/PermissionService');
 const { setAuthTokens, setOpenIDAuthTokens } = require('~/server/services/AuthService');
+const { recordAudit, auditRequestContext } = require('~/server/services/Audit');
 const getLogStores = require('~/cache/getLogStores');
 const { checkBan } = require('~/server/middleware');
 const { generateToken } = require('~/models');
@@ -35,6 +36,25 @@ function createOAuthHandler(redirectUri = domains.client) {
       if (req.banned) {
         return;
       }
+
+      /**
+       * Single seam for every federated sign-in — admin panel and chat app,
+       * every provider — so an SSO-only deployment still has a login trail.
+       * The local-password path is audited in its own controller.
+       */
+      recordAudit({
+        actorId: req.user?._id,
+        actorEmail: req.user?.email,
+        actorRole: req.user?.role,
+        action: 'auth.login',
+        outcome: 'success',
+        tenantId: req.user?.tenantId,
+        metadata: {
+          provider: req.user?.provider ?? 'unknown',
+          adminPanel: isAdminPanelRedirect(redirectUri, getAdminPanelUrl(), domains.client),
+        },
+        ...auditRequestContext(req),
+      });
 
       /** Check if this is an admin panel redirect (cross-origin or same-origin subpath) */
       if (isAdminPanelRedirect(redirectUri, getAdminPanelUrl(), domains.client)) {

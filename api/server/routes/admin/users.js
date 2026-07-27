@@ -10,6 +10,7 @@ const { getAppConfig } = require('~/server/services/Config');
 const { requireCapability } = require('~/server/middleware/roles/capabilities');
 const { requireJwtAuth } = require('~/server/middleware');
 const auditUserManagement = require('~/server/middleware/auditUserManagement');
+const auditUserBalance = require('~/server/middleware/auditUserBalance');
 const db = require('~/models');
 
 const router = express.Router();
@@ -53,7 +54,7 @@ router.get('/search', requireReadUsers, handlers.searchUsers);
 router.get('/balances', requireReadUsers, balanceHandlers.getUsersBalances);
 router.post('/', requireManageUsers, auditUserManagement, handlers.createUser);
 router.get('/:id/balance', requireReadUsers, balanceHandlers.getUserBalance);
-router.patch('/:id/balance', requireManageUsers, balanceHandlers.setUserBalance);
+router.patch('/:id/balance', requireManageUsers, auditUserBalance, balanceHandlers.setUserBalance);
 router.patch('/:id', requireManageUsers, auditUserManagement, handlers.updateUser);
 router.delete('/:id', requireManageUsers, auditUserManagement, handlers.deleteUser);
 

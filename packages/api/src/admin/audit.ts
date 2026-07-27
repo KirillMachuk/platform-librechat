@@ -53,6 +53,7 @@ function mapEntry(entry: IAuditLog): AdminAuditEntry {
       ? { input: entry.tokens.input, output: entry.tokens.output, total: entry.tokens.total }
       : undefined,
     ip: entry.ip,
+    userAgent: entry.userAgent,
     outcome: entry.outcome,
     metadata: entry.metadata,
     createdAt: entry.createdAt ? new Date(entry.createdAt).toISOString() : undefined,

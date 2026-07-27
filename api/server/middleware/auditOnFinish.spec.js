@@ -52,6 +52,19 @@ describe('createAuditOnFinish', () => {
     expect(mockRecordAudit).not.toHaveBeenCalled();
   });
 
+  it('reads the request before the handler runs, so route-scoped state cannot vanish', () => {
+    const mw = createAuditOnFinish((req) => ({ action: 'user.update', targetId: req.params.id }));
+    const res = buildRes(200);
+    const req = buildReq({ params: { id: 'u42' } });
+
+    mw(req, res, jest.fn());
+    /* Express restores params once a route completes; the entry must not lose its target. */
+    req.params = {};
+    res.emit('finish');
+
+    expect(mockRecordAudit.mock.calls[0][0].targetId).toBe('u42');
+  });
+
   it('skips when resolve returns null', () => {
     const resolve = jest.fn().mockReturnValue(null);
     const mw = createAuditOnFinish(resolve);

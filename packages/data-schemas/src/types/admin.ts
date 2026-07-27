@@ -182,6 +182,8 @@ export type AdminAuditEntry = {
   model?: string;
   tokens?: { input?: number; output?: number; total?: number };
   ip?: string;
+  /** Client the action came from; stored since the first entry, exposed for incident review. */
+  userAgent?: string;
   outcome: string;
   /** Action-specific detail (e.g. DR mode + chosen models, granted capability). */
   metadata?: Record<string, string | number | boolean>;
