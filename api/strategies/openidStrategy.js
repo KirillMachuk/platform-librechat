@@ -568,6 +568,7 @@ async function applyOpenIdRoleSync({
  */
 function loginRejection(message, email) {
   const error = new Error(message);
+  error.isLoginRejection = true;
   error.email = email;
   return error;
 }
@@ -877,6 +878,7 @@ function createOpenIDCallback(existingUsersOnly) {
        * client address — the reverse-proxy access log carries that.
        */
       const denied =
+        err.isLoginRejection === true ||
         err.message === 'Email domain not allowed' ||
         err.message === ErrorTypes.AUTH_FAILED ||
         (err.message && err.message.includes('role to log in'));

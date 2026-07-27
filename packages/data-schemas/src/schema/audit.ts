@@ -27,6 +27,13 @@ const auditLogSchema: Schema<t.IAuditLog> = new Schema<t.IAuditLog>(
   { timestamps: { createdAt: true, updatedAt: false } },
 );
 
+/**
+ * Every read sorts by `createdAt` descending. The compound indexes below only
+ * serve a query that also constrains their leading field, so an unfiltered page
+ * — the admin panel's default view, and every page of an export — would scan
+ * the collection and sort in memory, which Mongo aborts past 32 MB.
+ */
+auditLogSchema.index({ createdAt: -1 });
 auditLogSchema.index({ tenantId: 1, createdAt: -1 });
 auditLogSchema.index({ actorId: 1, createdAt: -1 });
 auditLogSchema.index({ action: 1, createdAt: -1 });

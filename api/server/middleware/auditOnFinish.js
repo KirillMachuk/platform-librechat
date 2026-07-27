@@ -11,18 +11,24 @@ const { recordAudit, auditRequestContext } = require('~/server/services/Audit');
  * `success` outcome are filled in automatically, so each hook stays a small,
  * declarative resolver.
  *
- * The resolver reads the request *before* the handler runs, and only the
- * recording waits for `finish`: `req.params`, `req.route` and `req.body` are
- * layer-scoped state that Express is free to restore once a route completes,
- * so resolving late risks an entry that names no target.
+ * The resolver runs on `finish`, not on entry: hooks mounted with `router.use`
+ * (grants, config) see an unmatched request, so `req.params` is only populated
+ * once the route layer has run. A hook that needs route-scoped state therefore
+ * has to be mounted per route.
  *
  * @param {(req: import('express').Request) => (object|null|undefined)} resolve
  * @returns {import('express').RequestHandler}
  */
 const createAuditOnFinish = (resolve) => (req, res, next) => {
-  const fields = resolve(req);
-  if (fields) {
-    const context = {
+  res.on('finish', () => {
+    if (res.statusCode >= 400) {
+      return;
+    }
+    const fields = resolve(req);
+    if (!fields) {
+      return;
+    }
+    recordAudit({
       actorId: req.user?._id,
       actorEmail: req.user?.email,
       actorRole: req.user?.role,
@@ -30,14 +36,8 @@ const createAuditOnFinish = (resolve) => (req, res, next) => {
       outcome: 'success',
       ...fields,
       ...auditRequestContext(req),
-    };
-    res.on('finish', () => {
-      if (res.statusCode >= 400) {
-        return;
-      }
-      recordAudit(context);
     });
-  }
+  });
   next();
 };
 
