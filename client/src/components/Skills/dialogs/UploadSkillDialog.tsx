@@ -8,6 +8,7 @@ import {
   fileConfig as defaultFileConfig,
 } from 'librechat-data-provider';
 import { useGetFileConfig, useImportSkillMutation } from '~/data-provider';
+import { usePanelDismiss } from '~/components/UnifiedSidebar/dismiss';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
@@ -24,6 +25,7 @@ function formatMegabytes(bytes: number): string {
 export default function UploadSkillDialog({ isOpen, setIsOpen }: UploadSkillDialogProps) {
   const localize = useLocalize();
   const navigate = useNavigate();
+  const dismissPanel = usePanelDismiss();
   const { showToast } = useToastContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -47,6 +49,7 @@ export default function UploadSkillDialog({ isOpen, setIsOpen }: UploadSkillDial
     onSuccess: (skill) => {
       showToast({ status: 'success', message: localize('com_ui_skill_created') });
       setIsOpen(false);
+      dismissPanel();
       navigate(`/skills/${skill._id}`);
     },
     onError: (error: unknown) => {

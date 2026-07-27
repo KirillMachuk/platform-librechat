@@ -234,7 +234,12 @@ const AgentGrid: React.FC<AgentGridProps> = ({
     </div>
   );
 
-  if (isLoading || (isFetching && !isFetchingNextPage)) {
+  /**
+   * `isLoading` is only true while the query has nothing to show; background
+   * refetches (tab switch, search keystroke) keep the previous page thanks to
+   * `keepPreviousData`, so they must not blank the grid.
+   */
+  if (isLoading) {
     return loadingSpinner;
   }
   return mainContent;

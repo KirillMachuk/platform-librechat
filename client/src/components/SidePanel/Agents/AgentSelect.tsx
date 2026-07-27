@@ -239,7 +239,7 @@ function AgentSelect({
               icon: agent.icon,
             })) ?? [
               {
-                label: 'Loading...',
+                label: localize('com_ui_loading'),
                 value: '',
               },
             ]

@@ -1,8 +1,8 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Search, Check, EarthIcon, User, Plus, Star, ListFilter, X } from 'lucide-react';
-import { useFormContext, useWatch } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { OGDialog, OGDialogContent } from '@librechat/client';
+import { useFormContext, useFormState, useWatch } from 'react-hook-form';
+import { Search, Check, EarthIcon, User, Plus, Star, ListFilter, X } from 'lucide-react';
 import { PermissionTypes, Permissions, SystemCategories } from 'librechat-data-provider';
 import type { TSkillSummary } from 'librechat-data-provider';
 import type { AgentForm } from '~/common';
@@ -13,6 +13,7 @@ import {
   useHasAccess,
   useSkillFavorites,
 } from '~/hooks';
+import { usePanelDismiss } from '~/components/UnifiedSidebar/dismiss';
 import { useListSkillsQuery } from '~/data-provider';
 import { CategoryIcon } from '~/components/Prompts';
 import { cn } from '~/utils';
@@ -171,8 +172,10 @@ function SkillCard({
 function SkillSelectDialog({ isOpen, setIsOpen }: SkillSelectDialogProps) {
   const localize = useLocalize();
   const navigate = useNavigate();
+  const dismissPanel = usePanelDismiss();
   const { user } = useAuthContext();
   const { control, setValue } = useFormContext<AgentForm>();
+  const { isDirty } = useFormState({ control });
   const [searchValue, setSearchValue] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>(SystemCategories.ALL);
   const { isFavorite: isFavoriteSkill, toggle: toggleFavoriteSkill } = useSkillFavorites();
@@ -216,10 +219,18 @@ function SkillSelectDialog({ isOpen, setIsOpen }: SkillSelectDialogProps) {
     setActiveFilter(SystemCategories.ALL);
   }, [setIsOpen]);
 
+  /**
+   * The agent builder form lives in the panel this navigation dismisses and has no
+   * draft storage, so leaving discards unsaved edits — warn before that happens.
+   */
   const handleCreate = useCallback(() => {
+    if (isDirty && !window.confirm(localize('com_ui_agent_leave_unsaved'))) {
+      return;
+    }
     setIsOpen(false);
+    dismissPanel();
     navigate('/skills/new');
-  }, [navigate, setIsOpen]);
+  }, [navigate, setIsOpen, dismissPanel, isDirty, localize]);
 
   const visibleSkills = useMemo(() => {
     const term = searchValue.toLowerCase();

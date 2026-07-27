@@ -396,6 +396,7 @@ export const useRevertAgentVersionMutation = (
             }
           });
         })(allAgentViewAndEditQueryKeys);
+        invalidateAgentMarketplaceQueries(queryClient);
 
         return options?.onSuccess?.(revertedAgent, variables, context);
       },
