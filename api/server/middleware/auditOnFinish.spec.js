@@ -52,6 +52,23 @@ describe('createAuditOnFinish', () => {
     expect(mockRecordAudit).not.toHaveBeenCalled();
   });
 
+  /**
+   * Router-level hooks (grants, config) run before a route is matched, so their
+   * `req.params` is filled in only later — resolving on entry would strip the
+   * target off every such entry.
+   */
+  it('reads the request on finish, after the route layer filled in its params', () => {
+    const mw = createAuditOnFinish((req) => ({ action: 'user.update', targetId: req.params.id }));
+    const res = buildRes(200);
+    const req = buildReq({ params: {} });
+
+    mw(req, res, jest.fn());
+    req.params = { id: 'u42' };
+    res.emit('finish');
+
+    expect(mockRecordAudit.mock.calls[0][0].targetId).toBe('u42');
+  });
+
   it('skips when resolve returns null', () => {
     const resolve = jest.fn().mockReturnValue(null);
     const mw = createAuditOnFinish(resolve);

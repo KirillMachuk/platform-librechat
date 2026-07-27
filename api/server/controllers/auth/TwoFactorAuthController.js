@@ -6,6 +6,7 @@ const {
   verifyBackupCode,
 } = require('~/server/services/twoFactorService');
 const { setAuthTokens } = require('~/server/services/AuthService');
+const { recordAudit, auditRequestContext } = require('~/server/services/Audit');
 const { getUserById } = require('~/models');
 
 /**
@@ -40,6 +41,16 @@ const verify2FAWithTempToken = async (req, res) => {
     }
 
     if (!isVerified) {
+      recordAudit({
+        actorId: user._id,
+        actorEmail: user.email,
+        actorRole: user.role,
+        action: 'auth.login_failed',
+        outcome: 'failure',
+        tenantId: user.tenantId,
+        metadata: { reason: 'invalid_2fa_code', method: backupCode ? 'backup_code' : 'totp' },
+        ...auditRequestContext(req),
+      });
       return res.status(401).json({ message: 'Invalid 2FA code or backup code' });
     }
 
@@ -51,6 +62,23 @@ const verify2FAWithTempToken = async (req, res) => {
     userData.id = user._id.toString();
 
     const authToken = await setAuthTokens(user._id, res, null, req);
+
+    /**
+     * A login that goes through 2FA completes here, not in `loginController` —
+     * that one returns at the `twoFAPending` branch, before it records anything.
+     * Without this, every 2FA-protected admin was invisible in the login trail.
+     */
+    recordAudit({
+      actorId: user._id,
+      actorEmail: user.email,
+      actorRole: user.role,
+      action: 'auth.login',
+      outcome: 'success',
+      tenantId: user.tenantId,
+      metadata: { method: backupCode ? 'backup_code' : 'totp' },
+      ...auditRequestContext(req),
+    });
+
     return res.status(200).json({ token: authToken, user: userData });
   } catch (err) {
     logger.error('[verify2FAWithTempToken]', err);

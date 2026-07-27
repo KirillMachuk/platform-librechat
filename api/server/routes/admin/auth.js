@@ -21,6 +21,7 @@ const {
   AdminRefreshError,
   buildOpenIDRefreshParams,
 } = require('@librechat/api');
+const auditAdminAccessDenied = require('~/server/middleware/auditAdminAccessDenied');
 const { loginController } = require('~/server/controllers/auth/LoginController');
 const { hasCapability, requireCapability } = require('~/server/middleware/roles/capabilities');
 const { createOAuthHandler } = require('~/server/controllers/auth/oauth');
@@ -75,6 +76,7 @@ router.post(
   middleware.checkBan,
   middleware.requireLocalAuth,
   tenantContextMiddleware,
+  auditAdminAccessDenied,
   requireAdminAccess,
   setBalanceConfig,
   loginController,
@@ -173,6 +175,7 @@ router.get(
   }),
   tenantContextMiddleware,
   retrievePkceChallenge('openid'),
+  auditAdminAccessDenied,
   requireAdminAccess,
   setBalanceConfig,
   middleware.checkDomainAllowed,
@@ -212,6 +215,7 @@ router.post(
   }),
   tenantContextMiddleware,
   retrievePkceChallenge('saml'),
+  auditAdminAccessDenied,
   requireAdminAccess,
   setBalanceConfig,
   middleware.checkDomainAllowed,
