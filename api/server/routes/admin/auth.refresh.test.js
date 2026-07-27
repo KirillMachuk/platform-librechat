@@ -294,7 +294,11 @@ describe('admin auth OpenID refresh route', () => {
     it('reports a revoked local session with its own status, not a 500', async () => {
       const { AdminRefreshError } = require('@librechat/api');
       applyLocalAdminRefresh.mockRejectedValue(
-        new AdminRefreshError('SESSION_NOT_FOUND', 401, 'No live session matches this refresh token'),
+        new AdminRefreshError(
+          'SESSION_NOT_FOUND',
+          401,
+          'No live session matches this refresh token',
+        ),
       );
 
       const response = await request(app)
