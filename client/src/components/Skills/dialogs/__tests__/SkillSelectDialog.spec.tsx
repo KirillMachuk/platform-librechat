@@ -1,7 +1,7 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useForm, FormProvider } from 'react-hook-form';
-import type { ReactNode } from 'react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { UseFormReturn } from 'react-hook-form';
+import type { ReactNode } from 'react';
 import type { AgentForm } from '~/common';
 import { PanelDismissProvider } from '~/components/UnifiedSidebar/dismiss';
 import SkillSelectDialog from '../SkillSelectDialog';
