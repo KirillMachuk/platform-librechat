@@ -2,7 +2,16 @@ import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
 import { ArrowLeft, MoreHorizontal, Upload, FileText, Trash2 } from 'lucide-react';
-import { Button, Spinner, TooltipAnchor, useToastContext } from '@librechat/client';
+import {
+  Label,
+  Button,
+  Spinner,
+  OGDialog,
+  TooltipAnchor,
+  OGDialogTrigger,
+  OGDialogTemplate,
+  useToastContext,
+} from '@librechat/client';
 import {
   useGetProjectQuery,
   useProjectConversationsQuery,
@@ -153,13 +162,10 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
   );
 
   const handleDeleteFile = useCallback(
-    (fileId: string, filename: string) => {
-      if (!window.confirm(localize('com_projects_remove_source_confirm', { name: filename }))) {
-        return;
-      }
+    (fileId: string) => {
       deleteFileMutation.mutate({ projectId, fileId });
     },
-    [deleteFileMutation, localize, projectId],
+    [deleteFileMutation, projectId],
   );
 
   if (projectLoading) {
@@ -352,22 +358,40 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
                       <span className="text-xs text-text-secondary">{formatBytes(file.bytes)}</span>
                     </div>
                   </div>
-                  <TooltipAnchor
-                    side="left"
-                    description={localize('com_projects_remove_source')}
-                    render={
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleDeleteFile(file.file_id, file.filename)}
-                        aria-label={localize('com_projects_remove_source')}
-                        disabled={deleteFileMutation.isLoading}
-                      >
-                        <Trash2 className="h-4 w-4 text-text-secondary" aria-hidden="true" />
-                      </Button>
-                    }
-                  />
+                  <OGDialog>
+                    <OGDialogTrigger asChild>
+                      <TooltipAnchor
+                        side="left"
+                        description={localize('com_projects_remove_source')}
+                        render={
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            aria-label={localize('com_projects_remove_source')}
+                            disabled={deleteFileMutation.isLoading}
+                          >
+                            <Trash2 className="h-4 w-4 text-text-secondary" aria-hidden="true" />
+                          </Button>
+                        }
+                      />
+                    </OGDialogTrigger>
+                    <OGDialogTemplate
+                      title={localize('com_projects_remove_source')}
+                      className="max-w-[450px]"
+                      main={
+                        <Label className="text-left text-sm font-medium">
+                          {localize('com_projects_remove_source_confirm', { name: file.filename })}
+                        </Label>
+                      }
+                      selection={{
+                        selectHandler: () => handleDeleteFile(file.file_id),
+                        selectClasses:
+                          'bg-surface-destructive hover:bg-surface-destructive-hover text-white transition-colors',
+                        selectText: localize('com_projects_remove_source'),
+                      }}
+                    />
+                  </OGDialog>
                 </div>
               ))
             )}
