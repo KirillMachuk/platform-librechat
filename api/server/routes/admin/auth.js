@@ -1,6 +1,7 @@
 const express = require('express');
 const passport = require('passport');
 const crypto = require('node:crypto');
+const jwt = require('jsonwebtoken');
 const openIdClient = require('openid-client');
 const { CacheKeys } = require('librechat-data-provider');
 const {
@@ -20,12 +21,14 @@ const {
   applyAdminRefresh,
   AdminRefreshError,
   buildOpenIDRefreshParams,
+  applyLocalAdminRefresh,
 } = require('@librechat/api');
 const { loginController } = require('~/server/controllers/auth/LoginController');
 const { hasCapability, requireCapability } = require('~/server/middleware/roles/capabilities');
 const { createOAuthHandler } = require('~/server/controllers/auth/oauth');
 const {
   findBalanceByUser,
+  findSession,
   findUsers,
   generateToken,
   getUserById,
@@ -65,6 +68,29 @@ function resolveRequestOrigin(req) {
     return new URL(refererHeader).origin;
   } catch {
     return undefined;
+  }
+}
+
+/**
+ * Same admin-access invariant the OAuth callback enforces. A refresh token can
+ * outlive a capability change, so the bearer must not be reissued for a user
+ * who no longer holds `ACCESS_ADMIN`. Fail-closed.
+ * @param {Partial<IUser>} user
+ * @returns {Promise<boolean>}
+ */
+async function canAccessAdmin(user) {
+  try {
+    return await hasCapability(
+      {
+        id: user.id ?? user._id?.toString(),
+        role: user.role ?? '',
+        tenantId: user.tenantId,
+      },
+      SystemCapabilities.ACCESS_ADMIN,
+    );
+  } catch (err) {
+    logger.warn(`[admin/oauth/refresh] capability check failed, denying: ${err?.message}`);
+    return false;
   }
 }
 
@@ -482,30 +508,40 @@ router.post('/oauth/exchange', middleware.loginLimiter, async (req, res) => {
 });
 
 /**
- * Admin-panel-shaped token refresh.
+ * Admin-panel-shaped token refresh, for both kinds of admin session.
  *
  * The standard `/api/auth/refresh` controller reads the refresh token from
  * cookies, which a cross-origin admin panel can't set. This endpoint accepts
- * the refresh token in the request body, exchanges it at the IdP, mints a
- * fresh LibreChat JWT, and returns the same response shape as
- * `/api/admin/oauth/exchange`.
+ * the refresh token in the request body, mints a fresh LibreChat JWT, and
+ * returns the same response shape as `/api/admin/oauth/exchange`.
+ *
+ * Two token kinds are served by one endpoint, so the panel needs no knowledge
+ * of how its session was opened:
+ *   - a LibreChat-issued refresh token (local-password admins: the owner's
+ *     superadmin and the break-glass account) is verified and resolved here,
+ *     without involving the IdP;
+ *   - anything else is treated as an IdP refresh token and exchanged at the
+ *     issuer, which additionally re-checks upstream revocation.
  *
  * POST /api/admin/oauth/refresh
  * Body:     { refresh_token: string, user_id?: string }
+ *           (`refreshToken` is accepted as an alias for `refresh_token`)
  * Response: { token: string, refreshToken?: string, user: object, expiresAt: number }
  *
  * Errors (all responses are `{ error: string, error_code: string }`):
- *   400 MISSING_REFRESH_TOKEN  — refresh_token absent or empty
+ *   400 MISSING_REFRESH_TOKEN  — refresh token absent or empty
+ *   401 INVALID_REFRESH_TOKEN  — LibreChat refresh token carries no user reference
+ *   401 SESSION_NOT_FOUND      — no live session matches the LibreChat refresh token
  *   401 REFRESH_FAILED         — IdP rejected the refresh grant
- *   401 USER_NOT_FOUND         — no LibreChat user matches the refreshed sub
+ *   401 USER_NOT_FOUND         — no LibreChat user matches the refreshed identity
  *   401 USER_ID_MISMATCH       — supplied user_id resolves to a user with a different openidId
  *   401 ISSUER_MISMATCH        — refreshed tokenset was issued by an unexpected issuer
  *   401 TENANT_MISMATCH        — resolved user belongs to a different tenant than the request
  *   403 FORBIDDEN              — resolved user no longer holds ACCESS_ADMIN
- *   403 TOKEN_REUSE_DISABLED   — OPENID_REUSE_TOKENS is not enabled on the server
+ *   403 TOKEN_REUSE_DISABLED   — IdP path only: OPENID_REUSE_TOKENS is not enabled
  *   502 IDP_INCOMPLETE         — IdP returned a tokenset missing access_token
  *   502 CLAIMS_INCOMPLETE      — IdP tokenset has no readable claims or no sub
- *   503 OPENID_NOT_CONFIGURED  — OpenID is not configured on this server
+ *   503 OPENID_NOT_CONFIGURED  — IdP path only: OpenID is not configured on this server
  *   500 INTERNAL_ERROR         — anything else (logged server-side)
  */
 router.post(
@@ -514,12 +550,53 @@ router.post(
   preAuthTenantMiddleware,
   async (req, res) => {
     try {
-      const { refresh_token: refreshToken, user_id: userId } = req.body ?? {};
+      const {
+        refresh_token: snakeCaseToken,
+        refreshToken: camelCaseToken,
+        user_id: userId,
+      } = req.body ?? {};
+      /** Both spellings are accepted: the admin panel historically sent `refreshToken`. */
+      const refreshToken =
+        typeof snakeCaseToken === 'string' && snakeCaseToken.length > 0
+          ? snakeCaseToken
+          : camelCaseToken;
       if (typeof refreshToken !== 'string' || refreshToken.length === 0) {
         return res.status(400).json({
           error: 'Missing refresh_token',
           error_code: 'MISSING_REFRESH_TOKEN',
         });
+      }
+
+      const sessionExpiryMs = Number(process.env.SESSION_EXPIRY) || DEFAULT_SESSION_EXPIRY;
+      const mintToken = async (user) => ({
+        token: await generateToken(user, sessionExpiryMs),
+        expiresAt: Date.now() + sessionExpiryMs,
+      });
+
+      /**
+       * Local-password admin sessions resolve here and never reach the IdP
+       * branch below; `applyLocalAdminRefresh` returns null for tokens this
+       * server did not sign, which is the signal to fall through.
+       */
+      const localRefresh = await applyLocalAdminRefresh(
+        refreshToken,
+        {
+          verifyRefreshToken: async (token) => {
+            try {
+              return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+            } catch {
+              return null;
+            }
+          },
+          findSession: (params) => findSession(params),
+          getUserById,
+          canAccessAdmin,
+          mintToken,
+        },
+        { tenantId: getTenantId() },
+      );
+      if (localRefresh) {
+        return res.json(localRefresh);
       }
 
       if (!isEnabled(process.env.OPENID_REUSE_TOKENS)) {
@@ -564,52 +641,29 @@ router.post(
         });
       }
 
-      const sessionExpiry = Number(process.env.SESSION_EXPIRY) || DEFAULT_SESSION_EXPIRY;
       const expectedIssuer = openIdConfig.serverMetadata?.()?.issuer;
 
-      try {
-        const result = await applyAdminRefresh(
-          tokenset,
-          {
-            findUsers,
-            getUserById,
-            canAccessAdmin: async (user) => {
-              try {
-                return await hasCapability(
-                  {
-                    id: user.id ?? user._id?.toString(),
-                    role: user.role ?? '',
-                    tenantId: user.tenantId,
-                  },
-                  SystemCapabilities.ACCESS_ADMIN,
-                );
-              } catch (err) {
-                logger.warn(
-                  `[admin/oauth/refresh] capability check failed, denying: ${err?.message}`,
-                );
-                return false;
-              }
-            },
-            mintToken: async (user) => ({
-              token: await generateToken(user, sessionExpiry),
-              expiresAt: Date.now() + sessionExpiry,
-            }),
-          },
-          {
-            userId: typeof userId === 'string' && userId.length > 0 ? userId : undefined,
-            previousRefreshToken: refreshToken,
-            expectedIssuer,
-            tenantId: getTenantId(),
-          },
-        );
-        return res.json(result);
-      } catch (err) {
-        if (err instanceof AdminRefreshError) {
-          return res.status(err.status).json({ error: err.message, error_code: err.code });
-        }
-        throw err;
-      }
+      const result = await applyAdminRefresh(
+        tokenset,
+        {
+          findUsers,
+          getUserById,
+          canAccessAdmin,
+          mintToken,
+        },
+        {
+          userId: typeof userId === 'string' && userId.length > 0 ? userId : undefined,
+          previousRefreshToken: refreshToken,
+          expectedIssuer,
+          tenantId: getTenantId(),
+        },
+      );
+      return res.json(result);
     } catch (error) {
+      /** Both refresh paths signal expected failures with AdminRefreshError. */
+      if (error instanceof AdminRefreshError) {
+        return res.status(error.status).json({ error: error.message, error_code: error.code });
+      }
       logger.error('[admin/oauth/refresh] Error:', error);
       res.status(500).json({
         error: 'Internal server error',
