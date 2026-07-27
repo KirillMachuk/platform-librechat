@@ -46,6 +46,9 @@ function summarizePermissions(permissions) {
       const part = `${type}.${bit}=${value}`;
       length += part.length + 2;
       if (length > MAX_PERMISSIONS_SUMMARY) {
+        /* Include this part before cutting: with an oversized first entry the
+           summary would otherwise be a lone ellipsis, naming no permission. */
+        parts.push(part);
         return `${parts.join('; ').slice(0, MAX_PERMISSIONS_SUMMARY)}…`;
       }
       parts.push(part);

@@ -72,6 +72,16 @@ describe('auditRoleManagement', () => {
     expect(summary.endsWith('…')).toBe(true);
   });
 
+  it('still names a permission when a single entry overruns the cap', async () => {
+    const permissions = { [`TYPE_${'X'.repeat(600)}`]: { USE: true } };
+
+    await request(buildApp()).patch('/api/admin/roles/USER/permissions').send({ permissions });
+
+    const summary = mockRecordAudit.mock.calls[0][0].metadata.permissions;
+    expect(summary.startsWith('TYPE_XXX')).toBe(true);
+    expect(summary).not.toBe('…');
+  });
+
   it('separates a rename from a permission change on the same method', async () => {
     await request(buildApp()).patch('/api/admin/roles/MANAGER').send({ name: 'LEAD' });
 
