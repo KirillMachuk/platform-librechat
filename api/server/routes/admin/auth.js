@@ -76,6 +76,7 @@ router.post(
   middleware.checkBan,
   middleware.requireLocalAuth,
   tenantContextMiddleware,
+  auditAdminAccessDenied,
   requireAdminAccess,
   setBalanceConfig,
   loginController,

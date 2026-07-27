@@ -1,31 +1,54 @@
+const { SystemCapabilities } = require('@librechat/data-schemas');
 const { recordAudit, auditRequestContext } = require('~/server/services/Audit');
+const { hasCapability } = require('~/server/middleware/roles/capabilities');
 
 /**
- * Records a federated sign-in that the identity provider accepted but the admin
- * panel refused, i.e. an authenticated user without `ACCESS_ADMIN`.
+ * Records a sign-in that succeeded against the identity provider (or the local
+ * password) but is about to be refused by the admin panel — an authenticated
+ * user without `ACCESS_ADMIN`.
  *
- * The generic audit hook only records successes, and the capability middleware
- * ends the request itself — so without this an employee trying the admin panel
- * left no trace at all, which is precisely the attempt a security review asks
- * about. Mount after the strategy (so the user is resolved) and before the
- * capability check.
+ * The shared audit hook only records successes and the capability middleware
+ * ends the request itself, so without this an employee trying the admin panel
+ * left no trace — the first question a security review asks.
+ *
+ * The capability is re-checked here rather than inferred from a 403 on the way
+ * out: `checkBan` answers 403 from the same chain, and a banned admin recorded
+ * as "no rights" would be a false entry in the one table that has to be exact.
+ * The extra read costs one query per sign-in.
+ *
+ * Mount immediately before `requireAdminAccess`, which still issues the refusal.
  */
-const auditAdminAccessDenied = (req, res, next) => {
-  res.on('finish', () => {
-    if (res.statusCode !== 403 || !req.user) {
-      return;
+const auditAdminAccessDenied = async (req, res, next) => {
+  const id = req.user?.id ?? req.user?._id?.toString();
+  if (!id) {
+    return next();
+  }
+
+  try {
+    const allowed = await hasCapability(
+      { id, role: req.user.role ?? '', tenantId: req.user.tenantId },
+      SystemCapabilities.ACCESS_ADMIN,
+    );
+    if (!allowed) {
+      recordAudit({
+        actorId: req.user._id,
+        actorEmail: req.user.email,
+        actorRole: req.user.role,
+        tenantId: req.user.tenantId,
+        action: 'auth.login_failed',
+        outcome: 'failure',
+        metadata: {
+          provider: req.user.provider ?? 'local',
+          reason: 'missing_capability',
+          adminPanel: true,
+        },
+        ...auditRequestContext(req),
+      });
     }
-    recordAudit({
-      actorId: req.user._id,
-      actorEmail: req.user.email,
-      actorRole: req.user.role,
-      action: 'auth.login_failed',
-      outcome: 'failure',
-      tenantId: req.user.tenantId,
-      metadata: { reason: 'admin_access_denied', provider: req.user.provider ?? 'unknown' },
-      ...auditRequestContext(req),
-    });
-  });
+  } catch {
+    /* Never block a sign-in over an audit read; requireAdminAccess decides access. */
+  }
+
   next();
 };
 

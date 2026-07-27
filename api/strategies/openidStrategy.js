@@ -697,7 +697,7 @@ async function processOpenIDAuth(tokenset, existingUsersOnly = false) {
   }
 
   if (existingUsersOnly && !user) {
-    throw new Error('User does not exist');
+    throw loginRejection('User does not exist', email);
   }
 
   if (!user) {
