@@ -12,6 +12,7 @@ import type { TStartupConfig, TUser } from 'librechat-data-provider';
 import { useMCPToolsQuery, useMCPServersQuery } from '~/data-provider';
 import { cleanupTimestampedStorage } from '~/utils/timestamps';
 import useSpeechSettingsInit from './useSpeechSettingsInit';
+import { resolveAppTitle } from '~/utils';
 import { useHasAccess } from '~/hooks';
 import store from '~/store';
 
@@ -53,7 +54,7 @@ export default function useAppStartup({
     if (!rawTitle) {
       return;
     }
-    const appTitle = rawTitle === 'LibreChat' ? '1ma' : rawTitle;
+    const appTitle = resolveAppTitle(rawTitle);
     document.title = appTitle;
     localStorage.setItem(LocalStorageKeys.APP_TITLE, appTitle);
   }, [startupConfig]);

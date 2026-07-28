@@ -9,20 +9,22 @@ import {
   OGDialogClose,
   OGDialogTitle,
   OGDialogHeader,
+  OGDialogTrigger,
   OGDialogContent,
+  OGDialogTemplate,
   useToastContext,
 } from '@librechat/client';
 import type { TProject } from 'librechat-data-provider';
-import { useDeleteProjectMutation, useUpdateProjectMutation } from '~/data-provider';
-import { useLocalize } from '~/hooks';
-import { NotificationSeverity } from '~/common';
-import ProjectAppearancePopover from './ProjectAppearancePopover';
 import {
   DEFAULT_PROJECT_ICON,
   DEFAULT_PROJECT_COLOR,
   resolveIcon,
   resolveColor,
 } from './iconOptions';
+import { useDeleteProjectMutation, useUpdateProjectMutation } from '~/data-provider';
+import ProjectAppearancePopover from './ProjectAppearancePopover';
+import { NotificationSeverity } from '~/common';
+import { useLocalize } from '~/hooks';
 
 type Props = {
   project: TProject;
@@ -114,21 +116,18 @@ function ProjectEditDialog({ project, open, onOpenChange, onDeleted }: Props) {
   const iconHex = resolveColor(appearance.color);
 
   const handleDelete = useCallback(() => {
-    if (!window.confirm(localize('com_projects_delete_confirm', { name: project.name }))) {
-      return;
-    }
     deleteMutation.mutate(project.projectId);
-  }, [deleteMutation, localize, project.name, project.projectId]);
+  }, [deleteMutation, project.projectId]);
 
   const isBusy = updateMutation.isLoading || deleteMutation.isLoading;
 
   return (
     <OGDialog open={open} onOpenChange={onOpenChange}>
-      <OGDialogContent className="w-11/12 max-w-lg" aria-describedby="project-edit-description">
+      <OGDialogContent className="w-11/12 max-w-lg" aria-describedby="project-edit-body">
         <OGDialogHeader>
           <OGDialogTitle>{localize('com_projects_edit_title')}</OGDialogTitle>
         </OGDialogHeader>
-        <div id="project-edit-description" className="flex flex-col gap-3 pt-2">
+        <div id="project-edit-body" className="flex flex-col gap-3 pt-2">
           <div className="flex justify-center pb-1">
             <button
               type="button"
@@ -172,9 +171,28 @@ function ProjectEditDialog({ project, open, onOpenChange, onDeleted }: Props) {
           </div>
         </div>
         <div className="flex justify-between gap-3 pt-4">
-          <Button variant="destructive" onClick={handleDelete} disabled={isBusy}>
-            {deleteMutation.isLoading ? <Spinner /> : localize('com_projects_delete')}
-          </Button>
+          <OGDialog>
+            <OGDialogTrigger asChild>
+              <Button variant="destructive" disabled={isBusy}>
+                {deleteMutation.isLoading ? <Spinner /> : localize('com_projects_delete')}
+              </Button>
+            </OGDialogTrigger>
+            <OGDialogTemplate
+              title={localize('com_projects_delete')}
+              className="max-w-[450px]"
+              main={
+                <Label className="text-left text-sm font-medium">
+                  {localize('com_projects_delete_confirm', { name: project.name })}
+                </Label>
+              }
+              selection={{
+                selectHandler: handleDelete,
+                selectClasses:
+                  'bg-surface-destructive hover:bg-surface-destructive-hover text-white transition-colors',
+                selectText: localize('com_projects_delete'),
+              }}
+            />
+          </OGDialog>
           <div className="flex gap-3">
             <OGDialogClose asChild>
               <Button variant="outline">{localize('com_ui_cancel')}</Button>

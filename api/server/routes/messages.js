@@ -79,6 +79,10 @@ router.get('/', async (req, res) => {
           ...message,
           title: convo.title,
           conversationId: message.conversationId,
+          /* A hit inside a project has to open at the project's URL. Without this the
+             client links to /c/<id> and the app has to notice and rewrite it, which
+             costs a round trip and only works while that repair step exists. */
+          project_id: convo.project_id,
           model: convo.model,
           isCreatedByUser: dbMessage?.isCreatedByUser,
           endpoint: dbMessage?.endpoint,

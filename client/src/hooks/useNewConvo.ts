@@ -33,6 +33,7 @@ import {
   getModelSpecPreset,
   hasModelSelection,
   buildDefaultConvo,
+  resolveAppTitle,
   logger,
 } from '~/utils';
 import { useDeleteFilesMutation, useGetEndpointsQuery, useGetStartupConfig } from '~/data-provider';
@@ -252,7 +253,7 @@ const useNewConvo = (index = 0) => {
 
         if (conversation.conversationId === Constants.NEW_CONVO && !modelsData) {
           const storedTitle = localStorage.getItem(LocalStorageKeys.APP_TITLE);
-          const appTitle = !storedTitle || storedTitle === 'LibreChat' ? '1ma' : storedTitle;
+          const appTitle = resolveAppTitle(storedTitle);
           document.title = appTitle;
           const path = `${buildConvoPath({ projectId })}${carriedSuffix}`;
           navigate(path, { state: { focusChat: true } });

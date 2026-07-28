@@ -199,6 +199,12 @@ echo "(Excluding: registry URLs, librechat.yaml file refs, librechat.ai URLs, HT
 #   - REDIS_KEY_PREFIX       (internal key)
 #   - OTEL_SERVICE_NAME      (internal telemetry)
 #   - CONFIG_PATH            (file path reference)
+#   - {{LIBRECHAT_USER_*}}   (template placeholders resolved by the server, never shown)
+#   - "app":"librechat"      (an example metadata value in a commented-out sample)
+#
+# Those last two are why this audit used to exit 1 on a clean checkout: it flagged
+# its own documentation examples, so `bash scripts/rebrand.sh` — a documented step
+# of the upstream-merge procedure — always failed, and stopped being believed.
 REMAINING=$(grep -rin "LibreChat" \
   "$REPO_ROOT/client/src/locales/"*/translation.json \
   "$REPO_ROOT/client/index.html" \
@@ -218,12 +224,43 @@ REMAINING=$(grep -rin "LibreChat" \
   | grep -iv "REDIS_KEY_PREFIX" \
   | grep -iv "OTEL_SERVICE_NAME" \
   | grep -iv "CONFIG_PATH" \
+  | grep -v "{{LIBRECHAT_" \
+  | grep -iv '"app":"librechat"' \
   || true)
 
 if [ -n "$REMAINING" ]; then
   echo "WARNING: These lines still contain 'LibreChat':"
   echo "$REMAINING"
   exit 1
-else
-  echo "All clear — no user-visible 'LibreChat' branding found."
 fi
+
+# The audit above only reads config and locale files, which is how three leaks
+# survived it: the app title falling back to the upstream name in code. That
+# fallback is the actual mechanism — an unset APP_TITLE, or an untouched default
+# — and it reaches users through outgoing email and the About panel. Any
+# `|| 'LibreChat'` is therefore wrong in a white-label fork, wherever it appears.
+echo ""
+echo "--- Audit: upstream name as a code fallback ---"
+# `??` counts as much as `||`, and tests are excluded on purpose: upstream ships
+# fixtures asserting its own name, and one of those must not block the merge
+# procedure this script is part of.
+FALLBACKS=$(grep -rEn "(\|\||\?\?)[[:space:]]*['\"]LibreChat['\"]" \
+  "$REPO_ROOT/api" \
+  "$REPO_ROOT/client/src" \
+  "$REPO_ROOT/packages" \
+  --include='*.js' --include='*.ts' --include='*.tsx' \
+  --exclude='*.spec.*' --exclude='*.test.*' \
+  --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=__tests__ \
+  2>/dev/null || true)
+
+if [ -n "$FALLBACKS" ]; then
+  echo "WARNING: the upstream name is used as a default here — a user sees it whenever"
+  echo "the environment does not override it (outgoing email, page title, diagnostics):"
+  echo "$FALLBACKS"
+  echo ""
+  echo "Use '${BRAND}' as the fallback, or route the value through resolveAppTitle()"
+  echo "in client/src/utils/brand.ts."
+  exit 1
+fi
+
+echo "All clear — no user-visible 'LibreChat' branding found."

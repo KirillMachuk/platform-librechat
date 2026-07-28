@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/extend-expect';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { VersionRecord } from '../types';
+import { formatTimestamp } from '~/utils';
 import VersionItem from '../VersionItem';
 
 jest.mock('~/hooks', () => ({
@@ -43,7 +44,7 @@ describe('VersionItem', () => {
   test('renders version number and timestamp', () => {
     render(<VersionItem {...defaultProps} />);
     expect(screen.getByText('Version 2')).toBeInTheDocument();
-    const date = new Date('2023-01-01T00:00:00Z').toLocaleString();
+    const date = formatTimestamp('2023-01-01T00:00:00Z');
     expect(screen.getByText(date)).toBeInTheDocument();
   });
 
@@ -98,7 +99,7 @@ describe('VersionItem', () => {
       createdAt: '2023-01-01T00:00:00Z',
     };
     render(<VersionItem {...defaultProps} version={versionWithBothDates} />);
-    const updatedDate = new Date('2023-01-02T00:00:00Z').toLocaleString();
+    const updatedDate = formatTimestamp('2023-01-02T00:00:00Z');
     expect(screen.getByText(updatedDate)).toBeInTheDocument();
   });
 
@@ -113,7 +114,7 @@ describe('VersionItem', () => {
         }}
       />,
     );
-    const createdDate = new Date('2023-01-01T00:00:00Z').toLocaleString();
+    const createdDate = formatTimestamp('2023-01-01T00:00:00Z');
     expect(screen.getByText(createdDate)).toBeInTheDocument();
   });
 

@@ -31,11 +31,16 @@ export const buildColumns = (ctx: PanelColumnsContext): TableColumn<TFileRow, un
       const localize = useLocalize();
       return localize('com_ui_date');
     },
-    cell: ({ row }) => (
-      <span className="flex justify-end text-xs">
-        {formatDate(row.original?.updatedAt?.toString() ?? '')}
-      </span>
-    ),
+    cell: ({ row }) => {
+      /* This cell renders separately from its header, so it needs its own
+         subscription — formatDate reads the app language. */
+      useLocalize();
+      return (
+        <span className="flex justify-end text-xs">
+          {formatDate(row.original?.updatedAt?.toString() ?? '')}
+        </span>
+      );
+    },
     meta: {
       width: 25,
     },

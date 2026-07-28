@@ -1,10 +1,9 @@
 import React from 'react';
 import { Label, InfoHoverCard, ESide } from '@librechat/client';
 import { getRefillEligibilityDate } from 'librechat-data-provider';
-
 import type { RefillIntervalUnit, TBalanceResponse } from 'librechat-data-provider';
 import type { TranslationKeys } from '~/hooks';
-
+import { formatTimestamp } from '~/utils';
 import { useLocalize } from '~/hooks';
 
 function ensureExhaustive(value: never): void {
@@ -65,7 +64,7 @@ const AutoRefillSettings: React.FC<AutoRefillSettingsProps> = ({
       <h3 className="text-lg font-medium">{localize('com_nav_balance_auto_refill_settings')}</h3>
       <div className="mb-1 flex justify-between text-sm">
         <span>{localize('com_nav_balance_last_refill')}</span>
-        <span>{lastRefillDate ? lastRefillDate.toLocaleString() : '-'}</span>
+        <span>{lastRefillDate ? formatTimestamp(lastRefillDate) : '-'}</span>
       </div>
       <div className="mb-1 flex justify-between text-sm">
         <span>{localize('com_nav_balance_refill_amount')}</span>
@@ -85,7 +84,7 @@ const AutoRefillSettings: React.FC<AutoRefillSettingsProps> = ({
         </div>
 
         <span className="text-sm font-medium text-gray-800 dark:text-gray-200" role="note">
-          {refillEligibilityDate ? refillEligibilityDate.toLocaleString() : '-'}
+          {refillEligibilityDate ? formatTimestamp(refillEligibilityDate) : '-'}
         </span>
       </div>
     </div>

@@ -13,6 +13,7 @@ import type { TUserMemory } from 'librechat-data-provider';
 import { useUpdateMemoryMutation, useMemoriesQuery } from '~/data-provider';
 import { useLocalize, useHasAccess } from '~/hooks';
 import MemoryUsageBadge from './MemoryUsageBadge';
+import { formatTimestamp } from '~/utils';
 
 interface MemoryEditDialogProps {
   memory: TUserMemory | null;
@@ -21,16 +22,6 @@ interface MemoryEditDialogProps {
   children: React.ReactNode;
   triggerRef?: React.MutableRefObject<HTMLButtonElement | null>;
 }
-
-const formatDateTime = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
 
 export default function MemoryEditDialog({
   memory,
@@ -161,7 +152,7 @@ export default function MemoryEditDialog({
 
                 {/* Date - Center */}
                 <span className="text-xs text-text-secondary">
-                  {formatDateTime(memory.updated_at)}
+                  {formatTimestamp(memory.updated_at)}
                 </span>
 
                 {/* Usage badge - Right (memory-specific) */}

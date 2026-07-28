@@ -1,12 +1,15 @@
 import { memo, useCallback, useEffect, useRef } from 'react';
-import { MessagesSquare, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { MessagesSquare, MessageSquare } from 'lucide-react';
 import type { MouseEvent } from 'react';
+import { buildSearchResultUrl } from './url';
+import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
 interface ItemProps {
   id: string;
   conversationId: string;
+  projectId?: string;
   title: string;
   snippet?: string;
   rightLabel?: string;
@@ -19,6 +22,7 @@ interface ItemProps {
 const Item = memo(function Item({
   id,
   conversationId,
+  projectId,
   title,
   snippet,
   rightLabel,
@@ -27,6 +31,7 @@ const Item = memo(function Item({
   isActive = false,
   onSelect,
 }: ItemProps) {
+  const localize = useLocalize();
   const navigate = useNavigate();
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -36,11 +41,10 @@ const Item = memo(function Item({
       if (!conversationId) {
         return;
       }
-      const url = messageId ? `/c/${conversationId}#msg=${messageId}` : `/c/${conversationId}`;
-      navigate(url);
+      navigate(buildSearchResultUrl({ conversationId, projectId, messageId }));
       onSelect?.();
     },
-    [conversationId, messageId, navigate, onSelect],
+    [conversationId, projectId, messageId, navigate, onSelect],
   );
 
   useEffect(() => {
@@ -68,11 +72,14 @@ const Item = memo(function Item({
     >
       <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-text-secondary" aria-hidden="true" />
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate font-normal text-text-primary">
-          {title}
+        {/* The badge sits beside the title rather than inside it: as one truncating
+            line, a long title pushed the badge out of view entirely — and it is the
+            only thing saying the match was found inside a message, not in the title. */}
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate font-normal text-text-primary">{title}</span>
           {type === 'message' ? (
-            <span className="ml-2 inline-block rounded bg-surface-tertiary px-1.5 py-px text-[10px] font-medium text-text-secondary">
-              msg
+            <span className="flex-shrink-0 rounded bg-surface-tertiary px-1.5 py-px text-[10px] font-medium text-text-secondary">
+              {localize('com_endpoint_message')}
             </span>
           ) : null}
         </span>

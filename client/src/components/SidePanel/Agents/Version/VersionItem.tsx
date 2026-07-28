@@ -1,5 +1,6 @@
-import { useLocalize } from '~/hooks';
 import type { VersionRecord } from './types';
+import { formatTimestamp } from '~/utils';
+import { useLocalize } from '~/hooks';
 
 type VersionItemProps = {
   version: VersionRecord;
@@ -27,8 +28,8 @@ export default function VersionItem({
         if (isNaN(date.getTime()) || date.toString() === 'Invalid Date') {
           return localize('com_ui_agent_version_unknown_date');
         }
-        return date.toLocaleString();
-      } catch (error) {
+        return formatTimestamp(timestamp);
+      } catch {
         return localize('com_ui_agent_version_unknown_date');
       }
     }

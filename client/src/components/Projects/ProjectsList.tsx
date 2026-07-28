@@ -1,21 +1,15 @@
 import { memo, useState } from 'react';
 import { Plus, FolderPlus } from 'lucide-react';
 import { Button, Spinner } from '@librechat/client';
+import { resolveIcon, resolveColor } from './iconOptions';
+import ProjectCreateDialog from './ProjectCreateDialog';
 import { useListProjectsQuery } from '~/data-provider';
 import { useLocalize, useAuthContext } from '~/hooks';
-import ProjectCreateDialog from './ProjectCreateDialog';
-import { resolveIcon, resolveColor } from './iconOptions';
+import { formatDate } from '~/utils';
 
 type Props = {
   onSelect: (projectId: string) => void;
 };
-
-function formatDate(value?: string): string {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString();
-}
 
 function ProjectsList({ onSelect }: Props) {
   const localize = useLocalize();

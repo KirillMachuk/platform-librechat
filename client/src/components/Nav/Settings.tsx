@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
-import { PermissionTypes, Permissions, SettingsTabValues } from 'librechat-data-provider';
 import { Brain, MessageSquare, Command, DollarSign, Info } from 'lucide-react';
+import { PermissionTypes, Permissions, SettingsTabValues } from 'librechat-data-provider';
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react';
 import {
   GearIcon,
@@ -167,7 +167,8 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
 
   return (
     <Transition appear show={open}>
-      <Dialog as="div" className="relative z-50" onClose={onOpenChange}>
+      {/* Same layer as PanelDialog: above the mobile drawer (110), below OGDialog (130/140). */}
+      <Dialog as="div" className="relative z-[120]" onClose={onOpenChange}>
         <TransitionChild
           enter="ease-out duration-200"
           enterFrom="opacity-0"

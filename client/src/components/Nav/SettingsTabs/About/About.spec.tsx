@@ -1,7 +1,7 @@
 import React from 'react';
-import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Constants } from 'librechat-data-provider';
+import { act, render, screen } from '@testing-library/react';
 import type { TStartupConfig } from 'librechat-data-provider';
 import About from './About';
 
@@ -80,7 +80,10 @@ describe('About', () => {
       expect(mockCopy).toHaveBeenCalledTimes(1);
       const [blob, options] = mockCopy.mock.calls[0] as [string, { format: string }];
       expect(options).toEqual({ format: 'text/plain' });
-      expect(blob).toContain(`LibreChat version: ${Constants.VERSION}`);
+      // The client must never see the upstream name — the label follows the
+      // configured brand, and falls back to ours rather than upstream's.
+      expect(blob).toContain(`1ma version: ${Constants.VERSION}`);
+      expect(blob).not.toContain('LibreChat');
       expect(blob).toContain(`Commit: ${populatedBuildInfo.commit}`);
       expect(blob).toContain(`Branch: ${populatedBuildInfo.branch}`);
       expect(blob).toContain('Build date: 2026-04-20 12:00:00 UTC');

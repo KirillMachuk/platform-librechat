@@ -3,12 +3,6 @@ import { RefreshCcw } from 'lucide-react';
 import { useSetRecoilState } from 'recoil';
 import { motion, AnimatePresence } from 'framer-motion';
 import { REGEXP_ONLY_DIGITS, REGEXP_ONLY_DIGITS_AND_CHARS } from 'input-otp';
-import type {
-  TRegenerateBackupCodesResponse,
-  TRegenerateBackupCodesRequest,
-  TBackupCode,
-  TUser,
-} from 'librechat-data-provider';
 import {
   InputOTPSeparator,
   InputOTPGroup,
@@ -24,8 +18,15 @@ import {
   TooltipAnchor,
   useToastContext,
 } from '@librechat/client';
+import type {
+  TRegenerateBackupCodesResponse,
+  TRegenerateBackupCodesRequest,
+  TBackupCode,
+  TUser,
+} from 'librechat-data-provider';
 import { useRegenerateBackupCodesMutation } from '~/data-provider';
 import { useAuthContext, useLocalize } from '~/hooks';
+import { formatDate } from '~/utils';
 import store from '~/store';
 
 const BackupCodesItem: React.FC = () => {
@@ -155,9 +156,7 @@ const BackupCodesItem: React.FC = () => {
                             {localize('com_ui_backup_code_number', { number: index + 1 })}
                           </span>
                           <TooltipAnchor
-                            description={
-                              code.usedAt ? new Date(code.usedAt).toLocaleDateString() : ''
-                            }
+                            description={formatDate(code.usedAt)}
                             disabled={!isUsed}
                             focusable={false}
                             className={isUsed ? 'cursor-pointer' : 'cursor-default'}

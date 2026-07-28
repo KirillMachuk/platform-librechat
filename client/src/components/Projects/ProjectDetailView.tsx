@@ -1,8 +1,17 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
 import { ArrowLeft, MoreHorizontal, Upload, FileText, Trash2 } from 'lucide-react';
-import { Button, Spinner, TooltipAnchor, useToastContext } from '@librechat/client';
+import {
+  Label,
+  Button,
+  Spinner,
+  OGDialog,
+  TooltipAnchor,
+  OGDialogTrigger,
+  OGDialogTemplate,
+  useToastContext,
+} from '@librechat/client';
+import type { TConversation } from 'librechat-data-provider';
 import {
   useGetProjectQuery,
   useProjectConversationsQuery,
@@ -11,18 +20,17 @@ import {
   useUploadProjectFileMutation,
   useDeleteProjectFileMutation,
 } from '~/data-provider';
-import type { TConversation } from 'librechat-data-provider';
-import { useLocalize, useNavigateToConvo, useNewConvo } from '~/hooks';
-import { NotificationSeverity } from '~/common';
-import { buildConvoPath, cn } from '~/utils';
-import ProjectAppearancePopover from './ProjectAppearancePopover';
-import ProjectEditDialog from './ProjectEditDialog';
 import {
   resolveIcon,
   resolveColor,
   DEFAULT_PROJECT_ICON,
   DEFAULT_PROJECT_COLOR,
 } from './iconOptions';
+import { useLocalize, useNavigateToConvo, useNewConvo } from '~/hooks';
+import ProjectAppearancePopover from './ProjectAppearancePopover';
+import { buildConvoPath, cn, formatDate } from '~/utils';
+import ProjectEditDialog from './ProjectEditDialog';
+import { NotificationSeverity } from '~/common';
 
 type Tab = 'chats' | 'sources';
 
@@ -42,7 +50,6 @@ function formatBytes(bytes?: number): string {
 
 function ProjectDetailView({ projectId, onBack, onClose }: Props) {
   const localize = useLocalize();
-  const navigate = useNavigate();
   const { showToast } = useToastContext();
   const { newConversation } = useNewConvo();
   const { navigateToConvo } = useNavigateToConvo();
@@ -153,13 +160,10 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
   );
 
   const handleDeleteFile = useCallback(
-    (fileId: string, filename: string) => {
-      if (!window.confirm(localize('com_projects_remove_source_confirm', { name: filename }))) {
-        return;
-      }
+    (fileId: string) => {
       deleteFileMutation.mutate({ projectId, fileId });
     },
-    [deleteFileMutation, localize, projectId],
+    [deleteFileMutation, projectId],
   );
 
   if (projectLoading) {
@@ -282,7 +286,7 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
                 >
                   <span className="truncate text-sm text-text-primary">{c.title}</span>
                   <span className="truncate text-xs text-text-secondary">
-                    {new Date(c.updatedAt ?? c.createdAt ?? Date.now()).toLocaleDateString()}
+                    {formatDate(c.updatedAt ?? c.createdAt)}
                   </span>
                 </a>
               ))
@@ -300,7 +304,7 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
             onDrop={handleDrop}
             className={cn(
               'flex flex-col gap-2 rounded-2xl border-2 border-dashed border-border-light p-4 transition-colors',
-              isDragOver && 'border-pink-400 bg-surface-hover',
+              isDragOver && 'border-border-xheavy bg-surface-hover',
             )}
           >
             <div className="flex items-center justify-between pb-2">
@@ -352,22 +356,40 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
                       <span className="text-xs text-text-secondary">{formatBytes(file.bytes)}</span>
                     </div>
                   </div>
-                  <TooltipAnchor
-                    side="left"
-                    description={localize('com_projects_remove_source')}
-                    render={
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleDeleteFile(file.file_id, file.filename)}
-                        aria-label={localize('com_projects_remove_source')}
-                        disabled={deleteFileMutation.isLoading}
-                      >
-                        <Trash2 className="h-4 w-4 text-text-secondary" aria-hidden="true" />
-                      </Button>
-                    }
-                  />
+                  <OGDialog>
+                    <OGDialogTrigger asChild>
+                      <TooltipAnchor
+                        side="left"
+                        description={localize('com_projects_remove_source')}
+                        render={
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            aria-label={localize('com_projects_remove_source')}
+                            disabled={deleteFileMutation.isLoading}
+                          >
+                            <Trash2 className="h-4 w-4 text-text-secondary" aria-hidden="true" />
+                          </Button>
+                        }
+                      />
+                    </OGDialogTrigger>
+                    <OGDialogTemplate
+                      title={localize('com_projects_remove_source')}
+                      className="max-w-[450px]"
+                      main={
+                        <Label className="text-left text-sm font-medium">
+                          {localize('com_projects_remove_source_confirm', { name: file.filename })}
+                        </Label>
+                      }
+                      selection={{
+                        selectHandler: () => handleDeleteFile(file.file_id),
+                        selectClasses:
+                          'bg-surface-destructive hover:bg-surface-destructive-hover text-white transition-colors',
+                        selectText: localize('com_projects_remove_source'),
+                      }}
+                    />
+                  </OGDialog>
                 </div>
               ))
             )}

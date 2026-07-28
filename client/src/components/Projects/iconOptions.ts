@@ -67,12 +67,21 @@ export const PROJECT_ICONS: ProjectIconOption[] = [
 
 export type ProjectColorOption = { name: string; hex: string };
 
+/**
+ * A project's colour is drawn as the glyph on a disc of that same colour at 10%
+ * alpha, so what has to stay legible is glyph-against-disc — and the disc sits on
+ * a surface that flips from #ffffff to #0d0d0d between themes. These hexes are the
+ * mid-luminance band that clears 3:1 (WCAG 1.4.11 non-text) on both: anything
+ * lighter dissolves in the light theme, anything darker in the dark one.
+ *
+ * `name` is what gets persisted, so hexes may change freely — names may not.
+ */
 export const PROJECT_COLORS: ProjectColorOption[] = [
-  { name: 'black', hex: '#0f172a' },
+  { name: 'black', hex: '#64748b' },
   { name: 'red', hex: '#ef4444' },
-  { name: 'orange', hex: '#f97316' },
-  { name: 'yellow', hex: '#eab308' },
-  { name: 'green', hex: '#22c55e' },
+  { name: 'orange', hex: '#ea580c' },
+  { name: 'yellow', hex: '#a16207' },
+  { name: 'green', hex: '#059669' },
   { name: 'blue', hex: '#3b82f6' },
   { name: 'purple', hex: '#a855f7' },
   { name: 'pink', hex: '#ec4899' },
@@ -86,7 +95,11 @@ export function resolveIcon(name?: string | null): LucideIcon {
   return PROJECT_ICONS.find((i) => i.name === name)?.Icon ?? Folder;
 }
 
+const FALLBACK_COLOR =
+  PROJECT_COLORS.find((c) => c.name === DEFAULT_PROJECT_COLOR)?.hex ?? PROJECT_COLORS[0].hex;
+
+/** Projects created before the colour field existed carry no colour at all. */
 export function resolveColor(name?: string | null): string {
-  if (!name) return '#0f172a';
-  return PROJECT_COLORS.find((c) => c.name === name)?.hex ?? '#0f172a';
+  if (!name) return FALLBACK_COLOR;
+  return PROJECT_COLORS.find((c) => c.name === name)?.hex ?? FALLBACK_COLOR;
 }

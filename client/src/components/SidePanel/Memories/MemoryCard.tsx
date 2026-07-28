@@ -1,20 +1,12 @@
 import type { TUserMemory } from 'librechat-data-provider';
 import MemoryCardActions from './MemoryCardActions';
+import { cn, formatDate } from '~/utils';
 import { useLocalize } from '~/hooks';
-import { cn } from '~/utils';
 
 interface MemoryCardProps {
   memory: TUserMemory;
   hasUpdateAccess: boolean;
 }
-
-const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};
 
 export default function MemoryCard({ memory, hasUpdateAccess }: MemoryCardProps) {
   const localize = useLocalize();

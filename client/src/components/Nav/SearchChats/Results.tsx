@@ -1,14 +1,14 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { Spinner } from '@librechat/client';
-import type { RefObject } from 'react';
 import type { TConversation, TMessage, GroupedConversations } from 'librechat-data-provider';
-import { useConversationsInfiniteQuery, useMessagesInfiniteQuery } from '~/data-provider';
-import { groupConversationsByDate } from '~/utils';
-import { useLocalize, useAuthContext, TranslationKeys } from '~/hooks';
+import type { RefObject } from 'react';
 import type { SearchItem } from './types';
+import { useConversationsInfiniteQuery, useMessagesInfiniteQuery } from '~/data-provider';
+import { useLocalize, useAuthContext, TranslationKeys } from '~/hooks';
+import { groupConversationsByDate } from '~/utils';
 import Item from './Item';
 
-type SearchMessageHit = TMessage & { title?: string };
+type SearchMessageHit = TMessage & { title?: string; project_id?: string };
 
 interface ResultsProps {
   query: string;
@@ -113,6 +113,7 @@ const Results = memo(function Results({
           items.push({
             id: `r-${cid}`,
             conversationId: cid,
+            projectId: c.project_id,
             title: c.title || localize('com_ui_new_chat'),
           });
         }
@@ -127,6 +128,7 @@ const Results = memo(function Results({
       items.push({
         id: `c-${cid}`,
         conversationId: cid,
+        projectId: c.project_id,
         title: c.title || localize('com_ui_new_chat'),
       });
     }
@@ -138,6 +140,7 @@ const Results = memo(function Results({
       items.push({
         id: `m-${m.messageId}`,
         conversationId: cid,
+        projectId: m.project_id,
         messageId: m.messageId,
         title: m.title || localize('com_ui_new_chat'),
         snippet: makeSnippet(m.text ?? '', query),
@@ -247,6 +250,7 @@ const Results = memo(function Results({
                   key={itemId}
                   id={itemId}
                   conversationId={cid}
+                  projectId={c.project_id}
                   title={c.title || localize('com_ui_new_chat')}
                   type="recent"
                   isActive={activeId === itemId}
@@ -290,6 +294,7 @@ const Results = memo(function Results({
                 key={itemId}
                 id={itemId}
                 conversationId={cid}
+                projectId={c.project_id}
                 title={c.title || localize('com_ui_new_chat')}
                 type="chat"
                 isActive={activeId === itemId}
@@ -312,6 +317,7 @@ const Results = memo(function Results({
                 key={itemId}
                 id={itemId}
                 conversationId={cid}
+                projectId={m.project_id}
                 messageId={m.messageId}
                 title={m.title || localize('com_ui_new_chat')}
                 snippet={makeSnippet(m.text ?? '', query)}
