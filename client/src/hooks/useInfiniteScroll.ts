@@ -41,10 +41,23 @@ export const useInfiniteScroll = ({
     }
   }, [scrollElement, hasNextPage, isLoading, fetchNextPage, threshold]);
 
-  // Create a throttled version - using useMemo to ensure it's created synchronously
+  /**
+   * The throttle has to outlive the handler it wraps. `handleNeedToFetch` gets a
+   * new identity whenever `hasNextPage` / `isLoading` / `fetchNextPage` change —
+   * i.e. on every step of a page load — and throttling state lives *inside* the
+   * throttled function, so re-wrapping it reset the window and let the very next
+   * render fire another leading-edge call. That is what made the grid request the
+   * same next page twice under a slow layout pass. Wrapping a ref instead keeps
+   * one throttle for the lifetime of the hook while still running current logic.
+   */
+  const handlerRef = useRef(handleNeedToFetch);
+  useEffect(() => {
+    handlerRef.current = handleNeedToFetch;
+  }, [handleNeedToFetch]);
+
   const throttledHandleNeedToFetch = useMemo(
-    () => throttle(handleNeedToFetch, throttleMs),
-    [handleNeedToFetch, throttleMs],
+    () => throttle(() => handlerRef.current(), throttleMs),
+    [throttleMs],
   );
 
   // Clean up throttled function on unmount
@@ -54,7 +67,11 @@ export const useInfiniteScroll = ({
     };
   }, [throttledHandleNeedToFetch]);
 
-  // Check if we need to fetch more data when loading state changes (useful to fill content on first load)
+  /**
+   * Re-check after a load settles, and after `hasNextPage` flips — together these
+   * cover what the listener effect below used to re-check incidentally, back when
+   * it re-ran on every handler identity change.
+   */
   useEffect(() => {
     if (isLoading === false && scrollElement) {
       // Use requestAnimationFrame to ensure DOM is ready after loading completes
@@ -63,7 +80,7 @@ export const useInfiniteScroll = ({
       });
       return () => cancelAnimationFrame(rafId);
     }
-  }, [isLoading, scrollElement, throttledHandleNeedToFetch]);
+  }, [isLoading, hasNextPage, scrollElement, throttledHandleNeedToFetch]);
 
   // Set up scroll listener and ResizeObserver
   useEffect(() => {
