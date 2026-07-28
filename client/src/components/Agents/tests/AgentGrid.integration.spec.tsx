@@ -484,7 +484,11 @@ describe('AgentGrid Integration with useGetMarketplaceAgentsQuery', () => {
       const Wrapper = createWrapper();
       render(
         <Wrapper>
-          <AgentGrid category="finance" searchQuery="nonexistent" onSelectAgent={mockOnSelectAgent} />
+          <AgentGrid
+            category="finance"
+            searchQuery="nonexistent"
+            onSelectAgent={mockOnSelectAgent}
+          />
         </Wrapper>,
       );
 

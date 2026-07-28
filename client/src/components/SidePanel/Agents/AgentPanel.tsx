@@ -610,15 +610,20 @@ export default function AgentPanel() {
               </div>
             </div>
           )}
-          {canEditAgent && !agentQuery.isInitialLoading && !permissionsPending && activePanel === Panel.model && (
-            <ModelPanel models={models} providers={providers} setActivePanel={setActivePanel} />
-          )}
-          {canEditAgent && !agentQuery.isInitialLoading && !permissionsPending && activePanel === Panel.builder && (
-            <AgentConfig />
-          )}
-          {canEditAgent && !agentQuery.isInitialLoading && !permissionsPending && activePanel === Panel.advanced && (
-            <AdvancedPanel />
-          )}
+          {canEditAgent &&
+            !agentQuery.isInitialLoading &&
+            !permissionsPending &&
+            activePanel === Panel.model && (
+              <ModelPanel models={models} providers={providers} setActivePanel={setActivePanel} />
+            )}
+          {canEditAgent &&
+            !agentQuery.isInitialLoading &&
+            !permissionsPending &&
+            activePanel === Panel.builder && <AgentConfig />}
+          {canEditAgent &&
+            !agentQuery.isInitialLoading &&
+            !permissionsPending &&
+            activePanel === Panel.advanced && <AdvancedPanel />}
         </div>
         {canEditAgent && !agentQuery.isInitialLoading && !permissionsPending && (
           <AgentFooter

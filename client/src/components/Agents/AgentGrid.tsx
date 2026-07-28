@@ -5,7 +5,7 @@ import type t from 'librechat-data-provider';
 import { useMarketplaceAgentsInfiniteQuery } from '~/data-provider/Agents';
 import { useInfiniteScroll } from '~/hooks/useInfiniteScroll';
 import { useAgentCategories, useLocalize } from '~/hooks';
-import { useHasData } from './SmartLoader';
+
 import ErrorDisplay from './ErrorDisplay';
 import AgentCard from './AgentCard';
 
@@ -84,9 +84,6 @@ const AgentGrid: React.FC<AgentGridProps> = ({
     if (!data?.pages) return [];
     return data.pages.flatMap((page) => page.data || []);
   }, [data?.pages]);
-
-  // Check if we have meaningful data to prevent unnecessary loading states
-  const hasData = useHasData(data?.pages?.[0]);
 
   // Set up infinite scroll
   const { setScrollElement } = useInfiniteScroll({

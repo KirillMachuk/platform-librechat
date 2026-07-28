@@ -15,41 +15,37 @@ jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
-jest.mock(
-  '@librechat/client',
-  () => {
-    const React = jest.requireActual<typeof import('react')>('react');
-    return {
-      OGDialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
-        open ? React.createElement('div', null, children) : null,
-      OGDialogContent: ({ children }: { children: ReactNode }) =>
-        React.createElement('div', null, children),
-      Label: ({ children }: { children: ReactNode }) => React.createElement('span', null, children),
-      /** Stands in for the shared confirm body: title, message and the accept button. */
-      OGDialogTemplate: ({
-        title,
+jest.mock('@librechat/client', () => {
+  const React = jest.requireActual<typeof import('react')>('react');
+  return {
+    OGDialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
+      open ? React.createElement('div', null, children) : null,
+    OGDialogContent: ({ children }: { children: ReactNode }) =>
+      React.createElement('div', null, children),
+    Label: ({ children }: { children: ReactNode }) => React.createElement('span', null, children),
+    /** Stands in for the shared confirm body: title, message and the accept button. */
+    OGDialogTemplate: ({
+      title,
+      main,
+      selection,
+    }: {
+      title: string;
+      main: ReactNode;
+      selection: { selectHandler: () => void; selectText: string };
+    }) =>
+      React.createElement(
+        'div',
+        null,
+        React.createElement('h2', null, title),
         main,
-        selection,
-      }: {
-        title: string;
-        main: ReactNode;
-        selection: { selectHandler: () => void; selectText: string };
-      }) =>
         React.createElement(
-          'div',
-          null,
-          React.createElement('h2', null, title),
-          main,
-          React.createElement(
-            'button',
-            { 'data-testid': 'confirm-leave', onClick: selection.selectHandler },
-            selection.selectText,
-          ),
+          'button',
+          { 'data-testid': 'confirm-leave', onClick: selection.selectHandler },
+          selection.selectText,
         ),
-    };
-  },
-  { virtual: true },
-);
+      ),
+  };
+});
 
 jest.mock('~/data-provider', () => ({
   useListSkillsQuery: () => ({ data: { skills: [] } }),
