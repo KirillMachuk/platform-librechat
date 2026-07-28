@@ -29,7 +29,7 @@ export default function VersionItem({
           return localize('com_ui_agent_version_unknown_date');
         }
         return formatTimestamp(timestamp);
-      } catch (error) {
+      } catch {
         return localize('com_ui_agent_version_unknown_date');
       }
     }

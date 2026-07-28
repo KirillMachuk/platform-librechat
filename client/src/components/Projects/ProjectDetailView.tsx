@@ -1,5 +1,4 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
 import { ArrowLeft, MoreHorizontal, Upload, FileText, Trash2 } from 'lucide-react';
 import {
@@ -51,7 +50,6 @@ function formatBytes(bytes?: number): string {
 
 function ProjectDetailView({ projectId, onBack, onClose }: Props) {
   const localize = useLocalize();
-  const navigate = useNavigate();
   const { showToast } = useToastContext();
   const { newConversation } = useNewConvo();
   const { navigateToConvo } = useNavigateToConvo();
