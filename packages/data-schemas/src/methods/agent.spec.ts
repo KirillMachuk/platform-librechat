@@ -1951,6 +1951,52 @@ describe('Agent Methods', () => {
       expect((agentInDb as unknown as Record<string, unknown>).createdAt).toBeDefined();
     });
 
+    /** Version 0 is written by `createAgent`, which used to resolve `category` and
+     *  `mcpServerNames` after taking the snapshot. Reverting to it then read their absence
+     *  as "the agent never had them" and stripped both — the agent dropped out of its
+     *  catalog category, which is what the user actually sees. */
+    test('should keep the category when reverting to the very first version', async () => {
+      const agentId = `agent_${uuidv4()}`;
+      const Agent = mongoose.models.Agent;
+
+      await createAgent({
+        id: agentId,
+        name: 'No Explicit Category',
+        provider: 'test',
+        model: 'test-model',
+        author: new mongoose.Types.ObjectId(),
+      });
+      await updateAgent({ id: agentId }, { description: 'second version' });
+
+      const reverted = await revertAgentVersion({ id: agentId }, 0);
+
+      expect(reverted.category).toBe('general');
+      const inDb = await Agent.findOne({ id: agentId }).lean<IAgent>();
+      expect(inDb!.category).toBe('general');
+    });
+
+    test('should rebuild the MCP index from the tools it restores', async () => {
+      const agentId = `agent_${uuidv4()}`;
+      const Agent = mongoose.models.Agent;
+
+      await createAgent({
+        id: agentId,
+        name: 'With MCP Tools',
+        provider: 'test',
+        model: 'test-model',
+        author: new mongoose.Types.ObjectId(),
+        tools: ['search_mcp_serverA'],
+      });
+      await updateAgent({ id: agentId }, { tools: ['other_mcp_serverB'] });
+
+      const reverted = await revertAgentVersion({ id: agentId }, 0);
+
+      /** Derived from the restored tools, not copied from the snapshot and not dropped. */
+      expect(reverted.tools).toEqual(['search_mcp_serverA']);
+      const inDb = await Agent.findOne({ id: agentId }).lean<IAgent>();
+      expect(inDb!.mcpServerNames).toEqual(['serverA']);
+    });
+
     test('should detect action metadata changes and force version update', async () => {
       const agentId = `agent_${uuidv4()}`;
       const authorId = new mongoose.Types.ObjectId();

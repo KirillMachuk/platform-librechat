@@ -340,6 +340,11 @@ export function createAgentMethods(
         agentData.skills_enabled = false;
       }
     }
+    /** `category` and `mcpServerNames` are deliberately resolved AFTER the snapshot and
+     *  stay out of version 0. Folding them in looks tidier but changes what counts as a
+     *  duplicate version: the next update then matches version 0 on those fields and is
+     *  skipped, so a skills pruning stops being written at all. The revert path is what
+     *  compensates — see `revertAgentVersion`. */
     const { author: _author, ...versionData } = agentData;
     const timestamp = new Date();
     const initialAgentData = {
@@ -985,8 +990,36 @@ export function createAgentMethods(
     );
 
     const update: Record<string, unknown> = { ...revertToVersion };
-    if (staleKeys.length > 0) {
-      update.$unset = Object.fromEntries(staleKeys.map((key) => [key, '']));
+    /** `mcpServerNames` is not agent config — it is an index derived from `tools`, kept in
+     *  step by `updateAgent`. Reverting has to recompute it from the tools being restored;
+     *  taking it from the snapshot (or dropping it) would leave the index describing a
+     *  different set of tools than the agent actually has. */
+    update.mcpServerNames = extractMCPServerNames(
+      (revertToVersion as Record<string, unknown>).tools as string[] | undefined,
+    );
+
+    const unset: Record<string, string> = {};
+    for (const key of staleKeys) {
+      if (key === 'mcpServerNames') {
+        continue;
+      }
+      /** A key the schema gives a default to was never really "absent": the document
+       *  carried the default at the time of the snapshot, because that is what the
+       *  schema guarantees. Unsetting it would strip a field the rest of the code
+       *  assumes is always there — `category` drives the catalog listing, so an agent
+       *  reverted to an early version would quietly vanish from its category.
+       *  Restoring the default is what the snapshot actually meant. Reading it off the
+       *  schema keeps this correct for fields added later, with no list to maintain. */
+      const schemaDefault = (Agent.schema.path(key) as { defaultValue?: unknown } | undefined)
+        ?.defaultValue;
+      if (schemaDefault === undefined) {
+        unset[key] = '';
+        continue;
+      }
+      update[key] = typeof schemaDefault === 'function' ? schemaDefault() : schemaDefault;
+    }
+    if (Object.keys(unset).length > 0) {
+      update.$unset = unset;
     }
 
     const revertedAgent = await Agent.findOneAndUpdate(searchParameter, update, {
