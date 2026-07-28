@@ -8,7 +8,7 @@ import { useLocalize, useAuthContext, TranslationKeys } from '~/hooks';
 import type { SearchItem } from './types';
 import Item from './Item';
 
-type SearchMessageHit = TMessage & { title?: string };
+type SearchMessageHit = TMessage & { title?: string; project_id?: string };
 
 interface ResultsProps {
   query: string;
@@ -140,6 +140,7 @@ const Results = memo(function Results({
       items.push({
         id: `m-${m.messageId}`,
         conversationId: cid,
+        projectId: m.project_id,
         messageId: m.messageId,
         title: m.title || localize('com_ui_new_chat'),
         snippet: makeSnippet(m.text ?? '', query),
@@ -316,6 +317,7 @@ const Results = memo(function Results({
                 key={itemId}
                 id={itemId}
                 conversationId={cid}
+                projectId={m.project_id}
                 messageId={m.messageId}
                 title={m.title || localize('com_ui_new_chat')}
                 snippet={makeSnippet(m.text ?? '', query)}
