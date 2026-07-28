@@ -26,7 +26,18 @@ const checkRemoteAgentsUse = generateCheckAccess({
   getRoleByName,
 });
 
-router.post('/', requireJwtAuth, checkRemoteAgentsUse, auditApiKey, handlers.createApiKey);
+/**
+ * Minting a key is a separate privilege from using one: an API key is long-lived credential
+ * that reaches agents outside the UI. `remoteAgents.create` was configurable but never
+ * enforced anywhere, so setting it to false had no effect until now.
+ */
+const checkRemoteAgentsCreate = generateCheckAccess({
+  permissionType: PermissionTypes.REMOTE_AGENTS,
+  permissions: [Permissions.USE, Permissions.CREATE],
+  getRoleByName,
+});
+
+router.post('/', requireJwtAuth, checkRemoteAgentsCreate, auditApiKey, handlers.createApiKey);
 
 router.get('/', requireJwtAuth, checkRemoteAgentsUse, handlers.listApiKeys);
 
