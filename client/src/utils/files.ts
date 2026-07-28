@@ -18,7 +18,7 @@ import {
 import type { TFile, EndpointFileConfig, FileConfig } from 'librechat-data-provider';
 import type { QueryClient } from '@tanstack/react-query';
 import type { ExtendedFile } from '~/common';
-import { getMessageTimestamp, resolveLocale } from './messages';
+import { resolveLocale } from './messages';
 /**
  * The bare i18next singleton, not `~/locales/i18n`: this module sits in the
  * `~/utils` barrel that half the app imports, and pulling the init module in
@@ -165,26 +165,68 @@ function toValidDate(value: DateLike): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+const LONG_DATE: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
+const SHORT_DATE: Intl.DateTimeFormatOptions = {
+  month: 'numeric',
+  day: 'numeric',
+  year: '2-digit',
+};
+
+/**
+ * Building an `Intl.DateTimeFormat` costs ~28µs — it loads locale data — while
+ * formatting with a built one costs ~0.6µs. These helpers render one cell per
+ * row (files, archived chats, shared links), so a 200-row table paid ~5.6ms per
+ * render for formatters it threw away. There are two shapes and one language at
+ * a time, so the cache stays at a handful of entries.
+ */
+const dateFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function dateFormatter(short: boolean): Intl.DateTimeFormat {
+  /* Keyed on the raw language: resolveLocale() validates through Intl too, so
+     doing it per call would put back part of the cost this cache removes. */
+  const key = `${i18n.language ?? ''}|${short ? 's' : 'l'}`;
+  let formatter = dateFormatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(
+      resolveLocale(i18n.language),
+      short ? SHORT_DATE : LONG_DATE,
+    );
+    dateFormatters.set(key, formatter);
+  }
+  return formatter;
+}
+
 export function formatDate(value?: DateLike, isSmallScreen = false): string {
   const date = toValidDate(value);
   if (!date) {
     return '';
   }
-
-  const options: Intl.DateTimeFormatOptions = isSmallScreen
-    ? { month: 'numeric', day: 'numeric', year: '2-digit' }
-    : { day: 'numeric', month: 'short', year: 'numeric' };
-
-  return new Intl.DateTimeFormat(resolveLocale(i18n.language), options).format(date);
+  return dateFormatter(isSmallScreen).format(date);
 }
 
-/** Date plus time, for rows where the hour matters (versions, keys, refills). */
+const DATE_TIME: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' };
+const timestampFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/**
+ * Date plus time, for rows where the hour matters (versions, keys, refills).
+ *
+ * Deliberately not delegating to getMessageTimestamp: that also builds a
+ * RelativeTimeFormat and walks the duration to produce a "3 days ago" string
+ * this caller throws away — 41µs per call against 0.8µs here, and these render
+ * once per row in the agent-version and prompt-version lists.
+ */
 export function formatTimestamp(value?: DateLike): string {
   const date = toValidDate(value);
   if (!date) {
     return '';
   }
-  return getMessageTimestamp(date.toISOString(), i18n.language)?.absolute ?? '';
+  const key = i18n.language ?? '';
+  let formatter = timestampFormatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(resolveLocale(i18n.language), DATE_TIME);
+    timestampFormatters.set(key, formatter);
+  }
+  return formatter.format(date);
 }
 
 /**

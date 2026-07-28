@@ -1,20 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { KeyboardEvent } from 'react';
-import { buildConvoPath } from '~/utils';
+import { buildSearchResultUrl } from './url';
 import type { SearchItem } from './types';
 
 interface Params {
   items: SearchItem[];
   onSelect: () => void;
-}
-
-export function buildSearchResultUrl(item: SearchItem): string {
-  const path = buildConvoPath({
-    conversationId: item.conversationId,
-    projectId: item.projectId,
-  });
-  return item.messageId ? `${path}#msg=${item.messageId}` : path;
 }
 
 export default function useKeyboardNav({ items, onSelect }: Params) {

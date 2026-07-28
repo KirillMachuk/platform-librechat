@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import type { MouseEvent } from 'react';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
-import { buildSearchResultUrl } from './useKeyboardNav';
+import { buildSearchResultUrl } from './url';
 
 interface ItemProps {
   id: string;
@@ -41,10 +41,10 @@ const Item = memo(function Item({
       if (!conversationId) {
         return;
       }
-      navigate(buildSearchResultUrl({ id, conversationId, projectId, messageId, title }));
+      navigate(buildSearchResultUrl({ conversationId, projectId, messageId }));
       onSelect?.();
     },
-    [id, conversationId, projectId, messageId, title, navigate, onSelect],
+    [conversationId, projectId, messageId, navigate, onSelect],
   );
 
   useEffect(() => {
@@ -72,10 +72,13 @@ const Item = memo(function Item({
     >
       <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-text-secondary" aria-hidden="true" />
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate font-normal text-text-primary">
-          {title}
+        {/* The badge sits beside the title rather than inside it: as one truncating
+            line, a long title pushed the badge out of view entirely — and it is the
+            only thing saying the match was found inside a message, not in the title. */}
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate font-normal text-text-primary">{title}</span>
           {type === 'message' ? (
-            <span className="ml-2 inline-block rounded bg-surface-tertiary px-1.5 py-px text-[10px] font-medium text-text-secondary">
+            <span className="flex-shrink-0 rounded bg-surface-tertiary px-1.5 py-px text-[10px] font-medium text-text-secondary">
               {localize('com_endpoint_message')}
             </span>
           ) : null}

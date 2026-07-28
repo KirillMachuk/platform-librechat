@@ -1,4 +1,4 @@
-import { buildSearchResultUrl } from '../useKeyboardNav';
+import { buildSearchResultUrl } from '../url';
 import type { SearchItem } from '../types';
 
 /**
