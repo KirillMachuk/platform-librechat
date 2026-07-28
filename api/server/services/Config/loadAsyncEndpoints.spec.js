@@ -21,17 +21,29 @@ function mockDependencies() {
     access: mockAccess,
   }));
 
+  /**
+   * Each stub keeps the real module underneath it. Replacing a shared package
+   * wholesale poisons every other module the graph pulls in: `admin/config.ts`
+   * reads `PrincipalType` from `librechat-data-provider` at import time, so a
+   * stub carrying only `EModelEndpoint` made it throw
+   * `Cannot read properties of undefined` — visible only when module resolution
+   * happened to reach that file, which is why this suite failed by the run
+   * rather than by the change.
+   */
   mockOptionalModule('@librechat/api', () => ({
+    ...jest.requireActual('@librechat/api'),
     isEnabled: (value) => value === true || value === 'true' || value === '1',
     isUserProvided: mockIsUserProvided,
     loadServiceKey: mockLoadServiceKey,
   }));
 
   mockOptionalModule('@librechat/data-schemas', () => ({
+    ...jest.requireActual('@librechat/data-schemas'),
     logger: mockLogger,
   }));
 
   mockOptionalModule('librechat-data-provider', () => ({
+    ...jest.requireActual('librechat-data-provider'),
     EModelEndpoint: {
       agents: 'agents',
       anthropic: 'anthropic',
