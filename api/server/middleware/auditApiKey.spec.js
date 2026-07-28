@@ -58,11 +58,32 @@ describe('auditApiKey', () => {
     );
   });
 
-  it('does not record a failed write (status >= 400)', () => {
+  /** Minting a key is privileged; a refused attempt belongs in the trail. */
+  it('records a refused mint as a failure', () => {
     const res = buildRes(403);
     auditApiKey(buildReq({ method: 'POST' }), res, jest.fn());
     res.emit('finish');
+    expect(mockRecordAudit).toHaveBeenCalledTimes(1);
+    expect(mockRecordAudit.mock.calls[0][0]).toMatchObject({
+      action: 'apikey.create',
+      outcome: 'failure',
+    });
+  });
+
+  it('does not record a validation error (status >= 400, not a denial)', () => {
+    const res = buildRes(400);
+    auditApiKey(buildReq({ method: 'POST' }), res, jest.fn());
+    res.emit('finish');
     expect(mockRecordAudit).not.toHaveBeenCalled();
+  });
+
+  it('names the minted key, which POST has no route param for', () => {
+    const res = buildRes(201);
+    const req = buildReq({ method: 'POST', body: { name: 'ci' } });
+    req.auditApiKeyId = 'key_created';
+    auditApiKey(req, res, jest.fn());
+    res.emit('finish');
+    expect(mockRecordAudit.mock.calls[0][0].targetId).toBe('key_created');
   });
 
   it('ignores reads (GET)', () => {

@@ -3004,3 +3004,82 @@ describe('updateInterfacePermissions - config seed fingerprint', () => {
     expect(webSearchUpdateFor(SystemRoles.USER)).toEqual({ [Permissions.USE]: false });
   });
 });
+
+/**
+ * The deployment closes sharing for employees on every resource type, but skills
+ * are the one case where no yaml key says so — the interface schema default does
+ * the work (`skills.share`/`public` are false there), which is what the stand
+ * actually carries. That makes the guarantee implicit, and an upstream change to
+ * that default would open company-wide skill sharing silently. These pin it.
+ *
+ * Deliberately not "fixed" by adding an explicit yaml block: a configured value
+ * seeds BOTH roles, so `share: false` would also strip sharing from ADMIN, which
+ * keeps it for agents. See the note in 1ma-lab/librechat.yaml.
+ */
+describe('updateInterfacePermissions - skills sharing', () => {
+  const run = async (skills: unknown) => {
+    const config = { interface: { skills } } as Partial<TCustomConfig>;
+    const configDefaults = { interface: {} } as TConfigDefaults;
+    const interfaceConfig = await loadDefaultInterface({ config, configDefaults });
+    const appConfig = { config, interfaceConfig } as unknown as AppConfig;
+    await updateInterfacePermissions({
+      appConfig,
+      getRoleByName: mockGetRoleByName,
+      updateAccessPermissions: mockUpdateAccessPermissions,
+      updateRoleByName: mockUpdateRoleByName,
+    });
+  };
+
+  const skillsUpdateFor = (role: SystemRoles) =>
+    mockUpdateAccessPermissions.mock.calls.find((call) => call[0] === role)?.[1]?.[
+      PermissionTypes.SKILLS
+    ];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetRoleByName.mockResolvedValue(null);
+  });
+
+  it('closes sharing for both roles when the yaml says so, keeping create', async () => {
+    await run({ use: true, create: true, share: false, public: false });
+
+    for (const role of [SystemRoles.USER, SystemRoles.ADMIN]) {
+      expect(skillsUpdateFor(role)).toMatchObject({
+        [Permissions.USE]: true,
+        [Permissions.CREATE]: true,
+        [Permissions.SHARE]: false,
+        [Permissions.SHARE_PUBLIC]: false,
+      });
+    }
+  });
+
+  /** This is the state the deployment runs in: no yaml key, schema default closes it. */
+  it('closes sharing from the schema default alone, with no yaml key present', async () => {
+    await run(undefined);
+
+    expect(skillsUpdateFor(SystemRoles.USER)).toMatchObject({
+      [Permissions.USE]: true,
+      [Permissions.CREATE]: true,
+      [Permissions.SHARE]: false,
+      [Permissions.SHARE_PUBLIC]: false,
+    });
+  });
+
+  /**
+   * Why the guarantee holds across restarts: once a role carries a SKILLS block
+   * and the yaml stays silent, the seeder leaves share/public alone rather than
+   * recomputing them.
+   */
+  it('does not rewrite share/public on a later seed when the yaml stays silent', async () => {
+    mockGetRoleByName.mockResolvedValue({
+      name: SystemRoles.USER,
+      permissions: JSON.parse(JSON.stringify(roleDefaults[SystemRoles.USER].permissions)),
+    });
+
+    await run(undefined);
+
+    const update = skillsUpdateFor(SystemRoles.USER);
+    expect(update?.[Permissions.SHARE]).toBeUndefined();
+    expect(update?.[Permissions.SHARE_PUBLIC]).toBeUndefined();
+  });
+});

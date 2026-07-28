@@ -20,7 +20,12 @@ const auditLogSchema: Schema<t.IAuditLog> = new Schema<t.IAuditLog>(
     tokens: { input: Number, output: Number, total: Number },
     ip: String,
     userAgent: String,
-    outcome: { type: String, enum: ['success', 'failure'], required: true, default: 'success' },
+    outcome: {
+      type: String,
+      enum: ['success', 'failure', 'unknown'],
+      required: true,
+      default: 'success',
+    },
     metadata: Schema.Types.Mixed,
     sourceId: { type: String, index: { unique: true, sparse: true } },
   },

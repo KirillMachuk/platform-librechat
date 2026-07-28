@@ -37,12 +37,18 @@ const checkRemoteAgentsCreate = generateCheckAccess({
   getRoleByName,
 });
 
-router.post('/', requireJwtAuth, checkRemoteAgentsCreate, auditApiKey, handlers.createApiKey);
+/**
+ * The audit hook sits after authentication but *before* the permission gate, so
+ * a refused attempt to mint or revoke a key is recorded too — the log is there
+ * to show who tried, not only who succeeded. It stays behind `requireJwtAuth`
+ * so anonymous internet scans cannot fill the trail with actorless entries.
+ */
+router.post('/', requireJwtAuth, auditApiKey, checkRemoteAgentsCreate, handlers.createApiKey);
 
 router.get('/', requireJwtAuth, checkRemoteAgentsUse, handlers.listApiKeys);
 
 router.get('/:id', requireJwtAuth, checkRemoteAgentsUse, handlers.getApiKey);
 
-router.delete('/:id', requireJwtAuth, checkRemoteAgentsUse, auditApiKey, handlers.deleteApiKey);
+router.delete('/:id', requireJwtAuth, auditApiKey, checkRemoteAgentsUse, handlers.deleteApiKey);
 
 module.exports = router;
