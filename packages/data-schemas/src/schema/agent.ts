@@ -138,5 +138,12 @@ const agentSchema: Schema<IAgent> = new Schema<IAgent>(
 agentSchema.index({ id: 1, tenantId: 1 }, { unique: true });
 agentSchema.index({ updatedAt: -1, _id: 1 });
 agentSchema.index({ 'edges.to': 1 });
+/**
+ * "Is anyone else still pointing at this avatar blob?" — asked before deleting an
+ * avatar file, on the delete and update paths. `avatar` is Mixed, so this is a
+ * sparse index on a nested key; without it the check is a collection scan on a
+ * write path.
+ */
+agentSchema.index({ 'avatar.filepath': 1 }, { sparse: true });
 
 export default agentSchema;
