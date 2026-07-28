@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { OGDialog, OGDialogContent } from '@librechat/client';
+import { Label, OGDialog, OGDialogContent, OGDialogTemplate } from '@librechat/client';
 import { useFormContext, useFormState, useWatch } from 'react-hook-form';
 import { Search, Check, EarthIcon, User, Plus, Star, ListFilter, X } from 'lucide-react';
 import { PermissionTypes, Permissions, SystemCategories } from 'librechat-data-provider';
@@ -221,16 +221,26 @@ function SkillSelectDialog({ isOpen, setIsOpen }: SkillSelectDialogProps) {
 
   /**
    * The agent builder form lives in the panel this navigation dismisses and has no
-   * draft storage, so leaving discards unsaved edits — warn before that happens.
+   * draft storage, so leaving discards unsaved edits — confirm before that happens.
+   * In-app rather than `window.confirm`: the native dialog ignores the app's theme
+   * and follows the browser's locale, so a Russian product could ask a Russian
+   * employee to confirm in English. Every other confirmation here works this way.
    */
-  const handleCreate = useCallback(() => {
-    if (isDirty && !window.confirm(localize('com_ui_agent_leave_unsaved'))) {
-      return;
-    }
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+
+  const goToSkillCreation = useCallback(() => {
     setIsOpen(false);
     dismissPanel();
     navigate('/skills/new');
-  }, [navigate, setIsOpen, dismissPanel, isDirty, localize]);
+  }, [navigate, setIsOpen, dismissPanel]);
+
+  const handleCreate = useCallback(() => {
+    if (isDirty) {
+      setConfirmLeaveOpen(true);
+      return;
+    }
+    goToSkillCreation();
+  }, [isDirty, goToSkillCreation]);
 
   const visibleSkills = useMemo(() => {
     const term = searchValue.toLowerCase();
@@ -257,8 +267,15 @@ function SkillSelectDialog({ isOpen, setIsOpen }: SkillSelectDialogProps) {
         className="w-11/12 max-w-[1024px] overflow-hidden rounded-2xl border-border-medium p-0 shadow-xl md:max-h-[85vh]"
         showCloseButton={false}
       >
-        <div className="flex h-[80vh] max-h-[720px]">
-          <aside className="flex w-56 shrink-0 flex-col gap-1 border-r border-border-light bg-surface-primary-alt p-3">
+        {/*
+          Below the 768 breakpoint the filter list stacks above the skills instead
+          of taking a fixed 224px out of a ~344px-wide screen, which left the cards
+          in a column too narrow to read. Only the stacking direction and the
+          sidebar's own bounds change — the contents keep their desktop markup.
+          Breakpoints per DESIGN_SYSTEM.md §7: 768 (`md:`) and 1024, nothing else.
+        */}
+        <div className="flex h-[80vh] max-h-[720px] flex-col md:flex-row">
+          <aside className="flex max-h-[38%] w-full shrink-0 flex-col gap-1 overflow-y-auto border-b border-border-light bg-surface-primary-alt p-3 md:max-h-none md:w-56 md:border-b-0 md:border-r">
             <h2 className="px-2.5 pb-1.5 pt-1 text-base font-bold text-text-primary">
               {localize('com_ui_add_skills')}
             </h2>
@@ -344,7 +361,7 @@ function SkillSelectDialog({ isOpen, setIsOpen }: SkillSelectDialogProps) {
               aria-label={localize('com_ui_add_skills')}
             >
               {visibleSkills.length > 0 ? (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                   {visibleSkills.map((skill) => (
                     <SkillCard
                       key={skill._id}
@@ -370,6 +387,25 @@ function SkillSelectDialog({ isOpen, setIsOpen }: SkillSelectDialogProps) {
             </div>
           </div>
         </div>
+
+        {/* Nested inside the content, the way ProjectEditDialog nests its own confirm. */}
+        <OGDialog open={confirmLeaveOpen} onOpenChange={setConfirmLeaveOpen}>
+          <OGDialogTemplate
+            title={localize('com_ui_create_skill')}
+            className="max-w-[450px]"
+            main={
+              <Label className="text-left text-sm font-medium">
+                {localize('com_ui_agent_leave_unsaved')}
+              </Label>
+            }
+            selection={{
+              selectHandler: goToSkillCreation,
+              selectClasses:
+                'bg-surface-destructive hover:bg-surface-destructive-hover text-white transition-colors',
+              selectText: localize('com_ui_leave_anyway'),
+            }}
+          />
+        </OGDialog>
       </OGDialogContent>
     </OGDialog>
   );

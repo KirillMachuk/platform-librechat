@@ -3,6 +3,7 @@ import { act, render } from '@testing-library/react';
 import '@testing-library/jest-dom/extend-expect';
 import type { Agent, AgentCreateParams } from 'librechat-data-provider';
 import type { UseMutationResult } from '@tanstack/react-query';
+import { AGENT_SELECT_ID } from '../AgentSelect';
 import DeleteButton from '../DeleteButton';
 
 const mockReset = jest.fn();
@@ -102,5 +103,35 @@ describe('DeleteButton', () => {
 
     expect(mockSetConversation).not.toHaveBeenCalled();
     expect(mockSetCurrentAgentId).toHaveBeenCalledWith(undefined);
+  });
+
+  /**
+   * The dialog's own focus restore aims at a trigger that no longer exists after
+   * the builder unmounts, so a keyboard user is dropped at `<body>` and has to tab
+   * in from the top of the page.
+   */
+  it('hands keyboard focus to the agent selector, which survives the delete', () => {
+    const selector = document.createElement('button');
+    selector.id = AGENT_SELECT_ID;
+    document.body.appendChild(selector);
+
+    const frames: FrameRequestCallback[] = [];
+    const raf = jest
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((cb) => frames.push(cb));
+
+    try {
+      act(() => {
+        mutationOptions.onSuccess?.(undefined, { agent_id: 'agent_1' }, remainingAgents);
+      });
+      act(() => {
+        frames.forEach((cb) => cb(0));
+      });
+
+      expect(document.activeElement).toBe(selector);
+    } finally {
+      raf.mockRestore();
+      selector.remove();
+    }
   });
 });

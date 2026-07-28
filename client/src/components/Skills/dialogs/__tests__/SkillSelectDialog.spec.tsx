@@ -24,6 +24,28 @@ jest.mock(
         open ? React.createElement('div', null, children) : null,
       OGDialogContent: ({ children }: { children: ReactNode }) =>
         React.createElement('div', null, children),
+      Label: ({ children }: { children: ReactNode }) => React.createElement('span', null, children),
+      /** Stands in for the shared confirm body: title, message and the accept button. */
+      OGDialogTemplate: ({
+        title,
+        main,
+        selection,
+      }: {
+        title: string;
+        main: ReactNode;
+        selection: { selectHandler: () => void; selectText: string };
+      }) =>
+        React.createElement(
+          'div',
+          null,
+          React.createElement('h2', null, title),
+          main,
+          React.createElement(
+            'button',
+            { 'data-testid': 'confirm-leave', onClick: selection.selectHandler },
+            selection.selectText,
+          ),
+        ),
     };
   },
   { virtual: true },
@@ -80,8 +102,8 @@ describe('SkillSelectDialog', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/skills/new');
   });
 
-  it('keeps the user in the builder when a dirty agent form is not confirmed', () => {
-    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false);
+  it('keeps the user in the builder while a dirty form waits on confirmation', () => {
+    const confirmSpy = jest.spyOn(window, 'confirm');
     render(<Harness />);
 
     act(() => {
@@ -89,19 +111,22 @@ describe('SkillSelectDialog', () => {
     });
     clickCreate();
 
-    expect(confirmSpy).toHaveBeenCalled();
+    // The confirmation is an in-app dialog: the native one ignores the app's
+    // theme and speaks the browser's language, not the product's.
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(screen.getByTestId('confirm-leave')).toBeInTheDocument();
     expect(mockDismiss).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('leaves a dirty agent form once the warning is confirmed', () => {
-    jest.spyOn(window, 'confirm').mockReturnValue(true);
     render(<Harness />);
 
     act(() => {
       formMethods.setValue('name', 'unsaved agent', { shouldDirty: true });
     });
     clickCreate();
+    fireEvent.click(screen.getByTestId('confirm-leave'));
 
     expect(mockDismiss).toHaveBeenCalledTimes(1);
     expect(mockNavigate).toHaveBeenCalledWith('/skills/new');

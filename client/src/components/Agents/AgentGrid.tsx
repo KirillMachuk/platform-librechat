@@ -130,10 +130,11 @@ const AgentGrid: React.FC<AgentGridProps> = ({
     return categoryValue.charAt(0).toUpperCase() + categoryValue.slice(1);
   };
 
-  // Simple loading spinner
+  // Simple loading spinner — announced, like the "loading more" one further down
   const loadingSpinner = (
-    <div className="flex justify-center py-12">
+    <div className="flex justify-center py-12" role="status" aria-live="polite">
       <Spinner className="h-8 w-8 text-primary" />
+      <span className="sr-only">{localize('com_agents_loading')}</span>
     </div>
   );
 
@@ -159,10 +160,15 @@ const AgentGrid: React.FC<AgentGridProps> = ({
       id={`category-panel-${category}`}
       aria-labelledby={`category-tab-${category}`}
       aria-live="polite"
-      aria-busy={isLoading && !hasData}
+      aria-busy={isFetching}
     >
-      {/* Handle empty results with enhanced accessibility */}
-      {(!currentAgents || currentAgents.length === 0) && !isLoading && !isFetching ? (
+      {/*
+        Empty results. Deliberately not gated on `isFetching`: a background
+        refetch (search keystroke, tab switch) would otherwise replace the
+        "nothing found" message with a blank panel for the length of the
+        request. `aria-busy` above carries the in-flight state instead.
+      */}
+      {(!currentAgents || currentAgents.length === 0) && !isLoading ? (
         <div
           className="py-12 text-center text-text-secondary"
           role="status"
@@ -173,7 +179,11 @@ const AgentGrid: React.FC<AgentGridProps> = ({
               : localize('com_agents_empty_state_heading')
           }
         >
-          <h3 className="mb-2 text-lg font-medium">{localize('com_agents_empty_state_heading')}</h3>
+          <h3 className="mb-2 text-lg font-medium">
+            {searchQuery
+              ? localize('com_agents_search_empty_heading')
+              : localize('com_agents_empty_state_heading')}
+          </h3>
         </div>
       ) : (
         <>

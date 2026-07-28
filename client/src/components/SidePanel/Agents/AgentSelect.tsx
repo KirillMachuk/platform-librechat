@@ -12,6 +12,9 @@ import { useListAgentsQuery } from '~/data-provider';
 
 const keys = new Set(Object.keys(defaultAgentFormValues));
 
+/** Focus lands back here when the builder around it is torn down (agent deleted). */
+export const AGENT_SELECT_ID = 'agent-select-trigger';
+
 function AgentSelect({
   agentQuery,
   selectedAgentId = null,
@@ -248,6 +251,10 @@ function AgentSelect({
             'z-50 flex h-9 w-full flex-none items-center justify-center truncate rounded-md bg-transparent font-bold',
           )}
           ariaLabel={localize('com_ui_agent')}
+          /** Deleting an agent unmounts the whole builder, including the button
+           *  that was focused, which drops keyboard focus to `<body>`. This gives
+           *  the deleter something surviving to hand focus back to. */
+          selectId={AGENT_SELECT_ID}
           isCollapsed={false}
           showCarat={true}
         />

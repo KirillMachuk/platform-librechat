@@ -392,14 +392,30 @@ describe('AgentPanel - Update Agent Toast Messages', () => {
       // Mock network error
       mockUpdateAgent.mockRejectedValue(new Error('Update failed'));
 
-      await renderAndSubmitForm();
+      /**
+       * The technical cause stays out of the toast: what surfaced there was
+       * axios's own English message ("Request failed with status code 400"), which
+       * a Russian-speaking employee can neither read nor act on. It goes to the
+       * console for support instead — asserted here so the diagnostic path does
+       * not quietly disappear either.
+       */
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await renderAndSubmitForm();
 
-      await waitFor(() => {
-        expect(mockShowToast).toHaveBeenCalledWith({
-          message: 'com_agents_update_error com_ui_error: Update failed',
-          status: 'error',
+        await waitFor(() => {
+          expect(mockShowToast).toHaveBeenCalledWith({
+            message: 'com_agents_update_error',
+            status: 'error',
+          });
         });
-      });
+        expect(consoleError).toHaveBeenCalledWith(
+          '[AgentPanel] Agent update failed',
+          expect.any(Error),
+        );
+      } finally {
+        consoleError.mockRestore();
+      }
     });
   });
 });
