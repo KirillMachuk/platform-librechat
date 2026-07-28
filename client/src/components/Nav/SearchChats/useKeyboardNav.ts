@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { KeyboardEvent } from 'react';
-import { buildSearchResultUrl } from './url';
 import type { SearchItem } from './types';
+import { buildSearchResultUrl } from './url';
 
 interface Params {
   items: SearchItem[];

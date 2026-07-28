@@ -11,8 +11,8 @@ import {
 import type { TStartupConfig, TUser } from 'librechat-data-provider';
 import { useMCPToolsQuery, useMCPServersQuery } from '~/data-provider';
 import { cleanupTimestampedStorage } from '~/utils/timestamps';
-import { resolveAppTitle } from '~/utils';
 import useSpeechSettingsInit from './useSpeechSettingsInit';
+import { resolveAppTitle } from '~/utils';
 import { useHasAccess } from '~/hooks';
 import store from '~/store';
 

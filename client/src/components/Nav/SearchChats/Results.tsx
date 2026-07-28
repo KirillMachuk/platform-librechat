@@ -1,11 +1,11 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { Spinner } from '@librechat/client';
-import type { RefObject } from 'react';
 import type { TConversation, TMessage, GroupedConversations } from 'librechat-data-provider';
-import { useConversationsInfiniteQuery, useMessagesInfiniteQuery } from '~/data-provider';
-import { groupConversationsByDate } from '~/utils';
-import { useLocalize, useAuthContext, TranslationKeys } from '~/hooks';
+import type { RefObject } from 'react';
 import type { SearchItem } from './types';
+import { useConversationsInfiniteQuery, useMessagesInfiniteQuery } from '~/data-provider';
+import { useLocalize, useAuthContext, TranslationKeys } from '~/hooks';
+import { groupConversationsByDate } from '~/utils';
 import Item from './Item';
 
 type SearchMessageHit = TMessage & { title?: string; project_id?: string };

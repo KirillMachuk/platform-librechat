@@ -4,8 +4,8 @@ import { Check, Copy } from 'lucide-react';
 import { Constants } from 'librechat-data-provider';
 import type { TStartupConfig } from 'librechat-data-provider';
 import { useGetStartupConfig } from '~/data-provider';
-import { useLocalize } from '~/hooks';
 import { resolveAppTitle } from '~/utils';
+import { useLocalize } from '~/hooks';
 
 const UNKNOWN_PLACEHOLDER = '—';
 

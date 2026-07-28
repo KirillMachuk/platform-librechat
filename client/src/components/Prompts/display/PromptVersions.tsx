@@ -3,8 +3,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { TooltipAnchor } from '@librechat/client';
 import { Zap, Circle, CheckCircle2 } from 'lucide-react';
 import type { TPrompt, TPromptGroup } from 'librechat-data-provider';
-import { useLocalize } from '~/hooks';
 import { cn, formatTimestamp } from '~/utils';
+import { useLocalize } from '~/hooks';
 
 const VersionBadge = ({
   type,

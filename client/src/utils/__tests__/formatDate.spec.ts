@@ -1,5 +1,5 @@
-import i18n from '~/locales/i18n';
 import { formatDate, formatTimestamp } from '../files';
+import i18n from '~/locales/i18n';
 
 /**
  * Dates must follow the language chosen in the app, not the browser's. The old

@@ -3,12 +3,6 @@ import { RefreshCcw } from 'lucide-react';
 import { useSetRecoilState } from 'recoil';
 import { motion, AnimatePresence } from 'framer-motion';
 import { REGEXP_ONLY_DIGITS, REGEXP_ONLY_DIGITS_AND_CHARS } from 'input-otp';
-import type {
-  TRegenerateBackupCodesResponse,
-  TRegenerateBackupCodesRequest,
-  TBackupCode,
-  TUser,
-} from 'librechat-data-provider';
 import {
   InputOTPSeparator,
   InputOTPGroup,
@@ -24,6 +18,12 @@ import {
   TooltipAnchor,
   useToastContext,
 } from '@librechat/client';
+import type {
+  TRegenerateBackupCodesResponse,
+  TRegenerateBackupCodesRequest,
+  TBackupCode,
+  TUser,
+} from 'librechat-data-provider';
 import { useRegenerateBackupCodesMutation } from '~/data-provider';
 import { useAuthContext, useLocalize } from '~/hooks';
 import { formatDate } from '~/utils';

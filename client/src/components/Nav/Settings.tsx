@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
-import { PermissionTypes, Permissions, SettingsTabValues } from 'librechat-data-provider';
 import { Brain, MessageSquare, Command, DollarSign, Info } from 'lucide-react';
+import { PermissionTypes, Permissions, SettingsTabValues } from 'librechat-data-provider';
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react';
 import {
   GearIcon,

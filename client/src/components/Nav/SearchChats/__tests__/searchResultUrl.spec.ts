@@ -1,5 +1,5 @@
-import { buildSearchResultUrl } from '../url';
 import type { SearchItem } from '../types';
+import { buildSearchResultUrl } from '../url';
 
 /**
  * Search results used to hardcode `/c/<id>`, in two separate copies — one for the

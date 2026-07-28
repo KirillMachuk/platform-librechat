@@ -1,6 +1,6 @@
-import { useLocalize } from '~/hooks';
-import { formatTimestamp } from '~/utils';
 import type { VersionRecord } from './types';
+import { formatTimestamp } from '~/utils';
+import { useLocalize } from '~/hooks';
 
 type VersionItemProps = {
   version: VersionRecord;

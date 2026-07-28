@@ -15,16 +15,16 @@ import {
   useToastContext,
 } from '@librechat/client';
 import type { TProject } from 'librechat-data-provider';
-import { useDeleteProjectMutation, useUpdateProjectMutation } from '~/data-provider';
-import { useLocalize } from '~/hooks';
-import { NotificationSeverity } from '~/common';
-import ProjectAppearancePopover from './ProjectAppearancePopover';
 import {
   DEFAULT_PROJECT_ICON,
   DEFAULT_PROJECT_COLOR,
   resolveIcon,
   resolveColor,
 } from './iconOptions';
+import { useDeleteProjectMutation, useUpdateProjectMutation } from '~/data-provider';
+import ProjectAppearancePopover from './ProjectAppearancePopover';
+import { NotificationSeverity } from '~/common';
+import { useLocalize } from '~/hooks';
 
 type Props = {
   project: TProject;

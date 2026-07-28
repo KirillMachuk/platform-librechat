@@ -1,8 +1,8 @@
 import '@testing-library/jest-dom/extend-expect';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { VersionRecord } from '../types';
-import VersionItem from '../VersionItem';
 import { formatTimestamp } from '~/utils';
+import VersionItem from '../VersionItem';
 
 jest.mock('~/hooks', () => ({
   useLocalize: jest.fn().mockImplementation(() => (key, params) => {

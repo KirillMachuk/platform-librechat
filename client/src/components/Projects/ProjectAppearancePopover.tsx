@@ -1,9 +1,9 @@
 import { memo, useCallback } from 'react';
 import { OGDialog, OGDialogContent, OGDialogHeader, OGDialogTitle } from '@librechat/client';
-import { useLocalize } from '~/hooks';
 import type { TranslationKeys } from '~/hooks';
-import { cn } from '~/utils';
 import { PROJECT_ICONS, PROJECT_COLORS, resolveColor } from './iconOptions';
+import { useLocalize } from '~/hooks';
+import { cn } from '~/utils';
 
 type Props = {
   open: boolean;

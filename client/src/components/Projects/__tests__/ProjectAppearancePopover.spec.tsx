@@ -1,8 +1,8 @@
-import { render, screen } from '@testing-library/react';
 import { RecoilRoot } from 'recoil';
+import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { PROJECT_COLORS, PROJECT_ICONS } from '../iconOptions';
 import ProjectAppearancePopover from '../ProjectAppearancePopover';
+import { PROJECT_COLORS, PROJECT_ICONS } from '../iconOptions';
 import en from '~/locales/en/translation.json';
 import ru from '~/locales/ru/translation.json';
 

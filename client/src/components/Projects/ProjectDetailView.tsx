@@ -11,6 +11,7 @@ import {
   OGDialogTemplate,
   useToastContext,
 } from '@librechat/client';
+import type { TConversation } from 'librechat-data-provider';
 import {
   useGetProjectQuery,
   useProjectConversationsQuery,
@@ -19,18 +20,17 @@ import {
   useUploadProjectFileMutation,
   useDeleteProjectFileMutation,
 } from '~/data-provider';
-import type { TConversation } from 'librechat-data-provider';
-import { useLocalize, useNavigateToConvo, useNewConvo } from '~/hooks';
-import { NotificationSeverity } from '~/common';
-import { buildConvoPath, cn, formatDate } from '~/utils';
-import ProjectAppearancePopover from './ProjectAppearancePopover';
-import ProjectEditDialog from './ProjectEditDialog';
 import {
   resolveIcon,
   resolveColor,
   DEFAULT_PROJECT_ICON,
   DEFAULT_PROJECT_COLOR,
 } from './iconOptions';
+import { useLocalize, useNavigateToConvo, useNewConvo } from '~/hooks';
+import ProjectAppearancePopover from './ProjectAppearancePopover';
+import { buildConvoPath, cn, formatDate } from '~/utils';
+import ProjectEditDialog from './ProjectEditDialog';
+import { NotificationSeverity } from '~/common';
 
 type Tab = 'chats' | 'sources';
 
