@@ -199,6 +199,12 @@ echo "(Excluding: registry URLs, librechat.yaml file refs, librechat.ai URLs, HT
 #   - REDIS_KEY_PREFIX       (internal key)
 #   - OTEL_SERVICE_NAME      (internal telemetry)
 #   - CONFIG_PATH            (file path reference)
+#   - {{LIBRECHAT_USER_*}}   (template placeholders resolved by the server, never shown)
+#   - "app":"librechat"      (an example metadata value in a commented-out sample)
+#
+# Those last two are why this audit used to exit 1 on a clean checkout: it flagged
+# its own documentation examples, so `bash scripts/rebrand.sh` — a documented step
+# of the upstream-merge procedure — always failed, and stopped being believed.
 REMAINING=$(grep -rin "LibreChat" \
   "$REPO_ROOT/client/src/locales/"*/translation.json \
   "$REPO_ROOT/client/index.html" \
@@ -218,6 +224,8 @@ REMAINING=$(grep -rin "LibreChat" \
   | grep -iv "REDIS_KEY_PREFIX" \
   | grep -iv "OTEL_SERVICE_NAME" \
   | grep -iv "CONFIG_PATH" \
+  | grep -v "{{LIBRECHAT_" \
+  | grep -iv '"app":"librechat"' \
   || true)
 
 if [ -n "$REMAINING" ]; then
@@ -233,12 +241,16 @@ fi
 # `|| 'LibreChat'` is therefore wrong in a white-label fork, wherever it appears.
 echo ""
 echo "--- Audit: upstream name as a code fallback ---"
-FALLBACKS=$(grep -rEn "\|\|[[:space:]]*['\"]LibreChat['\"]" \
+# `??` counts as much as `||`, and tests are excluded on purpose: upstream ships
+# fixtures asserting its own name, and one of those must not block the merge
+# procedure this script is part of.
+FALLBACKS=$(grep -rEn "(\|\||\?\?)[[:space:]]*['\"]LibreChat['\"]" \
   "$REPO_ROOT/api" \
   "$REPO_ROOT/client/src" \
   "$REPO_ROOT/packages" \
   --include='*.js' --include='*.ts' --include='*.tsx' \
-  --exclude-dir=node_modules --exclude-dir=dist \
+  --exclude='*.spec.*' --exclude='*.test.*' \
+  --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=__tests__ \
   2>/dev/null || true)
 
 if [ -n "$FALLBACKS" ]; then

@@ -6,6 +6,13 @@ import {
   VideoPaths,
   SheetPaths,
 } from '@librechat/client';
+/**
+ * The bare i18next singleton, not `~/locales/i18n`: this module sits in the
+ * `~/utils` barrel that half the app imports, and pulling the init module in
+ * here would drag i18n bootstrapping into every one of those graphs. Our init
+ * configures this same instance, so `.language` reads the same value.
+ */
+import i18n from 'i18next';
 import {
   megabyte,
   QueryKeys,
@@ -19,13 +26,6 @@ import type { TFile, EndpointFileConfig, FileConfig } from 'librechat-data-provi
 import type { QueryClient } from '@tanstack/react-query';
 import type { ExtendedFile } from '~/common';
 import { resolveLocale } from './messages';
-/**
- * The bare i18next singleton, not `~/locales/i18n`: this module sits in the
- * `~/utils` barrel that half the app imports, and pulling the init module in
- * here would drag i18n bootstrapping into every one of those graphs. Our init
- * configures this same instance, so `.language` reads the same value.
- */
-import i18n from 'i18next';
 
 export const partialTypes = ['text/x-'];
 
@@ -149,10 +149,17 @@ export const getFileType = (
 /**
  * Format a date string for reading, in the language the user chose in the app —
  * not the browser's. An employee on a Russian interface in an English-locale
- * browser must still see "1 янв. 2020". `i18n.language` is the app's own source
- * of truth and is always a normalized tag, kept in sync by LanguageSync.
+ * browser must still see "14 авг. 2026 г.". `i18n.language` is the app's own
+ * source of truth and is always a normalized tag, kept in sync by LanguageSync.
+ *
+ * Note that English output changed with this: the old hand-rolled version always
+ * produced "14 Aug 2026", whereas `en` through Intl is "Aug 14, 2026". That is
+ * what an English-locale reader expects, so it is the intended result and not a
+ * regression — but it is a visible change, so it is written down here.
+ *
  * @example
- * formatDate('2020-01-01T00:00:00.000Z') // '1 Jan 2020' / '1 янв. 2020'
+ * formatDate('2026-08-14T09:05:00Z')       // en: 'Aug 14, 2026' · ru: '14 авг. 2026 г.'
+ * formatDate('2026-08-14T09:05:00Z', true) // en: '8/14/26'      · ru: '14.08.26'
  */
 type DateLike = string | number | Date | null | undefined;
 

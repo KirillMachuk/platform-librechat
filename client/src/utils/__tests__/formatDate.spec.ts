@@ -27,6 +27,10 @@ describe('formatDate', () => {
     // Guards the specific regression: an English month name for a Russian user.
     expect(russian).not.toMatch(/Aug/);
     expect(english).toMatch(/Aug/);
+    // Pin the exact strings, not just the month: asserting /Aug/ alone let the
+    // English order flip from "14 Aug 2026" to "Aug 14, 2026" unnoticed.
+    expect(english).toBe('Aug 14, 2026');
+    expect(russian).toBe('14 авг. 2026 г.');
   });
 
   it('renders nothing rather than throwing on unusable input', () => {

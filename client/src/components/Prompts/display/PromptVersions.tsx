@@ -4,8 +4,7 @@ import { TooltipAnchor } from '@librechat/client';
 import { Zap, Circle, CheckCircle2 } from 'lucide-react';
 import type { TPrompt, TPromptGroup } from 'librechat-data-provider';
 import { useLocalize } from '~/hooks';
-import { cn } from '~/utils';
-import { formatTimestamp } from '~/utils';
+import { cn, formatTimestamp } from '~/utils';
 
 const VersionBadge = ({
   type,

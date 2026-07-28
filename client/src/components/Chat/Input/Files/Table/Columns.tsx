@@ -117,6 +117,9 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
     },
     cell: ({ row }) => {
       const isSmallScreen = useMediaQuery('(max-width: 768px)');
+      /* formatDate reads the app language, and this cell renders separately from
+         its header — without a subscription it keeps the previous language's date. */
+      useLocalize();
       return formatDate(row.original.updatedAt?.toString() ?? '', isSmallScreen);
     },
     meta: { desktopOnly: true },
