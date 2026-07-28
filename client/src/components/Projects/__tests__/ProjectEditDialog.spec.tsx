@@ -49,6 +49,30 @@ function renderDialog() {
   return render(<ProjectEditDialog project={project} open onOpenChange={jest.fn()} />, { wrapper });
 }
 
+describe('ProjectEditDialog — form labels', () => {
+  it('every label points at its own field', () => {
+    renderDialog();
+
+    // The dialog body once shared the id `project-edit-description` with the
+    // description input. A <label for> resolves to the FIRST element with that id,
+    // so the label pointed at the body div — clicking it focused nothing and a
+    // screen reader announced the whole form as the field's name.
+    for (const name of ['Name', 'Description', 'Project instructions']) {
+      const field = screen.getByLabelText(name);
+      expect(field.tagName).toMatch(/INPUT|TEXTAREA/);
+    }
+  });
+
+  it('uses each id exactly once', () => {
+    renderDialog();
+    // Search the document, not the render container: dialog content is portaled
+    // out of it, so scoping to the container would find nothing and pass blindly.
+    const ids = [...document.body.querySelectorAll('[id^="project-edit"]')].map((el) => el.id);
+    expect(ids.length).toBeGreaterThan(1);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
 describe('ProjectEditDialog — deleting a project', () => {
   let confirmSpy: jest.SpyInstance;
 

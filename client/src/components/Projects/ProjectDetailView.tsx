@@ -306,7 +306,7 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
             onDrop={handleDrop}
             className={cn(
               'flex flex-col gap-2 rounded-2xl border-2 border-dashed border-border-light p-4 transition-colors',
-              isDragOver && 'border-pink-400 bg-surface-hover',
+              isDragOver && 'border-border-xheavy bg-surface-hover',
             )}
           >
             <div className="flex items-center justify-between pb-2">

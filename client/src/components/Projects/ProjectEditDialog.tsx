@@ -123,11 +123,11 @@ function ProjectEditDialog({ project, open, onOpenChange, onDeleted }: Props) {
 
   return (
     <OGDialog open={open} onOpenChange={onOpenChange}>
-      <OGDialogContent className="w-11/12 max-w-lg" aria-describedby="project-edit-description">
+      <OGDialogContent className="w-11/12 max-w-lg" aria-describedby="project-edit-body">
         <OGDialogHeader>
           <OGDialogTitle>{localize('com_projects_edit_title')}</OGDialogTitle>
         </OGDialogHeader>
-        <div id="project-edit-description" className="flex flex-col gap-3 pt-2">
+        <div id="project-edit-body" className="flex flex-col gap-3 pt-2">
           <div className="flex justify-center pb-1">
             <button
               type="button"
