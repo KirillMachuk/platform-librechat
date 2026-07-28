@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useCallback, useRef, useId } from 'react';
+import { memo, useMemo, useState, useCallback, useEffect, useRef, useId } from 'react';
 import { useAtomValue } from 'jotai';
 import { ContentTypes } from 'librechat-data-provider';
 import type { MouseEvent, FocusEvent } from 'react';
@@ -39,11 +39,24 @@ const Reasoning = memo(({ reasoning, isLast }: ReasoningProps) => {
   const contentId = useId();
   const localize = useLocalize();
   const showThinking = useAtomValue(showThinkingAtom);
-  const [isExpanded, setIsExpanded] = useState(showThinking);
+  const { isSubmitting, isLatestMessage, nextType, autoExpandReasoning } = useMessageContext();
+  const [isExpanded, setIsExpanded] = useState(showThinking || autoExpandReasoning === true);
   const [isBarVisible, setIsBarVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { style: expandStyle, ref: expandRef } = useExpandCollapse(isExpanded);
-  const { isSubmitting, isLatestMessage, nextType } = useMessageContext();
+
+  /**
+   * The message finished with its reply inside the thinking channel (see
+   * `autoExpandThinkIdx` in ContentParts): expand once so the reply is visible.
+   * The ref makes it once per mount — a manual collapse afterwards sticks.
+   */
+  const didAutoExpand = useRef(autoExpandReasoning === true);
+  useEffect(() => {
+    if (autoExpandReasoning === true && !didAutoExpand.current) {
+      didAutoExpand.current = true;
+      setIsExpanded(true);
+    }
+  }, [autoExpandReasoning]);
 
   // Strip <think> tags from the reasoning content (modern format)
   const reasoningText = useMemo(() => {
