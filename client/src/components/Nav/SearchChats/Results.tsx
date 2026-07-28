@@ -113,6 +113,7 @@ const Results = memo(function Results({
           items.push({
             id: `r-${cid}`,
             conversationId: cid,
+            projectId: c.project_id,
             title: c.title || localize('com_ui_new_chat'),
           });
         }
@@ -127,6 +128,7 @@ const Results = memo(function Results({
       items.push({
         id: `c-${cid}`,
         conversationId: cid,
+        projectId: c.project_id,
         title: c.title || localize('com_ui_new_chat'),
       });
     }
@@ -247,6 +249,7 @@ const Results = memo(function Results({
                   key={itemId}
                   id={itemId}
                   conversationId={cid}
+                  projectId={c.project_id}
                   title={c.title || localize('com_ui_new_chat')}
                   type="recent"
                   isActive={activeId === itemId}
@@ -290,6 +293,7 @@ const Results = memo(function Results({
                 key={itemId}
                 id={itemId}
                 conversationId={cid}
+                projectId={c.project_id}
                 title={c.title || localize('com_ui_new_chat')}
                 type="chat"
                 isActive={activeId === itemId}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { KeyboardEvent } from 'react';
+import { buildConvoPath } from '~/utils';
 import type { SearchItem } from './types';
 
 interface Params {
@@ -8,10 +9,12 @@ interface Params {
   onSelect: () => void;
 }
 
-function buildUrl(item: SearchItem): string {
-  return item.messageId
-    ? `/c/${item.conversationId}#msg=${item.messageId}`
-    : `/c/${item.conversationId}`;
+export function buildSearchResultUrl(item: SearchItem): string {
+  const path = buildConvoPath({
+    conversationId: item.conversationId,
+    projectId: item.projectId,
+  });
+  return item.messageId ? `${path}#msg=${item.messageId}` : path;
 }
 
 export default function useKeyboardNav({ items, onSelect }: Params) {
@@ -56,7 +59,7 @@ export default function useKeyboardNav({ items, onSelect }: Params) {
         if (!item || !item.conversationId) {
           return;
         }
-        navigate(buildUrl(item));
+        navigate(buildSearchResultUrl(item));
         onSelect();
       }
     },

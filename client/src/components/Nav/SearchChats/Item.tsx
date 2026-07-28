@@ -2,11 +2,14 @@ import { memo, useCallback, useEffect, useRef } from 'react';
 import { MessagesSquare, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { MouseEvent } from 'react';
+import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
+import { buildSearchResultUrl } from './useKeyboardNav';
 
 interface ItemProps {
   id: string;
   conversationId: string;
+  projectId?: string;
   title: string;
   snippet?: string;
   rightLabel?: string;
@@ -19,6 +22,7 @@ interface ItemProps {
 const Item = memo(function Item({
   id,
   conversationId,
+  projectId,
   title,
   snippet,
   rightLabel,
@@ -27,6 +31,7 @@ const Item = memo(function Item({
   isActive = false,
   onSelect,
 }: ItemProps) {
+  const localize = useLocalize();
   const navigate = useNavigate();
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -36,11 +41,10 @@ const Item = memo(function Item({
       if (!conversationId) {
         return;
       }
-      const url = messageId ? `/c/${conversationId}#msg=${messageId}` : `/c/${conversationId}`;
-      navigate(url);
+      navigate(buildSearchResultUrl({ id, conversationId, projectId, messageId, title }));
       onSelect?.();
     },
-    [conversationId, messageId, navigate, onSelect],
+    [id, conversationId, projectId, messageId, title, navigate, onSelect],
   );
 
   useEffect(() => {
@@ -72,7 +76,7 @@ const Item = memo(function Item({
           {title}
           {type === 'message' ? (
             <span className="ml-2 inline-block rounded bg-surface-tertiary px-1.5 py-px text-[10px] font-medium text-text-secondary">
-              msg
+              {localize('com_endpoint_message')}
             </span>
           ) : null}
         </span>
