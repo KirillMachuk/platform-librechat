@@ -224,6 +224,31 @@ if [ -n "$REMAINING" ]; then
   echo "WARNING: These lines still contain 'LibreChat':"
   echo "$REMAINING"
   exit 1
-else
-  echo "All clear — no user-visible 'LibreChat' branding found."
 fi
+
+# The audit above only reads config and locale files, which is how three leaks
+# survived it: the app title falling back to the upstream name in code. That
+# fallback is the actual mechanism — an unset APP_TITLE, or an untouched default
+# — and it reaches users through outgoing email and the About panel. Any
+# `|| 'LibreChat'` is therefore wrong in a white-label fork, wherever it appears.
+echo ""
+echo "--- Audit: upstream name as a code fallback ---"
+FALLBACKS=$(grep -rEn "\|\|[[:space:]]*['\"]LibreChat['\"]" \
+  "$REPO_ROOT/api" \
+  "$REPO_ROOT/client/src" \
+  "$REPO_ROOT/packages" \
+  --include='*.js' --include='*.ts' --include='*.tsx' \
+  --exclude-dir=node_modules --exclude-dir=dist \
+  2>/dev/null || true)
+
+if [ -n "$FALLBACKS" ]; then
+  echo "WARNING: the upstream name is used as a default here — a user sees it whenever"
+  echo "the environment does not override it (outgoing email, page title, diagnostics):"
+  echo "$FALLBACKS"
+  echo ""
+  echo "Use '${BRAND}' as the fallback, or route the value through resolveAppTitle()"
+  echo "in client/src/utils/brand.ts."
+  exit 1
+fi
+
+echo "All clear — no user-visible 'LibreChat' branding found."

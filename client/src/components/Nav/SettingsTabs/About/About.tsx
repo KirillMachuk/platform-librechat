@@ -5,6 +5,7 @@ import { Constants } from 'librechat-data-provider';
 import type { TStartupConfig } from 'librechat-data-provider';
 import { useGetStartupConfig } from '~/data-provider';
 import { useLocalize } from '~/hooks';
+import { resolveAppTitle } from '~/utils';
 
 const UNKNOWN_PLACEHOLDER = '—';
 
@@ -25,9 +26,10 @@ function formatBuildDate(raw: string | null | undefined): string {
 function buildDiagnosticsBlob(
   version: string,
   buildInfo: TStartupConfig['buildInfo'] | undefined,
+  appTitle: string,
 ): string {
   const lines: string[] = [
-    `LibreChat version: ${version}`,
+    `${appTitle} version: ${version}`,
     `Commit: ${buildInfo?.commit ?? UNKNOWN_PLACEHOLDER}`,
     `Branch: ${buildInfo?.branch ?? UNKNOWN_PLACEHOLDER}`,
     `Build date: ${formatBuildDate(buildInfo?.buildDate)}`,
@@ -55,8 +57,8 @@ function About() {
   const version: string = Constants.VERSION;
 
   const diagnosticsBlob = useMemo(
-    () => buildDiagnosticsBlob(version, buildInfo),
-    [version, buildInfo],
+    () => buildDiagnosticsBlob(version, buildInfo, resolveAppTitle(startupConfig?.appTitle)),
+    [version, buildInfo, startupConfig?.appTitle],
   );
 
   useEffect(
