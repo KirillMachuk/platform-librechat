@@ -5,6 +5,7 @@ import { Zap, Circle, CheckCircle2 } from 'lucide-react';
 import type { TPrompt, TPromptGroup } from 'librechat-data-provider';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
+import { formatTimestamp } from '~/utils';
 
 const VersionBadge = ({
   type,
@@ -142,7 +143,7 @@ const VersionCard = ({
         <time
           className="mt-1 text-xs text-text-secondary"
           dateTime={prompt.createdAt}
-          title={new Date(prompt.createdAt).toLocaleString()}
+          title={formatTimestamp(prompt.createdAt)}
         >
           {formatDistanceToNow(new Date(prompt.createdAt), { addSuffix: true })}
         </time>

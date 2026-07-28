@@ -380,7 +380,7 @@ const RELATIVE_TIME_DIVISIONS: { amount: number; unit: Intl.RelativeTimeFormatUn
 ];
 
 /** Returns the locale only when it is a syntactically valid BCP-47 tag, else undefined. */
-const resolveLocale = (locale?: string): string | undefined => {
+export const resolveLocale = (locale?: string): string | undefined => {
   if (!locale) {
     return undefined;
   }

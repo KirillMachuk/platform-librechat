@@ -24,6 +24,7 @@ import type { PermissionConfig } from '~/components/ui';
 import { useUpdateRemoteAgentsPermissionsMutation } from '~/data-provider';
 import { AdminSettingsDialog } from '~/components/ui';
 import { useHasAccess, useLocalize } from '~/hooks';
+import { formatDate } from '~/utils';
 
 function CreateKeyDialog({ onKeyCreated }: { onKeyCreated?: () => void }) {
   const localize = useLocalize();
@@ -152,14 +153,6 @@ function KeyItem({
       showToast({ message: localize('com_ui_api_key_delete_error'), status: 'error' });
     }
     setConfirmDelete(false);
-  };
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
   };
 
   return (

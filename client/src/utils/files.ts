@@ -18,6 +18,14 @@ import {
 import type { TFile, EndpointFileConfig, FileConfig } from 'librechat-data-provider';
 import type { QueryClient } from '@tanstack/react-query';
 import type { ExtendedFile } from '~/common';
+import { getMessageTimestamp, resolveLocale } from './messages';
+/**
+ * The bare i18next singleton, not `~/locales/i18n`: this module sits in the
+ * `~/utils` barrel that half the app imports, and pulling the init module in
+ * here would drag i18n bootstrapping into every one of those graphs. Our init
+ * configures this same instance, so `.language` reads the same value.
+ */
+import i18n from 'i18next';
 
 export const partialTypes = ['text/x-'];
 
@@ -139,45 +147,44 @@ export const getFileType = (
 };
 
 /**
- * Format a date string to a human readable format
+ * Format a date string for reading, in the language the user chose in the app —
+ * not the browser's. An employee on a Russian interface in an English-locale
+ * browser must still see "1 янв. 2020". `i18n.language` is the app's own source
+ * of truth and is always a normalized tag, kept in sync by LanguageSync.
  * @example
- * formatDate('2020-01-01T00:00:00.000Z') // '1 Jan 2020'
+ * formatDate('2020-01-01T00:00:00.000Z') // '1 Jan 2020' / '1 янв. 2020'
  */
-export function formatDate(dateString: string, isSmallScreen = false) {
-  if (!dateString) {
+type DateLike = string | number | Date | null | undefined;
+
+/** Intl throws RangeError on an invalid date, so anything unparseable renders as nothing. */
+function toValidDate(value: DateLike): Date | null {
+  if (value == null || value === '') {
+    return null;
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function formatDate(value?: DateLike, isSmallScreen = false): string {
+  const date = toValidDate(value);
+  if (!date) {
     return '';
   }
 
-  const date = new Date(dateString);
+  const options: Intl.DateTimeFormatOptions = isSmallScreen
+    ? { month: 'numeric', day: 'numeric', year: '2-digit' }
+    : { day: 'numeric', month: 'short', year: 'numeric' };
 
-  if (isSmallScreen) {
-    return date.toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
-      year: '2-digit',
-    });
+  return new Intl.DateTimeFormat(resolveLocale(i18n.language), options).format(date);
+}
+
+/** Date plus time, for rows where the hour matters (versions, keys, refills). */
+export function formatTimestamp(value?: DateLike): string {
+  const date = toValidDate(value);
+  if (!date) {
+    return '';
   }
-
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
-  const day = date.getDate();
-  const month = months[date.getMonth()];
-  const year = date.getFullYear();
-
-  return `${day} ${month} ${year}`;
+  return getMessageTimestamp(date.toISOString(), i18n.language)?.absolute ?? '';
 }
 
 /**

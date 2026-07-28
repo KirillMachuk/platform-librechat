@@ -23,7 +23,7 @@ import {
 import type { TConversation } from 'librechat-data-provider';
 import { useLocalize, useNavigateToConvo, useNewConvo } from '~/hooks';
 import { NotificationSeverity } from '~/common';
-import { buildConvoPath, cn } from '~/utils';
+import { buildConvoPath, cn, formatDate } from '~/utils';
 import ProjectAppearancePopover from './ProjectAppearancePopover';
 import ProjectEditDialog from './ProjectEditDialog';
 import {
@@ -288,7 +288,7 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
                 >
                   <span className="truncate text-sm text-text-primary">{c.title}</span>
                   <span className="truncate text-xs text-text-secondary">
-                    {new Date(c.updatedAt ?? c.createdAt ?? Date.now()).toLocaleDateString()}
+                    {formatDate(c.updatedAt ?? c.createdAt)}
                   </span>
                 </a>
               ))

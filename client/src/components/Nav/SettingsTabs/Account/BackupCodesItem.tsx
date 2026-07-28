@@ -26,6 +26,7 @@ import {
 } from '@librechat/client';
 import { useRegenerateBackupCodesMutation } from '~/data-provider';
 import { useAuthContext, useLocalize } from '~/hooks';
+import { formatDate } from '~/utils';
 import store from '~/store';
 
 const BackupCodesItem: React.FC = () => {
@@ -155,9 +156,7 @@ const BackupCodesItem: React.FC = () => {
                             {localize('com_ui_backup_code_number', { number: index + 1 })}
                           </span>
                           <TooltipAnchor
-                            description={
-                              code.usedAt ? new Date(code.usedAt).toLocaleDateString() : ''
-                            }
+                            description={formatDate(code.usedAt)}
                             disabled={!isUsed}
                             focusable={false}
                             className={isUsed ? 'cursor-pointer' : 'cursor-default'}

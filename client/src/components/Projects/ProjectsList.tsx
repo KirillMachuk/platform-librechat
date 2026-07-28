@@ -3,19 +3,13 @@ import { Plus, FolderPlus } from 'lucide-react';
 import { Button, Spinner } from '@librechat/client';
 import { useListProjectsQuery } from '~/data-provider';
 import { useLocalize, useAuthContext } from '~/hooks';
+import { formatDate } from '~/utils';
 import ProjectCreateDialog from './ProjectCreateDialog';
 import { resolveIcon, resolveColor } from './iconOptions';
 
 type Props = {
   onSelect: (projectId: string) => void;
 };
-
-function formatDate(value?: string): string {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString();
-}
 
 function ProjectsList({ onSelect }: Props) {
   const localize = useLocalize();
