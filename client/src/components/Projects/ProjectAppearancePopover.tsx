@@ -6,6 +6,7 @@ import {
   OGDialogTitle,
 } from '@librechat/client';
 import { useLocalize } from '~/hooks';
+import type { TranslationKeys } from '~/hooks';
 import { cn } from '~/utils';
 import {
   PROJECT_ICONS,
@@ -56,7 +57,7 @@ function ProjectAppearancePopover({ open, onOpenChange, value, onChange }: Props
                   key={c.name}
                   type="button"
                   onClick={() => handleColorChange(c.name)}
-                  aria-label={c.name}
+                  aria-label={localize(`com_projects_color_${c.name}` as TranslationKeys)}
                   aria-pressed={value.color === c.name}
                   style={{ backgroundColor: c.hex }}
                   className={cn(
@@ -80,7 +81,7 @@ function ProjectAppearancePopover({ open, onOpenChange, value, onChange }: Props
                   key={name}
                   type="button"
                   onClick={() => handleIconChange(name)}
-                  aria-label={name}
+                  aria-label={localize(`com_projects_icon_${name}` as TranslationKeys)}
                   aria-pressed={value.icon === name}
                   className={cn(
                     'flex h-10 w-10 items-center justify-center rounded-lg border transition-colors',
