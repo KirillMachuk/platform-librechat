@@ -14,6 +14,7 @@ const {
   skillPermissionsSchema,
 } = require('librechat-data-provider');
 const { hasCapability, requireCapability } = require('~/server/middleware/roles/capabilities');
+const { auditRolePermissionUpdate } = require('~/server/middleware/auditRoleManagement');
 const { updateRoleByName, getRoleByName } = require('~/models');
 const { requireJwtAuth } = require('~/server/middleware');
 
@@ -142,51 +143,21 @@ router.get('/:roleName', async (req, res) => {
 });
 
 /**
- * PUT /api/roles/:roleName/prompts
- * Update prompt permissions for a specific role
+ * PUT /api/roles/:roleName/:permissionKey
+ *
+ * One route per permission type, each writing the role permissions the in-chat
+ * admin panels edit. Registered from `permissionConfigs` so a new permission
+ * type cannot arrive with the audit trail missing — these routes went unaudited
+ * while the equivalent admin-panel endpoint recorded every change, which meant
+ * granting all employees agent sharing left no trace.
  */
-router.put('/:roleName/prompts', manageRoles, createPermissionUpdateHandler('prompts'));
-
-/**
- * PUT /api/roles/:roleName/agents
- * Update agent permissions for a specific role
- */
-router.put('/:roleName/agents', manageRoles, createPermissionUpdateHandler('agents'));
-
-/**
- * PUT /api/roles/:roleName/memories
- * Update memory permissions for a specific role
- */
-router.put('/:roleName/memories', manageRoles, createPermissionUpdateHandler('memories'));
-
-/**
- * PUT /api/roles/:roleName/people-picker
- * Update people picker permissions for a specific role
- */
-router.put('/:roleName/people-picker', manageRoles, createPermissionUpdateHandler('people-picker'));
-
-/**
- * PUT /api/roles/:roleName/mcp-servers
- * Update MCP servers permissions for a specific role
- */
-router.put('/:roleName/mcp-servers', manageRoles, createPermissionUpdateHandler('mcp-servers'));
-
-/**
- * PUT /api/roles/:roleName/marketplace
- * Update marketplace permissions for a specific role
- */
-router.put('/:roleName/marketplace', manageRoles, createPermissionUpdateHandler('marketplace'));
-
-/**
- * PUT /api/roles/:roleName/remote-agents
- * Update remote agents (API) permissions for a specific role
- */
-router.put('/:roleName/remote-agents', manageRoles, createPermissionUpdateHandler('remote-agents'));
-
-/**
- * PUT /api/roles/:roleName/skills
- * Update skill permissions for a specific role
- */
-router.put('/:roleName/skills', manageRoles, createPermissionUpdateHandler('skills'));
+for (const [permissionKey, { permissionType }] of Object.entries(permissionConfigs)) {
+  router.put(
+    `/:roleName/${permissionKey}`,
+    manageRoles,
+    auditRolePermissionUpdate(permissionType),
+    createPermissionUpdateHandler(permissionKey),
+  );
+}
 
 module.exports = router;

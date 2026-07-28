@@ -1911,6 +1911,46 @@ describe('Agent Methods', () => {
       expect(revertedAgent.skills_enabled).toBe(false);
     });
 
+    /** A field the snapshot never had (added to the agent after it was taken) is
+     *  absent from the update object, and a plain update is applied as `$set` —
+     *  so without an explicit `$unset` it survives the revert. */
+    test('should drop fields added after the reverted-to version was taken', async () => {
+      const agentId = `agent_${uuidv4()}`;
+      const Agent = mongoose.models.Agent;
+
+      await createAgent({
+        id: agentId,
+        name: 'Original Agent',
+        provider: 'test',
+        model: 'test-model',
+        author: new mongoose.Types.ObjectId(),
+        description: 'Original description',
+      });
+
+      await updateAgent(
+        { id: agentId },
+        {
+          description: 'Now with subagents',
+          subagents: { enabled: true, agent_ids: ['agent_child'] },
+        },
+      );
+
+      const revertedAgent = await revertAgentVersion({ id: agentId }, 0);
+
+      expect(revertedAgent.subagents).toBeUndefined();
+      expect(revertedAgent.description).toBe('Original description');
+      expect(revertedAgent.name).toBe('Original Agent');
+
+      const agentInDb = await Agent.findOne({ id: agentId }).lean<IAgent>();
+      expect(agentInDb!.subagents).toBeUndefined();
+      expect(agentInDb!.description).toBe('Original description');
+      /** Bookkeeping the revert must keep. Timestamps are outside `IAgent`, so they
+       *  are read off the raw document. */
+      expect(agentInDb!.author).toBeDefined();
+      expect(agentInDb!.versions).toHaveLength(2);
+      expect((agentInDb as unknown as Record<string, unknown>).createdAt).toBeDefined();
+    });
+
     test('should detect action metadata changes and force version update', async () => {
       const agentId = `agent_${uuidv4()}`;
       const authorId = new mongoose.Types.ObjectId();

@@ -962,7 +962,34 @@ export function createAgentMethods(
       }
     }
 
-    const revertedAgent = await Agent.findOneAndUpdate(searchParameter, revertToVersion, {
+    /** Mongoose applies a plain update object as `$set`, so a field the snapshot
+     *  never had (added to the schema, or to the agent, after it was taken —
+     *  `subagents`, `skills`, `tool_options`, …) would survive the revert
+     *  untouched. Everything outside the snapshot is removed, except the
+     *  bookkeeping fields the revert deliberately keeps (the ones deleted above,
+     *  plus identity/timestamps). */
+    const preservedKeys = new Set([
+      '_id',
+      'id',
+      '__v',
+      'versions',
+      'author',
+      'updatedBy',
+      'is_promoted',
+      'createdAt',
+      'updatedAt',
+      'tenantId',
+    ]);
+    const staleKeys = Object.keys(agent.toObject() as unknown as Record<string, unknown>).filter(
+      (key) => !(key in revertToVersion) && !preservedKeys.has(key),
+    );
+
+    const update: Record<string, unknown> = { ...revertToVersion };
+    if (staleKeys.length > 0) {
+      update.$unset = Object.fromEntries(staleKeys.map((key) => [key, '']));
+    }
+
+    const revertedAgent = await Agent.findOneAndUpdate(searchParameter, update, {
       new: true,
     }).lean<IAgent>();
     if (!revertedAgent) {

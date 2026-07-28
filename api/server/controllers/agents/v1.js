@@ -796,6 +796,12 @@ const updateAgentHandler = async (req, res) => {
           })
         : existingAgent;
 
+    /** Clearing the avatar drops the only reference to the blob; same cleanup as
+     *  replacing it, and equally after the write for the same reason. */
+    if (avatarField === null) {
+      await deleteAgentAvatarFile(req, existingAgent);
+    }
+
     // Add version count to the response
     updatedAgent.version = updatedAgent.versions ? updatedAgent.versions.length : 0;
 
@@ -1017,8 +1023,12 @@ const duplicateAgentHandler = async (req, res) => {
 
 /**
  * Removes an agent's avatar blob and its File record. Best-effort: a storage
- * failure must not fail the agent deletion that already succeeded, but leaving
- * the blob behind orphans it forever (the avatar-replace path cleans up the same way).
+ * failure must not fail the write that already succeeded, but leaving the blob
+ * behind orphans it forever.
+ *
+ * Call it only once the agent no longer references `agent.avatar` (deleted, or
+ * updated to the new avatar) — the still-referenced check below would otherwise
+ * match this very agent and skip the cleanup.
  * @param {ServerRequest} req
  * @param {Agent} agent
  */
@@ -1048,7 +1058,7 @@ const deleteAgentAvatarFile = async (req, agent) => {
      *  create time, so an unscoped filter would delete whichever File matches first. */
     await db.deleteFileByFilter({ user: ownerId, filepath: avatar.filepath });
   } catch (error) {
-    logger.error(`[deleteAgent] Error deleting avatar for agent ${agent.id}`, error);
+    logger.error(`[agents] Error deleting avatar for agent ${agent.id}`, error);
   }
 };
 
@@ -1068,6 +1078,9 @@ const deleteAgentHandler = async (req, res) => {
       return res.status(404).json({ error: 'Agent not found' });
     }
     await db.deleteAgent({ id });
+    /** Action metadata carries the external API's credentials (`api_key`), so an
+     *  orphaned action doc keeps a live secret for an agent that no longer exists. */
+    await db.deleteActions({ agent_id: id });
     await deleteAgentAvatarFile(req, agent);
     return res.json({ message: 'Agent deleted' });
   } catch (error) {
@@ -1281,22 +1294,6 @@ const uploadAgentAvatarHandler = async (req, res) => {
       source: fileStrategy,
     };
 
-    let _avatar = existingAgent.avatar;
-
-    if (_avatar && _avatar.source) {
-      const { deleteFile } = getStrategyFunctions(_avatar.source);
-      try {
-        await deleteFile(req, {
-          filepath: _avatar.filepath,
-          user: req.user.id,
-          tenantId: req.user.tenantId,
-        });
-        await db.deleteFileByFilter({ user: req.user.id, filepath: _avatar.filepath });
-      } catch (error) {
-        logger.error('[/:agent_id/avatar] Error deleting old avatar', error);
-      }
-    }
-
     const data = {
       avatar: {
         filepath: image.filepath,
@@ -1307,6 +1304,10 @@ const uploadAgentAvatarHandler = async (req, res) => {
     const updatedAgent = await db.updateAgent({ id: agent_id }, data, {
       updatingUserId: req.user.id,
     });
+
+    /** After the update, so the shared cleanup sees the agent pointing at the new
+     *  avatar and can tell a duplicate still using the old blob from this agent. */
+    await deleteAgentAvatarFile(req, existingAgent);
 
     try {
       const avatarCache = getLogStores(CacheKeys.S3_EXPIRY_INTERVAL);
