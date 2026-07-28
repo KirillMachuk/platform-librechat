@@ -12,6 +12,7 @@ import {
   SKILL_NAME_MAX_LENGTH,
   SKILL_DESCRIPTION_MAX_LENGTH,
 } from 'librechat-data-provider';
+import { usePanelDismiss } from '~/components/UnifiedSidebar/dismiss';
 import { useCreateSkillMutation } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -43,6 +44,7 @@ export default function CreateSkillDialog({
 }: CreateSkillDialogProps) {
   const localize = useLocalize();
   const navigate = useNavigate();
+  const dismissPanel = usePanelDismiss();
   const { showToast } = useToastContext();
 
   const {
@@ -60,6 +62,7 @@ export default function CreateSkillDialog({
       showToast({ status: 'success', message: localize('com_ui_skill_created') });
       setIsOpen(false);
       reset();
+      dismissPanel();
       navigate(`/skills/${skill._id}`);
     },
     onError: (error: unknown) => {

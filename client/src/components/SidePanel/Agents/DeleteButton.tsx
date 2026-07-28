@@ -50,26 +50,12 @@ function DeleteButton({
         createMutation.reset();
       }
 
-      const firstAgent = updatedList[0] as Agent | undefined;
-      if (!firstAgent) {
-        setCurrentAgentId(undefined);
-        reset(getDefaultAgentFormValues());
-        setConversation((prev) => (prev ? { ...prev, agent_id: '' } : prev));
-        return;
-      }
-
       if (vars.agent_id === conversationAgentId) {
-        setConversation((prev) => (prev ? { ...prev, model: '', agent_id: firstAgent.id } : prev));
-        return;
+        setConversation((prev) => (prev ? { ...prev, model: '', agent_id: '' } : prev));
       }
 
-      const currentAgent = updatedList.find((agent) => agent.id === conversationAgentId);
-
-      if (currentAgent) {
-        setCurrentAgentId(currentAgent.id);
-      }
-
-      setCurrentAgentId(firstAgent.id);
+      setCurrentAgentId(undefined);
+      reset(getDefaultAgentFormValues());
     },
     onError: (error) => {
       console.error(error);

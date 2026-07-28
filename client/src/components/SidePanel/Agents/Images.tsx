@@ -93,7 +93,7 @@ export function AvatarMenu({
       { separate: true },
       {
         id: 'reset-avatar',
-        label: localize('com_ui_reset_var', { 0: 'Avatar' }),
+        label: localize('com_ui_reset_var', { 0: localize('com_ui_avatar') }),
         onClick: () => {
           if (fileInputRef.current) {
             fileInputRef.current.value = '';

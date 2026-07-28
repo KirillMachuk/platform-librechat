@@ -55,12 +55,16 @@ export default function AdvancedPanel() {
             render={({ field }) => <AgentSubagents field={field} currentAgentId={currentAgentId} />}
           />
         )}
-        <Controller
-          name="edges"
-          control={control}
-          defaultValue={[]}
-          render={({ field }) => <AgentHandoffs field={field} currentAgentId={currentAgentId} />}
-        />
+        {/* Handoffs have no capability of their own; they write the same run-graph
+            edges the chain builds, so they follow the `chain` capability. */}
+        {chainEnabled && (
+          <Controller
+            name="edges"
+            control={control}
+            defaultValue={[]}
+            render={({ field }) => <AgentHandoffs field={field} currentAgentId={currentAgentId} />}
+          />
+        )}
         {chainEnabled && (
           <Controller
             name="agent_ids"

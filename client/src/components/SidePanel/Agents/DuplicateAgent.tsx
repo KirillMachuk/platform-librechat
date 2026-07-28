@@ -1,5 +1,6 @@
 import { CopyPlus } from 'lucide-react';
 import { useToastContext, Button } from '@librechat/client';
+import { useAgentPanelContext } from '~/Providers/AgentPanelContext';
 import { useDuplicateAgentMutation } from '~/data-provider';
 import { isEphemeralAgent } from '~/common';
 import { useLocalize } from '~/hooks';
@@ -7,13 +8,15 @@ import { useLocalize } from '~/hooks';
 export default function DuplicateAgent({ agent_id }: { agent_id: string }) {
   const localize = useLocalize();
   const { showToast } = useToastContext();
+  const { setCurrentAgentId } = useAgentPanelContext();
 
   const duplicateAgent = useDuplicateAgentMutation({
-    onSuccess: () => {
+    onSuccess: ({ agent }) => {
       showToast({
         message: localize('com_ui_agent_duplicated'),
         status: 'success',
       });
+      setCurrentAgentId(agent.id);
     },
     onError: (error) => {
       console.error(error);
