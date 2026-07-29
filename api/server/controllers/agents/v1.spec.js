@@ -196,6 +196,21 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       expect(agentInDb.author.toString()).toBe(mockReq.user.id);
     });
 
+    /**
+     * The create schema tolerates a null model (the builder has none until one is
+     * picked), the stored document does not — so it used to surface as a mongoose
+     * cast failure, i.e. a 500 and a monitoring incident for a plainly bad request.
+     */
+    test('should answer 400, not 500, when no model was chosen', async () => {
+      mockReq.body = { name: 'Modelless Agent', provider: 'openai', model: null };
+
+      await createAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      expect(mockRes.status).not.toHaveBeenCalledWith(500);
+      expect(await Agent.countDocuments({ name: 'Modelless Agent' })).toBe(0);
+    });
+
     test('should roll back the agent and 500 when granting owner permission fails (E-H4)', async () => {
       grantPermission.mockRejectedValueOnce(new Error('grant failed'));
 
@@ -1399,6 +1414,45 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       expect(await Action.findOne({ action_id: survivor.action_id })).not.toBeNull();
     });
 
+    /**
+     * Order matters, not just the fact that both are deleted. With the agent gone
+     * first, a failure to delete its actions is unrecoverable: the retried DELETE
+     * stops at "Agent not found", and the doc keeps a live `api_key` with nothing
+     * left pointing at it.
+     */
+    test('deleteAgentHandler leaves the agent in place when action cleanup fails', async () => {
+      const Action = mongoose.models.Action;
+      const db = require('~/models');
+      const agent = await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Agent With Doomed Action',
+        provider: 'openai',
+        model: 'gpt-4',
+        author: mockReq.user.id,
+      });
+      await Action.create({
+        action_id: nanoid(),
+        agent_id: agent.id,
+        user: mockReq.user.id,
+        metadata: { domain: 'example.com', api_key: 'secret' },
+      });
+
+      const realDeleteActions = db.deleteActions;
+      db.deleteActions = jest.fn().mockRejectedValue(new Error('mongo is down'));
+      mockReq.params.id = agent.id;
+
+      try {
+        await deleteAgentHandler(mockReq, mockRes);
+      } finally {
+        db.deleteActions = realDeleteActions;
+      }
+
+      expect(mockRes.status).toHaveBeenCalledWith(500);
+      // Still reachable, so the operator (or a retry) can finish the job.
+      expect(await Agent.findOne({ id: agent.id })).not.toBeNull();
+      expect(await Action.countDocuments({ agent_id: agent.id })).toBe(1);
+    });
+
     /** The handler reads the upload off disk and pushes it through the storage strategy,
      *  so an avatar replacement needs a real temp file and a working `processAvatar`. */
     const stageAvatarUpload = async (newPath = '/images/new-avatar.png') => {
@@ -1602,6 +1656,38 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       expect(mockRes.json).toHaveBeenCalled();
       const agentInDb = await Agent.findOne({ id: agent.id }).lean();
       expect(agentInDb.tool_resources.file_search.file_ids).toEqual([ownedFileId]);
+    });
+
+    /**
+     * Asking for a version that is not there is the client's mistake, and a 500
+     * also books it as a server incident in monitoring.
+     */
+    test('revertAgentVersionHandler should answer 400 for a version that does not exist', async () => {
+      const agent = await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Agent With One Version',
+        provider: 'openai',
+        model: 'gpt-4',
+        author: mockReq.user.id,
+        versions: [{ name: 'v0', provider: 'openai', model: 'gpt-4' }],
+      });
+
+      mockReq.params.id = agent.id;
+      mockReq.body = { version_index: 7 };
+
+      await revertAgentVersionHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      expect(mockRes.status).not.toHaveBeenCalledWith(500);
+    });
+
+    test('revertAgentVersionHandler should answer 404 for an agent that does not exist', async () => {
+      mockReq.params.id = `agent_${uuidv4()}`;
+      mockReq.body = { version_index: 0 };
+
+      await revertAgentVersionHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(404);
     });
   });
 

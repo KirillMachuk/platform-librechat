@@ -362,6 +362,17 @@ const createAgentHandler = async (req, res) => {
     const validatedData = agentCreateSchema.parse(req.body);
     const { tools = [], ...agentData } = removeNullishValues(validatedData);
 
+    /**
+     * The create schema accepts a null model (an agent under construction in the
+     * UI has none yet) but the stored document requires one, so a null slipped
+     * through validation and surfaced as a mongoose cast failure — a 500 for what
+     * is plainly a bad request. Checked after `removeNullishValues`, which is what
+     * turns `model: null` into an absent field.
+     */
+    if (agentData.model == null) {
+      return res.status(400).json({ error: 'A model is required to create an agent' });
+    }
+
     if (tools.length > MAX_AGENT_TOOLS) {
       return res.status(400).json({
         error: `An agent may declare at most ${MAX_AGENT_TOOLS} tools (received ${tools.length}).`,
@@ -966,7 +977,22 @@ const duplicateAgentHandler = async (req, res) => {
       });
     }
 
-    const newAgent = await db.createAgent(newAgentData);
+    let newAgent;
+    try {
+      newAgent = await db.createAgent(newAgentData);
+    } catch (createError) {
+      /** The action copies already exist and point at an agent that now never
+       *  will. Nothing else can reach them, so clean up before giving up. */
+      await db
+        .deleteActions({ agent_id: newAgentId })
+        .catch((cleanupError) =>
+          logger.error(
+            `[duplicateAgent] Failed to clean up copied actions for ${newAgentId}; manual cleanup required:`,
+            cleanupError,
+          ),
+        );
+      throw createError;
+    }
 
     try {
       await Promise.all([
@@ -997,6 +1023,9 @@ const duplicateAgentHandler = async (req, res) => {
       );
       /** Mirrors createAgent: an agent without an owner grant is invisible to its creator */
       try {
+        /** The copies were written before the agent existed, so rolling back the
+         *  agent alone leaves them behind with nothing to reach them from. */
+        await db.deleteActions({ agent_id: newAgentId });
         await db.deleteAgent({ id: newAgent.id });
         logger.warn(
           `[duplicateAgent] Rolled back orphaned agent ${newAgent.id} after grant failure`,
@@ -1077,10 +1106,12 @@ const deleteAgentHandler = async (req, res) => {
     if (!agent) {
       return res.status(404).json({ error: 'Agent not found' });
     }
-    await db.deleteAgent({ id });
     /** Action metadata carries the external API's credentials (`api_key`), so an
-     *  orphaned action doc keeps a live secret for an agent that no longer exists. */
+     *  orphaned action doc keeps a live secret for an agent that no longer exists.
+     *  Deleted BEFORE the agent: if this throws with the agent already gone, the
+     *  doc is unreachable forever — a retried DELETE stops at the 404 above. */
     await db.deleteActions({ agent_id: id });
+    await db.deleteAgent({ id });
     await deleteAgentAvatarFile(req, agent);
     return res.json({ message: 'Agent deleted' });
   } catch (error) {
@@ -1405,7 +1436,19 @@ const revertAgentVersionHandler = async (req, res) => {
     }
 
     if (Object.keys(revertUpdates).length > 0) {
-      updatedAgent = await db.updateAgent({ id }, revertUpdates, { updatingUserId: req.user.id });
+      /**
+       * `skipVersioning`: this is not an edit the user made, it is the revert
+       * finishing its own job — stripping tools and files the author may no longer
+       * reach. Left on the normal path it would be checked against the newest
+       * stored version, and whenever the pruned state happens to match it the
+       * duplicate-version guard returns early WITHOUT writing — so a tool the
+       * author lost access to would quietly stay on the agent. It also has no
+       * business appending a version entry of its own: reverting does not add one.
+       */
+      updatedAgent = await db.updateAgent({ id }, revertUpdates, {
+        updatingUserId: req.user.id,
+        skipVersioning: true,
+      });
     }
 
     if (updatedAgent.author) {
@@ -1419,6 +1462,18 @@ const revertAgentVersionHandler = async (req, res) => {
     return res.json(updatedAgent);
   } catch (error) {
     logger.error('[/agents/:id/revert] Error reverting Agent version', error);
+    /**
+     * Asking for a version that does not exist is a bad request, not a server
+     * fault: the client should show "that version is gone", and a 500 also lands
+     * in error monitoring as an incident. The data layer signals it by message,
+     * so match on that rather than inventing an error class it does not throw.
+     */
+    if (/^Version .* not found$/.test(error.message ?? '')) {
+      return res.status(400).json({ error: error.message });
+    }
+    if (error.message === 'Agent not found') {
+      return res.status(404).json({ error: error.message });
+    }
     res.status(500).json({ error: error.message });
   }
 };

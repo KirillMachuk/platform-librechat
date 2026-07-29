@@ -1016,7 +1016,15 @@ export function createAgentMethods(
         unset[key] = '';
         continue;
       }
-      update[key] = typeof schemaDefault === 'function' ? schemaDefault() : schemaDefault;
+      /** A function default is called the way mongoose calls it — with the document
+       *  as `this` — since some read sibling fields. The value is today's default,
+       *  not the one in force when the snapshot was taken; the schema is the only
+       *  record of it, and reconstructing history is not worth a field that the
+       *  snapshot did not carry in the first place. */
+      update[key] =
+        typeof schemaDefault === 'function'
+          ? (schemaDefault as (this: unknown) => unknown).call(agent)
+          : schemaDefault;
     }
     if (Object.keys(unset).length > 0) {
       update.$unset = unset;
