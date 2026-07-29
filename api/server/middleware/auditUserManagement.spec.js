@@ -79,8 +79,20 @@ describe('auditUserManagement', () => {
     );
   });
 
-  it('does not record a failed write (status >= 400)', () => {
+  it('records a refused write as a failure', () => {
     const res = buildRes(403);
+    auditUserManagement(
+      buildReq({ method: 'PATCH', params: { id: 'u42' }, body: { role: 'ADMIN' } }),
+      res,
+      jest.fn(),
+    );
+    res.emit('finish');
+    expect(mockRecordAudit).toHaveBeenCalledTimes(1);
+    expect(mockRecordAudit.mock.calls[0][0].outcome).toBe('failure');
+  });
+
+  it('does not record a validation error', () => {
+    const res = buildRes(422);
     auditUserManagement(
       buildReq({ method: 'PATCH', params: { id: 'u42' }, body: { role: 'ADMIN' } }),
       res,

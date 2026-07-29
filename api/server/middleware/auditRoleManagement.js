@@ -127,7 +127,14 @@ const auditRolePermissionUpdate = (permissionType) =>
     targetType: 'role',
     targetId: req.params?.roleName,
     metadata: (() => {
-      const permissions = summarizePermissions({ [permissionType]: req.body });
+      /**
+       * `auditAppliedPermissions` is what the handler actually wrote (the parsed,
+       * schema-filtered body). Falling back to the raw body covers the paths that
+       * never reached the handler — a denied attempt is still worth recording,
+       * and there the request is all there is to record.
+       */
+      const applied = req.auditAppliedPermissions ?? req.body;
+      const permissions = summarizePermissions({ [permissionType]: applied });
       return permissions ? { permissions } : {};
     })(),
   }));

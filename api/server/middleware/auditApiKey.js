@@ -14,7 +14,8 @@ module.exports = createAuditOnFinish((req) => {
   return {
     action,
     targetType: 'apikey',
-    targetId: req.params?.id,
+    /** POST has no `:id` — the handler puts the minted key's id on the request. */
+    targetId: req.auditApiKeyId ?? req.params?.id,
     metadata: typeof req.body?.name === 'string' ? { name: req.body.name } : undefined,
   };
 });

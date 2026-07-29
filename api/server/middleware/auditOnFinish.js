@@ -2,26 +2,46 @@ const { recordAudit, auditRequestContext } = require('~/server/services/Audit');
 
 /**
  * Builds an Express middleware that records an audit event once the response
- * finishes successfully (status < 400). Recording is attached to the response
- * `finish` event, so it is fire-and-forget and never delays or breaks the request.
+ * settles. Recording is attached to response events, so it is fire-and-forget
+ * and never delays or breaks the request.
  *
  * `resolve(req)` returns the event-specific fields (`action`, `targetType`,
  * `targetId`, `metadata`, …) or `null`/`undefined` to skip (e.g. a method this
- * hook does not audit). Actor, tenant, request context (ip/user-agent) and a
- * `success` outcome are filled in automatically, so each hook stays a small,
- * declarative resolver.
+ * hook does not audit). Actor, tenant, request context (ip/user-agent) and an
+ * outcome are filled in automatically, so each hook stays a small, declarative
+ * resolver.
  *
- * The resolver runs on `finish`, not on entry: hooks mounted with `router.use`
- * (grants, config) see an unmatched request, so `req.params` is only populated
- * once the route layer has run. A hook that needs route-scoped state therefore
- * has to be mounted per route.
+ * The resolver runs when the response settles, not on entry: hooks mounted with
+ * `router.use` (grants, config) see an unmatched request, so `req.params` is
+ * only populated once the route layer has run. A hook that needs route-scoped
+ * state therefore has to be mounted per route.
+ *
+ * Outcomes:
+ *  - `success` — the response completed with a status below 400.
+ *  - `failure` — the request was denied (401/403). Recording these is the point
+ *    of an audit trail as much as the successes are: "who kept trying to grant
+ *    themselves rights" is a question the log has to be able to answer. Other
+ *    4xx/5xx are skipped so validation noise does not drown the trail.
+ *  - `unknown` — the client went away before the response was written (closed
+ *    laptop, dropped VPN, killed connection). The handler keeps running in
+ *    Node, so the change may be fully applied, partly applied, or not reached;
+ *    the entry says so instead of guessing. Without this branch the entry was
+ *    lost entirely, which made "disconnect mid-request" a way to mutate
+ *    permissions and leave no trace.
  *
  * @param {(req: import('express').Request) => (object|null|undefined)} resolve
  * @returns {import('express').RequestHandler}
  */
 const createAuditOnFinish = (resolve) => (req, res, next) => {
-  res.on('finish', () => {
-    if (res.statusCode >= 400) {
+  /** Both events fire on a normal response; the first one through wins. */
+  let recorded = false;
+
+  const record = (outcome) => {
+    if (recorded) {
+      return;
+    }
+    recorded = true;
+    if (outcome == null) {
       return;
     }
     const fields = resolve(req);
@@ -33,10 +53,28 @@ const createAuditOnFinish = (resolve) => (req, res, next) => {
       actorEmail: req.user?.email,
       actorRole: req.user?.role,
       tenantId: req.user?.tenantId,
-      outcome: 'success',
+      outcome,
       ...fields,
       ...auditRequestContext(req),
     });
+  };
+
+  /** @returns {'success'|'failure'|null} null means "not worth an entry". */
+  const outcomeForStatus = (statusCode) => {
+    if (statusCode === 401 || statusCode === 403) {
+      return 'failure';
+    }
+    return statusCode >= 400 ? null : 'success';
+  };
+
+  res.on('finish', () => record(outcomeForStatus(res.statusCode)));
+  res.on('close', () => {
+    /**
+     * `close` also fires after a completed response. `writableEnded` separates
+     * the two: true means the handler finished writing (and `finish` already
+     * claimed the record), false means the socket died first.
+     */
+    record(res.writableEnded ? outcomeForStatus(res.statusCode) : 'unknown');
   });
   next();
 };

@@ -83,6 +83,13 @@ const createPermissionUpdateHandler = (permissionKey) => {
 
     try {
       const parsedUpdates = config.schema.partial().parse(updates);
+      /**
+       * What the audit hook records has to be what was applied, not what was
+       * asked for: the schema drops unknown keys, so a body naming a permission
+       * that does not exist would otherwise appear in the trail as a change that
+       * never happened. The hook reads this on settle, after the handler ran.
+       */
+      req.auditAppliedPermissions = parsedUpdates;
 
       const role = await getRoleByName(roleName);
       if (!role) {
@@ -154,8 +161,9 @@ router.get('/:roleName', async (req, res) => {
 for (const [permissionKey, { permissionType }] of Object.entries(permissionConfigs)) {
   router.put(
     `/:roleName/${permissionKey}`,
-    manageRoles,
+    /** Before the gate, so a refused attempt is recorded too — see auditOnFinish. */
     auditRolePermissionUpdate(permissionType),
+    manageRoles,
     createPermissionUpdateHandler(permissionKey),
   );
 }

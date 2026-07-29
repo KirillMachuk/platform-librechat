@@ -42,7 +42,14 @@ export type AuditAction =
   | 'billing.reconcile_alert'
   | 'billing.limit_updated';
 
-export type AuditOutcome = 'success' | 'failure';
+/**
+ * `unknown` is for a request whose effect could not be observed: the client
+ * dropped the connection before the response was written, so the handler may
+ * have committed the change, partially committed it, or not reached it at all.
+ * Claiming either `success` or `failure` there would put a false statement in
+ * the audit trail — the one place that must not contain guesses.
+ */
+export type AuditOutcome = 'success' | 'failure' | 'unknown';
 
 export interface IAuditTokens {
   input?: number;

@@ -50,8 +50,15 @@ describe('auditUserBalance', () => {
     expect(mockRecordAudit.mock.calls[0][0].metadata).toEqual({ tokenCredits: 1 });
   });
 
-  it('records nothing when the change was rejected', async () => {
+  it('records a refused change as a failure', async () => {
     await request(buildApp(403)).patch('/api/admin/users/u42/balance').send({ tokenCredits: 1 });
+
+    expect(mockRecordAudit).toHaveBeenCalledTimes(1);
+    expect(mockRecordAudit.mock.calls[0][0].outcome).toBe('failure');
+  });
+
+  it('records nothing for a validation error', async () => {
+    await request(buildApp(422)).patch('/api/admin/users/u42/balance').send({ tokenCredits: 1 });
 
     expect(mockRecordAudit).not.toHaveBeenCalled();
   });

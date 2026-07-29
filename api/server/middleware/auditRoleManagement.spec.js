@@ -171,8 +171,23 @@ describe('auditRoleManagement', () => {
     });
   });
 
-  it('records nothing when the request failed', async () => {
+  /**
+   * A refused role change is exactly what a security review looks for — "who
+   * kept trying to grant themselves rights" has to be answerable — so it lands
+   * in the trail marked as a failure rather than vanishing.
+   */
+  it('records a refused role change as a failure', async () => {
     await request(buildApp(403)).delete('/api/admin/roles/MANAGER');
+    expect(mockRecordAudit).toHaveBeenCalledTimes(1);
+    expect(mockRecordAudit.mock.calls[0][0]).toMatchObject({
+      action: 'role.delete',
+      targetId: 'MANAGER',
+      outcome: 'failure',
+    });
+  });
+
+  it('records nothing for a validation error', async () => {
+    await request(buildApp(422)).delete('/api/admin/roles/MANAGER');
     expect(mockRecordAudit).not.toHaveBeenCalled();
   });
 

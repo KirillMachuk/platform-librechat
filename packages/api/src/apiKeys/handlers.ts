@@ -47,6 +47,42 @@ interface AuthenticatedRequest extends Request {
     id: string;
     _id: Types.ObjectId;
   };
+  /** Read by the audit hook once the response settles — see `auditApiKey`. */
+  auditApiKeyId?: string;
+}
+
+/**
+ * Ceiling on how long a minted key stays valid. An API key reaches agents from
+ * outside the UI with no session to expire, and the field is client-supplied
+ * and optional — so "no expiry" used to mean "forever", and a key leaked from a
+ * laptop stayed good indefinitely. A year is long enough not to interrupt
+ * automation and short enough that a forgotten key eventually stops working.
+ */
+const MAX_API_KEY_TTL_MS = 365 * 24 * 60 * 60 * 1000;
+
+/**
+ * Resolves the client-supplied expiry against the ceiling.
+ * @returns the effective expiry, or an error message when the input is unusable.
+ */
+export function resolveApiKeyExpiry(
+  expiresAt: unknown,
+  now: number,
+): { expiresAt: Date } | { error: string } {
+  const ceiling = new Date(now + MAX_API_KEY_TTL_MS);
+  if (expiresAt == null || expiresAt === '') {
+    return { expiresAt: ceiling };
+  }
+  if (typeof expiresAt !== 'string' && typeof expiresAt !== 'number') {
+    return { error: 'expiresAt must be a date' };
+  }
+  const requested = new Date(expiresAt);
+  if (Number.isNaN(requested.getTime())) {
+    return { error: 'expiresAt must be a valid date' };
+  }
+  if (requested.getTime() <= now) {
+    return { error: 'expiresAt must be in the future' };
+  }
+  return { expiresAt: requested.getTime() > ceiling.getTime() ? ceiling : requested };
 }
 
 export function createApiKeyHandlers(deps: ApiKeyHandlerDependencies): {
@@ -68,11 +104,19 @@ export function createApiKeyHandlers(deps: ApiKeyHandlerDependencies): {
         });
       }
 
+      const expiry = resolveApiKeyExpiry(expiresAt, Date.now());
+      if ('error' in expiry) {
+        return res.status(400).json({ error: expiry.error });
+      }
+
       const result = await deps.createAgentApiKey({
         userId: req.user?.id || '',
         name: name.trim(),
-        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        expiresAt: expiry.expiresAt,
       });
+
+      /** So the audit entry names the key that was minted, not just its label. */
+      req.auditApiKeyId = result.id;
 
       res.status(201).json({
         id: result.id,
