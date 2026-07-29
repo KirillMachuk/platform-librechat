@@ -457,6 +457,14 @@ export type TConfig = {
    * panel can hide settings that would otherwise be silently ignored.
    */
   dropParams?: string[];
+  /**
+   * Model ids this endpoint's gateway reports as accepting image input.
+   * Present only when the gateway publishes capabilities (OpenRouter-compatible
+   * catalogues do); consumers fall back to name matching when it is absent.
+   * Keeps the "this model can't read images" hint correct as the model line-up
+   * changes, without anyone editing a list of names.
+   */
+  visionModels?: string[];
   customParams?: {
     defaultParamsEndpoint?: string;
     reasoningFormat?: ReasoningParameterFormat;

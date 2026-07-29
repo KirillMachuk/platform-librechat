@@ -95,6 +95,26 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
     select: (data) => mergeFileConfig(data),
   });
 
+  /**
+   * Whether the active model accepts images. Prefers what the endpoint's own
+   * gateway reports (`visionModels`, refreshed server-side), because the
+   * name-matching fallback needs a human to add every new model and its stale
+   * answer is the harmful one: it tells someone on a vision-capable model that
+   * their model cannot read pictures. Endpoints whose gateway publishes no
+   * capabilities keep the previous behaviour.
+   */
+  const modelReadsImages = useCallback(
+    (model: string) => {
+      const endpointsConfig = queryClient.getQueryData<TEndpointsConfig>([QueryKeys.endpoints]);
+      const reported = endpointsConfig?.[endpoint]?.visionModels;
+      if (reported?.length) {
+        return reported.includes(model);
+      }
+      return validateVisionModel({ model });
+    },
+    [queryClient, endpoint],
+  );
+
   const displayToast = useCallback(() => {
     if (errors.length > 1) {
       // TODO: this should not be a dynamic localize input!!
@@ -353,11 +373,7 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
     // model before sending. Text/OCR and RAG are model-independent, so this
     // only applies to images. Emitted once even for a multi-image batch.
     const batchHasImage = fileList.some((file) => file.type.startsWith('image/'));
-    if (
-      batchHasImage &&
-      conversation?.model &&
-      !validateVisionModel({ model: conversation.model })
-    ) {
+    if (batchHasImage && conversation?.model && !modelReadsImages(conversation.model)) {
       showToast({
         message: localize('com_warning_model_no_vision'),
         status: 'warning',
