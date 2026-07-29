@@ -249,6 +249,16 @@ export default function AgentPanel() {
 
   const canEdit = hasPermission(PermissionBits.EDIT);
 
+  /**
+   * Permissions are fetched per agent, so switching agents leaves `canEdit`
+   * false for one round trip — long enough to flash "you don't have access" at
+   * someone who owns the agent. Wait for the answer instead of assuming the
+   * worst. Gated on the agent actually having an id: the permissions query is
+   * `enabled` only for a non-empty resource id, so on a new (unsaved) agent it
+   * never runs and its `isLoading` would otherwise stay true forever.
+   */
+  const permissionsPending = Boolean(basicAgentQuery.data?._id) && permissionsLoading;
+
   const expandedAgentQuery = useGetExpandedAgentByIdQuery(current_agent_id ?? '', {
     enabled: !isEphemeralAgent(current_agent_id) && canEdit && !permissionsLoading,
   });
@@ -421,11 +431,15 @@ export default function AgentPanel() {
       previousVersionRef.current = undefined;
     },
     onError: (err) => {
-      const error = err as Error;
+      /**
+       * The message is axios's own ("Request failed with status code 400") — the
+       * response interceptor does not lift the server's `error` field onto it. In
+       * a Russian product that trailed an English technical string a user cannot
+       * act on, so it goes to the console for support instead of into the toast.
+       */
+      console.error('[AgentPanel] Agent update failed', err);
       showToast({
-        message: `${localize('com_agents_update_error')}${
-          error.message ? ` ${localize('com_ui_error')}: ${error.message}` : ''
-        }`,
+        message: localize('com_agents_update_error'),
         status: 'error',
       });
     },
@@ -451,11 +465,10 @@ export default function AgentPanel() {
       }
     },
     onError: (err) => {
-      const error = err as Error;
+      /** Same as the update path above: axios's English message helps support, not the user. */
+      console.error('[AgentPanel] Agent creation failed', err);
       showToast({
-        message: `${localize('com_agents_create_error')}${
-          error.message ? ` ${localize('com_ui_error')}: ${error.message}` : ''
-        }`,
+        message: localize('com_agents_create_error'),
         status: 'error',
       });
     },
@@ -586,8 +599,8 @@ export default function AgentPanel() {
               </div>
             )}
           </div>
-          {agentQuery.isInitialLoading && <AgentPanelSkeleton />}
-          {!canEditAgent && !agentQuery.isInitialLoading && (
+          {(agentQuery.isInitialLoading || permissionsPending) && <AgentPanelSkeleton />}
+          {!canEditAgent && !agentQuery.isInitialLoading && !permissionsPending && (
             <div className="flex h-[30vh] w-full items-center justify-center">
               <div className="text-center">
                 <h2 className="text-token-text-primary m-2 text-xl font-semibold">
@@ -597,17 +610,22 @@ export default function AgentPanel() {
               </div>
             </div>
           )}
-          {canEditAgent && !agentQuery.isInitialLoading && activePanel === Panel.model && (
-            <ModelPanel models={models} providers={providers} setActivePanel={setActivePanel} />
-          )}
-          {canEditAgent && !agentQuery.isInitialLoading && activePanel === Panel.builder && (
-            <AgentConfig />
-          )}
-          {canEditAgent && !agentQuery.isInitialLoading && activePanel === Panel.advanced && (
-            <AdvancedPanel />
-          )}
+          {canEditAgent &&
+            !agentQuery.isInitialLoading &&
+            !permissionsPending &&
+            activePanel === Panel.model && (
+              <ModelPanel models={models} providers={providers} setActivePanel={setActivePanel} />
+            )}
+          {canEditAgent &&
+            !agentQuery.isInitialLoading &&
+            !permissionsPending &&
+            activePanel === Panel.builder && <AgentConfig />}
+          {canEditAgent &&
+            !agentQuery.isInitialLoading &&
+            !permissionsPending &&
+            activePanel === Panel.advanced && <AdvancedPanel />}
         </div>
-        {canEditAgent && !agentQuery.isInitialLoading && (
+        {canEditAgent && !agentQuery.isInitialLoading && !permissionsPending && (
           <AgentFooter
             createMutation={create}
             updateMutation={update}

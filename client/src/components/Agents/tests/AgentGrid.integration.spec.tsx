@@ -466,7 +466,34 @@ describe('AgentGrid Integration with useGetMarketplaceAgentsQuery', () => {
         </Wrapper>,
       );
 
-      expect(screen.getByText('No agents available')).toBeInTheDocument();
+      // A fruitless search is not an empty catalog: the heading has to say which
+      // one it is, and it already announced "No results found" to screen readers
+      // while showing "No agents available" on screen.
+      expect(screen.getByText('No results found')).toBeInTheDocument();
+      expect(screen.queryByText('No agents available')).not.toBeInTheDocument();
+    });
+
+    it('keeps the empty message on screen through a background refetch', () => {
+      mockUseMarketplaceAgentsInfiniteQuery.mockReturnValue({
+        ...defaultMockQueryResult,
+        data: { pages: [{ data: [] }] },
+        isLoading: false,
+        isFetching: true,
+      });
+
+      const Wrapper = createWrapper();
+      render(
+        <Wrapper>
+          <AgentGrid
+            category="finance"
+            searchQuery="nonexistent"
+            onSelectAgent={mockOnSelectAgent}
+          />
+        </Wrapper>,
+      );
+
+      expect(screen.getByText('No results found')).toBeInTheDocument();
+      expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-busy', 'true');
     });
   });
 

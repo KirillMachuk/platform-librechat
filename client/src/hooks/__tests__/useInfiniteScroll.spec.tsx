@@ -160,7 +160,11 @@ describe('useInfiniteScroll', () => {
   });
 
   it('stays put when the viewport is already filled', () => {
-    const scrollElement = makeScrollElement({ scrollHeight: 5000, clientHeight: 500, scrollTop: 0 });
+    const scrollElement = makeScrollElement({
+      scrollHeight: 5000,
+      clientHeight: 500,
+      scrollTop: 0,
+    });
     const fetchSpy = jest.fn();
 
     const { result } = renderHook(() =>

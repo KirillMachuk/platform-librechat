@@ -253,7 +253,13 @@ function ApiKeysContent({ isOpen }: { isOpen: boolean }) {
         {!isLoading && (!data?.keys || data.keys.length === 0) && (
           <div className="rounded-lg border-2 border-dashed border-border-light p-8 text-center">
             <Key className="mx-auto h-8 w-8 text-text-secondary" />
-            <p className="mt-2 text-sm text-text-secondary">{localize('com_ui_no_api_keys')}</p>
+            {/* Telling someone to "create one to get started" when the button is
+                hidden from them reads as a broken page, not as a policy. */}
+            <p className="mt-2 text-sm text-text-secondary">
+              {canCreateKeys
+                ? localize('com_ui_no_api_keys')
+                : localize('com_ui_no_api_keys_no_permission')}
+            </p>
           </div>
         )}
       </div>

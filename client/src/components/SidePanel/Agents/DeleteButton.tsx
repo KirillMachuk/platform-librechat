@@ -14,6 +14,7 @@ import type { Agent, AgentCreateParams } from 'librechat-data-provider';
 import type { UseMutationResult } from '@tanstack/react-query';
 import { logger, getDefaultAgentFormValues } from '~/utils';
 import { useDeleteAgentMutation } from '~/data-provider';
+import { AGENT_SELECT_ID } from './AgentSelect';
 import { isEphemeralAgent } from '~/common';
 import { useLocalize } from '~/hooks';
 import store from '~/store';
@@ -56,6 +57,17 @@ function DeleteButton({
 
       setCurrentAgentId(undefined);
       reset(getDefaultAgentFormValues());
+
+      /**
+       * The dialog would normally restore focus to its trigger, but that trigger
+       * has just been unmounted along with the deleted agent's builder — focus
+       * falls to `<body>` and a keyboard user has to tab in from the top of the
+       * page. Hand it to the agent selector, which survives, once React has
+       * finished the unmount.
+       */
+      requestAnimationFrame(() => {
+        document.getElementById(AGENT_SELECT_ID)?.focus();
+      });
     },
     onError: (error) => {
       console.error(error);
