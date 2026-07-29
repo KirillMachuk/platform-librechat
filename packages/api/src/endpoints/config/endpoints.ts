@@ -2,13 +2,16 @@ import {
   AuthType,
   EModelEndpoint,
   isAgentsEndpoint,
+  extractEnvVariable,
   orderEndpointsConfig,
+  normalizeEndpointName,
   defaultAgentCapabilities,
 } from 'librechat-data-provider';
 import type { AgentCapabilities, TEndpointsConfig, TConfig } from 'librechat-data-provider';
 import type { AppConfig } from '@librechat/data-schemas';
 import type { ServerRequest, TCustomEndpointsConfig } from '~/types';
 import { loadCustomEndpointsConfig as defaultLoadCustomEndpoints } from '~/endpoints/custom';
+import { fetchVisionCapableModels } from '~/endpoints/visionCapabilities';
 
 type PartialEndpointEntry = Partial<TConfig> & Record<string, unknown>;
 type DefaultEndpointsResult = Record<string, PartialEndpointEntry | false | null>;
@@ -22,6 +25,48 @@ export interface EndpointsConfigDeps {
   }) => Promise<AppConfig>;
   loadDefaultEndpointsConfig: (appConfig: AppConfig) => Promise<DefaultEndpointsResult>;
   loadCustomEndpointsConfig?: (custom: unknown) => TCustomEndpointsConfig | undefined;
+}
+
+/**
+ * Annotates each custom endpoint with the models its gateway says accept images.
+ *
+ * The client warns when a picture is attached to a model that cannot read one,
+ * and decided that from a hand-maintained list of model-name substrings — which
+ * goes stale every time the line-up changes, and whose stale answer tells people
+ * their working model is broken. Where the gateway publishes capabilities, that
+ * is the answer; where it does not, the field stays absent and the client keeps
+ * matching on names as before.
+ *
+ * Answers are cached, and failures are swallowed inside `fetchVisionCapableModels`
+ * — the endpoints config must not depend on the gateway being reachable.
+ */
+async function attachVisionModels(
+  customEndpointsConfig: TCustomEndpointsConfig | undefined,
+  customEndpoints: unknown,
+): Promise<void> {
+  if (!customEndpointsConfig || !Array.isArray(customEndpoints)) {
+    return;
+  }
+
+  await Promise.all(
+    (customEndpoints as Array<Record<string, unknown>>).map(async (endpoint) => {
+      const configName = endpoint?.name;
+      if (typeof configName !== 'string') {
+        return;
+      }
+      const entry = customEndpointsConfig[normalizeEndpointName(configName)];
+      if (!entry) {
+        return;
+      }
+      const visionModels = await fetchVisionCapableModels({
+        baseURL: extractEnvVariable(String(endpoint.baseURL ?? '')),
+        apiKey: extractEnvVariable(String(endpoint.apiKey ?? '')),
+      });
+      if (visionModels.length > 0) {
+        entry.visionModels = visionModels;
+      }
+    }),
+  );
 }
 
 export function createEndpointsConfigService(deps: EndpointsConfigDeps): {
@@ -44,6 +89,7 @@ export function createEndpointsConfigService(deps: EndpointsConfigDeps): {
       }));
     const defaultEndpointsConfig = await loadDefaultEndpointsConfig(appConfig);
     const customEndpointsConfig = loadCustomEndpointsConfig(appConfig?.endpoints?.custom);
+    await attachVisionModels(customEndpointsConfig, appConfig?.endpoints?.custom);
 
     const mergedConfig: MutableEndpointsConfig = {
       ...defaultEndpointsConfig,

@@ -58,6 +58,18 @@ jest.mock('~/components/MCP/MCPConfigDialog', () => ({
   default: () => null,
 }));
 
+/**
+ * `userEvent` waits on a timer between every dispatched event, and a single
+ * click is a whole sequence of them (pointer, mouse, focus, click). Running the
+ * full suite in parallel stretches those timers: interactions that take ~80ms on
+ * their own overran Jest's 5s default and failed the suite intermittently.
+ *
+ * The timeout is raised rather than the event timing changed — `delay: null`
+ * dispatches synchronously and breaks the arrow-key test, whose focus handling
+ * genuinely needs the ticks between key presses.
+ */
+jest.setTimeout(20000);
+
 describe('MCPSelect', () => {
   beforeEach(() => {
     jest.clearAllMocks();
