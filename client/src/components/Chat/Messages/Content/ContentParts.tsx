@@ -46,6 +46,7 @@ type PartWithContextProps = {
   partAttachments: TAttachment[] | undefined;
   hideAttachments?: boolean;
   onToolExpand?: () => void;
+  autoExpandReasoning?: boolean;
 };
 
 const PartWithContext = memo(function PartWithContext({
@@ -62,6 +63,7 @@ const PartWithContext = memo(function PartWithContext({
   partAttachments,
   hideAttachments,
   onToolExpand,
+  autoExpandReasoning,
 }: PartWithContextProps) {
   const contextValue = useMemo(
     () => ({
@@ -72,8 +74,9 @@ const PartWithContext = memo(function PartWithContext({
       nextType,
       isSubmitting,
       isLatestMessage,
+      autoExpandReasoning,
     }),
-    [messageId, conversationId, idx, nextType, isSubmitting, isLatestMessage],
+    [messageId, conversationId, idx, nextType, isSubmitting, isLatestMessage, autoExpandReasoning],
   );
 
   return (
@@ -227,6 +230,39 @@ const ContentParts = memo(function ContentParts({
       <PendingSkillCall key={`pending-skill-${name}`} skillName={name} loaded={hasRealContent} />
     ));
 
+  /**
+   * A completed message whose parts hold reasoning but not one non-empty TEXT
+   * part renders as collapsed "Thoughts" toggles and tool chips — to the user,
+   * an empty reply (seen in prod: deepseek v3.1 put the whole answer in the
+   * thinking channel). Returns the index of the last non-empty THINK part when
+   * that is the case, so it can expand itself; -1 otherwise. Streaming messages
+   * are left alone — their text part usually arrives later.
+   */
+  const autoExpandThinkIdx = useMemo(() => {
+    if (effectiveIsSubmitting || !content?.length) {
+      return -1;
+    }
+    let lastThinkIdx = -1;
+    for (let idx = 0; idx < content.length; idx++) {
+      const part = content[idx];
+      if (part == null) {
+        continue;
+      }
+      if (part.type === ContentTypes.TEXT) {
+        const text = typeof part.text === 'string' ? part.text : (part.text?.value ?? '');
+        if (text.length > 0) {
+          return -1;
+        }
+      } else if (part.type === ContentTypes.THINK) {
+        const think = typeof part.think === 'string' ? part.think : (part.think?.value ?? '');
+        if (think.trim().length > 0) {
+          lastThinkIdx = idx;
+        }
+      }
+    }
+    return lastThinkIdx;
+  }, [content, effectiveIsSubmitting]);
+
   const renderPart = useCallback(
     (part: TMessageContentParts, idx: number, isLastPart: boolean) => {
       return (
@@ -243,11 +279,13 @@ const ContentParts = memo(function ContentParts({
           nextType={content?.[idx + 1]?.type}
           isSubmitting={effectiveIsSubmitting}
           partAttachments={attachmentMap[getToolCallId(part)]}
+          autoExpandReasoning={idx === autoExpandThinkIdx}
         />
       );
     },
     [
       attachmentMap,
+      autoExpandThinkIdx,
       content,
       conversationId,
       effectiveIsSubmitting,
