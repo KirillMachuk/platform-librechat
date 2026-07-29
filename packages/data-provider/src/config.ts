@@ -2144,6 +2144,20 @@ export const visionModels = [
   'claude-opus-4',
   'claude-sonnet-4',
   'claude-haiku-4',
+  /**
+   * The Claude 5 family and Qwen's `plus` tier read images, and were missing —
+   * `claude-sonnet-5` is this deployment's default model, so every employee who
+   * attached a picture was told to switch to a model with vision while already
+   * using one. Checked against OpenRouter's own `architecture.input_modalities`
+   * rather than inferred from the name; `visionModels.spec.ts` records the whole
+   * verdict table and how to re-run that check.
+   *
+   * Note the Qwen entry is the `plus` tier specifically: `qwen3.7-max` is
+   * text-only, so no shared prefix covers both.
+   */
+  'claude-opus-5',
+  'claude-sonnet-5',
+  'qwen3.7-plus',
 ];
 export enum VisionModes {
   generative = 'generative',
