@@ -1,3 +1,4 @@
+import os from 'os';
 import path from 'path';
 import * as fs from 'fs';
 import JSZip from 'jszip';
@@ -110,7 +111,14 @@ describe('Document Parser', () => {
     zip.file('content.xml', 'x'.repeat(51 * 1024 * 1024), { compression: 'DEFLATE' });
     const buf = await zip.generateAsync({ type: 'nodebuffer' });
 
-    const tmpPath = path.join(__dirname, 'bomb.odt');
+    /**
+     * Written outside the source tree. This used to land next to the fixtures,
+     * where a run that died before the cleanup below left it behind — it was then
+     * committed by accident (#179) and deleted again by every later run, so a
+     * plain test run left the working tree dirty.
+     */
+    const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'librechat-odt-'));
+    const tmpPath = path.join(tmpDir, 'bomb.odt');
     await fs.promises.writeFile(tmpPath, buf);
     try {
       const file = {
@@ -120,7 +128,7 @@ describe('Document Parser', () => {
       } as Express.Multer.File;
       await expect(parseDocument({ file })).rejects.toThrow(/exceeds the 50MB decompressed limit/);
     } finally {
-      await fs.promises.unlink(tmpPath);
+      await fs.promises.rm(tmpDir, { recursive: true, force: true });
     }
   });
 
