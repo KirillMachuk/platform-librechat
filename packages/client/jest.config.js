@@ -17,6 +17,8 @@ export default {
   //   },
   // },
   maxWorkers: '50%',
+  /** Recycle a worker once its heap passes this mark — see `packages/api/jest.config.mjs`. */
+  workerIdleMemoryLimit: '1000MB',
   restoreMocks: true,
   testTimeout: 15000,
   // React component testing requires jsdom environment

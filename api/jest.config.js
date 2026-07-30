@@ -14,6 +14,16 @@ module.exports = {
   roots: ['<rootDir>'],
   coverageDirectory: 'coverage',
   maxWorkers: '50%',
+  /**
+   * Recycle a worker once its heap passes this mark. Jest reuses a worker across
+   * test files and the heap accumulates inside it; once a worker approaches Node's
+   * ~2.2 GB old-space ceiling, V8 spends its time collecting, so suites either die
+   * outright ("Jest worker ran out of memory and crashed") or miss their timeouts
+   * for no reason of their own. Lowering `maxWorkers` makes it worse, since each
+   * worker then handles more files. See `packages/api/jest.config.mjs` for the
+   * measured numbers behind the value.
+   */
+  workerIdleMemoryLimit: '1000MB',
   testTimeout: 30000, // 30 seconds timeout for all tests
   setupFiles: ['./test/jestSetup.js', './test/__mocks__/logger.js'],
   moduleNameMapper: {
