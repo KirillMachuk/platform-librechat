@@ -138,6 +138,21 @@ describe('token limits reported by the gateway', () => {
     expect(getModelMaxTokens('a/model', EModelEndpoint.custom)).toBe(200000);
   });
 
+  /**
+   * Publishing happens several times per request with the same held object, so the
+   * repeat must not rebuild a several-hundred-key map — but a genuinely new object
+   * with the same contents still has to be applied.
+   */
+  it('applies an equal-but-different report, and skips the identical one', () => {
+    const held = { 'a/model': { contextTokens: 111000 } };
+    publishModelLimits(held);
+    publishModelLimits(held);
+    expect(getModelMaxTokens('a/model', EModelEndpoint.custom)).toBe(111000);
+
+    publishModelLimits({ 'a/model': { contextTokens: 222000 } });
+    expect(getModelMaxTokens('a/model', EModelEndpoint.custom)).toBe(222000);
+  });
+
   it('reports whether a ceiling is known, for callers that only clamp known models', () => {
     expect(hasReportedMaxOutputTokens('deepseek/deepseek-v4-pro')).toBe(false);
 

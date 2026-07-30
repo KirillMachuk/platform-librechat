@@ -60,6 +60,32 @@ const EMPTY_CACHE_TTL = Time.TWO_MINUTES;
 const REQUEST_TIMEOUT_MS = 5000;
 
 /**
+ * How long the parsed answer is kept in this process, in front of the shared cache.
+ *
+ * The endpoints config is rebuilt several times while serving one request — twice
+ * on the message path (`validateModel`, `buildEndpointOption`) and once per
+ * `checkCapability` on the file paths — and each rebuild would otherwise fetch and
+ * re-parse a whole catalogue from the shared cache. A real one is ~38 kB of JSON,
+ * so that is the same blob deserialized up to eight times to answer one request.
+ *
+ * Far shorter than `CACHE_TTL`, so the hourly refresh and the short empty-answer
+ * retry both still behave as written; this only collapses the repeats inside a
+ * request and its immediate neighbours.
+ */
+const PROCESS_MEMO_MS = 10_000;
+
+/**
+ * Parsed catalogues by base URL, with the moment each stops being reused. Holds one
+ * small record per model of each endpoint — bounded by how many endpoints exist.
+ */
+const memo = new Map<string, { capabilities: ModelCapabilityMap; expiresAt: number }>();
+
+/** Test seam: forgets what this process is holding. */
+export function clearModelCapabilityMemo(): void {
+  memo.clear();
+}
+
+/**
  * Cache namespace. Deliberately not the `vision:` prefix an earlier revision used:
  * that one holds `string[]`, and a rolling deploy must not read those as the
  * capability records this module now stores.
@@ -169,12 +195,26 @@ export async function fetchModelCapabilities({
     return {};
   }
 
+  const now = Date.now();
+  const held = memo.get(baseURL);
+  if (held && held.expiresAt > now) {
+    return held.capabilities;
+  }
+
   const cache = standardCache(CacheKeys.MODEL_QUERIES);
   const cacheKey = cacheKeyFor(baseURL);
+
+  /** Keeps the parsed answer in this process too, so the repeats within one
+   *  request cost nothing. */
+  const hold = (capabilities: ModelCapabilityMap) => {
+    memo.set(baseURL, { capabilities, expiresAt: Date.now() + PROCESS_MEMO_MS });
+    return capabilities;
+  };
+
   try {
     const cached = await cache.get(cacheKey);
     if (cached != null && typeof cached === 'object' && !Array.isArray(cached)) {
-      return cached as ModelCapabilityMap;
+      return hold(cached as ModelCapabilityMap);
     }
   } catch (error) {
     logger.debug('[fetchModelCapabilities] cache read failed', error);
@@ -200,13 +240,13 @@ export async function fetchModelCapabilities({
       warnUnservedModels(baseURL, configuredModels, capabilities);
     }
     await remember(capabilities, answered ? CACHE_TTL : EMPTY_CACHE_TTL);
-    return capabilities;
+    return hold(capabilities);
   } catch (error) {
     logger.debug(
       `[fetchModelCapabilities] ${baseURL} did not report model capabilities; callers fall back to name matching`,
       error,
     );
     await remember({}, EMPTY_CACHE_TTL);
-    return {};
+    return hold({});
   }
 }

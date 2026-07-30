@@ -522,8 +522,20 @@ let modelLimitOverlay: ModelCapabilityMap = {};
  * flapping between real and name-matched windows mid-conversation is worse than a
  * slightly stale number.
  */
+let lastPublished: ModelCapabilityMap | undefined;
+
 export function publishModelLimits(capabilities: ModelCapabilityMap): void {
+  /**
+   * Called as the endpoints config is assembled, which happens several times per
+   * request. `fetchModelCapabilities` hands back the same object while it holds a
+   * parsed catalogue, so the common case is republishing something already merged —
+   * skip it rather than rebuild a several-hundred-key object per request.
+   */
+  if (capabilities === lastPublished) {
+    return;
+  }
   if (Object.keys(capabilities).length > 0) {
+    lastPublished = capabilities;
     modelLimitOverlay = { ...modelLimitOverlay, ...capabilities };
   }
 }
@@ -531,6 +543,7 @@ export function publishModelLimits(capabilities: ModelCapabilityMap): void {
 /** Test seam: drops everything a gateway reported. */
 export function clearModelLimits(): void {
   modelLimitOverlay = {};
+  lastPublished = undefined;
 }
 
 /** Exact-id lookup only — catalogue keys are full model ids, never fragments. */

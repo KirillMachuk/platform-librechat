@@ -267,6 +267,40 @@ describe('setModels', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  /**
+   * The list is persisted, echoed into every audit entry and delivered to every
+   * client with the endpoints config — an oversized request would inflate all
+   * three at once, so it is refused before any of that happens.
+   */
+  describe('blast-radius ceilings', () => {
+    it('rejects a list longer than any real catalogue', async () => {
+      const { res, deps } = await put({
+        endpoint: 'gw',
+        models: Array.from({ length: 1001 }, (_, i) => `a/model-${i}`),
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(deps.patchConfigFields).not.toHaveBeenCalled();
+    });
+
+    it('rejects an absurdly long model id', async () => {
+      const { res, deps } = await put({ endpoint: 'gw', models: ['a/'.padEnd(201, 'x')] });
+
+      expect(res.statusCode).toBe(400);
+      expect(deps.patchConfigFields).not.toHaveBeenCalled();
+    });
+
+    it('still accepts a full real catalogue', async () => {
+      const many = Array.from({ length: 400 }, (_, i) => `a/model-${i}`);
+      const { res } = await put(
+        { endpoint: 'gw', models: many },
+        { fetchModelCapabilities: jest.fn().mockResolvedValue({}) },
+      );
+
+      expect(res.statusCode).toBe(200);
+    });
+  });
+
   describe('models holding a configuration job', () => {
     const withRoles = () => ({
       getAppConfig: jest.fn().mockResolvedValue(

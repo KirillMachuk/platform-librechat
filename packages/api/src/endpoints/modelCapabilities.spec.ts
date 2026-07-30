@@ -4,6 +4,7 @@ import {
   extractCapabilities,
   extractModelCapabilities,
   fetchModelCapabilities,
+  clearModelCapabilityMemo,
 } from './modelCapabilities';
 
 jest.mock('axios');
@@ -28,6 +29,7 @@ const cacheSet = mockCacheSet;
 
 beforeEach(() => {
   mockCacheStore.clear();
+  clearModelCapabilityMemo();
   jest.clearAllMocks();
 });
 
@@ -211,6 +213,60 @@ describe('fetchModelCapabilities', () => {
 
     expect(mockedAxios.get).toHaveBeenCalledTimes(1);
     expect(cacheSet).toHaveBeenCalledWith(cacheKey, {}, 120000);
+  });
+
+  /**
+   * The endpoints config is rebuilt several times per request, and a real catalogue
+   * is ~38 kB of JSON — without this the same blob is fetched and re-parsed from the
+   * shared cache up to eight times to answer one request.
+   */
+  it('does not re-read the shared cache for the repeats within a request', async () => {
+    mockedAxios.get.mockResolvedValue({ data: catalogue });
+
+    await fetchModelCapabilities(args);
+    const readsAfterFirst = mockCacheGet.mock.calls.length;
+    await fetchModelCapabilities(args);
+    await fetchModelCapabilities(args);
+
+    expect(mockCacheGet.mock.calls.length).toBe(readsAfterFirst);
+    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds an empty answer too, so a silent gateway costs nothing either', async () => {
+    mockedAxios.get.mockResolvedValue({ data: { data: [] } });
+
+    await fetchModelCapabilities(args);
+    const readsAfterFirst = mockCacheGet.mock.calls.length;
+    expect(await fetchModelCapabilities(args)).toEqual({});
+
+    expect(mockCacheGet.mock.calls.length).toBe(readsAfterFirst);
+  });
+
+  /** Endpoints must not read each other's catalogue. */
+  it('keeps what it holds separate per gateway', async () => {
+    mockedAxios.get.mockResolvedValue({ data: catalogue });
+    await fetchModelCapabilities(args);
+
+    mockedAxios.get.mockResolvedValue({
+      data: { data: [{ id: 'b/other', supported_parameters: ['tools'] }] },
+    });
+    const other = await fetchModelCapabilities({ baseURL: 'http://other/v1', apiKey: 'k' });
+
+    expect(Object.keys(other)).toEqual(['b/other']);
+    expect(Object.keys(await fetchModelCapabilities(args))).toEqual(['a/model']);
+  });
+
+  it('goes back to the shared cache once what it holds expires', async () => {
+    mockedAxios.get.mockResolvedValue({ data: catalogue });
+    await fetchModelCapabilities(args);
+    const readsAfterFirst = mockCacheGet.mock.calls.length;
+
+    clearModelCapabilityMemo();
+    await fetchModelCapabilities(args);
+
+    expect(mockCacheGet.mock.calls.length).toBeGreaterThan(readsAfterFirst);
+    /** Served from the shared cache, so still no second trip to the gateway. */
+    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
   });
 
   it('caps how long it waits for the gateway', async () => {

@@ -31,6 +31,23 @@ const MODEL_CATALOGUE_PRIORITY = 10;
 /** Dot-path of the custom-endpoints array within the config override document. */
 const CUSTOM_ENDPOINTS_FIELD = 'endpoints.custom';
 
+/**
+ * Ceiling on how many models one endpoint may offer.
+ *
+ * Not a product limit — a blast radius. The list is persisted, echoed into every
+ * audit entry, and delivered to every client with the endpoints config, so an
+ * accidental or scripted oversized request would inflate all three at once.
+ * Comfortably above any real catalogue (OpenRouter serves under 400), and a
+ * curated line-up is an order of magnitude smaller still.
+ */
+const MAX_MODELS_PER_ENDPOINT = 1000;
+
+/**
+ * Ceiling on one model id. Ids are `vendor/model[:tag]`; the longest in a real
+ * catalogue is well under a hundred characters.
+ */
+const MAX_MODEL_ID_LENGTH = 200;
+
 /** A job this model does in the configuration; switching it off breaks that job. */
 export type ModelRole =
   | 'defaultModel'
@@ -286,8 +303,18 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
       if (typeof endpointName !== 'string' || endpointName === '') {
         return res.status(400).json({ error: 'endpoint is required' });
       }
-      if (!Array.isArray(models) || models.some((m) => typeof m !== 'string' || m === '')) {
+      if (
+        !Array.isArray(models) ||
+        models.some(
+          (m) => typeof m !== 'string' || m === '' || (m as string).length > MAX_MODEL_ID_LENGTH,
+        )
+      ) {
         return res.status(400).json({ error: 'models must be an array of model ids' });
+      }
+      if (models.length > MAX_MODELS_PER_ENDPOINT) {
+        return res
+          .status(400)
+          .json({ error: `At most ${MAX_MODELS_PER_ENDPOINT} models per endpoint` });
       }
       const unique = [...new Set(models as string[])];
       if (unique.length !== models.length) {
