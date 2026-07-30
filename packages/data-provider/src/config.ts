@@ -2457,6 +2457,11 @@ export enum ErrorTypes {
    */
   REASONING_MODEL_TOOLS = 'reasoning_model_tools',
   /**
+   * The endpoint's gateway publishes no `tools` support for the chosen model, so
+   * every tool the agent carries would be dropped by the provider without a word
+   */
+  MODEL_NO_TOOLS = 'model_no_tools',
+  /**
    * Deep Research mode is configured with only reasoning models for a tool node
    * (lead/worker); the run is refused up front instead of 400-ing mid-research
    */

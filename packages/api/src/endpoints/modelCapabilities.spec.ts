@@ -1,7 +1,9 @@
 import axios from 'axios';
 import { logger } from '@librechat/data-schemas';
+import type { TEndpointsConfig } from 'librechat-data-provider';
 import {
   extractCapabilities,
+  reportsNoToolSupport,
   extractModelCapabilities,
   fetchModelCapabilities,
   clearModelCapabilityMemo,
@@ -158,8 +160,12 @@ describe('extractCapabilities: context window', () => {
 
   it('distinguishes "no such field" from "false"', () => {
     expect(extractCapabilities({ id: 'x' }).vision).toBeUndefined();
-    expect(extractCapabilities({ architecture: { input_modalities: ['text'] } }).vision).toBe(false);
-    expect(extractCapabilities({ architecture: { input_modalities: 'image' } }).vision).toBeUndefined();
+    expect(extractCapabilities({ architecture: { input_modalities: ['text'] } }).vision).toBe(
+      false,
+    );
+    expect(
+      extractCapabilities({ architecture: { input_modalities: 'image' } }).vision,
+    ).toBeUndefined();
   });
 });
 
@@ -345,5 +351,36 @@ describe('fetchModelCapabilities', () => {
 
       expect(logger.warn).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe('reportsNoToolSupport', () => {
+  const config = {
+    gateway: {
+      modelCapabilities: {
+        'vendor/no-tools': { tools: false },
+        'vendor/tools': { tools: true },
+        'vendor/silent': {},
+      },
+    },
+  } as unknown as TEndpointsConfig;
+
+  it('answers yes only when the catalogue said no', () => {
+    expect(reportsNoToolSupport(config, 'gateway', 'vendor/no-tools')).toBe(true);
+    expect(reportsNoToolSupport(config, 'gateway', 'vendor/tools')).toBe(false);
+  });
+
+  /**
+   * The whole point of the gate failing open: an endpoint whose gateway publishes
+   * nothing must behave exactly as it did before the gate existed.
+   */
+  it('treats every kind of silence as "unknown", never as "no"', () => {
+    expect(reportsNoToolSupport(config, 'gateway', 'vendor/silent')).toBe(false);
+    expect(reportsNoToolSupport(config, 'gateway', 'vendor/never-heard-of')).toBe(false);
+    expect(reportsNoToolSupport(config, 'other-gateway', 'vendor/no-tools')).toBe(false);
+    expect(reportsNoToolSupport({} as TEndpointsConfig, 'gateway', 'vendor/no-tools')).toBe(false);
+    expect(reportsNoToolSupport(undefined, 'gateway', 'vendor/no-tools')).toBe(false);
+    expect(reportsNoToolSupport(config, undefined, 'vendor/no-tools')).toBe(false);
+    expect(reportsNoToolSupport(config, 'gateway', undefined)).toBe(false);
   });
 });

@@ -1,7 +1,11 @@
 import axios from 'axios';
-import { CacheKeys, Time } from 'librechat-data-provider';
 import { logger } from '@librechat/data-schemas';
-import type { ModelCapabilities, ModelCapabilityMap } from 'librechat-data-provider';
+import { CacheKeys, Time } from 'librechat-data-provider';
+import type {
+  ModelCapabilities,
+  ModelCapabilityMap,
+  TEndpointsConfig,
+} from 'librechat-data-provider';
 import { standardCache } from '~/cache';
 
 /**
@@ -249,4 +253,26 @@ export async function fetchModelCapabilities({
     await remember({}, EMPTY_CACHE_TTL);
     return hold({});
   }
+}
+
+/**
+ * Answers whether the gateway said, in so many words, that this model takes no
+ * tools — so a caller can refuse the combination instead of letting it fail
+ * silently at run time.
+ *
+ * Deliberately one-directional. An absent answer means the catalogue did not
+ * publish `supported_parameters` for the model, or the gateway was unreachable
+ * when the config was assembled, and neither is the same statement as "no". Only
+ * an explicit `false` is treated as a refusal, so a silent gateway costs the user
+ * nothing and this can never become the reason a save stops working.
+ */
+export function reportsNoToolSupport(
+  endpointsConfig: TEndpointsConfig | undefined | null,
+  endpoint: string | undefined | null,
+  model: string | undefined | null,
+): boolean {
+  if (!endpoint || !model) {
+    return false;
+  }
+  return endpointsConfig?.[endpoint]?.modelCapabilities?.[model]?.tools === false;
 }

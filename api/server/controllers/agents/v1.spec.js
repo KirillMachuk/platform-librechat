@@ -9,12 +9,25 @@ const { FileSources, PermissionBits, ResourceType } = require('librechat-data-pr
 const { MongoMemoryServer } = require('mongodb-memory-server');
 
 // Only mock the dependencies that are not database-related
+const mockGetEndpointsConfig = jest.fn().mockResolvedValue({});
+
+/**
+ * `mockResolvedValueOnce` queues, and `clearMocks` does not drain that queue — a
+ * value a test set up but the code never asked for is handed to the *next* test
+ * instead, which is a confusing way to fail. Reset the implementation each time.
+ */
+beforeEach(() => {
+  mockGetEndpointsConfig.mockReset();
+  mockGetEndpointsConfig.mockResolvedValue({});
+});
+
 jest.mock('~/server/services/Config', () => ({
   getCachedTools: jest.fn().mockResolvedValue({
     web_search: true,
     execute_code: true,
     file_search: true,
   }),
+  getEndpointsConfig: (...args) => mockGetEndpointsConfig(...args),
 }));
 
 jest.mock('~/server/services/Files/strategies', () => ({
@@ -581,6 +594,75 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       expect(created.tools).toContain('file_search');
     });
 
+    test('should reject a model the gateway serves without tool support (Ф3)', async () => {
+      mockGetEndpointsConfig.mockResolvedValueOnce({
+        openai: { modelCapabilities: { 'vendor/no-tools': { tools: false } } },
+      });
+      mockReq.body = {
+        provider: 'openai',
+        model: 'vendor/no-tools',
+        name: 'Tools the model would drop',
+        tools: ['file_search'],
+      };
+
+      await createAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      expect(mockRes.json.mock.calls[0][0].error).toContain('model_no_tools');
+      expect(await Agent.countDocuments({ author: mockReq.user.id })).toBe(0);
+    });
+
+    test('should allow a tool-less model when the agent carries no tools (Ф3)', async () => {
+      mockGetEndpointsConfig.mockResolvedValueOnce({
+        openai: { modelCapabilities: { 'vendor/no-tools': { tools: false } } },
+      });
+      mockReq.body = {
+        provider: 'openai',
+        model: 'vendor/no-tools',
+        name: 'Chat only',
+        tools: [],
+      };
+
+      await createAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+    });
+
+    test('should still save when the endpoint config cannot be read (Ф3)', async () => {
+      /** The gate is a courtesy. If it cannot answer, the save must go through —
+       *  not come back a 500 because a capability lookup failed. */
+      mockGetEndpointsConfig.mockRejectedValueOnce(new Error('config unavailable'));
+      mockReq.body = {
+        provider: 'openai',
+        model: 'gpt-4',
+        name: 'Gate cannot answer',
+        tools: ['file_search'],
+      };
+
+      await createAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+    });
+
+    test('should allow tools when the gateway said nothing about the model (Ф3)', async () => {
+      /** Silence is "unknown", not "no" — the gate must never be the reason a save
+       *  stops working on a gateway that publishes no capabilities. */
+      mockGetEndpointsConfig.mockResolvedValueOnce({
+        openai: { modelCapabilities: { 'vendor/unknown': {} } },
+      });
+      mockReq.body = {
+        provider: 'openai',
+        model: 'vendor/unknown',
+        name: 'Unknown capabilities',
+        tools: ['file_search'],
+      };
+
+      await createAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(201);
+      expect(mockRes.json.mock.calls[0][0].tools).toContain('file_search');
+    });
+
     test('should reject creating an agent with more than MAX_AGENT_TOOLS tools (E-M7)', async () => {
       mockReq.body = {
         provider: 'openai',
@@ -759,6 +841,64 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       expect(mockRes.status).not.toHaveBeenCalledWith(400);
       const agentInDb = await Agent.findOne({ id: existingAgentId });
       expect(agentInDb.model).toBe('openai/gpt-5');
+    });
+
+    test('should reject switching to a model the gateway serves without tools (Ф3)', async () => {
+      mockGetEndpointsConfig.mockResolvedValueOnce({
+        openai: { modelCapabilities: { 'vendor/no-tools': { tools: false } } },
+      });
+      await Agent.updateOne({ id: existingAgentId }, { $set: { tools: ['file_search'] } });
+      mockReq.user.id = existingAgentAuthorId.toString();
+      mockReq.params.id = existingAgentId;
+      mockReq.body = { model: 'vendor/no-tools' };
+
+      await updateAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      expect(mockRes.json.mock.calls[0][0].error).toContain('model_no_tools');
+      const agentInDb = await Agent.findOne({ id: existingAgentId });
+      expect(agentInDb.model).toBe('gpt-3.5-turbo');
+    });
+
+    test('should reject moving a tool-carrying agent to an endpoint without tool support (Ф3)', async () => {
+      /** Capabilities are published per gateway, so the same model id can be
+       *  tool-capable on one endpoint and not on another. */
+      mockGetEndpointsConfig.mockResolvedValueOnce({
+        'other-gateway': { modelCapabilities: { 'gpt-3.5-turbo': { tools: false } } },
+      });
+      await Agent.updateOne({ id: existingAgentId }, { $set: { tools: ['file_search'] } });
+      mockReq.user.id = existingAgentAuthorId.toString();
+      mockReq.params.id = existingAgentId;
+      mockReq.body = { provider: 'other-gateway' };
+
+      await updateAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).toHaveBeenCalledWith(400);
+      expect(mockRes.json.mock.calls[0][0].error).toContain('model_no_tools');
+    });
+
+    test('should allow an unrelated edit on an agent already on a tool-less model (Ф3)', async () => {
+      /** Same escape hatch as the reasoning gate: an agent that got into this state
+       *  must stay editable, or the only way out is to delete it. */
+      mockGetEndpointsConfig.mockResolvedValue({
+        openai: { modelCapabilities: { 'vendor/no-tools': { tools: false } } },
+      });
+      const legacy = await Agent.create({
+        id: `agent_${uuidv4()}`,
+        name: 'Legacy tool-less + tools',
+        provider: 'openai',
+        model: 'vendor/no-tools',
+        tools: ['file_search'],
+        author: existingAgentAuthorId,
+      });
+      mockReq.user.id = existingAgentAuthorId.toString();
+      mockReq.params.id = legacy.id;
+      mockReq.body = { description: 'still editable' };
+
+      await updateAgentHandler(mockReq, mockRes);
+
+      expect(mockRes.status).not.toHaveBeenCalledWith(400);
+      expect((await Agent.findOne({ id: legacy.id })).description).toBe('still editable');
     });
 
     test('should allow an unrelated edit on a legacy reasoning+tools agent so it stays fixable (E-H1)', async () => {

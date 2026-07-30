@@ -15,6 +15,8 @@ jest.mock('~/server/services/Config', () => ({
     execute_code: true,
     file_search: true,
   }),
+  /** Read by the tool-support gate on save; no endpoint here reports capabilities. */
+  getEndpointsConfig: jest.fn().mockResolvedValue({}),
 }));
 
 jest.mock('~/config', () => ({

@@ -5,6 +5,7 @@ import { useWatch, useForm, FormProvider } from 'react-hook-form';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
 import {
   Tools,
+  ErrorTypes,
   ResourceType,
   EModelEndpoint,
   PermissionBits,
@@ -39,6 +40,45 @@ import AgentFooter from './AgentFooter';
 import ModelPanel from './ModelPanel';
 
 /* Helpers */
+
+/**
+ * Lifts the reason out of a save the server refused.
+ *
+ * The gates in the agent controller answer with the same JSON-in-a-string shape
+ * the message stream uses (`{"type": ..., "info": ...}`). Axios does not carry it
+ * onto `err.message`, so without this a refusal we can explain word for word
+ * reaches the user as "there was an error updating your agent" and the actual
+ * reason only reaches the console. Anything unrecognised keeps that generic text,
+ * which is still better than showing a raw payload.
+ */
+function getSaveErrorMessage(
+  err: unknown,
+  fallback: string,
+  localize: (key: TranslationKeys, vars?: Record<string, unknown>) => string,
+): string {
+  const raw = (err as { response?: { data?: { error?: unknown } } })?.response?.data?.error;
+  if (typeof raw !== 'string') {
+    return fallback;
+  }
+
+  let parsed: { type?: string; info?: string };
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+
+  /** Ids read `vendor/model`; the vendor half is noise in a sentence about the model. */
+  const model = parsed.info?.split('/').pop() ?? parsed.info ?? '';
+  if (parsed.type === ErrorTypes.MODEL_NO_TOOLS) {
+    return localize('com_error_model_no_tools', { 0: model });
+  }
+  if (parsed.type === ErrorTypes.REASONING_MODEL_TOOLS) {
+    return localize('com_error_reasoning_model_tools', { 0: model });
+  }
+  return fallback;
+}
+
 function getUpdateToastMessage(
   noVersionChange: boolean,
   avatarActionState: AgentForm['avatar_action'],
@@ -432,14 +472,14 @@ export default function AgentPanel() {
     },
     onError: (err) => {
       /**
-       * The message is axios's own ("Request failed with status code 400") — the
-       * response interceptor does not lift the server's `error` field onto it. In
-       * a Russian product that trailed an English technical string a user cannot
-       * act on, so it goes to the console for support instead of into the toast.
+       * Axios's own message ("Request failed with status code 400") is an English
+       * technical string a user cannot act on, so it goes to the console for
+       * support. A refusal the server explained is lifted out of the response
+       * instead of being flattened into the generic line.
        */
       console.error('[AgentPanel] Agent update failed', err);
       showToast({
-        message: localize('com_agents_update_error'),
+        message: getSaveErrorMessage(err, localize('com_agents_update_error'), localize),
         status: 'error',
       });
     },
@@ -468,7 +508,7 @@ export default function AgentPanel() {
       /** Same as the update path above: axios's English message helps support, not the user. */
       console.error('[AgentPanel] Agent creation failed', err);
       showToast({
-        message: localize('com_agents_create_error'),
+        message: getSaveErrorMessage(err, localize('com_agents_create_error'), localize),
         status: 'error',
       });
     },
