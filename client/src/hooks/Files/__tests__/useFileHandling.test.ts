@@ -41,9 +41,12 @@ jest.mock('~/store', () => ({
   fileModeByConvoId: jest.fn(() => ({ key: 'mockFileMode' })),
 }));
 
+/** Endpoints config the hook reads out of the query cache; set per test. */
+let mockEndpointsConfig: Record<string, unknown> | undefined;
+
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: jest.fn(() => ({
-    getQueryData: jest.fn(),
+    getQueryData: jest.fn(() => mockEndpointsConfig),
     refetchQueries: jest.fn(),
   })),
 }));
@@ -55,13 +58,17 @@ jest.mock('~/data-provider', () => ({
   })),
 }));
 
-jest.mock('~/hooks/useLocalize', () => {
-  const fn = jest.fn((key: string) => key) as jest.Mock & {
-    TranslationKeys: Record<string, never>;
-  };
-  fn.TranslationKeys = {};
-  return { __esModule: true, default: fn, TranslationKeys: {} };
-});
+/**
+ * `useLocalize` is a hook that *returns* the localize function — the previous mock
+ * stood in for the localize function itself, so `useLocalize()` yielded undefined
+ * and any code path that actually localized threw. No test reached one until the
+ * image-capability warning below.
+ */
+jest.mock('~/hooks/useLocalize', () => ({
+  __esModule: true,
+  default: jest.fn(() => (key: string) => key),
+  TranslationKeys: {},
+}));
 
 jest.mock('../useDelayedUploadToast', () => ({
   useDelayedUploadToast: jest.fn(() => ({
@@ -105,6 +112,7 @@ describe('useFileHandling', () => {
     jest.clearAllMocks();
     mockConversation = {};
     mockIsTemporary = false;
+    mockEndpointsConfig = undefined;
   });
 
   const loadHook = async () => (await import('../useFileHandling')).default;
@@ -372,6 +380,100 @@ describe('useFileHandling', () => {
       expect(formData.get('agent_id')).toBe('agent-123');
       expect(formData.get('conversationId')).toBeNull();
       expect(formData.get('isTemporary')).toBeNull();
+    });
+  });
+
+  /**
+   * Attaching a picture to a model that cannot read one warns the user. Getting
+   * this wrong is not neutral in either direction: a false warning tells someone
+   * on a working model that their model is broken (which is what a stale name
+   * list did when Claude 5 shipped), and a missing one lets the attachment fail
+   * silently at the provider.
+   */
+  describe('image capability warning', () => {
+    const attachImage = async () => {
+      const useFileHandling = (await import('../useFileHandling')).default;
+      const { result } = renderHook(() => useFileHandling());
+      const image = new File(['x'], 'photo.png', { type: 'image/png' });
+      await act(async () => {
+        await result.current.handleFiles([image]);
+      });
+    };
+
+    const warned = () =>
+      mockShowToast.mock.calls.some(
+        ([arg]) => (arg as { message?: string })?.message === 'com_warning_model_no_vision',
+      );
+
+    const withCatalogue = (capabilities: Record<string, unknown>) => {
+      mockConversation = {
+        conversationId: 'convo-1',
+        endpoint: 'custom-gw',
+        model: 'vendor/model',
+      };
+      mockEndpointsConfig = { 'custom-gw': { modelCapabilities: capabilities } };
+    };
+
+    it('stays silent when the gateway says the model reads images', async () => {
+      withCatalogue({ 'vendor/model': { vision: true } });
+
+      await attachImage();
+
+      expect(warned()).toBe(false);
+    });
+
+    it('warns when the gateway says the model does not read images', async () => {
+      withCatalogue({ 'vendor/model': { vision: false } });
+
+      await attachImage();
+
+      expect(warned()).toBe(true);
+    });
+
+    /**
+     * The behaviour this replaces treated the catalogue as a whitelist, so any
+     * model missing from it was declared image-blind. A model the catalogue does
+     * not cover is unknown, not incapable — fall back to name matching.
+     */
+    it('falls back to name matching for a model the catalogue does not cover', async () => {
+      mockConversation = {
+        conversationId: 'convo-1',
+        endpoint: 'custom-gw',
+        model: 'gpt-4o',
+      };
+      mockEndpointsConfig = {
+        'custom-gw': { modelCapabilities: { 'vendor/other': { vision: true } } },
+      };
+
+      await attachImage();
+
+      expect(warned()).toBe(false);
+    });
+
+    it('falls back when the catalogue lists the model but states no modalities', async () => {
+      mockConversation = {
+        conversationId: 'convo-1',
+        endpoint: 'custom-gw',
+        model: 'gpt-4o',
+      };
+      mockEndpointsConfig = { 'custom-gw': { modelCapabilities: { 'gpt-4o': {} } } };
+
+      await attachImage();
+
+      expect(warned()).toBe(false);
+    });
+
+    it('falls back when the gateway published no catalogue at all', async () => {
+      mockConversation = {
+        conversationId: 'convo-1',
+        endpoint: 'custom-gw',
+        model: 'text-only-model',
+      };
+      mockEndpointsConfig = { 'custom-gw': {} };
+
+      await attachImage();
+
+      expect(warned()).toBe(true);
     });
   });
 });

@@ -430,6 +430,34 @@ export type TSearchResults = {
   filter: object;
 };
 
+/**
+ * What a gateway reports about one of its models.
+ *
+ * Every field is optional and means "the catalogue did not say" when absent —
+ * deliberately distinct from `false`/`0`. Callers must treat the two differently:
+ * a stated `false` is an answer, an absent field means fall back to whatever the
+ * caller did before (name matching, static token maps). Getting this wrong is how
+ * a gateway that publishes ids but no metadata would tell everyone their model
+ * cannot read images.
+ *
+ * Only fields with a consumer live here; the catalogue carries more (structured
+ * output, reasoning params, prompt caching) and they can be added when something
+ * needs them.
+ */
+export type ModelCapabilities = {
+  /** Accepts image input. */
+  vision?: boolean;
+  /** Accepts tool/function calling — required by web search, file search and agents. */
+  tools?: boolean;
+  /** Context window in tokens. */
+  contextTokens?: number;
+  /** Ceiling on a single response, in tokens. */
+  maxOutputTokens?: number;
+};
+
+/** Capabilities of every model a gateway published, keyed by model id. */
+export type ModelCapabilityMap = Record<string, ModelCapabilities>;
+
 export type TConfig = {
   order: number;
   type?: EModelEndpoint;
@@ -458,13 +486,13 @@ export type TConfig = {
    */
   dropParams?: string[];
   /**
-   * Model ids this endpoint's gateway reports as accepting image input.
-   * Present only when the gateway publishes capabilities (OpenRouter-compatible
-   * catalogues do); consumers fall back to name matching when it is absent.
-   * Keeps the "this model can't read images" hint correct as the model line-up
-   * changes, without anyone editing a list of names.
+   * What this endpoint's gateway says each of its models can do, keyed by model id.
+   * Present only when the gateway publishes a catalogue (OpenRouter-compatible ones
+   * do); consumers fall back to name matching when it — or an individual field —
+   * is absent. Keeps capability hints correct as the line-up changes without
+   * anyone editing a list of names.
    */
-  visionModels?: string[];
+  modelCapabilities?: ModelCapabilityMap;
   customParams?: {
     defaultParamsEndpoint?: string;
     reasoningFormat?: ReasoningParameterFormat;

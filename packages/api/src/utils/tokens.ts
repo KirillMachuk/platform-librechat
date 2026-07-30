@@ -1,5 +1,6 @@
 import z from 'zod';
 import { EModelEndpoint } from 'librechat-data-provider';
+import type { ModelCapabilityMap } from 'librechat-data-provider';
 import type { EndpointTokenConfig, TokenConfig } from '~/types';
 
 /**
@@ -485,6 +486,72 @@ export const maxOutputTokensMap: Record<string, Record<string, number>> = {
   },
 };
 
+/**
+ * Token limits the endpoints' own gateways reported, by exact model id.
+ *
+ * The static maps above are keyed by name fragments a human has to keep current,
+ * and they are wrong for most of a curated OpenRouter line-up: matching
+ * `deepseek/deepseek-v4-pro` on the fragment `deepseek` yields 128k against a real
+ * 1M window, and an 8k output cap against a real 384k. A too-small window makes the
+ * platform trim history and file context far earlier than necessary; a too-large
+ * output cap makes the provider reject the request outright.
+ *
+ * This overlay carries only limits. Pricing deliberately does not travel with it:
+ * the two are welded together in `endpointTokenConfig`, where `getMultiplier`
+ * prefers a listed model's rates and falls back to `defaultRate` for a record that
+ * omits them — so feeding real windows through that channel would silently move
+ * the analytics rates too. Money is accounted for outside the platform, from what
+ * the provider actually charged.
+ *
+ * ponytail: keyed by model id alone, so several endpoints share one namespace.
+ * Gateway catalogues use globally-unique `vendor/model` ids, so a collision needs
+ * two gateways serving the same id with different limits; the cost would be a
+ * slightly-off limit, not a failure. Key by baseURL if that ever stops holding.
+ */
+let modelLimitOverlay: ModelCapabilityMap = {};
+
+/**
+ * Publishes what a gateway reported. Called as the endpoints config is assembled,
+ * once per endpoint that answered.
+ *
+ * Merges rather than replaces, for two reasons. Endpoints are resolved
+ * concurrently, so replacing would let whichever finished last erase its
+ * siblings' models on every single request. And an empty report (gateway down, or
+ * a catalogue without metadata) must leave the previous answer in place rather
+ * than erasing it: those limits are still the best information available, and
+ * flapping between real and name-matched windows mid-conversation is worse than a
+ * slightly stale number.
+ */
+export function publishModelLimits(capabilities: ModelCapabilityMap): void {
+  if (Object.keys(capabilities).length > 0) {
+    modelLimitOverlay = { ...modelLimitOverlay, ...capabilities };
+  }
+}
+
+/** Test seam: drops everything a gateway reported. */
+export function clearModelLimits(): void {
+  modelLimitOverlay = {};
+}
+
+/** Exact-id lookup only — catalogue keys are full model ids, never fragments. */
+function reportedLimit(modelName: string, key: 'contextTokens' | 'maxOutputTokens') {
+  if (typeof modelName !== 'string') {
+    return undefined;
+  }
+  return modelLimitOverlay[modelName]?.[key];
+}
+
+/**
+ * Whether the gateway stated this model's output ceiling.
+ *
+ * Callers that clamp a requested `maxTokens` skip models they cannot recognise, so
+ * that a model missing from the static maps is not capped at a guess. A reported
+ * ceiling is not a guess, so it lifts that restriction.
+ */
+export function hasReportedMaxOutputTokens(modelName: string): boolean {
+  return reportedLimit(modelName, 'maxOutputTokens') != null;
+}
+
 /** Finds the longest matching key in the tokens map via substring match. */
 export function findMatchingPattern(
   modelName: string,
@@ -582,6 +649,12 @@ export function getModelMaxTokens(
       return overrideValue;
     }
   }
+  /** What the gateway said beats what a name fragment suggests — but an explicit
+   *  admin override above still wins over both. */
+  const reported = reportedLimit(modelName, 'contextTokens');
+  if (reported != null) {
+    return reported;
+  }
   return getModelTokenValue(modelName, maxTokensMap[endpoint as keyof typeof maxTokensMap]);
 }
 
@@ -604,6 +677,10 @@ export function getModelMaxOutputTokens(
     if (overrideValue != null) {
       return overrideValue;
     }
+  }
+  const reported = reportedLimit(modelName, 'maxOutputTokens');
+  if (reported != null) {
+    return reported;
   }
   return getModelTokenValue(
     modelName,
