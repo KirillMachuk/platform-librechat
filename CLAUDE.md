@@ -33,7 +33,7 @@ git merge upstream/main
 bash scripts/rebrand.sh 1ma
 npm install && npm run build && npm run test:client
 git commit && git push
-# create PR → review → merge to main → auto-deploy
+# create PR → review → merge to main (does NOT deploy — see "Deployment" below)
 ```
 
 Upstream remote: `upstream` → `https://github.com/danny-avila/LibreChat.git`
