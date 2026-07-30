@@ -26,9 +26,9 @@ import {
   useAddedChatContext,
   useAssistantsMapContext,
 } from '~/Providers';
-import PendingManualSkillsChips from './PendingManualSkillsChips';
 import { cn, getModelSpec, removeFocusRings, modelReportsNoTools } from '~/utils';
 import { useGetStartupConfig, useGetEndpointsQuery } from '~/data-provider';
+import PendingManualSkillsChips from './PendingManualSkillsChips';
 import { mainTextareaId, BadgeItem } from '~/common';
 import AttachFileChat from './Files/AttachFileChat';
 import FileFormChat from './Files/FileFormChat';

@@ -5,6 +5,7 @@ import {
   ReasoningSummary,
   ReasoningParameterFormat,
 } from 'librechat-data-provider';
+import type * as t from '~/types';
 import {
   getOpenAILLMConfig,
   applyDefaultParams,
@@ -12,7 +13,6 @@ import {
   suppressAnthropicThinkingForToolLoop,
 } from './llm';
 import { publishModelLimits, clearModelLimits } from '~/utils/tokens';
-import type * as t from '~/types';
 
 describe('getOpenAILLMConfig', () => {
   describe('Basic Configuration', () => {
@@ -1400,10 +1400,7 @@ describe('applyDefaultParams', () => {
       });
 
       it('raises a ceiling the static map understates', () => {
-        expect(withMaxTokens('deepseek/deepseek-v4-pro', 100000)).toHaveProperty(
-          'maxTokens',
-          8000,
-        );
+        expect(withMaxTokens('deepseek/deepseek-v4-pro', 100000)).toHaveProperty('maxTokens', 8000);
 
         publishModelLimits({ 'deepseek/deepseek-v4-pro': { maxOutputTokens: 384000 } });
 

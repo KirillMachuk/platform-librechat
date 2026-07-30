@@ -6,15 +6,13 @@ import {
   PrincipalType,
   defaultAgentCapabilities,
 } from 'librechat-data-provider';
-
 import type { AppConfig, IConfig } from '@librechat/data-schemas';
 import type { AppConfigServiceDeps } from '~/app/service';
 import type { EndpointsConfigDeps } from './endpoints';
 import type { ServerRequest } from '~/types';
-
+import { getModelMaxTokens, clearModelLimits } from '~/utils/tokens';
 import { createEndpointsConfigService } from './endpoints';
 import { createAppConfigService } from '~/app/service';
-import { getModelMaxTokens, clearModelLimits } from '~/utils/tokens';
 
 /** `mock`-prefixed so the hoisted factory below may reference it. */
 const mockFetchModelCapabilities = jest.fn().mockResolvedValue({});
