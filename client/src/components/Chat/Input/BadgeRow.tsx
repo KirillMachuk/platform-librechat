@@ -34,9 +34,10 @@ interface BadgeRowProps {
   specName?: string | null;
   isSubmitting?: boolean;
   isInChat: boolean;
-  /** Active model is an OpenAI reasoning family (o-series / gpt-5.x) that cannot run
-   *  the tool loop — hide the tool toggles that would arm one (see ChatForm). */
-  isReasoningModelActive?: boolean;
+  /** The active model cannot run the tool loop — a reasoning model, or one whose
+   *  gateway publishes no `tools` support. Hide the toggles that would arm one
+   *  (see ChatForm). */
+  toolLoopUnavailable?: boolean;
   /** Its name, so the tools menu can say which model cannot use them. */
   activeModel?: string | null;
 }
@@ -156,7 +157,7 @@ function BadgeRow({
   onChange,
   onToggle,
   isInChat,
-  isReasoningModelActive,
+  toolLoopUnavailable,
   activeModel,
 }: BadgeRowProps) {
   const [orderedBadges, setOrderedBadges] = useState<BadgeItem[]>([]);
@@ -336,7 +337,7 @@ function BadgeRow({
       conversationId={conversationId}
       specName={specName}
       isSubmitting={isSubmitting}
-      isReasoningModelActive={isReasoningModelActive}
+      toolLoopUnavailable={toolLoopUnavailable}
       activeModel={activeModel}
     >
       <div ref={containerRef} className="relative flex flex-wrap items-center gap-2">
@@ -387,13 +388,13 @@ function BadgeRow({
                 cannot run the tool loop, so the backend drops these tools anyway.
                 Deep Research (forces a non-reasoning model) and Artifacts (not a
                 tool) stay available. */}
-            {!isReasoningModelActive && <WebSearch />}
+            {!toolLoopUnavailable && <WebSearch />}
             <DeepResearch />
-            {!isReasoningModelActive && <CodeInterpreter />}
-            {!isReasoningModelActive && <FileSearch />}
+            {!toolLoopUnavailable && <CodeInterpreter />}
+            {!toolLoopUnavailable && <FileSearch />}
             <Skills />
             <Artifacts />
-            {!isReasoningModelActive && <MCPSelect />}
+            {!toolLoopUnavailable && <MCPSelect />}
           </>
         )}
         {ghostBadge && (

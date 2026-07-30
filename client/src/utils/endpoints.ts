@@ -31,6 +31,26 @@ export function filterDroppedParams(
 }
 
 /**
+ * Whether the endpoint's own gateway said this model takes no tools.
+ *
+ * Mirrors `reportsNoToolSupport` on the server, one-directional reading included:
+ * an absent answer means the catalogue did not publish `supported_parameters`, or
+ * the gateway could not be reached when the config was assembled, and neither is
+ * the statement "tools are unsupported". Only an explicit `false` counts, so a
+ * silent gateway leaves the composer exactly as it was before this existed.
+ */
+export function modelReportsNoTools(
+  endpointsConfig: t.TEndpointsConfig | undefined | null,
+  endpoint: string | undefined | null,
+  model: string | undefined | null,
+): boolean {
+  if (!endpoint || !model) {
+    return false;
+  }
+  return endpointsConfig?.[endpoint]?.modelCapabilities?.[model]?.tools === false;
+}
+
+/**
  * Clears model for non-ephemeral agent conversations.
  * Agents use their configured model internally, so the conversation model should be undefined.
  * Mutates the template in place.

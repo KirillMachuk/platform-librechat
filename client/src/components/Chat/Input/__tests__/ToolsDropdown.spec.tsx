@@ -10,7 +10,7 @@ import ToolsDropdown from '../ToolsDropdown';
  * loadEphemeralAgent / loadAddedAgent.
  */
 
-let mockIsReasoningModelActive = false;
+let mockToolLoopUnavailable = false;
 const mockActiveModel = 'openai/gpt-5.6-luna';
 
 const makeToggle = () => ({
@@ -24,7 +24,7 @@ const makeToggle = () => ({
 jest.mock('~/Providers', () => ({
   useBadgeRowContext: () => ({
     agentsConfig: { capabilities: [] },
-    isReasoningModelActive: mockIsReasoningModelActive,
+    toolLoopUnavailable: mockToolLoopUnavailable,
     activeModel: mockActiveModel,
     skills: makeToggle(),
     webSearch: makeToggle(),
@@ -89,11 +89,11 @@ jest.mock('lucide-react', () => new Proxy({}, { get: () => () => null }));
 
 describe('ToolsDropdown — reasoning-model tool gating', () => {
   afterEach(() => {
-    mockIsReasoningModelActive = false;
+    mockToolLoopUnavailable = false;
   });
 
   it('shows every enabled tool for a non-reasoning model', () => {
-    mockIsReasoningModelActive = false;
+    mockToolLoopUnavailable = false;
     render(<ToolsDropdown />);
 
     expect(screen.getByText('com_ui_web_search')).toBeInTheDocument();
@@ -106,7 +106,7 @@ describe('ToolsDropdown — reasoning-model tool gating', () => {
   });
 
   it('hides tool-loop toggles but keeps Deep Research / Artifacts / Skills for a reasoning model', () => {
-    mockIsReasoningModelActive = true;
+    mockToolLoopUnavailable = true;
     render(<ToolsDropdown />);
 
     expect(screen.queryByText('com_ui_web_search')).not.toBeInTheDocument();
@@ -120,28 +120,28 @@ describe('ToolsDropdown — reasoning-model tool gating', () => {
   });
 
   it('explains why the toggles are gone instead of just dropping them', () => {
-    mockIsReasoningModelActive = true;
+    mockToolLoopUnavailable = true;
     render(<ToolsDropdown />);
 
-    expect(screen.getByText('com_ui_tools_unavailable_reasoning')).toBeInTheDocument();
+    expect(screen.getByText('com_ui_tools_unavailable_model')).toBeInTheDocument();
     expect(screen.getByText(mockActiveModel)).toBeInTheDocument();
   });
 
   /** The menu is sized to its widest row, so an uncapped sentence stretched it to 1104px on a
    *  375px phone and pushed the pin buttons off-screen. */
   it('caps the note so a long sentence cannot stretch the menu', () => {
-    mockIsReasoningModelActive = true;
+    mockToolLoopUnavailable = true;
     render(<ToolsDropdown />);
 
-    const note = screen.getByText('com_ui_tools_unavailable_reasoning');
+    const note = screen.getByText('com_ui_tools_unavailable_model');
     expect(note.className).toContain('max-w-[min(18rem,var(--popover-available-width,18rem))]');
     expect(note.className).toContain('whitespace-normal');
   });
 
   it('adds no such note for a model that can use tools', () => {
-    mockIsReasoningModelActive = false;
+    mockToolLoopUnavailable = false;
     render(<ToolsDropdown />);
 
-    expect(screen.queryByText('com_ui_tools_unavailable_reasoning')).not.toBeInTheDocument();
+    expect(screen.queryByText('com_ui_tools_unavailable_model')).not.toBeInTheDocument();
   });
 });

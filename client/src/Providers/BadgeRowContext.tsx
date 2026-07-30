@@ -16,9 +16,10 @@ interface BadgeRowContextType {
   conversationId?: string | null;
   storageContextKey?: string;
   agentsConfig?: TAgentsEndpoint | null;
-  /** Active model is an OpenAI reasoning family (o-series / gpt-5.x); tool toggles
-   *  that arm the tool loop are hidden for it (mirrors the backend gating). */
-  isReasoningModelActive?: boolean;
+  /** The active model cannot work the multi-turn tool loop — an OpenAI reasoning
+   *  model, or one whose gateway publishes no `tools` support. The toggles that
+   *  arm the loop are hidden for it; see ChatForm for how it is decided. */
+  toolLoopUnavailable?: boolean;
   /** Name of that model, so the menu can say WHICH one cannot use tools. */
   activeModel?: string | null;
   skills: ReturnType<typeof useToolToggle>;
@@ -42,7 +43,7 @@ interface BadgeRowProviderProps {
   isSubmitting?: boolean;
   conversationId?: string | null;
   specName?: string | null;
-  isReasoningModelActive?: boolean;
+  toolLoopUnavailable?: boolean;
   activeModel?: string | null;
 }
 
@@ -51,7 +52,7 @@ export default function BadgeRowProvider({
   isSubmitting,
   conversationId,
   specName,
-  isReasoningModelActive,
+  toolLoopUnavailable,
   activeModel,
 }: BadgeRowProviderProps) {
   const lastContextKeyRef = useRef<string>('');
@@ -301,7 +302,7 @@ export default function BadgeRowProvider({
     codeInterpreter,
     searchApiKeyForm,
     mcpServerManager,
-    isReasoningModelActive,
+    toolLoopUnavailable,
     activeModel,
   };
 
