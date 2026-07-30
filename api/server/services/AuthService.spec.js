@@ -1,44 +1,41 @@
-jest.mock(
-  '@librechat/data-schemas',
-  () => ({
-    logger: { info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() },
-    getTenantId: jest.fn(() => undefined),
-    DEFAULT_SESSION_EXPIRY: 900000,
-    DEFAULT_REFRESH_TOKEN_EXPIRY: 604800000,
-  }),
-  { virtual: true },
-);
-jest.mock(
-  'librechat-data-provider',
-  () => ({
-    ErrorTypes: {},
-    SystemRoles: { USER: 'USER', ADMIN: 'ADMIN' },
-    errorsToString: jest.fn(),
-  }),
-  { virtual: true },
-);
-jest.mock(
-  '@librechat/api',
-  () => ({
-    isEnabled: jest.fn((val) => val === 'true' || val === true),
-    checkEmailConfig: jest.fn(),
-    isEmailDomainAllowed: jest.fn(),
-    math: jest.fn((val, fallback) => (val ? Number(val) : fallback)),
-    shouldUseSecureCookie: jest.fn(() => false),
-    resolveAppConfigForUser: jest.fn(async (_getAppConfig, _user) => ({})),
-    setCloudFrontCookies: jest.fn(() => true),
-    getCloudFrontConfig: jest.fn(() => ({
-      domain: 'https://cdn.example.com',
-      imageSigning: 'cookies',
-      cookieDomain: '.example.com',
-      privateKey: 'test-private-key',
-      keyPairId: 'K123ABC',
-    })),
-    parseCloudFrontCookieScope: jest.fn(() => null),
-    CLOUDFRONT_SCOPE_COOKIE: 'LibreChat-CloudFront-Scope',
-  }),
-  { virtual: true },
-);
+/**
+ * These three packages all exist, so they are mocked by resolved path like every
+ * other suite in `api/` does it. They used to carry `{ virtual: true }`, which keys
+ * the mock by module name instead: the spec's own imports got the factory, but
+ * `AuthService.js` resolved and loaded the real package, so its
+ * `shouldUseSecureCookie`/`setCloudFrontCookies`/`getTenantId` calls never reached
+ * these mocks. Whether that happened depended on which suite the worker had run
+ * before this one, which made 20 tests here fail in roughly one full run in three.
+ */
+jest.mock('@librechat/data-schemas', () => ({
+  logger: { info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() },
+  getTenantId: jest.fn(() => undefined),
+  DEFAULT_SESSION_EXPIRY: 900000,
+  DEFAULT_REFRESH_TOKEN_EXPIRY: 604800000,
+}));
+jest.mock('librechat-data-provider', () => ({
+  ErrorTypes: {},
+  SystemRoles: { USER: 'USER', ADMIN: 'ADMIN' },
+  errorsToString: jest.fn(),
+}));
+jest.mock('@librechat/api', () => ({
+  isEnabled: jest.fn((val) => val === 'true' || val === true),
+  checkEmailConfig: jest.fn(),
+  isEmailDomainAllowed: jest.fn(),
+  math: jest.fn((val, fallback) => (val ? Number(val) : fallback)),
+  shouldUseSecureCookie: jest.fn(() => false),
+  resolveAppConfigForUser: jest.fn(async (_getAppConfig, _user) => ({})),
+  setCloudFrontCookies: jest.fn(() => true),
+  getCloudFrontConfig: jest.fn(() => ({
+    domain: 'https://cdn.example.com',
+    imageSigning: 'cookies',
+    cookieDomain: '.example.com',
+    privateKey: 'test-private-key',
+    keyPairId: 'K123ABC',
+  })),
+  parseCloudFrontCookieScope: jest.fn(() => null),
+  CLOUDFRONT_SCOPE_COOKIE: 'LibreChat-CloudFront-Scope',
+}));
 jest.mock('~/models', () => ({
   findUser: jest.fn(),
   findToken: jest.fn(),
