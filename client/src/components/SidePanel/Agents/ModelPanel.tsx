@@ -16,7 +16,7 @@ import type * as t from 'librechat-data-provider';
 import type { AgentForm, AgentModelPanelProps, StringOption } from '~/common';
 import { componentMapping } from '~/components/SidePanel/Parameters/components';
 import { useGetEndpointsQuery } from '~/data-provider';
-import { cn, filterDroppedParams } from '~/utils';
+import { cn, filterDroppedParams, modelReportsNoTools } from '~/utils';
 import { useLiveAnnouncer } from '~/Providers';
 import { useLocalize } from '~/hooks';
 import { Panel } from '~/common';
@@ -221,6 +221,19 @@ export default function ModelPanel({
                   {provider && error && (
                     <span className="text-sm text-red-500 transition duration-300 ease-in-out">
                       {localize('com_ui_field_required')}
+                    </span>
+                  )}
+                  {/**
+                   * Said here rather than only on save. The agent builder is where
+                   * someone picks a model and then goes on to switch on file search
+                   * or an MCP server; discovering only at the end that the two
+                   * cannot go together means unpicking the work. A note, not a
+                   * block — the model is a perfectly good choice for a chat-only
+                   * agent, and the save gate refuses the combination that is not.
+                   */}
+                  {modelReportsNoTools(endpointsConfig, provider, field.value) && (
+                    <span className="mt-1 block text-sm text-text-secondary">
+                      {localize('com_ui_model_no_tools_hint')}
                     </span>
                   )}
                 </>
