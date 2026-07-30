@@ -15,5 +15,7 @@ module.exports = {
   //   },
   // },
   maxWorkers: '50%',
+  /** Recycle a worker once its heap passes this mark — see `packages/api/jest.config.mjs`. */
+  workerIdleMemoryLimit: '1000MB',
   restoreMocks: true,
 };

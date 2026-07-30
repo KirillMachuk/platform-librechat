@@ -33,6 +33,13 @@ module.exports = {
       '<rootDir>/../node_modules/librechat-data-provider/src/react-query',
   },
   maxWorkers: '50%',
+  /**
+   * Recycle a worker once its heap passes this mark — see the comment in
+   * `packages/api/jest.config.mjs`. Without it, workers drift towards Node's
+   * ~2.2 GB old-space ceiling and whichever suite lands on a saturated worker
+   * either dies or misses its timeouts.
+   */
+  workerIdleMemoryLimit: '1000MB',
   restoreMocks: true,
   testResultsProcessor: 'jest-junit',
   coverageReporters: ['text', 'cobertura', 'lcov'],
