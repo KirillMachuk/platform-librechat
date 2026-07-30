@@ -278,6 +278,7 @@ export function createAgentMethods(
     versionIndex: number,
   ) => Promise<IAgent>;
   countPromotedAgents: () => Promise<number>;
+  countAgentsByModel: (tenantId?: string) => Promise<Record<string, number>>;
   addAgentResourceFile: ({
     agent_id,
     tool_resource,
@@ -1047,6 +1048,33 @@ export function createAgentMethods(
     return await Agent.countDocuments({ is_promoted: true });
   }
 
+  /**
+   * How many agents name each model, for models that any agent names at all.
+   *
+   * Turning a model off in the admin catalogue is what this is for: an agent
+   * pinned to a model the endpoint no longer offers fails when its users run it,
+   * and today nothing warns anyone. Returns only non-zero counts, so an absent
+   * key means no agent uses that model.
+   */
+  async function countAgentsByModel(tenantId?: string): Promise<Record<string, number>> {
+    const Agent = mongoose.models.Agent as Model<IAgent>;
+    const match: Record<string, unknown> = { model: { $type: 'string', $ne: '' } };
+    if (tenantId != null) {
+      match.tenantId = tenantId;
+    }
+    const rows = await Agent.aggregate<{ _id: string; count: number }>([
+      { $match: match },
+      { $group: { _id: '$model', count: { $sum: 1 } } },
+    ]);
+    const counts: Record<string, number> = {};
+    for (const row of rows) {
+      if (typeof row?._id === 'string' && row._id !== '') {
+        counts[row._id] = row.count;
+      }
+    }
+    return counts;
+  }
+
   /** Removes an agent from the favorites of specified users. */
   async function removeAgentFromUserFavorites(
     resourceId: string,
@@ -1077,6 +1105,7 @@ export function createAgentMethods(
     deleteUserAgents,
     revertAgentVersion,
     countPromotedAgents,
+    countAgentsByModel,
     addAgentResourceFile,
     getListAgentsByAccess,
     removeAgentResourceFiles,
