@@ -201,7 +201,11 @@ function buildEndpoint(
    * is exactly the state an operator needs to see (typo, or retired upstream).
    */
   const ids = answered
-    ? [...configured.filter((id) => catalogue[id] != null), ...Object.keys(catalogue).filter((id) => !enabled.has(id)), ...configured.filter((id) => catalogue[id] == null)]
+    ? [
+        ...configured.filter((id) => catalogue[id] != null),
+        ...Object.keys(catalogue).filter((id) => !enabled.has(id)),
+        ...configured.filter((id) => catalogue[id] == null),
+      ]
     : [...configured];
 
   const models = ids.map((id) => ({
@@ -253,10 +257,7 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
     invalidateConfigCaches,
   } = deps;
 
-  async function loadPayload(
-    req: ServerRequest,
-    refresh = false,
-  ): Promise<ModelCatalogueResponse> {
+  async function loadPayload(req: ServerRequest, refresh = false): Promise<ModelCatalogueResponse> {
     const tenantId = getTenantId(req);
     const appConfig = await getAppConfig({ tenantId, refresh });
     const endpoints = customEndpointsOf(appConfig);

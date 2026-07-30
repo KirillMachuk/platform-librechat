@@ -86,7 +86,12 @@ describe('auditModelCatalogueChange', () => {
   /** A malformed body never reaches the write, so there is nothing to record —
    *  an entry here would claim a change that did not happen. */
   it('skips a PUT whose body is not a model list', () => {
-    for (const body of [{}, { endpoint: '1ma' }, { models: ['a/one'] }, { endpoint: 1, models: [] }]) {
+    for (const body of [
+      {},
+      { endpoint: '1ma' },
+      { models: ['a/one'] },
+      { endpoint: 1, models: [] },
+    ]) {
       mockRecordAudit.mockClear();
       const res = buildRes(200);
       auditModelCatalogueChange(buildReq({ body }), res, jest.fn());

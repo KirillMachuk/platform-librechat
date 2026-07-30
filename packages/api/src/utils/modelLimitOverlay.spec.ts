@@ -76,7 +76,9 @@ describe('token limits reported by the gateway', () => {
    * `DEFAULT_MAX_CONTEXT_TOKENS` (32000) — a 30× under-estimate for a 1M model.
    */
   it('serves a model no static map has ever heard of', () => {
-    expect(getModelMaxTokens('vendor/model-from-the-future', EModelEndpoint.custom)).toBeUndefined();
+    expect(
+      getModelMaxTokens('vendor/model-from-the-future', EModelEndpoint.custom),
+    ).toBeUndefined();
 
     publishModelLimits({ 'vendor/model-from-the-future': { contextTokens: 700000 } });
 
@@ -189,9 +191,17 @@ describe('money is not touched by reported limits', () => {
 
     const rateFor = (model: string) => ({
       prompt: getMultiplier({ model, tokenType: 'prompt', endpoint: EModelEndpoint.custom }),
-      completion: getMultiplier({ model, tokenType: 'completion', endpoint: EModelEndpoint.custom }),
+      completion: getMultiplier({
+        model,
+        tokenType: 'completion',
+        endpoint: EModelEndpoint.custom,
+      }),
       cacheRead: getCacheMultiplier({ model, cacheType: 'read', endpoint: EModelEndpoint.custom }),
-      cacheWrite: getCacheMultiplier({ model, cacheType: 'write', endpoint: EModelEndpoint.custom }),
+      cacheWrite: getCacheMultiplier({
+        model,
+        cacheType: 'write',
+        endpoint: EModelEndpoint.custom,
+      }),
     });
 
     const before = DEPLOYED.map((row) => rateFor(row.model));

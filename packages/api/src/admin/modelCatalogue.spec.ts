@@ -1,6 +1,7 @@
 import { PrincipalType } from 'librechat-data-provider';
 import type { AppConfig } from '@librechat/data-schemas';
 import type { Response } from 'express';
+import type { AdminModelEndpoint } from './modelCatalogue';
 import type { ServerRequest } from '~/types/http';
 import {
   createModelCatalogueHandlers,
@@ -48,8 +49,25 @@ function fakeRes() {
       return res;
     },
   };
-  return res as unknown as Response & { statusCode: number; body: any };
+  return res as unknown as Response & {
+    statusCode: number;
+    /** What the handlers actually answer, so the assertions below are type-checked. */
+    body: { endpoints: AdminModelEndpoint[]; error?: string };
+  };
 }
+
+/**
+ * Reads one model out of an answer, failing with its id when it is missing —
+ * `.find()` on its own hands back `undefined` and the assertion then blames the
+ * wrong thing.
+ */
+const modelById = (models: AdminModelEndpoint['models'], id: string) => {
+  const found = models.find((model) => model.id === id);
+  if (!found) {
+    throw new Error(`the answer carries no model "${id}"`);
+  }
+  return found;
+};
 
 const fakeReq = () => ({ user: { id: 'u1', role: 'ADMIN' }, body: {} }) as unknown as ServerRequest;
 
@@ -120,8 +138,7 @@ describe('getCatalogue', () => {
 
     await getCatalogue(fakeReq(), res);
 
-    const noTools = res.body.endpoints[0].models.find((m: { id: string }) => m.id === 'a/available');
-    expect(noTools.tools).toBe(false);
+    expect(modelById(res.body.endpoints[0].models, 'a/available').tools).toBe(false);
   });
 
   it('counts the agents pinned to each model', async () => {
@@ -134,8 +151,8 @@ describe('getCatalogue', () => {
     await getCatalogue(fakeReq(), res);
 
     const models = res.body.endpoints[0].models;
-    expect(models.find((m: { id: string }) => m.id === 'a/enabled').agents).toBe(7);
-    expect(models.find((m: { id: string }) => m.id === 'a/also-enabled').agents).toBe(0);
+    expect(modelById(models, 'a/enabled').agents).toBe(7);
+    expect(modelById(models, 'a/also-enabled').agents).toBe(0);
   });
 
   /**
@@ -182,7 +199,7 @@ describe('getCatalogue', () => {
 
     await getCatalogue(fakeReq(), res);
 
-    const typo = res.body.endpoints[0].models.find((m: { id: string }) => m.id === 'a/typo');
+    const typo = modelById(res.body.endpoints[0].models, 'a/typo');
     expect(typo.enabled).toBe(true);
     /** No capability badges: the catalogue said nothing about it. */
     expect(typo.tools).toBeUndefined();
@@ -328,10 +345,7 @@ describe('setModels', () => {
     /** Dropping these breaks new chats, titles or Deep Research for everyone at
      *  once, and the admin cannot see that from this screen. */
     it('refuses to drop the default chat model and names the setting', async () => {
-      const { res, deps } = await put(
-        { endpoint: 'gw', models: ['a/also-enabled'] },
-        withRoles(),
-      );
+      const { res, deps } = await put({ endpoint: 'gw', models: ['a/also-enabled'] }, withRoles());
 
       expect(res.statusCode).toBe(400);
       expect(res.body.error).toContain('a/enabled');
@@ -357,19 +371,17 @@ describe('setModels', () => {
     });
 
     it('surfaces the jobs on the catalogue so the screen can lock those rows', async () => {
-      const { getCatalogue } = createModelCatalogueHandlers(
-        createDeps(withRoles()) as never,
-      );
+      const { getCatalogue } = createModelCatalogueHandlers(createDeps(withRoles()) as never);
       const res = fakeRes();
 
       await getCatalogue(fakeReq(), res);
 
       const models = res.body.endpoints[0].models;
-      expect(models.find((m: { id: string }) => m.id === 'a/enabled').roles).toEqual([
+      expect(modelById(models, 'a/enabled').roles).toEqual([
         'defaultModel',
         'deepResearch.deep.workerModel',
       ]);
-      expect(models.find((m: { id: string }) => m.id === 'a/available').roles).toEqual([]);
+      expect(modelById(models, 'a/available').roles).toEqual([]);
     });
   });
 
