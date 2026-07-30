@@ -1,6 +1,6 @@
 import type { Response } from 'express';
-import { createApiKeyHandlers, resolveApiKeyExpiry } from './handlers';
 import type { AuthenticatedRequest } from './handlers';
+import { createApiKeyHandlers, resolveApiKeyExpiry } from './handlers';
 
 const DAY = 24 * 60 * 60 * 1000;
 const YEAR = 365 * DAY;
