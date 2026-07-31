@@ -51,6 +51,7 @@ const {
   buildInitialToolSessions,
   armDeepResearchBudget,
   createAgentTurnBalanceGuard,
+  isDataPolicyRefusal,
 } = require('@librechat/api');
 const {
   Callback,
@@ -144,6 +145,16 @@ function getUserFacingError(err) {
     errorBody.message.trim() !== ''
   ) {
     return errorBody.message.trim();
+  }
+
+  /* The gateway serves this model on paper but will not serve it to us: every
+   * provider behind it is excluded by the data policy this account is configured
+   * with. Nothing the user does — retrying, shortening, waiting — changes that, so
+   * the neutral "try again" wording sends them round a loop. Admins are stopped
+   * from offering such a model in the first place (`probeModel`); this is for the
+   * ones already offered, and for a provider that changes its mind later. */
+  if (isDataPolicyRefusal(status, `${errorBody?.message ?? ''} ${err?.message ?? ''}`)) {
+    return 'Эта модель сейчас недоступна: её обслуживают только площадки, которые не проходят нашу политику обработки данных. Выберите другую модель и сообщите администратору.';
   }
 
   if (status === 402) {

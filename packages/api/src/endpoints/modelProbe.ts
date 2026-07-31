@@ -42,6 +42,20 @@ const PROBE_MAX_TOKENS = 1;
 const DATA_POLICY_MESSAGE = /guardrail|data policy/i;
 const DATA_POLICY_STATUS = 404;
 
+/**
+ * Whether a gateway's answer is the "your data policy rules this model out"
+ * refusal.
+ *
+ * Exported because two places have to recognise the same thing and must not drift
+ * apart: this probe, deciding whether to let a model be offered, and the chat,
+ * deciding what to tell an employee who picked one that already was. Callers dig
+ * the status and the text out of whatever error shape reaches them — an axios
+ * rejection here, an SDK error there — and hand over just those two.
+ */
+export function isDataPolicyRefusal(status: unknown, text: string): boolean {
+  return status === DATA_POLICY_STATUS && DATA_POLICY_MESSAGE.test(text);
+}
+
 /** Everything a gateway might put an error message in, flattened to one string. */
 function messageOf(error: unknown): string {
   const response = (error as { response?: { data?: unknown } } | null)?.response;
@@ -53,10 +67,7 @@ function messageOf(error: unknown): string {
 
 function refusalOf(error: unknown): ModelRefusal | undefined {
   const status = (error as { response?: { status?: unknown } } | null)?.response?.status;
-  if (status !== DATA_POLICY_STATUS) {
-    return undefined;
-  }
-  return DATA_POLICY_MESSAGE.test(messageOf(error)) ? 'data-policy' : undefined;
+  return isDataPolicyRefusal(status, messageOf(error)) ? 'data-policy' : undefined;
 }
 
 /**

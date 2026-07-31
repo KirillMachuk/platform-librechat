@@ -3168,6 +3168,71 @@ describe('getUserFacingError - anonymizer messages reach the user', () => {
   });
 });
 
+/**
+ * The gateway lists the model and then refuses to serve it, because every
+ * provider behind it falls outside the data policy this account is configured
+ * with. Retrying, shortening the message and waiting all change nothing, so the
+ * neutral "try again" wording sends the user round a loop.
+ */
+describe('getUserFacingError - a model the gateway will never serve', () => {
+  const { getUserFacingError } = AgentClient;
+
+  /** Exactly what the stand logged on 31.07: status, code and message. */
+  const guardrail = () => ({
+    status: 404,
+    message:
+      '404 No endpoints available matching your guardrail restrictions and data policy. ' +
+      'Configure: https://openrouter.ai/settings/privacy',
+    error: {
+      code: 404,
+      message:
+        'No endpoints available matching your guardrail restrictions and data policy. ' +
+        'Configure: https://openrouter.ai/settings/privacy',
+    },
+  });
+
+  it('says the model is the problem, and that another one is the answer', () => {
+    const shown = getUserFacingError(guardrail());
+
+    expect(shown).toContain('Выберите другую модель');
+    expect(shown).not.toBe('Произошла ошибка при обработке запроса. Попробуйте ещё раз.');
+  });
+
+  /** The refusal names the gateway and a settings URL; neither belongs in a chat. */
+  it('does not leak where the refusal came from', () => {
+    const shown = getUserFacingError(guardrail());
+
+    expect(shown).not.toContain('openrouter');
+    expect(shown).not.toContain('http');
+    expect(shown).not.toContain('guardrail');
+  });
+
+  /** Reached even when the status only exists inside the wrapped message. */
+  it('recognises it from a message the SDK flattened', () => {
+    const shown = getUserFacingError({
+      message: '404 No endpoints available matching your guardrail restrictions and data policy.',
+    });
+
+    expect(shown).toContain('Выберите другую модель');
+  });
+
+  it('leaves every other 404 alone', () => {
+    expect(getUserFacingError({ status: 404, error: { message: 'model not found' } })).toBe(
+      'Произошла ошибка при обработке запроса. Попробуйте ещё раз.',
+    );
+  });
+
+  /** A refusal aimed at one message is not a statement about the model. */
+  it('does not claim the model is unusable when a prompt was refused', () => {
+    const shown = getUserFacingError({
+      status: 400,
+      error: { message: 'This prompt violates our data policy' },
+    });
+
+    expect(shown).not.toContain('Выберите другую модель');
+  });
+});
+
 describe('AgentClient - a run with nothing to show says so', () => {
   const makeSendCompletionClient = (contentParts) => {
     const client = new AgentClient({
