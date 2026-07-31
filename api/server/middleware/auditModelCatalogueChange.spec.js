@@ -25,15 +25,22 @@ function buildReq(overrides = {}) {
   };
 }
 
+/** What the handler leaves behind once a write has actually gone through. */
+const applied = (overrides = {}) => ({
+  endpoint: '1ma',
+  model: 'deepseek/deepseek-v4-pro',
+  enabled: true,
+  models: ['anthropic/claude-sonnet-5', 'deepseek/deepseek-v4-pro'],
+  ...overrides,
+});
+
 describe('auditModelCatalogueChange', () => {
   beforeEach(() => mockRecordAudit.mockClear());
 
-  /** Disabling a model stops employees selecting it, so the list itself is the
+  /** Disabling a model stops employees selecting it, so the resulting list is the
    *  change worth keeping — "who narrowed the line-up to these, and when". */
-  it('records the applied list with its count', () => {
-    const req = buildReq({
-      body: { endpoint: '1ma', models: ['anthropic/claude-sonnet-5', 'deepseek/deepseek-v4-pro'] },
-    });
+  it('records what was applied, with the model that moved', () => {
+    const req = buildReq({ modelCatalogueChange: applied() });
     const res = buildRes(200);
     const next = jest.fn();
 
@@ -55,6 +62,8 @@ describe('auditModelCatalogueChange', () => {
       }),
     );
     expect(mockRecordAudit.mock.calls[0][0].metadata).toEqual({
+      model: 'deepseek/deepseek-v4-pro',
+      enabled: true,
       count: 2,
       models: ['anthropic/claude-sonnet-5', 'deepseek/deepseek-v4-pro'],
     });
@@ -62,11 +71,7 @@ describe('auditModelCatalogueChange', () => {
 
   it('does not record a rejected write (status >= 400)', () => {
     const res = buildRes(400);
-    auditModelCatalogueChange(
-      buildReq({ body: { endpoint: '1ma', models: ['a/one'] } }),
-      res,
-      jest.fn(),
-    );
+    auditModelCatalogueChange(buildReq({ modelCatalogueChange: applied() }), res, jest.fn());
     res.emit('finish');
 
     expect(mockRecordAudit).not.toHaveBeenCalled();
@@ -83,36 +88,47 @@ describe('auditModelCatalogueChange', () => {
     expect(mockRecordAudit).not.toHaveBeenCalled();
   });
 
-  /** A malformed body never reaches the write, so there is nothing to record —
-   *  an entry here would claim a change that did not happen. */
-  it('skips a PUT whose body is not a model list', () => {
-    for (const body of [
-      {},
-      { endpoint: '1ma' },
-      { models: ['a/one'] },
-      { endpoint: 1, models: [] },
+  /**
+   * Read from what the handler wrote, never from the request body: a body states an
+   * intent, and an intent can be a no-op (enable what is already enabled) that
+   * answers 200 without changing anything. An entry for it would make the journal
+   * claim a change that never happened.
+   */
+  it('records nothing when the request changed nothing', () => {
+    for (const req of [
+      buildReq(),
+      buildReq({ body: { endpoint: '1ma', model: 'a/one', enabled: true } }),
+      buildReq({ body: { endpoint: '1ma', models: ['a/one'] } }),
     ]) {
       mockRecordAudit.mockClear();
       const res = buildRes(200);
-      auditModelCatalogueChange(buildReq({ body }), res, jest.fn());
+      auditModelCatalogueChange(req, res, jest.fn());
       res.emit('finish');
 
       expect(mockRecordAudit).not.toHaveBeenCalled();
     }
   });
 
-  it('keeps only string entries out of a mixed list', () => {
+  it('records a switch-off as such', () => {
     const res = buildRes(200);
     auditModelCatalogueChange(
-      buildReq({ body: { endpoint: '1ma', models: ['a/one', 42, null, 'a/two'] } }),
+      buildReq({
+        modelCatalogueChange: applied({
+          model: 'openai/gpt-5.6-sol',
+          enabled: false,
+          models: ['anthropic/claude-sonnet-5'],
+        }),
+      }),
       res,
       jest.fn(),
     );
     res.emit('finish');
 
     expect(mockRecordAudit.mock.calls[0][0].metadata).toEqual({
-      count: 4,
-      models: ['a/one', 'a/two'],
+      model: 'openai/gpt-5.6-sol',
+      enabled: false,
+      count: 1,
+      models: ['anthropic/claude-sonnet-5'],
     });
   });
 });

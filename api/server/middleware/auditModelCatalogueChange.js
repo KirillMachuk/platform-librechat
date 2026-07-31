@@ -10,24 +10,26 @@ const createAuditOnFinish = require('./auditOnFinish');
  * thirteen, and when" is the question this feed has to answer, especially since
  * disabling a model stops employees from selecting it.
  *
- * Only the count and the ids go in; the handler 400s (un-audited) on anything
- * malformed, so a recorded entry always reflects a list that was applied.
+ * Read from what the handler wrote, never from the request body. The body states
+ * an intent, and an intent can be a no-op (enable what is already enabled) or be
+ * rejected — either way there is no change to record, and an entry claiming
+ * otherwise would make the journal lie. The handler leaves this behind only once
+ * the write has gone through, so the recorded list is the one it produced.
  */
 module.exports = createAuditOnFinish((req) => {
-  if (req.method !== 'PUT') {
-    return null;
-  }
-  const body = req.body ?? {};
-  if (typeof body.endpoint !== 'string' || !Array.isArray(body.models)) {
+  const change = req.modelCatalogueChange;
+  if (!change) {
     return null;
   }
   return {
     action: 'models.set_enabled',
     targetType: 'endpoint',
-    targetId: body.endpoint,
+    targetId: change.endpoint,
     metadata: {
-      count: body.models.length,
-      models: body.models.filter((model) => typeof model === 'string'),
+      model: change.model,
+      enabled: change.enabled,
+      count: change.models.length,
+      models: change.models,
     },
   };
 });

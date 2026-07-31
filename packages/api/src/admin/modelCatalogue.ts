@@ -97,6 +97,21 @@ export interface ModelCatalogueResponse {
   endpoints: AdminModelEndpoint[];
 }
 
+/**
+ * What a write actually changed, left on the request for the audit hook.
+ *
+ * The hook cannot read this off the request body: the body carries an intent, and
+ * an intent that turned out to be a no-op must not be recorded as a change. Absent
+ * means nothing was written.
+ */
+export interface ModelCatalogueChange {
+  endpoint: string;
+  model: string;
+  enabled: boolean;
+  /** The line-up as it stands after the change. */
+  models: string[];
+}
+
 export interface ModelCatalogueDeps {
   getAppConfig: (options?: { tenantId?: string; refresh?: boolean }) => Promise<AppConfig>;
   /** Reads an endpoint's catalogue; `{}` when the gateway does not publish one. */
@@ -386,41 +401,28 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
   }
 
   async function setModels(req: ServerRequest, res: Response): Promise<Response> {
+    const audited = req as ServerRequest & { modelCatalogueChange?: ModelCatalogueChange };
     try {
       if (await denied(req, 'manage')) {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
-      const { endpoint: endpointName, models } = (req.body ?? {}) as {
+      const {
+        endpoint: endpointName,
+        model,
+        enabled,
+      } = (req.body ?? {}) as {
         endpoint?: unknown;
-        models?: unknown;
+        model?: unknown;
+        enabled?: unknown;
       };
       if (typeof endpointName !== 'string' || endpointName === '') {
         return res.status(400).json({ error: 'endpoint is required' });
       }
-      if (
-        !Array.isArray(models) ||
-        models.some(
-          (m) => typeof m !== 'string' || m === '' || (m as string).length > MAX_MODEL_ID_LENGTH,
-        )
-      ) {
-        return res.status(400).json({ error: 'models must be an array of model ids' });
+      if (typeof model !== 'string' || model === '' || model.length > MAX_MODEL_ID_LENGTH) {
+        return res.status(400).json({ error: 'model must be a model id' });
       }
-      if (models.length > MAX_MODELS_PER_ENDPOINT) {
-        return res
-          .status(400)
-          .json({ error: `At most ${MAX_MODELS_PER_ENDPOINT} models per endpoint` });
-      }
-      const unique = [...new Set(models as string[])];
-      if (unique.length !== models.length) {
-        return res.status(400).json({ error: 'models must not repeat' });
-      }
-      /**
-       * An empty list is refused rather than accepted-and-guarded-on-read: the
-       * merged config would carry `[]`, the model selector would be empty and
-       * nobody could start a chat. Forbidding the state beats detecting it.
-       */
-      if (unique.length === 0) {
-        return res.status(400).json({ error: 'At least one model must stay enabled' });
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ error: 'enabled must be true or false' });
       }
 
       const tenantId = getTenantId(req);
@@ -444,49 +446,66 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
         });
       }
 
-      const catalogue = await fetchModelCapabilities({
-        baseURL: extractEnvVariable(String(endpoint.baseURL ?? '')),
-        apiKey: extractEnvVariable(String(endpoint.apiKey ?? '')),
-      });
       /**
-       * Only validate against the catalogue when there is one — otherwise every id
-       * would look invalid and the endpoint would become unmanageable.
+       * The change is applied to the list as it stands right now, never to a list the
+       * caller sent.
        *
-       * And only newly added ids are checked. A model the provider retires stays in
-       * the saved list until an admin removes it, so validating the whole list would
-       * make that one retirement reject every later save on the endpoint — including
-       * the ones fixing it. The screen already flags such a model as unserved; the
-       * job here is to stop new typos, not to hold the endpoint hostage to an old one.
+       * A caller that states the whole list states it from whatever it last read, so
+       * an admin acting on a screen opened five minutes ago silently overwrites every
+       * change made since — and no re-read on this side can tell that apart from an
+       * intended edit. One model and a direction cannot carry a stale list, which also
+       * makes the request idempotent (asking to enable what is already enabled is not
+       * a change) and takes the order of the line-up out of the caller's hands: that
+       * order decides what employees see first.
        */
-      if (Object.keys(catalogue).length > 0) {
-        const alreadySaved = new Set(configuredModelsOf(endpoint));
-        const unknown = unique.filter(
-          (model) => !has(catalogue, model) && !alreadySaved.has(model),
-        );
-        if (unknown.length > 0) {
-          return res.status(400).json({
-            error: `Not served by this endpoint's gateway: ${unknown.join(', ')}`,
-          });
-        }
+      const current = configuredModelsOf(endpoint);
+      const alreadyEnabled = current.includes(model);
+      if (alreadyEnabled === enabled) {
+        return res.status(200).json(await loadPayload(req));
+      }
+      const next = enabled ? [...current, model] : current.filter((id) => id !== model);
+
+      if (next.length > MAX_MODELS_PER_ENDPOINT) {
+        return res
+          .status(400)
+          .json({ error: `At most ${MAX_MODELS_PER_ENDPOINT} models per endpoint` });
+      }
+      /**
+       * An empty list is refused rather than accepted-and-guarded-on-read: the
+       * merged config would carry `[]`, the model selector would be empty and
+       * nobody could start a chat. Forbidding the state beats detecting it.
+       */
+      if (next.length === 0) {
+        return res.status(400).json({ error: 'At least one model must stay enabled' });
       }
 
-      /**
-       * Models holding a configuration job cannot be dropped here. Doing so would
-       * break new chats, titles or Deep Research for everyone at once, and the
-       * admin cannot see that from this screen — so the error names the model and
-       * the setting to change first.
-       */
-      const { roles, blocking: claimed } = collectModelRoles(appConfig, endpointName, endpoint);
-      const stillEnabled = new Set(unique);
-      const blocking = [...roles.entries()].filter(
-        ([model]) => claimed.has(model) && !stillEnabled.has(model),
-      );
-      if (blocking.length > 0) {
-        return res.status(400).json({
-          error: `Still in use by configuration — change that setting first: ${blocking
-            .map(([model, jobs]) => `${model} (${jobs.join(', ')})`)
-            .join('; ')}`,
+      if (enabled) {
+        const catalogue = await fetchModelCapabilities({
+          baseURL: extractEnvVariable(String(endpoint.baseURL ?? '')),
+          apiKey: extractEnvVariable(String(endpoint.apiKey ?? '')),
         });
+        /** Checked only when there is a catalogue to check against — otherwise every
+         *  id would look invalid and the endpoint would become unmanageable. */
+        if (Object.keys(catalogue).length > 0 && !has(catalogue, model)) {
+          return res.status(400).json({
+            error: `Not served by this endpoint's gateway: ${model}`,
+          });
+        }
+      } else {
+        /**
+         * A model holding a configuration job cannot be dropped here. Doing so would
+         * break new chats, titles or Deep Research for everyone at once, and the
+         * admin cannot see that from this screen — so the error names the model and
+         * the setting to change first.
+         */
+        const { roles, blocking: claimed } = collectModelRoles(appConfig, endpointName, endpoint);
+        if (claimed.has(model)) {
+          return res.status(400).json({
+            error:
+              'Still in use by configuration — change that setting first: ' +
+              `${model} (${(roles.get(model) ?? []).join(', ')})`,
+          });
+        }
       }
 
       /**
@@ -500,7 +519,7 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
         includeInactive: true,
       });
       const overrides = (stored?.overrides ?? {}) as { endpoints?: { custom?: unknown } };
-      const merged = mergeEndpointOverride(overrides.endpoints?.custom, endpointName, unique);
+      const merged = mergeEndpointOverride(overrides.endpoints?.custom, endpointName, next);
 
       /**
        * The whole array is rewritten, so a save that started from a stale read
@@ -530,6 +549,13 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
         { [CUSTOM_ENDPOINTS_FIELD]: merged },
         MODEL_CATALOGUE_PRIORITY,
       );
+      /**
+       * The journal is told what was actually written, not what was asked for: a
+       * request that changed nothing returns above without reaching this line, so an
+       * entry always describes a real change, and the list it records is the one the
+       * server produced rather than one a caller claimed.
+       */
+      audited.modelCatalogueChange = { endpoint: endpointName, model, enabled, models: next };
       if (invalidateConfigCaches) {
         await invalidateConfigCaches(tenantId);
       }

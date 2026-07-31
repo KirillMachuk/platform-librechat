@@ -1,7 +1,7 @@
 import { PrincipalType } from 'librechat-data-provider';
 import type { AppConfig } from '@librechat/data-schemas';
 import type { Response } from 'express';
-import type { AdminModelEndpoint } from './modelCatalogue';
+import type { AdminModelEndpoint, ModelCatalogueChange } from './modelCatalogue';
 import type { ServerRequest } from '~/types/http';
 import {
   createModelCatalogueHandlers,
@@ -88,9 +88,33 @@ const put = async (body: unknown, overrides: Record<string, unknown> = {}) => {
   const deps = createDeps(overrides);
   const { setModels } = createModelCatalogueHandlers(deps as never);
   const res = fakeRes();
-  await setModels({ ...fakeReq(), body } as ServerRequest, res);
-  return { res, deps };
+  const req = { ...fakeReq(), body } as ServerRequest & {
+    modelCatalogueChange?: ModelCatalogueChange;
+  };
+  await setModels(req, res);
+  return { res, deps, req };
 };
+
+/** The line-up the handler actually wrote for `gw`. */
+const written = (deps: { patchConfigFields: jest.Mock }): string[] => {
+  const entries = deps.patchConfigFields.mock.calls[0][3]['endpoints.custom'] as Array<{
+    name: string;
+    models: { default: string[] };
+  }>;
+  const entry = entries.find((item) => item.name === 'gw');
+  if (!entry) {
+    throw new Error('nothing was written for endpoint "gw"');
+  }
+  return entry.models.default;
+};
+
+/** A config whose only custom endpoint is `gw`, with the given models block. */
+const customEndpoint = (models: Record<string, unknown>) =>
+  appConfig({
+    endpoints: {
+      custom: [{ name: 'gw', baseURL: 'http://gw/v1', apiKey: 'k', models }],
+    },
+  });
 
 describe('getCatalogue', () => {
   it('lists the whole catalogue with the configured models marked enabled', async () => {
@@ -219,27 +243,73 @@ describe('getCatalogue', () => {
 });
 
 describe('setModels', () => {
-  it('writes the list as an endpoint override and refreshes caches', async () => {
-    const { res, deps } = await put({ endpoint: 'gw', models: ['a/enabled', 'a/available'] });
+  it('appends an enabled model and refreshes caches', async () => {
+    const { res, deps } = await put({ endpoint: 'gw', model: 'a/available', enabled: true });
 
     expect(res.statusCode).toBe(200);
     expect(deps.patchConfigFields).toHaveBeenCalledWith(
       PrincipalType.ROLE,
       'base',
       expect.anything(),
-      { 'endpoints.custom': [{ name: 'gw', models: { default: ['a/enabled', 'a/available'] } }] },
+      {
+        'endpoints.custom': [
+          { name: 'gw', models: { default: ['a/enabled', 'a/also-enabled', 'a/available'] } },
+        ],
+      },
       10,
     );
     expect(deps.invalidateConfigCaches).toHaveBeenCalled();
   });
 
-  it('preserves the order it was given — the first model is the chat fallback', async () => {
-    const { deps } = await put({ endpoint: 'gw', models: ['a/available', 'a/enabled'] });
+  /** The first model is the fallback for new chats, so nothing else may move. */
+  it('cuts a disabled model out without moving the rest', async () => {
+    const { deps } = await put({ endpoint: 'gw', model: 'a/enabled', enabled: false });
 
-    expect(deps.patchConfigFields.mock.calls[0][3]['endpoints.custom'][0].models.default).toEqual([
-      'a/available',
-      'a/enabled',
-    ]);
+    expect(written(deps)).toEqual(['a/also-enabled']);
+  });
+
+  /**
+   * The change is applied to the line-up as stored, never to a list the caller sent.
+   *
+   * A caller that states the whole list states it from whatever it last read, so an
+   * admin acting on a screen opened minutes ago would overwrite every change made
+   * since — silently, and indistinguishably from an intended edit. Re-reading on this
+   * side cannot tell the two apart; not accepting the list can.
+   */
+  it('ignores a list in the request body entirely', async () => {
+    const { deps } = await put({
+      endpoint: 'gw',
+      model: 'a/available',
+      enabled: true,
+      models: ['whatever/the-caller-last-saw'],
+    });
+
+    expect(written(deps)).toEqual(['a/enabled', 'a/also-enabled', 'a/available']);
+  });
+
+  /** Asking for a state that already holds is not a change: no write, nothing audited. */
+  it('is idempotent in both directions', async () => {
+    const on = await put({ endpoint: 'gw', model: 'a/enabled', enabled: true });
+    expect(on.res.statusCode).toBe(200);
+    expect(on.deps.patchConfigFields).not.toHaveBeenCalled();
+    expect(on.req.modelCatalogueChange).toBeUndefined();
+
+    const off = await put({ endpoint: 'gw', model: 'a/available', enabled: false });
+    expect(off.res.statusCode).toBe(200);
+    expect(off.deps.patchConfigFields).not.toHaveBeenCalled();
+    expect(off.req.modelCatalogueChange).toBeUndefined();
+  });
+
+  /** The journal has to describe what was written, not what was asked for. */
+  it('leaves the applied change behind for the audit hook', async () => {
+    const { req } = await put({ endpoint: 'gw', model: 'a/available', enabled: true });
+
+    expect(req.modelCatalogueChange).toEqual({
+      endpoint: 'gw',
+      model: 'a/available',
+      enabled: true,
+      models: ['a/enabled', 'a/also-enabled', 'a/available'],
+    });
   });
 
   /**
@@ -247,72 +317,115 @@ describe('setModels', () => {
    * config would carry `[]` and nobody could start a chat.
    */
   it('refuses to leave the endpoint with no models', async () => {
-    const { res, deps } = await put({ endpoint: 'gw', models: [] });
+    const { res, deps } = await put(
+      { endpoint: 'gw', model: 'a/only', enabled: false },
+      { getAppConfig: jest.fn().mockResolvedValue(customEndpoint({ default: ['a/only'] })) },
+    );
 
     expect(res.statusCode).toBe(400);
     expect(deps.patchConfigFields).not.toHaveBeenCalled();
   });
 
   it('rejects a model the gateway does not serve', async () => {
-    const { res, deps } = await put({ endpoint: 'gw', models: ['a/enabled', 'a/nonsense'] });
+    const { res, deps } = await put({ endpoint: 'gw', model: 'a/nonsense', enabled: true });
 
     expect(res.statusCode).toBe(400);
     expect(res.body.error).toContain('a/nonsense');
     expect(deps.patchConfigFields).not.toHaveBeenCalled();
   });
 
+  /**
+   * `catalogue['toString']` is a function, not undefined, so a plain `!= null`
+   * membership test let inherited names through and into the live model list.
+   */
+  it('refuses model ids that only exist on Object.prototype', async () => {
+    for (const id of ['toString', 'constructor', '__proto__', 'valueOf']) {
+      const { res, deps } = await put({ endpoint: 'gw', model: id, enabled: true });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toContain('Not served by this endpoint');
+      expect(deps.patchConfigFields).not.toHaveBeenCalled();
+    }
+  });
+
   /** Without a catalogue every id would look invalid and the endpoint unmanageable. */
   it('skips catalogue validation when the gateway publishes nothing', async () => {
     const { res } = await put(
-      { endpoint: 'gw', models: ['a/enabled', 'anything/at-all'] },
+      { endpoint: 'gw', model: 'anything/at-all', enabled: true },
       { fetchModelCapabilities: jest.fn().mockResolvedValue({}) },
     );
 
     expect(res.statusCode).toBe(200);
   });
 
-  it('rejects an unknown endpoint, a missing endpoint and a bad list', async () => {
-    expect((await put({ endpoint: 'nope', models: ['a/enabled'] })).res.statusCode).toBe(400);
-    expect((await put({ models: ['a/enabled'] })).res.statusCode).toBe(400);
-    expect((await put({ endpoint: 'gw', models: 'a/enabled' })).res.statusCode).toBe(400);
-    expect((await put({ endpoint: 'gw', models: [''] })).res.statusCode).toBe(400);
-    expect((await put({ endpoint: 'gw' })).res.statusCode).toBe(400);
+  /**
+   * Only the model being added is checked. One the provider retires stays in the
+   * saved list until an admin removes it, and re-validating the whole line-up would
+   * make that retirement reject every later change — including the one fixing it.
+   */
+  it('does not re-check models that were already saved', async () => {
+    const { res, deps } = await put(
+      { endpoint: 'gw', model: 'a/available', enabled: true },
+      {
+        getAppConfig: jest
+          .fn()
+          .mockResolvedValue(customEndpoint({ default: ['a/enabled', 'a/retired'] })),
+      },
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(written(deps)).toEqual(['a/enabled', 'a/retired', 'a/available']);
   });
 
-  it('rejects a repeated model', async () => {
-    const { res } = await put({ endpoint: 'gw', models: ['a/enabled', 'a/enabled'] });
+  it('rejects an unknown endpoint and a malformed request', async () => {
+    const status = async (body: unknown) => (await put(body)).res.statusCode;
 
-    expect(res.statusCode).toBe(400);
+    expect(await status({ endpoint: 'nope', model: 'a/enabled', enabled: false })).toBe(400);
+    expect(await status({ model: 'a/available', enabled: true })).toBe(400);
+    expect(await status({ endpoint: 'gw', model: '', enabled: true })).toBe(400);
+    expect(await status({ endpoint: 'gw', model: ['a/available'], enabled: true })).toBe(400);
+    expect(await status({ endpoint: 'gw', model: 'a/available' })).toBe(400);
+    expect(await status({ endpoint: 'gw', model: 'a/available', enabled: 'yes' })).toBe(400);
   });
 
   /**
    * The list is persisted, echoed into every audit entry and delivered to every
-   * client with the endpoints config — an oversized request would inflate all
-   * three at once, so it is refused before any of that happens.
+   * client with the endpoints config — an oversized one would inflate all three.
    */
   describe('blast-radius ceilings', () => {
-    it('rejects a list longer than any real catalogue', async () => {
+    it('rejects an absurdly long model id', async () => {
       const { res, deps } = await put({
         endpoint: 'gw',
-        models: Array.from({ length: 1001 }, (_, i) => `a/model-${i}`),
+        model: 'a/'.padEnd(201, 'x'),
+        enabled: true,
       });
 
       expect(res.statusCode).toBe(400);
       expect(deps.patchConfigFields).not.toHaveBeenCalled();
     });
 
-    it('rejects an absurdly long model id', async () => {
-      const { res, deps } = await put({ endpoint: 'gw', models: ['a/'.padEnd(201, 'x')] });
+    it('refuses to grow a line-up past any real catalogue', async () => {
+      const many = Array.from({ length: 1000 }, (_, index) => `a/model-${index}`);
+      const { res, deps } = await put(
+        { endpoint: 'gw', model: 'a/available', enabled: true },
+        {
+          getAppConfig: jest.fn().mockResolvedValue(customEndpoint({ default: many })),
+          fetchModelCapabilities: jest.fn().mockResolvedValue({}),
+        },
+      );
 
       expect(res.statusCode).toBe(400);
       expect(deps.patchConfigFields).not.toHaveBeenCalled();
     });
 
     it('still accepts a full real catalogue', async () => {
-      const many = Array.from({ length: 400 }, (_, i) => `a/model-${i}`);
+      const many = Array.from({ length: 400 }, (_, index) => `a/model-${index}`);
       const { res } = await put(
-        { endpoint: 'gw', models: many },
-        { fetchModelCapabilities: jest.fn().mockResolvedValue({}) },
+        { endpoint: 'gw', model: 'a/available', enabled: true },
+        {
+          getAppConfig: jest.fn().mockResolvedValue(customEndpoint({ default: many })),
+          fetchModelCapabilities: jest.fn().mockResolvedValue({}),
+        },
       );
 
       expect(res.statusCode).toBe(200);
@@ -346,7 +459,10 @@ describe('setModels', () => {
     /** Dropping these breaks new chats, titles or Deep Research for everyone at
      *  once, and the admin cannot see that from this screen. */
     it('refuses to drop the default chat model and names the setting', async () => {
-      const { res, deps } = await put({ endpoint: 'gw', models: ['a/also-enabled'] }, withRoles());
+      const { res, deps } = await put(
+        { endpoint: 'gw', model: 'a/enabled', enabled: false },
+        withRoles(),
+      );
 
       expect(res.statusCode).toBe(400);
       expect(res.body.error).toContain('a/enabled');
@@ -354,17 +470,20 @@ describe('setModels', () => {
       expect(deps.patchConfigFields).not.toHaveBeenCalled();
     });
 
-    it('refuses to drop the title model and a Deep Research role', async () => {
-      const { res } = await put({ endpoint: 'gw', models: ['a/enabled'] }, withRoles());
+    it('refuses to drop the title model and names its Deep Research role too', async () => {
+      const { res } = await put(
+        { endpoint: 'gw', model: 'a/also-enabled', enabled: false },
+        withRoles(),
+      );
 
       expect(res.statusCode).toBe(400);
       expect(res.body.error).toContain('titleModel');
       expect(res.body.error).toContain('deepResearch.deep.leadModel');
     });
 
-    it('allows a change that keeps every job filled', async () => {
+    it('allows a change that leaves every job filled', async () => {
       const { res } = await put(
-        { endpoint: 'gw', models: ['a/enabled', 'a/also-enabled', 'a/available'] },
+        { endpoint: 'gw', model: 'a/available', enabled: true },
         withRoles(),
       );
 
@@ -388,7 +507,7 @@ describe('setModels', () => {
 
   it('answers 500 rather than throwing when the write fails', async () => {
     const { res } = await put(
-      { endpoint: 'gw', models: ['a/enabled'] },
+      { endpoint: 'gw', model: 'a/available', enabled: true },
       { patchConfigFields: jest.fn().mockRejectedValue(new Error('mongo down')) },
     );
 
@@ -495,41 +614,14 @@ describe('collectModelRoles', () => {
 });
 
 describe('setModels: hardening', () => {
-  /**
-   * `catalogue['toString']` is a function, not undefined, so a plain
-   * `!= null` membership test let inherited names through and wrote them into
-   * the live model list.
-   */
-  it('refuses model ids that only exist on Object.prototype', async () => {
-    const { res } = await put({
-      endpoint: 'gw',
-      models: ['a/enabled', 'toString', 'constructor', '__proto__', 'valueOf'],
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(res.body.error).toContain('Not served by this endpoint');
-    expect(res.body.error).toContain('toString');
-  });
-
   /** `models.fetch` makes the gateway authoritative — storing a list would lie. */
   it('refuses an endpoint that takes its list from the gateway', async () => {
     const { res, deps } = await put(
-      { endpoint: 'gw', models: ['a/enabled'] },
+      { endpoint: 'gw', model: 'a/available', enabled: true },
       {
-        getAppConfig: jest.fn().mockResolvedValue(
-          appConfig({
-            endpoints: {
-              custom: [
-                {
-                  name: 'gw',
-                  baseURL: 'http://gw/v1',
-                  apiKey: 'k',
-                  models: { fetch: true, default: ['a/enabled'] },
-                },
-              ],
-            },
-          }),
-        ),
+        getAppConfig: jest
+          .fn()
+          .mockResolvedValue(customEndpoint({ fetch: true, default: ['a/enabled'] })),
       },
     );
 
@@ -543,7 +635,7 @@ describe('setModels: hardening', () => {
    * the merge starts from an empty array, wiping every sibling endpoint.
    */
   it('reads the base config including an inactive document', async () => {
-    const { deps } = await put({ endpoint: 'gw', models: ['a/enabled'] });
+    const { deps } = await put({ endpoint: 'gw', model: 'a/available', enabled: true });
 
     expect(deps.findConfigByPrincipal).toHaveBeenCalledWith(
       PrincipalType.ROLE,
@@ -566,7 +658,7 @@ describe('setModels: hardening', () => {
       },
     };
     const { res, deps } = await put(
-      { endpoint: 'gw', models: ['a/enabled'] },
+      { endpoint: 'gw', model: 'a/available', enabled: true },
       {
         findConfigByPrincipal: jest.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second),
       },
@@ -620,7 +712,7 @@ describe('permissions', () => {
    */
   it('refuses a write from someone without the endpoints config capability', async () => {
     const { res, deps } = await put(
-      { endpoint: 'gw', models: ['a/enabled'] },
+      { endpoint: 'gw', model: 'a/available', enabled: true },
       { hasConfigCapability: jest.fn().mockResolvedValue(false) },
     );
 
@@ -629,7 +721,7 @@ describe('permissions', () => {
   });
 
   it('asks about the endpoints section, not about configs at large', async () => {
-    const { deps } = await put({ endpoint: 'gw', models: ['a/enabled'] });
+    const { deps } = await put({ endpoint: 'gw', model: 'a/available', enabled: true });
 
     expect(deps.hasConfigCapability).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'u1' }),
@@ -648,13 +740,6 @@ describe('permissions', () => {
     expect(res.statusCode).toBe(403);
   });
 });
-
-const customEndpoint = (models: Record<string, unknown>) =>
-  appConfig({
-    endpoints: {
-      custom: [{ name: 'gw', baseURL: 'http://gw/v1', apiKey: 'k', models }],
-    },
-  });
 
 const catalogueOf = async (config: AppConfig, deps: Record<string, unknown> = {}) => {
   const { getCatalogue } = createModelCatalogueHandlers(
@@ -700,36 +785,5 @@ describe('what the screen has to be told about an endpoint', () => {
 
     expect(endpoint.source).toBe('config');
     expect(endpoint.models.every((model) => model.unserved === undefined)).toBe(true);
-  });
-});
-
-/**
- * A provider retiring a model used to freeze the whole endpoint: the saved list still
- * carried that id, every save was validated in full, and so every save was refused —
- * including the ones that would have fixed it.
- */
-describe('a model retired upstream must not freeze the endpoint', () => {
-  const withRetired = () => customEndpoint({ default: ['a/enabled', 'a/retired'] });
-
-  it('accepts a save that keeps the saved model the gateway dropped', async () => {
-    const { res, deps } = await put(
-      { endpoint: 'gw', models: ['a/enabled', 'a/retired', 'a/available'] },
-      { getAppConfig: jest.fn().mockResolvedValue(withRetired()) },
-    );
-
-    expect(res.statusCode).toBe(200);
-    expect(deps.patchConfigFields).toHaveBeenCalled();
-  });
-
-  it('still refuses an id nobody had saved before', async () => {
-    const { res, deps } = await put(
-      { endpoint: 'gw', models: ['a/enabled', 'a/retired', 'a/typo'] },
-      { getAppConfig: jest.fn().mockResolvedValue(withRetired()) },
-    );
-
-    expect(res.statusCode).toBe(400);
-    expect(res.body.error).toContain('a/typo');
-    expect(res.body.error).not.toContain('a/retired');
-    expect(deps.patchConfigFields).not.toHaveBeenCalled();
   });
 });
