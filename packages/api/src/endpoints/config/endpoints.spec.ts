@@ -439,6 +439,39 @@ describe('createEndpointsConfigService', () => {
       expect(result?.gw?.modelCapabilities?.['vendor/listed']?.vision).toBe(true);
     });
 
+    /**
+     * The catalogue read also collects what only the admin screen needs, and this
+     * map is rebuilt several times per message — for an uncurated endpoint that is
+     * the whole catalogue each time, so anything the browser never reads is weight
+     * it pays for on every turn.
+     */
+    it('sends the browser only the fields it reads', async () => {
+      const deps = withGateway(
+        {
+          'vendor/listed': {
+            vision: true,
+            tools: true,
+            contextTokens: 1000,
+            maxOutputTokens: 100,
+            name: 'Vendor: Listed',
+            releasedAt: 1782843083,
+            retiresOn: '2026-08-10',
+            aliasOf: 'vendor/real',
+            free: true,
+          },
+        },
+        { default: ['vendor/listed'] },
+      );
+      const { getEndpointsConfig } = createEndpointsConfigService(deps);
+
+      const result = await getEndpointsConfig(fakeReq());
+
+      const sent = result?.gw?.modelCapabilities?.['vendor/listed'] ?? {};
+      expect(
+        Object.keys(sent).filter((key) => sent[key as keyof typeof sent] !== undefined),
+      ).toEqual(['vision', 'tools', 'contextTokens', 'maxOutputTokens', 'name']);
+    });
+
     it('passes the whole catalogue through when the line-up is not curated', async () => {
       const deps = withGateway(CATALOGUE, undefined);
       const { getEndpointsConfig } = createEndpointsConfigService(deps);
