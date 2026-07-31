@@ -33,6 +33,12 @@ import { standardCache } from '~/cache';
 /** Shape of the entries returned by an OpenRouter-compatible `/models` route. */
 interface CatalogueModel {
   id?: unknown;
+  name?: unknown;
+  created?: unknown;
+  expiration_date?: unknown;
+  alias_target?: {
+    slug?: unknown;
+  };
   context_length?: unknown;
   architecture?: {
     input_modalities?: unknown;
@@ -43,6 +49,16 @@ interface CatalogueModel {
     max_completion_tokens?: unknown;
   };
 }
+
+/**
+ * Marks a no-cost variant, from the id rather than from the price.
+ *
+ * `:free` is the catalogue's own suffix for it, and it is the honest signal: the
+ * price fields are per unit of the model's own modality, so a music model billed
+ * per second also reads as zero per token and would be mislabelled. Reading price
+ * here would also drag money into a module that deliberately stays out of it.
+ */
+const FREE_VARIANT_SUFFIX = ':free';
 
 /** How long a catalogue answer is reused. Model line-ups change on the order of
  *  days, and the gateway caches upstream as well, so an hour is generous. */
@@ -115,6 +131,28 @@ function listIncludes(list: unknown, member: string): boolean | undefined {
   return Array.isArray(list) ? list.includes(member) : undefined;
 }
 
+/** Reads a non-blank string, or undefined for anything else. */
+function toText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() !== '' ? value : undefined;
+}
+
+/**
+ * A retirement date is only carried through when it is a real calendar date.
+ *
+ * It is rendered as a deadline, and a deadline nobody can act on is worse than
+ * silence — so anything the catalogue publishes in another shape is dropped
+ * rather than shown verbatim.
+ */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function toIsoDate(value: unknown): string | undefined {
+  const text = toText(value);
+  if (text == null || !ISO_DATE.test(text)) {
+    return undefined;
+  }
+  return Number.isNaN(Date.parse(text)) ? undefined : text;
+}
+
 /**
  * Parses one catalogue entry. Exported for tests: this is the part with decisions.
  *
@@ -129,11 +167,19 @@ export function extractCapabilities(entry: CatalogueModel): ModelCapabilities {
     toPositiveInt(entry?.top_provider?.context_length),
   ].filter((value): value is number => value != null);
 
+  const id = toText(entry?.id);
+
   return {
     vision: listIncludes(entry?.architecture?.input_modalities, 'image'),
     tools: listIncludes(entry?.supported_parameters, 'tools'),
     contextTokens: contextCandidates.length > 0 ? Math.min(...contextCandidates) : undefined,
     maxOutputTokens: toPositiveInt(entry?.top_provider?.max_completion_tokens),
+    name: toText(entry?.name),
+    releasedAt: toPositiveInt(entry?.created),
+    retiresOn: toIsoDate(entry?.expiration_date),
+    aliasOf: toText(entry?.alias_target?.slug),
+    /** Only ever `true`: "not a free variant" is the norm and needs no field. */
+    free: id?.endsWith(FREE_VARIANT_SUFFIX) === true ? true : undefined,
   };
 }
 

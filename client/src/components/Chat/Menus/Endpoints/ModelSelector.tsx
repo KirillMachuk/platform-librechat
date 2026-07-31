@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { TooltipAnchor } from '@librechat/client';
 import { EModelEndpoint, getConfigDefaults, isAgentsEndpoint } from 'librechat-data-provider';
 import type { ModelSelectorProps } from '~/common';
+import type { SelectorTab } from './components';
 import {
   SelectorTabs,
   EndpointModelItem,
@@ -10,7 +11,6 @@ import {
   renderCustomGroups,
   renderEndpointModels,
 } from './components';
-import type { SelectorTab } from './components';
 import { ModelSelectorProvider, useModelSelectorContext } from './ModelSelectorContext';
 import { ModelSelectorChatProvider } from './ModelSelectorChatContext';
 import { getSelectedIcon, getDisplayValue } from './utils';
@@ -61,8 +61,9 @@ function ModelSelectorContent() {
         modelSpecs,
         selectedValues,
         mappedEndpoints,
+        endpointsConfig,
       }),
-    [localize, agentsMap, modelSpecs, selectedValues, mappedEndpoints],
+    [localize, agentsMap, modelSpecs, selectedValues, mappedEndpoints, endpointsConfig],
   );
 
   const agentsEndpoint = useMemo(
@@ -167,9 +168,7 @@ function ModelSelectorContent() {
         comboboxLabel={localize('com_endpoint_search_models')}
         trigger={trigger}
       >
-        {!searchResults && (
-          <SelectorTabs activeTab={activeTab} onTabChange={setActiveTab} />
-        )}
+        {!searchResults && <SelectorTabs activeTab={activeTab} onTabChange={setActiveTab} />}
         {renderContent()}
       </Menu>
       <DialogManager

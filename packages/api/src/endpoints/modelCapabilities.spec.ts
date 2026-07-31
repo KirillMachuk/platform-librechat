@@ -413,3 +413,66 @@ describe('fetchModelCapabilities: request identity', () => {
     expect(mockedAxios.get).toHaveBeenCalledTimes(2);
   });
 });
+
+/**
+ * The admin screen labels a model with these, and the owner's one requirement for
+ * labels was that they match reality — so each is read from what the catalogue
+ * actually publishes, and anything unreadable is dropped rather than guessed.
+ */
+describe('extractCapabilities: what a model is labelled with', () => {
+  it('reads the published name, release date, retirement date and alias target', () => {
+    expect(
+      extractCapabilities({
+        id: '~anthropic/claude-sonnet-latest',
+        name: 'Anthropic: Claude Sonnet 5',
+        created: 1782843083,
+        expiration_date: '2026-08-10',
+        alias_target: { slug: 'anthropic/claude-sonnet-5' },
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        name: 'Anthropic: Claude Sonnet 5',
+        releasedAt: 1782843083,
+        retiresOn: '2026-08-10',
+        aliasOf: 'anthropic/claude-sonnet-5',
+      }),
+    );
+  });
+
+  it('says nothing about a model the catalogue described plainly', () => {
+    expect(extractCapabilities({ id: 'a/plain', context_length: 8000 })).toEqual(
+      expect.objectContaining({
+        name: undefined,
+        releasedAt: undefined,
+        retiresOn: undefined,
+        aliasOf: undefined,
+        free: undefined,
+      }),
+    );
+  });
+
+  /**
+   * From the id, never from the price: prices are per unit of the model's own
+   * modality, so a model billed per second of audio also reads as zero per token
+   * and would be labelled free. `:free` is the catalogue's own marker for it.
+   */
+  it('marks a free variant from the id', () => {
+    expect(extractCapabilities({ id: 'nvidia/nemotron:free' }).free).toBe(true);
+    expect(extractCapabilities({ id: 'nvidia/nemotron' }).free).toBeUndefined();
+    expect(extractCapabilities({ id: 'a/free-tier' }).free).toBeUndefined();
+  });
+
+  /** A deadline in a shape nobody can read is worse than no deadline at all. */
+  it('drops a retirement date that is not a calendar date', () => {
+    const unusable: unknown[] = ['soon', '2026-13-45', '10.08.2026', 42, null, ''];
+    for (const value of unusable) {
+      expect(extractCapabilities({ id: 'a/x', expiration_date: value }).retiresOn).toBeUndefined();
+    }
+  });
+
+  it('drops a release date that is not a positive whole number', () => {
+    for (const value of ['1782843083', 0, -5, 1.5, null]) {
+      expect(extractCapabilities({ id: 'a/x', created: value }).releasedAt).toBeUndefined();
+    }
+  });
+});

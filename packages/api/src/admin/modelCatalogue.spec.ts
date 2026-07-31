@@ -648,3 +648,88 @@ describe('permissions', () => {
     expect(res.statusCode).toBe(403);
   });
 });
+
+const customEndpoint = (models: Record<string, unknown>) =>
+  appConfig({
+    endpoints: {
+      custom: [{ name: 'gw', baseURL: 'http://gw/v1', apiKey: 'k', models }],
+    },
+  });
+
+const catalogueOf = async (config: AppConfig, deps: Record<string, unknown> = {}) => {
+  const { getCatalogue } = createModelCatalogueHandlers(
+    createDeps({ getAppConfig: jest.fn().mockResolvedValue(config), ...deps }) as never,
+  );
+  const res = fakeRes();
+  await getCatalogue(fakeReq(), res);
+  return res.body.endpoints[0];
+};
+
+describe('what the screen has to be told about an endpoint', () => {
+  it('says an ordinary endpoint is managed from here', async () => {
+    expect((await catalogueOf(appConfig())).managed).toBe(true);
+  });
+
+  /**
+   * Inverted once already, and invisibly: the field was written the wrong way round
+   * and no screen read it, so nothing went red. `models.fetch` makes the gateway's
+   * own list authoritative, and toggles here would be stored and audited while
+   * changing nothing an employee sees.
+   */
+  it('says an endpoint that takes its list from the gateway is not', async () => {
+    const config = customEndpoint({ fetch: true, default: ['a/enabled'] });
+
+    expect((await catalogueOf(config)).managed).toBe(false);
+  });
+
+  it('flags a configured model the gateway stopped serving', async () => {
+    const config = customEndpoint({ default: ['a/enabled', 'a/retired'] });
+
+    const endpoint = await catalogueOf(config);
+
+    expect(modelById(endpoint.models, 'a/retired').unserved).toBe(true);
+    expect(modelById(endpoint.models, 'a/retired').enabled).toBe(true);
+    expect(modelById(endpoint.models, 'a/enabled').unserved).toBeUndefined();
+  });
+
+  /** A silent gateway is not a statement that every configured model is gone. */
+  it('claims nothing when the gateway published no catalogue at all', async () => {
+    const endpoint = await catalogueOf(appConfig(), {
+      fetchModelCapabilities: jest.fn().mockResolvedValue({}),
+    });
+
+    expect(endpoint.source).toBe('config');
+    expect(endpoint.models.every((model) => model.unserved === undefined)).toBe(true);
+  });
+});
+
+/**
+ * A provider retiring a model used to freeze the whole endpoint: the saved list still
+ * carried that id, every save was validated in full, and so every save was refused —
+ * including the ones that would have fixed it.
+ */
+describe('a model retired upstream must not freeze the endpoint', () => {
+  const withRetired = () => customEndpoint({ default: ['a/enabled', 'a/retired'] });
+
+  it('accepts a save that keeps the saved model the gateway dropped', async () => {
+    const { res, deps } = await put(
+      { endpoint: 'gw', models: ['a/enabled', 'a/retired', 'a/available'] },
+      { getAppConfig: jest.fn().mockResolvedValue(withRetired()) },
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(deps.patchConfigFields).toHaveBeenCalled();
+  });
+
+  it('still refuses an id nobody had saved before', async () => {
+    const { res, deps } = await put(
+      { endpoint: 'gw', models: ['a/enabled', 'a/retired', 'a/typo'] },
+      { getAppConfig: jest.fn().mockResolvedValue(withRetired()) },
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toContain('a/typo');
+    expect(res.body.error).not.toContain('a/retired');
+    expect(deps.patchConfigFields).not.toHaveBeenCalled();
+  });
+});

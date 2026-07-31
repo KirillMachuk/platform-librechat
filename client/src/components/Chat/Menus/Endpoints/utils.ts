@@ -20,6 +20,36 @@ export function stripProviderPrefix(modelId: string): string {
   return slashAt === -1 ? modelId : modelId.slice(slashAt + 1);
 }
 
+/** "Anthropic: Claude Sonnet 5" -> "Claude Sonnet 5"; names without a vendor are left alone. */
+function stripVendorFromName(name: string): string {
+  const separatorAt = name.indexOf(': ');
+  return separatorAt === -1 ? name : name.slice(separatorAt + 2);
+}
+
+/**
+ * How a model should read to a person.
+ *
+ * Gateways publish a display name next to the slug, and it is the same string the
+ * admin panel curates the line-up by — the two surfaces have to agree, or one model
+ * reads as two. The vendor is dropped because the brand mark beside the label
+ * already says it, and the width is better spent on the model itself. Falls back to
+ * the slug minus its vendor prefix, which is what this surface showed before any
+ * catalogue existed.
+ */
+export function modelDisplayName(
+  modelId: string,
+  endpointsConfig?: TEndpointsConfig | null,
+  endpoint?: string | null,
+): string {
+  const published = endpoint
+    ? endpointsConfig?.[endpoint]?.modelCapabilities?.[modelId]?.name
+    : undefined;
+  if (typeof published === 'string' && published.trim() !== '') {
+    return stripVendorFromName(published.trim());
+  }
+  return stripProviderPrefix(modelId);
+}
+
 export function filterItems<
   T extends {
     label: string;
@@ -207,12 +237,14 @@ export const getDisplayValue = ({
   selectedValues,
   modelSpecs,
   agentsMap,
+  endpointsConfig,
 }: {
   localize: ReturnType<typeof useLocalize>;
   selectedValues: SelectedValues;
   mappedEndpoints: Endpoint[];
   modelSpecs: TModelSpec[];
   agentsMap?: TAgentsMap;
+  endpointsConfig?: TEndpointsConfig | null;
 }) => {
   if (selectedValues.modelSpec) {
     const spec = modelSpecs.find((s) => s.name === selectedValues.modelSpec);
@@ -244,7 +276,7 @@ export const getDisplayValue = ({
       return endpoint.assistantNames[selectedValues.model];
     }
 
-    return stripProviderPrefix(selectedValues.model);
+    return modelDisplayName(selectedValues.model, endpointsConfig, endpoint.value);
   }
 
   if (selectedValues.endpoint) {

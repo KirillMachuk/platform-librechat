@@ -453,6 +453,27 @@ export type ModelCapabilities = {
   contextTokens?: number;
   /** Ceiling on a single response, in tokens. */
   maxOutputTokens?: number;
+  /** Display name as the catalogue publishes it, e.g. "Anthropic: Claude Sonnet 5". */
+  name?: string;
+  /** When the model was published, in seconds since the epoch. */
+  releasedAt?: number;
+  /**
+   * The date the provider retires this model, as published (`YYYY-MM-DD`). Absent
+   * for the overwhelming majority — a present value is a deadline, not a detail:
+   * the model stops answering that day whether or not anyone noticed.
+   */
+  retiresOn?: string;
+  /**
+   * The model id this one currently resolves to, when the id is a moving pointer
+   * (`~vendor/family-latest`) rather than a model. What it points at changes when
+   * the vendor ships a successor, so anything selecting it silently changes model.
+   */
+  aliasOf?: string;
+  /**
+   * A no-cost variant of a model, which providers serve from a shared pool under
+   * tighter limits and looser data terms than the paid twin.
+   */
+  free?: boolean;
 };
 
 /** Capabilities of every model a gateway published, keyed by model id. */

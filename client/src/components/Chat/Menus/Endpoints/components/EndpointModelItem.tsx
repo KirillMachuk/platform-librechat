@@ -6,7 +6,7 @@ import type { Endpoint } from '~/common';
 import { useFavorites, useLocalize, useIsActiveItem } from '~/hooks';
 import { useModelSelectorContext } from '../ModelSelectorContext';
 import { CustomMenuItem as MenuItem } from '../CustomMenu';
-import { stripProviderPrefix } from '../utils';
+import { modelDisplayName } from '../utils';
 import { getModelBrandIcon } from './brand';
 import { cn } from '~/utils';
 
@@ -17,7 +17,7 @@ interface EndpointModelItemProps {
 
 export function EndpointModelItem({ modelId, endpoint }: EndpointModelItemProps) {
   const localize = useLocalize();
-  const { handleSelectModel, selectedValues } = useModelSelectorContext();
+  const { handleSelectModel, selectedValues, endpointsConfig } = useModelSelectorContext();
   const {
     endpoint: selectedEndpoint,
     model: selectedModel,
@@ -48,7 +48,7 @@ export function EndpointModelItem({ modelId, endpoint }: EndpointModelItemProps)
   ) {
     modelName = endpoint.assistantNames[modelId];
   } else if (modelName) {
-    modelName = stripProviderPrefix(modelName);
+    modelName = modelDisplayName(modelName, endpointsConfig, endpoint.value);
   }
 
   const isAgent = isAgentsEndpoint(endpoint.value);

@@ -18,7 +18,7 @@ import {
   useGetStartupConfig,
 } from '~/data-provider';
 import { getModelBrandIcon } from '~/components/Chat/Menus/Endpoints/components/brand';
-import { stripProviderPrefix } from '~/components/Chat/Menus/Endpoints/utils';
+import { modelDisplayName } from '~/components/Chat/Menus/Endpoints/utils';
 import useAssistantListMap from '~/hooks/Assistants/useAssistantListMap';
 import { useAgentsMapContext } from '~/Providers/AgentsMapContext';
 import { mapEndpoints, getPresetTitle } from '~/utils';
@@ -185,7 +185,7 @@ export default function useMentions({
        *  under different names and a generic icon reads as a different set entirely. */
       const models = (modelsConfig?.[endpoint] ?? []).map((model) => ({
         value: endpoint,
-        label: stripProviderPrefix(model),
+        label: modelDisplayName(model, endpointsConfig, endpoint),
         modelId: model,
         type: 'model' as const,
         icon:
