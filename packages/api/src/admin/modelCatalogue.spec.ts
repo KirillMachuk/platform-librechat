@@ -79,6 +79,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     findConfigByPrincipal: jest.fn().mockResolvedValue(null),
     patchConfigFields: jest.fn().mockResolvedValue(undefined),
     invalidateConfigCaches: jest.fn().mockResolvedValue(undefined),
+    hasConfigCapability: jest.fn().mockResolvedValue(true),
     ...overrides,
   };
 }
@@ -449,7 +450,7 @@ describe('collectModelRoles', () => {
       interfaceConfig: { defaultModel: { endpoint: 'other', model: 'a/enabled' } },
     });
 
-    expect(collectModelRoles(config, 'gw', { name: 'gw' })).toEqual(new Map());
+    expect(collectModelRoles(config, 'gw', { name: 'gw' }).roles).toEqual(new Map());
   });
 
   /** A Deep Research endpoint that is set scopes its roles to that endpoint. */
@@ -458,7 +459,7 @@ describe('collectModelRoles', () => {
       deepResearch: { endpoint: 'other', modes: { deep: { leadModel: 'a/enabled' } } },
     });
 
-    expect(collectModelRoles(config, 'gw', { name: 'gw' })).toEqual(new Map());
+    expect(collectModelRoles(config, 'gw', { name: 'gw' }).roles).toEqual(new Map());
   });
 
   /** Unscoped Deep Research could run on any endpoint — warn everywhere. */
@@ -467,7 +468,7 @@ describe('collectModelRoles', () => {
       deepResearch: { modes: { economy: { leadModel: 'a/enabled' } } },
     });
 
-    expect(collectModelRoles(config, 'gw', { name: 'gw' })).toEqual(
+    expect(collectModelRoles(config, 'gw', { name: 'gw' }).roles).toEqual(
       new Map([['a/enabled', ['deepResearch.economy.leadModel']]]),
     );
   });
@@ -477,7 +478,7 @@ describe('collectModelRoles', () => {
       interfaceConfig: { defaultModel: { endpoint: 'gw', model: 'a/enabled' } },
     });
 
-    expect(collectModelRoles(config, 'gw', { name: 'gw', titleModel: 'a/enabled' })).toEqual(
+    expect(collectModelRoles(config, 'gw', { name: 'gw', titleModel: 'a/enabled' }).roles).toEqual(
       new Map([['a/enabled', ['defaultModel', 'titleModel']]]),
     );
   });
@@ -487,6 +488,163 @@ describe('collectModelRoles', () => {
       interfaceConfig: { defaultModel: { endpoint: 'gw', model: '' } },
     });
 
-    expect(collectModelRoles(config, 'gw', { name: 'gw', titleModel: 42 })).toEqual(new Map());
+    expect(collectModelRoles(config, 'gw', { name: 'gw', titleModel: 42 }).roles).toEqual(
+      new Map(),
+    );
+  });
+});
+
+describe('setModels: hardening', () => {
+  /**
+   * `catalogue['toString']` is a function, not undefined, so a plain
+   * `!= null` membership test let inherited names through and wrote them into
+   * the live model list.
+   */
+  it('refuses model ids that only exist on Object.prototype', async () => {
+    const { res } = await put({
+      endpoint: 'gw',
+      models: ['a/enabled', 'toString', 'constructor', '__proto__', 'valueOf'],
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toContain('Not served by this endpoint');
+    expect(res.body.error).toContain('toString');
+  });
+
+  /** `models.fetch` makes the gateway authoritative — storing a list would lie. */
+  it('refuses an endpoint that takes its list from the gateway', async () => {
+    const { res, deps } = await put(
+      { endpoint: 'gw', models: ['a/enabled'] },
+      {
+        getAppConfig: jest.fn().mockResolvedValue(
+          appConfig({
+            endpoints: {
+              custom: [
+                {
+                  name: 'gw',
+                  baseURL: 'http://gw/v1',
+                  apiKey: 'k',
+                  models: { fetch: true, default: ['a/enabled'] },
+                },
+              ],
+            },
+          }),
+        ),
+      },
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toContain('models.fetch');
+    expect(deps.patchConfigFields).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Without `includeInactive` a deactivated base document reads back as null and
+   * the merge starts from an empty array, wiping every sibling endpoint.
+   */
+  it('reads the base config including an inactive document', async () => {
+    const { deps } = await put({ endpoint: 'gw', models: ['a/enabled'] });
+
+    expect(deps.findConfigByPrincipal).toHaveBeenCalledWith(
+      PrincipalType.ROLE,
+      'base',
+      expect.objectContaining({ includeInactive: true }),
+    );
+  });
+
+  /** A stale read would silently drop a sibling endpoint another admin just saved. */
+  it('refuses rather than overwrite when the stored lists changed mid-save', async () => {
+    const first = { overrides: { endpoints: { custom: [{ name: 'other', models: {} }] } } };
+    const second = {
+      overrides: {
+        endpoints: {
+          custom: [
+            { name: 'other', models: {} },
+            { name: 'gw2', models: {} },
+          ],
+        },
+      },
+    };
+    const { res, deps } = await put(
+      { endpoint: 'gw', models: ['a/enabled'] },
+      {
+        findConfigByPrincipal: jest.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second),
+      },
+    );
+
+    expect(res.statusCode).toBe(409);
+    expect(deps.patchConfigFields).not.toHaveBeenCalled();
+  });
+});
+
+describe('collectModelRoles: what may block a save', () => {
+  /** `current_model` is a setting, not a model; treating it as an id deadlocks the endpoint. */
+  it('ignores the current_model sentinel', () => {
+    const { roles, blocking } = collectModelRoles(appConfig(), 'gw', {
+      name: 'gw',
+      titleModel: 'current_model',
+    });
+
+    expect(roles.size).toBe(0);
+    expect(blocking.size).toBe(0);
+  });
+
+  /**
+   * Unscoped Deep Research roles belong to no endpoint in particular: shown
+   * everywhere the id appears, but they must not make another endpoint unsavable.
+   */
+  it('reports unscoped Deep Research roles without letting them block', () => {
+    const config = appConfig({
+      deepResearch: { modes: { deep: { leadModel: 'x/lead' } } },
+    });
+
+    const { roles, blocking } = collectModelRoles(config, 'gw', { name: 'gw' });
+
+    expect(roles.get('x/lead')).toEqual(['deepResearch.deep.leadModel']);
+    expect(blocking.has('x/lead')).toBe(false);
+  });
+
+  it('keeps a Deep Research role blocking when it names this endpoint', () => {
+    const config = appConfig({
+      deepResearch: { endpoint: 'gw', modes: { deep: { leadModel: 'x/lead' } } },
+    });
+
+    expect(collectModelRoles(config, 'gw', { name: 'gw' }).blocking.has('x/lead')).toBe(true);
+  });
+});
+
+describe('permissions', () => {
+  /**
+   * `/api/admin/config` gates the `endpoints` section behind its own capability;
+   * without the same gate here, plain admin access is a way round it.
+   */
+  it('refuses a write from someone without the endpoints config capability', async () => {
+    const { res, deps } = await put(
+      { endpoint: 'gw', models: ['a/enabled'] },
+      { hasConfigCapability: jest.fn().mockResolvedValue(false) },
+    );
+
+    expect(res.statusCode).toBe(403);
+    expect(deps.patchConfigFields).not.toHaveBeenCalled();
+  });
+
+  it('asks about the endpoints section, not about configs at large', async () => {
+    const { deps } = await put({ endpoint: 'gw', models: ['a/enabled'] });
+
+    expect(deps.hasConfigCapability).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'u1' }),
+      'endpoints',
+      'manage',
+    );
+  });
+
+  it('refuses a read the same way', async () => {
+    const deps = createDeps({ hasConfigCapability: jest.fn().mockResolvedValue(false) });
+    const { getCatalogue } = createModelCatalogueHandlers(deps as never);
+    const res = fakeRes();
+
+    await getCatalogue(fakeReq(), res);
+
+    expect(res.statusCode).toBe(403);
   });
 });

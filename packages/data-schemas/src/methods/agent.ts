@@ -278,7 +278,7 @@ export function createAgentMethods(
     versionIndex: number,
   ) => Promise<IAgent>;
   countPromotedAgents: () => Promise<number>;
-  countAgentsByModel: (tenantId?: string) => Promise<Record<string, number>>;
+  countAgentsByModel: (provider: string, tenantId?: string) => Promise<Record<string, number>>;
   addAgentResourceFile: ({
     agent_id,
     tool_resource,
@@ -1049,16 +1049,27 @@ export function createAgentMethods(
   }
 
   /**
-   * How many agents name each model, for models that any agent names at all.
+   * How many agents name each model of one provider, for models any agent names.
    *
    * Turning a model off in the admin catalogue is what this is for: an agent
    * pinned to a model the endpoint no longer offers fails when its users run it,
    * and today nothing warns anyone. Returns only non-zero counts, so an absent
    * key means no agent uses that model.
+   *
+   * Counted per provider, because a model id says nothing about which endpoint
+   * serves it: two endpoints can both offer `vendor/model`, and attributing one
+   * endpoint's agents to the other warns an admin off a change that breaks
+   * nothing — or, worse, stays silent about one that does.
    */
-  async function countAgentsByModel(tenantId?: string): Promise<Record<string, number>> {
+  async function countAgentsByModel(
+    provider: string,
+    tenantId?: string,
+  ): Promise<Record<string, number>> {
     const Agent = mongoose.models.Agent as Model<IAgent>;
-    const match: Record<string, unknown> = { model: { $type: 'string', $ne: '' } };
+    const match: Record<string, unknown> = {
+      model: { $type: 'string', $ne: '' },
+      provider,
+    };
     if (tenantId != null) {
       match.tenantId = tenantId;
     }

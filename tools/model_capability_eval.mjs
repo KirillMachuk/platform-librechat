@@ -18,7 +18,7 @@
  *   node tools/model_capability_eval.mjs --save catalogue.json   # fetch + keep
  *   node tools/model_capability_eval.mjs --snapshot catalogue.json
  *   node tools/model_capability_eval.mjs --url http://gateway/v1 --key $KEY
- *   node tools/model_capability_eval.mjs --deployed             # our 13 only
+ *   node tools/model_capability_eval.mjs --only a/one,b/two   # a chosen subset
  *
  * Requires the workspace packages to be built (npm run build:api).
  */
@@ -41,23 +41,6 @@ const {
 const { validateVisionModel, EModelEndpoint } = require(
   join(root, 'packages/data-provider/dist/index.js'),
 );
-
-/** The line-up on the stand, from 1ma-lab/librechat.yaml. */
-const DEPLOYED = [
-  'anthropic/claude-sonnet-5',
-  'anthropic/claude-opus-4.8',
-  'openai/gpt-5.6-sol',
-  'openai/gpt-5.6-terra',
-  'openai/gpt-5.6-luna',
-  'deepseek/deepseek-v4-pro',
-  'deepseek/deepseek-v4-flash',
-  'deepseek/deepseek-v3.2',
-  'deepseek/deepseek-chat-v3.1',
-  'qwen/qwen3.7-max',
-  'qwen/qwen3.7-plus',
-  'qwen/qwen3-235b-a22b-2507',
-  'google/gemini-3.1-pro-preview',
-];
 
 const DEFAULT_URL = 'https://openrouter.ai/api/v1';
 /** Deliberately larger than any real ceiling, so the clamp always has to decide. */
@@ -103,10 +86,10 @@ function rawById(payload) {
 }
 
 function parseArgs(argv) {
-  const args = { deployed: false };
+  const args = {};
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
-    if (flag === '--deployed') args.deployed = true;
+    if (flag === '--only') args.only = (argv[++i] ?? '').split(',').filter(Boolean);
     else if (flag === '--snapshot') args.snapshot = argv[++i];
     else if (flag === '--save') args.save = argv[++i];
     else if (flag === '--url') args.url = argv[++i];
@@ -246,7 +229,17 @@ function scoreModel(model, truth, before, after) {
     }
   }
 
-  return { model, context, ceiling, vision, overRequestBefore, overRequestAfter, fixed, broke, notes };
+  return {
+    model,
+    context,
+    ceiling,
+    vision,
+    overRequestBefore,
+    overRequestAfter,
+    fixed,
+    broke,
+    notes,
+  };
 }
 
 const pct = (n, total) => (total === 0 ? '—' : `${((n / total) * 100).toFixed(1)}%`);
@@ -277,12 +270,12 @@ async function main() {
   const parserInvents = Object.keys(catalogue).filter((id) => !raw.has(id));
 
   let models = [...raw.keys()];
-  if (args.deployed) {
-    const missing = DEPLOYED.filter((model) => !raw.has(model));
+  if (args.only?.length) {
+    const missing = args.only.filter((model) => !raw.has(model));
     if (missing.length) {
       console.error(`not served by this gateway: ${missing.join(', ')}`);
     }
-    models = DEPLOYED.filter((model) => raw.has(model));
+    models = args.only.filter((model) => raw.has(model));
   }
   if (models.length === 0) {
     console.error('catalogue produced no models — nothing to evaluate');
@@ -295,9 +288,7 @@ async function main() {
 
   /** After: the catalogue is published, exactly as the endpoints config does it. */
   publishModelLimits(catalogue);
-  const after = new Map(
-    models.map((model) => [model, resolve(model, catalogue[model]?.vision)]),
-  );
+  const after = new Map(models.map((model) => [model, resolve(model, catalogue[model]?.vision)]));
 
   const rows = models.map((model) =>
     scoreModel(model, truth.get(model), before.get(model), after.get(model)),
@@ -334,7 +325,7 @@ async function main() {
       `  parser: missed ${parserMisses.length}, invented ${parserInvents.length} (both must be 0)`,
     );
 
-    const detail = args.deployed ? rows.filter((row) => row.notes.length) : regressions;
+    const detail = args.only?.length ? rows.filter((row) => row.notes.length) : regressions;
     for (const row of detail) {
       console.log(`\n  ${row.model}`);
       for (const note of row.notes) {

@@ -1065,7 +1065,15 @@ export async function initializeAgent(
     maxContextTokens,
     getModelMaxTokens(
       tokensModel ?? '',
-      providerEndpointMap[overrideProvider as keyof typeof providerEndpointMap],
+      /**
+       * A provider that is not one of the built-in families IS a custom endpoint,
+       * and its window is the one its gateway published. Left as `undefined` the
+       * default parameter said `openAI`, which reads the same static map
+       * (`maxTokensMap[custom] === maxTokensMap[openAI]`) but hides from
+       * `getModelMaxTokens` that this endpoint has a gateway to ask.
+       */
+      providerEndpointMap[overrideProvider as keyof typeof providerEndpointMap] ??
+        EModelEndpoint.custom,
       options.endpointTokenConfig,
     ),
     DEFAULT_MAX_CONTEXT_TOKENS,

@@ -1,7 +1,10 @@
 const express = require('express');
 const { createModelCatalogueHandlers, fetchModelCapabilities } = require('@librechat/api');
 const { SystemCapabilities } = require('@librechat/data-schemas');
-const { requireCapability } = require('~/server/middleware/roles/capabilities');
+const {
+  requireCapability,
+  hasConfigCapability,
+} = require('~/server/middleware/roles/capabilities');
 const { getAppConfig, invalidateConfigCaches } = require('~/server/services/Config');
 const { requireJwtAuth } = require('~/server/middleware');
 const auditModelCatalogueChange = require('~/server/middleware/auditModelCatalogueChange');
@@ -18,6 +21,7 @@ const handlers = createModelCatalogueHandlers({
   findConfigByPrincipal: db.findConfigByPrincipal,
   patchConfigFields: db.patchConfigFields,
   invalidateConfigCaches,
+  hasConfigCapability,
 });
 
 router.use(requireJwtAuth, requireAdminAccess);

@@ -1394,7 +1394,7 @@ describe('applyDefaultParams', () => {
         }).llmConfig;
 
       it('clamps a model no static map knows, once the gateway reports its ceiling', () => {
-        publishModelLimits({ 'acme/quasar-7b': { maxOutputTokens: 4096 } });
+        publishModelLimits('gw', { 'acme/quasar-7b': { maxOutputTokens: 4096 } });
 
         expect(withMaxTokens('acme/quasar-7b', 99999)).toHaveProperty('maxTokens', 4096);
       });
@@ -1402,7 +1402,7 @@ describe('applyDefaultParams', () => {
       it('raises a ceiling the static map understates', () => {
         expect(withMaxTokens('deepseek/deepseek-v4-pro', 100000)).toHaveProperty('maxTokens', 8000);
 
-        publishModelLimits({ 'deepseek/deepseek-v4-pro': { maxOutputTokens: 384000 } });
+        publishModelLimits('gw', { 'deepseek/deepseek-v4-pro': { maxOutputTokens: 384000 } });
 
         expect(withMaxTokens('deepseek/deepseek-v4-pro', 100000)).toHaveProperty(
           'maxTokens',
@@ -1418,7 +1418,7 @@ describe('applyDefaultParams', () => {
           32000,
         );
 
-        publishModelLimits({ 'qwen/qwen3-235b-a22b-2507': { maxOutputTokens: 16384 } });
+        publishModelLimits('gw', { 'qwen/qwen3-235b-a22b-2507': { maxOutputTokens: 16384 } });
 
         expect(withMaxTokens('qwen/qwen3-235b-a22b-2507', 32000)).toHaveProperty(
           'maxTokens',
@@ -1427,7 +1427,7 @@ describe('applyDefaultParams', () => {
       });
 
       it('keeps the static behaviour when only a context window was reported', () => {
-        publishModelLimits({ 'acme/quasar-7b': { contextTokens: 200000 } });
+        publishModelLimits('gw', { 'acme/quasar-7b': { contextTokens: 200000 } });
 
         expect(withMaxTokens('acme/quasar-7b', 99999)).toHaveProperty('maxTokens', 99999);
       });

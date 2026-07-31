@@ -724,7 +724,7 @@ export function getOpenAILLMConfig({
      * A ceiling the gateway itself reported counts as recognized: it is the
      * model's real cap, which is the case this guard was protecting. */
     if (
-      hasReportedMaxOutputTokens(llmConfig.model) ||
+      hasReportedMaxOutputTokens(llmConfig.model, tokenEndpoint) ||
       (tokensMap != null && findMatchingPattern(llmConfig.model, tokensMap) != null)
     ) {
       const modelMaxOutput = getModelMaxOutputTokens(llmConfig.model, tokenEndpoint);

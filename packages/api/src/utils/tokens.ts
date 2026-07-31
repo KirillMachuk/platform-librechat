@@ -503,12 +503,18 @@ export const maxOutputTokensMap: Record<string, Record<string, number>> = {
  * the analytics rates too. Money is accounted for outside the platform, from what
  * the provider actually charged.
  *
- * ponytail: keyed by model id alone, so several endpoints share one namespace.
- * Gateway catalogues use globally-unique `vendor/model` ids, so a collision needs
- * two gateways serving the same id with different limits; the cost would be a
- * slightly-off limit, not a failure. Key by baseURL if that ever stops holding.
+ * Stored per publishing endpoint rather than merged into one namespace, so that a
+ * republish REPLACES what that endpoint said instead of piling on top of it — a
+ * model the gateway stops serving, or an endpoint repointed at a different
+ * gateway, no longer leaves its old limits behind for the life of the process.
+ *
+ * Reads still search across endpoints, because the endpoint value that reaches
+ * `getModelMaxTokens` at run time is a provider family (`openAI` for anything not
+ * in `providerEndpointMap`), not the name a catalogue was published under. What
+ * keeps one gateway from redefining another endpoint's model is the exact-entry
+ * rule in `reportedLimit`, not the storage key.
  */
-let modelLimitOverlay: ModelCapabilityMap = {};
+const limitsByEndpoint = new Map<string, ModelCapabilityMap>();
 
 /**
  * Publishes what a gateway reported. Called as the endpoints config is assembled,
@@ -522,36 +528,59 @@ let modelLimitOverlay: ModelCapabilityMap = {};
  * flapping between real and name-matched windows mid-conversation is worse than a
  * slightly stale number.
  */
-let lastPublished: ModelCapabilityMap | undefined;
+const lastPublished = new Map<string, ModelCapabilityMap>();
 
-export function publishModelLimits(capabilities: ModelCapabilityMap): void {
+export function publishModelLimits(endpointName: string, capabilities: ModelCapabilityMap): void {
   /**
    * Called as the endpoints config is assembled, which happens several times per
    * request. `fetchModelCapabilities` hands back the same object while it holds a
-   * parsed catalogue, so the common case is republishing something already merged —
-   * skip it rather than rebuild a several-hundred-key object per request.
+   * parsed catalogue, so the common case is republishing what this endpoint
+   * published a moment ago. Remembered per endpoint: a single slot never matched
+   * once a second endpoint published, so the skip silently stopped working.
    */
-  if (capabilities === lastPublished) {
+  if (lastPublished.get(endpointName) === capabilities) {
     return;
   }
   if (Object.keys(capabilities).length > 0) {
-    lastPublished = capabilities;
-    modelLimitOverlay = { ...modelLimitOverlay, ...capabilities };
+    lastPublished.set(endpointName, capabilities);
+    limitsByEndpoint.set(endpointName, capabilities);
   }
 }
 
 /** Test seam: drops everything a gateway reported. */
 export function clearModelLimits(): void {
-  modelLimitOverlay = {};
-  lastPublished = undefined;
+  limitsByEndpoint.clear();
+  lastPublished.clear();
 }
 
+/**
+ * Only endpoints whose line-up comes from a gateway consult the overlay.
+ *
+ * Custom endpoints are the ones a catalogue is published for; the built-in
+ * families carry curated maps of their own and no gateway speaks for them. Without
+ * this, a proxy serving an unprefixed `gpt-4o` would redefine the window and the
+ * output ceiling of the built-in OpenAI endpoint for users who never touch that
+ * proxy. `maxTokensMap[custom]` is the very same object as `maxTokensMap[openAI]`,
+ * so nothing is lost by drawing the line here.
+ */
+const readsFromGateway = (endpoint?: EModelEndpoint | string): boolean =>
+  endpoint === EModelEndpoint.custom;
+
 /** Exact-id lookup only — catalogue keys are full model ids, never fragments. */
-function reportedLimit(modelName: string, key: 'contextTokens' | 'maxOutputTokens') {
-  if (typeof modelName !== 'string') {
+function reportedLimit(
+  modelName: string,
+  key: 'contextTokens' | 'maxOutputTokens',
+  endpoint?: EModelEndpoint | string,
+) {
+  if (typeof modelName !== 'string' || !readsFromGateway(endpoint)) {
     return undefined;
   }
-  return modelLimitOverlay[modelName]?.[key];
+  for (const capabilities of limitsByEndpoint.values()) {
+    if (Object.prototype.hasOwnProperty.call(capabilities, modelName)) {
+      return capabilities[modelName]?.[key];
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -561,8 +590,11 @@ function reportedLimit(modelName: string, key: 'contextTokens' | 'maxOutputToken
  * that a model missing from the static maps is not capped at a guess. A reported
  * ceiling is not a guess, so it lifts that restriction.
  */
-export function hasReportedMaxOutputTokens(modelName: string): boolean {
-  return reportedLimit(modelName, 'maxOutputTokens') != null;
+export function hasReportedMaxOutputTokens(
+  modelName: string,
+  endpoint?: EModelEndpoint | string,
+): boolean {
+  return reportedLimit(modelName, 'maxOutputTokens', endpoint) != null;
 }
 
 /** Finds the longest matching key in the tokens map via substring match. */
@@ -664,7 +696,7 @@ export function getModelMaxTokens(
   }
   /** What the gateway said beats what a name fragment suggests — but an explicit
    *  admin override above still wins over both. */
-  const reported = reportedLimit(modelName, 'contextTokens');
+  const reported = reportedLimit(modelName, 'contextTokens', endpoint);
   if (reported != null) {
     return reported;
   }
@@ -691,7 +723,7 @@ export function getModelMaxOutputTokens(
       return overrideValue;
     }
   }
-  const reported = reportedLimit(modelName, 'maxOutputTokens');
+  const reported = reportedLimit(modelName, 'maxOutputTokens', endpoint);
   if (reported != null) {
     return reported;
   }

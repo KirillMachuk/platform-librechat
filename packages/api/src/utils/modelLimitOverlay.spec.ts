@@ -45,7 +45,7 @@ describe('token limits reported by the gateway', () => {
   });
 
   it('replaces the name-matched window with the reported one', () => {
-    publishModelLimits(asOverlay(DEPLOYED));
+    publishModelLimits('gw', asOverlay(DEPLOYED));
 
     for (const { model, realCtx } of DEPLOYED) {
       expect(getModelMaxTokens(model, EModelEndpoint.custom)).toBe(realCtx);
@@ -53,7 +53,7 @@ describe('token limits reported by the gateway', () => {
   });
 
   it('replaces the name-matched output ceiling with the reported one', () => {
-    publishModelLimits(asOverlay(DEPLOYED));
+    publishModelLimits('gw', asOverlay(DEPLOYED));
 
     for (const { model, realOut } of DEPLOYED) {
       expect(getModelMaxOutputTokens(model, EModelEndpoint.custom)).toBe(realOut);
@@ -65,7 +65,7 @@ describe('token limits reported by the gateway', () => {
   it('lowers a ceiling the name map overstates', () => {
     expect(getModelMaxOutputTokens('qwen/qwen3-235b-a22b-2507', EModelEndpoint.custom)).toBe(32000);
 
-    publishModelLimits(asOverlay(DEPLOYED));
+    publishModelLimits('gw', asOverlay(DEPLOYED));
 
     expect(getModelMaxOutputTokens('qwen/qwen3-235b-a22b-2507', EModelEndpoint.custom)).toBe(16384);
   });
@@ -80,13 +80,13 @@ describe('token limits reported by the gateway', () => {
       getModelMaxTokens('vendor/model-from-the-future', EModelEndpoint.custom),
     ).toBeUndefined();
 
-    publishModelLimits({ 'vendor/model-from-the-future': { contextTokens: 700000 } });
+    publishModelLimits('gw', { 'vendor/model-from-the-future': { contextTokens: 700000 } });
 
     expect(getModelMaxTokens('vendor/model-from-the-future', EModelEndpoint.custom)).toBe(700000);
   });
 
   it('matches the full model id and never a fragment of one', () => {
-    publishModelLimits({ 'deepseek/deepseek-v4-pro': { contextTokens: 1048576 } });
+    publishModelLimits('gw', { 'deepseek/deepseek-v4-pro': { contextTokens: 1048576 } });
 
     expect(getModelMaxTokens('deepseek/deepseek-v4-pro-preview', EModelEndpoint.custom)).toBe(
       128000,
@@ -95,7 +95,7 @@ describe('token limits reported by the gateway', () => {
   });
 
   it('falls back per field, not per model', () => {
-    publishModelLimits({ 'deepseek/deepseek-v4-pro': { contextTokens: 1048576 } });
+    publishModelLimits('gw', { 'deepseek/deepseek-v4-pro': { contextTokens: 1048576 } });
 
     expect(getModelMaxTokens('deepseek/deepseek-v4-pro', EModelEndpoint.custom)).toBe(1048576);
     /** No ceiling reported → the name map still answers. */
@@ -103,7 +103,7 @@ describe('token limits reported by the gateway', () => {
   });
 
   it('lets an explicit admin override win over the gateway', () => {
-    publishModelLimits(asOverlay(DEPLOYED));
+    publishModelLimits('gw', asOverlay(DEPLOYED));
 
     expect(
       getModelMaxTokens('deepseek/deepseek-v4-pro', EModelEndpoint.custom, {
@@ -114,8 +114,8 @@ describe('token limits reported by the gateway', () => {
 
   /** Losing the gateway must not shrink windows mid-conversation. */
   it('keeps the last good answer when a later report is empty', () => {
-    publishModelLimits(asOverlay(DEPLOYED));
-    publishModelLimits({});
+    publishModelLimits('gw', asOverlay(DEPLOYED));
+    publishModelLimits('gw', {});
 
     expect(getModelMaxTokens('deepseek/deepseek-v4-pro', EModelEndpoint.custom)).toBe(1048576);
   });
@@ -126,16 +126,16 @@ describe('token limits reported by the gateway', () => {
    * request.
    */
   it('keeps models from every endpoint that reported', () => {
-    publishModelLimits({ 'gatewayA/model': { contextTokens: 111000 } });
-    publishModelLimits({ 'gatewayB/model': { contextTokens: 222000 } });
+    publishModelLimits('gw-a', { 'gatewayA/model': { contextTokens: 111000 } });
+    publishModelLimits('gw-b', { 'gatewayB/model': { contextTokens: 222000 } });
 
     expect(getModelMaxTokens('gatewayA/model', EModelEndpoint.custom)).toBe(111000);
     expect(getModelMaxTokens('gatewayB/model', EModelEndpoint.custom)).toBe(222000);
   });
 
   it('lets a fresher report correct a model it already knew', () => {
-    publishModelLimits({ 'a/model': { contextTokens: 100 } });
-    publishModelLimits({ 'a/model': { contextTokens: 200000 } });
+    publishModelLimits('gw', { 'a/model': { contextTokens: 100 } });
+    publishModelLimits('gw', { 'a/model': { contextTokens: 200000 } });
 
     expect(getModelMaxTokens('a/model', EModelEndpoint.custom)).toBe(200000);
   });
@@ -147,25 +147,33 @@ describe('token limits reported by the gateway', () => {
    */
   it('applies an equal-but-different report, and skips the identical one', () => {
     const held = { 'a/model': { contextTokens: 111000 } };
-    publishModelLimits(held);
-    publishModelLimits(held);
+    publishModelLimits('gw', held);
+    publishModelLimits('gw', held);
     expect(getModelMaxTokens('a/model', EModelEndpoint.custom)).toBe(111000);
 
-    publishModelLimits({ 'a/model': { contextTokens: 222000 } });
+    publishModelLimits('gw', { 'a/model': { contextTokens: 222000 } });
     expect(getModelMaxTokens('a/model', EModelEndpoint.custom)).toBe(222000);
   });
 
   it('reports whether a ceiling is known, for callers that only clamp known models', () => {
-    expect(hasReportedMaxOutputTokens('deepseek/deepseek-v4-pro')).toBe(false);
+    expect(hasReportedMaxOutputTokens('deepseek/deepseek-v4-pro', EModelEndpoint.custom)).toBe(
+      false,
+    );
 
-    publishModelLimits(asOverlay(DEPLOYED));
+    publishModelLimits('gw', asOverlay(DEPLOYED));
 
-    expect(hasReportedMaxOutputTokens('deepseek/deepseek-v4-pro')).toBe(true);
-    expect(hasReportedMaxOutputTokens('vendor/unknown')).toBe(false);
+    expect(hasReportedMaxOutputTokens('deepseek/deepseek-v4-pro', EModelEndpoint.custom)).toBe(
+      true,
+    );
+    expect(hasReportedMaxOutputTokens('vendor/unknown', EModelEndpoint.custom)).toBe(false);
+    /** A built-in endpoint never reads what a gateway published for someone else. */
+    expect(hasReportedMaxOutputTokens('deepseek/deepseek-v4-pro', EModelEndpoint.openAI)).toBe(
+      false,
+    );
   });
 
   it('survives non-string model names', () => {
-    publishModelLimits(asOverlay(DEPLOYED));
+    publishModelLimits('gw', asOverlay(DEPLOYED));
 
     expect(() =>
       getModelMaxTokens(undefined as unknown as string, EModelEndpoint.custom),
@@ -206,8 +214,45 @@ describe('money is not touched by reported limits', () => {
 
     const before = DEPLOYED.map((row) => rateFor(row.model));
 
-    publishModelLimits(asOverlay(DEPLOYED));
+    publishModelLimits('gw', asOverlay(DEPLOYED));
 
     expect(DEPLOYED.map((row) => rateFor(row.model))).toEqual(before);
+  });
+});
+
+describe('what a gateway may not redefine', () => {
+  beforeEach(() => clearModelLimits());
+  afterEach(() => clearModelLimits());
+
+  /**
+   * A proxy that serves unprefixed ids would otherwise rewrite the built-in
+   * endpoint's window for users who never touch that gateway: an exact entry in
+   * an endpoint's own map is a curated statement and outranks a coincidence.
+   */
+  it('leaves a built-in endpoint alone when a gateway serves the same id', () => {
+    const native = getModelMaxTokens('gpt-4o', EModelEndpoint.openAI);
+
+    publishModelLimits('proxy', { 'gpt-4o': { contextTokens: 8192, maxOutputTokens: 4096 } });
+
+    expect(getModelMaxTokens('gpt-4o', EModelEndpoint.openAI)).toBe(native);
+    expect(hasReportedMaxOutputTokens('gpt-4o', EModelEndpoint.openAI)).toBe(false);
+    /** …while the endpoint the catalogue belongs to still gets the real figures. */
+    expect(getModelMaxTokens('gpt-4o', EModelEndpoint.custom)).toBe(8192);
+  });
+
+  /** But a model nobody listed is still answered by the gateway that serves it. */
+  it('still answers for a model the static maps only guess at', () => {
+    publishModelLimits('proxy', { 'deepseek/deepseek-v4-pro': { contextTokens: 1048576 } });
+
+    expect(getModelMaxTokens('deepseek/deepseek-v4-pro', EModelEndpoint.custom)).toBe(1048576);
+  });
+
+  /** Republishing replaces what that endpoint said, so a retired model does not linger. */
+  it('drops a model an endpoint stops reporting', () => {
+    publishModelLimits('gw', { 'a/retired': { contextTokens: 999000 } });
+    publishModelLimits('gw', { 'a/current': { contextTokens: 111000 } });
+
+    expect(getModelMaxTokens('a/retired', EModelEndpoint.custom)).not.toBe(999000);
+    expect(getModelMaxTokens('a/current', EModelEndpoint.custom)).toBe(111000);
   });
 });
