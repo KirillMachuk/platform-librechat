@@ -42,7 +42,7 @@ export interface ApiKeyHandlerDependencies {
   } | null>;
 }
 
-interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
     _id: Types.ObjectId;

@@ -1,4 +1,5 @@
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
+import type { AuthenticatedRequest } from './handlers';
 import { createApiKeyHandlers, resolveApiKeyExpiry } from './handlers';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -72,7 +73,7 @@ describe('createApiKey handler', () => {
   it('bounds a key created without an expiry', async () => {
     const deps = buildDeps();
     const { createApiKey } = createApiKeyHandlers(deps);
-    const req = { body: { name: 'ci' }, user: { id: 'u1' } } as unknown as Request;
+    const req = { body: { name: 'ci' }, user: { id: 'u1' } } as unknown as AuthenticatedRequest;
 
     await createApiKey(req, buildRes());
 
@@ -85,7 +86,10 @@ describe('createApiKey handler', () => {
   it('answers 400 for an unparseable expiry instead of failing in the database', async () => {
     const deps = buildDeps();
     const { createApiKey } = createApiKeyHandlers(deps);
-    const req = { body: { name: 'ci', expiresAt: 'soon' }, user: { id: 'u1' } } as unknown as Request;
+    const req = {
+      body: { name: 'ci', expiresAt: 'soon' },
+      user: { id: 'u1' },
+    } as unknown as AuthenticatedRequest;
     const res = buildRes();
 
     await createApiKey(req, res);
@@ -97,9 +101,7 @@ describe('createApiKey handler', () => {
   it('exposes the minted key id so the audit entry can name it', async () => {
     const deps = buildDeps();
     const { createApiKey } = createApiKeyHandlers(deps);
-    const req = { body: { name: 'ci' }, user: { id: 'u1' } } as unknown as Request & {
-      auditApiKeyId?: string;
-    };
+    const req = { body: { name: 'ci' }, user: { id: 'u1' } } as unknown as AuthenticatedRequest;
 
     await createApiKey(req, buildRes());
 
