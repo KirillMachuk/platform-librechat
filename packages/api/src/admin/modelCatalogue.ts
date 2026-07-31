@@ -516,18 +516,19 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
       }
 
       /**
-       * The change is applied to the list as it stands right now, never to a list the
-       * caller sent.
+       * The request states one model and a direction, never a list.
        *
        * A caller that states the whole list states it from whatever it last read, so
-       * an admin acting on a screen opened five minutes ago silently overwrites every
-       * change made since — and no re-read on this side can tell that apart from an
-       * intended edit. One model and a direction cannot carry a stale list, which also
-       * makes the request idempotent (asking to enable what is already enabled is not
-       * a change) and takes the order of the line-up out of the caller's hands: that
-       * order decides what employees see first.
+       * an admin acting on a screen opened five minutes ago would silently overwrite
+       * every change made since — and no check on this side could tell that apart
+       * from an intended edit. One model and a direction cannot carry a stale list,
+       * which also makes the request idempotent and takes the order of the line-up
+       * out of the caller's hands: that order decides what employees see first.
+       *
+       * Answered from the config loaded on arrival because it is free, and because a
+       * click that changes nothing should not spend a gateway call. The list that is
+       * actually written is read further down, immediately before the write.
        */
-      /** Cheap answer first, so a click that changes nothing spends no gateway call. */
       if (configuredModelsOf(endpoint).includes(model) === enabled) {
         return res.status(200).json(await loadPayload(req));
       }
