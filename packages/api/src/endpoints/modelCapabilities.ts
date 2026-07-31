@@ -1,4 +1,5 @@
 import axios from 'axios';
+import crypto from 'node:crypto';
 import { logger } from '@librechat/data-schemas';
 import { CacheKeys, Time } from 'librechat-data-provider';
 import type {
@@ -79,7 +80,7 @@ const REQUEST_TIMEOUT_MS = 5000;
 const PROCESS_MEMO_MS = 10_000;
 
 /**
- * Parsed catalogues by base URL, with the moment each stops being reused. Holds one
+ * Parsed catalogues by cache key, with the moment each stops being reused. Holds one
  * small record per model of each endpoint — bounded by how many endpoints exist.
  */
 const memo = new Map<string, { capabilities: ModelCapabilityMap; expiresAt: number }>();
@@ -90,11 +91,19 @@ export function clearModelCapabilityMemo(): void {
 }
 
 /**
- * Cache namespace. Deliberately not the `vision:` prefix an earlier revision used:
- * that one holds `string[]`, and a rolling deploy must not read those as the
- * capability records this module now stores.
+ * Cache namespace, keyed by the whole request identity rather than the URL alone.
+ *
+ * Two endpoints can point at the same gateway with different keys — per-team
+ * entitlements, or a proxy where the key selects the served subset — and keying on
+ * the URL made whichever resolved first answer for both. `models.ts` hashes
+ * `baseURL:apiKey` for exactly this reason.
+ *
+ * Deliberately not the `vision:` prefix an earlier revision used: that one holds
+ * `string[]`, and a rolling deploy must not read those as the capability records
+ * this module now stores.
  */
-const cacheKeyFor = (baseURL: string) => `capabilities:${baseURL}`;
+const cacheKeyFor = (baseURL: string, apiKey: string) =>
+  `capabilities:${crypto.createHash('sha256').update(`${baseURL}:${apiKey}`).digest('hex').slice(0, 32)}`;
 
 /** Reads a positive integer, or undefined for anything else (strings, null, NaN). */
 function toPositiveInt(value: unknown): number | undefined {
@@ -199,19 +208,21 @@ export async function fetchModelCapabilities({
     return {};
   }
 
+  const cacheKey = cacheKeyFor(baseURL, apiKey);
+
   const now = Date.now();
-  const held = memo.get(baseURL);
+  const held = memo.get(cacheKey);
   if (held && held.expiresAt > now) {
     return held.capabilities;
   }
 
   const cache = standardCache(CacheKeys.MODEL_QUERIES);
-  const cacheKey = cacheKeyFor(baseURL);
 
   /** Keeps the parsed answer in this process too, so the repeats within one
-   *  request cost nothing. */
+   *  request cost nothing. Same key as the shared cache, so two endpoints on one
+   *  gateway with different keys do not answer for each other here either. */
   const hold = (capabilities: ModelCapabilityMap) => {
-    memo.set(baseURL, { capabilities, expiresAt: Date.now() + PROCESS_MEMO_MS });
+    memo.set(cacheKey, { capabilities, expiresAt: Date.now() + PROCESS_MEMO_MS });
     return capabilities;
   };
 

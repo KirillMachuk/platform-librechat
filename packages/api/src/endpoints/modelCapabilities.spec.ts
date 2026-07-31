@@ -1,4 +1,5 @@
 import axios from 'axios';
+import crypto from 'node:crypto';
 import { logger } from '@librechat/data-schemas';
 import type { TEndpointsConfig } from 'librechat-data-provider';
 import {
@@ -171,7 +172,13 @@ describe('extractCapabilities: context window', () => {
 
 describe('fetchModelCapabilities', () => {
   const args = { baseURL: 'http://gateway.internal/v1', apiKey: 'k' };
-  const cacheKey = 'capabilities:http://gateway.internal/v1';
+  /** Keyed by the whole request identity, so two endpoints on one gateway with
+   *  different keys cannot answer for each other. */
+  const cacheKey = `capabilities:${crypto
+    .createHash('sha256')
+    .update(`${args.baseURL}:${args.apiKey}`)
+    .digest('hex')
+    .slice(0, 32)}`;
 
   const catalogue = {
     data: [
@@ -382,5 +389,27 @@ describe('reportsNoToolSupport', () => {
     expect(reportsNoToolSupport(undefined, 'gateway', 'vendor/no-tools')).toBe(false);
     expect(reportsNoToolSupport(config, undefined, 'vendor/no-tools')).toBe(false);
     expect(reportsNoToolSupport(config, 'gateway', undefined)).toBe(false);
+  });
+});
+
+describe('fetchModelCapabilities: request identity', () => {
+  /** Two endpoints on one gateway with different keys serve different models. */
+  it('does not answer for a second endpoint that uses a different key', async () => {
+    mockedAxios.get.mockResolvedValueOnce({
+      data: { data: [{ id: 'cheap/model', supported_parameters: ['tools'] }] },
+    });
+    mockedAxios.get.mockResolvedValueOnce({
+      data: { data: [{ id: 'premium/model', supported_parameters: ['tools'] }] },
+    });
+
+    const cheap = await fetchModelCapabilities({ baseURL: 'http://gw/v1', apiKey: 'cheap-key' });
+    const premium = await fetchModelCapabilities({
+      baseURL: 'http://gw/v1',
+      apiKey: 'premium-key',
+    });
+
+    expect(Object.keys(cheap)).toEqual(['cheap/model']);
+    expect(Object.keys(premium)).toEqual(['premium/model']);
+    expect(mockedAxios.get).toHaveBeenCalledTimes(2);
   });
 });

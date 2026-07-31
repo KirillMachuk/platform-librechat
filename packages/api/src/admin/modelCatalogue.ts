@@ -1,5 +1,10 @@
 import { logger, BASE_CONFIG_PRINCIPAL_ID } from '@librechat/data-schemas';
-import { PrincipalType, PrincipalModel, extractEnvVariable } from 'librechat-data-provider';
+import {
+  Constants,
+  PrincipalType,
+  PrincipalModel,
+  extractEnvVariable,
+} from 'librechat-data-provider';
 import type { ModelCapabilities, ModelCapabilityMap } from 'librechat-data-provider';
 import type { AppConfig, IConfig } from '@librechat/data-schemas';
 import type { Types, ClientSession } from 'mongoose';
@@ -74,6 +79,12 @@ export interface AdminModelEndpoint {
    * model the gateway simply did not mention.
    */
   source: 'catalogue' | 'config';
+  /**
+   * False when the endpoint takes its line-up from its gateway (`models.fetch`):
+   * the toggles below would be stored and audited but change nothing an employee
+   * sees, so the screen must say so instead of offering them.
+   */
+  managed: boolean;
   models: AdminModelEntry[];
 }
 
@@ -89,7 +100,18 @@ export interface ModelCatalogueDeps {
     apiKey?: string;
   }) => Promise<ModelCapabilityMap>;
   /** Agents per model, so the UI can warn before retiring one that is in use. */
-  countAgentsByModel: (tenantId?: string) => Promise<Record<string, number>>;
+  countAgentsByModel: (provider: string, tenantId?: string) => Promise<Record<string, number>>;
+  /**
+   * The same gate `/api/admin/config` puts on the `endpoints` section. Without it
+   * this route is a lower-privilege way to rewrite the very document that one
+   * protects: `access:admin` alone would be enough to change what every employee
+   * can select.
+   */
+  hasConfigCapability: (
+    user: { id: string; role: string; tenantId?: string },
+    section: string | null,
+    verb?: 'manage' | 'read',
+  ) => Promise<boolean>;
   /** The raw override document, to avoid clobbering a sibling endpoint's list. */
   findConfigByPrincipal: (
     principalType: PrincipalType,
@@ -113,8 +135,23 @@ type CustomEndpoint = {
   baseURL?: unknown;
   apiKey?: unknown;
   titleModel?: unknown;
-  models?: { default?: unknown };
+  models?: { default?: unknown; fetch?: unknown };
 };
+
+/**
+ * Own-property membership, never `obj[key] != null`.
+ *
+ * These maps are built from gateway JSON and then looked up with ids from a
+ * request body, so a plain index reads straight through `Object.prototype`:
+ * `catalogue['toString']` is a function, not `undefined`, and an id like
+ * `toString`, `constructor` or `__proto__` would pass "does the gateway serve
+ * this" and be written into the live model list.
+ */
+const has = (map: object | undefined | null, key: string): boolean =>
+  map != null && Object.prototype.hasOwnProperty.call(map, key);
+
+/** Whether this endpoint takes its line-up from the gateway rather than the config. */
+const fetchesItsOwnModels = (endpoint: CustomEndpoint): boolean => endpoint.models?.fetch === true;
 
 function getTenantId(req: ServerRequest): string | undefined {
   return (req.user as { tenantId?: string } | undefined)?.tenantId;
@@ -145,10 +182,21 @@ export function collectModelRoles(
   appConfig: AppConfig,
   endpointName: string,
   endpoint: CustomEndpoint,
-): Map<string, ModelRole[]> {
+): { roles: Map<string, ModelRole[]>; blocking: Set<string> } {
   const roles = new Map<string, ModelRole[]>();
-  const add = (model: unknown, role: ModelRole) => {
+  const blocking = new Set<string>();
+  const add = (model: unknown, role: ModelRole, ambiguous = false) => {
     if (typeof model !== 'string' || model === '') {
+      return;
+    }
+    /**
+     * `current_model` is a setting, not a model: it tells the title step to reuse
+     * whatever the conversation is on. Treated as an id it becomes a job held by
+     * a model no gateway serves, and the endpoint can then never be saved —
+     * dropping it fails the "still in use" check, keeping it fails the "served by
+     * the gateway" one.
+     */
+    if (model === Constants.CURRENT_MODEL) {
       return;
     }
     const existing = roles.get(model);
@@ -156,6 +204,9 @@ export function collectModelRoles(
       existing.push(role);
     } else {
       roles.set(model, [role]);
+    }
+    if (!ambiguous) {
+      blocking.add(model);
     }
   };
 
@@ -175,14 +226,21 @@ export function collectModelRoles(
       }
     | undefined;
   const drEndpoint = deepResearch?.endpoint;
-  if (drEndpoint == null || drEndpoint === endpointName) {
+  /**
+   * With `deepResearch.endpoint` unset the roles belong to no endpoint in
+   * particular, so they are shown against every endpoint that lists the id but
+   * never block a save: an endpoint whose gateway does not serve the research
+   * models would otherwise be unsavable in both directions.
+   */
+  const ambiguous = drEndpoint == null;
+  if (ambiguous || drEndpoint === endpointName) {
     for (const [mode, tier] of Object.entries(deepResearch?.modes ?? {})) {
-      add(tier?.leadModel, `deepResearch.${mode}.leadModel`);
-      add(tier?.workerModel, `deepResearch.${mode}.workerModel`);
+      add(tier?.leadModel, `deepResearch.${mode}.leadModel`, ambiguous);
+      add(tier?.workerModel, `deepResearch.${mode}.workerModel`, ambiguous);
     }
   }
 
-  return roles;
+  return { roles, blocking };
 }
 
 /** Builds one endpoint's rows: catalogue order, enabled models hoisted to the top. */
@@ -192,6 +250,7 @@ function buildEndpoint(
   catalogue: ModelCapabilityMap,
   roles: Map<string, ModelRole[]>,
   agentCounts: Record<string, number>,
+  managed: boolean,
 ): AdminModelEndpoint {
   const answered = Object.keys(catalogue).length > 0;
   const enabled = new Set(configured);
@@ -202,9 +261,9 @@ function buildEndpoint(
    */
   const ids = answered
     ? [
-        ...configured.filter((id) => catalogue[id] != null),
+        ...configured.filter((id) => has(catalogue, id)),
         ...Object.keys(catalogue).filter((id) => !enabled.has(id)),
-        ...configured.filter((id) => catalogue[id] == null),
+        ...configured.filter((id) => !has(catalogue, id)),
       ]
     : [...configured];
 
@@ -212,11 +271,11 @@ function buildEndpoint(
     id,
     enabled: enabled.has(id),
     roles: roles.get(id) ?? [],
-    agents: agentCounts[id] ?? 0,
-    ...(catalogue[id] ?? {}),
+    agents: has(agentCounts, id) ? agentCounts[id] : 0,
+    ...(has(catalogue, id) ? catalogue[id] : {}),
   }));
 
-  return { name: endpointName, source: answered ? 'catalogue' : 'config', models };
+  return { name: endpointName, source: answered ? 'catalogue' : 'config', managed, models };
 }
 
 /**
@@ -255,13 +314,24 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
     findConfigByPrincipal,
     patchConfigFields,
     invalidateConfigCaches,
+    hasConfigCapability,
   } = deps;
+
+  /** The catalogue only ever reads and writes `endpoints`. */
+  const CONFIG_SECTION = 'endpoints';
+
+  const denied = async (req: ServerRequest, verb: 'manage' | 'read'): Promise<boolean> => {
+    const user = req.user as { id: string; role: string; tenantId?: string } | undefined;
+    if (!user) {
+      return true;
+    }
+    return !(await hasConfigCapability(user, CONFIG_SECTION, verb));
+  };
 
   async function loadPayload(req: ServerRequest, refresh = false): Promise<ModelCatalogueResponse> {
     const tenantId = getTenantId(req);
     const appConfig = await getAppConfig({ tenantId, refresh });
     const endpoints = customEndpointsOf(appConfig);
-    const agentCounts = await countAgentsByModel(tenantId);
 
     const rows = await Promise.all(
       endpoints.map(async (endpoint) => {
@@ -269,16 +339,21 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
         if (name === '') {
           return null;
         }
-        const catalogue = await fetchModelCapabilities({
-          baseURL: extractEnvVariable(String(endpoint.baseURL ?? '')),
-          apiKey: extractEnvVariable(String(endpoint.apiKey ?? '')),
-        });
+        /** Independent reads — the agent aggregate need not wait for the catalogue. */
+        const [catalogue, agentCounts] = await Promise.all([
+          fetchModelCapabilities({
+            baseURL: extractEnvVariable(String(endpoint.baseURL ?? '')),
+            apiKey: extractEnvVariable(String(endpoint.apiKey ?? '')),
+          }),
+          countAgentsByModel(name, tenantId),
+        ]);
         return buildEndpoint(
           name,
           configuredModelsOf(endpoint),
           catalogue,
-          collectModelRoles(appConfig, name, endpoint),
+          collectModelRoles(appConfig, name, endpoint).roles,
           agentCounts,
+          fetchesItsOwnModels(endpoint),
         );
       }),
     );
@@ -288,6 +363,9 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
 
   async function getCatalogue(req: ServerRequest, res: Response): Promise<Response> {
     try {
+      if (await denied(req, 'read')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
       return res.status(200).json(await loadPayload(req));
     } catch (error) {
       logger.error('[adminModelCatalogue] getCatalogue error:', error);
@@ -297,6 +375,9 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
 
   async function setModels(req: ServerRequest, res: Response): Promise<Response> {
     try {
+      if (await denied(req, 'manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
       const { endpoint: endpointName, models } = (req.body ?? {}) as {
         endpoint?: unknown;
         models?: unknown;
@@ -336,6 +417,20 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
       if (!endpoint) {
         return res.status(400).json({ error: `Unknown endpoint: ${endpointName}` });
       }
+      /**
+       * `models.fetch` makes the gateway's own list authoritative — `loadConfigModels`
+       * uses `models.default` only when the fetch returns nothing. Accepting a
+       * curated list here would store it, audit it and change nothing an employee
+       * sees, so refuse instead of pretending.
+       */
+      if (fetchesItsOwnModels(endpoint)) {
+        return res.status(400).json({
+          error:
+            `Endpoint "${endpointName}" takes its model list from its gateway ` +
+            '(models.fetch), so a curated list here would have no effect. Set models.fetch ' +
+            'to false in the configuration first.',
+        });
+      }
 
       const catalogue = await fetchModelCapabilities({
         baseURL: extractEnvVariable(String(endpoint.baseURL ?? '')),
@@ -344,7 +439,7 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
       /** Only validate against the catalogue when there is one — otherwise every
        *  id would look invalid and the endpoint would become unmanageable. */
       if (Object.keys(catalogue).length > 0) {
-        const unknown = unique.filter((model) => catalogue[model] == null);
+        const unknown = unique.filter((model) => !has(catalogue, model));
         if (unknown.length > 0) {
           return res.status(400).json({
             error: `Not served by this endpoint's gateway: ${unknown.join(', ')}`,
@@ -358,9 +453,11 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
        * admin cannot see that from this screen — so the error names the model and
        * the setting to change first.
        */
-      const roles = collectModelRoles(appConfig, endpointName, endpoint);
+      const { roles, blocking: claimed } = collectModelRoles(appConfig, endpointName, endpoint);
       const stillEnabled = new Set(unique);
-      const blocking = [...roles.entries()].filter(([model]) => !stillEnabled.has(model));
+      const blocking = [...roles.entries()].filter(
+        ([model]) => claimed.has(model) && !stillEnabled.has(model),
+      );
       if (blocking.length > 0) {
         return res.status(400).json({
           error: `Still in use by configuration — change that setting first: ${blocking
@@ -369,19 +466,45 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
         });
       }
 
-      const stored = await findConfigByPrincipal(PrincipalType.ROLE, BASE_CONFIG_PRINCIPAL_ID);
+      /**
+       * `includeInactive` matters: the read decides what the write preserves. A
+       * deactivated base document reads back as null without it, the merge then
+       * starts from an empty array, and the `$set` replaces every other endpoint's
+       * saved list with this one — the clobber `mergeEndpointOverride` exists to
+       * prevent.
+       */
+      const stored = await findConfigByPrincipal(PrincipalType.ROLE, BASE_CONFIG_PRINCIPAL_ID, {
+        includeInactive: true,
+      });
       const overrides = (stored?.overrides ?? {}) as { endpoints?: { custom?: unknown } };
+      const merged = mergeEndpointOverride(overrides.endpoints?.custom, endpointName, unique);
+
+      /**
+       * The whole array is rewritten, so a save that started from a stale read
+       * would silently drop a sibling endpoint another admin had just changed.
+       * There is no transaction to lean on — the deployment runs a standalone
+       * mongod — so re-read immediately before writing and refuse rather than
+       * overwrite. It narrows the window to one round trip and turns a silent
+       * loss into something the admin can retry.
+       */
+      const fresh = await findConfigByPrincipal(PrincipalType.ROLE, BASE_CONFIG_PRINCIPAL_ID, {
+        includeInactive: true,
+      });
+      const freshCustom = ((fresh?.overrides ?? {}) as { endpoints?: { custom?: unknown } })
+        .endpoints?.custom;
+      if (
+        JSON.stringify(freshCustom ?? null) !== JSON.stringify(overrides.endpoints?.custom ?? null)
+      ) {
+        return res.status(409).json({
+          error: 'The model lists changed while this was being saved. Reload and try again.',
+        });
+      }
+
       await patchConfigFields(
         PrincipalType.ROLE,
         BASE_CONFIG_PRINCIPAL_ID,
         PrincipalModel.ROLE,
-        {
-          [CUSTOM_ENDPOINTS_FIELD]: mergeEndpointOverride(
-            overrides.endpoints?.custom,
-            endpointName,
-            unique,
-          ),
-        },
+        { [CUSTOM_ENDPOINTS_FIELD]: merged },
         MODEL_CATALOGUE_PRIORITY,
       );
       if (invalidateConfigCaches) {
