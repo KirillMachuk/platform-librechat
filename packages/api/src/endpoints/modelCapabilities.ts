@@ -5,6 +5,8 @@ import { CacheKeys, Time } from 'librechat-data-provider';
 import type {
   ModelCapabilities,
   ModelCapabilityMap,
+  ModelOutputType,
+  ModelPriceTier,
   TEndpointsConfig,
 } from 'librechat-data-provider';
 import { standardCache } from '~/cache';
@@ -25,15 +27,19 @@ import { standardCache } from '~/cache';
  * already make. Gateways that do not publish it simply yield nothing here and every
  * caller keeps its previous behaviour.
  *
- * Nothing about pricing is read or stored. Money is accounted for outside the
- * platform, from what the provider actually charged, and this module must stay out
- * of it — see `MODEL_CAPABILITIES_Plan.md`.
+ * Money stays outside. The catalogue's price fields are read here for exactly one
+ * purpose — cutting a model into a coarse cost band an operator can see before
+ * turning it on — and for nothing else: no rate is written to the config, none is
+ * sent to employees, and nothing on the charging path (the provider's own
+ * `usage.cost`, collected by the anonymizer into the ledger) goes through this
+ * module. See `MODEL_CAPABILITIES_Plan.md`, "Деньги отделены".
  */
 
 /** Shape of the entries returned by an OpenRouter-compatible `/models` route. */
 interface CatalogueModel {
   id?: unknown;
   name?: unknown;
+  description?: unknown;
   created?: unknown;
   expiration_date?: unknown;
   alias_target?: {
@@ -42,11 +48,22 @@ interface CatalogueModel {
   context_length?: unknown;
   architecture?: {
     input_modalities?: unknown;
+    output_modalities?: unknown;
   };
   supported_parameters?: unknown;
   top_provider?: {
     context_length?: unknown;
     max_completion_tokens?: unknown;
+  };
+  /** USD per token, as strings. */
+  pricing?: {
+    prompt?: unknown;
+    completion?: unknown;
+  };
+  benchmarks?: {
+    artificial_analysis?: {
+      intelligence_index?: unknown;
+    };
   };
 }
 
@@ -153,6 +170,105 @@ function toIsoDate(value: unknown): string | undefined {
   return Number.isNaN(Date.parse(text)) ? undefined : text;
 }
 
+/** Reads a finite number from a number or a numeric string; prices arrive as strings. */
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  /** `Number('')` and `Number(null)` are both 0, which would read as a free model. */
+  if (typeof value !== 'string' || value.trim() === '') {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/**
+ * A bound on the vendor blurb, not a formatter.
+ *
+ * This is the one field of a record whose length nothing upstream constrains, and
+ * the record is cached and multiplied by every model of a catalogue. Real ones run
+ * to a couple of hundred characters, so the cut only ever fires on something
+ * pathological.
+ */
+const MAX_DESCRIPTION_LENGTH = 500;
+
+/**
+ * What the model answers with, when the catalogue lists more than one.
+ *
+ * A picture-or-audio model also emits the text around its answer, so `text` is
+ * present on nearly everything and is the least informative of the three. The
+ * distinctive modality wins.
+ */
+const OUTPUT_TYPES: ModelOutputType[] = ['image', 'audio', 'text'];
+
+function toOutputType(value: unknown): ModelOutputType | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  return OUTPUT_TYPES.find((type) => value.includes(type));
+}
+
+/**
+ * How much input weighs against output in the blend.
+ *
+ * Chats read far more than they write — a long thread, an attached document and a
+ * system prompt all get re-sent with every turn, against a few hundred tokens of
+ * answer. Weighting the two equally would rank a model with cheap input and dear
+ * output as costlier than it is in use.
+ */
+const INPUT_WEIGHT = 3;
+
+/**
+ * Where one band ends and the next begins, in USD per million blended tokens.
+ *
+ * Absolute figures rather than quantiles of the catalogue: a band that means
+ * "cheaper than most of what is on offer today" would re-label models on a day
+ * nobody touched them, and "Эконом" has to keep meaning the same thing. Checked
+ * against the line-up this stand actually runs — DeepSeek V3.1 at 0.4 and the
+ * cheap OpenAI tiers land in the first band, GLM and Qwen Max in the second,
+ * Sonnet and Kimi in the third, Opus in the fourth.
+ */
+const TIER_CEILINGS: ReadonlyArray<readonly [ModelPriceTier, number]> = [
+  ['economy', 1],
+  ['standard', 3],
+  ['premium', 8],
+];
+
+/** The band above the last ceiling. */
+const TOP_TIER: ModelPriceTier = 'top';
+
+/**
+ * The cost band of a model, and the blend it was cut from.
+ *
+ * Answers nothing at all unless per-token prices actually describe what the model
+ * costs. A free variant reads as zero; a router (`openrouter/auto`) publishes `-1`
+ * because its price is whatever it routes to; and a model that answers in pictures
+ * or audio is billed per image or per second, next to which its token prices are a
+ * rounding error. Each of those would otherwise be labelled the cheapest thing on
+ * the screen.
+ */
+function priceBandOf(
+  pricing: CatalogueModel['pricing'],
+  outputType: ModelOutputType | undefined,
+): { priceTier: ModelPriceTier; priceBlend: number } | undefined {
+  if (outputType !== 'text') {
+    return undefined;
+  }
+  const prompt = toFiniteNumber(pricing?.prompt);
+  const completion = toFiniteNumber(pricing?.completion);
+  if (prompt == null || completion == null || prompt < 0 || completion < 0) {
+    return undefined;
+  }
+  const blend = ((INPUT_WEIGHT * prompt + completion) / (INPUT_WEIGHT + 1)) * 1e6;
+  if (!(blend > 0)) {
+    return undefined;
+  }
+  const tier = TIER_CEILINGS.find(([, ceiling]) => blend < ceiling)?.[0] ?? TOP_TIER;
+  /** Four decimals keeps the cheapest models apart without pretending to be a rate. */
+  return { priceTier: tier, priceBlend: Math.round(blend * 1e4) / 1e4 };
+}
+
 /**
  * Parses one catalogue entry. Exported for tests: this is the part with decisions.
  *
@@ -168,6 +284,8 @@ export function extractCapabilities(entry: CatalogueModel): ModelCapabilities {
   ].filter((value): value is number => value != null);
 
   const id = toText(entry?.id);
+  const outputType = toOutputType(entry?.architecture?.output_modalities);
+  const intelligence = toFiniteNumber(entry?.benchmarks?.artificial_analysis?.intelligence_index);
 
   return {
     vision: listIncludes(entry?.architecture?.input_modalities, 'image'),
@@ -180,6 +298,10 @@ export function extractCapabilities(entry: CatalogueModel): ModelCapabilities {
     aliasOf: toText(entry?.alias_target?.slug),
     /** Only ever `true`: "not a free variant" is the norm and needs no field. */
     free: id?.endsWith(FREE_VARIANT_SUFFIX) === true ? true : undefined,
+    description: toText(entry?.description)?.slice(0, MAX_DESCRIPTION_LENGTH),
+    outputType,
+    intelligence: intelligence != null && intelligence >= 0 ? intelligence : undefined,
+    ...priceBandOf(entry?.pricing, outputType),
   };
 }
 

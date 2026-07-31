@@ -476,3 +476,172 @@ describe('extractCapabilities: what a model is labelled with', () => {
     }
   });
 });
+
+describe('extractCapabilities: what a model is for', () => {
+  it('carries the vendor description through', () => {
+    expect(
+      extractCapabilities({ id: 'a/x', description: 'A frontier model for agentic coding.' })
+        .description,
+    ).toBe('A frontier model for agentic coding.');
+  });
+
+  it('drops a description that is not text', () => {
+    for (const value of [42, null, '', '   ', {}, []]) {
+      expect(extractCapabilities({ id: 'a/x', description: value }).description).toBeUndefined();
+    }
+  });
+
+  /** The record is cached and repeated per model, so one field cannot be unbounded. */
+  it('bounds a description no upstream limit constrains', () => {
+    const description = extractCapabilities({
+      id: 'a/x',
+      description: 'x'.repeat(5000),
+    }).description;
+    expect(description).toHaveLength(500);
+  });
+
+  /**
+   * Every one of these also answers in text, so reading the first entry — or
+   * treating `text` as an answer — would call an image generator a text model.
+   */
+  it('names the distinctive output modality, not the ever-present one', () => {
+    const outputOf = (output_modalities: unknown) =>
+      extractCapabilities({ id: 'a/x', architecture: { output_modalities } }).outputType;
+
+    expect(outputOf(['text'])).toBe('text');
+    expect(outputOf(['image', 'text'])).toBe('image');
+    expect(outputOf(['text', 'image'])).toBe('image');
+    expect(outputOf(['text', 'audio'])).toBe('audio');
+    expect(outputOf(['image', 'audio', 'text'])).toBe('image');
+  });
+
+  it('says nothing when the catalogue lists no output modality it knows', () => {
+    expect(extractCapabilities({ id: 'a/x' }).outputType).toBeUndefined();
+    expect(
+      extractCapabilities({ id: 'a/x', architecture: { output_modalities: 'text' } }).outputType,
+    ).toBeUndefined();
+    expect(
+      extractCapabilities({ id: 'a/x', architecture: { output_modalities: ['embeddings'] } })
+        .outputType,
+    ).toBeUndefined();
+  });
+
+  it('reads the intelligence index the catalogue republishes', () => {
+    expect(
+      extractCapabilities({
+        id: 'a/x',
+        benchmarks: { artificial_analysis: { intelligence_index: 57.1 } },
+      }).intelligence,
+    ).toBe(57.1);
+  });
+
+  it('says nothing about intelligence rather than guessing a zero', () => {
+    expect(extractCapabilities({ id: 'a/x' }).intelligence).toBeUndefined();
+    expect(extractCapabilities({ id: 'a/x', benchmarks: {} }).intelligence).toBeUndefined();
+    /** A negative index is not a score, and a missing one must not sort as the worst. */
+    for (const value of [null, -1, NaN, 'strong', '']) {
+      expect(
+        extractCapabilities({
+          id: 'a/x',
+          benchmarks: { artificial_analysis: { intelligence_index: value } },
+        }).intelligence,
+      ).toBeUndefined();
+    }
+  });
+
+  /** Read the same way prices are, which the catalogue publishes as strings. */
+  it('accepts an index published as a numeric string', () => {
+    expect(
+      extractCapabilities({
+        id: 'a/x',
+        benchmarks: { artificial_analysis: { intelligence_index: '57.1' } },
+      }).intelligence,
+    ).toBe(57.1);
+  });
+});
+
+/**
+ * The band is what an operator is shown instead of a price, so the cases that
+ * matter are the ones where a number exists but does not mean what it looks like.
+ */
+describe('extractCapabilities: cost band', () => {
+  const bandOf = (prompt: unknown, completion: unknown, output_modalities: unknown = ['text']) =>
+    extractCapabilities({
+      id: 'a/x',
+      pricing: { prompt, completion },
+      architecture: { output_modalities },
+    });
+
+  /** Prices as this stand's own line-up publishes them. */
+  it('puts the models this stand runs where an operator would put them', () => {
+    expect(bandOf('0.00000025', '0.00000095').priceTier).toBe('economy'); // DeepSeek V3.1
+    expect(bandOf('0.00000112', '0.00000352').priceTier).toBe('standard'); // GLM 5.2
+    expect(bandOf('0.000002', '0.00001').priceTier).toBe('premium'); // Claude Sonnet 5
+    expect(bandOf('0.000005', '0.000025').priceTier).toBe('top'); // Claude Opus 5
+  });
+
+  it('cuts at the published boundaries, upper edge exclusive', () => {
+    expect(bandOf('0', '0.0000039').priceTier).toBe('economy'); // 0.975
+    expect(bandOf('0', '0.000004').priceTier).toBe('standard'); // 1.000
+    expect(bandOf('0', '0.0000119').priceTier).toBe('standard'); // 2.975
+    expect(bandOf('0', '0.000012').priceTier).toBe('premium'); // 3.000
+    expect(bandOf('0', '0.0000319').priceTier).toBe('premium'); // 7.975
+    expect(bandOf('0', '0.000032').priceTier).toBe('top'); // 8.000
+  });
+
+  it('reports the blend it cut from, weighted toward input', () => {
+    /** Sonnet 5: (3 × 2 + 10) / 4 = 4 USD per million. */
+    expect(bandOf('0.000002', '0.00001').priceBlend).toBe(4);
+    /** Equal weighting would have said 6. */
+    expect(bandOf('0.000002', '0.00001').priceBlend).not.toBe(6);
+  });
+
+  /**
+   * `openrouter/auto` publishes -1 because its price is whatever it routes to.
+   * Read as a number it is below every ceiling, so the router would be labelled
+   * the cheapest thing in the catalogue.
+   */
+  it('refuses to band a router that has no price of its own', () => {
+    expect(bandOf('-1', '-1').priceTier).toBeUndefined();
+    expect(bandOf('-1', '-1').priceBlend).toBeUndefined();
+  });
+
+  /**
+   * Today's sentinel is -1 per token, which is enormous next to a real price and
+   * drags the blend negative on its own. A smaller negative would not: it averages
+   * back above zero and would come out as an ordinary band. Refusing negative
+   * prices outright is what covers both, rather than relying on the sentinel
+   * staying large.
+   */
+  it('refuses a negative price too small to drag the blend below zero', () => {
+    /** Blends to +2.425, comfortably inside a band, from a nonsense input price. */
+    expect(bandOf('-0.0000001', '0.00001').priceTier).toBeUndefined();
+    expect(bandOf('0.000002', '-0.0000001').priceTier).toBeUndefined();
+  });
+
+  it('refuses to band a model nobody is charged per token for', () => {
+    /** A free variant. */
+    expect(bandOf('0', '0').priceTier).toBeUndefined();
+    /** Billed per second of audio; its token prices are zero. */
+    expect(bandOf('0', '0', ['text', 'audio']).priceTier).toBeUndefined();
+    /** Billed per image on top of tokens, so the token blend understates it. */
+    expect(bandOf('0.000002', '0.000012', ['image', 'text']).priceTier).toBeUndefined();
+  });
+
+  it('says nothing when the catalogue published no price', () => {
+    expect(extractCapabilities({ id: 'a/x' }).priceTier).toBeUndefined();
+    expect(bandOf(undefined, '0.00001').priceTier).toBeUndefined();
+    expect(bandOf('0.000002', undefined).priceTier).toBeUndefined();
+    /** `Number('')` is 0, which would read as free rather than as absent. */
+    expect(bandOf('', '').priceTier).toBeUndefined();
+    expect(bandOf('cheap', 'dear').priceTier).toBeUndefined();
+  });
+
+  /** A model with no stated output modality is not assumed to answer in text. */
+  it('does not band a model whose output the catalogue did not name', () => {
+    expect(
+      extractCapabilities({ id: 'a/x', pricing: { prompt: '0.000002', completion: '0.00001' } })
+        .priceTier,
+    ).toBeUndefined();
+  });
+});

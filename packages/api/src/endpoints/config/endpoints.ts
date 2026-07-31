@@ -24,11 +24,13 @@ import { publishModelLimits } from '~/utils/tokens';
  * carries.
  *
  * The read also collects fields only the admin screen needs — release and
- * retirement dates, what an alias resolves to, whether it is a free variant — and
- * this map rides on a route rebuilt several times per message. For an endpoint
- * without a curated list that is the entire catalogue, every time, so the extra
- * fields would be tens of kB of JSON per message answering nothing the browser
- * asks. The token figures stay: callers already had them.
+ * retirement dates, what an alias resolves to, whether it is a free variant, the
+ * vendor's paragraph about it, its cost band — and this map rides on a route
+ * rebuilt several times per message. For an endpoint without a curated list that
+ * is the entire catalogue, every time, so the extra fields would be a hundred kB
+ * of JSON per message answering nothing the browser asks; the descriptions alone
+ * outweigh everything else here put together. The token figures stay: callers
+ * already had them.
  */
 const forTheBrowser = ({
   vision,

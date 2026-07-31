@@ -474,7 +474,61 @@ export type ModelCapabilities = {
    * tighter limits and looser data terms than the paid twin.
    */
   free?: boolean;
+  /**
+   * The vendor's own one-paragraph description, in the language the catalogue
+   * publishes it (English). Says what the model is for, which nothing else in the
+   * record does — an id and a context window do not tell an operator whether a
+   * model is a coding specialist or a cheap summariser.
+   */
+  description?: string;
+  /**
+   * What the model produces. Absent when the catalogue did not say.
+   *
+   * `text` for the overwhelming majority; `image` and `audio` mark models whose
+   * answer is a picture or a sound, which behave differently enough in a chat that
+   * offering them unmarked is a trap.
+   */
+  outputType?: ModelOutputType;
+  /**
+   * Roughly what a million tokens costs, as a band rather than a figure — see
+   * {@link ModelPriceTier}.
+   */
+  priceTier?: ModelPriceTier;
+  /**
+   * The number the band was cut from: USD per million tokens, input and output
+   * weighted 3:1 (real conversations read far more than they write).
+   *
+   * A sort key, not a rate. It is a blend of two published prices and matches no
+   * invoice line, so it is never rendered — surfaced only so a list can be put in
+   * cost order, which bands alone cannot do when half the catalogue is one band.
+   * Absent whenever {@link priceTier} is.
+   */
+  priceBlend?: number;
+  /**
+   * Artificial Analysis' intelligence index, as the catalogue republishes it —
+   * one number combining their benchmark suite, higher is stronger. Published for
+   * roughly a third of a real catalogue; absent for the rest, which is not a
+   * statement that those models are weak.
+   */
+  intelligence?: number;
 };
+
+/** What a model produces, from the catalogue's output modalities. */
+export type ModelOutputType = 'text' | 'image' | 'audio';
+
+/**
+ * A coarse cost band for a model, in place of a price.
+ *
+ * Money is accounted for outside the platform, and an exact rate shown here would
+ * be a second source of truth that drifts. A band answers the question an operator
+ * actually has — "is turning this on going to be expensive?" — and stays true
+ * through the small price changes that would make a figure wrong.
+ *
+ * Absent when per-token prices do not describe the model's cost at all: a free
+ * variant, a router whose price depends on where it routes, or a model billed per
+ * image or per second of audio.
+ */
+export type ModelPriceTier = 'economy' | 'standard' | 'premium' | 'top';
 
 /** Capabilities of every model a gateway published, keyed by model id. */
 export type ModelCapabilityMap = Record<string, ModelCapabilities>;
