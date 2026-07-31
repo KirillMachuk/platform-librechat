@@ -26,9 +26,9 @@ import {
   useAddedChatContext,
   useAssistantsMapContext,
 } from '~/Providers';
+import { cn, getModelSpec, removeFocusRings, modelReportsNoTools } from '~/utils';
+import { useGetStartupConfig, useGetEndpointsQuery } from '~/data-provider';
 import PendingManualSkillsChips from './PendingManualSkillsChips';
-import { cn, getModelSpec, removeFocusRings } from '~/utils';
-import { useGetStartupConfig } from '~/data-provider';
 import { mainTextareaId, BadgeItem } from '~/common';
 import AttachFileChat from './Files/AttachFileChat';
 import FileFormChat from './Files/FileFormChat';
@@ -107,6 +107,7 @@ const ChatForm = memo(function ChatForm({
   } = useAddedChatContext();
   const assistantMap = useAssistantsMapContext();
   const { data: startupConfig } = useGetStartupConfig();
+  const { data: endpointsConfig } = useGetEndpointsQuery();
 
   const endpoint = useMemo(
     () => conversation?.endpointType ?? conversation?.endpoint,
@@ -117,15 +118,20 @@ const ChatForm = memo(function ChatForm({
     [conversation?.spec, startupConfig],
   );
   const hideBadgeRow = modelSpec?.hideBadgeRow === true;
-  /** Reasoning models (o-series / gpt-5.x) run chat-only — they cannot run the
-   *  multi-turn tool loop, so the tool toggles that arm one are hidden. Mirrors
-   *  the backend, which drops those tools for the same models (shared predicate).
-   *  Deep Research and Artifacts stay: DR forces a non-reasoning lead model, and
-   *  Artifacts is not a tool. Matches the model the backend sees for the ephemeral
-   *  agent (`conversation.model`). */
-  const isReasoningModelActive = useMemo(
-    () => isReasoningModel(conversation?.model),
-    [conversation?.model],
+  /** Two kinds of model run chat-only and cannot work the multi-turn tool loop, so
+   *  the toggles that arm one are hidden for both. Reasoning models (o-series /
+   *  gpt-5.x) are recognised by name, mirroring the backend, which drops those
+   *  tools for the same models via the shared predicate. The second kind is any
+   *  model whose gateway publishes no `tools` support: it accepts the definitions
+   *  and ignores them, so a visible toggle would promise a search that never
+   *  happens. Deep Research and Artifacts stay in both cases: DR runs on its own
+   *  lead and worker models from the config, and Artifacts is not a tool. The model
+   *  read here is the one the backend sees for the ephemeral agent. */
+  const toolLoopUnavailable = useMemo(
+    () =>
+      isReasoningModel(conversation?.model) ||
+      modelReportsNoTools(endpointsConfig, conversation?.endpoint, conversation?.model),
+    [conversation?.model, conversation?.endpoint, endpointsConfig],
   );
   const conversationId = useMemo(
     () => conversation?.conversationId ?? Constants.NEW_CONVO,
@@ -391,7 +397,7 @@ const ChatForm = memo(function ChatForm({
                 isSubmitting={isSubmitting}
                 conversationId={conversationId}
                 specName={conversation?.spec}
-                isReasoningModelActive={isReasoningModelActive}
+                toolLoopUnavailable={toolLoopUnavailable}
                 activeModel={conversation?.model}
                 onChange={setBadges}
                 isInChat={

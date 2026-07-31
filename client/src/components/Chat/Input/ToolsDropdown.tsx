@@ -83,13 +83,14 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
     mcpServerManager,
     codeInterpreter,
     searchApiKeyForm,
-    isReasoningModelActive,
+    toolLoopUnavailable,
     activeModel,
   } = context ?? {};
-  /** Reasoning models (o-series / gpt-5.x) run chat-only — omit the tool toggles
-   *  that arm the tool loop (the backend drops them too). Deep Research and
-   *  Artifacts remain, mirroring the badge row. */
-  const toolLoopAvailable = !isReasoningModelActive;
+  /** A model that runs chat-only — reasoning family, or no `tools` in its
+   *  gateway's catalogue — omits the toggles that arm the tool loop (the backend
+   *  drops them too). Deep Research and Artifacts remain, mirroring the badge
+   *  row: DR runs on its own models and Artifacts is not a tool. */
+  const toolLoopAvailable = !toolLoopUnavailable;
 
   const { setIsDialogOpen: setIsSearchDialogOpen, menuTriggerRef: searchMenuTriggerRef } =
     searchApiKeyForm ?? {};
@@ -388,7 +389,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
    *  so one long unbreakable line stretches the WHOLE menu — measured at 1104px on a 375px
    *  phone, which pushed every pin button off-screen. Capping the row makes the sentence wrap
    *  instead, and `--popover-available-width` keeps it inside the viewport on a narrow screen. */
-  if (isReasoningModelActive) {
+  if (toolLoopUnavailable) {
     dropdownItems.push({
       disabled: true,
       hideOnClick: false,
@@ -397,7 +398,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
           {...props}
           className="max-w-[min(18rem,var(--popover-available-width,18rem))] whitespace-normal break-words px-3 py-2 text-sm text-text-secondary"
         >
-          {localize('com_ui_tools_unavailable_reasoning')}
+          {localize('com_ui_tools_unavailable_model')}
           {activeModel ? <span className="mt-0.5 block opacity-70">{activeModel}</span> : null}
         </div>
       ),

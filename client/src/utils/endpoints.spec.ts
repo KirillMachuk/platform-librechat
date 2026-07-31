@@ -4,6 +4,7 @@ import {
   mapEndpoints,
   getEndpointsFilter,
   filterDroppedParams,
+  modelReportsNoTools,
   getAvailableEndpoints,
 } from './endpoints';
 
@@ -125,5 +126,36 @@ describe('filterDroppedParams', () => {
     const params = asSettings('temperature', 'top_p');
     const result = filterDroppedParams(params, ['nonexistent']);
     expect(result.map((p) => p.key)).toEqual(['temperature', 'top_p']);
+  });
+});
+
+describe('modelReportsNoTools', () => {
+  const config = {
+    gateway: {
+      modelCapabilities: {
+        'vendor/no-tools': { tools: false },
+        'vendor/tools': { tools: true },
+        'vendor/silent': {},
+      },
+    },
+  } as unknown as TEndpointsConfig;
+
+  it('answers yes only when the catalogue said no', () => {
+    expect(modelReportsNoTools(config, 'gateway', 'vendor/no-tools')).toBe(true);
+    expect(modelReportsNoTools(config, 'gateway', 'vendor/tools')).toBe(false);
+  });
+
+  /**
+   * Hiding a working toggle is the harmful direction, so every kind of silence —
+   * no record, no `tools` field, an endpoint the config does not cover, a config
+   * that has not loaded yet — leaves the composer as it was.
+   */
+  it('treats silence as "unknown", never as "no"', () => {
+    expect(modelReportsNoTools(config, 'gateway', 'vendor/silent')).toBe(false);
+    expect(modelReportsNoTools(config, 'gateway', 'vendor/never-heard-of')).toBe(false);
+    expect(modelReportsNoTools(config, 'other-gateway', 'vendor/no-tools')).toBe(false);
+    expect(modelReportsNoTools(undefined, 'gateway', 'vendor/no-tools')).toBe(false);
+    expect(modelReportsNoTools(config, undefined, 'vendor/no-tools')).toBe(false);
+    expect(modelReportsNoTools(config, 'gateway', undefined)).toBe(false);
   });
 });

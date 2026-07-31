@@ -8,6 +8,7 @@ const {
   agentUpdateSchema,
   refreshListAvatars,
   collectEdgeAgentIds,
+  reportsNoToolSupport,
   mergeAgentOcrConversion,
   MAX_AVATAR_REFRESH_AGENTS,
   collectToolResourceFileIds,
@@ -44,7 +45,7 @@ const { getStrategyFunctions } = require('~/server/services/Files/strategies');
 const { resizeAvatar } = require('~/server/services/Files/images/avatar');
 const { getFileStrategy } = require('~/server/utils/getFileStrategy');
 const { filterFile } = require('~/server/services/Files/process');
-const { getCachedTools } = require('~/server/services/Config');
+const { getCachedTools, getEndpointsConfig } = require('~/server/services/Config');
 const { nativeTools } = require('~/server/services/ToolService');
 const {
   createMCPPermissionContext,
@@ -63,6 +64,25 @@ const db = require('~/models');
  * through the API while an identical PATCH kept them (update only re-checks new MCP tools).
  */
 const systemTools = nativeTools;
+
+/**
+ * Reads the endpoints config for the tool-support gate below, answering
+ * `undefined` instead of throwing.
+ *
+ * The gate is a courtesy — it stops a user configuring a combination that would
+ * fail silently — and it must never itself become the reason a save that would
+ * otherwise have worked comes back as a 500. `reportsNoToolSupport` reads
+ * `undefined` as "the catalogue did not say", which is the same as having no
+ * gate at all.
+ */
+const readCapabilitiesForGate = async (req, logPrefix) => {
+  try {
+    return await getEndpointsConfig(req);
+  } catch (error) {
+    logger.warn(`${logPrefix} could not read endpoint capabilities; tool gate skipped`, error);
+    return undefined;
+  }
+};
 
 const MAX_SEARCH_LEN = 100;
 
@@ -475,6 +495,28 @@ const createAgentHandler = async (req, res) => {
       });
     }
 
+    /**
+     * A model the gateway serves without `tools` support drops every tool
+     * definition sent to it, and says nothing about having done so. The agent
+     * saves, looks configured, and then never searches the web, reads an attached
+     * file or reaches an MCP server — a failure that reads as "the assistant is
+     * being lazy" rather than as a misconfiguration. Refuse it here, where it can
+     * still be explained.
+     *
+     * `reportsNoToolSupport` answers only on an explicit "no" from the catalogue,
+     * so an endpoint whose gateway publishes nothing behaves exactly as it did
+     * before this existed. The config is only fetched when there are tools to
+     * gate — a chat-only agent costs nothing.
+     */
+    if (agentData.tools.length > 0) {
+      const endpointsConfig = await readCapabilitiesForGate(req, '[createAgent]');
+      if (reportsNoToolSupport(endpointsConfig, agentData.provider, agentData.model)) {
+        return res.status(400).json({
+          error: `{ "type": "${ErrorTypes.MODEL_NO_TOOLS}", "info": "${agentData.model}" }`,
+        });
+      }
+    }
+
     const agent = await db.createAgent(agentData);
 
     try {
@@ -790,13 +832,37 @@ const updateAgentHandler = async (req, res) => {
      * passes the gate, so the combination is always fixable from here.
      */
     const touchesModelOrTools = updateData.model !== undefined || updateData.tools !== undefined;
-    if (touchesModelOrTools) {
-      const effectiveModel = updateData.model ?? existingAgent.model;
-      const effectiveTools = updateData.tools ?? existingAgent.tools ?? [];
-      if (isReasoningModel(effectiveModel) && effectiveTools.length > 0) {
+    if (touchesModelOrTools || updateData.provider !== undefined) {
+      /**
+       * Recomputed here rather than reusing `effectiveTools` from above: the MCP
+       * authorization step in between can trim `updateData.tools`, and both gates
+       * must judge the list that is actually about to be persisted.
+       */
+      const gateModel = updateData.model ?? existingAgent.model;
+      const gateTools = updateData.tools ?? existingAgent.tools ?? [];
+
+      if (touchesModelOrTools && isReasoningModel(gateModel) && gateTools.length > 0) {
         return res.status(400).json({
-          error: `{ "type": "${ErrorTypes.REASONING_MODEL_TOOLS}", "info": "${effectiveModel}" }`,
+          error: `{ "type": "${ErrorTypes.REASONING_MODEL_TOOLS}", "info": "${gateModel}" }`,
         });
+      }
+
+      /**
+       * Same silent-drop as on create — see the comment there — and fixable the
+       * same way, since an unrelated edit does not reach this block.
+       *
+       * The provider counts as well as the model: capabilities are published per
+       * gateway, so moving an agent to a different endpoint can produce the broken
+       * pair without either the model or the tools changing.
+       */
+      if (gateTools.length > 0) {
+        const endpointsConfig = await readCapabilitiesForGate(req, '[updateAgent]');
+        const gateProvider = updateData.provider ?? existingAgent.provider;
+        if (reportsNoToolSupport(endpointsConfig, gateProvider, gateModel)) {
+          return res.status(400).json({
+            error: `{ "type": "${ErrorTypes.MODEL_NO_TOOLS}", "info": "${gateModel}" }`,
+          });
+        }
       }
     }
 

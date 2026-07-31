@@ -263,6 +263,7 @@ const startServer = async () => {
   app.use('/api/admin/config', routes.adminConfig);
   app.use('/api/admin/settings/deep-research', routes.adminDeepResearch);
   app.use('/api/admin/grants', routes.adminGrants);
+  app.use('/api/admin/models', routes.adminModels);
   app.use('/api/admin/groups', routes.adminGroups);
   app.use('/api/admin/roles', routes.adminRoles);
   app.use('/api/admin/usage', routes.adminUsage);

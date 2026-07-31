@@ -6,14 +6,19 @@ import {
   PrincipalType,
   defaultAgentCapabilities,
 } from 'librechat-data-provider';
-
 import type { AppConfig, IConfig } from '@librechat/data-schemas';
 import type { AppConfigServiceDeps } from '~/app/service';
 import type { EndpointsConfigDeps } from './endpoints';
 import type { ServerRequest } from '~/types';
-
+import { getModelMaxTokens, clearModelLimits } from '~/utils/tokens';
 import { createEndpointsConfigService } from './endpoints';
 import { createAppConfigService } from '~/app/service';
+
+/** `mock`-prefixed so the hoisted factory below may reference it. */
+const mockFetchModelCapabilities = jest.fn().mockResolvedValue({});
+jest.mock('~/endpoints/modelCapabilities', () => ({
+  fetchModelCapabilities: (...args: unknown[]) => mockFetchModelCapabilities(...args),
+}));
 
 function appConfig(partial: Record<string, unknown>): AppConfig {
   return partial as unknown as AppConfig;
@@ -385,6 +390,105 @@ describe('createEndpointsConfigService', () => {
       );
 
       expect(result).toBe(true);
+    });
+  });
+
+  /**
+   * Capabilities the endpoint's own gateway reported travel two ways: a trimmed
+   * copy to the client (for the picture warning), and the full catalogue into the
+   * synchronous token-limit lookup deep in server code.
+   */
+  describe('model capabilities', () => {
+    const CATALOGUE = {
+      'vendor/listed': { vision: true, tools: true, contextTokens: 1000000 },
+      'vendor/also-listed': { vision: false, tools: true, contextTokens: 163840 },
+      'vendor/not-in-line-up': { vision: true, tools: false, contextTokens: 8000 },
+    };
+
+    const withGateway = (
+      catalogue: Record<string, unknown>,
+      models?: { default?: string[] },
+    ): EndpointsConfigDeps => {
+      mockFetchModelCapabilities.mockResolvedValue(catalogue);
+      return createMockDeps({
+        getAppConfig: jest.fn().mockResolvedValue(
+          appConfig({
+            endpoints: {
+              custom: [{ name: 'gw', baseURL: 'http://gw/v1', apiKey: 'k', models }],
+            },
+          }),
+        ),
+        loadCustomEndpointsConfig: jest.fn().mockReturnValue({ gw: { userProvide: false } }),
+      });
+    };
+
+    afterEach(() => clearModelLimits());
+
+    it('sends only the models this endpoint offers, not the whole catalogue', async () => {
+      const deps = withGateway(CATALOGUE, {
+        default: ['vendor/listed', 'vendor/also-listed'],
+      });
+      const { getEndpointsConfig } = createEndpointsConfigService(deps);
+
+      const result = await getEndpointsConfig(fakeReq());
+
+      expect(Object.keys(result?.gw?.modelCapabilities ?? {})).toEqual([
+        'vendor/listed',
+        'vendor/also-listed',
+      ]);
+      expect(result?.gw?.modelCapabilities?.['vendor/listed']?.vision).toBe(true);
+    });
+
+    it('passes the whole catalogue through when the line-up is not curated', async () => {
+      const deps = withGateway(CATALOGUE, undefined);
+      const { getEndpointsConfig } = createEndpointsConfigService(deps);
+
+      const result = await getEndpointsConfig(fakeReq());
+
+      expect(Object.keys(result?.gw?.modelCapabilities ?? {})).toHaveLength(3);
+    });
+
+    it('skips a configured model the gateway does not serve', async () => {
+      const deps = withGateway(CATALOGUE, { default: ['vendor/listed', 'vendor/typo'] });
+      const { getEndpointsConfig } = createEndpointsConfigService(deps);
+
+      const result = await getEndpointsConfig(fakeReq());
+
+      expect(Object.keys(result?.gw?.modelCapabilities ?? {})).toEqual(['vendor/listed']);
+    });
+
+    /** Even models kept out of the client payload must reach the token lookup:
+     *  a model can be selected before it appears in a curated list. */
+    it('publishes the whole catalogue to the token-limit lookup', async () => {
+      const deps = withGateway(CATALOGUE, { default: ['vendor/listed'] });
+      const { getEndpointsConfig } = createEndpointsConfigService(deps);
+
+      await getEndpointsConfig(fakeReq());
+
+      expect(getModelMaxTokens('vendor/listed', EModelEndpoint.custom)).toBe(1000000);
+      expect(getModelMaxTokens('vendor/not-in-line-up', EModelEndpoint.custom)).toBe(8000);
+    });
+
+    it('leaves the endpoint untouched when the gateway says nothing', async () => {
+      const deps = withGateway({}, { default: ['vendor/listed'] });
+      const { getEndpointsConfig } = createEndpointsConfigService(deps);
+
+      const result = await getEndpointsConfig(fakeReq());
+
+      expect(result?.gw).toBeDefined();
+      expect(result?.gw?.modelCapabilities).toBeUndefined();
+      expect(getModelMaxTokens('vendor/listed', EModelEndpoint.custom)).toBeUndefined();
+    });
+
+    it('checks the configured line-up against the catalogue', async () => {
+      const deps = withGateway(CATALOGUE, { default: ['vendor/listed'] });
+      const { getEndpointsConfig } = createEndpointsConfigService(deps);
+
+      await getEndpointsConfig(fakeReq());
+
+      expect(mockFetchModelCapabilities).toHaveBeenCalledWith(
+        expect.objectContaining({ configuredModels: ['vendor/listed'] }),
+      );
     });
   });
 });

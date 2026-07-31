@@ -97,18 +97,21 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
 
   /**
    * Whether the active model accepts images. Prefers what the endpoint's own
-   * gateway reports (`visionModels`, refreshed server-side), because the
+   * gateway reports (`modelCapabilities`, refreshed server-side), because the
    * name-matching fallback needs a human to add every new model and its stale
    * answer is the harmful one: it tells someone on a vision-capable model that
-   * their model cannot read pictures. Endpoints whose gateway publishes no
-   * capabilities keep the previous behaviour.
+   * their model cannot read pictures.
+   *
+   * Only an explicit `true`/`false` from the catalogue is an answer. A model the
+   * catalogue does not cover — or covers without stating modalities — falls back
+   * to name matching rather than being declared image-blind.
    */
   const modelReadsImages = useCallback(
     (model: string) => {
       const endpointsConfig = queryClient.getQueryData<TEndpointsConfig>([QueryKeys.endpoints]);
-      const reported = endpointsConfig?.[endpoint]?.visionModels;
-      if (reported?.length) {
-        return reported.includes(model);
+      const reported = endpointsConfig?.[endpoint]?.modelCapabilities?.[model]?.vision;
+      if (typeof reported === 'boolean') {
+        return reported;
       }
       return validateVisionModel({ model });
     },

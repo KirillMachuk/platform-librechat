@@ -33,6 +33,7 @@ export type AuditAction =
   | 'admin.config_change'
   | 'deep_research.set_active_mode'
   | 'deep_research.set_models'
+  | 'models.set_enabled'
   | 'apikey.create'
   | 'apikey.revoke'
   | 'billing.package_added'

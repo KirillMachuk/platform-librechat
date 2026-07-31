@@ -11,7 +11,8 @@ import type { AgentCapabilities, TEndpointsConfig, TConfig } from 'librechat-dat
 import type { AppConfig } from '@librechat/data-schemas';
 import type { ServerRequest, TCustomEndpointsConfig } from '~/types';
 import { loadCustomEndpointsConfig as defaultLoadCustomEndpoints } from '~/endpoints/custom';
-import { fetchVisionCapableModels } from '~/endpoints/visionCapabilities';
+import { fetchModelCapabilities } from '~/endpoints/modelCapabilities';
+import { publishModelLimits } from '~/utils/tokens';
 
 type PartialEndpointEntry = Partial<TConfig> & Record<string, unknown>;
 type DefaultEndpointsResult = Record<string, PartialEndpointEntry | false | null>;
@@ -28,19 +29,18 @@ export interface EndpointsConfigDeps {
 }
 
 /**
- * Annotates each custom endpoint with the models its gateway says accept images.
+ * Annotates each custom endpoint with what its gateway says its models can do.
  *
- * The client warns when a picture is attached to a model that cannot read one,
- * and decided that from a hand-maintained list of model-name substrings — which
- * goes stale every time the line-up changes, and whose stale answer tells people
- * their working model is broken. Where the gateway publishes capabilities, that
- * is the answer; where it does not, the field stays absent and the client keeps
- * matching on names as before.
+ * Consumers decided capabilities from hand-maintained lists of model-name
+ * substrings — which go stale every time the line-up changes, and whose stale
+ * answer tells people their working model is broken. Where the gateway publishes
+ * a catalogue, that is the answer; where it does not, the field stays absent and
+ * consumers keep matching on names as before.
  *
- * Answers are cached, and failures are swallowed inside `fetchVisionCapableModels`
+ * Answers are cached, and failures are swallowed inside `fetchModelCapabilities`
  * — the endpoints config must not depend on the gateway being reachable.
  */
-async function attachVisionModels(
+async function attachModelCapabilities(
   customEndpointsConfig: TCustomEndpointsConfig | undefined,
   customEndpoints: unknown,
 ): Promise<void> {
@@ -58,13 +58,34 @@ async function attachVisionModels(
       if (!entry) {
         return;
       }
-      const visionModels = await fetchVisionCapableModels({
+      const configured = (endpoint.models as { default?: unknown } | undefined)?.default;
+      const configuredModels = Array.isArray(configured) ? (configured as string[]) : undefined;
+      const modelCapabilities = await fetchModelCapabilities({
         baseURL: extractEnvVariable(String(endpoint.baseURL ?? '')),
         apiKey: extractEnvVariable(String(endpoint.apiKey ?? '')),
+        configuredModels,
       });
-      if (visionModels.length > 0) {
-        entry.visionModels = visionModels;
+      if (Object.keys(modelCapabilities).length === 0) {
+        return;
       }
+      /** Token limits are also needed deep in server code that cannot await a
+       *  gateway (`getModelMaxTokens` is synchronous), so publish them for it —
+       *  the whole catalogue, since a model can be selected before it appears in
+       *  a curated list. */
+      publishModelLimits(modelCapabilities);
+      /**
+       * The client only ever asks about models it can select, so send those and
+       * not the gateway's whole catalogue: all 367 of OpenRouter's models weigh
+       * ~38 kB of JSON on a route rebuilt on every message, against ~1.3 kB for a
+       * curated line-up of thirteen.
+       */
+      entry.modelCapabilities = configuredModels
+        ? Object.fromEntries(
+            configuredModels
+              .filter((model) => modelCapabilities[model] != null)
+              .map((model) => [model, modelCapabilities[model]]),
+          )
+        : modelCapabilities;
     }),
   );
 }
@@ -89,7 +110,7 @@ export function createEndpointsConfigService(deps: EndpointsConfigDeps): {
       }));
     const defaultEndpointsConfig = await loadDefaultEndpointsConfig(appConfig);
     const customEndpointsConfig = loadCustomEndpointsConfig(appConfig?.endpoints?.custom);
-    await attachVisionModels(customEndpointsConfig, appConfig?.endpoints?.custom);
+    await attachModelCapabilities(customEndpointsConfig, appConfig?.endpoints?.custom);
 
     const mergedConfig: MutableEndpointsConfig = {
       ...defaultEndpointsConfig,

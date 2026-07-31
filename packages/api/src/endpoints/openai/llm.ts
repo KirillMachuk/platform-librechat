@@ -10,8 +10,13 @@ import type { AzureOpenAIInput } from '@librechat/agents/langchain/openai';
 import type { SettingDefinition } from 'librechat-data-provider';
 import type { OpenAI } from 'openai';
 import type * as t from '~/types';
+import {
+  getModelMaxOutputTokens,
+  hasReportedMaxOutputTokens,
+  findMatchingPattern,
+  maxOutputTokensMap,
+} from '~/utils/tokens';
 import { sanitizeModelName, constructAzureURL } from '~/utils/azure';
-import { getModelMaxOutputTokens, findMatchingPattern, maxOutputTokensMap } from '~/utils/tokens';
 import { isEnabled } from '~/utils/common';
 
 /**
@@ -715,8 +720,13 @@ export function getOpenAILLMConfig({
     const tokensMap = maxOutputTokensMap[tokenEndpoint as keyof typeof maxOutputTokensMap];
     /** Only clamp a confidently-recognized model — never apply the generic
      * `system_default` fallback, so a newly-added model that isn't yet in the
-     * token map keeps the requested value instead of being silently capped. */
-    if (tokensMap != null && findMatchingPattern(llmConfig.model, tokensMap) != null) {
+     * token map keeps the requested value instead of being silently capped.
+     * A ceiling the gateway itself reported counts as recognized: it is the
+     * model's real cap, which is the case this guard was protecting. */
+    if (
+      hasReportedMaxOutputTokens(llmConfig.model) ||
+      (tokensMap != null && findMatchingPattern(llmConfig.model, tokensMap) != null)
+    ) {
       const modelMaxOutput = getModelMaxOutputTokens(llmConfig.model, tokenEndpoint);
       if (typeof modelMaxOutput === 'number' && llmConfig.maxTokens > modelMaxOutput) {
         llmConfig.maxTokens = modelMaxOutput;

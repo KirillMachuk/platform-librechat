@@ -4,6 +4,7 @@ export { createAdminBalanceHandlers, TOKEN_CREDITS_PER_USD } from './balance';
 export { createAdminBillingHandlers, CREDIT_PACKAGE_SIZES } from './billing';
 export { createAdminConfigHandlers } from './config';
 export { createDeepResearchSettingsHandlers } from './deepResearch';
+export { createModelCatalogueHandlers } from './modelCatalogue';
 export { createAdminGrantsHandlers } from './grants';
 export { createAdminGroupsHandlers } from './groups';
 export { createAdminRolesHandlers } from './roles';
@@ -17,6 +18,12 @@ export type { AdminBillingDeps, AdminBillingSummary, AdminBillingLot } from './b
 export type { AdminUsageDeps } from './usage';
 export type { AdminConfigDeps } from './config';
 export type { DeepResearchSettingsDeps, DeepResearchSettingsResponse } from './deepResearch';
+export type {
+  ModelCatalogueDeps,
+  ModelCatalogueResponse,
+  AdminModelEndpoint,
+  AdminModelEntry,
+} from './modelCatalogue';
 export type { AdminGrantsDeps, GrantPrincipalType } from './grants';
 export type { AdminGroupsDeps } from './groups';
 export type { AdminRolesDeps } from './roles';

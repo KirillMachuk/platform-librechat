@@ -5,13 +5,14 @@ import {
   ReasoningSummary,
   ReasoningParameterFormat,
 } from 'librechat-data-provider';
+import type * as t from '~/types';
 import {
   getOpenAILLMConfig,
   applyDefaultParams,
   extractDefaultParams,
   suppressAnthropicThinkingForToolLoop,
 } from './llm';
-import type * as t from '~/types';
+import { publishModelLimits, clearModelLimits } from '~/utils/tokens';
 
 describe('getOpenAILLMConfig', () => {
   describe('Basic Configuration', () => {
@@ -1364,6 +1365,72 @@ describe('applyDefaultParams', () => {
       });
 
       expect(result.llmConfig).toHaveProperty('maxTokens', 99999);
+    });
+
+    /**
+     * The guard above exists so an unrecognized model is not capped at a guess.
+     * A ceiling the gateway itself reported is not a guess, so it applies.
+     *
+     * Both failure modes below are live against the deployed OpenRouter line-up,
+     * and both come from matching `vendor/model` ids against a table of name
+     * fragments written for the vendors' own APIs:
+     *  - `deepseek/deepseek-v4-pro` matches the catch-all fragment `deepseek`
+     *    (8000 — correct for `deepseek-chat` on api.deepseek.com) and is clamped
+     *    48× below its real 384000 ceiling;
+     *  - `qwen/*` and `google/gemini-3.1-*` match nothing, so a request sails
+     *    past unclamped and the provider rejects it outright — exactly the 400
+     *    this clamp exists to prevent (real ceilings: 16384 and 65536).
+     */
+    describe('with limits reported by the gateway', () => {
+      afterEach(() => clearModelLimits());
+
+      const withMaxTokens = (model: string, max_tokens: number) =>
+        getOpenAILLMConfig({
+          apiKey: 'test-api-key',
+          streaming: true,
+          endpoint: '1ma',
+          useOpenRouter: true,
+          modelOptions: { model, max_tokens },
+        }).llmConfig;
+
+      it('clamps a model no static map knows, once the gateway reports its ceiling', () => {
+        publishModelLimits({ 'acme/quasar-7b': { maxOutputTokens: 4096 } });
+
+        expect(withMaxTokens('acme/quasar-7b', 99999)).toHaveProperty('maxTokens', 4096);
+      });
+
+      it('raises a ceiling the static map understates', () => {
+        expect(withMaxTokens('deepseek/deepseek-v4-pro', 100000)).toHaveProperty('maxTokens', 8000);
+
+        publishModelLimits({ 'deepseek/deepseek-v4-pro': { maxOutputTokens: 384000 } });
+
+        expect(withMaxTokens('deepseek/deepseek-v4-pro', 100000)).toHaveProperty(
+          'maxTokens',
+          100000,
+        );
+      });
+
+      it('starts clamping a model that used to sail past the provider unchecked', () => {
+        /** Nothing in the fragment table matches a `qwen/*` id, so today an
+         *  over-limit request goes out whole and the provider rejects it. */
+        expect(withMaxTokens('qwen/qwen3-235b-a22b-2507', 32000)).toHaveProperty(
+          'maxTokens',
+          32000,
+        );
+
+        publishModelLimits({ 'qwen/qwen3-235b-a22b-2507': { maxOutputTokens: 16384 } });
+
+        expect(withMaxTokens('qwen/qwen3-235b-a22b-2507', 32000)).toHaveProperty(
+          'maxTokens',
+          16384,
+        );
+      });
+
+      it('keeps the static behaviour when only a context window was reported', () => {
+        publishModelLimits({ 'acme/quasar-7b': { contextTokens: 200000 } });
+
+        expect(withMaxTokens('acme/quasar-7b', 99999)).toHaveProperty('maxTokens', 99999);
+      });
     });
 
     it('resolves the true cap for OpenRouter Claude Opus 4.7 (dot-format id)', () => {

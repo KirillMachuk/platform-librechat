@@ -417,5 +417,64 @@ describe('AgentPanel - Update Agent Toast Messages', () => {
         consoleError.mockRestore();
       }
     });
+
+    /**
+     * The generic line above is right for a network failure, but wrong when the
+     * server refused the save for a reason it spelled out. Then the user is left
+     * re-pressing Save against a gate that will never open.
+     */
+    it('shows the reason when the server refused the save', async () => {
+      const { mockUseGetAgentByIdQuery, mockUpdateAgent } = setupMocks();
+      mockAgentQuery(mockUseGetAgentByIdQuery, { name: 'Test Agent', version: 2 });
+
+      /** Shaped like a real axios rejection: an Error carrying `response.data`. */
+      mockUpdateAgent.mockRejectedValue(
+        Object.assign(new Error('Request failed with status code 400'), {
+          response: {
+            data: { error: '{ "type": "model_no_tools", "info": "vendor/no-tools" }' },
+          },
+        }),
+      );
+
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await renderAndSubmitForm();
+
+        await waitFor(() => {
+          expect(mockShowToast).toHaveBeenCalledWith({
+            message: 'com_error_model_no_tools',
+            status: 'error',
+          });
+        });
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+
+    /** A refusal we cannot read must not reach the user as a raw payload. */
+    it('keeps the generic line when the refusal is not one it knows', async () => {
+      const { mockUseGetAgentByIdQuery, mockUpdateAgent } = setupMocks();
+      mockAgentQuery(mockUseGetAgentByIdQuery, { name: 'Test Agent', version: 2 });
+
+      mockUpdateAgent.mockRejectedValue(
+        Object.assign(new Error('Request failed with status code 400'), {
+          response: { data: { error: 'An agent may declare at most 64 tools' } },
+        }),
+      );
+
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await renderAndSubmitForm();
+
+        await waitFor(() => {
+          expect(mockShowToast).toHaveBeenCalledWith({
+            message: 'com_agents_update_error',
+            status: 'error',
+          });
+        });
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
   });
 });
