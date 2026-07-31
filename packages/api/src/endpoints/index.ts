@@ -8,3 +8,4 @@ export * from './openai';
 export * from './pricing';
 export * from './tokenConfig';
 export * from './modelCapabilities';
+export * from './modelProbe';

@@ -6,6 +6,7 @@ import type { ServerRequest } from '~/types/http';
 import {
   createModelCatalogueHandlers,
   collectModelRoles,
+  groupByVendor,
   mergeEndpointOverride,
 } from './modelCatalogue';
 
@@ -75,6 +76,8 @@ function createDeps(overrides: Record<string, unknown> = {}) {
   return {
     getAppConfig: jest.fn().mockResolvedValue(appConfig()),
     fetchModelCapabilities: jest.fn().mockResolvedValue(CATALOGUE),
+    /** The gateway raises no lasting objection unless a test says otherwise. */
+    probeModel: jest.fn().mockResolvedValue(undefined),
     countAgentsByModel: jest.fn().mockResolvedValue({}),
     findConfigByPrincipal: jest.fn().mockResolvedValue(null),
     patchConfigFields: jest.fn().mockResolvedValue(undefined),
@@ -785,5 +788,217 @@ describe('what the screen has to be told about an endpoint', () => {
 
     expect(endpoint.source).toBe('config');
     expect(endpoint.models.every((model) => model.unserved === undefined)).toBe(true);
+  });
+});
+
+/**
+ * The order stored here is the order employees scroll through, and the first entry
+ * is what a new chat falls back to. Both are consequences of a list nobody curates
+ * by hand, so the grouping has to be provably boring.
+ */
+describe('groupByVendor', () => {
+  it('collects a scattered line-up into vendor blocks', () => {
+    expect(
+      groupByVendor([
+        'anthropic/opus',
+        'deepseek/chat',
+        'anthropic/sonnet',
+        'qwen/max',
+        'deepseek/reasoner',
+      ]),
+    ).toEqual([
+      'anthropic/opus',
+      'anthropic/sonnet',
+      'deepseek/chat',
+      'deepseek/reasoner',
+      'qwen/max',
+    ]);
+  });
+
+  /** Vendors are ordered by where they first appear, not alphabetically: sorting
+   *  by name would reshuffle a line-up an admin had deliberately arranged. */
+  it('keeps vendors in the order they first appear', () => {
+    expect(groupByVendor(['zzz/one', 'aaa/one', 'zzz/two'])).toEqual([
+      'zzz/one',
+      'zzz/two',
+      'aaa/one',
+    ]);
+  });
+
+  /**
+   * The fallback for a new chat with no history. It is first, so it is the first
+   * appearance of its vendor, so its block leads — the invariant holds for every
+   * input rather than being a case handled beside the rule.
+   */
+  it('never moves the first model, whatever follows it', () => {
+    const lineUps = [
+      ['google/gemini', 'anthropic/opus', 'google/flash'],
+      ['a/one'],
+      ['z/last', 'z/other'],
+      ['~anthropic/latest', 'deepseek/chat', 'anthropic/opus'],
+    ];
+    for (const lineUp of lineUps) {
+      expect(groupByVendor(lineUp)[0]).toBe(lineUp[0]);
+    }
+  });
+
+  /** `~vendor/model-latest` is the same vendor; the marker is about the id moving. */
+  it('reads a moving pointer as its own vendor', () => {
+    expect(groupByVendor(['~anthropic/latest', 'deepseek/chat', 'anthropic/opus'])).toEqual([
+      '~anthropic/latest',
+      'anthropic/opus',
+      'deepseek/chat',
+    ]);
+  });
+
+  it('leaves a list that is already in blocks exactly as it was', () => {
+    const tidy = ['a/one', 'a/two', 'b/one', 'c/one'];
+
+    expect(groupByVendor(tidy)).toEqual(tidy);
+  });
+
+  it('handles ids with no vendor at all', () => {
+    expect(groupByVendor(['gpt-4o', 'a/one', 'gpt-4o-mini'])).toEqual([
+      'gpt-4o',
+      'a/one',
+      'gpt-4o-mini',
+    ]);
+    expect(groupByVendor([])).toEqual([]);
+  });
+});
+
+/**
+ * A catalogue entry says the gateway knows a model, not that it will answer with
+ * it. The gap is not hypothetical: a privacy setting can exclude every provider
+ * behind a model, and the only place that shows up is a message an employee sends.
+ */
+describe('setModels: asking the gateway before offering a model', () => {
+  const enabling = { endpoint: 'gw', model: 'a/available', enabled: true };
+
+  it('refuses a model the gateway will not serve, and writes nothing', async () => {
+    const { res, deps } = await put(enabling, {
+      probeModel: jest.fn().mockResolvedValue('data-policy'),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toContain('data policy');
+    expect(deps.patchConfigFields).not.toHaveBeenCalled();
+  });
+
+  it('leaves no audit entry for a refused model', async () => {
+    const { req } = await put(enabling, {
+      probeModel: jest.fn().mockResolvedValue('data-policy'),
+    });
+
+    expect(req.modelCatalogueChange).toBeUndefined();
+  });
+
+  it('asks about the model being offered, over that endpoint’s own connection', async () => {
+    const probeModel = jest.fn().mockResolvedValue(undefined);
+
+    await put(enabling, { probeModel });
+
+    expect(probeModel).toHaveBeenCalledWith({
+      baseURL: 'http://gw/v1',
+      apiKey: 'k',
+      model: 'a/available',
+    });
+  });
+
+  /**
+   * The probe answers "no lasting refusal" for a timeout, an outage or a rate
+   * limit, and this is the half of that contract the route owns: an admin must not
+   * be unable to curate the line-up because the gateway is having a bad minute.
+   */
+  it('goes ahead when the gateway raises no lasting objection', async () => {
+    const { res, deps } = await put(enabling, {
+      probeModel: jest.fn().mockResolvedValue(undefined),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(written(deps)).toContain('a/available');
+  });
+
+  /** Switching a model off cannot need the gateway's opinion, and must not wait
+   *  for it — that is how you get a line-up nobody can shrink during an outage. */
+  it('does not ask anything when a model is being switched off', async () => {
+    const probeModel = jest.fn().mockResolvedValue('data-policy');
+
+    const { res } = await put(
+      { endpoint: 'gw', model: 'a/also-enabled', enabled: false },
+      { probeModel },
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(probeModel).not.toHaveBeenCalled();
+  });
+
+  /** Nothing changes, so there is nothing to ask about — and no token to spend. */
+  it('does not ask about a model that is already enabled', async () => {
+    const probeModel = jest.fn().mockResolvedValue('data-policy');
+
+    const { res } = await put(
+      { endpoint: 'gw', model: 'a/enabled', enabled: true },
+      { probeModel },
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(probeModel).not.toHaveBeenCalled();
+  });
+});
+
+describe('setModels: where a newly offered model lands', () => {
+  const scattered = () =>
+    appConfig({
+      endpoints: {
+        custom: [
+          {
+            name: 'gw',
+            baseURL: 'http://gw/v1',
+            apiKey: 'k',
+            models: { default: ['anthropic/opus', 'deepseek/chat', 'anthropic/sonnet'] },
+          },
+        ],
+      },
+    });
+
+  it('puts it with its family rather than at the end', async () => {
+    const { deps } = await put(
+      { endpoint: 'gw', model: 'deepseek/reasoner', enabled: true },
+      {
+        getAppConfig: jest.fn().mockResolvedValue(scattered()),
+        fetchModelCapabilities: jest.fn().mockResolvedValue({ 'deepseek/reasoner': {} }),
+      },
+    );
+
+    expect(written(deps)).toEqual([
+      'anthropic/opus',
+      'anthropic/sonnet',
+      'deepseek/chat',
+      'deepseek/reasoner',
+    ]);
+  });
+
+  /** The line-up an admin already has gets tidied by the next toggle, in either
+   *  direction — nobody has to ask for it and nothing has to be migrated. */
+  it('tidies the existing line-up on the way past, even when switching one off', async () => {
+    const { deps } = await put(
+      { endpoint: 'gw', model: 'anthropic/sonnet', enabled: false },
+      { getAppConfig: jest.fn().mockResolvedValue(scattered()) },
+    );
+
+    expect(written(deps)).toEqual(['anthropic/opus', 'deepseek/chat']);
+  });
+
+  it('does not move the model a new chat falls back to', async () => {
+    const { deps } = await put(
+      { endpoint: 'gw', model: 'qwen/max', enabled: true },
+      {
+        getAppConfig: jest.fn().mockResolvedValue(scattered()),
+        fetchModelCapabilities: jest.fn().mockResolvedValue({ 'qwen/max': {} }),
+      },
+    );
+
+    expect(written(deps)[0]).toBe('anthropic/opus');
   });
 });

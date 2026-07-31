@@ -9,6 +9,7 @@ import type { ModelCapabilities, ModelCapabilityMap } from 'librechat-data-provi
 import type { AppConfig, IConfig } from '@librechat/data-schemas';
 import type { Types, ClientSession } from 'mongoose';
 import type { Response } from 'express';
+import type { ModelRefusal } from '~/endpoints/modelProbe';
 import type { ServerRequest } from '~/types/http';
 
 /**
@@ -119,6 +120,15 @@ export interface ModelCatalogueDeps {
     baseURL?: string;
     apiKey?: string;
   }) => Promise<ModelCapabilityMap>;
+  /**
+   * Asks the gateway whether it will really serve a model, before it is offered.
+   * Answers a refusal that will still hold tomorrow, or nothing at all.
+   */
+  probeModel: (params: {
+    baseURL?: string;
+    apiKey?: string;
+    model: string;
+  }) => Promise<ModelRefusal | undefined>;
   /** Agents per model, so the UI can warn before retiring one that is in use. */
   countAgentsByModel: (provider: string, tenantId?: string) => Promise<Record<string, number>>;
   /**
@@ -305,6 +315,42 @@ function buildEndpoint(
   return { name: endpointName, source: answered ? 'catalogue' : 'config', managed, models };
 }
 
+/** The vendor half of a `vendor/model` id, with the moving-pointer `~` stripped. */
+const vendorOf = (model: string): string => {
+  const slashAt = model.indexOf('/');
+  return slashAt <= 0 ? model : model.slice(0, slashAt).replace(/^~/, '').toLowerCase();
+};
+
+/**
+ * Keeps a line-up in vendor blocks, so a newly offered model lands next to its
+ * family instead of at the end.
+ *
+ * The order here is the order employees scroll through, and appending each new
+ * model left it a list in the sequence an admin happened to click — three
+ * DeepSeeks, an Anthropic, two more DeepSeeks. Vendors keep the order they first
+ * appear in and models keep their order within a vendor, so the effect on a list
+ * that is already tidy is nothing at all.
+ *
+ * The first entry cannot move, which matters: it is the model a new chat falls
+ * back to when the employee has no history and the configuration names no default
+ * (`parseConvo` takes the first of the list). It is first in the list, therefore
+ * the first appearance of its vendor, therefore first in the first block — an
+ * invariant of the grouping rather than a case handled beside it.
+ */
+export function groupByVendor(models: string[]): string[] {
+  const blocks = new Map<string, string[]>();
+  for (const model of models) {
+    const vendor = vendorOf(model);
+    const block = blocks.get(vendor);
+    if (block) {
+      block.push(model);
+    } else {
+      blocks.set(vendor, [model]);
+    }
+  }
+  return Array.from(blocks.values()).flat();
+}
+
 /**
  * Merges one endpoint's model list into the existing override array.
  *
@@ -337,6 +383,7 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
   const {
     getAppConfig,
     fetchModelCapabilities,
+    probeModel,
     countAgentsByModel,
     findConfigByPrincipal,
     patchConfigFields,
@@ -463,7 +510,9 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
       if (alreadyEnabled === enabled) {
         return res.status(200).json(await loadPayload(req));
       }
-      const next = enabled ? [...current, model] : current.filter((id) => id !== model);
+      const next = groupByVendor(
+        enabled ? [...current, model] : current.filter((id) => id !== model),
+      );
 
       if (next.length > MAX_MODELS_PER_ENDPOINT) {
         return res
@@ -480,15 +529,33 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
       }
 
       if (enabled) {
-        const catalogue = await fetchModelCapabilities({
+        const connection = {
           baseURL: extractEnvVariable(String(endpoint.baseURL ?? '')),
           apiKey: extractEnvVariable(String(endpoint.apiKey ?? '')),
-        });
+        };
+        const catalogue = await fetchModelCapabilities(connection);
         /** Checked only when there is a catalogue to check against — otherwise every
          *  id would look invalid and the endpoint would become unmanageable. */
         if (Object.keys(catalogue).length > 0 && !has(catalogue, model)) {
           return res.status(400).json({
             error: `Not served by this endpoint's gateway: ${model}`,
+          });
+        }
+        /**
+         * Listed in the catalogue is not the same as served. An account's privacy
+         * settings can rule out every provider behind a model, and the gateway only
+         * says so when a message is actually sent — so without this the first person
+         * to find out is an employee, mid-chat, from an error that explains nothing.
+         *
+         * One token, and only a refusal that will still hold tomorrow counts; see
+         * `probeModel`.
+         */
+        if ((await probeModel({ ...connection, model })) === 'data-policy') {
+          return res.status(400).json({
+            error:
+              `The gateway will not serve ${model}: every provider behind it is ` +
+              'excluded by the data policy this account is configured with. Nothing ' +
+              'was changed.',
           });
         }
       } else {
