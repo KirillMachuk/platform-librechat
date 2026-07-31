@@ -46,8 +46,8 @@ function VendorInitial({ vendor, size }: { vendor: string; size: number }): JSX.
   return (
     <span
       aria-hidden="true"
-      style={{ fontSize: Math.max(9, Math.round(size * 0.55)) }}
-      className="flex h-full w-full items-center justify-center rounded-full bg-surface-tertiary font-semibold uppercase leading-none text-text-secondary"
+      style={{ fontSize: Math.max(10, Math.round(size * 0.62)) }}
+      className="flex h-full w-full select-none items-center justify-center rounded-full bg-surface-tertiary font-semibold uppercase leading-none text-text-secondary"
     >
       {vendor.slice(0, 1)}
     </span>
