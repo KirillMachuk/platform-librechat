@@ -560,6 +560,9 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
               `The gateway will not serve ${model}: every provider behind it is ` +
               'excluded by the data policy this account is configured with. Nothing ' +
               'was changed.',
+            /** Named so a panel can say this in its own language rather than
+             *  matching on an English sentence that is free to change. */
+            code: 'data-policy',
           });
         }
       } else {
