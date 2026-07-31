@@ -68,6 +68,11 @@ export interface AdminModelEntry extends ModelCapabilities {
   roles: ModelRole[];
   /** Agents pinned to this model; they break when it stops being offered. */
   agents: number;
+  /**
+   * Present only when the gateway answered and did not list this id — a typo, or a
+   * model retired upstream. Employees can still select it and it fails on use.
+   */
+  unserved?: true;
 }
 
 export interface AdminModelEndpoint {
@@ -272,6 +277,13 @@ function buildEndpoint(
     enabled: enabled.has(id),
     roles: roles.get(id) ?? [],
     agents: has(agentCounts, id) ? agentCounts[id] : 0,
+    /**
+     * Only ever `true`, and only when the gateway answered and left this id out:
+     * employees can still select it and it will fail on use. A silent gateway
+     * makes no such statement, so the field stays absent rather than claiming
+     * every model is fine.
+     */
+    ...(answered && !has(catalogue, id) ? { unserved: true as const } : {}),
     ...(has(catalogue, id) ? catalogue[id] : {}),
   }));
 
@@ -353,7 +365,7 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
           catalogue,
           collectModelRoles(appConfig, name, endpoint).roles,
           agentCounts,
-          fetchesItsOwnModels(endpoint),
+          !fetchesItsOwnModels(endpoint),
         );
       }),
     );
@@ -436,10 +448,21 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
         baseURL: extractEnvVariable(String(endpoint.baseURL ?? '')),
         apiKey: extractEnvVariable(String(endpoint.apiKey ?? '')),
       });
-      /** Only validate against the catalogue when there is one — otherwise every
-       *  id would look invalid and the endpoint would become unmanageable. */
+      /**
+       * Only validate against the catalogue when there is one — otherwise every id
+       * would look invalid and the endpoint would become unmanageable.
+       *
+       * And only newly added ids are checked. A model the provider retires stays in
+       * the saved list until an admin removes it, so validating the whole list would
+       * make that one retirement reject every later save on the endpoint — including
+       * the ones fixing it. The screen already flags such a model as unserved; the
+       * job here is to stop new typos, not to hold the endpoint hostage to an old one.
+       */
       if (Object.keys(catalogue).length > 0) {
-        const unknown = unique.filter((model) => !has(catalogue, model));
+        const alreadySaved = new Set(configuredModelsOf(endpoint));
+        const unknown = unique.filter(
+          (model) => !has(catalogue, model) && !alreadySaved.has(model),
+        );
         if (unknown.length > 0) {
           return res.status(400).json({
             error: `Not served by this endpoint's gateway: ${unknown.join(', ')}`,

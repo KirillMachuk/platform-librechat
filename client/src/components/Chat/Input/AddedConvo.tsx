@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { isAgentsEndpoint } from 'librechat-data-provider';
 import type { TConversation } from 'librechat-data-provider';
 import type { SetterOrUpdater } from 'recoil';
-import { stripProviderPrefix } from '~/components/Chat/Menus/Endpoints/utils';
+import { modelDisplayName } from '~/components/Chat/Menus/Endpoints/utils';
 import { useGetEndpointsQuery } from '~/data-provider';
 import { EndpointIcon } from '~/components/Endpoints';
 import { useAgentsMapContext } from '~/Providers';
@@ -33,7 +33,9 @@ export default function AddedConvo({
     }
 
     const endpointConfig = endpointsConfig?.[addedConvo?.endpoint ?? ''];
-    const model = addedConvo?.model ? stripProviderPrefix(addedConvo.model) : undefined;
+    const model = addedConvo?.model
+      ? modelDisplayName(addedConvo.model, endpointsConfig, addedConvo.endpoint)
+      : undefined;
     const displayLabel =
       addedConvo?.modelLabel || model || endpointConfig?.modelDisplayLabel || 'AI';
 

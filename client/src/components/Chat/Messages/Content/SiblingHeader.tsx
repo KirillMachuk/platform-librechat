@@ -4,7 +4,7 @@ import { useToastContext } from '@librechat/client';
 import { EModelEndpoint, parseEphemeralAgentId, stripAgentIdSuffix } from 'librechat-data-provider';
 import type { TMessage, Agent } from 'librechat-data-provider';
 import MessageTimestamp from '~/components/Chat/Messages/ui/MessageTimestamp';
-import { stripProviderPrefix } from '~/components/Chat/Menus/Endpoints/utils';
+import { modelDisplayName } from '~/components/Chat/Menus/Endpoints/utils';
 import { useBranchMessageMutation } from '~/data-provider/Messages';
 import MessageIcon from '~/components/Share/MessageIcon';
 import { useGetEndpointsQuery } from '~/data-provider';
@@ -90,7 +90,9 @@ export default function SiblingHeader({
          */
         const endpointLabel = endpointsConfig?.[parsed.endpoint ?? '']?.modelDisplayLabel;
         const senderIsEndpointLabel = parsed.sender != null && parsed.sender === endpointLabel;
-        const model = parsed.model ? stripProviderPrefix(parsed.model) : undefined;
+        const model = parsed.model
+          ? modelDisplayName(parsed.model, endpointsConfig, parsed.endpoint)
+          : undefined;
         return {
           displayName:
             (senderIsEndpointLabel ? model || parsed.sender : parsed.sender) || model || 'AI',

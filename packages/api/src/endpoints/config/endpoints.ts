@@ -7,12 +7,42 @@ import {
   normalizeEndpointName,
   defaultAgentCapabilities,
 } from 'librechat-data-provider';
-import type { AgentCapabilities, TEndpointsConfig, TConfig } from 'librechat-data-provider';
+import type {
+  TConfig,
+  AgentCapabilities,
+  TEndpointsConfig,
+  ModelCapabilities,
+} from 'librechat-data-provider';
 import type { AppConfig } from '@librechat/data-schemas';
 import type { ServerRequest, TCustomEndpointsConfig } from '~/types';
 import { loadCustomEndpointsConfig as defaultLoadCustomEndpoints } from '~/endpoints/custom';
 import { fetchModelCapabilities } from '~/endpoints/modelCapabilities';
 import { publishModelLimits } from '~/utils/tokens';
+
+/**
+ * What the browser is told about a model, out of everything the catalogue read
+ * carries.
+ *
+ * The read also collects fields only the admin screen needs — release and
+ * retirement dates, what an alias resolves to, whether it is a free variant — and
+ * this map rides on a route rebuilt several times per message. For an endpoint
+ * without a curated list that is the entire catalogue, every time, so the extra
+ * fields would be tens of kB of JSON per message answering nothing the browser
+ * asks. The token figures stay: callers already had them.
+ */
+const forTheBrowser = ({
+  vision,
+  tools,
+  contextTokens,
+  maxOutputTokens,
+  name,
+}: ModelCapabilities): ModelCapabilities => ({
+  vision,
+  tools,
+  contextTokens,
+  maxOutputTokens,
+  name,
+});
 
 type PartialEndpointEntry = Partial<TConfig> & Record<string, unknown>;
 type DefaultEndpointsResult = Record<string, PartialEndpointEntry | false | null>;
@@ -92,13 +122,11 @@ async function attachModelCapabilities(
        * of JSON on a route rebuilt on every message, against ~1 kB for a curated
        * line-up.
        */
-      entry.modelCapabilities = configuredModels
-        ? Object.fromEntries(
-            configuredModels
-              .filter((model) => modelCapabilities[model] != null)
-              .map((model) => [model, modelCapabilities[model]]),
-          )
-        : modelCapabilities;
+      entry.modelCapabilities = Object.fromEntries(
+        (configuredModels ?? Object.keys(modelCapabilities))
+          .filter((model) => modelCapabilities[model] != null)
+          .map((model) => [model, forTheBrowser(modelCapabilities[model])]),
+      );
     }),
   );
 }

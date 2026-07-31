@@ -9,7 +9,7 @@ import { useModelSelectorContext } from '../ModelSelectorContext';
 import { CustomMenuItem as MenuItem } from '../CustomMenu';
 import { shouldRenderEndpointOption } from '../utils';
 import SpecDescription from './SpecDescription';
-import { stripProviderPrefix } from '../utils';
+import { modelDisplayName } from '../utils';
 import { getModelBrandIcon } from './brand';
 import SpecIcon from './SpecIcon';
 import { cn } from '~/utils';
@@ -133,9 +133,14 @@ export function SearchResults({ results, localize, searchValue }: SearchResultsP
                   ) {
                     modelName = endpoint.assistantNames[model.name];
                   } else {
-                    modelName = stripProviderPrefix(modelName);
+                    modelName = modelDisplayName(modelName, endpointsConfig, endpoint.value);
                   }
-                  return modelName.toLowerCase().includes(lowerQuery);
+                  /** The slug is matched too: it is what the label used to be, and
+                   *  what settings and support threads refer to. */
+                  return (
+                    modelName.toLowerCase().includes(lowerQuery) ||
+                    model.name.toLowerCase().includes(lowerQuery)
+                  );
                 });
 
             if (!filteredModels.length && !showMarketplace) {
@@ -178,7 +183,7 @@ export function SearchResults({ results, localize, searchValue }: SearchResultsP
                   ) {
                     modelName = endpoint.assistantNames[modelId];
                   } else {
-                    modelName = stripProviderPrefix(modelName);
+                    modelName = modelDisplayName(modelName, endpointsConfig, endpoint.value);
                   }
 
                   const isModelSelected =
