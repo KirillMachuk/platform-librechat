@@ -5,11 +5,18 @@ const { recordAudit, auditRequestContext } = require('~/server/services/Audit');
  * settles. Recording is attached to response events, so it is fire-and-forget
  * and never delays or breaks the request.
  *
- * `resolve(req)` returns the event-specific fields (`action`, `targetType`,
- * `targetId`, `metadata`, …) or `null`/`undefined` to skip (e.g. a method this
- * hook does not audit). Actor, tenant, request context (ip/user-agent) and an
- * outcome are filled in automatically, so each hook stays a small, declarative
- * resolver.
+ * `resolve(req, outcome)` returns the event-specific fields (`action`,
+ * `targetType`, `targetId`, `metadata`, …) or `null`/`undefined` to skip (e.g. a
+ * method this hook does not audit). Actor, tenant, request context (ip/user-agent)
+ * and the outcome are filled in automatically, so each hook stays a small,
+ * declarative resolver.
+ *
+ * The outcome is handed to the resolver as well, because a resolver that reads
+ * what the *handler* left behind cannot otherwise describe an `unknown`: at the
+ * moment a socket dies the handler is still running and has left nothing yet, so
+ * such a resolver answers null and the disconnect goes unrecorded — the very
+ * thing the `unknown` branch exists to prevent. Resolvers that do not care simply
+ * ignore the second argument.
  *
  * The resolver runs when the response settles, not on entry: hooks mounted with
  * `router.use` (grants, config) see an unmatched request, so `req.params` is
@@ -29,7 +36,7 @@ const { recordAudit, auditRequestContext } = require('~/server/services/Audit');
  *    lost entirely, which made "disconnect mid-request" a way to mutate
  *    permissions and leave no trace.
  *
- * @param {(req: import('express').Request) => (object|null|undefined)} resolve
+ * @param {(req: import('express').Request, outcome: 'success'|'failure'|'unknown') => (object|null|undefined)} resolve
  * @returns {import('express').RequestHandler}
  */
 const createAuditOnFinish = (resolve) => (req, res, next) => {
@@ -44,7 +51,7 @@ const createAuditOnFinish = (resolve) => (req, res, next) => {
     if (outcome == null) {
       return;
     }
-    const fields = resolve(req);
+    const fields = resolve(req, outcome);
     if (!fields) {
       return;
     }

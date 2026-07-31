@@ -3216,6 +3216,40 @@ describe('getUserFacingError - a model the gateway will never serve', () => {
     expect(shown).toContain('Выберите другую модель');
   });
 
+  /**
+   * The perimeter service can forward the gateway's answer as plain text, and
+   * OpenRouter parks the provider's own words in `metadata.raw` behind a generic
+   * "Provider returned error". The probe reads whatever shape arrives; this side
+   * has to recognise the same thing or the two drift apart and the employee is
+   * back to "try again".
+   */
+  it('recognises it in a body that is plain text', () => {
+    const shown = getUserFacingError({
+      status: 404,
+      response: {
+        status: 404,
+        data: 'No endpoints available matching your guardrail restrictions and data policy.',
+      },
+    });
+
+    expect(shown).toContain('Выберите другую модель');
+  });
+
+  it('recognises it behind a generic wrapper, in metadata.raw', () => {
+    const shown = getUserFacingError({
+      status: 404,
+      message: 'Provider returned error',
+      error: {
+        message: 'Provider returned error',
+        metadata: {
+          raw: 'No endpoints available matching your guardrail restrictions and data policy.',
+        },
+      },
+    });
+
+    expect(shown).toContain('Выберите другую модель');
+  });
+
   it('leaves every other 404 alone', () => {
     expect(getUserFacingError({ status: 404, error: { message: 'model not found' } })).toBe(
       'Произошла ошибка при обработке запроса. Попробуйте ещё раз.',

@@ -132,3 +132,86 @@ describe('auditModelCatalogueChange', () => {
     });
   });
 });
+
+/**
+ * Enabling a model now asks the gateway whether it will really serve it, which is
+ * a round trip an admin has every reason to abandon. The handler keeps running in
+ * Node regardless, so a closed tab must not be a way to change what every employee
+ * can select and leave the journal empty.
+ */
+describe('auditModelCatalogueChange: the admin went away mid-save', () => {
+  beforeEach(() => mockRecordAudit.mockClear());
+
+  /** `close` without `writableEnded` is Express's "the socket died first". */
+  const buildDeadSocket = () => {
+    const res = new EventEmitter();
+    res.statusCode = 200;
+    res.writableEnded = false;
+    return res;
+  };
+
+  it('records the intent, marked as not known to have been applied', () => {
+    const req = buildReq({ body: { endpoint: '1ma', model: 'a/new', enabled: true } });
+    const res = buildDeadSocket();
+
+    auditModelCatalogueChange(req, res, jest.fn());
+    res.emit('close');
+
+    expect(mockRecordAudit).toHaveBeenCalledTimes(1);
+    expect(mockRecordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'models.set_enabled',
+        outcome: 'unknown',
+        targetId: '1ma',
+        metadata: { model: 'a/new', enabled: true, applied: false },
+      }),
+    );
+  });
+
+  /** The list is the handler's to state; an abandoned request never learned it. */
+  it('claims no line-up it never saw', () => {
+    const req = buildReq({ body: { endpoint: '1ma', model: 'a/new', enabled: true } });
+    const res = buildDeadSocket();
+
+    auditModelCatalogueChange(req, res, jest.fn());
+    res.emit('close');
+
+    expect(mockRecordAudit.mock.calls[0][0].metadata.models).toBeUndefined();
+  });
+
+  it('prefers what was actually written when the handler got that far', () => {
+    const req = buildReq({
+      body: { endpoint: '1ma', model: 'a/new', enabled: true },
+      modelCatalogueChange: applied(),
+    });
+    const res = buildDeadSocket();
+
+    auditModelCatalogueChange(req, res, jest.fn());
+    res.emit('close');
+
+    expect(mockRecordAudit.mock.calls[0][0].metadata.applied).toBeUndefined();
+    expect(mockRecordAudit.mock.calls[0][0].metadata.models).toHaveLength(2);
+  });
+
+  it('records nothing for a body that carries no change at all', () => {
+    const req = buildReq({ body: {} });
+    const res = buildDeadSocket();
+
+    auditModelCatalogueChange(req, res, jest.fn());
+    res.emit('close');
+
+    expect(mockRecordAudit).not.toHaveBeenCalled();
+  });
+
+  /** A completed request still answers from what the handler wrote — a no-op that
+   *  finished normally must not start producing "intent" entries. */
+  it('leaves a completed no-op unrecorded', () => {
+    const req = buildReq({ body: { endpoint: '1ma', model: 'a/already-on', enabled: true } });
+    const res = buildRes(200);
+
+    auditModelCatalogueChange(req, res, jest.fn());
+    res.emit('finish');
+
+    expect(mockRecordAudit).not.toHaveBeenCalled();
+  });
+});
