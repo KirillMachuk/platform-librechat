@@ -61,19 +61,35 @@ function getSaveErrorMessage(
     return fallback;
   }
 
-  let parsed: { type?: string; info?: string };
+  let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
     return fallback;
   }
+  /**
+   * `JSON.parse` answers `null`, a number or an array without throwing, and the
+   * server builds these payloads by interpolating a model name into a template —
+   * so a name carrying a quote arrives as something that parses to anything at
+   * all. Reading `.info` off that threw straight out of the mutation's `onError`,
+   * and the user pressed Save to no toast whatsoever.
+   */
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return fallback;
+  }
 
+  const { type, info } = parsed as { type?: unknown; info?: unknown };
   /** Ids read `vendor/model`; the vendor half is noise in a sentence about the model. */
-  const model = parsed.info?.split('/').pop() ?? parsed.info ?? '';
-  if (parsed.type === ErrorTypes.MODEL_NO_TOOLS) {
+  const model = typeof info === 'string' && info !== '' ? (info.split('/').pop() ?? info) : '';
+  /** Without a model to name, the sentence would read «Модель «» …» — the generic
+   *  line is less specific but at least not nonsense. */
+  if (model === '') {
+    return fallback;
+  }
+  if (type === ErrorTypes.MODEL_NO_TOOLS) {
     return localize('com_error_model_no_tools', { 0: model });
   }
-  if (parsed.type === ErrorTypes.REASONING_MODEL_TOOLS) {
+  if (type === ErrorTypes.REASONING_MODEL_TOOLS) {
     return localize('com_error_reasoning_model_tools', { 0: model });
   }
   return fallback;

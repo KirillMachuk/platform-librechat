@@ -384,10 +384,13 @@ function BadgeRow({
         {showEphemeralBadges === true && (
           <>
             <FileMode />
-            {/* Tool toggles hidden for reasoning models (o-series / gpt-5.x): they
-                cannot run the tool loop, so the backend drops these tools anyway.
-                Deep Research (forces a non-reasoning model) and Artifacts (not a
-                tool) stay available. */}
+            {/* Hidden for a model that cannot run the tool loop — a reasoning
+                model, or one its gateway serves without `tools`. Deep Research
+                stays (it runs on its own lead and worker models from the
+                configuration), Artifacts is a rendering mode rather than a tool,
+                and Skills arms `skills_enabled` rather than a tool definition —
+                whether a chat-only model should still offer it is a question for
+                its own change, with its own evidence. */}
             {!toolLoopUnavailable && <WebSearch />}
             <DeepResearch />
             {!toolLoopUnavailable && <CodeInterpreter />}

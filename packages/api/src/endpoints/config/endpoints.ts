@@ -58,8 +58,21 @@ async function attachModelCapabilities(
       if (!entry) {
         return;
       }
+      /**
+       * `models.default` legally holds `{ name, description }` objects as well as
+       * plain ids (`modelItemSchema`), and `loadConfigModels` already reads both.
+       * Casting the array to `string[]` made every entry of an object-form list
+       * miss in the capability map, so the whole feature switched itself off for
+       * that endpoint without a word.
+       */
       const configured = (endpoint.models as { default?: unknown } | undefined)?.default;
-      const configuredModels = Array.isArray(configured) ? (configured as string[]) : undefined;
+      const configuredModels = Array.isArray(configured)
+        ? configured
+            .map((model) =>
+              typeof model === 'string' ? model : (model as { name?: unknown } | null)?.name,
+            )
+            .filter((model): model is string => typeof model === 'string' && model !== '')
+        : undefined;
       const modelCapabilities = await fetchModelCapabilities({
         baseURL: extractEnvVariable(String(endpoint.baseURL ?? '')),
         apiKey: extractEnvVariable(String(endpoint.apiKey ?? '')),
@@ -72,12 +85,12 @@ async function attachModelCapabilities(
        *  gateway (`getModelMaxTokens` is synchronous), so publish them for it —
        *  the whole catalogue, since a model can be selected before it appears in
        *  a curated list. */
-      publishModelLimits(modelCapabilities);
+      publishModelLimits(configName, modelCapabilities);
       /**
        * The client only ever asks about models it can select, so send those and
-       * not the gateway's whole catalogue: all 367 of OpenRouter's models weigh
-       * ~38 kB of JSON on a route rebuilt on every message, against ~1.3 kB for a
-       * curated line-up of thirteen.
+       * not the gateway's whole catalogue: a few hundred models weigh tens of kB
+       * of JSON on a route rebuilt on every message, against ~1 kB for a curated
+       * line-up.
        */
       entry.modelCapabilities = configuredModels
         ? Object.fromEntries(
