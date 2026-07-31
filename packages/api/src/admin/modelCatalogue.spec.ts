@@ -7,6 +7,7 @@ import {
   createModelCatalogueHandlers,
   collectModelRoles,
   groupByVendor,
+  storedLineUp,
   mergeEndpointOverride,
 } from './modelCatalogue';
 
@@ -1000,5 +1001,104 @@ describe('setModels: where a newly offered model lands', () => {
     );
 
     expect(written(deps)[0]).toBe('anthropic/opus');
+  });
+});
+
+/**
+ * A gateway call sits between reading the line-up and writing it, and it can take
+ * seconds. Anything read before that call is a view of the past by the time the
+ * write lands.
+ */
+describe('setModels: the line-up is read at write time, not on arrival', () => {
+  /** An override document holding a saved line-up for `gw`. */
+  const overrideWith = (models: string[]) => ({
+    overrides: { endpoints: { custom: [{ name: 'gw', models: { default: models } }] } },
+  });
+
+  it('starts from what is saved, not from the config this request loaded', async () => {
+    const { deps } = await put(
+      { endpoint: 'gw', model: 'a/available', enabled: true },
+      {
+        /** The merged config is a step behind the override — a cache that has not
+         *  caught up with another admin's write. */
+        findConfigByPrincipal: jest
+          .fn()
+          .mockResolvedValue(overrideWith(['a/enabled', 'a/also-enabled', 'a/theirs'])),
+      },
+    );
+
+    expect(written(deps)).toEqual(['a/enabled', 'a/also-enabled', 'a/theirs', 'a/available']);
+  });
+
+  /**
+   * The case the ordering exists for: another admin's change lands while the
+   * gateway is being asked about ours. Read on arrival, their model would have been
+   * written back out with no error anywhere.
+   */
+  it('does not drop a change made while the gateway was being asked', async () => {
+    let saved = ['a/enabled', 'a/also-enabled'];
+    const findConfigByPrincipal = jest.fn(async () => overrideWith(saved));
+    const probeModel = jest.fn(async () => {
+      saved = [...saved, 'a/theirs'];
+      return undefined;
+    });
+
+    const { deps, res } = await put(
+      { endpoint: 'gw', model: 'a/available', enabled: true },
+      { findConfigByPrincipal, probeModel },
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(written(deps)).toContain('a/theirs');
+    expect(written(deps)).toContain('a/available');
+  });
+
+  /** Both admins asked for the same thing; the second one has nothing left to do. */
+  it('writes nothing when the change arrived from somewhere else first', async () => {
+    let saved = ['a/enabled', 'a/also-enabled'];
+    const findConfigByPrincipal = jest.fn(async () => overrideWith(saved));
+    const probeModel = jest.fn(async () => {
+      saved = [...saved, 'a/available'];
+      return undefined;
+    });
+
+    const { deps, res, req } = await put(
+      { endpoint: 'gw', model: 'a/available', enabled: true },
+      { findConfigByPrincipal, probeModel },
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(deps.patchConfigFields).not.toHaveBeenCalled();
+    expect(req.modelCatalogueChange).toBeUndefined();
+  });
+});
+
+describe('storedLineUp', () => {
+  const doc = (models: unknown) => [{ name: 'gw', models: { default: models } }];
+
+  it('reads the endpoint its own saved list', () => {
+    expect(storedLineUp(doc(['a/one', 'a/two']), 'gw')).toEqual(['a/one', 'a/two']);
+  });
+
+  it('ignores entries that belong to another endpoint', () => {
+    expect(storedLineUp([{ name: 'other', models: { default: ['x/y'] } }], 'gw')).toBeUndefined();
+  });
+
+  /**
+   * `undefined`, never `[]`. An empty answer would read as "saved as empty" and stop
+   * the caller falling back to the YAML line-up, which is what an endpoint nobody
+   * has curated yet actually offers.
+   */
+  it('says nothing when the override has never mentioned this endpoint', () => {
+    expect(storedLineUp(undefined, 'gw')).toBeUndefined();
+    expect(storedLineUp(null, 'gw')).toBeUndefined();
+    expect(storedLineUp([], 'gw')).toBeUndefined();
+    expect(storedLineUp([{ name: 'gw' }], 'gw')).toBeUndefined();
+    expect(storedLineUp(doc(undefined), 'gw')).toBeUndefined();
+    expect(storedLineUp(doc('a/one'), 'gw')).toBeUndefined();
+  });
+
+  it('drops entries that are not model ids', () => {
+    expect(storedLineUp(doc(['a/one', '', 42, null, 'a/two']), 'gw')).toEqual(['a/one', 'a/two']);
   });
 });

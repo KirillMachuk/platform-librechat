@@ -352,6 +352,28 @@ export function groupByVendor(models: string[]): string[] {
 }
 
 /**
+ * One endpoint's saved line-up, straight out of the override document.
+ *
+ * `undefined` — not `[]` — when the override says nothing about this endpoint, so a
+ * caller can tell "saved as empty" from "never saved" and fall back to the YAML
+ * list for the second. An array that is present is authoritative even when it is
+ * empty: the override replaces the YAML list wholesale.
+ */
+export function storedLineUp(stored: unknown, endpointName: string): string[] | undefined {
+  if (!Array.isArray(stored)) {
+    return undefined;
+  }
+  const entry = (stored as Array<Record<string, unknown>>).find(
+    (item) => item?.name === endpointName,
+  );
+  const models = (entry?.models as { default?: unknown } | undefined)?.default;
+  if (!Array.isArray(models)) {
+    return undefined;
+  }
+  return models.filter((model): model is string => typeof model === 'string' && model !== '');
+}
+
+/**
  * Merges one endpoint's model list into the existing override array.
  *
  * Reads the stored override rather than rebuilding it from the merged config: a
@@ -505,27 +527,9 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
        * a change) and takes the order of the line-up out of the caller's hands: that
        * order decides what employees see first.
        */
-      const current = configuredModelsOf(endpoint);
-      const alreadyEnabled = current.includes(model);
-      if (alreadyEnabled === enabled) {
+      /** Cheap answer first, so a click that changes nothing spends no gateway call. */
+      if (configuredModelsOf(endpoint).includes(model) === enabled) {
         return res.status(200).json(await loadPayload(req));
-      }
-      const next = groupByVendor(
-        enabled ? [...current, model] : current.filter((id) => id !== model),
-      );
-
-      if (next.length > MAX_MODELS_PER_ENDPOINT) {
-        return res
-          .status(400)
-          .json({ error: `At most ${MAX_MODELS_PER_ENDPOINT} models per endpoint` });
-      }
-      /**
-       * An empty list is refused rather than accepted-and-guarded-on-read: the
-       * merged config would carry `[]`, the model selector would be empty and
-       * nobody could start a chat. Forbidding the state beats detecting it.
-       */
-      if (next.length === 0) {
-        return res.status(400).json({ error: 'At least one model must stay enabled' });
       }
 
       if (enabled) {
@@ -586,6 +590,41 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
         includeInactive: true,
       });
       const overrides = (stored?.overrides ?? {}) as { endpoints?: { custom?: unknown } };
+
+      /**
+       * The line-up is read here, immediately before it is rewritten — not from the
+       * config this request loaded on arrival.
+       *
+       * Between the two sits a gateway call that can take seconds, and a change
+       * another admin makes in that window is invisible to a list read before it:
+       * we would write our own model in and theirs back out, with nothing to notice
+       * it by. Reading and writing the same document one round trip apart is what
+       * the guard below can actually cover.
+       */
+      const current =
+        storedLineUp(overrides.endpoints?.custom, endpointName) ?? configuredModelsOf(endpoint);
+      /** Someone else got there first while the gateway was being asked. */
+      if (current.includes(model) === enabled) {
+        return res.status(200).json(await loadPayload(req, true));
+      }
+      const next = groupByVendor(
+        enabled ? [...current, model] : current.filter((id) => id !== model),
+      );
+
+      if (next.length > MAX_MODELS_PER_ENDPOINT) {
+        return res
+          .status(400)
+          .json({ error: `At most ${MAX_MODELS_PER_ENDPOINT} models per endpoint` });
+      }
+      /**
+       * An empty list is refused rather than accepted-and-guarded-on-read: the
+       * merged config would carry `[]`, the model selector would be empty and
+       * nobody could start a chat. Forbidding the state beats detecting it.
+       */
+      if (next.length === 0) {
+        return res.status(400).json({ error: 'At least one model must stay enabled' });
+      }
+
       const merged = mergeEndpointOverride(overrides.endpoints?.custom, endpointName, next);
 
       /**
