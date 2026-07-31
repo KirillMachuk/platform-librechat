@@ -51,6 +51,7 @@ const {
   buildInitialToolSessions,
   armDeepResearchBudget,
   createAgentTurnBalanceGuard,
+  isDataPolicyRefusal,
 } = require('@librechat/api');
 const {
   Callback,
@@ -144,6 +145,30 @@ function getUserFacingError(err) {
     errorBody.message.trim() !== ''
   ) {
     return errorBody.message.trim();
+  }
+
+  /* The gateway serves this model on paper but will not serve it to us: every
+   * provider behind it is excluded by the data policy this account is configured
+   * with. Nothing the user does — retrying, shortening, waiting — changes that, so
+   * the neutral "try again" wording sends them round a loop. Admins are stopped
+   * from offering such a model in the first place (`probeModel`); this is for the
+   * ones already offered, and for a provider that changes its mind later. */
+  /* Everywhere the refusal can hide, joined into one string. The gateway is
+   * behind our own perimeter service, so the body may arrive as plain text
+   * (`errorBody` is then the string itself, with no `.message`), and OpenRouter
+   * parks the upstream provider's own words in `metadata.raw` behind a generic
+   * "Provider returned error" — the same field the detail log above reads. The
+   * probe stringifies whatever it receives; feeding this side less text is how
+   * the two halves drift apart. Only the text widens: the 404 stays required. */
+  const refusalText = [
+    typeof errorBody === 'string' ? errorBody : errorBody?.message,
+    errorBody?.metadata?.raw,
+    err?.message,
+  ]
+    .filter((part) => typeof part === 'string')
+    .join(' ');
+  if (isDataPolicyRefusal(status, refusalText)) {
+    return 'Эта модель сейчас недоступна: её обслуживают только площадки, которые не проходят нашу политику обработки данных. Выберите другую модель и сообщите администратору.';
   }
 
   if (status === 402) {

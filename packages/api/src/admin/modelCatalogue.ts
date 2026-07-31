@@ -9,6 +9,7 @@ import type { ModelCapabilities, ModelCapabilityMap } from 'librechat-data-provi
 import type { AppConfig, IConfig } from '@librechat/data-schemas';
 import type { Types, ClientSession } from 'mongoose';
 import type { Response } from 'express';
+import type { ModelRefusal } from '~/endpoints/modelProbe';
 import type { ServerRequest } from '~/types/http';
 
 /**
@@ -119,6 +120,15 @@ export interface ModelCatalogueDeps {
     baseURL?: string;
     apiKey?: string;
   }) => Promise<ModelCapabilityMap>;
+  /**
+   * Asks the gateway whether it will really serve a model, before it is offered.
+   * Answers a refusal that will still hold tomorrow, or nothing at all.
+   */
+  probeModel: (params: {
+    baseURL?: string;
+    apiKey?: string;
+    model: string;
+  }) => Promise<ModelRefusal | undefined>;
   /** Agents per model, so the UI can warn before retiring one that is in use. */
   countAgentsByModel: (provider: string, tenantId?: string) => Promise<Record<string, number>>;
   /**
@@ -305,6 +315,64 @@ function buildEndpoint(
   return { name: endpointName, source: answered ? 'catalogue' : 'config', managed, models };
 }
 
+/** The vendor half of a `vendor/model` id, with the moving-pointer `~` stripped. */
+const vendorOf = (model: string): string => {
+  const slashAt = model.indexOf('/');
+  return slashAt <= 0 ? model : model.slice(0, slashAt).replace(/^~/, '').toLowerCase();
+};
+
+/**
+ * Keeps a line-up in vendor blocks, so a newly offered model lands next to its
+ * family instead of at the end.
+ *
+ * The order here is the order employees scroll through, and appending each new
+ * model left it a list in the sequence an admin happened to click — three
+ * DeepSeeks, an Anthropic, two more DeepSeeks. Vendors keep the order they first
+ * appear in and models keep their order within a vendor, so the effect on a list
+ * that is already tidy is nothing at all.
+ *
+ * The first entry cannot move, which matters: it is the model a new chat falls
+ * back to when the employee has no history and the configuration names no default
+ * (`parseConvo` takes the first of the list). It is first in the list, therefore
+ * the first appearance of its vendor, therefore first in the first block — an
+ * invariant of the grouping rather than a case handled beside it.
+ */
+export function groupByVendor(models: string[]): string[] {
+  const blocks = new Map<string, string[]>();
+  for (const model of models) {
+    const vendor = vendorOf(model);
+    const block = blocks.get(vendor);
+    if (block) {
+      block.push(model);
+    } else {
+      blocks.set(vendor, [model]);
+    }
+  }
+  return Array.from(blocks.values()).flat();
+}
+
+/**
+ * One endpoint's saved line-up, straight out of the override document.
+ *
+ * `undefined` — not `[]` — when the override says nothing about this endpoint, so a
+ * caller can tell "saved as empty" from "never saved" and fall back to the YAML
+ * list for the second. An array that is present is authoritative even when it is
+ * empty: the override replaces the YAML list wholesale.
+ */
+export function storedLineUp(stored: unknown, endpointName: string): string[] | undefined {
+  if (!Array.isArray(stored)) {
+    return undefined;
+  }
+  const entry = (stored as Array<Record<string, unknown>>).find(
+    (item) => item?.name === endpointName,
+  );
+  const models = (entry?.models as { default?: unknown } | undefined)?.default;
+  if (!Array.isArray(models)) {
+    return undefined;
+  }
+  return models.filter((model): model is string => typeof model === 'string' && model !== '');
+}
+
 /**
  * Merges one endpoint's model list into the existing override array.
  *
@@ -337,6 +405,7 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
   const {
     getAppConfig,
     fetchModelCapabilities,
+    probeModel,
     countAgentsByModel,
     findConfigByPrincipal,
     patchConfigFields,
@@ -447,48 +516,54 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
       }
 
       /**
-       * The change is applied to the list as it stands right now, never to a list the
-       * caller sent.
+       * The request states one model and a direction, never a list.
        *
        * A caller that states the whole list states it from whatever it last read, so
-       * an admin acting on a screen opened five minutes ago silently overwrites every
-       * change made since — and no re-read on this side can tell that apart from an
-       * intended edit. One model and a direction cannot carry a stale list, which also
-       * makes the request idempotent (asking to enable what is already enabled is not
-       * a change) and takes the order of the line-up out of the caller's hands: that
-       * order decides what employees see first.
+       * an admin acting on a screen opened five minutes ago would silently overwrite
+       * every change made since — and no check on this side could tell that apart
+       * from an intended edit. One model and a direction cannot carry a stale list,
+       * which also makes the request idempotent and takes the order of the line-up
+       * out of the caller's hands: that order decides what employees see first.
+       *
+       * Answered from the config loaded on arrival because it is free, and because a
+       * click that changes nothing should not spend a gateway call. The list that is
+       * actually written is read further down, immediately before the write.
        */
-      const current = configuredModelsOf(endpoint);
-      const alreadyEnabled = current.includes(model);
-      if (alreadyEnabled === enabled) {
+      if (configuredModelsOf(endpoint).includes(model) === enabled) {
         return res.status(200).json(await loadPayload(req));
-      }
-      const next = enabled ? [...current, model] : current.filter((id) => id !== model);
-
-      if (next.length > MAX_MODELS_PER_ENDPOINT) {
-        return res
-          .status(400)
-          .json({ error: `At most ${MAX_MODELS_PER_ENDPOINT} models per endpoint` });
-      }
-      /**
-       * An empty list is refused rather than accepted-and-guarded-on-read: the
-       * merged config would carry `[]`, the model selector would be empty and
-       * nobody could start a chat. Forbidding the state beats detecting it.
-       */
-      if (next.length === 0) {
-        return res.status(400).json({ error: 'At least one model must stay enabled' });
       }
 
       if (enabled) {
-        const catalogue = await fetchModelCapabilities({
+        const connection = {
           baseURL: extractEnvVariable(String(endpoint.baseURL ?? '')),
           apiKey: extractEnvVariable(String(endpoint.apiKey ?? '')),
-        });
+        };
+        const catalogue = await fetchModelCapabilities(connection);
         /** Checked only when there is a catalogue to check against — otherwise every
          *  id would look invalid and the endpoint would become unmanageable. */
         if (Object.keys(catalogue).length > 0 && !has(catalogue, model)) {
           return res.status(400).json({
             error: `Not served by this endpoint's gateway: ${model}`,
+          });
+        }
+        /**
+         * Listed in the catalogue is not the same as served. An account's privacy
+         * settings can rule out every provider behind a model, and the gateway only
+         * says so when a message is actually sent — so without this the first person
+         * to find out is an employee, mid-chat, from an error that explains nothing.
+         *
+         * One token, and only a refusal that will still hold tomorrow counts; see
+         * `probeModel`.
+         */
+        if ((await probeModel({ ...connection, model })) === 'data-policy') {
+          return res.status(400).json({
+            error:
+              `The gateway will not serve ${model}: every provider behind it is ` +
+              'excluded by the data policy this account is configured with. Nothing ' +
+              'was changed.',
+            /** Named so a panel can say this in its own language rather than
+             *  matching on an English sentence that is free to change. */
+            code: 'data-policy',
           });
         }
       } else {
@@ -519,6 +594,41 @@ export function createModelCatalogueHandlers(deps: ModelCatalogueDeps): {
         includeInactive: true,
       });
       const overrides = (stored?.overrides ?? {}) as { endpoints?: { custom?: unknown } };
+
+      /**
+       * The line-up is read here, immediately before it is rewritten — not from the
+       * config this request loaded on arrival.
+       *
+       * Between the two sits a gateway call that can take seconds, and a change
+       * another admin makes in that window is invisible to a list read before it:
+       * we would write our own model in and theirs back out, with nothing to notice
+       * it by. Reading and writing the same document one round trip apart is what
+       * the guard below can actually cover.
+       */
+      const current =
+        storedLineUp(overrides.endpoints?.custom, endpointName) ?? configuredModelsOf(endpoint);
+      /** Someone else got there first while the gateway was being asked. */
+      if (current.includes(model) === enabled) {
+        return res.status(200).json(await loadPayload(req, true));
+      }
+      const next = groupByVendor(
+        enabled ? [...current, model] : current.filter((id) => id !== model),
+      );
+
+      if (next.length > MAX_MODELS_PER_ENDPOINT) {
+        return res
+          .status(400)
+          .json({ error: `At most ${MAX_MODELS_PER_ENDPOINT} models per endpoint` });
+      }
+      /**
+       * An empty list is refused rather than accepted-and-guarded-on-read: the
+       * merged config would carry `[]`, the model selector would be empty and
+       * nobody could start a chat. Forbidding the state beats detecting it.
+       */
+      if (next.length === 0) {
+        return res.status(400).json({ error: 'At least one model must stay enabled' });
+      }
+
       const merged = mergeEndpointOverride(overrides.endpoints?.custom, endpointName, next);
 
       /**

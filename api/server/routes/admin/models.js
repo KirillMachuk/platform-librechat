@@ -1,5 +1,9 @@
 const express = require('express');
-const { createModelCatalogueHandlers, fetchModelCapabilities } = require('@librechat/api');
+const {
+  createModelCatalogueHandlers,
+  fetchModelCapabilities,
+  probeModel,
+} = require('@librechat/api');
 const { SystemCapabilities } = require('@librechat/data-schemas');
 const {
   requireCapability,
@@ -17,6 +21,7 @@ const requireAdminAccess = requireCapability(SystemCapabilities.ACCESS_ADMIN);
 const handlers = createModelCatalogueHandlers({
   getAppConfig,
   fetchModelCapabilities,
+  probeModel,
   countAgentsByModel: db.countAgentsByModel,
   findConfigByPrincipal: db.findConfigByPrincipal,
   patchConfigFields: db.patchConfigFields,
