@@ -124,19 +124,33 @@ export function clearModelCapabilityMemo(): void {
 }
 
 /**
- * Cache namespace, keyed by the whole request identity rather than the URL alone.
+ * Bumped whenever `extractCapabilities` changes what a record carries.
+ *
+ * The parsed map outlives the process that parsed it: it sits in the shared cache
+ * for an hour, and a deploy swaps the code without touching the cache. Under an
+ * unversioned key the new code spends that hour serving whatever the old parser
+ * understood — this is not hypothetical: the release that added output types and
+ * cost bands read a map the previous parser had written seconds before the
+ * restart, and the admin screen's type filters matched nothing for the rest of
+ * that hour, on production, with every test green.
+ */
+const PARSER_VERSION = 2;
+
+/**
+ * Cache namespace, keyed by the parser version and the whole request identity
+ * rather than the URL alone.
  *
  * Two endpoints can point at the same gateway with different keys — per-team
  * entitlements, or a proxy where the key selects the served subset — and keying on
  * the URL made whichever resolved first answer for both. `models.ts` hashes
  * `baseURL:apiKey` for exactly this reason.
  *
- * Deliberately not the `vision:` prefix an earlier revision used: that one holds
- * `string[]`, and a rolling deploy must not read those as the capability records
- * this module now stores.
+ * The version plays the role the one-off rename from the `vision:` prefix played
+ * before it: an old-shape entry must be invisible to new code, not read and
+ * served. An orphaned entry just times out.
  */
 const cacheKeyFor = (baseURL: string, apiKey: string) =>
-  `capabilities:${crypto.createHash('sha256').update(`${baseURL}:${apiKey}`).digest('hex').slice(0, 32)}`;
+  `capabilities:v${PARSER_VERSION}:${crypto.createHash('sha256').update(`${baseURL}:${apiKey}`).digest('hex').slice(0, 32)}`;
 
 /** Reads a positive integer, or undefined for anything else (strings, null, NaN). */
 function toPositiveInt(value: unknown): number | undefined {
