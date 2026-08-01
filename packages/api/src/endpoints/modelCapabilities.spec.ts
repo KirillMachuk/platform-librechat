@@ -174,7 +174,7 @@ describe('fetchModelCapabilities', () => {
   const args = { baseURL: 'http://gateway.internal/v1', apiKey: 'k' };
   /** Keyed by the whole request identity, so two endpoints on one gateway with
    *  different keys cannot answer for each other. */
-  const cacheKey = `capabilities:${crypto
+  const cacheKey = `capabilities:v2:${crypto
     .createHash('sha256')
     .update(`${args.baseURL}:${args.apiKey}`)
     .digest('hex')
@@ -201,6 +201,31 @@ describe('fetchModelCapabilities', () => {
     expect(first['a/model'].vision).toBe(true);
     expect(mockedAxios.get).toHaveBeenCalledTimes(1);
     expect(cacheSet).toHaveBeenCalledWith(cacheKey, expect.any(Object), 3600000);
+  });
+
+  /**
+   * The map outlives the process that parsed it, and a deploy swaps the code
+   * without touching the cache. An entry written by the previous parser must be
+   * invisible to this one — not read and served for the rest of its hour. That
+   * happened on production: the release that added output types spent an hour
+   * serving a map without them, and the type filters matched nothing.
+   */
+  it('does not read a map the previous parser wrote', async () => {
+    const unversionedKey = `capabilities:${crypto
+      .createHash('sha256')
+      .update(`${args.baseURL}:${args.apiKey}`)
+      .digest('hex')
+      .slice(0, 32)}`;
+    mockCacheStore.set(unversionedKey, {
+      value: { 'a/model': { vision: true, tools: true } },
+    });
+    mockedAxios.get.mockResolvedValue({ data: catalogue });
+
+    const result = await fetchModelCapabilities(args);
+
+    /** Answered by a fresh fetch, not by the old entry. */
+    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+    expect(result['a/model'].contextTokens).toBe(128000);
   });
 
   /**
