@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { previewDialog, previewFixture, previewFrame, previewFrameElement } from './files.helpers';
 
 /**
- * What a user sees after clicking an attached file. The fixtures in
+ * What a user sees after opening a file from their library. The fixtures in
  * `e2e/fixtures/files` are real documents produced by the usual Office
  * libraries rather than hand-built XML.
  *
@@ -31,7 +31,7 @@ const DECK_SECTION_MARKER = 'Раздел 1';
 test.describe('file preview — office documents', () => {
   test('renders a Word contract as continuous reading text', async ({ page }) => {
     test.setTimeout(180000);
-    await previewFixture(page, 'contract-short.docx', 'docx-short');
+    await previewFixture(page, 'contract-short.docx');
 
     const frame = previewFrame(page, 'contract-short.docx');
     await expect(frame.locator('body')).toContainText(CONTRACT_MARKER, {
@@ -42,7 +42,7 @@ test.describe('file preview — office documents', () => {
 
   test('reads a long agreement as one continuous document', async ({ page }) => {
     test.setTimeout(180000);
-    await previewFixture(page, 'contract-long.docx', 'docx-long');
+    await previewFixture(page, 'contract-long.docx');
 
     const frame = previewFrame(page, 'contract-long.docx');
     await expect(frame.locator('body')).toContainText(CONTRACT_LONG_MARKER, {
@@ -53,7 +53,7 @@ test.describe('file preview — office documents', () => {
 
   test('renders a spreadsheet as a grid with its sheets', async ({ page }) => {
     test.setTimeout(180000);
-    await previewFixture(page, 'registry.xlsx', 'xlsx');
+    await previewFixture(page, 'registry.xlsx');
 
     const frame = previewFrame(page, 'registry.xlsx');
     await expect(frame.locator('table').first()).toBeVisible({ timeout: 60000 });
@@ -62,7 +62,7 @@ test.describe('file preview — office documents', () => {
 
   test('keeps a huge spreadsheet bounded instead of hanging the panel', async ({ page }) => {
     test.setTimeout(240000);
-    await previewFixture(page, 'big-rows.xlsx', 'xlsx-big');
+    await previewFixture(page, 'big-rows.xlsx');
 
     const frame = previewFrame(page, 'big-rows.xlsx');
     await expect(frame.locator('table').first()).toBeVisible({ timeout: 90000 });
@@ -75,7 +75,7 @@ test.describe('file preview — office documents', () => {
 
   test('renders a CSV as a sheet rather than raw text', async ({ page }) => {
     test.setTimeout(180000);
-    await previewFixture(page, 'data.csv', 'csv');
+    await previewFixture(page, 'data.csv');
 
     const frame = previewFrame(page, 'data.csv');
     await expect(frame.locator('table').first()).toBeVisible({ timeout: 60000 });
@@ -84,7 +84,7 @@ test.describe('file preview — office documents', () => {
 
   test('renders a widescreen presentation slide by slide', async ({ page }) => {
     test.setTimeout(180000);
-    await previewFixture(page, 'deck-16x9.pptx', 'pptx-wide');
+    await previewFixture(page, 'deck-16x9.pptx');
 
     const frame = previewFrame(page, 'deck-16x9.pptx');
     await expect(frame.locator('body')).toContainText(DECK_TITLE_MARKER, {
@@ -96,7 +96,7 @@ test.describe('file preview — office documents', () => {
 
   test('renders a four-by-three presentation too', async ({ page }) => {
     test.setTimeout(180000);
-    await previewFixture(page, 'deck-4x3.pptx', 'pptx-classic');
+    await previewFixture(page, 'deck-4x3.pptx');
 
     const frame = previewFrame(page, 'deck-4x3.pptx');
     await expect(frame.locator('body')).toContainText(DECK_TITLE_MARKER, {
@@ -107,7 +107,7 @@ test.describe('file preview — office documents', () => {
 
   test('renders a document too large for the bundled renderer', async ({ page }) => {
     test.setTimeout(240000);
-    await previewFixture(page, 'contract-heavy.docx', 'docx-heavy');
+    await previewFixture(page, 'contract-heavy.docx');
 
     const frame = previewFrame(page, 'contract-heavy.docx');
     await expect(frame.locator('body')).toContainText(CONTRACT_MARKER, {
@@ -120,31 +120,31 @@ test.describe('file preview — office documents', () => {
 test.describe('file preview — plain formats', () => {
   test('shows a markdown file as text with a copy action', async ({ page }) => {
     test.setTimeout(90000);
-    const dialog = await previewFixture(page, 'notes.md', 'md');
+    const dialog = await previewFixture(page, 'notes.md');
 
     await expect(dialog.locator('pre')).toContainText(MD_MARKER, { timeout: 30000 });
   });
 
   test('shows a source file as text', async ({ page }) => {
     test.setTimeout(90000);
-    const dialog = await previewFixture(page, 'script.py', 'code');
+    const dialog = await previewFixture(page, 'script.py');
 
     await expect(dialog.locator('pre')).toContainText(PY_MARKER, { timeout: 30000 });
   });
 
   test('renders a PDF in a viewer rather than as raw text', async ({ page }) => {
     test.setTimeout(90000);
-    await previewFixture(page, 'digital.pdf', 'pdf');
+    await previewFixture(page, 'digital.pdf');
 
     await expect(previewFrameElement(page, 'digital.pdf')).toBeVisible({ timeout: 30000 });
-    await expect(previewDialog(page).locator('pre')).toHaveCount(0);
+    await expect(previewDialog(page, 'digital.pdf').locator('pre')).toHaveCount(0);
   });
 });
 
 test.describe('file preview — honest states', () => {
   test('offers download instead of a preview for an archive', async ({ page }) => {
     test.setTimeout(90000);
-    const dialog = await previewFixture(page, 'archive.zip', 'zip');
+    const dialog = await previewFixture(page, 'archive.zip');
 
     await expect(dialog.getByText('Preview not available for this file type')).toBeVisible();
     await expect(dialog.getByRole('button', { name: /^Download / })).toBeVisible();
@@ -152,7 +152,7 @@ test.describe('file preview — honest states', () => {
 
   test('says plainly that a damaged document could not be shown', async ({ page }) => {
     test.setTimeout(180000);
-    const dialog = await previewFixture(page, 'broken.docx', 'broken');
+    const dialog = await previewFixture(page, 'broken.docx');
 
     await expect(
       dialog.getByText(/Could not render preview for this file|Preview unavailable/),
@@ -169,7 +169,7 @@ test.describe('file preview — honest states', () => {
    */
   test('keeps a password-protected PDF inside the preview surface', async ({ page }) => {
     test.setTimeout(180000);
-    const dialog = await previewFixture(page, 'locked.pdf', 'locked');
+    const dialog = await previewFixture(page, 'locked.pdf');
 
     await expect(previewFrameElement(page, 'locked.pdf')).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Download locked.pdf' })).toBeVisible();
