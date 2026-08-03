@@ -1,5 +1,5 @@
-import { readFileSync } from 'fs';
 import { join } from 'path';
+import { readFileSync } from 'fs';
 
 /**
  * The artifacts panel decides for itself whether to draw a desktop panel or a
