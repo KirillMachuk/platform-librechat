@@ -1,0 +1,145 @@
+import fs from 'fs';
+import path from 'path';
+import { expect } from '@playwright/test';
+import type { FrameLocator, Locator, Page } from '@playwright/test';
+import { NEW_CHAT_PATH } from './helpers';
+
+export const FIXTURE_DIR = path.resolve(__dirname, '..', '..', 'fixtures', 'files');
+
+const MIME_BY_EXTENSION: Record<string, string> = {
+  csv: 'text/csv',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  md: 'text/markdown',
+  pdf: 'application/pdf',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  py: 'text/x-python',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  xyz: 'application/octet-stream',
+  zip: 'application/zip',
+};
+
+export type FileFixture = { name: string; mimeType: string; buffer: Buffer };
+
+/** Load a committed fixture from `e2e/fixtures/files` for `setFiles`. */
+export function fileFixture(name: string): FileFixture {
+  const extension = name.slice(name.lastIndexOf('.') + 1).toLowerCase();
+  const mimeType = MIME_BY_EXTENSION[extension];
+  if (!mimeType) {
+    throw new Error(`no mime type mapped for fixture "${name}"`);
+  }
+  return { name, mimeType, buffer: fs.readFileSync(path.join(FIXTURE_DIR, name)) };
+}
+
+const composer = (page: Page) =>
+  page.locator('form').filter({ has: page.getByRole('textbox', { name: 'Message input' }) });
+
+const isUpload = (response: { url(): string; request(): { method(): string }; status(): number }) =>
+  response.url().includes('/api/files') &&
+  response.request().method() === 'POST' &&
+  response.status() === 200;
+
+/** Upload the fixture through the composer, which persists it in the user's files. */
+export async function attachFixture(page: Page, fixture: FileFixture) {
+  const chooserPromise = page.waitForEvent('filechooser');
+  await composer(page).getByRole('button', { name: 'Attach Files' }).click();
+  const chooser = await chooserPromise;
+  const uploaded = page.waitForResponse(isUpload, { timeout: 60000 });
+  await chooser.setFiles(fixture);
+  expect((await uploaded).ok()).toBeTruthy();
+  await expect(composer(page).getByRole('button', { name: fixture.name })).toBeVisible();
+}
+
+/** Sidebar entry that opens the file library, and the heading it puts on the panel. */
+const FILES_PANEL_TITLE = 'Attach Files';
+
+/**
+ * Open the file library from the sidebar.
+ *
+ * Previews are opened from here rather than from a chat transcript on purpose.
+ * A transcript chip only appears once a model turn completes, so every preview
+ * assertion used to depend on the mock provider's context window — and a
+ * document big enough to be worth testing is also big enough to overflow it,
+ * which killed the turn before the chip existed. Uploading already persists the
+ * file, so the library shows it with no model in the loop.
+ */
+export async function openFilesPanel(page: Page): Promise<Locator> {
+  const panel = page
+    .getByRole('dialog')
+    .filter({ has: page.getByRole('heading', { name: FILES_PANEL_TITLE }) });
+  await page.locator('aside').getByRole('button', { name: FILES_PANEL_TITLE }).click();
+  /* The dialog element itself is a zero-height positioning wrapper, so it never
+   * counts as visible; its heading is what tells us the panel actually opened. */
+  await expect(panel.getByRole('heading', { name: FILES_PANEL_TITLE })).toBeVisible();
+  return panel;
+}
+
+/** The preview dialog for one file — its title is the file name. */
+export const previewDialog = (page: Page, filename: string): Locator =>
+  page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: filename }) });
+
+/**
+ * Office previews render into a sandboxed srcdoc iframe, so assertions about
+ * document content go through the frame rather than the dialog body.
+ */
+export const previewFrame = (page: Page, filename: string): FrameLocator =>
+  page.frameLocator(`iframe[title="Preview: ${filename}"]`);
+
+export const previewFrameElement = (page: Page, filename: string): Locator =>
+  page.locator(`iframe[title="Preview: ${filename}"]`);
+
+const RENDERING_NOTICE = 'Rendering document, this may take a moment…';
+
+/** Every terminal surface the dialog can settle on, whatever the file turns out to be. */
+const PREVIEW_SETTLED =
+  /Preview not available for this file type|Could not render preview|Preview unavailable|Preview took too long|File is too large to preview/;
+
+/**
+ * Find the file in the library and open its preview.
+ *
+ * The table paginates at six rows, so the file is located through the table's
+ * own search rather than by scanning the first page — otherwise a test would
+ * pass or fail depending on how many files earlier tests left behind.
+ *
+ * Readiness has to be a positive signal — some surface exists — rather than
+ * "the rendering notice is not visible", which is equally true before the
+ * notice has had a chance to appear and lets a slow machine start asserting
+ * against an empty dialog.
+ *
+ * The wait is generous because the first office document of a run pays for
+ * loading the conversion libraries; measured cold renders on a loaded laptop
+ * take tens of seconds, while every later one lands in a few.
+ */
+export async function openPreview(page: Page, filename: string): Promise<Locator> {
+  const panel = await openFilesPanel(page);
+  /* Located by placeholder, not by accessible name: the table's labels come from
+   * the shared package's own locale file, which the app does not load, so the
+   * field currently announces itself as "com_ui_search_table" (see the
+   * localization row in e2e/COVERAGE_MAP.md). */
+  await panel.getByPlaceholder('Search', { exact: true }).fill(filename);
+  /* Rows carry role="button" because the table is clickable, so the file is
+   * addressed through its row header instead. `.first()` keeps a retry that
+   * re-uploads the same fixture from turning into a strict-mode failure. */
+  const row = panel.getByRole('rowheader', { name: filename, exact: true }).first();
+  await expect(row).toBeVisible({ timeout: 30000 });
+  await row.click();
+
+  /* A dialog locator that matches nothing makes every later negative
+   * assertion pass for free, so pin that exactly one is open. */
+  const dialog = previewDialog(page, filename);
+  await expect(dialog).toHaveCount(1);
+
+  const settled = previewFrameElement(page, filename)
+    .or(dialog.locator('pre'))
+    .or(dialog.getByText(PREVIEW_SETTLED));
+  await expect(settled.first()).toBeVisible({ timeout: 120000 });
+  await expect(dialog.getByText(RENDERING_NOTICE)).toHaveCount(0);
+  return dialog;
+}
+
+/** Upload the fixture and open its preview from the library. */
+export async function previewFixture(page: Page, name: string): Promise<Locator> {
+  const fixture = fileFixture(name);
+  await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+  await attachFixture(page, fixture);
+  return openPreview(page, fixture.name);
+}
