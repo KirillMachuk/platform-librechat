@@ -71,7 +71,7 @@ const setPanelState = (overrides: Record<string, unknown> = {}) => {
 /** Makes `useMediaQuery('(max-width: Npx)')` answer for a simulated viewport. */
 const setViewportWidth = (width: number) => {
   window.matchMedia = jest.fn().mockImplementation((query: string) => {
-    const match = query.match(/max-width:\s*(\d+)px/);
+    const match = query.match(/max-width:\s*([\d.]+)px/);
     const matches = match ? width <= Number(match[1]) : false;
     return {
       matches,

@@ -581,7 +581,7 @@ const PromptForm = ({ promptId: promptIdProp }: { promptId?: string }) => {
           <div
             aria-hidden={!showSidePanel}
             className={cn(
-              'fixed inset-0 z-[100] bg-black/20 lg:hidden',
+              'fixed inset-0 z-scrim-drawer bg-black/20 lg:hidden',
               showSidePanel ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
             )}
             style={{ transition: 'opacity 300ms cubic-bezier(0.2, 0, 0, 1)' }}
@@ -599,7 +599,7 @@ const PromptForm = ({ promptId: promptIdProp }: { promptId?: string }) => {
           <div
             ref={sidePanelRef}
             className={cn(
-              'fixed right-0 top-0 z-[110] flex h-full flex-col border-l border-border-medium bg-surface-primary-alt shadow-xl lg:hidden',
+              'fixed right-0 top-0 z-drawer flex h-full flex-col border-l border-border-medium bg-surface-primary-alt shadow-xl lg:hidden',
               showSidePanel ? 'translate-x-0' : 'translate-x-full',
             )}
             style={{

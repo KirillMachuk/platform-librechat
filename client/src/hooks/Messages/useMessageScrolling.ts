@@ -1,10 +1,10 @@
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRecoilValue } from 'recoil';
 import { Constants } from 'librechat-data-provider';
-import { useState, useRef, useCallback, useEffect } from 'react';
 import type { TMessage } from 'librechat-data-provider';
 import { useMessagesConversation, useMessagesSubmission } from '~/Providers';
-import useScrollToRef from '~/hooks/useScrollToRef';
 import { reconcileMessageContentLayout } from './messageLayout';
+import useScrollToRef from '~/hooks/useScrollToRef';
 import store from '~/store';
 
 const threshold = 0.85;
@@ -165,7 +165,12 @@ export default function useMessageScrolling(messagesTree?: TMessage[] | null) {
       return;
     }
 
-    if (isSubmitting && scrollToBottom && abortScroll !== true) {
+    // `abortScroll` поднимается только колесом и касанием. Кто тянул ползунок
+    // прокрутки или шёл клавишами, его не выставлял — и лента дёргала человека
+    // обратно вниз на каждом куске ответа. Обработчик изменения размера рядом
+    // (см. `reconcileContentResize`) уже спрашивает, у низа ли мы; спрашиваем и
+    // здесь, чтобы правило было одно.
+    if (isSubmitting && scrollToBottom && abortScroll !== true && isNearBottomRef.current) {
       scrollToBottom();
     }
 

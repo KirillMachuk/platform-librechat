@@ -16,8 +16,8 @@ import { readFileSync } from 'fs';
  */
 const readBreakpoint = (relativePath: string): number => {
   const source = readFileSync(join(__dirname, '..', '..', '..', relativePath), 'utf8');
-  const widths = [...source.matchAll(/useMediaQuery\('\(max-width:\s*(\d+)px\)'\)/g)].map((match) =>
-    Number(match[1]),
+  const widths = [...source.matchAll(/useMediaQuery\('\(max-width:\s*([\d.]+)px\)'\)/g)].map(
+    (match) => Number(match[1]),
   );
   if (widths.length === 0) {
     throw new Error(`no useMediaQuery max-width breakpoint found in ${relativePath}`);
@@ -39,16 +39,13 @@ describe('artifacts panel breakpoints', () => {
   });
 
   /**
-   * Known defect, fixed by the panel redesign (Ф1): the panel switches to its
-   * phone layout at 868px while the layout host keeps the desktop split until
-   * 767px, so every viewport from 768px to 868px gets both at once. The design
-   * canon allows only 768 and 1024 as breakpoints.
-   *
-   * `failing` rather than `skip` on purpose: when the widths are made to agree
-   * this test starts failing, which forces whoever fixes it to promote it to a
-   * normal assertion instead of leaving a stale skip behind.
+   * The panel used to switch to its phone layout at 868px while the layout
+   * host kept the desktop split until 767px, so every viewport between them
+   * got both at once: the conversation squeezed into half the window, the
+   * other half empty, and a bottom sheet over all of it. Both now read the
+   * canonical mobile edge, and this assertion holds them together.
    */
-  it.failing('switches the panel and its layout host at the same width', () => {
+  it('switches the panel and its layout host at the same width', () => {
     expect(panel()).toBe(layoutHost());
   });
 });

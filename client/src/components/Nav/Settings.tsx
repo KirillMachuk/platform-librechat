@@ -168,7 +168,7 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
   return (
     <Transition appear show={open}>
       {/* Same layer as PanelDialog: above the mobile drawer (110), below OGDialog (130/140). */}
-      <Dialog as="div" className="relative z-[120]" onClose={onOpenChange}>
+      <Dialog as="div" className="relative z-dialog" onClose={onOpenChange}>
         <TransitionChild
           enter="ease-out duration-200"
           enterFrom="opacity-0"

@@ -167,6 +167,9 @@ html {
   --border-heavy: var(--c-acc);
   --border-xheavy: var(--c-acc);
   --border-destructive: var(--c-errc);
+  --border-control: var(--c-control);
+  --border-focus: var(--c-acc);
+  --ring-primary-soft: var(--c-acc-soft);
   /* These are test styles */
 
   --background: 0 0% 100%;
@@ -230,6 +233,9 @@ html {
   --border-heavy: var(--c-acc);
   --border-xheavy: var(--c-acc);
   --border-destructive: var(--c-errc);
+  --border-control: var(--c-control);
+  --border-focus: var(--c-acc);
+  --ring-primary-soft: var(--c-acc-soft);
   /* These are test styles */
 
   --background: 0 0% 7%;
@@ -2484,7 +2490,7 @@ html {
 }
 
 .tooltip {
-  z-index: 150;
+  z-index: var(--c-z-popover);
   cursor: pointer;
   border-radius: 0.275rem;
   background-color: var(--surface-primary);
@@ -2861,5 +2867,26 @@ html {
     100% {
       outline: 2px solid transparent;
     }
+  }
+}
+
+/* ============================================================================
+   Уважение к системной настройке «уменьшить движение».
+   Общего правила не было вовсе — единственный блок ниже касался подсветки
+   поиска. Человек, включивший это в системе, продолжал видеть пульсацию
+   скелетонов, бегущие статусы инструментов и выезды шторок.
+   Движение не выключается полностью, а сокращается до неощутимого: так
+   переходы состояний доигрывают и код не решает, что анимация зависла.
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
   }
 }

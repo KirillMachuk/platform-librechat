@@ -300,10 +300,19 @@ const ChatForm = memo(function ChatForm({
             onClick={handleContainerClick}
             className={cn(
               'relative flex w-full flex-grow flex-col overflow-hidden rounded-t-3xl border pb-4 text-text-primary transition-all duration-200 sm:rounded-3xl sm:pb-0',
-              isTextAreaFocused ? 'shadow-lg' : 'shadow-md',
+              // Канон §6.4: фокус поля — рамка `acc` и кольцо 3px `acc-soft`.
+              // Смена тени с md на lg фокусом не считается: на глаз она не
+              // читается, и человек, дошедший до композера по Tab, не понимал,
+              // что попал в него.
+              isTextAreaFocused
+                ? 'shadow-lg ring-[3px] ring-ring-primary-soft'
+                : 'shadow-md ring-0',
               isTemporary
                 ? 'border-violet-800/60 bg-violet-950/10'
-                : 'border-border-light bg-surface-chat',
+                : cn(
+                    'bg-surface-chat',
+                    isTextAreaFocused ? 'border-border-focus' : 'border-border-light',
+                  ),
             )}
           >
             <TextareaHeader addedConvo={addedConvo} setAddedConvo={setAddedConvo} />

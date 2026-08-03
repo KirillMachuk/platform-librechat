@@ -27,7 +27,6 @@ import {
   OGDialogTemplate,
 } from '@librechat/client';
 import type { SharedLinkItem, SharedLinksListParams } from 'librechat-data-provider';
-import type { TranslationKeys } from '~/hooks';
 import { useDeleteSharedLinkMutation, useSharedLinksQuery } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
 import { useLocalize } from '~/hooks';
@@ -114,7 +113,7 @@ export default function SharedLinks() {
 
       if (validRows.length === 0) {
         showToast({
-          message: localize('com_ui_no_valid_items' as TranslationKeys),
+          message: localize('com_ui_no_valid_items'),
           severity: NotificationSeverity.WARNING,
         });
         return;
@@ -128,15 +127,15 @@ export default function SharedLinks() {
         showToast({
           message: localize(
             validRows.length === 1
-              ? ('com_ui_shared_link_delete_success' as TranslationKeys)
-              : ('com_ui_shared_link_bulk_delete_success' as TranslationKeys),
+              ? 'com_ui_shared_link_delete_success'
+              : 'com_ui_shared_link_bulk_delete_success',
           ),
           severity: NotificationSeverity.SUCCESS,
         });
       } catch (error) {
         console.error('Failed to delete shared links:', error);
         showToast({
-          message: localize('com_ui_bulk_delete_error' as TranslationKeys),
+          message: localize('com_ui_bulk_delete_error'),
           severity: NotificationSeverity.ERROR,
         });
       }

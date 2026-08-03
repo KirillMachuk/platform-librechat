@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en-US">
   <head>
     <meta charset="utf-8" />
@@ -12,7 +12,10 @@
     <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon-180x180.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, interactive-widget=resizes-content"
+    />
     <style>
       html,
       body {
@@ -22,20 +25,21 @@
       }
     </style>
     <script>
+      /*
+       * Тема решается ДО первой отрисовки и сразу ставится классом на <html>:
+       * иначе слой токенов стартует светлым и человек с тёмной темой видит
+       * белую вспышку, которую канон (§7) прямо запрещает. Раньше здесь
+       * красилась только заставка, а несохранённая тема (первый заход)
+       * всегда считалась светлой — даже на тёмной системе.
+       */
       const theme = localStorage.getItem('color-theme');
-      const loadingContainerStyle = document.createElement('style');
-      let backgroundColor;
-
-      if (theme === 'dark') {
-        backgroundColor = '#0d0d0d';
-      } else if (theme === 'light') {
-        backgroundColor = '#ffffff';
-      } else if (theme === 'system') {
-        const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        backgroundColor = prefersDarkScheme ? '#0d0d0d' : '#ffffff';
-      } else {
-        backgroundColor = '#ffffff';
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const isDark = theme === 'dark' || (theme !== 'light' && prefersDark);
+      if (isDark) {
+        document.documentElement.classList.add('dark');
       }
+      const loadingContainerStyle = document.createElement('style');
+      const backgroundColor = isDark ? '#1c1c1c' : '#fcfcfc';
 
       loadingContainerStyle.innerHTML = `
         #loading-container {

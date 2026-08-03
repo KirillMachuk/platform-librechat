@@ -3,8 +3,8 @@ import * as Ariakit from '@ariakit/react';
 import { CrossCircledIcon } from '@radix-ui/react-icons';
 import { DropdownPopup, TooltipAnchor } from '@librechat/client';
 import { BookmarkFilledIcon, BookmarkIcon } from '@radix-ui/react-icons';
-import type * as t from '~/common';
 import type { FC } from 'react';
+import type * as t from '~/common';
 import { useGetConversationTags } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -97,7 +97,7 @@ const BookmarkNav: FC<BookmarkNavProps> = ({ tags, setTags }: BookmarkNavProps) 
       unmountOnHide={true}
       setIsOpen={setIsMenuOpen}
       keyPrefix="bookmark-nav-"
-      className="z-[125]"
+      className="z-popover"
       trigger={
         <TooltipAnchor
           description={label}

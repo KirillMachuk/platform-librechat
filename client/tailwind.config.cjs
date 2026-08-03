@@ -22,6 +22,20 @@ module.exports = {
       width: {
         authPageWidth: '370px',
       },
+      // Канонная шкала слоёв (DESIGN_SYSTEM §4). До неё в форке жило два
+      // десятка разных чисел, и порядок между оверлеями получался случайным:
+      // списки в «Настройках» оказывались под диалогом настроек и не
+      // открывались вовсе. Значения берутся из слоя токенов, а не пишутся
+      // числами в разметке.
+      zIndex: {
+        sticky: 'var(--c-z-sticky)',
+        'scrim-drawer': 'var(--c-z-scrim-drawer)',
+        drawer: 'var(--c-z-drawer)',
+        'scrim-dialog': 'var(--c-z-scrim-dialog)',
+        dialog: 'var(--c-z-dialog)',
+        popover: 'var(--c-z-popover)',
+        toast: 'var(--c-z-toast)',
+      },
       keyframes: {
         'accordion-down': {
           from: { height: 0 },
@@ -95,6 +109,7 @@ module.exports = {
         'text-warning': 'var(--text-warning)',
         'text-destructive': 'var(--text-destructive)',
         'ring-primary': 'var(--ring-primary)',
+        'ring-primary-soft': 'var(--ring-primary-soft)',
         'header-primary': 'var(--header-primary)',
         'header-hover': 'var(--header-hover)',
         'header-button-hover': 'var(--header-button-hover)',
@@ -115,6 +130,8 @@ module.exports = {
         'surface-destructive': 'var(--surface-destructive)',
         'surface-destructive-hover': 'var(--surface-destructive-hover)',
         'surface-chat': 'var(--surface-chat)',
+        'border-control': 'var(--border-control)',
+        'border-focus': 'var(--border-focus)',
         'border-light': 'var(--border-light)',
         'border-medium': 'var(--border-medium)',
         'border-medium-alt': 'var(--border-medium-alt)',

@@ -3,8 +3,8 @@ import { ListFilter } from 'lucide-react';
 import * as Menu from '@ariakit/react/menu';
 import type { Table } from '@tanstack/react-table';
 import type { TranslationKeys } from '../../hooks';
-import { useLocalize } from '../../hooks';
 import DropdownPopup from '../DropdownPopup';
+import { useLocalize } from '../../hooks';
 import { cn } from '~/utils';
 
 interface DataTableColumnVisibilityProps<TData> {
@@ -57,7 +57,7 @@ export function DataTableColumnVisibility<TData>({
       }
       items={dropdownItems}
       menuId={menuId}
-      className="z-50 max-h-[300px] overflow-y-auto"
+      className="z-popover max-h-[300px] overflow-y-auto"
     />
   );
 }

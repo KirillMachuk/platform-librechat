@@ -5,14 +5,14 @@ import { Code, Play, RefreshCw, X } from 'lucide-react';
 import { useSetRecoilState, useResetRecoilState } from 'recoil';
 import { Button, Spinner, useMediaQuery, Radio } from '@librechat/client';
 import type { SandpackPreviewRef } from '@codesandbox/sandpack-react';
+import { displayFilename } from '~/components/Chat/Messages/Content/Parts/attachmentTypes';
+import { isCodeOnlyArtifact, isPreviewOnlyArtifact } from '~/utils/artifacts';
 import CopyButton from '~/components/Messages/Content/CopyButton';
 import { useShareContext, useMutationState } from '~/Providers';
 import useArtifacts from '~/hooks/Artifacts/useArtifacts';
 import DownloadArtifact from './DownloadArtifact';
 import ArtifactVersion from './ArtifactVersion';
 import ArtifactTabs from './ArtifactTabs';
-import { isCodeOnlyArtifact, isPreviewOnlyArtifact } from '~/utils/artifacts';
-import { displayFilename } from '~/components/Chat/Messages/Content/Parts/attachmentTypes';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 import store from '~/store';
@@ -24,7 +24,7 @@ export default function Artifacts() {
   const localize = useLocalize();
   const { isMutating } = useMutationState();
   const { isSharedConvo } = useShareContext();
-  const isMobile = useMediaQuery('(max-width: 868px)');
+  const isMobile = useMediaQuery('(max-width: 767.98px)');
   const previewRef = useRef<SandpackPreviewRef>();
   const [isVisible, setIsVisible] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -213,7 +213,7 @@ export default function Artifacts() {
         {isMobile && (
           <div
             className={cn(
-              'fixed inset-0 z-[99] bg-black will-change-[opacity,backdrop-filter]',
+              'fixed inset-0 z-scrim-drawer bg-black will-change-[opacity,backdrop-filter]',
               isVisible && !isClosing
                 ? 'transition-all duration-300'
                 : 'pointer-events-none opacity-0 backdrop-blur-none transition-opacity duration-150',
@@ -233,7 +233,7 @@ export default function Artifacts() {
             'flex w-full flex-col bg-surface-primary text-xl text-text-primary',
             isMobile
               ? cn(
-                  'fixed inset-x-0 bottom-0 z-[100] rounded-t-[20px] shadow-[0_-10px_60px_rgba(0,0,0,0.35)]',
+                  'fixed inset-x-0 bottom-0 z-drawer rounded-t-[20px] shadow-[0_-10px_60px_rgba(0,0,0,0.35)]',
                   isVisible && !isClosing
                     ? 'translate-y-0 opacity-100'
                     : 'duration-250 translate-y-full opacity-0 transition-all',
