@@ -234,7 +234,8 @@ satisfied by any failure, so alone it would stop meaning anything. The conversat
 the virtualised chat list declares `role="grid"` without the rows a grid requires (critical),
 and a conversation row nests an interactive control inside another (serious). The file library:
 its sortable column headers render #737373 on #f5f5f5, 4.34:1 where AA asks 4.5:1. All three
-are in surfaces the redesign is rebuilding.
+are in surfaces the redesign is rebuilding, and fixing them belongs to that work (owner
+decision, 2026-08-03) — not to whoever next reads this file.
 
 "A dialog holds focus against anything else claiming it" is a `gap`, not a passing test, on
 purpose. Focus was once observed leaving the open file panel for the chat composer about half a
