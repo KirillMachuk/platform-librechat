@@ -36,7 +36,6 @@ const TIER_EXTRAS: Record<
   DeepResearchMode,
   { budgetGateRatio: number; timeGateRatio: number; digestCap: number }
 > = {
-  economy: { budgetGateRatio: 0.7, timeGateRatio: 0.65, digestCap: 800 },
   balanced: { budgetGateRatio: 0.72, timeGateRatio: 0.68, digestCap: 1200 },
   deep: { budgetGateRatio: 0.75, timeGateRatio: 0.7, digestCap: 2000 },
 };
@@ -44,7 +43,7 @@ const TIER_EXTRAS: Record<
 /** Resolves the active tier (models/limits from config) plus the new graph knobs. */
 export function resolveDeepResearchTier(config?: TDeepResearchConfig): DeepResearchTier {
   const base = resolveDeepResearchMode(config);
-  const extras = TIER_EXTRAS[base.name] ?? TIER_EXTRAS.deep;
+  const extras = TIER_EXTRAS[base.name] ?? TIER_EXTRAS.balanced;
   return {
     ...base,
     compressModel: base.workerModel,

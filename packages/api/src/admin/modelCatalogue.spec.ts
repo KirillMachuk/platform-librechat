@@ -588,11 +588,11 @@ describe('collectModelRoles', () => {
   /** Unscoped Deep Research could run on any endpoint — warn everywhere. */
   it('reports Deep Research roles everywhere when no endpoint is designated', () => {
     const config = appConfig({
-      deepResearch: { modes: { economy: { leadModel: 'a/enabled' } } },
+      deepResearch: { modes: { balanced: { leadModel: 'a/enabled' } } },
     });
 
     expect(collectModelRoles(config, 'gw', { name: 'gw' }).roles).toEqual(
-      new Map([['a/enabled', ['deepResearch.economy.leadModel']]]),
+      new Map([['a/enabled', ['deepResearch.balanced.leadModel']]]),
     );
   });
 

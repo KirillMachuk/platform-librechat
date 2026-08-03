@@ -21,17 +21,26 @@ describe('resolveDeepResearchTier', () => {
 
   it('resolves a configured tier with admin model overrides', () => {
     const config = {
-      activeMode: 'economy',
-      modes: { economy: { leadModel: 'lead-x', workerModel: 'worker-y' } },
+      activeMode: 'balanced',
+      modes: { balanced: { leadModel: 'lead-x', workerModel: 'worker-y' } },
     } as TDeepResearchConfig;
 
     const tier = resolveDeepResearchTier(config);
-    expect(tier.name).toBe('economy');
+    expect(tier.name).toBe('balanced');
     expect(tier.leadModel).toBe('lead-x');
     expect(tier.workerModel).toBe('worker-y');
     expect(tier.compressModel).toBe('worker-y');
-    expect(tier.budgetGateRatio).toBe(0.7);
-    expect(tier.digestCap).toBe(800);
+    expect(tier.budgetGateRatio).toBe(0.72);
+    expect(tier.digestCap).toBe(1200);
+  });
+
+  it('gives the retired economy tier balanced knobs, not deep ones', () => {
+    const tier = resolveDeepResearchTier({
+      activeMode: 'economy',
+    } as unknown as TDeepResearchConfig);
+    expect(tier.name).toBe('balanced');
+    expect(tier.digestCap).toBe(1200);
+    expect(tier.perRunTokenBudget).toBe(400_000);
   });
 });
 

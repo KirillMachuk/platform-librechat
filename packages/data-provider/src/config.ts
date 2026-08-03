@@ -1599,7 +1599,12 @@ export const webSearchSchema = z.object({
 
 export type TWebSearchConfig = DeepPartial<z.infer<typeof webSearchSchema>>;
 
-export const DeepResearchModes = ['economy', 'balanced', 'deep'] as const;
+/**
+ * Depth tiers offered to the admin. `economy` was retired once both cheap tiers ended
+ * up on the same model — they then differed only in budget, which is what `balanced`
+ * already expresses. A stored `economy` value degrades to `balanced` (see `activeMode`).
+ */
+export const DeepResearchModes = ['balanced', 'deep'] as const;
 export type DeepResearchMode = (typeof DeepResearchModes)[number];
 
 /**
@@ -1619,8 +1624,12 @@ export const deepResearchModeSchema = z.object({
 });
 
 export const deepResearchSchema = z.object({
-  /** Active depth tier, selected per tenant (admin). */
-  activeMode: z.enum(['economy', 'balanced', 'deep']).default('deep'),
+  /**
+   * Active depth tier, selected per tenant (admin). `.catch` keeps a tenant whose stored
+   * override still says `economy` (the retired tier) working, and lands them on the cheap
+   * tier rather than letting an unparseable value fall through to premium research.
+   */
+  activeMode: z.enum(DeepResearchModes).default('deep').catch('balanced'),
   /**
    * Endpoint whose model list scopes the admin's lead/worker choices. DR runs on
    * the conversation's endpoint at runtime; a white-label tenant names that one
@@ -1659,7 +1668,6 @@ export const deepResearchSchema = z.object({
   planAutoStartSec: z.number().int().min(0).max(600).default(60),
   modes: z
     .object({
-      economy: deepResearchModeSchema.optional(),
       balanced: deepResearchModeSchema.optional(),
       deep: deepResearchModeSchema.optional(),
     })
