@@ -14,9 +14,11 @@ const updatePreferencesController = async (req, res) => {
       return res.status(400).json({ message: 'Preferences must be an object' });
     }
 
+    /** The count, not the keys: they come from the request, and a log line is no place
+     *  to render whatever a caller decided to send. */
     if (payload.rejected.length > 0) {
       logger.debug(
-        `[PreferencesController] Ignoring unknown preference keys: ${payload.rejected.join(', ')}`,
+        `[PreferencesController] Ignored ${payload.rejected.length} unrecognised preference(s)`,
       );
     }
 

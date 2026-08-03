@@ -24,6 +24,17 @@ describe('readStoredPreferences', () => {
 
     expect(readStoredPreferences()).toEqual({ enterToSend: 'false' });
   });
+
+  it('gives up quietly when the browser refuses to hand over storage', () => {
+    const getItem = jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError');
+    });
+
+    expect(() => readStoredPreferences()).not.toThrow();
+    expect(readStoredPreferences()).toEqual({});
+
+    getItem.mockRestore();
+  });
 });
 
 describe('storePreference', () => {

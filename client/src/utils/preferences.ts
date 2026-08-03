@@ -15,7 +15,14 @@ import { setTimestamp } from './timestamps';
 export function readStoredPreferences(): TUserPreferences {
   const stored: TUserPreferences = {};
   for (const key of userPreferenceKeys) {
-    const value = localStorage.getItem(key);
+    /** A browser that refuses storage must cost the employee their settings, not their
+     *  sign-in: this runs on the way in. */
+    let value: string | null = null;
+    try {
+      value = localStorage.getItem(key);
+    } catch {
+      return stored;
+    }
     if (value !== null && isValidPreferenceValue(key, value)) {
       stored[key] = value;
     }
