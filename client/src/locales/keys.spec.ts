@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
+import { readdirSync, readFileSync } from 'fs';
 import English from './en/translation.json';
 
 /**
