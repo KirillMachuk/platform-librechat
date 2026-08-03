@@ -33,8 +33,7 @@ export function isAgentGenerationStart(response: Response) {
   );
 }
 
-const modelSelectorTrigger = (page: Page) =>
-  page.getByRole('button', { name: 'Select a model' }).first();
+const modelSelectorTrigger = (page: Page) => page.getByTestId('model-selector-trigger').first();
 
 export const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -58,7 +57,8 @@ export async function selectMockEndpoint(page: Page, endpoint: MockEndpoint) {
   } else {
     await modelOption.click();
   }
-  await expect(trigger).not.toHaveText('Select a model');
+  // Имя кнопки — это выбранная модель; до выбора текста нет вовсе.
+  await expect(trigger).not.toHaveText('');
 }
 
 /** Open the model selector and choose a configured model spec by label. */

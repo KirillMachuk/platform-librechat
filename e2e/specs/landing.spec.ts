@@ -6,7 +6,7 @@ test.describe('Landing suite', () => {
 
     await expect(page.getByRole('main')).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Select a model' })).toBeVisible();
+    await expect(page.getByTestId('model-selector-trigger')).toBeVisible();
   });
 
   test('Create Conversation', async ({ page }) => {
