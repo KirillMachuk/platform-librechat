@@ -167,6 +167,9 @@ html {
   --border-heavy: var(--c-acc);
   --border-xheavy: var(--c-acc);
   --border-destructive: var(--c-errc);
+  --border-control: var(--c-control);
+  --border-focus: var(--c-acc);
+  --ring-primary-soft: var(--c-acc-soft);
   /* These are test styles */
 
   --background: 0 0% 100%;
@@ -230,6 +233,9 @@ html {
   --border-heavy: var(--c-acc);
   --border-xheavy: var(--c-acc);
   --border-destructive: var(--c-errc);
+  --border-control: var(--c-control);
+  --border-focus: var(--c-acc);
+  --ring-primary-soft: var(--c-acc-soft);
   /* These are test styles */
 
   --background: 0 0% 7%;
