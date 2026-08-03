@@ -220,7 +220,8 @@ agreed redesign and are the acceptance criteria for it.
 | Dialogs trap focus and return it on close | a11y | — | planned:Э4 |
 | Escape closes dialogs in the expected order | a11y | — | planned:Э4 |
 | Icon-only buttons have accessible names | a11y | — | planned:Э4 |
-| Data tables announce translated labels, not raw keys | a11y | — | gap |
+| Data tables announce translated labels, not raw keys | a11y | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| Shared components' translation keys are defined in this app | unit | `client/src/locales/keys.spec.ts` | covered |
 | File panel exposes tablist semantics | a11y | — | fixme:Ф1 |
 
 ## 12. Layout, theme, localisation
@@ -268,12 +269,13 @@ and fixed before merge, kept here so they are not reintroduced):
   CDN path it claimed to check. Removed; the converter itself is covered by unit
   tests in `packages/api/src/files/documents/html.spec.ts`.
 
-**Defect found while writing these tests, not yet fixed.** Every data table in
-the app announces raw translation keys: `com_ui_search_table`,
-`com_ui_data_table`, `com_ui_data_table_scroll_area`,
-`com_ui_search_table_description` are defined in
-`packages/client/src/locales/en/translation.json` but missing from
-`client/src/locales/en/translation.json`, which is the resource the running app
-loads. A screen reader reads the file search field as "com_ui_search_table". The
-row for it is in section 11; the helper locates that field by placeholder so the
-matrix does not depend on the broken label.
+**Defect found while writing these tests, since fixed.** Every data table in the
+app announced raw translation keys — a screen reader read the file search field
+as "com_ui_search_table". Nine keys the shared `@librechat/client` components
+ask for were defined only in that package's own locale file, which the running
+app does not load, so i18next rendered the key itself. They are now defined in
+`client/src/locales/en/translation.json`, guarded by
+`client/src/locales/keys.spec.ts` and proven in the running app by the "file
+library panel" test. The preview helper still locates the search field by
+placeholder rather than by label, so the matrix does not depend on either
+outcome.
