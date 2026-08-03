@@ -1,54 +1,77 @@
-"""Расчёт итогов по реестру договоров.
+#!/usr/bin/env python3
+"""Мини-утилита для сводки по реестру договоров.
 
-Учебный модуль: используется как фикстура предпросмотра исходного кода.
+Фикстура для тестов предпросмотра кода: файл должен читаться как обычный
+рабочий скрипт — с докстрингами, комментариями и осмысленными именами.
+Данные вымышленные.
 """
 
-from dataclasses import dataclass
+import csv
+from collections import defaultdict
+from decimal import Decimal
+
+# Договор считается крупным, если его сумма не меньше этого порога (BYN).
+LARGE_CONTRACT_THRESHOLD = Decimal("50000.00")
+
+# Статусы, которые не учитываем в сводке: договор не порождает обязательств.
+IGNORED_STATUSES = frozenset({"Расторгнут", "Черновик"})
 
 
-VAT_RATE = 0.2
+def read_registry(path):
+    """Читает CSV-реестр и возвращает список словарей.
+
+    Пустая ячейка суммы означает «сумма не согласована» — такие строки
+    оставляем, но в деньги не превращаем.
+    """
+    with open(path, encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
 
 
-@dataclass
-class Contract:
-    """Одна строка реестра договоров."""
-
-    number: int
-    counterparty: str
-    amount: float
-    status: str
+def parse_amount(raw):
+    """Превращает «12 480,00» в Decimal. Пустая строка -> None."""
+    if not raw or not raw.strip():
+        return None
+    normalized = raw.replace("\u00a0", "").replace(" ", "").replace(",", ".")
+    return Decimal(normalized)
 
 
-def is_active(contract: Contract) -> bool:
-    """Договор считается действующим, пока он не закрыт."""
-    return contract.status not in {"закрыт", "расторгнут"}
+def summarize(rows):
+    """Считает количество и сумму договоров по каждому контрагенту."""
+    totals = defaultdict(lambda: {"count": 0, "amount": Decimal("0")})
+    for row in rows:
+        if row.get("Статус") in IGNORED_STATUSES:
+            continue
+        amount = parse_amount(row.get("Сумма"))
+        bucket = totals[row["Контрагент"]]
+        bucket["count"] += 1
+        if amount is not None:
+            bucket["amount"] += amount
+    return totals
 
 
-def total_amount(contracts: list[Contract]) -> float:
-    """Сумма по действующим договорам без НДС."""
-    return sum(contract.amount for contract in contracts if is_active(contract))
+def large_contracts(rows):
+    """Возвращает договоры не меньше порога, от большего к меньшему."""
+    result = []
+    for row in rows:
+        amount = parse_amount(row.get("Сумма"))
+        if amount is not None and amount >= LARGE_CONTRACT_THRESHOLD:
+            result.append((amount, row["Номер"], row["Контрагент"]))
+    return sorted(result, reverse=True)
 
 
-def with_vat(amount: float) -> float:
-    """Сумма с НДС, округлённая до копеек."""
-    return round(amount * (1 + VAT_RATE), 2)
+def main(path="data.csv"):
+    """Печатает сводку по контрагентам и список крупных договоров."""
+    rows = read_registry(path)
+    totals = summarize(rows)
 
+    print(f"Контрагентов в реестре: {len(totals)}")
+    for name, bucket in sorted(totals.items()):
+        print(f"  {name:<40} {bucket['count']:>3} шт.  {bucket['amount']:>12}")
 
-def summary(contracts: list[Contract]) -> dict[str, float]:
-    """Свод по реестру: количество, сумма и сумма с НДС."""
-    active = [contract for contract in contracts if is_active(contract)]
-    base = total_amount(active)
-    return {
-        "count": len(active),
-        "amount": base,
-        "amount_with_vat": with_vat(base),
-    }
+    print("\nКрупные договоры:")
+    for amount, number, name in large_contracts(rows):
+        print(f"  {number:<10} {name:<40} {amount:>12}")
 
 
 if __name__ == "__main__":
-    rows = [
-        Contract(1, "ООО «Ромашка»", 120000, "действует"),
-        Contract(2, "ИП Иванов", 80000, "закрыт"),
-        Contract(3, "ООО «Василёк»", 45000, "продлён"),
-    ]
-    print(summary(rows))
+    main()
