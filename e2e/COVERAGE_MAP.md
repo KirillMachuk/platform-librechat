@@ -215,14 +215,32 @@ agreed redesign and are the acceptance criteria for it.
 
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
-| Key screens pass axe (WCAG 2.1 AA rules) | a11y | — | planned:Э4 |
-| Tab order reaches every control on the chat screen | a11y | — | planned:Э4 |
-| Dialogs trap focus and return it on close | a11y | — | planned:Э4 |
-| Escape closes dialogs in the expected order | a11y | — | planned:Э4 |
-| Icon-only buttons have accessible names | a11y | — | planned:Э4 |
+| New chat screen passes axe (WCAG 2.1 A/AA) | a11y | `e2e/specs/mock/a11y.spec.ts` | covered |
+| Icon-only buttons have accessible names | a11y | `e2e/specs/mock/a11y.spec.ts` | covered |
+| Conversation screen passes axe | a11y | `e2e/specs/mock/a11y.spec.ts` | fixme:Ф1 |
+| File library dialog passes axe | a11y | `e2e/specs/mock/a11y.spec.ts` | fixme:Ф1 |
+| Tab order reaches the composer from the top of the document | a11y | `e2e/specs/mock/a11y.spec.ts` | covered |
+| Closing a dialog returns focus to what opened it | a11y | `e2e/specs/mock/a11y.spec.ts` | covered |
+| Escape closes the top dialog and leaves the one behind it open | a11y | `e2e/specs/mock/a11y.spec.ts` | covered |
+| A dialog holds focus against anything else claiming it | a11y | — | gap |
+| Settings, projects and agents dialogs pass axe | a11y | — | planned:Э6 |
 | Data tables announce translated labels, not raw keys | a11y | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | Shared components' translation keys are defined in this app | unit | `client/src/locales/keys.spec.ts` | covered |
 | File panel exposes tablist semantics | a11y | — | fixme:Ф1 |
+
+Two rows are `fixme:Ф1` because the screen has a real defect, each with a `test.fail` for the
+clean result and an ordinary sibling test pinning exactly what is wrong — `test.fail` is
+satisfied by any failure, so alone it would stop meaning anything. The conversation screen:
+the virtualised chat list declares `role="grid"` without the rows a grid requires (critical),
+and a conversation row nests an interactive control inside another (serious). The file library:
+its sortable column headers render #737373 on #f5f5f5, 4.34:1 where AA asks 4.5:1. All three
+are in surfaces the redesign is rebuilding.
+
+"A dialog holds focus against anything else claiming it" is a `gap`, not a passing test, on
+purpose. Focus was once observed leaving the open file panel for the chat composer about half a
+second after opening, and could not be reproduced afterwards. A test that asserts an
+intermittent steal is a flaky test either way round, so the observation is recorded here instead
+of encoded.
 
 ## 12. Layout, theme, localisation
 
