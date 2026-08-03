@@ -247,7 +247,7 @@ function MCPToolSelectDialog({
       }}
       className="relative z-[102]"
     >
-      <div className="fixed inset-0 bg-surface-primary opacity-60 transition-opacity dark:opacity-80" />
+      <div className="fixed inset-0 bg-scrim transition-opacity" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel
           className="relative max-h-[90vh] w-full transform overflow-hidden overflow-y-auto rounded-lg bg-surface-secondary text-left shadow-xl transition-all max-sm:h-full sm:mx-7 sm:my-8 sm:max-w-2xl lg:max-w-5xl xl:max-w-7xl"

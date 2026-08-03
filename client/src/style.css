@@ -56,9 +56,6 @@
   --amber-900: #78350f;
   --amber-950: #451a03;
   --brand-purple: #ab68ff;
-  --gizmo-gray-500: #999;
-  --gizmo-gray-600: #666;
-  --gizmo-gray-950: #0f0f0f;
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
   --font-size-base: 1rem;
@@ -69,43 +66,46 @@
   --markdown-font-size: 1rem;
 }
 html {
-  font-feature-settings: 'cv11' 1, 'ss01' 1, 'cv02' 1;
+  font-feature-settings:
+    'cv11' 1,
+    'ss01' 1,
+    'cv02' 1;
   font-variant-numeric: tabular-nums;
-  --brand-purple: #ab68ff;
-  --presentation: var(--white);
-  --text-primary: var(--gray-800);
-  --text-secondary: var(--gray-600);
-  --text-secondary-alt: var(--gray-500);
-  --text-tertiary: var(--gray-500);
-  --text-warning: var(--amber-500);
-  --text-destructive: var(--red-600);
-  --ring-primary: var(--gray-500);
-  --header-primary: var(--white);
-  --header-hover: var(--gray-50);
-  --header-button-hover: var(--gray-50);
-  --surface-active: var(--gray-100);
-  --surface-active-alt: var(--gray-200);
-  --surface-hover: var(--gray-200);
-  --surface-hover-alt: var(--gray-300);
-  --surface-primary: var(--white);
-  --surface-primary-alt: var(--gray-50);
-  --surface-primary-contrast: var(--gray-100);
-  --surface-secondary: var(--gray-50);
-  --surface-secondary-alt: var(--gray-200);
-  --surface-tertiary: var(--gray-100);
-  --surface-tertiary-alt: var(--white);
-  --surface-dialog: var(--white);
+  --brand-purple: var(--c-acc);
+  --presentation: var(--c-bg);
+  --text-primary: var(--c-t1);
+  --text-secondary: var(--c-t2);
+  --text-secondary-alt: var(--c-t3);
+  --text-tertiary: var(--c-t3);
+  --text-warning: var(--c-warnc);
+  --text-destructive: var(--c-errc);
+  --ring-primary: var(--c-acc);
+  --header-primary: var(--c-bg);
+  --header-hover: var(--c-hover);
+  --header-button-hover: var(--c-hover);
+  --surface-active: var(--c-active);
+  --surface-active-alt: var(--c-active);
+  --surface-hover: var(--c-hover);
+  --surface-hover-alt: var(--c-active);
+  --surface-primary: var(--c-card);
+  --surface-primary-alt: var(--c-panel);
+  --surface-primary-contrast: var(--c-panel);
+  --surface-secondary: var(--c-panel);
+  --surface-secondary-alt: var(--c-active);
+  --surface-tertiary: var(--c-panel);
+  --surface-tertiary-alt: var(--c-card);
+  --surface-dialog: var(--c-card);
   --surface-submit: var(--green-700);
   --surface-submit-hover: var(--green-800);
   --surface-destructive: var(--red-700);
   --surface-destructive-hover: var(--red-800);
-  --surface-chat: var(--white);
-  --border-light: var(--gray-200);
-  --border-medium-alt: var(--gray-300);
-  --border-medium: var(--gray-300);
-  --border-heavy: var(--gray-400);
-  --border-xheavy: var(--gray-500);
-  --border-destructive: var(--red-600);
+  --surface-chat: var(--c-card);
+  --border-light: var(--c-hairline);
+  --border-medium-alt: var(--c-hairline);
+  --border-medium: var(--c-btn-line);
+  --border-heavy: var(--c-acc);
+  --border-xheavy: var(--c-acc);
+  --border-destructive: var(--c-errc);
   /* These are test styles */
 
   --background: 0 0% 100%;
@@ -134,40 +134,41 @@ html {
   --switch-unchecked: 0 0% 58%;
 }
 .dark {
-  --brand-purple: #ab68ff;
-  --presentation: var(--gray-800);
-  --text-primary: var(--gray-100);
-  --text-secondary: var(--gray-300);
-  --text-secondary-alt: var(--gray-400);
-  --text-tertiary: var(--gray-500);
-  --text-warning: var(--amber-500);
-  --text-destructive: var(--red-600);
-  --header-primary: var(--gray-700);
-  --header-hover: var(--gray-600);
-  --header-button-hover: var(--gray-700);
-  --surface-active: var(--gray-500);
-  --surface-active-alt: var(--gray-700);
-  --surface-hover: var(--gray-600);
-  --surface-hover-alt: var(--gray-600);
-  --surface-primary: var(--gray-900);
-  --surface-primary-alt: var(--gray-850);
-  --surface-primary-contrast: var(--gray-850);
-  --surface-secondary: var(--gray-800);
-  --surface-secondary-alt: var(--gray-800);
-  --surface-tertiary: var(--gray-700);
-  --surface-tertiary-alt: var(--gray-700);
-  --surface-dialog: var(--gray-850);
+  --brand-purple: var(--c-acc);
+  --presentation: var(--c-bg);
+  --text-primary: var(--c-t1);
+  --text-secondary: var(--c-t2);
+  --text-secondary-alt: var(--c-t3);
+  --text-tertiary: var(--c-t3);
+  --text-warning: var(--c-warnc);
+  --text-destructive: var(--c-errc);
+  --ring-primary: var(--c-acc);
+  --header-primary: var(--c-bg);
+  --header-hover: var(--c-hover);
+  --header-button-hover: var(--c-hover);
+  --surface-active: var(--c-active);
+  --surface-active-alt: var(--c-active);
+  --surface-hover: var(--c-hover);
+  --surface-hover-alt: var(--c-active);
+  --surface-primary: var(--c-card);
+  --surface-primary-alt: var(--c-panel);
+  --surface-primary-contrast: var(--c-panel);
+  --surface-secondary: var(--c-panel);
+  --surface-secondary-alt: var(--c-active);
+  --surface-tertiary: var(--c-panel);
+  --surface-tertiary-alt: var(--c-card);
+  --surface-dialog: var(--c-card);
   --surface-submit: var(--green-700);
   --surface-submit-hover: var(--green-800);
   --surface-destructive: var(--red-800);
   --surface-destructive-hover: var(--red-900);
-  --surface-chat: var(--gray-700);
-  --border-light: var(--gray-700);
-  --border-medium-alt: var(--gray-600);
-  --border-medium: var(--gray-600);
-  --border-heavy: var(--gray-500);
-  --border-xheavy: var(--gray-400);
-  --border-destructive: var(--red-500);
+  --surface-chat: var(--c-card);
+  --border-light: var(--c-hairline);
+  --border-medium-alt: var(--c-hairline);
+  --border-medium: var(--c-btn-line);
+  --border-heavy: var(--c-acc);
+  --border-xheavy: var(--c-acc);
+  --border-destructive: var(--c-errc);
   /* These are test styles */
 
   --background: 0 0% 7%;
@@ -194,29 +195,141 @@ html {
   --chart-5: 340 75% 55%;
   --switch-unchecked: 0 0% 40%;
 }
-.gizmo {
-  --text-primary: var(--gizmo-gray-950);
-  --text-secondary: var(--gizmo-gray-600);
-  --text-tertiary: var(--gizmo-gray-500);
-  --surface-primary: var(--white);
-  --surface-secondary: var(--gray-50);
-  --surface-tertiary: var(--gray-100);
-  --border-light: rgba(0, 0, 0, 0.1);
-  --border-medium: rgba(0, 0, 0, 0.15);
-  --border-heavy: rgba(0, 0, 0, 0.2);
-  --border-xheavy: rgba(0, 0, 0, 0.25);
+/* ============================================================================
+   1ma — канонический слой токенов (DESIGN_SYSTEM.md, Приложение А).
+   Единственный источник правды для цвета, размеров, радиусов, теней и слоёв.
+   Значения не дублировать: любая правка дизайна начинается здесь.
+
+   Порядок: неизменные величины на :root, цвет светлой темы на html,
+   тёмной — на .dark. Селектор .dark (0,1,0) специфичнее html (0,0,1),
+   поэтому тёмная всегда выигрывает независимо от порядка правил в файле.
+
+   Семантика LibreChat (--text-*, --surface-*, --border-*) переводится на этот
+   слой отдельным шагом; пока она держит прежние значения, и объявление слоя
+   ничего не перекрашивает.
+   ========================================================================== */
+:root {
+  /* типографика (§3) */
+  --c-fs-body: 15px;
+  --c-lh-body: 1.6;
+  --c-fs-ui: 14px;
+  --c-lh-ui: 20px;
+  --c-fs-cap: 12.5px;
+  --c-fs-comp: 16px;
+  /* размеры (§2) */
+  --c-row-h: 40px;
+  --c-btn-h: 36px;
+  --c-btn-h-sm: 30px;
+  --c-side-w: 240px;
+  --c-rail-w: 56px;
+  /* радиусы (§4) */
+  --c-r-ctl: 8px;
+  --c-r-btn: 12px;
+  --c-r-inp: 12px;
+  --c-r-row: 12px;
+  --c-r-card: 12px;
+  --c-r-modal: 16px;
+  --c-r-comp: 24px;
+  --c-r-pill: 999px;
+  /* движение (§5) */
+  --c-dur: 90ms;
+  --c-dur-mid: 120ms;
+  --c-ease: linear;
+  /* иконки (§4) */
+  --c-ic: 18px;
+  --c-ic-sm: 16px;
+  --c-ic-xs: 14px;
+  --c-ic-sw: 1.75;
+  /* шаг сетки (§2) */
+  --c-sp1: 4px;
+  --c-sp2: 8px;
+  --c-sp3: 12px;
+  --c-sp4: 16px;
+  --c-sp5: 24px;
+  --c-sp6: 32px;
+  /* слои (§4). Поповеры выше диалогов — инвариант форка. */
+  --c-z-sticky: 10;
+  --c-z-scrim-drawer: 109;
+  --c-z-drawer: 110;
+  --c-z-scrim-dialog: 990;
+  --c-z-dialog: 999;
+  --c-z-popover: 1001;
+  --c-z-toast: 1010;
 }
-.gizmo.dark {
-  --text-primary: var(--gray-100);
-  --text-secondary: var(--gray-300);
-  --text-tertiary: var(--gizmo-gray-500);
-  --surface-primary: var(--gray-900);
-  --surface-secondary: var(--gray-800);
-  --surface-tertiary: var(--gray-700);
-  --border-light: rgba(217, 217, 227, 0.1);
-  --border-medium: rgba(217, 217, 227, 0.15);
-  --border-heavy: rgba(217, 217, 227, 0.2);
-  --border-xheavy: rgba(217, 217, 227, 0.25);
+html {
+  /* поверхности */
+  --c-bg: #fcfcfc;
+  --c-panel: #f5f5f5;
+  --c-card: #ffffff;
+  --c-hover: #f0f0f0;
+  --c-active: #e8e8e8;
+  --c-bubble: #f0f0f0;
+  /* линии и контролы */
+  --c-hairline: #e5e5e5;
+  --c-control: #8c8c8c;
+  --c-btn-line: rgba(0, 0, 0, 0.16);
+  /* текст */
+  --c-t1: #171717;
+  --c-t2: #525252;
+  --c-t3: #666666;
+  /* чернильная кнопка */
+  --c-ink: #171717;
+  --c-ink-label: #ffffff;
+  /* акцент */
+  --c-acc: #0f6a88;
+  --c-acc-ink: #ffffff;
+  --c-acc-hov: #0c566e;
+  --c-acc-soft: #e6f0f4;
+  /* состояния */
+  --c-okc: #0e7a5c;
+  --c-ok-soft: #e9f5f0;
+  --c-warnc: #916100;
+  --c-warn-soft: #fbf3e0;
+  --c-errc: #cf2e2e;
+  --c-err-soft: #fdf2f1;
+  --c-err-ink: #ffffff;
+  /* выделение и перекрытия */
+  --c-sel: #e6f0f4;
+  --c-scrim: rgba(0, 0, 0, 0.42);
+  /* тени — их ровно две */
+  --c-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.05);
+  --c-shadow-lg: 0 10px 32px rgba(0, 0, 0, 0.16);
+  /* код */
+  --c-code-bg: #f5f5f5;
+  --c-code-ink: #171717;
+}
+.dark {
+  --c-bg: #1c1c1c;
+  --c-panel: #161616;
+  --c-card: #232323;
+  --c-hover: #272727;
+  --c-active: #2f2f2f;
+  --c-bubble: #272727;
+  --c-hairline: #2f2f2f;
+  --c-control: #707070;
+  --c-btn-line: rgba(255, 255, 255, 0.2);
+  --c-t1: #f0f0f0;
+  --c-t2: #a8a8a8;
+  --c-t3: #999999;
+  --c-ink: #f0f0f0;
+  --c-ink-label: #171717;
+  --c-acc: #5cc0dd;
+  --c-acc-ink: #08222c;
+  --c-acc-hov: #7acde5;
+  --c-acc-soft: #16272e;
+  --c-okc: #4fc79f;
+  --c-ok-soft: #12261f;
+  --c-warnc: #dda84b;
+  --c-warn-soft: #2c2412;
+  --c-errc: #fa6a5a;
+  --c-err-soft: #2e1a17;
+  --c-err-ink: #171717;
+  --c-sel: #1e3a46;
+  --c-scrim: rgba(0, 0, 0, 0.55);
+  --c-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
+  --c-shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.5);
+  --c-code-bg: #161616;
+  --c-code-ink: #f0f0f0;
 }
 
 .text-token-text-primary {
@@ -232,11 +345,6 @@ html {
   color: var(--text-tertiary);
 }
 
-.icon-xs {
-  stroke-width: 1.5;
-  height: 0.75rem;
-  width: 0.75rem;
-}
 .icon-sm {
   stroke-width: 2;
   height: 1rem;
@@ -265,11 +373,6 @@ html {
   stroke-width: 1.5;
   height: 2rem;
   width: 2rem;
-}
-.icon-cover {
-  stroke-width: 1.5;
-  height: 234px;
-  width: 234px;
 }
 
 .border-token-border-heavy {
@@ -306,9 +409,6 @@ html {
 }
 
 @media (max-width: 640px) {
-  .no-gradient-sm {
-    background: none !important;
-  }
 }
 
 .ellipsis {
@@ -340,132 +440,6 @@ html {
   font-weight: 400;
   src: url('$fonts/roboto-mono-latin-400-italic.woff2') format('woff2');
 }
-
-/*
-
-The default ChatGPT fonts, according to OpenAI's brand guidelines, are proprietary and require appropriate font license according to your use case.
-
-They can be purchased here: https://klim.co.nz/buy/soehne/
-
-The fonts in question are (9 total):
-
-> - Söhne (Buch Kursiv, Buch, Halbfett Kursiv, Halbfett, Kraftig Kursiv, Kraftig, Mono Buch Kursiv, Mono Buch, Mono Halbfett)
-
-If you have purchased a license, you can use the commented-out `@font-face` declarations below to include them in your project.
-
-Step 1: Buy whatever license applies to you and allows use of `.woff2` font files (likely web font license).
-Step 2: Place them in ./client/public/fonts/ directory.
-Step 3: Replace the current `fontFamily` config in ./client/tailwind.config.cjs with the following:
-
-```
-    fontFamily: {
-      sans: ['Söhne', 'sans-serif'],
-      mono: ['Söhne Mono', 'monospace'],
-    },
-```
-
-Step 4: Uncomment all Söhne font-face declarations below.
-Step 5: rebuild frontend code: `npm run frontend` (or rebuild docker).
-
-*/
-
-/* @font-face {
-  font-display: swap;
-  font-family: Söhne;
-  font-style: normal;
-  font-weight: 400;
-  src: url("$fonts/soehne-buch.woff2") format("woff2")
-}
-
-@font-face {
-  font-display: swap;
-  font-family: Söhne;
-  font-style: italic;
-  font-weight: 400;
-  src: url("$fonts/soehne-buch-kursiv.woff2") format("woff2")
-}
-
-@font-face {
-  font-display: swap;
-  font-family: Söhne;
-  font-style: normal;
-  font-weight: 500;
-  src: url("$fonts/soehne-kraftig.woff2") format("woff2")
-}
-
-@font-face {
-  font-display: swap;
-  font-family: Söhne;
-  font-style: italic;
-  font-weight: 500;
-  src: url("$fonts/soehne-kraftig-kursiv.woff2") format("woff2")
-}
-
-@font-face {
-  font-display: swap;
-  font-family: Söhne;
-  font-style: normal;
-  font-weight: 600;
-  src: url("$fonts/soehne-halbfett.woff2") format("woff2")
-}
-
-@font-face {
-  font-display: swap;
-  font-family: Söhne;
-  font-style: italic;
-  font-weight: 600;
-  src: url("$fonts/soehne-halbfett-kursiv.woff2") format("woff2")
-}
-
-@font-face {
-  font-display: swap;
-  font-family: Söhne Mono;
-  font-style: normal;
-  font-weight: 400;
-  src: url("$fonts/soehne-mono-buch.woff2") format("woff2")
-}
-
-@font-face {
-  font-display: swap;
-  font-family: Söhne Mono;
-  font-style: normal;
-  font-weight: 700;
-  src: url("$fonts/soehne-mono-halbfett.woff2") format("woff2")
-}
-
-@font-face {
-  font-display: swap;
-  font-family: Söhne Mono;
-  font-style: italic;
-  font-weight: 400;
-  src: url("$fonts/soehne-mono-buch-kursiv.woff2") format("woff2")
-} */
-
-/* * {
-  box-sizing: border-box;
-  outline: 1px solid limegreen !important;
-} */
-
-/* p small {
-  opacity: 0;
-  animation: fadeIn 3s ease forwards;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-} */
-
-/* .LazyLoad {
-  opacity: 0;
-  transition: all 1s ease-in-out;
-} */
 
 select {
   --tw-shadow: 0 0 transparent;
@@ -502,57 +476,8 @@ select {
   text-align: right;
 }
 
-.option-buttons {
-  pointer-events: none;
-  opacity: 0;
-  transition: all 0.25s ease-in-out;
-}
-
-.option-buttons.full-opacity {
-  pointer-events: fill;
-  opacity: 1;
-}
-
-.option-buttons.show {
-  pointer-events: fill;
-  opacity: 1;
-}
-
-.options-bar {
-  pointer-events: none;
-  opacity: 0;
-  transition: all 0.25s ease-in-out;
-}
-
-.options-bar.full-opacity {
-  pointer-events: fill;
-  opacity: 1;
-}
-
-.options-bar.show {
-  pointer-events: fill;
-  opacity: 0.3;
-}
-
 .hidden {
   display: none;
-}
-
-.creative-tab {
-  /* background: linear-gradient(90deg, #904887 10.79%, #8B257E 87.08%); */
-  background: linear-gradient(90deg, #904887 10.79%, #8b257e 87.08%);
-}
-
-.fast-tab {
-  background: linear-gradient(90deg, #2870ea 10.79%, #1b4aef 87.08%);
-}
-
-.balanced-tab {
-  background: linear-gradient(90deg, #d7871a 10.79%, #9f6005 87.08%);
-}
-
-.precise-tab {
-  background: linear-gradient(90deg, #006880 10.79%, #005366 87.08%);
 }
 
 p > small {
@@ -647,6 +572,15 @@ pre {
     opacity: 0;
     transform: translateY(8px) scale(0.95);
   }
+}
+
+/* Предпросмотр артефакта — печатный носитель: страница белая в ОБЕИХ темах,
+   как страницы PDF и слайды (DESIGN_SYSTEM §6.15). Артефакт — это отдельный
+   документ, а не часть интерфейса: он не наследует тему, и если сам не задал
+   себе цвета, браузер рисует текст чёрным. На тёмной панели такой текст
+   пропадал. Белизна бумаги от темы не зависит — поэтому здесь не токен. */
+.artifact-preview iframe {
+  background: #ffffff;
 }
 
 /* Scroll-to-bottom button */
@@ -1151,7 +1085,6 @@ code,
 pre {
   font-family:
     Consolas,
-    Söhne Mono,
     Monaco,
     Andale Mono,
     Ubuntu Mono,
@@ -1438,14 +1371,6 @@ button {
   border-radius: 9999px;
 }
 
-.scrollbar-transparent::-webkit-scrollbar-thumb {
-  background-color: transparent;
-}
-
-.dark .scrollbar-transparent::-webkit-scrollbar-thumb {
-  background-color: transparent;
-}
-
 .markdown-table-wrapper {
   -webkit-overflow-scrolling: touch;
   overflow-x: auto;
@@ -1601,18 +1526,7 @@ html {
   text-underline-offset: 2px;
 }
 
-.animate-flash {
-  -webkit-animation: flash 2s steps(60, start);
-  animation: flash 2s steps(60, start);
-}
-
 @-webkit-keyframes flash {
-  0% {
-    background-color: hsla(0, 0%, 100%, 0.4);
-  }
-}
-
-@keyframes flash {
   0% {
     background-color: hsla(0, 0%, 100%, 0.4);
   }
@@ -1856,12 +1770,6 @@ html {
   text-decoration-line: underline;
   text-underline-offset: 2px;
 }
-.conversation-item-time:before {
-  content: attr(data-time);
-}
-.tooltip-label:before {
-  content: attr(data-content);
-}
 
 @-webkit-keyframes blink {
   to {
@@ -1873,16 +1781,7 @@ html {
     visibility: hidden;
   }
 }
-.animate-flash {
-  -webkit-animation: flash 2s steps(60, start);
-  animation: flash 2s steps(60, start);
-}
 @-webkit-keyframes flash {
-  0% {
-    background-color: hsla(0, 0%, 100%, 0.4);
-  }
-}
-@keyframes flash {
   0% {
     background-color: hsla(0, 0%, 100%, 0.4);
   }
@@ -2065,7 +1964,6 @@ html {
   font-family:
     system-ui,
     Inter,
-    Söhne Circle,
     -apple-system,
     Segoe UI,
     Roboto,
@@ -2085,7 +1983,6 @@ html {
     font-family:
       system-ui,
       Inter,
-      Söhne Circle,
       -apple-system,
       Segoe UI,
       Roboto,
@@ -2110,7 +2007,6 @@ html {
     font-family:
       system-ui,
       Inter,
-      Söhne Circle,
       -apple-system,
       Segoe UI,
       Roboto,
@@ -2799,10 +2695,6 @@ html {
   animation: gradient-x 15s ease infinite;
 }
 
-.animate-pulse-subtle {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
 .animate-pulse-slow {
   animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
@@ -2889,20 +2781,9 @@ html {
   animation: shimmer 4s linear infinite;
 }
 
-.custom-style-2 {
-  padding: 12px;
-}
-
 /* Hide scrollbar for Chrome, Safari and Opera */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
 
 /* Hide scrollbar for IE, Edge and Firefox */
-.no-scrollbar {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
-}
 
 .sharepoint-picker-bg {
   background-color: #f5f5f5;

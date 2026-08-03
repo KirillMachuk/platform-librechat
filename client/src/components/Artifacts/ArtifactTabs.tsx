@@ -3,9 +3,9 @@ import * as Tabs from '@radix-ui/react-tabs';
 import type { SandpackPreviewRef } from '@codesandbox/sandpack-react/unstyled';
 import type { editor } from 'monaco-editor';
 import type { Artifact } from '~/common';
-import { useCodeState } from '~/Providers/EditorContext';
 import useArtifactProps from '~/hooks/Artifacts/useArtifactProps';
 import { ArtifactCodeEditor } from './ArtifactCodeEditor';
+import { useCodeState } from '~/Providers/EditorContext';
 import { useGetStartupConfig } from '~/data-provider';
 import { ArtifactPreview } from './ArtifactPreview';
 
@@ -45,7 +45,7 @@ export default function ArtifactTabs({
 
       <Tabs.Content
         value="preview"
-        className="h-full w-full flex-grow overflow-hidden"
+        className="artifact-preview h-full w-full flex-grow overflow-hidden"
         tabIndex={-1}
       >
         <ArtifactPreview
