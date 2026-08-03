@@ -92,7 +92,7 @@ html {
   --surface-primary-contrast: var(--c-panel);
   --surface-secondary: var(--c-panel);
   --surface-secondary-alt: var(--c-active);
-  --surface-tertiary: var(--c-hover);
+  --surface-tertiary: var(--c-panel);
   --surface-tertiary-alt: var(--c-card);
   --surface-dialog: var(--c-card);
   --surface-submit: var(--green-700);
@@ -155,7 +155,7 @@ html {
   --surface-primary-contrast: var(--c-panel);
   --surface-secondary: var(--c-panel);
   --surface-secondary-alt: var(--c-active);
-  --surface-tertiary: var(--c-hover);
+  --surface-tertiary: var(--c-panel);
   --surface-tertiary-alt: var(--c-card);
   --surface-dialog: var(--c-card);
   --surface-submit: var(--green-700);
