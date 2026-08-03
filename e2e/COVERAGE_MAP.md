@@ -187,7 +187,8 @@ agreed redesign and are the acceptance criteria for it.
 | A failed or lost settings upload is retried, never silently dropped | unit | `client/src/hooks/Preferences/__tests__/useSyncPreferences.spec.tsx` | covered |
 | Only known settings, with values this build accepts, reach the account | unit | `packages/data-provider/src/preferences.spec.ts` | covered |
 | Two devices saving different settings do not overwrite each other | unit | `packages/data-schemas/src/methods/user.preferences.spec.ts` | covered |
-| Settings survive a full sign-in → change → sign-out → sign-in round trip | e2e | — | gap |
+| Settings survive a full sign-in → change → sign-out → sign-in round trip | e2e | `e2e/specs/mock/settings-sync.spec.ts` | covered |
+| Bookmarks switch reveals the header icon, and only in a saved chat | e2e | `e2e/specs/mock/settings-sync.spec.ts` | covered |
 
 ## 11. Accessibility
 
