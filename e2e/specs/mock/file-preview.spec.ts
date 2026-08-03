@@ -152,7 +152,11 @@ test.describe('file preview — office documents', () => {
     });
   });
 
-  test('renders a document too large for the bundled renderer', async ({ page }) => {
+  /* Names what this actually proves: a 423 KB document renders through the
+   * server-side converter without timing out. Which renderer production would
+   * have picked for it is a routing decision this profile disables, so no test
+   * here can claim to cover the size bound. */
+  test('renders a heavy document without timing out', async ({ page }) => {
     test.setTimeout(240000);
     await previewFixture(page, 'contract-heavy.docx');
 

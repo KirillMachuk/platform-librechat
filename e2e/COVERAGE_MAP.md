@@ -73,41 +73,62 @@ test exists and is skipped until the redesign lands.
 | "Original file" handling toggle changes the mode | e2e | `e2e/specs/mock/chat.spec.ts` | covered |
 | Attachment preview status polls until ready/failed | unit | `client/src/hooks/Files/__tests__/useAttachmentPreviewSync.spec.tsx` | covered |
 | Preview poll interval and error cap | unit | `client/src/data-provider/Files/__tests__/previewRefetchInterval.spec.ts` | covered |
+| Clicking a file in a sent message opens its preview | e2e | — | gap |
+| Opening a file from the library opens its preview | e2e | `e2e/specs/mock/files.helpers.ts` | covered |
 
 ## 5. File preview — rendering matrix
 
 Canon: `FRONTEND_TESTING_Canon_Checklist.md` part A. Fixtures: `e2e/fixtures/files/`.
 
+Previews are opened from the file library rather than from a chat transcript — see section 13
+for why that matters.
+
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
-| docx (short) renders as a reading flow | e2e | — | planned:Э3 |
-| docx (multipage) scrolls as one document | e2e | — | planned:Э3 |
-| docx shows no fabricated page numbers | e2e | — | planned:Э3 |
-| docx over the CDN size bound falls back to server HTML | e2e | — | planned:Э3 |
-| xlsx renders a grid with sticky addresses | e2e | — | planned:Э3 |
-| xlsx sheet switching works and returns | e2e | — | planned:Э3 |
-| xlsx merged and empty cells keep the layout | e2e | — | planned:Э3 |
-| xlsx over 5000 rows truncates with a plate | e2e | — | planned:Э3 |
-| pptx 16:9 renders slides | e2e | — | planned:Э3 |
-| pptx 4:3 renders slides | e2e | — | planned:Э3 |
-| pptx with many slides stays responsive | e2e | — | planned:Э3 |
-| md renders preview and source | e2e | — | planned:Э3 |
-| Source code file renders with syntax view | e2e | — | planned:Э3 |
-| csv renders as a sheet | e2e | — | planned:Э3 |
-| PDF (digital) renders real pages | e2e | — | planned:Э3 |
-| PDF (scan) renders pages plus recognition note | e2e | — | planned:Э3 |
-| Text preview truncates at the byte cap with a notice | e2e | — | planned:Э3 |
+| docx (short) renders as a reading flow | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| docx (multipage) scrolls as one document | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| A heavy docx renders without timing out | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| docx shows no fabricated page numbers | e2e | — | gap |
+| docx over the CDN size bound falls back to server HTML | e2e | — | gap |
+| xlsx renders a grid with its sheet names | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| xlsx sheet switching works and returns | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| xlsx merged and empty cells keep the layout | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| xlsx over 5000 rows truncates with a plate | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| xlsx keeps spreadsheet addresses visible while scrolling | e2e | — | fixme:Ф1 |
+| pptx 16:9 renders slides | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| pptx 4:3 renders slides | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| pptx with many slides stays responsive | e2e | — | gap |
+| md opens as readable text | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| md offers rendered and source views | e2e | — | fixme:Ф1 |
+| Source code file opens as text | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| Source code file renders with syntax view | e2e | — | fixme:Ф1 |
+| csv renders as a sheet | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| PDF (digital) opens in a viewer, not as raw text | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| PDF (scan) renders pages plus recognition note | e2e | — | gap |
+| Text preview truncates at the byte cap with a notice | e2e | — | gap |
+
+Three rows above are `gap`, not `planned`, because this profile cannot prove them. Page numbers
+are produced by no renderer in this configuration, so an assertion that none appear passes
+without the feature existing. The CDN size bound is a routing decision the e2e profile disables
+outright (`OFFICE_PREVIEW_DISABLE_CDN`), so no e2e test here can exercise it. Both need either
+the nightly non-hermetic profile or unit coverage of the routing decision itself.
 
 ## 6. File preview — honest states (negative cases)
 
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
-| Corrupted file shows "preview failed" with retry and download | e2e | — | planned:Э3 |
-| Password-protected file shows the same honest failure | e2e | — | planned:Э3 |
-| Archive / unsupported format offers download, not an error | e2e | — | planned:Э3 |
-| File still in the recognition queue shows queue position and estimate | e2e | — | planned:Э3 |
-| File over the upload limit is refused before upload | e2e | — | planned:Э3 |
-| No state renders an empty rectangle | e2e | — | planned:Э3 |
+| Corrupted file says plainly it could not be shown, and offers download | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| Archive / unsupported format offers download, not an error | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| Password-protected file stays inside the preview surface | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| Every preview settles on a real surface — never an empty rectangle | e2e | `e2e/specs/mock/files.helpers.ts` | covered |
+| A failed preview offers Retry alongside Download | e2e | — | fixme:Ф1 |
+| Password-protected file shows the shared honest failure instead of the browser viewer | e2e | — | fixme:Ф1 |
+| File still in the recognition queue shows queue position and estimate | e2e | — | gap |
+| File over the upload limit is refused before upload | e2e | — | gap |
+
+"Never an empty rectangle" is owned by the helper rather than by one test: `openPreview` refuses
+to return until the dialog shows a frame, a text block or a named failure state, so all sixteen
+files in the matrix assert it on every run.
 
 ## 7. File panel behavior
 
@@ -199,6 +220,7 @@ agreed redesign and are the acceptance criteria for it.
 | Dialogs trap focus and return it on close | a11y | — | planned:Э4 |
 | Escape closes dialogs in the expected order | a11y | — | planned:Э4 |
 | Icon-only buttons have accessible names | a11y | — | planned:Э4 |
+| Data tables announce translated labels, not raw keys | a11y | — | gap |
 | File panel exposes tablist semantics | a11y | — | fixme:Ф1 |
 
 ## 12. Layout, theme, localisation
@@ -212,11 +234,27 @@ agreed redesign and are the acceptance criteria for it.
 | Product name is 1MA everywhere, never LibreChat | e2e | — | planned:Э6 |
 | Help button opens the help centre | e2e | — | planned:Э6 |
 
-## 13. Why the preview matrix is not merged
+## 13. Notes on the preview matrix
 
-`file-preview.spec.ts` is committed on a draft PR and is **not merged**. A
-skeptical review of it found that several assertions were green for reasons
-unrelated to the behaviour they name:
+**Why previews are opened from the library, not from the chat transcript.** A
+transcript chip only appears once a model turn completes, which made every
+preview assertion depend on the mock provider's context window: a document big
+enough to be worth testing is also big enough to overflow it (22.6k tokens), the
+turn died with `empty_messages`, and no chip ever arrived. That read as
+flakiness for a while. Sending the file natively instead of as extracted text
+was tried and made it worse — 12 of 14 tests failed — so that route is closed
+and should not be retried. Uploading already persists the file, so the library
+shows it with no completion in the loop. The matrix went from minutes and four
+to twelve failures to 16 passes in about 45 seconds.
+
+The entry point is the sidebar's "Attach Files" panel
+(`client/src/components/SidePanel/Files/Panel.tsx`), reached through
+`useSideNavLinks`; its table opens `FilePreviewDialog` on a row click. That is
+one of the five preview entry points the canon lists, so covering it is not a
+detour. The transcript entry point itself is a separate `gap`.
+
+**Assertions that were green for the wrong reason** (found by a skeptical review
+and fixed before merge, kept here so they are not reintroduced):
 
 - office text assertions matched the mammoth fallback markup, which the page
   keeps in a `hidden` container — they passed on text no user can see. Now
@@ -224,34 +262,18 @@ unrelated to the behaviour they name:
 - the row-count assertion (`<= 5100`) also held when nothing rendered. Now an
   exact count plus the truncation banner.
 - the "no invented page numbers" assertion could not fail: no renderer in this
-  configuration produces page numbers at all. Removed rather than kept as
-  decoration.
+  configuration produces page numbers at all. Removed, and the behavior is
+  recorded as a `gap` instead of being claimed.
 - the hermetic-CDN test could not fail either, because the profile disables the
-  CDN path it claimed to check. Removed; that hatch is covered by unit tests in
-  `packages/api/src/files/documents/html.spec.ts`.
+  CDN path it claimed to check. Removed; the converter itself is covered by unit
+  tests in `packages/api/src/files/documents/html.spec.ts`.
 
-Two open problems remain, both real:
-
-1. Attaching a document as extracted text can exceed the mock model's context
-   window (22.6k tokens), and the turn then dies with `empty_messages`. Sending
-   the file natively instead was tried and made things worse (12 of 14 tests
-   failed), so that route is closed.
-2. The suite is not yet stable run-to-run on a slow machine.
-
-**Agreed fix (owner decision, 2026-08-03): take the model out of the loop.**
-Open the preview from "My Files" instead of from the transcript, so no
-completion has to succeed for a document to be previewed:
-
-- the file is already persisted by the upload itself (`POST /api/files` during
-  attach), so no message needs to be sent at all;
-- `MyFilesModal` (`client/src/components/Chat/Input/Files/MyFilesModal.tsx`)
-  renders its own `FilePreviewDialog` and opens it when a row is clicked;
-- its trigger today is the "Manage Files" button in
-  `client/src/components/SidePanel/Files/Panel.tsx`; the first implementation
-  step is confirming how that panel is reached in the current UI, since nothing
-  else in `client/src` mounts it.
-
-This also closes one of the five preview entry points the canon lists, so it is
-not a detour. The transcript entry point stays covered by one small fixture
-whose extracted text fits the context window.
-Until both are closed, no row in sections 5 and 6 may be marked covered.
+**Defect found while writing these tests, not yet fixed.** Every data table in
+the app announces raw translation keys: `com_ui_search_table`,
+`com_ui_data_table`, `com_ui_data_table_scroll_area`,
+`com_ui_search_table_description` are defined in
+`packages/client/src/locales/en/translation.json` but missing from
+`client/src/locales/en/translation.json`, which is the resource the running app
+loads. A screen reader reads the file search field as "com_ui_search_table". The
+row for it is in section 11; the helper locates that field by placeholder so the
+matrix does not depend on the broken label.
