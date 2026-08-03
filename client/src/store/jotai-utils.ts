@@ -124,7 +124,14 @@ export function createTabIsolatedStorage<Value>(): SyncStorage<Value> {
       }
     },
     setItem(key: string, newValue: Value): void {
-      writeStoredValue(key, JSON.stringify(newValue));
+      if (typeof window === 'undefined') {
+        return;
+      }
+      try {
+        localStorage.setItem(key, JSON.stringify(newValue));
+      } catch {
+        // quota exceeded or other write error — silently ignore
+      }
     },
     removeItem(key: string): void {
       if (typeof window === 'undefined') {

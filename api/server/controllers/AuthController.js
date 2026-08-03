@@ -54,7 +54,10 @@ const registrationController = async (req, res) => {
 };
 
 const sanitizeUserForAuthResponse = (user) => {
-  const source = (typeof user?.toObject === 'function' ? user.toObject() : user) || {};
+  /** `flattenMaps` is load-bearing: a Mongoose Map serializes to `{}` through
+   *  `JSON.stringify`, so the settings that ride along here would arrive empty. */
+  const source =
+    (typeof user?.toObject === 'function' ? user.toObject({ flattenMaps: true }) : user) || {};
   const {
     password: _pw,
     __v: _v,

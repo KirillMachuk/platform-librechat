@@ -110,8 +110,7 @@ export const projectById = (id: string) => `${projectsRoot}/${encodeURIComponent
 export const projectConversations = (id: string, cursor?: string | null) =>
   `${projectsRoot}/${encodeURIComponent(id)}/conversations${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`;
 
-export const projectFiles = (id: string) =>
-  `${projectsRoot}/${encodeURIComponent(id)}/files`;
+export const projectFiles = (id: string) => `${projectsRoot}/${encodeURIComponent(id)}/files`;
 
 export const projectFileById = (id: string, fileId: string) =>
   `${projectsRoot}/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}`;

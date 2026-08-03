@@ -1339,10 +1339,7 @@ export function createProject(payload: p.TProjectCreate): Promise<p.TProject> {
   return request.post(endpoints.projects(), payload);
 }
 
-export function updateProject(
-  projectId: string,
-  payload: p.TProjectUpdate,
-): Promise<p.TProject> {
+export function updateProject(projectId: string, payload: p.TProjectUpdate): Promise<p.TProject> {
   return request.patch(endpoints.projectById(projectId), payload);
 }
 

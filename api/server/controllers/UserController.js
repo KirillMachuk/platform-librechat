@@ -49,7 +49,9 @@ const PUBLIC_USER_RESPONSE_FIELDS = [
 ];
 
 const sanitizeUserForResponse = (user) => {
-  const source = user.toObject != null ? user.toObject() : user;
+  /** `flattenMaps` is load-bearing: a Mongoose Map serializes to `{}` through
+   *  `JSON.stringify`, so preferences would reach the browser empty. */
+  const source = user.toObject != null ? user.toObject({ flattenMaps: true }) : user;
   return PUBLIC_USER_RESPONSE_FIELDS.reduce((userData, field) => {
     if (source[field] !== undefined) {
       userData[field] = source[field];
