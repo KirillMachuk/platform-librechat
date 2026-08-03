@@ -183,6 +183,16 @@ describe('Artifacts panel', () => {
     });
   });
 
+  /* The panel picks which artifact to show and hands it to the editor tabs.
+   * Handing down a stale one is the failure mode the version stepper makes
+   * possible, and nothing else in this file reads what the tabs received. */
+  it('hands the shown artifact down to the editor', () => {
+    setPanelState({ currentArtifact: buildArtifact({ id: 'artifact-2', title: 'second.html' }) });
+    renderPanel();
+
+    expect(screen.getByTestId('artifact-tabs')).toHaveTextContent('artifact-2');
+  });
+
   describe('header actions', () => {
     it('copies the artifact content', () => {
       setPanelState();
@@ -213,7 +223,11 @@ describe('Artifacts panel', () => {
       setPanelState();
       renderPanel();
 
+      /* Both probes are read before the click. Without the second one,
+       * "the panel forgot the artifact" would also hold if the id had never
+       * been set — the assertion would pass without the close doing anything. */
       expect(visibilityProbe).toBe(true);
+      expect(artifactIdProbe).toBe('artifact-1');
 
       fireEvent.click(screen.getByRole('button', { name: 'com_ui_close' }));
 

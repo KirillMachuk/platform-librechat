@@ -8,13 +8,25 @@ import { readFileSync } from 'fs';
  * at the same width: in any band where they disagree, the host reserves a
  * side column and the panel draws a phone sheet over the whole viewport.
  */
+/**
+ * Reads the single width each file switches on. Matching all of them rather
+ * than the first is deliberate: a second `useMediaQuery` added to either file
+ * would otherwise be invisible here, and the comparison below would quietly
+ * start comparing whichever one happens to come first in the source.
+ */
 const readBreakpoint = (relativePath: string): number => {
   const source = readFileSync(join(__dirname, '..', '..', '..', relativePath), 'utf8');
-  const match = source.match(/useMediaQuery\('\(max-width:\s*(\d+)px\)'\)/);
-  if (!match) {
+  const widths = [...source.matchAll(/useMediaQuery\('\(max-width:\s*(\d+)px\)'\)/g)].map((match) =>
+    Number(match[1]),
+  );
+  if (widths.length === 0) {
     throw new Error(`no useMediaQuery max-width breakpoint found in ${relativePath}`);
   }
-  return Number(match[1]);
+  const distinct = [...new Set(widths)];
+  if (distinct.length > 1) {
+    throw new Error(`${relativePath} switches on more than one width: ${distinct.join(', ')}`);
+  }
+  return distinct[0];
 };
 
 describe('artifacts panel breakpoints', () => {
