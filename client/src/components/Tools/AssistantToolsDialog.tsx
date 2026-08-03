@@ -149,7 +149,7 @@ function AssistantToolsDialog({
       className="relative z-[102]"
     >
       {/* The backdrop, rendered as a fixed sibling to the panel container */}
-      <div className="fixed inset-0 bg-surface-primary opacity-60 transition-opacity dark:opacity-80" />
+      <div className="fixed inset-0 bg-scrim transition-opacity" />
       {/* Full-screen container to center the panel */}
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel

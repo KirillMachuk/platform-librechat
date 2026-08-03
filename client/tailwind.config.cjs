@@ -87,6 +87,7 @@ module.exports = {
         },
         'brand-purple': 'var(--brand-purple)',
         presentation: 'var(--presentation)',
+        scrim: 'var(--c-scrim)',
         'text-primary': 'var(--text-primary)',
         'text-secondary': 'var(--text-secondary)',
         'text-secondary-alt': 'var(--text-secondary-alt)',
