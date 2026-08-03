@@ -3,6 +3,13 @@ import { useRecoilValue } from 'recoil';
 import { Outlet } from 'react-router-dom';
 import { useMediaQuery } from '@librechat/client';
 import {
+  PromptGroupsProvider,
+  AssistantsMapContext,
+  AgentsMapContext,
+  SetConvoProvider,
+  FileMapContext,
+} from '~/Providers';
+import {
   useSyncPreferences,
   useSearchEnabled,
   useAssistantsMap,
@@ -10,19 +17,12 @@ import {
   useAgentsMap,
   useFileMap,
 } from '~/hooks';
-import store from '~/store';
-import {
-  PromptGroupsProvider,
-  AssistantsMapContext,
-  AgentsMapContext,
-  SetConvoProvider,
-  FileMapContext,
-} from '~/Providers';
 import { useUserTermsQuery, useGetStartupConfig } from '~/data-provider';
 import { UnifiedSidebar } from '~/components/UnifiedSidebar';
 import { TermsAndConditionsModal } from '~/components/ui';
 import { useHealthCheck } from '~/data-provider';
 import { Banner } from '~/components/Banners';
+import store from '~/store';
 
 export default function Root() {
   const [showTerms, setShowTerms] = useState(false);

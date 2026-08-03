@@ -1,7 +1,7 @@
 import React from 'react';
-import { renderHook, act } from '@testing-library/react';
-import { RecoilRoot, useSetRecoilState } from 'recoil';
 import { ThemeContext } from '@librechat/client';
+import { RecoilRoot, useSetRecoilState } from 'recoil';
+import { renderHook, act } from '@testing-library/react';
 import type { TUser, TUserPreferences } from 'librechat-data-provider';
 import useApplyPreferences from '../useApplyPreferences';
 import useSyncPreferences from '../useSyncPreferences';

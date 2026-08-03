@@ -1,8 +1,8 @@
 import React from 'react';
 import Cookies from 'js-cookie';
-import { renderHook, act } from '@testing-library/react';
-import { RecoilRoot, useRecoilValue } from 'recoil';
 import { ThemeContext } from '@librechat/client';
+import { RecoilRoot, useRecoilValue } from 'recoil';
+import { renderHook, act } from '@testing-library/react';
 import type { TUser, TUserPreferences } from 'librechat-data-provider';
 import useApplyPreferences from '../useApplyPreferences';
 import store from '~/store';

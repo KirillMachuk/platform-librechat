@@ -1,11 +1,11 @@
 import Cookies from 'js-cookie';
-import { showThinkingAtom } from '~/store/showThinking';
-import { fontSizeAtom } from '~/store/fontSize';
-import { storePreference } from '~/utils/preferences';
-import { mcpPinnedAtom } from '~/store/mcp';
 import type { UserPreferenceKey } from 'librechat-data-provider';
 import type { RecoilState } from 'recoil';
 import type { useStore } from 'jotai';
+import { showThinkingAtom } from '~/store/showThinking';
+import { storePreference } from '~/utils/preferences';
+import { fontSizeAtom } from '~/store/fontSize';
+import { mcpPinnedAtom } from '~/store/mcp';
 import store from '~/store';
 
 type JotaiStore = ReturnType<typeof useStore>;

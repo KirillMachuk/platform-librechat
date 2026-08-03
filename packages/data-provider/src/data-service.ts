@@ -1,8 +1,8 @@
 import type { AxiosResponse } from 'axios';
 import type { TFileConfig } from './file-config';
-import type * as t from './types';
 import type * as p from './types/projects';
 import type * as pref from './preferences';
+import type * as t from './types';
 import * as permissions from './accessPermissions';
 import * as endpoints from './api-endpoints';
 import * as mcp from './types/mcpServers';

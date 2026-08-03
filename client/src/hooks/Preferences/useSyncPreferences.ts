@@ -3,8 +3,8 @@ import debounce from 'lodash/debounce';
 import { useRecoilValue } from 'recoil';
 import { sanitizeUserPreferences, isUserPreferenceKey } from 'librechat-data-provider';
 import type { TUserPreferences } from 'librechat-data-provider';
-import { useUpdateUserPreferencesMutation } from '~/data-provider';
 import { diffPreferences, readStoredPreferences } from '~/utils/preferences';
+import { useUpdateUserPreferencesMutation } from '~/data-provider';
 import store from '~/store';
 
 /** Long enough to collect a burst of toggles, short enough to survive a quick tab close. */
