@@ -20,6 +20,21 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 
 export type FileFixture = { name: string; mimeType: string; buffer: Buffer };
 
+/**
+ * A text file built here rather than committed: the only interesting thing
+ * about it is its size, and half a megabyte of filler in the repository would
+ * be half a megabyte nobody ever reads.
+ */
+export function largeTextFixture(name: string, bytes: number): FileFixture {
+  const line = 'Строка отчёта о выполненных работах за отчётный период.\n';
+  const repeats = Math.ceil(bytes / Buffer.byteLength(line, 'utf8'));
+  return {
+    name,
+    mimeType: 'text/markdown',
+    buffer: Buffer.from(`# Отчёт\n\n${line.repeat(repeats)}`, 'utf8'),
+  };
+}
+
 /** Load a committed fixture from `e2e/fixtures/files` for `setFiles`. */
 export function fileFixture(name: string): FileFixture {
   const extension = name.slice(name.lastIndexOf('.') + 1).toLowerCase();
@@ -38,13 +53,18 @@ const isUpload = (response: { url(): string; request(): { method(): string }; st
   response.request().method() === 'POST' &&
   response.status() === 200;
 
-/** Upload the fixture through the composer, which persists it in the user's files. */
-export async function attachFixture(page: Page, fixture: FileFixture) {
+/** Hand the fixture to the composer's file picker, without waiting for an upload. */
+export async function chooseFixture(page: Page, fixture: FileFixture) {
   const chooserPromise = page.waitForEvent('filechooser');
   await composer(page).getByRole('button', { name: 'Attach Files' }).click();
   const chooser = await chooserPromise;
-  const uploaded = page.waitForResponse(isUpload, { timeout: 60000 });
   await chooser.setFiles(fixture);
+}
+
+/** Upload the fixture through the composer, which persists it in the user's files. */
+export async function attachFixture(page: Page, fixture: FileFixture) {
+  const uploaded = page.waitForResponse(isUpload, { timeout: 60000 });
+  await chooseFixture(page, fixture);
   expect((await uploaded).ok()).toBeTruthy();
   await expect(composer(page).getByRole('button', { name: fixture.name })).toBeVisible();
 }
@@ -137,8 +157,8 @@ export async function openPreview(page: Page, filename: string): Promise<Locator
 }
 
 /** Upload the fixture and open its preview from the library. */
-export async function previewFixture(page: Page, name: string): Promise<Locator> {
-  const fixture = fileFixture(name);
+export async function previewFixture(page: Page, file: string | FileFixture): Promise<Locator> {
+  const fixture = typeof file === 'string' ? fileFixture(file) : file;
   await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
   await attachFixture(page, fixture);
   return openPreview(page, fixture.name);
