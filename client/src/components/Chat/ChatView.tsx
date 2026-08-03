@@ -1,12 +1,11 @@
 import { memo, useCallback } from 'react';
 import { useRecoilValue } from 'recoil';
 import { useForm } from 'react-hook-form';
-import { Spinner } from '@librechat/client';
 import { useParams } from 'react-router-dom';
+import { Button, Spinner } from '@librechat/client';
 import { Constants, buildTree } from 'librechat-data-provider';
 import type { TMessage } from 'librechat-data-provider';
 import type { ChatFormValues } from '~/common';
-import { ChatContext, AddedChatContext, ChatFormProvider, useFileMapContext } from '~/Providers';
 import {
   useAddedResponse,
   useResumeOnLoad,
@@ -14,11 +13,13 @@ import {
   useChatHelpers,
   useDefaultSelection,
 } from '~/hooks';
+import { ChatContext, AddedChatContext, ChatFormProvider, useFileMapContext } from '~/Providers';
 import ConversationStarters from './Input/ConversationStarters';
 import { useGetMessagesByConvoId } from '~/data-provider';
 import MessagesView from './Messages/MessagesView';
 import Presentation from './Presentation';
 import ChatForm from './Input/ChatForm';
+import { useLocalize } from '~/hooks';
 import Landing from './Landing';
 import Header from './Header';
 import Footer from './Footer';
@@ -30,6 +31,25 @@ function LoadingSpinner() {
     <div className="relative flex-1 overflow-hidden overflow-y-auto">
       <div className="relative flex h-full items-center justify-center">
         <Spinner className="text-text-primary" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Отказ обязан выглядеть как отказ. Раньше при ошибке загрузки сообщений
+ * `messagesTree` оставался пустым, `isLoading` уже был false, и экран навсегда
+ * застревал на спиннере — даже когда сеть возвращалась.
+ */
+function MessagesLoadError({ onRetry }: { onRetry: () => void }) {
+  const localize = useLocalize();
+  return (
+    <div className="relative flex-1 overflow-hidden overflow-y-auto">
+      <div className="relative flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-sm text-text-secondary">{localize('com_ui_messages_load_error')}</p>
+        <Button variant="outline" onClick={onRetry}>
+          {localize('com_ui_retry')}
+        </Button>
       </div>
     </div>
   );
@@ -47,7 +67,12 @@ function ChatView({ index = 0 }: { index?: number }) {
 
   const fileMap = useFileMapContext();
 
-  const { data: messagesTree = null, isLoading } = useGetMessagesByConvoId(
+  const {
+    data: messagesTree = null,
+    isLoading,
+    isError: messagesFailed,
+    refetch: refetchMessages,
+  } = useGetMessagesByConvoId(
     conversationId ?? '',
     {
       select: useCallback(
@@ -83,7 +108,9 @@ function ChatView({ index = 0 }: { index?: number }) {
     (conversationId === Constants.NEW_CONVO || !conversationId);
   const isNavigating = (!messagesTree || messagesTree.length === 0) && conversationId != null;
 
-  if (isLoading && conversationId !== Constants.NEW_CONVO) {
+  if (messagesFailed && !isLandingPage) {
+    content = <MessagesLoadError onRetry={() => void refetchMessages()} />;
+  } else if (isLoading && conversationId !== Constants.NEW_CONVO) {
     content = <LoadingSpinner />;
   } else if ((isLoading || isNavigating) && !isLandingPage) {
     content = <LoadingSpinner />;

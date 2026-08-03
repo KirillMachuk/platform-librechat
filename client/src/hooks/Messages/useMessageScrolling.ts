@@ -165,7 +165,12 @@ export default function useMessageScrolling(messagesTree?: TMessage[] | null) {
       return;
     }
 
-    if (isSubmitting && scrollToBottom && abortScroll !== true) {
+    // `abortScroll` поднимается только колесом и касанием. Кто тянул ползунок
+    // прокрутки или шёл клавишами, его не выставлял — и лента дёргала человека
+    // обратно вниз на каждом куске ответа. Обработчик изменения размера рядом
+    // (см. `reconcileContentResize`) уже спрашивает, у низа ли мы; спрашиваем и
+    // здесь, чтобы правило было одно.
+    if (isSubmitting && scrollToBottom && abortScroll !== true && isNearBottomRef.current) {
       scrollToBottom();
     }
 

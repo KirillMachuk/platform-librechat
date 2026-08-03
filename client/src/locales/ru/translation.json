@@ -1714,6 +1714,7 @@
   "com_ui_message_nav_go_to_user": "Перейти к сообщению пользователя: {{0}}",
   "com_ui_message_nav_next": "Перейти к следующему сообщению",
   "com_ui_message_nav_previous": "Перейти к предыдущему сообщению",
+  "com_ui_messages_load_error": "Не удалось загрузить переписку",
   "com_ui_model_parameters_reset": "Параметры модели сброшены.",
   "com_ui_model_selected": "Выбрано: {{0}}",
   "com_ui_model_spec": "Спецификация модели",
