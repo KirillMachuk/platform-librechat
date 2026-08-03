@@ -1,7 +1,8 @@
 import type { AxiosResponse } from 'axios';
 import type { TFileConfig } from './file-config';
-import type * as t from './types';
 import type * as p from './types/projects';
+import type * as pref from './preferences';
+import type * as t from './types';
 import * as permissions from './accessPermissions';
 import * as endpoints from './api-endpoints';
 import * as mcp from './types/mcpServers';
@@ -34,6 +35,16 @@ export function getFavorites(): Promise<q.TUserFavorite[]> {
 
 export function updateFavorites(favorites: q.TUserFavorite[]): Promise<q.TUserFavorite[]> {
   return request.post(`${endpoints.apiBaseUrl()}/api/user/settings/favorites`, { favorites });
+}
+
+/**
+ * Merges the given personal interface settings into the account and returns the full
+ * merged set. There is no matching read: preferences arrive with the user on sign-in.
+ */
+export function updateUserPreferences(
+  preferences: pref.TUserPreferences,
+): Promise<{ preferences: pref.TUserPreferences }> {
+  return request.patch(endpoints.userPreferences(), { preferences });
 }
 
 /**
@@ -1328,10 +1339,7 @@ export function createProject(payload: p.TProjectCreate): Promise<p.TProject> {
   return request.post(endpoints.projects(), payload);
 }
 
-export function updateProject(
-  projectId: string,
-  payload: p.TProjectUpdate,
-): Promise<p.TProject> {
+export function updateProject(projectId: string, payload: p.TProjectUpdate): Promise<p.TProject> {
   return request.patch(endpoints.projectById(projectId), payload);
 }
 

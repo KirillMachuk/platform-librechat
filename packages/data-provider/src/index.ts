@@ -18,6 +18,8 @@ export * from './mcp';
 /* RBAC */
 export * from './permissions';
 export * from './roles';
+/* personal interface settings carried by the account */
+export * from './preferences';
 /* types (exports schemas from `./types` as they contain needed in other defs) */
 export * from './types';
 export * from './types/agents';

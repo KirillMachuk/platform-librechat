@@ -110,8 +110,7 @@ export const projectById = (id: string) => `${projectsRoot}/${encodeURIComponent
 export const projectConversations = (id: string, cursor?: string | null) =>
   `${projectsRoot}/${encodeURIComponent(id)}/conversations${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`;
 
-export const projectFiles = (id: string) =>
-  `${projectsRoot}/${encodeURIComponent(id)}/files`;
+export const projectFiles = (id: string) => `${projectsRoot}/${encodeURIComponent(id)}/files`;
 
 export const projectFileById = (id: string, fileId: string) =>
   `${projectsRoot}/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}`;
@@ -431,6 +430,9 @@ export const skillTree = ({ skillId, path = '' }: { skillId: string; path?: stri
 
 /* Skill active states (per-user overrides) */
 export const skillStates = () => `${BASE_URL}/api/user/settings/skills/active`;
+
+/* Personal interface settings carried by the account */
+export const userPreferences = () => `${BASE_URL}/api/user/settings/preferences`;
 
 /* Roles */
 export const roles = () => `${BASE_URL}/api/roles`;

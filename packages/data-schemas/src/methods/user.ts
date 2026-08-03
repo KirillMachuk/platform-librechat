@@ -1,5 +1,5 @@
 import mongoose, { FilterQuery } from 'mongoose';
-import type { RefillIntervalUnit } from 'librechat-data-provider';
+import type { RefillIntervalUnit, TUserPreferences } from 'librechat-data-provider';
 import type { IUser, BalanceConfig, CreateUserRequest, UserDeleteResult } from '~/types';
 import { escapeRegExp } from '~/utils/string';
 import { signPayload } from '~/crypto';
@@ -106,6 +106,7 @@ export function createUserMethods(mongoose: typeof import('mongoose')): {
     action: 'install' | 'uninstall',
   ) => Promise<IUser | null>;
   toggleUserMemories: (userId: string, memoriesEnabled: boolean) => Promise<IUser | null>;
+  updateUserPreferences: (userId: string, preferences: TUserPreferences) => Promise<IUser | null>;
 } {
   /**
    * Normalizes email fields in search criteria to lowercase and trimmed.
@@ -339,6 +340,35 @@ export function createUserMethods(mongoose: typeof import('mongoose')): {
   }
 
   /**
+   * Merges personal interface settings into the account one key at a time.
+   *
+   * Whole-document writes are wrong here: two tabs, or a phone and a laptop, each send
+   * only the settings they changed, and replacing the map would drop everything the
+   * other one had just saved. Dotted `$set` paths touch exactly the keys supplied.
+   */
+  async function updateUserPreferences(
+    userId: string,
+    preferences: TUserPreferences,
+  ): Promise<IUser | null> {
+    const entries = Object.entries(preferences);
+    if (entries.length === 0) {
+      return await getUserById(userId, 'preferences');
+    }
+
+    const User = mongoose.models.User;
+    const paths: Record<string, string> = {};
+    for (const [key, value] of entries) {
+      paths[`preferences.${key}`] = value as string;
+    }
+
+    return await User.findByIdAndUpdate(
+      userId,
+      { $set: paths },
+      { new: true, runValidators: true },
+    ).lean<IUser>();
+  }
+
+  /**
    * Search for users by pattern matching on name, email, or username (case-insensitive)
    * @param searchPattern - The pattern to search for
    * @param limit - Maximum number of results to return
@@ -517,6 +547,7 @@ export function createUserMethods(mongoose: typeof import('mongoose')): {
     deleteUserById,
     updateUserPlugins,
     toggleUserMemories,
+    updateUserPreferences,
   };
 }
 

@@ -157,6 +157,17 @@ const userSchema: Schema<IUser> = new Schema<IUser>(
       of: Boolean,
       default: () => new Map(),
     },
+    /**
+     * Personal interface settings, keyed by their browser-storage key and holding the
+     * exact string the browser stores. Kept here so an employee's setup follows the
+     * account instead of one browser; the accepted keys and shapes live in
+     * `librechat-data-provider`'s preference registry, which gates every write.
+     */
+    preferences: {
+      type: Map,
+      of: String,
+      default: () => new Map(),
+    },
     /** Field for external source identification (for consistency with TPrincipal schema) */
     idOnTheSource: {
       type: String,

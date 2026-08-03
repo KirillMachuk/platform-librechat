@@ -1,12 +1,13 @@
 import { useCallback, useMemo, useEffect } from 'react';
 import debounce from 'lodash/debounce';
 import { useRecoilState } from 'recoil';
+import { writeStoredValue } from '@librechat/client';
 import { Constants, LocalStorageKeys } from 'librechat-data-provider';
 import type { VerifyToolAuthResponse } from 'librechat-data-provider';
 import type { UseQueryOptions } from '@tanstack/react-query';
 import { useVerifyAgentToolAuth } from '~/data-provider';
-import { setTimestamp } from '~/utils/timestamps';
 import useLocalStorage from '~/hooks/useLocalStorageAlt';
+import { setTimestamp } from '~/utils/timestamps';
 import { ephemeralAgentByConvoId } from '~/store';
 
 type ToolValue = boolean | string;
@@ -71,7 +72,7 @@ export function useToolToggle({
   useEffect(() => {
     const value = ephemeralAgent?.[toolKey];
     if (value !== undefined) {
-      localStorage.setItem(storageKey, JSON.stringify(value));
+      writeStoredValue(storageKey, JSON.stringify(value));
       setTimestamp(storageKey);
     }
   }, [ephemeralAgent, toolKey, storageKey]);
@@ -99,7 +100,7 @@ export function useToolToggle({
       // Dual-write to environment key for new conversation defaults
       if (storageContextKey) {
         const envKey = `${localStorageKey}${storageContextKey}`;
-        localStorage.setItem(envKey, JSON.stringify(value));
+        writeStoredValue(envKey, JSON.stringify(value));
         setTimestamp(envKey);
       }
     },

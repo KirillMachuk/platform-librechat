@@ -180,6 +180,14 @@ agreed redesign and are the acceptance criteria for it.
 | Share a conversation by link | e2e | `e2e/specs/mock/shared-links.spec.ts` | covered |
 | Role permissions gate UI affordances | e2e | `e2e/specs/mock/permissions.spec.ts` | covered |
 | Usage/balance surfaces are correct | e2e | `e2e/specs/mock/usage.spec.ts` | covered |
+| Personal settings follow the account onto a new device | unit | `client/src/hooks/Preferences/__tests__/useApplyPreferences.spec.tsx` | covered |
+| A second employee on the same computer gets their own settings | unit | `client/src/hooks/Preferences/__tests__/useApplyPreferences.spec.tsx` | covered |
+| Settings saved only in this browser migrate up on first sign-in | unit | `client/src/hooks/Preferences/__tests__/useSyncPreferences.spec.tsx` | covered |
+| Changing a setting saves it to the account, and only what changed | unit | `client/src/hooks/Preferences/__tests__/preferencesRoundTrip.spec.tsx` | covered |
+| A failed or lost settings upload is retried, never silently dropped | unit | `client/src/hooks/Preferences/__tests__/useSyncPreferences.spec.tsx` | covered |
+| Only known settings, with values this build accepts, reach the account | unit | `packages/data-provider/src/preferences.spec.ts` | covered |
+| Two devices saving different settings do not overwrite each other | unit | `packages/data-schemas/src/methods/user.preferences.spec.ts` | covered |
+| Settings survive a full sign-in → change → sign-out → sign-in round trip | e2e | — | gap |
 
 ## 11. Accessibility
 

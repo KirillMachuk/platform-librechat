@@ -254,6 +254,47 @@ describe('getUserController', () => {
     expect(sentUser).not.toHaveProperty('tokenset');
     expect(sentUser).not.toHaveProperty('safeLookingRuntimeField');
   });
+
+  /**
+   * Personal settings are stored as a Mongoose Map, which `JSON.stringify` renders as
+   * `{}` unless the document is flattened on the way out. Without this, an employee's
+   * settings would leave the server empty and the feature would silently do nothing.
+   */
+  it('sends personal settings as values, not as an unserialisable Map', async () => {
+    const req = {
+      config: {},
+      user: {
+        id: 'user-id',
+        email: 'employee@test.com',
+        provider: 'local',
+        role: 'USER',
+        preferences: new Map([
+          ['autoScroll', 'true'],
+          ['color-theme', 'dark'],
+        ]),
+        toObject(options) {
+          return {
+            id: this.id,
+            email: this.email,
+            provider: this.provider,
+            role: this.role,
+            preferences:
+              options?.flattenMaps === true
+                ? Object.fromEntries(this.preferences)
+                : this.preferences,
+          };
+        },
+      },
+    };
+
+    await getUserController(req, mockRes);
+
+    const sentUser = mockRes.send.mock.calls[0][0];
+    expect(JSON.parse(JSON.stringify(sentUser)).preferences).toEqual({
+      autoScroll: 'true',
+      'color-theme': 'dark',
+    });
+  });
 });
 
 describe('deleteUserController', () => {

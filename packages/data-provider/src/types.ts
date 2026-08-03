@@ -10,6 +10,7 @@ import type {
   ReasoningResponseKey,
   ReasoningParameterFormat,
 } from './schemas';
+import type { TUserPreferences } from './preferences';
 import type { RefillIntervalUnit } from './balance';
 import type { SettingDefinition } from './generate';
 import type { TMinimalFeedback } from './feedback';
@@ -236,6 +237,8 @@ export type TUser = {
   personalization?: {
     memories?: boolean;
   };
+  /** Personal interface settings that follow the account rather than the browser. */
+  preferences?: TUserPreferences;
   createdAt: string;
   updatedAt: string;
 };

@@ -1,4 +1,4 @@
-import type { RefillIntervalUnit, TUserFavorite } from 'librechat-data-provider';
+import type { RefillIntervalUnit, TUserFavorite, TUserPreferences } from 'librechat-data-provider';
 import type { Document, Types } from 'mongoose';
 import { CursorPaginationParams } from '~/common';
 
@@ -55,6 +55,8 @@ export interface IUser extends Document {
   favorites?: TUserFavorite[];
   /** Per-skill active/inactive overrides. Key = skillId, value = active state. */
   skillStates?: Record<string, boolean>;
+  /** Personal interface settings that follow the account rather than the browser. */
+  preferences?: TUserPreferences;
   createdAt?: Date;
   updatedAt?: Date;
   /** Field for external source identification (for consistency with TPrincipal schema) */

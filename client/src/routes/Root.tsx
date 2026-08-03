@@ -3,25 +3,26 @@ import { useRecoilValue } from 'recoil';
 import { Outlet } from 'react-router-dom';
 import { useMediaQuery } from '@librechat/client';
 import {
-  useSearchEnabled,
-  useAssistantsMap,
-  useAuthContext,
-  useAgentsMap,
-  useFileMap,
-} from '~/hooks';
-import store from '~/store';
-import {
   PromptGroupsProvider,
   AssistantsMapContext,
   AgentsMapContext,
   SetConvoProvider,
   FileMapContext,
 } from '~/Providers';
+import {
+  useSyncPreferences,
+  useSearchEnabled,
+  useAssistantsMap,
+  useAuthContext,
+  useAgentsMap,
+  useFileMap,
+} from '~/hooks';
 import { useUserTermsQuery, useGetStartupConfig } from '~/data-provider';
 import { UnifiedSidebar } from '~/components/UnifiedSidebar';
 import { TermsAndConditionsModal } from '~/components/ui';
 import { useHealthCheck } from '~/data-provider';
 import { Banner } from '~/components/Banners';
+import store from '~/store';
 
 export default function Root() {
   const [showTerms, setShowTerms] = useState(false);
@@ -32,6 +33,7 @@ export default function Root() {
   const { isAuthenticated, logout } = useAuthContext();
 
   useHealthCheck(isAuthenticated);
+  useSyncPreferences(isAuthenticated);
 
   const assistantsMap = useAssistantsMap({ isAuthenticated });
   const agentsMap = useAgentsMap({ isAuthenticated });
