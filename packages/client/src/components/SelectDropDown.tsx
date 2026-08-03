@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { JSX } from 'react/jsx-runtime';
+import { ChevronDown } from 'lucide-react';
 import {
   Label,
   Listbox,
@@ -165,21 +166,10 @@ function SelectDropDown({
                   </span>
                 </span>
                 <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-                  <svg
-                    stroke="currentColor"
-                    fill="none"
-                    strokeWidth="2"
-                    viewBox="0 0 24 24"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="h-4 w-4 text-gray-400"
-                    height="1em"
-                    width="1em"
-                    xmlns="http://www.w3.org/2000/svg"
+                  <ChevronDown
+                    className="icon-sm text-gray-400"
                     style={showAbove ? { transform: 'scaleY(-1)' } : {}}
-                  >
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
+                  />
                 </span>
               </ListboxButton>
               <Transition

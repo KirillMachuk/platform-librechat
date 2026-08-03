@@ -1,4 +1,5 @@
 import React from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLocalize } from '~/hooks';
 
 type TPluginPaginationProps = {
@@ -41,20 +42,7 @@ const PluginPagination: React.FC<TPluginPaginationProps> = ({
         }`}
         style={{ userSelect: 'none' }}
       >
-        <svg
-          stroke="currentColor"
-          fill="none"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="h-4 w-4"
-          height="1em"
-          width="1em"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <polyline points="15 18 9 12 15 6" />
-        </svg>
+        <ChevronLeft className="icon-sm" />
         {localize('com_ui_prev')}
       </div>
       {pages.map((page) => (
@@ -96,20 +84,7 @@ const PluginPagination: React.FC<TPluginPaginationProps> = ({
         style={{ userSelect: 'none' }}
       >
         {localize('com_ui_next')}
-        <svg
-          stroke="currentColor"
-          fill="none"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="h-4 w-4"
-          height="1em"
-          width="1em"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
+        <ChevronRight className="icon-sm" />
       </div>
     </div>
   );

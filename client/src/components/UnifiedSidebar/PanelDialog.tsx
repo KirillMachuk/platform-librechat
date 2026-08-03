@@ -1,4 +1,5 @@
 import { memo, useCallback } from 'react';
+import { X } from 'lucide-react';
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react';
 import type { NavLink } from '~/common';
 import { PanelDismissProvider } from './dismiss';
@@ -63,22 +64,7 @@ function PanelDialog({ link, open, onOpenChange }: PanelDialogProps) {
                   onClick={() => onOpenChange(false)}
                   aria-label={localize('com_ui_close')}
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="h-5 w-5 text-text-primary"
-                    aria-hidden="true"
-                  >
-                    <line x1="18" x2="6" y1="6" y2="18"></line>
-                    <line x1="6" x2="18" y1="6" y2="18"></line>
-                  </svg>
+                  <X className="icon-md text-text-primary" />
                 </button>
               </DialogTitle>
               <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden text-text-primary">
