@@ -258,8 +258,8 @@ of encoded.
 | Russian locale renders key screens without overflow | e2e | `e2e/specs/nightly/layout.spec.ts` | covered |
 | Artifacts panel in the 768–868 band | e2e | — | fixme:Ф1 |
 | Pixel snapshots of the redesigned screens | visual | — | planned:Э7 |
-| Product name is 1MA everywhere, never LibreChat | e2e | — | planned:Э6 |
-| Help button opens the help centre | e2e | — | planned:Э6 |
+| Product name is 1MA everywhere, never LibreChat | e2e | `e2e/specs/mock/branding.spec.ts` | covered |
+| Help entry points at the configured help centre | e2e | `e2e/specs/mock/branding.spec.ts` | covered |
 
 The nightly rows above run in `e2e/playwright.config.nightly.ts`, not on pull requests: five
 projects against the same hermetic server is a few minutes a day rather than minutes on every PR.
