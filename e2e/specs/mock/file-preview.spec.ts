@@ -319,7 +319,7 @@ test.describe('file preview — the rest of the matrix', () => {
     /* The message is the synchronisation point. Asserting "no upload happened"
      * straight after the click would be true before anything could have been
      * sent, and would pass even if the file were accepted. */
-    await expect(page.getByText(/Unsupported file type/)).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText(/cannot be attached here/)).toBeVisible({ timeout: 30000 });
     expect(uploads).toEqual([]);
   });
 
