@@ -22,6 +22,18 @@ import { previewDialog, previewFixture, previewFrame, previewFrameElement } from
 const CONTRACT_MARKER = 'Исполнитель обязуется оказать Заказчику услуги';
 const CONTRACT_LONG_MARKER = 'Договор оказания услуг (расширенный)';
 const SHEET_MARKER = 'Реестр действующих договоров';
+const SHEET_TWO_MARKER = 'Сводка по кварталам';
+/* Row 5 of `registry.xlsx`: no end date, no paid amount, no status. */
+const SPREADSHEET_ROW_WITH_A_HOLE = [
+  '1',
+  'ООО «Ромашка»',
+  'Оказание услуг',
+  '01.01.2024',
+  '',
+  '4800',
+  '',
+  '',
+];
 const MD_MARKER = 'Что сделано';
 const PY_MARKER = 'def total_amount';
 const CSV_MARKER = 'Контрагент';
@@ -58,6 +70,41 @@ test.describe('file preview — office documents', () => {
     const frame = previewFrame(page, 'registry.xlsx');
     await expect(frame.locator('table').first()).toBeVisible({ timeout: 60000 });
     await expect(frame.locator('body')).toContainText(SHEET_MARKER, { useInnerText: true });
+  });
+
+  test('switches between spreadsheet sheets and back', async ({ page }) => {
+    test.setTimeout(180000);
+    await previewFixture(page, 'registry.xlsx');
+
+    const frame = previewFrame(page, 'registry.xlsx');
+    const body = frame.locator('body');
+    await expect(body).toContainText(SHEET_MARKER, { timeout: 60000, useInnerText: true });
+    await expect(body).not.toContainText(SHEET_TWO_MARKER, { useInnerText: true });
+
+    await frame.getByText('Сводка', { exact: true }).click();
+    await expect(body).toContainText(SHEET_TWO_MARKER, { useInnerText: true });
+    await expect(body).not.toContainText(SHEET_MARKER, { useInnerText: true });
+
+    await frame.getByText('Реестр договоров', { exact: true }).click();
+    await expect(body).toContainText(SHEET_MARKER, { useInnerText: true });
+  });
+
+  test('keeps merged headers and empty cells from shifting the columns', async ({ page }) => {
+    test.setTimeout(180000);
+    await previewFixture(page, 'registry.xlsx');
+
+    const frame = previewFrame(page, 'registry.xlsx');
+    await expect(frame.locator('table').first()).toBeVisible({ timeout: 60000 });
+
+    /* The first contract in the fixture has no end date. If empty cells
+     * collapsed, its amount would slide left into the date column. */
+    const row = frame
+      .locator('tr')
+      .filter({ has: frame.locator('td').filter({ hasText: /^ООО «Ромашка»$/ }) })
+      .first();
+    expect((await row.locator('td, th').allInnerTexts()).map((cell) => cell.trim())).toEqual(
+      SPREADSHEET_ROW_WITH_A_HOLE,
+    );
   });
 
   test('keeps a huge spreadsheet bounded instead of hanging the panel', async ({ page }) => {
