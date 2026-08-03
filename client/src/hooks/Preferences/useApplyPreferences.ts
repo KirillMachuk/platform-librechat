@@ -12,13 +12,14 @@ import { preferenceAppliers } from './appliers';
  * Runs before the signed-in interface mounts, so stores hold the right values the first
  * time instead of flashing a default, and so a second employee signing in on the same
  * computer does not inherit the first one's setup. Settings the account has never seen
- * are left as they are and returned, for the first upload to carry up.
+ * are left exactly as they are; carrying them up is the sync hook's job, which sees them
+ * as the difference between this browser and the account.
  *
  * Applied once per person per page load. The session token is refreshed periodically
  * with a fresh copy of the account, and re-applying it would undo a setting the employee
  * changed in the seconds before that copy was taken.
  */
-export default function useApplyPreferences(): (user?: TUser) => TUserPreferences {
+export default function useApplyPreferences(): (user?: TUser) => void {
   const { setTheme } = useContext(ThemeContext);
   const jotai = useStore();
   const appliedForRef = useRef<string | undefined>(undefined);
@@ -44,12 +45,11 @@ export default function useApplyPreferences(): (user?: TUser) => TUserPreference
   return useCallback(
     (user?: TUser) => {
       if (user?.id == null || appliedForRef.current === user.id) {
-        return {};
+        return;
       }
       appliedForRef.current = user.id;
-      const { resolved, pending } = resolvePreferences(user.preferences, readStoredPreferences());
+      const { resolved } = resolvePreferences(user.preferences, readStoredPreferences());
       applyResolved(resolved, setThemeRef.current);
-      return pending;
     },
     [applyResolved],
   );

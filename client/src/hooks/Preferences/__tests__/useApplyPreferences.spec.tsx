@@ -77,31 +77,28 @@ describe('useApplyPreferences', () => {
     expect(localStorage.getItem('speechToText')).toBe('false');
   });
 
-  it('keeps a setting the account has never seen and reports it for upload', () => {
+  it('leaves a setting the account has never seen exactly as this browser had it', () => {
     localStorage.setItem('enterToSend', 'false');
     const { result } = renderApply();
-    let pending: TUserPreferences = {};
 
     act(() => {
-      pending = result.current.apply(signIn({ autoScroll: 'true' }));
+      result.current.apply(signIn({ autoScroll: 'true' }));
     });
 
     expect(result.current.enterToSend).toBe(false);
     expect(result.current.autoScroll).toBe(true);
-    expect(pending).toEqual({ enterToSend: 'false' });
+    expect(localStorage.getItem('enterToSend')).toBe('false');
   });
 
   it('leaves the interface at its defaults for a brand-new account', () => {
     const { result } = renderApply();
-    let pending: TUserPreferences = {};
 
     act(() => {
-      pending = result.current.apply(signIn(undefined));
+      result.current.apply(signIn(undefined));
     });
 
     expect(result.current.autoScroll).toBe(false);
     expect(result.current.enterToSend).toBe(true);
-    expect(pending).toEqual({});
   });
 
   it('applies the theme through the theme provider, in the raw form it stores', () => {
@@ -197,9 +194,10 @@ describe('useApplyPreferences', () => {
     const { result } = renderApply();
 
     act(() => {
-      expect(result.current.apply(undefined)).toEqual({});
+      result.current.apply(undefined);
     });
 
     expect(setTheme).not.toHaveBeenCalled();
+    expect(localStorage.length).toBe(0);
   });
 });
