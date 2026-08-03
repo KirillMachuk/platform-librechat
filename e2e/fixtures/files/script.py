@@ -49,6 +49,18 @@ def summarize(rows):
     return totals
 
 
+def total_amount(rows):
+    """Общая сумма по всем строкам реестра, кроме игнорируемых статусов."""
+    total = Decimal("0")
+    for row in rows:
+        if row.get("Статус") in IGNORED_STATUSES:
+            continue
+        amount = parse_amount(row.get("Сумма"))
+        if amount is not None:
+            total += amount
+    return total
+
+
 def large_contracts(rows):
     """Возвращает договоры не меньше порога, от большего к меньшему."""
     result = []
@@ -67,6 +79,8 @@ def main(path="data.csv"):
     print(f"Контрагентов в реестре: {len(totals)}")
     for name, bucket in sorted(totals.items()):
         print(f"  {name:<40} {bucket['count']:>3} шт.  {bucket['amount']:>12}")
+
+    print(f"Итого по реестру: {total_amount(rows)}")
 
     print("\nКрупные договоры:")
     for amount, number, name in large_contracts(rows):

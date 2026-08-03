@@ -312,7 +312,7 @@ CUSTOMER_REQUISITES = {
 #: renders two identical sentences in a row.
 CLAUSES = {
     "Предмет договора": [
-        "Исполнитель обязуется по заданию Заказчика оказать услуги по {topic}, "
+        "Исполнитель обязуется оказать Заказчику услуги по {topic}, "
         "а Заказчик обязуется принять результат оказанных услуг и оплатить его "
         "в порядке и на условиях, предусмотренных настоящим Договором.",
         "Перечень, объём и содержание услуг определяются Техническим заданием "
@@ -778,11 +778,11 @@ def build_contract_long(path: Path, letterhead: bytes = None,
                         stamp: bytes = None) -> None:
     from docx.shared import Cm
 
-    doc = _docx_new("Договор на оказание услуг № 44/2024 (расширенная редакция)")
+    doc = _docx_new("Договор оказания услуг (расширенный) № 44/2024")
     if letterhead is not None:
         doc.add_picture(io.BytesIO(letterhead), width=Cm(16.0))
     _contract_preamble(
-        doc, "44/2024", "ДОГОВОР НА ОКАЗАНИЕ УСЛУГ (РАСШИРЕННАЯ РЕДАКЦИЯ)"
+        doc, "44/2024", "Договор оказания услуг (расширенный)"
     )
     next_no = _add_sections(
         doc, list(CLAUSES.keys()), start_no=1, repeats=LONG_CLAUSE_REPEATS
@@ -1186,8 +1186,9 @@ def build_big_rows_xlsx(path: Path, data_rows: int = 6_000) -> None:
 
 DECK_SLIDES = (
     (
-        "Итоги квартала",
+        "Итоги полугодия",
         (
+            "Раздел 1. Ключевые показатели за период",
             "Выручка выросла на 12% к предыдущему кварталу",
             "Подписано 8 новых договоров",
             "Средний срок согласования — 6 рабочих дней",
@@ -1398,6 +1399,8 @@ NOTES_MD = """\
 3. Сроки оплаты и порядок приёмки.
 4. Ответственность: пеня, предельный размер убытков.
 
+## Что сделано
+
 - [x] Шаблон договора обновлён
 - [x] Реестр выгружается в XLSX
 - [ ] Автонапоминание о продлении
@@ -1485,6 +1488,18 @@ def summarize(rows):
     return totals
 
 
+def total_amount(rows):
+    """Общая сумма по всем строкам реестра, кроме игнорируемых статусов."""
+    total = Decimal("0")
+    for row in rows:
+        if row.get("Статус") in IGNORED_STATUSES:
+            continue
+        amount = parse_amount(row.get("Сумма"))
+        if amount is not None:
+            total += amount
+    return total
+
+
 def large_contracts(rows):
     """Возвращает договоры не меньше порога, от большего к меньшему."""
     result = []
@@ -1503,6 +1518,8 @@ def main(path="data.csv"):
     print(f"Контрагентов в реестре: {len(totals)}")
     for name, bucket in sorted(totals.items()):
         print(f"  {name:<40} {bucket['count']:>3} шт.  {bucket['amount']:>12}")
+
+    print(f"Итого по реестру: {total_amount(rows)}")
 
     print("\\nКрупные договоры:")
     for amount, number, name in large_contracts(rows):
@@ -2027,9 +2044,30 @@ def verify(out_dir: Path) -> int:
             chars += sum(len(c.text) for row in table.rows for c in row.cells)
         return chars
 
+    #: Literal strings e2e/specs/mock/file-preview.spec.ts asserts on. The spec
+    #: quotes them from the fixtures on purpose (a check that re-extracts with
+    #: the same library it verifies passes even when both are wrong), so an
+    #: edit here must not silently drop them.
+    spec_markers = {
+        "contract-short.docx": ("Исполнитель обязуется оказать Заказчику услуги",),
+        "contract-heavy.docx": ("Исполнитель обязуется оказать Заказчику услуги",),
+        "contract-long.docx": ("Договор оказания услуг (расширенный)",),
+        "registry.xlsx": ("Реестр действующих договоров",),
+        "notes.md": ("Что сделано",),
+        "script.py": ("def total_amount",),
+        "data.csv": ("Контрагент",),
+        "deck-16x9.pptx": ("Итоги полугодия", "Раздел 1"),
+        "deck-4x3.pptx": ("Итоги полугодия",),
+    }
+
+    def assert_markers(name: str, text: str) -> None:
+        missing = [m for m in spec_markers.get(name, ()) if m not in text]
+        assert not missing, f"e2e spec marker(s) missing: {missing}"
+
     def check_short(path):
         doc = docx.Document(path)
         opc_integrity(path)
+        assert_markers(path.name, "\n".join(p.text for p in doc.paragraphs))
         assert len(doc.tables) >= 1, "expected at least one table"
         size = path.stat().st_size
         assert size < 30 * 1024, f"must stay under 30 KB, got {size}"
@@ -2042,6 +2080,7 @@ def verify(out_dir: Path) -> int:
     def check_long(path):
         doc = docx.Document(path)
         opc_integrity(path)
+        assert_markers(path.name, "\n".join(p.text for p in doc.paragraphs))
         pages = docx_chars(doc) // 2800 + 1
         assert len(doc.tables) >= 1, "expected at least one table"
         assert pages >= 25, f"expected 25+ pages, estimated {pages}"
@@ -2058,6 +2097,7 @@ def verify(out_dir: Path) -> int:
     def check_heavy(path):
         doc = docx.Document(path)
         opc_integrity(path)
+        assert_markers(path.name, "\n".join(p.text for p in doc.paragraphs))
         size = path.stat().st_size
         assert size > 360 * 1024, f"must exceed 360 KB, got {size}"
         images = len(doc.inline_shapes)
@@ -2072,6 +2112,7 @@ def verify(out_dir: Path) -> int:
         assert len(wb.sheetnames) == 3, f"expected 3 sheets, got {wb.sheetnames}"
         ws = wb[wb.sheetnames[0]]
         assert isinstance(ws["A1"].value, str) and ws["A1"].value, "A1 title missing"
+        assert_markers(path.name, ws["A1"].value)
         assert all(
             ws.cell(row=2, column=c).value is None for c in range(1, 9)
         ), "row 2 must be blank"
@@ -2147,6 +2188,13 @@ def verify(out_dir: Path) -> int:
             titles = {
                 s.shapes.title.text for s in prs.slides if s.shapes.title is not None
             }
+            body = "\n".join(
+                sh.text_frame.text
+                for s in prs.slides
+                for sh in s.shapes
+                if sh.has_text_frame
+            )
+            assert_markers(path.name, body)
             tables = sum(
                 1 for s in prs.slides for sh in s.shapes if sh.has_table
             )
@@ -2179,6 +2227,7 @@ def verify(out_dir: Path) -> int:
         }
         missing = [k for k, pattern in required.items() if not re.search(pattern, text, re.M)]
         assert not missing, f"markdown missing: {', '.join(missing)}"
+        assert_markers(path.name, text)
         return f"markdown OK · {len(text.splitlines())} lines · all elements present"
 
     def check_script(path):
@@ -2188,6 +2237,7 @@ def verify(out_dir: Path) -> int:
         assert len(lines) >= 55, f"expected ~60 lines, got {len(lines)}"
         assert '"""' in source, "expected docstrings"
         assert re.search(r"^\s*#", source, re.M), "expected comments"
+        assert_markers(path.name, source)
         return f"python OK · compiles · {len(lines)} lines"
 
     def check_csv(path):
@@ -2199,6 +2249,7 @@ def verify(out_dir: Path) -> int:
         assert any('"' in cell for cell in flat), "need a field containing a quote"
         assert any(cell == "" for cell in flat), "need an empty field"
         assert any(re.search(r"[А-Яа-я]", cell) for cell in flat), "need Cyrillic"
+        assert_markers(path.name, path.read_text(encoding="utf-8"))
         return f"csv OK · {len(rows) - 1} rows · quoted/empty/Cyrillic present"
 
     def check_digital_pdf(path):

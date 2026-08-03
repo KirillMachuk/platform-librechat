@@ -21,30 +21,38 @@ encoding and font handling are part of what these tests exercise.
 | File | What it is | Behaviour it exercises | Size |
 |---|---|---|---|
 | `contract-short.docx` | 2-page services agreement: title, 4 numbered sections, a small price table, signature block | The ordinary small-DOCX path — high-fidelity CDN renderer, headings/tables/Cyrillic render correctly | 24 KB |
-| `contract-long.docx` | ~77-page agreement: 11 sections (~66 clauses), 12 appendices, a 220-row смета, letterhead logo and a scanned stamp | Long-document reading: scrolling, many headings, 14 tables, inline images inside a text flow | 116 KB |
+| `contract-long.docx` | ~77-page agreement: 11 sections (66 clauses), 12 appendices, a 220-row смета, letterhead logo and a scanned stamp | Long-document reading: scrolling, 78 headings, 14 tables, inline images inside a text flow | 116 KB |
 | `contract-heavy.docx` | Contract with 5 full-page scan images appended | **Above the 350 KB CDN cutoff** (`MAX_DOCX_CDN_BINARY_BYTES` in `packages/api/src/files/documents/html.ts`) — the backend must fall back to the mammoth renderer | 430 KB |
 | `registry.xlsx` | 3 sheets: contract registry (title in A1, blank row 2, two-level merged header, 40 data rows with holes, totals row), «Сводка» with formulas, near-empty «Черновик» | Multi-sheet tab strip, merged cells, empty cells not shifting columns, real numbers vs text, formulas with and without cached values | 9 KB |
 | `big-rows.xlsx` | One sheet, 6 000 data rows (6 001 with the header) | **Past the 5 000-row cap** (`SPREADSHEET_MAX_ROWS_PER_SHEET`) — truncation plus the "showing first 5,000 of 6,001 rows" banner | 241 KB |
 | `deck-16x9.pptx` | 12 slides, 16:9 (12192000 × 6858000 EMU), bullets, one table slide, one bar-chart-like slide | Widescreen slide rendering, slide list, tables and shapes on slides | 39 KB |
-| `deck-4x3.pptx` | 6 slides, 4:3 (9144000 × 6858000 EMU) | The other aspect ratio — slide canvas must not letterbox or crop | 33 KB |
-| `deck-many.pptx` | 60 slides, 16:9, every title distinct («Слайд 07. …») | Slide count and navigation: a test can jump to slide N and assert which one it landed on | 88 KB |
+| `deck-4x3.pptx` | 6 slides, 4:3 (9144000 × 6858000 EMU) | The other aspect ratio — the slide canvas must not letterbox or crop | 33 KB |
+| `deck-many.pptx` | 60 slides, 16:9, every title distinct («Слайд 07. …») | Slide count and navigation: a test can jump to slide N and assert which one it landed on | 89 KB |
 | `notes.md` | Markdown with headings, ordered list, task list, table, Python code fence, blockquote and a link | Markdown preview: every block element in one file | 2 KB |
-| `script.py` | Readable 77-line utility with module/function docstrings and comments | Source-code preview and syntax highlighting | 3 KB |
+| `script.py` | Readable 91-line utility with module/function docstrings and comments | Source-code preview and syntax highlighting | 4 KB |
 | `data.csv` | Header + 30 rows; quoted fields containing commas and `"` quotes, one empty column, Cyrillic values | CSV parsing: quoting rules, empty fields, encoding | 5 KB |
 | `digital.pdf` | 5 pages, real text layer, headings «Раздел 1» … «Раздел 5» | Text-layer PDF: search and text selection. Each heading is distinct, so a test can search for one and assert the page | 100 KB |
-| `scan.pdf` | 3 pages, **image only** — rasterised, slightly rotated, speckled like a flatbed scan | The "scanned document" path: zero extractable text, so any text-layer feature must degrade gracefully (and OCR-style handling can be tested) | 148 KB |
+| `scan.pdf` | 3 pages, **image only** — rasterised, slightly rotated, speckled like a flatbed scan | The "scanned document" path: zero extractable text, so any text-layer feature must degrade gracefully | 148 KB |
 | `broken.docx` | A real docx truncated to 55% — `PK\x03\x04` magic intact, central directory gone | Corrupt-file handling: sniffing says docx, every parser fails. Must surface an error, not a blank preview | 12 KB |
 | `locked.pdf` | AES-256 encrypted PDF, user password `secret123` | Password-protected PDF: must prompt or report "encrypted", never render | 94 KB |
 | `locked.docx` | Genuinely encrypted Office file (OLE2/CFB container, ECMA-376 agile encryption), password `secret123` | Password-protected DOCX. It is *not* a zip at all, so the docx parser fails differently from `broken.docx` | 43 KB |
 | `archive.zip` | Valid zip with two text files | Unsupported-for-preview format: expect a download prompt, not an attempted render | 0.5 KB |
 | `unknown.xyz` | 1 KB opaque binary blob, no recognised magic bytes | Unknown extension and unknown content — the fallback of the fallback | 1 KB |
 
-Total: **1.37 MB** (1 431 026 bytes) — 18 fixtures plus this README.
+Total: **1.36 MB** (1 423 988 bytes) across 18 fixtures, plus this README.
 
 Test passwords are `secret123` for both `locked.pdf` and `locked.docx`. They are
 fixture passwords for throwaway documents, nothing else.
 
 ## Things worth knowing before you rely on these
+
+**Some strings in these files are load-bearing.** `e2e/specs/mock/file-preview.spec.ts`
+asserts on literal markers quoted from the fixtures (deliberately, so the check
+does not share code with the thing it verifies): «Исполнитель обязуется оказать
+Заказчику услуги», «Договор оказания услуг (расширенный)», «Реестр действующих
+договоров», «Что сделано», `def total_amount`, «Контрагент», «Итоги полугодия»,
+«Раздел 1». `generate_fixtures.py --verify` re-asserts every one of them, so
+rewording the content fails loudly here instead of mysteriously in Playwright.
 
 **`registry.xlsx` sheet 2 has formulas of both kinds — on purpose.** openpyxl
 writes `<f>C4-B4</f><v></v>`, an *empty* cached value, because it never
