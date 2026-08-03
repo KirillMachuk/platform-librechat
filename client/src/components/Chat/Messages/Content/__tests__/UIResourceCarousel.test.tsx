@@ -22,6 +22,13 @@ jest.mock('~/Providers', () => ({
 }));
 
 // Mock handleUIAction utility
+// Хук локализации замокан отдельно: в этой спеке нет провайдера i18next,
+// а подписи стрелок теперь берутся из переводов.
+jest.mock('~/hooks/useLocalize', () => ({
+  __esModule: true,
+  default: () => (key: string) => key,
+}));
+
 jest.mock('~/utils', () => ({
   handleUIAction: jest.fn(),
 }));
@@ -81,8 +88,8 @@ describe('UIResourceCarousel', () => {
     const carouselContainer = container.querySelector('.relative.mb-4.pt-3');
 
     // Initially arrows should be hidden (opacity-0)
-    const leftArrow = screen.queryByLabelText('Scroll left');
-    const rightArrow = screen.queryByLabelText('Scroll right');
+    const leftArrow = screen.queryByLabelText('com_ui_scroll_left');
+    const rightArrow = screen.queryByLabelText('com_ui_scroll_right');
 
     // Right arrow should exist but left should not (at start)
     expect(leftArrow).not.toBeInTheDocument();
@@ -117,8 +124,8 @@ describe('UIResourceCarousel', () => {
 
     // Both arrows should now be visible
     await waitFor(() => {
-      expect(screen.getByLabelText('Scroll left')).toBeInTheDocument();
-      expect(screen.getByLabelText('Scroll right')).toBeInTheDocument();
+      expect(screen.getByLabelText('com_ui_scroll_left')).toBeInTheDocument();
+      expect(screen.getByLabelText('com_ui_scroll_right')).toBeInTheDocument();
     });
 
     // Hover to make arrows interactive
@@ -126,14 +133,14 @@ describe('UIResourceCarousel', () => {
     fireEvent.mouseEnter(carouselContainer!);
 
     // Click right arrow
-    fireEvent.click(screen.getByLabelText('Scroll right'));
+    fireEvent.click(screen.getByLabelText('com_ui_scroll_right'));
     expect(mockScrollTo).toHaveBeenCalledWith({
       left: 650, // 200 + (500 * 0.9)
       behavior: 'smooth',
     });
 
     // Click left arrow
-    fireEvent.click(screen.getByLabelText('Scroll left'));
+    fireEvent.click(screen.getByLabelText('com_ui_scroll_left'));
     expect(mockScrollTo).toHaveBeenCalledWith({
       left: -250, // 200 - (500 * 0.9)
       behavior: 'smooth',
@@ -153,8 +160,8 @@ describe('UIResourceCarousel', () => {
     fireEvent.scroll(scrollContainer!);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Scroll left')).toBeInTheDocument();
-      expect(screen.queryByLabelText('Scroll right')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('com_ui_scroll_left')).toBeInTheDocument();
+      expect(screen.queryByLabelText('com_ui_scroll_right')).not.toBeInTheDocument();
     });
   });
 

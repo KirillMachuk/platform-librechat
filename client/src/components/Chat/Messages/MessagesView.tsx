@@ -52,7 +52,20 @@ function MessagesViewContent({
               width: '100%',
             }}
           >
-            <div ref={contentRef} className="flex flex-col pb-9 pt-14 dark:bg-transparent">
+            {/*
+              Лента объявлена журналом: без этого незрячий человек не узнаёт,
+              что ответ пришёл — новые сообщения появлялись молча. `polite`, а
+              не `assertive`, чтобы не перебивать чтение; `aria-relevant`
+              ограничен добавлениями, иначе диктор зачитывает и удаления.
+            */}
+            <div
+              ref={contentRef}
+              role="log"
+              aria-live="polite"
+              aria-relevant="additions"
+              aria-label={localize('com_ui_conversation_log')}
+              className="flex flex-col pb-9 pt-14 dark:bg-transparent"
+            >
               {(_messagesTree && _messagesTree.length == 0) || _messagesTree === null ? (
                 <div
                   className={cn(

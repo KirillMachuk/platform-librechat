@@ -179,7 +179,7 @@ function ToolSelectDialog({
                     setCurrentPage(1);
                   }}
                   className="inline-block rounded-full text-text-secondary transition-colors hover:text-text-primary"
-                  aria-label="Close dialog"
+                  aria-label={localize('com_ui_close_dialog')}
                   type="button"
                 >
                   <X aria-hidden="true" />

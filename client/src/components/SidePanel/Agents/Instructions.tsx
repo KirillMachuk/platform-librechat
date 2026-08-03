@@ -88,7 +88,7 @@ export default function Instructions() {
               id="instructions"
               placeholder={localize('com_agents_instructions_placeholder')}
               rows={3}
-              aria-label="Agent instructions"
+              aria-label={localize('com_ui_agent_instructions_field')}
               aria-required="true"
               aria-invalid={error ? 'true' : 'false'}
             />

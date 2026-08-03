@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { GearIcon } from '@librechat/client';
 import type { Action } from 'librechat-data-provider';
+import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
 export default function Action({ action, onClick }: { action: Action; onClick: () => void }) {
+  const localize = useLocalize();
   const [isHovering, setIsHovering] = useState(false);
 
   return (
@@ -32,7 +34,7 @@ export default function Action({ action, onClick }: { action: Action; onClick: (
           'h-9 w-9 min-w-9 items-center justify-center rounded-lg transition-colors duration-200 hover:bg-surface-tertiary focus:outline-none focus:ring-2 focus:ring-text-primary group-focus:flex',
           isHovering ? 'flex' : 'hidden',
         )}
-        aria-label="Settings"
+        aria-label={localize('com_ui_action_settings')}
       >
         <GearIcon className="icon-sm" aria-hidden="true" />
       </div>

@@ -1,10 +1,10 @@
-import { useForm } from 'react-hook-form';
 import React, { useContext, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { loginPage } from 'librechat-data-provider';
 import { Turnstile } from '@marsidev/react-turnstile';
-import { ThemeContext, SecretInput, Spinner, Button, isDark } from '@librechat/client';
 import { useNavigate, useOutletContext, useLocation } from 'react-router-dom';
 import { useRegisterUserMutation } from 'librechat-data-provider/react-query';
-import { loginPage } from 'librechat-data-provider';
+import { ThemeContext, SecretInput, Spinner, Button, isDark } from '@librechat/client';
 import type { TRegisterUser, TError } from 'librechat-data-provider';
 import type { TLoginLayoutContext } from '~/common';
 import { useLocalize, TranslationKeys } from '~/hooks';
@@ -149,7 +149,7 @@ const Registration: React.FC = () => {
         <>
           <form
             className="mt-6"
-            aria-label="Registration form"
+            aria-label={localize('com_ui_form_registration')}
             method="POST"
             onSubmit={handleSubmit((data: TRegisterUser) =>
               registerUser.mutate({ ...data, token: token ?? undefined }),
