@@ -244,20 +244,26 @@ merge PR to platform-librechat/main
 - **GitHub Actions minutes are only free while this repo is public.** It was switched to
   private once and burned ~1800 of the 2000/month minutes in three weeks. Keep it public;
   if it ever must go private, disable the inherited upstream workflows first.
-- **CI scope gotcha:** the frontend test suite (`.github/workflows/frontend-review.yml`)
-  runs only on PRs touching `client/**`, `packages/client/**`, or `packages/data-provider/**`,
-  and the backend `api/` + `packages/api` jest suites have no CI workflow at all — run them
-  locally (`cd api && npx jest <pattern>`, `cd packages/api && npx jest <pattern>`) before
-  merging backend changes. A green `main` only means the Docker image built.
+- **CI scope:** the frontend suite (`frontend-review.yml`) runs on PRs touching `client/**`,
+  `packages/client/**`, `packages/data-provider/**` and on push to `main` for the same paths;
+  the backend suite (`backend-review.yml`) runs on `api/**` and `packages/**`; the hermetic
+  Playwright mock e2e suite (`playwright-mock.yml`) runs on **every** PR. A path-filtered
+  workflow is skipped, not failed, so a green PR does not always mean a suite ran — check
+  which ones did before trusting it.
 
 ---
 
 ## Testing
 
-- Framework: **Jest**, run per-workspace.
+- Framework: **Jest**, run per-workspace; **Playwright** for e2e (`e2e/`, mock profile).
 - Run tests from their workspace directory: `cd api && npx jest <pattern>`, `cd packages/api && npx jest <pattern>`, etc.
 - Frontend tests: `__tests__` directories alongside components; use `test/layout-test-utils` for rendering.
 - Cover loading, success, and error states for UI/data flows.
+- **`e2e/COVERAGE_MAP.md` is the inventory of user behavior and its owning tests.** A PR that
+  adds or changes user-facing behavior updates it; `npm run check:coverage-map` (CI-enforced)
+  fails when a claimed test no longer exists.
+- A test counts only once it has been **seen red** — break the behavior on purpose, watch it
+  fail, restore. This repo has caught four wrong "green" tests that way.
 
 ### Philosophy
 
