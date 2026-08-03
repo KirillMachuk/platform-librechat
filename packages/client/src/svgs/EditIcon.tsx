@@ -13,7 +13,6 @@ const EditIcon: React.ForwardRefExoticComponent<IconProps & React.RefAttributes<
       <svg
         ref={ref}
         fill="none"
-        strokeWidth="2"
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
         strokeLinecap="round"

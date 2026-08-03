@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Label, OGDialog, OGDialogContent, OGDialogTemplate } from '@librechat/client';
 import { useFormContext, useFormState, useWatch } from 'react-hook-form';
+import { Label, OGDialog, OGDialogContent, OGDialogTemplate } from '@librechat/client';
 import { Search, Check, EarthIcon, User, Plus, Star, ListFilter, X } from 'lucide-react';
 import { PermissionTypes, Permissions, SystemCategories } from 'librechat-data-provider';
 import type { TSkillSummary } from 'librechat-data-provider';
@@ -162,7 +162,7 @@ function SkillCard({
           )}
           aria-hidden="true"
         >
-          <Check className="size-3" strokeWidth={3} />
+          <Check className="icon-xs" />
         </span>
       </div>
     </button>

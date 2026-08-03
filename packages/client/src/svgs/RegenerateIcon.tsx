@@ -17,7 +17,7 @@ export default function RegenerateIcon({
       viewBox="0 0 24 24"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn('icon-md-heavy', className)}
+      className={cn('icon-md', className)}
       aria-hidden="true"
     >
       <path

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FileUp } from 'lucide-react';
-import { cn } from '~/utils/';
 import { useLocalize } from '~/hooks';
+import { cn } from '~/utils/';
 
 type FileUploadProps = {
   onFileSelected: (jsonData: Record<string, unknown>) => void;
@@ -81,7 +81,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         )}
         aria-label={statusText}
       >
-        <FileUp className="mr-1 flex w-[22px] items-center stroke-1" aria-hidden="true" />
+        <FileUp className="mr-1 flex w-[22px] items-center" aria-hidden="true" />
         <span className="flex text-xs">{statusText}</span>
       </button>
       <input

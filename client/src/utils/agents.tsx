@@ -90,14 +90,6 @@ export const renderAgentAvatar = (
     xl: 'h-10 w-10',
   };
 
-  const placeholderSizeClasses = {
-    icon: 'h-5 w-5',
-    sm: 'h-10 w-10 sm:h-12 sm:w-12',
-    md: 'h-12 w-12 sm:h-16 sm:w-16 md:h-20 md:w-20',
-    lg: 'h-16 w-16 sm:h-20 sm:w-20 md:h-24 md:w-24',
-    xl: 'h-20 w-20',
-  };
-
   const borderClasses = showBorder ? 'border-1 border-border-medium' : '';
 
   if (avatarUrl) {
@@ -116,7 +108,7 @@ export const renderAgentAvatar = (
 
   return (
     <div className={`relative flex items-center justify-center ${sizeClasses[size]} ${className}`}>
-      <Feather className={`text-text-primary ${iconSizeClasses[size]}`} strokeWidth={1.5} />
+      <Feather className={`text-text-primary ${iconSizeClasses[size]}`} />
     </div>
   );
 };

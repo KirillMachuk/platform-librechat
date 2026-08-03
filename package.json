@@ -68,6 +68,7 @@
     "e2e:login": "npx playwright codegen --save-storage=e2e/storageState.json http://localhost:3080/login",
     "e2e:github": "act -W .github/workflows/playwright-mock.yml --secret-file my.secrets",
     "check:coverage-map": "node e2e/scripts/check-coverage-map.mjs",
+    "check:icons": "node scripts/check-icons.mjs",
     "test:client": "cd client && npm run test:ci",
     "test:api": "cd api && npm run test:ci",
     "test:packages:api": "cd packages/api && npm run test:ci",

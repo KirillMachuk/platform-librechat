@@ -9,11 +9,10 @@ export default function TrashIcon({ className = '' }: TrashIconProps): JSX.Eleme
   return (
     <svg
       fill="none"
-      strokeWidth="2"
       viewBox="0 0 24 24"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn('icon-md h-4 w-4', className)}
+      className={cn('icon-md', className)}
       height="1em"
       width="1em"
       xmlns="http://www.w3.org/2000/svg"

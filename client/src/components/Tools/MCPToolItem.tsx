@@ -37,7 +37,7 @@ function MCPToolItem({
     if (isInstalled) {
       return {
         text: localize('com_nav_tool_remove'),
-        icon: <XCircle className="flex h-4 w-4 items-center stroke-2" aria-hidden="true" />,
+        icon: <XCircle className="flex h-4 w-4 items-center" aria-hidden="true" />,
         className: 'btn btn-neutral border-token-border-light relative',
         disabled: false,
       };
@@ -46,7 +46,7 @@ function MCPToolItem({
     if (isConfiguring) {
       return {
         text: localize('com_ui_confirm'),
-        icon: <PlusCircleIcon className="flex h-4 w-4 items-center stroke-2" aria-hidden="true" />,
+        icon: <PlusCircleIcon className="flex h-4 w-4 items-center" aria-hidden="true" />,
         className: 'btn btn-primary relative',
         disabled: false,
       };
@@ -55,7 +55,7 @@ function MCPToolItem({
     if (isInitializing) {
       return {
         text: localize('com_ui_initializing'),
-        icon: <Wrench className="flex h-4 w-4 items-center stroke-2" aria-hidden="true" />,
+        icon: <Wrench className="flex h-4 w-4 items-center" aria-hidden="true" />,
         className: 'btn btn-primary relative opacity-75 cursor-not-allowed',
         disabled: true,
       };
@@ -63,7 +63,7 @@ function MCPToolItem({
 
     return {
       text: localize('com_ui_add'),
-      icon: <PlusCircleIcon className="flex h-4 w-4 items-center stroke-2" aria-hidden="true" />,
+      icon: <PlusCircleIcon className="flex h-4 w-4 items-center" aria-hidden="true" />,
       className: 'btn btn-primary relative',
       disabled: false,
     };

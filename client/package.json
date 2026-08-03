@@ -81,7 +81,7 @@
     "js-cookie": "^3.0.5",
     "librechat-data-provider": "*",
     "lodash": "^4.17.23",
-    "lucide-react": "^0.394.0",
+    "lucide-react": "^0.577.0",
     "match-sorter": "^8.1.0",
     "mdast-util-directive": "^3.0.0",
     "mdast-util-from-markdown": "^2.0.1",
