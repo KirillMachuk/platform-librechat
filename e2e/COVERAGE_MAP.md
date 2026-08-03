@@ -211,3 +211,13 @@ agreed redesign and are the acceptance criteria for it.
 | Russian locale renders key screens without overflow | e2e | — | planned:Э5 |
 | Product name is 1MA everywhere, never LibreChat | e2e | — | planned:Э6 |
 | Help button opens the help centre | e2e | — | planned:Э6 |
+
+## 13. Known investigation
+
+`file-preview.spec.ts` is committed on a draft PR, not merged. On a slow
+machine five of its fifteen tests fail while ten pass; the same suite passes on
+three of four CI shards. The failures are not cross-test leakage — the
+multi-sheet workbook case fails identically when run alone — so either the
+preview of a multi-sheet workbook is genuinely slow to appear, or the readiness
+wait in `files.helpers.ts` returns before the frame is populated. Resolve before
+marking these rows covered.
