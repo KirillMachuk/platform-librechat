@@ -68,7 +68,15 @@ export default function useSyncPreferences(isAuthenticated: boolean): void {
 
     const scheduleUpload = debounce(upload, UPLOAD_DELAY_MS);
 
+    /**
+     * Only writes made in this tab. The browser marks a genuine cross-tab event with the
+     * storage area it came from; those are another tab's changes, and that tab is already
+     * saving them. Acting on them too would send the same change once per open tab.
+     */
     const onStorage = (event: StorageEvent) => {
+      if (event.storageArea != null) {
+        return;
+      }
       if (event.key != null && !isUserPreferenceKey(event.key)) {
         return;
       }

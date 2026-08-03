@@ -145,6 +145,30 @@ describe('useSyncPreferences', () => {
     expect(mockMutate.mock.calls[0][0]).toEqual({ autoScroll: 'false' });
   });
 
+  it('leaves a change made in another tab to the tab that made it', async () => {
+    renderSync(employee({}));
+    await act(async () => {
+      jest.advanceTimersByTime(2000);
+    });
+    mockMutate.mockClear();
+
+    localStorage.setItem('autoScroll', 'false');
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'autoScroll',
+          newValue: 'false',
+          storageArea: localStorage,
+        }),
+      );
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(2000);
+    });
+
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
   it('leaves an unrelated storage write alone entirely', async () => {
     renderSync(employee({}));
     await act(async () => {
