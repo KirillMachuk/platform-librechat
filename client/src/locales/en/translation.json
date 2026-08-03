@@ -1820,6 +1820,9 @@
   "com_ui_terms_and_conditions": "Terms and Conditions",
   "com_ui_terms_of_service": "Terms of service",
   "com_ui_ai_disclaimer": "ИИ может ошибаться. Проверяйте важную информацию.",
+  "com_ui_data_table": "Data Table",
+  "com_ui_data_table_scroll_area": "Scrollable data table area",
+  "com_ui_error_details": "Error Details (Dev)",
   "com_ui_text_variables": "Text variables",
   "com_ui_thinking": "Thinking...",
   "com_ui_thoughts": "Thoughts",
@@ -1966,5 +1969,11 @@
   "com_ui_file_mode_text": "Full text",
   "com_ui_file_mode_native": "Original file",
   "com_ui_file_mode_search": "Search in document",
+  "com_ui_loading_more_data": "Loading more data...",
+  "com_ui_no_options": "No options available",
+  "com_ui_search_table": "Search table",
+  "com_ui_search_table_description": "Type to filter results",
+  "com_ui_table_error": "Table Error",
+  "com_ui_table_error_description": "Table failed to load. Please refresh or try again.",
   "com_warning_model_no_vision": "This model can't read images. Switch to a model with vision (e.g. Sonnet, GPT-5, or Gemini) to work with pictures."
 }
