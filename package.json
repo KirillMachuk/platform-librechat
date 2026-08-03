@@ -114,7 +114,8 @@
     "backfill:library-index:dry-run": "node config/backfill-library-index.js --dry-run",
     "backfill:library-index": "node config/backfill-library-index.js",
     "backfill:doc-metadata:dry-run": "node config/backfill-doc-metadata.js --dry-run",
-    "backfill:doc-metadata": "node config/backfill-doc-metadata.js"
+    "backfill:doc-metadata": "node config/backfill-doc-metadata.js",
+    "e2e:nightly": "playwright test --config=e2e/playwright.config.nightly.ts"
   },
   "repository": {
     "type": "git",

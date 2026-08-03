@@ -96,6 +96,7 @@ const MenuRow = memo(function MenuRow({
   return (
     <Button
       variant="ghost"
+      data-testid={`sidebar-link-${link.id}`}
       aria-label={localize(link.title)}
       className="flex h-9 w-full items-center justify-start gap-2 rounded-lg px-2 text-sm font-normal text-text-primary hover:bg-surface-hover"
       onClick={() => onSelect(link)}

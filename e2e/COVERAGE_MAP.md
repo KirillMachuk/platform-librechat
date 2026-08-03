@@ -234,7 +234,8 @@ satisfied by any failure, so alone it would stop meaning anything. The conversat
 the virtualised chat list declares `role="grid"` without the rows a grid requires (critical),
 and a conversation row nests an interactive control inside another (serious). The file library:
 its sortable column headers render #737373 on #f5f5f5, 4.34:1 where AA asks 4.5:1. All three
-are in surfaces the redesign is rebuilding.
+are in surfaces the redesign is rebuilding, and fixing them belongs to that work (owner
+decision, 2026-08-03) — not to whoever next reads this file.
 
 "A dialog holds focus against anything else claiming it" is a `gap`, not a passing test, on
 purpose. Focus was once observed leaving the open file panel for the chat composer about half a
@@ -247,11 +248,30 @@ of encoded.
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
 | Panel and its layout host switch to the phone layout at the same width | unit | `client/src/components/Artifacts/__tests__/breakpoints.test.ts` | fixme:Ф1 |
-| Mobile viewport renders the chat and panel correctly | e2e | — | planned:Э5 |
-| Dark theme on key screens | visual | — | planned:Э5 |
-| Russian locale renders key screens without overflow | e2e | — | planned:Э5 |
+| Chat and file library work at phone, 800px and desktop widths | e2e | `e2e/specs/nightly/layout.spec.ts` | covered |
+| No screen scrolls sideways at any of those widths | e2e | `e2e/specs/nightly/layout.spec.ts` | covered |
+| Dark theme really applies, and its key screens pass axe | a11y | `e2e/specs/nightly/theme.spec.ts` | covered |
+| Russian build shows no untranslated keys on key screens | e2e | `e2e/specs/nightly/locale.spec.ts` | covered |
+| Russian locale renders key screens without overflow | e2e | `e2e/specs/nightly/layout.spec.ts` | covered |
+| Artifacts panel in the 768–868 band | e2e | — | fixme:Ф1 |
+| Pixel snapshots of the redesigned screens | visual | — | planned:Э7 |
 | Product name is 1MA everywhere, never LibreChat | e2e | — | planned:Э6 |
 | Help button opens the help centre | e2e | — | planned:Э6 |
+
+The nightly rows above run in `e2e/playwright.config.nightly.ts`, not on pull requests: five
+projects against the same hermetic server is a few minutes a day rather than minutes on every PR.
+Each project runs only the specs it needs, expressed as `testMatch` rather than a skip inside the
+test — a skipped test still costs a worker slot and still reports.
+
+The 768–868 band is `fixme:Ф1` at the e2e level on purpose. Reaching it needs an artifacts panel
+open, which needs the model to emit an artifact; the breakpoint mismatch itself is already owned
+by `client/src/components/Artifacts/__tests__/breakpoints.test.ts`, which reads both widths from
+source and fails when they are made to agree. The `narrow-desktop` project exists so the rest of
+the app is exercised at that width today, and so the band test has somewhere to land.
+
+Pixel snapshots are `planned:Э7`, not Э5. Baselines taken now would be invalidated by the very
+redesign they are meant to guard, and they would have to be generated on CI rather than on a Mac
+to compare at all. Structural and ARIA assertions carry the regression value in the meantime.
 
 ## 13. Notes on the preview matrix
 
