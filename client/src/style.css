@@ -56,9 +56,6 @@
   --amber-900: #78350f;
   --amber-950: #451a03;
   --brand-purple: #ab68ff;
-  --gizmo-gray-500: #999;
-  --gizmo-gray-600: #666;
-  --gizmo-gray-950: #0f0f0f;
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
   --font-size-base: 1rem;
@@ -194,29 +191,141 @@ html {
   --chart-5: 340 75% 55%;
   --switch-unchecked: 0 0% 40%;
 }
-.gizmo {
-  --text-primary: var(--gizmo-gray-950);
-  --text-secondary: var(--gizmo-gray-600);
-  --text-tertiary: var(--gizmo-gray-500);
-  --surface-primary: var(--white);
-  --surface-secondary: var(--gray-50);
-  --surface-tertiary: var(--gray-100);
-  --border-light: rgba(0, 0, 0, 0.1);
-  --border-medium: rgba(0, 0, 0, 0.15);
-  --border-heavy: rgba(0, 0, 0, 0.2);
-  --border-xheavy: rgba(0, 0, 0, 0.25);
+/* ============================================================================
+   1ma — канонический слой токенов (DESIGN_SYSTEM.md, Приложение А).
+   Единственный источник правды для цвета, размеров, радиусов, теней и слоёв.
+   Значения не дублировать: любая правка дизайна начинается здесь.
+
+   Порядок: неизменные величины на :root, цвет светлой темы на html,
+   тёмной — на .dark. Селектор .dark (0,1,0) специфичнее html (0,0,1),
+   поэтому тёмная всегда выигрывает независимо от порядка правил в файле.
+
+   Семантика LibreChat (--text-*, --surface-*, --border-*) переводится на этот
+   слой отдельным шагом; пока она держит прежние значения, и объявление слоя
+   ничего не перекрашивает.
+   ========================================================================== */
+:root {
+  /* типографика (§3) */
+  --c-fs-body: 15px;
+  --c-lh-body: 1.6;
+  --c-fs-ui: 14px;
+  --c-lh-ui: 20px;
+  --c-fs-cap: 12.5px;
+  --c-fs-comp: 16px;
+  /* размеры (§2) */
+  --c-row-h: 40px;
+  --c-btn-h: 36px;
+  --c-btn-h-sm: 30px;
+  --c-side-w: 240px;
+  --c-rail-w: 56px;
+  /* радиусы (§4) */
+  --c-r-ctl: 8px;
+  --c-r-btn: 12px;
+  --c-r-inp: 12px;
+  --c-r-row: 12px;
+  --c-r-card: 12px;
+  --c-r-modal: 16px;
+  --c-r-comp: 24px;
+  --c-r-pill: 999px;
+  /* движение (§5) */
+  --c-dur: 90ms;
+  --c-dur-mid: 120ms;
+  --c-ease: linear;
+  /* иконки (§4) */
+  --c-ic: 18px;
+  --c-ic-sm: 16px;
+  --c-ic-xs: 14px;
+  --c-ic-sw: 1.75;
+  /* шаг сетки (§2) */
+  --c-sp1: 4px;
+  --c-sp2: 8px;
+  --c-sp3: 12px;
+  --c-sp4: 16px;
+  --c-sp5: 24px;
+  --c-sp6: 32px;
+  /* слои (§4). Поповеры выше диалогов — инвариант форка. */
+  --c-z-sticky: 10;
+  --c-z-scrim-drawer: 109;
+  --c-z-drawer: 110;
+  --c-z-scrim-dialog: 990;
+  --c-z-dialog: 999;
+  --c-z-popover: 1001;
+  --c-z-toast: 1010;
 }
-.gizmo.dark {
-  --text-primary: var(--gray-100);
-  --text-secondary: var(--gray-300);
-  --text-tertiary: var(--gizmo-gray-500);
-  --surface-primary: var(--gray-900);
-  --surface-secondary: var(--gray-800);
-  --surface-tertiary: var(--gray-700);
-  --border-light: rgba(217, 217, 227, 0.1);
-  --border-medium: rgba(217, 217, 227, 0.15);
-  --border-heavy: rgba(217, 217, 227, 0.2);
-  --border-xheavy: rgba(217, 217, 227, 0.25);
+html {
+  /* поверхности */
+  --c-bg: #fcfcfc;
+  --c-panel: #f5f5f5;
+  --c-card: #ffffff;
+  --c-hover: #f0f0f0;
+  --c-active: #e8e8e8;
+  --c-bubble: #f0f0f0;
+  /* линии и контролы */
+  --c-hairline: #e5e5e5;
+  --c-control: #8c8c8c;
+  --c-btn-line: rgba(0, 0, 0, 0.16);
+  /* текст */
+  --c-t1: #171717;
+  --c-t2: #525252;
+  --c-t3: #6b6b6b;
+  /* чернильная кнопка */
+  --c-ink: #171717;
+  --c-ink-label: #ffffff;
+  /* акцент */
+  --c-acc: #0f6a88;
+  --c-acc-ink: #ffffff;
+  --c-acc-hov: #0c566e;
+  --c-acc-soft: #e6f0f4;
+  /* состояния */
+  --c-okc: #0e7a5c;
+  --c-ok-soft: #e9f5f0;
+  --c-warnc: #916100;
+  --c-warn-soft: #fbf3e0;
+  --c-errc: #cf2e2e;
+  --c-err-soft: #fdf2f1;
+  --c-err-ink: #ffffff;
+  /* выделение и перекрытия */
+  --c-sel: #e6f0f4;
+  --c-scrim: rgba(0, 0, 0, 0.42);
+  /* тени — их ровно две */
+  --c-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.05);
+  --c-shadow-lg: 0 10px 32px rgba(0, 0, 0, 0.16);
+  /* код */
+  --c-code-bg: #f5f5f5;
+  --c-code-ink: #171717;
+}
+.dark {
+  --c-bg: #1c1c1c;
+  --c-panel: #161616;
+  --c-card: #232323;
+  --c-hover: #272727;
+  --c-active: #2f2f2f;
+  --c-bubble: #272727;
+  --c-hairline: #2f2f2f;
+  --c-control: #707070;
+  --c-btn-line: rgba(255, 255, 255, 0.2);
+  --c-t1: #f0f0f0;
+  --c-t2: #a8a8a8;
+  --c-t3: #949494;
+  --c-ink: #f0f0f0;
+  --c-ink-label: #171717;
+  --c-acc: #5cc0dd;
+  --c-acc-ink: #08222c;
+  --c-acc-hov: #7acde5;
+  --c-acc-soft: #16272e;
+  --c-okc: #4fc79f;
+  --c-ok-soft: #12261f;
+  --c-warnc: #dda84b;
+  --c-warn-soft: #2c2412;
+  --c-errc: #fa6a5a;
+  --c-err-soft: #2e1a17;
+  --c-err-ink: #171717;
+  --c-sel: #1e3a46;
+  --c-scrim: rgba(0, 0, 0, 0.55);
+  --c-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
+  --c-shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.5);
+  --c-code-bg: #161616;
+  --c-code-ink: #f0f0f0;
 }
 
 .text-token-text-primary {
