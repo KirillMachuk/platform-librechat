@@ -45,7 +45,7 @@ export default function ArtifactTabs({
 
       <Tabs.Content
         value="preview"
-        className="h-full w-full flex-grow overflow-hidden"
+        className="artifact-preview h-full w-full flex-grow overflow-hidden"
         tabIndex={-1}
       >
         <ArtifactPreview
