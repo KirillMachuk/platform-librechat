@@ -5,7 +5,6 @@ export default function CheckMark({ className = '' }: { className?: string }): J
   return (
     <svg
       fill="none"
-      strokeWidth="2"
       viewBox="0 0 24 24"
       strokeLinecap="round"
       strokeLinejoin="round"

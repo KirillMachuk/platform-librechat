@@ -13,8 +13,9 @@ export default function ListeningIcon({ className }: ListeningIconProps): JSX.El
       height="24"
       viewBox="0 0 24 24"
       fill="none"
+      stroke="currentColor"
       className={cn(className)}
-      strokeWidth="2"
+      strokeWidth="1.75"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"

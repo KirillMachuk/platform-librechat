@@ -5,7 +5,7 @@ export default function SquirclePlusIcon(): JSX.Element {
     <svg
       stroke="currentColor"
       fill="none"
-      strokeWidth="2"
+      strokeWidth="1.75"
       viewBox="0 0 24 24"
       strokeLinecap="round"
       strokeLinejoin="round"

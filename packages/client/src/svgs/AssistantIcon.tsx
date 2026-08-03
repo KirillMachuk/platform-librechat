@@ -18,7 +18,7 @@ export default function AssistantIcon({
       viewBox={`0 0 ${unit} ${unit}`}
       stroke="currentColor"
       fill="none"
-      strokeWidth="2"
+      strokeWidth="1.75"
       strokeLinecap="round"
       strokeLinejoin="round"
       className={cn('text-token-secondary h-2/3 w-2/3', className)}

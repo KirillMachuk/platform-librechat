@@ -11,7 +11,6 @@ export default function Plugin({ className = '', ...props }: SVGProps<SVGSVGElem
       className={cn('h-4 w-4', className)}
       width="16"
       height="16"
-      strokeWidth="2"
       aria-hidden="true"
       {...props}
     >
