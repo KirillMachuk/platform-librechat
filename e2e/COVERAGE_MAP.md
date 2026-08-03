@@ -73,7 +73,7 @@ test exists and is skipped until the redesign lands.
 | "Original file" handling toggle changes the mode | e2e | `e2e/specs/mock/chat.spec.ts` | covered |
 | Attachment preview status polls until ready/failed | unit | `client/src/hooks/Files/__tests__/useAttachmentPreviewSync.spec.tsx` | covered |
 | Preview poll interval and error cap | unit | `client/src/data-provider/Files/__tests__/previewRefetchInterval.spec.ts` | covered |
-| Clicking a file in a sent message opens its preview | e2e | — | gap |
+| Clicking a file in a sent message opens its preview | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | Opening a file from the library opens its preview | e2e | `e2e/specs/mock/files.helpers.ts` | covered |
 
 ## 5. File preview — rendering matrix
@@ -97,15 +97,16 @@ for why that matters.
 | xlsx keeps spreadsheet addresses visible while scrolling | e2e | — | fixme:Ф1 |
 | pptx 16:9 renders slides | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | pptx 4:3 renders slides | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| pptx with many slides stays responsive | e2e | — | gap |
+| pptx with many slides renders every slide | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | md opens as readable text | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | md offers rendered and source views | e2e | — | fixme:Ф1 |
 | Source code file opens as text | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | Source code file renders with syntax view | e2e | — | fixme:Ф1 |
 | csv renders as a sheet | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | PDF (digital) opens in a viewer, not as raw text | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| PDF (scan) renders pages plus recognition note | e2e | — | gap |
-| Text preview truncates at the byte cap with a notice | e2e | — | gap |
+| PDF (scan) opens in the viewer despite having no text layer | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| PDF (scan) carries a recognition note | e2e | — | fixme:Ф1 |
+| Text preview truncates at the byte cap with a notice | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 
 Three rows above are `gap`, not `planned`, because this profile cannot prove them. Page numbers
 are produced by no renderer in this configuration, so an assertion that none appear passes
@@ -119,12 +120,14 @@ the nightly non-hermetic profile or unit coverage of the routing decision itself
 |---|---|---|---|
 | Corrupted file says plainly it could not be shown, and offers download | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | Archive / unsupported format offers download, not an error | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| Password-protected file stays inside the preview surface | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| Password-protected PDF stays inside the preview surface | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| Password-protected Word file says plainly it could not be shown | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | Every preview settles on a real surface — never an empty rectangle | e2e | `e2e/specs/mock/files.helpers.ts` | covered |
 | A failed preview offers Retry alongside Download | e2e | — | fixme:Ф1 |
 | Password-protected file shows the shared honest failure instead of the browser viewer | e2e | — | fixme:Ф1 |
 | File still in the recognition queue shows queue position and estimate | e2e | — | gap |
-| File over the upload limit is refused before upload | e2e | — | gap |
+| A file type the app cannot handle is refused before upload | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| A file over the size limit is refused before upload | e2e | — | gap |
 
 "Never an empty rectangle" is owned by the helper rather than by one test: `openPreview` refuses
 to return until the dialog shows a frame, a text block or a named failure state, so all sixteen
