@@ -87,7 +87,10 @@ describe('Agent Utilities', () => {
 
       const featherIcon = screen.getByTestId('feather-icon');
       expect(featherIcon).toBeInTheDocument();
-      expect(featherIcon).toHaveAttribute('data-stroke-width', '1.5');
+      // Stroke width belongs to the icon canon in style.css, not to call sites:
+      // one rule keyed on lucide's own `.lucide` class sets it for every icon.
+      // A per-site override here would silently opt this avatar out of it.
+      expect(featherIcon).not.toHaveAttribute('data-stroke-width');
     });
 
     it('should apply different size classes', () => {

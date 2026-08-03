@@ -114,7 +114,7 @@ function PluginAuthForm({ plugin, onSubmit, isEntityTool }: TPluginAuthFormProps
           >
             <div className="flex items-center justify-center gap-2">
               {localize('com_ui_save')}
-              <Save className="flex h-4 w-4 items-center stroke-2" aria-hidden="true" />
+              <Save className="flex h-4 w-4 items-center" aria-hidden="true" />
             </div>
           </button>
         </form>

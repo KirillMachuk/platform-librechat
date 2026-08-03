@@ -2,7 +2,7 @@ import { JSX } from 'react/jsx-runtime';
 import { cn } from '~/utils/';
 
 export default function CircleHelpIcon({
-  className = 'icon-md-heavy',
+  className = 'icon-md',
   size = '1em',
 }: {
   className?: string | undefined;
