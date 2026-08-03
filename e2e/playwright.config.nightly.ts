@@ -14,6 +14,14 @@ import mockConfig from './playwright.config.mock';
  * five projects × every spec is four times the work for nothing. */
 const LAYOUT = /layout\.spec\.ts/;
 
+/* CI runs the runner's preinstalled Google Chrome and skips the bundled browser
+ * download, so a project that does not carry the channel launches nothing. The
+ * mock config applies this to its one project; overriding `projects` here drops
+ * it, which is how the first nightly run failed with "Executable doesn't exist". */
+const chrome = process.env.E2E_CHROMIUM_CHANNEL
+  ? { ...devices['Desktop Chrome'], channel: process.env.E2E_CHROMIUM_CHANNEL }
+  : devices['Desktop Chrome'];
+
 export default defineConfig({
   ...mockConfig,
   testDir: 'specs/nightly/',
@@ -21,23 +29,23 @@ export default defineConfig({
     {
       name: 'desktop',
       testMatch: LAYOUT,
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...chrome },
     },
     {
       /** The client reads Russian; a smoke on English only would never see it. */
       name: 'desktop-ru',
       testMatch: /(layout|locale)\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'], locale: 'ru-RU' },
+      use: { ...chrome, locale: 'ru-RU' },
     },
     {
       name: 'dark',
       testMatch: /(layout|theme)\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'], colorScheme: 'dark' },
+      use: { ...chrome, colorScheme: 'dark' },
     },
     {
       name: 'phone',
       testMatch: LAYOUT,
-      use: { ...devices['Desktop Chrome'], viewport: { width: 414, height: 896 } },
+      use: { ...chrome, viewport: { width: 414, height: 896 } },
     },
     {
       /**
@@ -47,7 +55,7 @@ export default defineConfig({
        */
       name: 'narrow-desktop',
       testMatch: LAYOUT,
-      use: { ...devices['Desktop Chrome'], viewport: { width: 800, height: 900 } },
+      use: { ...chrome, viewport: { width: 800, height: 900 } },
     },
   ],
 });
