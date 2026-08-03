@@ -76,7 +76,9 @@ describe('auditDeepResearchChange', () => {
   });
 
   it('records only the model role that was provided (partial update)', () => {
-    const req = buildReq({ body: { mode: 'balanced', leadModel: 'deepseek/deepseek-v4-flash-0731' } });
+    const req = buildReq({
+      body: { mode: 'balanced', leadModel: 'deepseek/deepseek-v4-flash-0731' },
+    });
     const res = buildRes(200);
     auditDeepResearchChange(req, res, jest.fn());
     res.emit('finish');
