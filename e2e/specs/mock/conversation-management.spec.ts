@@ -26,8 +26,10 @@ async function sendAndExpectReply(page: Page, label: string) {
   const reply = replyText(label);
   const response = await sendMessage(page, prompt);
   expect(response.ok()).toBeTruthy();
-  await expect(messagesView(page).getByText(prompt)).toBeVisible();
-  await expect(messagesView(page).getByText(reply)).toBeVisible();
+  /* Generous because the first turn of a cold worker pays for the server
+   * warming up; every later one lands in well under a second. */
+  await expect(messagesView(page).getByText(prompt)).toBeVisible({ timeout: 30000 });
+  await expect(messagesView(page).getByText(reply)).toBeVisible({ timeout: 30000 });
   return { prompt, reply };
 }
 
@@ -118,3 +120,45 @@ test.describe('conversation management', () => {
     await expect(messagesView(page).getByText(turn.reply)).toHaveCount(0);
   });
 });
+
+test.describe('finding and filing conversations', () => {
+  test('archives a conversation out of the sidebar and brings it back', async ({ page }) => {
+    test.setTimeout(180000);
+    await openMockChat(page);
+    await sendAndExpectReply(page, uniqueLabel('archivable'));
+
+    const title = uniqueLabel('Договор на архив');
+    await renameConversation(page, firstConversation(page), title);
+    const sidebarEntry = page.getByTestId('convo-item').filter({ hasText: title });
+    await expect(sidebarEntry).toHaveCount(1);
+
+    await openConversationMenu(firstConversation(page));
+    await page.getByRole('menuitem', { name: 'Archive' }).click();
+    await expect(sidebarEntry).toHaveCount(0, { timeout: 30000 });
+
+    await openArchivedChats(page);
+    const archivedRow = page.getByRole('dialog').getByText(title, { exact: false }).first();
+    await expect(archivedRow).toBeVisible({ timeout: 30000 });
+
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: /Unarchive/i })
+      .first()
+      .click();
+    await expect(page.getByRole('dialog').getByText(title, { exact: false })).toHaveCount(0, {
+      timeout: 30000,
+    });
+
+    await page.keyboard.press('Escape');
+    await expect(sidebarEntry).toHaveCount(1, { timeout: 30000 });
+  });
+});
+
+async function openArchivedChats(page: Page) {
+  await page.getByTestId('nav-user').click();
+  await page.getByRole('menuitem', { name: 'Settings' }).click();
+  await page
+    .getByRole('button', { name: /Archived chats|Manage/i })
+    .first()
+    .click();
+}
