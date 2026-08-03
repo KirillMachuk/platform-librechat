@@ -21,6 +21,21 @@ env:
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
 jobs:
+  coverage-map:
+    name: Coverage map guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 24.16.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      - name: Check that every claimed owning test exists
+        run: node e2e/scripts/check-coverage-map.mjs
+
   e2e:
     runs-on: ubuntu-latest
     # The mock e2e suite runs serially within a job (workers:1, fullyParallel:false)
