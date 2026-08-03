@@ -7,6 +7,7 @@ import {
   NEW_CHAT_PATH,
   messagesView,
   replyPrompt,
+  replyText,
   selectMockEndpoint,
   sendMessage,
 } from './helpers';
@@ -62,6 +63,10 @@ export async function sendWithFixture(page: Page, fixture: FileFixture, label: s
   await attachFixture(page, fixture);
   const response = await sendMessage(page, replyPrompt(label));
   expect(response.ok()).toBeTruthy();
+  /* The reply proves the turn completed. Without it a run that died mid-stream
+   * still leaves a chip behind, and the preview failure that follows points at
+   * the wrong thing. */
+  await expect(messagesView(page).getByText(replyText(label))).toBeVisible({ timeout: 60000 });
   await expect(fileChip(page, fixture.name)).toBeVisible({ timeout: 30000 });
 }
 
@@ -80,14 +85,38 @@ export const previewFrame = (page: Page, filename: string): FrameLocator =>
 export const previewFrameElement = (page: Page, filename: string): Locator =>
   page.locator(`iframe[title="Preview: ${filename}"]`);
 
-/** Click the chip in the transcript and wait for the preview surface to settle. */
+const RENDERING_NOTICE = 'Rendering document, this may take a moment…';
+
+/** Every terminal surface the dialog can settle on, whatever the file turns out to be. */
+const PREVIEW_SETTLED =
+  /Preview not available for this file type|Could not render preview|Preview unavailable|Preview took too long|File is too large to preview/;
+
+/**
+ * Click the chip in the transcript and wait for the preview to actually settle.
+ *
+ * Readiness has to be a positive signal — some surface exists — rather than
+ * "the rendering notice is not visible", which is equally true before the
+ * notice has had a chance to appear and lets a slow machine start asserting
+ * against an empty dialog.
+ *
+ * The wait is generous because the first office document of a run pays for
+ * loading the conversion libraries; measured cold renders on a loaded laptop
+ * take tens of seconds, while every later one lands in a few.
+ */
 export async function openPreview(page: Page, filename: string) {
   await fileChip(page, filename).click();
   const dialog = previewDialog(page);
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByText('Rendering document, this may take a moment…')).toBeHidden({
-    timeout: 60000,
-  });
+
+  /* A dialog locator that matches nothing makes every later negative
+   * assertion pass for free, so pin that exactly one is open. */
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+
+  const settled = previewFrameElement(page, filename)
+    .or(dialog.locator('pre'))
+    .or(dialog.getByText(PREVIEW_SETTLED));
+  await expect(settled.first()).toBeVisible({ timeout: 120000 });
+  await expect(dialog.getByText(RENDERING_NOTICE)).toHaveCount(0);
   return dialog;
 }
 

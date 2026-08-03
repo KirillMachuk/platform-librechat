@@ -212,20 +212,31 @@ agreed redesign and are the acceptance criteria for it.
 | Product name is 1MA everywhere, never LibreChat | e2e | — | planned:Э6 |
 | Help button opens the help centre | e2e | — | planned:Э6 |
 
-## 13. Known investigation
+## 13. Why the preview matrix is not merged
 
-`file-preview.spec.ts` is committed on a draft PR and is **not merged**: it is
-not stable yet.
+`file-preview.spec.ts` is committed on a draft PR and is **not merged**. A
+skeptical review of it found that several assertions were green for reasons
+unrelated to the behaviour they name:
 
-Two consecutive local runs on the same commit failed a different subset each
-time — 10/15 then 11/15, with only the first test failing in both. A run also
-failed a test that passed when run alone. Different failures from identical
-code is flakiness, not a product defect, and the fixtures are not the cause:
-every literal string the specs assert was extracted back out of each document
-and confirmed present.
+- office text assertions matched the mammoth fallback markup, which the page
+  keeps in a `hidden` container — they passed on text no user can see. Now
+  asserted through `useInnerText`.
+- the row-count assertion (`<= 5100`) also held when nothing rendered. Now an
+  exact count plus the truncation banner.
+- the "no invented page numbers" assertion could not fail: no renderer in this
+  configuration produces page numbers at all. Removed rather than kept as
+  decoration.
+- the hermetic-CDN test could not fail either, because the profile disables the
+  CDN path it claimed to check. Removed; that hatch is covered by unit tests in
+  `packages/api/src/files/documents/html.spec.ts`.
 
-The suspect is the readiness wait in `files.helpers.ts`, which treats "the
-rendering notice is not visible" as "the preview is ready". That is true before
-the notice appears as well, so a slow machine can start asserting against a
-frame that has not been populated. The fix is a positive ready signal, not
-longer timeouts. Until then no row in sections 5 and 6 may be marked covered.
+Two open problems remain, both real:
+
+1. Attaching a document as extracted text can exceed the mock model's context
+   window (22.6k tokens), and the turn then dies with `empty_messages`. Sending
+   the file natively instead was tried and made things worse, so the matrix
+   needs either a larger context window for the mock provider or a preview
+   surface that does not require a completion.
+2. The suite is not yet stable run-to-run on a slow machine.
+
+Until both are closed, no row in sections 5 and 6 may be marked covered.
