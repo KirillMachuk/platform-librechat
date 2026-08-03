@@ -69,6 +69,7 @@
     "e2e:github": "act -W .github/workflows/playwright-mock.yml --secret-file my.secrets",
     "check:coverage-map": "node e2e/scripts/check-coverage-map.mjs",
     "check:icons": "node scripts/check-icons.mjs",
+    "check:i18n": "node scripts/check-i18n.mjs",
     "test:client": "cd client && npm run test:ci",
     "test:api": "cd api && npm run test:ci",
     "test:packages:api": "cd packages/api && npm run test:ci",
