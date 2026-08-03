@@ -1,4 +1,5 @@
 import { atom } from 'recoil';
+import { writeStoredValue } from '@librechat/client';
 
 // Improved helper function to create atoms with localStorage
 export function atomWithLocalStorage<T>(key: string, defaultValue: T) {
@@ -17,13 +18,13 @@ export function atomWithLocalStorage<T>(key: string, defaultValue: T) {
               `Error parsing localStorage key "${key}", \`savedValue\`: defaultValue, error:`,
               e,
             );
-            localStorage.setItem(key, JSON.stringify(defaultValue));
+            writeStoredValue(key, JSON.stringify(defaultValue));
             setSelf(defaultValue);
           }
         }
 
         onSet((newValue: T) => {
-          localStorage.setItem(key, JSON.stringify(newValue));
+          writeStoredValue(key, JSON.stringify(newValue));
         });
       },
     ],

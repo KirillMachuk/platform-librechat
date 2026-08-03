@@ -1,7 +1,7 @@
 import { atom } from 'jotai';
 import { atomFamily, atomWithStorage } from 'jotai/utils';
 import { Constants, LocalStorageKeys } from 'librechat-data-provider';
-import { createTabIsolatedStorage } from './jotai-utils';
+import { createTabIsolatedStorage, createStorageAtom } from './jotai-utils';
 
 /**
  * Tab-isolated storage for MCP values — prevents cross-tab sync so that
@@ -27,9 +27,7 @@ export const mcpValuesAtomFamily = atomFamily((conversationId: string | null) =>
  * Tools dropdown, and users can pin the badge from there. An explicit pin/unpin
  * (the only path that writes `PIN_MCP_`) is preserved.
  */
-export const mcpPinnedAtom = atomWithStorage<boolean>(LocalStorageKeys.PIN_MCP_, false, undefined, {
-  getOnInit: true,
-});
+export const mcpPinnedAtom = createStorageAtom<boolean>(LocalStorageKeys.PIN_MCP_, false);
 
 /**
  * Server initialization state - shared globally so chat dropdown and settings panel

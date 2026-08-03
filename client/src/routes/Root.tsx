@@ -3,6 +3,7 @@ import { useRecoilValue } from 'recoil';
 import { Outlet } from 'react-router-dom';
 import { useMediaQuery } from '@librechat/client';
 import {
+  useSyncPreferences,
   useSearchEnabled,
   useAssistantsMap,
   useAuthContext,
@@ -32,6 +33,7 @@ export default function Root() {
   const { isAuthenticated, logout } = useAuthContext();
 
   useHealthCheck(isAuthenticated);
+  useSyncPreferences(isAuthenticated);
 
   const assistantsMap = useAssistantsMap({ isAuthenticated });
   const agentsMap = useAgentsMap({ isAuthenticated });

@@ -313,6 +313,21 @@ function RemoteAgentsAdminSettings() {
 export function AgentApiKeys() {
   const localize = useLocalize();
   const [isOpen, setIsOpen] = useState(false);
+  const canCreateKeys = useHasAccess({
+    permissionType: PermissionTypes.REMOTE_AGENTS,
+    permission: Permissions.CREATE,
+  });
+  /** Only asked when the answer can hide the row: someone who may create keys always
+   *  needs it, so their list stays lazy behind the dialog. */
+  const { data: existingKeys, isError } = useGetAgentApiKeysQuery({ enabled: !canCreateKeys });
+
+  /** Nothing to create and nothing to revoke — the row would be a dead end. Someone who
+   *  still holds a key issued before the permission was withdrawn keeps the row so they
+   *  can revoke it, and so does anyone whose list failed to load: hiding on an error
+   *  would take away the only way to reach an existing key. */
+  if (!canCreateKeys && !isError && (existingKeys?.keys?.length ?? 0) === 0) {
+    return null;
+  }
 
   return (
     <div className="flex items-center justify-between">

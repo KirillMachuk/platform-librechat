@@ -8,6 +8,7 @@ import React, {
   useRef,
 } from 'react';
 import { JSX } from 'react/jsx-runtime';
+import { writeStoredValue } from '../../utils/storage';
 import applyTheme from '../utils/applyTheme';
 import { IThemeRGB } from '../types';
 
@@ -134,12 +135,7 @@ export function ThemeProvider({
 
   const setTheme = useCallback((newTheme: string) => {
     setThemeState(newTheme);
-    if (typeof window === 'undefined') return;
-    try {
-      localStorage.setItem(THEME_KEY, newTheme);
-    } catch {
-      // localStorage not available
-    }
+    writeStoredValue(THEME_KEY, newTheme);
   }, []);
 
   const setThemeRGB = useCallback((colors?: IThemeRGB) => {

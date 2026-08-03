@@ -28,6 +28,7 @@ import {
 } from '~/data-provider';
 import { TAuthConfig, TUserContext, TAuthContext, TResError } from '~/common';
 import { SESSION_KEY, isSafeRedirect, getPostLoginRedirect } from '~/utils';
+import useApplyPreferences from './Preferences/useApplyPreferences';
 import { clearRoleSnapshots } from '~/utils/rolesCache';
 import useTimeout from './useTimeout';
 import store from '~/store';
@@ -52,6 +53,7 @@ const AuthContextProvider = ({
   const [error, setError] = useState<string | undefined>(undefined);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const setQueriesEnabled = useSetRecoilState<boolean>(store.queriesEnabled);
+  const applyPreferences = useApplyPreferences();
 
   const userRoleName = user?.role ?? '';
   const isCustomRole = isAuthenticated && !!user?.role && !isSystemRoleName(user.role);
@@ -72,6 +74,11 @@ const AuthContextProvider = ({
     () =>
       debounce((userContext: TUserContext) => {
         const { token, isAuthenticated, user, redirect } = userContext;
+        /** Before the signed-in interface mounts, so it reads this person's settings
+         *  rather than the browser's leftovers or a previous employee's. */
+        if (isAuthenticated) {
+          applyPreferences(user);
+        }
         setUser(user);
         setToken(token);
         setTokenHeader(token);
@@ -97,7 +104,7 @@ const AuthContextProvider = ({
 
         navigate(finalRedirect, { replace: true });
       }, 50),
-    [navigate, setUser, setQueriesEnabled],
+    [navigate, setUser, setQueriesEnabled, applyPreferences],
   );
   const doSetError = useTimeout({ callback: (error) => setError(error as string | undefined) });
 

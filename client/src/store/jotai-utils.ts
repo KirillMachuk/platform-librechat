@@ -1,6 +1,62 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
+import { writeStoredValue } from '@librechat/client';
 import type { SyncStorage } from 'jotai/vanilla/utils/atomWithStorage';
+
+/**
+ * localStorage adapter that announces its writes to this tab, so anything mirroring a
+ * key (the account-settings sync) sees a change the moment it happens. Cross-tab
+ * behaviour is unchanged: only genuine browser events, which carry `storageArea`, are
+ * read back in.
+ */
+function createNotifyingStorage<Value>(): SyncStorage<Value> {
+  return {
+    getItem(key: string, initialValue: Value): Value {
+      if (typeof window === 'undefined') {
+        return initialValue;
+      }
+      try {
+        const stored = localStorage.getItem(key);
+        if (stored === null) {
+          return initialValue;
+        }
+        return JSON.parse(stored) as Value;
+      } catch {
+        return initialValue;
+      }
+    },
+    setItem(key: string, newValue: Value): void {
+      writeStoredValue(key, JSON.stringify(newValue));
+    },
+    removeItem(key: string): void {
+      if (typeof window === 'undefined') {
+        return;
+      }
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // quota or availability error — nothing to undo
+      }
+    },
+    subscribe(key: string, callback: (value: Value) => void, initialValue: Value): () => void {
+      if (typeof window === 'undefined') {
+        return () => undefined;
+      }
+      const handler = (event: StorageEvent) => {
+        if (event.storageArea !== localStorage || event.key !== key) {
+          return;
+        }
+        try {
+          callback(event.newValue === null ? initialValue : (JSON.parse(event.newValue) as Value));
+        } catch {
+          callback(initialValue);
+        }
+      };
+      window.addEventListener('storage', handler);
+      return () => window.removeEventListener('storage', handler);
+    },
+  };
+}
 
 /**
  * Create a simple atom with localStorage persistence
@@ -11,7 +67,7 @@ import type { SyncStorage } from 'jotai/vanilla/utils/atomWithStorage';
  * @returns Jotai atom with localStorage persistence
  */
 export function createStorageAtom<T>(key: string, defaultValue: T) {
-  return atomWithStorage<T>(key, defaultValue, undefined, {
+  return atomWithStorage<T>(key, defaultValue, createNotifyingStorage<T>(), {
     getOnInit: true,
   });
 }
@@ -68,14 +124,7 @@ export function createTabIsolatedStorage<Value>(): SyncStorage<Value> {
       }
     },
     setItem(key: string, newValue: Value): void {
-      if (typeof window === 'undefined') {
-        return;
-      }
-      try {
-        localStorage.setItem(key, JSON.stringify(newValue));
-      } catch {
-        // quota exceeded or other write error — silently ignore
-      }
+      writeStoredValue(key, JSON.stringify(newValue));
     },
     removeItem(key: string): void {
       if (typeof window === 'undefined') {

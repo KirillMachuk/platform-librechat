@@ -57,6 +57,8 @@ export * from './prompts';
 export * from './projects';
 /* Skills */
 export * from './skills';
+/* Personal interface settings */
+export * from './settings';
 /* Endpoints */
 export * from './endpoints';
 /* Files */

@@ -42,6 +42,7 @@ const PUBLIC_USER_RESPONSE_FIELDS = [
   'personalization',
   'favorites',
   'skillStates',
+  'preferences',
   'createdAt',
   'updatedAt',
   'tenantId',
