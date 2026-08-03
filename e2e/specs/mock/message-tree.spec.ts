@@ -593,7 +593,7 @@ async function clickSibling(page: Page, messageTextValue: string, direction: 'Pr
   const render = messageRender(page, messageTextValue);
   await render.scrollIntoViewIfNeeded();
   await render.hover();
-  await render.getByRole('button', { name: `${direction} sibling message` }).click();
+  await render.getByRole('button', { name: `${direction} variant` }).click();
 }
 
 async function expectCanCycleSiblingTexts(page: Page, previousText: string, nextText: string) {

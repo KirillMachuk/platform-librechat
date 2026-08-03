@@ -95,7 +95,7 @@ test.describe('shared links', () => {
       throw new Error(`Could not parse conversation id from ${conversationUrl.href}`);
     }
 
-    await page.getByRole('button', { name: 'Export options' }).click();
+    await page.getByRole('button', { name: 'Export and share' }).click();
     await page.getByTestId('share-conversation-menu-item').click();
     await expect(page.getByRole('dialog', { name: 'Share link to chat' })).toBeVisible();
 
