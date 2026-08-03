@@ -177,7 +177,7 @@ test.describe('context usage gauge', () => {
 
     /** Switch back to branch A. Its live snapshot was overwritten by B, so the
      *  rows can only survive via the per-anchor snapshot history map. */
-    await page.getByRole('button', { name: 'Previous sibling message' }).click();
+    await page.getByRole('button', { name: 'Previous variant' }).click();
     await expect(page.getByText('1 / 2')).toBeVisible({ timeout: 10000 });
 
     await expectGranular(page);

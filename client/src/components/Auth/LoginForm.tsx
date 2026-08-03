@@ -90,7 +90,7 @@ const LoginForm: React.FC<TLoginFormProps> = ({ onSubmit, startupConfig, error, 
       )}
       <form
         className="mt-6"
-        aria-label="Login form"
+        aria-label={localize('com_ui_form_login')}
         method="POST"
         onSubmit={handleSubmit((data) => onSubmit(data))}
       >

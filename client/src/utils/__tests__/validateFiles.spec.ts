@@ -77,7 +77,10 @@ describe('validateFiles', () => {
     ];
     const result = validateFiles({ files, fileList, setError, endpointFileConfig, fileConfig });
     expect(result).toBe(false);
-    expect(setError).toHaveBeenCalledWith('File limit reached: 3 files');
+    expect(setError).toHaveBeenCalledWith({
+      key: 'com_ui_attach_error_file_limit',
+      values: { count: 3 },
+    });
   });
 
   it('allows upload when exactly at fileLimit boundary', () => {
@@ -95,7 +98,10 @@ describe('validateFiles', () => {
     const fileList = [makeFile('data.xyz', 'application/x-unknown', 1024)];
     const result = validateFiles({ files, fileList, setError, endpointFileConfig, fileConfig });
     expect(result).toBe(false);
-    expect(setError).toHaveBeenCalledWith('Unsupported file type: application/x-unknown');
+    expect(setError).toHaveBeenCalledWith({
+      key: 'com_ui_attach_error_type_unsupported',
+      values: { type: 'application/x-unknown' },
+    });
   });
 
   it('rejects when file size equals fileSizeLimit (>= comparison)', () => {
@@ -104,7 +110,10 @@ describe('validateFiles', () => {
     const fileList = [makeFile('exact.pdf', 'application/pdf', limit)];
     const result = validateFiles({ files, fileList, setError, endpointFileConfig, fileConfig });
     expect(result).toBe(false);
-    expect(setError).toHaveBeenCalledWith(`File size limit exceeded: ${limit / megabyte} MB`);
+    expect(setError).toHaveBeenCalledWith({
+      key: 'com_ui_attach_error_size',
+      values: { limit: limit / megabyte },
+    });
   });
 
   it('allows file just under fileSizeLimit', () => {
@@ -122,7 +131,10 @@ describe('validateFiles', () => {
     const fileList = [makeFile('big.pdf', 'application/pdf', 5 * megabyte)];
     const result = validateFiles({ files, fileList, setError, endpointFileConfig, fileConfig });
     expect(result).toBe(false);
-    expect(setError).toHaveBeenCalledWith(`Total file size limit exceeded: ${limit / megabyte} MB`);
+    expect(setError).toHaveBeenCalledWith({
+      key: 'com_ui_attach_error_total',
+      values: { limit: limit / megabyte },
+    });
   });
 
   it('allows when totalSizeLimit is exactly met', () => {
@@ -167,6 +179,9 @@ describe('validateFiles', () => {
     files = new Map([['f1', makeExtendedFile({ file_id: 'f1', filename: 'existing.pdf' })]]);
     const fileList = [makeFile('huge.pdf', 'application/pdf', limit)];
     validateFiles({ files, fileList, setError, endpointFileConfig, fileConfig });
-    expect(setError).toHaveBeenCalledWith('File limit reached: 1 files');
+    expect(setError).toHaveBeenCalledWith({
+      key: 'com_ui_attach_error_file_limit',
+      values: { count: 1 },
+    });
   });
 });

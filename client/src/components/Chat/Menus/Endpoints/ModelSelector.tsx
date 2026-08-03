@@ -101,12 +101,16 @@ function ModelSelectorContent() {
 
   const trigger = (
     <TooltipAnchor
-      aria-label={localize('com_ui_select_model')}
       description={localize('com_ui_select_model')}
       render={
+        // Имя кнопки НЕ задаётся aria-label намеренно: оно должно считаться из
+        // содержимого, то есть равняться видимому названию модели. Раньше
+        // aria-label перебивал его, и диктор произносил «Выберите модель» при
+        // любой активной модели, а голосовое управление не находило кнопку по
+        // тому слову, которое человек видит на экране.
         <button
+          data-testid="model-selector-trigger"
           className="my-1 flex h-9 w-full max-w-[70vw] items-center justify-center gap-2 rounded-xl border border-border-light bg-presentation px-3 py-2 text-sm text-text-primary hover:bg-surface-active-alt"
-          aria-label={localize('com_ui_select_model')}
         >
           {selectedIcon && React.isValidElement(selectedIcon) && (
             <div className="flex flex-shrink-0 items-center justify-center overflow-hidden">

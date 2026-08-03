@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
 import { RecoilRoot } from 'recoil';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { EModelEndpoint, EToolResources, Providers } from 'librechat-data-provider';
 import AttachFileMenu from '../AttachFileMenu';
@@ -145,7 +145,7 @@ function renderMenu(props: Record<string, unknown> = {}) {
 }
 
 function openMenu() {
-  fireEvent.click(screen.getByRole('button', { name: /attach file options/i }));
+  fireEvent.click(screen.getByRole('button', { name: /com_ui_attach_file_options/i }));
 }
 
 describe('AttachFileMenu', () => {
@@ -248,19 +248,23 @@ describe('AttachFileMenu', () => {
     it('renders the attachment button', () => {
       setupMocks();
       renderMenu();
-      expect(screen.getByRole('button', { name: /attach file options/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /com_ui_attach_file_options/i }),
+      ).toBeInTheDocument();
     });
 
     it('is disabled when disabled prop is true', () => {
       setupMocks();
       renderMenu({ disabled: true });
-      expect(screen.getByRole('button', { name: /attach file options/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /com_ui_attach_file_options/i })).toBeDisabled();
     });
 
     it('is not disabled when disabled prop is false', () => {
       setupMocks();
       renderMenu({ disabled: false });
-      expect(screen.getByRole('button', { name: /attach file options/i })).not.toBeDisabled();
+      expect(
+        screen.getByRole('button', { name: /com_ui_attach_file_options/i }),
+      ).not.toBeDisabled();
     });
   });
 
@@ -411,7 +415,7 @@ describe('AttachFileMenu', () => {
     it('handles undefined endpoint and provider gracefully', () => {
       setupMocks();
       renderMenu({ endpoint: undefined, endpointType: undefined });
-      const button = screen.getByRole('button', { name: /attach file options/i });
+      const button = screen.getByRole('button', { name: /com_ui_attach_file_options/i });
       expect(button).toBeInTheDocument();
       fireEvent.click(button);
       expect(screen.getByText('Upload Image')).toBeInTheDocument();
@@ -420,19 +424,25 @@ describe('AttachFileMenu', () => {
     it('handles null endpoint and provider gracefully', () => {
       setupMocks();
       renderMenu({ endpoint: null, endpointType: null });
-      expect(screen.getByRole('button', { name: /attach file options/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /com_ui_attach_file_options/i }),
+      ).toBeInTheDocument();
     });
 
     it('handles missing agentId gracefully', () => {
       setupMocks();
       renderMenu({ agentId: undefined, endpointType: EModelEndpoint.openAI });
-      expect(screen.getByRole('button', { name: /attach file options/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /com_ui_attach_file_options/i }),
+      ).toBeInTheDocument();
     });
 
     it('handles empty string agentId', () => {
       setupMocks();
       renderMenu({ agentId: '', endpointType: EModelEndpoint.openAI });
-      expect(screen.getByRole('button', { name: /attach file options/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /com_ui_attach_file_options/i }),
+      ).toBeInTheDocument();
     });
   });
 });

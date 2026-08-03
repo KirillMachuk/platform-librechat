@@ -276,7 +276,7 @@ const AttachFileMenu = ({
         <Ariakit.MenuButton
           disabled={isUploadDisabled}
           id="attach-file-menu-button"
-          aria-label="Attach File Options"
+          aria-label={localize('com_ui_attach_file_options')}
           className={cn(
             'flex size-9 items-center justify-center rounded-full p-1 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-opacity-50',
             isPopoverActive && 'bg-surface-hover',

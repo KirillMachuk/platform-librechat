@@ -16,7 +16,7 @@ test.describe('app loads cleanly', () => {
     await expect(page.getByRole('main')).toBeVisible();
     await expect(page.getByRole('main')).toContainText(user.name);
     await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Select a model' }).first()).toBeVisible();
+    await expect(page.getByTestId('model-selector-trigger').first()).toBeVisible();
     await expect(page.getByTestId('nav-user')).toBeVisible();
 
     await expect(page.getByText(/something went wrong/i)).toHaveCount(0);

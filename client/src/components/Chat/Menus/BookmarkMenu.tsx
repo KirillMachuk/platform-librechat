@@ -11,10 +11,10 @@ import type { FC } from 'react';
 import type * as t from '~/common';
 import { useConversationTagsQuery, useTagConversationMutation } from '~/data-provider';
 import { BookmarkContext } from '~/Providers/BookmarkContext';
+import { cn, isTemporaryConversation, logger } from '~/utils';
 import { BookmarkEditDialog } from '~/components/Bookmarks';
 import { useBookmarkSuccess, useLocalize } from '~/hooks';
 import { NotificationSeverity } from '~/common';
-import { cn, isTemporaryConversation, logger } from '~/utils';
 import store from '~/store';
 
 const BookmarkMenu: FC = () => {
@@ -153,7 +153,7 @@ const BookmarkMenu: FC = () => {
 
   const renderButtonContent = () => {
     if (mutation.isLoading) {
-      return <Spinner aria-label="Spinner" />;
+      return <Spinner aria-label={localize('com_ui_loading_indicator')} />;
     }
     if (hasBookmarks) {
       return <BookmarkFilledIcon className="icon-md" aria-hidden="true" />;

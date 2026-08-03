@@ -17,7 +17,7 @@ const EPHEMERAL_ENDPOINT = { label: 'Mock Provider C', model: 'mock-model-c' };
 
 const uniqueName = (prefix: string) => `${prefix} ${Date.now()}-${Math.floor(Math.random() * 1e4)}`;
 
-const modelTrigger = (page: Page) => page.getByRole('button', { name: 'Select a model' }).first();
+const modelTrigger = (page: Page) => page.getByTestId('model-selector-trigger').first();
 
 /** Reset selection state so the test starts as a fresh instance (auth stays in cookies). */
 async function startFresh(page: Page) {

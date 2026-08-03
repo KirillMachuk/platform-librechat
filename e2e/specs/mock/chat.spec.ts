@@ -218,7 +218,7 @@ test.describe('core chat loop', () => {
     expect(regenerateResponse.ok()).toBeTruthy();
 
     await expect(page.getByText('2 / 2')).toBeVisible();
-    await page.getByRole('button', { name: 'Previous sibling message' }).click();
+    await page.getByRole('button', { name: 'Previous variant' }).click();
     await expect(page.getByText('1 / 2')).toBeVisible();
     await expect(page.getByText(followUpMessage)).toBeVisible();
   });
@@ -255,7 +255,7 @@ test.describe('core chat loop', () => {
     await expect(page.getByText(secondMessage)).toHaveCount(0);
 
     // Back to the ORIGINAL branch (both turns present).
-    await page.getByRole('button', { name: 'Previous sibling message' }).click();
+    await page.getByRole('button', { name: 'Previous variant' }).click();
     await expect(page.getByText('1 / 2')).toBeVisible();
     await expect(page.getByText(secondMessage)).toBeVisible();
 
@@ -318,7 +318,7 @@ test.describe('core chat loop', () => {
     await expect(messagesView(page).getByText(turns[2].reply)).toHaveCount(0);
 
     // Go back to the ORIGINAL branch — all three turns are present again.
-    await page.getByRole('button', { name: 'Previous sibling message' }).click();
+    await page.getByRole('button', { name: 'Previous variant' }).click();
     await expect(page.getByText('1 / 2')).toBeVisible();
     await expect(messagesView(page).getByText(turns[1].reply)).toBeVisible();
     await expect(messagesView(page).getByText(turns[2].reply)).toBeVisible();

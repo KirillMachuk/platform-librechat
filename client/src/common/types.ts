@@ -91,6 +91,13 @@ export type LocalizeFunction = (
   options?: Record<string, string | number>,
 ) => string;
 
+/**
+ * Ошибка работы с файлом путешествует как ключ перевода — иногда с числами
+ * (лимит файлов, размер в мегабайтах). Готовую строку сюда класть нельзя:
+ * так в русском интерфейсе появлялось «File size limit exceeded: 512 MB».
+ */
+export type FileError = string | { key: string; values: Record<string, string | number> };
+
 export type ChatFormValues = { text: string };
 
 export const mainTextareaId = 'prompt-textarea';

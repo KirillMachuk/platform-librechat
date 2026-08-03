@@ -8,6 +8,8 @@ import {
   getEndpointFileConfig,
 } from 'librechat-data-provider';
 import type { TFile } from 'librechat-data-provider';
+import type { TranslationKeys } from '~/hooks';
+import type { FileError } from '~/common';
 import { useGetFiles, useUploadFileMutation, useGetFileConfig } from '~/data-provider';
 import { validateFiles } from '~/utils';
 import { useLocalize } from '~/hooks';
@@ -99,9 +101,15 @@ export function useLibraryUpload() {
       validateFiles({
         files: new Map(),
         fileList,
-        setError: (error: string) => {
+        setError: (error: FileError) => {
           ok = false;
-          showToast({ message: error, status: 'error' });
+          // Раньше сюда попадал сам ключ перевода и человек читал
+          // «com_error_files_empty» вместо объяснения.
+          const message =
+            typeof error === 'string'
+              ? localize(error as TranslationKeys) || error
+              : localize(error.key as TranslationKeys, error.values) || error.key;
+          showToast({ message, status: 'error' });
         },
         fileConfig,
         endpointFileConfig,
@@ -109,7 +117,7 @@ export function useLibraryUpload() {
       });
       return ok;
     },
-    [fileConfig, showToast],
+    [fileConfig, showToast, localize],
   );
 
   const processFiles = useCallback(

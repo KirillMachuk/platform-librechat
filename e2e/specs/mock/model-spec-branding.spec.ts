@@ -39,7 +39,7 @@ test.describe('model spec branding on landing', () => {
   test('branded spec renders its description in the model selector', async ({ page }) => {
     await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
 
-    await page.getByRole('button', { name: 'Select a model' }).first().click();
+    await page.getByTestId('model-selector-trigger').first().click();
     const option = page.getByRole('option', { name: new RegExp(BRANDED_SPEC.label) });
     await expect(option).toContainText(BRANDED_SPEC.descriptionText);
     await expect(option.locator(`img[src$="${BRANDED_SPEC.descriptionIcon}"]`)).toBeVisible();

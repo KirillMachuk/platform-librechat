@@ -35,7 +35,7 @@ test.describe('model selector tabs', () => {
     test.setTimeout(60000);
     await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
 
-    await page.getByRole('button', { name: 'Select a model' }).first().click();
+    await page.getByTestId('model-selector-trigger').first().click();
     const tabs = page.getByRole('tab');
     await expect(tabs).toHaveCount(2, { timeout: 10000 });
 

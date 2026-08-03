@@ -98,7 +98,7 @@ const BookmarkTable = () => {
           <div
             className="flex items-center justify-end gap-2"
             role="navigation"
-            aria-label="Pagination"
+            aria-label={localize('com_ui_pagination')}
           >
             <Button
               variant="outline"
