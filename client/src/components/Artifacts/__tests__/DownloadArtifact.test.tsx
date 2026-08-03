@@ -73,14 +73,28 @@ describe('DownloadArtifact', () => {
     global.Blob = OriginalBlob;
   });
 
-  it('downloads the shown file under its own name', () => {
+  it('saves the shown file and releases the object url', () => {
     renderDownload(buildArtifact({ title: 'report.md' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'com_ui_download_artifact' }));
 
     expect(clickSpy).toHaveBeenCalledTimes(1);
-    expect(downloadedName).toBe('content.md');
     expect(global.URL.revokeObjectURL).toHaveBeenCalledWith('blob:artifact');
+  });
+
+  /**
+   * The name comes from the sandpack file key, not from the artifact, so every
+   * markdown artifact lands in Downloads as `content.md` and every office one
+   * as `index.html` — save two and the second overwrites the first. Recorded as
+   * failing so that fixing it turns this into a plain assertion instead of
+   * breaking a test that had pinned the defect as correct.
+   */
+  it.failing('saves under the name the panel shows', () => {
+    renderDownload(buildArtifact({ title: 'report.md' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'com_ui_download_artifact' }));
+
+    expect(downloadedName).toBe('report.md');
   });
 
   it('downloads what the user edited rather than the original content', () => {
