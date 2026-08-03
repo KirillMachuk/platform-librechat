@@ -24,7 +24,7 @@ import {
 } from 'librechat-data-provider';
 import type { TFile, EndpointFileConfig, FileConfig } from 'librechat-data-provider';
 import type { QueryClient } from '@tanstack/react-query';
-import type { ExtendedFile } from '~/common';
+import type { ExtendedFile, FileError } from '~/common';
 import { resolveLocale } from './messages';
 
 export const partialTypes = ['text/x-'];
@@ -287,7 +287,7 @@ export const validateFiles = ({
 }: {
   fileList: File[];
   files: Map<string, ExtendedFile>;
-  setError: (error: string) => void;
+  setError: (error: FileError) => void;
   endpointFileConfig: EndpointFileConfig;
   toolResource?: string;
   fileConfig: FileConfig | null;
@@ -308,7 +308,7 @@ export const validateFiles = ({
   const currentTotalSize = existingFiles.reduce((total, file) => total + file.size, 0);
 
   if (fileLimit && fileList.length + files.size > fileLimit) {
-    setError(`File limit reached: ${fileLimit} files`);
+    setError({ key: 'com_ui_attach_error_file_limit', values: { count: fileLimit } });
     return false;
   }
 
@@ -318,7 +318,7 @@ export const validateFiles = ({
 
     // Check if the file type is still empty after the extension check
     if (!fileType) {
-      setError('Unable to determine file type for: ' + originalFile.name);
+      setError({ key: 'com_ui_attach_error_type_unknown', values: { name: originalFile.name } });
       return false;
     }
 
@@ -345,18 +345,21 @@ export const validateFiles = ({
     }
 
     if (!checkType(originalFile.type, mimeTypesToCheck)) {
-      setError(`Unsupported file type: ${originalFile.type}`);
+      setError({
+        key: 'com_ui_attach_error_type_unsupported',
+        values: { type: originalFile.type },
+      });
       return false;
     }
 
     if (fileSizeLimit && originalFile.size >= fileSizeLimit) {
-      setError(`File size limit exceeded: ${fileSizeLimit / megabyte} MB`);
+      setError({ key: 'com_ui_attach_error_size', values: { limit: fileSizeLimit / megabyte } });
       return false;
     }
   }
 
   if (totalSizeLimit && currentTotalSize + incomingTotalSize > totalSizeLimit) {
-    setError(`Total file size limit exceeded: ${totalSizeLimit / megabyte} MB`);
+    setError({ key: 'com_ui_attach_error_total', values: { limit: totalSizeLimit / megabyte } });
     return false;
   }
 

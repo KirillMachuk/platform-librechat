@@ -16,7 +16,7 @@ import {
 } from 'librechat-data-provider';
 import type { EModelEndpoint, TEndpointsConfig, TError } from 'librechat-data-provider';
 import type { TConversation } from 'librechat-data-provider';
-import type { ExtendedFile, FileSetter } from '~/common';
+import type { ExtendedFile, FileError, FileSetter, LocalizeFunction } from '~/common';
 import { logger, validateFiles, cachePreview, getCachedPreview, removePreviewEntry } from '~/utils';
 import store, { ephemeralAgentByConvoId, fileModeByConvoId } from '~/store';
 import { useGetFileConfig, useUploadFileMutation } from '~/data-provider';
@@ -56,7 +56,7 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
   const localize = useLocalize();
   const queryClient = useQueryClient();
   const { showToast } = useToastContext();
-  const [errors, setErrors] = useState<string[]>([]);
+  const [errors, setErrors] = useState<FileError[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const { startUploadTimer, clearUploadTimer } = useDelayedUploadToast();
   const { files, setFiles, conversation } = fileState;
@@ -71,7 +71,7 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
   const fileMode = useRecoilValue(
     fileModeByConvoId(conversation?.conversationId ?? Constants.NEW_CONVO),
   );
-  const setError = (error: string) => setErrors((prevErrors) => [...prevErrors, error]);
+  const setError = (error: FileError) => setErrors((prevErrors) => [...prevErrors, error]);
   const { addFile, replaceFile, updateFileById, deleteFileById } = useUpdateFiles(
     params?.fileSetter ?? setFiles,
   );
@@ -121,8 +121,8 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
   const displayToast = useCallback(() => {
     if (errors.length > 1) {
       // TODO: this should not be a dynamic localize input!!
-      const errorList = Array.from(new Set(errors))
-        .map((e, i) => `${i > 0 ? '• ' : ''}${localize(e as TranslationKeys) || e}\n`)
+      const errorList = Array.from(new Map(errors.map((e) => [JSON.stringify(e), e])).values())
+        .map((e, i) => `${i > 0 ? '• ' : ''}${localizeError(localize, e)}\n`)
         .join('');
       showToast({
         message: errorList,
@@ -130,8 +130,7 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
         duration: 5000,
       });
     } else if (errors.length === 1) {
-      // TODO: this should not be a dynamic localize input!!
-      const message = localize(errors[0] as TranslationKeys) || errors[0];
+      const message = localizeError(localize, errors[0]);
       showToast({
         message,
         status: 'error',
@@ -586,6 +585,18 @@ export const useFileHandlingNoChatContext = (
   params: UseFileHandling | undefined,
   fileState: FileHandlingState,
 ) => useFileHandlingCore(params, fileState);
+
+/**
+ * Ошибка едет по каналу как ключ перевода, иногда с числами (лимит, размер).
+ * Раньше часть мест клала сюда готовую английскую строку — и человек читал
+ * «File size limit exceeded: 512 MB» в русском интерфейсе.
+ */
+const localizeError = (localize: LocalizeFunction, error: FileError): string => {
+  if (typeof error === 'string') {
+    return localize(error as TranslationKeys) || error;
+  }
+  return localize(error.key as TranslationKeys, error.values) || error.key;
+};
 
 const useFileHandling = (params?: UseFileHandling) => {
   const { files, setFiles, setFilesLoading, conversation } = useChatContext();
