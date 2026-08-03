@@ -126,19 +126,3 @@ jobs:
             echo "::error::Or rely on the lint-staged pre-commit hook (do not bypass with --no-verify)."
             exit 1
           fi
-
-  icon_canon:
-    name: Icon canon
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js 24.16.0
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24.16.0'
-
-      # Reads files only — no dependencies, so no install step.
-      - name: Check the icon canon
-        run: npm run check:icons

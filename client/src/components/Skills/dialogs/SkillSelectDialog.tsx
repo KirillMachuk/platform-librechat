@@ -162,7 +162,7 @@ function SkillCard({
           )}
           aria-hidden="true"
         >
-          <Check className="size-3" />
+          <Check className="icon-xs" />
         </span>
       </div>
     </button>

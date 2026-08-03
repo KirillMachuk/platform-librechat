@@ -205,7 +205,6 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
                   type="button"
                   className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-border-xheavy focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-surface-primary dark:focus:ring-offset-surface-primary"
                   onClick={() => onOpenChange(false)}
-                  aria-label={localize('com_ui_close')}
                 >
                   <X className="icon-md text-text-primary" />
                   <span className="sr-only">{localize('com_ui_close_settings')}</span>

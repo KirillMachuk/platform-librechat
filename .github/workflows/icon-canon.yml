@@ -1,0 +1,52 @@
+name: Icon Canon
+
+# Its own workflow rather than a job inside the lint one: the paths that can
+# break the canon include the guard script itself and the root manifest, and a
+# guard that a pull request can edit without re-running is not a guard.
+# `eslint-ci.yml` cannot simply gain these triggers — its other job reads
+# `pull_request.base.sha`, which a push event does not carry.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+      - dev-staging
+      - release/*
+    paths:
+      - 'api/**'
+      - 'client/**'
+      - 'packages/**'
+      - 'scripts/check-icons.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/icon-canon.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'api/**'
+      - 'client/**'
+      - 'packages/**'
+      - 'scripts/check-icons.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/icon-canon.yml'
+
+jobs:
+  icon_canon:
+    name: Icon canon
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24.16.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      # Reads files only — no dependencies, so no install step.
+      - name: Check the icon canon
+        run: npm run check:icons
