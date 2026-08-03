@@ -1,5 +1,18 @@
 import { expect, test } from '@playwright/test';
 import {
+  MOCK_ENDPOINTS,
+  NEW_CHAT_PATH,
+  messagesView,
+  replyPrompt,
+  replyText,
+  selectMockEndpoint,
+  sendMessage,
+} from './helpers';
+import {
+  attachFixture,
+  chooseFixture,
+  fileFixture,
+  largeTextFixture,
   openFilesPanel,
   previewDialog,
   previewFixture,
@@ -45,6 +58,9 @@ const PY_MARKER = 'def total_amount';
 const CSV_MARKER = 'Контрагент';
 const DECK_TITLE_MARKER = 'Итоги полугодия';
 const DECK_SECTION_MARKER = 'Раздел 1';
+/** deck-many.pptx is built with this many slides — see e2e/fixtures/files/README.md. */
+const DECK_MANY_SLIDES = 60;
+const TEXT_TRUNCATED_NOTICE = 'Showing the beginning of a large file.';
 
 test.describe('file library panel', () => {
   /**
@@ -248,5 +264,102 @@ test.describe('file preview — honest states', () => {
 
     await expect(previewFrameElement(page, 'locked.pdf')).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Download locked.pdf' })).toBeVisible();
+  });
+});
+
+test.describe('file preview — the rest of the matrix', () => {
+  test('renders a deck with many slides', async ({ page }) => {
+    test.setTimeout(240000);
+    await previewFixture(page, 'deck-many.pptx');
+
+    const frame = previewFrame(page, 'deck-many.pptx');
+    await expect(frame.locator('body')).toContainText(DECK_TITLE_MARKER, {
+      timeout: 90000,
+      useInnerText: true,
+    });
+    const slides = await frame.locator('.lc-pptx-slide').count();
+    expect(slides).toBe(DECK_MANY_SLIDES);
+  });
+
+  test('opens a scanned PDF in the viewer even though it has no text layer', async ({ page }) => {
+    test.setTimeout(120000);
+    const dialog = await previewFixture(page, 'scan.pdf');
+
+    await expect(previewFrameElement(page, 'scan.pdf')).toBeVisible({ timeout: 30000 });
+    await expect(dialog.locator('pre')).toHaveCount(0);
+  });
+
+  test('says plainly that a password-protected document could not be shown', async ({ page }) => {
+    test.setTimeout(180000);
+    const dialog = await previewFixture(page, 'locked.docx');
+
+    await expect(
+      dialog.getByText(/Could not render preview for this file|Preview unavailable/),
+    ).toBeVisible({ timeout: 60000 });
+    await expect(dialog.getByRole('button', { name: 'Download locked.docx' })).toBeVisible();
+  });
+
+  /**
+   * A type the app cannot handle never reaches the library: the composer
+   * refuses it in the browser, so there is no preview state to reach at all.
+   */
+  test('refuses a file type it cannot handle, before uploading it', async ({ page }) => {
+    test.setTimeout(90000);
+    await page.goto('/c/new', { timeout: 15000 });
+
+    const uploads: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().includes('/api/files')) {
+        uploads.push(request.url());
+      }
+    });
+
+    await chooseFixture(page, fileFixture('unknown.xyz'));
+
+    /* The message is the synchronisation point. Asserting "no upload happened"
+     * straight after the click would be true before anything could have been
+     * sent, and would pass even if the file were accepted. */
+    await expect(page.getByText(/Unsupported file type/)).toBeVisible({ timeout: 30000 });
+    expect(uploads).toEqual([]);
+  });
+
+  /**
+   * The other entry point the canon lists. It is covered by one small file on
+   * purpose: a chip only exists after the model's turn completes, and a document
+   * large enough to be interesting overflows the mock provider's context window
+   * and kills the turn — which is why the rest of the matrix goes through the
+   * library instead.
+   */
+  test('opens a preview from a file attached to a sent message', async ({ page }) => {
+    test.setTimeout(120000);
+    const fixture = fileFixture('notes.md');
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
+    await attachFixture(page, fixture);
+
+    const response = await sendMessage(page, replyPrompt('transcript-preview'));
+    expect(response.ok()).toBeTruthy();
+    await expect(messagesView(page).getByText(replyText('transcript-preview'))).toBeVisible({
+      timeout: 60000,
+    });
+
+    await messagesView(page).getByRole('button', { name: fixture.name }).click();
+    const dialog = previewDialog(page, fixture.name);
+    await expect(dialog).toHaveCount(1);
+    await expect(dialog.locator('pre')).toContainText(MD_MARKER, { timeout: 30000 });
+  });
+
+  test('shows the beginning of a very long text file and says so', async ({ page }) => {
+    test.setTimeout(120000);
+    const fixture = largeTextFixture('long-report.md', 600 * 1024);
+    const dialog = await previewFixture(page, fixture);
+
+    await expect(dialog.locator('pre')).toBeVisible({ timeout: 30000 });
+    /* Characters against characters. Comparing the rendered length to the
+     * fixture's BYTE length would pass without any truncation at all, because
+     * this text is Cyrillic and every character costs two bytes. */
+    const shown = (await dialog.locator('pre').innerText()).length;
+    expect(shown).toBeLessThan(fixture.buffer.toString('utf8').length);
+    await expect(dialog.getByText(TEXT_TRUNCATED_NOTICE)).toBeVisible();
   });
 });
