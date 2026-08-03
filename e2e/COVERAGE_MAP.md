@@ -117,12 +117,16 @@ agreed redesign and are the acceptance criteria for it.
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
 | Panel opens with the artifact from a chat card | unit | `client/src/components/Chat/Messages/Content/Parts/__tests__/ArtifactRouting.test.tsx` | covered |
-| Panel closes and clears the current artifact | unit | — | planned:Э2 |
-| Header copy / download / close act on the shown file | unit | — | planned:Э2 |
-| Refresh button appears only for a live preview | unit | — | planned:Э2 |
-| Stepper moves between open artifacts | unit | — | planned:Э2 |
+| Panel closes and clears the current artifact | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
+| Header copy and close act on the shown file | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
+| Download saves the shown file, edited buffer winning over stored content | unit | `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx` | covered |
+| Office and code files expose only their meaningful view | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
+| View switch is locked while a save is in flight | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
+| Editor keeps unsaved edits while the same file keeps streaming | unit | `client/src/components/Artifacts/__tests__/ArtifactTabs.test.tsx` | covered |
+| Refresh button appears only for a live preview | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
+| Stepper moves between open artifacts | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
 | Code/Preview choice is per file, not per panel | unit | — | fixme:Ф1 |
-| Unsaved editor edits survive switching files | unit | — | fixme:Ф1 |
+| Unsaved editor edits survive switching files | unit | `client/src/components/Artifacts/__tests__/ArtifactTabs.test.tsx` | fixme:Ф1 |
 | Tab strip appears from the second file | e2e | — | fixme:Ф1 |
 | New tabs are added at the right end | e2e | — | fixme:Ф1 |
 | A file arriving while reading another marks a dot, no focus steal | e2e | — | fixme:Ф1 |
@@ -192,7 +196,7 @@ agreed redesign and are the acceptance criteria for it.
 
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
-| Layout is consistent across the 768–868 px band | unit | — | planned:Э2 |
+| Panel and its layout host switch to the phone layout at the same width | unit | `client/src/components/Artifacts/__tests__/breakpoints.test.ts` | fixme:Ф1 |
 | Mobile viewport renders the chat and panel correctly | e2e | — | planned:Э5 |
 | Dark theme on key screens | visual | — | planned:Э5 |
 | Russian locale renders key screens without overflow | e2e | — | planned:Э5 |
