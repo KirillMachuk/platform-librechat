@@ -174,9 +174,9 @@ agreed redesign and are the acceptance criteria for it.
 | Delete a conversation | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
 | Favourite a conversation and see it pinned | unit | `client/src/components/Nav/Favorites/tests/FavoriteItem.spec.tsx` | covered |
 | One user cannot see another user's conversations | e2e | `e2e/specs/mock/isolation.spec.ts` | covered |
-| Search chats popup finds by text | e2e | — | planned:Э6 |
-| Bookmarks: create, attach, filter | e2e | — | planned:Э6 |
-| Archive and restore a conversation | e2e | — | planned:Э6 |
+| Search chats popup finds by text | e2e | — | gap |
+| Bookmarks: create, attach, filter | e2e | — | gap |
+| Archive a conversation and bring it back | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
 | Mobile sidebar opens and dismisses | e2e | `e2e/specs/mock/mobile-sidebar.spec.ts` | covered |
 
 ## 9. Models, agents, projects
@@ -275,6 +275,15 @@ the app is exercised at that width today, and so the band test has somewhere to 
 Pixel snapshots are `planned:Э7`, not Э5. Baselines taken now would be invalidated by the very
 redesign they are meant to guard, and they would have to be generated on CI rather than on a Mac
 to compare at all. Structural and ARIA assertions carry the regression value in the meantime.
+
+Two rows in section 8 are `gap` rather than planned work, for reasons found while trying to
+write them. **Conversation search** cannot be proven in this profile at all: the hermetic
+environment sets `SEARCH=false` (there is no Meilisearch instance), so the popup has nothing to
+query. It needs either a non-hermetic profile or a unit test of the search UI against a stubbed
+service. **Bookmarks** are reachable only from the chat header, and only after the user turns
+the menu on — `showBookmarksMenu` defaults to `false`. Worth flagging separately:
+`client/src/components/Nav/Bookmarks/BookmarkNav.tsx` is imported by nothing, so the sidebar
+variant of that UI is dead code.
 
 ## 13. Notes on the preview matrix
 
