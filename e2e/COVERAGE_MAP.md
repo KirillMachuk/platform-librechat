@@ -234,9 +234,24 @@ Two open problems remain, both real:
 
 1. Attaching a document as extracted text can exceed the mock model's context
    window (22.6k tokens), and the turn then dies with `empty_messages`. Sending
-   the file natively instead was tried and made things worse, so the matrix
-   needs either a larger context window for the mock provider or a preview
-   surface that does not require a completion.
+   the file natively instead was tried and made things worse (12 of 14 tests
+   failed), so that route is closed.
 2. The suite is not yet stable run-to-run on a slow machine.
 
+**Agreed fix (owner decision, 2026-08-03): take the model out of the loop.**
+Open the preview from "My Files" instead of from the transcript, so no
+completion has to succeed for a document to be previewed:
+
+- the file is already persisted by the upload itself (`POST /api/files` during
+  attach), so no message needs to be sent at all;
+- `MyFilesModal` (`client/src/components/Chat/Input/Files/MyFilesModal.tsx`)
+  renders its own `FilePreviewDialog` and opens it when a row is clicked;
+- its trigger today is the "Manage Files" button in
+  `client/src/components/SidePanel/Files/Panel.tsx`; the first implementation
+  step is confirming how that panel is reached in the current UI, since nothing
+  else in `client/src` mounts it.
+
+This also closes one of the five preview entry points the canon lists, so it is
+not a detour. The transcript entry point stays covered by one small fixture
+whose extracted text fits the context window.
 Until both are closed, no row in sections 5 and 6 may be marked covered.
