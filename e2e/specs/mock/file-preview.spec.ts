@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { previewDialog, previewFixture, previewFrame, previewFrameElement } from './files.helpers';
+import {
+  openFilesPanel,
+  previewDialog,
+  previewFixture,
+  previewFrame,
+  previewFrameElement,
+} from './files.helpers';
 
 /**
  * What a user sees after opening a file from their library. The fixtures in
@@ -39,6 +45,24 @@ const PY_MARKER = 'def total_amount';
 const CSV_MARKER = 'Контрагент';
 const DECK_TITLE_MARKER = 'Итоги полугодия';
 const DECK_SECTION_MARKER = 'Раздел 1';
+
+test.describe('file library panel', () => {
+  /**
+   * The table comes from `@librechat/client`, which carries its own locale
+   * file that this app does not load. When a key it asks for is undefined here,
+   * i18next renders the key — so the search field announced itself to screen
+   * readers as "com_ui_search_table". The unit guard is
+   * `client/src/locales/keys.spec.ts`; this proves it in the running app.
+   */
+  test('labels the file table in words, not translation keys', async ({ page }) => {
+    test.setTimeout(60000);
+    await page.goto('/c/new', { timeout: 15000 });
+    const panel = await openFilesPanel(page);
+
+    await expect(panel.getByRole('textbox', { name: 'Search table' })).toBeVisible();
+    await expect(panel.getByText(/^com_[a-z0-9_]+$/)).toHaveCount(0);
+  });
+});
 
 test.describe('file preview — office documents', () => {
   test('renders a Word contract as continuous reading text', async ({ page }) => {
