@@ -214,10 +214,18 @@ agreed redesign and are the acceptance criteria for it.
 
 ## 13. Known investigation
 
-`file-preview.spec.ts` is committed on a draft PR, not merged. On a slow
-machine five of its fifteen tests fail while ten pass; the same suite passes on
-three of four CI shards. The failures are not cross-test leakage — the
-multi-sheet workbook case fails identically when run alone — so either the
-preview of a multi-sheet workbook is genuinely slow to appear, or the readiness
-wait in `files.helpers.ts` returns before the frame is populated. Resolve before
-marking these rows covered.
+`file-preview.spec.ts` is committed on a draft PR and is **not merged**: it is
+not stable yet.
+
+Two consecutive local runs on the same commit failed a different subset each
+time — 10/15 then 11/15, with only the first test failing in both. A run also
+failed a test that passed when run alone. Different failures from identical
+code is flakiness, not a product defect, and the fixtures are not the cause:
+every literal string the specs assert was extracted back out of each document
+and confirmed present.
+
+The suspect is the readiness wait in `files.helpers.ts`, which treats "the
+rendering notice is not visible" as "the preview is ready". That is true before
+the notice appears as well, so a slow machine can start asserting against a
+frame that has not been populated. The fix is a positive ready signal, not
+longer timeouts. Until then no row in sections 5 and 6 may be marked covered.
