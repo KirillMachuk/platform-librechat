@@ -67,7 +67,6 @@ export const ThemeSelector = ({
         options={themeOptions}
         sizeClasses="w-[180px]"
         testId="theme-selector"
-        className="z-50"
         aria-labelledby={labelId}
         portal={portal}
       />
@@ -153,7 +152,6 @@ export const LangSelector = ({
           onChange={onChange}
           sizeClasses="[--anchor-max-height:256px] max-h-[60vh]"
           options={languageOptions}
-          className="z-50"
           aria-labelledby={labelId}
           portal={portal}
         />

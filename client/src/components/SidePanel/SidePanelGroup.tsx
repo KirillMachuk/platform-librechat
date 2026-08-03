@@ -13,7 +13,7 @@ interface SidePanelProps {
 
 const SidePanelGroup = memo(({ artifacts, children }: SidePanelProps) => {
   const [shouldRenderArtifacts, setShouldRenderArtifacts] = useState(artifacts != null);
-  const isSmallScreen = useMediaQuery('(max-width: 767px)');
+  const isSmallScreen = useMediaQuery('(max-width: 767.98px)');
 
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: 'side-panel-layout',
@@ -45,7 +45,7 @@ const SidePanelGroup = memo(({ artifacts, children }: SidePanelProps) => {
         )}
       </ResizablePanelGroup>
       {artifacts != null && isSmallScreen && (
-        <div className="fixed inset-0 z-[100]">{artifacts}</div>
+        <div className="fixed inset-0 z-scrim-drawer">{artifacts}</div>
       )}
     </>
   );

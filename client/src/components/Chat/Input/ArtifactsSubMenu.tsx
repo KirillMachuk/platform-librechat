@@ -1,8 +1,8 @@
 import React from 'react';
 import * as Ariakit from '@ariakit/react';
 import { PinIcon } from '@librechat/client';
-import { ChevronRight, WandSparkles } from 'lucide-react';
 import { ArtifactModes } from 'librechat-data-provider';
+import { ChevronRight, WandSparkles } from 'lucide-react';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
@@ -90,7 +90,7 @@ const ArtifactsSubMenu = React.forwardRef<HTMLDivElement, ArtifactsSubMenuProps>
               portal={true}
               unmountOnHide={true}
               className={cn(
-                'animate-popover-left z-40 ml-3 mt-6 flex min-w-[250px] flex-col rounded-xl',
+                'animate-popover-left z-popover ml-3 mt-6 flex min-w-[250px] flex-col rounded-xl',
                 'border border-border-light bg-surface-secondary shadow-lg',
               )}
             >

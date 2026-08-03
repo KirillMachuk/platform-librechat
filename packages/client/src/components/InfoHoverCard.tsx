@@ -24,7 +24,7 @@ const InfoHoverCard = ({ side, text }: InfoHoverCardProps): JSX.Element => {
         <CircleHelpIcon className="h-5 w-5 text-text-tertiary" aria-hidden="true" />
       </HoverCardTrigger>
       <HoverCardPortal>
-        <HoverCardContent side={side} className="z-[999] w-80">
+        <HoverCardContent side={side} className="z-popover w-80">
           <div className="max-h-[80vh] space-y-2 overflow-y-auto">
             <span className="text-sm text-text-secondary">{text}</span>
           </div>

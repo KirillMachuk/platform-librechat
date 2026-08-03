@@ -161,7 +161,7 @@ export default function FavoriteItem(props: FavoriteItemProps) {
           mountByState={true}
           isOpen={isPopoverActive}
           setIsOpen={setIsPopoverActive}
-          className="z-[125]"
+          className="z-popover"
           trigger={
             <Menu.MenuButton
               className={cn(

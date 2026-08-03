@@ -208,7 +208,7 @@ function ChatGroupItem({
               portal={true}
               menuId={menuId}
               focusLoop={true}
-              className="z-[125]"
+              className="z-popover"
               unmountOnHide={true}
               isOpen={menuOpen}
               setIsOpen={setMenuOpen}

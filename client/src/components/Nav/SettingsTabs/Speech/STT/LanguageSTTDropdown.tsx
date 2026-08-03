@@ -105,7 +105,6 @@ export default function LanguageSTTDropdown() {
         options={languageOptions}
         sizeClasses="[--anchor-max-height:256px]"
         testId="LanguageSTTDropdown"
-        className="z-50"
         aria-labelledby={labelId}
       />
     </div>

@@ -148,7 +148,7 @@ function ToolSelectDialog({
         setCurrentPage(1);
         setSearchValue('');
       }}
-      className="relative z-[102]"
+      className="relative z-dialog"
     >
       {/* The backdrop, rendered as a fixed sibling to the panel container */}
       <div className="fixed inset-0 bg-scrim transition-opacity" />

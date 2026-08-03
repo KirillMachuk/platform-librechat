@@ -1,5 +1,5 @@
 .tooltip {
-  z-index: 150;
+  z-index: var(--c-z-popover);
   cursor: pointer;
   pointer-events: auto;
   border-radius: 0.275rem;

@@ -245,7 +245,7 @@ function MCPToolSelectDialog({
         setConfiguringServer(null);
         setIsInitializing(null);
       }}
-      className="relative z-[102]"
+      className="relative z-dialog"
     >
       <div className="fixed inset-0 bg-scrim transition-opacity" />
       <div className="fixed inset-0 flex items-center justify-center p-4">

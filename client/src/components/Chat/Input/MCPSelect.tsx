@@ -1,8 +1,8 @@
 import React, { memo, useMemo } from 'react';
 import * as Ariakit from '@ariakit/react';
 import { ChevronDown } from 'lucide-react';
-import { PermissionTypes, Permissions } from 'librechat-data-provider';
 import { TooltipAnchor } from '@librechat/client';
+import { PermissionTypes, Permissions } from 'librechat-data-provider';
 import MCPServerMenuItem from '~/components/MCP/MCPServerMenuItem';
 import MCPConfigDialog from '~/components/MCP/MCPConfigDialog';
 import StackedMCPIcons from '~/components/MCP/StackedMCPIcons';
@@ -100,7 +100,7 @@ function MCPSelectContent() {
           unmountOnHide={true}
           aria-label={localize('com_ui_mcp_servers')}
           className={cn(
-            'z-50 flex min-w-[260px] max-w-[320px] flex-col rounded-xl',
+            'z-popover flex min-w-[260px] max-w-[320px] flex-col rounded-xl',
             'border border-border-light bg-presentation p-1.5 shadow-lg',
             'origin-top opacity-0 transition-[opacity,transform] duration-200 ease-out',
             'data-[enter]:scale-100 data-[enter]:opacity-100',
