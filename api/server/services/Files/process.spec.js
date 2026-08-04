@@ -97,7 +97,7 @@ jest.mock('@librechat/api', () => {
     isContentRoutingEnabled: jest.fn(() => false),
     readDocRoutingThresholds: jest.fn(() => ({ maxContextChars: 40000, maxContextScanPages: 12 })),
     isImageOcrEnabled: jest.fn(() => false),
-    imageOcrMinChars: jest.fn(() => 150),
+    imageOcrMinWords: jest.fn(() => 3),
     acceptOcrText: jest.fn(() => false),
     isOfficeHtmlPreviewable: jest.fn(() => false),
     renderOfficePreview: jest.fn(),

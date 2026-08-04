@@ -1,9 +1,10 @@
 import { EToolResources } from 'librechat-data-provider';
 import {
   acceptOcrText,
+  countTextWords,
   DEFAULT_DOC_ROUTING_THRESHOLDS,
-  DEFAULT_IMAGE_OCR_MIN_CHARS,
-  imageOcrMinChars,
+  DEFAULT_IMAGE_OCR_MIN_WORDS,
+  imageOcrMinWords,
   isContentRoutingEnabled,
   isImageOcrEnabled,
   isScannedPdf,
@@ -15,6 +16,30 @@ import {
 } from './routing';
 
 const { context, file_search } = EToolResources;
+
+/**
+ * OCR output measured on five representative attachments, run through this
+ * deployment's own OCR service. Every realistic screenshot lands far below the
+ * 150 characters the gate used to demand, and the image with NO text at all
+ * produced the MOST characters — which is why the gate counts words instead.
+ */
+const OCR_SAMPLES = {
+  /** Contract screenshot, 3 lines — 110 chars, 10 words. */
+  contract:
+    'ДОГОВОР АРЕНДЫ №05-11\nг. Минск, 06 апреля 2021 г.\nАрендодатель передаёт нежилое помещение общей площадью 120 м',
+  /** Table screenshot, 4 rows — 83 chars, 6 words. */
+  table: 'Товар | Кол-во | Цена\nСтол | 2 | 1 340,00\nСтул | 6 | 1 120,50\nЛампа | 1 | 12 089,90',
+  /** Chart with a title and axis labels — 39 chars, 7 words. */
+  chart: 'Выручка 2026, млн руб.\nянв фев мар апр.',
+  /** Whiteboard diagram, 4 boxes — 26 chars, 4 words: the shortest content we still admit. */
+  diagram: 'Заявка Прове Договор Отказ',
+  /** Product photo with no text at all — 106 chars of Tesseract noise, 0 words. */
+  noise:
+    '_ о = oo о / о мо / о о о\n| ` ~ и — о .. \\ о о | 1 о\n_ о = oo о / о мо / о о\n. , о | о ~ о | ,, о | .. - ~',
+} as const;
+
+/** The character minimum the gate demanded before it was measured. */
+const OLD_MIN_CHARS = 150;
 
 describe('routeDocumentBySize', () => {
   it('keeps a small digital document in whole-text context', () => {
@@ -131,17 +156,39 @@ describe('isImageOcrEnabled', () => {
   });
 });
 
-describe('imageOcrMinChars', () => {
-  it('defaults to DEFAULT_IMAGE_OCR_MIN_CHARS', () => {
-    expect(imageOcrMinChars({})).toBe(DEFAULT_IMAGE_OCR_MIN_CHARS);
+describe('imageOcrMinWords', () => {
+  it('defaults to DEFAULT_IMAGE_OCR_MIN_WORDS', () => {
+    expect(imageOcrMinWords({})).toBe(DEFAULT_IMAGE_OCR_MIN_WORDS);
   });
 
   it('reads a positive override', () => {
-    expect(imageOcrMinChars({ AUTO_IMAGE_OCR_MIN_CHARS: '300' })).toBe(300);
+    expect(imageOcrMinWords({ AUTO_IMAGE_OCR_MIN_WORDS: '5' })).toBe(5);
   });
 
   it('ignores non-positive overrides', () => {
-    expect(imageOcrMinChars({ AUTO_IMAGE_OCR_MIN_CHARS: '0' })).toBe(DEFAULT_IMAGE_OCR_MIN_CHARS);
+    expect(imageOcrMinWords({ AUTO_IMAGE_OCR_MIN_WORDS: '0' })).toBe(DEFAULT_IMAGE_OCR_MIN_WORDS);
+  });
+});
+
+describe('countTextWords', () => {
+  it('counts runs of three or more letters, Cyrillic and Latin alike', () => {
+    expect(countTextWords('Заявка Прове Договор Отказ')).toBe(4);
+    expect(countTextWords('Revenue per quarter, mln')).toBe(4);
+  });
+
+  it('ignores digits, punctuation and one- or two-letter fragments', () => {
+    expect(countTextWords('120 кв. м. № 05-11 | 2 | oo')).toBe(0);
+  });
+
+  it('counts nothing in OCR noise from an image with no text', () => {
+    expect(countTextWords(OCR_SAMPLES.noise)).toBe(0);
+  });
+
+  it('separates every measured content shape from noise without overlap', () => {
+    expect(countTextWords(OCR_SAMPLES.contract)).toBe(10);
+    expect(countTextWords(OCR_SAMPLES.table)).toBe(6);
+    expect(countTextWords(OCR_SAMPLES.chart)).toBe(7);
+    expect(countTextWords(OCR_SAMPLES.diagram)).toBe(4);
   });
 });
 
@@ -163,17 +210,45 @@ describe('looksLikeText', () => {
 });
 
 describe('acceptOcrText', () => {
-  it('accepts text that meets the length minimum and looks like text', () => {
-    const text = 'Договор аренды № 05-11 от 06.04.2021. '.repeat(6);
-    expect(acceptOcrText(text, 150)).toBe(true);
+  const minWords = DEFAULT_IMAGE_OCR_MIN_WORDS;
+
+  it('accepts a contract screenshot the old character minimum rejected', () => {
+    expect(OCR_SAMPLES.contract.length).toBeLessThan(OLD_MIN_CHARS);
+    expect(acceptOcrText(OCR_SAMPLES.contract, minWords)).toBe(true);
   });
 
-  it('rejects text below the minimum length', () => {
-    expect(acceptOcrText('короткий текст', 150)).toBe(false);
+  it('accepts a table screenshot', () => {
+    expect(OCR_SAMPLES.table.length).toBeLessThan(OLD_MIN_CHARS);
+    expect(acceptOcrText(OCR_SAMPLES.table, minWords)).toBe(true);
   });
 
-  it('rejects long binary garbage even above the length minimum', () => {
-    const garbage = String.fromCharCode(0, 1, 2).repeat(80);
-    expect(acceptOcrText(garbage, 150)).toBe(false);
+  it('accepts a chart carrying only a title and axis labels', () => {
+    expect(OCR_SAMPLES.chart.length).toBeLessThan(OLD_MIN_CHARS);
+    expect(acceptOcrText(OCR_SAMPLES.chart, minWords)).toBe(true);
+  });
+
+  it('accepts a whiteboard diagram of four boxes', () => {
+    expect(OCR_SAMPLES.diagram.length).toBeLessThan(OLD_MIN_CHARS);
+    expect(acceptOcrText(OCR_SAMPLES.diagram, minWords)).toBe(true);
+  });
+
+  it('rejects OCR noise from an image with no text at all', () => {
+    expect(acceptOcrText(OCR_SAMPLES.noise, minWords)).toBe(false);
+  });
+
+  it('rejects noise that carries more characters than accepted real content', () => {
+    expect(OCR_SAMPLES.noise.length).toBeGreaterThan(OCR_SAMPLES.diagram.length);
+    expect(acceptOcrText(OCR_SAMPLES.diagram, minWords)).toBe(true);
+    expect(acceptOcrText(OCR_SAMPLES.noise, minWords)).toBe(false);
+  });
+
+  it('rejects text with fewer words than the minimum', () => {
+    expect(acceptOcrText('Итого 120', minWords)).toBe(false);
+  });
+
+  it('still rejects binary garbage that carries enough words', () => {
+    const garbage = `Договор аренды помещение${String.fromCharCode(0, 1, 2).repeat(80)}`;
+    expect(countTextWords(garbage)).toBeGreaterThanOrEqual(minWords);
+    expect(acceptOcrText(garbage, minWords)).toBe(false);
   });
 });
