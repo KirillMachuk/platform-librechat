@@ -175,7 +175,11 @@ agreed redesign and are the acceptance criteria for it.
 | Delete a conversation | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
 | Favourite a conversation and see it pinned | unit | `client/src/components/Nav/Favorites/tests/FavoriteItem.spec.tsx` | covered |
 | One user cannot see another user's conversations | e2e | `e2e/specs/mock/isolation.spec.ts` | covered |
-| Search chats popup finds by text | e2e | — | gap |
+| Search results show chats and messages separately | unit | `client/src/components/Nav/SearchChats/__tests__/Results.spec.tsx` | covered |
+| Search says plainly when it found nothing | unit | `client/src/components/Nav/SearchChats/__tests__/Results.spec.tsx` | covered |
+| Search shows a busy state instead of an empty box | unit | `client/src/components/Nav/SearchChats/__tests__/Results.spec.tsx` | covered |
+| A running search is announced to a screen reader | a11y | — | fixme:Ф1 |
+| Search finds real matches end to end | e2e | — | gap |
 | Bookmarks: create, attach, filter | e2e | — | gap |
 | Archive a conversation and bring it back | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
 | Mobile sidebar opens and dismisses | e2e | `e2e/specs/mock/mobile-sidebar.spec.ts` | covered |
@@ -277,11 +281,13 @@ Pixel snapshots are `planned:Э7`, not Э5. Baselines taken now would be invalid
 redesign they are meant to guard, and they would have to be generated on CI rather than on a Mac
 to compare at all. Structural and ARIA assertions carry the regression value in the meantime.
 
-Two rows in section 8 are `gap` rather than planned work, for reasons found while trying to
-write them. **Conversation search** cannot be proven in this profile at all: the hermetic
-environment sets `SEARCH=false` (there is no Meilisearch instance), so the popup has nothing to
-query. It needs either a non-hermetic profile or a unit test of the search UI against a stubbed
-service. **Bookmarks** are reachable only from the chat header, and only after the user turns
+**Conversation search** cannot be proven end to end in this profile: the hermetic environment
+sets `SEARCH=false`, so there is no Meilisearch instance and the search entry is not rendered at
+all — a probe confirmed the button does not exist, not merely that it returns nothing. Its states
+are therefore covered as unit tests against stubbed queries (owner's decision, 2026-08-04:
+cover the cheap way, verify real matching on the stand by hand). Writing them surfaced a defect:
+the busy state is an `<svg aria-hidden="true">` with no role and no live region, so a screen
+reader is told nothing while a search runs. **Bookmarks** are reachable only from the chat header, and only after the user turns
 the menu on — `showBookmarksMenu` defaults to `false`. Worth flagging separately:
 `client/src/components/Nav/Bookmarks/BookmarkNav.tsx` is imported by nothing, so the sidebar
 variant of that UI is dead code.
