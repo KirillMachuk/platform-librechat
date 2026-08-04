@@ -10,7 +10,7 @@ const A_PRIVATE_MARKER = 'A-private-conversation-marker';
 async function register(page: Page, user: User) {
   await page.getByRole('link', { name: 'Sign up' }).click();
   await page.getByLabel('Full name', { exact: true }).fill(user.name);
-  await page.getByLabel('Email', { exact: true }).fill(user.email);
+  await page.getByLabel('Email address', { exact: true }).fill(user.email);
   await page.getByTestId('password').fill(user.password);
   await page.getByTestId('confirm_password').fill(user.password);
   await page.getByTestId('registration-button').click();

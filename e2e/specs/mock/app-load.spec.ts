@@ -1,12 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { getPrimaryE2EUser } from '../../setup/users.mock';
-import { NEW_CHAT_PATH } from './helpers';
+import { LANDING_GREETING, NEW_CHAT_PATH } from './helpers';
 
 test.describe('app loads cleanly', () => {
   test('authenticated user lands on a rendered chat view without runtime errors', async ({
     page,
   }) => {
-    const user = getPrimaryE2EUser();
     const pageErrors: string[] = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
 
@@ -14,7 +12,7 @@ test.describe('app loads cleanly', () => {
 
     await expect(page).toHaveURL(/\/c\/new$/);
     await expect(page.getByRole('main')).toBeVisible();
-    await expect(page.getByRole('main')).toContainText(user.name);
+    await expect(page.getByRole('main')).toContainText(LANDING_GREETING);
     await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
     await expect(page.getByTestId('model-selector-trigger').first()).toBeVisible();
     await expect(page.getByTestId('nav-user')).toBeVisible();

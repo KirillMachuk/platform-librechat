@@ -294,7 +294,7 @@ async function stopProcess(child) {
 async function register(page, user, timeout) {
   await page.getByRole('link', { name: 'Sign up' }).click({ timeout });
   await page.getByLabel('Full name', { exact: true }).fill(user.name);
-  await page.getByLabel('Email', { exact: true }).fill(user.email);
+  await page.getByLabel('Email address', { exact: true }).fill(user.email);
   await page.getByTestId('password').fill(user.password);
   await page.getByTestId('confirm_password').fill(user.password);
   await page.getByTestId('registration-button').click();

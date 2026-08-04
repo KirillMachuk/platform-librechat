@@ -158,7 +158,7 @@ const Registration: React.FC = () => {
                 message: localize('com_auth_username_max_length'),
               },
             })}
-            {renderInput('email', 'com_auth_email', 'email', {
+            {renderInput('email', 'com_auth_email_address', 'email', {
               required: localize('com_auth_email_required'),
               minLength: {
                 value: 1,

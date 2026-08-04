@@ -16,9 +16,9 @@ async function register(page: Page, user: User) {
   await page.getByRole('link', { name: 'Sign up' }).click();
   await page.getByLabel('Full name', { exact: true }).click();
   await page.getByLabel('Full name', { exact: true }).fill(user.name);
-  await page.getByLabel('Email', { exact: true }).click();
-  await page.getByLabel('Email', { exact: true }).fill(user.email);
-  await page.getByLabel('Email', { exact: true }).press('Tab');
+  await page.getByLabel('Email address', { exact: true }).click();
+  await page.getByLabel('Email address', { exact: true }).fill(user.email);
+  await page.getByLabel('Email address', { exact: true }).press('Tab');
   await page.getByTestId('password').click();
   await page.getByTestId('password').fill(user.password);
   await page.getByTestId('confirm_password').click();

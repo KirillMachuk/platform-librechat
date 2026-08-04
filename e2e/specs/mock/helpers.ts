@@ -14,6 +14,10 @@ export type MockEndpoint = { label: string; model: string };
 
 export const NEW_CHAT_PATH = '/c/new';
 
+/** One greeting for everyone (owner decision 04.08): no time of day, no name.
+ *  `interface.customWelcome` overrides it, and the e2e config does not set one. */
+export const LANDING_GREETING = 'Where shall we start?';
+
 type RefreshTokenBody = {
   token?: string;
 };
