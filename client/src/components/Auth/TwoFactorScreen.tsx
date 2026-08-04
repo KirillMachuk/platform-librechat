@@ -148,7 +148,7 @@ const TwoFactorScreen: React.FC = React.memo(() => {
             aria-label={localize('com_auth_continue')}
             data-testid="login-button"
             disabled={isLoading}
-            className="h-12 w-full rounded-xl bg-ink text-[15px] font-medium text-ink-label transition-opacity duration-90 hover:opacity-[0.86] disabled:cursor-not-allowed disabled:opacity-45 sm:h-10 sm:text-sm"
+            className="h-12 w-full rounded-xl bg-ink text-[15px] font-medium text-ink-label transition-opacity duration-90 hover:opacity-[0.86] disabled:cursor-not-allowed disabled:opacity-45 sm:h-9 sm:text-sm"
           >
             {isLoading ? localize('com_auth_email_verifying_ellipsis') : localize('com_ui_verify')}
           </button>

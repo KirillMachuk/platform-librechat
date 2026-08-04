@@ -43,7 +43,7 @@ function ResetPassword() {
           <Button
             onClick={() => navigate('/login')}
             variant="submit"
-            className="h-12 w-full rounded-xl text-[15px] sm:h-10 sm:text-sm"
+            className="h-12 w-full rounded-xl text-[15px] sm:h-9 sm:text-sm"
           >
             {localize('com_auth_continue')}
           </Button>
@@ -120,7 +120,7 @@ function ResetPassword() {
         data-testid="reset-password-button"
         disabled={isSubmitting}
         variant="submit"
-        className="mt-1 h-12 w-full rounded-xl text-[15px] sm:h-10 sm:text-sm"
+        className="mt-1 h-12 w-full rounded-xl text-[15px] sm:h-9 sm:text-sm"
       >
         {isSubmitting ? <Spinner /> : localize('com_auth_continue')}
       </Button>
