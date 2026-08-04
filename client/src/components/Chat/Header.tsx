@@ -6,12 +6,12 @@ import { getConfigDefaults, PermissionTypes, Permissions } from 'librechat-data-
 import { resolveIcon, resolveColor } from '~/components/Projects/iconOptions';
 import { useGetProjectQuery, useGetStartupConfig } from '~/data-provider';
 import ModelSelector from './Menus/Endpoints/ModelSelector';
+import { useBookmarksEnabled, useHasAccess } from '~/hooks';
 import ExportAndShareMenu from './ExportAndShareMenu';
 import { OpenSidebar, PresetsMenu } from './Menus';
 import BookmarkMenu from './Menus/BookmarkMenu';
 import { TemporaryChat } from './TemporaryChat';
 import AddMultiConvo from './AddMultiConvo';
-import { useHasAccess } from '~/hooks';
 import { cn } from '~/utils';
 import store from '~/store';
 
@@ -20,7 +20,7 @@ const defaultInterface = getConfigDefaults().interface;
 function Header() {
   const { data: startupConfig } = useGetStartupConfig();
   const navVisible = useRecoilValue(store.sidebarExpanded);
-  const showBookmarksMenu = useRecoilValue(store.showBookmarksMenu);
+  const bookmarksEnabled = useBookmarksEnabled();
   const conversation = useRecoilValue(store.conversationByIndex(0));
   const projectId = conversation?.project_id;
   const { data: project } = useGetProjectQuery(projectId ?? '', {
@@ -51,11 +51,6 @@ function Header() {
     [startupConfig],
   );
 
-  const hasAccessToBookmarks = useHasAccess({
-    permissionType: PermissionTypes.BOOKMARKS,
-    permission: Permissions.USE,
-  });
-
   const hasAccessToMultiConvo = useHasAccess({
     permissionType: PermissionTypes.MULTI_CONVO,
     permission: Permissions.USE,
@@ -83,7 +78,7 @@ function Header() {
               {projectBadge}
               <ModelSelector startupConfig={startupConfig} />
               {interfaceConfig.presets === true && interfaceConfig.modelSelect && <PresetsMenu />}
-              {hasAccessToBookmarks === true && showBookmarksMenu && <BookmarkMenu />}
+              {bookmarksEnabled && <BookmarkMenu />}
               {hasAccessToMultiConvo === true && <AddMultiConvo />}
               {isSmallScreen && (
                 <>

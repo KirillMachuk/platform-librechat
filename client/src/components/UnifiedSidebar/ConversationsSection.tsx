@@ -1,18 +1,21 @@
-import { useCallback, useState, useMemo, memo, useRef, lazy, Suspense } from 'react';
+import { useCallback, useState, useMemo, useEffect, memo, useRef, lazy, Suspense } from 'react';
+import { useSetRecoilState } from 'recoil';
 import { useMediaQuery } from '@librechat/client';
-import { useSetRecoilState, useRecoilValue } from 'recoil';
-import { Permissions, PermissionTypes } from 'librechat-data-provider';
 import type { InfiniteQueryObserverResult } from '@tanstack/react-query';
 import type { ConversationListResponse } from 'librechat-data-provider';
 import type { List } from 'react-virtualized';
 import {
   useLocalize,
-  useHasAccess,
   useAuthContext,
   useLocalStorage,
   useNavScrolling,
+  useBookmarksEnabled,
 } from '~/hooks';
-import { useConversationsInfiniteQuery, useTitleGeneration } from '~/data-provider';
+import {
+  useConversationsInfiniteQuery,
+  useGetConversationTags,
+  useTitleGeneration,
+} from '~/data-provider';
 import { Conversations } from '~/components/Conversations';
 import store from '~/store';
 
@@ -29,15 +32,25 @@ const ConversationsSection = memo(() => {
   const [showLoading, setShowLoading] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
 
-  const hasAccessToBookmarks = useHasAccess({
-    permissionType: PermissionTypes.BOOKMARKS,
-    permission: Permissions.USE,
-  });
-  const showBookmarksMenu = useRecoilValue(store.showBookmarksMenu);
-  const bookmarksEnabled = hasAccessToBookmarks && showBookmarksMenu;
+  const bookmarksEnabled = useBookmarksEnabled();
+  /** Off means off: no request for a feature the client has not switched on. */
+  const { data: bookmarks } = useGetConversationTags({ enabled: bookmarksEnabled });
 
   /** Hiding the control must also drop its filter, or the list stays narrowed with no way back. */
   const activeTags = bookmarksEnabled ? tags : [];
+
+  /* A bookmark renamed or deleted from the panel takes its name with it. Left in the selection
+   * it would filter the list by a name nothing carries any more, while the menu shows that
+   * bookmark unselected — so drop what no longer exists, once the list is actually known. */
+  useEffect(() => {
+    if (!bookmarks) {
+      return;
+    }
+    const known = new Set(bookmarks.map((bookmark) => bookmark.tag));
+    setTags((current) =>
+      current.every((tag) => known.has(tag)) ? current : current.filter((tag) => known.has(tag)),
+    );
+  }, [bookmarks]);
 
   const { data, fetchNextPage, isFetchingNextPage, isLoading } = useConversationsInfiniteQuery(
     {
@@ -81,6 +94,18 @@ const ConversationsSection = memo(() => {
     }
   }, [isSmallScreen, setSidebarExpanded]);
 
+  /* Built once per selection rather than per render: `Conversations` is memoized, and a fresh
+   * element here would defeat that on every re-render a streaming reply causes. */
+  const headerActions = useMemo(
+    () =>
+      bookmarksEnabled ? (
+        <Suspense fallback={null}>
+          <BookmarkNav tags={tags} setTags={setTags} />
+        </Suspense>
+      ) : null,
+    [bookmarksEnabled, tags],
+  );
+
   const loadMoreConversations = useCallback(() => {
     if (isFetchingNextPage || !computedHasNextPage) {
       return;
@@ -106,13 +131,7 @@ const ConversationsSection = memo(() => {
           isChatsExpanded={isChatsExpanded}
           setIsChatsExpanded={setIsChatsExpanded}
           showFavorites={false}
-          headerActions={
-            bookmarksEnabled ? (
-              <Suspense fallback={null}>
-                <BookmarkNav tags={tags} setTags={setTags} />
-              </Suspense>
-            ) : null
-          }
+          headerActions={headerActions}
         />
       </div>
     </div>
