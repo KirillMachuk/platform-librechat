@@ -231,7 +231,10 @@ agreed redesign and are the acceptance criteria for it.
 | Closing a dialog returns focus to what opened it | a11y | `e2e/specs/mock/a11y.spec.ts` | covered |
 | Escape closes the top dialog and leaves the one behind it open | a11y | `e2e/specs/mock/a11y.spec.ts` | covered |
 | A dialog holds focus against anything else claiming it | a11y | — | gap |
-| Settings, projects and agents dialogs pass axe | a11y | — | planned:Э6 |
+| The settings dialog passes axe | a11y | `e2e/specs/mock/a11y.spec.ts` | covered |
+| The projects panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts` | covered |
+| The agents panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts` | fixme:Ф1 |
+| The prompts panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts` | fixme:Ф1 |
 | Data tables announce translated labels, not raw keys | a11y | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | Shared components' translation keys are defined in this app | unit | `client/src/locales/keys.spec.ts` | covered |
 | File panel exposes tablist semantics | a11y | — | fixme:Ф1 |
@@ -280,6 +283,14 @@ the app is exercised at that width today, and so the band test has somewhere to 
 Pixel snapshots are `planned:Э7`, not Э5. Baselines taken now would be invalidated by the very
 redesign they are meant to guard, and they would have to be generated on CI rather than on a Mac
 to compare at all. Structural and ARIA assertions carry the regression value in the meantime.
+
+Two more accessibility defects, both in panels the redesign is rebuilding. The **agents panel**
+labels its grid with `aria-labelledby="category-tab-all"` (`AgentGrid.tsx`), but that id belongs
+to a tab `CategoryTabs.tsx` renders from data it loads first — before the tabs arrive the grid
+points at an element that is not there. It is critical *and* intermittent: whether a scan sees it
+depends on when the scan runs, which is why the test pins that one rule rather than a set that
+changes between runs. The **prompts panel** nests an interactive control inside another one, the
+same shape as the sidebar row defect. The settings dialog and the projects panel are clean.
 
 **Conversation search** cannot be proven end to end in this profile: the hermetic environment
 sets `SEARCH=false`, so there is no Meilisearch instance and the search entry is not rendered at
