@@ -157,6 +157,15 @@ test.describe('bookmarks', () => {
       await expect(conversationNamed(page, plainTitle)).toHaveCount(0);
       await expect(sidebarBookmark(page)).toHaveAttribute('aria-pressed', 'true');
 
+      /* Switching bookmarks off while a filter is on has to release the filter too — otherwise
+       * the chat list stays narrowed with the control that narrowed it gone. */
+      await setBookmarksMenu(page, false);
+      await expect(sidebarBookmark(page)).toHaveCount(0);
+      await expect(headerBookmark(page)).toHaveCount(0);
+      await expect(conversationNamed(page, plainTitle)).toHaveCount(1, { timeout: 20000 });
+      await setBookmarksMenu(page, true);
+      await expect(conversationNamed(page, plainTitle)).toHaveCount(0, { timeout: 20000 });
+
       /* Taking the chat out of the bookmark empties the filtered list. */
       await headerBookmark(page).click();
       const headerEntry = page.getByRole('menuitemcheckbox', { name: bookmark });
