@@ -21,6 +21,7 @@ import type { Response as ServerResponse } from 'express';
 import type { RunLLMConfig } from '~/types';
 import { GenerationJobManager } from '~/stream/GenerationJobManager';
 import { resolveConfigHeaders, createSafeUser } from '~/utils';
+import { checkMemoryValue } from '~/memory/guard';
 import Tokenizer from '~/utils/tokenizer';
 
 type RequiredMemoryMethods = Pick<
@@ -154,6 +155,30 @@ export const createMemoryTool = ({
             };
             return [`Memory storage would exceed limit. Cannot save this memory.`, errorArtifact];
           }
+        }
+
+        const verdict = await checkMemoryValue(value);
+        if (verdict.outcome !== 'allowed') {
+          const errorArtifact: Record<Tools.memory, MemoryArtifact> = {
+            [Tools.memory]: {
+              key: 'system',
+              type: 'error',
+              value: JSON.stringify({
+                errorType: verdict.outcome === 'rejected' ? 'personal_data' : 'guard_unavailable',
+                entityTypes: verdict.types ?? [],
+              }),
+              tokenCount: totalTokens,
+            },
+          };
+          logger.warn(
+            `Memory Agent refused to set memory for key "${key}": guard returned "${verdict.outcome}"`,
+          );
+          return [
+            verdict.outcome === 'rejected'
+              ? 'Not saved: the value looks like personal data. Memory holds the working profile only — role, topics and answer preferences.'
+              : 'Not saved: the memory guard is unavailable.',
+            errorArtifact,
+          ];
         }
 
         const artifact: Record<Tools.memory, MemoryArtifact> = {

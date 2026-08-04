@@ -14,6 +14,9 @@ jest.mock('~/hooks', () => ({
       com_ui_memory_would_exceed: `Cannot save - would exceed limit by ${params?.tokens || 0} tokens. Delete existing memories to make space.`,
       com_ui_memory_deleted: 'This memory has been deleted',
       com_ui_memory_storage_full: 'Memory Storage Full',
+      com_ui_memory_not_saved: 'Not saved',
+      com_ui_memory_personal_data: 'Not saved: this looks like personal data.',
+      com_ui_memory_guard_unavailable: 'Not saved: the personal-data check is unavailable.',
       com_ui_memory_error: 'Memory Error',
       com_ui_updated_successfully: 'Updated successfully',
       com_ui_none_selected: 'None selected',
@@ -191,8 +194,8 @@ describe('MemoryInfo', () => {
 
       render(<MemoryInfo memoryArtifacts={memoryArtifacts} />);
 
-      // Should render generic error message
-      expect(screen.getByText('Memory Storage Full')).toBeInTheDocument();
+      // Not a storage problem, so the heading must not claim storage is full
+      expect(screen.getByText('Not saved')).toBeInTheDocument();
       expect(screen.getByText('Memory Error')).toBeInTheDocument();
     });
 
@@ -207,7 +210,7 @@ describe('MemoryInfo', () => {
 
       render(<MemoryInfo memoryArtifacts={memoryArtifacts} />);
 
-      expect(screen.getByText('Memory Storage Full')).toBeInTheDocument();
+      expect(screen.getByText('Not saved')).toBeInTheDocument();
       expect(screen.getByText('Memory Error')).toBeInTheDocument();
     });
 
@@ -223,8 +226,56 @@ describe('MemoryInfo', () => {
       render(<MemoryInfo memoryArtifacts={memoryArtifacts} />);
 
       // Should show generic error message for unknown types
-      expect(screen.getByText('Memory Storage Full')).toBeInTheDocument();
+      expect(screen.getByText('Not saved')).toBeInTheDocument();
       expect(screen.getByText('Memory Error')).toBeInTheDocument();
+    });
+
+    test('names a personal-data refusal for what it is, not "storage full"', () => {
+      const memoryArtifacts: MemoryArtifact[] = [
+        {
+          type: 'error',
+          key: 'system',
+          value: JSON.stringify({ errorType: 'personal_data', entityTypes: ['PERSON'] }),
+        },
+      ];
+
+      render(<MemoryInfo memoryArtifacts={memoryArtifacts} />);
+
+      expect(screen.getByText('Not saved')).toBeInTheDocument();
+      expect(screen.getByText('Not saved: this looks like personal data.')).toBeInTheDocument();
+      expect(screen.queryByText('Memory Storage Full')).not.toBeInTheDocument();
+    });
+
+    test('tells the user when the personal-data check itself is down', () => {
+      const memoryArtifacts: MemoryArtifact[] = [
+        {
+          type: 'error',
+          key: 'system',
+          value: JSON.stringify({ errorType: 'guard_unavailable', entityTypes: [] }),
+        },
+      ];
+
+      render(<MemoryInfo memoryArtifacts={memoryArtifacts} />);
+
+      expect(
+        screen.getByText('Not saved: the personal-data check is unavailable.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Memory Storage Full')).not.toBeInTheDocument();
+    });
+
+    test('still says "storage full" when storage really is full', () => {
+      const memoryArtifacts: MemoryArtifact[] = [
+        {
+          type: 'error',
+          key: 'system',
+          value: JSON.stringify({ errorType: 'already_exceeded', tokenCount: 10 }),
+        },
+      ];
+
+      render(<MemoryInfo memoryArtifacts={memoryArtifacts} />);
+
+      expect(screen.getByText('Memory Storage Full')).toBeInTheDocument();
+      expect(screen.queryByText('Not saved')).not.toBeInTheDocument();
     });
 
     test('returns null when no memories of any type exist', () => {

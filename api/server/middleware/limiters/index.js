@@ -10,6 +10,7 @@ const toolCallLimiter = require('./toolCallLimiter');
 const messageLimiters = require('./messageLimiters');
 const promptUsageLimiter = require('./promptUsageLimiter');
 const projectCreateLimiter = require('./projectCreateLimiter');
+const memoryWriteLimiter = require('./memoryWriteLimiter');
 const verifyEmailLimiter = require('./verifyEmailLimiter');
 const resetPasswordLimiter = require('./resetPasswordLimiter');
 const twoFactorTempLimiter = require('./twoFactorTempLimiter');
@@ -23,6 +24,7 @@ module.exports = {
   ...forkLimiters,
   ...promptUsageLimiter,
   ...projectCreateLimiter,
+  ...memoryWriteLimiter,
   loginLimiter,
   registerLimiter,
   toolCallLimiter,

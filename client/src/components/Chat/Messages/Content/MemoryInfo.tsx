@@ -5,14 +5,21 @@ import { useLocalize } from '~/hooks';
 export default function MemoryInfo({ memoryArtifacts }: { memoryArtifacts: MemoryArtifact[] }) {
   const localize = useLocalize();
 
-  const { updatedMemories, deletedMemories, errorMessages } = useMemo(() => {
+  const { updatedMemories, deletedMemories, errorMessages, errorTitle } = useMemo(() => {
     const updated = memoryArtifacts.filter((art) => art.type === 'update');
     const deleted = memoryArtifacts.filter((art) => art.type === 'delete');
     const errors = memoryArtifacts.filter((art) => art.type === 'error');
 
+    const storageErrorTypes = new Set(['already_exceeded', 'would_exceed']);
+    let onlyStorageErrors = true;
+
     const messages = errors.map((artifact) => {
       try {
         const errorData = JSON.parse(artifact.value as string);
+
+        if (!storageErrorTypes.has(errorData.errorType)) {
+          onlyStorageErrors = false;
+        }
 
         if (errorData.errorType === 'already_exceeded') {
           return localize('com_ui_memory_already_exceeded', {
@@ -22,10 +29,15 @@ export default function MemoryInfo({ memoryArtifacts }: { memoryArtifacts: Memor
           return localize('com_ui_memory_would_exceed', {
             tokens: errorData.tokenCount,
           });
+        } else if (errorData.errorType === 'personal_data') {
+          return localize('com_ui_memory_personal_data');
+        } else if (errorData.errorType === 'guard_unavailable') {
+          return localize('com_ui_memory_guard_unavailable');
         } else {
           return localize('com_ui_memory_error');
         }
       } catch {
+        onlyStorageErrors = false;
         return localize('com_ui_memory_error');
       }
     });
@@ -34,6 +46,9 @@ export default function MemoryInfo({ memoryArtifacts }: { memoryArtifacts: Memor
       updatedMemories: updated,
       deletedMemories: deleted,
       errorMessages: messages,
+      errorTitle: onlyStorageErrors
+        ? localize('com_ui_memory_storage_full')
+        : localize('com_ui_memory_not_saved'),
     };
   }, [memoryArtifacts, localize]);
 
@@ -89,9 +104,7 @@ export default function MemoryInfo({ memoryArtifacts }: { memoryArtifacts: Memor
 
       {errorMessages.length > 0 && (
         <div>
-          <h4 className="mb-2 text-sm font-semibold text-red-500">
-            {localize('com_ui_memory_storage_full')}
-          </h4>
+          <h4 className="mb-2 text-sm font-semibold text-red-500">{errorTitle}</h4>
           <div className="space-y-2">
             {errorMessages.map((errorMessage) => (
               <div
