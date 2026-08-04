@@ -31,7 +31,7 @@ const OCR_SAMPLES = {
   table: 'Товар | Кол-во | Цена\nСтол | 2 | 1 340,00\nСтул | 6 | 1 120,50\nЛампа | 1 | 12 089,90',
   /** Chart with a title and axis labels — 39 chars, 7 words. */
   chart: 'Выручка 2026, млн руб.\nянв фев мар апр.',
-  /** Whiteboard diagram, 4 boxes — empty under psm 3, 26 chars / 4 words under psm 6. */
+  /** Whiteboard diagram, 4 boxes — 26 chars, 4 words: the shortest content we still admit. */
   diagram: 'Заявка Прове Договор Отказ',
   /** Product photo with no text at all — 106 chars of Tesseract noise, 0 words. */
   noise:
