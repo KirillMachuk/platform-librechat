@@ -19,6 +19,21 @@ Status values: `covered` — owned and proven; `gap` — nothing owns it; `plann
 scheduled by `FRONTEND_TESTING_Plan.md`; `fixme:Ф1` — canon behavior not implemented yet, the
 test exists and is skipped until the redesign lands.
 
+## What to do with a test that fails intermittently
+
+A test that passes on retry is not a passing test. Playwright reports it as *flaky* and the run
+stays green, so flakes accumulate where nobody looks.
+
+1. The nightly run uses `--fail-on-flaky-tests`, so a flake turns that run red within a day. It
+   is deliberately not on the pull-request gate yet: flakes have to be visible before they are
+   made blocking, and a gate that rejects merges over an untriaged flake costs the whole team.
+   Move the flag to `playwright-mock.yml` once the nightly has been clean for a stretch.
+2. Before merging a new test, burn it in: `npm run e2e:burn-in -- <spec>` runs it five times and
+   fails on the first flake.
+3. A flake that cannot be fixed on the spot is **quarantined, not retried**: mark the test
+   `test.fixme()` with a comment naming what is unstable, and move its row here from `covered`
+   back to `gap`. A quarantined test proves nothing, and the map must not claim otherwise.
+
 ---
 
 ## 1. Authentication and app load
