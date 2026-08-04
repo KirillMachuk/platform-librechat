@@ -316,13 +316,28 @@ user the connection went away. How long a dropped stream takes to surface is tim
 so pinning it would be pinning a race; it needs a product decision about what should be shown
 and when, before a test can say anything honest about it.
 
-Two more accessibility defects, both in panels the redesign is rebuilding. The **agents panel**
-labels its grid with `aria-labelledby="category-tab-all"` (`AgentGrid.tsx`), but that id belongs
-to a tab `CategoryTabs.tsx` renders from data it loads first — before the tabs arrive the grid
-points at an element that is not there. It is critical *and* intermittent: whether a scan sees it
-depends on when the scan runs, which is why the test pins that one rule rather than a set that
-changes between runs. The **prompts panel** nests an interactive control inside another one, the
-same shape as the sidebar row defect. The settings dialog and the projects panel are clean.
+Accessibility defects outside the sidebar, all in surfaces the redesign is rebuilding.
+
+The **agents panel** has a critical `aria-valid-attr-value` on `#category-tab-all` — the tab
+itself names something that is not in the document. An earlier note here called it intermittent
+and blamed the grid; both were wrong. Measured three times: the tab is present and visible when
+the scan runs and the violation is still there. What varies is only *when* you scan — before the
+tabs render the panel is clean, because the element that carries the defect does not exist yet.
+Both agents tests therefore wait for the tabs, so the "clean" one cannot pass while the defect
+sits behind it.
+
+The **file library table** has two defects that an empty library was hiding: each row carries
+`role="button"` with the "attach to chat" button inside it — a control inside a control — and the
+table declares a role whose required children it does not provide. Both tests now upload a file
+first, so the table has a row.
+
+The **prompts panel** nests an interactive control inside another one. The **settings dialog**
+and the **projects panel** are clean, measured.
+
+**Every accessibility test now states its own starting state.** Three of them used to pass only
+because they ran before anything created a conversation or uploaded a file; the new-chat scan
+excludes the sidebar, whose two defects have their own owner. Proven with `--repeat-each=2`:
+28 of 28.
 
 **Conversation search** cannot be proven end to end in this profile: the hermetic environment
 sets `SEARCH=false`, so there is no Meilisearch instance and the search entry is not rendered at
