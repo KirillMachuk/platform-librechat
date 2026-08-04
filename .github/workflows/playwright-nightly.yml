@@ -132,11 +132,18 @@ jobs:
         # Capped well under the job timeout so a hung run fails THIS step and the
         # upload steps below still capture artifacts. The suite finishes in well
         # under a minute locally; 20m is ample even on a cold cache.
+        #
+        # --fail-on-flaky-tests turns "failed once, passed on retry" from a green
+        # run into a red one. It lives here rather than on the PR gate on
+        # purpose: flakes have to become VISIBLE before they can be made
+        # blocking, and a gate that starts rejecting merges for a flake nobody
+        # has triaged yet costs the whole team. Move it to playwright-mock.yml
+        # once this run has been clean for a stretch.
         timeout-minutes: 20
         run: |
           set -o pipefail
           mkdir -p e2e/logs
-          npx playwright test --config=e2e/playwright.config.nightly.ts 2>&1 \
+          npx playwright test --config=e2e/playwright.config.nightly.ts --fail-on-flaky-tests 2>&1 \
             | tee "e2e/logs/run-nightly.log"
         env:
           CI: 'true'

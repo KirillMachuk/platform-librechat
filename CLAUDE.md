@@ -264,6 +264,9 @@ merge PR to platform-librechat/main
   fails when a claimed test no longer exists.
 - A test counts only once it has been **seen red** — break the behavior on purpose, watch it
   fail, restore. This repo has caught four wrong "green" tests that way.
+- A test that passes on retry is not a passing test. Burn a new one in before merging
+  (`npm run e2e:burn-in -- <spec>`), and quarantine rather than retry a flake you cannot fix —
+  the rule and the reasoning are at the top of `e2e/COVERAGE_MAP.md`.
 
 ### Philosophy
 
