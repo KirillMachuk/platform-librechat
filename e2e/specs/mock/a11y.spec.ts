@@ -186,3 +186,82 @@ test.describe('keyboard', () => {
     await expect(openPanels(page)).toHaveCount(1);
   });
 });
+
+/**
+ * The dialogs a user opens from the sidebar and the account menu. Each is
+ * scoped to itself so the sidebar's own two defects, scanned above, do not
+ * leak in and mask whatever the dialog has of its own.
+ */
+test.describe('accessibility of the main dialogs', () => {
+  const openSidebarPanel = async (page: Page, id: string) => {
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+    await page.getByTestId(`sidebar-link-${id}`).click();
+    await expect(page.locator(FILE_PANEL)).toHaveCount(1);
+  };
+
+  test('the projects panel has no WCAG A/AA violations', async ({ page }) => {
+    test.setTimeout(90000);
+    await openSidebarPanel(page, 'projects');
+
+    expect(describeViolations(await scan(page, FILE_PANEL))).toEqual([]);
+  });
+
+  /**
+   * The agents panel labels its grid with `aria-labelledby="category-tab-all"`
+   * (AgentGrid.tsx), but that id belongs to a tab CategoryTabs renders from data
+   * it has to load first. Before the tabs arrive the grid points at an element
+   * that is not there — a critical violation, and an intermittent one: whether a
+   * scan sees it depends on when it runs. Measured across runs, the critical
+   * rule is always present; a second, `nested-interactive`, appears only
+   * sometimes, so the twin test below pins the stable one rather than a set that
+   * changes between runs.
+   */
+  test('the agents panel has no WCAG A/AA violations', async ({ page }) => {
+    test.fail();
+    test.setTimeout(90000);
+    await openSidebarPanel(page, 'agents');
+
+    expect(describeViolations(await scan(page, FILE_PANEL))).toEqual([]);
+  });
+
+  test('the agents grid labels itself by a tab that may not exist yet', async ({ page }) => {
+    test.setTimeout(90000);
+    await openSidebarPanel(page, 'agents');
+
+    expect(describeViolations(await scan(page, FILE_PANEL)).map((v) => v.rule)).toContain(
+      'aria-valid-attr-value',
+    );
+  });
+
+  test('the prompts panel has no WCAG A/AA violations', async ({ page }) => {
+    test.fail();
+    test.setTimeout(90000);
+    await openSidebarPanel(page, 'prompts');
+
+    expect(describeViolations(await scan(page, FILE_PANEL))).toEqual([]);
+  });
+
+  test('the prompts panel fails only on the nested control', async ({ page }) => {
+    test.setTimeout(90000);
+    await openSidebarPanel(page, 'prompts');
+
+    expect(
+      describeViolations(await scan(page, FILE_PANEL))
+        .map((violation) => violation.rule)
+        .sort(),
+    ).toEqual(['nested-interactive']);
+  });
+
+  test('the settings dialog has no WCAG A/AA violations', async ({ page }) => {
+    test.setTimeout(90000);
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    await page.getByTestId('nav-user').click();
+    await page.getByRole('menuitem', { name: 'Settings' }).click();
+    /* The dialog element is a zero-height positioning wrapper and never counts
+     * as visible; its heading is what says the dialog actually opened. */
+    await expect(page.getByRole('heading', { name: 'Settings' }).first()).toBeVisible();
+
+    expect(describeViolations(await scan(page, 'div[role="dialog"]'))).toEqual([]);
+  });
+});
