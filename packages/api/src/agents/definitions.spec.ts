@@ -60,11 +60,11 @@ describe('parseAgentDefinition', () => {
     expect(errors.join(' ')).toContain('не годится как идентификатор');
   });
 
+  /** Upstream defaults allowSelf to true; implicit, it hands the orchestrator a second
+   *  delegation target carrying the parent's own prompt. */
   it('allowSelf выключен, пока его явно не включили', () => {
     const src = GOOD.replace('tools:', 'subagents:\n  enabled: true\n  agent_ids: [other]\ntools:');
     const { definition } = parseAgentDefinition(src, 'r.md');
-    // Наверху по умолчанию TRUE: неявный allowSelf дал бы оркестратору вторую цель
-    // делегирования с ЕГО собственным промптом вместо промпта исследователя.
     expect(definition?.subagents?.allowSelf).toBe(false);
     expect(definition?.subagents?.agent_ids).toEqual(['other']);
   });
