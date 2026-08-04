@@ -29,6 +29,7 @@ const {
   updateInterfacePermissions,
 } = require('@librechat/api');
 const { connectDb, indexSync } = require('~/db');
+const { initializeProvisionedAgents } = require('./services/start/agents');
 const {
   updateAccessPermissions,
   sweepOrphanedPreviews,
@@ -134,6 +135,13 @@ const startServer = async () => {
   const appConfig = await getAppConfig({ baseOnly: true });
   initializeFileStorage(appConfig);
   await initializeDeploymentSkills({ projectRoot: path.resolve(__dirname, '../..') });
+  /* File-defined agents (agents.d) reconciled into Mongo. After seedDatabase so the admin
+   * that authors them exists, and before requests are served so an orchestrator's
+   * researcher is present on the first delegation. Never throws: a broken definition file
+   * must not stop the platform from starting. */
+  await runAsSystem(() =>
+    initializeProvisionedAgents({ projectRoot: path.resolve(__dirname, '../..') }),
+  );
   initializeGitHubSkillSync(appConfig);
   startExpiredFileSweep({ appConfig, loadAppConfig: getAppConfig });
   /* Background RAG-embedding worker (no-op unless RAG_ASYNC_EMBED=true).
