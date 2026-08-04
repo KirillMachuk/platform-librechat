@@ -32,7 +32,7 @@ const {
   readDocRoutingThresholds,
   isImageOcrEnabled,
   hashFileContent,
-  imageOcrMinChars,
+  imageOcrMinWords,
   acceptOcrText,
   processAudioFile,
   getStorageMetadata,
@@ -999,7 +999,7 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         IMAGE_OCR_TIMEOUT_MS,
         `image OCR timed out for "${file.originalname}"`,
       );
-      if (parsed?.text && acceptOcrText(parsed.text, imageOcrMinChars())) {
+      if (parsed?.text && acceptOcrText(parsed.text, imageOcrMinWords())) {
         imageOcrText = parsed;
         tool_resource = EToolResources.context;
         logger.info(

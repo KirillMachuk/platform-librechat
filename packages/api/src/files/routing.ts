@@ -104,8 +104,8 @@ export const routePdfBySize = (
     thresholds,
   );
 
-/** Default minimum OCR'd characters for an image to count as a document. */
-export const DEFAULT_IMAGE_OCR_MIN_CHARS = 150;
+/** Default minimum OCR'd words for an image to count as a document. */
+export const DEFAULT_IMAGE_OCR_MIN_WORDS = 3;
 
 /**
  * Whether Auto image-OCR is enabled. Off by default: images keep going natively
@@ -115,9 +115,20 @@ export const DEFAULT_IMAGE_OCR_MIN_CHARS = 150;
 export const isImageOcrEnabled = (env: NodeJS.ProcessEnv = process.env): boolean =>
   env.AUTO_IMAGE_OCR === 'true';
 
-/** Minimum OCR'd characters for an image to count as a document (env-tunable). */
-export const imageOcrMinChars = (env: NodeJS.ProcessEnv = process.env): number =>
-  positiveInt(env.AUTO_IMAGE_OCR_MIN_CHARS, DEFAULT_IMAGE_OCR_MIN_CHARS);
+/** Minimum OCR'd words for an image to count as a document (env-tunable). */
+export const imageOcrMinWords = (env: NodeJS.ProcessEnv = process.env): number =>
+  positiveInt(env.AUTO_IMAGE_OCR_MIN_WORDS, DEFAULT_IMAGE_OCR_MIN_WORDS);
+
+/** A word: three or more consecutive Latin/Cyrillic letters — the OCR languages we run. */
+const OCR_WORD = /[\p{Script=Latin}\p{Script=Cyrillic}]{3,}/gu;
+
+/**
+ * Words of three or more letters in OCR output. This is the quantity that tells
+ * OCR content apart from OCR noise: measured across representative attachments,
+ * real content (contract, table, chart, whiteboard diagram) scored 4–10 while a
+ * photo with no text at all scored 0, with no overlap.
+ */
+export const countTextWords = (text: string): number => (text.match(OCR_WORD) ?? []).length;
 
 const MIN_TEXT_RATIO = 0.7;
 const TEXTY_CHARS = /[\p{L}\p{N}\s.,;:!?'"()[\]{}\-–—«»…/№%@#&*+=]/gu;
@@ -138,10 +149,16 @@ export const looksLikeText = (text: string): boolean => {
 };
 
 /**
- * Whether OCR output should be accepted as a document: enough characters AND it
+ * Whether OCR output should be accepted as a document: enough real words AND it
  * actually looks like text. Otherwise the caller falls back to the vision path.
+ *
+ * The gate counts words rather than characters because character count does not
+ * separate content from noise: the sample that produced the most characters was
+ * an image carrying no text at all, while an ordinary chat screenshot carries
+ * well under a hundred. The gate stays in place — without it that textless image
+ * would become a "document" made of OCR noise.
  */
-export const acceptOcrText = (text: string, minChars: number): boolean => {
+export const acceptOcrText = (text: string, minWords: number): boolean => {
   const trimmed = text.trim();
-  return trimmed.length >= minChars && looksLikeText(trimmed);
+  return countTextWords(trimmed) >= minWords && looksLikeText(trimmed);
 };
