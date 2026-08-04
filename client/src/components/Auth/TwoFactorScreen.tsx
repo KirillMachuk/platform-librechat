@@ -74,7 +74,7 @@ const TwoFactorScreen: React.FC = React.memo(() => {
   }, []);
 
   return (
-    <div className="mt-4">
+    <div>
       <form onSubmit={handleSubmit(onSubmit)}>
         <Label className="flex justify-center break-keep text-center text-sm text-text-primary">
           {localize('com_auth_two_factor')}
