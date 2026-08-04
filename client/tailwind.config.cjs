@@ -36,6 +36,22 @@ module.exports = {
         popover: 'var(--c-z-popover)',
         toast: 'var(--c-z-toast)',
       },
+      // Канон §4 знает ровно две тени — карточки и оверлеи, и обе в тёмной
+      // теме заметно плотнее, чем даёт Tailwind по умолчанию. Значения
+      // объявлены в слое токенов с Ф2a и до сих пор не имели потребителя.
+      // shadow-md/xl/2xl остаются дефолтными до своих партий.
+      boxShadow: {
+        sm: 'var(--c-shadow-sm)',
+        lg: 'var(--c-shadow-lg)',
+      },
+      // Канон §5 знает две длительности: 90 мс цвет/наведение, 120 мс
+      // появление. Произвольное `duration-[90ms]` Tailwind считает
+      // неоднозначным и МОЛЧА не выпускает правило — проверено на собранном
+      // CSS, поэтому имена заводятся здесь.
+      transitionDuration: {
+        90: 'var(--c-dur)',
+        120: 'var(--c-dur-mid)',
+      },
       keyframes: {
         'accordion-down': {
           from: { height: 0 },
@@ -102,14 +118,24 @@ module.exports = {
         'brand-purple': 'var(--brand-purple)',
         presentation: 'var(--presentation)',
         scrim: 'var(--c-scrim)',
+        ink: 'var(--c-ink)',
+        'ink-label': 'var(--c-ink-label)',
         'text-primary': 'var(--text-primary)',
         'text-secondary': 'var(--text-secondary)',
         'text-secondary-alt': 'var(--text-secondary-alt)',
         'text-tertiary': 'var(--text-tertiary)',
+        // Канон §1.1 отдаёт петроль ссылкам и активным состояниям; до сих пор
+        // акцентного ТЕКСТА в словаре не было, и ссылки красились сырым
+        // text-green-600. Имя `accent` уже занято поверхностью из shadcn,
+        // поэтому ключ живёт в семье text-* — класс `text-text-accent`.
+        'text-accent': 'var(--c-acc)',
         'text-warning': 'var(--text-warning)',
         'text-destructive': 'var(--text-destructive)',
         'ring-primary': 'var(--ring-primary)',
         'ring-primary-soft': 'var(--ring-primary-soft)',
+        // Мягкая подложка ошибки: кольцо фокуса поля в ошибке (§6.4) и инлайн-
+        // алерты форм (§6.9). Значение с Ф2a, потребителей до сих пор не было.
+        'err-soft': 'var(--c-err-soft)',
         'header-primary': 'var(--header-primary)',
         'header-hover': 'var(--header-hover)',
         'header-button-hover': 'var(--header-button-hover)',

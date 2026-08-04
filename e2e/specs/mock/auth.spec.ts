@@ -90,7 +90,7 @@ test.describe('auth session', () => {
       await page.getByRole('menuitem', { name: 'Log out' }).click();
 
       await page.waitForURL(/\/login/, { timeout: 10000 });
-      await expect(page.getByLabel('Email')).toBeVisible();
+      await expect(page.getByLabel('Email address', { exact: true })).toBeVisible();
 
       await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
       await expect(page).toHaveURL(/\/login/);

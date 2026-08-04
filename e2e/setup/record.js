@@ -297,7 +297,7 @@ async function register(page, user, timeout) {
   await page.getByLabel('Email').fill(user.email);
   await page.getByTestId('password').fill(user.password);
   await page.getByTestId('confirm_password').fill(user.password);
-  await page.getByLabel('Submit registration').click();
+  await page.getByTestId('registration-button').click();
 }
 
 async function login(page, user) {

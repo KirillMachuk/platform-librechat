@@ -12,20 +12,23 @@ import { useChatContext, useAgentsMapContext, useAssistantsMapContext } from '~/
 import { useGetEndpointsQuery, useGetStartupConfig } from '~/data-provider';
 import { useLocalize, useAuthContext } from '~/hooks';
 
+/** Canon §3: the empty-chat greeting is 22/500 on a phone and 21/500 on the
+ *  desktop scale. Long agent names still step down rather than wrap into a
+ *  wall of text. */
 function getTextSizeClass(text: string | undefined | null) {
   if (!text) {
-    return 'text-xl sm:text-2xl';
+    return 'text-[19px] sm:text-[17px]';
   }
 
   if (text.length < 40) {
-    return 'text-2xl sm:text-4xl';
+    return 'text-[22px] sm:text-[21px]';
   }
 
   if (text.length < 70) {
-    return 'text-xl sm:text-2xl';
+    return 'text-[19px] sm:text-[17px]';
   }
 
-  return 'text-lg sm:text-md';
+  return 'text-[17px] sm:text-[15px]';
 }
 
 export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: boolean }) {
@@ -71,8 +74,14 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
   const brandedSpecLabel = modelSpec?.showOnLanding ? modelSpec.label : '';
   const brandedSpecDescription = (modelSpec?.showOnLanding && modelSpec.description) || '';
   const name = entity?.name ?? brandedSpecLabel;
+  /** Nothing selected has its own words? The screen still says what to do —
+   *  an empty chat with a bare greeting reads as a dead end. */
   const description =
-    (entity?.description || brandedSpecDescription || conversation?.greeting) ?? '';
+    (entity?.description ||
+      brandedSpecDescription ||
+      conversation?.greeting ||
+      localize('com_ui_landing_subtitle')) ??
+    '';
   const descriptionIsHTML = description.trim().startsWith('<');
 
   const sanitizeDescription = useMemo(
@@ -181,13 +190,15 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
       <div ref={contentRef} className="flex flex-col items-center gap-0 p-2">
         {((isAgent || isAssistant) && name) || name ? (
           <div className="flex flex-col items-center gap-0 p-2">
-            <h1 className={`${getTextSizeClass(name)} text-center font-medium text-text-primary`}>
+            <h1
+              className={`${getTextSizeClass(name)} text-center font-medium tracking-[-0.02em] text-text-primary`}
+            >
               <span ref={greetingRef}>{name}</span>
             </h1>
           </div>
         ) : (
           <h1
-            className={`${getTextSizeClass(greetingText)} text-center font-medium text-text-primary`}
+            className={`${getTextSizeClass(greetingText)} text-center font-medium tracking-[-0.02em] text-text-primary`}
           >
             <span ref={greetingRef}>{greetingText}</span>
           </h1>
@@ -195,11 +206,11 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
         {description &&
           (descriptionIsHTML ? (
             <div
-              className="animate-fadeIn mt-4 flex max-w-md items-center justify-center gap-2 text-center text-sm font-normal text-text-primary [&_img]:inline-block [&_img]:h-4 [&_img]:w-4"
+              className="mt-1.5 flex max-w-md items-center justify-center gap-2 text-center text-[15px] font-normal text-text-tertiary sm:mt-2 [&_img]:inline-block [&_img]:h-4 [&_img]:w-4"
               dangerouslySetInnerHTML={{ __html: sanitizeDescription(description) }}
             />
           ) : (
-            <div className="animate-fadeIn mt-4 max-w-md text-center text-sm font-normal text-text-primary">
+            <div className="mt-1.5 max-w-md text-center text-[15px] font-normal text-text-tertiary sm:mt-2">
               {description}
             </div>
           ))}

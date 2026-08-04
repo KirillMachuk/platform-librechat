@@ -118,7 +118,7 @@ test('renders login form', () => {
     />,
   );
   expect(getByLabelText(/email/i)).toBeInTheDocument();
-  expect(getByLabelText(/password/i)).toBeInTheDocument();
+  expect(getByLabelText('Password', { exact: true })).toBeInTheDocument();
 });
 
 test('submits login form', async () => {
@@ -131,7 +131,7 @@ test('submits login form', async () => {
     />,
   );
   const emailInput = getByLabelText(/email/i);
-  const passwordInput = getByLabelText(/password/i);
+  const passwordInput = getByLabelText('Password', { exact: true });
   const submitButton = getByTestId(document.body, 'login-button');
 
   await userEvent.type(emailInput, 'test@example.com');
@@ -151,7 +151,7 @@ test('displays validation error messages', async () => {
     />,
   );
   const emailInput = getByLabelText(/email/i);
-  const passwordInput = getByLabelText(/password/i);
+  const passwordInput = getByLabelText('Password', { exact: true });
   const submitButton = getByTestId(document.body, 'login-button');
 
   await userEvent.type(emailInput, 'test');

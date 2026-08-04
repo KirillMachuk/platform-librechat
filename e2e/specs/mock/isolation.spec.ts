@@ -9,11 +9,11 @@ const A_PRIVATE_MARKER = 'A-private-conversation-marker';
 
 async function register(page: Page, user: User) {
   await page.getByRole('link', { name: 'Sign up' }).click();
-  await page.getByLabel('Full name').fill(user.name);
-  await page.getByLabel('Email').fill(user.email);
+  await page.getByLabel('Full name', { exact: true }).fill(user.name);
+  await page.getByLabel('Email', { exact: true }).fill(user.email);
   await page.getByTestId('password').fill(user.password);
   await page.getByTestId('confirm_password').fill(user.password);
-  await page.getByLabel('Submit registration').click();
+  await page.getByTestId('registration-button').click();
 }
 
 async function registrationErrorIsVisible(page: Page) {
@@ -54,8 +54,8 @@ async function ensureSecondaryUser(browser: Browser, page: Page, user: User, bas
   }
 
   await page.goto('/login', { timeout: 10000 });
-  await page.getByLabel('Email').fill(user.email);
-  await page.getByLabel('Password').fill(user.password);
+  await page.getByLabel('Email address', { exact: true }).fill(user.email);
+  await page.getByLabel('Password', { exact: true }).fill(user.password);
   await page.getByTestId('login-button').click();
   await page.waitForURL(/\/c\/new/, { timeout: 10000 });
 }

@@ -1,5 +1,8 @@
-import { useLocalize } from '~/hooks';
 import { TStartupConfig } from 'librechat-data-provider';
+import { useLocalize } from '~/hooks';
+
+const legalLinkClassName =
+  'text-[12.5px] text-text-accent underline decoration-transparent transition-all duration-200 hover:decoration-current focus:decoration-current';
 
 function Footer({ startupConfig }: { startupConfig: TStartupConfig | null | undefined }) {
   const localize = useLocalize();
@@ -11,7 +14,7 @@ function Footer({ startupConfig }: { startupConfig: TStartupConfig | null | unde
 
   const privacyPolicyRender = privacyPolicy?.externalUrl && (
     <a
-      className="text-sm text-green-600 underline decoration-transparent transition-all duration-200 hover:text-green-700 hover:decoration-green-700 focus:text-green-700 focus:decoration-green-700 dark:text-green-500 dark:hover:text-green-400 dark:hover:decoration-green-400 dark:focus:text-green-400 dark:focus:decoration-green-400"
+      className={legalLinkClassName}
       href={privacyPolicy.externalUrl}
       // Removed for WCAG compliance
       // target={privacyPolicy.openNewTab ? '_blank' : undefined}
@@ -23,7 +26,7 @@ function Footer({ startupConfig }: { startupConfig: TStartupConfig | null | unde
 
   const termsOfServiceRender = termsOfService?.externalUrl && (
     <a
-      className="text-sm text-green-600 underline decoration-transparent transition-all duration-200 hover:text-green-700 hover:decoration-green-700 focus:text-green-700 focus:decoration-green-700 dark:text-green-500 dark:hover:text-green-400 dark:hover:decoration-green-400 dark:focus:text-green-400 dark:focus:decoration-green-400"
+      className={legalLinkClassName}
       href={termsOfService.externalUrl}
       // Removed for WCAG compliance
       // target={termsOfService.openNewTab ? '_blank' : undefined}
@@ -34,12 +37,20 @@ function Footer({ startupConfig }: { startupConfig: TStartupConfig | null | unde
   );
 
   return (
-    <div className="align-end m-4 flex justify-center gap-2" role="contentinfo">
-      {privacyPolicyRender}
-      {privacyPolicyRender && termsOfServiceRender && (
-        <div className="border-r-[1px] border-gray-300 dark:border-gray-600" />
+    <div
+      className="m-4 flex flex-col items-center justify-center gap-2 text-center"
+      role="contentinfo"
+    >
+      <p className="text-[12.5px] text-text-tertiary">{localize('com_auth_access_by_admin')}</p>
+      {(privacyPolicyRender || termsOfServiceRender) && (
+        <div className="flex items-center justify-center gap-2">
+          {privacyPolicyRender}
+          {privacyPolicyRender && termsOfServiceRender && (
+            <div className="h-3 border-r border-border-light" />
+          )}
+          {termsOfServiceRender}
+        </div>
       )}
-      {termsOfServiceRender}
     </div>
   );
 }

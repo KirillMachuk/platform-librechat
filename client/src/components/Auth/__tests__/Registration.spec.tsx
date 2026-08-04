@@ -126,7 +126,7 @@ test('renders registration form', () => {
   expect(getByRole('textbox', { name: /Email/i })).toBeInTheDocument();
   expect(getByTestId('password')).toBeInTheDocument();
   expect(getByTestId('confirm_password')).toBeInTheDocument();
-  expect(getByRole('button', { name: /Submit registration/i })).toBeInTheDocument();
+  expect(getByTestId('registration-button')).toBeInTheDocument();
   expect(getByRole('link', { name: 'Login' })).toBeInTheDocument();
   expect(getByRole('link', { name: 'Login' })).toHaveAttribute('href', '/login');
   expect(getByRole('link', { name: /Continue with Google/i })).toBeInTheDocument();
@@ -173,7 +173,7 @@ test('renders registration form', () => {
 //   await userEvent.type(getByRole('textbox', { name: /Email/i }), 'test@test.com');
 //   await userEvent.type(getByTestId('password'), 'password');
 //   await userEvent.type(getByTestId('confirm_password'), 'password');
-//   await userEvent.click(getByRole('button', { name: /Submit registration/i }));
+//   await userEvent.click(getByTestId('registration-button'));
 
 //   console.log(history);
 //   waitFor(() => {
@@ -182,24 +182,36 @@ test('renders registration form', () => {
 //   });
 // });
 
-test('shows validation error messages', async () => {
+/** The form used to validate on every keystroke, so the first letter of a name
+ *  already lit up "Name must be at least 3 characters". It now waits until the
+ *  field is left. */
+test('stays quiet while a field is still being typed', async () => {
+  const { getByRole, queryAllByRole } = setup();
+  await userEvent.type(getByRole('textbox', { name: /Full name/i }), 'J');
+  const alerts = queryAllByRole('alert').filter((el) => el.textContent !== '');
+  expect(alerts).toHaveLength(0);
+});
+
+test('shows validation error messages once a field is left', async () => {
   const { getByTestId, getAllByRole, getByRole } = setup();
   await userEvent.type(getByRole('textbox', { name: /Full name/i }), 'J');
+  await userEvent.tab();
   await userEvent.type(getByRole('textbox', { name: /Username/i }), 'j');
+  await userEvent.tab();
   await userEvent.type(getByRole('textbox', { name: /Email/i }), 'test');
+  await userEvent.tab();
   await userEvent.type(getByTestId('password'), 'pass');
+  await userEvent.tab();
   await userEvent.type(getByTestId('confirm_password'), 'password1');
-  const alerts = getAllByRole('alert');
-  expect(alerts).toHaveLength(6);
+  await userEvent.tab();
+  const alerts = getAllByRole('alert').filter((el) => el.textContent !== '');
+  expect(alerts).toHaveLength(5);
 
-  // This first alert is for the theme toggle, which is empty within this test but still picked up by getAllByRole as an alert
-  expect(alerts[0]).toHaveTextContent('');
-
-  expect(alerts[1]).toHaveTextContent(/Name must be at least 3 characters/i);
-  expect(alerts[2]).toHaveTextContent(/Username must be at least 2 characters/i);
-  expect(alerts[3]).toHaveTextContent(/You must enter a valid email address/i);
-  expect(alerts[4]).toHaveTextContent(/Password must be at least 8 characters/i);
-  expect(alerts[5]).toHaveTextContent(/Passwords do not match/i);
+  expect(alerts[0]).toHaveTextContent(/Name must be at least 3 characters/i);
+  expect(alerts[1]).toHaveTextContent(/Username must be at least 2 characters/i);
+  expect(alerts[2]).toHaveTextContent(/You must enter a valid email address/i);
+  expect(alerts[3]).toHaveTextContent(/Password must be at least 8 characters/i);
+  expect(alerts[4]).toHaveTextContent(/Passwords do not match/i);
 });
 
 test('shows error message when registration fails', async () => {
@@ -220,7 +232,7 @@ test('shows error message when registration fails', async () => {
   await userEvent.type(getByRole('textbox', { name: /Email/i }), 'test@test.com');
   await userEvent.type(getByTestId('password'), 'password');
   await userEvent.type(getByTestId('confirm_password'), 'password');
-  await userEvent.click(getByRole('button', { name: /Submit registration/i }));
+  await userEvent.click(getByTestId('registration-button'));
 
   waitFor(() => {
     expect(screen.getByTestId('registration-error')).toBeInTheDocument();

@@ -8,18 +8,22 @@ dotenv.config();
 const timeout = Number(process.env.E2E_AUTH_TIMEOUT ?? 15000);
 const chromiumChannel = process.env.E2E_CHROMIUM_CHANNEL || undefined;
 
+/** Field labels are matched exactly: the visibility toggle beside a password
+ *  field is legitimately named "Show password", so a substring match on
+ *  "Password" resolves to two elements. The submit buttons are reached by
+ *  test id — their accessible name is the visible, translated text. */
 async function register(page: Page, user: User) {
   await page.getByRole('link', { name: 'Sign up' }).click();
-  await page.getByLabel('Full name').click();
-  await page.getByLabel('Full name').fill(user.name);
-  await page.getByLabel('Email').click();
-  await page.getByLabel('Email').fill(user.email);
-  await page.getByLabel('Email').press('Tab');
+  await page.getByLabel('Full name', { exact: true }).click();
+  await page.getByLabel('Full name', { exact: true }).fill(user.name);
+  await page.getByLabel('Email', { exact: true }).click();
+  await page.getByLabel('Email', { exact: true }).fill(user.email);
+  await page.getByLabel('Email', { exact: true }).press('Tab');
   await page.getByTestId('password').click();
   await page.getByTestId('password').fill(user.password);
   await page.getByTestId('confirm_password').click();
   await page.getByTestId('confirm_password').fill(user.password);
-  await page.getByLabel('Submit registration').click();
+  await page.getByTestId('registration-button').click();
 }
 
 async function registrationErrorIsVisible(page: Page) {
@@ -30,8 +34,8 @@ async function registrationErrorIsVisible(page: Page) {
 }
 
 async function login(page: Page, user: User) {
-  await page.getByLabel('Email').fill(user.email);
-  await page.getByLabel('Password').fill(user.password);
+  await page.getByLabel('Email address', { exact: true }).fill(user.email);
+  await page.getByLabel('Password', { exact: true }).fill(user.password);
   await page.getByTestId('login-button').click();
 }
 

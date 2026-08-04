@@ -33,8 +33,10 @@ const buttonVariants: (
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-surface-hover hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
-        // hardcoded text color because of WCAG contrast issues (text-white)
-        submit: 'bg-surface-submit text-white hover:bg-surface-submit-hover',
+        /** Canon §1.1/§6.1: the main action is ink, never a colour; hover is
+         *  opacity .86 rather than a second shade, so `transition-opacity`
+         *  deliberately replaces the base `transition-colors` here. */
+        submit: 'bg-ink text-ink-label transition-opacity duration-90 hover:opacity-[0.86]',
       },
       size: {
         default: 'h-10 px-4 py-2',
