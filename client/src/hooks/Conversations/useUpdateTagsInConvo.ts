@@ -1,5 +1,5 @@
-import { useQueryClient } from '@tanstack/react-query';
 import { QueryKeys } from 'librechat-data-provider';
+import { useQueryClient } from '@tanstack/react-query';
 import type { ConversationListResponse } from 'librechat-data-provider';
 import type { InfiniteData } from '@tanstack/react-query';
 import type t from 'librechat-data-provider';
@@ -7,8 +7,18 @@ import type t from 'librechat-data-provider';
 const useUpdateTagsInConvo = () => {
   const queryClient = useQueryClient();
 
+  /**
+   * Conversation lists are cached per filter — `[allConversations, { tags, search, ... }]` — so
+   * the bookmark-filtered list the sidebar shows is a different entry from the plain one. Only a
+   * prefix invalidation reaches every variant; without it a chat stays listed under a bookmark it
+   * has just been taken out of.
+   */
+  const invalidateConversationLists = () => {
+    queryClient.invalidateQueries([QueryKeys.allConversations]);
+  };
+
   // Update the queryClient cache with the new tag when a new tag is added/removed to a conversation
-  const updateTagsInConversation = (conversationId: string, tags: string[]) => {
+  const writeTagsIntoCache = (conversationId: string, tags: string[]) => {
     // Update the tags for the current conversation
     const currentConvo = queryClient.getQueryData<t.TConversation>([
       QueryKeys.conversation,
@@ -42,6 +52,11 @@ const useUpdateTagsInConvo = () => {
         };
       },
     );
+  };
+
+  const updateTagsInConversation = (conversationId: string, tags: string[]) => {
+    writeTagsIntoCache(conversationId, tags);
+    invalidateConversationLists();
   };
 
   // update the tag to newTag in all conversations when a tag is updated to a newTag

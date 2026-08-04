@@ -41,6 +41,7 @@ interface ConversationsProps {
   isChatsExpanded: boolean;
   setIsChatsExpanded: (expanded: boolean) => void;
   showFavorites?: boolean;
+  headerActions?: React.ReactNode;
 }
 
 interface MeasuredRowProps {
@@ -83,13 +84,14 @@ LoadingSpinner.displayName = 'LoadingSpinner';
 interface ChatsHeaderProps {
   isExpanded: boolean;
   onToggle: () => void;
+  actions?: React.ReactNode;
 }
 
-const headerIconButtonClassName =
+export const headerIconButtonClassName =
   'flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-secondary outline-none transition-colors hover:bg-surface-active-alt hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black dark:focus-visible:ring-white';
 
 /** Collapsible header for the Chats section */
-const ChatsHeader: FC<ChatsHeaderProps> = memo(({ isExpanded, onToggle }) => {
+const ChatsHeader: FC<ChatsHeaderProps> = memo(({ isExpanded, onToggle, actions }) => {
   const localize = useLocalize();
   const queryClient = useQueryClient();
   const { newConversation } = useNewConvo();
@@ -118,6 +120,7 @@ const ChatsHeader: FC<ChatsHeaderProps> = memo(({ isExpanded, onToggle }) => {
           aria-hidden="true"
         />
       </button>
+      {actions}
       <TooltipAnchor
         description={localize('com_ui_new_chat')}
         render={
@@ -153,6 +156,7 @@ const Conversations: FC<ConversationsProps> = ({
   isChatsExpanded,
   setIsChatsExpanded,
   showFavorites = true,
+  headerActions,
 }) => {
   const localize = useLocalize();
   const search = useRecoilValue(store.search);
@@ -344,6 +348,7 @@ const Conversations: FC<ConversationsProps> = ({
         <ChatsHeader
           isExpanded={isChatsExpanded}
           onToggle={() => setIsChatsExpanded(!isChatsExpanded)}
+          actions={headerActions}
         />
       </div>
       {isSearchLoading ? (

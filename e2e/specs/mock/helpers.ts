@@ -45,6 +45,13 @@ export const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]
  */
 export async function selectMockEndpoint(page: Page, endpoint: MockEndpoint) {
   const trigger = modelSelectorTrigger(page);
+  /* Choosing what is already chosen is a no-op for the user, but not for this helper: the
+   * selected row carries its own marker and stops matching by exact name. A test that opens
+   * two chats in a row would fail on the second one. */
+  const chosen = (await trigger.textContent()) ?? '';
+  if (chosen.includes(endpoint.label) || chosen.includes(endpoint.model)) {
+    return;
+  }
   await trigger.click();
   const labelOption = page.getByRole('option', { name: endpoint.label, exact: true });
   const modelOption = page.getByRole('option', { name: endpoint.model, exact: true });
