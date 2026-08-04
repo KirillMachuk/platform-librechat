@@ -118,7 +118,7 @@ function RequestPasswordReset() {
         data-testid="request-password-reset-button"
         disabled={isLoading}
         variant="submit"
-        className="mt-1 h-12 w-full rounded-xl text-[15px] sm:h-9 sm:text-sm"
+        className="mt-1 h-12 w-full rounded-xl text-[15px] sm:h-10 sm:text-sm"
       >
         {isLoading ? <Spinner /> : localize('com_auth_continue')}
       </Button>

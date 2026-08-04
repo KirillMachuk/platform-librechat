@@ -30,13 +30,13 @@ function AuthLayout({
   const DisplayError = () => {
     if (hasStartupConfigError) {
       return (
-        <div className="mx-auto w-full max-w-[380px]">
+        <div className="mx-auto w-full max-w-[360px]">
           <ErrorMessage>{localize('com_auth_error_login_server')}</ErrorMessage>
         </div>
       );
     } else if (error === 'com_auth_error_invalid_reset_token') {
       return (
-        <div className="mx-auto w-full max-w-[380px]">
+        <div className="mx-auto w-full max-w-[360px]">
           <ErrorMessage>
             {localize('com_auth_error_invalid_reset_token')}{' '}
             <a className="font-medium text-text-accent hover:underline" href="/forgot-password">
@@ -48,7 +48,7 @@ function AuthLayout({
       );
     } else if (error != null && error) {
       return (
-        <div className="mx-auto w-full max-w-[380px]">
+        <div className="mx-auto w-full max-w-[360px]">
           <ErrorMessage>{localize(error)}</ErrorMessage>
         </div>
       );
@@ -71,7 +71,7 @@ function AuthLayout({
 
       <main className="flex flex-grow flex-col items-center justify-center gap-4 px-4 py-8">
         <DisplayError />
-        <div className="flex w-full max-w-[380px] flex-col gap-3.5 rounded-2xl border border-border-light bg-surface-primary p-5 shadow-sm sm:p-7 sm:pb-6">
+        <div className="flex w-full max-w-[360px] flex-col gap-3.5 rounded-2xl border border-border-light bg-surface-primary p-5 shadow-sm sm:p-7 sm:pb-6">
           <div className="mb-1 flex flex-col items-center gap-[3px] text-center">
             <BlinkAnimation active={isFetching}>
               <img
