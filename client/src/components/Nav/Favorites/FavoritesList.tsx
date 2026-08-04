@@ -13,9 +13,9 @@ import useSelectMention from '~/hooks/Input/useSelectMention';
 import FavoriteItem from './FavoriteItem';
 import store from '~/store';
 
-/** Height intentionally matches FavoriteItem (px-3 py-2 + h-5 icon) to keep the CellMeasurerCache valid across the isAgentsLoading transition. */
+/** Height intentionally matches FavoriteItem (44 on phones, 40 on desktop) to keep the CellMeasurerCache valid across the isAgentsLoading transition. */
 const FavoriteItemSkeleton = () => (
-  <div className="flex w-full items-center rounded-lg px-3 py-2">
+  <div className="flex h-11 w-full items-center rounded-xl px-2.5 md:h-10">
     <Skeleton className="mr-2 h-5 w-5 rounded-full" />
     <Skeleton className="h-4 w-24" />
   </div>

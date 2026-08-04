@@ -58,7 +58,7 @@ const MeasuredRow: FC<MeasuredRowProps> = memo(
   ({ cache, rowKey, parent, index, style, children }) => (
     <CellMeasurer cache={cache} columnIndex={0} key={rowKey} parent={parent} rowIndex={index}>
       {({ registerChild }) => (
-        <div ref={registerChild as React.LegacyRef<HTMLDivElement>} style={style} className="px-3">
+        <div ref={registerChild as React.LegacyRef<HTMLDivElement>} style={style}>
           {children}
         </div>
       )}
@@ -88,7 +88,7 @@ interface ChatsHeaderProps {
 }
 
 export const headerIconButtonClassName =
-  'flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-secondary outline-none transition-colors hover:bg-surface-active-alt hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black dark:focus-visible:ring-white';
+  'tap-target flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-secondary outline-none transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black dark:focus-visible:ring-white';
 
 /** Collapsible header for the Chats section */
 const ChatsHeader: FC<ChatsHeaderProps> = memo(({ isExpanded, onToggle, actions }) => {
@@ -103,11 +103,12 @@ const ChatsHeader: FC<ChatsHeaderProps> = memo(({ isExpanded, onToggle, actions 
     newConversation();
   }, [conversation?.conversationId, newConversation, queryClient]);
 
+  /** Канон §3: заголовок секции — 12,5/500 цвета t3, а не 12/700. */
   return (
-    <div className="flex h-8 w-full items-center gap-0.5 pr-2">
+    <div className="flex h-11 w-full items-center gap-0.5 pr-1 md:h-9">
       <button
         onClick={onToggle}
-        className="group flex min-w-0 flex-1 items-center gap-1 rounded-lg px-1 py-2 text-xs font-bold text-text-secondary outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black dark:focus-visible:ring-white"
+        className="group flex h-full min-w-0 flex-1 items-center gap-1 rounded-lg px-2.5 text-[12.5px] font-medium text-text-tertiary outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black dark:focus-visible:ring-white"
         type="button"
         aria-expanded={isExpanded}
       >
@@ -162,7 +163,9 @@ const Conversations: FC<ConversationsProps> = ({
   const search = useRecoilValue(store.search);
   const { favorites, isLoading: isFavoritesLoading } = useFavorites();
   const isSmallScreen = useMediaQuery('(max-width: 768px)');
-  const convoHeight = isSmallScreen ? 44 : 34;
+  /** Первая оценка высоты строки до замера — канонные 44 на телефоне и 40 на
+   *  десктопе, иначе список дёргается на первом кадре. */
+  const convoHeight = isSmallScreen ? 44 : 40;
   const showAgentMarketplace = useShowMarketplace();
   const {
     ref: listContainerRef,
@@ -344,7 +347,7 @@ const Conversations: FC<ConversationsProps> = ({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col pb-2 text-sm text-text-primary">
-      <div className="px-3">
+      <div>
         <ChatsHeader
           isExpanded={isChatsExpanded}
           onToggle={() => setIsChatsExpanded(!isChatsExpanded)}

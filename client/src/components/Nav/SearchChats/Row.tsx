@@ -1,7 +1,12 @@
 import { memo, useEffect, useCallback } from 'react';
 import { Search } from 'lucide-react';
-import { useRecoilValue, useSetRecoilState } from 'recoil';
 import { TooltipAnchor } from '@librechat/client';
+import { useRecoilValue, useSetRecoilState } from 'recoil';
+import {
+  sidebarIconButtonClassName,
+  sidebarRowIconClassName,
+  sidebarRowClassName,
+} from '~/components/UnifiedSidebar/rows';
 import { useLocalize } from '~/hooks';
 import store from '~/store';
 
@@ -46,9 +51,9 @@ const SearchChatsRow = memo(function SearchChatsRow({ variant = 'full' }: Search
             data-testid="search-chats-icon-button"
             aria-label={label}
             onClick={openDialog}
-            className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-surface-hover"
+            className={sidebarIconButtonClassName}
           >
-            <Search className="h-5 w-5 text-text-primary" aria-hidden="true" />
+            <Search className="icon-md" aria-hidden="true" />
           </button>
         }
       />
@@ -61,9 +66,9 @@ const SearchChatsRow = memo(function SearchChatsRow({ variant = 'full' }: Search
       data-testid="search-chats-button"
       aria-label={label}
       onClick={openDialog}
-      className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm text-text-primary transition-colors hover:bg-surface-hover"
+      className={sidebarRowClassName}
     >
-      <Search className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+      <Search className={sidebarRowIconClassName} aria-hidden="true" />
       <span className="truncate">{label}</span>
     </button>
   );

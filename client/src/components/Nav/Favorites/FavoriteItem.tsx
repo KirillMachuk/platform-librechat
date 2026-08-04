@@ -135,8 +135,8 @@ export default function FavoriteItem(props: FavoriteItemProps) {
       tabIndex={0}
       aria-label={ariaLabel}
       className={cn(
-        'group relative flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm text-text-primary outline-none hover:bg-surface-active-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black dark:focus-visible:ring-white',
-        isPopoverActive ? 'bg-surface-active-alt' : '',
+        'group relative flex h-11 w-full cursor-pointer items-center justify-between rounded-xl px-2.5 text-sm text-text-primary outline-none transition-colors duration-90 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black dark:focus-visible:ring-white md:h-10',
+        isPopoverActive ? 'bg-surface-active' : '',
       )}
       onClick={handleClick}
       onKeyDown={handleKeyDown}

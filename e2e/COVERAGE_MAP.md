@@ -186,6 +186,7 @@ agreed redesign and are the acceptance criteria for it.
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
 | Conversation list loads and paginates on scroll | e2e | `e2e/specs/mock/sidebar.spec.ts` | covered |
+| Collapsed rail still reaches settings and sign-out | e2e | `e2e/specs/mock/sidebar.spec.ts` | covered |
 | Open a conversation from the list | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
 | Rename a conversation | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
 | Delete a conversation | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |

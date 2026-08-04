@@ -5,10 +5,17 @@ import { QueryKeys } from 'librechat-data-provider';
 import { useQueryClient } from '@tanstack/react-query';
 import { Skeleton, Sidebar as SidebarIcon, Button, TooltipAnchor } from '@librechat/client';
 import type { NavLink } from '~/common';
+import {
+  sidebarIconButtonClassName,
+  sidebarNewChatClassName,
+  sidebarRowIconClassName,
+  sidebarRowClassName,
+} from './rows';
 import ConversationsSection from '~/components/UnifiedSidebar/ConversationsSection';
 import { SearchChatsRow, SearchChatsDialog } from '~/components/Nav/SearchChats';
 import { CLOSE_SIDEBAR_ID } from '~/components/Chat/Menus/OpenSidebar';
 import PanelDialog from '~/components/UnifiedSidebar/PanelDialog';
+import { useGetStartupConfig } from '~/data-provider';
 import { useLocalize, useNewConvo } from '~/hooks';
 import { clearMessagesCache, cn } from '~/utils';
 import store from '~/store';
@@ -38,10 +45,10 @@ const NewChatRow = memo(function NewChatRow() {
       href="/c/new"
       data-testid="new-chat-button"
       aria-label={localize('com_ui_new_chat')}
-      className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm text-text-primary transition-colors hover:bg-surface-hover"
+      className={sidebarNewChatClassName}
       onClick={handleClick}
     >
-      <SquarePen className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+      <SquarePen className="icon-md flex-shrink-0" aria-hidden="true" />
       <span className="truncate">{localize('com_ui_new_chat')}</span>
     </a>
   );
@@ -73,10 +80,10 @@ const NewChatIconButton = memo(function NewChatIconButton() {
         <a
           href="/c/new"
           aria-label={localize('com_ui_new_chat')}
-          className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-surface-hover"
+          className={sidebarIconButtonClassName}
           onClick={handleClick}
         >
-          <SquarePen className="h-5 w-5 text-text-primary" aria-hidden="true" />
+          <SquarePen className="icon-md" aria-hidden="true" />
         </a>
       }
     />
@@ -98,10 +105,10 @@ const MenuRow = memo(function MenuRow({
       variant="ghost"
       data-testid={`sidebar-link-${link.id}`}
       aria-label={localize(link.title)}
-      className="flex h-9 w-full items-center justify-start gap-2 rounded-lg px-2 text-sm font-normal text-text-primary hover:bg-surface-hover"
+      className={cn(sidebarRowClassName, 'justify-start')}
       onClick={() => onSelect(link)}
     >
-      {Icon ? <Icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" /> : null}
+      {Icon ? <Icon className={sidebarRowIconClassName} aria-hidden="true" /> : null}
       <span className="truncate">{localize(link.title)}</span>
     </Button>
   );
@@ -119,6 +126,7 @@ function ExpandedPanel({
   onExpand?: () => void;
 }) {
   const localize = useLocalize();
+  const { data: startupConfig } = useGetStartupConfig();
   const [activeLink, setActiveLink] = useState<NavLink | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -147,7 +155,7 @@ function ExpandedPanel({
   const menuLinks = links.filter((link) => link.id !== 'conversations');
 
   const collapsed = (
-    <div className="flex h-full w-full flex-shrink-0 flex-col items-center gap-2 border-r border-border-light bg-surface-primary-alt px-2 py-2">
+    <div className="flex h-full w-full flex-shrink-0 flex-col items-center gap-2 px-2 pb-2 pt-2.5">
       <TooltipAnchor
         side="right"
         description={localize(toggleLabel)}
@@ -158,21 +166,38 @@ function ExpandedPanel({
             variant="ghost"
             aria-label={localize(toggleLabel)}
             aria-expanded={false}
-            className="h-9 w-9 rounded-lg"
+            className={sidebarIconButtonClassName}
             onClick={toggleClick}
           >
-            <SidebarIcon aria-hidden="true" className="h-5 w-5 text-text-primary" />
+            <SidebarIcon aria-hidden="true" className="icon-md" />
           </Button>
         }
       />
       <NewChatIconButton />
       <SearchChatsRow variant="icon" />
+      {/* В свёрнутой рельсе прототип прячет имя, но оставляет аватар: иначе до
+          настроек и выхода не добраться, не развернув сайдбар. */}
+      <div className="mt-auto">
+        <Suspense fallback={<Skeleton className="h-8 w-8 rounded-lg" />}>
+          <AccountSettings collapsed />
+        </Suspense>
+      </div>
     </div>
   );
 
   const fullPanel = (
-    <div className="flex h-full w-full flex-shrink-0 flex-col border-r border-border-light bg-surface-primary-alt">
-      <div className="flex items-center justify-between gap-2 px-2 py-2">
+    <div className="flex h-full w-full flex-shrink-0 flex-col px-2.5 pb-2 pt-2.5">
+      {/* Шапка сайдбара — 50px против 52px у шапки рабочей области: с отступом
+          карточки (8) и её рамкой логотип и селектор модели встают на одну ось
+          (канон §4). Число проверено замером прототипа, не подобрано на глаз. */}
+      <div className="flex h-[50px] flex-none items-center justify-between gap-2 px-1">
+        <img
+          src="assets/logo.svg"
+          className="h-[18px] w-auto object-contain dark:invert"
+          width={1920}
+          height={648}
+          alt={localize('com_ui_logo', { 0: startupConfig?.appTitle ?? '1ma' })}
+        />
         <TooltipAnchor
           side="right"
           description={localize(toggleLabel)}
@@ -184,16 +209,16 @@ function ExpandedPanel({
               variant="ghost"
               aria-label={localize(toggleLabel)}
               aria-expanded={true}
-              className="h-9 w-9 rounded-lg"
+              className={sidebarIconButtonClassName}
               onClick={toggleClick}
             >
-              <SidebarIcon aria-hidden="true" className="h-5 w-5 text-text-primary" />
+              <SidebarIcon aria-hidden="true" className="icon-md" />
             </Button>
           }
         />
       </div>
 
-      <div className="flex flex-col gap-0.5 px-2">
+      <div className="flex flex-col">
         <NewChatRow />
         <SearchChatsRow />
         {menuLinks.map((link) => (
@@ -205,8 +230,8 @@ function ExpandedPanel({
         <ConversationsSection />
       </div>
 
-      <div className="border-t border-border-light px-2 py-2">
-        <Suspense fallback={<Skeleton className="h-9 w-full rounded-lg" />}>
+      <div className="mt-auto flex-none border-t border-border-light px-1.5 pb-1.5 pt-2.5">
+        <Suspense fallback={<Skeleton className="h-9 w-full rounded-xl" />}>
           <AccountSettings />
         </Suspense>
       </div>

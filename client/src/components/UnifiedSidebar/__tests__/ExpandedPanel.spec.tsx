@@ -36,6 +36,11 @@ jest.mock('~/components/Chat/Menus/OpenSidebar', () => ({
   CLOSE_SIDEBAR_ID: 'close-sidebar-button',
 }));
 
+/* Логотип в шапке сайдбара берёт название продукта из конфига (белая метка). */
+jest.mock('~/data-provider', () => ({
+  useGetStartupConfig: () => ({ data: { appTitle: '1ma' } }),
+}));
+
 jest.mock('~/components/Nav/AccountSettings', () => ({
   __esModule: true,
   default: () => <div data-testid="account-settings" />,

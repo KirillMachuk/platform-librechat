@@ -25,22 +25,17 @@ function AccountSettings({ collapsed = false }: { collapsed?: boolean }) {
         data-testid="nav-user"
         className={
           collapsed
-            ? 'flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-surface-active-alt aria-[expanded=true]:bg-surface-active-alt'
-            : 'mt-text-sm flex h-auto w-full items-center gap-2 rounded-xl p-2 text-sm transition-all duration-200 ease-in-out hover:bg-surface-active-alt aria-[expanded=true]:bg-surface-active-alt'
+            ? 'tap-target flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-90 hover:bg-surface-hover aria-[expanded=true]:bg-surface-active'
+            : 'flex h-auto w-full items-center gap-2.5 rounded-xl p-1.5 text-sm text-text-secondary transition-colors duration-90 hover:bg-surface-hover aria-[expanded=true]:bg-surface-active'
         }
       >
-        <div
-          className={collapsed ? 'size-7 flex-shrink-0' : '-ml-0.9 -mt-0.8 h-8 w-8 flex-shrink-0'}
-        >
+        <div className={collapsed ? 'size-7 flex-shrink-0' : 'h-8 w-8 flex-shrink-0'}>
           <div className="relative flex">
             <Avatar user={user} size={collapsed ? 28 : 32} />
           </div>
         </div>
         {!collapsed && (
-          <div
-            className="mt-2 grow overflow-hidden text-ellipsis whitespace-nowrap text-left text-text-primary"
-            style={{ marginTop: '0', marginLeft: '0' }}
-          >
+          <div className="grow overflow-hidden text-ellipsis whitespace-nowrap text-left">
             {user?.name ?? user?.username ?? localize('com_nav_user')}
           </div>
         )}
