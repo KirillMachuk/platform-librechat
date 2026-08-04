@@ -155,7 +155,7 @@ const LoginForm: React.FC<TLoginFormProps> = ({ onSubmit, startupConfig, error, 
           disabled={(requireCaptcha && !turnstileToken) || isSubmitting}
           variant={hasSocialLogin ? 'outline' : 'submit'}
           className={cn(
-            'mt-1 h-12 w-full rounded-xl text-[15px] sm:h-9 sm:text-sm',
+            'mt-1 h-12 w-full rounded-xl text-[15px] sm:h-10 sm:text-sm',
             /** The shared `outline` variant still carries upstream's hairline
              *  border and shadcn hover; canon §6.1 wants `btn-line` and a plain
              *  `hover` fill. Normalising the variant itself touches 88 buttons
