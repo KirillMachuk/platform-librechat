@@ -119,19 +119,28 @@ export interface ImageOcrThresholds {
 }
 
 /**
- * Measured on real Tesseract output over two sets of images: ones that should
- * become documents (text, table, chart, whiteboard diagram) and ones that must
- * never become documents (foliage, sensor grain, empty scan, product photo).
+ * Both numbers come from real Tesseract output, and each catches a failure the
+ * other misses.
  *
- * Word count alone does NOT separate them — a photo of foliage yields up to 12
- * "words" of Tesseract noise ("omy", "ote", "sie"), more than a real diagram.
- * What separates cleanly is how much of the text sits inside those words:
- * content scored 0.41 and up, textless images 0.21 and below. 0.3 sits in the
- * gap. The word minimum stays as a floor so a single stray word cannot pass.
+ * `minDensity` catches a photo with no text on it. Swept over 60 runs across 15
+ * textless images (foliage, sensor grain, gravel, bokeh, brickwork; every psm
+ * mode), Tesseract hallucinates up to 31 "words" — more than a real diagram —
+ * but the word-rich ones top out at 0.304 density. Ten real screenshots and
+ * photos that were read properly bottom out at 0.479 (a photographed receipt).
+ * 0.4 sits between, with room on both sides.
+ *
+ * `minWords` catches the opposite: a photo too blurry to read, where OCR
+ * returns a handful of dense nonsense. A photographed price tag scored 3 words
+ * at density 0.55 — density cannot tell that from a receipt at 0.48. Those same
+ * ten real images bottom out at 10 words, so 6 sits clear of both sides.
+ *
+ * Neither bar alone is enough, and an image that misses either goes to the
+ * vision path — which is the safer answer anyway: four boxes and some arrows
+ * carry their meaning in the arrows, and the words alone would misrepresent it.
  */
 export const DEFAULT_IMAGE_OCR_THRESHOLDS: ImageOcrThresholds = {
-  minWords: 3,
-  minDensity: 0.3,
+  minWords: 6,
+  minDensity: 0.4,
 };
 
 /**
