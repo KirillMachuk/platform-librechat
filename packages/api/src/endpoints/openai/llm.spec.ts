@@ -1,3 +1,5 @@
+import { getChatModelClass, Providers } from '@librechat/agents';
+import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import {
   Verbosity,
   EModelEndpoint,
@@ -1205,6 +1207,156 @@ describe('getOpenAILLMConfig', () => {
       });
 
       expect(result.llmConfig).not.toHaveProperty('includeReasoningContent');
+    });
+  });
+
+  /**
+   * The assertions above only restate the setter. What `includeReasoningContent`
+   * is actually FOR is the DeepSeek thinking-mode tool-calling contract: every
+   * prior assistant message that emitted `tool_calls` must carry its
+   * `reasoning_content` back upstream. That replay happens inside
+   * `@librechat/agents` — `LibreChatOpenAICompletions` (the class behind
+   * `Providers.OPENAI`) reads the field and swaps in its own
+   * `_convertMessagesToOpenAIParams`, which is the only converter that emits
+   * `reasoning_content`. `@langchain/openai`'s stock converter never does, so
+   * grepping there alone reads as "nothing consumes the flag".
+   *
+   * These tests therefore assert the HTTP request body rather than the config,
+   * and fail if the setter, the field name, or the SDK's honouring of it goes away.
+   * @see https://api-docs.deepseek.com/guides/thinking_mode#tool-calls
+   */
+  describe('DeepSeek reasoning_content replay (request body)', () => {
+    interface OutboundToolCall {
+      id: string;
+      type: string;
+      function: { name: string; arguments: string };
+    }
+    interface OutboundMessage {
+      role: string;
+      content?: string;
+      tool_calls?: OutboundToolCall[];
+      tool_call_id?: string;
+      reasoning_content?: string;
+    }
+    interface OutboundBody {
+      stream?: boolean;
+      messages: OutboundMessage[];
+    }
+
+    const PRIOR_TRACE = 'chain-of-thought from the turn that called the tool';
+
+    /** A history whose assistant turn both calls a tool and carries a reasoning trace. */
+    const toolTurnHistory = () => [
+      new HumanMessage('what is the weather in Minsk'),
+      new AIMessage({
+        content: '',
+        tool_calls: [{ id: 'call_1', name: 'get_weather', args: { city: 'Minsk' } }],
+        additional_kwargs: { reasoning_content: PRIOR_TRACE },
+      }),
+      new ToolMessage({ tool_call_id: 'call_1', content: '17C' }),
+      new HumanMessage('and tomorrow?'),
+    ];
+
+    const completionResponse = (model: string) =>
+      JSON.stringify({
+        id: 'chatcmpl-test',
+        object: 'chat.completion',
+        created: 0,
+        model,
+        choices: [
+          { index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'ok' } },
+        ],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      });
+
+    const streamResponse = (model: string) =>
+      [
+        `data: {"id":"chatcmpl-test","object":"chat.completion.chunk","created":0,"model":"${model}","choices":[{"index":0,"delta":{"role":"assistant","content":"ok"},"finish_reason":null}]}`,
+        `data: {"id":"chatcmpl-test","object":"chat.completion.chunk","created":0,"model":"${model}","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
+        'data: [DONE]',
+        '',
+      ].join('\n\n');
+
+    /**
+     * Builds the real chat model from the config `getOpenAILLMConfig` produced and
+     * returns the body it puts on the wire. No network: the OpenAI client's `fetch`
+     * is replaced, so the request is captured before it leaves the process.
+     */
+    async function outboundBody({
+      model,
+      streaming,
+    }: {
+      model: string;
+      streaming: boolean;
+    }): Promise<OutboundBody> {
+      const { llmConfig } = getOpenAILLMConfig({
+        apiKey: 'test-api-key',
+        streaming,
+        modelOptions: { model },
+      });
+
+      const bodies: OutboundBody[] = [];
+      const ChatOpenAI = getChatModelClass(Providers.OPENAI);
+      const client = new ChatOpenAI({
+        ...llmConfig,
+        configuration: {
+          baseURL: 'http://127.0.0.1:9/v1',
+          fetch: async (_url: string, init: { body: string }) => {
+            bodies.push(JSON.parse(init.body) as OutboundBody);
+            return streaming
+              ? new Response(streamResponse(model), {
+                  status: 200,
+                  headers: { 'content-type': 'text/event-stream' },
+                })
+              : new Response(completionResponse(model), {
+                  status: 200,
+                  headers: { 'content-type': 'application/json' },
+                });
+          },
+        },
+      });
+
+      if (streaming) {
+        for await (const _chunk of await client.stream(toolTurnHistory())) {
+          void _chunk;
+        }
+      } else {
+        await client.invoke(toolTurnHistory());
+      }
+
+      expect(bodies).toHaveLength(1);
+      return bodies[0];
+    }
+
+    const assistantTurn = (body: OutboundBody) => {
+      const message = body.messages.find((entry) => entry.role === 'assistant');
+      expect(message).toBeDefined();
+      return message as OutboundMessage;
+    };
+
+    it('replays the prior reasoning trace on a DeepSeek tool turn (non-streaming)', async () => {
+      const assistant = assistantTurn(
+        await outboundBody({ model: 'deepseek/deepseek-v4-flash-0731', streaming: false }),
+      );
+
+      expect(assistant.tool_calls).toHaveLength(1);
+      expect(assistant.reasoning_content).toBe(PRIOR_TRACE);
+    });
+
+    it('replays the prior reasoning trace on a DeepSeek tool turn (streaming)', async () => {
+      const assistant = assistantTurn(
+        await outboundBody({ model: 'deepseek-chat', streaming: true }),
+      );
+
+      expect(assistant.tool_calls).toHaveLength(1);
+      expect(assistant.reasoning_content).toBe(PRIOR_TRACE);
+    });
+
+    it('does not replay it for a non-DeepSeek model', async () => {
+      const assistant = assistantTurn(await outboundBody({ model: 'gpt-4', streaming: false }));
+
+      expect(assistant.tool_calls).toHaveLength(1);
+      expect(assistant).not.toHaveProperty('reasoning_content');
     });
   });
 

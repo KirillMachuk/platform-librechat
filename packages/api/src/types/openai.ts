@@ -30,7 +30,8 @@ export type OpenAIConfiguration = OpenAIClientOptions['configuration'];
 
 export type OAIClientOptions = Omit<OpenAIClientOptions, 'verbosity'> & {
   include_reasoning?: boolean;
-  /** Replays `reasoning_content` on tool-bearing turns (DeepSeek thinking-mode, #13366). */
+  /** Replays `reasoning_content` on tool-bearing turns (DeepSeek thinking-mode, #13366).
+   *  Honoured by `LibreChatOpenAICompletions` in `@librechat/agents`, not by this repo. */
   includeReasoningContent?: boolean;
   promptCache?: boolean;
   _lc_stream_delay?: number;

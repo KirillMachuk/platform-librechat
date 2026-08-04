@@ -813,7 +813,13 @@ export function getOpenAILLMConfig({
       }) || hasModelKwargs;
   }
 
-  /** DeepSeek thinking-mode requires `reasoning_content` replay on tool turns (#13366). */
+  /**
+   * DeepSeek thinking-mode requires `reasoning_content` replay on tool turns (#13366).
+   * The replay itself lives in `@librechat/agents`, not here: `LibreChatOpenAICompletions`
+   * reads this field and swaps in its own message converter. `@langchain/openai`'s stock
+   * converter never emits `reasoning_content`, so grepping this repo alone makes the flag
+   * look dead — see the request-body tests in `llm.spec.ts` for the proof that it is not.
+   */
   if (
     typeof modelOptions.model === 'string' &&
     /^deepseek(?:[-/]|$)/i.test(modelOptions.model.replace(/^~/, ''))
