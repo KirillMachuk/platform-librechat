@@ -28,8 +28,8 @@ async function signInOnCleanDevice(browser: Browser, baseURL: string) {
   const context = await browser.newContext({ storageState: undefined, baseURL });
   const page = await context.newPage();
   await page.goto('/login', { timeout: 15000 });
-  await page.getByLabel('Email').fill(user.email);
-  await page.getByLabel('Password').fill(user.password);
+  await page.getByLabel('Email address', { exact: true }).fill(user.email);
+  await page.getByLabel('Password', { exact: true }).fill(user.password);
   await page.getByTestId('login-button').click();
   await page.waitForURL(/\/c\/new/, { timeout: 20000 });
   return { context, page };

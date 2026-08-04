@@ -1,3 +1,4 @@
+import { TStartupConfig } from 'librechat-data-provider';
 import {
   GoogleIcon,
   FacebookIcon,
@@ -7,12 +8,8 @@ import {
   AppleIcon,
   SamlIcon,
 } from '@librechat/client';
-
 import SocialButton from './SocialButton';
-
 import { useLocalize } from '~/hooks';
-
-import { TStartupConfig } from 'librechat-data-provider';
 
 function SocialLoginRender({
   startupConfig,
@@ -117,24 +114,21 @@ function SocialLoginRender({
     ),
   };
 
+  if (startupConfig.socialLoginEnabled !== true) {
+    return null;
+  }
+
   return (
-    startupConfig.socialLoginEnabled && (
-      <>
-        {startupConfig.emailLoginEnabled && (
-          <>
-            <div className="relative mt-6 flex w-full items-center justify-center border border-t border-gray-300 uppercase dark:border-gray-600">
-              <div className="absolute bg-white px-3 text-xs text-black dark:bg-gray-900 dark:text-white">
-                Or
-              </div>
-            </div>
-            <div className="mt-8" />
-          </>
-        )}
-        <div className="mt-2">
-          {startupConfig.socialLogins?.map((provider) => providerComponents[provider] || null)}
+    <>
+      <div className="flex flex-col gap-2">
+        {startupConfig.socialLogins?.map((provider) => providerComponents[provider] || null)}
+      </div>
+      {startupConfig.emailLoginEnabled && (
+        <div className="flex items-center gap-2.5 text-[12.5px] text-text-tertiary before:h-px before:flex-1 before:bg-border-light before:content-[''] after:h-px after:flex-1 after:bg-border-light after:content-['']">
+          {localize('com_auth_or_divider')}
         </div>
-      </>
-    )
+      )}
+    </>
   );
 }
 

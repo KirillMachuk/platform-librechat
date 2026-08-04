@@ -17,6 +17,10 @@ export interface SecretInputProps
   controlsClassName?: string;
   buttonClassName?: string;
   controlsOnHover?: boolean;
+  /** This package cannot localize on its own — callers that live in a
+   *  translated screen pass the accessible names for the visibility toggle. */
+  showSecretLabel?: string;
+  hideSecretLabel?: string;
 }
 
 const SecretInput: React.ForwardRefExoticComponent<
@@ -33,6 +37,8 @@ const SecretInput: React.ForwardRefExoticComponent<
       controlsClassName,
       buttonClassName,
       controlsOnHover = false,
+      showSecretLabel = 'Show secret',
+      hideSecretLabel = 'Hide secret',
       onCopy,
       copyFeedbackDuration = 2000,
       disabled,
@@ -77,7 +83,7 @@ const SecretInput: React.ForwardRefExoticComponent<
           id={id}
           type={isVisible ? 'text' : 'password'}
           className={cn(
-            'flex h-10 w-full rounded-lg border border-border-light bg-transparent py-2 pl-3 text-sm transition-colors placeholder:text-muted-foreground hover:border-border-medium focus-visible:border-border-heavy focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
+            'flex h-10 w-full rounded-lg border border-border-control bg-transparent py-2 pl-3 text-sm transition-colors placeholder:text-text-tertiary focus-visible:border-border-focus focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring-primary-soft disabled:cursor-not-allowed disabled:opacity-50',
             className ?? '',
             showCopy ? 'pr-20' : 'pr-11',
           )}
@@ -107,7 +113,7 @@ const SecretInput: React.ForwardRefExoticComponent<
               onClick={handleCopy}
               disabled={disabled || !value}
               className={cn(
-                'inline-flex size-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary [&>svg]:block',
+                'tap-target inline-flex size-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary [&>svg]:block',
                 disabled || !value
                   ? 'cursor-not-allowed opacity-50'
                   : 'hover:bg-surface-hover hover:text-text-primary',
@@ -123,13 +129,13 @@ const SecretInput: React.ForwardRefExoticComponent<
             onClick={toggleVisibility}
             disabled={disabled}
             className={cn(
-              'inline-flex size-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary [&>svg]:block',
+              'tap-target inline-flex size-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary [&>svg]:block',
               disabled
                 ? 'cursor-not-allowed opacity-50'
                 : 'hover:bg-surface-hover hover:text-text-primary',
               buttonClassName,
             )}
-            aria-label={isVisible ? 'Hide secret' : 'Show secret'}
+            aria-label={isVisible ? hideSecretLabel : showSecretLabel}
           >
             {isVisible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
           </button>

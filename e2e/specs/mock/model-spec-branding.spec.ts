@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { getPrimaryE2EUser } from '../../setup/users.mock';
-import { NEW_CHAT_PATH, selectModelSpec } from './helpers';
+import { LANDING_GREETING, NEW_CHAT_PATH, selectModelSpec } from './helpers';
 
 /** Spec with `showOnLanding: true` and an HTML `description` in e2e/config/librechat.e2e.yaml. */
 const BRANDED_SPEC = {
@@ -24,16 +23,16 @@ test.describe('model spec branding on landing', () => {
     await expect(main).toContainText(BRANDED_SPEC.descriptionText);
     await expect(main.locator(`img[src$="${BRANDED_SPEC.descriptionIcon}"]`)).toBeVisible();
 
-    const user = getPrimaryE2EUser();
-    await expect(main).not.toContainText(user.name);
+    await expect(main).not.toContainText(LANDING_GREETING);
   });
 
-  test('unbranded spec keeps the personalized greeting', async ({ page }) => {
+  test('unbranded spec keeps the default greeting', async ({ page }) => {
     await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
     await selectModelSpec(page, UNBRANDED_SPEC_LABEL);
 
-    const user = getPrimaryE2EUser();
-    await expect(page.getByRole('main')).toContainText(user.name);
+    const main = page.getByRole('main');
+    await expect(main).toContainText(LANDING_GREETING);
+    await expect(main).not.toContainText(BRANDED_SPEC.label);
   });
 
   test('branded spec renders its description in the model selector', async ({ page }) => {

@@ -7,6 +7,7 @@ import { useRegisterUserMutation } from 'librechat-data-provider/react-query';
 import { ThemeContext, SecretInput, Spinner, Button, isDark } from '@librechat/client';
 import type { TRegisterUser, TError } from 'librechat-data-provider';
 import type { TLoginLayoutContext } from '~/common';
+import { AuthField, authFieldClassName, errorId } from './Field';
 import { useLocalize, TranslationKeys } from '~/hooks';
 import { ErrorMessage } from './ErrorMessage';
 
@@ -21,7 +22,7 @@ const Registration: React.FC = () => {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<TRegisterUser>({ mode: 'onChange' });
+  } = useForm<TRegisterUser>({ mode: 'onTouched', reValidateMode: 'onChange' });
   const password = watch('password');
 
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -36,13 +37,6 @@ const Registration: React.FC = () => {
 
   // only require captcha if we have a siteKey
   const requireCaptcha = Boolean(startupConfig?.turnstile?.siteKey);
-  const authInputClassName =
-    'webkit-dark-styles transition-color peer w-full rounded-2xl border border-border-light bg-surface-primary px-3.5 pb-2.5 pt-3 text-text-primary duration-200 hover:border-border-light focus:border-green-500 focus:outline-none focus-visible:border-green-500';
-  const authSecretInputClassName = `${authInputClassName} h-auto pr-12`;
-  const authLabelClassName =
-    'absolute start-3 top-1.5 z-10 origin-[0] -translate-y-4 scale-75 transform bg-surface-primary px-2 text-sm text-text-secondary-alt duration-200 peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:scale-100 peer-focus:top-1.5 peer-focus:-translate-y-4 peer-focus:scale-75 peer-focus:px-2 peer-focus:text-green-500 rtl:peer-focus:left-auto rtl:peer-focus:translate-x-1/4';
-  const authSecretButtonClassName =
-    'size-9 rounded-xl text-text-secondary-alt hover:bg-transparent hover:text-text-primary';
 
   const registerUser = useRegisterUserMutation({
     onMutate: () => {
@@ -77,50 +71,38 @@ const Registration: React.FC = () => {
       id as 'name' | 'email' | 'username' | 'password' | 'confirm_password',
       validation,
     );
+    const message = errors[id] ? String(errors[id]?.message ?? '') : undefined;
+    /** A saved password must not be offered as a NEW one, and a fresh one has
+     *  to be offerable — `autoComplete={id}` produced neither. */
+    const autoComplete = type === 'password' ? 'new-password' : id;
 
     return (
-      <div className="mb-4">
-        <div className="relative">
-          {type === 'password' ? (
-            <SecretInput
-              id={id}
-              autoComplete={id}
-              aria-label={fieldLabel}
-              {...field}
-              aria-invalid={!!errors[id]}
-              className={authSecretInputClassName}
-              placeholder=" "
-              data-testid={id}
-              label={fieldLabel}
-              labelClassName={authLabelClassName}
-              controlsClassName="right-2"
-              buttonClassName={authSecretButtonClassName}
-            />
-          ) : (
-            <>
-              <input
-                id={id}
-                type={type}
-                autoComplete={id}
-                aria-label={fieldLabel}
-                {...field}
-                aria-invalid={!!errors[id]}
-                className={authInputClassName}
-                placeholder=" "
-                data-testid={id}
-              />
-              <label htmlFor={id} className={authLabelClassName}>
-                {fieldLabel}
-              </label>
-            </>
-          )}
-        </div>
-        {errors[id] && (
-          <span role="alert" className="mt-1 text-sm text-red-500">
-            {String(errors[id]?.message) ?? ''}
-          </span>
+      <AuthField key={id} id={id} label={fieldLabel} error={message}>
+        {type === 'password' ? (
+          <SecretInput
+            id={id}
+            autoComplete={autoComplete}
+            {...field}
+            aria-invalid={!!errors[id]}
+            aria-describedby={message ? errorId(id) : undefined}
+            className={authFieldClassName(!!errors[id])}
+            data-testid={id}
+            showSecretLabel={localize('com_auth_password_show')}
+            hideSecretLabel={localize('com_auth_password_hide')}
+          />
+        ) : (
+          <input
+            id={id}
+            type={type}
+            autoComplete={autoComplete}
+            {...field}
+            aria-invalid={!!errors[id]}
+            aria-describedby={message ? errorId(id) : undefined}
+            className={authFieldClassName(!!errors[id])}
+            data-testid={id}
+          />
         )}
-      </div>
+      </AuthField>
     );
   };
 
@@ -133,7 +115,7 @@ const Registration: React.FC = () => {
       )}
       {registerUser.isSuccess && countdown > 0 && (
         <div
-          className="rounded-md border border-green-500 bg-green-500/10 px-3 py-2 text-sm text-gray-600 dark:text-gray-200"
+          className="rounded-xl border border-border-light bg-surface-secondary px-4 py-3 text-[13px] text-text-secondary"
           role="alert"
         >
           {localize(
@@ -148,7 +130,7 @@ const Registration: React.FC = () => {
       {!startupConfigError && !isFetching && (
         <>
           <form
-            className="mt-6"
+            className="flex flex-col gap-3"
             aria-label={localize('com_ui_form_registration')}
             method="POST"
             onSubmit={handleSubmit((data: TRegisterUser) =>
@@ -176,7 +158,7 @@ const Registration: React.FC = () => {
                 message: localize('com_auth_username_max_length'),
               },
             })}
-            {renderInput('email', 'com_auth_email', 'email', {
+            {renderInput('email', 'com_auth_email_address', 'email', {
               required: localize('com_auth_email_required'),
               minLength: {
                 value: 1,
@@ -208,7 +190,7 @@ const Registration: React.FC = () => {
             })}
 
             {startupConfig?.turnstile?.siteKey && (
-              <div className="my-4 flex justify-center">
+              <div className="flex justify-center">
                 <Turnstile
                   siteKey={startupConfig.turnstile.siteKey}
                   options={{
@@ -222,29 +204,22 @@ const Registration: React.FC = () => {
               </div>
             )}
 
-            <div className="mt-6">
-              <Button
-                disabled={
-                  Object.keys(errors).length > 0 ||
-                  isSubmitting ||
-                  (requireCaptcha && !turnstileToken)
-                }
-                type="submit"
-                aria-label="Submit registration"
-                variant="submit"
-                className="h-12 w-full rounded-2xl"
-              >
-                {isSubmitting ? <Spinner /> : localize('com_auth_continue')}
-              </Button>
-            </div>
+            <Button
+              disabled={isSubmitting || (requireCaptcha && !turnstileToken)}
+              type="submit"
+              data-testid="registration-button"
+              variant="submit"
+              className="mt-1 h-12 w-full rounded-xl text-[15px] sm:h-9 sm:text-sm"
+            >
+              {isSubmitting ? <Spinner /> : localize('com_auth_continue')}
+            </Button>
           </form>
 
-          <p className="my-4 text-center text-sm font-light text-gray-700 dark:text-white">
+          <p className="mt-1 text-center text-[13px] text-text-tertiary">
             {localize('com_auth_already_have_account')}{' '}
             <a
               href={loginPage()}
-              aria-label="Login"
-              className="inline-flex p-1 text-sm font-medium text-green-600 transition-colors hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+              className="tap-target inline-block text-text-accent hover:underline"
             >
               {localize('com_auth_login')}
             </a>

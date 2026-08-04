@@ -74,7 +74,7 @@ const TwoFactorScreen: React.FC = React.memo(() => {
   }, []);
 
   return (
-    <div className="mt-4">
+    <div>
       <form onSubmit={handleSubmit(onSubmit)}>
         <Label className="flex justify-center break-keep text-center text-sm text-text-primary">
           {localize('com_auth_two_factor')}
@@ -105,7 +105,9 @@ const TwoFactorScreen: React.FC = React.memo(() => {
                 </InputOTP>
               )}
             />
-            {errors.token && <span className="text-sm text-red-500">{errors.token.message}</span>}
+            {errors.token && (
+              <span className="text-[12.5px] text-text-destructive">{errors.token.message}</span>
+            )}
           </div>
         )}
         {useBackup && (
@@ -134,7 +136,9 @@ const TwoFactorScreen: React.FC = React.memo(() => {
               )}
             />
             {errors.backupCode && (
-              <span className="text-sm text-red-500">{errors.backupCode.message}</span>
+              <span className="text-[12.5px] text-text-destructive">
+                {errors.backupCode.message}
+              </span>
             )}
           </div>
         )}
@@ -144,7 +148,7 @@ const TwoFactorScreen: React.FC = React.memo(() => {
             aria-label={localize('com_auth_continue')}
             data-testid="login-button"
             disabled={isLoading}
-            className="w-full rounded-2xl bg-green-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-80 dark:bg-green-600 dark:hover:bg-green-700"
+            className="h-12 w-full rounded-xl bg-ink text-[15px] font-medium text-ink-label transition-opacity duration-90 hover:opacity-[0.86] disabled:cursor-not-allowed disabled:opacity-45 sm:h-9 sm:text-sm"
           >
             {isLoading ? localize('com_auth_email_verifying_ellipsis') : localize('com_ui_verify')}
           </button>
@@ -154,7 +158,7 @@ const TwoFactorScreen: React.FC = React.memo(() => {
             <button
               type="button"
               onClick={toggleBackupOn}
-              className="inline-flex p-1 text-sm font-medium text-green-600 transition-colors hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+              className="text-[13px] text-text-accent hover:underline"
             >
               {localize('com_ui_use_backup_code')}
             </button>
@@ -162,7 +166,7 @@ const TwoFactorScreen: React.FC = React.memo(() => {
             <button
               type="button"
               onClick={toggleBackupOff}
-              className="inline-flex p-1 text-sm font-medium text-green-600 transition-colors hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+              className="text-[13px] text-text-accent hover:underline"
             >
               {localize('com_ui_use_2fa_code')}
             </button>

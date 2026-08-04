@@ -61,6 +61,25 @@
   width: 2rem;
 }
 
+/* Канон §4: на телефоне зона нажатия всегда ≥44px, даже когда сам контрол
+   меньше (кнопка-иконка 32, глаз в поле 28). Расширение невидимое, поэтому
+   вид не меняется ни на одной ширине. Правило живёт здесь, а не в `@layer`:
+   внутри слоя Tailwind вычищает то, чего не нашёл в исходниках. */
+@media (max-width: 767.98px) {
+  .tap-target {
+    position: relative;
+  }
+  .tap-target::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+}
+
 @tailwind utilities;
 
 .message-render {

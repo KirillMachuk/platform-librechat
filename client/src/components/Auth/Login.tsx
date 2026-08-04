@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ErrorTypes, registerPage } from 'librechat-data-provider';
 import { OpenIDIcon, useToastContext } from '@librechat/client';
+import { ErrorTypes, registerPage } from 'librechat-data-provider';
 import { useOutletContext, useSearchParams, useLocation } from 'react-router-dom';
 import type { TLoginLayoutContext } from '~/common';
 import { getLoginError, persistRedirectToSession } from '~/utils';
@@ -77,7 +77,7 @@ function Login() {
         <p className="text-lg font-semibold">
           {localize('com_ui_redirecting_to_provider', { 0: startupConfig.openidLabel })}
         </p>
-        <div className="mt-4">
+        <div className="mt-4 w-full max-w-[380px]">
           <SocialButton
             key="openid"
             enabled={startupConfig.openidLoginEnabled}
@@ -110,12 +110,11 @@ function Login() {
         />
       )}
       {startupConfig?.registrationEnabled === true && (
-        <p className="my-4 text-center text-sm font-light text-gray-700 dark:text-white">
-          {' '}
+        <p className="mt-1 text-center text-[13px] text-text-tertiary">
           {localize('com_auth_no_account')}{' '}
           <a
             href={registerPage()}
-            className="inline-flex p-1 text-sm font-medium text-green-600 underline decoration-transparent transition-all duration-200 hover:text-green-700 hover:decoration-green-700 focus:text-green-700 focus:decoration-green-700 dark:text-green-500 dark:hover:text-green-400 dark:hover:decoration-green-400 dark:focus:text-green-400 dark:focus:decoration-green-400"
+            className="tap-target inline-block text-text-accent hover:underline"
           >
             {localize('com_auth_sign_up')}
           </a>

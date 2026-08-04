@@ -293,16 +293,17 @@ async function stopProcess(child) {
 
 async function register(page, user, timeout) {
   await page.getByRole('link', { name: 'Sign up' }).click({ timeout });
-  await page.getByLabel('Full name').fill(user.name);
-  await page.getByLabel('Email').fill(user.email);
+  await page.getByLabel('Full name', { exact: true }).fill(user.name);
+  await page.getByLabel('Email address', { exact: true }).fill(user.email);
   await page.getByTestId('password').fill(user.password);
   await page.getByTestId('confirm_password').fill(user.password);
-  await page.getByLabel('Submit registration').click();
+  await page.getByTestId('registration-button').click();
 }
 
+/** Exact labels: "Show password" beside the field otherwise matches too. */
 async function login(page, user) {
-  await page.getByLabel('Email').fill(user.email);
-  await page.getByLabel('Password').fill(user.password);
+  await page.getByLabel('Email address', { exact: true }).fill(user.email);
+  await page.getByLabel('Password', { exact: true }).fill(user.password);
   await page.getByTestId('login-button').click();
 }
 
