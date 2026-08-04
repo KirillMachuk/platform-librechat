@@ -261,6 +261,7 @@ agreed redesign and are the acceptance criteria for it.
 | The agents panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts` | fixme:Ф1 |
 | The prompts panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts` | fixme:Ф1 |
 | Data tables announce translated labels, not raw keys | a11y | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| Every control the keyboard reaches shows that it has focus | a11y | `e2e/specs/mock/canon.spec.ts` | covered |
 | Shared components' translation keys are defined in this app | unit | `client/src/locales/keys.spec.ts` | covered |
 | File panel exposes tablist semantics | a11y | — | fixme:Ф1 |
 
@@ -367,6 +368,18 @@ An earlier revision of this file recorded `client/src/components/Nav/Bookmarks/B
 dead code. It was: the unified-sidebar rework (`1f32bd336`) removed bookmarks from the sidebar on
 purpose but left the chat-header menu behind, so chats could be filed under a bookmark and never
 found again. The sidebar control is wired up again and the loop is covered end to end.
+
+Canon checks are being **ported** from `tools/ui_probe.js` in the workspace, not rewritten. That
+probe has its own mutation self-test (`tools/probe_selftest.js`, twelve checks, run and green on
+2026-08-04) — run it before trusting its numbers. Of its nine measurements, `contrast` and `names`
+are already covered by axe here; `focusring`, `targets` (WCAG 2.2, outside the tag set axe runs
+with), `layers`, `reachable` and `cls` are not, and are the ones worth porting. Focus visibility
+is done; the rest follow one at a time.
+
+Two things the probe learned the hard way, carried over with it: focus must be measured with real
+Tab presses (the fork's focus styles hang off `:focus-visible`, which programmatic focus does not
+switch on), and the appearance must be sampled from the element **and three ancestors**, because
+composite controls draw the ring on a wrapper.
 
 ## 13. Notes on the preview matrix
 
