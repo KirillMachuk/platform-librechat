@@ -10,9 +10,9 @@ import {
   useToastContext,
 } from '@librechat/client';
 import type { TUserMemory } from 'librechat-data-provider';
+import type { MemoryErrorResponse } from '~/utils/memoryError';
 import { useUpdateMemoryMutation, useMemoriesQuery } from '~/data-provider';
 import { memoryErrorKey } from '~/utils/memoryError';
-import type { MemoryErrorResponse } from '~/utils/memoryError';
 import { useLocalize, useHasAccess } from '~/hooks';
 import MemoryUsageBadge from './MemoryUsageBadge';
 import { formatTimestamp } from '~/utils';

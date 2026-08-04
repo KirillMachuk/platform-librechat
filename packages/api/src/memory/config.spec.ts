@@ -1,9 +1,7 @@
 import { logger } from '@librechat/data-schemas';
-import { DEFAULT_MEMORY_MAX_INPUT_TOKENS } from 'librechat-data-provider';
-
-import type { TCustomConfig } from 'librechat-data-provider';
-
 import { MEMORY_GUARD_URL_ENV } from '@librechat/data-schemas';
+import { DEFAULT_MEMORY_MAX_INPUT_TOKENS } from 'librechat-data-provider';
+import type { TCustomConfig } from 'librechat-data-provider';
 import { isMemoryAgentEnabled, isMemoryEnabled, loadMemoryConfig } from './config';
 
 describe('memory config', () => {

@@ -1,6 +1,6 @@
-import { applyContextToAgent } from '~/agents/context';
 import type { AgentWithTools } from '~/agents/context';
 import type { MCPManager } from '~/mcp/MCPManager';
+import { applyContextToAgent } from '~/agents/context';
 
 /**
  * Memory is injected into every request, so where it lands in the system prompt is
