@@ -5,6 +5,7 @@ import { DropdownPopup, TooltipAnchor } from '@librechat/client';
 import { BookmarkFilledIcon, BookmarkIcon } from '@radix-ui/react-icons';
 import type { FC } from 'react';
 import type * as t from '~/common';
+import { headerIconButtonClassName } from '~/components/Conversations/Conversations';
 import { useGetConversationTags } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -107,18 +108,15 @@ const BookmarkNav: FC<BookmarkNavProps> = ({ tags, setTags }: BookmarkNavProps) 
               aria-label={buttonAriaLabel}
               aria-pressed={tags.length > 0}
               className={cn(
-                'flex items-center justify-center',
-                'size-9 border-none text-text-primary hover:bg-accent hover:text-accent-foreground',
-                'rounded-lg border-none p-2 hover:bg-surface-active-alt',
-                'outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black dark:focus-visible:ring-white',
-                isMenuOpen ? 'bg-surface-hover' : '',
+                headerIconButtonClassName,
+                isMenuOpen || tags.length > 0 ? 'bg-surface-active-alt text-text-primary' : '',
               )}
-              data-testid="bookmark-menu"
+              data-testid="bookmark-nav"
             >
               {tags.length > 0 ? (
-                <BookmarkFilledIcon aria-hidden="true" className="icon-lg text-text-primary" />
+                <BookmarkFilledIcon aria-hidden="true" className="h-4 w-4" />
               ) : (
-                <BookmarkIcon aria-hidden="true" className="icon-lg text-text-primary" />
+                <BookmarkIcon aria-hidden="true" className="h-4 w-4" />
               )}
             </Ariakit.MenuButton>
           }
