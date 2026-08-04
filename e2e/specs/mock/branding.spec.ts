@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { NEW_CHAT_PATH } from './helpers';
+import { NEW_CHAT_PATH, openAccountMenu } from './helpers';
 
 /**
  * This is a white-label fork: the client must never see the upstream name.
@@ -74,7 +74,7 @@ test.describe('branding', () => {
   test('the account menu and settings never show it either', async ({ page }) => {
     test.setTimeout(90000);
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
-    await page.getByTestId('nav-user').click();
+    await openAccountMenu(page);
     await expect(page.getByRole('menu')).toBeVisible();
 
     expect(await upstreamMentions(page)).toEqual([]);
@@ -112,7 +112,7 @@ test.describe('help', () => {
       };
     });
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
-    await page.getByTestId('nav-user').click();
+    await openAccountMenu(page);
 
     const help = page.getByRole('menuitem', { name: /Help/i });
     await expect(help).toBeVisible();

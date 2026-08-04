@@ -1,6 +1,12 @@
 import { expect, test } from '@playwright/test';
 import type { Browser, Page } from '@playwright/test';
-import { MOCK_ENDPOINTS, NEW_CHAT_PATH, selectMockEndpoint, sendMessage } from './helpers';
+import {
+  MOCK_ENDPOINTS,
+  NEW_CHAT_PATH,
+  openAccountMenu,
+  selectMockEndpoint,
+  sendMessage,
+} from './helpers';
 import { getPrimaryE2EUser } from '../../setup/users.mock';
 
 /**
@@ -10,7 +16,7 @@ import { getPrimaryE2EUser } from '../../setup/users.mock';
  */
 
 async function openChatSettings(page: Page) {
-  await page.getByTestId('nav-user').click();
+  await openAccountMenu(page);
   await page.getByRole('menuitem', { name: 'Settings' }).click();
   await page.getByRole('tab', { name: 'Chat' }).click();
 }

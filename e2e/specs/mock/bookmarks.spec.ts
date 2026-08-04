@@ -4,6 +4,7 @@ import {
   MOCK_ENDPOINTS,
   NEW_CHAT_PATH,
   messagesView,
+  openAccountMenu,
   replyPrompt,
   replyText,
   selectMockEndpoint,
@@ -58,7 +59,7 @@ async function openChatSettings(page: Page) {
   await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({
     timeout: 30000,
   });
-  await page.getByTestId('nav-user').click();
+  await openAccountMenu(page);
   await page.getByRole('menuitem', { name: 'Settings' }).click();
   await page.getByRole('tab', { name: 'Chat' }).click();
 }
