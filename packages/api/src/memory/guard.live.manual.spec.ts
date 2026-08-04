@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
+import { Tools } from 'librechat-data-provider';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createMethods, createModels } from '@librechat/data-schemas';
+import type { MemoryArtifact } from 'librechat-data-provider';
 import { createMemoryTool } from '~/agents/memory';
 import { checkMemoryValue } from './guard';
 
@@ -79,7 +81,8 @@ describe('memory write guard, end to end', () => {
     for (const value of PERSONAL_DATA) {
       const [message, artifact] = await tool().func({ key: 'context', value });
       expect(message).toContain('Not saved');
-      expect(JSON.parse((artifact as never)['memory'].value).errorType).toBe('personal_data');
+      const errorArtifact = (artifact as Record<Tools.memory, MemoryArtifact>)[Tools.memory];
+      expect(JSON.parse(errorArtifact.value as string).errorType).toBe('personal_data');
     }
 
     const stored = await methods.getAllUserMemories(userId);
