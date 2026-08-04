@@ -18,14 +18,22 @@ describe('resolveDeepResearchMode', () => {
   });
 
   it('selects the active mode preset', () => {
-    expect(resolveDeepResearchMode({ activeMode: 'economy' })).toEqual(
-      DEEP_RESEARCH_MODE_DEFAULTS.economy,
+    expect(resolveDeepResearchMode({ activeMode: 'balanced' })).toEqual(
+      DEEP_RESEARCH_MODE_DEFAULTS.balanced,
     );
   });
 
-  it('falls back to deep for an unknown active mode', () => {
+  it('falls back to balanced for an unknown active mode', () => {
     expect(resolveDeepResearchMode({ activeMode: 'nonsense' as unknown as 'deep' })).toEqual(
-      DEEP_RESEARCH_MODE_DEFAULTS.deep,
+      DEEP_RESEARCH_MODE_DEFAULTS.balanced,
+    );
+  });
+
+  it('lands a tenant still stored on the retired economy tier on balanced, never on deep', () => {
+    const resolved = resolveDeepResearchMode({ activeMode: 'economy' as unknown as 'deep' });
+    expect(resolved).toEqual(DEEP_RESEARCH_MODE_DEFAULTS.balanced);
+    expect(resolved.perRunTokenBudget).toBeLessThan(
+      DEEP_RESEARCH_MODE_DEFAULTS.deep.perRunTokenBudget,
     );
   });
 
@@ -92,7 +100,7 @@ describe('deepResearchRecursionLimit', () => {
     const deep = deepResearchRecursionLimit(DEEP_RESEARCH_MODE_DEFAULTS.deep);
     expect(deep).toBe((8 + 4) * 2 + 6); // 30
     expect(deep).toBeLessThanOrEqual(50);
-    expect(deepResearchRecursionLimit(DEEP_RESEARCH_MODE_DEFAULTS.economy)).toBeGreaterThanOrEqual(
+    expect(deepResearchRecursionLimit(DEEP_RESEARCH_MODE_DEFAULTS.balanced)).toBeGreaterThanOrEqual(
       12,
     );
   });

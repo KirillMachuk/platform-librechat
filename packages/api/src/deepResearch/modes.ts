@@ -5,18 +5,10 @@ import type { ResolvedDeepResearchMode } from './types';
 /**
  * Safe starting presets per depth tier. Admins override per mode via
  * `deepResearch.modes.<tier>` in config; the active tier is `deepResearch.activeMode`.
- * Deep keeps strong models (Opus lead / Sonnet worker via config); economy/balanced
- * move to cheaper models once the model price/quality benchmark lands.
+ * Deep keeps strong models (Opus lead / Sonnet worker via config); balanced runs the
+ * cheap model the price/quality benchmark picked.
  */
 export const DEEP_RESEARCH_MODE_DEFAULTS: Record<DeepResearchMode, ResolvedDeepResearchMode> = {
-  economy: {
-    name: 'economy',
-    maxConcurrentResearchers: 2,
-    maxOrchestratorCycles: 4,
-    maxSearcherTurns: 3,
-    perRunTokenBudget: 200_000,
-    wallClockMinutes: 5,
-  },
   balanced: {
     name: 'balanced',
     maxConcurrentResearchers: 3,
@@ -59,10 +51,16 @@ export function resolveDeepResearchModel(
   return candidates.find((model) => !isReasoningModel(model));
 }
 
-/** Resolves the active Deep Research mode from tenant config, merged over defaults. */
+/**
+ * Resolves the active Deep Research mode from tenant config, merged over defaults.
+ *
+ * An unknown tier falls back to `balanced`, not `deep`: the retired `economy` value can
+ * still sit in a tenant's stored override, and resolving it to the premium tier would
+ * silently bill Opus-priced research to a tenant who had chosen the cheapest option.
+ */
 export function resolveDeepResearchMode(config?: TDeepResearchConfig): ResolvedDeepResearchMode {
   const activeMode = (config?.activeMode ?? 'deep') as DeepResearchMode;
-  const base = DEEP_RESEARCH_MODE_DEFAULTS[activeMode] ?? DEEP_RESEARCH_MODE_DEFAULTS.deep;
+  const base = DEEP_RESEARCH_MODE_DEFAULTS[activeMode] ?? DEEP_RESEARCH_MODE_DEFAULTS.balanced;
   const override = config?.modes?.[activeMode];
   if (!override) {
     return { ...base };

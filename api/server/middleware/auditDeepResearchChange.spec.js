@@ -76,14 +76,16 @@ describe('auditDeepResearchChange', () => {
   });
 
   it('records only the model role that was provided (partial update)', () => {
-    const req = buildReq({ body: { mode: 'economy', leadModel: 'deepseek-chat-v3.1' } });
+    const req = buildReq({
+      body: { mode: 'balanced', leadModel: 'deepseek/deepseek-v4-flash-0731' },
+    });
     const res = buildRes(200);
     auditDeepResearchChange(req, res, jest.fn());
     res.emit('finish');
 
     expect(mockRecordAudit.mock.calls[0][0].metadata).toEqual({
-      mode: 'economy',
-      leadModel: 'deepseek-chat-v3.1',
+      mode: 'balanced',
+      leadModel: 'deepseek/deepseek-v4-flash-0731',
     });
   });
 

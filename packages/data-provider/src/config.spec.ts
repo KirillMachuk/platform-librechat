@@ -1,13 +1,15 @@
 import type { TEndpointsConfig } from './types';
-import { EModelEndpoint, isDocumentSupportedProvider } from './schemas';
-import { getEndpointFileConfig, mergeFileConfig } from './file-config';
 import {
   allowedAddressesSchema,
   configSchema,
+  deepResearchSchema,
+  DeepResearchModes,
   excludedKeys,
   resolveEndpointType,
   webSearchSchema,
 } from './config';
+import { EModelEndpoint, isDocumentSupportedProvider } from './schemas';
+import { getEndpointFileConfig, mergeFileConfig } from './file-config';
 
 const endpointsConfig: TEndpointsConfig = {
   [EModelEndpoint.openAI]: { userProvide: false, order: 0 },
@@ -557,5 +559,38 @@ describe('webSearchSchema', () => {
         },
       }),
     ).toThrow();
+  });
+});
+
+describe('deepResearchSchema', () => {
+  it('offers exactly the two depth tiers', () => {
+    expect(DeepResearchModes).toEqual(['balanced', 'deep']);
+  });
+
+  it('keeps a tenant stored on the retired economy tier working, on the CHEAP tier', () => {
+    // The tier was removed from the product, but a tenant's config-override document in
+    // Mongo can still hold it. Throwing here would reject the whole app config; resolving
+    // it to `deep` would bill Opus-priced research to whoever had picked the cheapest
+    // option. Neither is acceptable — it must degrade to `balanced`.
+    expect(deepResearchSchema.parse({ activeMode: 'economy' }).activeMode).toBe('balanced');
+    expect(deepResearchSchema.parse({ activeMode: 'nonsense' }).activeMode).toBe('balanced');
+  });
+
+  it('still honours a valid tier and the unset default', () => {
+    expect(deepResearchSchema.parse({ activeMode: 'balanced' }).activeMode).toBe('balanced');
+    expect(deepResearchSchema.parse({ activeMode: 'deep' }).activeMode).toBe('deep');
+    expect(deepResearchSchema.parse({}).activeMode).toBe('deep');
+  });
+
+  it('drops a leftover economy block instead of rejecting the config', () => {
+    const parsed = deepResearchSchema.parse({
+      activeMode: 'balanced',
+      modes: {
+        economy: { leadModel: 'old/model' },
+        balanced: { leadModel: 'deepseek/deepseek-v4-flash-0731' },
+      },
+    });
+    expect(parsed.modes).not.toHaveProperty('economy');
+    expect(parsed.modes?.balanced?.leadModel).toBe('deepseek/deepseek-v4-flash-0731');
   });
 });

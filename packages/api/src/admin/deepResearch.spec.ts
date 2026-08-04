@@ -72,7 +72,7 @@ function createHandlers(overrides = {}) {
 
 describe('createDeepResearchSettingsHandlers', () => {
   describe('getSettings', () => {
-    it('returns the active mode and all three resolved tiers', async () => {
+    it('returns the active mode and both resolved tiers', async () => {
       const { handlers } = createHandlers();
       const res = mockRes();
 
@@ -80,7 +80,7 @@ describe('createDeepResearchSettingsHandlers', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.body?.activeMode).toBe('balanced');
-      expect(res.body?.modes?.map((m) => m.name)).toEqual(['economy', 'balanced', 'deep']);
+      expect(res.body?.modes?.map((m) => m.name)).toEqual(['balanced', 'deep']);
       // Excludes the reasoning model (gpt-5.5) — not a valid DR tool-node model.
       expect(res.body?.availableModels).toEqual([...AVAILABLE].sort());
       expect(res.body?.availableModels).not.toContain('openai/gpt-5.5');
@@ -121,6 +121,17 @@ describe('createDeepResearchSettingsHandlers', () => {
       expect(deps.invalidateConfigCaches).not.toHaveBeenCalled();
     });
 
+    it('rejects the retired economy tier — a stale admin tab must not write it back', async () => {
+      const { handlers, deps } = createHandlers();
+      const res = mockRes();
+
+      await handlers.setActiveMode(mockReq({ body: { activeMode: 'economy' } }), res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body?.error).toContain('balanced, deep');
+      expect(deps.patchConfigFields).not.toHaveBeenCalled();
+    });
+
     it('rejects a missing mode without writing', async () => {
       const { handlers, deps } = createHandlers();
       const res = mockRes();
@@ -133,23 +144,23 @@ describe('createDeepResearchSettingsHandlers', () => {
 
     it('patches the base-principal override, invalidates caches, and returns the new mode', async () => {
       // After the override is written, the refreshed read reflects the new mode.
-      const getAppConfig = jest.fn().mockResolvedValue(appConfig('economy'));
+      const getAppConfig = jest.fn().mockResolvedValue(appConfig('deep'));
       const { handlers, deps } = createHandlers({ getAppConfig });
       const res = mockRes();
 
-      await handlers.setActiveMode(mockReq({ body: { activeMode: 'economy' } }), res);
+      await handlers.setActiveMode(mockReq({ body: { activeMode: 'deep' } }), res);
 
       expect(deps.patchConfigFields).toHaveBeenCalledWith(
         PrincipalType.ROLE,
         BASE_CONFIG_PRINCIPAL_ID,
         PrincipalModel.ROLE,
-        { 'deepResearch.activeMode': 'economy' },
+        { 'deepResearch.activeMode': 'deep' },
         10,
       );
       expect(deps.invalidateConfigCaches).toHaveBeenCalledWith('t1');
       expect(getAppConfig).toHaveBeenLastCalledWith({ tenantId: 't1', refresh: true });
       expect(res.statusCode).toBe(200);
-      expect(res.body?.activeMode).toBe('economy');
+      expect(res.body?.activeMode).toBe('deep');
     });
 
     it('returns 500 when the write fails', async () => {
@@ -201,7 +212,7 @@ describe('createDeepResearchSettingsHandlers', () => {
       await handlers.setModeModels(
         mockReq({
           body: {
-            mode: 'economy',
+            mode: 'balanced',
             leadModel: 'openai/ghost-model',
             workerModel: 'deepseek/deepseek-v3.2',
           },
