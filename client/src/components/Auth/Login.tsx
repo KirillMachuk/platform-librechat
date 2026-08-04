@@ -110,9 +110,12 @@ function Login() {
         />
       )}
       {startupConfig?.registrationEnabled === true && (
-        <p className="text-center text-[13px] text-text-tertiary">
+        <p className="mt-1 text-center text-[13px] text-text-tertiary">
           {localize('com_auth_no_account')}{' '}
-          <a href={registerPage()} className="text-text-accent hover:underline">
+          <a
+            href={registerPage()}
+            className="tap-target inline-block text-text-accent hover:underline"
+          >
             {localize('com_auth_sign_up')}
           </a>
         </p>

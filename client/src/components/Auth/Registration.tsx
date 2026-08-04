@@ -215,9 +215,12 @@ const Registration: React.FC = () => {
             </Button>
           </form>
 
-          <p className="text-center text-[13px] text-text-tertiary">
+          <p className="mt-1 text-center text-[13px] text-text-tertiary">
             {localize('com_auth_already_have_account')}{' '}
-            <a href={loginPage()} className="text-text-accent hover:underline">
+            <a
+              href={loginPage()}
+              className="tap-target inline-block text-text-accent hover:underline"
+            >
               {localize('com_auth_login')}
             </a>
           </p>

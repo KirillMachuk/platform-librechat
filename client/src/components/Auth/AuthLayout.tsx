@@ -62,8 +62,11 @@ function AuthLayout({
   return (
     <div className="relative flex min-h-screen flex-col bg-presentation">
       <Banner />
+      {/* returnThemeOnly: the wrapper form of ThemeSelector positions itself
+          absolutely at the bottom-left, and nesting that inside a positioned
+          box threw the toggle 36px past the right edge of the page. */}
       <div className="absolute right-3 top-3">
-        <ThemeSelector />
+        <ThemeSelector returnThemeOnly />
       </div>
 
       <main className="flex flex-grow flex-col items-center justify-center gap-4 px-4 py-8">
@@ -74,6 +77,8 @@ function AuthLayout({
               <img
                 src="assets/logo.svg"
                 className="h-[30px] w-auto object-contain dark:invert"
+                width={1920}
+                height={648}
                 alt={localize('com_ui_logo', { 0: startupConfig?.appTitle ?? '1ma' })}
               />
             </BlinkAnimation>

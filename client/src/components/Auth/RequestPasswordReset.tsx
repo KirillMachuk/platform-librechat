@@ -122,7 +122,10 @@ function RequestPasswordReset() {
       >
         {isLoading ? <Spinner /> : localize('com_auth_continue')}
       </Button>
-      <a href={loginPage()} className="self-center text-[13px] text-text-accent hover:underline">
+      <a
+        href={loginPage()}
+        className="tap-target mt-1 inline-block self-center text-[13px] text-text-accent hover:underline"
+      >
         {localize('com_auth_back_to_login')}
       </a>
     </form>

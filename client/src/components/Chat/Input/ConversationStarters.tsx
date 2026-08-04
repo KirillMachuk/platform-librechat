@@ -79,7 +79,7 @@ const ConversationStarters = () => {
           <button
             key={index}
             onClick={() => sendConversationStarter(text)}
-            className="duration-90 flex max-w-[16rem] cursor-pointer items-center justify-center rounded-full border border-border-light bg-surface-primary px-3.5 py-[7px] text-center text-[13px] text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+            className="flex max-w-[16rem] cursor-pointer items-center justify-center rounded-full border border-border-light bg-surface-primary px-3.5 py-[7px] text-center text-[13px] text-text-secondary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
           >
             <span className="line-clamp-2 text-balance break-words">{text}</span>
           </button>
