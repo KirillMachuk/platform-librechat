@@ -415,3 +415,44 @@ test.describe('core chat loop', () => {
     await expect(messagesView(page).getByRole('button', { name: textFixture.name })).toBeVisible();
   });
 });
+
+test.describe('losing the connection mid-reply', () => {
+  /**
+   * What a user gets when their network drops while the model is answering.
+   * The promise being tested is not "it recovers" — it is "nothing you already
+   * received is lost", which is what people actually notice.
+   *
+   * Observed and worth knowing: while offline the composer still shows "Stop
+   * generating", so the interface does not itself notice the connection went
+   * away. That is not asserted here because how long a dropped stream takes to
+   * surface is timing-dependent; it is recorded in e2e/COVERAGE_MAP.md.
+   */
+  test('keeps what already arrived, and loses nothing after reconnecting', async ({
+    page,
+    context,
+  }) => {
+    test.setTimeout(180000);
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
+
+    const prompt = 'E2E_SLOW_REPLY:connection-drop';
+    await sendMessage(page, prompt);
+    const reply = messagesView(page).getByText(/E2E slow reply connection-drop/);
+    await expect(reply).toBeVisible({ timeout: 60000 });
+    /* Wait for a chunk well past the first so the drop lands mid-stream rather
+     * than before anything meaningful has been received. */
+    await expect(reply).toContainText('chunk-005', { timeout: 60000 });
+
+    await context.setOffline(true);
+    const received = await reply.innerText();
+    expect(received).toContain('chunk-005');
+
+    await context.setOffline(false);
+    await page.reload({ timeout: 30000 });
+
+    await expect(messagesView(page).getByText(prompt)).toBeVisible({ timeout: 30000 });
+    const persisted = messagesView(page).getByText(/E2E slow reply connection-drop/);
+    await expect(persisted).toBeVisible({ timeout: 30000 });
+    await expect(persisted).toContainText('chunk-005');
+  });
+});

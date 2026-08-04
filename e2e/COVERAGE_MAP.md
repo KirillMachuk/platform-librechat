@@ -46,7 +46,8 @@ test exists and is skipped until the redesign lands.
 | Fork a conversation from a message | unit | `client/src/components/Chat/Messages/__tests__/Fork.spec.tsx` | covered |
 | Error mid-stream surfaces a readable message | e2e | `e2e/specs/mock/chat.spec.ts` | covered |
 | Submit is blocked while a run is in flight | unit | `client/src/hooks/Chat/__tests__/useChatFunctions.spec.ts` | covered |
-| Network drop mid-stream, resume on reload | e2e | — | planned:Э6 |
+| A dropped connection mid-reply loses nothing | e2e | `e2e/specs/mock/chat.spec.ts` | covered |
+| A dropped connection is noticed and shown to the user | e2e | — | gap |
 
 ## 3. Message rendering
 
@@ -283,6 +284,13 @@ the app is exercised at that width today, and so the band test has somewhere to 
 Pixel snapshots are `planned:Э7`, not Э5. Baselines taken now would be invalidated by the very
 redesign they are meant to guard, and they would have to be generated on CI rather than on a Mac
 to compare at all. Structural and ARIA assertions carry the regression value in the meantime.
+
+A dropped connection mid-reply keeps everything already received, and a reconnect plus reload
+loses nothing — that is covered. What is **not** covered, and is a gap rather than planned work:
+while offline the composer goes on showing "Stop generating", so the interface never tells the
+user the connection went away. How long a dropped stream takes to surface is timing-dependent,
+so pinning it would be pinning a race; it needs a product decision about what should be shown
+and when, before a test can say anything honest about it.
 
 Two more accessibility defects, both in panels the redesign is rebuilding. The **agents panel**
 labels its grid with `aria-labelledby="category-tab-all"` (`AgentGrid.tsx`), but that id belongs
