@@ -77,7 +77,7 @@ function Login() {
         <p className="text-lg font-semibold">
           {localize('com_ui_redirecting_to_provider', { 0: startupConfig.openidLabel })}
         </p>
-        <div className="mt-4">
+        <div className="mt-4 w-full max-w-[380px]">
           <SocialButton
             key="openid"
             enabled={startupConfig.openidLoginEnabled}

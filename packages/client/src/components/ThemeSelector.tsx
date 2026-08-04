@@ -16,9 +16,9 @@ const Theme = ({ theme, onChange }: { theme: string; onChange: (value: string) =
   const localize = useLocalize();
 
   const themeIcons: Record<ThemeType, JSX.Element> = {
-    system: <Monitor aria-hidden="true" />,
-    dark: <Moon aria-hidden="true" />,
-    light: <Sun aria-hidden="true" />,
+    system: <Monitor className="icon-md" aria-hidden="true" />,
+    dark: <Moon className="icon-md" aria-hidden="true" />,
+    light: <Sun className="icon-md" aria-hidden="true" />,
   };
 
   const nextTheme = isDark(theme) ? 'light' : 'dark';
@@ -36,7 +36,7 @@ const Theme = ({ theme, onChange }: { theme: string; onChange: (value: string) =
 
   return (
     <button
-      className="flex items-center gap-2 rounded-lg p-2 text-text-primary transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 dark:focus-visible:ring-0"
+      className="flex size-8 items-center justify-center rounded-lg text-text-tertiary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
       aria-label={localize('com_ui_toggle_theme')}
       aria-keyshortcuts="Ctrl+Shift+T"
       onClick={(e) => {

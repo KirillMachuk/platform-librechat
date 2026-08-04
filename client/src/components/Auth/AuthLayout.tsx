@@ -62,7 +62,7 @@ function AuthLayout({
   return (
     <div className="relative flex min-h-screen flex-col bg-presentation">
       <Banner />
-      <div className="absolute bottom-0 left-0 md:m-4">
+      <div className="absolute right-3 top-3">
         <ThemeSelector />
       </div>
 
