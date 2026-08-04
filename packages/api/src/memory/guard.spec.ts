@@ -1,8 +1,11 @@
 import axios from 'axios';
-import { MEMORY_GUARD_TOKEN_ENV, MEMORY_GUARD_URL_ENV } from '@librechat/data-schemas';
+import { MEMORY_GUARD_TOKEN_ENV, MEMORY_GUARD_URL_ENV, logger } from '@librechat/data-schemas';
 import { checkMemoryValue } from './guard';
 
-jest.mock('axios');
+jest.mock('axios', () => ({
+  __esModule: true,
+  default: { post: jest.fn(), isAxiosError: jest.fn(() => false) },
+}));
 const mockedPost = axios.post as jest.MockedFunction<typeof axios.post>;
 
 const GUARD_URL = 'http://guard.test/v1/classify';
@@ -45,6 +48,24 @@ describe('checkMemoryValue', () => {
     mockedPost.mockRejectedValue(new Error('ECONNREFUSED'));
 
     await expect(checkMemoryValue('anything')).resolves.toEqual({ outcome: 'unavailable' });
+  });
+
+  it('does not put the screened value or the token into the log', async () => {
+    const logged: string[] = [];
+    const errorSpy = jest.spyOn(logger, 'error').mockImplementation((message) => {
+      logged.push(String(message));
+      return logger;
+    });
+    process.env[MEMORY_GUARD_TOKEN_ENV] = 'secret-token';
+    mockedPost.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    await checkMemoryValue('Клиент Иван Петров, +375291234567');
+
+    expect(errorSpy).toHaveBeenCalled();
+    const line = logged.join(' ');
+    expect(line).not.toContain('secret-token');
+    expect(line).not.toContain('Иван');
+    expect(line).not.toContain('375291234567');
   });
 
   it('fails closed when the guard answers in an unexpected shape', async () => {

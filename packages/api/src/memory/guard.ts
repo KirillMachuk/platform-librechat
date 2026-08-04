@@ -78,7 +78,17 @@ export async function checkMemoryValue(value: string): Promise<MemoryGuardVerdic
 
     return ALLOWED;
   } catch (error) {
-    logger.error('[memory] Guard call failed; refusing to store memory', error);
+    /**
+     * Status and message, not the error object: an axios error carries the whole
+     * request config, including the guard's bearer token and the very value being
+     * screened. The logger redacts bearer tokens, but the safest thing to log is
+     * the little that is actually useful.
+     */
+    const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+    const reason = error instanceof Error ? error.message : 'unknown error';
+    logger.error(
+      `[memory] Guard call failed (${status ?? 'no response'}): ${reason}; refusing to store memory`,
+    );
     return UNAVAILABLE;
   }
 }
