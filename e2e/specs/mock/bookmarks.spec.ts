@@ -27,6 +27,15 @@ function uniqueLabel(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Entries that exist in exactly one of the two bookmark menus, so closing can be asserted. */
+const HEADER_MENU_ITEM = 'New Bookmark';
+const SIDEBAR_MENU_ITEM = 'Clear all';
+
+async function closeMenu(page: Page, ownItem: string) {
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menuitem', { name: ownItem })).toHaveCount(0);
+}
+
 async function openChatSettings(page: Page) {
   await page.getByTestId('nav-user').click();
   await page.getByRole('menuitem', { name: 'Settings' }).click();
@@ -53,6 +62,11 @@ async function setBookmarksMenu(page: Page, enabled: boolean) {
 
 async function openMockChat(page: Page) {
   await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
+  /** The model selector only answers clicks once the chat view is live. */
+  await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({
+    timeout: 30000,
+  });
+  await expect(page.getByTestId('model-selector-trigger').first()).toBeVisible({ timeout: 20000 });
   await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
 }
 
@@ -107,12 +121,14 @@ test.describe('bookmarks', () => {
     const taggedTitle = uniqueLabel('С закладкой');
     const bookmark = uniqueLabel('bookmark');
 
+    await createNamedConversation(page, plainTitle);
+    await createNamedConversation(page, taggedTitle);
+
+    /* Flipped only now: the switch reaches the account through a debounced upload, and a
+     * page load in between could race it back to off. */
     await setBookmarksMenu(page, true);
 
     try {
-      await createNamedConversation(page, plainTitle);
-      await createNamedConversation(page, taggedTitle);
-
       /* File the open conversation under a brand-new bookmark. The dialog ticks
        * "add to conversation" for us because it was opened from a saved chat. */
       await expect(headerBookmark(page)).toBeVisible({ timeout: 20000 });
@@ -120,10 +136,14 @@ test.describe('bookmarks', () => {
       await page.getByRole('menuitem', { name: 'New Bookmark' }).click();
       const dialog = page.getByRole('dialog');
       await expect(dialog).toBeVisible();
-      await dialog.getByLabel('Title').fill(bookmark);
+      await dialog.getByLabel('Title', { exact: true }).fill(bookmark);
       await dialog.getByRole('button', { name: 'Save' }).click();
       await expect(dialog).toBeHidden();
       await expect(headerBookmark(page)).toHaveAttribute('aria-pressed', 'true');
+
+      /* The header menu stays open behind the dialog; both menus list the same bookmarks, so
+       * one has to be shut before the other is opened. */
+      await closeMenu(page, HEADER_MENU_ITEM);
 
       /* The sidebar offers the bookmark and narrows the chat list to it. */
       await sidebarBookmark(page).click();
@@ -131,7 +151,7 @@ test.describe('bookmarks', () => {
       await expect(sidebarEntry).toBeVisible();
       await sidebarEntry.click();
       await expect(sidebarEntry).toHaveAttribute('aria-checked', 'true');
-      await sidebarBookmark(page).click();
+      await closeMenu(page, SIDEBAR_MENU_ITEM);
 
       await expect(conversationNamed(page, taggedTitle)).toHaveCount(1, { timeout: 20000 });
       await expect(conversationNamed(page, plainTitle)).toHaveCount(0);
@@ -143,7 +163,7 @@ test.describe('bookmarks', () => {
       await expect(headerEntry).toBeVisible();
       await headerEntry.click();
       await expect(headerBookmark(page)).toHaveAttribute('aria-pressed', 'false');
-      await headerBookmark(page).click();
+      await closeMenu(page, HEADER_MENU_ITEM);
 
       await expect(conversationNamed(page, taggedTitle)).toHaveCount(0, { timeout: 20000 });
     } finally {

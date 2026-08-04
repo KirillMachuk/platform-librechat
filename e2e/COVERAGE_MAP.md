@@ -180,7 +180,9 @@ agreed redesign and are the acceptance criteria for it.
 | Search shows a busy state instead of an empty box | unit | `client/src/components/Nav/SearchChats/__tests__/Results.spec.tsx` | covered |
 | A running search is announced to a screen reader | a11y | — | fixme:Ф1 |
 | Search finds real matches end to end | e2e | — | gap |
-| Bookmarks: create, attach, filter | e2e | — | gap |
+| Bookmarks: create, attach, filter | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
+| Bookmarks: a chat can be taken back out of a bookmark | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
+| Bookmarks stay hidden on every surface while the switch is off | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
 | Archive a conversation and bring it back | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
 | Mobile sidebar opens and dismisses | e2e | `e2e/specs/mock/mobile-sidebar.spec.ts` | covered |
 
@@ -287,10 +289,19 @@ all — a probe confirmed the button does not exist, not merely that it returns 
 are therefore covered as unit tests against stubbed queries (owner's decision, 2026-08-04:
 cover the cheap way, verify real matching on the stand by hand). Writing them surfaced a defect:
 the busy state is an `<svg aria-hidden="true">` with no role and no live region, so a screen
-reader is told nothing while a search runs. **Bookmarks** are reachable only from the chat header, and only after the user turns
-the menu on — `showBookmarksMenu` defaults to `false`. Worth flagging separately:
-`client/src/components/Nav/Bookmarks/BookmarkNav.tsx` is imported by nothing, so the sidebar
-variant of that UI is dead code.
+reader is told nothing while a search runs.
+
+**Bookmarks** stay behind a switch that ships off (`showBookmarksMenu` defaults to `false`), which
+is deliberate: the icons only clutter the interface for the majority who never file a chat. The
+tests therefore come in pairs — one proving the surfaces are absent with the switch off, one
+flipping it on and walking the loop. Both live in `e2e/specs/mock/bookmarks.spec.ts`, and the
+"on" test flips the switch back in a `finally`, because the setting now follows the account and a
+leftover `true` would fail `settings-sync.spec.ts`.
+
+An earlier revision of this file recorded `client/src/components/Nav/Bookmarks/BookmarkNav.tsx` as
+dead code. It was: the unified-sidebar rework (`1f32bd336`) removed bookmarks from the sidebar on
+purpose but left the chat-header menu behind, so chats could be filed under a bookmark and never
+found again. The sidebar control is wired up again and the loop is covered end to end.
 
 ## 13. Notes on the preview matrix
 
