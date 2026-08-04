@@ -184,6 +184,7 @@ agreed redesign and are the acceptance criteria for it.
 | Bookmarks: create, attach, filter | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
 | Bookmarks: a chat can be taken back out of a bookmark | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
 | Bookmarks stay hidden on every surface while the switch is off | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
+| Bookmarks panel: create, rename, delete a bookmark | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
 | Switching bookmarks off releases the bookmark filter on the chat list | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
 | Archive a conversation and bring it back | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
 | Mobile sidebar opens and dismisses | e2e | `e2e/specs/mock/mobile-sidebar.spec.ts` | covered |
@@ -317,6 +318,12 @@ tests therefore come in pairs — one proving the surfaces are absent with the s
 flipping it on and walking the loop. Both live in `e2e/specs/mock/bookmarks.spec.ts`, and the
 "on" test flips the switch back in a `finally`, because the setting now follows the account and a
 leftover `true` would fail `settings-sync.spec.ts`.
+
+Bookmarks are one feature with three surfaces — the chat-header menu that files a chat, the
+sidebar filter that browses by bookmark, and the sidebar panel that manages the bookmarks
+themselves. All three read `useBookmarksEnabled`, so the switch cannot leave one of them behind;
+the "hidden while the switch is off" test asserts all three at once, on a saved open chat where
+each would otherwise render.
 
 An earlier revision of this file recorded `client/src/components/Nav/Bookmarks/BookmarkNav.tsx` as
 dead code. It was: the unified-sidebar rework (`1f32bd336`) removed bookmarks from the sidebar on

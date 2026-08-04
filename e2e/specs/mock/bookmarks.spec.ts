@@ -18,6 +18,7 @@ import {
 
 const headerBookmark = (page: Page) => page.getByTestId('bookmark-menu');
 const sidebarBookmark = (page: Page) => page.getByTestId('bookmark-nav');
+const bookmarksPanelLink = (page: Page) => page.getByTestId('sidebar-link-bookmarks');
 const bookmarksSwitch = (page: Page) => page.getByTestId('showBookmarksMenu');
 const conversationNamed = (page: Page, title: string) =>
   page.getByTestId('convo-item').filter({ hasText: title });
@@ -34,6 +35,20 @@ const SIDEBAR_MENU_ITEM = 'Clear all';
 async function closeMenu(page: Page, ownItem: string) {
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menuitem', { name: ownItem })).toHaveCount(0);
+}
+
+/** The panel's own content, not the dialog frame — a stable handle while dialogs stack. */
+const bookmarksPanel = (page: Page) => page.getByRole('region', { name: 'Bookmarks', exact: true });
+
+/** The create/edit dialog, identified by the form it wraps so a stacked panel cannot match. */
+async function fillBookmarkForm(page: Page, name: string) {
+  const dialog = page
+    .getByRole('dialog')
+    .filter({ has: page.getByRole('form', { name: 'Bookmark form' }) });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('Title', { exact: true }).fill(name);
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog).toBeHidden();
 }
 
 async function openChatSettings(page: Page) {
@@ -103,13 +118,16 @@ test.describe('bookmarks', () => {
 
     await createNamedConversation(page, uniqueLabel('Без закладок'));
 
-    /* A saved, open conversation is the one state in which both controls would render, so
-     * their absence here is the switch doing its job — not an empty page. */
+    /* A saved, open conversation is the one state in which all three surfaces would render,
+     * so their absence here is the switch doing its job — not an empty page. The sibling
+     * sidebar entries are asserted present for the same reason. */
     await expect(firstConversation(page)).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+    await expect(page.getByTestId('sidebar-link-files')).toBeVisible();
 
     await expect(headerBookmark(page)).toHaveCount(0);
     await expect(sidebarBookmark(page)).toHaveCount(0);
+    await expect(bookmarksPanelLink(page)).toHaveCount(0);
   });
 
   test('file a chat from the header, find it under that bookmark in the sidebar, take it back out', async ({
@@ -134,11 +152,7 @@ test.describe('bookmarks', () => {
       await expect(headerBookmark(page)).toBeVisible({ timeout: 20000 });
       await headerBookmark(page).click();
       await page.getByRole('menuitem', { name: 'New Bookmark' }).click();
-      const dialog = page.getByRole('dialog');
-      await expect(dialog).toBeVisible();
-      await dialog.getByLabel('Title', { exact: true }).fill(bookmark);
-      await dialog.getByRole('button', { name: 'Save' }).click();
-      await expect(dialog).toBeHidden();
+      await fillBookmarkForm(page, bookmark);
       await expect(headerBookmark(page)).toHaveAttribute('aria-pressed', 'true');
 
       /* The header menu stays open behind the dialog; both menus list the same bookmarks, so
@@ -176,6 +190,55 @@ test.describe('bookmarks', () => {
 
       await expect(conversationNamed(page, taggedTitle)).toHaveCount(0, { timeout: 20000 });
     } finally {
+      await setBookmarksMenu(page, false);
+    }
+  });
+
+  test('the sidebar panel creates, renames and deletes a bookmark', async ({ page }) => {
+    test.setTimeout(180000);
+
+    /* Deliberately unrelated strings: a renamed label that contained the original would make
+     * "the old name is gone" true by substring and prove nothing. */
+    const created = uniqueLabel('панель');
+    const renamed = uniqueLabel('переименована');
+
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({
+      timeout: 30000,
+    });
+    await setBookmarksMenu(page, true);
+
+    try {
+      await bookmarksPanelLink(page).click();
+      const panel = bookmarksPanel(page);
+      await expect(panel).toBeVisible();
+
+      await panel.getByRole('button', { name: 'New Bookmark' }).click();
+      await fillBookmarkForm(page, created);
+      const row = panel.getByRole('listitem').filter({ hasText: created });
+      await expect(row).toHaveCount(1, { timeout: 20000 });
+
+      await row.getByRole('button', { name: 'Edit Bookmark' }).click();
+      await fillBookmarkForm(page, renamed);
+      await expect(panel.getByRole('listitem').filter({ hasText: renamed })).toHaveCount(1, {
+        timeout: 20000,
+      });
+      await expect(panel.getByRole('listitem').filter({ hasText: created })).toHaveCount(0);
+
+      const renamedRow = panel.getByRole('listitem').filter({ hasText: renamed });
+      await renamedRow.getByRole('button', { name: 'Delete Bookmark' }).click();
+      const confirm = page
+        .getByRole('dialog')
+        .filter({ hasText: 'Are you sure you want to delete this bookmark?' });
+      await expect(confirm).toBeVisible();
+      await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
+      await expect(panel.getByRole('listitem').filter({ hasText: renamed })).toHaveCount(0, {
+        timeout: 20000,
+      });
+    } finally {
+      /* A reload, not an Escape: if the test failed with the panel open its overlay would
+       * swallow the click that turns the switch back off, and the next spec would inherit it. */
+      await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
       await setBookmarksMenu(page, false);
     }
   });

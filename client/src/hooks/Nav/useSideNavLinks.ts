@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
 import { MCPIcon, AttachmentIcon, OpenAIMinimalIcon } from '@librechat/client';
-import { Bot, Folder, NotebookPen, ScrollText, SlidersHorizontal } from 'lucide-react';
+import { Bot, Folder, Bookmark, NotebookPen, ScrollText, SlidersHorizontal } from 'lucide-react';
 import {
   Permissions,
   EModelEndpoint,
@@ -16,9 +16,11 @@ import {
   useAgentCapabilities,
   useMCPServerManager,
   useGetAgentsConfig,
+  useBookmarksEnabled,
   useHasAccess,
 } from '~/hooks';
 import MCPBuilderPanel from '~/components/SidePanel/MCPBuilder/MCPBuilderPanel';
+import BookmarkPanel from '~/components/SidePanel/Bookmarks/BookmarkPanel';
 import PanelSwitch from '~/components/SidePanel/Builder/PanelSwitch';
 import Parameters from '~/components/SidePanel/Parameters/Panel';
 import FilesPanel from '~/components/SidePanel/Files/Panel';
@@ -64,6 +66,7 @@ export default function useSideNavLinks({
     permission: Permissions.CREATE,
   });
   const { availableMCPServers } = useMCPServerManager();
+  const bookmarksEnabled = useBookmarksEnabled();
   const showParametersPanel = useRecoilValue(store.showParametersPanel);
 
   const { agentsConfig } = useGetAgentsConfig({ endpointsConfig });
@@ -141,6 +144,16 @@ export default function useSideNavLinks({
       Component: FilesPanel,
     });
 
+    if (bookmarksEnabled) {
+      links.push({
+        title: 'com_sidepanel_conversation_tags',
+        label: '',
+        icon: Bookmark,
+        id: 'bookmarks',
+        Component: BookmarkPanel,
+      });
+    }
+
     if (
       interfaceConfig.parameters === true &&
       showParametersPanel &&
@@ -178,6 +191,7 @@ export default function useSideNavLinks({
     hasAccessToAgents,
     hasAccessToPrompts,
     hasAccessToSkills,
+    bookmarksEnabled,
     skillsEnabled,
     interfaceConfig.parameters,
     showParametersPanel,

@@ -1,16 +1,15 @@
 import { useCallback, useState, useMemo, memo, useRef, lazy, Suspense } from 'react';
+import { useSetRecoilState } from 'recoil';
 import { useMediaQuery } from '@librechat/client';
-import { useSetRecoilState, useRecoilValue } from 'recoil';
-import { Permissions, PermissionTypes } from 'librechat-data-provider';
 import type { InfiniteQueryObserverResult } from '@tanstack/react-query';
 import type { ConversationListResponse } from 'librechat-data-provider';
 import type { List } from 'react-virtualized';
 import {
   useLocalize,
-  useHasAccess,
   useAuthContext,
   useLocalStorage,
   useNavScrolling,
+  useBookmarksEnabled,
 } from '~/hooks';
 import { useConversationsInfiniteQuery, useTitleGeneration } from '~/data-provider';
 import { Conversations } from '~/components/Conversations';
@@ -29,12 +28,7 @@ const ConversationsSection = memo(() => {
   const [showLoading, setShowLoading] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
 
-  const hasAccessToBookmarks = useHasAccess({
-    permissionType: PermissionTypes.BOOKMARKS,
-    permission: Permissions.USE,
-  });
-  const showBookmarksMenu = useRecoilValue(store.showBookmarksMenu);
-  const bookmarksEnabled = hasAccessToBookmarks && showBookmarksMenu;
+  const bookmarksEnabled = useBookmarksEnabled();
 
   /** Hiding the control must also drop its filter, or the list stays narrowed with no way back. */
   const activeTags = bookmarksEnabled ? tags : [];

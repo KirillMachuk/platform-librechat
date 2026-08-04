@@ -6,6 +6,7 @@ export { default as useGenerateConvo } from './useGenerateConvo';
 export { default as useDebouncedInput } from './useDebouncedInput';
 export { default as useGetConversation } from './useGetConversation';
 export { default as useBookmarkSuccess } from './useBookmarkSuccess';
+export { default as useBookmarksEnabled } from './useBookmarksEnabled';
 export { default as useNavigateToConvo } from './useNavigateToConvo';
 export { default as useSetIndexOptions } from './useSetIndexOptions';
 export { default as useParameterEffects } from './useParameterEffects';
