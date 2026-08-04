@@ -236,24 +236,39 @@ test.describe('accessibility of the main dialogs', () => {
    * sometimes, so the twin test below pins the stable one rather than a set that
    * changes between runs.
    */
+  /**
+   * Both agents tests scan the same moment — after the category tabs have
+   * rendered. That matters: scanned earlier the panel is clean, because the
+   * tab that carries the defect does not exist yet. A "clean" test that did
+   * not wait would pass while the defect sat right behind it.
+   */
   test('the agents panel has no WCAG A/AA violations', async ({ page }) => {
     test.fail();
     test.setTimeout(90000);
     await openSidebarPanel(page, 'agents');
+    await expect(page.locator('#category-tab-all')).toBeVisible({ timeout: 30000 });
 
     expect(describeViolations(await scan(page, FILE_PANEL))).toEqual([]);
   });
 
-  test('the agents panel is clean once its category tabs have loaded', async ({ page }) => {
+  /**
+   * Measured three times, same answer every time: the offending element is
+   * `#category-tab-all` — the tab itself, which names something that is not in
+   * the document. My first reading blamed the grid for pointing at a tab that
+   * had not loaded yet, and called the defect intermittent. Both were wrong:
+   * the tab is present and visible when the scan runs, and the violation is
+   * still there. It is a plain, permanent, critical defect of the tab strip.
+   */
+  test('the agents panel fails only on its category tab', async ({ page }) => {
     test.setTimeout(90000);
     await openSidebarPanel(page, 'agents');
-    /* Waiting for the tabs is what makes this deterministic: the violation
-     * above exists only in the window before they arrive, so a scan that does
-     * not wait reports it or not depending on machine speed. Asserting the
-     * clean result afterwards pins that nothing else is wrong with the panel. */
     await expect(page.locator('#category-tab-all')).toBeVisible({ timeout: 30000 });
 
-    expect(describeViolations(await scan(page, FILE_PANEL))).toEqual([]);
+    expect(
+      describeViolations(await scan(page, FILE_PANEL))
+        .map((violation) => violation.rule)
+        .sort(),
+    ).toEqual(['aria-valid-attr-value']);
   });
 
   test('the prompts panel has no WCAG A/AA violations', async ({ page }) => {
@@ -275,13 +290,17 @@ test.describe('accessibility of the main dialogs', () => {
     ).toEqual(['nested-interactive']);
   });
 
+  /**
+   * Clean, and measured as such. An earlier pass reported the tab-strip defect
+   * here too; re-measured, that was the agents scan's result read into the
+   * wrong row, not this dialog's. It is asserted plainly rather than left as a
+   * suspicion.
+   */
   test('the settings dialog has no WCAG A/AA violations', async ({ page }) => {
     test.setTimeout(90000);
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
     await openAccountMenu(page);
     await page.getByRole('menuitem', { name: 'Settings' }).click();
-    /* The dialog element is a zero-height positioning wrapper and never counts
-     * as visible; its heading is what says the dialog actually opened. */
     await expect(page.getByRole('heading', { name: 'Settings' }).first()).toBeVisible();
 
     expect(describeViolations(await scan(page, 'div[role="dialog"]'))).toEqual([]);

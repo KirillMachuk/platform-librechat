@@ -104,9 +104,13 @@ export async function enableSkills(page: Page) {
  * person could hit the button too.
  */
 async function settle(locator: Locator, page: Page) {
-  let previous = await locator.boundingBox();
+  /* Short, tolerant reads: an element that goes away mid-loop must not hold the
+   * whole test hostage — `boundingBox()` on a vanished locator waits out the
+   * test timeout otherwise. */
+  const box = () => locator.boundingBox({ timeout: 2000 }).catch(() => null);
+  let previous = await box();
   for (let attempt = 0; attempt < 40; attempt++) {
-    const current = await locator.boundingBox();
+    const current = await box();
     if (
       previous &&
       current &&
