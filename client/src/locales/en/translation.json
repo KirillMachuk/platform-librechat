@@ -1312,7 +1312,7 @@
   "com_ui_key_required": "API key is required",
   "com_ui_labels": "Labels",
   "com_ui_last_used": "Last used",
-  "com_ui_landing_subtitle": "Ask a question or attach a document",
+  "com_ui_landing_greeting": "Where shall we start?",
   "com_ui_late_night": "Happy late night",
   "com_ui_latest": "latest",
   "com_ui_latest_activity": "Latest activity",
