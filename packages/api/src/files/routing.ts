@@ -34,6 +34,12 @@ const positiveInt = (raw: string | undefined, fallback: number): number => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+/** A share in (0, 1]; anything outside that falls back rather than widening a gate. */
+const positiveRatio = (raw: string | undefined, fallback: number): number => {
+  const parsed = Number.parseFloat(raw ?? '');
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= 1 ? parsed : fallback;
+};
+
 /**
  * Whether content-based Auto routing is enabled. Off by default so the change
  * ships dormant and is switched on per-deployment after validation on lab.
@@ -104,8 +110,29 @@ export const routePdfBySize = (
     thresholds,
   );
 
-/** Default minimum OCR'd words for an image to count as a document. */
-export const DEFAULT_IMAGE_OCR_MIN_WORDS = 3;
+/** Thresholds an image's OCR output must clear to count as a document. */
+export interface ImageOcrThresholds {
+  /** Minimum words of three or more letters. */
+  minWords: number;
+  /** Minimum share of non-space characters that sit inside those words. */
+  minDensity: number;
+}
+
+/**
+ * Measured on real Tesseract output over two sets of images: ones that should
+ * become documents (text, table, chart, whiteboard diagram) and ones that must
+ * never become documents (foliage, sensor grain, empty scan, product photo).
+ *
+ * Word count alone does NOT separate them — a photo of foliage yields up to 12
+ * "words" of Tesseract noise ("omy", "ote", "sie"), more than a real diagram.
+ * What separates cleanly is how much of the text sits inside those words:
+ * content scored 0.41 and up, textless images 0.21 and below. 0.3 sits in the
+ * gap. The word minimum stays as a floor so a single stray word cannot pass.
+ */
+export const DEFAULT_IMAGE_OCR_THRESHOLDS: ImageOcrThresholds = {
+  minWords: 3,
+  minDensity: 0.3,
+};
 
 /**
  * Whether Auto image-OCR is enabled. Off by default: images keep going natively
@@ -115,23 +142,38 @@ export const DEFAULT_IMAGE_OCR_MIN_WORDS = 3;
 export const isImageOcrEnabled = (env: NodeJS.ProcessEnv = process.env): boolean =>
   env.AUTO_IMAGE_OCR === 'true';
 
-/** Minimum OCR'd words for an image to count as a document (env-tunable). */
-export const imageOcrMinWords = (env: NodeJS.ProcessEnv = process.env): number =>
-  positiveInt(env.AUTO_IMAGE_OCR_MIN_WORDS, DEFAULT_IMAGE_OCR_MIN_WORDS);
-
-/** A word: three or more consecutive Latin/Cyrillic letters — the OCR languages we run. */
-const OCR_WORD = /[\p{Script=Latin}\p{Script=Cyrillic}]{3,}/gu;
+/** Reads {@link ImageOcrThresholds} from env, falling back to the measured defaults. */
+export const readImageOcrThresholds = (
+  env: NodeJS.ProcessEnv = process.env,
+): ImageOcrThresholds => ({
+  minWords: positiveInt(env.AUTO_IMAGE_OCR_MIN_WORDS, DEFAULT_IMAGE_OCR_THRESHOLDS.minWords),
+  minDensity: positiveRatio(
+    env.AUTO_IMAGE_OCR_MIN_DENSITY,
+    DEFAULT_IMAGE_OCR_THRESHOLDS.minDensity,
+  ),
+});
 
 /**
- * Words of three or more letters in OCR output. This is the quantity that tells
- * OCR content apart from OCR noise: measured across representative attachments,
- * real content (contract, table, chart, whiteboard diagram) scored 4–10 while a
- * photo with no text at all scored 0, with no overlap.
+ * A word: three or more consecutive Latin/Cyrillic letters, combining marks
+ * included so that a decomposed "März" or a stressed "Дире́ктор" stays one word.
+ * Latin and Cyrillic because those are the OCR languages this deployment runs
+ * (TESSERACT_LANGS); adding a language there means widening this class too.
  */
-export const countTextWords = (text: string): number => (text.match(OCR_WORD) ?? []).length;
+const OCR_WORD = /[\p{Script=Latin}\p{Script=Cyrillic}\p{Mn}]{3,}/gu;
+
+/** What the gate measures in OCR output; also what the caller logs. */
+export interface OcrTextMetrics {
+  /** Words of three or more letters. */
+  words: number;
+  /** Share of non-space characters that sit inside those words, 0–1. */
+  density: number;
+  /** Whether the text looks like text at all rather than binary garbage. */
+  texty: boolean;
+}
 
 const MIN_TEXT_RATIO = 0.7;
 const TEXTY_CHARS = /[\p{L}\p{N}\s.,;:!?'"()[\]{}\-–—«»…/№%@#&*+=]/gu;
+const WHITESPACE = /\s/gu;
 
 /**
  * Heuristic: does this string look like real extracted text rather than binary
@@ -149,16 +191,39 @@ export const looksLikeText = (text: string): boolean => {
 };
 
 /**
- * Whether OCR output should be accepted as a document: enough real words AND it
- * actually looks like text. Otherwise the caller falls back to the vision path.
- *
- * The gate counts words rather than characters because character count does not
- * separate content from noise: the sample that produced the most characters was
- * an image carrying no text at all, while an ordinary chat screenshot carries
- * well under a hundred. The gate stays in place — without it that textless image
- * would become a "document" made of OCR noise.
+ * Measure OCR output for the admission gate. `looksLikeText` runs first and on a
+ * capped sample: it is the cheap guard, and it is what stops a native fallback
+ * that read raw image bytes as a string from being scanned end to end.
  */
-export const acceptOcrText = (text: string, minWords: number): boolean => {
-  const trimmed = text.trim();
-  return countTextWords(trimmed) >= minWords && looksLikeText(trimmed);
+export const measureOcrText = (text: string): OcrTextMetrics => {
+  const texty = looksLikeText(text);
+  if (!texty) {
+    return { words: 0, density: 0, texty };
+  }
+  const matches = text.match(OCR_WORD) ?? [];
+  let inWords = 0;
+  for (const word of matches) {
+    inWords += word.length;
+  }
+  const nonSpace = text.replace(WHITESPACE, '').length;
+  return { words: matches.length, density: nonSpace === 0 ? 0 : inWords / nonSpace, texty };
 };
+
+/**
+ * Whether OCR output should be accepted as a document rather than fall back to
+ * the vision path. Character count is not the quantity to gate on — the textless
+ * image in the measurement produced the MOST characters — and neither is word
+ * count on its own: noise from a photo of foliage yields more "words" than a
+ * real diagram. Content is what has enough words AND enough of its text inside
+ * them. Accepting replaces the picture with its text, so a wrong yes costs the
+ * model the image itself; when in doubt this says no and vision still sees it.
+ */
+export const acceptOcrMetrics = (
+  metrics: OcrTextMetrics,
+  thresholds: ImageOcrThresholds,
+): boolean =>
+  metrics.texty && metrics.words >= thresholds.minWords && metrics.density >= thresholds.minDensity;
+
+/** Convenience wrapper over {@link measureOcrText} + {@link acceptOcrMetrics}. */
+export const acceptOcrText = (text: string, thresholds: ImageOcrThresholds): boolean =>
+  acceptOcrMetrics(measureOcrText(text.trim()), thresholds);
