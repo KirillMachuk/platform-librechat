@@ -32,8 +32,9 @@ const {
   readDocRoutingThresholds,
   isImageOcrEnabled,
   hashFileContent,
-  imageOcrMinWords,
-  acceptOcrText,
+  measureOcrText,
+  acceptOcrMetrics,
+  readImageOcrThresholds,
   processAudioFile,
   getStorageMetadata,
   createConcurrencyLimiter,
@@ -999,15 +1000,22 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         IMAGE_OCR_TIMEOUT_MS,
         `image OCR timed out for "${file.originalname}"`,
       );
-      if (parsed?.text && acceptOcrText(parsed.text, imageOcrMinWords())) {
+      const thresholds = readImageOcrThresholds();
+      const metrics = parsed?.text ? measureOcrText(parsed.text.trim()) : null;
+      // Log what the gate measured, not just its verdict: the thresholds are env-tunable and
+      // "my screenshot was not read" is unanswerable without the numbers behind the decision.
+      const measured = metrics
+        ? `words=${metrics.words}/${thresholds.minWords} density=${metrics.density.toFixed(2)}/${thresholds.minDensity} texty=${metrics.texty}`
+        : 'no text';
+      if (metrics && acceptOcrMetrics(metrics, thresholds)) {
         imageOcrText = parsed;
         tool_resource = EToolResources.context;
         logger.info(
-          `[processAgentFileUpload] image OCR'd "${file.originalname}" (${parsed.text.length} chars) -> full-text context`,
+          `[processAgentFileUpload] image OCR'd "${file.originalname}" (${measured}) -> full-text context`,
         );
       } else {
         logger.info(
-          `[processAgentFileUpload] image OCR for "${file.originalname}" yielded too little/non-text -> native vision`,
+          `[processAgentFileUpload] image OCR for "${file.originalname}" rejected (${measured}) -> native vision`,
         );
       }
     } catch (err) {
