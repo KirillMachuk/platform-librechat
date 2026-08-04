@@ -3,7 +3,7 @@ import type { APIRequestContext } from '@playwright/test';
 import type { User } from '../../types';
 import { getSecondaryE2EUser } from '../../setup/users.mock';
 import cleanupUser from '../../setup/cleanupUser';
-import { NEW_CHAT_PATH } from './helpers';
+import { NEW_CHAT_PATH, openAccountMenu } from './helpers';
 
 type AuthRecoveryTestEvent = {
   type: string;
@@ -86,7 +86,7 @@ test.describe('auth session', () => {
       await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
       await expect(page).not.toHaveURL(/\/login/);
 
-      await page.getByTestId('nav-user').click();
+      await openAccountMenu(page);
       await page.getByRole('menuitem', { name: 'Log out' }).click();
 
       await page.waitForURL(/\/login/, { timeout: 10000 });

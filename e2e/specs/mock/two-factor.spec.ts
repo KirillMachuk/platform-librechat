@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { NEW_CHAT_PATH } from './helpers';
+import { NEW_CHAT_PATH, openAccountMenu } from './helpers';
 
 /**
  * Regression test for the framer-motion / Vite incompatibility that crashed the
@@ -23,8 +23,8 @@ test.describe('account settings · two-factor dialog', () => {
 
     await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
 
-    await page.getByTestId('nav-user').click();
-    await page.getByRole('menuitem', { name: 'Settings' }).click();
+    const accountMenu = await openAccountMenu(page);
+    await accountMenu.getByRole('menuitem', { name: 'Settings' }).click();
     await page.getByRole('tab', { name: 'Account' }).click();
 
     // Opening the dialog mounts the framer-motion-animated body — the crash site.

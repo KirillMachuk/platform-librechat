@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import type { Page, Response } from '@playwright/test';
+import type { Locator, Page, Response } from '@playwright/test';
 
 /** Substring of the reply emitted by the mock LLM server. */
 export const MOCK_REPLY_TEXT = 'E2E mock reply';
@@ -90,6 +90,57 @@ export async function enableSkills(page: Page) {
   await page.getByTestId('tools-menu-skills').click();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Skills' })).toBeVisible();
+}
+
+/**
+ * Open the account menu, once the thing it hangs off has stopped moving.
+ *
+ * The sidebar animates its width for 300ms on load, and a menu anchored inside
+ * it moves with it. Playwright refuses to click an element whose box is still
+ * changing, so a click issued during that window retries until the test times
+ * out — measured at two failures in fifteen runs of two-factor.spec.ts, and the
+ * same pattern is used by four specs. Waiting for the trigger's box to repeat
+ * is a real synchronisation point, not a sleep: it is exactly the moment a
+ * person could hit the button too.
+ */
+async function settle(locator: Locator, page: Page) {
+  let previous = await locator.boundingBox();
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const current = await locator.boundingBox();
+    if (
+      previous &&
+      current &&
+      Math.abs(previous.x - current.x) < 1 &&
+      Math.abs(previous.y - current.y) < 1 &&
+      Math.abs(previous.height - current.height) < 1
+    ) {
+      return;
+    }
+    previous = current;
+    await page.waitForTimeout(50);
+  }
+}
+
+export async function openAccountMenu(page: Page) {
+  const trigger = page.getByTestId('nav-user');
+  await expect(trigger).toBeVisible();
+  await settle(trigger, page);
+  const menu = page.getByRole('menu');
+  await trigger.click();
+  /* The first interaction after the sidebar mounts is sometimes swallowed — the
+   * click lands and no menu appears. One retry covers it without hiding a menu
+   * that is genuinely broken: the assertion below still has its full timeout,
+   * so a menu that never opens still fails. */
+  if (!(await menu.isVisible().catch(() => false))) {
+    await page.waitForTimeout(300);
+    if (!(await menu.isVisible().catch(() => false))) {
+      await trigger.click();
+    }
+  }
+  await expect(menu).toBeVisible();
+  /* The menu animates in as well, and its items move with it. */
+  await settle(menu, page);
+  return menu;
 }
 
 /** The conversation messages container. */

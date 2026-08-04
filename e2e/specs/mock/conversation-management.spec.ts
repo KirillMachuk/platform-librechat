@@ -4,6 +4,7 @@ import {
   MOCK_ENDPOINTS,
   NEW_CHAT_PATH,
   messagesView,
+  openAccountMenu,
   replyPrompt,
   replyText,
   selectMockEndpoint,
@@ -155,7 +156,7 @@ test.describe('finding and filing conversations', () => {
 });
 
 async function openArchivedChats(page: Page) {
-  await page.getByTestId('nav-user').click();
+  await openAccountMenu(page);
   await page.getByRole('menuitem', { name: 'Settings' }).click();
   await page.getByRole('button', { name: 'Archived chats', exact: true }).click();
 }

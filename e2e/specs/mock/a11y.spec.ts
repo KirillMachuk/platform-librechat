@@ -5,6 +5,7 @@ import {
   MOCK_ENDPOINTS,
   NEW_CHAT_PATH,
   messagesView,
+  openAccountMenu,
   replyPrompt,
   replyText,
   selectMockEndpoint,
@@ -256,7 +257,7 @@ test.describe('accessibility of the main dialogs', () => {
   test('the settings dialog has no WCAG A/AA violations', async ({ page }) => {
     test.setTimeout(90000);
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
-    await page.getByTestId('nav-user').click();
+    await openAccountMenu(page);
     await page.getByRole('menuitem', { name: 'Settings' }).click();
     /* The dialog element is a zero-height positioning wrapper and never counts
      * as visible; its heading is what says the dialog actually opened. */
