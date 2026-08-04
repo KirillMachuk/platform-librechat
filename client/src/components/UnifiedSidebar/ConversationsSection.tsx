@@ -33,7 +33,8 @@ const ConversationsSection = memo(() => {
   const [tags, setTags] = useState<string[]>([]);
 
   const bookmarksEnabled = useBookmarksEnabled();
-  const { data: bookmarks } = useGetConversationTags();
+  /** Off means off: no request for a feature the client has not switched on. */
+  const { data: bookmarks } = useGetConversationTags({ enabled: bookmarksEnabled });
 
   /** Hiding the control must also drop its filter, or the list stays narrowed with no way back. */
   const activeTags = bookmarksEnabled ? tags : [];

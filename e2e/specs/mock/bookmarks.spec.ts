@@ -218,9 +218,7 @@ test.describe('bookmarks', () => {
    * chat list keeps filtering by a name nothing carries any more, while the menu shows that
    * bookmark unselected — three surfaces telling three different stories.
    */
-  test('renaming a bookmark from the panel releases a filter that was using it', async ({
-    page,
-  }) => {
+  test('renaming or deleting a bookmark releases a filter that was using it', async ({ page }) => {
     test.setTimeout(240000);
 
     const plainTitle = uniqueLabel('Вне закладки');
@@ -264,6 +262,34 @@ test.describe('bookmarks', () => {
     });
     await expect(conversationNamed(page, plainTitle)).toHaveCount(1, { timeout: 20000 });
     await expect(conversationNamed(page, taggedTitle)).toHaveCount(1);
+
+    /* Same story for deletion: filter by the renamed bookmark, then delete it. */
+    await sidebarBookmark(page).click();
+    await page.getByRole('menuitemcheckbox', { name: after }).click();
+    await closeMenu(page, SIDEBAR_MENU_ITEM);
+    await expect(conversationNamed(page, plainTitle)).toHaveCount(0, { timeout: 20000 });
+
+    await bookmarksPanelLink(page).click();
+    await expect(panel).toBeVisible();
+    await panel
+      .getByRole('listitem')
+      .filter({ hasText: after })
+      .getByRole('button', { name: 'Delete Bookmark' })
+      .click();
+    const confirm = page
+      .getByRole('dialog')
+      .filter({ hasText: 'Are you sure you want to delete this bookmark?' });
+    await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(panel.getByRole('listitem').filter({ hasText: after })).toHaveCount(0, {
+      timeout: 20000,
+    });
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+
+    await expect(sidebarBookmark(page)).toHaveAttribute('aria-pressed', 'false', {
+      timeout: 20000,
+    });
+    await expect(conversationNamed(page, plainTitle)).toHaveCount(1, { timeout: 20000 });
   });
 
   test('the sidebar panel creates, renames and deletes a bookmark', async ({ page }) => {

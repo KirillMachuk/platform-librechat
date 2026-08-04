@@ -111,8 +111,6 @@ const useUpdateTagsInConvo = () => {
         );
       }
     }
-
-    invalidateConversationLists();
   };
 
   return { updateTagsInConversation, replaceTagsInAllConversations };
