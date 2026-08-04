@@ -16,8 +16,18 @@ jest.mock('~/data-provider', () => ({
   useGetProjectQuery: () => ({ data: undefined }),
 }));
 
+const mockHasAccess = jest.fn(() => true);
+
+/* Only the permission lookup is faked. `useBookmarksEnabled` itself is the real hook, so these
+ * tests fail if the gate it implements changes — a hand-written stand-in would keep passing. */
+jest.mock('~/hooks/Roles/useHasAccess', () => ({
+  __esModule: true,
+  default: () => mockHasAccess(),
+}));
+
 jest.mock('~/hooks', () => ({
-  useHasAccess: () => true,
+  useHasAccess: () => mockHasAccess(),
+  useBookmarksEnabled: jest.requireActual('~/hooks/Conversations/useBookmarksEnabled').default,
 }));
 
 jest.mock('./../Menus/Endpoints/ModelSelector', () => ({
@@ -61,6 +71,11 @@ const renderHeader = (overrides?: (snapshot: MutableSnapshot) => void) =>
   );
 
 describe('Chat header power-user menus', () => {
+  beforeEach(() => {
+    mockHasAccess.mockReset();
+    mockHasAccess.mockReturnValue(true);
+  });
+
   it('hides the bookmarks menu by default', () => {
     renderHeader();
 
@@ -72,6 +87,15 @@ describe('Chat header power-user menus', () => {
     renderHeader(({ set }) => set(store.showBookmarksMenu, true));
 
     expect(screen.getByTestId('bookmark-menu')).toBeInTheDocument();
+  });
+
+  /** Two gates, not one: the user's switch cannot grant what the role withholds. */
+  it('keeps the bookmarks menu hidden when the role forbids bookmarks', () => {
+    mockHasAccess.mockReturnValue(false);
+    renderHeader(({ set }) => set(store.showBookmarksMenu, true));
+
+    expect(screen.getByTestId('model-selector')).toBeInTheDocument();
+    expect(screen.queryByTestId('bookmark-menu')).not.toBeInTheDocument();
   });
 
   /** The presets switch lives inside PresetsMenu, below the hook that loads a user's
