@@ -300,11 +300,14 @@ describe('acceptOcrText', () => {
   });
 
   it('pins the defaults to the measured gap between content and noise', () => {
-    expect(acceptOcrMetrics({ words: 3, density: 0.3, texty: true }, DEFAULT_IMAGE_OCR_THRESHOLDS))
-      .toBe(true);
-    expect(acceptOcrMetrics({ words: 2, density: 0.9, texty: true }, DEFAULT_IMAGE_OCR_THRESHOLDS))
-      .toBe(false);
-    expect(acceptOcrMetrics({ words: 9, density: 0.29, texty: true }, DEFAULT_IMAGE_OCR_THRESHOLDS))
-      .toBe(false);
+    expect(
+      acceptOcrMetrics({ words: 3, density: 0.3, texty: true }, DEFAULT_IMAGE_OCR_THRESHOLDS),
+    ).toBe(true);
+    expect(
+      acceptOcrMetrics({ words: 2, density: 0.9, texty: true }, DEFAULT_IMAGE_OCR_THRESHOLDS),
+    ).toBe(false);
+    expect(
+      acceptOcrMetrics({ words: 9, density: 0.29, texty: true }, DEFAULT_IMAGE_OCR_THRESHOLDS),
+    ).toBe(false);
   });
 });

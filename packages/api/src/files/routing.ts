@@ -223,8 +223,7 @@ export const acceptOcrMetrics = (
   thresholds: ImageOcrThresholds,
 ): boolean =>
   metrics.texty &&
-  metrics.words >= thresholds.minWords &&
-  metrics.density >= thresholds.minDensity;
+  metrics.words >= thresholds.minWords && metrics.density >= thresholds.minDensity;
 
 /** Convenience wrapper over {@link measureOcrText} + {@link acceptOcrMetrics}. */
 export const acceptOcrText = (text: string, thresholds: ImageOcrThresholds): boolean =>
