@@ -39,11 +39,14 @@ const OCR_SAMPLES = {
   contract:
     'ДОГОВОР АРЕНДЫ №05-11\nг. Минск, 06 апреля 2021 г.\nАрендодатель передаёт нежилое помещение общей площадью 120 м',
   /** Photographed cash receipt — the least dense real content measured, 0.48. */
-  receipt: "000 “АВТОКАФЕ”\n\nКассовый чек\n\n000 \"Автокафе\"\n127015, г,Москва, пл,\nСавеловского вокзала, дом 2\nМЕСТО РАСЧЕТОВ Павильон\nкар ‘rodent печёный\n\n115.00 * 1шт. = 115.00\nрастительное масло\n\nс 85.00 ж шт. = 85.00\n\nлук фри\nо. 85.00 * ит, = 85.00\nЗакусочный\n\n120.00 * 1шт, = 120.00\nЗакусочный\n\n120.00 ж 1шт. = 120.00\n\nкофе `американо 0.2\n100.00 ж lur. = 100.00\n\nморе\n\n160.00 * 1шт. = 160.00\nИТОГ =785.00\nБЕЗНАЛИЧНЫМИ 785.00\nСУММА БЕЗ НАС 785.00\nСНО:УСН доход-расход ПРИХОД\n\nКАССИР Прохорова М,\n\n888/25\n\n29.07.2025 46:36\nИНН 7705202538 For дм\nРН ККТ 0000502615061209 Чем\noH 7286440500094315\non 89523\non 608422087\n\nСПАСИБО",
+  receipt:
+    '000 “АВТОКАФЕ”\n\nКассовый чек\n\n000 "Автокафе"\n127015, г,Москва, пл,\nСавеловского вокзала, дом 2\nМЕСТО РАСЧЕТОВ Павильон\nкар ‘rodent печёный\n\n115.00 * 1шт. = 115.00\nрастительное масло\n\nс 85.00 ж шт. = 85.00\n\nлук фри\nо. 85.00 * ит, = 85.00\nЗакусочный\n\n120.00 * 1шт, = 120.00\nЗакусочный\n\n120.00 ж 1шт. = 120.00\n\nкофе `американо 0.2\n100.00 ж lur. = 100.00\n\nморе\n\n160.00 * 1шт. = 160.00\nИТОГ =785.00\nБЕЗНАЛИЧНЫМИ 785.00\nСУММА БЕЗ НАС 785.00\nСНО:УСН доход-расход ПРИХОД\n\nКАССИР Прохорова М,\n\n888/25\n\n29.07.2025 46:36\nИНН 7705202538 For дм\nРН ККТ 0000502615061209 Чем\noH 7286440500094315\non 89523\non 608422087\n\nСПАСИБО',
   /** Screenshot of a chart: title and axis labels only. */
-  chart: "Диалоги по времени\n\n1200]\n\nиюл. 28 июл. 29 июл. 30 июл. 31 авг. 1 авг. 2 авг. 3 авг. 4",
+  chart:
+    'Диалоги по времени\n\n1200]\n\nиюл. 28 июл. 29 июл. 30 июл. 31 авг. 1 авг. 2 авг. 3 авг. 4',
   /** Screenshot of a network diagram, English labels. */
-  diagram: "Design console Order console Fabricate and deliver console\n\nOrder tower : .\nmaterial Deliver tower material\n12\n3 3",
+  diagram:
+    'Design console Order console Fabricate and deliver console\n\nOrder tower : .\nmaterial Deliver tower material\n12\n3 3',
 } as const;
 
 /**
@@ -51,7 +54,8 @@ const OCR_SAMPLES = {
  * noise by density (0.55, higher than a real receipt) — it is caught by having
  * too few words, which is why both bars exist.
  */
-const OCR_UNREADABLE = "С\n= 50...\n= cece (NAN ВАЛА";
+const OCR_UNREADABLE =
+  'С\n= 50...\n= cece (NAN ВАЛА';
 
 /** OCR of images with no text on them whatsoever — every one of these is noise. */
 const OCR_NOISE = {
