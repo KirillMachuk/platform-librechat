@@ -218,10 +218,12 @@ function Conversation({
     <div
       ref={containerRef}
       className={cn(
-        'group relative flex h-12 w-full items-center rounded-lg outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black dark:focus-visible:ring-white md:h-9',
-        isActiveConvo || isPopoverActive
-          ? 'bg-surface-active-alt before:absolute before:bottom-1 before:left-0 before:top-1 before:w-0.5 before:rounded-full before:bg-black dark:before:bg-white'
-          : 'hover:bg-surface-active-alt',
+        /* Канон §6.5: наведение красит фон `hover`, выбранный чат — `active`.
+           До этого оба состояния красились одним токеном, и наведение на любой
+           чат выглядело так же, как открытый. Отметка выбора — точка `acc`
+           справа (как в прототипе), а не планка сырым чёрным цветом. */
+        'group relative flex h-11 w-full items-center rounded-xl outline-none transition-colors duration-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black dark:focus-visible:ring-white md:h-10',
+        isActiveConvo || isPopoverActive ? 'bg-surface-active' : 'hover:bg-surface-hover',
       )}
       role="button"
       tabIndex={renaming ? -1 : 0}

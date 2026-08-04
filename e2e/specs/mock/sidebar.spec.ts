@@ -66,4 +66,19 @@ test.describe('sidebar chat list', () => {
     const shrunken = await settledSizes(page);
     expect(shrunken.gridH).toBeLessThan(initial.gridH);
   });
+
+  test('the collapsed rail still reaches settings and sign-out', async ({ page }) => {
+    await page.goto('/c/new', { timeout: 10000 });
+    const rail = page.locator('aside');
+    await expect(rail.getByTestId('close-sidebar-button')).toBeVisible({ timeout: 20000 });
+
+    await rail.getByTestId('close-sidebar-button').click();
+    await expect(rail.getByTestId('open-sidebar-button')).toBeVisible();
+
+    /* Without the account button the rail is a dead end: the only way to
+       settings or sign-out would be to expand the sidebar again. */
+    await rail.getByTestId('nav-user').click();
+    await expect(page.getByRole('menuitem', { name: /Настройки|Settings/ })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: /Выход|Log out/ })).toBeVisible();
+  });
 });

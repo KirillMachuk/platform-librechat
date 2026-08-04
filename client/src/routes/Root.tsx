@@ -73,13 +73,17 @@ export default function Root() {
             <PromptGroupsProvider>
               <Banner onHeightChange={setBannerHeight} />
               <div className="flex" style={{ height: `calc(100dvh - ${bannerHeight}px)` }}>
-                <div className="relative z-0 flex h-full w-full overflow-hidden">
+                {/* Канон §4, врезанный сайдбар: полотно окна красится в `panel`,
+                    сайдбар прозрачен и без правой границы, а рабочая область —
+                    отдельная карточка `bg` с рамкой, радиусом 16 и отступом 8
+                    сверху, справа и снизу. Слева отступа нет — там сайдбар.
+                    На телефоне рамы нет: рабочая область занимает весь экран. */}
+                <div className="relative z-0 flex h-full w-full overflow-hidden bg-surface-primary-alt">
                   <UnifiedSidebar />
                   <div
-                    className="relative flex h-full max-w-full flex-1 flex-col overflow-hidden"
+                    className="relative flex h-full max-w-full flex-1 flex-col overflow-hidden md:my-2 md:mr-2 md:h-[calc(100%-1rem)] md:rounded-2xl md:border md:border-border-light md:bg-presentation md:shadow-sm"
                     style={{
-                      transform:
-                        isSmallScreen && sidebarExpanded ? 'translateX(min(85vw, 380px))' : 'none',
+                      transform: isSmallScreen && sidebarExpanded ? 'translateX(72vw)' : 'none',
                       transition: 'transform 300ms cubic-bezier(0.2, 0, 0, 1)',
                     }}
                     inert={isSmallScreen && sidebarExpanded ? '' : undefined}

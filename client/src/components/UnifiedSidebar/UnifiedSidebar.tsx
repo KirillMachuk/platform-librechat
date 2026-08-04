@@ -1,8 +1,8 @@
 import { useCallback, useEffect, memo, startTransition } from 'react';
-import type { ReactNode } from 'react';
 import { useRecoilState } from 'recoil';
 import { useForm } from 'react-hook-form';
 import { useMediaQuery } from '@librechat/client';
+import type { ReactNode } from 'react';
 import type { ChatFormValues } from '~/common';
 import { ChatContext, ChatFormProvider, ActivePanelProvider } from '~/Providers';
 import useUnifiedSidebarLinks from '~/hooks/Nav/useUnifiedSidebarLinks';
@@ -12,8 +12,9 @@ import Sidebar from './Sidebar';
 import { cn } from '~/utils';
 import store from '~/store';
 
-const COLLAPSED_WIDTH = 52;
-const EXPANDED_WIDTH = 260;
+/** Канон §4: сайдбар 240, свёрнутая рельса 56. */
+const COLLAPSED_WIDTH = 56;
+const EXPANDED_WIDTH = 240;
 const TRANSITION_MS = 300;
 const EASING = 'cubic-bezier(0.2, 0, 0, 1)';
 
@@ -68,12 +69,14 @@ function UnifiedSidebar() {
     return (
       <>
         <div
+          data-testid="sidebar-drawer"
           className={cn(
-            'fixed left-0 top-0 z-[110] flex h-full bg-surface-primary-alt',
+            'fixed left-0 top-0 z-drawer flex h-full bg-surface-primary-alt',
             expanded ? 'translate-x-0' : '-translate-x-full',
           )}
           style={{
-            width: 'min(85vw, 320px)',
+            /** Канон §7: на телефоне меню — панель в 72% ширины экрана. */
+            width: '72vw',
             transition: `transform ${TRANSITION_MS}ms ${EASING}`,
           }}
           inert={!expanded ? '' : undefined}
@@ -86,7 +89,7 @@ function UnifiedSidebar() {
         </div>
         <div
           className={cn(
-            'fixed inset-0 z-[109] bg-black/50',
+            'fixed inset-0 z-scrim-drawer bg-scrim',
             expanded ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
           )}
           style={{ transition: `opacity ${TRANSITION_MS}ms ${EASING}` }}

@@ -23,8 +23,8 @@ const ConvoLink: React.FC<ConvoLinkProps> = ({
   return (
     <div
       className={cn(
-        'flex min-w-0 grow items-center gap-2 overflow-hidden rounded-lg px-2',
-        isActiveConvo || isPopoverActive ? 'bg-surface-active-alt' : '',
+        'flex min-w-0 grow items-center gap-2 overflow-hidden rounded-xl px-2.5',
+        isActiveConvo || isPopoverActive ? 'bg-surface-active' : '',
       )}
       title={title ?? undefined}
       aria-current={isActiveConvo ? 'page' : undefined}
@@ -50,11 +50,19 @@ const ConvoLink: React.FC<ConvoLinkProps> = ({
         className={cn(
           'pointer-events-none absolute bottom-0.5 right-0.5 top-0.5 w-20 rounded-r-md bg-gradient-to-l',
           isActiveConvo || isPopoverActive
-            ? 'from-surface-active-alt'
-            : 'from-surface-primary-alt from-0% to-transparent group-hover:from-surface-active-alt group-hover:from-40%',
+            ? 'from-surface-active'
+            : 'from-surface-primary-alt from-0% to-transparent group-hover:from-surface-hover group-hover:from-40%',
         )}
         aria-hidden="true"
       />
+      {/* Отметка открытого чата — точка `acc` справа (прототип, экран 8).
+          Стоит после градиента, иначе он бы её закрасил. */}
+      {isActiveConvo && (
+        <span
+          className="relative ml-auto h-[7px] w-[7px] flex-none rounded-full bg-text-accent"
+          aria-hidden="true"
+        />
+      )}
     </div>
   );
 };
