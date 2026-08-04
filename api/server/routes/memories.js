@@ -1,5 +1,5 @@
 const express = require('express');
-const { Tokenizer, generateCheckAccess } = require('@librechat/api');
+const { Tokenizer, generateCheckAccess, checkMemoryValue } = require('@librechat/api');
 const { PermissionTypes, Permissions } = require('librechat-data-provider');
 const {
   getAllUserMemories,
@@ -40,6 +40,31 @@ const checkMemoryOptOut = generateCheckAccess({
   permissions: [Permissions.USE, Permissions.OPT_OUT],
   getRoleByName,
 });
+
+/**
+ * Screens a hand-written memory the same way the extraction agent's writes are screened.
+ * A guard that only covers the automatic path is decorative: the same personal data can
+ * be typed into the panel and lands in the same permanent store.
+ */
+const rejectPersonalData = async (value, res) => {
+  const verdict = await checkMemoryValue(value);
+  if (verdict.outcome === 'allowed') {
+    return false;
+  }
+  if (verdict.outcome === 'rejected') {
+    res.status(422).json({
+      error: 'Value looks like personal data.',
+      errorType: 'personal_data',
+      entityTypes: verdict.types ?? [],
+    });
+    return true;
+  }
+  res.status(503).json({
+    error: 'Memory guard is unavailable, try again shortly.',
+    errorType: 'guard_unavailable',
+  });
+  return true;
+};
 
 router.use(requireJwtAuth);
 
@@ -116,6 +141,10 @@ router.post('/', memoryPayloadLimit, checkMemoryCreate, configMiddleware, async 
   }
 
   try {
+    if (await rejectPersonalData(value, res)) {
+      return;
+    }
+
     const tokenCount = Tokenizer.getTokenCount(value, 'o200k_base');
 
     const memories = await getAllUserMemories(req.user.id);
@@ -222,6 +251,10 @@ router.patch('/:key', memoryPayloadLimit, checkMemoryUpdate, configMiddleware, a
   }
 
   try {
+    if (await rejectPersonalData(value, res)) {
+      return;
+    }
+
     const tokenCount = Tokenizer.getTokenCount(value, 'o200k_base');
 
     const memories = await getAllUserMemories(req.user.id);

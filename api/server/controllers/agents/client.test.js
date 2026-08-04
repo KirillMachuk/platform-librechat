@@ -2702,6 +2702,38 @@ describe('AgentClient - titleConvo', () => {
       );
     });
 
+    it('should neither read nor write memory in a temporary conversation', async () => {
+      /* Every mock below is set so that a conversation which is NOT temporary would
+         reach the memory processor and come back with existing memories — otherwise
+         this test passes for the wrong reason (an agent that fails to initialize
+         returns undefined too). */
+      mockCheckAccess.mockResolvedValue(true);
+      mockInitializeAgent.mockResolvedValue({ ...mockAgent, provider: EModelEndpoint.openAI });
+      mockCreateMemoryProcessor.mockResolvedValue(['lease lawyer', jest.fn()]);
+
+      client = new AgentClient(mockOptions);
+      client.conversationId = 'convo-123';
+      client.responseMessageId = 'response-123';
+
+      expect(await client.useMemory()).toBe('lease lawyer');
+      expect(client.processMemory).toBeDefined();
+
+      jest.clearAllMocks();
+      mockCheckAccess.mockResolvedValue(true);
+      mockInitializeAgent.mockResolvedValue({ ...mockAgent, provider: EModelEndpoint.openAI });
+      mockCreateMemoryProcessor.mockResolvedValue(['lease lawyer', jest.fn()]);
+      mockReq.body = { isTemporary: true };
+
+      const temporaryClient = new AgentClient(mockOptions);
+      temporaryClient.conversationId = 'convo-456';
+      temporaryClient.responseMessageId = 'response-456';
+
+      expect(await temporaryClient.useMemory()).toBeUndefined();
+      expect(mockGetFormattedMemories).not.toHaveBeenCalled();
+      expect(mockCreateMemoryProcessor).not.toHaveBeenCalled();
+      expect(temporaryClient.processMemory).toBeUndefined();
+    });
+
     it('should return existing memories without auto-processing when memory agent is not enabled', async () => {
       mockReq.config.memory = {
         personalize: true,

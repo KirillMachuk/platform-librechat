@@ -37,6 +37,11 @@ jest.mock('winston', () => ({
   },
 }));
 
+// The write guard calls out to a screening service; these tests are about the tool.
+jest.mock('~/memory/guard', () => ({
+  checkMemoryValue: jest.fn(),
+}));
+
 // Mock the Tokenizer
 jest.mock('~/utils/tokenizer', () => ({
   __esModule: true,
@@ -61,12 +66,68 @@ jest.mock('@librechat/agents', () => ({
   },
 }));
 
+const { checkMemoryValue } = jest.requireMock('~/memory/guard');
+
 describe('createMemoryTool', () => {
   let mockSetMemory: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockSetMemory = jest.fn().mockResolvedValue({ ok: true });
+    checkMemoryValue.mockResolvedValue({ outcome: 'allowed' });
+  });
+
+  describe('personal-data guard', () => {
+    it('should refuse to store a value the guard rejects', async () => {
+      checkMemoryValue.mockResolvedValue({ outcome: 'rejected', types: ['PERSON', 'PHONE'] });
+      const tool = createMemoryTool({
+        userId: 'test-user',
+        setMemory: mockSetMemory,
+      });
+
+      const result = await tool.func({
+        key: 'context',
+        value: 'Клиент Иван Петров, тел. +375291234567',
+      });
+
+      expect(mockSetMemory).not.toHaveBeenCalled();
+      expect(result[0]).toContain('Not saved');
+      const artifact = (result[1] as Record<Tools.memory, MemoryArtifact>)[Tools.memory];
+      expect(artifact.type).toBe('error');
+      const errorData = JSON.parse(artifact.value as string);
+      expect(errorData.errorType).toBe('personal_data');
+      expect(errorData.entityTypes).toEqual(['PERSON', 'PHONE']);
+      /** The reason travels as types; the value itself must never ride along. */
+      expect(artifact.value).not.toContain('Иван');
+      expect(artifact.value).not.toContain('375291234567');
+    });
+
+    it('should refuse to store when the guard is unavailable', async () => {
+      checkMemoryValue.mockResolvedValue({ outcome: 'unavailable' });
+      const tool = createMemoryTool({
+        userId: 'test-user',
+        setMemory: mockSetMemory,
+      });
+
+      const result = await tool.func({ key: 'context', value: 'Lease lawyer' });
+
+      expect(mockSetMemory).not.toHaveBeenCalled();
+      const artifact = (result[1] as Record<Tools.memory, MemoryArtifact>)[Tools.memory];
+      expect(JSON.parse(artifact.value as string).errorType).toBe('guard_unavailable');
+    });
+
+    it('should screen the value before an invalid key is even considered', async () => {
+      const tool = createMemoryTool({
+        userId: 'test-user',
+        setMemory: mockSetMemory,
+        validKeys: ['preferences', 'context'],
+      });
+
+      await tool.func({ key: 'nonsense', value: 'Lease lawyer' });
+
+      /** An invalid key is rejected without a write, so screening it would be a wasted call. */
+      expect(checkMemoryValue).not.toHaveBeenCalled();
+    });
   });
 
   // Memory overflow tests

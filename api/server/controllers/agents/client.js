@@ -733,6 +733,13 @@ class AgentClient extends BaseClient {
     if (user.personalization?.memories === false) {
       return;
     }
+    /** A temporary chat leaves no trace: it must neither read memory nor write to it. */
+    if (this.options.req?.body?.isTemporary) {
+      logger.debug(
+        '[api/server/controllers/agents/client.js #useMemory] Skipping memory for temporary conversation',
+      );
+      return;
+    }
     const hasAccess = await checkAccess({
       user,
       permissionType: PermissionTypes.MEMORIES,

@@ -3,9 +3,17 @@ import { DEFAULT_MEMORY_MAX_INPUT_TOKENS } from 'librechat-data-provider';
 
 import type { TCustomConfig } from 'librechat-data-provider';
 
+import { MEMORY_GUARD_URL_ENV } from '@librechat/data-schemas';
 import { isMemoryAgentEnabled, isMemoryEnabled, loadMemoryConfig } from './config';
 
 describe('memory config', () => {
+  beforeEach(() => {
+    process.env[MEMORY_GUARD_URL_ENV] = 'http://guard.test/v1/classify';
+  });
+
+  afterEach(() => {
+    delete process.env[MEMORY_GUARD_URL_ENV];
+  });
   it('keeps memory enabled without configuring an automatic memory agent', () => {
     const config: TCustomConfig['memory'] = {
       personalize: true,
@@ -64,6 +72,25 @@ describe('memory config', () => {
 
     expect(isMemoryEnabled(loaded)).toBe(true);
     expect(isMemoryAgentEnabled(loaded)).toBe(true);
+  });
+
+  it('keeps memory off when no write guard is configured', () => {
+    delete process.env[MEMORY_GUARD_URL_ENV];
+    const errorSpy = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+    const config: TCustomConfig['memory'] = {
+      personalize: true,
+      agent: {
+        enabled: true,
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+      },
+    };
+
+    const loaded = loadMemoryConfig(config);
+
+    expect(isMemoryEnabled(loaded)).toBe(false);
+    expect(isMemoryAgentEnabled(loaded)).toBe(false);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining(MEMORY_GUARD_URL_ENV));
   });
 
   it('keeps disabled memory disabled even when the agent is explicitly enabled', () => {

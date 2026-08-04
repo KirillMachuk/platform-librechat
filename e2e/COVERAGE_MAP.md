@@ -240,6 +240,8 @@ agreed redesign and are the acceptance criteria for it.
 | Two devices saving different settings do not overwrite each other | unit | `packages/data-schemas/src/methods/user.preferences.spec.ts` | covered |
 | Settings survive a full sign-in → change → sign-out → sign-in round trip | e2e | `e2e/specs/mock/settings-sync.spec.ts` | covered |
 | Bookmarks switch reveals the header icon, and only in a saved chat | e2e | `e2e/specs/mock/settings-sync.spec.ts` | covered |
+| A memory refused for personal data says so, instead of "storage full" | unit | `client/src/components/Chat/Messages/Content/__tests__/MemoryInfo.test.tsx` | covered |
+| A memory refused because the screening service is down says so | unit | `client/src/components/Chat/Messages/Content/__tests__/MemoryInfo.test.tsx` | covered |
 
 ## 11. Accessibility
 
