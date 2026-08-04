@@ -74,7 +74,7 @@ test exists and is skipped until the redesign lands.
 | Attachment preview status polls until ready/failed | unit | `client/src/hooks/Files/__tests__/useAttachmentPreviewSync.spec.tsx` | covered |
 | Preview poll interval and error cap | unit | `client/src/data-provider/Files/__tests__/previewRefetchInterval.spec.ts` | covered |
 | Clicking a file in a sent message opens its preview | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| Opening a file from the library opens its preview | e2e | `e2e/specs/mock/files.helpers.ts` | covered |
+| Opening a file from the library opens its preview | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 
 ## 5. File preview — rendering matrix
 
@@ -122,16 +122,17 @@ the nightly non-hermetic profile or unit coverage of the routing decision itself
 | Archive / unsupported format offers download, not an error | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | Password-protected PDF stays inside the preview surface | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | Password-protected Word file says plainly it could not be shown | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| Every preview settles on a real surface — never an empty rectangle | e2e | `e2e/specs/mock/files.helpers.ts` | covered |
+| Every preview settles on a real surface — never an empty rectangle | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | A failed preview offers Retry alongside Download | e2e | — | fixme:Ф1 |
 | Password-protected file shows the shared honest failure instead of the browser viewer | e2e | — | fixme:Ф1 |
 | File still in the recognition queue shows queue position and estimate | e2e | — | gap |
 | A file type the app cannot handle is refused before upload | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | A file over the size limit is refused before upload | e2e | — | gap |
 
-"Never an empty rectangle" is owned by the helper rather than by one test: `openPreview` refuses
-to return until the dialog shows a frame, a text block or a named failure state, so all sixteen
-files in the matrix assert it on every run.
+"Never an empty rectangle" has no test of its own: `openPreview` in
+`e2e/specs/mock/files.helpers.ts` refuses to return until the dialog shows a frame, a text block
+or a named failure state, so every file in the matrix asserts it on every run. The row names the
+spec rather than the helper, because that is where a reader will find the tests.
 
 ## 7. File panel behavior
 

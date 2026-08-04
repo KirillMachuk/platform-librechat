@@ -1,6 +1,14 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import {
+  MOCK_ENDPOINTS,
+  messagesView,
+  replyPrompt,
+  replyText,
+  selectMockEndpoint,
+  sendMessage,
+} from '../mock/helpers';
 
 /**
  * Dark theme. The canon calls out contrast in the dark as its own risk — light
@@ -46,5 +54,24 @@ test.describe('dark theme', () => {
     await expect(page.locator('div[role="dialog"]')).toHaveCount(1);
 
     expect(await rules(page, 'div[role="dialog"]')).toEqual([]);
+  });
+  /**
+   * The screen that matters most, and the one the two clean scans above miss.
+   * In the light theme a conversation fails on exactly two structural defects
+   * of the sidebar (a grid without rows, a control nested inside a control) —
+   * both theme-independent. Asserting the same two here means a colour that
+   * only fails in the dark shows up as a third entry rather than as nothing.
+   */
+  test('a conversation gains no dark-only defect on top of the known two', async ({ page }) => {
+    test.setTimeout(150000);
+    await page.goto('/c/new', { timeout: 15000 });
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
+    expect((await sendMessage(page, replyPrompt('dark-a11y'))).ok()).toBeTruthy();
+    await expect(messagesView(page).getByText(replyText('dark-a11y'))).toBeVisible({
+      timeout: 60000,
+    });
+
+    expect(await rules(page)).toEqual(['aria-required-children', 'nested-interactive']);
   });
 });
