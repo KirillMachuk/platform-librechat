@@ -11,6 +11,8 @@ import {
 } from '@librechat/client';
 import type { TUserMemory } from 'librechat-data-provider';
 import { useUpdateMemoryMutation, useMemoriesQuery } from '~/data-provider';
+import { memoryErrorKey } from '~/utils/memoryError';
+import type { MemoryErrorResponse } from '~/utils/memoryError';
 import { useLocalize, useHasAccess } from '~/hooks';
 import MemoryUsageBadge from './MemoryUsageBadge';
 import { formatTimestamp } from '~/utils';
@@ -56,18 +58,12 @@ export default function MemoryEditDialog({
       let errorMessage = localize('com_ui_error');
 
       if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as any;
-        if (axiosError.response?.data?.error) {
+        const axiosError = error as { response?: MemoryErrorResponse };
+        const localizedKey = memoryErrorKey(axiosError.response);
+        if (localizedKey) {
+          errorMessage = localize(localizedKey);
+        } else if (axiosError.response?.data?.error) {
           errorMessage = axiosError.response.data.error;
-
-          // Check for duplicate key error
-          if (axiosError.response?.status === 409 || errorMessage.includes('already exists')) {
-            errorMessage = localize('com_ui_memory_key_exists');
-          }
-          // Check for key validation error (lowercase and underscores only)
-          else if (errorMessage.includes('lowercase letters and underscores')) {
-            errorMessage = localize('com_ui_memory_key_validation');
-          }
         }
       } else if (error.message) {
         errorMessage = error.message;

@@ -242,6 +242,7 @@ agreed redesign and are the acceptance criteria for it.
 | Bookmarks switch reveals the header icon, and only in a saved chat | e2e | `e2e/specs/mock/settings-sync.spec.ts` | covered |
 | A memory refused for personal data says so, instead of "storage full" | unit | `client/src/components/Chat/Messages/Content/__tests__/MemoryInfo.test.tsx` | covered |
 | A memory refused because the screening service is down says so | unit | `client/src/components/Chat/Messages/Content/__tests__/MemoryInfo.test.tsx` | covered |
+| A hand-written memory refused by the guard is explained in the user's language | unit | `client/src/utils/__tests__/memoryError.spec.ts` | covered |
 
 ## 11. Accessibility
 

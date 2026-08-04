@@ -10,6 +10,7 @@ const {
   setMemory,
 } = require('~/models');
 const { requireJwtAuth, configMiddleware } = require('~/server/middleware');
+const { memoryWriteLimiter } = require('~/server/middleware/limiters');
 
 const router = express.Router();
 
@@ -113,80 +114,87 @@ router.get('/', checkMemoryRead, configMiddleware, async (req, res) => {
  * Body: { key: string, value: string }
  * Returns 201 and { created: true, memory: <createdDoc> } when successful.
  */
-router.post('/', memoryPayloadLimit, checkMemoryCreate, configMiddleware, async (req, res) => {
-  const { key, value } = req.body;
+router.post(
+  '/',
+  memoryWriteLimiter,
+  memoryPayloadLimit,
+  checkMemoryCreate,
+  configMiddleware,
+  async (req, res) => {
+    const { key, value } = req.body;
 
-  if (typeof key !== 'string' || key.trim() === '') {
-    return res.status(400).json({ error: 'Key is required and must be a non-empty string.' });
-  }
-
-  if (typeof value !== 'string' || value.trim() === '') {
-    return res.status(400).json({ error: 'Value is required and must be a non-empty string.' });
-  }
-
-  const appConfig = req.config;
-  const memoryConfig = appConfig?.memory;
-  const charLimit = memoryConfig?.charLimit || 10000;
-
-  if (key.length > 1000) {
-    return res.status(400).json({
-      error: `Key exceeds maximum length of 1000 characters. Current length: ${key.length} characters.`,
-    });
-  }
-
-  if (value.length > charLimit) {
-    return res.status(400).json({
-      error: `Value exceeds maximum length of ${charLimit} characters. Current length: ${value.length} characters.`,
-    });
-  }
-
-  try {
-    if (await rejectPersonalData(value, res)) {
-      return;
+    if (typeof key !== 'string' || key.trim() === '') {
+      return res.status(400).json({ error: 'Key is required and must be a non-empty string.' });
     }
 
-    const tokenCount = Tokenizer.getTokenCount(value, 'o200k_base');
-
-    const memories = await getAllUserMemories(req.user.id);
+    if (typeof value !== 'string' || value.trim() === '') {
+      return res.status(400).json({ error: 'Value is required and must be a non-empty string.' });
+    }
 
     const appConfig = req.config;
     const memoryConfig = appConfig?.memory;
-    const tokenLimit = memoryConfig?.tokenLimit;
+    const charLimit = memoryConfig?.charLimit || 10000;
 
-    if (tokenLimit) {
-      const currentTotalTokens = memories.reduce(
-        (sum, memory) => sum + (memory.tokenCount || 0),
-        0,
-      );
-      if (currentTotalTokens + tokenCount > tokenLimit) {
-        return res.status(400).json({
-          error: `Adding this memory would exceed the token limit of ${tokenLimit}. Current usage: ${currentTotalTokens} tokens.`,
-        });
+    if (key.length > 1000) {
+      return res.status(400).json({
+        error: `Key exceeds maximum length of 1000 characters. Current length: ${key.length} characters.`,
+      });
+    }
+
+    if (value.length > charLimit) {
+      return res.status(400).json({
+        error: `Value exceeds maximum length of ${charLimit} characters. Current length: ${value.length} characters.`,
+      });
+    }
+
+    try {
+      if (await rejectPersonalData(value, res)) {
+        return;
       }
+
+      const tokenCount = Tokenizer.getTokenCount(value, 'o200k_base');
+
+      const memories = await getAllUserMemories(req.user.id);
+
+      const appConfig = req.config;
+      const memoryConfig = appConfig?.memory;
+      const tokenLimit = memoryConfig?.tokenLimit;
+
+      if (tokenLimit) {
+        const currentTotalTokens = memories.reduce(
+          (sum, memory) => sum + (memory.tokenCount || 0),
+          0,
+        );
+        if (currentTotalTokens + tokenCount > tokenLimit) {
+          return res.status(400).json({
+            error: `Adding this memory would exceed the token limit of ${tokenLimit}. Current usage: ${currentTotalTokens} tokens.`,
+          });
+        }
+      }
+
+      const result = await createMemory({
+        userId: req.user.id,
+        key: key.trim(),
+        value: value.trim(),
+        tokenCount,
+      });
+
+      if (!result.ok) {
+        return res.status(500).json({ error: 'Failed to create memory.' });
+      }
+
+      const updatedMemories = await getAllUserMemories(req.user.id);
+      const newMemory = updatedMemories.find((m) => m.key === key.trim());
+
+      res.status(201).json({ created: true, memory: newMemory });
+    } catch (error) {
+      if (error.message && error.message.includes('already exists')) {
+        return res.status(409).json({ error: 'Memory with this key already exists.' });
+      }
+      res.status(500).json({ error: error.message });
     }
-
-    const result = await createMemory({
-      userId: req.user.id,
-      key: key.trim(),
-      value: value.trim(),
-      tokenCount,
-    });
-
-    if (!result.ok) {
-      return res.status(500).json({ error: 'Failed to create memory.' });
-    }
-
-    const updatedMemories = await getAllUserMemories(req.user.id);
-    const newMemory = updatedMemories.find((m) => m.key === key.trim());
-
-    res.status(201).json({ created: true, memory: newMemory });
-  } catch (error) {
-    if (error.message && error.message.includes('already exists')) {
-      return res.status(409).json({ error: 'Memory with this key already exists.' });
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
+  },
+);
 
 /**
  * PATCH /memories/preferences
@@ -225,87 +233,94 @@ router.patch('/preferences', checkMemoryOptOut, async (req, res) => {
  * Body: { key?: string, value: string }
  * Returns 200 and { updated: true, memory: <updatedDoc> } when successful.
  */
-router.patch('/:key', memoryPayloadLimit, checkMemoryUpdate, configMiddleware, async (req, res) => {
-  const { key: urlKey } = req.params;
-  const { key: bodyKey, value } = req.body || {};
+router.patch(
+  '/:key',
+  memoryWriteLimiter,
+  memoryPayloadLimit,
+  checkMemoryUpdate,
+  configMiddleware,
+  async (req, res) => {
+    const { key: urlKey } = req.params;
+    const { key: bodyKey, value } = req.body || {};
 
-  if (typeof value !== 'string' || value.trim() === '') {
-    return res.status(400).json({ error: 'Value is required and must be a non-empty string.' });
-  }
-
-  const newKey = bodyKey || urlKey;
-  const appConfig = req.config;
-  const memoryConfig = appConfig?.memory;
-  const charLimit = memoryConfig?.charLimit || 10000;
-
-  if (newKey.length > 1000) {
-    return res.status(400).json({
-      error: `Key exceeds maximum length of 1000 characters. Current length: ${newKey.length} characters.`,
-    });
-  }
-
-  if (value.length > charLimit) {
-    return res.status(400).json({
-      error: `Value exceeds maximum length of ${charLimit} characters. Current length: ${value.length} characters.`,
-    });
-  }
-
-  try {
-    if (await rejectPersonalData(value, res)) {
-      return;
+    if (typeof value !== 'string' || value.trim() === '') {
+      return res.status(400).json({ error: 'Value is required and must be a non-empty string.' });
     }
 
-    const tokenCount = Tokenizer.getTokenCount(value, 'o200k_base');
+    const newKey = bodyKey || urlKey;
+    const appConfig = req.config;
+    const memoryConfig = appConfig?.memory;
+    const charLimit = memoryConfig?.charLimit || 10000;
 
-    const memories = await getAllUserMemories(req.user.id);
-    const existingMemory = memories.find((m) => m.key === urlKey);
-
-    if (!existingMemory) {
-      return res.status(404).json({ error: 'Memory not found.' });
-    }
-
-    if (newKey !== urlKey) {
-      const keyExists = memories.find((m) => m.key === newKey);
-      if (keyExists) {
-        return res.status(409).json({ error: 'Memory with this key already exists.' });
-      }
-
-      const createResult = await createMemory({
-        userId: req.user.id,
-        key: newKey,
-        value,
-        tokenCount,
+    if (newKey.length > 1000) {
+      return res.status(400).json({
+        error: `Key exceeds maximum length of 1000 characters. Current length: ${newKey.length} characters.`,
       });
-
-      if (!createResult.ok) {
-        return res.status(500).json({ error: 'Failed to create new memory.' });
-      }
-
-      const deleteResult = await deleteMemory({ userId: req.user.id, key: urlKey });
-      if (!deleteResult.ok) {
-        return res.status(500).json({ error: 'Failed to delete old memory.' });
-      }
-    } else {
-      const result = await setMemory({
-        userId: req.user.id,
-        key: newKey,
-        value,
-        tokenCount,
-      });
-
-      if (!result.ok) {
-        return res.status(500).json({ error: 'Failed to update memory.' });
-      }
     }
 
-    const updatedMemories = await getAllUserMemories(req.user.id);
-    const updatedMemory = updatedMemories.find((m) => m.key === newKey);
+    if (value.length > charLimit) {
+      return res.status(400).json({
+        error: `Value exceeds maximum length of ${charLimit} characters. Current length: ${value.length} characters.`,
+      });
+    }
 
-    res.json({ updated: true, memory: updatedMemory });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+    try {
+      if (await rejectPersonalData(value, res)) {
+        return;
+      }
+
+      const tokenCount = Tokenizer.getTokenCount(value, 'o200k_base');
+
+      const memories = await getAllUserMemories(req.user.id);
+      const existingMemory = memories.find((m) => m.key === urlKey);
+
+      if (!existingMemory) {
+        return res.status(404).json({ error: 'Memory not found.' });
+      }
+
+      if (newKey !== urlKey) {
+        const keyExists = memories.find((m) => m.key === newKey);
+        if (keyExists) {
+          return res.status(409).json({ error: 'Memory with this key already exists.' });
+        }
+
+        const createResult = await createMemory({
+          userId: req.user.id,
+          key: newKey,
+          value,
+          tokenCount,
+        });
+
+        if (!createResult.ok) {
+          return res.status(500).json({ error: 'Failed to create new memory.' });
+        }
+
+        const deleteResult = await deleteMemory({ userId: req.user.id, key: urlKey });
+        if (!deleteResult.ok) {
+          return res.status(500).json({ error: 'Failed to delete old memory.' });
+        }
+      } else {
+        const result = await setMemory({
+          userId: req.user.id,
+          key: newKey,
+          value,
+          tokenCount,
+        });
+
+        if (!result.ok) {
+          return res.status(500).json({ error: 'Failed to update memory.' });
+        }
+      }
+
+      const updatedMemories = await getAllUserMemories(req.user.id);
+      const updatedMemory = updatedMemories.find((m) => m.key === newKey);
+
+      res.json({ updated: true, memory: updatedMemory });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
 
 /**
  * DELETE /memories/:key

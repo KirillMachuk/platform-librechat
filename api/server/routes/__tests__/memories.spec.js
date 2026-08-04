@@ -21,6 +21,10 @@ jest.mock('~/models', () => ({
   setMemory: (...args) => mockSetMemory(...args),
 }));
 
+jest.mock('~/server/middleware/limiters', () => ({
+  memoryWriteLimiter: (_req, _res, next) => next(),
+}));
+
 jest.mock('~/server/middleware', () => ({
   requireJwtAuth: (req, _res, next) => {
     req.user = { id: 'user-123' };
