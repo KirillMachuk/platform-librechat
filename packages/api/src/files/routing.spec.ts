@@ -24,27 +24,37 @@ const { context, file_search } = EToolResources;
  * become documents. Word count does not separate them — the foliage photo below
  * yields more "words" than a real whiteboard diagram. Word density does.
  *
- * | sample        | words | density |
- * |---------------|-------|---------|
- * | contract      |    10 |   0.777 |
- * | chart         |     7 |   0.781 |
- * | table         |     6 |   0.410 |  <- lowest content
- * | diagram       |     4 |   1.000 |
- * | sensor grain  |     7 |   0.176 |  <- textless
- * | foliage       |     7 |   0.070 |  <- textless
- * | empty scan    |     1 |   0.079 |  <- textless
+ * | sample          | words | density |
+ * |-----------------|-------|---------|
+ * | contract        |    10 |   0.777 |
+ * | receipt (photo) |    41 |   0.479 |  <- least dense real content
+ * | chart           |    10 |   0.585 |
+ * | diagram         |    14 |   0.937 |
+ * | price tag       |     3 |   0.550 |  <- too blurry to read: dense nonsense
+ * | sensor grain    |     7 |   0.176 |  <- textless
+ * | foliage         |     7 |   0.070 |  <- textless
  */
 const OCR_SAMPLES = {
   /** Contract screenshot, 3 lines. */
   contract:
     'ДОГОВОР АРЕНДЫ №05-11\nг. Минск, 06 апреля 2021 г.\nАрендодатель передаёт нежилое помещение общей площадью 120 м',
-  /** Table screenshot, 4 rows — the least dense content we still admit. */
-  table: 'Товар | Кол-во | Цена\nСтол | 2 | 1 340,00\nСтул | 6 | 1 120,50\nЛампа | 1 | 12 089,90',
-  /** Chart with a title and axis labels. */
-  chart: 'Выручка 2026, млн руб.\nянв фев мар апр.',
-  /** Whiteboard diagram, 4 boxes. */
-  diagram: 'Заявка Проверка Договор Отказ',
+  /** Photographed cash receipt — the least dense real content measured, 0.48. */
+  receipt:
+    '000 “АВТОКАФЕ”\n\nКассовый чек\n\n000 "Автокафе"\n127015, г,Москва, пл,\nСавеловского вокзала, дом 2\nМЕСТО РАСЧЕТОВ Павильон\nкар ‘rodent печёный\n\n115.00 * 1шт. = 115.00\nрастительное масло\n\nс 85.00 ж шт. = 85.00\n\nлук фри\nо. 85.00 * ит, = 85.00\nЗакусочный\n\n120.00 * 1шт, = 120.00\nЗакусочный\n\n120.00 ж 1шт. = 120.00\n\nкофе `американо 0.2\n100.00 ж lur. = 100.00\n\nморе\n\n160.00 * 1шт. = 160.00\nИТОГ =785.00\nБЕЗНАЛИЧНЫМИ 785.00\nСУММА БЕЗ НАС 785.00\nСНО:УСН доход-расход ПРИХОД\n\nКАССИР Прохорова М,\n\n888/25\n\n29.07.2025 46:36\nИНН 7705202538 For дм\nРН ККТ 0000502615061209 Чем\noH 7286440500094315\non 89523\non 608422087\n\nСПАСИБО',
+  /** Screenshot of a chart: title and axis labels only. */
+  chart:
+    'Диалоги по времени\n\n1200]\n\nиюл. 28 июл. 29 июл. 30 июл. 31 авг. 1 авг. 2 авг. 3 авг. 4',
+  /** Screenshot of a network diagram, English labels. */
+  diagram:
+    'Design console Order console Fabricate and deliver console\n\nOrder tower : .\nmaterial Deliver tower material\n12\n3 3',
 } as const;
+
+/**
+ * A photographed price tag too blurry to read: OCR returns dense nonsense. Not
+ * noise by density (0.55, higher than a real receipt) — it is caught by having
+ * too few words, which is why both bars exist.
+ */
+const OCR_UNREADABLE = 'С\n= 50...\n= cece (NAN ВАЛА';
 
 /** OCR of images with no text on them whatsoever — every one of these is noise. */
 const OCR_NOISE = {
@@ -177,7 +187,7 @@ describe('isImageOcrEnabled', () => {
 
 describe('readImageOcrThresholds', () => {
   it('falls back to the measured defaults when env is unset', () => {
-    expect(readImageOcrThresholds({})).toEqual({ minWords: 3, minDensity: 0.3 });
+    expect(readImageOcrThresholds({})).toEqual({ minWords: 6, minDensity: 0.4 });
   });
 
   it('reads overrides', () => {
@@ -196,9 +206,9 @@ describe('readImageOcrThresholds', () => {
         AUTO_IMAGE_OCR_MIN_DENSITY: '0',
       }),
     ).toEqual(DEFAULT_IMAGE_OCR_THRESHOLDS);
-    expect(readImageOcrThresholds({ AUTO_IMAGE_OCR_MIN_DENSITY: '-0.5' }).minDensity).toBe(0.3);
-    expect(readImageOcrThresholds({ AUTO_IMAGE_OCR_MIN_DENSITY: '1.5' }).minDensity).toBe(0.3);
-    expect(readImageOcrThresholds({ AUTO_IMAGE_OCR_MIN_DENSITY: 'abc' }).minDensity).toBe(0.3);
+    expect(readImageOcrThresholds({ AUTO_IMAGE_OCR_MIN_DENSITY: '-0.5' }).minDensity).toBe(0.4);
+    expect(readImageOcrThresholds({ AUTO_IMAGE_OCR_MIN_DENSITY: '1.5' }).minDensity).toBe(0.4);
+    expect(readImageOcrThresholds({ AUTO_IMAGE_OCR_MIN_DENSITY: 'abc' }).minDensity).toBe(0.4);
   });
 });
 
@@ -220,9 +230,9 @@ describe('measureOcrText', () => {
   it('reports the density of every measured content shape', () => {
     expect(measureOcrText(OCR_SAMPLES.contract)).toMatchObject({ words: 10, texty: true });
     expect(measureOcrText(OCR_SAMPLES.contract).density).toBeCloseTo(0.777, 2);
-    expect(measureOcrText(OCR_SAMPLES.table).density).toBeCloseTo(0.41, 2);
-    expect(measureOcrText(OCR_SAMPLES.chart).density).toBeCloseTo(0.781, 2);
-    expect(measureOcrText(OCR_SAMPLES.diagram).density).toBe(1);
+    expect(measureOcrText(OCR_SAMPLES.receipt).density).toBeCloseTo(0.479, 2);
+    expect(measureOcrText(OCR_SAMPLES.chart).density).toBeCloseTo(0.585, 2);
+    expect(measureOcrText(OCR_SAMPLES.diagram).density).toBeCloseTo(0.937, 2);
   });
 
   it('reports OCR noise as word-rich but sparse — which is how it is told apart', () => {
@@ -263,26 +273,40 @@ describe('acceptOcrText', () => {
 
   it.each([
     ['contract screenshot', OCR_SAMPLES.contract],
-    ['table screenshot', OCR_SAMPLES.table],
+    ['photographed receipt', OCR_SAMPLES.receipt],
     ['chart with a title and axis labels', OCR_SAMPLES.chart],
-    ['whiteboard diagram of four boxes', OCR_SAMPLES.diagram],
-  ])('accepts a %s, which the old character minimum rejected', (_name, sample) => {
-    expect(sample.length).toBeLessThan(OLD_MIN_CHARS);
+    ['network diagram', OCR_SAMPLES.diagram],
+  ])('accepts a %s', (_name, sample) => {
     expect(acceptOcrText(sample, thresholds)).toBe(true);
+  });
+
+  it('accepts content the old 150-character minimum threw away', () => {
+    expect(OCR_SAMPLES.contract.length).toBeLessThan(OLD_MIN_CHARS);
+    expect(OCR_SAMPLES.chart.length).toBeLessThan(OLD_MIN_CHARS);
+    expect(acceptOcrText(OCR_SAMPLES.contract, thresholds)).toBe(true);
+    expect(acceptOcrText(OCR_SAMPLES.chart, thresholds)).toBe(true);
+  });
+
+  it('rejects a photo too blurry to read, which density alone cannot catch', () => {
+    const unreadable = measureOcrText(OCR_UNREADABLE);
+    expect(unreadable.density).toBeGreaterThan(measureOcrText(OCR_SAMPLES.receipt).density);
+    expect(unreadable.words).toBeLessThan(thresholds.minWords);
+    expect(acceptOcrText(OCR_UNREADABLE, thresholds)).toBe(false);
   });
 
   it.each([
     ['foliage', OCR_NOISE.foliage],
     ['sensor grain', OCR_NOISE.grain],
   ])('rejects OCR noise from a photo of %s, however many words it seems to hold', (_n, noise) => {
-    expect(measureOcrText(noise).words).toBeGreaterThan(measureOcrText(OCR_SAMPLES.diagram).words);
+    expect(measureOcrText(noise).words).toBeGreaterThan(0);
+    expect(measureOcrText(noise).density).toBeLessThan(thresholds.minDensity);
     expect(acceptOcrText(noise, thresholds)).toBe(false);
   });
 
   it('rejects text with fewer words than the minimum however dense it is', () => {
-    const twoWords = 'Итого руб';
-    expect(measureOcrText(twoWords)).toMatchObject({ words: 2, density: 1 });
-    expect(acceptOcrText(twoWords, thresholds)).toBe(false);
+    const fourWords = 'Заявка Проверка Договор Отказ';
+    expect(measureOcrText(fourWords)).toMatchObject({ words: 4, density: 1 });
+    expect(acceptOcrText(fourWords, thresholds)).toBe(false);
   });
 
   it('still rejects binary garbage that carries enough words', () => {
@@ -301,13 +325,13 @@ describe('acceptOcrText', () => {
 
   it('pins the defaults to the measured gap between content and noise', () => {
     expect(
-      acceptOcrMetrics({ words: 3, density: 0.3, texty: true }, DEFAULT_IMAGE_OCR_THRESHOLDS),
+      acceptOcrMetrics({ words: 6, density: 0.4, texty: true }, DEFAULT_IMAGE_OCR_THRESHOLDS),
     ).toBe(true);
     expect(
-      acceptOcrMetrics({ words: 2, density: 0.9, texty: true }, DEFAULT_IMAGE_OCR_THRESHOLDS),
+      acceptOcrMetrics({ words: 5, density: 0.9, texty: true }, DEFAULT_IMAGE_OCR_THRESHOLDS),
     ).toBe(false);
     expect(
-      acceptOcrMetrics({ words: 9, density: 0.29, texty: true }, DEFAULT_IMAGE_OCR_THRESHOLDS),
+      acceptOcrMetrics({ words: 9, density: 0.39, texty: true }, DEFAULT_IMAGE_OCR_THRESHOLDS),
     ).toBe(false);
   });
 });
