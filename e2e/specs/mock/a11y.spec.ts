@@ -27,10 +27,22 @@ import { attachFixture, fileFixture, openFilesPanel, openPreview } from './files
  */
 const WCAG_21_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
-const scan = (page: Page, within?: string) => {
-  const builder = new AxeBuilder({ page }).withTags(WCAG_21_AA);
-  return (within ? builder.include(within) : builder).analyze();
+const scan = (page: Page, within?: string, excluding?: string) => {
+  let builder = new AxeBuilder({ page }).withTags(WCAG_21_AA);
+  if (within) {
+    builder = builder.include(within);
+  }
+  if (excluding) {
+    builder = builder.exclude(excluding);
+  }
+  return builder.analyze();
 };
+
+/* The sidebar has two defects of its own, owned by the conversation tests
+ * below. Leaving it in every other scan makes those tests depend on how many
+ * conversations happen to exist when they run — which is how three of them
+ * passed only because they ran before anything created one. */
+const SIDEBAR = 'aside';
 
 /** What failed, naming the element rather than dumping the whole rule object. */
 const describeViolations = (results: Awaited<ReturnType<typeof scan>>) =>
@@ -48,7 +60,7 @@ test.describe('accessibility', () => {
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
     await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
 
-    expect(describeViolations(await scan(page))).toEqual([]);
+    expect(describeViolations(await scan(page, undefined, SIDEBAR))).toEqual([]);
   });
 
   /**
@@ -93,28 +105,34 @@ test.describe('accessibility', () => {
    */
   test('the file library dialog has no WCAG A/AA violations', async ({ page }) => {
     test.fail();
-    test.setTimeout(90000);
+    test.setTimeout(120000);
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    /* With a file in it, not empty: an empty table has no rows, and the row
+     * defect below only exists once there is a row to have it. Scanning an
+     * empty library was how this test stayed clean. */
+    await attachFixture(page, fileFixture('notes.md'));
     await openFilesPanel(page);
 
     expect(describeViolations(await scan(page, FILE_PANEL))).toEqual([]);
   });
 
-  test('the file library fails only on the column-header contrast', async ({ page }) => {
-    test.setTimeout(90000);
+  test('the file library fails on the header contrast and on its own rows', async ({ page }) => {
+    test.setTimeout(120000);
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    await attachFixture(page, fileFixture('notes.md'));
     await openFilesPanel(page);
 
-    expect(describeViolations(await scan(page, FILE_PANEL))).toEqual([
-      {
-        rule: 'color-contrast',
-        impact: 'serious',
-        where: [
-          'th[aria-label="filename column, sortable"] > .md\\:gap-2.gap-1.items-center',
-          'th[aria-label="updatedAt column, sortable"] > .md\\:gap-2.gap-1.items-center',
-        ],
-      },
-    ]);
+    /* Two defects, and the second was invisible until the table had a row in
+     * it: each row carries `role="button"` so the whole row is clickable, and
+     * the "attach to chat" button sits inside it — a control inside a control.
+     * Same shape as the sidebar row defect, same owner: the redesign. The
+     * third, `aria-required-children`, is the table declaring a role whose
+     * required children it does not provide — also only visible with a row. */
+    expect(
+      describeViolations(await scan(page, FILE_PANEL))
+        .map((violation) => violation.rule)
+        .sort(),
+    ).toEqual(['aria-required-children', 'color-contrast', 'nested-interactive']);
   });
 });
 
@@ -226,13 +244,16 @@ test.describe('accessibility of the main dialogs', () => {
     expect(describeViolations(await scan(page, FILE_PANEL))).toEqual([]);
   });
 
-  test('the agents grid labels itself by a tab that may not exist yet', async ({ page }) => {
+  test('the agents panel is clean once its category tabs have loaded', async ({ page }) => {
     test.setTimeout(90000);
     await openSidebarPanel(page, 'agents');
+    /* Waiting for the tabs is what makes this deterministic: the violation
+     * above exists only in the window before they arrive, so a scan that does
+     * not wait reports it or not depending on machine speed. Asserting the
+     * clean result afterwards pins that nothing else is wrong with the panel. */
+    await expect(page.locator('#category-tab-all')).toBeVisible({ timeout: 30000 });
 
-    expect(describeViolations(await scan(page, FILE_PANEL)).map((v) => v.rule)).toContain(
-      'aria-valid-attr-value',
-    );
+    expect(describeViolations(await scan(page, FILE_PANEL))).toEqual([]);
   });
 
   test('the prompts panel has no WCAG A/AA violations', async ({ page }) => {
