@@ -84,6 +84,9 @@ test.describe('branding', () => {
     test.setTimeout(90000);
     await context.clearCookies();
     await page.goto('/login', { timeout: 15000 });
+    /* A stale session would silently redirect to the chat and this would become
+     * a second copy of the test above, passing for the wrong screen. */
+    await expect(page).toHaveURL(/\/login/, { timeout: 20000 });
     await expect(page.getByRole('button', { name: /Log in|Continue/i }).first()).toBeVisible({
       timeout: 20000,
     });
