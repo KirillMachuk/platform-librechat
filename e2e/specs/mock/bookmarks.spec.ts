@@ -213,6 +213,59 @@ test.describe('bookmarks', () => {
     await expect(conversationNamed(page, taggedTitle)).toHaveCount(0, { timeout: 20000 });
   });
 
+  /**
+   * The panel can rename a bookmark out from under a filter that is using it. Left alone the
+   * chat list keeps filtering by a name nothing carries any more, while the menu shows that
+   * bookmark unselected — three surfaces telling three different stories.
+   */
+  test('renaming a bookmark from the panel releases a filter that was using it', async ({
+    page,
+  }) => {
+    test.setTimeout(240000);
+
+    const plainTitle = uniqueLabel('Вне закладки');
+    const taggedTitle = uniqueLabel('В закладке');
+    const before = uniqueLabel('до');
+    const after = uniqueLabel('после');
+
+    await createNamedConversation(page, plainTitle);
+    await createNamedConversation(page, taggedTitle);
+    await setBookmarksMenu(page, true);
+
+    await headerBookmark(page).click();
+    await page.getByRole('menuitem', { name: 'New Bookmark' }).click();
+    await fillBookmarkForm(page, before);
+    await closeMenu(page, HEADER_MENU_ITEM);
+
+    await sidebarBookmark(page).click();
+    await page.getByRole('menuitemcheckbox', { name: before }).click();
+    await closeMenu(page, SIDEBAR_MENU_ITEM);
+    await expect(conversationNamed(page, plainTitle)).toHaveCount(0, { timeout: 20000 });
+    await expect(sidebarBookmark(page)).toHaveAttribute('aria-pressed', 'true');
+
+    await bookmarksPanelLink(page).click();
+    const panel = bookmarksPanel(page);
+    await expect(panel).toBeVisible();
+    await panel
+      .getByRole('listitem')
+      .filter({ hasText: before })
+      .getByRole('button', { name: 'Edit Bookmark' })
+      .click();
+    await fillBookmarkForm(page, after);
+    await expect(panel.getByRole('listitem').filter({ hasText: after })).toHaveCount(1, {
+      timeout: 20000,
+    });
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+
+    /* The filter let go, so the chat it had been hiding is listed again. */
+    await expect(sidebarBookmark(page)).toHaveAttribute('aria-pressed', 'false', {
+      timeout: 20000,
+    });
+    await expect(conversationNamed(page, plainTitle)).toHaveCount(1, { timeout: 20000 });
+    await expect(conversationNamed(page, taggedTitle)).toHaveCount(1);
+  });
+
   test('the sidebar panel creates, renames and deletes a bookmark', async ({ page }) => {
     test.setTimeout(180000);
 

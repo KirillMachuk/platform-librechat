@@ -185,6 +185,7 @@ agreed redesign and are the acceptance criteria for it.
 | Bookmarks: a chat can be taken back out of a bookmark | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
 | Bookmarks stay hidden on every surface while the switch is off | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
 | Bookmarks panel: create, rename, delete a bookmark | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
+| Renaming a bookmark releases a chat-list filter that was using it | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
 | Switching bookmarks off releases the bookmark filter on the chat list | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
 | Archive a conversation and bring it back | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
 | Mobile sidebar opens and dismisses | e2e | `e2e/specs/mock/mobile-sidebar.spec.ts` | covered |

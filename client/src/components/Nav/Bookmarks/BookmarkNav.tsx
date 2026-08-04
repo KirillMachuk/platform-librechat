@@ -1,4 +1,4 @@
-import { useState, useId, useMemo, useCallback } from 'react';
+import { useState, useId, useMemo, useCallback, memo } from 'react';
 import * as Ariakit from '@ariakit/react';
 import { CrossCircledIcon } from '@radix-ui/react-icons';
 import { DropdownPopup, TooltipAnchor } from '@librechat/client';
@@ -127,4 +127,5 @@ const BookmarkNav: FC<BookmarkNavProps> = ({ tags, setTags }: BookmarkNavProps) 
   );
 };
 
-export default BookmarkNav;
+/** Memoized upstream (#14011) to keep it out of the re-render storm while a reply streams. */
+export default memo(BookmarkNav);

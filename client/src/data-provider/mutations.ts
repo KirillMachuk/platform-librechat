@@ -431,6 +431,10 @@ export const useDeleteTagInConversations = () => {
         });
       }
     }
+
+    /* The writes above land on the unfiltered key only. Conversation lists are cached per
+     * filter, so the bookmark-filtered list the sidebar shows needs a prefix invalidation. */
+    queryClient.invalidateQueries([QueryKeys.allConversations]);
   };
   return deleteTagInAllConversation;
 };
