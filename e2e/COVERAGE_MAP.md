@@ -126,7 +126,7 @@ the nightly non-hermetic profile or unit coverage of the routing decision itself
 | Every preview settles on a real surface — never an empty rectangle | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | A failed preview offers Retry alongside Download | e2e | — | fixme:Ф1 |
 | Password-protected file shows the shared honest failure instead of the browser viewer | e2e | — | fixme:Ф1 |
-| File still in the recognition queue shows queue position and estimate | e2e | — | gap |
+| File still in the recognition queue shows queue position and estimate | e2e | — | fixme:Ф1 |
 | A file type the app cannot handle is refused before upload | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | A file over the size limit is refused before upload | e2e | — | gap |
 
@@ -196,7 +196,8 @@ agreed redesign and are the acceptance criteria for it.
 | Agent builder saves a version | unit | `client/src/components/SidePanel/Agents/AgentPanel.test.tsx` | covered |
 | Project create, rename, colour, icon | e2e | `e2e/specs/mock/projects.spec.ts` | covered |
 | Prompts library: create and use a prompt | e2e | `e2e/specs/mock/prompts.spec.ts` | covered |
-| Prompts library UI components | unit | — | planned:Э6 |
+| A prompt's variables are read and shown by kind | unit | `client/src/components/Prompts/display/__tests__/PromptVariables.spec.tsx` | covered |
+| Creating, editing and sharing a prompt | unit | — | gap |
 | MCP server selection and ephemeral servers | e2e | `e2e/specs/mock/mcp.spec.ts` | covered |
 | Skills appear and run | e2e | `e2e/specs/mock/deployment-skills.spec.ts` | covered |
 
@@ -284,6 +285,9 @@ the app is exercised at that width today, and so the band test has somewhere to 
 Pixel snapshots are `planned:Э7`, not Э5. Baselines taken now would be invalidated by the very
 redesign they are meant to guard, and they would have to be generated on CI rather than on a Mac
 to compare at all. Structural and ARIA assertions carry the regression value in the meantime.
+
+The recognition-queue row is `fixme:Ф1`, not a gap: there is no queue state in the product at
+all — no strings, no code. Nothing can be tested until it exists.
 
 A dropped connection mid-reply keeps everything already received, and a reconnect plus reload
 loses nothing — that is covered. What is **not** covered, and is a gap rather than planned work:
