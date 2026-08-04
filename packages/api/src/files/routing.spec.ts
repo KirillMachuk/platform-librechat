@@ -54,8 +54,7 @@ const OCR_SAMPLES = {
  * noise by density (0.55, higher than a real receipt) — it is caught by having
  * too few words, which is why both bars exist.
  */
-const OCR_UNREADABLE =
-  'С\n= 50...\n= cece (NAN ВАЛА';
+const OCR_UNREADABLE = 'С\n= 50...\n= cece (NAN ВАЛА';
 
 /** OCR of images with no text on them whatsoever — every one of these is noise. */
 const OCR_NOISE = {
