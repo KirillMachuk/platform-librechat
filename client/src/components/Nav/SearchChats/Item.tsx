@@ -66,11 +66,12 @@ const Item = memo(function Item({
       data-active={isActive ? '' : undefined}
       onClick={handleClick}
       className={cn(
-        'flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left text-sm text-text-primary transition-colors hover:bg-surface-hover focus:outline-none',
+        /* Прототип `.sres`: зазор 10, паддинг 8/10, радиус 8, текст 14. */
+        'flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-text-primary transition-colors duration-90 hover:bg-surface-hover focus:outline-none',
         isActive && 'bg-surface-hover',
       )}
     >
-      <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-text-secondary" aria-hidden="true" />
+      <Icon className="icon-md mt-0.5 flex-shrink-0 text-text-tertiary" aria-hidden="true" />
       <div className="flex min-w-0 flex-1 flex-col">
         {/* The badge sits beside the title rather than inside it: as one truncating
             line, a long title pushed the badge out of view entirely — and it is the
@@ -78,19 +79,19 @@ const Item = memo(function Item({
         <span className="flex min-w-0 items-baseline gap-2">
           <span className="truncate font-normal text-text-primary">{title}</span>
           {type === 'message' ? (
-            <span className="flex-shrink-0 rounded bg-surface-tertiary px-1.5 py-px text-[10px] font-medium text-text-secondary">
+            <span className="flex-shrink-0 rounded bg-surface-tertiary px-1.5 py-px text-[11px] font-medium text-text-secondary">
               {localize('com_endpoint_message')}
             </span>
           ) : null}
         </span>
         {snippet ? (
-          <span className="mt-0.5 line-clamp-2 border-l-2 border-border-light pl-2 text-xs text-text-secondary">
+          <span className="mt-0.5 line-clamp-2 border-l-2 border-border-light pl-2 text-[12.5px] text-text-secondary">
             {snippet}
           </span>
         ) : null}
       </div>
       {rightLabel ? (
-        <span className="flex-shrink-0 text-xs text-text-secondary">{rightLabel}</span>
+        <span className="flex-shrink-0 text-[12.5px] text-text-tertiary">{rightLabel}</span>
       ) : null}
     </button>
   );
