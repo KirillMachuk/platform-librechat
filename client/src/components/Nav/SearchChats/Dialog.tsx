@@ -1,15 +1,15 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { useRecoilValue, useRecoilState } from 'recoil';
+import debounce from 'lodash/debounce';
 import { Search, X, SquarePen } from 'lucide-react';
 import { QueryKeys } from 'librechat-data-provider';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRecoilValue, useRecoilState } from 'recoil';
 import { OGDialog, OGDialogContent } from '@librechat/client';
-import debounce from 'lodash/debounce';
 import type { ChangeEvent } from 'react';
-import { useLocalize, useNewConvo } from '~/hooks';
-import { clearMessagesCache } from '~/utils';
-import useKeyboardNav from './useKeyboardNav';
 import type { SearchItem } from './types';
+import { useLocalize, useNewConvo } from '~/hooks';
+import useKeyboardNav from './useKeyboardNav';
+import { clearMessagesCache } from '~/utils';
 import Results from './Results';
 import store from '~/store';
 
@@ -89,10 +89,16 @@ const SearchChatsDialog = memo(function SearchChatsDialog() {
   return (
     <OGDialog open={open} onOpenChange={setOpen}>
       <OGDialogContent
-        className="flex h-[640px] max-h-[85vh] w-[calc(100vw-2rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 supports-[height:85dvh]:max-h-[85dvh] sm:w-full"
+        /* Прототип, экран 9: диалог поиска 560 шириной и не выше 540 — он не
+           «страница», а список поверх чата. Фиксированные 640 растягивали его
+           на пустой запрос до высоты, которую нечем заполнить. */
+        className="flex max-h-[540px] w-[calc(100vw-2rem)] max-w-[560px] flex-col gap-0 overflow-hidden p-1.5 supports-[height:85dvh]:max-h-[min(540px,85dvh)] sm:w-full"
         showCloseButton={false}
       >
-        <div className="flex items-center gap-2 border-b border-border-light px-4 py-3">
+        <div /* Поиск — контрол (§6.4): рамка `control`, радиус 12, высота 36/48,
+            а не строка с линией снизу. */
+          className="mb-1 flex h-12 flex-none items-center gap-2 rounded-xl border border-border-control px-2.5 sm:h-9"
+        >
           <Search className="h-5 w-5 flex-shrink-0 text-text-secondary" aria-hidden="true" />
           <input
             ref={inputRef}
@@ -125,10 +131,7 @@ const SearchChatsDialog = memo(function SearchChatsDialog() {
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
-        <div
-          ref={scrollRef}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2"
-        >
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {text.trim().length === 0 ? (
             <button
               type="button"
