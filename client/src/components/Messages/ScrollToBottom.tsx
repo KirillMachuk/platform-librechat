@@ -18,7 +18,7 @@ const ScrollToBottom = forwardRef<HTMLDivElement, Props>(({ scrollHandler }, ref
       ref={ref}
       className={cn(
         'pointer-events-none absolute bottom-5 left-0 right-0 mx-auto flex justify-end',
-        maximizeChatSpace ? 'max-w-full' : 'md:max-w-3xl xl:max-w-4xl',
+        maximizeChatSpace ? 'max-w-full' : 'md:max-w-[48rem]',
       )}
     >
       <button
