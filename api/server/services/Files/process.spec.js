@@ -201,6 +201,7 @@ const db = require('~/models');
 const {
   processAgentFileUpload,
   processDeleteRequest,
+  processImageFile,
   processFileURL,
   sweepExpiredFiles,
   startExpiredFileSweep,
@@ -1307,6 +1308,53 @@ describe('processAgentFileUpload', () => {
       const persisted = db.createFile.mock.calls[0][0];
       expect(persisted.metadata).not.toHaveProperty('fileIdentifier');
     });
+  });
+});
+
+describe('processImageFile — accepted OCR text rides along with the picture', () => {
+  /* The record stays a normal image (same storage, dimensions, thumbnail); the
+   * `text` field is what makes the model read words instead of pixels, because
+   * attachments carrying extracted text are excluded from image inlining. */
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockRes.status.mockReturnThis();
+    mockRes.json.mockReturnValue({});
+    mergeFileConfig.mockReturnValue(makeFileConfig());
+    getStrategyFunctions.mockReturnValue({
+      handleImageUpload: jest.fn().mockResolvedValue({
+        filepath: '/images/shot.png',
+        bytes: 4096,
+        width: 1200,
+        height: 800,
+      }),
+    });
+  });
+
+  const uploadImage = async (text) => {
+    const req = makeReq({ mimetype: 'image/png' });
+    req.file.originalname = 'shot.png';
+    await processImageFile({ req, res: mockRes, metadata: makeMetadata(), text });
+    return db.createFile.mock.calls[0][0];
+  };
+
+  test('persists the text alongside the dimensions when the gate accepted it', async () => {
+    const persisted = await uploadImage('ООО «Ромашка» Кассовый чек ИТОГО 19,65');
+    expect(persisted.text).toBe('ООО «Ромашка» Кассовый чек ИТОГО 19,65');
+    expect(persisted.width).toBe(1200);
+    expect(persisted.height).toBe(800);
+    expect(persisted.type).toMatch(/^image\//);
+  });
+
+  test('leaves no text field at all when the gate rejected it', async () => {
+    const persisted = await uploadImage(null);
+    expect(persisted).not.toHaveProperty('text');
+    expect(persisted.width).toBe(1200);
+  });
+
+  test('defaults to no text when the caller does not pass any', async () => {
+    const req = makeReq({ mimetype: 'image/png' });
+    await processImageFile({ req, res: mockRes, metadata: makeMetadata() });
+    expect(db.createFile.mock.calls[0][0]).not.toHaveProperty('text');
   });
 });
 

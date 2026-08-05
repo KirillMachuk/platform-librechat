@@ -19,6 +19,7 @@ jest.mock('~/server/services/Files/process', () => ({
   processImageFile: jest.fn().mockImplementation(async ({ res }) => {
     return res.status(200).json({ message: 'Image processed' });
   }),
+  attemptImageOcr: jest.fn().mockResolvedValue(null),
   filterFile: jest.fn(),
 }));
 
