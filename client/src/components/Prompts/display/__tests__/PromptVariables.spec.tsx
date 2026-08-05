@@ -43,11 +43,13 @@ describe('prompt variables', () => {
     for (const option of ['деловой', 'дружеский', 'краткий']) {
       expect(screen.getByText(option)).toBeInTheDocument();
     }
-    /* A single alternative is not a choice — it stays a plain field. */
+    /* Listed as a choice and nowhere else — a variable in both sections would
+     * ask the user to fill it in twice. */
     expect(screen.queryByText('Text variables')).not.toBeInTheDocument();
   });
 
   it('treats a lone alternative as a plain field, not a choice of one', () => {
+    /* A single alternative is not a choice, so it stays a plain field. */
     render(<PromptVariables promptText="Тон: {{тон:деловой}}" />);
 
     expect(screen.getByText('Text variables')).toBeInTheDocument();

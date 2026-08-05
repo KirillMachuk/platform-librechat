@@ -6,8 +6,8 @@ import Results from '../Results';
  * The search results list, driven by stubbed queries instead of a real search
  * engine. The e2e profile runs with `SEARCH=false` and hides the search entry
  * entirely, so the states a user actually meets — spinner, "nothing found",
- * "no chats yet", and results grouped into chats and messages — have no other
- * place to be proven.
+ * "no chats yet", recent chats grouped by date, and results split into chats
+ * and messages — have no other place to be proven.
  */
 type QueryState = {
   data?: { pages: Array<Record<string, unknown>> };
@@ -17,26 +17,46 @@ type QueryState = {
   fetchNextPage?: () => void;
 };
 
+type QueryCall = { search?: string; enabled?: boolean };
+
 const conversationsState: { current: QueryState } = { current: {} };
 const messagesState: { current: QueryState } = { current: {} };
 const recentsState: { current: QueryState } = { current: {} };
 
-const idle: QueryState = {
+const conversationCalls: QueryCall[] = [];
+const messageCalls: QueryCall[] = [];
+
+/* A function, not a shared object: spreading one literal into three states left
+ * all three holding the same `pages` array, so a test that pushed into one
+ * silently changed the others. */
+const idle = (): QueryState => ({
   data: { pages: [{ conversations: [] }] },
   isLoading: false,
   isFetchingNextPage: false,
   hasNextPage: false,
   fetchNextPage: () => undefined,
-};
+});
 
 jest.mock('react-router-dom', () => ({
   useNavigate: () => () => undefined,
 }));
 
+/**
+ * Recents and search are the same hook called twice, told apart by `search`.
+ * With an empty box both calls pass `search: undefined` and both land on the
+ * recents state — harmless, because the component reads the search results
+ * only when there is a query, and the recorded `enabled` flags below prove the
+ * second call is switched off rather than merely ignored.
+ */
 jest.mock('~/data-provider', () => ({
-  useConversationsInfiniteQuery: (params: { search?: string }) =>
-    params.search == null ? recentsState.current : conversationsState.current,
-  useMessagesInfiniteQuery: () => messagesState.current,
+  useConversationsInfiniteQuery: (params: { search?: string }, options?: { enabled?: boolean }) => {
+    conversationCalls.push({ search: params.search, enabled: options?.enabled });
+    return params.search == null ? recentsState.current : conversationsState.current;
+  },
+  useMessagesInfiniteQuery: (params: { search?: string }, options?: { enabled?: boolean }) => {
+    messageCalls.push({ search: params.search, enabled: options?.enabled });
+    return messagesState.current;
+  },
 }));
 
 /* Only the two hooks this tree uses. Pulling the real `~/hooks` barrel drags in
@@ -67,10 +87,16 @@ beforeAll(() => {
   });
 });
 
-const conversation = (conversationId: string, title: string) => ({
+const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+const conversation = (
+  conversationId: string,
+  title: string,
+  updatedAt = new Date().toISOString(),
+) => ({
   conversationId,
   title,
-  updatedAt: new Date().toISOString(),
+  updatedAt,
 });
 
 const renderResults = (query: string) =>
@@ -81,9 +107,11 @@ const renderResults = (query: string) =>
   );
 
 beforeEach(() => {
-  conversationsState.current = { ...idle };
-  messagesState.current = { ...idle, data: { pages: [{ messages: [] }] } };
-  recentsState.current = { ...idle };
+  conversationsState.current = idle();
+  messagesState.current = { ...idle(), data: { pages: [{ messages: [] }] } };
+  recentsState.current = idle();
+  conversationCalls.length = 0;
+  messageCalls.length = 0;
 });
 
 describe('search results', () => {
@@ -98,7 +126,7 @@ describe('search results', () => {
    * here; when it is fixed, this locator should become `getByRole('status')`.
    */
   it('shows a spinner while a search is still running', () => {
-    conversationsState.current = { ...idle, isLoading: true };
+    conversationsState.current = { ...idle(), isLoading: true };
     const { container } = renderResults('договор');
 
     expect(container.querySelector('.spinner')).toBeInTheDocument();
@@ -119,13 +147,67 @@ describe('search results', () => {
     expect(screen.queryByText('Nothing found')).not.toBeInTheDocument();
   });
 
+  /**
+   * The empty box is not empty in real use — it lists what the user was last
+   * working on, under date headings. Nothing exercised this branch before, so
+   * the recents state could have been wired to the search state and every
+   * other test here would still have passed.
+   */
+  it('lists recent chats under date headings when nothing has been typed', () => {
+    recentsState.current = {
+      ...idle(),
+      data: {
+        pages: [
+          {
+            conversations: [
+              conversation('c-today', 'Сегодняшний договор'),
+              conversation('c-older', 'Прошлая смета', daysAgo(3)),
+            ],
+          },
+        ],
+      },
+    };
+    renderResults('');
+
+    expect(screen.getByText('Today')).toBeInTheDocument();
+    expect(screen.getByText('Сегодняшний договор')).toBeInTheDocument();
+    expect(screen.getByText('Previous 7 days')).toBeInTheDocument();
+    expect(screen.getByText('Прошлая смета')).toBeInTheDocument();
+    expect(screen.queryByText('No chats yet')).not.toBeInTheDocument();
+  });
+
+  /**
+   * An empty box must not send the search engine a query for everything, and a
+   * typed query must not keep refetching the recents list underneath it. Both
+   * are decided by `enabled`, which no rendered output reveals.
+   */
+  it('runs recents or search, never both', () => {
+    renderResults('');
+
+    expect(conversationCalls).toEqual([
+      { search: undefined, enabled: true },
+      { search: undefined, enabled: false },
+    ]);
+    expect(messageCalls).toEqual([{ search: undefined, enabled: false }]);
+
+    conversationCalls.length = 0;
+    messageCalls.length = 0;
+    renderResults('договор');
+
+    expect(conversationCalls).toEqual([
+      { search: undefined, enabled: false },
+      { search: 'договор', enabled: true },
+    ]);
+    expect(messageCalls).toEqual([{ search: 'договор', enabled: true }]);
+  });
+
   it('separates matching chats from matching messages', () => {
     conversationsState.current = {
-      ...idle,
+      ...idle(),
       data: { pages: [{ conversations: [conversation('c-1', 'Договор аренды')] }] },
     };
     messagesState.current = {
-      ...idle,
+      ...idle(),
       data: {
         pages: [
           {

@@ -18,10 +18,17 @@ import { NEW_CHAT_PATH } from './helpers';
  */
 type FocusResult = { element: string; name: string };
 
+/**
+ * `visited` is how many distinct controls the Tab walk actually landed on — not
+ * how many the page has. Without it, a walk that stops moving focus reports an
+ * empty list of offenders, which reads exactly like a clean screen.
+ */
+type FocusScan = { unmarked: FocusResult[]; visited: number };
+
 const FOCUSABLE =
   'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
-async function controlsWithoutVisibleFocus(page: Page, limit = 60): Promise<FocusResult[]> {
+async function controlsWithoutVisibleFocus(page: Page, limit = 60): Promise<FocusScan> {
   await page.evaluate((selector) => {
     const signature = (element: Element) => {
       const parts: string[] = [];
@@ -62,7 +69,11 @@ async function controlsWithoutVisibleFocus(page: Page, limit = 60): Promise<Focu
 
   const unmarked: FocusResult[] = [];
   const seen = new Set<string>();
-  await page.evaluate(() => document.body.focus());
+  /* Blur, not `body.focus()`: the body is not focusable, so focusing it does
+   * nothing and the walk would start wherever the composer's autofocus left it.
+   * Blurring the active element does move focus to the body, which is what
+   * "from the top of the document" needs. */
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   for (let step = 0; step < limit; step += 1) {
     await page.keyboard.press('Tab');
     const current = await page.evaluate(() => {
@@ -91,6 +102,9 @@ async function controlsWithoutVisibleFocus(page: Page, limit = 60): Promise<Focu
     if (!current || current.index == null) {
       continue;
     }
+    /* Wrapped around: the walk is done. A screen with a focus trap would end up
+     * here after a control or two instead, which is why the count comes back
+     * with the result rather than being thrown away. */
     if (seen.has(current.index)) {
       break;
     }
@@ -99,26 +113,23 @@ async function controlsWithoutVisibleFocus(page: Page, limit = 60): Promise<Focu
       unmarked.push({ element: current.element, name: current.name });
     }
   }
-  return unmarked;
+  return { unmarked, visited: seen.size };
 }
 
 test.describe('canon — focus is visible', () => {
-  test('the probe reaches controls at all', async ({ page }) => {
-    test.setTimeout(90000);
+  /**
+   * The offenders list is empty both when every control is marked and when the
+   * walk never moved. This guard counts the controls the walk actually landed
+   * on, not the controls the page contains: an earlier version counted matching
+   * elements in the DOM, which stays healthy while Tab does nothing at all.
+   */
+  test('the Tab walk actually moves through controls', async ({ page }) => {
+    test.setTimeout(120000);
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
     await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
 
-    /* Without this, a Tab walk that reached nothing would report "no control
-     * lacks a focus ring" forever. */
-    const reached = await page.evaluate(
-      (selector) =>
-        [...document.querySelectorAll(selector)].filter((element) => {
-          const box = element.getBoundingClientRect();
-          return box.width > 0 && box.height > 0;
-        }).length,
-      FOCUSABLE,
-    );
-    expect(reached).toBeGreaterThan(5);
+    const { visited } = await controlsWithoutVisibleFocus(page);
+    expect(visited).toBeGreaterThan(5);
   });
 
   test('every control the keyboard reaches on the chat screen shows it has focus', async ({
@@ -128,6 +139,8 @@ test.describe('canon — focus is visible', () => {
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
     await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
 
-    expect(await controlsWithoutVisibleFocus(page)).toEqual([]);
+    const { unmarked, visited } = await controlsWithoutVisibleFocus(page);
+    expect(visited).toBeGreaterThan(5);
+    expect(unmarked).toEqual([]);
   });
 });
