@@ -131,10 +131,12 @@ const PREVIEW_SETTLED =
  */
 export async function openPreview(page: Page, filename: string): Promise<Locator> {
   const panel = await openFilesPanel(page);
-  /* Located by placeholder, not by accessible name: the table's labels come from
-   * the shared package's own locale file, which the app does not load, so the
-   * field currently announces itself as "com_ui_search_table" (see the
-   * localization row in e2e/COVERAGE_MAP.md). */
+  /* Located by placeholder, not by accessible name. The field used to announce
+   * itself as "com_ui_search_table" — the shared package's locale file is not
+   * loaded by the app, so i18next rendered the key — and that is fixed. The
+   * placeholder locator stays because this helper runs under every test in the
+   * matrix and should not depend on the outcome of the localisation guard;
+   * whether the label is right is that guard's job, not this one's. */
   await panel.getByPlaceholder('Search', { exact: true }).fill(filename);
   /* Rows carry role="button" because the table is clickable, so the file is
    * addressed through its row header instead. `.first()` keeps a retry that

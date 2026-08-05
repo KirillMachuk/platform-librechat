@@ -229,18 +229,15 @@ test.describe('accessibility of the main dialogs', () => {
   /**
    * The agents panel labels its grid with `aria-labelledby="category-tab-all"`
    * (AgentGrid.tsx), but that id belongs to a tab CategoryTabs renders from data
-   * it has to load first. Before the tabs arrive the grid points at an element
-   * that is not there — a critical violation, and an intermittent one: whether a
-   * scan sees it depends on when it runs. Measured across runs, the critical
-   * rule is always present; a second, `nested-interactive`, appears only
-   * sometimes, so the twin test below pins the stable one rather than a set that
-   * changes between runs.
-   */
-  /**
-   * Both agents tests scan the same moment — after the category tabs have
-   * rendered. That matters: scanned earlier the panel is clean, because the
-   * tab that carries the defect does not exist yet. A "clean" test that did
-   * not wait would pass while the defect sat right behind it.
+   * it has to load first, so the tab itself ends up naming something that is not
+   * in the document — a critical `aria-valid-attr-value`.
+   *
+   * An earlier note here called the violation intermittent. It is not: measured
+   * three times, the tab is present and visible when the scan runs and the
+   * violation is there every time. What varies is only *when* you scan — before
+   * the tabs render the panel is clean, because the element carrying the defect
+   * does not exist yet. Both agents tests therefore wait for the tabs, so the
+   * "clean" one cannot pass while the defect sits behind it.
    */
   test('the agents panel has no WCAG A/AA violations', async ({ page }) => {
     test.fail();

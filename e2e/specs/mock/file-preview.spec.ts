@@ -61,6 +61,8 @@ const DECK_SECTION_MARKER = 'Раздел 1';
 /** deck-many.pptx is built with this many slides — see e2e/fixtures/files/README.md. */
 const DECK_MANY_SLIDES = 60;
 const TEXT_TRUNCATED_NOTICE = 'Showing the beginning of a large file.';
+/** `TEXT_PREVIEW_MAX_BYTES` in `client/src/.../Content/FilePreviewDialog.tsx`. */
+const TEXT_PREVIEW_MAX_BYTES = 512 * 1024;
 
 test.describe('file library panel', () => {
   /**
@@ -252,13 +254,29 @@ test.describe('file preview — honest states', () => {
   });
 
   /**
-   * A password-protected PDF is currently handed straight to the browser's own
-   * viewer, which asks for the password inside the frame. The canon wants the
-   * shared "could not show this document" state with Retry and Download
-   * instead — that arrives with the panel redesign, see the corresponding
-   * fixme row in e2e/COVERAGE_MAP.md.
+   * A password-protected PDF is handed straight to the browser's own viewer,
+   * which asks for the password inside the frame. The canon wants the shared
+   * "could not show this document" state with Retry and Download, the same one
+   * `locked.docx` already gets.
+   *
+   * Two tests, as everywhere else a known defect is pinned: a `test.fail` for
+   * the state the canon asks for, and an ordinary one recording what happens
+   * today. Without the pair, the day the redesign fixes this the single test
+   * below would go red and read as a regression — the opposite of the truth.
    */
-  test('keeps a password-protected PDF inside the preview surface', async ({ page }) => {
+  test('a password-protected PDF says plainly it could not be shown', async ({ page }) => {
+    test.fail();
+    test.setTimeout(180000);
+    const dialog = await previewFixture(page, 'locked.pdf');
+
+    await expect(
+      dialog.getByText(/Could not render preview for this file|Preview unavailable/),
+    ).toBeVisible({ timeout: 60000 });
+  });
+
+  test('today a password-protected PDF stays in the browser viewer, inside the surface', async ({
+    page,
+  }) => {
     test.setTimeout(180000);
     const dialog = await previewFixture(page, 'locked.pdf');
 
@@ -355,11 +373,20 @@ test.describe('file preview — the rest of the matrix', () => {
     const dialog = await previewFixture(page, fixture);
 
     await expect(dialog.locator('pre')).toBeVisible({ timeout: 30000 });
-    /* Characters against characters. Comparing the rendered length to the
-     * fixture's BYTE length would pass without any truncation at all, because
-     * this text is Cyrillic and every character costs two bytes. */
+
+    /* Against the cap, not against the whole file. "Shorter than the source"
+     * was the old assertion and it could not fail: `innerText` trims at least
+     * the trailing newline, so any prefix — including the entire file with
+     * truncation switched off — is shorter than the source by at least one
+     * character. Comparing to the cap is what makes the number mean something.
+     *
+     * The cap is a byte count and the text is Cyrillic at two bytes a
+     * character, so the expected character count comes from slicing the
+     * fixture's bytes and decoding, not from dividing. */
+    const capped = fixture.buffer.subarray(0, TEXT_PREVIEW_MAX_BYTES).toString('utf8').length;
     const shown = (await dialog.locator('pre').innerText()).length;
-    expect(shown).toBeLessThan(fixture.buffer.toString('utf8').length);
+    expect(shown).toBeLessThanOrEqual(capped);
+    expect(shown).toBeGreaterThan(capped - 20);
     await expect(dialog.getByText(TEXT_TRUNCATED_NOTICE)).toBeVisible();
   });
 });

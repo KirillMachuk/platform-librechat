@@ -8,13 +8,40 @@ import type { Page } from '@playwright/test';
  */
 const composer = (page: Page) => page.locator('form textarea').first();
 
-/** Wider than the window means a sideways scrollbar — the classic symptom of
- * longer translated labels or a fixed width that survives a narrow viewport. */
+/**
+ * Wider than its own box means a sideways scrollbar — the classic symptom of
+ * longer translated labels or a fixed width that survives a narrow viewport.
+ *
+ * Measured per container, not on the document alone, and that is the whole
+ * point. `main` carries `overflow-x: auto`, so content wider than the chat
+ * column scrolls **inside** it and never reaches
+ * `document.documentElement.scrollWidth`. Injecting a 5000px element proves it:
+ * into `<body>` the document reports 5000, into `<main>` it still reports 1280
+ * while `main.scrollWidth` reports 5000. An earlier version of this check
+ * measured only the document, and the mutation that "proved" it worked put the
+ * wide element in `<body>` — the one place it happened to be visible.
+ *
+ * `aside` is deliberately not measured: it is `overflow: hidden`, so a wide
+ * label there is clipped rather than scrolled and its `scrollWidth` never grows
+ * either. An assertion about it could not fail, which is worse than none.
+ */
 const overflow = (page: Page) =>
-  page.evaluate(() => ({
-    scrollWidth: document.documentElement.scrollWidth,
-    innerWidth: window.innerWidth,
-  }));
+  page.evaluate(() => {
+    const main = document.querySelector('main');
+    return {
+      docScrollWidth: document.documentElement.scrollWidth,
+      innerWidth: window.innerWidth,
+      mainScrollWidth: main?.scrollWidth ?? 0,
+      mainClientWidth: main?.clientWidth ?? 0,
+    };
+  });
+
+const expectNoSidewaysScroll = (measured: Awaited<ReturnType<typeof overflow>>) => {
+  expect(measured.docScrollWidth).toBeLessThanOrEqual(measured.innerWidth + 1);
+  /* A `main` of zero width would make the line below pass for free. */
+  expect(measured.mainClientWidth).toBeGreaterThan(0);
+  expect(measured.mainScrollWidth).toBeLessThanOrEqual(measured.mainClientWidth + 1);
+};
 
 test.describe('layout', () => {
   test('the chat screen is usable and does not scroll sideways', async ({ page }) => {
@@ -26,8 +53,7 @@ test.describe('layout', () => {
     await composer(page).fill('typed at this viewport');
     await expect(composer(page)).toHaveValue('typed at this viewport');
 
-    const { scrollWidth, innerWidth } = await overflow(page);
-    expect(scrollWidth).toBeLessThanOrEqual(innerWidth + 1);
+    expectNoSidewaysScroll(await overflow(page));
   });
 
   test('the file library opens and does not scroll sideways', async ({ page }) => {
@@ -46,7 +72,6 @@ test.describe('layout', () => {
     const dialog = page.locator('div[role="dialog"]');
     await expect(dialog).toHaveCount(1);
 
-    const { scrollWidth, innerWidth } = await overflow(page);
-    expect(scrollWidth).toBeLessThanOrEqual(innerWidth + 1);
+    expectNoSidewaysScroll(await overflow(page));
   });
 });
