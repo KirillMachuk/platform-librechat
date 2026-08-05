@@ -78,15 +78,16 @@ const HoverButton = memo(
     isActive = false,
     isVisible = true,
     isDisabled = false,
-    isLast = false,
     className = '',
   }: HoverButtonProps) => {
     const buttonStyle = cn(
-      'hover-button flex h-7 w-7 items-center justify-center rounded-lg text-text-secondary-alt [&_svg]:h-4 [&_svg]:w-4',
+      'hover-button tap-target flex h-7 w-7 items-center justify-center rounded-lg text-text-secondary-alt [&_svg]:h-4 [&_svg]:w-4',
       'hover:text-text-primary hover:bg-surface-hover',
+      /* Канон §6.2, решение владельца: кнопки под ответом видны ВСЕГДА, а не
+         по наведению. Раньше так вёл себя только последний ответ, у остальных
+         кнопки на мыши прятались — их приходилось искать наведением. Гейт
+         `isVisible` остаётся: во время генерации кнопок быть не должно. */
       'group-hover:visible group-focus-within:visible group-[.final-completion]:visible',
-      !isLast &&
-        'group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:hover)]:opacity-0',
       !isVisible && 'opacity-0',
       'focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white focus-visible:outline-none',
       isActive && isVisible && 'active text-text-primary bg-surface-hover',
