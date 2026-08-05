@@ -120,6 +120,9 @@ module.exports = {
         scrim: 'var(--c-scrim)',
         ink: 'var(--c-ink)',
         'ink-label': 'var(--c-ink-label)',
+        // Пузырь пользователя (§6.13). Значение с Ф2a, потребителя до сих пор не
+        // было: пузырь красился сырым #F3F3F3 с отдельным правилом для тьмы.
+        bubble: 'var(--c-bubble)',
         'text-primary': 'var(--text-primary)',
         'text-secondary': 'var(--text-secondary)',
         'text-secondary-alt': 'var(--text-secondary-alt)',

@@ -5,4 +5,4 @@
  * overflow-wrap covers unbroken tokens (long URLs/keys) inside markdown.
  */
 export const USER_BUBBLE_CLASS =
-  'max-w-[85%] rounded-3xl bg-[#F3F3F3] px-4 py-2 [overflow-wrap:anywhere] dark:bg-surface-tertiary md:max-w-[70%]';
+  'max-w-[85%] rounded-3xl bg-bubble px-4 py-2.5 text-[length:var(--markdown-font-size)] leading-[1.55] [overflow-wrap:anywhere] md:max-w-[78%]';
