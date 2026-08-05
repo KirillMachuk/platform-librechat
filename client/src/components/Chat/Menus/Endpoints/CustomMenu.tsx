@@ -87,13 +87,16 @@ export const CustomMenu = React.forwardRef<HTMLDivElement, CustomMenuProps>(func
                     autoSelect
                     render={combobox}
                     className={cn(
-                      'peer flex h-10 w-full items-center justify-center rounded-lg border-none bg-transparent px-2 text-base',
-                      'sm:h-8 sm:text-sm',
-                      'focus:outline-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-primary',
+                      /* Прототип `.selsearch` и канон §6.4: поле — контрол, а не
+                         прозрачная строка: 48 на телефоне и 36 на десктопе,
+                         радиус 12, рамка `control` (3:1 обязательна). */
+                      'peer flex h-12 w-full items-center justify-center rounded-xl border border-border-control bg-transparent px-2.5 text-base',
+                      'sm:h-9 sm:text-sm',
+                      'focus:outline-none focus:ring-0 focus-visible:border-border-focus focus-visible:ring-[3px] focus-visible:ring-ring-primary-soft',
                     )}
                   />
                   {comboboxLabel && (
-                    <label className="pointer-events-none absolute left-2.5 top-2.5 text-sm text-text-secondary transition-all duration-200 peer-[:not(:placeholder-shown)]:-top-1.5 peer-[:not(:placeholder-shown)]:left-1.5 peer-[:not(:placeholder-shown)]:bg-presentation peer-[:not(:placeholder-shown)]:text-xs sm:top-1.5">
+                    <label className="pointer-events-none absolute left-3 top-3.5 text-sm text-text-secondary transition-all duration-200 peer-[:not(:placeholder-shown)]:-top-1.5 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:bg-presentation peer-[:not(:placeholder-shown)]:px-1 peer-[:not(:placeholder-shown)]:text-xs sm:top-2">
                       {comboboxLabel}
                     </label>
                   )}
@@ -175,7 +178,11 @@ export const CustomMenuItem = React.forwardRef<HTMLDivElement, CustomMenuItemPro
       blurOnHoverEnd: false,
       ...props,
       className: cn(
-        'relative flex cursor-default items-center gap-2 rounded-lg px-2 py-1 outline-none! scroll-m-1 scroll-mt-[calc(var(--combobox-height,0px)+var(--label-height,4px))] aria-disabled:opacity-25 data-[active-item]:bg-black/[0.075] data-[active-item]:text-black dark:data-[active-item]:bg-white/10 dark:data-[active-item]:text-white sm:text-sm min-w-0 w-full before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:bg-transparent before:rounded-full data-[active-item]:before:bg-black dark:data-[active-item]:before:bg-white',
+        /* Канон §6.5 и прототип `.selitem`: строка списка 36 высотой, радиус 8,
+         зазор 10; подсвеченная строка красится токеном `hover`, а не сырым
+         чёрным с прозрачностью, и планка слева не нужна — выбранное отмечает
+         галочка. */
+        'relative flex min-h-9 w-full min-w-0 cursor-default items-center gap-2.5 rounded-lg px-2.5 py-1 outline-none! scroll-m-1 scroll-mt-[calc(var(--combobox-height,0px)+var(--label-height,4px))] aria-disabled:opacity-25 data-[active-item]:bg-surface-hover data-[active-item]:text-text-primary sm:text-sm',
         props.className,
       ),
     };
