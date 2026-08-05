@@ -249,7 +249,12 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | Agent builder saves a version | unit | `client/src/components/SidePanel/Agents/AgentPanel.test.tsx` | covered |
 | Project is created from the popup and listed | e2e | `e2e/specs/mock/projects.spec.ts#creates a project via the popup and lists it` | covered |
 | A project-scoped chat stays under its project | e2e | `e2e/specs/mock/projects.spec.ts#starts a project-scoped chat and persists it under the project` | covered |
-| Project rename, colour and icon | e2e | — | gap |
+| Project rename, colour and icon survive a reload | e2e | `e2e/specs/mock/projects.spec.ts#a renamed, recoloured project keeps all three across a reload` | covered |
+| Every project colour and icon is named in words, in both languages | unit | `client/src/components/Projects/__tests__/ProjectAppearancePopover.spec.tsx#has a label for every colour and icon, in both languages` | covered |
+| A project with no stored colour falls back to the default | unit | `client/src/components/Projects/__tests__/iconOptions.spec.ts#falls back to the default colour when a project has none stored` | covered |
+| Deleting a project asks in an in-app dialog, never window.confirm | unit | `client/src/components/Projects/__tests__/ProjectEditDialog.spec.tsx#asks in an in-app dialog and never through window.confirm` | covered |
+| Cancelling the project edit dialog leaves the project alone | unit | `client/src/components/Projects/__tests__/ProjectEditDialog.spec.tsx#cancelling leaves the project alone` | covered |
+| Removing a project source confirms by naming the file | unit | `client/src/components/Projects/__tests__/ProjectDetailView.spec.tsx#confirms in a dialog naming the file, never through window.confirm` | covered |
 | Prompts library: create and use a prompt | e2e | `e2e/specs/mock/prompts.spec.ts` | covered |
 | A prompt's variables are read and shown by kind | unit | `client/src/components/Prompts/display/__tests__/PromptVariables.spec.tsx` | covered |
 | Creating, editing and sharing a prompt | unit | — | gap |
