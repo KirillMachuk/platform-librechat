@@ -311,7 +311,7 @@ const ChatForm = memo(function ChatForm({
                 ? 'border-violet-800/60 bg-violet-950/10'
                 : cn(
                     'bg-surface-chat',
-                    isTextAreaFocused ? 'border-border-focus' : 'border-border-light',
+                    isTextAreaFocused ? 'border-border-focus' : 'border-border-control',
                   ),
             )}
           >

@@ -216,7 +216,7 @@ function FeedbackButtons({
 
 function buttonClasses(isActive: boolean, isLast: boolean) {
   return cn(
-    'hover-button flex h-7 w-7 items-center justify-center rounded-lg text-text-secondary-alt [&_svg]:h-4 [&_svg]:w-4',
+    'hover-button tap-target flex h-7 w-7 items-center justify-center rounded-lg text-text-secondary-alt [&_svg]:h-4 [&_svg]:w-4',
     'hover:text-text-primary hover:bg-surface-hover',
     'group-hover:visible group-focus-within:visible group-[.final-completion]:visible',
     !isLast &&
