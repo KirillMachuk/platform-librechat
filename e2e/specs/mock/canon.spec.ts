@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { attachFixture, fileFixture, openFilesPanel } from './files.helpers';
+import { measureCanon } from './canon.helpers';
 import { NEW_CHAT_PATH } from './helpers';
 
 /**
@@ -142,5 +144,72 @@ test.describe('canon — focus is visible', () => {
     const { unmarked, visited } = await controlsWithoutVisibleFocus(page);
     expect(visited).toBeGreaterThan(5);
     expect(unmarked).toEqual([]);
+  });
+});
+
+/**
+ * Three more measurements ported from the same probe. All three come back empty
+ * on the app today, which is why they belong on the pull-request gate: they cost
+ * one page load and they turn the first regression red rather than the
+ * hundredth.
+ *
+ * Each asserts what it looked at as well as what it found. An empty list of
+ * offenders reads the same whether the screen is clean or the sweep reached
+ * nothing, and every one of these sweeps has a way of reaching nothing — a
+ * renamed token, a selector that stops matching, a dialog that never opened.
+ */
+test.describe('canon — layers, keyboard reach, layout shift', () => {
+  const onChatScreen = async (page: Page) => {
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+    return measureCanon(page);
+  };
+
+  /**
+   * The scale is read from the token layer at runtime rather than copied into
+   * this file. Copying it would let the two drift apart silently, and the
+   * drift would show up as this test going quiet, not as it going red.
+   */
+  test('every z-index comes from the canon scale', async ({ page }) => {
+    test.setTimeout(90000);
+    const chat = await onChatScreen(page);
+
+    expect(chat.scale).toEqual([10, 109, 110, 990, 999, 1001, 1010]);
+    expect(chat.layers).toEqual([]);
+  });
+
+  test('the file library dialog stacks on the canon scale too', async ({ page }) => {
+    test.setTimeout(120000);
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    await attachFixture(page, fileFixture('notes.md'));
+    await openFilesPanel(page);
+
+    const withDialog = await measureCanon(page);
+    /* A dialog is where a stray z-index shows up, and where it matters: the
+     * fork already had settings lists render behind the settings dialog. */
+    expect(withDialog.scale).toEqual([10, 109, 110, 990, 999, 1001, 1010]);
+    expect(withDialog.layers).toEqual([]);
+  });
+
+  test('nothing is clickable by mouse but unreachable by keyboard', async ({ page }) => {
+    test.setTimeout(90000);
+    const chat = await onChatScreen(page);
+
+    /* `cursor: pointer` inherits, so this sweep sees far more elements than it
+     * reports — the icons and labels inside every button. If it ever sees none
+     * at all, the selector or the exclusion has stopped matching and the empty
+     * result below means nothing. */
+    expect(chat.pointerCursor).toBeGreaterThan(5);
+    expect(chat.reachable).toEqual([]);
+  });
+
+  test('every image reserves its space before it loads', async ({ page }) => {
+    test.setTimeout(90000);
+    const chat = await onChatScreen(page);
+
+    /* At least the product logo, which carries width/height attributes. Zero
+     * images seen would make the assertion below free. */
+    expect(chat.images).toBeGreaterThan(0);
+    expect(chat.cls).toEqual([]);
   });
 });

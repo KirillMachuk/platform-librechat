@@ -294,7 +294,9 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | The agents panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the agents panel fails only on its category tab` | fixme:Ф1 |
 | The prompts panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the prompts panel fails only on the nested control` | fixme:Ф1 |
 | Data tables announce translated labels, not raw keys | a11y | `e2e/specs/mock/file-preview.spec.ts#labels the file table in words, not translation keys` | covered |
-| Every control the keyboard reaches shows that it has focus | a11y | `e2e/specs/mock/canon.spec.ts` | covered |
+| Every control the keyboard reaches shows that it has focus | a11y | `e2e/specs/mock/canon.spec.ts#every control the keyboard reaches on the chat screen shows it has focus` | covered |
+| Nothing is clickable by mouse but unreachable by keyboard | a11y | `e2e/specs/mock/canon.spec.ts#nothing is clickable by mouse but unreachable by keyboard` | covered |
+| Every hit area on a phone is at least 44px (WCAG 2.2, axe does not check it) | a11y | `e2e/specs/nightly/touch-targets.spec.ts#exactly three chat-header controls are under 44px` | fixme:Ф1 |
 | Shared components' translation keys are defined in this app | unit | `client/src/locales/keys.spec.ts` | covered |
 | File panel exposes tablist semantics | a11y | — | todo:Ф1 |
 
@@ -328,6 +330,8 @@ of encoded.
 | Russian build shows no untranslated keys on key screens | e2e | `e2e/specs/nightly/locale.spec.ts#with no untranslated keys left showing` | covered |
 | Russian locale renders key screens without overflow | e2e | `e2e/specs/nightly/layout.spec.ts#mainScrollWidth` | covered |
 | Artifacts panel open at a narrow desktop width | e2e | — | gap |
+| Every z-index comes from the canon scale, dialogs included | e2e | `e2e/specs/mock/canon.spec.ts#every z-index comes from the canon scale` | covered |
+| Every image reserves its space before it loads | e2e | `e2e/specs/mock/canon.spec.ts#every image reserves its space before it loads` | covered |
 | Pixel snapshots of the redesigned screens | visual | — | planned:Э7 |
 | Product name is 1MA everywhere, never LibreChat | e2e | `e2e/specs/mock/branding.spec.ts#the account menu and the settings dialog never show it either` | covered |
 | Help entry points at the configured help centre | e2e | `e2e/specs/mock/branding.spec.ts#expect(opened).toEqual([HELP_URL])` | covered |
@@ -432,17 +436,30 @@ dead code. It was: the unified-sidebar rework (`1f32bd336`) removed bookmarks fr
 purpose but left the chat-header menu behind, so chats could be filed under a bookmark and never
 found again. The sidebar control is wired up again and the loop is covered end to end.
 
-Canon checks are being **ported** from `tools/ui_probe.js` in the workspace, not rewritten. That
-probe has its own mutation self-test (`tools/probe_selftest.js`, twelve checks, run and green on
-2026-08-04) — run it before trusting its numbers. Of its nine measurements, `contrast` and `names`
-are already covered by axe here; `focusring`, `targets` (WCAG 2.2, outside the tag set axe runs
-with), `layers`, `reachable` and `cls` are not, and are the ones worth porting. Focus visibility
-is done; the rest follow one at a time.
+Canon checks are **ported** from `tools/ui_probe.js` in the workspace, not rewritten. That probe
+has its own mutation self-test (`tools/probe_selftest.js`, twelve checks, run and green on
+2026-08-05) — run it before trusting its numbers. Of its nine measurements, `contrast` and `names`
+are already covered by axe here; the other five were not. **All five are now ported**: `focusring`
+and `targets` to their own tests, `layers`, `reachable` and `cls` to `canon.spec.ts`. The probe
+stays in the workspace as the place to explore a screen; the repo carries the settled rules.
 
-Two things the probe learned the hard way, carried over with it: focus must be measured with real
-Tab presses (the fork's focus styles hang off `:focus-visible`, which programmatic focus does not
-switch on), and the appearance must be sampled from the element **and three ancestors**, because
-composite controls draw the ring on a wrapper.
+Four things the probe learned the hard way, carried over with it, each one a false positive or a
+blind spot that took a measurement to find:
+
+- focus is measured with **real Tab presses**, never `element.focus()` — the fork's focus styles
+  hang off `:focus-visible`, which programmatic focus does not switch on;
+- the appearance is sampled from the element **and three ancestors**, because composite controls
+  draw the ring on a wrapper;
+- a touch target is the **hit area, not the box**: `.tap-target` grows a 32px control to 44 with
+  an invisible `::after`, and measuring the box calls that control broken while it obeys the rule;
+- `cursor: pointer` **inherits**, so "clickable but not focusable" has to exclude anything inside
+  a focusable or role-bearing ancestor, or every icon inside every button is a finding.
+
+Touch targets run **nightly and phone-only**. The 44px rule is about fingers, and the helper that
+satisfies it lives inside `@media (max-width: 767.98px)` — the same scan at 1280px reports sixteen
+violations of a rule that does not apply there. Three real ones remain on the phone chat header
+(the model selector, "compare with another model", "temporary chat"), all 36px; they belong to the
+redesign, so they are pinned rather than fixed.
 
 ## 13. Notes on the preview matrix
 
