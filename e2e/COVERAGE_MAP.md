@@ -10,14 +10,29 @@ Rules:
    is incomplete.
 2. Every test referenced here must exist — `npm run check:coverage-map` fails otherwise, so
    the map cannot quietly rot when files are renamed or deleted.
-3. A test counts as owning a behavior only if it has been **seen red**: break the behavior on
+3. **Name the owning test as `` `path#anchor` ``.** The anchor is a substring the guard greps
+   for in that file — a test title, an assertion, a constant. A path alone only proves the file
+   still exists, which is how rows here came to claim behavior their test never touched: a
+   pagination row pointing at a width test, a UI row pointing at a pure API test. Anchors are
+   required on every row this repo touches from 2026-08-05 on; older rows carry one as soon as
+   somebody has read them.
+4. A test counts as owning a behavior only if it has been **seen red**: break the behavior on
    purpose, watch the test fail, restore. Untested tests are decoration.
-4. Levels: `unit` (Jest+RTL, no server), `e2e` (Playwright mock profile, real server + fake
+5. Levels: `unit` (Jest+RTL, no server), `e2e` (Playwright mock profile, real server + fake
    model), `a11y` (axe + keyboard), `visual` (screenshot/ARIA snapshot, nightly only).
 
-Status values: `covered` — owned and proven; `gap` — nothing owns it; `planned:<stage>` —
-scheduled by `FRONTEND_TESTING_Plan.md`; `fixme:Ф1` — canon behavior not implemented yet, the
-test exists and is skipped until the redesign lands.
+Status values:
+
+- `covered` — owned and proven; names its test.
+- `gap` — nothing owns it; names no test.
+- `planned:<stage>` — scheduled by `FRONTEND_TESTING_Plan.md`.
+- `fixme:Ф1` — the canon behavior is not implemented yet **and a test says so**: either skipped
+  until the redesign lands, or pinning today's contrary state so the redesign has to come back
+  here. Names its test — the guard enforces it.
+- `todo:Ф1` — the canon behavior is not implemented and **nothing tests it**. Names no test.
+
+The last two were one status until 2026-08-05, which read as "23 skipped tests exist" when in
+fact none of them did.
 
 ## What to do with a test that fails intermittently
 
@@ -54,12 +69,12 @@ stays green, so flakes accumulate where nobody looks.
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
 | Send a message and receive a streamed reply | e2e | `e2e/specs/mock/chat.spec.ts` | covered |
-| Stop generation mid-stream keeps the partial reply | e2e | `e2e/specs/mock/chat.spec.ts` | covered |
+| Stop generation mid-stream keeps the partial reply | e2e | `e2e/specs/mock/message-tree.spec.ts#keeps an aborted response as the next parent` | covered |
 | Regenerate produces a sibling reply | e2e | `e2e/specs/mock/message-tree.spec.ts` | covered |
 | Edit own message and resubmit branches the tree | e2e | `e2e/specs/mock/message-tree.spec.ts` | covered |
 | Cycle between sibling replies | e2e | `e2e/specs/mock/message-tree.spec.ts` | covered |
 | Fork a conversation from a message | unit | `client/src/components/Chat/Messages/__tests__/Fork.spec.tsx` | covered |
-| Error mid-stream surfaces a readable message | e2e | `e2e/specs/mock/chat.spec.ts` | covered |
+| Error mid-stream surfaces a readable message | e2e | `e2e/specs/mock/message-tree.spec.ts#error responses remain valid parents for follow-ups` | covered |
 | Submit is blocked while a run is in flight | unit | `client/src/hooks/Chat/__tests__/useChatFunctions.spec.ts` | covered |
 | A dropped connection mid-reply loses nothing | e2e | `e2e/specs/mock/chat.spec.ts` | covered |
 | A dropped connection is noticed and shown to the user | e2e | — | gap |
@@ -69,7 +84,8 @@ stays green, so flakes accumulate where nobody looks.
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
 | Markdown renders (headings, lists, tables, links) | unit | `client/src/components/Chat/Messages/Content/__tests__/MarkdownBlocks.test.tsx` | covered |
-| Code block renders with language and copy button | e2e | `e2e/specs/mock/chat.spec.ts` | covered |
+| Code block renders with its language highlighted | e2e | `e2e/specs/mock/chat.spec.ts#language-javascript` | covered |
+| Copy button on a code block copies it | e2e | — | gap |
 | Reasoning ("Мысли") block auto-expands then collapses | unit | `client/src/components/Chat/Messages/Content/Parts/__tests__/ReasoningAutoExpand.test.tsx` | covered |
 | Tool calls render with status and result | unit | `client/src/components/Chat/Messages/Content/__tests__/ToolCall.test.tsx` | covered |
 | Web-search citations render and open | unit | `client/src/components/Web/__tests__/Citation.test.tsx` | covered |
@@ -84,12 +100,12 @@ stays green, so flakes accumulate where nobody looks.
 | Attach a file via the attach button | e2e | `e2e/specs/mock/chat.spec.ts` | covered |
 | Drag-and-drop a file onto the composer | unit | `client/src/components/Chat/Input/Files/__tests__/DragDropModal.spec.tsx` | covered |
 | Upload progress and completion states | unit | `client/src/hooks/Files/__tests__/useFileHandling.test.ts` | covered |
-| Rejected file type / oversize file is refused with a reason | unit | `client/src/utils/__tests__/validateFiles.spec.ts` | covered |
+| Rejected file type is refused with a reason | unit | `client/src/utils/__tests__/validateFiles.spec.ts#rejects unsupported MIME type` | covered |
 | Remove an attached file before sending | unit | `client/src/hooks/Files/__tests__/useFileDeletion.spec.ts` | covered |
 | "Original file" handling toggle changes the mode | e2e | `e2e/specs/mock/chat.spec.ts` | covered |
 | Attachment preview status polls until ready/failed | unit | `client/src/hooks/Files/__tests__/useAttachmentPreviewSync.spec.tsx` | covered |
 | Preview poll interval and error cap | unit | `client/src/data-provider/Files/__tests__/previewRefetchInterval.spec.ts` | covered |
-| Clicking a file in a sent message opens its preview | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| Clicking a file in a sent message opens its preview | e2e | `e2e/specs/mock/file-preview.spec.ts#opens a preview from a file attached to a sent message` | covered |
 | Opening a file from the library opens its preview | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 
 ## 5. File preview — rendering matrix
@@ -105,55 +121,61 @@ for why that matters.
 | docx (multipage) scrolls as one document | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | A heavy docx renders without timing out | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | docx shows no fabricated page numbers | e2e | — | gap |
-| docx over the CDN size bound falls back to server HTML | e2e | — | gap |
+| docx over the CDN size bound falls back to server HTML | unit | `packages/api/src/files/documents/html.spec.ts#routes a docx above the size cap through the mammoth fallback` | covered |
 | xlsx renders a grid with its sheet names | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | xlsx sheet switching works and returns | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | xlsx merged and empty cells keep the layout | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | xlsx over 5000 rows truncates with a plate | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| xlsx keeps spreadsheet addresses visible while scrolling | e2e | — | fixme:Ф1 |
+| xlsx keeps spreadsheet addresses visible while scrolling | e2e | — | todo:Ф1 |
 | pptx 16:9 renders slides | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | pptx 4:3 renders slides | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | pptx with many slides renders every slide | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | md opens as readable text | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| md offers rendered and source views | e2e | — | fixme:Ф1 |
+| md offers rendered and source views | e2e | — | todo:Ф1 |
 | Source code file opens as text | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| Source code file renders with syntax view | e2e | — | fixme:Ф1 |
+| Source code file renders with syntax view | e2e | — | todo:Ф1 |
 | csv renders as a sheet | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | PDF (digital) opens in a viewer, not as raw text | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | PDF (scan) opens in the viewer despite having no text layer | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| PDF (scan) carries a recognition note | e2e | — | fixme:Ф1 |
+| PDF (scan) carries a recognition note | e2e | — | todo:Ф1 |
 | Text preview truncates at the byte cap with a notice | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 
-Three rows above are `gap`, not `planned`, because this profile cannot prove them. Page numbers
-are produced by no renderer in this configuration, so an assertion that none appear passes
-without the feature existing. The CDN size bound is a routing decision the e2e profile disables
-outright (`OFFICE_PREVIEW_DISABLE_CDN`), so no e2e test here can exercise it. Both need either
-the nightly non-hermetic profile or unit coverage of the routing decision itself.
+One row above is a `gap`, not `planned`, because this profile cannot prove it: no renderer in
+this configuration produces page numbers at all, so an assertion that none appear passes without
+the feature existing. It needs the nightly non-hermetic profile.
+
+The CDN size bound was the same kind of gap at the e2e level — the profile disables that routing
+outright (`OFFICE_PREVIEW_DISABLE_CDN`) — but the routing decision itself is a unit test, and it
+already existed while this row still claimed nothing owned it. Section 13 said so in prose at the
+same time. Owned properly now.
 
 ## 6. File preview — honest states (negative cases)
 
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
-| Corrupted file says plainly it could not be shown, and offers download | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| Archive / unsupported format offers download, not an error | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| Password-protected PDF stays inside the preview surface | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| Password-protected Word file says plainly it could not be shown | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| Every preview settles on a real surface — never an empty rectangle | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| A failed preview offers Retry alongside Download | e2e | — | fixme:Ф1 |
-| Password-protected file shows the shared honest failure instead of the browser viewer | e2e | — | fixme:Ф1 |
-| File still in the recognition queue shows queue position and estimate | e2e | — | fixme:Ф1 |
-| A file type the app cannot handle is refused before upload | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| A file over the size limit is refused before upload | e2e | — | gap |
+| Corrupted file says plainly it could not be shown, and offers download | e2e | `e2e/specs/mock/file-preview.spec.ts#says plainly that a damaged document could not be shown` | covered |
+| Archive / unsupported format offers download, not an error | e2e | `e2e/specs/mock/file-preview.spec.ts#offers download instead of a preview for an archive` | covered |
+| Password-protected PDF stays inside the preview surface | e2e | `e2e/specs/mock/file-preview.spec.ts#keeps a password-protected PDF inside the preview surface` | covered |
+| Password-protected Word file says plainly it could not be shown | e2e | `e2e/specs/mock/file-preview.spec.ts#says plainly that a password-protected document could not be shown` | covered |
+| Every preview settles on a real surface — never an empty rectangle | e2e | `e2e/specs/mock/files.helpers.ts#const settled = previewFrameElement` | covered |
+| A failed preview offers Retry alongside Download | e2e | — | todo:Ф1 |
+| Password-protected file shows the shared honest failure instead of the browser viewer | e2e | — | todo:Ф1 |
+| File still in the recognition queue shows queue position and estimate | e2e | — | todo:Ф1 |
+| A file type the app cannot handle is refused before upload | e2e | `e2e/specs/mock/file-preview.spec.ts#refuses a file type it cannot handle, before uploading it` | covered |
+| A file over the size limit is refused before upload | unit | `client/src/utils/__tests__/validateFiles.spec.ts#rejects when file size equals fileSizeLimit` | covered |
 
 "Never an empty rectangle" has no test of its own: `openPreview` in
 `e2e/specs/mock/files.helpers.ts` refuses to return until the dialog shows a frame, a text block
-or a named failure state, so every file in the matrix asserts it on every run. The row names the
-spec rather than the helper, because that is where a reader will find the tests.
+or a named failure state, so every file in the matrix asserts it on every run. The row used to
+name the spec instead, on the reasoning that a reader looks for tests there — but a reader
+following that pointer finds no such assertion in the spec, so the row now names the helper that
+actually carries it.
 
 ## 7. File panel behavior
 
-Canon: `FRONTEND_TESTING_Canon_Checklist.md` part B. Rows marked `fixme:Ф1` describe the
-agreed redesign and are the acceptance criteria for it.
+Canon: `FRONTEND_TESTING_Canon_Checklist.md` part B. Rows marked `todo:Ф1` describe the
+agreed redesign and are the acceptance criteria for it — a tab strip that does not exist yet
+cannot have a skipped test waiting for it, only an entry saying nobody has written one.
 
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
@@ -166,27 +188,29 @@ agreed redesign and are the acceptance criteria for it.
 | Editor keeps unsaved edits while the same file keeps streaming | unit | `client/src/components/Artifacts/__tests__/ArtifactTabs.test.tsx` | covered |
 | Refresh button appears only for a live preview | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
 | Stepper moves between open artifacts | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
-| Code/Preview choice is per file, not per panel | unit | — | fixme:Ф1 |
-| Unsaved editor edits survive switching files | unit | `client/src/components/Artifacts/__tests__/ArtifactTabs.test.tsx` | fixme:Ф1 |
-| Tab strip appears from the second file | e2e | — | fixme:Ф1 |
-| New tabs are added at the right end | e2e | — | fixme:Ф1 |
-| A file arriving while reading another marks a dot, no focus steal | e2e | — | fixme:Ф1 |
-| Closing a tab activates the neighbour | e2e | — | fixme:Ф1 |
-| Closing the last tab closes the panel | e2e | — | fixme:Ф1 |
-| Header cross hides the panel but keeps the tab set | e2e | — | fixme:Ф1 |
-| Counter button in the chat header restores the panel | e2e | — | fixme:Ф1 |
-| Fullscreen takes the work area, sidebar stays | e2e | — | fixme:Ф1 |
-| Escape leaves fullscreen | e2e | — | fixme:Ф1 |
-| Active file and scroll survive fullscreen toggling | e2e | — | fixme:Ф1 |
-| Every file open lands in the side panel, never a centred modal | e2e | — | fixme:Ф1 |
-| Panel width drag respects the minimum and the chat guarantee | e2e | — | fixme:Ф1 |
+| Code/Preview choice is per file, not per panel | unit | — | todo:Ф1 |
+| Unsaved editor edits survive switching files — today they are dropped, pinned | unit | `client/src/components/Artifacts/__tests__/ArtifactTabs.test.tsx#drops unsaved edits when another file is opened` | fixme:Ф1 |
+| Tab strip appears from the second file | e2e | — | todo:Ф1 |
+| New tabs are added at the right end | e2e | — | todo:Ф1 |
+| A file arriving while reading another marks a dot, no focus steal | e2e | — | todo:Ф1 |
+| Closing a tab activates the neighbour | e2e | — | todo:Ф1 |
+| Closing the last tab closes the panel | e2e | — | todo:Ф1 |
+| Header cross hides the panel but keeps the tab set | e2e | — | todo:Ф1 |
+| Counter button in the chat header restores the panel | e2e | — | todo:Ф1 |
+| Fullscreen takes the work area, sidebar stays | e2e | — | todo:Ф1 |
+| Escape leaves fullscreen | e2e | — | todo:Ф1 |
+| Active file and scroll survive fullscreen toggling | e2e | — | todo:Ф1 |
+| Every file open lands in the side panel, never a centred modal | e2e | — | todo:Ф1 |
+| Panel width drag respects the minimum and the chat guarantee | e2e | — | todo:Ф1 |
 
 ## 8. Conversations and navigation
 
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
-| Conversation list loads and paginates on scroll | e2e | `e2e/specs/mock/sidebar.spec.ts` | covered |
-| Collapsed rail still reaches settings and sign-out | e2e | `e2e/specs/mock/sidebar.spec.ts` | covered |
+| Conversation list loads and paginates on scroll | e2e | — | gap |
+| Chat list width tracks the sidebar through collapse and viewport cycles | e2e | `e2e/specs/mock/sidebar.spec.ts#chat list width tracks the sidebar through collapse and viewport cycles` | covered |
+| Collapsed rail still reaches settings and sign-out | e2e | `e2e/specs/mock/sidebar.spec.ts#the collapsed rail still reaches settings and sign-out` | covered |
+| First click after the sidebar mounts is sometimes swallowed | e2e | — | gap |
 | Open a conversation from the list | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
 | Rename a conversation | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
 | Delete a conversation | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
@@ -195,14 +219,14 @@ agreed redesign and are the acceptance criteria for it.
 | Search results show chats and messages separately | unit | `client/src/components/Nav/SearchChats/__tests__/Results.spec.tsx` | covered |
 | Search says plainly when it found nothing | unit | `client/src/components/Nav/SearchChats/__tests__/Results.spec.tsx` | covered |
 | Search shows a busy state instead of an empty box | unit | `client/src/components/Nav/SearchChats/__tests__/Results.spec.tsx` | covered |
-| A running search is announced to a screen reader | a11y | — | fixme:Ф1 |
+| A running search is announced to a screen reader | a11y | — | todo:Ф1 |
 | Search finds real matches end to end | e2e | — | gap |
-| Bookmarks: create, attach, filter | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
-| Bookmarks: a chat can be taken back out of a bookmark | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
-| Bookmarks stay hidden on every surface while the switch is off | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
-| Bookmarks panel: create, rename, delete a bookmark | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
-| Renaming or deleting a bookmark releases a chat-list filter using it | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
-| Switching bookmarks off releases the bookmark filter on the chat list | e2e | `e2e/specs/mock/bookmarks.spec.ts` | covered |
+| Bookmarks: create, attach, filter | e2e | `e2e/specs/mock/bookmarks.spec.ts#The sidebar offers the bookmark and narrows the chat list to it` | covered |
+| Bookmarks: a chat can be taken back out of a bookmark | e2e | `e2e/specs/mock/bookmarks.spec.ts#Taking the chat out of the bookmark empties the filtered list` | covered |
+| Bookmarks stay hidden on every surface while the switch is off | e2e | `e2e/specs/mock/bookmarks.spec.ts#stay out of sight entirely while the switch is off` | covered |
+| Bookmarks panel: create, rename, delete a bookmark | e2e | `e2e/specs/mock/bookmarks.spec.ts#the sidebar panel creates, renames and deletes a bookmark` | covered |
+| Renaming or deleting a bookmark releases a chat-list filter using it | e2e | `e2e/specs/mock/bookmarks.spec.ts#renaming or deleting a bookmark releases a filter that was using it` | covered |
+| Switching bookmarks off releases the bookmark filter on the chat list | e2e | `e2e/specs/mock/bookmarks.spec.ts#Switching bookmarks off while a filter is on has to release the filter too` | covered |
 | Archive a conversation and bring it back | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
 | Mobile sidebar opens and dismisses | e2e | `e2e/specs/mock/mobile-sidebar.spec.ts` | covered |
 
@@ -211,16 +235,22 @@ agreed redesign and are the acceptance criteria for it.
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
 | Model selector lists and switches endpoints | e2e | `e2e/specs/mock/model-switching.spec.ts` | covered |
-| Model spec branding, icons, starters render | e2e | `e2e/specs/mock/model-spec-branding.spec.ts` | covered |
+| Model spec branding replaces the greeting and shows in the selector | e2e | `e2e/specs/mock/model-spec-branding.spec.ts#branded spec replaces the greeting with its label and rendered description` | covered |
+| Model spec conversation starters render, and clicking one sends it | e2e | `e2e/specs/mock/model-spec-starters.spec.ts#clicking a starter submits it as the first message` | covered |
+| A model spec stream keeps its reply across navigation, abort and reload | e2e | `e2e/specs/mock/model-spec-icons.spec.ts#keeps the assistant message when resuming an active stream after navigation` | covered |
 | Default model selection rules | unit | `client/src/utils/__tests__/getDefaultModelSpec.test.ts` | covered |
 | Agent marketplace lists and opens agents | e2e | `e2e/specs/mock/agents.spec.ts` | covered |
 | Agent builder saves a version | unit | `client/src/components/SidePanel/Agents/AgentPanel.test.tsx` | covered |
-| Project create, rename, colour, icon | e2e | `e2e/specs/mock/projects.spec.ts` | covered |
+| Project is created from the popup and listed | e2e | `e2e/specs/mock/projects.spec.ts#creates a project via the popup and lists it` | covered |
+| A project-scoped chat stays under its project | e2e | `e2e/specs/mock/projects.spec.ts#starts a project-scoped chat and persists it under the project` | covered |
+| Project rename, colour and icon | e2e | — | gap |
 | Prompts library: create and use a prompt | e2e | `e2e/specs/mock/prompts.spec.ts` | covered |
 | A prompt's variables are read and shown by kind | unit | `client/src/components/Prompts/display/__tests__/PromptVariables.spec.tsx` | covered |
 | Creating, editing and sharing a prompt | unit | — | gap |
 | MCP server selection and ephemeral servers | e2e | `e2e/specs/mock/mcp.spec.ts` | covered |
-| Skills appear and run | e2e | `e2e/specs/mock/deployment-skills.spec.ts` | covered |
+| Configured skills load read-only for every authenticated user (API) | e2e | `e2e/specs/mock/deployment-skills.spec.ts#loads configured deployment skills for every authenticated user as read-only` | covered |
+| A model spec sees only the skills scoped to it (API) | e2e | `e2e/specs/mock/model-spec-skills.spec.ts#loads accessible configured skills and skips missing or inaccessible names` | covered |
+| Skills appear in the interface and run from it | e2e | — | gap |
 
 ## 10. Settings, sharing, permissions
 
@@ -230,7 +260,8 @@ agreed redesign and are the acceptance criteria for it.
 | Language switch persists | unit | `client/src/components/Nav/SettingsTabs/General/LangSelector.spec.tsx` | covered |
 | Speech settings toggles | unit | `client/src/components/Nav/SettingsTabs/Speech/ConversationModeSwitch.spec.tsx` | covered |
 | Share a conversation by link | e2e | `e2e/specs/mock/shared-links.spec.ts` | covered |
-| Role permissions gate UI affordances | e2e | `e2e/specs/mock/permissions.spec.ts` | covered |
+| Permission principals and details are enforced server-side | e2e | `e2e/specs/mock/permissions.spec.ts#keeps permission details and local principal writes in the authenticated context` | covered |
+| Role permissions gate UI affordances | e2e | — | gap |
 | Usage/balance surfaces are correct | e2e | `e2e/specs/mock/usage.spec.ts` | covered |
 | Personal settings follow the account onto a new device | unit | `client/src/hooks/Preferences/__tests__/useApplyPreferences.spec.tsx` | covered |
 | A second employee on the same computer gets their own settings | unit | `client/src/hooks/Preferences/__tests__/useApplyPreferences.spec.tsx` | covered |
@@ -249,31 +280,35 @@ agreed redesign and are the acceptance criteria for it.
 
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
-| New chat screen passes axe (WCAG 2.1 A/AA) | a11y | `e2e/specs/mock/a11y.spec.ts` | covered |
-| Icon-only buttons have accessible names | a11y | `e2e/specs/mock/a11y.spec.ts` | covered |
-| Conversation screen passes axe | a11y | `e2e/specs/mock/a11y.spec.ts` | fixme:Ф1 |
-| File library dialog passes axe | a11y | `e2e/specs/mock/a11y.spec.ts` | fixme:Ф1 |
-| Tab order reaches the composer from the top of the document | a11y | `e2e/specs/mock/a11y.spec.ts` | covered |
-| Closing a dialog returns focus to what opened it | a11y | `e2e/specs/mock/a11y.spec.ts` | covered |
-| Escape closes the top dialog and leaves the one behind it open | a11y | `e2e/specs/mock/a11y.spec.ts` | covered |
+| New chat screen passes axe (WCAG 2.1 A/AA) | a11y | `e2e/specs/mock/a11y.spec.ts#the new chat screen has no WCAG A/AA violations` | covered |
+| Icon-only buttons have accessible names, outside the sidebar | a11y | `e2e/specs/mock/a11y.spec.ts#const SIDEBAR = 'aside'` | covered |
+| Conversation screen passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#a conversation fails only on the two known sidebar defects` | fixme:Ф1 |
+| File library dialog passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the file library fails on the header contrast and on its own rows` | fixme:Ф1 |
+| Tab order reaches the composer from the top of the document | a11y | `e2e/specs/mock/a11y.spec.ts#the composer is reachable and operable from the keyboard alone` | covered |
+| Closing a dialog returns focus to what opened it | a11y | `e2e/specs/mock/a11y.spec.ts#closing the file panel hands focus back to what opened it` | covered |
+| Escape closes the top dialog and leaves the one behind it open | a11y | `e2e/specs/mock/a11y.spec.ts#Escape closes the preview and leaves the panel it came from open` | covered |
 | A dialog holds focus against anything else claiming it | a11y | — | gap |
-| The settings dialog passes axe | a11y | `e2e/specs/mock/a11y.spec.ts` | covered |
-| The projects panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts` | covered |
-| The agents panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts` | fixme:Ф1 |
-| The prompts panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts` | fixme:Ф1 |
-| Data tables announce translated labels, not raw keys | a11y | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| The settings dialog passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the settings dialog has no WCAG A/AA violations` | covered |
+| The projects panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the projects panel has no WCAG A/AA violations` | covered |
+| The agents panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the agents panel fails only on its category tab` | fixme:Ф1 |
+| The prompts panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the prompts panel fails only on the nested control` | fixme:Ф1 |
+| Data tables announce translated labels, not raw keys | a11y | `e2e/specs/mock/file-preview.spec.ts#labels the file table in words, not translation keys` | covered |
 | Every control the keyboard reaches shows that it has focus | a11y | `e2e/specs/mock/canon.spec.ts` | covered |
 | Shared components' translation keys are defined in this app | unit | `client/src/locales/keys.spec.ts` | covered |
-| File panel exposes tablist semantics | a11y | — | fixme:Ф1 |
+| File panel exposes tablist semantics | a11y | — | todo:Ф1 |
 
-Two rows are `fixme:Ф1` because the screen has a real defect, each with a `test.fail` for the
+Four rows are `fixme:Ф1` because the screen has a real defect, each with a `test.fail` for the
 clean result and an ordinary sibling test pinning exactly what is wrong — `test.fail` is
-satisfied by any failure, so alone it would stop meaning anything. The conversation screen:
+satisfied by any failure, so alone it would stop meaning anything. Each row's anchor points at
+the **pinning** test, not the `test.fail` one: the pinning test is what goes red the day the
+defect is fixed, which is exactly when this row needs a reader. The conversation screen:
 the virtualised chat list declares `role="grid"` without the rows a grid requires (critical),
 and a conversation row nests an interactive control inside another (serious). The file library:
-its sortable column headers render #737373 on #f5f5f5, 4.34:1 where AA asks 4.5:1. All three
-are in surfaces the redesign is rebuilding, and fixing them belongs to that work (owner
-decision, 2026-08-03) — not to whoever next reads this file.
+its sortable column headers render #737373 on #f5f5f5, 4.34:1 where AA asks 4.5:1, plus the two
+row-level defects described further down. The agents and prompts panels are described there too,
+where those notes happened to be written. All of them are in surfaces the redesign is rebuilding,
+and fixing them belongs to that work (owner decision, 2026-08-03) — not to whoever next reads
+this file.
 
 "A dialog holds focus against anything else claiming it" is a `gap`, not a passing test, on
 purpose. Focus was once observed leaving the open file panel for the chat composer about half a
@@ -285,13 +320,13 @@ of encoded.
 
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
-| Panel and its layout host switch to the phone layout at the same width | unit | `client/src/components/Artifacts/__tests__/breakpoints.test.ts` | fixme:Ф1 |
+| Panel and its layout host switch to the phone layout at the same width | unit | `client/src/components/Artifacts/__tests__/breakpoints.test.ts#switches the panel and its layout host at the same width` | covered |
 | Chat and file library work at phone, 800px and desktop widths | e2e | `e2e/specs/nightly/layout.spec.ts` | covered |
 | No screen scrolls sideways at any of those widths | e2e | `e2e/specs/nightly/layout.spec.ts` | covered |
 | Dark theme really applies, and its key screens pass axe | a11y | `e2e/specs/nightly/theme.spec.ts` | covered |
 | Russian build shows no untranslated keys on key screens | e2e | `e2e/specs/nightly/locale.spec.ts` | covered |
 | Russian locale renders key screens without overflow | e2e | `e2e/specs/nightly/layout.spec.ts` | covered |
-| Artifacts panel in the 768–868 band | e2e | — | fixme:Ф1 |
+| Artifacts panel open at a narrow desktop width | e2e | — | gap |
 | Pixel snapshots of the redesigned screens | visual | — | planned:Э7 |
 | Product name is 1MA everywhere, never LibreChat | e2e | `e2e/specs/mock/branding.spec.ts` | covered |
 | Help entry points at the configured help centre | e2e | `e2e/specs/mock/branding.spec.ts` | covered |
@@ -301,18 +336,25 @@ projects against the same hermetic server is a few minutes a day rather than min
 Each project runs only the specs it needs, expressed as `testMatch` rather than a skip inside the
 test — a skipped test still costs a worker slot and still reports.
 
-The 768–868 band is `fixme:Ф1` at the e2e level on purpose. Reaching it needs an artifacts panel
-open, which needs the model to emit an artifact; the breakpoint mismatch itself is already owned
-by `client/src/components/Artifacts/__tests__/breakpoints.test.ts`, which reads both widths from
-source and fails when they are made to agree. The `narrow-desktop` project exists so the rest of
-the app is exercised at that width today, and so the band test has somewhere to land.
+**The 768–868 band defect is fixed.** The artifacts panel used to switch to its phone sheet at
+868px while its layout host kept the desktop split until 767px, so every width between them got
+both at once. The redesign moved both to 767.98px; `breakpoints.test.ts` reads the two widths
+from source and asserts they agree, and it passes — so that row is `covered`, not `fixme`. This
+map went on calling it an open defect for a day after the fix landed, which is what an unanchored
+row buys you.
+
+What is still uncovered is the artifacts panel **open** at a narrow desktop width: reaching it
+needs the model to emit an artifact, and nothing in this profile does. The `narrow-desktop`
+nightly project exercises the rest of the app at 800px and gives that test somewhere to land.
 
 Pixel snapshots are `planned:Э7`, not Э5. Baselines taken now would be invalidated by the very
 redesign they are meant to guard, and they would have to be generated on CI rather than on a Mac
 to compare at all. Structural and ARIA assertions carry the regression value in the meantime.
 
-The recognition-queue row is `fixme:Ф1`, not a gap: there is no queue state in the product at
-all — no strings, no code. Nothing can be tested until it exists.
+The recognition-queue row is `todo:Ф1`, not a gap: there is no queue state in the product at
+all — no strings, no code. Nothing can be tested until it exists. A `gap` says "this works and
+nobody checks it"; `todo:Ф1` says "this does not exist yet". Conflating them is how a redesign
+backlog gets read as a testing backlog.
 
 A dropped connection mid-reply keeps everything already received, and a reconnect plus reload
 loses nothing — that is covered. What is **not** covered, and is a gap rather than planned work:
@@ -343,6 +385,14 @@ and the **projects panel** are clean, measured.
 because they ran before anything created a conversation or uploaded a file; the new-chat scan
 excludes the sidebar, whose two defects have their own owner. Proven with `--repeat-each=2`:
 28 of 28.
+
+**The first click after the sidebar mounts is sometimes swallowed** — the click lands, no menu
+opens. Seven specs hit it, and `openAccountMenu` in `e2e/specs/mock/helpers.ts` works around it
+with one retry. That is a real product defect a user meets as "I clicked my avatar and nothing
+happened", and it was living only in a code comment: a workaround in test code is not coverage,
+and the map's own quarantine rule says an unfixed problem gets a row rather than a silent
+retry. Hence the `gap` row in section 8. The retry stays until the defect is diagnosed —
+removing it would just make seven specs flaky again without telling anyone anything new.
 
 **Conversation search** cannot be proven end to end in this profile: the hermetic environment
 sets `SEARCH=false`, so there is no Meilisearch instance and the search entry is not rendered at
@@ -399,7 +449,9 @@ The entry point is the sidebar's "Attach Files" panel
 (`client/src/components/SidePanel/Files/Panel.tsx`), reached through
 `useSideNavLinks`; its table opens `FilePreviewDialog` on a row click. That is
 one of the five preview entry points the canon lists, so covering it is not a
-detour. The transcript entry point itself is a separate `gap`.
+detour. The transcript entry point has its own test as well — "opens a preview
+from a file attached to a sent message" — which this paragraph went on calling
+a `gap` long after that test was written.
 
 **Assertions that were green for the wrong reason** (found by a skeptical review
 and fixed before merge, kept here so they are not reintroduced):

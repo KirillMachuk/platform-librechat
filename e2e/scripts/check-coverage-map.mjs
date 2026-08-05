@@ -2,9 +2,14 @@
 /**
  * Guards e2e/COVERAGE_MAP.md against rot.
  *
- * The map claims which test owns which user behavior. A renamed or deleted test would
- * silently turn a claim into a lie, so every referenced path is checked to exist, and the
- * status column is checked to agree with whether a test is named at all.
+ * The map claims which test owns which user behavior. Two ways that claim rots: the test is
+ * renamed or deleted, and the test stays but stops being about the behavior. The first is
+ * caught by checking every referenced path exists. The second is caught by the anchor form
+ * `path#substring` — the substring (a test title, an assertion, a constant) must still be
+ * present in that file. Rows without an anchor are only as trustworthy as their last reader.
+ *
+ * The status column is checked against whether a test is named at all, which is what keeps
+ * `fixme` from quietly meaning "nothing here".
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -16,17 +21,18 @@ const mapPath = join(repoRoot, 'e2e', 'COVERAGE_MAP.md');
 
 const LEVELS = new Set(['unit', 'e2e', 'a11y', 'visual']);
 const NO_TEST = '—';
-const STATUS_REQUIRES_TEST = new Set(['covered']);
-const STATUS_FORBIDS_TEST = new Set(['gap']);
+const STATUS_REQUIRES_TEST = new Set(['covered', 'fixme:Ф1']);
+const STATUS_FORBIDS_TEST = new Set(['gap', 'todo:Ф1']);
 
 const isStatus = (value) =>
   value === 'covered' ||
   value === 'gap' ||
   value === 'fixme:Ф1' ||
+  value === 'todo:Ф1' ||
   /^planned:[A-ZЭ][0-9]$/u.test(value);
 
 const problems = [];
-const stats = { rows: 0, covered: 0, planned: 0, fixme: 0, gap: 0 };
+const stats = { rows: 0, covered: 0, planned: 0, fixme: 0, todo: 0, gap: 0 };
 
 const lines = readFileSync(mapPath, 'utf8').split('\n');
 
@@ -62,6 +68,8 @@ lines.forEach((line, index) => {
     stats.planned += 1;
   } else if (status.startsWith('fixme')) {
     stats.fixme += 1;
+  } else if (status.startsWith('todo')) {
+    stats.todo += 1;
   } else if (status === 'gap') {
     stats.gap += 1;
   }
@@ -82,13 +90,25 @@ lines.forEach((line, index) => {
     problems.push(`${lineNo}: owning test must be a backtick-quoted path — "${owner}"`);
     return;
   }
-  for (const path of paths) {
+  for (const reference of paths) {
+    const separator = reference.indexOf('#');
+    const path = separator === -1 ? reference : reference.slice(0, separator);
+    const anchor = separator === -1 ? '' : reference.slice(separator + 1);
     if (!/\.(ts|tsx)$/.test(path)) {
       problems.push(`${lineNo}: owning test is not a .ts/.tsx file — "${path}"`);
       continue;
     }
-    if (!existsSync(join(repoRoot, path))) {
+    const absolute = join(repoRoot, path);
+    if (!existsSync(absolute)) {
       problems.push(`${lineNo}: owning test does not exist — "${path}"`);
+      continue;
+    }
+    if (separator !== -1 && anchor.length === 0) {
+      problems.push(`${lineNo}: empty anchor after "#" — "${reference}"`);
+      continue;
+    }
+    if (anchor && !readFileSync(absolute, 'utf8').includes(anchor)) {
+      problems.push(`${lineNo}: "${path}" no longer contains its anchor — "${anchor}"`);
     }
   }
 });
@@ -107,5 +127,6 @@ if (problems.length > 0) {
 
 console.log(
   `COVERAGE_MAP.md ok — ${stats.rows} behaviors: ${stats.covered} covered, ` +
-    `${stats.planned} planned, ${stats.fixme} awaiting Ф1, ${stats.gap} gaps`,
+    `${stats.planned} planned, ${stats.fixme} pinned awaiting Ф1, ${stats.todo} untested ` +
+    `awaiting Ф1, ${stats.gap} gaps`,
 );

@@ -49,9 +49,13 @@ export default defineConfig({
     },
     {
       /**
-       * The band where the artifacts panel and its layout host disagree: the
-       * panel switches to its phone sheet at 868px while the host keeps the
-       * desktop split until 767px. Nothing else looks at these widths.
+       * A desktop narrow enough that the sidebar and the work area compete for
+       * room, but wide enough that neither switches to its phone layout. This
+       * width was originally chosen for the band where the artifacts panel and
+       * its layout host disagreed — the panel went to its phone sheet at 868px
+       * while the host kept the desktop split until 767px. Both read 767.98px
+       * since the redesign, so the disagreement is gone and this project now
+       * earns its keep as plain narrow-desktop coverage.
        */
       name: 'narrow-desktop',
       testMatch: LAYOUT,
