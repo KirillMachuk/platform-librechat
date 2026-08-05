@@ -7,6 +7,7 @@ const { ResourceType, isAssistantsEndpoint } = require('librechat-data-provider'
 const {
   processAgentFileUpload,
   processImageFile,
+  attemptImageOcr,
   filterFile,
 } = require('~/server/services/Files/process');
 const { canManageResourceType } = require('~/server/middleware/roles/capabilities');
@@ -40,7 +41,19 @@ router.post('/', async (req, res) => {
       return await processAgentFileUpload({ req, res, metadata });
     }
 
-    await processImageFile({ req, res, metadata });
+    /* Read the picture before storing it. An image the OCR gate accepts is kept
+     * as an image in every visible way, but the model reads its text: masked by
+     * the anonymizer, and legible to models that cannot see at all. A rejected
+     * one returns null and this is the untouched native path. OCR runs first
+     * because storing the image consumes the uploaded temp file. */
+    const parsed = await attemptImageOcr({
+      req,
+      file: req.file,
+      file_id: metadata.file_id,
+      tag: 'files/images',
+    });
+
+    await processImageFile({ req, res, metadata, text: parsed?.text ?? null });
   } catch (error) {
     // TODO: delete remote file if it exists
     logger.error('[/files/images] Error processing file:', error);

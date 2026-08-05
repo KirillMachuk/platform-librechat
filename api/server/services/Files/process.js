@@ -605,17 +605,74 @@ const processFileURL = async ({
 };
 
 /**
+ * OCR an uploaded image and decide whether its text can stand in for the
+ * picture. Returns the text on acceptance, `null` otherwise — a `null` leaves
+ * the caller on the native (vision) path, which is what every failure mode
+ * degrades to. Never throws: OCR is an optimisation, not a precondition.
+ *
+ * Accepting matters beyond convenience. The text reaches the model through the
+ * anonymizer and is masked; the picture would not be, and under the strict
+ * policy an image attachment is refused outright. So a readable screenshot is
+ * strictly better off as text — and an unreadable one must stay a picture.
+ *
+ * @param {Object} params
+ * @param {ServerRequest} params.req
+ * @param {Express.Multer.File} params.file
+ * @param {string} params.file_id
+ * @param {string} params.tag - Caller name for the log line.
+ * @returns {Promise<{ text: string, bytes: number } | null>}
+ */
+const attemptImageOcr = async ({ req, file, file_id, tag }) => {
+  if (!isImageOcrEnabled()) {
+    return null;
+  }
+  try {
+    const parsed = await withTimeout(
+      parseText({ req, file, file_id }),
+      IMAGE_OCR_TIMEOUT_MS,
+      `image OCR timed out for "${file.originalname}"`,
+    );
+    const thresholds = readImageOcrThresholds();
+    const metrics = parsed?.text ? measureOcrText(parsed.text.trim()) : null;
+    /* Log what the gate measured, not just its verdict: the thresholds are
+     * env-tunable and "my screenshot was not read" is unanswerable without the
+     * numbers behind the decision. */
+    const measured = metrics
+      ? `words=${metrics.words}/${thresholds.minWords} density=${metrics.density.toFixed(2)}/${thresholds.minDensity} texty=${metrics.texty}`
+      : 'no text';
+    if (metrics && acceptOcrMetrics(metrics, thresholds)) {
+      logger.info(`[${tag}] image OCR'd "${file.originalname}" (${measured}) -> full text`);
+      return parsed;
+    }
+    logger.info(
+      `[${tag}] image OCR for "${file.originalname}" rejected (${measured}) -> native vision`,
+    );
+    return null;
+  } catch (err) {
+    logger.error(`[${tag}] image OCR failed for "${file.originalname}", using native vision:`, err);
+    return null;
+  }
+};
+
+/**
  * Applies the current strategy for image uploads.
  * Saves file metadata to the database with an expiry TTL.
+ *
+ * `text` is OCR output accepted by {@link attemptImageOcr}. The record stays a
+ * normal image — same storage, same dimensions, same thumbnail — but carrying
+ * `text` makes the model read those words instead of the picture: attachments
+ * with extracted text are excluded from image inlining and injected as context
+ * (see BaseClient). Without it nothing about this path changes.
  *
  * @param {Object} params - The parameters object.
  * @param {ServerRequest} params.req - The Express request object.
  * @param {Express.Response} [params.res] - The Express response object.
  * @param {ImageMetadata} params.metadata - Additional metadata for the file.
  * @param {boolean} params.returnFile - Whether to return the file metadata or return response as normal.
+ * @param {string | null} [params.text] - Accepted OCR text, if any.
  * @returns {Promise<void>}
  */
-const processImageFile = async ({ req, res, metadata, returnFile = false }) => {
+const processImageFile = async ({ req, res, metadata, returnFile = false, text = null }) => {
   const { file } = req;
   const appConfig = req.config;
   const source = getFileStrategy(appConfig, { isImage: true });
@@ -989,40 +1046,15 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
     });
   }
 
-  // Auto image-OCR (behind AUTO_IMAGE_OCR): OCR an uploaded image locally; if it yields enough
-  // real text, treat it as a full-text `context` document (masked by the anonymizer — more
-  // sovereign than vision). Too little / non-text -> fall through to the native vision path.
+  /* Auto image-OCR for an image attached to a tool resource. The plain chat
+   * attachment — the common case by far — never reaches here: `/files/images`
+   * only routes to this function when a tool resource is set, so that path runs
+   * the same gate of its own (see the route). */
   let imageOcrText = null;
-  if (isImageOcrEnabled() && isImage && tool_resource == null) {
-    try {
-      const parsed = await withTimeout(
-        parseText({ req, file, file_id }),
-        IMAGE_OCR_TIMEOUT_MS,
-        `image OCR timed out for "${file.originalname}"`,
-      );
-      const thresholds = readImageOcrThresholds();
-      const metrics = parsed?.text ? measureOcrText(parsed.text.trim()) : null;
-      // Log what the gate measured, not just its verdict: the thresholds are env-tunable and
-      // "my screenshot was not read" is unanswerable without the numbers behind the decision.
-      const measured = metrics
-        ? `words=${metrics.words}/${thresholds.minWords} density=${metrics.density.toFixed(2)}/${thresholds.minDensity} texty=${metrics.texty}`
-        : 'no text';
-      if (metrics && acceptOcrMetrics(metrics, thresholds)) {
-        imageOcrText = parsed;
-        tool_resource = EToolResources.context;
-        logger.info(
-          `[processAgentFileUpload] image OCR'd "${file.originalname}" (${measured}) -> full-text context`,
-        );
-      } else {
-        logger.info(
-          `[processAgentFileUpload] image OCR for "${file.originalname}" rejected (${measured}) -> native vision`,
-        );
-      }
-    } catch (err) {
-      logger.error(
-        `[processAgentFileUpload] image OCR failed for "${file.originalname}", using native vision:`,
-        err,
-      );
+  if (isImage && tool_resource == null) {
+    imageOcrText = await attemptImageOcr({ req, file, file_id, tag: 'processAgentFileUpload' });
+    if (imageOcrText != null) {
+      tool_resource = EToolResources.context;
     }
   }
 
@@ -2047,6 +2079,7 @@ module.exports = {
   processFileURL,
   saveBase64Image,
   processImageFile,
+  attemptImageOcr,
   uploadImageBuffer,
   sweepExpiredFiles,
   startExpiredFileSweep,
