@@ -57,7 +57,18 @@ test.describe('russian build', () => {
     test.setTimeout(90000);
     await page.goto('/c/new', { timeout: 15000 });
     await page.getByTestId('sidebar-link-files').click();
-    await expect(page.locator('div[role="dialog"]')).toHaveCount(1);
+    const dialog = page.locator('div[role="dialog"]');
+    await expect(dialog).toHaveCount(1);
+
+    /* The dialog existing is not the dialog being drawn. Its table — the part
+     * that renders labels from the shared package, which is where raw keys came
+     * from in the first place — arrives after. Scanning on the dialog's
+     * appearance alone measured the moment before the thing under test existed.
+     * A column header is that content, and its Russian text is the locale
+     * anchor this test was missing: without one, an English build would pass
+     * the raw-key check for free. */
+    await expect(dialog.getByRole('columnheader').first()).toBeVisible({ timeout: 20000 });
+    await expect(dialog.getByText('Файлы').first()).toBeVisible();
 
     expect(await rawKeys(page)).toEqual([]);
   });

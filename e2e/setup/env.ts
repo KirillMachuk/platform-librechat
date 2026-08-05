@@ -97,6 +97,11 @@ export function getBaseE2EEnv(): Record<string, string> {
     JWT_SECRET: process.env.JWT_SECRET ?? GENERATED_JWT_SECRET,
     JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET ?? GENERATED_JWT_REFRESH_SECRET,
     EMAIL_HOST: '',
+    /* Set explicitly so the help entry can be asserted against a known value.
+     * Left unset, `api/server/routes/config.js` falls back to a hardcoded
+     * marketing address, and a test that only checks "some https URL opened"
+     * passes against the fallback while the setting is ignored. */
+    HELP_AND_FAQ_URL: process.env.HELP_AND_FAQ_URL ?? 'https://help.e2e.test/start',
     SEARCH: 'false',
     SESSION_EXPIRY: process.env.SESSION_EXPIRY ?? '3600000',
     ALLOW_REGISTRATION: 'true',

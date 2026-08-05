@@ -71,11 +71,25 @@ test.describe('branding', () => {
     expect(await upstreamMentions(page)).toEqual([]);
   });
 
-  test('the account menu and settings never show it either', async ({ page }) => {
-    test.setTimeout(90000);
+  test('the account menu and the settings dialog never show it either', async ({ page }) => {
+    test.setTimeout(120000);
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
-    await openAccountMenu(page);
-    await expect(page.getByRole('menu')).toBeVisible();
+    const menu = await openAccountMenu(page);
+    await expect(menu).toBeVisible();
+
+    expect(await upstreamMentions(page)).toEqual([]);
+
+    /* The title said "and settings" while the test never opened them. The
+     * dialog is the likeliest place for an upstream string to survive a merge:
+     * it names the product in its own copy. */
+    await menu.getByRole('menuitem', { name: 'Settings' }).click();
+    /* By its heading, not by `role=dialog` being visible: Headless UI's outer
+     * dialog wrapper has no size of its own, so Playwright calls it hidden
+     * while the panel inside it is on screen. */
+    await expect(page.getByRole('heading', { name: 'Settings' }).first()).toBeVisible({
+      timeout: 20000,
+    });
+    await expect(page.getByRole('tab').first()).toBeVisible();
 
     expect(await upstreamMentions(page)).toEqual([]);
   });
@@ -95,11 +109,20 @@ test.describe('branding', () => {
   });
 });
 
+/** Must match `HELP_AND_FAQ_URL` in `e2e/setup/env.ts`. */
+const HELP_URL = 'https://help.e2e.test/start';
+
 test.describe('help', () => {
   /**
    * The entry opens a new tab. `window.open` is replaced rather than followed:
    * the help centre is a real external site and this suite must not reach for
    * the network to prove which address a button points at.
+   *
+   * The address is compared exactly against what the profile configures. An
+   * earlier version asserted only "some https URL that is not the upstream
+   * name", which the hardcoded fallback in `api/server/routes/config.js`
+   * satisfies — so the test passed while `HELP_AND_FAQ_URL` was not set at all
+   * and the button could have been ignoring the setting entirely.
    */
   test('the account menu offers help, pointing at the configured address', async ({ page }) => {
     test.setTimeout(90000);
@@ -121,9 +144,7 @@ test.describe('help', () => {
     const opened = await page.evaluate(() => [
       ...(window as unknown as WindowWithOpened).__openedUrls,
     ]);
-    expect(opened).toHaveLength(1);
-    expect(opened[0]).toMatch(/^https?:\/\//);
-    expect(opened[0]).not.toMatch(UPSTREAM_NAME);
+    expect(opened).toEqual([HELP_URL]);
   });
 });
 

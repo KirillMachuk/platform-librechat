@@ -76,7 +76,8 @@ stays green, so flakes accumulate where nobody looks.
 | Fork a conversation from a message | unit | `client/src/components/Chat/Messages/__tests__/Fork.spec.tsx` | covered |
 | Error mid-stream surfaces a readable message | e2e | `e2e/specs/mock/message-tree.spec.ts#error responses remain valid parents for follow-ups` | covered |
 | Submit is blocked while a run is in flight | unit | `client/src/hooks/Chat/__tests__/useChatFunctions.spec.ts` | covered |
-| A dropped connection mid-reply loses nothing | e2e | `e2e/specs/mock/chat.spec.ts` | covered |
+| A reload mid-reply keeps what the server already persisted | e2e | `e2e/specs/mock/chat.spec.ts#a reload mid-reply keeps everything the server had already persisted` | covered |
+| A dropped connection mid-reply loses nothing already received | e2e | — | gap |
 | A dropped connection is noticed and shown to the user | e2e | — | gap |
 
 ## 3. Message rendering
@@ -138,7 +139,7 @@ for why that matters.
 | PDF (digital) opens in a viewer, not as raw text | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | PDF (scan) opens in the viewer despite having no text layer | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
 | PDF (scan) carries a recognition note | e2e | — | todo:Ф1 |
-| Text preview truncates at the byte cap with a notice | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| Text preview truncates at the byte cap with a notice | e2e | `e2e/specs/mock/file-preview.spec.ts#TEXT_PREVIEW_MAX_BYTES` | covered |
 
 One row above is a `gap`, not `planned`, because this profile cannot prove it: no renderer in
 this configuration produces page numbers at all, so an assertion that none appear passes without
@@ -155,11 +156,11 @@ same time. Owned properly now.
 |---|---|---|---|
 | Corrupted file says plainly it could not be shown, and offers download | e2e | `e2e/specs/mock/file-preview.spec.ts#says plainly that a damaged document could not be shown` | covered |
 | Archive / unsupported format offers download, not an error | e2e | `e2e/specs/mock/file-preview.spec.ts#offers download instead of a preview for an archive` | covered |
-| Password-protected PDF stays inside the preview surface | e2e | `e2e/specs/mock/file-preview.spec.ts#keeps a password-protected PDF inside the preview surface` | covered |
+| Password-protected PDF stays inside the preview surface (today's behavior, pinned) | e2e | `e2e/specs/mock/file-preview.spec.ts#today a password-protected PDF stays in the browser viewer` | covered |
 | Password-protected Word file says plainly it could not be shown | e2e | `e2e/specs/mock/file-preview.spec.ts#says plainly that a password-protected document could not be shown` | covered |
 | Every preview settles on a real surface — never an empty rectangle | e2e | `e2e/specs/mock/files.helpers.ts#const settled = previewFrameElement` | covered |
 | A failed preview offers Retry alongside Download | e2e | — | todo:Ф1 |
-| Password-protected file shows the shared honest failure instead of the browser viewer | e2e | — | todo:Ф1 |
+| Password-protected file shows the shared honest failure instead of the browser viewer | e2e | `e2e/specs/mock/file-preview.spec.ts#a password-protected PDF says plainly it could not be shown` | fixme:Ф1 |
 | File still in the recognition queue shows queue position and estimate | e2e | — | todo:Ф1 |
 | A file type the app cannot handle is refused before upload | e2e | `e2e/specs/mock/file-preview.spec.ts#refuses a file type it cannot handle, before uploading it` | covered |
 | A file over the size limit is refused before upload | unit | `client/src/utils/__tests__/validateFiles.spec.ts#rejects when file size equals fileSizeLimit` | covered |
@@ -321,15 +322,15 @@ of encoded.
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
 | Panel and its layout host switch to the phone layout at the same width | unit | `client/src/components/Artifacts/__tests__/breakpoints.test.ts#switches the panel and its layout host at the same width` | covered |
-| Chat and file library work at phone, 800px and desktop widths | e2e | `e2e/specs/nightly/layout.spec.ts` | covered |
-| No screen scrolls sideways at any of those widths | e2e | `e2e/specs/nightly/layout.spec.ts` | covered |
-| Dark theme really applies, and its key screens pass axe | a11y | `e2e/specs/nightly/theme.spec.ts` | covered |
-| Russian build shows no untranslated keys on key screens | e2e | `e2e/specs/nightly/locale.spec.ts` | covered |
-| Russian locale renders key screens without overflow | e2e | `e2e/specs/nightly/layout.spec.ts` | covered |
+| Chat and file library work at phone, 800px and desktop widths | e2e | `e2e/specs/nightly/layout.spec.ts#the file library opens and does not scroll sideways` | covered |
+| No screen scrolls sideways at any of those widths | e2e | `e2e/specs/nightly/layout.spec.ts#expectNoSidewaysScroll` | covered |
+| Dark theme really applies, and its key screens pass axe | a11y | `e2e/specs/nightly/theme.spec.ts#a conversation gains no dark-only defect on top of the known two` | covered |
+| Russian build shows no untranslated keys on key screens | e2e | `e2e/specs/nightly/locale.spec.ts#with no untranslated keys left showing` | covered |
+| Russian locale renders key screens without overflow | e2e | `e2e/specs/nightly/layout.spec.ts#mainScrollWidth` | covered |
 | Artifacts panel open at a narrow desktop width | e2e | — | gap |
 | Pixel snapshots of the redesigned screens | visual | — | planned:Э7 |
-| Product name is 1MA everywhere, never LibreChat | e2e | `e2e/specs/mock/branding.spec.ts` | covered |
-| Help entry points at the configured help centre | e2e | `e2e/specs/mock/branding.spec.ts` | covered |
+| Product name is 1MA everywhere, never LibreChat | e2e | `e2e/specs/mock/branding.spec.ts#the account menu and the settings dialog never show it either` | covered |
+| Help entry points at the configured help centre | e2e | `e2e/specs/mock/branding.spec.ts#expect(opened).toEqual([HELP_URL])` | covered |
 
 The nightly rows above run in `e2e/playwright.config.nightly.ts`, not on pull requests: five
 projects against the same hermetic server is a few minutes a day rather than minutes on every PR.
@@ -356,12 +357,23 @@ all — no strings, no code. Nothing can be tested until it exists. A `gap` says
 nobody checks it"; `todo:Ф1` says "this does not exist yet". Conflating them is how a redesign
 backlog gets read as a testing backlog.
 
-A dropped connection mid-reply keeps everything already received, and a reconnect plus reload
-loses nothing — that is covered. What is **not** covered, and is a gap rather than planned work:
-while offline the composer goes on showing "Stop generating", so the interface never tells the
-user the connection went away. How long a dropped stream takes to surface is timing-dependent,
-so pinning it would be pinning a race; it needs a product decision about what should be shown
-and when, before a test can say anything honest about it.
+**A dropped connection is two gaps, and used to be a covered row.** The test claimed a network
+drop mid-reply loses nothing. It called `context.setOffline(true)` and read the reply back —
+but that does not sever a Server-Sent Events connection that is already established. Measured
+2026-08-05: the stream ran from chunk 5 to chunk 60 during four seconds of being "offline", and
+a CDP `Network.emulateNetworkConditions { offline: true }` behaved the same way, chunk 11 to
+chunk 65. Both only affect new requests. The offline block could be deleted without changing the
+outcome, which is what an assertion that proves nothing looks like. The test now says what it
+does prove — a reload mid-reply keeps what the server had already written down — and the two
+things nobody has proven are rows of their own:
+
+- whether the client keeps what already arrived through a **real** disconnect. No mechanism
+  available in this profile severs an established stream, so proving it needs something the
+  hermetic profile does not have.
+- whether the interface ever tells the user the connection went away. Observed: while offline the
+  composer goes on showing "Stop generating". How long a dropped stream takes to surface is
+  timing-dependent, so pinning it would be pinning a race; it needs a product decision about what
+  should be shown and when.
 
 Accessibility defects outside the sidebar, all in surfaces the redesign is rebuilding.
 

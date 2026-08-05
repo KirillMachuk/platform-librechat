@@ -132,7 +132,12 @@ test.describe('core chat loop', () => {
       .filter({ hasText: userMessage });
     await expect(userMessageTurn.locator('.user-turn')).toBeVisible();
     await expect(userMessageTurn.locator('.agent-turn')).toHaveCount(0);
-    await expect(mockReply(page)).toBeVisible();
+    /* Explicit, like every other reply assertion in this file. This one relied
+     * on the 10s default and is the first test in the file, so it pays for the
+     * worker's cold start — it fails on a slow machine while CI, which is
+     * faster, never sees it. Verified pre-existing: it fails the same way with
+     * this file restored to origin/main. */
+    await expect(mockReply(page)).toBeVisible({ timeout: 30000 });
 
     await expect(page).toHaveURL(/\/c\/[0-9a-fA-F-]{36}$/);
     const conversationUrl = page.url();
@@ -416,21 +421,27 @@ test.describe('core chat loop', () => {
   });
 });
 
-test.describe('losing the connection mid-reply', () => {
+test.describe('interrupting a reply in progress', () => {
   /**
-   * What a user gets when their network drops while the model is answering.
-   * The promise being tested is not "it recovers" — it is "nothing you already
-   * received is lost", which is what people actually notice.
+   * Leaving and coming back mid-answer keeps what the server had already
+   * written down. That is what a user notices when a tab reloads, a phone
+   * locks, or they navigate away and back while the model is still typing.
    *
-   * Observed and worth knowing: while offline the composer still shows "Stop
-   * generating", so the interface does not itself notice the connection went
-   * away. That is not asserted here because how long a dropped stream takes to
-   * surface is timing-dependent; it is recorded in e2e/COVERAGE_MAP.md.
+   * **This is not a dropped-connection test, and an earlier version of it
+   * claimed to be one.** It called `context.setOffline(true)` mid-stream and
+   * read the reply back. Measured on 2026-08-05: the stream went from chunk 5
+   * to chunk 60 during four seconds of being "offline", and a CDP
+   * `Network.emulateNetworkConditions { offline: true }` did the same — chunk
+   * 11 to chunk 65. Neither severs a Server-Sent Events connection that is
+   * already established; both only affect new requests. The offline block
+   * could be deleted with no change in outcome, which is the definition of an
+   * assertion that proves nothing.
+   *
+   * What a real disconnect does to the client-side buffer is therefore still
+   * uncovered, and recorded as a gap in e2e/COVERAGE_MAP.md rather than
+   * pretended at here.
    */
-  test('keeps what already arrived, and loses nothing after reconnecting', async ({
-    page,
-    context,
-  }) => {
+  test('a reload mid-reply keeps everything the server had already persisted', async ({ page }) => {
     test.setTimeout(180000);
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
     await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
@@ -439,15 +450,10 @@ test.describe('losing the connection mid-reply', () => {
     await sendMessage(page, prompt);
     const reply = messagesView(page).getByText(/E2E slow reply connection-drop/);
     await expect(reply).toBeVisible({ timeout: 60000 });
-    /* Wait for a chunk well past the first so the drop lands mid-stream rather
-     * than before anything meaningful has been received. */
+    /* Well past the first chunk, so the reload lands mid-stream rather than
+     * before anything meaningful has been written down. */
     await expect(reply).toContainText('chunk-005', { timeout: 60000 });
 
-    await context.setOffline(true);
-    const received = await reply.innerText();
-    expect(received).toContain('chunk-005');
-
-    await context.setOffline(false);
     await page.reload({ timeout: 30000 });
 
     await expect(messagesView(page).getByText(prompt)).toBeVisible({ timeout: 30000 });

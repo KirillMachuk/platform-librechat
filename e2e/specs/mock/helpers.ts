@@ -111,11 +111,16 @@ async function settle(locator: Locator, page: Page) {
   let previous = await box();
   for (let attempt = 0; attempt < 40; attempt++) {
     const current = await box();
+    /* Width included: the animation this exists for is a WIDTH animation, and
+     * comparing only x, y and height let the one dimension that actually moves
+     * pass unnoticed — an element sliding open horizontally from a fixed corner
+     * changes nothing else. */
     if (
       previous &&
       current &&
       Math.abs(previous.x - current.x) < 1 &&
       Math.abs(previous.y - current.y) < 1 &&
+      Math.abs(previous.width - current.width) < 1 &&
       Math.abs(previous.height - current.height) < 1
     ) {
       return;
@@ -132,9 +137,18 @@ export async function openAccountMenu(page: Page) {
   const menu = page.getByRole('menu');
   await trigger.click();
   /* The first interaction after the sidebar mounts is sometimes swallowed — the
-   * click lands and no menu appears. One retry covers it without hiding a menu
-   * that is genuinely broken: the assertion below still has its full timeout,
-   * so a menu that never opens still fails. */
+   * click lands and no menu appears. That is a real product defect, not a test
+   * artefact: a user meets it as "I clicked my avatar and nothing happened". It
+   * has a `gap` row of its own in e2e/COVERAGE_MAP.md so this workaround does
+   * not stand in for a fix.
+   *
+   * One retry covers it without hiding a menu that is genuinely broken: the
+   * assertion below still has its full timeout, so a menu that never opens
+   * still fails. The visibility check is repeated immediately before the second
+   * click because the menu is a toggle — if the first click was merely slow
+   * rather than swallowed, clicking again would close what just opened. The
+   * window between that check and the click is not closable from here; it is
+   * narrow enough that the loop below has never been observed to need it. */
   if (!(await menu.isVisible().catch(() => false))) {
     await page.waitForTimeout(300);
     if (!(await menu.isVisible().catch(() => false))) {
