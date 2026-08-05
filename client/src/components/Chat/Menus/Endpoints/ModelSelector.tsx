@@ -110,14 +110,26 @@ function ModelSelectorContent() {
         // тому слову, которое человек видит на экране.
         <button
           data-testid="model-selector-trigger"
-          className="my-1 flex h-9 w-full max-w-[70vw] items-center justify-center gap-2 rounded-xl border border-border-light bg-presentation px-3 py-2 text-sm text-text-primary hover:bg-surface-active-alt"
+          /* Канон §7: селектор в шапке — пилюля 38 без рамки и заливки, 15/500.
+             Рамка делала выбор похожим на поле ввода. Заливку и наведение
+             красит меню (оно знает состояние «открыто»), геометрию — эта
+             кнопка: склеивание классов Ariakit не позволяет задавать одно и
+             то же с двух сторон. */
+          className="tap-target my-1 flex h-[38px] w-full max-w-[70vw] items-center justify-center gap-1.5 rounded-full px-2.5 text-[15px] font-medium text-text-primary transition-colors duration-90"
         >
           {selectedIcon && React.isValidElement(selectedIcon) && (
             <div className="flex flex-shrink-0 items-center justify-center overflow-hidden">
               {selectedIcon}
             </div>
           )}
-          <span className="flex-grow truncate text-left">{selectedDisplayValue}</span>
+          {/* Имя усекается, поэтому полное обязано быть достижимым: нативный
+              `title` даёт его по наведению и не трогает доступное имя кнопки. */}
+          <span
+            className="max-w-[170px] flex-grow truncate text-left"
+            title={typeof selectedDisplayValue === 'string' ? selectedDisplayValue : undefined}
+          >
+            {selectedDisplayValue}
+          </span>
         </button>
       }
     />

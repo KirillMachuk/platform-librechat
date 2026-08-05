@@ -44,12 +44,17 @@ export const CustomMenu = React.forwardRef<HTMLDivElement, CustomMenuProps>(func
       <Ariakit.MenuButton
         ref={ref}
         {...props}
+        /* Вид кнопки-триггера здесь НЕ задаётся. Ariakit рисует её через
+           `render={trigger}` и СКЛЕИВАЕТ два набора классов строкой, а не
+           объединяет: в разметке оказываются и `rounded-xl`, и `rounded-full`,
+           и побеждает не тот, что позже в атрибуте, а тот, чьё правило ниже в
+           собранном CSS. Поэтому геометрию приносит сам вызывающий, а меню
+           отвечает только за состояние «открыто» (§6.5: наведение — `hover`,
+           активное — `active`). */
         className={cn(
-          !parent &&
-            'flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-border-light px-3 py-2 text-sm text-text-primary',
           menuStore.useState('open')
-            ? 'bg-surface-active-alt hover:bg-surface-active-alt'
-            : 'bg-presentation hover:bg-surface-active-alt',
+            ? 'bg-surface-active hover:bg-surface-active'
+            : 'hover:bg-surface-hover',
           props.className,
         )}
         render={parent ? <CustomMenuItem render={trigger} /> : trigger}
