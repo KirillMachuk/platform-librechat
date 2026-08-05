@@ -287,8 +287,12 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | File library dialog passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the file library fails on the header contrast and on its own rows` | fixme:Ф1 |
 | Tab order reaches the composer from the top of the document | a11y | `e2e/specs/mock/a11y.spec.ts#the composer is reachable and operable from the keyboard alone` | covered |
 | Closing a dialog returns focus to what opened it | a11y | `e2e/specs/mock/a11y.spec.ts#closing the file panel hands focus back to what opened it` | covered |
+| Closing the settings dialog returns focus to the account button | a11y | `e2e/specs/mock/dialogs.spec.ts#the settings dialog keeps the other four, and drops focus to the body` | fixme:Ф1 |
 | Escape closes the top dialog and leaves the one behind it open | a11y | `e2e/specs/mock/a11y.spec.ts#Escape closes the preview and leaves the panel it came from open` | covered |
+| A modal locks the page behind it, and lets it scroll again after | a11y | `e2e/specs/mock/dialogs.spec.ts#the projects panel locks the page, holds focus, and hands it back` | covered |
+| Tab does not walk out of an open modal onto the page behind | a11y | `e2e/specs/mock/dialogs.spec.ts#tabEscapedTo` | covered |
 | A dialog holds focus against anything else claiming it | a11y | — | gap |
+| A menu popover follows the menu pattern, not the modal one | a11y | — | gap |
 | The settings dialog passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the settings dialog has no WCAG A/AA violations` | covered |
 | The projects panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the projects panel has no WCAG A/AA violations` | covered |
 | The agents panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the agents panel fails only on its category tab` | fixme:Ф1 |
@@ -312,6 +316,22 @@ row-level defects described further down. The agents and prompts panels are desc
 where those notes happened to be written. All of them are in surfaces the redesign is rebuilding,
 and fixing them belongs to that work (owner decision, 2026-08-03) — not to whoever next reads
 this file.
+
+**What a modal promises a keyboard** is ported from `tools/ui_probe_dialogs.js` and measured on
+every modal the app opens from the sidebar or the account menu: the page behind stops scrolling
+and scrolls again after, focus moves inside, Tab does not walk out, Escape closes, focus returns
+to whatever opened it. The projects panel and the file library keep all five.
+
+The **settings dialog keeps four**. It is opened from a menu item, and closing the menu unmounts
+the element focus would be restored to — so on Escape focus falls to the document **body** and the
+next Tab starts again from the top of the page. Measured, not inferred: the other two modals hand
+focus back to their own trigger by test id. A keyboard user loses their place every time they
+close settings.
+
+The **model catalogue is deliberately not in that spec**. It is a `role="menu"` popover, and a
+menu makes different promises — it is not meant to trap focus or lock the page. Asserting the five
+above on it would pin the wrong contract; it gets a `gap` row until somebody writes down what a
+menu owes the keyboard here.
 
 "A dialog holds focus against anything else claiming it" is a `gap`, not a passing test, on
 purpose. Focus was once observed leaving the open file panel for the chat composer about half a
