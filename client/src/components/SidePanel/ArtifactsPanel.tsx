@@ -4,7 +4,6 @@ import { ResizableHandleAlt, ResizablePanel } from '@librechat/client';
 
 interface ArtifactsPanelProps {
   artifacts: React.ReactNode | null;
-  cardClassName: string;
   minSizeMain: string;
   shouldRender: boolean;
   onRenderChange: (shouldRender: boolean) => void;
@@ -12,7 +11,6 @@ interface ArtifactsPanelProps {
 
 const ArtifactsPanel = memo(function ArtifactsPanel({
   artifacts,
-  cardClassName,
   minSizeMain,
   shouldRender,
   onRenderChange,
@@ -39,9 +37,7 @@ const ArtifactsPanel = memo(function ArtifactsPanel({
   return (
     <>
       {artifacts != null && (
-        /* Зазор между карточками И ЕСТЬ ручка: отдельной полосы прототип не
-           рисует, поэтому дорожка прозрачная, а видимая засечка остаётся. */
-        <ResizableHandleAlt withHandle className="w-2 bg-transparent text-text-secondary" />
+        <ResizableHandleAlt withHandle className="bg-border-medium text-text-primary" />
       )}
       <ResizablePanel
         defaultSize="50"
@@ -52,7 +48,7 @@ const ArtifactsPanel = memo(function ArtifactsPanel({
         panelRef={artifactsPanelRef}
         id="artifacts-panel"
       >
-        <div className={`min-w-[400px] ${cardClassName}`}>{artifacts}</div>
+        <div className="h-full min-w-[400px] overflow-hidden">{artifacts}</div>
       </ResizablePanel>
     </>
   );

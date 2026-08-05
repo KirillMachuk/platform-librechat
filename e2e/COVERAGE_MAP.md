@@ -88,10 +88,14 @@ stays green, so flakes accumulate where nobody looks.
 | Code block renders with its language highlighted | e2e | `e2e/specs/mock/chat.spec.ts#language-javascript` | covered |
 | Copy button on a code block copies it | e2e | — | gap |
 | Reasoning ("Мысли") block auto-expands then collapses | unit | `client/src/components/Chat/Messages/Content/Parts/__tests__/ReasoningAutoExpand.test.tsx` | covered |
-| Tool calls render with status and result | unit | `client/src/components/Chat/Messages/Content/__tests__/ToolCall.test.tsx` | covered |
-| Web-search citations render and open | unit | `client/src/components/Web/__tests__/Citation.test.tsx` | covered |
+| A tool call hands its input, output and attachments to the renderer | unit | `client/src/components/Chat/Messages/Content/__tests__/ToolCall.test.tsx#should pass input and output props to ToolCallInfo` | covered |
+| Tool calls render their status and result | unit | — | gap |
+| Web-search citations render as links | unit | `client/src/components/Web/__tests__/Citation.test.tsx#keeps standalone web citations as links` | covered |
+| A file citation opens its preview | unit | `client/src/components/Web/__tests__/Citation.test.tsx#renders composite file citations as buttons and opens the preview dialog` | covered |
+| Clicking a web-search citation opens its source | unit | — | gap |
 | File-search (RAG) retrieval card renders | unit | `client/src/components/Chat/Messages/Content/__tests__/RetrievalCall.test.tsx` | covered |
-| Attachment chips render under a message | unit | `client/src/components/Chat/Input/Files/__tests__/FileContainer.spec.tsx` | covered |
+| Attachment chips render under a sent message | e2e | `e2e/specs/mock/file-preview.spec.ts#opens a preview from a file attached to a sent message` | covered |
+| An attachment chip shows its display name, falling back to the filename | unit | `client/src/components/Chat/Input/Files/__tests__/FileContainer.spec.tsx#falls back to empty string when neither` | covered |
 | Artifact cards route to the panel, not inline | unit | `client/src/components/Chat/Messages/Content/Parts/__tests__/ArtifactRouting.test.tsx` | covered |
 
 ## 4. File attachments
@@ -183,7 +187,8 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | Panel opens with the artifact from a chat card | unit | `client/src/components/Chat/Messages/Content/Parts/__tests__/ArtifactRouting.test.tsx` | covered |
 | Panel closes and clears the current artifact | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
 | Header copy and close act on the shown file | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
-| Download saves the shown file, edited buffer winning over stored content | unit | `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx` | covered |
+| Download saves the shown file, edited buffer winning over stored content | unit | `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx#downloads what the user edited rather than the original content` | covered |
+| A downloaded artifact keeps the name the panel shows | unit | `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx#saves under the name the panel shows` | fixme:Ф1 |
 | Office and code files expose only their meaningful view | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
 | View switch is locked while a save is in flight | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
 | Editor keeps unsaved edits while the same file keeps streaming | unit | `client/src/components/Artifacts/__tests__/ArtifactTabs.test.tsx` | covered |
@@ -222,12 +227,12 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | Search shows a busy state instead of an empty box | unit | `client/src/components/Nav/SearchChats/__tests__/Results.spec.tsx` | covered |
 | A running search is announced to a screen reader | a11y | — | todo:Ф1 |
 | Search finds real matches end to end | e2e | — | gap |
-| Bookmarks: create, attach, filter | e2e | `e2e/specs/mock/bookmarks.spec.ts#The sidebar offers the bookmark and narrows the chat list to it` | covered |
-| Bookmarks: a chat can be taken back out of a bookmark | e2e | `e2e/specs/mock/bookmarks.spec.ts#Taking the chat out of the bookmark empties the filtered list` | covered |
+| Bookmarks: create, attach, filter | e2e | `e2e/specs/mock/bookmarks.spec.ts#toHaveAttribute('aria-checked', 'true')` | covered |
+| Bookmarks: a chat can be taken back out of a bookmark | e2e | `e2e/specs/mock/bookmarks.spec.ts#toHaveAttribute('aria-pressed', 'false')` | covered |
 | Bookmarks stay hidden on every surface while the switch is off | e2e | `e2e/specs/mock/bookmarks.spec.ts#stay out of sight entirely while the switch is off` | covered |
 | Bookmarks panel: create, rename, delete a bookmark | e2e | `e2e/specs/mock/bookmarks.spec.ts#the sidebar panel creates, renames and deletes a bookmark` | covered |
 | Renaming or deleting a bookmark releases a chat-list filter using it | e2e | `e2e/specs/mock/bookmarks.spec.ts#renaming or deleting a bookmark releases a filter that was using it` | covered |
-| Switching bookmarks off releases the bookmark filter on the chat list | e2e | `e2e/specs/mock/bookmarks.spec.ts#Switching bookmarks off while a filter is on has to release the filter too` | covered |
+| Switching bookmarks off releases the bookmark filter on the chat list | e2e | `e2e/specs/mock/bookmarks.spec.ts#await setBookmarksMenu(page, false)` | covered |
 | Archive a conversation and bring it back | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
 | Mobile sidebar opens and dismisses | e2e | `e2e/specs/mock/mobile-sidebar.spec.ts` | covered |
 
@@ -300,7 +305,7 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | Data tables announce translated labels, not raw keys | a11y | `e2e/specs/mock/file-preview.spec.ts#labels the file table in words, not translation keys` | covered |
 | Every control the keyboard reaches shows that it has focus | a11y | `e2e/specs/mock/canon.spec.ts#every control the keyboard reaches on the chat screen shows it has focus` | covered |
 | Nothing is clickable by mouse but unreachable by keyboard | a11y | `e2e/specs/mock/canon.spec.ts#nothing is clickable by mouse but unreachable by keyboard` | covered |
-| Every hit area on a phone is at least 44px (WCAG 2.2, axe does not check it) | a11y | `e2e/specs/nightly/touch-targets.spec.ts#exactly three chat-header controls are under 44px` | fixme:Ф1 |
+| Every hit area on a phone is at least 44px (WCAG 2.2, axe does not check it) | a11y | `e2e/specs/nightly/touch-targets.spec.ts#every control a finger can reach is at least 44px` | covered |
 | Shared components' translation keys are defined in this app | unit | `client/src/locales/keys.spec.ts` | covered |
 | File panel exposes tablist semantics | a11y | — | todo:Ф1 |
 
@@ -350,11 +355,12 @@ of encoded.
 | Russian build shows no untranslated keys on key screens | e2e | `e2e/specs/nightly/locale.spec.ts#with no untranslated keys left showing` | covered |
 | Russian locale renders key screens without overflow | e2e | `e2e/specs/nightly/layout.spec.ts#mainScrollWidth` | covered |
 | Artifacts panel open at a narrow desktop width | e2e | — | gap |
-| Every z-index comes from the canon scale, dialogs included | e2e | `e2e/specs/mock/canon.spec.ts#every z-index comes from the canon scale` | covered |
+| Every z-index on the chat screen comes from the canon scale | e2e | `e2e/specs/mock/canon.spec.ts#every z-index comes from the canon scale` | covered |
+| The file library dialog stacks on the canon dialog layer | e2e | `e2e/specs/mock/canon.spec.ts#the file library dialog is on the canon scale` | fixme:Ф1 |
 | Every image reserves its space before it loads | e2e | `e2e/specs/mock/canon.spec.ts#every image reserves its space before it loads` | covered |
 | Pixel snapshots of the redesigned screens | visual | — | planned:Э7 |
 | Product name is 1MA everywhere, never LibreChat | e2e | `e2e/specs/mock/branding.spec.ts#the account menu and the settings dialog never show it either` | covered |
-| Help entry points at the configured help centre | e2e | `e2e/specs/mock/branding.spec.ts#expect(opened).toEqual([HELP_URL])` | covered |
+| Help entry points at the configured help centre | e2e | `e2e/specs/mock/branding.spec.ts#the account menu offers help, pointing at the configured address` | covered |
 
 The nightly rows above run in `e2e/playwright.config.nightly.ts`, not on pull requests: five
 projects against the same hermetic server is a few minutes a day rather than minutes on every PR.

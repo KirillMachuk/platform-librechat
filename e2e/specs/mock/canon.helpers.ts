@@ -37,7 +37,12 @@ export type CanonScan = {
 const TOUCH_MIN = 44;
 
 /* Serialised rather than passed as a function so the same source runs in both
- * profiles without a bundler step. */
+ * profiles without a bundler step.
+ *
+ * NO BACKTICKS BELOW THIS LINE, not even inside a comment: this is a template
+ * literal, and one in a comment ends the string. It surfaces as a TypeScript
+ * parse error rather than at runtime, so it is caught — but it has cost two
+ * rounds of lint already. */
 const MEASURE = `(() => {
   const TOUCH_MIN = ${TOUCH_MIN};
   const styles = getComputedStyle(document.documentElement);
@@ -76,7 +81,16 @@ const MEASURE = `(() => {
     if (!visible(el)) continue;
     out.interactive += 1;
     const r = el.getBoundingClientRect();
-    const key = where(el) + Math.round(r.width) + 'x' + Math.round(r.height);
+    /* The accessible name is part of the key, and that matters. The identifier
+       deliberately drops class names so it survives a restyle, which leaves
+       every button without an id or a test id reporting as plain "button".
+       Keyed on tag and size alone, a second unnamed control the same size as an
+       existing finding was silently swallowed: a 36px button injected beside
+       the 36px "Temporary Chat" one left this scan reporting the same three
+       names and staying green. Measured, not reasoned — the twin was injected
+       and the test kept passing until the name went into the key. */
+    const key =
+      where(el) + '|' + accName(el) + '|' + Math.round(r.width) + 'x' + Math.round(r.height);
     if (seen.has(key)) continue;
     /* A 1x1 element that is not itself a control is a focus-trap sentinel the
        dialog library parks in the DOM, not something anybody taps. */
@@ -87,8 +101,15 @@ const MEASURE = `(() => {
        ::after (the .tap-target helper, phone widths only). Measuring the
        bounding box instead would report every icon button in the app as a
        violation exactly where the rule is being obeyed. */
+    /* The element itself must be positioned. An absolute pseudo-element resolves
+       its size against the nearest POSITIONED ancestor, so on a static control
+       inside a relative card, computed width comes back as the card: a 20px
+       button in a 400px card reported a 400px hit area and vanished from this
+       list entirely. The helper this rule exists for sets position: relative on
+       the control, so requiring it costs nothing and closes the false pass. */
     const after = getComputedStyle(el, '::after');
-    const grown = after.content !== 'none' && after.position === 'absolute';
+    const positioned = getComputedStyle(el).position !== 'static';
+    const grown = positioned && after.content !== 'none' && after.position === 'absolute';
     const hitW = grown ? Math.max(r.width, parseFloat(after.width) || 0) : r.width;
     const hitH = grown ? Math.max(r.height, parseFloat(after.height) || 0) : r.height;
     if (hitW < TOUCH_MIN || hitH < TOUCH_MIN) {
@@ -118,10 +139,19 @@ const MEASURE = `(() => {
     });
   }
 
+  /* Not filtered by visible(). The element that carries a dialog's z-index is
+     the wrapper Headless UI renders, and that wrapper has no size of its own —
+     so the sweep that was meant to check dialog stacking never looked at the
+     dialog's own layer. Display and visibility still count, size does not.
+
+     Negative values count too. z-index: -1 is the classic way to put content
+     behind its own background, and it is as far outside the canon scale as 77
+     is. */
   for (const el of document.querySelectorAll('body *')) {
-    if (!visible(el)) continue;
-    const z = parseInt(getComputedStyle(el).zIndex, 10);
-    if (Number.isFinite(z) && z > 0 && !CANON_Z.has(z)) {
+    const s = getComputedStyle(el);
+    if (s.display === 'none' || s.visibility === 'hidden') continue;
+    const z = parseInt(s.zIndex, 10);
+    if (Number.isFinite(z) && z !== 0 && !CANON_Z.has(z)) {
       out.layers.push({ el: where(el), z: String(z) });
     }
   }
