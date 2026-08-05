@@ -57,7 +57,11 @@ export function SelectorTabs({ activeTab, onTabChange }: SelectorTabsProps) {
       role="tablist"
       aria-orientation="horizontal"
       aria-label={localize('com_ui_select_model')}
-      className="flex w-full gap-1 border-b border-border-light px-2 pb-1 pt-1"
+      /* Канон §1.4 и прототип: сегмент, а не полоса с линией снизу — трек `panel`
+         с волосяной рамкой и радиусом 12, вложенный радиус 12−3=9. Выбранная
+         вкладка выражается тинтом и цветом (`acc-soft` + `acc`): серым по серому
+         выбор читался как 1,09 контраста, то есть никак. */
+      className="mx-2 my-1.5 flex gap-[3px] rounded-xl border border-border-light bg-surface-primary-alt p-[3px]"
     >
       {TABS.map((tab, index) => {
         const isActive = activeTab === tab.id;
@@ -74,12 +78,12 @@ export function SelectorTabs({ activeTab, onTabChange }: SelectorTabsProps) {
             onClick={() => onTabChange(tab.id)}
             onKeyDown={(event) => handleKeyDown(event, index)}
             className={cn(
-              'flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+              'h-11 flex-1 rounded-[9px] px-3 text-[15px] font-medium transition-colors duration-90 md:h-[30px] md:text-[13px]',
               // Not ring-primary: it resolves to the same grey as surface-active in
               // the dark theme, so the ring on the selected tab was invisible (1:1).
               'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-primary',
               isActive
-                ? 'bg-surface-active text-text-primary'
+                ? 'bg-ring-primary-soft text-text-accent'
                 : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',
             )}
           >
