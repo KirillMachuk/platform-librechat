@@ -143,7 +143,7 @@
   --font-size-xl: 1.25rem;
   --font-size-2xl: 1.5rem;
   --font-size-3xl: 1.875rem;
-  --markdown-font-size: 1rem;
+  --markdown-font-size: 0.9375rem;
 }
 html {
   font-feature-settings:
@@ -737,7 +737,7 @@ pre {
   max-width: 65ch;
   font-size: var(--markdown-font-size, var(--font-size-base));
   line-height: calc(
-    22px * var(--markdown-font-size, var(--font-size-base)) / var(--font-size-base)
+    25.6px * var(--markdown-font-size, var(--font-size-base)) / var(--font-size-base)
   );
 }
 
@@ -1499,7 +1499,7 @@ html {
   max-width: none;
   font-size: var(--markdown-font-size, var(--font-size-base));
   line-height: calc(
-    22px * var(--markdown-font-size, var(--font-size-base)) / var(--font-size-base)
+    25.6px * var(--markdown-font-size, var(--font-size-base)) / var(--font-size-base)
   );
 }
 
@@ -2467,7 +2467,8 @@ html {
 
 .message-content {
   font-size: var(--markdown-font-size, var(--font-size-base));
-  line-height: 1.4;
+  /* Канон §6.13: текст ответа 15/1.6 — тот же межстрочный, что у markdown выше. */
+  line-height: 1.6;
 }
 
 .message-content pre code {

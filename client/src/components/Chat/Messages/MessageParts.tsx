@@ -52,7 +52,7 @@ export default function Message(props: TMessageProps) {
     if (hasParallelContent) {
       return 'md:max-w-[58rem] xl:max-w-[70rem]';
     }
-    return 'md:max-w-[47rem] xl:max-w-[55rem]';
+    return 'md:max-w-[48rem]';
   };
 
   const baseClasses = {

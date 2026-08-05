@@ -10,7 +10,10 @@ export const applyFontSize = (val: string): void => {
       root.style.setProperty('--markdown-font-size', '0.875rem'); // 14px
       break;
     case 'base':
-      root.style.setProperty('--markdown-font-size', '1rem'); // 16px
+      /* Канон §3: текст сообщений 15px. Шкала выбора осталась той же пятиступенчатой
+         и подписана словами, поэтому «Средний» просто стал канонным размером —
+         новый пункт заводить не пришлось. */
+      root.style.setProperty('--markdown-font-size', '0.9375rem'); // 15px
       break;
     case 'lg':
       root.style.setProperty('--markdown-font-size', '1.125rem'); // 18px
