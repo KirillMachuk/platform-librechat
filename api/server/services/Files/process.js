@@ -700,6 +700,7 @@ const processImageFile = async ({ req, res, metadata, returnFile = false, text =
       source,
       type: `image/${appConfig.imageOutputType}`,
       ...(await getRetentionExpiry(req)),
+      ...(text != null ? { text } : {}),
       width,
       height,
       tenantId: req.user.tenantId,
