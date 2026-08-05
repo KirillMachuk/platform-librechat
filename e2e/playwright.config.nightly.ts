@@ -43,8 +43,12 @@ export default defineConfig({
       use: { ...chrome, colorScheme: 'dark' },
     },
     {
+      /* Touch targets run here and nowhere else: the 44px rule is about
+       * fingers, and the helper that satisfies it lives inside a phone media
+       * query, so the same scan at desktop reports sixteen violations of a rule
+       * that does not apply there. */
       name: 'phone',
-      testMatch: LAYOUT,
+      testMatch: /(layout|touch-targets)\.spec\.ts/,
       use: { ...chrome, viewport: { width: 414, height: 896 } },
     },
     {
