@@ -42,7 +42,7 @@ function AddMultiConvo() {
       aria-label={localize('com_ui_add_multi_conversation')}
       onClick={clickHandler}
       data-testid="add-multi-convo-button"
-      className="inline-flex size-9 flex-shrink-0 items-center justify-center rounded-xl border border-border-light bg-presentation text-text-primary transition-all ease-in-out hover:bg-surface-tertiary disabled:pointer-events-none disabled:opacity-50 radix-state-open:bg-surface-tertiary"
+      className="tap-target inline-flex size-8 flex-shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-50 radix-state-open:bg-surface-tertiary"
     >
       <PlusCircle className="icon-sm" aria-hidden="true" />
     </TooltipAnchor>
