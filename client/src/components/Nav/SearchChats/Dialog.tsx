@@ -1,15 +1,15 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { useRecoilValue, useRecoilState } from 'recoil';
+import debounce from 'lodash/debounce';
 import { Search, X, SquarePen } from 'lucide-react';
 import { QueryKeys } from 'librechat-data-provider';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRecoilValue, useRecoilState } from 'recoil';
 import { OGDialog, OGDialogContent } from '@librechat/client';
-import debounce from 'lodash/debounce';
 import type { ChangeEvent } from 'react';
-import { useLocalize, useNewConvo } from '~/hooks';
-import { clearMessagesCache } from '~/utils';
-import useKeyboardNav from './useKeyboardNav';
 import type { SearchItem } from './types';
+import { useLocalize, useNewConvo } from '~/hooks';
+import useKeyboardNav from './useKeyboardNav';
+import { clearMessagesCache } from '~/utils';
 import Results from './Results';
 import store from '~/store';
 
