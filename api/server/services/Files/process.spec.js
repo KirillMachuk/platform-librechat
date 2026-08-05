@@ -97,6 +97,7 @@ jest.mock('@librechat/api', () => {
     isContentRoutingEnabled: jest.fn(() => false),
     readDocRoutingThresholds: jest.fn(() => ({ maxContextChars: 40000, maxContextScanPages: 12 })),
     isImageOcrEnabled: jest.fn(() => false),
+    getAttachmentPolicy: jest.fn().mockResolvedValue({ imagesToText: true }),
     readImageOcrThresholds: jest.fn(() => ({ minWords: 3, minDensity: 0.3 })),
     measureOcrText: jest.fn(() => ({ words: 0, density: 0, texty: false })),
     acceptOcrMetrics: jest.fn(() => false),
