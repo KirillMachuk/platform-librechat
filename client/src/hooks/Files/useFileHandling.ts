@@ -14,7 +14,12 @@ import {
   getEndpointFileConfig,
   defaultAssistantsVersion,
 } from 'librechat-data-provider';
-import type { EModelEndpoint, TEndpointsConfig, TError } from 'librechat-data-provider';
+import type {
+  EModelEndpoint,
+  TEndpointsConfig,
+  TFileUpload,
+  TError,
+} from 'librechat-data-provider';
 import type { TConversation } from 'librechat-data-provider';
 import type { ExtendedFile, FileError, FileSetter, LocalizeFunction } from '~/common';
 import { logger, validateFiles, cachePreview, getCachedPreview, removePreviewEntry } from '~/utils';
@@ -58,6 +63,10 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
   const { showToast } = useToastContext();
   const [errors, setErrors] = useState<FileError[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
+  /* Armed when a batch starts, disarmed by the first notice it produces: the
+   * verdict now arrives per upload response, and a five-image batch must not
+   * raise five identical toasts. */
+  const visionNoticePendingRef = useRef(false);
   const { startUploadTimer, clearUploadTimer } = useDelayedUploadToast();
   const { files, setFiles, conversation } = fileState;
   const setFilesLoading = fileState.setFilesLoading ?? noop;
@@ -151,11 +160,46 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
     return () => debouncedDisplayToast.cancel();
   }, [errors, debouncedDisplayToast]);
 
+  /**
+   * Warn — once per batch — when an attached image will reach the model as a
+   * picture that the model cannot see.
+   *
+   * This is decided on the upload RESPONSE, not on the picked file. The server
+   * offers every image to the OCR gate first, and an image it reads through
+   * arrives as text (`data.text`), which any model handles regardless of
+   * vision. Judging by mimetype alone, as this notice used to, tells someone on
+   * a text-only model to go and switch models for a receipt the platform has
+   * already read for them.
+   */
+  const noticeVisionGap = useCallback(
+    (data: TFileUpload) => {
+      if (!visionNoticePendingRef.current) {
+        return;
+      }
+      const isImage = (data.type ?? '').startsWith('image/');
+      if (!isImage || (data.text ?? '') !== '') {
+        return;
+      }
+      const model = conversation?.model;
+      if (!model || modelReadsImages(model)) {
+        return;
+      }
+      visionNoticePendingRef.current = false;
+      showToast({
+        message: localize('com_warning_model_no_vision'),
+        status: 'warning',
+        duration: 8000,
+      });
+    },
+    [conversation?.model, modelReadsImages, showToast, localize],
+  );
+
   const uploadFile = useUploadFileMutation(
     {
       onSuccess: (data) => {
         clearUploadTimer(data.temp_file_id);
         console.log('upload success', data);
+        noticeVisionGap(data);
         if (agent_id) {
           queryClient.refetchQueries([QueryKeys.agent, agent_id]);
           return;
@@ -368,20 +412,11 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
       return;
     }
 
-    // Capability notice (once per batch): images only work on vision-capable
-    // models. If the active model can't see images, warn with a concrete
-    // recommendation (switch model) instead of letting the attachment silently
-    // fail at the provider. Upload is still allowed — the user may switch the
-    // model before sending. Text/OCR and RAG are model-independent, so this
-    // only applies to images. Emitted once even for a multi-image batch.
-    const batchHasImage = fileList.some((file) => file.type.startsWith('image/'));
-    if (batchHasImage && conversation?.model && !modelReadsImages(conversation.model)) {
-      showToast({
-        message: localize('com_warning_model_no_vision'),
-        status: 'warning',
-        duration: 8000,
-      });
-    }
+    /* Arms the capability notice for this batch. It cannot be decided here: the
+     * server may read an image and hand the model its text instead, and a model
+     * that cannot see pictures reads that text perfectly well. Only the upload
+     * response knows which happened — see `noticeVisionGap`. */
+    visionNoticePendingRef.current = true;
 
     /* Process files */
     for (const originalFile of fileList) {
