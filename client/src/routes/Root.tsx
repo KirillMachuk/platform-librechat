@@ -17,13 +17,11 @@ import {
   useAgentsMap,
   useFileMap,
 } from '~/hooks';
-import useArtifactsPanelOpen from '~/hooks/Artifacts/useArtifactsPanelOpen';
 import { useUserTermsQuery, useGetStartupConfig } from '~/data-provider';
 import { UnifiedSidebar } from '~/components/UnifiedSidebar';
 import { TermsAndConditionsModal } from '~/components/ui';
 import { useHealthCheck } from '~/data-provider';
 import { Banner } from '~/components/Banners';
-import { cn } from '~/utils';
 import store from '~/store';
 
 export default function Root() {
@@ -31,7 +29,6 @@ export default function Root() {
   const [bannerHeight, setBannerHeight] = useState(0);
   const sidebarExpanded = useRecoilValue(store.sidebarExpanded);
   const isSmallScreen = useMediaQuery('(max-width: 768px)');
-  const panelOpen = useArtifactsPanelOpen();
 
   const { isAuthenticated, logout } = useAuthContext();
 
@@ -84,15 +81,7 @@ export default function Root() {
                 <div className="relative z-0 flex h-full w-full overflow-hidden bg-surface-primary-alt">
                   <UnifiedSidebar />
                   <div
-                    className={cn(
-                      'relative flex h-full max-w-full flex-1 flex-col overflow-hidden md:my-2 md:mr-2 md:h-[calc(100%-1rem)]',
-                      /* С открытой правой панелью карточек ДВЕ (прототип: чат и
-                         панель — отдельные карточки, а зазор между ними и есть
-                         ручка перетаскивания). Тогда общий контейнер держит
-                         только отступы, а рамку и фон несут сами панели. */
-                      !panelOpen &&
-                        'md:rounded-2xl md:border md:border-border-light md:bg-presentation md:shadow-sm',
-                    )}
+                    className="relative flex h-full max-w-full flex-1 flex-col overflow-hidden md:my-2 md:mr-2 md:h-[calc(100%-1rem)] md:rounded-2xl md:border md:border-border-light md:bg-presentation md:shadow-sm"
                     style={{
                       transform: isSmallScreen && sidebarExpanded ? 'translateX(72vw)' : 'none',
                       transition: 'transform 300ms cubic-bezier(0.2, 0, 0, 1)',

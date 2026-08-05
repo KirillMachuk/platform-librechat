@@ -27,11 +27,14 @@ import { identify, measureCanon } from '../mock/canon.helpers';
 const CHAT_PATH = '/c/new';
 
 /**
- * The three controls in the chat header that are 36px today. Named by test id
- * where they have one, so a class rename does not move them.
+ * There were three: the model selector, "compare with another model" and
+ * "temporary chat", all 36px in the chat header. The redesign gave all three
+ * the hit-area helper in #263, this scan measured zero on the rebuilt client,
+ * and the row moved from a pinned defect to plain coverage. The `test.fail`
+ * twin that used to sit here was removed the same day — kept, it would have
+ * reported "expected to fail, but passed", which is how a fix looks like a
+ * break.
  */
-const UNDER_44 = ['Temporary Chat', 'add-multi-convo-button', 'model-selector-trigger'];
-
 test.describe('canon — touch targets on a phone', () => {
   const scan = async (page: import('@playwright/test').Page) => {
     await page.goto(CHAT_PATH, { timeout: 15000 });
@@ -39,27 +42,14 @@ test.describe('canon — touch targets on a phone', () => {
     return measureCanon(page);
   };
 
-  /**
-   * The clean result the canon asks for. It fails today, and the test below
-   * says exactly how — `test.fail` on its own is satisfied by any failure,
-   * including a broken selector, so it would quietly stop meaning anything.
-   */
   test('every control a finger can reach is at least 44px', async ({ page }) => {
-    test.fail();
-    test.setTimeout(90000);
-    const found = await scan(page);
-
-    expect(found.targets).toEqual([]);
-  });
-
-  test('exactly three chat-header controls are under 44px', async ({ page }) => {
     test.setTimeout(90000);
     const found = await scan(page);
 
     /* Twenty-two controls on this screen. A sweep that reached two of them
      * would report no violations and read as a clean phone. */
     expect(found.interactive).toBeGreaterThan(10);
-    expect(found.targets.map(identify).sort()).toEqual(UNDER_44);
+    expect(found.targets.map(identify)).toEqual([]);
   });
 
   /**

@@ -108,25 +108,39 @@ async function settle(locator: Locator, page: Page) {
    * whole test hostage — `boundingBox()` on a vanished locator waits out the
    * test timeout otherwise. */
   const box = () => locator.boundingBox({ timeout: 2000 }).catch(() => null);
+  /* Width included: the animation this exists for is a WIDTH animation, and
+   * comparing only x, y and height let the one dimension that actually moves
+   * pass unnoticed — an element sliding open horizontally from a fixed corner
+   * changes nothing else. */
+  const same = (a: NonNullable<Awaited<ReturnType<typeof box>>>, b: typeof a) =>
+    Math.abs(a.x - b.x) < 1 &&
+    Math.abs(a.y - b.y) < 1 &&
+    Math.abs(a.width - b.width) < 1 &&
+    Math.abs(a.height - b.height) < 1;
+
   let previous = await box();
+  let missedInARow = previous ? 0 : 1;
   for (let attempt = 0; attempt < 40; attempt++) {
+    /* The wait comes FIRST. Two reads back to back land in the same animation
+     * frame, match, and this returned on the very first attempt having waited
+     * for nothing at all — measured against a 300ms width transition, nine runs
+     * in twelve returned inside 26ms, at under half the final width. A
+     * synchronisation point that does not synchronise is worse than a sleep,
+     * because it reads like one that does. */
+    await page.waitForTimeout(50);
     const current = await box();
-    /* Width included: the animation this exists for is a WIDTH animation, and
-     * comparing only x, y and height let the one dimension that actually moves
-     * pass unnoticed — an element sliding open horizontally from a fixed corner
-     * changes nothing else. */
-    if (
-      previous &&
-      current &&
-      Math.abs(previous.x - current.x) < 1 &&
-      Math.abs(previous.y - current.y) < 1 &&
-      Math.abs(previous.width - current.width) < 1 &&
-      Math.abs(previous.height - current.height) < 1
-    ) {
+    if (previous && current && same(previous, current)) {
       return;
     }
+    missedInARow = current ? 0 : missedInARow + 1;
+    /* Three tolerant reads with no box at all means the element is not there.
+     * Left to run, forty of them at a two-second timeout each burned eighty
+     * seconds of the test's budget and then returned as if all was well, so the
+     * eventual failure surfaced somewhere unrelated. */
+    if (missedInARow >= 3) {
+      throw new Error('settle: element has no bounding box after three reads — it is not there');
+    }
     previous = current;
-    await page.waitForTimeout(50);
   }
 }
 

@@ -25,12 +25,25 @@ import { NEW_CHAT_PATH, openAccountMenu } from './helpers';
  */
 type Opened = { overlay: Locator; trigger: Locator };
 
+/**
+ * The fewest distinct controls the Tab walk must land on inside each dialog.
+ * A floor, not an exact count: the file library reported 8 on one run and 10 on
+ * the next, because files accumulate in the shared database and every extra row
+ * is another tab stop. Pinning the exact number would have been pinning how many
+ * tests ran before this one.
+ *
+ * The point of the field is that the walk moved at all — a Tab that does nothing
+ * reports a perfect focus trap, which is the failure this guards.
+ */
+const MIN_STOPS = { projects: 3, files: 6, settings: 8 };
+
 type DialogReport = {
   lockedBefore: boolean;
   lockedDuring: boolean;
   lockedAfter: boolean;
   focusMovedIn: boolean;
   tabEscapedTo: string | null;
+  visitedInside: number;
   escapeClosed: boolean;
   focusLandedOn: string;
 };
@@ -78,27 +91,66 @@ async function walkTheDialog(page: Page, open: () => Promise<Opened>): Promise<D
 
   /* Twenty-five is a whole lap of the biggest dialog here and then some. A trap
    * that holds sends focus round in a circle; one that leaks lands on the page
-   * behind, and the element it landed on is worth naming. */
+   * behind, and the element it landed on is worth naming.
+   *
+   * The body counts as OUTSIDE, and that is the whole correction. Treating it as
+   * "not out yet" made a dialog with no trap at all indistinguishable from one
+   * that holds: focus walks off the last control onto the body, then back to the
+   * first, and the trail reads as a circle. Measured on synthetic dialogs — with
+   * the trap and without it, this reported the same `null`.
+   *
+   * `visitedInside` is the other half. An empty escape is only meaningful if the
+   * walk moved through the dialog at all; a Tab that does nothing reports a
+   * perfect trap. */
   let tabEscapedTo: string | null = null;
+  const insideSeen = new Set<string>();
   for (let step = 0; step < 25; step += 1) {
     await page.keyboard.press('Tab');
-    const outside = await overlay
+    const where = await overlay
       .evaluate((el) => {
         const active = document.activeElement;
-        if (!active || active === document.body) {
-          return null;
+        if (!active) {
+          return { out: 'nothing', id: '' };
         }
-        return el.contains(active) ? null : active.tagName.toLowerCase();
+        if (active === document.body) {
+          return { out: 'BODY', id: '' };
+        }
+        if (!el.contains(active)) {
+          return { out: active.tagName.toLowerCase(), id: '' };
+        }
+        /* Stamped, because counting by tag plus accessible name collapses every
+         * unlabelled control in the dialog into one entry — the settings dialog
+         * reported two stops for a walk of twenty-five. The attribute is local
+         * to this measurement and the dialog is closed a moment later. */
+        if (!active.hasAttribute('data-tab-stop')) {
+          const marker = window as unknown as { __tabStops?: number };
+          marker.__tabStops = (marker.__tabStops ?? 0) + 1;
+          active.setAttribute('data-tab-stop', String(marker.__tabStops));
+        }
+        return { out: null, id: active.getAttribute('data-tab-stop') ?? '' };
       })
-      .catch(() => null);
-    if (outside) {
-      tabEscapedTo = outside;
+      .catch(() => ({ out: 'unreadable', id: '' }));
+    if (where.out) {
+      tabEscapedTo = where.out;
       break;
     }
+    insideSeen.add(where.id);
   }
 
+  /* Polled, not asserted here. An earlier version awaited `toHaveCount(0)` and
+   * then returned a hardcoded `escapeClosed: true` — so the field the caller
+   * asserts could never have been false, and deleting the await would have left
+   * a check that reads like one and is not. The value below is measured. */
   await page.keyboard.press('Escape');
-  await expect(overlay).toHaveCount(0, { timeout: 20000 });
+  let escapeClosed = false;
+  /* Twenty seconds, the same budget the assertion it replaced had. Polling with
+   * a tighter one would have traded a tautology for a flake on a slow runner. */
+  for (let step = 0; step < 400 && !escapeClosed; step += 1) {
+    escapeClosed = (await overlay.count()) === 0;
+    if (!escapeClosed) {
+      await page.waitForTimeout(50);
+    }
+  }
 
   return {
     lockedBefore,
@@ -106,7 +158,8 @@ async function walkTheDialog(page: Page, open: () => Promise<Opened>): Promise<D
     lockedAfter: await scrollLocked(page),
     focusMovedIn,
     tabEscapedTo,
-    escapeClosed: true,
+    visitedInside: insideSeen.size,
+    escapeClosed,
     focusLandedOn: await activeElement(page),
   };
 }
@@ -129,8 +182,12 @@ const openSidebarPanel = (page: Page, id: string) => async (): Promise<Opened> =
 test.describe('modal dialogs keep their promises', () => {
   test('the projects panel locks the page, holds focus, and hands it back', async ({ page }) => {
     test.setTimeout(120000);
-    const report = await walkTheDialog(page, openSidebarPanel(page, 'projects'));
+    const { visitedInside, ...report } = await walkTheDialog(
+      page,
+      openSidebarPanel(page, 'projects'),
+    );
 
+    expect(visitedInside).toBeGreaterThanOrEqual(MIN_STOPS.projects);
     expect(report).toEqual({
       lockedBefore: false,
       lockedDuring: true,
@@ -148,8 +205,9 @@ test.describe('modal dialogs keep their promises', () => {
     /* With a file in it: an empty table is a different screen, and the one
      * users meet has rows to tab through. */
     await attachFixture(page, fileFixture('notes.md'));
-    const report = await walkTheDialog(page, openSidebarPanel(page, 'files'));
+    const { visitedInside, ...report } = await walkTheDialog(page, openSidebarPanel(page, 'files'));
 
+    expect(visitedInside).toBeGreaterThanOrEqual(MIN_STOPS.files);
     expect(report).toEqual({
       lockedBefore: false,
       lockedDuring: true,
@@ -184,8 +242,9 @@ test.describe('modal dialogs keep their promises', () => {
     page,
   }) => {
     test.setTimeout(120000);
-    const report = await walkTheDialog(page, openSettings(page));
+    const { visitedInside, ...report } = await walkTheDialog(page, openSettings(page));
 
+    expect(visitedInside).toBeGreaterThanOrEqual(MIN_STOPS.settings);
     expect(report).toEqual({
       lockedBefore: false,
       lockedDuring: true,

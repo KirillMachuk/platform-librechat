@@ -166,9 +166,12 @@ test.describe('canon — layers, keyboard reach, layout shift', () => {
   };
 
   /**
-   * The scale is read from the token layer at runtime rather than copied into
-   * this file. Copying it would let the two drift apart silently, and the
-   * drift would show up as this test going quiet, not as it going red.
+   * The scale is read from the token layer at runtime **and** pinned here. The
+   * runtime read is what makes the second assertion mean anything: comparing
+   * elements against a hardcoded list would keep passing while the tokens said
+   * something else. The pin is what makes a token change loud — rename or drop
+   * `--c-z-dialog` and this goes red naming the number that vanished, rather
+   * than quietly shrinking the set of values it considers canonical.
    */
   test('every z-index comes from the canon scale', async ({ page }) => {
     test.setTimeout(90000);
@@ -178,17 +181,39 @@ test.describe('canon — layers, keyboard reach, layout shift', () => {
     expect(chat.layers).toEqual([]);
   });
 
-  test('the file library dialog stacks on the canon scale too', async ({ page }) => {
+  /**
+   * A dialog is where a stray z-index shows up, and where it matters: the fork
+   * already had settings lists render behind the settings dialog.
+   *
+   * The file library sits at 120 — above the drawer at 110, nowhere near the
+   * dialog layer at 999. Nothing renders wrongly today, because nothing else
+   * claims the band between them; a popover opened from inside this dialog
+   * would, since popovers live at 1001 and would escape it entirely.
+   *
+   * Found only once this sweep stopped filtering by size: the element carrying
+   * a dialog's z-index is the wrapper Headless UI renders, and that wrapper has
+   * no box of its own, so the check meant for dialog stacking had never once
+   * looked at a dialog's own layer.
+   */
+  test('the file library dialog stacks below the canon dialog layer', async ({ page }) => {
     test.setTimeout(120000);
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
     await attachFixture(page, fileFixture('notes.md'));
     await openFilesPanel(page);
 
     const withDialog = await measureCanon(page);
-    /* A dialog is where a stray z-index shows up, and where it matters: the
-     * fork already had settings lists render behind the settings dialog. */
     expect(withDialog.scale).toEqual([10, 109, 110, 990, 999, 1001, 1010]);
-    expect(withDialog.layers).toEqual([]);
+    expect(withDialog.layers.map((layer) => layer.z)).toEqual(['120']);
+  });
+
+  test('the file library dialog is on the canon scale', async ({ page }) => {
+    test.fail();
+    test.setTimeout(120000);
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    await attachFixture(page, fileFixture('notes.md'));
+    await openFilesPanel(page);
+
+    expect((await measureCanon(page)).layers).toEqual([]);
   });
 
   test('nothing is clickable by mouse but unreachable by keyboard', async ({ page }) => {

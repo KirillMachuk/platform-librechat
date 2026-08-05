@@ -21,35 +21,100 @@ const mapPath = join(repoRoot, 'e2e', 'COVERAGE_MAP.md');
 
 const LEVELS = new Set(['unit', 'e2e', 'a11y', 'visual']);
 const NO_TEST = '—';
-const STATUS_REQUIRES_TEST = new Set(['covered', 'fixme:Ф1']);
-const STATUS_FORBIDS_TEST = new Set(['gap', 'todo:Ф1']);
+/* By prefix, not by exact string: the stage a row waits on is not always Ф1,
+ * and hardcoding it meant `fixme:Э5` quietly escaped the "must name a test"
+ * rule instead of being rejected as an unknown status. */
+const requiresTest = (status) => status === 'covered' || status.startsWith('fixme:');
+const forbidsTest = (status) => status === 'gap' || status.startsWith('todo:');
 
 const isStatus = (value) =>
   value === 'covered' ||
   value === 'gap' ||
-  value === 'fixme:Ф1' ||
-  value === 'todo:Ф1' ||
-  /^planned:[A-ZЭ][0-9]$/u.test(value);
+  /^(?:planned|fixme|todo):[A-ZА-ЯЁ][0-9]{1,2}$/u.test(value);
+
+/**
+ * Comments do not count as evidence. An anchor is supposed to prove the file
+ * still carries the behavior, and three rows here anchored on a comment inside
+ * a test — deleting that test outright, comments left behind, kept this guard
+ * green. Block comments and whole-line `//` go, the same narrow rule
+ * `client/src/locales/keys.spec.ts` uses: stripping every `//` to end of line
+ * would eat a URL in a string and take real code with it.
+ */
+const withoutComments = (source) =>
+  source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+
+/**
+ * A `covered` row must not point at a test that does not run. Playwright marks
+ * a test skipped from inside its body (`test.fixme()` on the first line), so
+ * looking at the opener is not enough — the body has to be read. Only applies
+ * when the anchor is a test title, which is the form that can be located.
+ */
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const QUARANTINE = /\b(?:test|it)\.(?:skip|fixme|fail|failing|todo)\s*\(/;
+const quarantinedTest = (source, anchor) => {
+  const opener = new RegExp(`\\b(?:test|it)(?:\\.\\w+)?\\s*\\(\\s*['"\`]${escapeRegExp(anchor)}`);
+  const match = opener.exec(source);
+  if (!match) {
+    return null;
+  }
+  if (/\.(?:skip|fixme|fail)\s*\($/.test(match[0].replace(/\s*['"`].*$/, ''))) {
+    return match[0].trim();
+  }
+  const rest = source.slice(match.index + match[0].length);
+  /* The body ends where the next test begins, or at the end of the file. */
+  const next = rest.search(/\n\s*(?:test|it)(?:\.\w+)?\s*\(/);
+  const body = next === -1 ? rest : rest.slice(0, next);
+  const marked = QUARANTINE.exec(body);
+  return marked ? marked[0] : null;
+};
 
 const problems = [];
 const stats = { rows: 0, covered: 0, planned: 0, fixme: 0, todo: 0, gap: 0 };
 
 const lines = readFileSync(mapPath, 'utf8').split('\n');
 
+let insideFence = false;
+
 lines.forEach((line, index) => {
   const lineNo = index + 1;
-  if (!line.startsWith('|')) {
+  /* Rows inside a fenced block are documentation, not claims. Left in, an
+   * example row was counted as a behavior and a broken one failed the build. */
+  if (/^\s*```/.test(line)) {
+    insideFence = !insideFence;
     return;
   }
-  const cells = line
+  if (insideFence) {
+    return;
+  }
+  /* Trimmed, because markdown allows up to three spaces of indent and an
+   * indented row used to vanish from this guard entirely — along with whatever
+   * it claimed. */
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('|')) {
+    return;
+  }
+  const cells = trimmed
     .split('|')
     .slice(1, -1)
     .map((cell) => cell.trim());
   if (cells.length !== 4) {
+    /* Not a silent `return`. A row with an escaped pipe in its text, or without
+     * its closing pipe, is still a row a reader sees — and it used to disappear
+     * from here while claiming `covered` for a file that does not exist. */
+    problems.push(
+      `${lineNo}: table row has ${cells.length} columns, expected 4 — "${trimmed.slice(0, 70)}"`,
+    );
     return;
   }
   const [behavior, level, owner, status] = cells;
-  if (behavior === 'Behavior' || /^-+$/.test(behavior)) {
+  if (/^-+:?$|^:?-+:?$/.test(behavior)) {
+    return;
+  }
+  if (behavior === 'Behavior') {
+    if (level !== 'Level') {
+      problems.push(`${lineNo}: a behavior may not be called "Behavior" — it reads as a header`);
+    }
     return;
   }
 
@@ -75,10 +140,10 @@ lines.forEach((line, index) => {
   }
 
   const hasTest = owner !== NO_TEST;
-  if (STATUS_REQUIRES_TEST.has(status) && !hasTest) {
+  if (requiresTest(status) && !hasTest) {
     problems.push(`${lineNo}: status "${status}" but no owning test named — "${behavior}"`);
   }
-  if (STATUS_FORBIDS_TEST.has(status) && hasTest) {
+  if (forbidsTest(status) && hasTest) {
     problems.push(`${lineNo}: status "${status}" must not name a test — "${behavior}"`);
   }
   if (!hasTest) {
@@ -107,14 +172,46 @@ lines.forEach((line, index) => {
       problems.push(`${lineNo}: empty anchor after "#" — "${reference}"`);
       continue;
     }
-    if (anchor && !readFileSync(absolute, 'utf8').includes(anchor)) {
-      problems.push(`${lineNo}: "${path}" no longer contains its anchor — "${anchor}"`);
+    if (!anchor) {
+      continue;
+    }
+    /* An anchor shorter than this matches by accident: a single letter is in
+     * every file. Long enough to be a test title or a whole assertion. */
+    if (anchor.length < 8) {
+      problems.push(`${lineNo}: anchor is too short to mean anything — "${anchor}"`);
+      continue;
+    }
+    const source = readFileSync(absolute, 'utf8');
+    if (!withoutComments(source).includes(anchor)) {
+      const inComment = source.includes(anchor);
+      problems.push(
+        inComment
+          ? `${lineNo}: "${path}" has its anchor only in a comment — "${anchor}"`
+          : `${lineNo}: "${path}" no longer contains its anchor — "${anchor}"`,
+      );
+      continue;
+    }
+    if (status === 'covered') {
+      const quarantined = quarantinedTest(source, anchor);
+      if (quarantined) {
+        problems.push(
+          `${lineNo}: "covered" but the test is quarantined (${quarantined}) — "${anchor}"`,
+        );
+      }
     }
   }
 });
 
 if (stats.rows === 0) {
   problems.push('no behavior rows parsed — the map format changed and this guard went blind');
+}
+/* A floor, not a checksum. The map has grown past 180 rows; anything that
+ * parses a fraction of that has lost most of the file to a format change, and
+ * the old backstop at zero could not see it. */
+if (stats.rows > 0 && stats.rows < 150) {
+  problems.push(
+    `only ${stats.rows} behavior rows parsed — the map has ~185; most of it went unread`,
+  );
 }
 
 if (problems.length > 0) {
