@@ -1,6 +1,7 @@
 /**
- * Guards the interface strings: every key the UI asks for must exist, and the
- * Russian file must not fall behind English.
+ * Guards the interface strings: every key the UI asks for must exist, the
+ * Russian file must not fall behind English, and no component hands the screen
+ * reader an English literal.
  *
  * The client is Russian-only in production, so a key that exists in neither
  * file is not a cosmetic gap — the person sees `com_ui_search_table` where a
@@ -77,6 +78,30 @@ for (const key of Object.keys(en)) {
     problems.push(
       `${RU}\n    "${key}" is missing — Russian falls back to «${en[key]}»\n` +
         '    → translate it; production runs in Russian only',
+    );
+  }
+}
+
+/**
+ * No component hands the screen reader an English literal.
+ *
+ * Visible text is caught by eye and by the lint rule; an `aria-label` is not —
+ * it is invisible, so twelve of them sat in the app announcing "Dismiss banner"
+ * and "Archived chats" to a Russian listener, and one e2e locator had come to
+ * depend on one staying broken.
+ *
+ * Only word-shaped literals count: a symbol or a digit as a label is a
+ * different problem and not this one's business.
+ */
+const WORDY_LABEL = /aria-label\s*=\s*"([^"{}]*[A-Za-z]{2,}[^"{}]*)"/g;
+
+for (const file of SRC.flatMap((dir) => [...sources(join(ROOT, dir))])) {
+  const text = readFileSync(file, 'utf8');
+  for (const [, label] of text.matchAll(WORDY_LABEL)) {
+    problems.push(
+      `${relative(ROOT, file).split(sep).join('/')}\n` +
+        `    the screen reader is handed the English literal "${label}"\n` +
+        `    → localize() it, or drop it when the visible text already names the control`,
     );
   }
 }

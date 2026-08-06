@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useRef } from 'react';
 import * as Ariakit from '@ariakit/react';
 import type { ElementRef } from 'react';
+import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 import './AnimatedTabs.css';
 import { JSX } from 'react/jsx-runtime';
@@ -116,12 +117,14 @@ export function AnimatedTabs({
     return () => observer.disconnect();
   }, [tabs]);
 
+  const localize = useLocalize();
+
   return (
     <div className={`w-full ${className}`}>
       <Ariakit.TabProvider defaultSelectedId={firstTabId}>
         <Ariakit.TabList
           ref={tabListRef}
-          aria-label="Tabs"
+          aria-label={localize('com_ui_tabs')}
           className={`animated-tab-list flex py-1 ${tabListClassName}`}
           {...tabListProps}
         >

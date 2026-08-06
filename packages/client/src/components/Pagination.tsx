@@ -2,19 +2,23 @@ import * as React from 'react';
 import { JSX } from 'react/jsx-runtime';
 import { ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
 import { ButtonProps, buttonVariants } from './Button';
+import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
 const Pagination: {
   ({ className, ...props }: React.ComponentProps<'nav'>): JSX.Element;
   displayName: string;
-} = ({ className, ...props }: React.ComponentProps<'nav'>): JSX.Element => (
-  <nav
-    role="navigation"
-    aria-label="pagination"
-    className={cn('mx-auto flex w-full justify-center', className)}
-    {...props}
-  />
-);
+} = ({ className, ...props }: React.ComponentProps<'nav'>): JSX.Element => {
+  const localize = useLocalize();
+  return (
+    <nav
+      role="navigation"
+      aria-label={localize('com_ui_pagination')}
+      className={cn('mx-auto flex w-full justify-center', className)}
+      {...props}
+    />
+  );
+};
 Pagination.displayName = 'Pagination';
 
 const PaginationContent: React.ForwardRefExoticComponent<
@@ -69,33 +73,32 @@ PaginationLink.displayName = 'PaginationLink';
 const PaginationPrevious: {
   ({ className, ...props }: React.ComponentProps<typeof PaginationLink>): JSX.Element;
   displayName: string;
-} = ({ className, ...props }: React.ComponentProps<typeof PaginationLink>): JSX.Element => (
-  <PaginationLink
-    aria-label="Go to previous page"
-    size="default"
-    className={cn('gap-1 pl-2.5', className)}
-    {...props}
-  >
-    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-    <span>Previous</span>
-  </PaginationLink>
-);
+} = ({ className, ...props }: React.ComponentProps<typeof PaginationLink>): JSX.Element => {
+  /* The visible word is the accessible name — no aria-label layered on top of
+     it, which is how this came to announce "Go to previous page" in English
+     over a label that was itself English. */
+  const localize = useLocalize();
+  return (
+    <PaginationLink size="default" className={cn('gap-1 pl-2.5', className)} {...props}>
+      <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+      <span>{localize('com_ui_pagination_previous')}</span>
+    </PaginationLink>
+  );
+};
 PaginationPrevious.displayName = 'PaginationPrevious';
 
 const PaginationNext: {
   ({ className, ...props }: React.ComponentProps<typeof PaginationLink>): JSX.Element;
   displayName: string;
-} = ({ className, ...props }: React.ComponentProps<typeof PaginationLink>): JSX.Element => (
-  <PaginationLink
-    aria-label="Go to next page"
-    size="default"
-    className={cn('gap-1 pr-2.5', className)}
-    {...props}
-  >
-    <span>Next</span>
-    <ChevronRight className="h-4 w-4" aria-hidden="true" />
-  </PaginationLink>
-);
+} = ({ className, ...props }: React.ComponentProps<typeof PaginationLink>): JSX.Element => {
+  const localize = useLocalize();
+  return (
+    <PaginationLink size="default" className={cn('gap-1 pr-2.5', className)} {...props}>
+      <span>{localize('com_ui_pagination_next')}</span>
+      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+    </PaginationLink>
+  );
+};
 PaginationNext.displayName = 'PaginationNext';
 
 const PaginationEllipsis: {

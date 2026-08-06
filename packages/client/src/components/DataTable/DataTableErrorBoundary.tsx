@@ -89,7 +89,6 @@ class DataTableErrorBoundaryInner extends Component<
                 variant="outline"
                 onClick={this.handleReset}
                 className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-surface-hover dark:hover:bg-surface-active"
-                aria-label="Retry loading table"
               >
                 <RefreshCw className="h-3 w-3" />
                 {this.props.localize('com_ui_retry')}

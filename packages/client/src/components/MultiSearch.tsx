@@ -22,6 +22,10 @@ export default function MultiSearch({
     [onChange],
   );
 
+  /* One string for both: the caller passes it already translated, and a field
+     whose visible hint and accessible name disagree is worse than either. */
+  const searchLabel = String(placeholder ?? '');
+
   const clearSearch = () => {
     onChange('');
     setTimeout(() => {
@@ -45,8 +49,8 @@ export default function MultiSearch({
         type="text"
         value={value ?? ''}
         onChange={onChangeHandler}
-        placeholder={String(placeholder ?? 'Search...')}
-        aria-label="Search Model"
+        placeholder={searchLabel}
+        aria-label={searchLabel}
         className="flex-1 rounded-md border-none bg-transparent px-2.5 py-2 text-sm placeholder-text-secondary focus:outline-none focus:ring-1 focus:ring-ring-primary"
       />
       <button

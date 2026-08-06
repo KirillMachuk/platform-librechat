@@ -130,11 +130,7 @@ const PresetsMenu: FC = () => {
               />
             </div>
             <div className="flex justify-end gap-4 pt-4">
-              <Button
-                aria-label="cancel"
-                variant="outline"
-                onClick={() => handleDeleteDialogChange(false)}
-              >
+              <Button variant="outline" onClick={() => handleDeleteDialogChange(false)}>
                 {localize('com_ui_cancel')}
               </Button>
               <Button variant="destructive" onClick={confirmDeletePreset}>

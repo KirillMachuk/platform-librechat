@@ -12,6 +12,7 @@ import { ArtifactsProvider, EditorProvider } from '~/Providers';
 import Artifacts from '~/components/Artifacts/Artifacts';
 import { isCodeOnlyArtifact } from '~/utils/artifacts';
 import { getLatestText } from '~/utils';
+import { useLocalize } from '~/hooks';
 import store from '~/store';
 
 const DEFAULT_ARTIFACT_PANEL_SIZE = 40;
@@ -163,11 +164,12 @@ function ShareArtifactsPanel({ contextValue }: ShareArtifactsPanelProps) {
  * Mobile overlay that displays artifacts in a fixed position
  */
 function ShareArtifactsOverlay({ contextValue }: ShareArtifactsPanelProps) {
+  const localize = useLocalize();
   return (
     <div
       className="fixed inset-y-0 right-0 z-drawer flex w-full max-w-full sm:max-w-[420px]"
       role="complementary"
-      aria-label="Artifacts panel"
+      aria-label={localize('com_ui_artifacts')}
     >
       <ShareArtifactsPanel contextValue={contextValue} />
     </div>
