@@ -51,11 +51,18 @@ jest.mock('@tanstack/react-query', () => ({
   })),
 }));
 
+/* The upload mutation's own callbacks, captured so a test can play the server's
+ * answer back. The image-capability notice is decided on that answer — an image
+ * the server read through comes back carrying `text` — so a mock that only
+ * swallows `mutate` cannot exercise it. */
+let uploadCallbacks: { onSuccess?: (data: Record<string, unknown>) => void } = {};
+
 jest.mock('~/data-provider', () => ({
   useGetFileConfig: jest.fn(() => ({ data: null })),
-  useUploadFileMutation: jest.fn((_opts: Record<string, unknown>) => ({
-    mutate: mockMutate,
-  })),
+  useUploadFileMutation: jest.fn((opts: Record<string, unknown>) => {
+    uploadCallbacks = opts as { onSuccess?: (data: Record<string, unknown>) => void };
+    return { mutate: mockMutate };
+  }),
 }));
 
 /**
@@ -391,12 +398,31 @@ describe('useFileHandling', () => {
    * silently at the provider.
    */
   describe('image capability warning', () => {
-    const attachImage = async () => {
+    /** Plays back the upload response for one attached image. `text` present =
+     * the OCR gate read the picture and the model will receive words, not pixels. */
+    const attachImage = async ({
+      text = '',
+      count = 1,
+    }: { text?: string; count?: number } = {}) => {
       const useFileHandling = (await import('../useFileHandling')).default;
       const { result } = renderHook(() => useFileHandling());
-      const image = new File(['x'], 'photo.png', { type: 'image/png' });
+      const images = Array.from(
+        { length: count },
+        (_, i) => new File(['x'], `photo-${i}.png`, { type: 'image/png' }),
+      );
       await act(async () => {
-        await result.current.handleFiles([image]);
+        await result.current.handleFiles(images);
+      });
+      await act(async () => {
+        for (let i = 0; i < count; i++) {
+          uploadCallbacks.onSuccess?.({
+            temp_file_id: `temp-${i}`,
+            file_id: `file-${i}`,
+            type: 'image/png',
+            filename: `photo-${i}.png`,
+            text,
+          });
+        }
       });
     };
 
@@ -428,6 +454,31 @@ describe('useFileHandling', () => {
       await attachImage();
 
       expect(warned()).toBe(true);
+    });
+
+    /**
+     * The picture the platform read for you is not a picture any more. Warning
+     * here is worse than useless: it sends someone on a text-only model off to
+     * switch models for a receipt whose text is already on its way to that same
+     * model. The verdict therefore waits for the upload response.
+     */
+    it('stays silent when the server read the image and returned its text', async () => {
+      withCatalogue({ 'vendor/model': { vision: false } });
+
+      await attachImage({ text: 'ИТОГО 785.00 БЕЗНАЛИЧНЫМИ' });
+
+      expect(warned()).toBe(false);
+    });
+
+    it('warns once for a batch, not once per image', async () => {
+      withCatalogue({ 'vendor/model': { vision: false } });
+
+      await attachImage({ count: 3 });
+
+      const warnings = mockShowToast.mock.calls.filter(
+        ([arg]) => (arg as { message?: string })?.message === 'com_warning_model_no_vision',
+      );
+      expect(warnings).toHaveLength(1);
     });
 
     /**

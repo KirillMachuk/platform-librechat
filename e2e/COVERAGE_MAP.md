@@ -105,6 +105,8 @@ stays green, so flakes accumulate where nobody looks.
 | Attach a file via the attach button | e2e | `e2e/specs/mock/chat.spec.ts` | covered |
 | Drag-and-drop a file onto the composer | unit | `client/src/components/Chat/Input/Files/__tests__/DragDropModal.spec.tsx` | covered |
 | Upload progress and completion states | unit | `client/src/hooks/Files/__tests__/useFileHandling.test.ts` | covered |
+| Image on a model that cannot see it warns to switch model | unit | `client/src/hooks/Files/__tests__/useFileHandling.test.ts#warns when the gateway says the model does not read images` | covered |
+| Image the server read as text raises no such warning | unit | `client/src/hooks/Files/__tests__/useFileHandling.test.ts#stays silent when the server read the image and returned its text` | covered |
 | Rejected file type is refused with a reason | unit | `client/src/utils/__tests__/validateFiles.spec.ts#rejects unsupported MIME type` | covered |
 | Remove an attached file before sending | unit | `client/src/hooks/Files/__tests__/useFileDeletion.spec.ts` | covered |
 | "Original file" handling toggle changes the mode | e2e | `e2e/specs/mock/chat.spec.ts` | covered |

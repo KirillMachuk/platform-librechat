@@ -13,6 +13,7 @@ export * from './open';
 export * from './parse';
 export * from './rag';
 export * from './retention';
+export * from './policy';
 export * from './routing';
 export * from './sweep';
 export * from './validation';

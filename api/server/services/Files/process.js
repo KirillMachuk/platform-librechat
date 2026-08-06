@@ -31,6 +31,7 @@ const {
   isContentRoutingEnabled,
   readDocRoutingThresholds,
   isImageOcrEnabled,
+  getAttachmentPolicy,
   hashFileContent,
   measureOcrText,
   acceptOcrMetrics,
@@ -624,6 +625,15 @@ const processFileURL = async ({
  */
 const attemptImageOcr = async ({ req, file, file_id, tag }) => {
   if (!isImageOcrEnabled()) {
+    return null;
+  }
+  /* Reading a picture instead of sending it is the client's decision, kept
+   * beside their other anonymisation settings — the platform asks rather than
+   * assumes. Unreachable anonymizer degrades to reading, never to shipping the
+   * picture out unmasked. */
+  const { imagesToText } = await getAttachmentPolicy();
+  if (!imagesToText) {
+    logger.info(`[${tag}] image OCR off by anonymizer policy -> native vision`);
     return null;
   }
   try {
