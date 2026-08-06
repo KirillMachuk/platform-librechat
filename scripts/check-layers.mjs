@@ -14,8 +14,10 @@
  *
  * A raw number on an element that is NOT page-level is fine and stays fine:
  * ordering siblings inside one component (stacked avatars, a spinner over a
- * card) is local and has nothing to do with the page scale. The rule fires on
- * `position: fixed` — the marker of "this floats over everything".
+ * card) is local and has nothing to do with the page scale. Two markers say
+ * "this floats over the page": `position: fixed`, and a number in the page band
+ * (100 and up). Either one is enough — see PAGE_BAND for why the second had to
+ * be added.
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -117,9 +119,72 @@ if (tailwind) {
  * component's `z-dialog` — both survive into the DOM and whichever rule the
  * build emitted last wins. Measured: today `.z-dialog` happens to come later,
  * so the SharePoint dialog renders correctly by luck.
+ *
+ * The arbitrary-value form needs its own closing boundary. `\b` after `]` can
+ * never match — a bracket and the quote or space after it are both non-word
+ * characters, so there is no transition to sit on. This pattern ended in `\b`
+ * for months and therefore saw `z-50` while being blind to every single `z-[N]`
+ * in the codebase. That is what CASES below exists to stop happening again: a
+ * matcher that quietly matches nothing reports a clean canon forever.
  */
-const RAW_Z = /\bz-(?:\[\d+\]|\d+)\b/;
+const RAW_Z = /\bz-(?:\[(-?\d+)\]|(\d+))(?![\w-])/g;
+
+/**
+ * Where the page band starts.
+ *
+ * `position: fixed` alone is not the marker it looked like. Headless UI's root
+ * `<Dialog>` is positioned `relative`, and its number decides where the whole
+ * window stands — so the panel dialog sat on `relative z-[120]`, off the scale,
+ * while this script reported the canon held. Measured both ways by the test
+ * track before it was believed: put the number back and `check:layers` stays
+ * green while `canon.spec.ts` on the same build goes red.
+ *
+ * The band, not the position, is the honest signal. Everything the canon floats
+ * over the page lives at 109 and above, and nothing local needs three digits —
+ * ordering siblings inside one component is 1 against 2, never 100 against 120.
+ * So a number this large is either a page layer wearing its own value or a local
+ * one that reached far past what it needed; both are answered by a smaller
+ * number or a class from the scale.
+ *
+ * Adding `relative` to the `fixed` rule instead would have been useless noise:
+ * `relative` sits on nearly every card in the codebase.
+ */
+const PAGE_BAND = 100;
+const SCALE = 'use a class from the scale (z-dialog, z-popover, z-toast, z-drawer, z-dragdrop)';
 const SOURCES = [...walk('client/src'), ...walk('packages/client/src')];
+
+/** Every raw layer in one class string: `z-50` → 50, `focus-within:z-[120]` → 120. */
+const rawLayers = (classes) =>
+  [...classes.matchAll(RAW_Z)].map((m) => ({ token: m[0], value: Number(m[1] ?? m[2]) }));
+
+/**
+ * What the matcher must see, and what it must leave alone. Every entry here is
+ * a string that appeared in this codebase or in a break someone tried.
+ */
+const CASES = [
+  ['relative z-dialog', []],
+  ['z-drawer fixed inset-0', []],
+  ['hz-[100] flex', []],
+  ['z-[calc(100%)]', []],
+  ['fixed z-50', [50]],
+  ['z-9999 rounded', [9999]],
+  ['relative z-[120]', [120]],
+  ['relative focus-within:z-[100]', [100]],
+  ['absolute inset-0 z-[60] flex', [60]],
+  ['fixed inset-0 z-[-1] bg-black/80', [-1]],
+  ['z-10 flex", "fixed z-[130]', [10, 130]],
+];
+
+for (const [classes, expected] of CASES) {
+  const got = rawLayers(classes).map((layer) => layer.value);
+  if (got.join(',') !== expected.join(',')) {
+    fail(
+      'scripts/check-layers.mjs',
+      `the matcher reads "${classes}" as [${got}], not [${expected}]`,
+      'fix RAW_Z — until it is right, every rule below reports a clean canon it never checked',
+    );
+  }
+}
 
 /** Every `className=` value in the file, braces balanced so `cn(...)` comes whole. */
 function classNameValues(text) {
@@ -155,14 +220,23 @@ function classNameValues(text) {
 for (const rel of SOURCES) {
   const source = read(rel);
   if (!source) continue;
+  const where = relative('.', rel).split(sep).join('/');
   for (const classes of classNameValues(stripComments(source))) {
-    if (!RAW_Z.test(classes)) continue;
-    if (!/\bfixed\b/.test(classes)) continue;
-    fail(
-      `${relative('.', rel).split(sep).join('/')}`,
-      `a page-level overlay carries ${classes.match(RAW_Z)[0]}`,
-      'use a class from the scale (z-dialog, z-popover, z-toast, z-drawer, z-dragdrop)',
-    );
+    const layers = rawLayers(classes);
+    if (!layers.length) continue;
+
+    const inBand = layers.find((layer) => layer.value >= PAGE_BAND);
+    if (inBand) {
+      fail(
+        where,
+        `${inBand.token} is in the page band (${PAGE_BAND} and up)`,
+        `${SCALE} — or, if this only orders siblings inside one component, a single-digit number`,
+      );
+      continue;
+    }
+    if (/\bfixed\b/.test(classes)) {
+      fail(where, `a page-level overlay carries ${layers[0].token}`, SCALE);
+    }
   }
 }
 
