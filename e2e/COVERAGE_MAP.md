@@ -274,7 +274,9 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | Speech settings toggles | unit | `client/src/components/Nav/SettingsTabs/Speech/ConversationModeSwitch.spec.tsx` | covered |
 | Share a conversation by link | e2e | `e2e/specs/mock/shared-links.spec.ts` | covered |
 | Permission principals and details are enforced server-side | e2e | `e2e/specs/mock/permissions.spec.ts#keeps permission details and local principal writes in the authenticated context` | covered |
-| Role permissions gate UI affordances | e2e | — | gap |
+| A permission switched off in the config takes its control out of the interface | e2e | `e2e/specs/permissions/gating.spec.ts#a permission switched off takes its control with it` | covered |
+| The permissions left on keep their controls on the same screen | e2e | `e2e/specs/permissions/gating.spec.ts#the permissions left on keep their controls` | covered |
+| The interface config block seeds the role exactly as written | e2e | `e2e/specs/permissions/gating.spec.ts#the config seeded the role exactly as written` | covered |
 | Usage/balance surfaces are correct | e2e | `e2e/specs/mock/usage.spec.ts` | covered |
 | Personal settings follow the account onto a new device | unit | `client/src/hooks/Preferences/__tests__/useApplyPreferences.spec.tsx` | covered |
 | A second employee on the same computer gets their own settings | unit | `client/src/hooks/Preferences/__tests__/useApplyPreferences.spec.tsx` | covered |
@@ -368,6 +370,19 @@ of encoded.
 | Pixel snapshots of the redesigned screens | visual | — | planned:Э7 |
 | Product name is 1MA everywhere, never LibreChat | e2e | `e2e/specs/mock/branding.spec.ts#the account menu and the settings dialog never show it either` | covered |
 | Help entry points at the configured help centre | e2e | `e2e/specs/mock/branding.spec.ts#the account menu offers help, pointing at the configured address` | covered |
+
+**Role permissions have a profile of their own.** `e2e/playwright.config.permissions.ts` boots a
+second hermetic server, on its own port and database, against a config whose `interface` block
+switches three permissions off and leaves the rest on. It exists because there is no cheaper
+lever in this fork: self-service registration always creates a plain USER, so no test can grant
+itself `MANAGE_ROLES` and call the roles API, and roles are cached server-side, so writing to
+Mongo behind the server's back changes nothing a page can see. Permissions are decided once, at
+boot, which is why this needs a server rather than a fixture.
+
+Every assertion there comes in a pair — what must disappear and what must stay. Without the
+second half, a run where the permission system failed to load entirely would look exactly like a
+run where every gate worked. It runs on the pull-request gate as a step on shard 1, which costs
+that shard about a minute and the gate as a whole nothing.
 
 The nightly rows above run in `e2e/playwright.config.nightly.ts`, not on pull requests: five
 projects against the same hermetic server is a few minutes a day rather than minutes on every PR.
