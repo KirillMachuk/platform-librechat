@@ -1,11 +1,17 @@
-import { useState } from 'react';
+import { useRef } from 'react';
 import { useToastContext } from '@librechat/client';
 import { useLocalize } from '~/hooks';
 
 export const useDelayedUploadToast = () => {
   const localize = useLocalize();
   const { showToast } = useToastContext();
-  const [uploadTimers, setUploadTimers] = useState<Record<string, NodeJS.Timeout>>({});
+  /* A ref, not state: nothing renders from this map, and an upload that finishes
+   * before React re-renders must still be able to cancel its own notice. Held in
+   * state, `clearUploadTimer` read whatever the last render captured — usually a
+   * map without this upload in it — so the notice fired over an upload that had
+   * already succeeded, taking the single toast slot from whatever the app said
+   * next. */
+  const uploadTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const determineDelay = (fileSize: number): number => {
     const baseDelay = 5000;
@@ -15,31 +21,21 @@ export const useDelayedUploadToast = () => {
 
   const startUploadTimer = (fileId: string, fileName: string, fileSize: number) => {
     const delay = determineDelay(fileSize);
+    clearTimeout(uploadTimers.current[fileId]);
 
-    if (uploadTimers[fileId]) {
-      clearTimeout(uploadTimers[fileId]);
-    }
-
-    const timer = setTimeout(() => {
-      const message = localize('com_ui_upload_delay', { 0: fileName });
+    uploadTimers.current[fileId] = setTimeout(() => {
+      delete uploadTimers.current[fileId];
       showToast({
-        message,
+        message: localize('com_ui_upload_delay', { 0: fileName }),
         status: 'warning',
         duration: 10000,
       });
     }, delay);
-
-    setUploadTimers((prev) => ({ ...prev, [fileId]: timer }));
   };
 
   const clearUploadTimer = (fileId: string) => {
-    if (uploadTimers[fileId]) {
-      clearTimeout(uploadTimers[fileId]);
-      setUploadTimers((prev) => {
-        const { [fileId]: _, ...rest } = prev;
-        return rest;
-      });
-    }
+    clearTimeout(uploadTimers.current[fileId]);
+    delete uploadTimers.current[fileId];
   };
 
   return { startUploadTimer, clearUploadTimer };
