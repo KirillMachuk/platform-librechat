@@ -262,7 +262,7 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | Prompts library: create and use a prompt | e2e | `e2e/specs/mock/prompts.spec.ts` | covered |
 | A prompt's variables are read and shown by kind | unit | `client/src/components/Prompts/display/__tests__/PromptVariables.spec.tsx` | covered |
 | Editing a prompt adds a version and the new one is what gets sent | e2e | `e2e/specs/mock/prompts.spec.ts#editing a prompt adds a version and it is the new one that gets sent` | covered |
-| Sharing a prompt with someone else | e2e | — | gap |
+| Sharing a prompt with someone else | e2e | `e2e/specs/permissions/sharing.spec.ts#what is shared with everyone reaches someone else, what is not stays put` | covered |
 | MCP server selection and ephemeral servers | e2e | `e2e/specs/mock/mcp.spec.ts` | covered |
 | Configured skills load read-only for every authenticated user (API) | e2e | `e2e/specs/mock/deployment-skills.spec.ts#loads configured deployment skills for every authenticated user as read-only` | covered |
 | A model spec sees only the skills scoped to it (API) | e2e | `e2e/specs/mock/model-spec-skills.spec.ts#loads accessible configured skills and skips missing or inaccessible names` | covered |
@@ -270,16 +270,25 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | A skill written in the interface belongs to its author, a configured one to nobody | e2e | `e2e/specs/mock/skills.spec.ts#a skill of my own is mine to edit` | covered |
 | A skill is attached to an agent from the interface | e2e | — | gap |
 
-**Why sharing a prompt has no test.** The Share button renders only when the USER role carries
-`PROMPTS.SHARE`, and this deployment does not give it. Measured 2026-08-06 rather than assumed:
-against a fresh database, with `interface.prompts: true` — the stand's exact setting —
-`/api/roles/USER` comes back `{USE: true, CREATE: true, SHARE: false, SHARE_PUBLIC: false}`, and
-the prompt page offers Delete but no Share. The permission is only seeded from `interface.prompts`
-when that key is an **object** carrying `share` or `public`; a bare `true` leaves both off.
+**Why sharing is tested in a profile of its own.** The Share button renders only when the USER
+role carries `PROMPTS.SHARE`, and the deployment does not give it today. Measured 2026-08-06
+rather than assumed: against a fresh database, with `interface.prompts: true` — the stand's exact
+setting — `/api/roles/USER` comes back `{USE: true, CREATE: true, SHARE: false, SHARE_PUBLIC:
+false}`, and the prompt page offers Delete but no Share. The permission is seeded from
+`interface.prompts` only when that key is an **object** carrying `share` or `public`; a bare
+`true` leaves both off, which is why nobody noticed it was off.
 
-So there is nothing to cover until someone turns it on, and a test that turned it on itself would
-be testing a configuration no one runs. Worth an owner decision, not a test: the stand also sets
-`peoplePicker: {users: true}` "для ACL Sharing", which suggests sharing was meant to work.
+The owner decided on 2026-08-06 that all of this is to be switched on, so the permissions profile
+(`e2e/config/librechat.permissions.yaml`) switches it on and the behaviour is covered there —
+proven before the stand's yaml changes rather than after somebody reports it broken. That profile
+now carries both halves: two permissions deliberately off so the gate stays proven, and the
+sharing permissions on so what they unlock is proven too.
+
+**Still off, still uncovered**, in the same family and for the same reason — each needs its
+permission turned on in that profile before it can be tested at all:
+`MARKETPLACE.USE`, `MCP_SERVERS.CREATE`/`SHARE`/`SHARE_PUBLIC`/`CONFIGURE_OBO`,
+`REMOTE_AGENTS.USE`/`CREATE`/`SHARE`/`SHARE_PUBLIC`, and sharing an agent or a skill (the
+permissions are on in the profile, the flows are not covered yet).
 
 ## 10. Settings, sharing, permissions
 

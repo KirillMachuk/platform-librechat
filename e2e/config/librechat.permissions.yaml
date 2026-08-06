@@ -15,7 +15,6 @@ interface:
 
   # OFF: each of these seeds a role permission, and each has one affordance in
   # the interface that must disappear with it.
-  prompts: false
   multiConvo: false
   temporaryChat: false
 
@@ -23,7 +22,30 @@ interface:
   # permission system failed to load would look exactly like a run where every
   # gate worked.
   bookmarks: true
-  agents: true
+
+  # ON, and this is the other half of what this profile is for. Sharing is off
+  # in the deployment today — not by choice but by the shape of the config:
+  # `prompts: true` seeds USE and CREATE and leaves SHARE and SHARE_PUBLIC off,
+  # because the seeding only reads them when the key is an OBJECT carrying
+  # `share` or `public` (packages/api/src/app/permissions.ts). The owner intends
+  # to turn all of it on, so the behaviour it unlocks is tested here rather than
+  # waiting for the day the stand's yaml changes.
+  #
+  # The people picker matters as much as the share bits: without it the share
+  # dialog has nobody to offer, and granting access to a person is impossible.
+  prompts:
+    share: true
+    public: true
+  agents:
+    share: true
+    public: true
+  skills:
+    share: true
+    public: true
+  peoplePicker:
+    users: true
+    groups: true
+    roles: true
 
 mcpServers:
   e2e-memory:
