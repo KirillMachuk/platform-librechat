@@ -206,7 +206,11 @@ export default function MemoryPanel() {
 
             {/* Pagination - Right */}
             {filteredMemories.length > pageSize && (
-              <div className="flex items-center gap-2" role="navigation" aria-label="Pagination">
+              <div
+                className="flex items-center gap-2"
+                role="navigation"
+                aria-label={localize('com_ui_pagination')}
+              >
                 <Button
                   variant="outline"
                   size="sm"

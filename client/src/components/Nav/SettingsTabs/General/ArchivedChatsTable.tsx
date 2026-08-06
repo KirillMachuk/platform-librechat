@@ -89,7 +89,9 @@ export default function ArchivedChatsTable({
     }
     return data.pages
       .flatMap((page) => page?.conversations?.filter(Boolean) ?? [])
-      .filter((conv): conv is typeof conv & { conversationId: string } => conv.conversationId != null)
+      .filter(
+        (conv): conv is typeof conv & { conversationId: string } => conv.conversationId != null,
+      )
       .map((conv) => ({ ...conv, id: conv.conversationId }));
   }, [data?.pages]);
 
@@ -336,7 +338,7 @@ export default function ArchivedChatsTable({
             </OGDialogTitle>
           </OGDialogHeader>
           <div className="flex justify-end gap-4 pt-4">
-            <Button aria-label="cancel" variant="outline" onClick={() => setIsDeleteOpen(false)}>
+            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>
               {localize('com_ui_cancel')}
             </Button>
             <Button

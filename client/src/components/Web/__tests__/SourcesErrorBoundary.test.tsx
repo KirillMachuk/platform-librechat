@@ -42,8 +42,10 @@ describe('SourcesErrorBoundary - NEW COMPONENT test', () => {
       </SourcesErrorBoundary>,
     );
 
+    /* Both strings are localised now. They used to be English literals behind an
+       eslint-disable, so a Russian reader saw English on an error screen. */
     expect(screen.getByText('Sources temporarily unavailable')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Reload the page' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reload page' })).toBeInTheDocument();
   });
 
   it('should reload page when refresh button is clicked', () => {
@@ -55,7 +57,7 @@ describe('SourcesErrorBoundary - NEW COMPONENT test', () => {
       </SourcesErrorBoundary>,
     );
 
-    const refreshButton = screen.getByRole('button', { name: 'Reload the page' });
+    const refreshButton = screen.getByRole('button', { name: 'Reload page' });
     fireEvent.click(refreshButton);
 
     expect(reloadSpy).toHaveBeenCalled();

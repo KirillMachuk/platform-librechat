@@ -1,16 +1,18 @@
+import { useEffect, useMemo, useRef } from 'react';
 import { XIcon } from 'lucide-react';
 import { useRecoilState } from 'recoil';
 import { Button, cn } from '@librechat/client';
-import { useEffect, useMemo, useRef } from 'react';
 import {
   CONFIG_HTML_TEXT_TAGS,
   CONFIG_HTML_CLASS_ATTR,
   createConfigHtmlSanitizer,
 } from '~/utils/configHtml';
 import { useGetBannerQuery } from '~/data-provider';
+import { useLocalize } from '~/hooks';
 import store from '~/store';
 
 export const Banner = ({ onHeightChange }: { onHeightChange?: (height: number) => void }) => {
+  const localize = useLocalize();
   const { data: banner } = useGetBannerQuery();
   const [hideBannerHint, setHideBannerHint] = useRecoilState<string[]>(store.hideBannerHint);
   const bannerRef = useRef<HTMLDivElement>(null);
@@ -71,7 +73,7 @@ export const Banner = ({ onHeightChange }: { onHeightChange?: (height: number) =
         <Button
           size="icon"
           variant="ghost"
-          aria-label="Dismiss banner"
+          aria-label={localize('com_ui_close')}
           className="size-8"
           onClick={onClick}
         >

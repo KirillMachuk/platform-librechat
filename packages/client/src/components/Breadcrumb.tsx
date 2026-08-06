@@ -2,6 +2,7 @@ import * as React from 'react';
 import { JSX } from 'react/jsx-runtime';
 import { Slot } from '@radix-ui/react-slot';
 import { ChevronRight, MoreHorizontal } from 'lucide-react';
+import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
 const Breadcrumb: React.ForwardRefExoticComponent<
@@ -13,7 +14,10 @@ const Breadcrumb: React.ForwardRefExoticComponent<
   React.ComponentPropsWithoutRef<'nav'> & {
     separator?: React.ReactNode;
   }
->(({ ...props }, ref) => <nav ref={ref} aria-label="breadcrumb" {...props} />);
+>(({ ...props }, ref) => {
+  const localize = useLocalize();
+  return <nav ref={ref} aria-label={localize('com_ui_breadcrumb')} {...props} />;
+});
 Breadcrumb.displayName = 'Breadcrumb';
 
 const BreadcrumbList: React.ForwardRefExoticComponent<

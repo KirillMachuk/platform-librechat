@@ -46,6 +46,9 @@ const bookmarksPanel = (page: Page) => page.getByRole('region', { name: 'Bookmar
 async function fillBookmarkForm(page: Page, name: string) {
   const dialog = page
     .getByRole('dialog')
+    /* The name is localised now; the English value is unchanged, so this
+       locator stands. It used to be an English literal in the component, which
+       a Russian screen reader read out in English. */
     .filter({ has: page.getByRole('form', { name: 'Bookmark form' }) });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Title', { exact: true }).fill(name);

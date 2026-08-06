@@ -224,15 +224,20 @@ describe('DataTableErrorBoundary', () => {
     expect(refreshIcons.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('should have aria-label on retry button', () => {
+  /**
+   * Asserts the accessible NAME, not the attribute that used to supply it. The
+   * button carries localised text, so the name comes from its content — and the
+   * aria-label it used to carry said "Retry loading table" in English over that
+   * text, replacing a good name with a worse one for every Russian listener.
+   */
+  it('names the retry button for a screen reader', () => {
     render(
       <DataTableErrorBoundary>
         <ThrowingComponent shouldThrow={true} />
       </DataTableErrorBoundary>,
     );
 
-    const retryButton = screen.getByTestId('retry-button');
-    expect(retryButton).toHaveAttribute('aria-label', 'Retry loading table');
+    expect(screen.getByTestId('retry-button')).toHaveAccessibleName(/.+/);
   });
 
   it('should render with outline variant button', () => {
