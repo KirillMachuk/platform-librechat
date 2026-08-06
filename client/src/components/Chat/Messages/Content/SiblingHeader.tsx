@@ -1,14 +1,11 @@
-import { useMemo } from 'react';
-import { GitBranchPlus } from 'lucide-react';
+import { useState } from 'react';
+import { Check, Copy } from 'lucide-react';
 import { useToastContext } from '@librechat/client';
-import { EModelEndpoint, parseEphemeralAgentId, stripAgentIdSuffix } from 'librechat-data-provider';
-import type { TMessage, Agent } from 'librechat-data-provider';
+import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
 import MessageTimestamp from '~/components/Chat/Messages/ui/MessageTimestamp';
-import { modelDisplayName } from '~/components/Chat/Menus/Endpoints/utils';
+import { useCopyToClipboard, useSiblingIdentity } from '~/hooks/Messages';
 import { useBranchMessageMutation } from '~/data-provider/Messages';
 import MessageIcon from '~/components/Share/MessageIcon';
-import { useGetEndpointsQuery } from '~/data-provider';
-import { useAgentsMapContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
@@ -23,11 +20,27 @@ type SiblingHeaderProps = {
   conversationId?: string | null;
   /** Whether a submission is in progress */
   isSubmitting?: boolean;
+  /** This column's content parts, so Copy takes this answer and not the turn. */
+  parts?: TMessageContentParts[];
+  /** The phone's switcher already names the answer; repeating it here only
+      squeezed the name to "E2E S…" to make room for the two buttons. */
+  nameInSwitcher?: boolean;
 };
 
+/** Both header actions share one shape: 30px tall, canon control border. */
+const ACTION =
+  'flex h-[30px] flex-shrink-0 items-center gap-1.5 rounded-xl border border-border-control px-3 ' +
+  'text-[13px] text-text-primary transition-colors duration-90 hover:bg-surface-hover ' +
+  'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 ' +
+  'focus-visible:outline-text-primary disabled:cursor-not-allowed disabled:opacity-50';
+
 /**
- * Header component for sibling content parts in parallel agent responses.
- * Displays the agent/model icon and name for each parallel response.
+ * The header of one column in a side-by-side comparison: who wrote this answer,
+ * and the two actions that belong to the answer rather than to the turn.
+ *
+ * Copy and "keep this one" live here on purpose. The row under the message
+ * carries the turn's actions — edit the question, run it again — and a Copy
+ * down there could not say which of two answers it meant.
  */
 export default function SiblingHeader({
   agentId,
@@ -35,90 +48,32 @@ export default function SiblingHeader({
   createdAt,
   conversationId,
   isSubmitting,
+  parts,
+  nameInSwitcher,
 }: SiblingHeaderProps) {
-  const agentsMap = useAgentsMapContext();
-  const { data: endpointsConfig } = useGetEndpointsQuery();
   const localize = useLocalize();
   const { showToast } = useToastContext();
+  const [isCopied, setIsCopied] = useState(false);
+  const { displayName, displayEndpoint, displayModel, agent } = useSiblingIdentity(agentId);
+  const copyToClipboard = useCopyToClipboard({ content: parts });
 
   const branchMessage = useBranchMessageMutation(conversationId ?? null, {
     onSuccess: () => {
-      showToast({
-        message: localize('com_ui_branch_created'),
-        status: 'success',
-      });
+      showToast({ message: localize('com_ui_kept_this_answer'), status: 'success' });
     },
     onError: () => {
-      showToast({
-        message: localize('com_ui_branch_error'),
-        status: 'error',
-      });
+      showToast({ message: localize('com_ui_branch_error'), status: 'error' });
     },
   });
 
-  const handleBranch = () => {
-    if (!messageId || !agentId || isSubmitting || branchMessage.isLoading) {
+  const canKeep = !!messageId && !!agentId && !isSubmitting && !branchMessage.isLoading;
+
+  const handleKeep = () => {
+    if (!canKeep) {
       return;
     }
     branchMessage.mutate({ messageId, agentId });
   };
-
-  const { displayName, displayEndpoint, displayModel, agent } = useMemo(() => {
-    // First, try to look up as a real agent
-    if (agentId) {
-      // Strip ____N suffix if present (used to distinguish parallel agents with same ID)
-      const baseAgentId = stripAgentIdSuffix(agentId);
-
-      const foundAgent = agentsMap?.[baseAgentId] as Agent | undefined;
-      if (foundAgent) {
-        return {
-          displayName: foundAgent.name,
-          displayEndpoint: EModelEndpoint.agents,
-          displayModel: foundAgent.model,
-          agent: foundAgent,
-        };
-      }
-
-      // Try to parse as ephemeral agent ID (endpoint__model___sender format)
-      const parsed = parseEphemeralAgentId(agentId);
-      if (parsed) {
-        /**
-         * The sender falls back to the endpoint's modelDisplayLabel, which is one
-         * shared string for every model it serves — so side-by-side answers would
-         * carry the same name, hiding the very thing being compared. Name the model
-         * in that case, and keep the sender when it says something per-model.
-         */
-        const endpointLabel = endpointsConfig?.[parsed.endpoint ?? '']?.modelDisplayLabel;
-        const senderIsEndpointLabel = parsed.sender != null && parsed.sender === endpointLabel;
-        const model = parsed.model
-          ? modelDisplayName(parsed.model, endpointsConfig, parsed.endpoint)
-          : undefined;
-        return {
-          displayName:
-            (senderIsEndpointLabel ? model || parsed.sender : parsed.sender) || model || 'AI',
-          displayEndpoint: parsed.endpoint,
-          displayModel: parsed.model,
-          agent: undefined,
-        };
-      }
-
-      // agentId exists but couldn't be parsed as ephemeral - use it as-is for display
-      return {
-        displayName: baseAgentId,
-        displayEndpoint: EModelEndpoint.agents,
-        displayModel: undefined,
-        agent: undefined,
-      };
-    }
-
-    // Use message model/endpoint as last resort
-    return {
-      displayName: 'Agent',
-      displayEndpoint: EModelEndpoint.agents,
-      displayModel: undefined,
-      agent: undefined,
-    };
-  }, [agentId, agentsMap, endpointsConfig]);
 
   return (
     <div className="mb-2 flex items-center justify-between gap-2 border-b border-border-light pb-2">
@@ -135,27 +90,40 @@ export default function SiblingHeader({
             agent={agent || undefined}
           />
         </div>
-        <span className="truncate text-sm font-medium text-text-primary" title={displayName ?? ''}>
-          {displayName}
-        </span>
+        {!nameInSwitcher && (
+          <span className="truncate text-sm font-medium text-text-primary" title={displayName}>
+            {displayName}
+          </span>
+        )}
         <MessageTimestamp value={createdAt} />
       </div>
-      <button
-        type="button"
-        onClick={handleBranch}
-        disabled={!messageId || !agentId || isSubmitting || branchMessage.isLoading}
-        className={cn(
-          'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md',
-          'text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary',
-          'focus:outline-none focus:ring-2 focus:ring-border-medium focus:ring-offset-1',
-          'disabled:cursor-not-allowed disabled:opacity-50',
-          (!messageId || !agentId || isSubmitting) && 'invisible',
-        )}
-        aria-label={localize('com_ui_branch_message')}
-        title={localize('com_ui_branch_message')}
-      >
-        <GitBranchPlus className="h-4 w-4" aria-hidden="true" />
-      </button>
+      <div className="flex flex-shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={() => copyToClipboard(setIsCopied)}
+          disabled={!parts?.length}
+          className={cn(ACTION, 'px-2.5')}
+          aria-label={localize('com_ui_copy_this_answer')}
+          title={localize('com_ui_copy_this_answer')}
+        >
+          {isCopied ? (
+            <Check className="icon-sm" aria-hidden="true" />
+          ) : (
+            <Copy className="icon-sm" aria-hidden="true" />
+          )}
+        </button>
+        {/* A word, not a branch glyph: this ends the comparison, and the audience
+            is not technical — "create a branch" said nothing about that. */}
+        <button
+          type="button"
+          onClick={handleKeep}
+          disabled={!canKeep}
+          className={cn(ACTION, !messageId && !agentId && 'invisible')}
+          title={localize('com_ui_keep_this_answer_hint')}
+        >
+          {localize('com_ui_keep_this_answer')}
+        </button>
+      </div>
     </div>
   );
 }

@@ -129,6 +129,18 @@ const HoverButtons = ({
   const [isCopied, setIsCopied] = useState(false);
   const [TextToSpeech] = useRecoilState<boolean>(store.textToSpeech);
 
+  /**
+   * When the turn holds two answers side by side, this row cannot speak for
+   * either of them: Copy would not say which answer it took, and a thumb would
+   * not say which answer it judged. Those two move into each column's own
+   * header; what stays here is what genuinely belongs to the turn — edit the
+   * question, fork it, run it again.
+   */
+  const isComparison = useMemo(
+    () => (message.content ?? []).some((part) => part?.groupId != null),
+    [message.content],
+  );
+
   const endpoint = useMemo(() => {
     if (!conversation) {
       return '';
@@ -207,21 +219,23 @@ const HoverButtons = ({
         />
       )}
 
-      {/* Copy Button */}
-      <HoverButton
-        onClick={handleCopy}
-        title={
-          isCopied ? localize('com_ui_copied_to_clipboard') : localize('com_ui_copy_to_clipboard')
-        }
-        icon={isCopied ? <CheckMark className="h-[18px] w-[18px]" /> : <Clipboard size="19" />}
-        isLast={isLast}
-        className={cn(
-          'ml-0 flex items-center gap-1.5 text-xs',
-          isSubmitting && isCreatedByUser
-            ? 'group-hover:opacity-100 [@media(hover:hover)]:opacity-0'
-            : '',
-        )}
-      />
+      {/* Copy Button — see isComparison */}
+      {!isComparison && (
+        <HoverButton
+          onClick={handleCopy}
+          title={
+            isCopied ? localize('com_ui_copied_to_clipboard') : localize('com_ui_copy_to_clipboard')
+          }
+          icon={isCopied ? <CheckMark className="h-[18px] w-[18px]" /> : <Clipboard size="19" />}
+          isLast={isLast}
+          className={cn(
+            'ml-0 flex items-center gap-1.5 text-xs',
+            isSubmitting && isCreatedByUser
+              ? 'group-hover:opacity-100 [@media(hover:hover)]:opacity-0'
+              : '',
+          )}
+        />
+      )}
 
       {/* Edit Button */}
       {isEditableEndpoint && (
@@ -248,7 +262,7 @@ const HoverButtons = ({
       />
 
       {/* Feedback Buttons */}
-      {!isCreatedByUser && handleFeedback != null && (
+      {!isCreatedByUser && !isComparison && handleFeedback != null && (
         <Feedback handleFeedback={handleFeedback} feedback={message.feedback} isLast={isLast} />
       )}
 

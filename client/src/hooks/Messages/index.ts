@@ -17,5 +17,6 @@ export { default as useMemoizedChatContext } from './useMemoizedChatContext';
 export { default as useMessageProcess } from './useMessageProcess';
 export { default as useMessageHelpers } from './useMessageHelpers';
 export { default as useCopyToClipboard } from './useCopyToClipboard';
+export { default as useSiblingIdentity } from './useSiblingIdentity';
 export { default as useContentMetadata } from './useContentMetadata';
 export { default as useMessageScrolling } from './useMessageScrolling';
