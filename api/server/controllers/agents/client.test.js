@@ -3299,6 +3299,109 @@ describe('getUserFacingError - a model the gateway will never serve', () => {
   });
 });
 
+/**
+ * A picture sent to a model that cannot look at one. The upload warns about this,
+ * but the warning is escapable — switch model after attaching, or let an admin turn
+ * image-to-text off — and the neutral "try again" wording then hides the one fact
+ * that would fix it.
+ */
+describe('getUserFacingError - a picture for a model that cannot see', () => {
+  const { getUserFacingError } = AgentClient;
+
+  /** Exactly what the stand logged on 06.08, both times the owner hit this. */
+  const noVision = () => ({
+    status: 404,
+    code: 404,
+    lc_error_code: 'MODEL_NOT_FOUND',
+    message:
+      '404 No endpoints found that support image input\n\nTroubleshooting URL: ' +
+      'https://docs.langchain.com/oss/javascript/langchain/errors/MODEL_NOT_FOUND/\n',
+    error: { code: 404, message: 'No endpoints found that support image input' },
+  });
+
+  it('names the reason and both ways out of it', () => {
+    const shown = getUserFacingError(noVision());
+
+    expect(shown).toContain('не умеет читать изображения');
+    expect(shown).toContain('опишите содержимое картинки текстом');
+    expect(shown).not.toBe('Произошла ошибка при обработке запроса. Попробуйте ещё раз.');
+  });
+
+  /**
+   * The refusal carries a docs URL and an SDK error code; neither belongs in a chat.
+   * Asserted together with the message being the right one, because "leaks nothing"
+   * is also true of the generic fallback — on its own it would pass while the fix
+   * did nothing.
+   */
+  it('does not leak where the refusal came from', () => {
+    const shown = getUserFacingError(noVision());
+
+    expect(shown).toContain('не умеет читать изображения');
+    expect(shown).not.toContain('http');
+    expect(shown).not.toContain('endpoint');
+    expect(shown).not.toContain('MODEL_NOT_FOUND');
+  });
+
+  /** Reached even when the status only exists inside the wrapped message. */
+  it('recognises it from a message the SDK flattened', () => {
+    const shown = getUserFacingError({
+      message: '404 No endpoints found that support image input',
+    });
+
+    expect(shown).toContain('не умеет читать изображения');
+  });
+
+  /** The perimeter service can forward the gateway's answer as plain text. */
+  it('recognises it in a body that is plain text', () => {
+    const shown = getUserFacingError({
+      status: 404,
+      response: { status: 404, data: 'No endpoints found that support image input' },
+    });
+
+    expect(shown).toContain('не умеет читать изображения');
+  });
+
+  /** A model ruled out by data policy is a different problem with a different answer. */
+  it('leaves the data-policy refusal to its own message', () => {
+    const shown = getUserFacingError({
+      status: 404,
+      error: {
+        message: 'No endpoints available matching your guardrail restrictions and data policy.',
+      },
+    });
+
+    expect(shown).toContain('Выберите другую модель');
+    expect(shown).not.toContain('не умеет читать изображения');
+  });
+
+  /**
+   * Status is half the check. A rejected attachment is about the file, not the
+   * model, and telling someone to switch model sends them round a loop.
+   */
+  it('does not blame the model when the picture itself was rejected', () => {
+    const shown = getUserFacingError({
+      status: 400,
+      error: { message: 'Invalid image input: unsupported media type' },
+    });
+
+    expect(shown).not.toContain('не умеет читать изображения');
+  });
+
+  /**
+   * "image" on its own is not the signal — the platform also *makes* pictures, and a
+   * 404 from an image-generation route says nothing about reading them. Telling that
+   * user to pick a model with vision would be advice for a problem they do not have.
+   */
+  it('does not mistake a 404 about generating pictures for one about reading them', () => {
+    const shown = getUserFacingError({
+      status: 404,
+      error: { message: 'Image generation model not found' },
+    });
+
+    expect(shown).not.toContain('не умеет читать изображения');
+  });
+});
+
 describe('AgentClient - a run with nothing to show says so', () => {
   const makeSendCompletionClient = (contentParts) => {
     const client = new AgentClient({
