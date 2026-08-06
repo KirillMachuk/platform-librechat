@@ -87,4 +87,41 @@ describe('getAttachmentPolicy', () => {
 
     expect(failing).toHaveBeenCalledTimes(1);
   });
+
+  /**
+   * Reusing a recent answer is standing in for the service; reusing an old one is
+   * guessing. A remembered `false` used to survive an outage of any length, because
+   * every failed retry re-extended it — so a long outage sent every picture to the
+   * provider un-read, the less private direction, for as long as it lasted.
+   */
+  it('stops reusing the last answer once it is too old to stand for anything', async () => {
+    const start = Date.now();
+    await getAttachmentPolicy(env, answering({ images_to_text: false }));
+    const failing = jest.fn().mockRejectedValue(new Error('down'));
+
+    jest.spyOn(Date, 'now').mockReturnValue(start + 120_000);
+    await expect(getAttachmentPolicy(env, failing)).resolves.toEqual({ imagesToText: false });
+
+    jest.spyOn(Date, 'now').mockReturnValue(start + 3_600_000);
+    await expect(getAttachmentPolicy(env, failing)).resolves.toEqual(DEFAULT_ATTACHMENT_POLICY);
+
+    jest.spyOn(Date, 'now').mockRestore();
+  });
+
+  /** A recovered service replaces the remembered answer rather than ageing beside it. */
+  it('takes a fresh answer over a remembered one when the service returns', async () => {
+    const start = Date.now();
+    await getAttachmentPolicy(env, answering({ images_to_text: false }));
+
+    jest.spyOn(Date, 'now').mockReturnValue(start + 120_000);
+    await expect(getAttachmentPolicy(env, answering({ images_to_text: true }))).resolves.toEqual({
+      imagesToText: true,
+    });
+
+    jest.spyOn(Date, 'now').mockReturnValue(start + 3_600_000);
+    const failing = jest.fn().mockRejectedValue(new Error('down'));
+    await expect(getAttachmentPolicy(env, failing)).resolves.toEqual({ imagesToText: true });
+
+    jest.spyOn(Date, 'now').mockRestore();
+  });
 });

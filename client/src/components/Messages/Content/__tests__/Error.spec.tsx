@@ -102,3 +102,46 @@ describe('Error – a plain message keeps one language', () => {
     );
   });
 });
+
+/**
+ * The error bubble looks up its handler by a key taken from the error body:
+ * `errorMessages[json.code || json.type]`. An object literal inherits
+ * `Object.prototype`, so keys that exist there resolve to methods nobody
+ * registered — and the bubble calls whatever it found. Found by an independent
+ * security review of the vision-error work.
+ */
+describe('Error – a key nobody registered', () => {
+  it('does not call an inherited Object method as if it were a handler', () => {
+    const { container } = renderError(JSON.stringify({ code: 'hasOwnProperty' }), 'en');
+
+    expect(container.textContent).toContain('Something went wrong');
+  });
+
+  it('survives a key that resolves to a constructor', () => {
+    const { container } = renderError(JSON.stringify({ code: 'constructor' }), 'en');
+
+    expect(container.textContent).toContain('Something went wrong');
+  });
+
+  it('still routes a key that really is registered', () => {
+    const { container } = renderError(JSON.stringify({ code: 'invalid_api_key' }), 'en');
+
+    expect(container.textContent).toContain('Invalid API key');
+  });
+});
+
+/**
+ * Long errors are cut to 512 characters — unless the text happens to contain a
+ * balanced pair of braces, because the cut is skipped whenever `extractJson`
+ * finds one, and `extractJson` matches braces, not JSON.
+ */
+describe('Error – a long message stays cut', () => {
+  it('cuts a long message that merely mentions braces', () => {
+    const long = `a {not json} ${'x'.repeat(900)}`;
+
+    const { container } = renderError(long, 'en');
+
+    expect(container.textContent).toContain('...');
+    expect(container.textContent!.length).toBeLessThan(700);
+  });
+});
