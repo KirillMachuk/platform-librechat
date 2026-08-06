@@ -22,18 +22,21 @@ export const ROLE_LOCALIZATIONS = {
     name: 'com_ui_role_owner' as const,
     description: 'com_ui_role_owner_desc' as const,
   } as const,
-  // PromptGroup roles
+  // PromptGroup roles — generic names, prompt-specific descriptions. The
+  // generic `com_ui_role_*_desc` keys spell out "the agent", so the share
+  // dialog for a prompt offered "Can view and use the agent". Same shape the
+  // skill roles below already use.
   promptGroup_viewer: {
     name: 'com_ui_role_viewer' as const,
-    description: 'com_ui_role_viewer_desc' as const,
+    description: 'com_ui_prompt_role_viewer_desc' as const,
   } as const,
   promptGroup_editor: {
     name: 'com_ui_role_editor' as const,
-    description: 'com_ui_role_editor_desc' as const,
+    description: 'com_ui_prompt_role_editor_desc' as const,
   } as const,
   promptGroup_owner: {
     name: 'com_ui_role_owner' as const,
-    description: 'com_ui_role_owner_desc' as const,
+    description: 'com_ui_prompt_role_owner_desc' as const,
   } as const,
   // MCPServer roles
   mcpServer_viewer: {

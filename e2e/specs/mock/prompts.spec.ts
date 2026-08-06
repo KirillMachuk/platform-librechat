@@ -263,7 +263,10 @@ test.describe('prompt manager', () => {
       /* Leaving edit mode is what saves — the form submits on the way out. A
        * version goes to the group's own endpoint, not to the one that created
        * the group. */
-      const [saved] = await Promise.all([
+      /* No assertion on the response: the predicate above already requires it
+       * to be a successful POST to that path, so `expect(saved.ok())` could not
+       * fail and would only read like a check. */
+      await Promise.all([
         page.waitForResponse(
           (response) =>
             response.request().method() === 'POST' &&
@@ -273,7 +276,6 @@ test.describe('prompt manager', () => {
         ),
         page.getByRole('button', { name: 'Save', exact: true }).first().click(),
       ]);
-      expect(saved.ok()).toBeTruthy();
 
       const versions = await fetchJson<Prompt[]>(
         page,

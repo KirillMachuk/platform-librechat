@@ -187,7 +187,11 @@ jobs:
         # this shard has already built everything. It costs shard 1 about a
         # minute and the gate as a whole nothing, since the shards run together.
         if: ${{ matrix.shard == 1 }}
-        timeout-minutes: 10
+        # Twenty, not ten: a genuinely failing test here retries twice and each
+        # attempt carries a ninety-second budget, so ten minutes would cut the
+        # run off and report "the step timed out" instead of the assertion that
+        # failed.
+        timeout-minutes: 20
         run: |
           set -o pipefail
           mkdir -p e2e/logs
@@ -201,7 +205,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-shard-${{ matrix.shard }}
-          path: e2e/playwright-report/**
+          # Both reports: the permissions profile writes its own, and leaving it
+          # out meant the one run whose failures are hardest to reproduce was
+          # the one with no report to download.
+          path: |
+            e2e/playwright-report/**
+            e2e/playwright-report-permissions/**
           retention-days: 7
           if-no-files-found: ignore
 
