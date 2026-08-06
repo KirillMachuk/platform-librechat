@@ -28,14 +28,27 @@ const POLICY_TTL_MS = 60_000;
 /** While the anonymizer is down, retry at most this often — otherwise every
  * upload pays the timeout again. */
 const POLICY_RETRY_MS = 10_000;
+/**
+ * How long a last-known-good answer may stand in for a live one. Past this, an
+ * outage falls back to {@link DEFAULT_ATTACHMENT_POLICY} instead.
+ *
+ * Without a bound, a remembered `imagesToText: false` outlived the outage that
+ * froze it: every failed retry re-extended the entry, so a long outage meant
+ * every picture went to the provider un-read — the less private direction —
+ * indefinitely, behind a single log line. Reusing a recent answer is right;
+ * reusing an old one is guessing.
+ */
+const POLICY_STALE_MAX_MS = 300_000;
 
 let cached: { policy: AttachmentPolicy; expiresAt: number } | null = null;
-let warned = false;
+let lastGood: { policy: AttachmentPolicy; at: number } | null = null;
+let warnedFor: 'last-good' | 'default' | null = null;
 
 /** Test seam: drops the memoised policy so a case starts from a known state. */
 export const resetAttachmentPolicyCache = (): void => {
   cached = null;
-  warned = false;
+  lastGood = null;
+  warnedFor = null;
 };
 
 const readEnv = (env: NodeJS.ProcessEnv) => ({
@@ -48,9 +61,10 @@ const readEnv = (env: NodeJS.ProcessEnv) => ({
  * minute: the answer changes when an administrator changes it, not per upload,
  * and an upload must not wait on a second service more often than that.
  *
- * Never throws and never blocks an upload for longer than {@link POLICY_TIMEOUT_MS}
- * — a failure here degrades to {@link DEFAULT_ATTACHMENT_POLICY}, and the last
- * good answer is preferred over the default while it is still fresh.
+ * Never throws and never blocks an upload for longer than {@link POLICY_TIMEOUT_MS}.
+ * A failure prefers the last good answer while it is younger than
+ * {@link POLICY_STALE_MAX_MS}, and {@link DEFAULT_ATTACHMENT_POLICY} after that —
+ * the promise this sentence used to make without the code keeping it.
  */
 export const getAttachmentPolicy = async (
   env: NodeJS.ProcessEnv = process.env,
@@ -73,18 +87,27 @@ export const getAttachmentPolicy = async (
     if (typeof body.images_to_text !== 'boolean') {
       throw new Error('no images_to_text in response');
     }
-    cached = { policy: { imagesToText: body.images_to_text }, expiresAt: now + POLICY_TTL_MS };
-    warned = false;
-    return cached.policy;
+    const policy = { imagesToText: body.images_to_text };
+    cached = { policy, expiresAt: now + POLICY_TTL_MS };
+    lastGood = { policy, at: now };
+    warnedFor = null;
+    return policy;
   } catch (error) {
-    if (!warned) {
-      warned = true;
+    const reusable = lastGood != null && now - lastGood.at <= POLICY_STALE_MAX_MS;
+    const policy = reusable ? lastGood!.policy : DEFAULT_ATTACHMENT_POLICY;
+    const mode = reusable ? 'last-good' : 'default';
+    /** Warn once per outage, and again when the answer changes from the remembered
+     *  one to the default — the moment behaviour changes is the one worth seeing. */
+    if (warnedFor !== mode) {
+      warnedFor = mode;
       logger.warn(
         `[attachmentPolicy] could not read the anonymizer policy at ${url}, ` +
-          `falling back to reading images as text: ${(error as Error).message}`,
+          (reusable
+            ? `keeping the last answer (imagesToText=${policy.imagesToText}): `
+            : `falling back to reading images as text: `) +
+          `${(error as Error).message}`,
       );
     }
-    const policy = cached?.policy ?? DEFAULT_ATTACHMENT_POLICY;
     cached = { policy, expiresAt: now + POLICY_RETRY_MS };
     return policy;
   }

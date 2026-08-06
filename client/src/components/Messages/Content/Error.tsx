@@ -134,19 +134,30 @@ const errorMessages = {
 const Error = ({ text }: { text: string }) => {
   const localize = useLocalize();
   const jsonString = extractJson(text);
-  const errorMessage = text.length > 512 && !jsonString ? text.slice(0, 512) + '...' : text;
+  /** `extractJson` matches balanced braces, not JSON, so a plain message that merely
+   *  contains `{...}` used to skip the cut and print in full. The cut belongs to messages
+   *  we cannot parse — which is exactly `!structured`. */
+  const structured = isJson(jsonString);
+  const errorMessage = text.length > 512 && !structured ? text.slice(0, 512) + '...' : text;
   /** Localized: the server already answers in the user's language (getUserFacingError returns
    *  curated Russian sentences), so a hardcoded English lead-in put two languages in one
    *  bubble. The English wording is unchanged. */
   const defaultResponse = localize('com_error_generic_prefix', { 0: errorMessage });
 
-  if (!isJson(jsonString)) {
+  if (!structured) {
     return defaultResponse;
   }
 
   const json = JSON.parse(jsonString);
   const errorKey = json.code || json.type;
-  const handler = errorKey ? errorMessages[errorKey] : undefined;
+  /** Own keys only. `errorMessages` is an object literal, so a body carrying
+   *  `{"code":"hasOwnProperty"}` used to resolve to an inherited Object method, which this
+   *  then called as a handler — a TypeError thrown during render, taking the message list
+   *  with it. The key comes from an error body, so it is not ours to trust. */
+  const handler =
+    typeof errorKey === 'string' && Object.prototype.hasOwnProperty.call(errorMessages, errorKey)
+      ? errorMessages[errorKey]
+      : undefined;
 
   if (typeof handler === 'function') {
     return handler(json, localize);
