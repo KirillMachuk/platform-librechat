@@ -85,10 +85,13 @@ export function SortFilterHeader<TData, TValue>({
 
   const sortState = column.getIsSorted();
   let ariaSort: 'ascending' | 'descending' | 'none' = 'none';
+  let SortIcon = CaretSortIcon;
   if (sortState === 'desc') {
     ariaSort = 'descending';
+    SortIcon = ArrowDownIcon;
   } else if (sortState === 'asc') {
     ariaSort = 'ascending';
+    SortIcon = ArrowUpIcon;
   }
 
   return (
@@ -118,13 +121,7 @@ export function SortFilterHeader<TData, TValue>({
                 ) : (
                   <ListFilter className="icon-sm text-text-secondary" aria-hidden="true" />
                 )}
-                {sortState === 'desc' ? (
-                  <ArrowDownIcon className="icon-sm" />
-                ) : sortState === 'asc' ? (
-                  <ArrowUpIcon className="icon-sm" />
-                ) : (
-                  <CaretSortIcon className="icon-sm" />
-                )}
+                <SortIcon className="icon-sm" />
               </Menu.MenuButton>
             }
           />
