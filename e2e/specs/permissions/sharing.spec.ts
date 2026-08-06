@@ -171,12 +171,18 @@ test.describe('sharing a prompt', () => {
       await expect(promptCard(pageB, sharedName)).toBeVisible({ timeout: 20000 });
 
       /* The control. Same panel, same field, same person — the only difference
-       * is that this one was never shared. */
+       * is that this one was never shared.
+       *
+       * The empty state comes first on purpose. `toHaveCount(0)` on its own is
+       * satisfied while the refiltered list is still in flight, so it needs a
+       * settled state to stand on; putting it second also means a real failure
+       * reports the card that should not be there rather than the empty state
+       * that is missing. */
       await filter.fill(privateName, { timeout: 15000 });
-      await expect(promptCard(pageB, privateName)).toHaveCount(0);
       await expect(pageB.getByText('No prompts yet', { exact: false })).toBeVisible({
         timeout: 15000,
       });
+      await expect(promptCard(pageB, privateName)).toHaveCount(0);
     } finally {
       await contextB.close();
       await deletePrompt(page, token, sharedGroupId);

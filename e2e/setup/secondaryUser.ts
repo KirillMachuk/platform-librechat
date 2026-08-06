@@ -21,10 +21,18 @@ async function register(page: Page, user: User) {
   await page.getByTestId('registration-button').click();
 }
 
+/**
+ * Three seconds, not the half a second this carried when it lived in one spec.
+ * It only runs after registration has already failed, so it costs nothing on
+ * the path that works — and on the path that matters (a retry, where the
+ * account exists from the first attempt) a loaded machine can easily take
+ * longer than half a second to paint the error, and the retry would then die on
+ * registration instead of cleaning up and trying again.
+ */
 async function registrationErrorIsVisible(page: Page) {
   return page
     .getByTestId('registration-error')
-    .isVisible({ timeout: 500 })
+    .isVisible({ timeout: 3000 })
     .catch(() => false);
 }
 

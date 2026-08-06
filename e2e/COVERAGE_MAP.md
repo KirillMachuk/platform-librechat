@@ -401,7 +401,8 @@ of encoded.
 
 **Role permissions have a profile of their own.** `e2e/playwright.config.permissions.ts` boots a
 second hermetic server, on its own port and database, against a config whose `interface` block
-switches three permissions off and leaves the rest on. It exists because there is no cheaper
+switches two permissions off, leaves the rest on, and turns on the sharing permissions the
+deployment has not enabled yet. It exists because there is no cheaper
 lever in this fork: self-service registration always creates a plain USER, so no test can grant
 itself `MANAGE_ROLES` and call the roles API, and roles are cached server-side, so writing to
 Mongo behind the server's back changes nothing a page can see. Permissions are decided once, at

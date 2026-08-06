@@ -81,6 +81,15 @@ test.describe('role permissions gate the interface', () => {
     await page.goto(CHAT, { timeout: 30000 });
     await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
 
+    /* Both controls below live in the chat header, so the control for them has
+     * to live there too — the sidebar links asserted in the next test would
+     * still be present on a build where the header lost its whole toolbar. The
+     * model selector is the neighbour that no permission gates.
+     *
+     * Not the export menu, which was the first choice and does not render at
+     * all on a new chat: it hides itself while the conversation id is still
+     * "new". Measured, three runs red, before this settled on the selector. */
+    await expect(page.getByTestId('model-selector-trigger').first()).toBeVisible();
     await expect(page.getByTestId('add-multi-convo-button')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Temporary Chat' })).toHaveCount(0);
   });
