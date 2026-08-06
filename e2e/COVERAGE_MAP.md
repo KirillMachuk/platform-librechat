@@ -264,6 +264,9 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | A call site can still override the button height | unit | `client/src/components/__tests__/canonControls.spec.tsx#lets a call site win, because the sign-in card is 40 by canon` | covered |
 | The shared field is 36 on a desktop and 48 on a phone | unit | `client/src/components/__tests__/canonControls.spec.tsx#is 36 on a desktop, 48 on a phone, radius 12, on a card fill` | covered |
 | The field leaves its border to FIELD_BORDER so an error can replace it | unit | `client/src/components/__tests__/canonControls.spec.tsx#leaves the border to FIELD_BORDER, so an error can replace just that` | covered |
+| The instruction every chat in a project gets is visible on the card | unit | `client/src/components/Projects/__tests__/ProjectDetailView.spec.tsx#shows the instruction every chat in the project gets` | covered |
+| A project without instructions says nothing about them | unit | `client/src/components/Projects/__tests__/ProjectDetailView.spec.tsx#says nothing about instructions when the project has none` | covered |
+| Each project source says whether the chat can read it yet | unit | `client/src/components/Projects/__tests__/ProjectDetailView.spec.tsx#says of each source whether the chat can read it yet` | covered |
 | Prompts library: create and use a prompt | e2e | `e2e/specs/mock/prompts.spec.ts` | covered |
 | A prompt's variables are read and shown by kind | unit | `client/src/components/Prompts/display/__tests__/PromptVariables.spec.tsx` | covered |
 | Editing a prompt adds a version and the new one is what gets sent | e2e | `e2e/specs/mock/prompts.spec.ts#editing a prompt adds a version and it is the new one that gets sent` | covered |
