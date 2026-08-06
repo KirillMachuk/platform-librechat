@@ -27,10 +27,17 @@ type SiblingHeaderProps = {
   nameInSwitcher?: boolean;
 };
 
-/** Both header actions share one shape: 30px tall, canon control border. */
+/**
+ * Both header actions share one shape: the canon control border, 30px on a
+ * desktop and 44 on a phone. The phone size is not decoration — 44 is the
+ * minimum a finger can hit, and at 30 these were the smallest targets on the
+ * screen. Caught by the prototype's own guard, not by the app's touch sweep,
+ * which only walks the chat screen and never opens a comparison.
+ */
 const ACTION =
-  'flex h-[30px] flex-shrink-0 items-center gap-1.5 rounded-xl border border-border-control px-3 ' +
-  'text-[13px] text-text-primary transition-colors duration-90 hover:bg-surface-hover ' +
+  'flex h-11 flex-shrink-0 items-center gap-1.5 rounded-xl border border-border-control px-3 ' +
+  'text-[15px] text-text-primary transition-colors duration-90 hover:bg-surface-hover md:h-[30px] ' +
+  'md:text-[13px] ' +
   'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 ' +
   'focus-visible:outline-text-primary disabled:cursor-not-allowed disabled:opacity-50';
 
