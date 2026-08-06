@@ -57,7 +57,10 @@ describe('ProjectEditDialog — form labels', () => {
     // description input. A <label for> resolves to the FIRST element with that id,
     // so the label pointed at the body div — clicking it focused nothing and a
     // screen reader announced the whole form as the field's name.
-    for (const name of ['Name', 'Description', 'Project instructions']) {
+    // Two of the three carry canon §6.4's "(optional)" inside the label, so the
+    // accessible name is "Description (optional)" — matched loosely on purpose,
+    // while still asserting that what the label points at is the control.
+    for (const name of [/^Name$/, /^Description/, /^Project instructions/]) {
       const field = screen.getByLabelText(name);
       expect(field.tagName).toMatch(/INPUT|TEXTAREA/);
     }

@@ -11,7 +11,9 @@ import {
   OGDialogTemplate,
   useToastContext,
 } from '@librechat/client';
-import type { TConversation } from 'librechat-data-provider';
+import type { TConversation, TFile } from 'librechat-data-provider';
+import type { TranslationKeys } from '~/hooks';
+import { Segmented } from '~/components/ui/Segmented';
 import {
   useGetProjectQuery,
   useProjectConversationsQuery,
@@ -38,6 +40,15 @@ type Props = {
   projectId: string;
   onBack: () => void;
   onClose: () => void;
+};
+
+/** A source the chat can already quote from, as opposed to one still going in. */
+const sourceReady = (file: TFile) =>
+  file.embeddingStatus === 'ready' || (file.embeddingStatus == null && file.embedded === true);
+
+const sourceStatusKey = (file: TFile): TranslationKeys => {
+  if (file.embeddingStatus === 'failed') return 'com_projects_source_failed';
+  return sourceReady(file) ? 'com_projects_source_ready' : 'com_projects_source_working';
 };
 
 function formatBytes(bytes?: number): string {
@@ -246,20 +257,38 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
       <button
         type="button"
         onClick={handleNewChat}
-        className="mb-6 flex h-12 w-full items-center gap-3 rounded-2xl border border-border-light bg-surface-primary px-4 text-left text-sm text-text-secondary hover:bg-surface-hover"
+        /* Canon §4: a wide action row is 48 on a phone and 40 on a desktop, at
+           radius 12 — 16 belongs to dialogs and sheets, not to what sits inside
+           one. */
+        className="mb-6 flex h-12 w-full items-center gap-3 rounded-xl border border-border-light bg-surface-primary px-4 text-left text-sm text-text-secondary transition-colors duration-90 hover:bg-surface-hover md:h-10"
       >
         <span className="text-xl text-text-secondary">+</span>
         <span>{localize('com_projects_new_chat', { name: project.name })}</span>
       </button>
 
-      <div className="flex gap-2 border-b border-border-light">
-        <TabButton active={tab === 'chats'} onClick={() => setTab('chats')}>
-          {localize('com_projects_tab_chats')}
-        </TabButton>
-        <TabButton active={tab === 'sources'} onClick={() => setTab('sources')}>
-          {localize('com_projects_tab_sources')}
-        </TabButton>
-      </div>
+      {/* The instruction is what every chat in this project silently gets, and
+          it used to be visible only inside the edit form — so the one thing
+          that changes every answer was the one thing you could not see. */}
+      {project.instructions ? (
+        <div className="mb-4">
+          <h2 className="pb-1 text-[12.5px] font-medium text-text-secondary">
+            {localize('com_projects_instructions')}
+          </h2>
+          <p className="whitespace-pre-wrap rounded-xl border border-border-light px-[14px] py-3 text-sm text-text-primary">
+            {project.instructions}
+          </p>
+        </div>
+      ) : null}
+
+      <Segmented
+        items={[
+          { id: 'chats', label: localize('com_projects_tab_chats') },
+          { id: 'sources', label: localize('com_projects_tab_sources') },
+        ]}
+        value={tab}
+        onChange={setTab}
+        label={localize('com_projects_section')}
+      />
 
       <div className="pt-4">
         {tab === 'chats' && (
@@ -353,7 +382,17 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
                     />
                     <div className="flex min-w-0 flex-col">
                       <span className="truncate text-sm text-text-primary">{file.filename}</span>
-                      <span className="text-xs text-text-secondary">{formatBytes(file.bytes)}</span>
+                      {/* Size alone does not answer the only question a source
+                          raises: can the chat read it yet. The lifecycle is
+                          already in the data (`embeddingStatus`); it was just
+                          never shown. */}
+                      <span className="text-xs text-text-secondary">
+                        {formatBytes(file.bytes)}
+                        {' · '}
+                        <span className={cn(sourceReady(file) && 'text-text-accent')}>
+                          {localize(sourceStatusKey(file))}
+                        </span>
+                      </span>
                     </div>
                   </div>
                   <OGDialog>
@@ -410,31 +449,6 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
         onChange={handleAppearanceChange}
       />
     </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'border-b-2 px-3 py-2 text-sm transition-colors',
-        active
-          ? 'border-text-primary font-semibold text-text-primary'
-          : 'border-transparent text-text-secondary hover:text-text-primary',
-      )}
-    >
-      {children}
-    </button>
   );
 }
 

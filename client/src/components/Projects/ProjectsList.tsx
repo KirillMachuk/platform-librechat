@@ -1,11 +1,11 @@
 import { memo, useState } from 'react';
-import { Plus, FolderPlus } from 'lucide-react';
+import { Plus, ChevronRight } from 'lucide-react';
 import { Button, Spinner } from '@librechat/client';
+import { PanelHeaderAction } from '~/components/UnifiedSidebar/PanelDialog';
 import { resolveIcon, resolveColor } from './iconOptions';
 import ProjectCreateDialog from './ProjectCreateDialog';
 import { useListProjectsQuery } from '~/data-provider';
 import { useLocalize, useAuthContext } from '~/hooks';
-import { formatDate } from '~/utils';
 
 type Props = {
   onSelect: (projectId: string) => void;
@@ -21,19 +21,13 @@ function ProjectsList({ onSelect }: Props) {
   });
 
   return (
-    <div className="flex h-full w-full flex-col px-6 py-6">
-      <div className="flex items-center justify-end pb-4">
-        <Button
-          variant="default"
-          size="sm"
-          onClick={() => setCreateOpen(true)}
-          className="gap-2"
-          aria-label={localize('com_projects_new')}
-        >
-          <Plus className="h-4 w-4" aria-hidden="true" />
+    <div className="flex h-full w-full flex-col px-6 pb-6 pt-4">
+      <PanelHeaderAction>
+        <Button variant="submit" onClick={() => setCreateOpen(true)} className="gap-2">
+          <Plus className="icon-sm" aria-hidden="true" />
           <span>{localize('com_projects_new')}</span>
         </Button>
-      </div>
+      </PanelHeaderAction>
 
       {isLoading && (
         <div className="flex flex-1 items-center justify-center">
@@ -41,15 +35,12 @@ function ProjectsList({ onSelect }: Props) {
         </div>
       )}
 
+      {/* The action lives in the header now, so an empty screen says what a
+          project is for instead of repeating the same button in a dashed box. */}
       {!isLoading && projects.length === 0 && (
-        <button
-          type="button"
-          onClick={() => setCreateOpen(true)}
-          className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border-light p-8 text-text-secondary transition-colors hover:bg-surface-hover"
-        >
-          <FolderPlus className="h-8 w-8" aria-hidden="true" />
-          <span className="text-sm">{localize('com_projects_new')}</span>
-        </button>
+        <p className="flex flex-1 items-center justify-center px-8 text-center text-sm text-text-secondary">
+          {localize('com_projects_empty')}
+        </p>
       )}
 
       {!isLoading && projects.length > 0 && (
@@ -62,20 +53,36 @@ function ProjectsList({ onSelect }: Props) {
                 <button
                   type="button"
                   onClick={() => onSelect(project.projectId)}
-                  className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-surface-hover"
+                  className="group flex w-full items-center gap-3 rounded-xl px-[10px] py-2 text-left transition-colors duration-90 hover:bg-surface-hover"
                 >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span
-                      className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full"
-                      style={{ backgroundColor: `${iconColor}1a` }}
-                    >
-                      <Icon className="h-5 w-5" style={{ color: iconColor }} aria-hidden="true" />
-                    </span>
-                    <span className="truncate text-sm text-text-primary">{project.name}</span>
-                  </div>
-                  <span className="flex-shrink-0 text-xs text-text-secondary">
-                    {formatDate(project.updatedAt ?? project.createdAt)}
+                  <span
+                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full"
+                    style={{ backgroundColor: `${iconColor}1a` }}
+                  >
+                    <Icon className="icon-md" style={{ color: iconColor }} aria-hidden="true" />
                   </span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-sm text-text-primary">{project.name}</span>
+                    <span className="truncate text-[12.5px] text-text-secondary">
+                      {/* `n` rather than `count`: the latter switches i18next
+                          to plural lookup, and this product has no plural
+                          keys — a label with a colon reads right at any
+                          number in both languages.
+                          A project with nothing in it says so once, rather
+                          than showing a row of zeroes. */}
+                      {(project.conversationCount ?? 0) + (project.fileCount ?? 0) === 0
+                        ? localize('com_projects_meta_empty')
+                        : `${localize('com_projects_meta_chats', {
+                            n: project.conversationCount ?? 0,
+                          })} · ${localize('com_projects_meta_sources', {
+                            n: project.fileCount ?? 0,
+                          })}`}
+                    </span>
+                  </span>
+                  <ChevronRight
+                    className="icon-sm flex-shrink-0 text-text-tertiary"
+                    aria-hidden="true"
+                  />
                 </button>
               </li>
             );

@@ -82,7 +82,9 @@ describe('ProjectDetailView — removing a source', () => {
     renderView();
 
     // The view opens on the chats tab; sources live behind their own tab.
-    await user.click(await screen.findByRole('button', { name: /Sources/ }));
+    /* The two sections are a canon §6.5 segment now, so they answer to `tab`
+       rather than `button` — and a tab is what a screen reader should hear. */
+    await user.click(await screen.findByRole('tab', { name: /Sources/ }));
 
     const removeButtons = await screen.findAllByRole('button', { name: 'Remove source' });
     expect(removeButtons).toHaveLength(2);
