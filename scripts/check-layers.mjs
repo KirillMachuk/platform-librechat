@@ -94,25 +94,61 @@ if (tailwind) {
 /* ------------------------------------------------------------------ *
  * 2. Nothing that floats over the page carries a raw number.
  *
- *    Matched on the className string, not on the whole file: a `fixed` in one
- *    element and a `z-[60]` in another are not the same element, and pairing
- *    them would make this shout at code that is fine.
+ *    Scoped to one `className` at a time, never to the whole file: a `fixed` on
+ *    one element and a `z-[60]` on another are not the same element, and
+ *    pairing them would make this shout at code that is fine.
+ *
+ *    The whole attribute value, though — not one quoted run inside it. The
+ *    first version matched a single-line string and missed the two patterns
+ *    that matter most, both measured rather than imagined:
+ *      - a multi-line template literal (`DragDropOverlay`, the file that used
+ *        to carry z-9999): reintroducing the number left this green;
+ *      - classes split across `cn()` arguments, where `fixed` sits in one and
+ *        the number in another.
  * ------------------------------------------------------------------ */
 const RAW_Z = /\bz-\[\d+\]/;
 const SOURCES = [...walk('client/src'), ...walk('packages/client/src')];
 
+/** Every `className=` value in the file, braces balanced so `cn(...)` comes whole. */
+function classNameValues(text) {
+  const out = [];
+  const attribute = /className\s*=\s*/g;
+  let match;
+  while ((match = attribute.exec(text)) !== null) {
+    let i = match.index + match[0].length;
+    const opener = text[i];
+    if (opener === '"' || opener === "'") {
+      const end = text.indexOf(opener, i + 1);
+      if (end === -1) continue;
+      out.push(text.slice(i + 1, end));
+      attribute.lastIndex = end;
+      continue;
+    }
+    if (opener !== '{') continue;
+    let depth = 0;
+    const start = i;
+    for (; i < text.length; i += 1) {
+      if (text[i] === '{') depth += 1;
+      else if (text[i] === '}') {
+        depth -= 1;
+        if (depth === 0) break;
+      }
+    }
+    out.push(text.slice(start + 1, i));
+    attribute.lastIndex = i;
+  }
+  return out;
+}
+
 for (const rel of SOURCES) {
   const source = read(rel);
   if (!source) continue;
-  const text = stripComments(source);
-  /* Every quoted or templated run of classes in the file. */
-  for (const [, classes] of text.matchAll(/["'`]([^"'`\n]*\bz-\[\d+\][^"'`\n]*)["'`]/g)) {
+  for (const classes of classNameValues(stripComments(source))) {
     if (!RAW_Z.test(classes)) continue;
     if (!/\bfixed\b/.test(classes)) continue;
-    const number = classes.match(RAW_Z)[0];
     fail(
       `${relative('.', rel).split(sep).join('/')}`,
-      `a page-level overlay carries ${number}`,
+      `a page-level overlay carries ${classes.match(RAW_Z)[0]}`,
       'use a class from the scale (z-dialog, z-popover, z-toast, z-drawer, z-dragdrop)',
     );
   }

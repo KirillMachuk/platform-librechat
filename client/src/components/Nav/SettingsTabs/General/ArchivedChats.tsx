@@ -12,7 +12,9 @@ export default function ArchivedChats() {
       <div>{localize('com_nav_archived_chats')}</div>
       <OGDialog open={isOpen} onOpenChange={setIsOpen}>
         <OGDialogTrigger asChild>
-          <Button variant="outline" aria-label="Archived chats">
+          {/* The visible label is just "Manage", which says nothing on its own to a
+              screen reader — hence a name of its own, from the same key as the row. */}
+          <Button variant="outline" aria-label={localize('com_nav_archived_chats')}>
             {localize('com_ui_manage')}
           </Button>
         </OGDialogTrigger>
