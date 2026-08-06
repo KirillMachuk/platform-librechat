@@ -53,36 +53,31 @@ describe('imageResize utility', () => {
   });
 
   describe('shouldResizeImage', () => {
-    it('should return true for large image files', () => {
-      const largeImageFile = new File([''], 'test.jpg', {
-        type: 'image/jpeg',
-        lastModified: Date.now(),
-      });
+    const imageOfSize = (bytes: number) => {
+      const file = new File([''], 'test.jpg', { type: 'image/jpeg', lastModified: 0 });
+      Object.defineProperty(file, 'size', { value: bytes, writable: false });
+      return file;
+    };
 
-      // Mock large file size
-      Object.defineProperty(largeImageFile, 'size', {
-        value: 100 * 1024 * 1024, // 100MB
-        writable: false,
-      });
-
-      const result = shouldResizeImage(largeImageFile, 50 * 1024 * 1024); // 50MB limit
-      expect(result).toBe(true);
+    it('offers a large image for resizing', () => {
+      expect(shouldResizeImage(imageOfSize(100 * 1024 * 1024))).toBe(true);
     });
 
-    it('should return false for small image files', () => {
-      const smallImageFile = new File([''], 'test.jpg', {
-        type: 'image/jpeg',
-        lastModified: Date.now(),
-      });
+    /**
+     * The rule used to be "smaller than a tenth of the size limit — leave it", with the
+     * limit defaulting to 512 MB. That meant only images above 51 MB were ever offered,
+     * while the server rejects anything over 50 MB: the feature could not fire at all.
+     * A phone photo is the case it exists for, and it is single-digit megabytes.
+     */
+    it('offers a phone photo too, which the old size rule skipped', () => {
+      expect(shouldResizeImage(imageOfSize(9 * 1024 * 1024))).toBe(true);
+      expect(shouldResizeImage(imageOfSize(2 * 1024 * 1024))).toBe(true);
+    });
 
-      // Mock small file size
-      Object.defineProperty(smallImageFile, 'size', {
-        value: 1024, // 1KB
-        writable: false,
-      });
-
-      const result = shouldResizeImage(smallImageFile, 50 * 1024 * 1024); // 50MB limit
-      expect(result).toBe(false);
+    /** Small pictures are offered as well; `resizeImage` hands back the original
+     *  untouched once it sees the dimensions already fit. */
+    it('leaves the decision about dimensions to resizeImage', () => {
+      expect(shouldResizeImage(imageOfSize(1024))).toBe(true);
     });
 
     it('should return false for non-image files', () => {
