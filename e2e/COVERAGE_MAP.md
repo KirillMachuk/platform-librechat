@@ -269,6 +269,17 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | A skill written in the interface belongs to its author, a configured one to nobody | e2e | `e2e/specs/mock/skills.spec.ts#a skill of my own is mine to edit` | covered |
 | A skill is attached to an agent from the interface | e2e | — | gap |
 
+**Why sharing a prompt has no test.** The Share button renders only when the USER role carries
+`PROMPTS.SHARE`, and this deployment does not give it. Measured 2026-08-06 rather than assumed:
+against a fresh database, with `interface.prompts: true` — the stand's exact setting —
+`/api/roles/USER` comes back `{USE: true, CREATE: true, SHARE: false, SHARE_PUBLIC: false}`, and
+the prompt page offers Delete but no Share. The permission is only seeded from `interface.prompts`
+when that key is an **object** carrying `share` or `public`; a bare `true` leaves both off.
+
+So there is nothing to cover until someone turns it on, and a test that turned it on itself would
+be testing a configuration no one runs. Worth an owner decision, not a test: the stand also sets
+`peoplePicker: {users: true}` "для ACL Sharing", which suggests sharing was meant to work.
+
 ## 10. Settings, sharing, permissions
 
 | Behavior | Level | Owning test | Status |
