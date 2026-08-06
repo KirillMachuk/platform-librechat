@@ -27,14 +27,17 @@ module.exports = {
       // списки в «Настройках» оказывались под диалогом настроек и не
       // открывались вовсе. Значения берутся из слоя токенов, а не пишутся
       // числами в разметке.
+      //
+      // Слой окон один — `dialog`. Кто из окон выше, решает порядок открытия,
+      // а не число: разбор в style.css рядом с токенами.
       zIndex: {
         sticky: 'var(--c-z-sticky)',
         'scrim-drawer': 'var(--c-z-scrim-drawer)',
         drawer: 'var(--c-z-drawer)',
-        'scrim-dialog': 'var(--c-z-scrim-dialog)',
         dialog: 'var(--c-z-dialog)',
         popover: 'var(--c-z-popover)',
         toast: 'var(--c-z-toast)',
+        dragdrop: 'var(--c-z-dragdrop)',
       },
       // Канон §4 знает ровно две тени — карточки и оверлеи, и обе в тёмной
       // теме заметно плотнее, чем даёт Tailwind по умолчанию. Значения

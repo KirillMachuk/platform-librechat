@@ -56,8 +56,7 @@ const SaveAsPresetDialog = ({ open, onOpenChange, preset }: TEditPresetProps) =>
     <OGDialog open={open} onOpenChange={onOpenChange}>
       <OGDialogTemplate
         title={localize('com_endpoint_save_as_preset')}
-        className="z-[90] w-11/12 sm:w-1/4"
-        overlayClassName="z-[80]"
+        className="w-11/12 sm:w-1/4"
         showCloseButton={false}
         main={
           <div className="flex w-full flex-col items-center gap-2">

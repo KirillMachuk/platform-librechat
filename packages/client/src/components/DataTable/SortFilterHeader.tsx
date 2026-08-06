@@ -131,7 +131,7 @@ export function SortFilterHeader<TData, TValue>({
         }
         items={dropdownItems}
         menuId={menuId}
-        className="z-[1001]"
+        className="z-popover"
       />
     </div>
   );

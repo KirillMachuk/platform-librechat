@@ -139,7 +139,7 @@ const MessageIndicator = memo(function MessageIndicator({
         </button>
       </HoverCardTrigger>
       <HoverCardPortal>
-        <HoverCardContent side="left" sideOffset={12} className="z-[999] max-w-[280px] px-3 py-2">
+        <HoverCardContent side="left" sideOffset={12} className="z-popover max-w-[280px] px-3 py-2">
           <p className="line-clamp-3 text-xs text-text-secondary">{entry.preview}</p>
         </HoverCardContent>
       </HoverCardPortal>

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { attachFixture, fileFixture, openFilesPanel } from './files.helpers';
 import { measureCanon } from './canon.helpers';
-import { NEW_CHAT_PATH } from './helpers';
+import { NEW_CHAT_PATH, openAccountMenu } from './helpers';
 
 /**
  * Canon rules that hold whatever screen is in front of you, so they can be
@@ -177,60 +177,73 @@ test.describe('canon — layers, keyboard reach, layout shift', () => {
     test.setTimeout(90000);
     const chat = await onChatScreen(page);
 
-    expect(chat.scale).toEqual([10, 109, 110, 990, 999, 1001, 1010]);
+    expect(chat.scale).toEqual([10, 109, 110, 999, 1001, 1010, 1020]);
     expect(chat.layers).toEqual([]);
   });
 
   /**
-   * A dialog is where a stray z-index shows up, and where it matters: the fork
-   * already had settings lists render behind the settings dialog.
+   * A dialog is where a stray z-index shows up, and where it matters.
    *
-   * The file library sits at 120 — above the drawer at 110, nowhere near the
-   * dialog layer at 999. Nothing renders wrongly today, because nothing else
-   * claims the band between them; a popover opened from inside this dialog
-   * would, since popovers live at 1001 and would escape it entirely.
+   * The fork used to run a parallel ladder in this band — panel dialog 120,
+   * prompts menu 125, then OGDialog at 130/140 with +60 per level of nesting —
+   * alongside the settings dialog on the canon 999. A dialog opened from
+   * settings therefore landed *underneath* it: visible around the edges,
+   * impossible to click. Reproduced and photographed before the fix by
+   * `tools/layers_repro.js` in the workspace.
    *
-   * **Do not fix this by raising one number.** The redesign track measured the
-   * whole band and it is a parallel ladder that holds itself together: mobile
-   * drawer 110 over its scrim 109 (canon), panel dialog 120
-   * (`UnifiedSidebar/PanelDialog.tsx`), prompts menu 125, then OGDialog at
-   * 130/140 with +60 for every level of nesting
-   * (`packages/client/src/components/OriginalDialog.tsx`). The ladder exists so
-   * a dialog opened FROM a panel — the project editor, say — lands above the
-   * panel. Move `PanelDialog` alone to 999 and OGDialog's 140 falls behind it.
-   * Move the whole ladder up from 999 and the second nesting level reaches
-   * 1059, above popovers at 1001 and toasts at 1010, which breaks the fork's
-   * own "popovers sit above dialogs" rule.
-   *
-   * So the canon describes one dialog layer and says nothing about nested ones,
-   * and that is a decision about the scale rather than a code change. Tracked in
-   * `UI_IMPLEMENTATION_Plan.md`. This test holds the current number until the
-   * scale is settled, and goes red exactly when it is.
+   * The ladder is gone. Every modal now shares one layer, and which of two is
+   * on top is decided by which was opened later, because a dialog opened later
+   * is appended later in the document. That is how the browser's own top layer
+   * behaves, and both dialog libraries the fork uses (Radix, Headless UI)
+   * portal to the end of the document, so the guarantee holds across them.
    *
    * Found only once this sweep stopped filtering by size: the element carrying
    * a dialog's z-index is the wrapper Headless UI renders, and that wrapper has
    * no box of its own, so the check meant for dialog stacking had never once
    * looked at a dialog's own layer.
    */
-  test('the file library dialog stacks below the canon dialog layer', async ({ page }) => {
+  test('the file library dialog is on the canon dialog layer', async ({ page }) => {
     test.setTimeout(120000);
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
     await attachFixture(page, fileFixture('notes.md'));
     await openFilesPanel(page);
 
     const withDialog = await measureCanon(page);
-    expect(withDialog.scale).toEqual([10, 109, 110, 990, 999, 1001, 1010]);
-    expect(withDialog.layers.map((layer) => layer.z)).toEqual(['120']);
+    expect(withDialog.scale).toEqual([10, 109, 110, 999, 1001, 1010, 1020]);
+    expect(withDialog.layers).toEqual([]);
   });
 
-  test('the file library dialog is on the canon scale', async ({ page }) => {
-    test.fail();
+  /**
+   * The number on its own proves nothing — it only holds inside its own
+   * stacking context, and an ancestor with a transform or an opacity silently
+   * traps it. What a person cares about is whether the second window can be
+   * used, so this opens a dialog from inside a dialog and asks the page who is
+   * actually on top at the point a finger would land.
+   */
+  test('a dialog opened from a dialog is the one you can click', async ({ page }) => {
     test.setTimeout(120000);
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
-    await attachFixture(page, fileFixture('notes.md'));
-    await openFilesPanel(page);
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
 
-    expect((await measureCanon(page)).layers).toEqual([]);
+    const menu = await openAccountMenu(page);
+    await menu.getByRole('menuitem', { name: 'Settings' }).click();
+    await expect(page.getByRole('heading', { name: 'Settings' }).first()).toBeVisible();
+
+    await page.getByRole('button', { name: 'Archived chats' }).click();
+    await expect(page.locator('[role=dialog]')).toHaveCount(2);
+
+    const nested = await page.evaluate(() => {
+      /* Document order is open order: the dialog opened last is last. */
+      const all = [...document.querySelectorAll('[role=dialog]')];
+      const el = all[all.length - 1];
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return { width: Math.round(r.width), onTop: !!top && el.contains(top) };
+    });
+
+    /* Guards against grabbing the size-less wrapper instead of the window. */
+    expect(nested.width).toBeGreaterThan(200);
+    expect(nested.onTop).toBe(true);
   });
 
   test('nothing is clickable by mouse but unreachable by keyboard', async ({ page }) => {
