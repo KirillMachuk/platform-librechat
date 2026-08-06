@@ -3,11 +3,11 @@ import * as Menu from '@ariakit/react/menu';
 import { FilterX, ListFilter } from 'lucide-react';
 import { ArrowDownIcon, ArrowUpIcon, CaretSortIcon } from '@radix-ui/react-icons';
 import type { Column } from '@tanstack/react-table';
-import type { MenuItemProps } from '../../common';
 import type { TranslationKeys } from '../../hooks';
-import { useLocalize } from '../../hooks';
-import { TooltipAnchor } from '../Tooltip';
+import type { MenuItemProps } from '../../common';
 import DropdownPopup from '../DropdownPopup';
+import { TooltipAnchor } from '../Tooltip';
+import { useLocalize } from '../../hooks';
 import { cn } from '~/utils';
 
 interface SortFilterHeaderProps<TData, TValue> extends React.HTMLAttributes<HTMLDivElement> {
