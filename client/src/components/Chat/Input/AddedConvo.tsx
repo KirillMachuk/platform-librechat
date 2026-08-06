@@ -60,16 +60,15 @@ export default function AddedConvo({
           />
         </div>
       </span>
-      <span className="text-token-text-secondary line-clamp-3 flex-1 py-0.5 font-semibold">
-        {title}
-      </span>
+      {/* Weight 500, not 600: the canon keeps 600 for the logo and markdown only. */}
+      <span className="line-clamp-3 flex-1 py-0.5 font-medium text-text-secondary">{title}</span>
       <button
-        className="text-token-text-secondary flex-shrink-0"
+        className="tap-target flex size-8 flex-shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary"
         type="button"
         aria-label={localize('com_ui_close_added_convo')}
         onClick={() => setAddedConvo(null)}
       >
-        <X className="icon-lg" />
+        <X className="icon-md" aria-hidden="true" />
       </button>
     </div>
   );
