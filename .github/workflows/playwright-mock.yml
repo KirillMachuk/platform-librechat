@@ -134,10 +134,29 @@ jobs:
         run: npm run build:client
 
       - name: Install Playwright runtime dependencies
-        timeout-minutes: 5
+        # Three attempts with a pause. The step downloads apt packages from Ubuntu
+        # mirrors and has failed its five minutes three times on other people's
+        # pull requests — the tests never ran, the artifacts were empty, and a
+        # plain re-run went green. A retry removes the coin flip without hiding
+        # anything: if the libraries genuinely cannot be installed, all three
+        # attempts fail and so does the job.
+        #
+        # `continue-on-error` was the other candidate and was not taken. The
+        # runner image ships Chrome's libraries already, so it would usually
+        # work — but on the day it does not, the failure would surface as a
+        # cryptic browser crash inside a test instead of here.
+        timeout-minutes: 12
         run: |
           google-chrome --version
-          npx playwright install-deps chrome
+          for attempt in 1 2 3; do
+            if npx playwright install-deps chrome; then
+              exit 0
+            fi
+            echo "install-deps attempt $attempt failed; retrying in 20s"
+            sleep 20
+          done
+          echo "install-deps failed three times — this is not a flake"
+          exit 1
 
       - name: Run mock-LLM Tier-1 e2e (shard ${{ matrix.shard }}/4)
         # Cap the test step well under the job timeout (45m). A hung run then fails
@@ -158,6 +177,25 @@ jobs:
         env:
           CI: 'true'
 
+      - name: Run the permissions profile (shard 1 only)
+        # A second hermetic run whose only difference is the `interface` block of
+        # its config — the block that seeds role permissions at startup. It needs
+        # its own server because permissions are decided once, at boot.
+        #
+        # A step on shard 1 rather than a job of its own: a job would repeat
+        # ninety lines of cache-and-build for a run that takes forty seconds, and
+        # this shard has already built everything. It costs shard 1 about a
+        # minute and the gate as a whole nothing, since the shards run together.
+        if: ${{ matrix.shard == 1 }}
+        timeout-minutes: 10
+        run: |
+          set -o pipefail
+          mkdir -p e2e/logs
+          npx playwright test --config=e2e/playwright.config.permissions.ts 2>&1 \
+            | tee "e2e/logs/run-permissions.log"
+        env:
+          CI: 'true'
+
       - name: Upload Playwright HTML report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -174,6 +212,7 @@ jobs:
           name: playwright-test-results-shard-${{ matrix.shard }}
           path: |
             e2e/specs/.test-results/**
+            e2e/specs/.test-results-permissions/**
             e2e/logs/**
           retention-days: 7
           if-no-files-found: ignore

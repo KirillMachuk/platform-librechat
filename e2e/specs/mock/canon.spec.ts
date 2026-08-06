@@ -190,6 +190,23 @@ test.describe('canon — layers, keyboard reach, layout shift', () => {
    * claims the band between them; a popover opened from inside this dialog
    * would, since popovers live at 1001 and would escape it entirely.
    *
+   * **Do not fix this by raising one number.** The redesign track measured the
+   * whole band and it is a parallel ladder that holds itself together: mobile
+   * drawer 110 over its scrim 109 (canon), panel dialog 120
+   * (`UnifiedSidebar/PanelDialog.tsx`), prompts menu 125, then OGDialog at
+   * 130/140 with +60 for every level of nesting
+   * (`packages/client/src/components/OriginalDialog.tsx`). The ladder exists so
+   * a dialog opened FROM a panel — the project editor, say — lands above the
+   * panel. Move `PanelDialog` alone to 999 and OGDialog's 140 falls behind it.
+   * Move the whole ladder up from 999 and the second nesting level reaches
+   * 1059, above popovers at 1001 and toasts at 1010, which breaks the fork's
+   * own "popovers sit above dialogs" rule.
+   *
+   * So the canon describes one dialog layer and says nothing about nested ones,
+   * and that is a decision about the scale rather than a code change. Tracked in
+   * `UI_IMPLEMENTATION_Plan.md`. This test holds the current number until the
+   * scale is settled, and goes red exactly when it is.
+   *
    * Found only once this sweep stopped filtering by size: the element carrying
    * a dialog's z-index is the wrapper Headless UI renders, and that wrapper has
    * no box of its own, so the check meant for dialog stacking had never once

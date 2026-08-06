@@ -117,6 +117,7 @@
     "backfill:doc-metadata:dry-run": "node config/backfill-doc-metadata.js --dry-run",
     "backfill:doc-metadata": "node config/backfill-doc-metadata.js",
     "e2e:nightly": "playwright test --config=e2e/playwright.config.nightly.ts --fail-on-flaky-tests",
+    "e2e:permissions": "playwright test --config=e2e/playwright.config.permissions.ts",
     "e2e:burn-in": "playwright test --config=e2e/playwright.config.mock.ts --repeat-each=5 --fail-on-flaky-tests"
   },
   "repository": {

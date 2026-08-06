@@ -123,10 +123,29 @@ jobs:
         run: npm run build:client
 
       - name: Install Playwright runtime dependencies
-        timeout-minutes: 5
+        # Three attempts with a pause. The step downloads apt packages from Ubuntu
+        # mirrors and has failed its five minutes three times on other people's
+        # pull requests — the tests never ran, the artifacts were empty, and a
+        # plain re-run went green. A retry removes the coin flip without hiding
+        # anything: if the libraries genuinely cannot be installed, all three
+        # attempts fail and so does the job.
+        #
+        # `continue-on-error` was the other candidate and was not taken. The
+        # runner image ships Chrome's libraries already, so it would usually
+        # work — but on the day it does not, the failure would surface as a
+        # cryptic browser crash inside a test instead of here.
+        timeout-minutes: 12
         run: |
           google-chrome --version
-          npx playwright install-deps chrome
+          for attempt in 1 2 3; do
+            if npx playwright install-deps chrome; then
+              exit 0
+            fi
+            echo "install-deps attempt $attempt failed; retrying in 20s"
+            sleep 20
+          done
+          echo "install-deps failed three times — this is not a flake"
+          exit 1
 
       - name: Run nightly e2e
         # Capped well under the job timeout so a hung run fails THIS step and the
