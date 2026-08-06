@@ -109,6 +109,18 @@ const USER_READY_ANONYMIZER_ERRORS = new Set([
 ]);
 
 /**
+ * The gateway's own words for "the model you picked has no provider that accepts
+ * images" — logged verbatim from the stand on 06.08 as
+ * `status=404 | message=No endpoints found that support image input`.
+ *
+ * Both halves are required, as with the data-policy refusal below: 404 alone is any
+ * unknown route, and matching the text alone would let a 400 about a malformed
+ * attachment claim the model is at fault.
+ */
+const NO_IMAGE_ENDPOINT_MESSAGE = /image input/i;
+const NO_IMAGE_ENDPOINT_STATUS = 404;
+
+/**
  * Maps an upstream/model-provider error to a clean, neutral message for the
  * end user. The precise technical reason (status/code/provider/raw) is logged
  * separately in `sendCompletion`'s catch; this never leaks the provider name
@@ -167,6 +179,17 @@ function getUserFacingError(err) {
   ]
     .filter((part) => typeof part === 'string')
     .join(' ');
+
+  /* The employee attached a picture to a model that cannot look at one. Checked
+   * before the data-policy refusal below because it is the narrower answer: this
+   * is about the message they just sent, which they can change, rather than about
+   * the model being unusable in general. The upload already warns when the model
+   * is known not to read images; this catches the ways round that warning —
+   * switching model after attaching, or an admin who turned image-to-text off. */
+  if (status === NO_IMAGE_ENDPOINT_STATUS && NO_IMAGE_ENDPOINT_MESSAGE.test(refusalText)) {
+    return 'Эта модель не умеет читать изображения. Переключитесь на модель с поддержкой изображений или опишите содержимое картинки текстом.';
+  }
+
   if (isDataPolicyRefusal(status, refusalText)) {
     return 'Эта модель сейчас недоступна: её обслуживают только площадки, которые не проходят нашу политику обработки данных. Выберите другую модель и сообщите администратору.';
   }
