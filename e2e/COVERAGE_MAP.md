@@ -262,7 +262,8 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | Prompts library: create and use a prompt | e2e | `e2e/specs/mock/prompts.spec.ts` | covered |
 | A prompt's variables are read and shown by kind | unit | `client/src/components/Prompts/display/__tests__/PromptVariables.spec.tsx` | covered |
 | Editing a prompt adds a version and the new one is what gets sent | e2e | `e2e/specs/mock/prompts.spec.ts#editing a prompt adds a version and it is the new one that gets sent` | covered |
-| Sharing a prompt with someone else | e2e | `e2e/specs/permissions/sharing.spec.ts#what is shared with everyone reaches someone else, what is not stays put` | covered |
+| A prompt shared with everyone reaches other people, an unshared one does not | e2e | `e2e/specs/permissions/sharing.spec.ts#what is shared with everyone reaches someone else, what is not stays put` | covered |
+| Sharing a prompt with one named person | e2e | — | gap |
 | MCP server selection and ephemeral servers | e2e | `e2e/specs/mock/mcp.spec.ts` | covered |
 | Configured skills load read-only for every authenticated user (API) | e2e | `e2e/specs/mock/deployment-skills.spec.ts#loads configured deployment skills for every authenticated user as read-only` | covered |
 | A model spec sees only the skills scoped to it (API) | e2e | `e2e/specs/mock/model-spec-skills.spec.ts#loads accessible configured skills and skips missing or inaccessible names` | covered |
@@ -278,11 +279,19 @@ false}`, and the prompt page offers Delete but no Share. The permission is seede
 `interface.prompts` only when that key is an **object** carrying `share` or `public`; a bare
 `true` leaves both off, which is why nobody noticed it was off.
 
-The owner decided on 2026-08-06 that all of this is to be switched on, so the permissions profile
+The owner decided on 2026-08-06 that this is to be switched on, so the permissions profile
 (`e2e/config/librechat.permissions.yaml`) switches it on and the behaviour is covered there —
 proven before the stand's yaml changes rather than after somebody reports it broken. That profile
 now carries both halves: two permissions deliberately off so the gate stays proven, and the
 sharing permissions on so what they unlock is proven too.
+
+**Sharing with one named person is a gap on purpose.** It needs `PEOPLE_PICKER`, and the owner
+decided the same day that sharing with everyone is all this deployment wants. That permission
+opens `search-principals` — the whole staff directory — to every USER, so the profile leaves it
+off and `gating.spec.ts` asserts it is off. Measured after removing it: the share dialog still
+opens and everyone-sharing still works, because the dialog needs either the picker **or** public
+sharing, not both. If the decision ever changes, the profile is where to turn it on and this row
+is what to cover.
 
 **Still off, still uncovered**, in the same family and for the same reason — each needs its
 permission turned on in that profile before it can be tested at all:

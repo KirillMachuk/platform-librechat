@@ -30,9 +30,6 @@ interface:
   # `share` or `public` (packages/api/src/app/permissions.ts). The owner intends
   # to turn all of it on, so the behaviour it unlocks is tested here rather than
   # waiting for the day the stand's yaml changes.
-  #
-  # The people picker matters as much as the share bits: without it the share
-  # dialog has nobody to offer, and granting access to a person is impossible.
   prompts:
     share: true
     public: true
@@ -42,10 +39,16 @@ interface:
   skills:
     share: true
     public: true
-  peoplePicker:
-    users: true
-    groups: true
-    roles: true
+
+  # peoplePicker stays OFF, and deliberately. Sharing with a named person needs
+  # it; sharing with everyone does not, and the owner decided on 2026-08-06 that
+  # everyone-sharing is all this deployment wants. The permission is not free:
+  # it opens `GET /api/permissions/search-principals` to every USER, which is
+  # the whole staff directory. Left off here so the profile does not quietly
+  # recommend it to the stand's config.
+  #
+  # `gating.spec.ts` asserts it is off, so this is a decision with a test on it
+  # rather than an omission.
 
 mcpServers:
   e2e-memory:

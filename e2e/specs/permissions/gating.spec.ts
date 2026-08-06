@@ -67,7 +67,14 @@ test.describe('role permissions gate the interface', () => {
     expect(seeded.PROMPTS?.SHARE_PUBLIC).toBe(true);
     expect(seeded.AGENTS?.SHARE).toBe(true);
     expect(seeded.SKILLS?.SHARE).toBe(true);
-    expect(seeded.PEOPLE_PICKER?.VIEW_USERS).toBe(true);
+
+    /* And off, on purpose. Sharing with a named person needs the people picker;
+     * sharing with everyone does not, and everyone-sharing is all this
+     * deployment wants (owner, 2026-08-06). The permission opens the whole staff
+     * directory to every USER through `search-principals`, so leaving it off is
+     * a decision — and this line is what keeps it one rather than an oversight
+     * somebody switches on while adding an unrelated key. */
+    expect(seeded.PEOPLE_PICKER?.VIEW_USERS).toBe(false);
 
     /* And the object form must not have quietly taken USE and CREATE with it,
      * which is what would happen if the seeding treated an object as "only what
