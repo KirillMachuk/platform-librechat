@@ -233,17 +233,45 @@ test.describe('canon — layers, keyboard reach, layout shift', () => {
     await expect(page.locator('[role=dialog]')).toHaveCount(2);
 
     const nested = await page.evaluate(() => {
-      /* Document order is open order: the dialog opened last is last. */
-      const all = [...document.querySelectorAll('[role=dialog]')];
-      const el = all[all.length - 1];
-      const r = el.getBoundingClientRect();
-      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-      return { width: Math.round(r.width), onTop: !!top && el.contains(top) };
+      /* Radix switches pointer events off on the body while a modal is open,
+         so a plain hit test answers "what would catch the click", not "what is
+         drawn on top" — and those two come apart in exactly the case this
+         guards. With the buried dialog the clicks still landed on it, blind,
+         underneath the dialog the person could see. Measured: this test passed
+         against the reintroduced defect until the lock came off.
+
+         Lifted on the body alone, not with a blanket `* { pointer-events:
+         auto }`. The blanket version also revives layers that are deliberately
+         click-through — the toast viewport is a full-screen `<ol>` above
+         everything — and then the measurement reports the toast layer covering
+         every dialog. Measured that too, on a build that was fine. */
+      const previous = document.body.style.pointerEvents;
+      document.body.style.pointerEvents = 'auto';
+      const name = (el: Element | null) =>
+        el
+          ? `${el.tagName.toLowerCase()}.${String(el.className).split(/\s+/).slice(0, 3).join('.')}`
+          : 'nothing';
+      try {
+        /* Document order is open order: the dialog opened last is last. */
+        const all = [...document.querySelectorAll('[role=dialog]')];
+        const el = all[all.length - 1];
+        const r = el.getBoundingClientRect();
+        const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return {
+          width: Math.round(r.width),
+          onTop: !!top && el.contains(top),
+          /* Named so a failure says who covered it, not just that something did. */
+          nested: name(el),
+          coveredBy: !top || el.contains(top) ? '' : name(top),
+        };
+      } finally {
+        document.body.style.pointerEvents = previous;
+      }
     });
 
     /* Guards against grabbing the size-less wrapper instead of the window. */
     expect(nested.width).toBeGreaterThan(200);
-    expect(nested.onTop).toBe(true);
+    expect(nested).toMatchObject({ onTop: true, coveredBy: '' });
   });
 
   test('nothing is clickable by mouse but unreachable by keyboard', async ({ page }) => {
