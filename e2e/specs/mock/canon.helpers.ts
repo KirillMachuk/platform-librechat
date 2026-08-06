@@ -46,7 +46,7 @@ const TOUCH_MIN = 44;
 const MEASURE = `(() => {
   const TOUCH_MIN = ${TOUCH_MIN};
   const styles = getComputedStyle(document.documentElement);
-  const scale = ['sticky','scrim-drawer','drawer','scrim-dialog','dialog','popover','toast']
+  const scale = ['sticky','scrim-drawer','drawer','dialog','popover','toast','dragdrop']
     .map((name) => parseInt(styles.getPropertyValue('--c-z-' + name), 10))
     .filter((n) => Number.isFinite(n));
   const CANON_Z = new Set([0, ...scale]);

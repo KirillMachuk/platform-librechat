@@ -16,7 +16,7 @@ type DialogPortalProps = DialogPrimitive.DialogPortalProps & { className?: strin
 
 const DialogPortal = ({ className = '', children, ...props }: DialogPortalProps) => (
   <DialogPrimitive.Portal className={cn(className)} {...(props as DialogPortalProps)}>
-    <div className="fixed inset-0 z-[999] flex items-start justify-center sm:items-center">
+    <div className="fixed inset-0 z-dialog flex items-start justify-center sm:items-center">
       {children}
     </div>
   </DialogPrimitive.Portal>
@@ -29,7 +29,7 @@ const DialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     className={cn(
-      'fixed inset-0 z-[999] bg-gray-600/65 transition-all duration-100 data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:fade-in dark:bg-black/80',
+      'fixed inset-0 z-dialog bg-gray-600/65 transition-all duration-100 data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:fade-in dark:bg-black/80',
       className ?? '',
     )}
     {...props}
@@ -60,10 +60,10 @@ const DialogContent: React.ForwardRefExoticComponent<
         <DialogPrimitive.Content
           ref={ref}
           className={cn(
-            'fixed z-[999] grid w-full gap-4 rounded-b-lg bg-white pb-6 animate-in data-[state=open]:fade-in-90 data-[state=open]:slide-in-from-bottom-10 sm:rounded-lg',
+            'fixed z-dialog grid w-full gap-4 rounded-b-lg bg-white pb-6 animate-in data-[state=open]:fade-in-90 data-[state=open]:slide-in-from-bottom-10 sm:rounded-lg',
             'dark:bg-gray-700',
             isSmallScreen
-              ? 'fixed left-1/2 top-1/2 z-[999] m-auto grid w-11/12 -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-white pb-6'
+              ? 'fixed left-1/2 top-1/2 z-dialog m-auto grid w-11/12 -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-white pb-6'
               : '',
             disableScroll ? 'overflow-hidden' : '',
             className ?? '',

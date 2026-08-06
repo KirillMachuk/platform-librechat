@@ -91,7 +91,7 @@ function SourceItem({ source, expanded = false }: SourceItemProps) {
           <Ariakit.Hovercard
             gutter={16}
             className={cn(
-              'z-[999] w-[320px] max-w-[calc(100vw-2rem)] rounded-xl border border-border-medium bg-surface-secondary p-3 text-text-primary shadow-lg',
+              'z-popover w-[320px] max-w-[calc(100vw-2rem)] rounded-xl border border-border-medium bg-surface-secondary p-3 text-text-primary shadow-lg',
               'origin-top-left scale-95 opacity-0 transition-[opacity,transform] duration-150 ease-out',
               'data-[enter]:scale-100 data-[enter]:opacity-100',
               'data-[leave]:scale-95 data-[leave]:opacity-0',
