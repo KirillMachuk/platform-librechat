@@ -210,4 +210,106 @@ test.describe('prompt manager', () => {
       await cleanupPromptGroup(page, createdGroupId);
     }
   });
+
+  /**
+   * Editing was the half of the prompt manager nothing looked at: the test
+   * above creates a prompt and sends it, and stops there.
+   *
+   * Rewriting the text does not overwrite it. The group keeps every version and
+   * points at one of them as production, and it is the production one a chat
+   * sends — so the assertion that matters is not "the textarea now reads X" but
+   * "the old text is still on record and the new one is what would be sent".
+   *
+   * The prompt is created through the API rather than the form. The form is
+   * already covered above; repeating it here would only make this test slower
+   * and give it a second way to fail for reasons that have nothing to do with
+   * editing.
+   */
+  test('editing a prompt adds a version and it is the new one that gets sent', async ({ page }) => {
+    test.setTimeout(120000);
+
+    const promptName = uniquePromptName();
+    const original = replyPrompt('before-the-edit');
+    const rewritten = replyPrompt('after-the-edit');
+    let groupId: string | undefined;
+
+    try {
+      await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
+      await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+
+      const token = await getAccessToken(page);
+      const created = await requestJson<{ prompt?: Prompt; group?: PromptGroup }>(page, {
+        path: '/api/prompts',
+        token,
+        method: 'POST',
+        body: {
+          prompt: { prompt: original, type: 'text' },
+          group: { name: promptName, category: '', oneliner: DESCRIPTION },
+        },
+      });
+      groupId = created.group?._id ?? created.prompt?.groupId;
+      expect(groupId).toBeTruthy();
+
+      await page.goto(`/prompts/${groupId}`, { timeout: 15000 });
+      await expect(page.getByText(original)).toBeVisible();
+
+      /* The editor toggle and the invisible overlay that covers the preview
+       * both answer to "Edit"; either opens the same textarea. */
+      await page.getByRole('button', { name: 'Edit', exact: true }).first().click();
+      const editor = page.getByRole('textbox', { name: 'Prompt input' });
+      await expect(editor).toBeVisible();
+      await editor.fill(rewritten);
+
+      /* Leaving edit mode is what saves — the form submits on the way out. A
+       * version goes to the group's own endpoint, not to the one that created
+       * the group. */
+      const [saved] = await Promise.all([
+        page.waitForResponse(
+          (response) =>
+            response.request().method() === 'POST' &&
+            new URL(response.url()).pathname === `/api/prompts/groups/${groupId}/prompts` &&
+            response.ok(),
+          { timeout: 30000 },
+        ),
+        page.getByRole('button', { name: 'Save', exact: true }).first().click(),
+      ]);
+      expect(saved.ok()).toBeTruthy();
+
+      const versions = await fetchJson<Prompt[]>(
+        page,
+        `/api/prompts?groupId=${encodeURIComponent(groupId!)}`,
+        token,
+      );
+      /* Both, in this order of importance: the rewrite is on record, and the
+       * original was not replaced by it. A test that only looked for the new
+       * text would pass on a build that quietly threw the old version away. */
+      expect(versions.map((version) => version.prompt).sort()).toEqual([original, rewritten].sort());
+
+      const group = await fetchJson<PromptGroup>(
+        page,
+        `/api/prompts/groups/${encodeURIComponent(groupId!)}`,
+        token,
+      );
+      expect(group.productionPrompt?.prompt).toBe(rewritten);
+
+      /* And the point of all of it: a chat sends the rewrite. */
+      await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
+      await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
+      await openPromptsPanel(page);
+      await ensureAutoSendPrompts(page);
+      await page.getByLabel('Filter prompts by name').fill(promptName);
+      const promptCard = page.getByRole('button', {
+        name: new RegExp(`^${escapeRegExp(promptName)} prompt`),
+      });
+      await expect(promptCard).toBeVisible({ timeout: 10000 });
+      await Promise.all([
+        page.waitForResponse(isAgentsStream, { timeout: 30000 }),
+        promptCard.click(),
+      ]);
+      await expect(page.getByTestId('messages-view').getByText(rewritten)).toBeVisible();
+      await expect(page.getByTestId('messages-view').getByText(original)).toHaveCount(0);
+    } finally {
+      await cleanupPromptGroup(page, groupId);
+    }
+  });
 });
