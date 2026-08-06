@@ -131,8 +131,20 @@ test.describe('sidebar chat list', () => {
       const userId = me.id ?? me._id;
       expect(userId).toBeTruthy();
 
-      /* Dated an hour ahead so these sort above whatever earlier specs left
-       * behind for this user, which is what makes "position 30" mean "page 2". */
+      /* Start from an empty list rather than dating the fixtures into the
+       * future to outrank it. Future dates do outrank everything, but they also
+       * fall out of every "Today"/"Yesterday" bucket the sidebar groups by and
+       * land under a bare year heading below the real chats — which near
+       * midnight UTC would sink them out of the first screen and fail this test
+       * for a reason that has nothing to do with paging.
+       *
+       * Global setup already clears this user's conversations for the same kind
+       * of reason, and the specs that run after this one in a shard make their
+       * own, so the emptying is not felt outside this test. */
+      await requestJson(page, { path: '/api/convos/all', token, method: 'DELETE' }).catch(
+        () => undefined,
+      );
+
       await client
         .db()
         .collection('conversations')
@@ -144,8 +156,14 @@ test.describe('sidebar chat list', () => {
             endpoint: 'Mock Provider A',
             model: 'mock-model-a',
             isArchived: false,
-            createdAt: new Date(stamp + 3600_000 - index * 1000),
-            updatedAt: new Date(stamp + 3600_000 - index * 1000),
+            /* The app writes this on every conversation, and the visibility
+             * filter has a separate branch for documents that predate it. Left
+             * out, these fixtures would be visible only through that legacy
+             * branch — so a regression in the branch every real chat uses would
+             * not show up here at all. */
+            isTemporary: false,
+            createdAt: new Date(stamp - index * 1000),
+            updatedAt: new Date(stamp - index * 1000),
           })),
         );
 
@@ -161,16 +179,19 @@ test.describe('sidebar chat list', () => {
       await page.reload({ timeout: 20000 });
       await expect(page.getByText(newest, { exact: true })).toBeVisible({ timeout: 20000 });
 
-      /* Neither the last chat of the first page nor the one past it is on
-       * screen yet. The first of the two is the control: it is already loaded
-       * and merely below the fold, so if it does not appear after the scroll,
-       * the scroll did not happen and the rest of this test means nothing.
-       * Measured — an earlier version wheeled at fixed coordinates that missed
-       * the list, scrollTop stayed 0 through fifteen turns, and it read exactly
-       * like an app that refuses to paginate. */
-      const lastOfFirstPage = title(20);
-      await expect(page.getByText(lastOfFirstPage, { exact: true })).toHaveCount(0);
+      /* The chat past the first page is not here yet. */
       await expect(page.getByText(oldest, { exact: true })).toHaveCount(0);
+
+      /* And the control for the scroll itself, read off the scroller rather
+       * than off a row: which rows a virtualized list keeps mounted depends on
+       * its overscan, the row height and the machine's viewport, so "some row
+       * appeared" is a guess where `scrollTop` is a fact. Measured — an earlier
+       * version wheeled at fixed coordinates that missed the list, scrollTop
+       * stayed 0 through fifteen turns, and it read exactly like an app that
+       * refuses to paginate. */
+      const scrollTop = () =>
+        page.locator('.ReactVirtualized__List').first().evaluate((el) => el.scrollTop);
+      expect(await scrollTop()).toBe(0);
 
       const secondPage = page.waitForResponse(
         (response) => {
@@ -184,20 +205,32 @@ test.describe('sidebar chat list', () => {
 
       /* Aimed at the list, not at a coordinate: `hover` puts the pointer at the
        * element's own centre, which is what makes the wheel reach the
-       * virtualized scroller. */
+       * virtualized scroller.
+       *
+       * The loop runs until the list stops moving — to the end, which is what
+       * the test is named after. Stopping as soon as the last chat appears in
+       * the markup would stop too early: react-virtualized mounts a row before
+       * it is on screen, and the first version did exactly that and then failed
+       * its own viewport check. */
       const list = page.locator('.ReactVirtualized__List').first();
-      for (let attempt = 0; attempt < 15; attempt += 1) {
+      let previousTop = -1;
+      for (let attempt = 0; attempt < 25; attempt += 1) {
         await list.hover();
         await page.mouse.wheel(0, 600);
         await page.waitForTimeout(300);
-        if ((await page.getByText(oldest, { exact: true }).count()) > 0) {
+        const top = await scrollTop();
+        if (top === previousTop) {
           break;
         }
+        previousTop = top;
       }
 
-      await expect(page.getByText(lastOfFirstPage, { exact: true })).toBeVisible();
+      expect(await scrollTop(), 'the wheel did not reach the list').toBeGreaterThan(0);
       await secondPage;
-      await expect(page.getByText(oldest, { exact: true })).toBeVisible();
+      /* In the viewport, not merely in the document: a virtualized row that has
+       * scrolled out of its clipped container still has a box, and
+       * `toBeVisible` is satisfied by that. */
+      await expect(page.getByText(oldest, { exact: true })).toBeInViewport();
     } finally {
       await client
         .db()
