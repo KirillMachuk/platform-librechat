@@ -13,7 +13,7 @@ type AlertPortalProps = AlertDialogPrimitive.AlertDialogPortalProps & { classNam
 
 const AlertDialogPortal = ({ className = '', children, ...props }: AlertPortalProps) => (
   <AlertDialogPrimitive.Portal className={cn(className)} {...(props as AlertPortalProps)}>
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+    <div className="fixed inset-0 z-dialog flex items-end justify-center sm:items-center">
       {children}
     </div>
   </AlertDialogPrimitive.Portal>
@@ -26,7 +26,7 @@ const AlertDialogOverlay = React.forwardRef<
 >(({ className = '', ...props }, ref) => (
   <AlertDialogPrimitive.Overlay
     className={cn(
-      'fixed inset-0 z-50 bg-gray-500/90 transition-opacity animate-in fade-in dark:bg-gray-800/90',
+      'fixed inset-0 z-dialog bg-gray-500/90 transition-opacity animate-in fade-in dark:bg-gray-800/90',
       className,
     )}
     {...props}
@@ -47,7 +47,7 @@ const AlertDialogContent: React.ForwardRefExoticComponent<
     <AlertDialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed z-50 grid w-full max-w-lg scale-100 gap-4 bg-white p-6 opacity-100 animate-in fade-in-90 slide-in-from-bottom-10 sm:rounded-lg sm:zoom-in-90 sm:slide-in-from-bottom-0 md:w-full',
+        'fixed z-dialog grid w-full max-w-lg scale-100 gap-4 bg-white p-6 opacity-100 animate-in fade-in-90 slide-in-from-bottom-10 sm:rounded-lg sm:zoom-in-90 sm:slide-in-from-bottom-0 md:w-full',
         'dark:bg-gray-900',
         className,
       )}

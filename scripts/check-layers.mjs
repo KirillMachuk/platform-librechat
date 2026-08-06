@@ -106,7 +106,19 @@ if (tailwind) {
  *      - classes split across `cn()` arguments, where `fixed` sits in one and
  *        the number in another.
  * ------------------------------------------------------------------ */
-const RAW_Z = /\bz-\[\d+\]/;
+/**
+ * A number rather than a name: `z-[999]` and `z-50` alike. Tailwind's own scale
+ * counts — it is off the canon just as much as an invented value, and leaving
+ * it out let a whole dialog primitive (`AlertDialog`) and the SharePoint picker
+ * sit on 50 while this reported the canon held.
+ *
+ * Worse than merely off-scale: `tailwind-merge` does not recognise the named
+ * classes as z-index utilities, so a caller's `z-50` does NOT replace the
+ * component's `z-dialog` — both survive into the DOM and whichever rule the
+ * build emitted last wins. Measured: today `.z-dialog` happens to come later,
+ * so the SharePoint dialog renders correctly by luck.
+ */
+const RAW_Z = /\bz-(?:\[\d+\]|\d+)\b/;
 const SOURCES = [...walk('client/src'), ...walk('packages/client/src')];
 
 /** Every `className=` value in the file, braces balanced so `cn(...)` comes whole. */
