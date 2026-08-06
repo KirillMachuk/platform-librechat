@@ -260,7 +260,8 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | Removing a project source confirms by naming the file | unit | `client/src/components/Projects/__tests__/ProjectDetailView.spec.tsx#confirms in a dialog naming the file, never through window.confirm` | covered |
 | Prompts library: create and use a prompt | e2e | `e2e/specs/mock/prompts.spec.ts` | covered |
 | A prompt's variables are read and shown by kind | unit | `client/src/components/Prompts/display/__tests__/PromptVariables.spec.tsx` | covered |
-| Creating, editing and sharing a prompt | unit | — | gap |
+| Editing a prompt adds a version and the new one is what gets sent | e2e | `e2e/specs/mock/prompts.spec.ts#editing a prompt adds a version and it is the new one that gets sent` | covered |
+| Sharing a prompt with someone else | e2e | — | gap |
 | MCP server selection and ephemeral servers | e2e | `e2e/specs/mock/mcp.spec.ts` | covered |
 | Configured skills load read-only for every authenticated user (API) | e2e | `e2e/specs/mock/deployment-skills.spec.ts#loads configured deployment skills for every authenticated user as read-only` | covered |
 | A model spec sees only the skills scoped to it (API) | e2e | `e2e/specs/mock/model-spec-skills.spec.ts#loads accessible configured skills and skips missing or inaccessible names` | covered |
