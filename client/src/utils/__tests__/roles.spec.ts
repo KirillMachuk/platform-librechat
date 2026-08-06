@@ -1,6 +1,6 @@
 import type { AccessRoleIds } from 'librechat-data-provider';
-import { getRoleLocalizationKeys } from '../roles';
 import translation from '~/locales/en/translation.json';
+import { getRoleLocalizationKeys } from '../roles';
 
 /**
  * The share dialog is generic — one component serves agents, prompts, skills,
