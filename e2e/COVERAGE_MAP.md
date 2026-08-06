@@ -368,6 +368,8 @@ of encoded.
 | Every z-index on the chat screen comes from the canon scale | e2e | `e2e/specs/mock/canon.spec.ts#every z-index comes from the canon scale` | covered |
 | The file library dialog stacks on the canon dialog layer | e2e | `e2e/specs/mock/canon.spec.ts#the file library dialog is on the canon dialog layer` | covered |
 | A dialog opened from inside a dialog is the one drawn on top | e2e | `e2e/specs/mock/canon.spec.ts#a dialog opened from a dialog is the one you can click` | covered |
+| Each answer in a comparison carries its own Copy and Keep | e2e | `e2e/specs/mock/multi-convo.spec.ts#every answer carries its own Copy and its own way to keep it` | covered |
+| A phone shows one compared answer at a time, switched by a segment | e2e | `e2e/specs/mock/multi-convo.spec.ts#a phone shows one answer at a time and switches between them` | covered |
 | Every image reserves its space before it loads | e2e | `e2e/specs/mock/canon.spec.ts#every image reserves its space before it loads` | covered |
 | Pixel snapshots of the redesigned screens | visual | — | planned:Э7 |
 | Product name is 1MA everywhere, never LibreChat | e2e | `e2e/specs/mock/branding.spec.ts#the account menu and the settings dialog never show it either` | covered |

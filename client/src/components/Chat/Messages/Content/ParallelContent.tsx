@@ -1,9 +1,13 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
+import { useMediaQuery } from '@librechat/client';
 import type { TMessageContentParts, SearchResultData, TAttachment } from 'librechat-data-provider';
+import { useSiblingIdentity } from '~/hooks/Messages';
+import { Segmented } from '~/components/ui/Segmented';
 import MemoryArtifacts from './MemoryArtifacts';
 import Sources from '~/components/Web/Sources';
 import { SearchContext } from '~/Providers';
 import SiblingHeader from './SiblingHeader';
+import { useLocalize } from '~/hooks';
 import { EmptyText } from './Parts';
 import Container from './Container';
 import { cn } from '~/utils';
@@ -146,6 +150,11 @@ type ParallelColumnsProps = {
 
 /**
  * Renders parallel content columns for a single groupId.
+ *
+ * Side by side on a desktop; on a phone one at a time, switched by a segment.
+ * Stacking them there looked simpler and was not: the answers ended up some six
+ * hundred pixels apart, so comparing them — the only reason they exist — meant
+ * scrolling past one to reach the other and holding it in your head.
  */
 export const ParallelColumns = memo(function ParallelColumns({
   columns,
@@ -157,41 +166,104 @@ export const ParallelColumns = memo(function ParallelColumns({
   lastContentIdx,
   renderPart,
 }: ParallelColumnsProps) {
-  return (
-    <div className={cn('flex w-full flex-col gap-3 md:flex-row', 'sibling-content-group')}>
-      {columns.map(({ agentId, parts: columnParts }, colIdx) => {
-        // Show loading cursor if column has no content parts yet (empty array from placeholder)
-        const showLoadingCursor = isSubmitting && columnParts.length === 0;
+  const localize = useLocalize();
+  const isPhone = useMediaQuery('(max-width: 767px)');
+  const [shown, setShown] = useState(0);
 
-        return (
-          <div
-            key={`column-${messageId}-${groupId}-${agentId || colIdx}`}
-            className="min-w-0 flex-1 rounded-xl border border-border-light p-3"
-          >
-            <SiblingHeader
-              agentId={agentId}
-              messageId={messageId}
-              createdAt={createdAt}
-              isSubmitting={isSubmitting}
-              conversationId={conversationId}
-            />
-            {showLoadingCursor ? (
-              <Container>
-                <EmptyText />
-              </Container>
-            ) : (
-              columnParts.map(({ part, idx }) => {
-                const isLastInColumn = idx === columnParts[columnParts.length - 1]?.idx;
-                const isLastContent = idx === lastContentIdx;
-                return renderPart(part, idx, isLastInColumn && isLastContent);
-              })
-            )}
-          </div>
-        );
-      })}
-    </div>
+  /* A column can arrive or leave mid-stream; without this the segment could point
+     past the end and the phone would show nothing at all. */
+  const active = Math.min(shown, Math.max(columns.length - 1, 0));
+  const columnId = (index: number) => `parallel-${messageId}-${groupId}-${index}`;
+
+  return (
+    <>
+      {isPhone && columns.length > 1 && (
+        <SiblingSwitcher
+          columns={columns}
+          active={active}
+          onChange={setShown}
+          label={localize('com_ui_switch_answer')}
+          panelId={columnId}
+        />
+      )}
+      <div className={cn('flex w-full flex-col gap-3 md:flex-row', 'sibling-content-group')}>
+        {columns.map(({ agentId, parts: columnParts }, colIdx) => {
+          // Show loading cursor if column has no content parts yet (empty array from placeholder)
+          const showLoadingCursor = isSubmitting && columnParts.length === 0;
+          const hidden = isPhone && columns.length > 1 && colIdx !== active;
+
+          return (
+            <div
+              key={`column-${messageId}-${groupId}-${agentId || colIdx}`}
+              id={columnId(colIdx)}
+              role={isPhone && columns.length > 1 ? 'tabpanel' : undefined}
+              className={cn(
+                'min-w-0 flex-1 rounded-xl border border-border-light p-3',
+                hidden && 'hidden',
+              )}
+            >
+              <SiblingHeader
+                agentId={agentId}
+                messageId={messageId}
+                createdAt={createdAt}
+                isSubmitting={isSubmitting}
+                conversationId={conversationId}
+                parts={columnParts.map(({ part }) => part)}
+                nameInSwitcher={isPhone && columns.length > 1}
+              />
+              {showLoadingCursor ? (
+                <Container>
+                  <EmptyText />
+                </Container>
+              ) : (
+                columnParts.map(({ part, idx }) => {
+                  const isLastInColumn = idx === columnParts[columnParts.length - 1]?.idx;
+                  const isLastContent = idx === lastContentIdx;
+                  return renderPart(part, idx, isLastInColumn && isLastContent);
+                })
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 });
+
+/** Names every column so the segment can say which answer it switches to. */
+function SiblingSwitcher({
+  columns,
+  active,
+  onChange,
+  label,
+  panelId,
+}: {
+  columns: ParallelColumn[];
+  active: number;
+  onChange: (index: number) => void;
+  label: string;
+  panelId: (index: number) => string;
+}) {
+  const items = columns.map((column, index) => ({
+    id: String(index),
+    label: <SiblingName agentId={column.agentId} />,
+  }));
+
+  return (
+    <Segmented
+      items={items}
+      value={String(active)}
+      onChange={(id) => onChange(Number(id))}
+      label={label}
+      panelId={(id) => panelId(Number(id))}
+      className="mb-3"
+    />
+  );
+}
+
+function SiblingName({ agentId }: { agentId?: string }) {
+  return <>{useSiblingIdentity(agentId).displayName}</>;
+}
 
 type ParallelContentRendererProps = {
   content?: Array<TMessageContentParts | undefined>;
