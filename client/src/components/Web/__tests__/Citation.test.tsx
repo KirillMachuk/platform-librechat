@@ -142,4 +142,48 @@ describe('Citation', () => {
       'https://example.com',
     );
   });
+
+  /**
+   * Clicking a web citation has to reach the browser. The file citation on the
+   * same component deliberately swallows its click to open a preview instead,
+   * and the two paths differ by one `preventDefault` — so an href alone does not
+   * say which of them a reader gets. `fireEvent.click` returns false when the
+   * default was prevented, which is the difference stated directly.
+   */
+  it('lets a web citation click through to the browser, unlike a file one', () => {
+    const searchResults = {
+      '0': {
+        organic: [
+          {
+            attribution: 'example.com',
+            link: 'https://example.com',
+            snippet: 'Example snippet',
+            title: 'Example',
+          },
+        ],
+      },
+    };
+
+    renderWithProviders(
+      <Citation
+        citationId="cite-3"
+        citationType="standalone"
+        node={{
+          properties: {
+            citation: { turn: 0, refType: 'search', index: 0 },
+            citationId: 'cite-3',
+          },
+        }}
+      />,
+      searchResults as any,
+    );
+
+    const link = screen.getByRole('link', { name: 'example.com' });
+    /* A new tab, and no handle back to this one: `noopener` is what stops the
+     * opened page reaching `window.opener`. */
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link.getAttribute('rel')).toContain('noopener');
+
+    expect(fireEvent.click(link)).toBe(true);
+  });
 });
