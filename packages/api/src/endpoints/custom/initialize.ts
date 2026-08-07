@@ -21,6 +21,7 @@ import { isUserProvided, checkUserKeyExpiry } from '~/utils';
 import { getOpenAIConfig } from '~/endpoints/openai/config';
 import { getScopedTokenConfigKey } from '~/endpoints/keys';
 import { getCustomEndpointConfig } from '~/app/config';
+import { autoRequestParams } from '~/agents/auto';
 import { fetchModels } from '~/endpoints/models';
 import { validateEndpointURL } from '~/auth';
 import { tokenConfigCache } from '~/cache';
@@ -109,10 +110,14 @@ function resolveAddParams(
   }
   const modelSpecs = req.config?.modelSpecs as { list?: TModelSpec[] } | undefined;
   const spec = modelSpecs?.list?.find((entry) => entry.name === specName);
-  if (!spec?.addParams) {
+  /** The Auto orchestrator's active mode contributes its own routing (its fallback list),
+   *  which has to win over anything static on the card: a list written on the card names
+   *  the standard brain first and would hijack the premium mode's model. */
+  const fromMode = autoRequestParams(req.config?.auto, specName);
+  if (!spec?.addParams && !fromMode) {
     return endpointConfig.addParams;
   }
-  return { ...(endpointConfig.addParams ?? {}), ...spec.addParams };
+  return { ...(endpointConfig.addParams ?? {}), ...(spec?.addParams ?? {}), ...(fromMode ?? {}) };
 }
 
 /**

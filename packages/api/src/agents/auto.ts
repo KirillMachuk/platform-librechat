@@ -23,7 +23,16 @@ export interface AutoConfigInput {
   spec?: string;
   activeMode?: AutoMode;
   modes?: Partial<
-    Record<AutoMode, { model?: string; researcherId?: string; instructions?: string } | undefined>
+    Record<
+      AutoMode,
+      | {
+          model?: string;
+          researcherId?: string;
+          instructions?: string;
+          fallbackModels?: string[];
+        }
+      | undefined
+    >
   >;
 }
 
@@ -32,6 +41,7 @@ export interface ResolvedAutoMode {
   model: string;
   researcherId: string;
   instructions?: string;
+  fallbackModels?: string[];
 }
 
 /** Whether this spec is the one the Auto config governs. */
@@ -64,6 +74,7 @@ export function resolveAutoMode(config: AutoConfigInput | undefined): ResolvedAu
       model: mode.model,
       researcherId: mode.researcherId,
       instructions: mode.instructions,
+      ...(mode.fallbackModels?.length ? { fallbackModels: mode.fallbackModels } : {}),
     };
   };
   const requested = (config.activeMode ?? AutoModes[0]) as AutoMode;
@@ -98,4 +109,26 @@ export function autoOverridesFor(
     ...(mode.instructions ? { instructions: mode.instructions } : {}),
     subagents: { enabled: true, allowSelf: false, agent_ids: [mode.researcherId] },
   };
+}
+
+/**
+ * Request params the active mode contributes — today just OpenRouter's fallback list.
+ * Kept apart from `autoOverridesFor` because these are resolved when the HTTP request is
+ * built, not when the agent is assembled, and the two happen in different places.
+ */
+export function autoRequestParams(
+  config: AutoConfigInput | undefined,
+  specName: string | undefined,
+): { models: string[] } | undefined {
+  if (!isAutoSpec(config, specName)) {
+    return undefined;
+  }
+  const mode = resolveAutoMode(config);
+  if (!mode?.fallbackModels?.length) {
+    return undefined;
+  }
+  /** The mode's own brain leads: OpenRouter tries this list in order, so a list that
+   *  omitted it would route the premium mode to whatever came first. */
+  const models = [mode.model, ...mode.fallbackModels.filter((entry) => entry !== mode.model)];
+  return { models };
 }

@@ -1642,6 +1642,12 @@ export const autoModeSchema = z.object({
   model: z.string().min(1),
   researcherId: z.string().min(1),
   instructions: z.string().optional(),
+  /**
+   * Models to try in order when the primary is unavailable, sent as OpenRouter's `models`.
+   * Belongs to the MODE rather than the spec: a static list on the card would name the
+   * standard brain first and hijack the premium mode's own model.
+   */
+  fallbackModels: z.array(z.string().min(1)).optional(),
 });
 
 export const autoSchema = z.object({

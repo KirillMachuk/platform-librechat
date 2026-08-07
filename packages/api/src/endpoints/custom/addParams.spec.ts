@@ -18,7 +18,20 @@ const AUTO_SPEC = {
   preset: { endpoint: ENDPOINT, model: 'deepseek/deepseek-v4-flash-0731' },
 } as unknown as TModelSpec;
 
-function makeReq(spec?: string) {
+/** Режим задаёт маршрут ПОВЕРХ карточки: иначе Умный уехал бы на дешёвый мозг. */
+const AUTO_CONFIG = {
+  spec: 'auto',
+  activeMode: 'smart' as const,
+  modes: {
+    smart: {
+      model: 'anthropic/claude-opus-5',
+      researcherId: 'researcher-smart',
+      fallbackModels: ['anthropic/claude-sonnet-5'],
+    },
+  },
+};
+
+function makeReq(spec?: string, withModes = false) {
   return {
     body: { ...(spec ? { spec } : {}) },
     user: { id: 'u1' },
@@ -35,13 +48,14 @@ function makeReq(spec?: string) {
         ],
       },
       modelSpecs: { list: [AUTO_SPEC] },
+      ...(withModes ? { auto: AUTO_CONFIG } : {}),
     },
   };
 }
 
-async function kwargsFor(spec?: string) {
+async function kwargsFor(spec?: string, withModes = false) {
   const { llmConfig } = await initializeCustom({
-    req: makeReq(spec) as never,
+    req: makeReq(spec, withModes) as never,
     endpoint: ENDPOINT,
     model_parameters: { model: 'deepseek/deepseek-v4-flash-0731' },
   } as never);
@@ -69,5 +83,11 @@ describe('addParams: карточка поверх эндпоинта', () => {
     const kwargs = await kwargsFor('нет-такой-карточки');
     expect(kwargs.provider).toEqual(ENDPOINT_ADD_PARAMS.provider);
     expect(kwargs.models).toBeUndefined();
+  });
+
+  it('активный режим ведёт маршрут СВОИМ мозгом, перекрывая список карточки', async () => {
+    const kwargs = await kwargsFor('auto', true);
+    expect(kwargs.models).toEqual(['anthropic/claude-opus-5', 'anthropic/claude-sonnet-5']);
+    expect(kwargs.provider).toEqual(ENDPOINT_ADD_PARAMS.provider);
   });
 });
