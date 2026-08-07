@@ -368,7 +368,8 @@ permissions are on in the profile, the flows are not covered yet).
 | A modal locks the page behind it, and lets it scroll again after | a11y | `e2e/specs/mock/dialogs.spec.ts#the projects panel locks the page, holds focus, and hands it back` | covered |
 | Tab does not walk out of an open modal onto the page behind | a11y | `e2e/specs/mock/dialogs.spec.ts#tabEscapedTo` | covered |
 | A dialog holds focus against anything else claiming it | a11y | — | gap |
-| A menu popover follows the menu pattern, not the modal one | a11y | — | gap |
+| A menu popover follows the menu pattern, not the modal one | a11y | `e2e/specs/mock/menu-pattern.spec.ts#it is a menu of menu items, and it does not lock the page like a modal` | covered |
+| A menu answers the arrow keys and hands focus back on Escape | a11y | `e2e/specs/mock/menu-pattern.spec.ts#arrow keys walk its items and Escape gives focus back` | covered |
 | The settings dialog passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the settings dialog has no WCAG A/AA violations` | covered |
 | The projects panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the projects panel has no WCAG A/AA violations` | covered |
 | The agents panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the agents panel fails only on its category tab` | fixme:Ф1 |
