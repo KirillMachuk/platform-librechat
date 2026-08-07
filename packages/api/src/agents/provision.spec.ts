@@ -1,6 +1,6 @@
-import { parseAgentDefinition } from './definitions';
-import { provisionAgents, summarise } from './provision';
 import type { StoredAgent, ProvisionDeps } from './provision';
+import { provisionAgents, summarise } from './provision';
+import { parseAgentDefinition } from './definitions';
 
 jest.mock('@librechat/data-schemas', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },

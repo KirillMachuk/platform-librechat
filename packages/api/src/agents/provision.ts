@@ -1,6 +1,6 @@
 import { logger } from '@librechat/data-schemas';
-import { toAgentUpdate, diffAgent } from './definitions';
 import type { AgentDefinition, AgentUpdate } from './definitions';
+import { toAgentUpdate, diffAgent } from './definitions';
 
 /**
  * Reconciles file-defined agents into the database.

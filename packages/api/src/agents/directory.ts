@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { logger } from '@librechat/data-schemas';
-import { parseAgentDefinition } from './definitions';
 import type { AgentDefinition } from './definitions';
+import { parseAgentDefinition } from './definitions';
 
 /**
  * Reads agent definitions from a directory, mirroring how deployment skills are loaded at
