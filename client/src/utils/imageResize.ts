@@ -191,27 +191,24 @@ export function resizeImage(
 }
 
 /**
- * Determines if an image should be resized based on size and dimensions
+ * Whether a file is a candidate for resizing at all.
+ *
+ * The answer is about the picture, not the bytes. This used to skip anything under a
+ * tenth of a `fileSizeLimit` that defaulted to 512 MB — so in practice it only resized
+ * images above 51 MB, which the server refuses anyway. Switched on in production, the
+ * feature left an 8.9 MB phone photo untouched and did nothing at all.
+ *
+ * Whether the picture actually needs shrinking is decided by {@link resizeImage}, which
+ * returns the original file when the dimensions are already inside the bounds. Deciding
+ * here on bytes would keep guessing at the thing that matters: a 12-megapixel photo can
+ * compress to two megabytes, and both costs this exists to avoid — the upload and the
+ * OCR pass — follow pixels rather than file size.
  */
-export function shouldResizeImage(
-  file: File,
-  fileSizeLimit: number = 512 * 1024 * 1024, // 512MB default
-): boolean {
-  // Don't resize if file is already small
-  if (file.size < fileSizeLimit * 0.1) {
-    // Less than 10% of limit
-    return false;
-  }
-
-  // Don't process non-images
+export function shouldResizeImage(file: File): boolean {
   if (!file.type.startsWith('image/')) {
     return false;
   }
 
-  // Don't process GIFs (they might be animated)
-  if (file.type === 'image/gif') {
-    return false;
-  }
-
-  return true;
+  /** Animated frames do not survive a canvas round-trip. */
+  return file.type !== 'image/gif';
 }
