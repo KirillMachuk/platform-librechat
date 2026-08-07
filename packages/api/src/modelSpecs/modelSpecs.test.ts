@@ -191,3 +191,25 @@ describe('modelSpecs helpers', () => {
     ).toBe('Help Ada.');
   });
 });
+
+describe('sanitizeModelSpecs: маршрутизация не уезжает в браузер', () => {
+  const spec = {
+    name: 'auto',
+    label: 'Авто',
+    addParams: { provider: { order: ['DeepInfra'], allow_fallbacks: true } },
+    subagents: { enabled: true, allowSelf: false, agent_ids: ['researcher-standard'] },
+    preset: { endpoint: '1ma', model: 'm', promptPrefix: 'секретный промпт' },
+  } as unknown as TModelSpec;
+
+  it('addParams вырезается: это выбор площадки, а не дело клиента', () => {
+    const [out] = sanitizeModelSpecs({ list: [spec] })!.list!;
+    expect((out as { addParams?: unknown }).addParams).toBeUndefined();
+  });
+
+  it('и заодно по-прежнему не уезжают промпт и список суб-агентов', () => {
+    const [out] = sanitizeModelSpecs({ list: [spec] })!.list!;
+    expect((out.preset as { promptPrefix?: string }).promptPrefix).toBeUndefined();
+    expect(out.subagents?.agent_ids).toBeUndefined();
+    expect(out.subagents?.enabled).toBe(true);
+  });
+});
