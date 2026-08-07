@@ -459,6 +459,63 @@ describe('DataTable', () => {
     });
   });
 
+  describe('Which column is sorted', () => {
+    /**
+     * A table has to say which column it is ordered by. Every sortable header
+     * used to carry its glyph at `text-primary`, so a two-column table showed
+     * two equally loud arrows and answered nothing. The direction arrows stay
+     * loud; the neutral one is muted to t3.
+     */
+    const sortableColumns = (): TableColumn<TestData, string>[] => [
+      {
+        accessorKey: 'name',
+        header: 'Name',
+        cell: ({ row }) => row.original.name,
+        enableSorting: true,
+      },
+      {
+        accessorKey: 'status',
+        header: 'Status',
+        cell: ({ row }) => row.original.status,
+        enableSorting: true,
+      },
+    ];
+
+    const renderSortable = () =>
+      render(
+        <TestWrapper>
+          <DataTable columns={sortableColumns()} data={createTestData(3)} manualSorting={false} />
+        </TestWrapper>,
+      );
+
+    it('mutes the glyph on every column while nothing is sorted', () => {
+      renderSortable();
+
+      const neutral = screen.getAllByTestId('arrow-down-up');
+      expect(neutral.length).toBeGreaterThan(0);
+      for (const glyph of neutral) {
+        expect(glyph.className).toContain('text-text-tertiary');
+      }
+      expect(screen.queryByTestId('arrow-up')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('arrow-down')).not.toBeInTheDocument();
+    });
+
+    it('gives the sorted column a loud arrow and leaves the rest quiet', () => {
+      renderSortable();
+
+      fireEvent.click(screen.getByText('Name'));
+
+      const active = screen.getByTestId('arrow-up');
+      expect(active.className).toContain('text-text-primary');
+
+      /* The other column keeps the neutral glyph, and keeps it quiet. */
+      for (const glyph of screen.getAllByTestId('arrow-down-up')) {
+        expect(glyph.className).toContain('text-text-tertiary');
+        expect(glyph.className).not.toContain('text-text-primary');
+      }
+    });
+  });
+
   describe('Search', () => {
     it('should render search input when enableSearch is true', () => {
       const columns = createTestColumns();

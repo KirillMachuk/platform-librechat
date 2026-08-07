@@ -259,6 +259,8 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | Deleting a project asks in an in-app dialog, never window.confirm | unit | `client/src/components/Projects/__tests__/ProjectEditDialog.spec.tsx#asks in an in-app dialog and never through window.confirm` | covered |
 | Cancelling the project edit dialog leaves the project alone | unit | `client/src/components/Projects/__tests__/ProjectEditDialog.spec.tsx#cancelling leaves the project alone` | covered |
 | Removing a project source confirms by naming the file | unit | `client/src/components/Projects/__tests__/ProjectDetailView.spec.tsx#confirms in a dialog naming the file, never through window.confirm` | covered |
+| A table says which column it is sorted by | unit | `packages/client/src/components/DataTable/DataTable.spec.tsx#gives the sorted column a loud arrow and leaves the rest quiet` | covered |
+| An unsorted table shouts at no column | unit | `packages/client/src/components/DataTable/DataTable.spec.tsx#mutes the glyph on every column while nothing is sorted` | covered |
 | A button carries the canon 36/12 and reaches 44 for a finger | unit | `client/src/components/__tests__/canonControls.spec.tsx#is 36 high with radius 12, and reaches 44 for a finger` | covered |
 | An icon button keeps radius 8, not the 12 of a text button | unit | `client/src/components/__tests__/canonControls.spec.tsx#keeps radius 8 on an icon button, where §6.2 wants it` | covered |
 | The outline button wears btn-line and a plain hover fill | unit | `client/src/components/__tests__/canonControls.spec.tsx#gives the outline variant a btn-line border and a plain hover fill` | covered |
