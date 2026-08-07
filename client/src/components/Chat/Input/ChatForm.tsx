@@ -261,7 +261,7 @@ const ChatForm = memo(function ChatForm({
     <form
       onSubmit={methods.handleSubmit(submitMessage)}
       className={cn(
-        'mx-auto flex w-full flex-row gap-3 px-2 transition-[max-width] duration-300 md:px-0',
+        'mx-auto flex w-full flex-row gap-3 px-2.5 transition-[max-width] duration-300 md:px-0',
         chatColumnClass(maximizeChatSpace),
         centerFormOnLanding &&
           (conversationId == null || conversationId === Constants.NEW_CONVO) &&
