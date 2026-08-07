@@ -49,7 +49,7 @@ const Switch: React.ForwardRefExoticComponent<
     <SwitchPrimitives.Root
       className={cn(
         'peer inline-flex shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors',
-        'bg-surface-active data-[state=checked]:bg-brand-purple',
+        'bg-surface-active data-[state=checked]:bg-acc',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         'disabled:cursor-not-allowed disabled:opacity-45',
         track[size],
