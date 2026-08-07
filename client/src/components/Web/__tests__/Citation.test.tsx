@@ -179,11 +179,19 @@ describe('Citation', () => {
     );
 
     const link = screen.getByRole('link', { name: 'example.com' });
+    /* Where it goes, first. Without this the rest passes on a build where every
+     * citation points at `#` — caught by review, not by the original run. */
+    expect(link).toHaveAttribute('href', 'https://example.com');
     /* A new tab, and no handle back to this one: `noopener` is what stops the
      * opened page reaching `window.opener`. */
     expect(link).toHaveAttribute('target', '_blank');
     expect(link.getAttribute('rel')).toContain('noopener');
 
-    expect(fireEvent.click(link)).toBe(true);
+    /* Deliberately NOT asserting that the click is un-prevented. The web branch
+     * renders the anchor with no click handler at all (`SourceHovercard`), so
+     * "nobody called preventDefault" is true by construction — a review showed
+     * the only regression that could break it (rendering a button instead)
+     * fails on the `getByRole('link')` above, one line earlier. The three
+     * attributes are what carry this test. */
   });
 });

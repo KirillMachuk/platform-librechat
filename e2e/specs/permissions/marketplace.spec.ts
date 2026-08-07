@@ -92,7 +92,7 @@ async function deleteAgent(page: Page, token: string, id: string | undefined) {
  * a real answer here and waiting for a card to appear cannot express it. The
  * banner is rendered by the same grid either way.
  */
-async function marketplaceHits(page: Page, name: string): Promise<number> {
+async function marketplaceCards(page: Page, name: string) {
   const search = page.getByPlaceholder('Search agents...');
   await expect(search).toBeVisible({ timeout: 20000 });
 
@@ -113,14 +113,26 @@ async function marketplaceHits(page: Page, name: string): Promise<number> {
   await search.fill(name, { timeout: 15000 });
   await answered;
 
-  /* And then the render of that answer, which is one of two things. Waiting on
-   * either keeps the read off a fixed sleep; waiting on the response first
-   * keeps it off the PREVIOUS search's banner, which would still be on screen. */
-  await expect(
-    page.getByLabel(/Showing \d+ agents/).or(page.getByText(/No search results|No agents found/)),
-  ).toBeVisible({ timeout: 20000 });
+  /* And then the render of THIS answer. Waiting on "either a banner or an empty
+   * state" was not enough: on the second search of a run the previous search's
+   * grid is still on screen, so the `.or()` was satisfied immediately and the
+   * count below could read the old DOM. A review caught it. `toHaveCount`
+   * retries, so the read itself is now the synchronisation. */
+  const cards = page.locator(`[aria-label^=${JSON.stringify(`${name} agent.`)}]`);
+  return cards;
+}
 
-  return page.locator(`[aria-label^=${JSON.stringify(`${name} agent.`)}]`).count();
+/** The two outcomes, each waited for on its own terms rather than on "either". */
+async function expectMarketplaceHit(page: Page, name: string) {
+  await expect(await marketplaceCards(page, name)).toHaveCount(1, { timeout: 20000 });
+}
+
+async function expectNoMarketplaceHit(page: Page, name: string) {
+  const cards = await marketplaceCards(page, name);
+  /* The empty state for THIS search, so the wait cannot be satisfied by the
+   * previous search's results still being painted. */
+  await expect(page.getByText('No search results')).toBeVisible({ timeout: 20000 });
+  await expect(cards).toHaveCount(0);
 }
 
 test.describe('the agent marketplace', () => {
@@ -195,10 +207,10 @@ test.describe('the agent marketplace', () => {
         timeout: 20000,
       });
 
-      expect(await marketplaceHits(pageB, sharedName)).toBe(1);
+      await expectMarketplaceHit(pageB, sharedName);
       /* The control. Same screen, same search box, same person — the only
        * difference is that this one was never shared. */
-      expect(await marketplaceHits(pageB, privateName)).toBe(0);
+      await expectNoMarketplaceHit(pageB, privateName);
     } finally {
       await contextB.close();
       await deleteAgent(page, token, sharedId);

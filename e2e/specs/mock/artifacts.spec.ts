@@ -24,11 +24,16 @@ import {
  * Three wrong anchors were tried before this settled, and each one is worth
  * naming because each was wrong in a different way:
  *
- *   the artifact's TEXT — useless. The message carries a screen-reader copy of
- *       the whole reply in an `sr-only` div, and `sr-only` is clipped rather
- *       than hidden, so Playwright counts it visible. That version passed with
- *       the panel firmly shut, and only deleting the card's click handler
- *       exposed it.
+ *   the artifact's TEXT — useless. With the panel shut, the artifact's heading
+ *       was still found, inside a page-level `sr-only` container two levels
+ *       below `body`; `sr-only` is clipped rather than hidden, so Playwright
+ *       counts it visible. That version passed with the panel firmly shut and
+ *       only deleting the card's click handler exposed it. Which component owns
+ *       that container was NOT established — an earlier version of this comment
+ *       said it was a screen-reader copy of the reply carried by the message,
+ *       and a review found no such element. What is established is the element
+ *       chain above and the rule it implies: do not anchor on text that a
+ *       screen-reader-only node may also carry.
  *   the panel's Code/Preview controls as `role="tab"` — they are not tabs in
  *       the accessibility tree, so three runs went red against a panel that was
  *       in fact open. Load was blamed first; on a quiet machine it failed the
