@@ -12,8 +12,8 @@ import {
   RunningSlot,
   resolveDrReport,
 } from '~/components/Chat/Messages/DeepResearch';
+import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import { useAttachments, useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
-import { cn, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import ContentParts from '~/components/Chat/Messages/Content/ContentParts';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
 import { USER_BUBBLE_CLASS } from '~/components/Chat/Messages/ui/turn';
@@ -158,19 +158,9 @@ const ContentRender = memo(function ContentRender({
     return null;
   }
 
-  const getChatWidthClass = () => {
-    if (maximizeChatSpace) {
-      return 'w-full max-w-full md:px-5 lg:px-1 xl:px-5';
-    }
-    if (hasParallelContent) {
-      return 'md:max-w-[58rem] xl:max-w-[70rem]';
-    }
-    return 'md:max-w-[48rem]';
-  };
-
   const baseClasses = {
     common: 'group mx-auto flex flex-1 gap-3 transition-all duration-300 transform-gpu ',
-    chat: getChatWidthClass(),
+    chat: chatColumnClass(maximizeChatSpace, hasParallelContent),
   };
 
   const conditionalClasses = {

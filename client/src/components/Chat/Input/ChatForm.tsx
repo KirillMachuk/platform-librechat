@@ -26,7 +26,7 @@ import {
   useAddedChatContext,
   useAssistantsMapContext,
 } from '~/Providers';
-import { cn, getModelSpec, removeFocusRings, modelReportsNoTools } from '~/utils';
+import { cn, chatColumnClass, getModelSpec, removeFocusRings, modelReportsNoTools } from '~/utils';
 import { useGetStartupConfig, useGetEndpointsQuery } from '~/data-provider';
 import PendingManualSkillsChips from './PendingManualSkillsChips';
 import { mainTextareaId, BadgeItem } from '~/common';
@@ -261,8 +261,8 @@ const ChatForm = memo(function ChatForm({
     <form
       onSubmit={methods.handleSubmit(submitMessage)}
       className={cn(
-        'mx-auto flex w-full flex-row gap-3 transition-[max-width] duration-300 sm:px-2',
-        maximizeChatSpace ? 'max-w-full' : 'md:max-w-[48rem]',
+        'mx-auto flex w-full flex-row gap-3 px-2 transition-[max-width] duration-300 md:px-0',
+        chatColumnClass(maximizeChatSpace),
         centerFormOnLanding &&
           (conversationId == null || conversationId === Constants.NEW_CONVO) &&
           !isSubmitting &&
