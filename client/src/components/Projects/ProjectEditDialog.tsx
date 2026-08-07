@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import {
   Label,
   Button,
@@ -15,8 +15,8 @@ import {
   useToastContext,
 } from '@librechat/client';
 import type { TProject } from 'librechat-data-provider';
-import { DEFAULT_PROJECT_ICON, DEFAULT_PROJECT_COLOR } from './iconOptions';
 import { useDeleteProjectMutation, useUpdateProjectMutation } from '~/data-provider';
+import { DEFAULT_PROJECT_ICON, DEFAULT_PROJECT_COLOR } from './iconOptions';
 import ProjectAppearancePopover from './ProjectAppearancePopover';
 import ProjectFormFields from './ProjectFormFields';
 import { NotificationSeverity } from '~/common';

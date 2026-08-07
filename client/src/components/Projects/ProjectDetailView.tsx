@@ -13,7 +13,6 @@ import {
 } from '@librechat/client';
 import type { TConversation, TFile } from 'librechat-data-provider';
 import type { TranslationKeys } from '~/hooks';
-import { Segmented } from '~/components/ui/Segmented';
 import {
   useGetProjectQuery,
   useProjectConversationsQuery,
@@ -31,6 +30,7 @@ import {
 import { useLocalize, useNavigateToConvo, useNewConvo } from '~/hooks';
 import ProjectAppearancePopover from './ProjectAppearancePopover';
 import { buildConvoPath, cn, formatDate } from '~/utils';
+import { Segmented } from '~/components/ui/Segmented';
 import ProjectEditDialog from './ProjectEditDialog';
 import { NotificationSeverity } from '~/common';
 

@@ -1,6 +1,6 @@
 import { memo, useCallback, useContext, useState, createContext } from 'react';
-import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react';
 import type { NavLink } from '~/common';
 import { PanelDismissProvider } from './dismiss';

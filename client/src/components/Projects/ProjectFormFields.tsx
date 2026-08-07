@@ -1,8 +1,8 @@
 import { memo } from 'react';
 import { Label, FIELD_BASE, FIELD_BORDER } from '@librechat/client';
-import { cn } from '~/utils';
 import { resolveIcon, resolveColor } from './iconOptions';
 import { useLocalize } from '~/hooks';
+import { cn } from '~/utils';
 
 export type Appearance = { icon: string; color: string };
 

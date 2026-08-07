@@ -11,12 +11,12 @@ import {
   useToastContext,
 } from '@librechat/client';
 import type { TProject } from 'librechat-data-provider';
-import { useCreateProjectMutation } from '~/data-provider';
-import { useLocalize } from '~/hooks';
-import { NotificationSeverity } from '~/common';
-import ProjectAppearancePopover from './ProjectAppearancePopover';
-import ProjectFormFields from './ProjectFormFields';
 import { DEFAULT_PROJECT_ICON, DEFAULT_PROJECT_COLOR } from './iconOptions';
+import ProjectAppearancePopover from './ProjectAppearancePopover';
+import { useCreateProjectMutation } from '~/data-provider';
+import ProjectFormFields from './ProjectFormFields';
+import { NotificationSeverity } from '~/common';
+import { useLocalize } from '~/hooks';
 
 type Props = {
   open: boolean;
