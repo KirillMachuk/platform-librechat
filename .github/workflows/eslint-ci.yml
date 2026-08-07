@@ -114,13 +114,17 @@ jobs:
           echo "Files to check:"
           printf '%s\n' "${CHANGED_FILES[@]}"
 
-          # `--check` lists offending files and exits non-zero without writing.
-          if ! node scripts/sort-imports.mts --check "${CHANGED_FILES[@]}"; then
+          # `--check` marks offending files with a leading "✗" and exits non-zero
+          # without writing. Capture that so the error names the real files: the
+          # example paths that used to sit here were literal, and read as findings.
+          CHECK_OUTPUT=$(node scripts/sort-imports.mts --check "${CHANGED_FILES[@]}" 2>&1) || CHECK_FAILED=1
+          echo "$CHECK_OUTPUT"
+
+          if [[ -n "${CHECK_FAILED:-}" ]]; then
+            OFFENDERS=$(printf '%s\n' "$CHECK_OUTPUT" | sed -n 's/^[[:space:]]*✗[[:space:]]*//p' | tr '\n' ' ')
             echo ""
             echo "::error::Import order drift detected. Fix locally with:"
-            echo "::error::  npm run sort-imports"
-            echo "::error::For specific files:"
-            echo "::error::  npm run sort-imports -- packages/api/src/app/metrics.ts packages/api/src/rum/proxy.ts"
+            echo "::error::  npm run sort-imports -- $OFFENDERS"
             echo "::error::To check without writing files:"
             echo "::error::  npm run sort-imports:check"
             echo "::error::Or rely on the lint-staged pre-commit hook (do not bypass with --no-verify)."
