@@ -10,9 +10,9 @@ export default function SpeechToTextSwitch({
     <ToggleSwitch
       stateAtom={store.speechToText}
       localizationKey={'com_nav_speech_to_text' as const}
+      descriptionKey={'com_nav_speech_to_text_desc' as const}
       switchId="SpeechToText"
       onCheckedChange={onCheckedChange}
-      strongLabel={true}
     />
   );
 }

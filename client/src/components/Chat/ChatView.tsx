@@ -139,7 +139,7 @@ function ChatView({ index = 0 }: { index?: number }) {
                   {content}
                   <div
                     className={cn(
-                      'w-full',
+                      'scrollbar-gutter-mirror w-full',
                       isLandingPage && 'max-w-3xl transition-all duration-200 xl:max-w-4xl',
                     )}
                   >

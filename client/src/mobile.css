@@ -243,6 +243,19 @@
   scrollbar-gutter: stable;
 }
 
+/* The thread reserves the scrollbar's width so its text does not shift when the
+   bar appears. Anything that must line up with the thread — the composer and
+   what sits with it — has to reserve exactly the same, or it centres inside a
+   box that much wider and lands half of it off (measured: 8px reserved, 4px
+   off). `scrollbar-gutter` only answers on a scroll container, hence the
+   `overflow`; the composer never overflows, so no bar is ever drawn, and on a
+   platform with overlay scrollbars both sides reserve nothing — which is the
+   point of mirroring rather than hard-coding 8px. */
+.scrollbar-gutter-mirror {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
 /* Styles for Chrome scrollbar */
 .chrome-scrollbar::-webkit-scrollbar {
   width: 12px;  /* Increase the width of the scrollbar */
