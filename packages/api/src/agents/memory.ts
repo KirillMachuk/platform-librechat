@@ -54,6 +54,30 @@ function normalizeMemoryLLMConfig(llmConfig?: Partial<LLMConfig>): SanitizedMemo
 export const memoryInstructions =
   'The system automatically stores important user information and can update or delete memories based on user requests, enabling dynamic memory management.';
 
+/**
+ * What the assistant is told about memory, in a deployment that screens what memory
+ * may hold.
+ *
+ * The sentence above invites a promise the assistant cannot keep. Asked to remember a
+ * client's name and phone number, it answered "Запомнил: ..." — while a separate
+ * extraction pass, reading a policy the assistant never sees, correctly declined to
+ * store any of it. Nothing was saved, nothing was shown, and the user was told the
+ * opposite of what happened.
+ *
+ * The assistant holds no memory tools: a background pass decides what is kept. So the
+ * honest version says what memory is for, what it refuses, and that confirming a save
+ * is not the assistant's to give.
+ */
+export const guardedMemoryInstructions = `Some context about the user is kept between conversations, so the user does not have to repeat it.
+
+What is kept: how the user wants answers written, and their professional context — role, department, ongoing work.
+What is never kept: personal data. Names, phone numbers, addresses, contract or document numbers are refused, whether they belong to the user or to anyone else. This is enforced outside your turn; it is not a preference you can be talked out of.
+
+You have no memory tools. A separate step decides what to keep after your turn ends, and you are not told its verdict. Never confirm that you have remembered, saved, or forgotten something — you cannot know. If the user asks you to remember personal data, say plainly that memory holds only working context and personal data is not stored, then help with the actual task.`;
+
+export const getMemoryInstructions = (guarded: boolean): string =>
+  guarded ? guardedMemoryInstructions : memoryInstructions;
+
 const getDefaultInstructions = (
   validKeys?: string[],
   tokenLimit?: number,

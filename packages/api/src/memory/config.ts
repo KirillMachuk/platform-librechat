@@ -1,1 +1,6 @@
-export { isMemoryAgentEnabled, isMemoryEnabled, loadMemoryConfig } from '@librechat/data-schemas';
+export {
+  isMemoryGuardConfigured,
+  isMemoryAgentEnabled,
+  loadMemoryConfig,
+  isMemoryEnabled,
+} from '@librechat/data-schemas';
