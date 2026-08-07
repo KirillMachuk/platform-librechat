@@ -86,13 +86,13 @@ stays green, so flakes accumulate where nobody looks.
 |---|---|---|---|
 | Markdown renders (headings, lists, tables, links) | unit | `client/src/components/Chat/Messages/Content/__tests__/MarkdownBlocks.test.tsx` | covered |
 | Code block renders with its language highlighted | e2e | `e2e/specs/mock/chat.spec.ts#language-javascript` | covered |
-| Copy button on a code block copies it | e2e | — | gap |
+| Copy button on a code block copies it | e2e | `e2e/specs/mock/chat.spec.ts#the copy button on a code block puts the code on the clipboard` | covered |
 | Reasoning ("Мысли") block auto-expands then collapses | unit | `client/src/components/Chat/Messages/Content/Parts/__tests__/ReasoningAutoExpand.test.tsx` | covered |
 | A tool call hands its input, output and attachments to the renderer | unit | `client/src/components/Chat/Messages/Content/__tests__/ToolCall.test.tsx#should pass input and output props to ToolCallInfo` | covered |
-| Tool calls render their status and result | unit | — | gap |
+| Tool calls render their status and result | unit | `client/src/components/Chat/Messages/Content/__tests__/ToolCallStatus.test.tsx#says it finished, and shows what came back` | covered |
 | Web-search citations render as links | unit | `client/src/components/Web/__tests__/Citation.test.tsx#keeps standalone web citations as links` | covered |
 | A file citation opens its preview | unit | `client/src/components/Web/__tests__/Citation.test.tsx#renders composite file citations as buttons and opens the preview dialog` | covered |
-| Clicking a web-search citation opens its source | unit | — | gap |
+| Clicking a web-search citation opens its source | unit | `client/src/components/Web/__tests__/Citation.test.tsx#lets a web citation click through to the browser, unlike a file one` | covered |
 | File-search (RAG) retrieval card renders | unit | `client/src/components/Chat/Messages/Content/__tests__/RetrievalCall.test.tsx` | covered |
 | Attachment chips render under a sent message | e2e | `e2e/specs/mock/file-preview.spec.ts#opens a preview from a file attached to a sent message` | covered |
 | An attachment chip shows its display name, falling back to the filename | unit | `client/src/components/Chat/Input/Files/__tests__/FileContainer.spec.tsx#falls back to empty string when neither` | covered |

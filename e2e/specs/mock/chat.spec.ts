@@ -193,6 +193,43 @@ test.describe('core chat loop', () => {
     await expect(codeBlock).toHaveClass(/language-javascript/);
   });
 
+  /**
+   * The copy button on a code block.
+   *
+   * Read back from the real clipboard rather than from a stubbed
+   * `navigator.clipboard`: the app copies through `copy-to-clipboard`, which
+   * uses `document.execCommand` and a hidden textarea, so a stub on the modern
+   * API would sit there unused and the test would pass on a build that copies
+   * nothing at all.
+   */
+  test('the copy button on a code block puts the code on the clipboard', async ({
+    page,
+    context,
+  }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
+    await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
+
+    const response = await sendMessage(page, 'E2E_MARKDOWN_REPLY');
+    expect(response.ok()).toBeTruthy();
+
+    const assistantMessage = messagesView(page)
+      .locator('.message-render')
+      .filter({ hasText: 'E2E markdown heading' })
+      .last();
+    const codeBlock = assistantMessage.locator('code').filter({ hasText: 'e2eSyntaxHighlight' });
+    await expect(codeBlock).toBeVisible();
+
+    /* Emptied first, so a value left by anything earlier cannot pass for the
+     * value this click is supposed to write. */
+    await page.evaluate(() => navigator.clipboard.writeText('e2e-clipboard-was-not-written'));
+
+    await assistantMessage.getByRole('button', { name: 'Copy code' }).click();
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()), { timeout: 15000 })
+      .toBe('const e2eSyntaxHighlight = "ok";');
+  });
+
   test('can switch back to the previous branch after regenerating an earlier response', async ({
     page,
   }) => {
