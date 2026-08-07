@@ -1,41 +1,30 @@
 import React from 'react';
+import { SettingGroup } from '@librechat/client';
 import DisplayUsernameMessages from './DisplayUsernameMessages';
-import DeleteAccount from './DeleteAccount';
-import Avatar from './Avatar';
 import EnableTwoFactorItem from './TwoFactorAuthentication';
-import BackupCodesItem from './BackupCodesItem';
 import { useGetStartupConfig } from '~/data-provider';
+import BackupCodesItem from './BackupCodesItem';
+import DeleteAccount from './DeleteAccount';
 import { useAuthContext } from '~/hooks';
+import Avatar from './Avatar';
 
 function Account() {
   const { user } = useAuthContext();
   const { data: startupConfig } = useGetStartupConfig();
 
   return (
-    <div className="flex flex-col gap-3 p-1 text-sm text-text-primary">
-      <div className="pb-3">
+    <div className="p-1 text-sm text-text-primary">
+      <SettingGroup>
         <DisplayUsernameMessages />
-      </div>
-      <div className="pb-3">
         <Avatar />
-      </div>
-      {user?.provider === 'local' && (
-        <>
-          <div className="pb-3">
+        {user?.provider === 'local' && (
+          <>
             <EnableTwoFactorItem />
-          </div>
-          {user?.twoFactorEnabled && (
-            <div className="pb-3">
-              <BackupCodesItem />
-            </div>
-          )}
-        </>
-      )}
-      {startupConfig?.allowAccountDeletion !== false && (
-        <div className="pb-3">
-          <DeleteAccount />
-        </div>
-      )}
+            {user?.twoFactorEnabled && <BackupCodesItem />}
+          </>
+        )}
+        {startupConfig?.allowAccountDeletion !== false && <DeleteAccount />}
+      </SettingGroup>
     </div>
   );
 }

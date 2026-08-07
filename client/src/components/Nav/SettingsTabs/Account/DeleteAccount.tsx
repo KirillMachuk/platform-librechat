@@ -9,6 +9,7 @@ import {
   InputOTPGroup,
   OGDialogTitle,
   InputOTPSlot,
+  SettingRow,
   OGDialog,
   InputOTP,
   Spinner,
@@ -62,13 +63,15 @@ const DeleteAccount = ({ disabled = false }: { title?: string; disabled?: boolea
   const otpReady = !needs2FA || otpToken.length === (useBackup ? 8 : 6);
 
   return (
-    <>
-      <OGDialog open={isDialogOpen} onOpenChange={setDialogOpen}>
-        <div className="flex items-center justify-between">
-          <Label id="delete-account-label">{localize('com_nav_delete_account')}</Label>
+    <SettingRow
+      id="delete-account"
+      title={localize('com_nav_delete_account')}
+      stackControlOnMobile
+      control={({ labelId }) => (
+        <OGDialog open={isDialogOpen} onOpenChange={setDialogOpen}>
           <OGDialogTrigger asChild>
             <Button
-              aria-labelledby="delete-account-label"
+              aria-labelledby={labelId}
               variant="destructive"
               onClick={() => setDialogOpen(true)}
               disabled={disabled}
@@ -76,86 +79,88 @@ const DeleteAccount = ({ disabled = false }: { title?: string; disabled?: boolea
               {localize('com_ui_delete')}
             </Button>
           </OGDialogTrigger>
-        </div>
-        <OGDialogContent className="w-11/12 max-w-md">
-          <OGDialogHeader>
-            <OGDialogTitle className="text-lg font-medium leading-6">
-              {localize('com_nav_delete_account_confirm')}
-            </OGDialogTitle>
-          </OGDialogHeader>
-          <div className="mb-8 text-sm text-black dark:text-white">
-            <ul className="font-semibold text-amber-600">
-              <li>{localize('com_nav_delete_warning')}</li>
-              <li>{localize('com_nav_delete_data_info')}</li>
-            </ul>
-          </div>
-          <div className="flex-col items-center justify-center">
-            <div className="mb-4">
-              {renderInput(
-                localize('com_nav_delete_account_email_placeholder'),
-                'email-confirm-input',
-                user?.email ?? '',
-                (e) => handleInputChange(e.target.value),
-              )}
+          <OGDialogContent className="w-11/12 max-w-md">
+            <OGDialogHeader>
+              <OGDialogTitle className="text-lg font-medium leading-6">
+                {localize('com_nav_delete_account_confirm')}
+              </OGDialogTitle>
+            </OGDialogHeader>
+            <div className="mb-8 text-sm text-black dark:text-white">
+              <ul className="font-semibold text-amber-600">
+                <li>{localize('com_nav_delete_warning')}</li>
+                <li>{localize('com_nav_delete_data_info')}</li>
+              </ul>
             </div>
-            {needs2FA && (
-              <div className="mb-4 space-y-3">
-                <Label className="text-sm font-medium">
-                  {localize('com_ui_2fa_verification_required')}
-                </Label>
-                <div className="flex justify-center">
-                  <InputOTP
-                    value={otpToken}
-                    onChange={setOtpToken}
-                    maxLength={useBackup ? 8 : 6}
-                    pattern={useBackup ? REGEXP_ONLY_DIGITS_AND_CHARS : REGEXP_ONLY_DIGITS}
-                    className="gap-2"
-                  >
-                    {useBackup ? (
-                      <InputOTPGroup>
-                        <InputOTPSlot index={0} />
-                        <InputOTPSlot index={1} />
-                        <InputOTPSlot index={2} />
-                        <InputOTPSlot index={3} />
-                        <InputOTPSlot index={4} />
-                        <InputOTPSlot index={5} />
-                        <InputOTPSlot index={6} />
-                        <InputOTPSlot index={7} />
-                      </InputOTPGroup>
-                    ) : (
-                      <>
+            <div className="flex-col items-center justify-center">
+              <div className="mb-4">
+                {renderInput(
+                  localize('com_nav_delete_account_email_placeholder'),
+                  'email-confirm-input',
+                  user?.email ?? '',
+                  (e) => handleInputChange(e.target.value),
+                )}
+              </div>
+              {needs2FA && (
+                <div className="mb-4 space-y-3">
+                  <Label className="text-sm font-medium">
+                    {localize('com_ui_2fa_verification_required')}
+                  </Label>
+                  <div className="flex justify-center">
+                    <InputOTP
+                      value={otpToken}
+                      onChange={setOtpToken}
+                      maxLength={useBackup ? 8 : 6}
+                      pattern={useBackup ? REGEXP_ONLY_DIGITS_AND_CHARS : REGEXP_ONLY_DIGITS}
+                      className="gap-2"
+                    >
+                      {useBackup ? (
                         <InputOTPGroup>
                           <InputOTPSlot index={0} />
                           <InputOTPSlot index={1} />
                           <InputOTPSlot index={2} />
-                        </InputOTPGroup>
-                        <InputOTPSeparator />
-                        <InputOTPGroup>
                           <InputOTPSlot index={3} />
                           <InputOTPSlot index={4} />
                           <InputOTPSlot index={5} />
+                          <InputOTPSlot index={6} />
+                          <InputOTPSlot index={7} />
                         </InputOTPGroup>
-                      </>
-                    )}
-                  </InputOTP>
+                      ) : (
+                        <>
+                          <InputOTPGroup>
+                            <InputOTPSlot index={0} />
+                            <InputOTPSlot index={1} />
+                            <InputOTPSlot index={2} />
+                          </InputOTPGroup>
+                          <InputOTPSeparator />
+                          <InputOTPGroup>
+                            <InputOTPSlot index={3} />
+                            <InputOTPSlot index={4} />
+                            <InputOTPSlot index={5} />
+                          </InputOTPGroup>
+                        </>
+                      )}
+                    </InputOTP>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseBackup(!useBackup);
+                      setOtpToken('');
+                    }}
+                    className="text-sm text-primary hover:underline"
+                  >
+                    {useBackup
+                      ? localize('com_ui_use_2fa_code')
+                      : localize('com_ui_use_backup_code')}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUseBackup(!useBackup);
-                    setOtpToken('');
-                  }}
-                  className="text-sm text-primary hover:underline"
-                >
-                  {useBackup ? localize('com_ui_use_2fa_code') : localize('com_ui_use_backup_code')}
-                </button>
-              </div>
-            )}
-            {renderDeleteButton(handleDeleteUser, isDeleting, isLocked || !otpReady, localize)}
-          </div>
-        </OGDialogContent>
-      </OGDialog>
-    </>
+              )}
+              {renderDeleteButton(handleDeleteUser, isDeleting, isLocked || !otpReady, localize)}
+            </div>
+          </OGDialogContent>
+        </OGDialog>
+      )}
+    />
   );
 };
 

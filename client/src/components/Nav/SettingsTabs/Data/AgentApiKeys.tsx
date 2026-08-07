@@ -12,6 +12,7 @@ import {
   Label,
   Spinner,
   SecretInput,
+  SettingRow,
   OGDialog,
   OGDialogClose,
   OGDialogTitle,
@@ -334,29 +335,32 @@ export function AgentApiKeys() {
   }
 
   return (
-    <div className="flex items-center justify-between">
-      <Label id="api-keys-label">{localize('com_ui_agent_api_keys')}</Label>
+    <SettingRow
+      id="api-keys"
+      title={localize('com_ui_agent_api_keys')}
+      stackControlOnMobile
+      control={({ labelId }) => (
+        <OGDialog open={isOpen} onOpenChange={setIsOpen}>
+          <OGDialogTrigger asChild>
+            <Button aria-labelledby={labelId} variant="outline">
+              {localize('com_ui_manage')}
+            </Button>
+          </OGDialogTrigger>
 
-      <OGDialog open={isOpen} onOpenChange={setIsOpen}>
-        <OGDialogTrigger asChild>
-          <Button aria-labelledby="api-keys-label" variant="outline">
-            {localize('com_ui_manage')}
-          </Button>
-        </OGDialogTrigger>
-
-        <OGDialogContent
-          title={localize('com_ui_agent_api_keys')}
-          className="w-11/12 max-w-2xl bg-background text-text-primary shadow-2xl"
-        >
-          <OGDialogHeader>
-            <OGDialogTitle>{localize('com_ui_agent_api_keys')}</OGDialogTitle>
-            <p className="text-sm text-text-secondary">
-              {localize('com_ui_agent_api_keys_description')}
-            </p>
-          </OGDialogHeader>
-          <ApiKeysContent isOpen={isOpen} />
-        </OGDialogContent>
-      </OGDialog>
-    </div>
+          <OGDialogContent
+            title={localize('com_ui_agent_api_keys')}
+            className="w-11/12 max-w-2xl bg-background text-text-primary shadow-2xl"
+          >
+            <OGDialogHeader>
+              <OGDialogTitle>{localize('com_ui_agent_api_keys')}</OGDialogTitle>
+              <p className="text-sm text-text-secondary">
+                {localize('com_ui_agent_api_keys_description')}
+              </p>
+            </OGDialogHeader>
+            <ApiKeysContent isOpen={isOpen} />
+          </OGDialogContent>
+        </OGDialog>
+      )}
+    />
   );
 }

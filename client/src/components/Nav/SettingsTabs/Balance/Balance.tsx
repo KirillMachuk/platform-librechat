@@ -1,4 +1,5 @@
 import React from 'react';
+import { SettingGroup } from '@librechat/client';
 import { useGetStartupConfig, useGetUserBalance } from '~/data-provider';
 import { useAuthContext, useLocalize } from '~/hooks';
 import AutoRefillSettings from './AutoRefillSettings';
@@ -34,14 +35,16 @@ function Balance() {
   const renderAutoRefill = () => {
     if (!autoRefillEnabled) {
       return (
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-text-secondary">
           {localize('com_nav_balance_auto_refill_disabled')}
         </div>
       );
     }
     if (!hasValidRefillSettings) {
       return (
-        <div className="text-sm text-red-600">{localize('com_nav_balance_auto_refill_error')}</div>
+        <div className="text-sm text-text-destructive">
+          {localize('com_nav_balance_auto_refill_error')}
+        </div>
       );
     }
     return (
@@ -56,10 +59,9 @@ function Balance() {
 
   return (
     <div className="flex flex-col gap-4 p-4 text-sm text-text-primary">
-      {/* Token credits display */}
-      <TokenCreditsItem tokenCredits={tokenCredits} />
-
-      {/* Auto-refill display */}
+      <SettingGroup>
+        <TokenCreditsItem tokenCredits={tokenCredits} />
+      </SettingGroup>
       {renderAutoRefill()}
     </div>
   );

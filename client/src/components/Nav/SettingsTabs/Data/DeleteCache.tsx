@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   OGDialogTemplate,
+  SettingRow,
   Label,
   Button,
   OGDialog,
@@ -37,36 +38,40 @@ export const DeleteCache = ({ disabled = false }: { disabled?: boolean }) => {
   }, []);
 
   return (
-    <div className="flex items-center justify-between">
-      <Label id="delete-cache-label">{localize('com_nav_delete_cache_storage')}</Label>
-      <OGDialog open={open} onOpenChange={setOpen}>
-        <OGDialogTrigger asChild>
-          <Button
-            variant="destructive"
-            onClick={() => setOpen(true)}
-            disabled={disabled || isCacheEmpty}
-            aria-labelledby="delete-cache-label"
-          >
-            {localize('com_ui_delete')}
-          </Button>
-        </OGDialogTrigger>
-        <OGDialogTemplate
-          showCloseButton={false}
-          title={localize('com_nav_confirm_clear')}
-          className="max-w-[450px]"
-          main={
-            <Label className="text-left text-sm font-medium">
-              {localize('com_nav_clear_cache_confirm_message')}
-            </Label>
-          }
-          selection={{
-            selectHandler: revokeAllUserKeys,
-            selectClasses:
-              'bg-destructive text-white transition-all duration-200 hover:bg-destructive/80',
-            selectText: isLoading ? <Spinner /> : localize('com_ui_delete'),
-          }}
-        />
-      </OGDialog>
-    </div>
+    <SettingRow
+      id="delete-cache"
+      title={localize('com_nav_delete_cache_storage')}
+      stackControlOnMobile
+      control={({ labelId }) => (
+        <OGDialog open={open} onOpenChange={setOpen}>
+          <OGDialogTrigger asChild>
+            <Button
+              variant="destructive"
+              onClick={() => setOpen(true)}
+              disabled={disabled || isCacheEmpty}
+              aria-labelledby={labelId}
+            >
+              {localize('com_ui_delete')}
+            </Button>
+          </OGDialogTrigger>
+          <OGDialogTemplate
+            showCloseButton={false}
+            title={localize('com_nav_confirm_clear')}
+            className="max-w-[450px]"
+            main={
+              <Label className="text-left text-sm font-medium">
+                {localize('com_nav_clear_cache_confirm_message')}
+              </Label>
+            }
+            selection={{
+              selectHandler: revokeAllUserKeys,
+              selectClasses:
+                'bg-destructive text-white transition-all duration-200 hover:bg-destructive/80',
+              selectText: isLoading ? <Spinner /> : localize('com_ui_delete'),
+            }}
+          />
+        </OGDialog>
+      )}
+    />
   );
 };
