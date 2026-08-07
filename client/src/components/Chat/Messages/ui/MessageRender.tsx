@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, memo } from 'react';
 import { useRecoilValue } from 'recoil';
 import type { TMessage } from 'librechat-data-provider';
 import type { TMessageProps, TMessageChatContext } from '~/common';
-import { cn, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
+import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import MessageContent from '~/components/Chat/Messages/Content/MessageContent';
 import { useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
@@ -139,19 +139,9 @@ const MessageRender = memo(function MessageRender({
     return null;
   }
 
-  const getChatWidthClass = () => {
-    if (maximizeChatSpace) {
-      return 'w-full max-w-full md:px-5 lg:px-1 xl:px-5';
-    }
-    if (hasParallelContent) {
-      return 'md:max-w-[58rem] xl:max-w-[70rem]';
-    }
-    return 'md:max-w-[48rem]';
-  };
-
   const baseClasses = {
     common: 'group mx-auto flex flex-1 gap-3 transition-all duration-300 transform-gpu ',
-    chat: getChatWidthClass(),
+    chat: chatColumnClass(maximizeChatSpace, hasParallelContent),
   };
 
   const conditionalClasses = {

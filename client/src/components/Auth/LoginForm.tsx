@@ -158,7 +158,7 @@ const LoginForm: React.FC<TLoginFormProps> = ({ onSubmit, startupConfig, error, 
            *  phone), taller than the 36 every other button gets. The `outline`
            *  variant now carries `btn-line` and a plain `hover` fill on its
            *  own, so the patch that used to live here is gone. */
-          className="mt-1 h-12 w-full text-[15px] sm:h-10 sm:text-sm"
+          className="mt-1 h-12 w-full text-[15px] md:h-10 md:text-sm"
         >
           {isSubmitting ? <Spinner /> : localize('com_auth_continue')}
         </Button>

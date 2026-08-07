@@ -1,8 +1,8 @@
 import { forwardRef } from 'react';
 import { useRecoilValue } from 'recoil';
 import { ChevronDown } from 'lucide-react';
+import { cn, chatColumnClass } from '~/utils';
 import { useLocalize } from '~/hooks';
-import { cn } from '~/utils';
 import store from '~/store';
 
 type Props = {
@@ -18,7 +18,7 @@ const ScrollToBottom = forwardRef<HTMLDivElement, Props>(({ scrollHandler }, ref
       ref={ref}
       className={cn(
         'pointer-events-none absolute bottom-5 left-0 right-0 mx-auto flex justify-end',
-        maximizeChatSpace ? 'max-w-full' : 'md:max-w-[48rem]',
+        chatColumnClass(maximizeChatSpace),
       )}
     >
       <button

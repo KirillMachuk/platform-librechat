@@ -90,7 +90,7 @@ const HoverButton = memo(
       'group-hover:visible group-focus-within:visible group-[.final-completion]:visible',
       !isVisible && 'opacity-0',
       'focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white focus-visible:outline-none',
-      isActive && isVisible && 'active text-text-primary bg-surface-hover',
+      isActive && isVisible && 'text-text-primary bg-surface-hover',
       className,
     );
 
@@ -273,7 +273,6 @@ const HoverButtons = ({
           title={localize('com_ui_regenerate')}
           icon={<RegenerateIcon size="19" />}
           isLast={isLast}
-          className="active"
         />
       )}
 
@@ -284,7 +283,6 @@ const HoverButtons = ({
           title={localize('com_ui_continue')}
           icon={<ContinueIcon className="w-19 h-19 -rotate-180" />}
           isLast={isLast}
-          className="active"
         />
       )}
     </div>

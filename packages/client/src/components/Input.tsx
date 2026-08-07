@@ -19,7 +19,15 @@ export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
  * already do; they used to carry their own copy of these numbers.
  */
 export const FIELD_BASE =
-  'w-full rounded-xl border bg-surface-primary px-3 text-[15px] text-text-primary placeholder:text-text-tertiary focus-visible:outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-45 h-12 sm:h-9 sm:text-sm';
+  'w-full rounded-xl border bg-surface-primary px-3 text-base text-text-primary placeholder:text-text-tertiary focus-visible:outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-45 h-12 md:h-9 md:text-sm';
+
+/*
+ * Two things were wrong with the breakpoint and the size above, and both were
+ * ours. Canon §7 knows exactly two breakpoints, 768 and 1024 — `sm:` is 640, so
+ * between 640 and 768 a field was already desktop-sized while the layout around
+ * it was still the phone's. And the phone size was 15px: Safari zooms the page
+ * on focus below 16, which canon §7 calls out by name.
+ */
 
 /** The normal, non-error border and focus colours that go with FIELD_BASE. */
 export const FIELD_BORDER =
