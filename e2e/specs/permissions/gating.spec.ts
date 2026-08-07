@@ -68,6 +68,15 @@ test.describe('role permissions gate the interface', () => {
     expect(seeded.AGENTS?.SHARE).toBe(true);
     expect(seeded.SKILLS?.SHARE).toBe(true);
 
+    /* The rest of the family, switched on the same way and for the same reason.
+     * Each of these was `false` on a fresh database until this config named it —
+     * measured, not assumed. */
+    expect(seeded.MARKETPLACE?.USE).toBe(true);
+    expect(seeded.MCP_SERVERS?.CREATE).toBe(true);
+    expect(seeded.MCP_SERVERS?.CONFIGURE_OBO).toBe(true);
+    expect(seeded.REMOTE_AGENTS?.USE).toBe(true);
+    expect(seeded.REMOTE_AGENTS?.SHARE).toBe(true);
+
     /* And off, on purpose. Sharing with a named person needs the people picker;
      * sharing with everyone does not, and everyone-sharing is all this
      * deployment wants (owner, 2026-08-06). The permission opens the whole staff
@@ -112,5 +121,10 @@ test.describe('role permissions gate the interface', () => {
     await expect(page.getByTestId('sidebar-link-agents')).toHaveCount(1);
     await expect(page.getByTestId('sidebar-link-skills')).toHaveCount(1);
     await expect(page.getByTestId('sidebar-link-prompts')).toHaveCount(1);
+
+    /* This one only exists because `mcpServers.create` is on: it is the entry to
+     * the MCP builder, and it is not in the sidebar of a run without that
+     * permission. The clearest single affordance the newly-enabled half adds. */
+    await expect(page.getByTestId('sidebar-link-mcp-builder')).toHaveCount(1);
   });
 });

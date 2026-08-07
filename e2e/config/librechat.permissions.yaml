@@ -40,6 +40,23 @@ interface:
     share: true
     public: true
 
+  # The rest of the family the deployment has not switched on either. Turned on
+  # here for the same reason as sharing: the owner intends to enable them, and a
+  # permission nobody has ever seeded is a permission nobody has ever seen fail.
+  marketplace:
+    use: true
+  mcpServers:
+    use: true
+    create: true
+    share: true
+    public: true
+    configureObo: true
+  remoteAgents:
+    use: true
+    create: true
+    share: true
+    public: true
+
   # peoplePicker stays OFF, and deliberately. Sharing with a named person needs
   # it; sharing with everyone does not, and the owner decided on 2026-08-06 that
   # everyone-sharing is all this deployment wants. The permission is not free:
