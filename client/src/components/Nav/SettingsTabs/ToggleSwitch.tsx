@@ -1,6 +1,6 @@
 import { WritableAtom, useAtom } from 'jotai';
 import { RecoilState, useRecoilState } from 'recoil';
-import { Switch, InfoHoverCard, ESide } from '@librechat/client';
+import { Switch, SettingRow } from '@librechat/client';
 import { useLocalize } from '~/hooks';
 
 type LocalizeFn = ReturnType<typeof useLocalize>;
@@ -9,116 +9,109 @@ type LocalizeKey = Parameters<LocalizeFn>[0];
 interface ToggleSwitchProps {
   stateAtom: RecoilState<boolean> | WritableAtom<boolean, [boolean], void>;
   localizationKey: LocalizeKey;
-  hoverCardText?: LocalizeKey;
+  /**
+   * The line under the title (canon §6.4). This used to be `hoverCardText`: an
+   * "i" bubble that a touch screen can never open, holding the only explanation
+   * of what the switch does. On screen it is a line of text, not a secret.
+   */
+  descriptionKey?: LocalizeKey;
+  icon?: React.ReactNode;
   switchId: string;
   onCheckedChange?: (value: boolean) => void;
   showSwitch?: boolean;
   disabled?: boolean;
-  strongLabel?: boolean;
 }
 
 function isRecoilState<T>(atom: unknown): atom is RecoilState<T> {
   return atom != null && typeof atom === 'object' && 'key' in atom;
 }
 
-const RecoilToggle: React.FC<
-  Omit<ToggleSwitchProps, 'stateAtom'> & { stateAtom: RecoilState<boolean> }
-> = ({
-  stateAtom,
+type RowProps = Omit<ToggleSwitchProps, 'stateAtom' | 'showSwitch'> & {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+};
+
+const Row: React.FC<RowProps> = ({
   localizationKey,
-  hoverCardText,
+  descriptionKey,
+  icon,
   switchId,
-  onCheckedChange,
   disabled = false,
-  strongLabel = false,
+  checked,
+  onChange,
 }) => {
-  const [switchState, setSwitchState] = useRecoilState(stateAtom);
   const localize = useLocalize();
 
-  const handleCheckedChange = (value: boolean) => {
-    setSwitchState(value);
-    onCheckedChange?.(value);
-  };
+  return (
+    <SettingRow
+      id={switchId}
+      icon={icon}
+      title={localize(localizationKey)}
+      description={descriptionKey ? localize(descriptionKey) : undefined}
+      control={({ labelId, descriptionId }) => (
+        <Switch
+          size="row"
+          id={switchId}
+          checked={checked}
+          onCheckedChange={onChange}
+          disabled={disabled}
+          data-testid={switchId}
+          aria-labelledby={labelId}
+          aria-describedby={descriptionId}
+        />
+      )}
+    />
+  );
+};
 
-  const labelId = `${switchId}-label`;
+const RecoilToggle: React.FC<
+  Omit<ToggleSwitchProps, 'stateAtom' | 'showSwitch'> & { stateAtom: RecoilState<boolean> }
+> = ({ stateAtom, onCheckedChange, ...rest }) => {
+  const [switchState, setSwitchState] = useRecoilState(stateAtom);
 
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center space-x-2">
-        <div id={labelId}>
-          {strongLabel ? <strong>{localize(localizationKey)}</strong> : localize(localizationKey)}
-        </div>
-        {hoverCardText && <InfoHoverCard side={ESide.Bottom} text={localize(hoverCardText)} />}
-      </div>
-      <Switch
-        id={switchId}
-        checked={switchState}
-        onCheckedChange={handleCheckedChange}
-        disabled={disabled}
-        className="ml-4"
-        data-testid={switchId}
-        aria-labelledby={labelId}
-      />
-    </div>
+    <Row
+      {...rest}
+      checked={switchState}
+      onChange={(value) => {
+        setSwitchState(value);
+        onCheckedChange?.(value);
+      }}
+    />
   );
 };
 
 const JotaiToggle: React.FC<
-  Omit<ToggleSwitchProps, 'stateAtom'> & { stateAtom: WritableAtom<boolean, [boolean], void> }
-> = ({
-  stateAtom,
-  localizationKey,
-  hoverCardText,
-  switchId,
-  onCheckedChange,
-  disabled = false,
-  strongLabel = false,
-}) => {
+  Omit<ToggleSwitchProps, 'stateAtom' | 'showSwitch'> & {
+    stateAtom: WritableAtom<boolean, [boolean], void>;
+  }
+> = ({ stateAtom, onCheckedChange, ...rest }) => {
   const [switchState, setSwitchState] = useAtom(stateAtom);
-  const localize = useLocalize();
-
-  const handleCheckedChange = (value: boolean) => {
-    setSwitchState(value);
-    onCheckedChange?.(value);
-  };
-
-  const labelId = `${switchId}-label`;
 
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center space-x-2">
-        <div id={labelId}>
-          {strongLabel ? <strong>{localize(localizationKey)}</strong> : localize(localizationKey)}
-        </div>
-        {hoverCardText && <InfoHoverCard side={ESide.Bottom} text={localize(hoverCardText)} />}
-      </div>
-      <Switch
-        id={switchId}
-        checked={switchState}
-        onCheckedChange={handleCheckedChange}
-        disabled={disabled}
-        className="ml-4"
-        data-testid={switchId}
-        aria-labelledby={labelId}
-      />
-    </div>
+    <Row
+      {...rest}
+      checked={switchState}
+      onChange={(value) => {
+        setSwitchState(value);
+        onCheckedChange?.(value);
+      }}
+    />
   );
 };
 
-const ToggleSwitch: React.FC<ToggleSwitchProps> = (props) => {
-  const { stateAtom, showSwitch = true } = props;
-
+const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ showSwitch = true, ...props }) => {
   if (!showSwitch) {
     return null;
   }
 
-  const isRecoil = isRecoilState(stateAtom);
-
-  if (isRecoil) {
-    return <RecoilToggle {...props} stateAtom={stateAtom as RecoilState<boolean>} />;
+  if (isRecoilState(props.stateAtom)) {
+    return <RecoilToggle {...props} stateAtom={props.stateAtom as RecoilState<boolean>} />;
   }
 
-  return <JotaiToggle {...props} stateAtom={stateAtom as WritableAtom<boolean, [boolean], void>} />;
+  return (
+    <JotaiToggle {...props} stateAtom={props.stateAtom as WritableAtom<boolean, [boolean], void>} />
+  );
 };
 
 export default ToggleSwitch;

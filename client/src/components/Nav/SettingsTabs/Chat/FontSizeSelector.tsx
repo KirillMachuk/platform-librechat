@@ -1,5 +1,5 @@
 import { useAtom } from 'jotai';
-import { Dropdown } from '@librechat/client';
+import { Dropdown, SettingRow } from '@librechat/client';
 import { fontSizeAtom } from '~/store/fontSize';
 import { useLocalize } from '~/hooks';
 
@@ -19,19 +19,20 @@ export default function FontSizeSelector() {
     { value: 'text-xl', label: localize('com_nav_font_size_xl') },
   ];
 
-  const labelId = 'font-size-selector-label';
-
   return (
-    <div className="flex w-full items-center justify-between">
-      <div id={labelId}>{localize('com_nav_font_size')}</div>
-      <Dropdown
-        value={fontSize}
-        options={options}
-        onChange={handleChange}
-        testId="font-size-selector"
-        sizeClasses="w-[150px]"
-        aria-labelledby={labelId}
-      />
-    </div>
+    <SettingRow
+      id="font-size-selector"
+      title={localize('com_nav_font_size')}
+      control={({ labelId }) => (
+        <Dropdown
+          value={fontSize}
+          options={options}
+          onChange={handleChange}
+          testId="font-size-selector"
+          sizeClasses="w-[150px]"
+          aria-labelledby={labelId}
+        />
+      )}
+    />
   );
 }

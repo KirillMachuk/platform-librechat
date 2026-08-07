@@ -1,6 +1,6 @@
 import React from 'react';
 import { useRecoilState } from 'recoil';
-import { Dropdown } from '@librechat/client';
+import { Dropdown, SettingRow } from '@librechat/client';
 import { useLocalize } from '~/hooks';
 import store from '~/store';
 
@@ -23,20 +23,22 @@ const EngineSTTDropdown: React.FC<EngineSTTDropdownProps> = ({ external }) => {
     setEngineSTT(value);
   };
 
-  const labelId = 'engine-stt-dropdown-label';
-
   return (
-    <div className="flex items-center justify-between">
-      <div id={labelId}>{localize('com_nav_engine')}</div>
-      <Dropdown
-        value={engineSTT}
-        onChange={handleSelect}
-        options={endpointOptions}
-        sizeClasses="w-[180px]"
-        testId="EngineSTTDropdown"
-        aria-labelledby={labelId}
-      />
-    </div>
+    <SettingRow
+      id="engine-stt-dropdown"
+      title={localize('com_nav_engine')}
+      stackControlOnMobile
+      control={({ labelId }) => (
+        <Dropdown
+          value={engineSTT}
+          onChange={handleSelect}
+          options={endpointOptions}
+          sizeClasses="w-[180px]"
+          testId="EngineSTTDropdown"
+          aria-labelledby={labelId}
+        />
+      )}
+    />
   );
 };
 

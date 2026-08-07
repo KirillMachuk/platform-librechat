@@ -12,7 +12,6 @@ export default function TextToSpeechSwitch({
       localizationKey={'com_nav_text_to_speech' as const}
       switchId="TextToSpeech"
       onCheckedChange={onCheckedChange}
-      strongLabel={true}
     />
   );
 }

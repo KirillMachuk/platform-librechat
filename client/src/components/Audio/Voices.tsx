@@ -1,6 +1,6 @@
 import React from 'react';
 import { useRecoilState } from 'recoil';
-import { Dropdown } from '@librechat/client';
+import { Dropdown, SettingRow } from '@librechat/client';
 import type { Option } from '~/common';
 import { useLocalize, useTTSBrowser, useTTSExternal } from '~/hooks';
 import { logger } from '~/utils';
@@ -19,21 +19,23 @@ export function BrowserVoiceDropdown() {
     }
   };
 
-  const labelId = 'browser-voice-dropdown-label';
-
   return (
-    <div className="flex items-center justify-between">
-      <div id={labelId}>{localize('com_nav_voice_select')}</div>
-      <Dropdown
-        key={`browser-voice-dropdown-${voices.length}`}
-        value={voice ?? ''}
-        options={voices}
-        onChange={handleVoiceChange}
-        sizeClasses="min-w-[200px] !max-w-[400px] [--anchor-max-width:400px]"
-        testId="BrowserVoiceDropdown"
-        aria-labelledby={labelId}
-      />
-    </div>
+    <SettingRow
+      id="browser-voice-dropdown"
+      title={localize('com_nav_voice_select')}
+      stackControlOnMobile
+      control={({ labelId }) => (
+        <Dropdown
+          key={`browser-voice-dropdown-${voices.length}`}
+          value={voice ?? ''}
+          options={voices}
+          onChange={handleVoiceChange}
+          sizeClasses="min-w-[200px] !max-w-[400px] [--anchor-max-width:400px]"
+          testId="BrowserVoiceDropdown"
+          aria-labelledby={labelId}
+        />
+      )}
+    />
   );
 }
 
@@ -50,20 +52,22 @@ export function ExternalVoiceDropdown() {
     }
   };
 
-  const labelId = 'external-voice-dropdown-label';
-
   return (
-    <div className="flex items-center justify-between">
-      <div id={labelId}>{localize('com_nav_voice_select')}</div>
-      <Dropdown
-        key={`external-voice-dropdown-${voices.length}`}
-        value={voice ?? ''}
-        options={voices}
-        onChange={handleVoiceChange}
-        sizeClasses="min-w-[200px] !max-w-[400px] [--anchor-max-width:400px]"
-        testId="ExternalVoiceDropdown"
-        aria-labelledby={labelId}
-      />
-    </div>
+    <SettingRow
+      id="external-voice-dropdown"
+      title={localize('com_nav_voice_select')}
+      stackControlOnMobile
+      control={({ labelId }) => (
+        <Dropdown
+          key={`external-voice-dropdown-${voices.length}`}
+          value={voice ?? ''}
+          options={voices}
+          onChange={handleVoiceChange}
+          sizeClasses="min-w-[200px] !max-w-[400px] [--anchor-max-width:400px]"
+          testId="ExternalVoiceDropdown"
+          aria-labelledby={labelId}
+        />
+      )}
+    />
   );
 }
