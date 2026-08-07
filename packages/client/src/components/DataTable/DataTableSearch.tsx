@@ -44,7 +44,7 @@ export const DataTableSearch: MemoExoticComponent<
            * the wrong way round, 40 on a phone and 48 on a desktop, where the
            * canon and every other field in the product do the opposite.
            */
-          className={cn('h-12 sm:h-9', className)}
+          className={cn('h-12 bg-surface-primary sm:h-9', className)}
         />
         <span id="search-description" className="sr-only">
           {localize('com_ui_search_table_description')}

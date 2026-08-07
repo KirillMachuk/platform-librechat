@@ -123,12 +123,22 @@ describe('DataTableSearch', () => {
     expect(input.className).toContain('custom-class');
   });
 
-  it('should apply default styling classes', () => {
+  /**
+   * Canon §6.4: 48 on a phone, 36 on a desktop. It used to pin `h-10`, which was
+   * the old 40 — and the old class list also carried `border-0` and
+   * `rounded-b-none`, welding the input into the top of the table so it read as
+   * the edge of a card rather than a field. The border and radius now come from
+   * `Input`; what this pins is the height and the fill.
+   */
+  it('is a field: 48 on a phone, 36 on a desktop, on a card fill', () => {
     render(<DataTableSearch value="" onChange={jest.fn()} />);
 
     const input = screen.getByTestId('search-input');
-    expect(input.className).toContain('h-10');
+    expect(input.className).toContain('h-12');
+    expect(input.className).toContain('sm:h-9');
     expect(input.className).toContain('bg-surface-primary');
+    expect(input.className).not.toContain('border-0');
+    expect(input.className).not.toContain('rounded-b-none');
   });
 
   it('should have correct id for label association', () => {
