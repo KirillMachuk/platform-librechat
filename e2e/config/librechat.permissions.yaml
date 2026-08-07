@@ -15,7 +15,6 @@ interface:
 
   # OFF: each of these seeds a role permission, and each has one affordance in
   # the interface that must disappear with it.
-  prompts: false
   multiConvo: false
   temporaryChat: false
 
@@ -23,7 +22,33 @@ interface:
   # permission system failed to load would look exactly like a run where every
   # gate worked.
   bookmarks: true
-  agents: true
+
+  # ON, and this is the other half of what this profile is for. Sharing is off
+  # in the deployment today — not by choice but by the shape of the config:
+  # `prompts: true` seeds USE and CREATE and leaves SHARE and SHARE_PUBLIC off,
+  # because the seeding only reads them when the key is an OBJECT carrying
+  # `share` or `public` (packages/api/src/app/permissions.ts). The owner intends
+  # to turn all of it on, so the behaviour it unlocks is tested here rather than
+  # waiting for the day the stand's yaml changes.
+  prompts:
+    share: true
+    public: true
+  agents:
+    share: true
+    public: true
+  skills:
+    share: true
+    public: true
+
+  # peoplePicker stays OFF, and deliberately. Sharing with a named person needs
+  # it; sharing with everyone does not, and the owner decided on 2026-08-06 that
+  # everyone-sharing is all this deployment wants. The permission is not free:
+  # it opens `GET /api/permissions/search-principals` to every USER, which is
+  # the whole staff directory. Left off here so the profile does not quietly
+  # recommend it to the stand's config.
+  #
+  # `gating.spec.ts` asserts it is off, so this is a decision with a test on it
+  # rather than an omission.
 
 mcpServers:
   e2e-memory:

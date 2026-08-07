@@ -18,7 +18,9 @@ import { getLocalE2EEnv } from './setup/env';
  *
  * Runs alongside the mock profile rather than instead of it: different port,
  * different database name, different auth state, different output directory. On
- * CI it is its own job, so the pull-request gate does not get slower.
+ * CI it is a step on shard 1 rather than a job of its own — a job would repeat
+ * the whole cache-and-build for a run that takes under a minute — so it costs
+ * that shard about a minute and the gate as a whole nothing.
  */
 const rootPath = path.resolve(__dirname, '..');
 const serverPath = path.resolve(rootPath, 'e2e/setup/start-server.js');
