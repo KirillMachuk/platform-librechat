@@ -626,7 +626,9 @@ function DataTable<TData extends RowWithId, TValue>({
       {(shouldShowSearch ||
         customActionsRenderer != null ||
         (columnVisibilityEnabled && columnVisibilityContextMap != null)) && (
-        <div className="flex w-full shrink-0 items-center gap-2 border-b border-border-light md:gap-3">
+        /* The strip needs padding now that the search inside it is a field with
+           its own border, rather than a borderless block welded to the table. */
+        <div className="flex w-full shrink-0 items-center gap-2 border-b border-border-light p-2 md:gap-3 md:p-3">
           {shouldShowSearch && <DataTableSearch value={searchTerm} onChange={setSearchTerm} />}
           {customActionsRenderer &&
             customActionsRenderer({

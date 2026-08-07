@@ -33,7 +33,18 @@ export const DataTableSearch: MemoExoticComponent<
           aria-label={localize('com_ui_search_table')}
           aria-describedby="search-description"
           placeholder={placeholder || localize('com_ui_search')}
-          className={cn('h-10 rounded-b-none border-0 bg-surface-primary md:h-12', className)}
+          /**
+           * Canon §6.4: a field is 36 on a desktop, 48 on a phone, radius 12,
+           * with a `control` border — which is what `Input` already carries.
+           *
+           * This used to strip all of it: `border-0` and `rounded-b-none` fused
+           * the input into the top edge of the table, so measured live it came
+           * back as radius `12px 12px 0 0` with no border at all — the top of a
+           * card rather than something you can type in. The heights were also
+           * the wrong way round, 40 on a phone and 48 on a desktop, where the
+           * canon and every other field in the product do the opposite.
+           */
+          className={cn('h-12 bg-surface-primary sm:h-9', className)}
         />
         <span id="search-description" className="sr-only">
           {localize('com_ui_search_table_description')}
