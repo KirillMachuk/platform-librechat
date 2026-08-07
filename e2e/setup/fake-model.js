@@ -27,6 +27,7 @@ const SLOW_COUNTED_REPLY_MARKER = 'E2E_SLOW_COUNTED_REPLY:';
 const RESUME_ICON_REPLY_MARKER = 'E2E_RESUME_ICON_REPLY:';
 const FORCED_ERROR_MARKER = 'E2E_FORCED_ERROR:';
 const MARKDOWN_REPLY_MARKER = 'E2E_MARKDOWN_REPLY';
+const ARTIFACT_REPLY_MARKER = 'E2E_ARTIFACT_REPLY';
 const CREATE_FILE_AUTHORING_FINAL_TEXT = 'E2E file authoring complete';
 const EDIT_FILE_AUTHORING_FINAL_TEXT = 'E2E file edit complete';
 const MODEL_SPEC_SKILL_ASSERTION_FINAL_TEXT = 'E2E model spec skill assertion passed';
@@ -233,6 +234,27 @@ function providerFileAssertionResponses({ messages, text }) {
 }
 
 function replyResponses(text) {
+  /* An artifact, which the client routes into its own panel instead of drawing
+   * inline. The container syntax is the one `artifactPlugin` looks for; the
+   * body is markdown so the panel needs no sandbox to show it. */
+  if (text.includes(ARTIFACT_REPLY_MARKER)) {
+    return {
+      responses: [
+        [
+          'Here is the document you asked for.',
+          '',
+          ':::artifact{identifier="e2e-artifact" type="text/markdown" title="E2E Artifact"}',
+          '```',
+          '# E2E artifact heading',
+          '',
+          'E2E artifact body line.',
+          '```',
+          ':::',
+        ].join('\n'),
+      ],
+    };
+  }
+
   if (text.includes(MARKDOWN_REPLY_MARKER)) {
     return {
       responses: [
