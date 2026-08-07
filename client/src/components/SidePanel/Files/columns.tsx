@@ -43,7 +43,7 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
           <div className="flex gap-2">
             <ImagePreview
               url={file.filepath}
-              className="relative h-10 w-10 shrink-0 overflow-visible rounded-md"
+              className="relative size-7 shrink-0 overflow-visible rounded-lg"
               source={file.source}
             />
             <span className="self-center truncate">{file.filename}</span>
@@ -53,14 +53,28 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
 
       const fileType = getFileType(file.type);
       return (
+        /**
+         * The type badge is 40 in the composer, where a handful of chips have
+         * room for it. In a list it set the row height — 64 against the canon's
+         * 44 — and took the space the filename needed. 28 keeps the badge
+         * readable and lets the row land on the scale.
+         */
         <div className="flex gap-2">
-          {fileType && <FilePreview fileType={fileType} className="relative" file={file} />}
+          {fileType && <FilePreview fileType={fileType} className="relative size-7" file={file} />}
           <span className="self-center truncate">{file.filename}</span>
         </div>
       );
     },
     meta: {
       isRowHeader: true,
+      /**
+       * The name had no width at all, so the table handed it whatever the other
+       * headers left over — and "Search index" is a long header. In a 720 dialog
+       * that came out as "big…", "dat…", "co…": the one column a person actually
+       * reads was the one that lost. It takes the lion's share now, and the
+       * columns whose content is short are capped so they cannot take it back.
+       */
+      width: 46,
     },
   },
   {
@@ -99,6 +113,7 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
       }
       return <span className="text-text-secondary">—</span>;
     },
+    meta: { width: 20 },
   },
   {
     accessorKey: 'bytes',
@@ -113,7 +128,7 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
       }
       return `${value} MB`;
     },
-    meta: { desktopOnly: true },
+    meta: { desktopOnly: true, width: 12 },
   },
   {
     accessorKey: 'updatedAt',
@@ -128,7 +143,7 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
       useLocalize();
       return formatDate(row.original.updatedAt?.toString() ?? '', isSmallScreen);
     },
-    meta: { desktopOnly: true },
+    meta: { desktopOnly: true, width: 16 },
   },
   {
     id: 'attach',
@@ -142,7 +157,10 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
      */
     cell: ({ row }) => {
       const localize = useLocalize();
-      const label = `${localize('com_sidepanel_attach_files')}: ${row.original.filename}`;
+      /* Not `com_sidepanel_attach_files` — that key is the sidebar section's
+         name, and in Russian it is simply "Файлы", so a screen reader announced
+         this button as "Файлы: contract.docx" instead of an action. */
+      const label = `${localize('com_ui_attach_to_chat')}: ${row.original.filename}`;
       return (
         <div className="flex items-center justify-end">
           <button
@@ -152,7 +170,7 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
               ctx.onAttach(row.original);
             }}
             aria-label={label}
-            title={localize('com_sidepanel_attach_files')}
+            title={localize('com_ui_attach_to_chat')}
             className="tap-target flex size-8 items-center justify-center rounded-lg text-text-tertiary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy"
           >
             <Paperclip className="icon-sm" aria-hidden="true" />
