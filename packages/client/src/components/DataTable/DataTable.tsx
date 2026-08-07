@@ -758,12 +758,26 @@ function DataTable<TData extends RowWithId, TValue>({
                         <div className="flex items-center gap-1 md:gap-2">
                           {flexRender(header.column.columnDef.header, header.getContext())}
                           {wrapperSortable && (
-                            <span className="text-text-primary" aria-hidden="true">
+                            /**
+                             * The column being sorted by is the one wearing a
+                             * direction; every other sortable column wears the
+                             * neutral glyph at t3. All three used to be t1, so a
+                             * two-column table showed two equally loud arrows and
+                             * said nothing about which one was in charge.
+                             *
+                             * The prototype drops the glyph entirely when a column
+                             * is not sorted. Muted rather than absent, because a
+                             * finger has no hover to reveal it with, and without it
+                             * nothing on a phone says the header can be tapped at
+                             * all. `aria-sort` on the header carries the state for
+                             * a screen reader either way.
+                             */
+                            <span aria-hidden="true">
                               {{
                                 asc: <ArrowUp className="size-4 text-text-primary" />,
                                 desc: <ArrowDown className="size-4 text-text-primary" />,
                               }[header.column.getIsSorted() as string] ?? (
-                                <ArrowDownUp className="size-4 text-text-primary" />
+                                <ArrowDownUp className="size-4 text-text-tertiary" />
                               )}
                             </span>
                           )}
