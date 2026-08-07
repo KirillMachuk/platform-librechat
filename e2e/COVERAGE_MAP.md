@@ -270,6 +270,11 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | A configured skill is listed, its file list expands, and it offers no Edit | e2e | `e2e/specs/mock/skills.spec.ts#a configured skill is listed, its files open, and it stays read-only` | covered |
 | A skill written in the interface offers its author an Edit, a configured one does not | e2e | `e2e/specs/mock/skills.spec.ts#a skill of my own is mine to edit` | covered |
 | A skill is attached to an agent from the interface | e2e | — | gap |
+| An agent shared with everyone appears in the marketplace for other people | e2e | `e2e/specs/permissions/marketplace.spec.ts#an agent shared with everyone reaches the marketplace, an unshared one does not` | covered |
+| An unshared agent stays out of other people's marketplace | e2e | `e2e/specs/permissions/marketplace.spec.ts#marketplaceHits(pageB, privateName)).toBe(0)` | covered |
+| Remote access is offered on an agent when the permission allows it | e2e | `e2e/specs/permissions/marketplace.spec.ts#Remote Access` | covered |
+| The MCP builder appears in the sidebar when its permission allows it | e2e | `e2e/specs/permissions/gating.spec.ts#sidebar-link-mcp-builder` | covered |
+| Marketplace, MCP and remote-agent permissions seed as the config writes them | e2e | `e2e/specs/permissions/gating.spec.ts#seeded.MARKETPLACE?.USE` | covered |
 
 **Why sharing is tested in a profile of its own.** The Share button renders only when the USER
 role carries `PROMPTS.SHARE`, and the deployment does not give it today. Measured 2026-08-06

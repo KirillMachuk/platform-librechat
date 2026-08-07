@@ -160,9 +160,9 @@ test.describe('sharing a prompt', () => {
        * message and once inside a `role="status"` live region that reads
        * "Notification " first. A loose match resolves to both and the run dies
        * of strict mode — which it did, on one repeat out of twelve. */
-      await expect(
-        page.getByText('Permissions updated successfully', { exact: true }),
-      ).toBeVisible({ timeout: 15000 });
+      await expect(page.getByText('Permissions updated successfully', { exact: true })).toBeVisible(
+        { timeout: 15000 },
+      );
 
       await pageB.goto(CHAT, { timeout: 20000 });
       const filter = await openPromptsPanel(pageB);
