@@ -106,6 +106,16 @@ test.describe('role permissions gate the interface', () => {
      * all on a new chat: it hides itself while the conversation id is still
      * "new". Measured, three runs red, before this settled on the selector. */
     await expect(page.getByTestId('model-selector-trigger').first()).toBeVisible();
+
+    /* And a control that DOES depend on a permission, in this same test. The
+     * selector above proves the header rendered, but it renders whether or not
+     * the roles request has come back — and `useHasAccess` answers "no" while
+     * that request is in flight, so both negatives below would pass on a run
+     * where the roles simply had not arrived. A review caught that. This link
+     * appears only with `PROMPTS.USE`, which this profile leaves on, so it is
+     * the signal that the permission answer is in. */
+    await expect(page.getByTestId('sidebar-link-prompts')).toHaveCount(1);
+
     await expect(page.getByTestId('add-multi-convo-button')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Temporary Chat' })).toHaveCount(0);
   });
@@ -122,9 +132,13 @@ test.describe('role permissions gate the interface', () => {
     await expect(page.getByTestId('sidebar-link-skills')).toHaveCount(1);
     await expect(page.getByTestId('sidebar-link-prompts')).toHaveCount(1);
 
-    /* This one only exists because `mcpServers.create` is on: it is the entry to
-     * the MCP builder, and it is not in the sidebar of a run without that
-     * permission. The clearest single affordance the newly-enabled half adds. */
+    /* The MCP builder's entry. Note what this does NOT say: it is not evidence
+     * about `mcpServers.create`. `useSideNavLinks` renders this link when
+     * (`MCP_SERVERS.USE` and at least one server is configured) OR `CREATE`, and
+     * this profile satisfies the first half on its own — it defines the
+     * `e2e-memory` server and USE is a role default. Measured: switching
+     * `create` off leaves this assertion green. An earlier version of this
+     * comment claimed the opposite and an independent review caught it. */
     await expect(page.getByTestId('sidebar-link-mcp-builder')).toHaveCount(1);
   });
 });

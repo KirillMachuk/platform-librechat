@@ -92,7 +92,7 @@ stays green, so flakes accumulate where nobody looks.
 | Tool calls render their status and result | unit | `client/src/components/Chat/Messages/Content/__tests__/ToolCallStatus.test.tsx#says it finished, and shows what came back` | covered |
 | Web-search citations render as links | unit | `client/src/components/Web/__tests__/Citation.test.tsx#keeps standalone web citations as links` | covered |
 | A file citation opens its preview | unit | `client/src/components/Web/__tests__/Citation.test.tsx#renders composite file citations as buttons and opens the preview dialog` | covered |
-| Clicking a web-search citation opens its source | unit | `client/src/components/Web/__tests__/Citation.test.tsx#lets a web citation click through to the browser, unlike a file one` | covered |
+| A web-search citation links out to its source, in a new tab, without a handle back | unit | `client/src/components/Web/__tests__/Citation.test.tsx#lets a web citation click through to the browser, unlike a file one` | covered |
 | File-search (RAG) retrieval card renders | unit | `client/src/components/Chat/Messages/Content/__tests__/RetrievalCall.test.tsx` | covered |
 | Attachment chips render under a sent message | e2e | `e2e/specs/mock/file-preview.spec.ts#opens a preview from a file attached to a sent message` | covered |
 | An attachment chip shows its display name, falling back to the filename | unit | `client/src/components/Chat/Input/Files/__tests__/FileContainer.spec.tsx#falls back to empty string when neither` | covered |
@@ -280,24 +280,35 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | MCP server selection and ephemeral servers | e2e | `e2e/specs/mock/mcp.spec.ts` | covered |
 | Configured skills load read-only for every authenticated user (API) | e2e | `e2e/specs/mock/deployment-skills.spec.ts#loads configured deployment skills for every authenticated user as read-only` | covered |
 | A model spec sees only the skills scoped to it (API) | e2e | `e2e/specs/mock/model-spec-skills.spec.ts#loads accessible configured skills and skips missing or inaccessible names` | covered |
-| A configured skill is listed, its file list expands, and it offers no Edit | e2e | `e2e/specs/mock/skills.spec.ts#a configured skill is listed, its files open, and it stays read-only` | covered |
+| A configured skill is listed, its file list is fetched on demand, and it offers no Edit | e2e | `e2e/specs/mock/skills.spec.ts#a configured skill is listed, its files open, and it stays read-only` | covered |
 | A skill written in the interface offers its author an Edit, a configured one does not | e2e | `e2e/specs/mock/skills.spec.ts#a skill of my own is mine to edit` | covered |
 | A skill is attached to an agent from the interface | e2e | `e2e/specs/mock/agent-skills.spec.ts#a skill picked in the builder is still on the agent after saving` | fixme:Ф1 |
 | Today a picked skill is sent and then dropped on save (defect, pinned) | e2e | `e2e/specs/mock/agent-skills.spec.ts#today the skill is sent and then dropped on save` | covered |
 
-**The skill-on-agent defect, measured 2026-08-07.** `fixme:Ф1` is the map's only pinned status
-and this is not a canon item, so read it as "pinned, waiting on a fix" rather than as anything to
-do with the redesign. What happens: the builder offers the skill, the browser sends
-`{"skills":["<real id>"],"skills_enabled":true}`, and the create response is
-`{"skills":[],"skills_enabled":false}` — the switch goes off with it. The id is genuine
-(`GET /api/skills` lists it in the same run) and a later `PATCH` keeps nothing either, by id or by
-name. Not a sanitised response: the viewer-scope sanitiser runs only on the list endpoint. On the
-stand every skill is deployment-loaded, which is exactly the class this drops.
 | An agent shared with everyone appears in the marketplace for other people | e2e | `e2e/specs/permissions/marketplace.spec.ts#an agent shared with everyone reaches the marketplace, an unshared one does not` | covered |
-| An unshared agent stays out of other people's marketplace | e2e | `e2e/specs/permissions/marketplace.spec.ts#marketplaceHits(pageB, privateName)).toBe(0)` | covered |
-| Remote access is offered on an agent when the permission allows it | e2e | `e2e/specs/permissions/marketplace.spec.ts#Remote Access` | covered |
-| The MCP builder appears in the sidebar when its permission allows it | e2e | `e2e/specs/permissions/gating.spec.ts#sidebar-link-mcp-builder` | covered |
-| Marketplace, MCP and remote-agent permissions seed as the config writes them | e2e | `e2e/specs/permissions/gating.spec.ts#seeded.MARKETPLACE?.USE` | covered |
+| An unshared agent stays out of other people's marketplace | e2e | `e2e/specs/permissions/marketplace.spec.ts#expectNoMarketplaceHit(pageB, privateName)` | covered |
+| Remote access is offered on an agent in a profile where its permission is on | e2e | `e2e/specs/permissions/marketplace.spec.ts#Remote Access` | covered |
+| The MCP builder has an entry in the sidebar when MCP is available | e2e | `e2e/specs/permissions/gating.spec.ts#sidebar-link-mcp-builder` | covered |
+| Five of the marketplace, MCP and remote-agent permissions seed as written | e2e | `e2e/specs/permissions/gating.spec.ts#seeded.MARKETPLACE?.USE` | covered |
+
+**The skill-on-agent defect, measured 2026-08-07 and narrowed 2026-08-07 after review.**
+`fixme:Ф1` is the map's only pinned status and this is not a canon item, so read it as "pinned,
+waiting on a fix" rather than as anything to do with the redesign.
+
+What happens: a **deployment** skill picked in the builder is dropped on save. The browser sends
+`{"skills":["<id>"],"skills_enabled":true}`, the create response is
+`{"skills":[],"skills_enabled":false}`, and the agent then runs with no skills at all.
+
+Why: a deployment skill's id is synthetic — `stableObjectId('deployment-skill:<name>')` in
+`packages/api/src/skills/deployment.ts`, kept in memory and never written to the `Skill`
+collection. `GET /api/skills` serves it anyway, and so does the picker, but
+`filterExistingSkillIds` checks Mongo only. The allowlist empties and `createAgent` fails closed,
+switching skills off rather than widening scope to the whole catalogue.
+
+**The boundary is asserted, not assumed:** a skill created through `POST /api/skills` — a real
+Mongo document — survives the same endpoint untouched. The first version of this paragraph said
+the server "stores neither the skill nor the switch" without qualification, which overstated the
+blast radius; an independent review caught it and the contrast is now a test assertion.
 
 **Why sharing is tested in a profile of its own.** The Share button renders only when the USER
 role carries `PROMPTS.SHARE`, and the deployment does not give it today. Measured 2026-08-06
@@ -321,11 +332,20 @@ opens and everyone-sharing still works, because the dialog needs either the pick
 sharing, not both. If the decision ever changes, the profile is where to turn it on and this row
 is what to cover.
 
-**Still off, still uncovered**, in the same family and for the same reason — each needs its
-permission turned on in that profile before it can be tested at all:
-`MARKETPLACE.USE`, `MCP_SERVERS.CREATE`/`SHARE`/`SHARE_PUBLIC`/`CONFIGURE_OBO`,
-`REMOTE_AGENTS.USE`/`CREATE`/`SHARE`/`SHARE_PUBLIC`, and sharing an agent or a skill (the
-permissions are on in the profile, the flows are not covered yet).
+**On in the profile, and exercised by nothing.** These were switched on so the behaviour behind
+them could be reached, and then not reached. Written down because a profile that enables
+something without covering it is exactly the quiet claim this map exists to prevent:
+`MCP_SERVERS.USE`/`CREATE`/`SHARE`/`SHARE_PUBLIC`/`CONFIGURE_OBO`,
+`REMOTE_AGENTS.USE`/`CREATE`/`SHARE_PUBLIC`, and `SKILLS.SHARE`/`SHARE_PUBLIC`. Nothing opens the
+MCP builder, creates or shares a server, mints a remote-agent key, or shares a skill.
+
+Two of those are worth an owner's decision before they reach the stand's own config rather than
+this profile: `MCP_SERVERS.CONFIGURE_OBO` lets any user configure a server that mints downstream
+tokens on behalf of whoever uses it, and `REMOTE_AGENTS.CREATE` mints a long-lived API key that
+reaches agents outside the browser session.
+
+Covered by a flow, not just seeded: `PROMPTS.SHARE`/`SHARE_PUBLIC`, `AGENTS.SHARE`/`SHARE_PUBLIC`,
+`MARKETPLACE.USE`, `REMOTE_AGENTS.SHARE`.
 
 ## 10. Settings, sharing, permissions
 
@@ -428,14 +448,6 @@ of encoded.
 | Russian locale renders key screens without overflow | e2e | `e2e/specs/nightly/layout.spec.ts#mainScrollWidth` | covered |
 | Artifacts panel open at a narrow desktop width | e2e | `e2e/specs/mock/artifacts.spec.ts#the panel opens at a narrow desktop width and leaves the chat usable` | covered |
 
-**Three wrong anchors on the way to that row**, all worth knowing before writing anything else
-against this panel. The artifact's **text** cannot be asserted: the message carries a
-screen-reader copy of the whole reply in an `sr-only` div, and `sr-only` is clipped rather than
-hidden, so Playwright counts it visible — that version passed with the panel firmly shut. The
-panel's Code/Preview controls are **not** `role="tab"`. And the code pane is the inactive tab's
-content, so it is mounted but hidden; the panel opens on preview. What works is the pane's
-presence (absent before the click, present after) plus a visible control of the panel's own
-toolbar.
 | Every z-index on the chat screen comes from the canon scale | e2e | `e2e/specs/mock/canon.spec.ts#every z-index comes from the canon scale` | covered |
 | The file library dialog stacks on the canon dialog layer | e2e | `e2e/specs/mock/canon.spec.ts#the file library dialog is on the canon dialog layer` | covered |
 | A dialog opened from inside a dialog is the one drawn on top | e2e | `e2e/specs/mock/canon.spec.ts#a dialog opened from a dialog is the one you can click` | covered |
@@ -445,6 +457,15 @@ toolbar.
 | Pixel snapshots of the redesigned screens | visual | — | planned:Э7 |
 | Product name is 1MA everywhere, never LibreChat | e2e | `e2e/specs/mock/branding.spec.ts#the account menu and the settings dialog never show it either` | covered |
 | Help entry points at the configured help centre | e2e | `e2e/specs/mock/branding.spec.ts#the account menu offers help, pointing at the configured address` | covered |
+
+**Three wrong anchors on the way to that row**, all worth knowing before writing anything else
+against this panel. The artifact's **text** cannot be asserted: the message carries a
+screen-reader copy of the whole reply in an `sr-only` div, and `sr-only` is clipped rather than
+hidden, so Playwright counts it visible — that version passed with the panel firmly shut. The
+panel's Code/Preview controls are **not** `role="tab"`. And the code pane is the inactive tab's
+content, so it is mounted but hidden; the panel opens on preview. What works is the pane's
+presence (absent before the click, present after) plus a visible control of the panel's own
+toolbar.
 
 **Role permissions have a profile of their own.** `e2e/playwright.config.permissions.ts` boots a
 second hermetic server, on its own port and database, against a config whose `interface` block

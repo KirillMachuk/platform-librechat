@@ -46,6 +46,10 @@ test.describe('the account menu follows the menu pattern', () => {
       ariaModal: document.querySelector('[role=menu]')?.getAttribute('aria-modal') ?? null,
     }));
     expect(lockedDuring.overflow).toBe(lockedBefore.overflow);
+    /* Read and then actually compared. An earlier version measured this and
+     * never asserted it, which a review caught: a menu that switched the page's
+     * pointer events off would have sailed through. */
+    expect(lockedDuring.pointerEvents).toBe(lockedBefore.pointerEvents);
     expect(lockedDuring.ariaModal).toBeNull();
   });
 
@@ -66,9 +70,16 @@ test.describe('the account menu follows the menu pattern', () => {
         };
       });
 
+    /* Polled, not snapshotted. `press` waits for the event to be dispatched, not
+     * for the roving-focus implementation to commit it on the next frame, so a
+     * single read right after the keypress can still see the old element on a
+     * slow machine. */
     await page.keyboard.press('ArrowDown');
+    await expect.poll(async () => (await inMenu()).role, { timeout: 10000 }).toBe('menuitem');
     const first = await inMenu();
+
     await page.keyboard.press('ArrowDown');
+    await expect.poll(async () => (await inMenu()).name, { timeout: 10000 }).not.toBe(first.name);
     const second = await inMenu();
 
     /* Both on an item, and not the same item: either half alone passes on a
@@ -83,9 +94,11 @@ test.describe('the account menu follows the menu pattern', () => {
     /* Focus back on what opened it. A menu that closes and drops focus to the
      * body sends the next Tab to the top of the page, which is the same defect
      * the settings dialog is pinned for. */
-    const focused = await page.evaluate(
-      () => document.activeElement?.getAttribute('data-testid') ?? null,
-    );
-    expect(focused).toBe('nav-user');
+    await expect
+      .poll(
+        () => page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? null),
+        { timeout: 10000 },
+      )
+      .toBe('nav-user');
   });
 });

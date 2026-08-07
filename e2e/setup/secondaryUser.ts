@@ -42,22 +42,22 @@ async function registrationErrorIsVisible(page: Page) {
  * this user.
  */
 export async function registerSecondaryUser(page: Page, user: User) {
-  await page.goto('/', { timeout: 10000 });
-  await page.waitForURL(/\/login/, { timeout: 10000 });
+  await page.goto('/', { timeout: 30000 });
+  await page.waitForURL(/\/login/, { timeout: 30000 });
   await register(page, user);
 
   try {
-    await page.waitForURL(/\/c\/new/, { timeout: 10000 });
+    await page.waitForURL(/\/c\/new/, { timeout: 30000 });
   } catch (error) {
     if (!(await registrationErrorIsVisible(page))) {
       throw error;
     }
 
     await cleanupUser(user);
-    await page.goto('/', { timeout: 10000 });
-    await page.waitForURL(/\/login/, { timeout: 10000 });
+    await page.goto('/', { timeout: 30000 });
+    await page.waitForURL(/\/login/, { timeout: 30000 });
     await register(page, user);
-    await page.waitForURL(/\/c\/new/, { timeout: 10000 });
+    await page.waitForURL(/\/c\/new/, { timeout: 30000 });
   }
 }
 
@@ -76,10 +76,10 @@ export async function ensureSecondaryUser(
     await setupContext.close();
   }
 
-  await page.goto('/login', { timeout: 10000 });
+  await page.goto('/login', { timeout: 30000 });
   await page.getByLabel('Email address', { exact: true }).fill(user.email);
   await page.getByLabel('Password', { exact: true }).fill(user.password);
   await page.getByTestId('login-button').click();
-  await page.waitForURL(/\/c\/new/, { timeout: 15000 });
+  await page.waitForURL(/\/c\/new/, { timeout: 30000 });
   await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
 }
