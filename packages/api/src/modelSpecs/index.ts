@@ -203,6 +203,10 @@ export function sanitizeModelSpecs<T extends Partial<TSpecsConfig> | null | unde
       const preset = modelSpec?.preset;
       const sanitizedModelSpec = { ...modelSpec };
       delete (sanitizedModelSpec as { skills?: unknown }).skills;
+      /** Routing the server adds to the upstream request — which provider is pinned, which
+       *  models stand in for an outage. The browser neither needs it nor should see it: it
+       *  is deployment detail, and this payload goes to every signed-in user. */
+      delete (sanitizedModelSpec as { addParams?: unknown }).addParams;
       const subagents = sanitizedModelSpec.subagents;
       if (subagents && typeof subagents === 'object') {
         const sanitizedSubagents: TModelSpec['subagents'] = {};
