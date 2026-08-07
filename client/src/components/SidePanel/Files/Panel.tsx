@@ -1,34 +1,51 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { ArrowUpLeft, Upload } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import { useSetRecoilState } from 'recoil';
+import { Upload, Trash2 } from 'lucide-react';
 import { Spinner, Button, DataTable } from '@librechat/client';
 import type { DataTableConfig } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
+import { useAttachFileToChat, useDeleteFilesFromTable, useLibraryUpload } from '~/hooks/Files';
 import FilePreviewDialog from '~/components/Chat/Messages/Content/FilePreviewDialog';
-import { useLocalize, useAttachFileToChat, useLibraryUpload } from '~/hooks';
-import { MyFilesModal } from '~/components/Chat/Input/Files/MyFilesModal';
+import { buildColumns, filenameContextMap } from './columns';
 import { useGetFiles } from '~/data-provider';
-import { buildColumns } from './PanelColumns';
+import { useLocalize } from '~/hooks';
+import store from '~/store';
 
+/**
+ * The file library, and there is one of it.
+ *
+ * There used to be two, nested: this panel showed a cut-down table — name and
+ * date, no way to select anything — under a button that opened a second dialog
+ * with the same files, the columns that matter, checkboxes and a delete. So a
+ * person opened Files, got the short list, and had to guess that another button
+ * led to the real one. Nothing else opened that second dialog; it existed only
+ * to be reached from here.
+ *
+ * The short list is gone and this one carries everything, including the index
+ * column the prototype calls the important one: whether the assistant can find
+ * the document yet.
+ */
 const TABLE_CONFIG: DataTableConfig = {
-  selection: { enableRowSelection: false, showCheckboxes: false },
   behavior: {
     manualSorting: false,
     manualFiltering: false,
     enablePagination: true,
-    pageSize: 6,
+    pageSize: 10,
   },
   search: { filterColumn: 'filename' },
+  columnVisibility: { enabled: true, contextMap: filenameContextMap },
 };
 
 export default function FilesPanel({ onClose }: { onClose?: () => void }) {
   const localize = useLocalize();
-  const { data: filesList = [] } = useGetFiles<TFile[]>();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [previewFile, setPreviewFile] = useState<TFile | null>(null);
+  const setSelectedFiles = useSetRecoilState(store.filesByIndex(0));
+  const { deleteFiles } = useDeleteFilesFromTable(() => setIsDeleting(false));
   const { openFilePicker, isUploading, uploadStatusLabel, dropHandlers, isDragActive } =
     useLibraryUpload();
 
-  const [showFilesModal, setShowFilesModal] = useState(false);
-  const [previewFile, setPreviewFile] = useState<TFile | null>(null);
-  const manageFilesRef = useRef<HTMLButtonElement>(null);
+  const { data: filesList = [] } = useGetFiles<TFile[]>();
 
   const filesWithIds = useMemo<Array<TFile & { id: string }>>(
     () => filesList.map((file) => ({ ...file, id: file.file_id })),
@@ -62,7 +79,7 @@ export default function FilesPanel({ onClose }: { onClose?: () => void }) {
         <div
           role="status"
           aria-live="polite"
-          className="flex items-center gap-2 rounded-md border border-border-light bg-surface-secondary px-2 py-1.5 text-xs text-text-secondary"
+          className="flex items-center gap-2 rounded-xl border border-border-light bg-surface-secondary px-2 py-1.5 text-xs text-text-secondary"
         >
           <Spinner className="size-3 shrink-0" size={12} />
           <span className="shimmer min-w-0 flex-1 truncate">{uploadStatusLabel}</span>
@@ -74,40 +91,43 @@ export default function FilesPanel({ onClose }: { onClose?: () => void }) {
         config={TABLE_CONFIG}
         onRowClick={(row) => handlePreview(row as TFile)}
         className="h-auto max-h-[calc(100vh-16rem)] flex-1"
-      />
-      <div className="flex w-full gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex-1"
-          onClick={openFilePicker}
-          aria-label={localize('com_ui_upload_files')}
-          disabled={isUploading}
-        >
-          {isUploading ? (
-            <Spinner className="h-4 w-4" size={16} />
-          ) : (
-            <Upload className="h-4 w-4" aria-hidden="true" />
-          )}
-          <span className="ml-2">{localize('com_ui_upload')}</span>
-        </Button>
-        <Button
-          ref={manageFilesRef}
-          variant="outline"
-          size="sm"
-          className="flex-1"
-          onClick={() => setShowFilesModal(true)}
-          aria-label={localize('com_sidepanel_manage_files')}
-        >
-          <ArrowUpLeft className="h-4 w-4" aria-hidden="true" />
-          <span className="ml-2">{localize('com_sidepanel_manage_files')}</span>
-        </Button>
-      </div>
-      <MyFilesModal
-        open={showFilesModal}
-        onOpenChange={setShowFilesModal}
-        triggerRef={manageFilesRef}
-        onAttachSuccess={onClose}
+        customActionsRenderer={({ selectedRows }) => (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isUploading}
+              onClick={openFilePicker}
+              className="ml-2"
+              aria-label={localize('com_ui_upload_files')}
+            >
+              {isUploading ? (
+                <Spinner className="size-4" />
+              ) : (
+                <Upload className="icon-sm" aria-hidden="true" />
+              )}
+              <span className="ml-2 hidden sm:inline">{localize('com_ui_upload')}</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={selectedRows.length === 0 || isDeleting}
+              onClick={() => {
+                setIsDeleting(true);
+                deleteFiles({ files: selectedRows as TFile[], setFiles: setSelectedFiles });
+              }}
+              className="ml-2"
+              aria-label={localize('com_ui_delete')}
+            >
+              {isDeleting ? (
+                <Spinner className="size-4" />
+              ) : (
+                <Trash2 className="icon-sm text-text-destructive" aria-hidden="true" />
+              )}
+              <span className="ml-2 hidden sm:inline">{localize('com_ui_delete')}</span>
+            </Button>
+          </>
+        )}
       />
       <FilePreviewDialog
         open={previewFile !== null}
