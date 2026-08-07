@@ -1623,6 +1623,38 @@ export const deepResearchModeSchema = z.object({
   writerModel: z.string().optional(),
 });
 
+/**
+ * Modes of the "Auto" orchestrator, switched tenant-wide by an admin exactly like Deep
+ * Research depth tiers — live, no deploy. Both run the same spec and the same tools; what
+ * changes is the brain, its prompt and which researcher it delegates to.
+ */
+export const AutoModes = ['standard', 'smart'] as const;
+export type AutoMode = (typeof AutoModes)[number];
+
+/**
+ * One mode. `model` and `researcherId` are required because a half-configured mode is
+ * worse than none: an unset researcher silently disables delegation, and the failure is
+ * invisible in the interface. `instructions` overrides the spec's own prompt — the two
+ * modes are prompted differently on purpose, since a rule with no exit condition breaks a
+ * cheap model and leaves an expensive one untouched (measured, AUTO_ORCHESTRATOR_Plan §5.7).
+ */
+export const autoModeSchema = z.object({
+  model: z.string().min(1),
+  researcherId: z.string().min(1),
+  instructions: z.string().optional(),
+});
+
+export const autoSchema = z.object({
+  /** Spec this applies to; must match a `modelSpecs.list[].name`. */
+  spec: z.string().default('auto'),
+  /** Active mode for the whole tenant. Unparseable stored value degrades to the cheap
+   *  mode rather than silently putting the whole team on the premium brain. */
+  activeMode: z.enum(AutoModes).default('standard').catch('standard'),
+  modes: z.record(z.enum(AutoModes), autoModeSchema).optional(),
+});
+
+export type TAutoConfig = z.infer<typeof autoSchema>;
+
 export const deepResearchSchema = z.object({
   /**
    * Active depth tier, selected per tenant (admin). `.catch` keeps a tenant whose stored
@@ -1802,6 +1834,7 @@ export const configSchema = z.object({
   cache: z.boolean().default(true),
   ocr: ocrSchema.optional(),
   webSearch: webSearchSchema.optional(),
+  auto: autoSchema.optional(),
   deepResearch: deepResearchSchema.optional(),
   memory: memorySchema.optional(),
   summarization: summarizationConfigSchema.optional(),
