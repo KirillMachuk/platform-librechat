@@ -1,5 +1,6 @@
 export { createAdminAnalyticsHandlers } from './analytics';
 export { createAdminAuditHandlers } from './audit';
+export { createAutoSettingsHandlers } from './auto';
 export { createAdminBalanceHandlers, TOKEN_CREDITS_PER_USD } from './balance';
 export { createAdminBillingHandlers, CREDIT_PACKAGE_SIZES } from './billing';
 export { createAdminConfigHandlers } from './config';
@@ -12,6 +13,7 @@ export { createAdminUsageHandlers } from './usage';
 export { createAdminSkillsSyncAccess, createAdminSkillsSyncHandlers } from './skills';
 export { createAdminUsersHandlers } from './users';
 export type { AdminAnalyticsDeps } from './analytics';
+export type { AutoSettingsDeps, AutoSettingsResponse } from './auto';
 export type { AdminAuditDeps } from './audit';
 export type { AdminBalanceDeps } from './balance';
 export type { AdminBillingDeps, AdminBillingSummary, AdminBillingLot } from './billing';
