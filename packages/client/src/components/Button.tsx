@@ -21,17 +21,28 @@ const buttonVariants: (
       } & ClassProp)
     | undefined,
 ) => string = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+  /**
+   * Canon §6.1: radius 12, height 36 (30 sm), padding 16 (12 sm).
+   *
+   * `tap-target` comes with the height: at 36 a button is under the 44 a finger
+   * needs, so the shrink from upstream's 40 is paid for by the invisible
+   * extension the canon prescribes for exactly this. It is mobile-only and any
+   * explicit position utility still wins over its `relative`.
+   */
+  'tap-target inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-45',
   {
     variants: {
       variant: {
         default: 'bg-primary text-primary-foreground hover:bg-primary/90',
         destructive:
           'bg-surface-destructive text-destructive-foreground hover:bg-surface-destructive-hover',
+        /** Canon §6.1: a decorative `btn-line` border and a plain `hover` fill.
+         *  Upstream's hairline and shadcn accent hover were being patched away
+         *  at the call sites that noticed. */
         outline:
-          'text-text-primary border border-border-light bg-transparent hover:bg-accent hover:text-accent-foreground',
+          'border border-border-medium bg-transparent text-text-primary hover:bg-surface-hover',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        ghost: 'hover:bg-surface-hover hover:text-accent-foreground',
+        ghost: 'hover:bg-surface-hover hover:text-text-primary',
         link: 'text-primary underline-offset-4 hover:underline',
         /** Canon §1.1/§6.1: the main action is ink, never a colour; hover is
          *  opacity .86 rather than a second shade, so `transition-opacity`
@@ -39,10 +50,23 @@ const buttonVariants: (
         submit: 'bg-ink text-ink-label transition-opacity duration-90 hover:opacity-[0.86]',
       },
       size: {
-        default: 'h-10 px-4 py-2',
-        sm: 'h-9 rounded-lg px-3',
-        lg: 'h-11 rounded-lg px-8',
-        icon: 'size-10',
+        default: 'h-9 px-4',
+        /**
+         * The canon's small button is 30, and this is not it yet. While the
+         * default was upstream's 40, every one of the 46 call sites that asked
+         * for `sm` was asking for the normal button, and got 36 — so 36 is what
+         * they still get here. Nothing is off canon: 36 is the canon height.
+         * Dropping them to 30 is a per-screen judgement (a main action at 30
+         * next to a sibling at 36 reads as broken), and those screens arrive
+         * with their own batches.
+         */
+        sm: 'h-9 px-3',
+        lg: 'h-11 px-8',
+        /** Icon buttons keep radius 8 (§6.2), not the 12 of a text button. The
+         *  40 they are drawn at is upstream's and outside what the owner asked
+         *  for here; §6.2 wants 32, which is its own sweep across 40 call sites
+         *  and their touch targets. */
+        icon: 'size-10 rounded-lg',
       },
     },
     defaultVariants: {

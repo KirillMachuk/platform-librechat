@@ -1,18 +1,16 @@
+import { FIELD_BASE, FIELD_BORDER } from '@librechat/client';
 import { cn } from '~/utils';
 
-/** Canon §6.4: label above the control, field 36 high (48 on a phone), radius
- *  12, `control` border for the mandatory 3:1, focus is an `acc` border plus a
- *  3px `acc-soft` ring and never an outline, error is an `errc` border with an
- *  `err-soft` ring and the reason under the field. */
-const base =
-  'h-12 w-full rounded-xl border bg-surface-primary px-3 text-[15px] text-text-primary placeholder:text-text-tertiary focus-visible:outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-45 sm:h-9 sm:text-sm';
-
+/** Canon §6.4: label above the control, the shared field geometry, and the one
+ *  thing these screens add to it — an error border with an `err-soft` ring and
+ *  the reason under the field. The numbers themselves live with `Input`, which
+ *  is what every other form in the product uses. */
 export const authFieldClassName = (hasError?: boolean) =>
   cn(
-    base,
+    FIELD_BASE,
     hasError
       ? 'border-border-destructive focus-visible:border-border-destructive focus-visible:ring-err-soft'
-      : 'border-border-control focus-visible:border-border-focus focus-visible:ring-ring-primary-soft',
+      : FIELD_BORDER,
   );
 
 export const errorId = (id: string) => `${id}-error`;

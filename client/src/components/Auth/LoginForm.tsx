@@ -6,7 +6,7 @@ import type { TLoginUser, TStartupConfig } from 'librechat-data-provider';
 import type { TAuthContext } from '~/common';
 import { useResendVerificationEmail, useGetStartupConfig } from '~/data-provider';
 import { AuthField, authFieldClassName, errorId } from './Field';
-import { validateEmail, cn } from '~/utils';
+import { validateEmail } from '~/utils';
 import { useLocalize } from '~/hooks';
 
 type TLoginFormProps = {
@@ -154,14 +154,11 @@ const LoginForm: React.FC<TLoginFormProps> = ({ onSubmit, startupConfig, error, 
           type="submit"
           disabled={(requireCaptcha && !turnstileToken) || isSubmitting}
           variant={hasSocialLogin ? 'outline' : 'submit'}
-          className={cn(
-            'mt-1 h-12 w-full rounded-xl text-[15px] sm:h-10 sm:text-sm',
-            /** The shared `outline` variant still carries upstream's hairline
-             *  border and shadcn hover; canon §6.1 wants `btn-line` and a plain
-             *  `hover` fill. Normalising the variant itself touches 88 buttons
-             *  and belongs to the ui-kit batch. */
-            hasSocialLogin && 'border-border-medium hover:bg-surface-hover hover:text-text-primary',
-          )}
+          /** Canon §4: the one wide button on the sign-in card is 40 (48 on a
+           *  phone), taller than the 36 every other button gets. The `outline`
+           *  variant now carries `btn-line` and a plain `hover` fill on its
+           *  own, so the patch that used to live here is gone. */
+          className="mt-1 h-12 w-full text-[15px] sm:h-10 sm:text-sm"
         >
           {isSubmitting ? <Spinner /> : localize('com_auth_continue')}
         </Button>

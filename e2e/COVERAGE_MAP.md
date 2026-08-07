@@ -259,6 +259,12 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | Deleting a project asks in an in-app dialog, never window.confirm | unit | `client/src/components/Projects/__tests__/ProjectEditDialog.spec.tsx#asks in an in-app dialog and never through window.confirm` | covered |
 | Cancelling the project edit dialog leaves the project alone | unit | `client/src/components/Projects/__tests__/ProjectEditDialog.spec.tsx#cancelling leaves the project alone` | covered |
 | Removing a project source confirms by naming the file | unit | `client/src/components/Projects/__tests__/ProjectDetailView.spec.tsx#confirms in a dialog naming the file, never through window.confirm` | covered |
+| A button carries the canon 36/12 and reaches 44 for a finger | unit | `client/src/components/__tests__/canonControls.spec.tsx#is 36 high with radius 12, and reaches 44 for a finger` | covered |
+| An icon button keeps radius 8, not the 12 of a text button | unit | `client/src/components/__tests__/canonControls.spec.tsx#keeps radius 8 on an icon button, where §6.2 wants it` | covered |
+| The outline button wears btn-line and a plain hover fill | unit | `client/src/components/__tests__/canonControls.spec.tsx#gives the outline variant a btn-line border and a plain hover fill` | covered |
+| A call site can still override the button height | unit | `client/src/components/__tests__/canonControls.spec.tsx#lets a call site win, because the sign-in card is 40 by canon` | covered |
+| The shared field is 36 on a desktop and 48 on a phone | unit | `client/src/components/__tests__/canonControls.spec.tsx#is 36 on a desktop, 48 on a phone, radius 12, on a card fill` | covered |
+| The field leaves its border to FIELD_BORDER so an error can replace it | unit | `client/src/components/__tests__/canonControls.spec.tsx#leaves the border to FIELD_BORDER, so an error can replace just that` | covered |
 | Prompts library: create and use a prompt | e2e | `e2e/specs/mock/prompts.spec.ts` | covered |
 | A prompt's variables are read and shown by kind | unit | `client/src/components/Prompts/display/__tests__/PromptVariables.spec.tsx` | covered |
 | Editing a prompt adds a version and the new one is what gets sent | e2e | `e2e/specs/mock/prompts.spec.ts#editing a prompt adds a version and it is the new one that gets sent` | covered |
