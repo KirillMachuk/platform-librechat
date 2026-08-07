@@ -217,7 +217,7 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
-| Conversation list loads and paginates on scroll | e2e | — | gap |
+| Conversation list loads and paginates on scroll | e2e | `e2e/specs/mock/sidebar.spec.ts#the chat list fetches the next page when you scroll to the end` | covered |
 | Chat list width tracks the sidebar through collapse and viewport cycles | e2e | `e2e/specs/mock/sidebar.spec.ts#chat list width tracks the sidebar through collapse and viewport cycles` | covered |
 | Collapsed rail still reaches settings and sign-out | e2e | `e2e/specs/mock/sidebar.spec.ts#the collapsed rail still reaches settings and sign-out` | covered |
 | First click after the sidebar mounts is sometimes swallowed | e2e | — | gap |
