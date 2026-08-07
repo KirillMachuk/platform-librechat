@@ -278,7 +278,17 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | A model spec sees only the skills scoped to it (API) | e2e | `e2e/specs/mock/model-spec-skills.spec.ts#loads accessible configured skills and skips missing or inaccessible names` | covered |
 | A configured skill is listed, its file list expands, and it offers no Edit | e2e | `e2e/specs/mock/skills.spec.ts#a configured skill is listed, its files open, and it stays read-only` | covered |
 | A skill written in the interface offers its author an Edit, a configured one does not | e2e | `e2e/specs/mock/skills.spec.ts#a skill of my own is mine to edit` | covered |
-| A skill is attached to an agent from the interface | e2e | — | gap |
+| A skill is attached to an agent from the interface | e2e | `e2e/specs/mock/agent-skills.spec.ts#a skill picked in the builder is still on the agent after saving` | fixme:Ф1 |
+| Today a picked skill is sent and then dropped on save (defect, pinned) | e2e | `e2e/specs/mock/agent-skills.spec.ts#today the skill is sent and then dropped on save` | covered |
+
+**The skill-on-agent defect, measured 2026-08-07.** `fixme:Ф1` is the map's only pinned status
+and this is not a canon item, so read it as "pinned, waiting on a fix" rather than as anything to
+do with the redesign. What happens: the builder offers the skill, the browser sends
+`{"skills":["<real id>"],"skills_enabled":true}`, and the create response is
+`{"skills":[],"skills_enabled":false}` — the switch goes off with it. The id is genuine
+(`GET /api/skills` lists it in the same run) and a later `PATCH` keeps nothing either, by id or by
+name. Not a sanitised response: the viewer-scope sanitiser runs only on the list endpoint. On the
+stand every skill is deployment-loaded, which is exactly the class this drops.
 | An agent shared with everyone appears in the marketplace for other people | e2e | `e2e/specs/permissions/marketplace.spec.ts#an agent shared with everyone reaches the marketplace, an unshared one does not` | covered |
 | An unshared agent stays out of other people's marketplace | e2e | `e2e/specs/permissions/marketplace.spec.ts#marketplaceHits(pageB, privateName)).toBe(0)` | covered |
 | Remote access is offered on an agent when the permission allows it | e2e | `e2e/specs/permissions/marketplace.spec.ts#Remote Access` | covered |
