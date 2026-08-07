@@ -48,6 +48,11 @@ export type TModelSpec = {
   mcpServers?: string[];
   skills?: boolean | string[];
   subagents?: AgentSubagentsConfig;
+  /** Extra request-body params for this spec only, merged over the endpoint's.
+   *  Endpoint-level `addParams` reaches every model on that endpoint, which is wrong
+   *  for anything model-specific — an OpenRouter fallback list naming DeepSeek first
+   *  would ride along on every Anthropic request too. */
+  addParams?: Record<string, unknown>;
 };
 
 export const modelSpecSubagentsSchema = z.object({
@@ -80,6 +85,7 @@ export const tModelSpecSchema = z.object({
   mcpServers: z.array(z.string()).optional(),
   skills: z.union([z.boolean(), z.array(z.string())]).optional(),
   subagents: modelSpecSubagentsSchema.optional(),
+  addParams: z.record(z.unknown()).optional(),
 });
 
 export const specsConfigSchema = z.object({

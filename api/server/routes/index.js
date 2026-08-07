@@ -7,6 +7,7 @@ const adminAudit = require('./admin/audit');
 const adminBilling = require('./admin/billing');
 const adminConfig = require('./admin/config');
 const adminDeepResearch = require('./admin/deepResearch');
+const adminAuto = require('./admin/auto');
 const adminGrants = require('./admin/grants');
 const adminModels = require('./admin/models');
 const adminGroups = require('./admin/groups');
@@ -53,6 +54,7 @@ module.exports = {
   adminBilling,
   adminConfig,
   adminDeepResearch,
+  adminAuto,
   adminGrants,
   adminModels,
   adminGroups,

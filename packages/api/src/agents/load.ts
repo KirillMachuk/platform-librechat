@@ -16,6 +16,7 @@ import type {
 import type { AppConfig } from '@librechat/data-schemas';
 import { requiresEphemeralUserConnection } from '~/mcp/utils';
 import { getCustomEndpointConfig } from '~/app/config';
+import { autoOverridesFor } from './auto';
 
 const { mcp_all, mcp_delimiter } = Constants;
 type ModelParametersWithPromptPrefix = AgentModelParameters & { promptPrefix?: string | null };
@@ -50,12 +51,20 @@ export async function loadEphemeralAgent(
   { req, spec, endpoint, model_parameters: _m }: Omit<LoadAgentParams, 'agent_id'>,
   deps: LoadAgentDeps,
 ): Promise<Agent | null> {
-  const { model, ...model_parameters } = _m ?? ({} as unknown as AgentModelParameters);
+  const { model: requestedModel, ...model_parameters } =
+    _m ?? ({} as unknown as AgentModelParameters);
   const modelSpecs = req.config?.modelSpecs as { list?: TModelSpec[] } | undefined;
   let modelSpec: TModelSpec | null = null;
   if (spec != null && spec !== '') {
     modelSpec = modelSpecs?.list?.find((s) => s.name === spec) ?? null;
   }
+  /**
+   * The Auto orchestrator's admin-selected mode. Applied HERE rather than at the end
+   * because the model decides which tools get armed a few lines down — resolving it late
+   * would arm the outgoing model's tools and then swap the brain underneath them.
+   */
+  const autoOverrides = autoOverridesFor(req.config?.auto, spec);
+  const model = autoOverrides?.model ?? requestedModel;
   const ephemeralAgent: TEphemeralAgent | undefined = req.body?.ephemeralAgent;
   const mcpServers = new Set<string>(ephemeralAgent?.mcp);
   const userId = req.user?.id ?? '';
@@ -131,14 +140,15 @@ export async function loadEphemeralAgent(
    * armed. Splits frontend transmission bugs (file_search absent here despite a green toggle)
    * from backend arming bugs (file_search=true here but tools empty) without redeploying. */
   logger.info(
-    `[loadEphemeralAgent] armed=[${tools.join(',')}] sent={file_search:${ephemeralAgent?.file_search ?? 'unset'},web_search:${ephemeralAgent?.web_search ?? 'unset'},execute_code:${ephemeralAgent?.execute_code ?? 'unset'},mcp:${mcpServers.size}} model=${model} reasoning=${reasoningModel} spec=${spec ?? ''}`,
+    `[loadEphemeralAgent] armed=[${tools.join(',')}] sent={file_search:${ephemeralAgent?.file_search ?? 'unset'},web_search:${ephemeralAgent?.web_search ?? 'unset'},execute_code:${ephemeralAgent?.execute_code ?? 'unset'},mcp:${mcpServers.size}} model=${model} reasoning=${reasoningModel} spec=${spec ?? ''}${autoOverrides ? ` autoMode=${req.config?.auto?.activeMode ?? 'standard'}` : ''}`,
   );
 
   const requestPromptPrefix = req.body?.promptPrefix;
   const { promptPrefix: modelPromptPrefix, ...safeModelParameters } =
     model_parameters as ModelParametersWithPromptPrefix;
   const instructions =
-    typeof modelPromptPrefix === 'string' ? modelPromptPrefix : requestPromptPrefix;
+    autoOverrides?.instructions ??
+    (typeof modelPromptPrefix === 'string' ? modelPromptPrefix : requestPromptPrefix);
 
   // Get endpoint config for modelDisplayLabel fallback
   const appConfig = req.config;
@@ -179,7 +189,9 @@ export async function loadEphemeralAgent(
   if (ephemeralAgent?.artifacts) {
     result.artifacts = ephemeralAgent.artifacts;
   }
-  if (modelSpec?.subagents) {
+  if (autoOverrides?.subagents) {
+    result.subagents = autoOverrides.subagents;
+  } else if (modelSpec?.subagents) {
     result.subagents = modelSpec.subagents;
   }
   if (modelSpec && Object.prototype.hasOwnProperty.call(modelSpec, 'skills')) {

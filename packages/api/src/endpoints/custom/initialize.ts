@@ -7,7 +7,7 @@ import {
   FetchTokenConfig,
   extractEnvVariable,
 } from 'librechat-data-provider';
-import type { TEndpoint } from 'librechat-data-provider';
+import type { TEndpoint, TModelSpec } from 'librechat-data-provider';
 import type { AppConfig } from '@librechat/data-schemas';
 import type {
   BaseInitializeParams,
@@ -21,6 +21,7 @@ import { isUserProvided, checkUserKeyExpiry } from '~/utils';
 import { getOpenAIConfig } from '~/endpoints/openai/config';
 import { getScopedTokenConfigKey } from '~/endpoints/keys';
 import { getCustomEndpointConfig } from '~/app/config';
+import { autoRequestParams } from '~/agents/auto';
 import { fetchModels } from '~/endpoints/models';
 import { validateEndpointURL } from '~/auth';
 import { tokenConfigCache } from '~/cache';
@@ -94,16 +95,43 @@ function toBillingTokenConfig(
 }
 
 /**
+ * Extra request-body params for this turn: the endpoint's, with the active spec's merged
+ * over them. Endpoint-level `addParams` reaches every model on the endpoint, so anything
+ * model-specific has to come from the spec — an OpenRouter fallback list naming DeepSeek
+ * first would otherwise ride along on every Anthropic request through the same endpoint.
+ */
+function resolveAddParams(
+  endpointConfig: Partial<TEndpoint>,
+  req: BaseInitializeParams['req'],
+): Record<string, unknown> | undefined {
+  const specName = (req.body as { spec?: string } | undefined)?.spec;
+  if (!specName) {
+    return endpointConfig.addParams;
+  }
+  const modelSpecs = req.config?.modelSpecs as { list?: TModelSpec[] } | undefined;
+  const spec = modelSpecs?.list?.find((entry) => entry.name === specName);
+  /** The Auto orchestrator's active mode contributes its own routing (its fallback list),
+   *  which has to win over anything static on the card: a list written on the card names
+   *  the standard brain first and would hijack the premium mode's model. */
+  const fromMode = autoRequestParams(req.config?.auto, specName);
+  if (!spec?.addParams && !fromMode) {
+    return endpointConfig.addParams;
+  }
+  return { ...(endpointConfig.addParams ?? {}), ...(spec?.addParams ?? {}), ...(fromMode ?? {}) };
+}
+
+/**
  * Builds custom options from endpoint configuration
  */
 function buildCustomOptions(
   endpointConfig: Partial<TEndpoint>,
+  req: BaseInitializeParams['req'],
   appConfig?: AppConfig,
   endpointTokenConfig?: Record<string, unknown>,
 ) {
   const customOptions: Record<string, unknown> = {
     headers: endpointConfig.headers,
-    addParams: endpointConfig.addParams,
+    addParams: resolveAddParams(endpointConfig, req),
     dropParams: endpointConfig.dropParams,
     customParams: endpointConfig.customParams,
     titleConvo: endpointConfig.titleConvo,
@@ -134,12 +162,14 @@ function buildCustomOptions(
 function buildAnthropicCustomConfig({
   apiKey,
   baseURL,
+  addParams,
   modelOptions,
   endpointConfig,
   userProvidesURL,
 }: {
   apiKey: string;
   baseURL: string;
+  addParams?: Record<string, unknown>;
   modelOptions: AnthropicModelOptions;
   endpointConfig: Partial<TEndpoint>;
   userProvidesURL: boolean;
@@ -149,7 +179,7 @@ function buildAnthropicCustomConfig({
     proxy: PROXY ?? undefined,
     reverseProxyUrl: baseURL,
     headers: userProvidesURL ? undefined : endpointConfig.headers,
-    addParams: endpointConfig.addParams,
+    addParams,
     dropParams: endpointConfig.dropParams,
     /** Apply admin `customParams.paramDefinitions` defaults (e.g. promptCache,
      *  web_search, thinking) the OpenAI-compatible path gets via `getOpenAIConfig`. */
@@ -290,7 +320,7 @@ export async function initializeCustom({
     endpointTokenConfig = (await cache.get(tokenKey)) as EndpointTokenConfig | undefined;
   }
 
-  const customOptions = buildCustomOptions(endpointConfig, appConfig, endpointTokenConfig);
+  const customOptions = buildCustomOptions(endpointConfig, req, appConfig, endpointTokenConfig);
 
   const clientOptions: Record<string, unknown> = {
     reverseProxyUrl: baseURL ?? null,
@@ -308,6 +338,7 @@ export async function initializeCustom({
     options = buildAnthropicCustomConfig({
       apiKey,
       baseURL,
+      addParams: resolveAddParams(endpointConfig, req),
       modelOptions: modelOptions as AnthropicModelOptions,
       endpointConfig,
       userProvidesURL,
