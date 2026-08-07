@@ -127,7 +127,7 @@ describe('Switch — canon §6.4', () => {
     render(<Switch checked onCheckedChange={jest.fn()} aria-label="x" />);
 
     const className = screen.getByRole('switch').className;
-    expect(className).toContain('data-[state=checked]:bg-brand-purple');
+    expect(className).toContain('data-[state=checked]:bg-acc');
     expect(className).not.toContain('bg-primary');
   });
 });
