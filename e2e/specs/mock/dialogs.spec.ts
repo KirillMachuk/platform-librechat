@@ -34,8 +34,14 @@ type Opened = { overlay: Locator; trigger: Locator };
  *
  * The point of the field is that the walk moved at all — a Tab that does nothing
  * reports a perfect focus trap, which is the failure this guards.
+ *
+ * Projects is 2 because an empty projects panel now holds exactly two controls:
+ * "New project" in the header and the close button. It used to hold a third — a
+ * dashed tile repeating the same "New project" underneath it — which P6 removed
+ * as a duplicate call to action. Two still tells a moving walk from a stuck one:
+ * a Tab that does nothing reports 1.
  */
-const MIN_STOPS = { projects: 3, files: 6, settings: 8 };
+const MIN_STOPS = { projects: 2, files: 6, settings: 8 };
 
 type DialogReport = {
   lockedBefore: boolean;

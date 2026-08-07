@@ -1,9 +1,9 @@
 import { memo, useCallback, useEffect, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Button,
-  Input,
   Label,
+  Button,
   Spinner,
   OGDialog,
   OGDialogClose,
@@ -15,14 +15,10 @@ import {
   useToastContext,
 } from '@librechat/client';
 import type { TProject } from 'librechat-data-provider';
-import {
-  DEFAULT_PROJECT_ICON,
-  DEFAULT_PROJECT_COLOR,
-  resolveIcon,
-  resolveColor,
-} from './iconOptions';
 import { useDeleteProjectMutation, useUpdateProjectMutation } from '~/data-provider';
+import { DEFAULT_PROJECT_ICON, DEFAULT_PROJECT_COLOR } from './iconOptions';
 import ProjectAppearancePopover from './ProjectAppearancePopover';
+import ProjectFormFields from './ProjectFormFields';
 import { NotificationSeverity } from '~/common';
 import { useLocalize } from '~/hooks';
 
@@ -112,9 +108,6 @@ function ProjectEditDialog({ project, open, onOpenChange, onDeleted }: Props) {
     });
   }, [name, description, instructions, appearance, updateMutation]);
 
-  const Icon = resolveIcon(appearance.icon);
-  const iconHex = resolveColor(appearance.color);
-
   const handleDelete = useCallback(() => {
     deleteMutation.mutate(project.projectId);
   }, [deleteMutation, project.projectId]);
@@ -123,58 +116,42 @@ function ProjectEditDialog({ project, open, onOpenChange, onDeleted }: Props) {
 
   return (
     <OGDialog open={open} onOpenChange={onOpenChange}>
-      <OGDialogContent className="w-11/12 max-w-lg" aria-describedby="project-edit-body">
+      {/* Canon §4: dialogs are 420 / 560 / 720. */}
+      <OGDialogContent className="w-11/12 max-w-[560px]" aria-describedby="project-edit-body">
         <OGDialogHeader>
           <OGDialogTitle>{localize('com_projects_edit_title')}</OGDialogTitle>
         </OGDialogHeader>
         <div id="project-edit-body" className="flex flex-col gap-3 pt-2">
-          <div className="flex justify-center pb-1">
-            <button
-              type="button"
-              onClick={() => setAppearanceOpen(true)}
-              aria-label={localize('com_projects_appearance')}
-              className="flex h-16 w-16 items-center justify-center rounded-full border border-border-light transition-transform hover:scale-105"
-              style={{ backgroundColor: `${iconHex}1a` }}
-            >
-              <Icon className="h-8 w-8" style={{ color: iconHex }} aria-hidden="true" />
-            </button>
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="project-edit-name">{localize('com_projects_name')}</Label>
-            <Input
-              id="project-edit-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={120}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="project-edit-description">{localize('com_projects_description')}</Label>
-            <Input
-              id="project-edit-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              maxLength={500}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="project-edit-instructions">
-              {localize('com_projects_instructions')}
-            </Label>
-            <textarea
-              id="project-edit-instructions"
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              className="min-h-[160px] w-full rounded-md border border-border-light bg-surface-primary px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-ring"
-              maxLength={20000}
-            />
-          </div>
+          <ProjectFormFields
+            idPrefix="project-edit"
+            name={name}
+            description={description}
+            instructions={instructions}
+            appearance={appearance}
+            onNameChange={setName}
+            onDescriptionChange={setDescription}
+            onInstructionsChange={setInstructions}
+            onOpenAppearance={() => setAppearanceOpen(true)}
+          />
         </div>
         <div className="flex justify-between gap-3 pt-4">
           <OGDialog>
             <OGDialogTrigger asChild>
-              <Button variant="destructive" disabled={isBusy}>
-                {deleteMutation.isLoading ? <Spinner /> : localize('com_projects_delete')}
+              {/* Deleting a project is not the main action of this dialog, so
+                  it does not wear the filled red of one — that stays on the
+                  confirmation below, where it IS the main action. Quiet text,
+                  far from Save, is what the prototype draws and why. */}
+              <Button
+                variant="ghost"
+                disabled={isBusy}
+                className="gap-2 text-text-destructive hover:bg-surface-destructive-hover hover:text-white"
+              >
+                {deleteMutation.isLoading ? (
+                  <Spinner />
+                ) : (
+                  <Trash2 className="icon-sm" aria-hidden="true" />
+                )}
+                {localize('com_projects_delete')}
               </Button>
             </OGDialogTrigger>
             <OGDialogTemplate
