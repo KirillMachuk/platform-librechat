@@ -16,10 +16,11 @@ const {
   getBalanceConfig,
   omitTitleOptions,
   getProviderConfig,
-  memoryInstructions,
+  getMemoryInstructions,
   createTokenCounter,
   applyContextToAgent,
   isMemoryAgentEnabled,
+  isMemoryGuardConfigured,
   claimCollectedUsage,
   recordCollectedUsage,
   sendEvent,
@@ -645,7 +646,7 @@ class AgentClient extends BaseClient {
     /** Memory context (user preferences/memories) */
     const withoutKeys = await this.useMemory();
     const memoryContext = withoutKeys
-      ? `${memoryInstructions}\n\n# Existing memory about the user:\n${withoutKeys}`
+      ? `${getMemoryInstructions(isMemoryGuardConfigured())}\n\n# Existing memory about the user:\n${withoutKeys}`
       : undefined;
 
     const sharedRunContext = sharedRunContextParts.join('\n\n');
