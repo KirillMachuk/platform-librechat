@@ -1,4 +1,4 @@
-import type { AccessRoleIds } from 'librechat-data-provider';
+import { AccessRoleIds } from 'librechat-data-provider';
 import translation from '~/locales/en/translation.json';
 import { getRoleLocalizationKeys } from '../roles';
 
@@ -11,9 +11,17 @@ import { getRoleLocalizationKeys } from '../roles';
  * existed: "Can view and use the agent but cannot modify it".
  */
 const RESOURCES: Record<string, AccessRoleIds[]> = {
-  promptGroup: ['promptGroup_viewer', 'promptGroup_editor', 'promptGroup_owner'],
-  skill: ['skill_viewer', 'skill_editor', 'skill_owner'],
-  mcpServer: ['mcpServer_viewer', 'mcpServer_editor', 'mcpServer_owner'],
+  promptGroup: [
+    AccessRoleIds.PROMPTGROUP_VIEWER,
+    AccessRoleIds.PROMPTGROUP_EDITOR,
+    AccessRoleIds.PROMPTGROUP_OWNER,
+  ],
+  skill: [AccessRoleIds.SKILL_VIEWER, AccessRoleIds.SKILL_EDITOR, AccessRoleIds.SKILL_OWNER],
+  mcpServer: [
+    AccessRoleIds.MCPSERVER_VIEWER,
+    AccessRoleIds.MCPSERVER_EDITOR,
+    AccessRoleIds.MCPSERVER_OWNER,
+  ],
 };
 
 const strings = translation as unknown as Record<string, string>;
@@ -37,7 +45,7 @@ describe('role localizations', () => {
   /* The control. Agent roles SHOULD say agent, so the assertion above is about
    * the wrong noun rather than about a word being banned everywhere. */
   it('an agent role does describe an agent', () => {
-    expect(describedAs('agent_viewer').toLowerCase()).toContain('agent');
+    expect(describedAs(AccessRoleIds.AGENT_VIEWER).toLowerCase()).toContain('agent');
   });
 
   /* Every mapped role must resolve to a string that exists. A missing key
