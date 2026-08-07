@@ -259,6 +259,7 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | Deleting a project asks in an in-app dialog, never window.confirm | unit | `client/src/components/Projects/__tests__/ProjectEditDialog.spec.tsx#asks in an in-app dialog and never through window.confirm` | covered |
 | Cancelling the project edit dialog leaves the project alone | unit | `client/src/components/Projects/__tests__/ProjectEditDialog.spec.tsx#cancelling leaves the project alone` | covered |
 | Removing a project source confirms by naming the file | unit | `client/src/components/Projects/__tests__/ProjectDetailView.spec.tsx#confirms in a dialog naming the file, never through window.confirm` | covered |
+| The file library is one window, not a short list over a full one | e2e | `e2e/specs/mock/file-library.spec.ts#is one window, with the columns and the actions in it` | covered |
 | A table says which column it is sorted by | unit | `packages/client/src/components/DataTable/DataTable.spec.tsx#gives the sorted column a loud arrow and leaves the rest quiet` | covered |
 | An unsorted table shouts at no column | unit | `packages/client/src/components/DataTable/DataTable.spec.tsx#mutes the glyph on every column while nothing is sorted` | covered |
 | A button carries the canon 36/12 and reaches 44 for a finger | unit | `client/src/components/__tests__/canonControls.spec.tsx#is 36 high with radius 12, and reaches 44 for a finger` | covered |
