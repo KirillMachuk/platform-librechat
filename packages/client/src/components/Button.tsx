@@ -29,7 +29,7 @@ const buttonVariants: (
    * extension the canon prescribes for exactly this. It is mobile-only and any
    * explicit position utility still wins over its `relative`.
    */
-  'tap-target inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+  'tap-target inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-45',
   {
     variants: {
       variant: {
@@ -42,7 +42,7 @@ const buttonVariants: (
         outline:
           'border border-border-medium bg-transparent text-text-primary hover:bg-surface-hover',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        ghost: 'hover:bg-surface-hover hover:text-accent-foreground',
+        ghost: 'hover:bg-surface-hover hover:text-text-primary',
         link: 'text-primary underline-offset-4 hover:underline',
         /** Canon §1.1/§6.1: the main action is ink, never a colour; hover is
          *  opacity .86 rather than a second shade, so `transition-opacity`
