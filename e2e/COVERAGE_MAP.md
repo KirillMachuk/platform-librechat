@@ -425,7 +425,16 @@ of encoded.
 | Dark theme really applies, and its key screens pass axe | a11y | `e2e/specs/nightly/theme.spec.ts#a conversation gains no dark-only defect on top of the known two` | covered |
 | Russian build shows no untranslated keys on key screens | e2e | `e2e/specs/nightly/locale.spec.ts#with no untranslated keys left showing` | covered |
 | Russian locale renders key screens without overflow | e2e | `e2e/specs/nightly/layout.spec.ts#mainScrollWidth` | covered |
-| Artifacts panel open at a narrow desktop width | e2e | — | gap |
+| Artifacts panel open at a narrow desktop width | e2e | `e2e/specs/mock/artifacts.spec.ts#the panel opens at a narrow desktop width and leaves the chat usable` | covered |
+
+**Three wrong anchors on the way to that row**, all worth knowing before writing anything else
+against this panel. The artifact's **text** cannot be asserted: the message carries a
+screen-reader copy of the whole reply in an `sr-only` div, and `sr-only` is clipped rather than
+hidden, so Playwright counts it visible — that version passed with the panel firmly shut. The
+panel's Code/Preview controls are **not** `role="tab"`. And the code pane is the inactive tab's
+content, so it is mounted but hidden; the panel opens on preview. What works is the pane's
+presence (absent before the click, present after) plus a visible control of the panel's own
+toolbar.
 | Every z-index on the chat screen comes from the canon scale | e2e | `e2e/specs/mock/canon.spec.ts#every z-index comes from the canon scale` | covered |
 | The file library dialog stacks on the canon dialog layer | e2e | `e2e/specs/mock/canon.spec.ts#the file library dialog is on the canon dialog layer` | covered |
 | A dialog opened from inside a dialog is the one drawn on top | e2e | `e2e/specs/mock/canon.spec.ts#a dialog opened from a dialog is the one you can click` | covered |
