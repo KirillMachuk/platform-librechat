@@ -267,8 +267,8 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | MCP server selection and ephemeral servers | e2e | `e2e/specs/mock/mcp.spec.ts` | covered |
 | Configured skills load read-only for every authenticated user (API) | e2e | `e2e/specs/mock/deployment-skills.spec.ts#loads configured deployment skills for every authenticated user as read-only` | covered |
 | A model spec sees only the skills scoped to it (API) | e2e | `e2e/specs/mock/model-spec-skills.spec.ts#loads accessible configured skills and skips missing or inaccessible names` | covered |
-| A configured skill is listed in the interface and its files open | e2e | `e2e/specs/mock/skills.spec.ts#a configured skill is listed, its files open, and it stays read-only` | covered |
-| A skill written in the interface belongs to its author, a configured one to nobody | e2e | `e2e/specs/mock/skills.spec.ts#a skill of my own is mine to edit` | covered |
+| A configured skill is listed, its file list expands, and it offers no Edit | e2e | `e2e/specs/mock/skills.spec.ts#a configured skill is listed, its files open, and it stays read-only` | covered |
+| A skill written in the interface offers its author an Edit, a configured one does not | e2e | `e2e/specs/mock/skills.spec.ts#a skill of my own is mine to edit` | covered |
 | A skill is attached to an agent from the interface | e2e | — | gap |
 
 **Why sharing is tested in a profile of its own.** The Share button renders only when the USER
