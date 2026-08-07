@@ -65,6 +65,7 @@ export interface AppConfig {
   webSearch?: TCustomConfig['webSearch'];
   /** Deep Research configuration (activeMode + per-mode models/caps for the orchestrator→researcher graph) */
   deepResearch?: TCustomConfig['deepResearch'];
+  auto?: TCustomConfig['auto'];
   /** Message filter configuration (PII and future filter types) */
   messageFilter?: TCustomConfig['messageFilter'];
   /** Skill sync configuration */

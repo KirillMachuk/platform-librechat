@@ -1,5 +1,5 @@
 import { AutoModes } from 'librechat-data-provider';
-import type { TAutoConfig, AutoMode, TModelSpec } from 'librechat-data-provider';
+import type { AutoMode, TModelSpec } from 'librechat-data-provider';
 
 /**
  * The "Auto" orchestrator in two modes, switched tenant-wide by an admin.
@@ -13,6 +13,20 @@ import type { TAutoConfig, AutoMode, TModelSpec } from 'librechat-data-provider'
  * user picked by hand, another spec — passes through untouched.
  */
 
+/**
+ * Config as it actually arrives: every field optional. The YAML schema fills defaults, but
+ * an admin override is patched in by dot-path and bypasses them, so completeness is checked
+ * here rather than assumed. A mode missing its model or its researcher is treated as absent
+ * — half a mode would disable delegation with no visible symptom.
+ */
+export interface AutoConfigInput {
+  spec?: string;
+  activeMode?: AutoMode;
+  modes?: Partial<
+    Record<AutoMode, { model?: string; researcherId?: string; instructions?: string } | undefined>
+  >;
+}
+
 export interface ResolvedAutoMode {
   name: AutoMode;
   model: string;
@@ -21,7 +35,10 @@ export interface ResolvedAutoMode {
 }
 
 /** Whether this spec is the one the Auto config governs. */
-export function isAutoSpec(config: TAutoConfig | undefined, specName: string | undefined): boolean {
+export function isAutoSpec(
+  config: AutoConfigInput | undefined,
+  specName: string | undefined,
+): boolean {
   if (!config?.modes || !specName) {
     return false;
   }
@@ -33,21 +50,24 @@ export function isAutoSpec(config: TAutoConfig | undefined, specName: string | u
  * entry. Undefined means "change nothing": the spec keeps the model and prompt written in
  * the config file, which is a working orchestrator rather than a broken one.
  */
-export function resolveAutoMode(config: TAutoConfig | undefined): ResolvedAutoMode | undefined {
+export function resolveAutoMode(config: AutoConfigInput | undefined): ResolvedAutoMode | undefined {
   if (!config?.modes) {
     return undefined;
   }
-  const name = (config.activeMode ?? 'standard') as AutoMode;
-  const mode = config.modes[name] ?? config.modes[AutoModes[0]];
-  if (!mode) {
-    return undefined;
-  }
-  return {
-    name: config.modes[name] ? name : AutoModes[0],
-    model: mode.model,
-    researcherId: mode.researcherId,
-    instructions: mode.instructions,
+  const complete = (candidate: AutoMode): ResolvedAutoMode | undefined => {
+    const mode = config.modes?.[candidate];
+    if (!mode?.model || !mode.researcherId) {
+      return undefined;
+    }
+    return {
+      name: candidate,
+      model: mode.model,
+      researcherId: mode.researcherId,
+      instructions: mode.instructions,
+    };
   };
+  const requested = (config.activeMode ?? AutoModes[0]) as AutoMode;
+  return complete(requested) ?? complete(AutoModes[0]);
 }
 
 export interface AutoOverrides {
@@ -63,7 +83,7 @@ export interface AutoOverrides {
  * prompt instead of the researcher's, and the model can pick the wrong one.
  */
 export function autoOverridesFor(
-  config: TAutoConfig | undefined,
+  config: AutoConfigInput | undefined,
   specName: string | undefined,
 ): AutoOverrides | undefined {
   if (!isAutoSpec(config, specName)) {

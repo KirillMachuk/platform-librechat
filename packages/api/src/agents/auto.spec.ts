@@ -1,7 +1,7 @@
-import type { TAutoConfig } from 'librechat-data-provider';
+import type { AutoConfigInput } from './auto';
 import { autoOverridesFor, resolveAutoMode, isAutoSpec } from './auto';
 
-const CONFIG: TAutoConfig = {
+const CONFIG: AutoConfigInput = {
   spec: 'auto',
   activeMode: 'standard',
   modes: {
@@ -37,12 +37,30 @@ describe('resolveAutoMode', () => {
   });
 
   it('активный режим без описания падает на дешёвый, а не на премиальный', () => {
-    const partial: TAutoConfig = {
+    const partial: AutoConfigInput = {
       spec: 'auto',
       activeMode: 'smart',
       modes: { standard: CONFIG.modes!.standard },
     };
     expect(resolveAutoMode(partial)).toMatchObject({ name: 'standard' });
+  });
+
+  it('режим без исследователя считается ОТСУТСТВУЮЩИМ, а не полурабочим', () => {
+    const half: AutoConfigInput = {
+      spec: 'auto',
+      activeMode: 'smart',
+      modes: {
+        standard: CONFIG.modes!.standard,
+        smart: { model: 'anthropic/claude-opus-5' },
+      },
+    };
+    expect(resolveAutoMode(half)).toMatchObject({ name: 'standard' });
+  });
+
+  it('и если недоделан САМ дешёвый режим — не решаем ничего', () => {
+    expect(
+      resolveAutoMode({ spec: 'auto', activeMode: 'standard', modes: { standard: {} } }),
+    ).toBeUndefined();
   });
 
   it('без настройки — ничего не решаем', () => {
@@ -78,7 +96,7 @@ describe('autoOverridesFor', () => {
   });
 
   it('имя карточки берётся из настройки, а не зашито', () => {
-    const renamed: TAutoConfig = { ...CONFIG, spec: 'помощник' };
+    const renamed: AutoConfigInput = { ...CONFIG, spec: 'помощник' };
     expect(isAutoSpec(renamed, 'помощник')).toBe(true);
     expect(isAutoSpec(renamed, 'auto')).toBe(false);
   });
