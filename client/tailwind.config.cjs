@@ -123,6 +123,10 @@ module.exports = {
         scrim: 'var(--c-scrim)',
         ink: 'var(--c-ink)',
         'ink-label': 'var(--c-ink-label)',
+        /* What reads ON TOP of the accent fill: a label on an accent-filled
+           plate, and the knob of a switch that is on (canon §6.4). The palette
+           token existed; there was no Tailwind name for it. */
+        'acc-ink': 'var(--c-acc-ink)',
         // Пузырь пользователя (§6.13). Значение с Ф2a, потребителя до сих пор не
         // было: пузырь красился сырым #F3F3F3 с отдельным правилом для тьмы.
         bubble: 'var(--c-bubble)',

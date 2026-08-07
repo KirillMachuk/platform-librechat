@@ -67,7 +67,7 @@ describe('the canon a field carries', () => {
     const c = FIELD_BASE.split(/\s+/);
 
     expect(c).toContain('h-12');
-    expect(c).toContain('sm:h-9');
+    expect(c).toContain('md:h-9');
     expect(c).toContain('rounded-xl');
     expect(c).toContain('bg-surface-primary');
     expect(c).toContain('disabled:opacity-45');

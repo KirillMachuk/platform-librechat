@@ -4,6 +4,7 @@ import { TAskFunction } from '~/common';
 import logger from './logger';
 
 export * from './map';
+export * from './chatColumn';
 export * from './json';
 export * from './text';
 export * from './icons';
