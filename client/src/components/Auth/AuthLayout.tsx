@@ -74,9 +74,16 @@ function AuthLayout({
         <div className="flex w-full max-w-[360px] flex-col gap-3.5 rounded-2xl border border-border-light bg-surface-primary p-5 shadow-sm md:p-7 md:pb-6">
           <div className="mb-1 flex flex-col items-center gap-[3px] text-center">
             <BlinkAnimation active={isFetching}>
+              {/* Прототип рисует на этом месте «1ma» текстом 21/700 — это
+                  заглушка под фирменный знак, который в один html-файл не
+                  вложить. Знак остаётся картинкой (решение владельца 08.08),
+                  но встаёт в тот же оптический размер: у книжного начертания
+                  высота прописных ≈15px при ширине блока 42px, у знака при
+                  16px высоты ширина выходит ≈47px. Раньше стояло 30px — вдвое
+                  крупнее книги, и это было первым, что бросалось в глаза. */}
               <img
                 src="assets/logo.svg"
-                className="h-[30px] w-auto object-contain dark:invert"
+                className="h-[17px] w-auto object-contain dark:invert md:h-4"
                 width={1920}
                 height={648}
                 alt={localize('com_ui_logo', { 0: startupConfig?.appTitle ?? '1ma' })}
