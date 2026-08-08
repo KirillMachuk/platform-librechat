@@ -73,22 +73,30 @@ function AuthLayout({
         <DisplayError />
         <div className="flex w-full max-w-[360px] flex-col gap-3.5 rounded-2xl border border-border-light bg-surface-primary p-5 shadow-sm md:p-7 md:pb-6">
           <div className="mb-1 flex flex-col items-center gap-[3px] text-center">
-            <BlinkAnimation active={isFetching}>
-              {/* Прототип рисует на этом месте «1ma» текстом 21/700 — это
+            {/* Знак живёт в коробке высотой со строку, которую занимает в
+                прототипе набранное на его месте «1ma» (21px × 1,6 = 34 на
+                десктопе, 22 × 1,6 = 35 на телефоне). Картинка своего
+                межстрочного не несёт, поэтому без этой коробки подзаголовок
+                подъезжает вплотную к знаку — владелец заметил это как «шрифт
+                надписи будто выше», хотя сам шрифт уже совпадал. */}
+            <div className="flex h-[35px] items-center md:h-[34px]">
+              <BlinkAnimation active={isFetching}>
+                {/* Прототип рисует на этом месте «1ma» текстом 21/700 — это
                   заглушка под фирменный знак, который в один html-файл не
                   вложить. Знак остаётся картинкой (решение владельца 08.08),
                   но встаёт в тот же оптический размер: у книжного начертания
                   высота прописных ≈15px при ширине блока 42px, у знака при
                   16px высоты ширина выходит ≈47px. Раньше стояло 30px — вдвое
                   крупнее книги, и это было первым, что бросалось в глаза. */}
-              <img
-                src="assets/logo.svg"
-                className="h-[17px] w-auto object-contain dark:invert md:h-4"
-                width={1920}
-                height={648}
-                alt={localize('com_ui_logo', { 0: startupConfig?.appTitle ?? '1ma' })}
-              />
-            </BlinkAnimation>
+                <img
+                  src="assets/logo.svg"
+                  className="h-[17px] w-auto object-contain dark:invert md:h-4"
+                  width={1920}
+                  height={648}
+                  alt={localize('com_ui_logo', { 0: startupConfig?.appTitle ?? '1ma' })}
+                />
+              </BlinkAnimation>
+            </div>
             {!hasStartupConfigError && !isFetching && header && (
               <h1
                 className="text-[13px] font-normal text-text-tertiary"
