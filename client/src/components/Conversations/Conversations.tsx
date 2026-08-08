@@ -87,8 +87,10 @@ interface ChatsHeaderProps {
   actions?: React.ReactNode;
 }
 
+/** Canon §1.8: one focus for the whole system — 2px `acc`, offset +2 on a
+ *  standalone control. */
 export const headerIconButtonClassName =
-  'tap-target flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-secondary outline-none transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black dark:focus-visible:ring-white';
+  'tap-target flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-secondary outline-none transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus';
 
 /** Collapsible header for the Chats section */
 const ChatsHeader: FC<ChatsHeaderProps> = memo(({ isExpanded, onToggle, actions }) => {
@@ -103,12 +105,13 @@ const ChatsHeader: FC<ChatsHeaderProps> = memo(({ isExpanded, onToggle, actions 
     newConversation();
   }, [conversation?.conversationId, newConversation, queryClient]);
 
-  /** Канон §3: заголовок секции — 12,5/500 цвета t3, а не 12/700. */
+  /** Канон §3: заголовок секции — 12,5/500 цвета t3, а не 12/700.
+   *  Focus is §1.8 with offset −2: the control runs the full width of the row. */
   return (
     <div className="flex h-11 w-full items-center gap-0.5 pr-1 md:h-9">
       <button
         onClick={onToggle}
-        className="group flex h-full min-w-0 flex-1 items-center gap-1 rounded-lg px-2.5 text-[12.5px] font-medium text-text-tertiary outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black dark:focus-visible:ring-white"
+        className="group flex h-full min-w-0 flex-1 items-center gap-1 rounded-lg px-2.5 text-[12.5px] font-medium text-text-tertiary outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-border-focus"
         type="button"
         aria-expanded={isExpanded}
       >
