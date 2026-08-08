@@ -21,13 +21,11 @@ export default function Fork({
   conversationId: _convoId,
   forkingSupported = false,
   latestMessageId,
-  isLast = false,
 }: {
   messageId: string;
   conversationId: string | null;
   forkingSupported?: boolean;
   latestMessageId?: string;
-  isLast?: boolean;
 }) {
   const localize = useLocalize();
   const { showToast } = useToastContext();

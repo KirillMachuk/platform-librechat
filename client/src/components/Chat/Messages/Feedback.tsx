@@ -25,7 +25,6 @@ import { cn } from '~/utils';
 interface FeedbackProps {
   handleFeedback: ({ feedback }: { feedback: TFeedback | undefined }) => void;
   feedback?: TFeedback;
-  isLast?: boolean;
 }
 
 const ICONS = {
@@ -72,12 +71,10 @@ function FeedbackOptionButton({
 }
 
 function FeedbackButtons({
-  isLast,
   feedback,
   onFeedback,
   onOther,
 }: {
-  isLast: boolean;
   feedback?: TFeedback;
   onFeedback: (fb: TFeedback | undefined) => void;
   onOther?: () => void;
@@ -228,11 +225,7 @@ function buttonClasses(isActive: boolean) {
   );
 }
 
-export default function Feedback({
-  isLast = false,
-  handleFeedback,
-  feedback: initialFeedback,
-}: FeedbackProps) {
+export default function Feedback({ handleFeedback, feedback: initialFeedback }: FeedbackProps) {
   const localize = useLocalize();
   const [openDialog, setOpenDialog] = useState(false);
   const [feedback, setFeedback] = useState<TFeedback | undefined>(initialFeedback);
@@ -310,7 +303,6 @@ export default function Feedback({
         renderSingleFeedbackButton()
       ) : (
         <FeedbackButtons
-          isLast={isLast}
           feedback={feedback}
           onFeedback={handleButtonFeedback}
           onOther={handleOtherOpen}
