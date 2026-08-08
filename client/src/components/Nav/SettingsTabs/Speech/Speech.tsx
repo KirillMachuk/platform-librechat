@@ -2,8 +2,13 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useRecoilState } from 'recoil';
 import * as Tabs from '@radix-ui/react-tabs';
 import { Lightbulb, Cog } from 'lucide-react';
-import { SettingGroup, useOnClickOutside, useMediaQuery } from '@librechat/client';
 import { useGetCustomConfigSpeechQuery } from 'librechat-data-provider/react-query';
+import {
+  SettingGroup,
+  SETTINGS_TAB_BODY,
+  useOnClickOutside,
+  useMediaQuery,
+} from '@librechat/client';
 import {
   CloudBrowserVoicesSwitch,
   AutomaticPlaybackSwitch,
@@ -187,7 +192,7 @@ function Speech() {
       </div>
 
       <Tabs.Content value={'simple'} tabIndex={-1}>
-        <div className="flex flex-col gap-4 text-sm text-text-primary">
+        <div className={SETTINGS_TAB_BODY}>
           <SettingGroup label={localize('com_nav_speech_to_text')}>
             <SpeechToTextSwitch />
             <EngineSTTDropdown external={sttExternal} />
@@ -202,7 +207,7 @@ function Speech() {
       </Tabs.Content>
 
       <Tabs.Content value={'advanced'} tabIndex={-1}>
-        <div className="flex flex-col gap-4 text-sm text-text-primary">
+        <div className={SETTINGS_TAB_BODY}>
           <SettingGroup>
             <ConversationModeSwitch />
           </SettingGroup>

@@ -29,6 +29,13 @@ import { useLocalize, useHasAccess, TranslationKeys } from '~/hooks';
 import { useGetStartupConfig } from '~/data-provider';
 import { cn } from '~/utils';
 
+type SettingsTab = {
+  value: SettingsTabValues;
+  icon: React.JSX.Element;
+  label: TranslationKeys;
+  content: React.JSX.Element;
+};
+
 export default function Settings({ open, onOpenChange }: TDialogProps) {
   const isSmallScreen = useMediaQuery('(max-width: 767px)');
   const { data: startupConfig } = useGetStartupConfig();
@@ -53,19 +60,97 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
     }
   }, [aboutEnabled, activeTab]);
 
+  /**
+   * One array for the rail, the keyboard and the panels — canon forbids the
+   * list and the rail drifting apart, and they used to be declared three times
+   * over with the same permission gates copied into each.
+   */
+  const settingsTabs: SettingsTab[] = [
+    {
+      value: SettingsTabValues.GENERAL,
+      icon: <GearIcon />,
+      label: 'com_nav_setting_general',
+      content: <General />,
+    },
+    {
+      value: SettingsTabValues.CHAT,
+      icon: <MessageSquare className="icon-sm" aria-hidden="true" />,
+      label: 'com_nav_setting_chat',
+      content: <Chat />,
+    },
+    {
+      value: SettingsTabValues.COMMANDS,
+      icon: <Command className="icon-sm" aria-hidden="true" />,
+      label: 'com_nav_commands',
+      content: <Commands />,
+    },
+    {
+      value: SettingsTabValues.SPEECH,
+      icon: <SpeechIcon className="icon-sm" aria-hidden="true" />,
+      label: 'com_nav_setting_speech',
+      content: <Speech />,
+    },
+    ...(hasAnyPersonalizationFeature
+      ? [
+          {
+            value: SettingsTabValues.PERSONALIZATION,
+            icon: <PersonalizationIcon />,
+            label: 'com_nav_setting_personalization' as TranslationKeys,
+            content: (
+              <Personalization
+                hasMemoryOptOut={hasMemoryOptOut}
+                hasAnyPersonalizationFeature={hasAnyPersonalizationFeature}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...(showMemoryTab
+      ? [
+          {
+            value: SettingsTabValues.MEMORY,
+            icon: <Brain className="icon-sm" aria-hidden="true" />,
+            label: 'com_ui_memories' as TranslationKeys,
+            content: <Memory />,
+          },
+        ]
+      : []),
+    {
+      value: SettingsTabValues.DATA,
+      icon: <DataIcon />,
+      label: 'com_nav_setting_data',
+      content: <Data />,
+    },
+    ...(startupConfig?.balance?.enabled
+      ? [
+          {
+            value: SettingsTabValues.BALANCE,
+            icon: <DollarSign size={18} />,
+            label: 'com_nav_setting_balance' as TranslationKeys,
+            content: <Balance />,
+          },
+        ]
+      : ([] as SettingsTab[])),
+    {
+      value: SettingsTabValues.ACCOUNT,
+      icon: <UserIcon />,
+      label: 'com_nav_setting_account',
+      content: <Account />,
+    },
+    ...(aboutEnabled
+      ? [
+          {
+            value: SettingsTabValues.ABOUT,
+            icon: <Info className="icon-sm" aria-hidden="true" />,
+            label: 'com_nav_setting_about' as TranslationKeys,
+            content: <About />,
+          },
+        ]
+      : ([] as SettingsTab[])),
+  ];
+
   const handleKeyDown = (event: React.KeyboardEvent) => {
-    const tabs: SettingsTabValues[] = [
-      SettingsTabValues.GENERAL,
-      SettingsTabValues.CHAT,
-      SettingsTabValues.COMMANDS,
-      SettingsTabValues.SPEECH,
-      ...(hasAnyPersonalizationFeature ? [SettingsTabValues.PERSONALIZATION] : []),
-      ...(showMemoryTab ? [SettingsTabValues.MEMORY] : []),
-      SettingsTabValues.DATA,
-      ...(startupConfig?.balance?.enabled ? [SettingsTabValues.BALANCE] : []),
-      SettingsTabValues.ACCOUNT,
-      ...(aboutEnabled ? [SettingsTabValues.ABOUT] : []),
-    ];
+    const tabs = settingsTabs.map(({ value }) => value);
     const currentIndex = tabs.indexOf(activeTab);
 
     switch (event.key) {
@@ -87,79 +172,6 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
         break;
     }
   };
-
-  const settingsTabs: {
-    value: SettingsTabValues;
-    icon: React.JSX.Element;
-    label: TranslationKeys;
-  }[] = [
-    {
-      value: SettingsTabValues.GENERAL,
-      icon: <GearIcon />,
-      label: 'com_nav_setting_general',
-    },
-    {
-      value: SettingsTabValues.CHAT,
-      icon: <MessageSquare className="icon-sm" aria-hidden="true" />,
-      label: 'com_nav_setting_chat',
-    },
-    {
-      value: SettingsTabValues.COMMANDS,
-      icon: <Command className="icon-sm" aria-hidden="true" />,
-      label: 'com_nav_commands',
-    },
-    {
-      value: SettingsTabValues.SPEECH,
-      icon: <SpeechIcon className="icon-sm" aria-hidden="true" />,
-      label: 'com_nav_setting_speech',
-    },
-    ...(hasAnyPersonalizationFeature
-      ? [
-          {
-            value: SettingsTabValues.PERSONALIZATION,
-            icon: <PersonalizationIcon />,
-            label: 'com_nav_setting_personalization' as TranslationKeys,
-          },
-        ]
-      : []),
-    ...(showMemoryTab
-      ? [
-          {
-            value: SettingsTabValues.MEMORY,
-            icon: <Brain className="icon-sm" aria-hidden="true" />,
-            label: 'com_ui_memories' as TranslationKeys,
-          },
-        ]
-      : []),
-    {
-      value: SettingsTabValues.DATA,
-      icon: <DataIcon />,
-      label: 'com_nav_setting_data',
-    },
-    ...(startupConfig?.balance?.enabled
-      ? [
-          {
-            value: SettingsTabValues.BALANCE,
-            icon: <DollarSign size={18} />,
-            label: 'com_nav_setting_balance' as TranslationKeys,
-          },
-        ]
-      : ([] as { value: SettingsTabValues; icon: React.JSX.Element; label: TranslationKeys }[])),
-    {
-      value: SettingsTabValues.ACCOUNT,
-      icon: <UserIcon />,
-      label: 'com_nav_setting_account',
-    },
-    ...(aboutEnabled
-      ? [
-          {
-            value: SettingsTabValues.ABOUT,
-            icon: <Info className="icon-sm" aria-hidden="true" />,
-            label: 'com_nav_setting_about' as TranslationKeys,
-          },
-        ]
-      : ([] as { value: SettingsTabValues; icon: React.JSX.Element; label: TranslationKeys }[])),
-  ];
 
   const handleTabChange = (value: string) => {
     setActiveTab(value as SettingsTabValues);
@@ -231,10 +243,19 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
                       <Tabs.Trigger
                         key={value}
                         className={cn(
-                          'group relative z-10 m-1 flex items-center justify-start gap-2 rounded-xl px-2 py-1.5 transition-all duration-200 ease-in-out',
+                          /* Canon, prototype screens 21–23 (`.srail button`): 36
+                             high, 14px label, radius 8, 0/10 padding, gap 10,
+                             icon 16. The icon is sized here rather than on each
+                             svg — five of them carry their own width/height. */
+                          'group relative z-10 m-1 flex h-9 items-center justify-start gap-2.5 rounded-lg px-2.5 text-sm transition-all duration-200 ease-in-out [&>svg]:size-4 [&>svg]:shrink-0',
+                          /* The selected section is the accent on its soft tint,
+                             icon included — grey on grey is no distinction. The
+                             icon's variants read `[&>svg]:` first and the state
+                             second: the other order hangs `[data-state=active]`
+                             on the svg, which never carries it. */
                           isSmallScreen
-                            ? 'flex-1 justify-center text-nowrap p-1 px-3 text-sm text-text-secondary radix-state-active:bg-surface-hover radix-state-active:text-text-primary'
-                            : 'bg-transparent text-text-secondary radix-state-active:bg-surface-tertiary radix-state-active:text-text-primary',
+                            ? 'flex-1 justify-center text-nowrap px-3 text-text-secondary radix-state-active:bg-ring-primary-soft radix-state-active:text-text-accent'
+                            : 'bg-transparent text-text-primary radix-state-active:bg-ring-primary-soft radix-state-active:text-text-accent [&>svg]:text-text-secondary [&>svg]:radix-state-active:text-text-accent',
                         )}
                         value={value}
                         ref={(el) => (tabRefs.current[value] = el)}
@@ -245,47 +266,11 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
                     ))}
                   </Tabs.List>
                   <div className="overflow-auto sm:w-full sm:max-w-none md:pr-0.5 md:pt-0.5">
-                    <Tabs.Content value={SettingsTabValues.GENERAL} tabIndex={-1}>
-                      <General />
-                    </Tabs.Content>
-                    <Tabs.Content value={SettingsTabValues.CHAT} tabIndex={-1}>
-                      <Chat />
-                    </Tabs.Content>
-                    <Tabs.Content value={SettingsTabValues.COMMANDS} tabIndex={-1}>
-                      <Commands />
-                    </Tabs.Content>
-                    <Tabs.Content value={SettingsTabValues.SPEECH} tabIndex={-1}>
-                      <Speech />
-                    </Tabs.Content>
-                    {hasAnyPersonalizationFeature && (
-                      <Tabs.Content value={SettingsTabValues.PERSONALIZATION} tabIndex={-1}>
-                        <Personalization
-                          hasMemoryOptOut={hasMemoryOptOut}
-                          hasAnyPersonalizationFeature={hasAnyPersonalizationFeature}
-                        />
+                    {settingsTabs.map(({ value, content }) => (
+                      <Tabs.Content key={value} value={value} tabIndex={-1}>
+                        {content}
                       </Tabs.Content>
-                    )}
-                    {showMemoryTab && (
-                      <Tabs.Content value={SettingsTabValues.MEMORY} tabIndex={-1}>
-                        <Memory />
-                      </Tabs.Content>
-                    )}
-                    <Tabs.Content value={SettingsTabValues.DATA} tabIndex={-1}>
-                      <Data />
-                    </Tabs.Content>
-                    {startupConfig?.balance?.enabled && (
-                      <Tabs.Content value={SettingsTabValues.BALANCE} tabIndex={-1}>
-                        <Balance />
-                      </Tabs.Content>
-                    )}
-                    <Tabs.Content value={SettingsTabValues.ACCOUNT} tabIndex={-1}>
-                      <Account />
-                    </Tabs.Content>
-                    {aboutEnabled && (
-                      <Tabs.Content value={SettingsTabValues.ABOUT} tabIndex={-1}>
-                        <About />
-                      </Tabs.Content>
-                    )}
+                    ))}
                   </div>
                 </Tabs.Root>
               </div>
