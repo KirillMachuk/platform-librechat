@@ -258,12 +258,11 @@ const HoverButtons = ({
         conversationId={conversation.conversationId}
         forkingSupported={forkingSupported}
         latestMessageId={latestMessageId}
-        isLast={isLast}
       />
 
       {/* Feedback Buttons */}
       {!isCreatedByUser && !isComparison && handleFeedback != null && (
-        <Feedback handleFeedback={handleFeedback} feedback={message.feedback} isLast={isLast} />
+        <Feedback handleFeedback={handleFeedback} feedback={message.feedback} />
       )}
 
       {/* Regenerate Button */}

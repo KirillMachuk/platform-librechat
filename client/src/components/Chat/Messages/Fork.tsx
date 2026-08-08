@@ -26,7 +26,6 @@ export default function Fork({
   conversationId: string | null;
   forkingSupported?: boolean;
   latestMessageId?: string;
-  isLast?: boolean;
 }) {
   const localize = useLocalize();
   const { showToast } = useToastContext();

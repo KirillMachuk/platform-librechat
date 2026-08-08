@@ -25,7 +25,6 @@ import { cn } from '~/utils';
 interface FeedbackProps {
   handleFeedback: ({ feedback }: { feedback: TFeedback | undefined }) => void;
   feedback?: TFeedback;
-  isLast?: boolean;
 }
 
 const ICONS = {
