@@ -447,6 +447,7 @@ of encoded.
 | Russian build shows no untranslated keys on key screens | e2e | `e2e/specs/nightly/locale.spec.ts#with no untranslated keys left showing` | covered |
 | Russian locale renders key screens without overflow | e2e | `e2e/specs/nightly/layout.spec.ts#mainScrollWidth` | covered |
 | Artifacts panel open at a narrow desktop width | e2e | `e2e/specs/mock/artifacts.spec.ts#the panel opens at a narrow desktop width and leaves the chat usable` | covered |
+| The open panel gives chat and artifact their own card (radius, border, gap-as-handle), dropped for an overlay on the phone layout | e2e | `e2e/specs/mock/artifacts.spec.ts#the open panel gives the chat and the artifact their own card, and the gap between them is the handle` | covered |
 
 | Every z-index on the chat screen comes from the canon scale | e2e | `e2e/specs/mock/canon.spec.ts#every z-index comes from the canon scale` | covered |
 | The file library dialog stacks on the canon dialog layer | e2e | `e2e/specs/mock/canon.spec.ts#the file library dialog is on the canon dialog layer` | covered |
