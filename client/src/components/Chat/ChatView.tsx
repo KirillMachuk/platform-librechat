@@ -15,6 +15,7 @@ import {
 } from '~/hooks';
 import { ChatContext, AddedChatContext, ChatFormProvider, useFileMapContext } from '~/Providers';
 import ConversationStarters from './Input/ConversationStarters';
+import { useMarkActiveConversationRead } from '~/store/unread';
 import { useGetMessagesByConvoId } from '~/data-provider';
 import MessagesView from './Messages/MessagesView';
 import Presentation from './Presentation';
@@ -60,6 +61,13 @@ function ChatView({ index = 0 }: { index?: number }) {
   const rootSubmission = useRecoilValue(store.submissionByIndex(index));
   const isSubmitting = useRecoilValue(store.isSubmittingFamily(index));
   const centerFormOnLanding = useRecoilValue(store.centerFormOnLanding);
+
+  /* A chat you are in has nothing unseen in it. `new` is not a conversation
+     yet — marking it would leave a mark under an id that never exists. */
+  useMarkActiveConversationRead(
+    conversationId === Constants.NEW_CONVO ? null : conversationId,
+    isSubmitting,
+  );
 
   const methods = useForm<ChatFormValues>({
     defaultValues: { text: '' },
