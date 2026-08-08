@@ -329,7 +329,7 @@ export default function SharedLinks() {
 
             <OGDialogContent
               title={localize('com_nav_shared_links')}
-              className="w-11/12 max-w-5xl bg-background text-text-primary shadow-2xl"
+              className="w-11/12 max-w-5xl bg-background text-text-primary shadow-lg"
             >
               <OGDialogHeader>
                 <OGDialogTitle>{localize('com_nav_shared_links')}</OGDialogTitle>
