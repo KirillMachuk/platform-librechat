@@ -2734,6 +2734,52 @@ describe('AgentClient - titleConvo', () => {
       expect(temporaryClient.processMemory).toBeUndefined();
     });
 
+    it('should neither read nor write memory when the user has switched memory off', async () => {
+      /* The two controls the user sees — "Использовать память" in the memory panel and
+         "Ссылка на сохраненную память" in Personalization — both write this one flag.
+         Prove the positive path first, or an agent that fails to initialize would return
+         undefined too and this would pass for the wrong reason. */
+      mockCheckAccess.mockResolvedValue(true);
+      mockInitializeAgent.mockResolvedValue({ ...mockAgent, provider: EModelEndpoint.openAI });
+      mockCreateMemoryProcessor.mockResolvedValue(['lease lawyer', jest.fn()]);
+
+      client = new AgentClient(mockOptions);
+      client.conversationId = 'convo-123';
+      client.responseMessageId = 'response-123';
+
+      expect(await client.useMemory()).toBe('lease lawyer');
+      expect(client.processMemory).toBeDefined();
+
+      jest.clearAllMocks();
+      mockCheckAccess.mockResolvedValue(true);
+      mockInitializeAgent.mockResolvedValue({ ...mockAgent, provider: EModelEndpoint.openAI });
+      mockCreateMemoryProcessor.mockResolvedValue(['lease lawyer', jest.fn()]);
+      mockReq.user = { id: 'user-123', personalization: { memories: false } };
+
+      const optedOutClient = new AgentClient(mockOptions);
+      optedOutClient.conversationId = 'convo-789';
+      optedOutClient.responseMessageId = 'response-789';
+
+      expect(await optedOutClient.useMemory()).toBeUndefined();
+      expect(mockGetFormattedMemories).not.toHaveBeenCalled();
+      expect(mockCreateMemoryProcessor).not.toHaveBeenCalled();
+      expect(optedOutClient.processMemory).toBeUndefined();
+    });
+
+    it('keeps memory on when the flag is absent, so an untouched account is not opted out', async () => {
+      mockCheckAccess.mockResolvedValue(true);
+      mockInitializeAgent.mockResolvedValue({ ...mockAgent, provider: EModelEndpoint.openAI });
+      mockCreateMemoryProcessor.mockResolvedValue(['lease lawyer', jest.fn()]);
+      mockReq.user = { id: 'user-123' };
+
+      client = new AgentClient(mockOptions);
+      client.conversationId = 'convo-123';
+      client.responseMessageId = 'response-123';
+
+      expect(await client.useMemory()).toBe('lease lawyer');
+      expect(client.processMemory).toBeDefined();
+    });
+
     it('should return existing memories without auto-processing when memory agent is not enabled', async () => {
       mockReq.config.memory = {
         personalize: true,
