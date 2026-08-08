@@ -233,14 +233,14 @@ export default function Artifacts() {
             'flex w-full flex-col bg-surface-primary text-xl text-text-primary',
             isMobile
               ? cn(
-                  'fixed inset-x-0 bottom-0 z-drawer rounded-t-[20px] shadow-[0_-10px_60px_rgba(0,0,0,0.35)]',
+                  'fixed inset-x-0 bottom-0 z-drawer rounded-t-[20px] shadow-lg',
                   isVisible && !isClosing
                     ? 'translate-y-0 opacity-100'
                     : 'duration-250 translate-y-full opacity-0 transition-all',
                   isDragging ? '' : 'transition-all duration-300',
                 )
               : cn(
-                  'h-full shadow-2xl',
+                  'h-full shadow-lg',
                   isVisible && !isClosing
                     ? 'duration-350 translate-x-0 opacity-100 transition-all'
                     : 'translate-x-5 opacity-0 transition-all duration-300',

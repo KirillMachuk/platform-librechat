@@ -65,7 +65,7 @@ const CheckboxButton: React.ForwardRefExoticComponent<
         'group relative inline-flex items-center justify-center gap-1.5',
         'rounded-full border border-border-medium text-sm font-medium',
         'size-9 p-2 transition-all md:w-full md:p-3',
-        'bg-transparent shadow-sm hover:bg-surface-hover hover:shadow-md active:shadow-inner',
+        'bg-transparent shadow-sm hover:bg-surface-hover',
 
         // Checked state styling
         isChecked && isCheckedClassName && isCheckedClassName,

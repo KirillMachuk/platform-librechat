@@ -65,7 +65,7 @@ function PanelDialog({ link, open, onOpenChange }: PanelDialogProps) {
             {/* Canon §4: dialogs are 420 / 560 / 720. */}
             <DialogPanel
               className={cn(
-                'flex max-h-[90vh] w-full flex-col overflow-hidden rounded-xl bg-background shadow-2xl backdrop-blur-2xl animate-in sm:rounded-2xl md:w-[720px]',
+                'flex max-h-[90vh] w-full flex-col overflow-hidden rounded-xl bg-background shadow-lg backdrop-blur-2xl animate-in sm:rounded-2xl md:w-[720px]',
               )}
             >
               <DialogTitle

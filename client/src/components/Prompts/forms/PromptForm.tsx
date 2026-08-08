@@ -599,7 +599,7 @@ const PromptForm = ({ promptId: promptIdProp }: { promptId?: string }) => {
           <div
             ref={sidePanelRef}
             className={cn(
-              'fixed right-0 top-0 z-drawer flex h-full flex-col border-l border-border-medium bg-surface-primary-alt shadow-xl lg:hidden',
+              'fixed right-0 top-0 z-drawer flex h-full flex-col border-l border-border-medium bg-surface-primary-alt shadow-lg lg:hidden',
               showSidePanel ? 'translate-x-0' : 'translate-x-full',
             )}
             style={{

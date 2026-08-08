@@ -346,7 +346,7 @@ export function AgentApiKeys() {
 
         <OGDialogContent
           title={localize('com_ui_agent_api_keys')}
-          className="w-11/12 max-w-2xl bg-background text-text-primary shadow-2xl"
+          className="w-11/12 max-w-2xl bg-background text-text-primary shadow-lg"
         >
           <OGDialogHeader>
             <OGDialogTitle>{localize('com_ui_agent_api_keys')}</OGDialogTitle>
