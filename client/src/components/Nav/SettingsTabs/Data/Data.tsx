@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { useOnClickOutside } from '@librechat/client';
 import { Permissions, PermissionTypes } from 'librechat-data-provider';
+import { SettingGroup, SETTINGS_TAB_BODY, useOnClickOutside } from '@librechat/client';
 import ImportConversations from './ImportConversations';
 import { AgentApiKeys } from './AgentApiKeys';
 import { DeleteCache } from './DeleteCache';
@@ -19,27 +19,19 @@ function Data() {
   });
 
   return (
-    <div className="flex flex-col gap-3 p-1 text-sm text-text-primary">
-      <div className="pb-3">
+    <div className={SETTINGS_TAB_BODY}>
+      <SettingGroup>
         <ImportConversations />
-      </div>
-      <div className="pb-3">
         <SharedLinks />
-      </div>
-      {hasAccessToApiKeys && (
-        <div className="pb-3">
-          <AgentApiKeys />
-        </div>
-      )}
-      <div className="pb-3">
+        {hasAccessToApiKeys && <AgentApiKeys />}
+      </SettingGroup>
+      {/* The irreversible ones sit in a group of their own — no key exists for a
+          "danger zone" heading, so the wider gap carries the meaning. */}
+      <SettingGroup>
         <RevokeKeys />
-      </div>
-      <div className="pb-3">
         <DeleteCache />
-      </div>
-      <div className="pb-3">
         <ClearChats />
-      </div>
+      </SettingGroup>
     </div>
   );
 }

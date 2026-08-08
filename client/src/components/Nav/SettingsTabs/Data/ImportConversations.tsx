@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { Import } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Spinner, useToastContext, Label, Button } from '@librechat/client';
+import { Spinner, useToastContext, SettingRow, Button } from '@librechat/client';
 import type { TStartupConfig } from 'librechat-data-provider';
 import { startupConfigKey, useUploadConversationsMutation } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
@@ -107,37 +107,43 @@ function ImportConversations() {
   const isImportDisabled = isUploading;
 
   return (
-    <div className="flex items-center justify-between">
-      <Label id="import-conversation-label">{localize('com_ui_import_conversation_info')}</Label>
-      <Button
-        variant="outline"
-        onClick={handleImportClick}
-        onKeyDown={handleKeyDown}
-        disabled={isImportDisabled}
-        aria-label={localize('com_ui_import')}
-        aria-labelledby="import-conversation-label"
-      >
-        {isUploading ? (
-          <>
-            <Spinner className="mr-1 w-4" />
-            <span>{localize('com_ui_importing')}</span>
-          </>
-        ) : (
-          <>
-            <Import className="mr-1 flex h-4 w-4 items-center" aria-hidden="true" />
-            <span>{localize('com_ui_import')}</span>
-          </>
-        )}
-      </Button>
-      <input
-        ref={fileInputRef}
-        type="file"
-        className={cn('hidden')}
-        accept=".json"
-        onChange={handleFileChange}
-        aria-hidden="true"
-      />
-    </div>
+    <SettingRow
+      id="import-conversation"
+      title={localize('com_ui_import_conversation_info')}
+      stackControlOnMobile
+      control={({ labelId }) => (
+        <>
+          <Button
+            variant="outline"
+            onClick={handleImportClick}
+            onKeyDown={handleKeyDown}
+            disabled={isImportDisabled}
+            aria-label={localize('com_ui_import')}
+            aria-labelledby={labelId}
+          >
+            {isUploading ? (
+              <>
+                <Spinner className="mr-1 w-4" />
+                <span>{localize('com_ui_importing')}</span>
+              </>
+            ) : (
+              <>
+                <Import className="mr-1 flex h-4 w-4 items-center" aria-hidden="true" />
+                <span>{localize('com_ui_import')}</span>
+              </>
+            )}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className={cn('hidden')}
+            accept=".json"
+            onChange={handleFileChange}
+            aria-hidden="true"
+          />
+        </>
+      )}
+    />
   );
 }
 

@@ -29,7 +29,6 @@ export default function ConversationModeSwitch({
       switchId="ConversationMode"
       onCheckedChange={handleCheckedChange}
       disabled={!textToSpeech || !speechToText}
-      strongLabel={true}
     />
   );
 }

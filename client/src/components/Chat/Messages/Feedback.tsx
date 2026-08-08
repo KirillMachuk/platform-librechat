@@ -25,7 +25,6 @@ import { cn } from '~/utils';
 interface FeedbackProps {
   handleFeedback: ({ feedback }: { feedback: TFeedback | undefined }) => void;
   feedback?: TFeedback;
-  isLast?: boolean;
 }
 
 const ICONS = {
@@ -72,12 +71,10 @@ function FeedbackOptionButton({
 }
 
 function FeedbackButtons({
-  isLast,
   feedback,
   onFeedback,
   onOther,
 }: {
-  isLast: boolean;
   feedback?: TFeedback;
   onFeedback: (fb: TFeedback | undefined) => void;
   onOther?: () => void;
@@ -147,7 +144,7 @@ function FeedbackButtons({
         store={upStore}
         render={
           <button
-            className={buttonClasses(feedback?.rating === 'thumbsUp', isLast)}
+            className={buttonClasses(feedback?.rating === 'thumbsUp')}
             onClick={handleThumbsUpClick}
             type="button"
             title={localize('com_ui_feedback_positive')}
@@ -181,7 +178,7 @@ function FeedbackButtons({
         store={downStore}
         render={
           <button
-            className={buttonClasses(feedback?.rating === 'thumbsDown', isLast)}
+            className={buttonClasses(feedback?.rating === 'thumbsDown')}
             onClick={handleThumbsDownClick}
             type="button"
             title={localize('com_ui_feedback_negative')}
@@ -214,23 +211,21 @@ function FeedbackButtons({
   );
 }
 
-function buttonClasses(isActive: boolean, isLast: boolean) {
+function buttonClasses(isActive: boolean) {
   return cn(
     'hover-button tap-target flex h-7 w-7 items-center justify-center rounded-lg text-text-secondary-alt [&_svg]:h-4 [&_svg]:w-4',
     'hover:text-text-primary hover:bg-surface-hover',
     'group-hover:visible group-focus-within:visible group-[.final-completion]:visible',
-    !isLast &&
-      'group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:hover)]:opacity-0',
+    /* Canon §6.13: the row under a message is visible ALWAYS. This used to hide
+       every button but the last message's behind a hover, so half the row
+       appeared and half did not — which is what it looked like: a ragged set of
+       icons that came and went. `HoverButton` was fixed; these two were not. */
     'focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white focus-visible:outline-none',
-    isActive && 'active text-text-primary bg-surface-hover',
+    isActive && 'text-text-primary bg-surface-hover',
   );
 }
 
-export default function Feedback({
-  isLast = false,
-  handleFeedback,
-  feedback: initialFeedback,
-}: FeedbackProps) {
+export default function Feedback({ handleFeedback, feedback: initialFeedback }: FeedbackProps) {
   const localize = useLocalize();
   const [openDialog, setOpenDialog] = useState(false);
   const [feedback, setFeedback] = useState<TFeedback | undefined>(initialFeedback);
@@ -285,7 +280,7 @@ export default function Feedback({
       : localize('com_ui_feedback_negative');
     return (
       <button
-        className={buttonClasses(true, isLast)}
+        className={buttonClasses(true)}
         onClick={() => {
           if (isThumbsUp) {
             handleButtonFeedback(undefined);
@@ -308,7 +303,6 @@ export default function Feedback({
         renderSingleFeedbackButton()
       ) : (
         <FeedbackButtons
-          isLast={isLast}
           feedback={feedback}
           onFeedback={handleButtonFeedback}
           onOther={handleOtherOpen}

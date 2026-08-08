@@ -15,6 +15,7 @@ import {
 } from '~/hooks';
 import { ChatContext, AddedChatContext, ChatFormProvider, useFileMapContext } from '~/Providers';
 import ConversationStarters from './Input/ConversationStarters';
+import { useMarkActiveConversationRead } from '~/store/unread';
 import { useGetMessagesByConvoId } from '~/data-provider';
 import MessagesView from './Messages/MessagesView';
 import Presentation from './Presentation';
@@ -60,6 +61,13 @@ function ChatView({ index = 0 }: { index?: number }) {
   const rootSubmission = useRecoilValue(store.submissionByIndex(index));
   const isSubmitting = useRecoilValue(store.isSubmittingFamily(index));
   const centerFormOnLanding = useRecoilValue(store.centerFormOnLanding);
+
+  /* A chat you are in has nothing unseen in it. `new` is not a conversation
+     yet — marking it would leave a mark under an id that never exists. */
+  useMarkActiveConversationRead(
+    conversationId === Constants.NEW_CONVO ? null : conversationId,
+    isSubmitting,
+  );
 
   const methods = useForm<ChatFormValues>({
     defaultValues: { text: '' },
@@ -138,6 +146,15 @@ function ChatView({ index = 0 }: { index?: number }) {
                 >
                   {content}
                   <div
+                    /* Здесь стоял `scrollbar-gutter-mirror` — `overflow-y: auto`
+                       ради того, чтобы композер зарезервировал такую же полосу
+                       прокрутки, как лента, и не уезжал на 4px. Он это делал —
+                       и заодно превращал обёртку в контейнер прокрутки, который
+                       ОБРЕЗАЛ всплывающий выбор модели: кнопка «сравнить с
+                       другой моделью» открывала меню, которого не видно. Резерв
+                       полосы без контейнера прокрутки средствами CSS не
+                       выражается, поэтому 4px возвращаются до отдельного
+                       решения — меню важнее. */
                     className={cn(
                       'w-full',
                       isLandingPage && 'max-w-3xl transition-all duration-200 xl:max-w-4xl',

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import copy from 'copy-to-clipboard';
 import { Check, Copy } from 'lucide-react';
 import { Constants } from 'librechat-data-provider';
+import { SETTINGS_TAB_BODY } from '@librechat/client';
 import type { TStartupConfig } from 'librechat-data-provider';
 import { useGetStartupConfig } from '~/data-provider';
 import { resolveAppTitle } from '~/utils';
@@ -83,7 +84,7 @@ function About() {
   }, [diagnosticsBlob]);
 
   return (
-    <div className="flex flex-col gap-3 p-1 text-sm text-text-primary">
+    <div className={SETTINGS_TAB_BODY}>
       <section aria-labelledby="about-version-heading" className="flex flex-col">
         <h3 id="about-version-heading" className="mb-2 text-sm font-medium text-text-primary">
           {localize('com_nav_about_version_heading')}

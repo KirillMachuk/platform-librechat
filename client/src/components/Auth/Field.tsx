@@ -28,7 +28,7 @@ export function AuthField({
 }) {
   return (
     <div className="flex flex-col gap-[5px]">
-      <label htmlFor={id} className="text-[15px] text-text-primary sm:text-sm">
+      <label htmlFor={id} className="text-[15px] text-text-primary md:text-sm">
         {label}
       </label>
       {children}
