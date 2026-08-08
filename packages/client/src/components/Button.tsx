@@ -29,25 +29,43 @@ const buttonVariants: (
    * extension the canon prescribes for exactly this. It is mobile-only and any
    * explicit position utility still wins over its `relative`.
    */
-  'tap-target inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-45',
+  /* Вес 400 в базе, а не 500. Канон §1.4: «Вес 400 всюду; 500 — главная
+     кнопка», и 500 живёт теперь у заливных вариантов, которые главной кнопкой
+     и бывают. Пока `font-medium` стоял здесь, каждая кнопка в продукте — в том
+     числе аутлайн и `ghost` — была на ступень жирнее, чем в прототипе. */
+  'tap-target inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-45',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        default: 'bg-primary font-medium text-primary-foreground hover:bg-primary/90',
         destructive:
-          'bg-surface-destructive text-destructive-foreground hover:bg-surface-destructive-hover',
-        /** Canon §6.1: a decorative `btn-line` border and a plain `hover` fill.
-         *  Upstream's hairline and shadcn accent hover were being patched away
-         *  at the call sites that noticed. */
+          'bg-surface-destructive font-medium text-destructive-foreground hover:bg-surface-destructive-hover',
+        /**
+         * The boundary of an outline button is the only thing that says a button
+         * is there, so it is the same `control` border a field wears — one token
+         * for "edge of an interactive control", fields and buttons alike.
+         *
+         * It used to be `btn-line` (black at 16%), which lands near 1.3:1 against
+         * the card. WCAG 2.2 SC 1.4.11 asks 3:1 of exactly this boundary, and
+         * canon §1.6 repeats it; `control` measures 3.4:1. The prototype draws
+         * the faint line too — this is a place where the drawing is wrong and the
+         * written canon is right, and the owner's own words for it were that the
+         * sign-in button "совсем не видна".
+         *
+         * `btn-line` stays what it is elsewhere: 116 call sites use it for
+         * dividers and container edges, which are decoration and carry no such
+         * requirement.
+         */
         outline:
-          'border border-border-medium bg-transparent text-text-primary hover:bg-surface-hover',
+          'border border-border-control bg-transparent text-text-primary hover:bg-surface-hover',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-surface-hover hover:text-text-primary',
         link: 'text-primary underline-offset-4 hover:underline',
         /** Canon §1.1/§6.1: the main action is ink, never a colour; hover is
          *  opacity .86 rather than a second shade, so `transition-opacity`
          *  deliberately replaces the base `transition-colors` here. */
-        submit: 'bg-ink text-ink-label transition-opacity duration-90 hover:opacity-[0.86]',
+        submit:
+          'bg-ink font-medium text-ink-label transition-opacity duration-90 hover:opacity-[0.86]',
       },
       size: {
         default: 'h-9 px-4',
