@@ -119,7 +119,8 @@
     "e2e:nightly": "playwright test --config=e2e/playwright.config.nightly.ts --fail-on-flaky-tests",
     "e2e:permissions": "playwright test --config=e2e/playwright.config.permissions.ts",
     "e2e:burn-in": "playwright test --config=e2e/playwright.config.mock.ts --repeat-each=5 --fail-on-flaky-tests",
-    "check:layers": "node scripts/check-layers.mjs"
+    "check:layers": "node scripts/check-layers.mjs",
+    "check:shadows": "node scripts/check-shadows.mjs"
   },
   "repository": {
     "type": "git",

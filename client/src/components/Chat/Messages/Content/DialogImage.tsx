@@ -379,7 +379,7 @@ export default function DialogImage({
           {/* Side Panel */}
           <div
             data-side-panel
-            className={`fixed right-0 top-0 z-dialog h-full w-80 transform border-l border-white/10 bg-surface-primary shadow-2xl transition-transform duration-300 ${
+            className={`fixed right-0 top-0 z-dialog h-full w-80 transform border-l border-white/10 bg-surface-primary shadow-lg transition-transform duration-300 ${
               isPromptOpen ? 'translate-x-0' : 'translate-x-full'
             }`}
             onClick={(e) => e.stopPropagation()}

@@ -77,7 +77,7 @@ const UIResourceCarousel: React.FC<UIResourceCarouselProps> = React.memo(({ uiRe
         <button
           type="button"
           onClick={() => scroll('left')}
-          className={`absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-xl bg-white p-2 text-gray-800 shadow-lg transition-all duration-200 hover:scale-110 hover:bg-gray-100 hover:shadow-xl active:scale-95 dark:bg-gray-200 dark:text-gray-800 dark:hover:bg-gray-300 ${
+          className={`absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-xl bg-white p-2 text-gray-800 shadow-lg transition-all duration-200 hover:scale-110 hover:bg-gray-100 hover:shadow-sm active:scale-95 dark:bg-gray-200 dark:text-gray-800 dark:hover:bg-gray-300 ${
             isContainerHovered ? 'opacity-100' : 'pointer-events-none opacity-0'
           }`}
           aria-label={localize('com_ui_scroll_left')}
@@ -129,7 +129,7 @@ const UIResourceCarousel: React.FC<UIResourceCarouselProps> = React.memo(({ uiRe
         <button
           type="button"
           onClick={() => scroll('right')}
-          className={`absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-xl bg-white p-2 text-gray-800 shadow-lg transition-all duration-200 hover:scale-110 hover:bg-gray-100 hover:shadow-xl active:scale-95 dark:bg-gray-200 dark:text-gray-800 dark:hover:bg-gray-300 ${
+          className={`absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-xl bg-white p-2 text-gray-800 shadow-lg transition-all duration-200 hover:scale-110 hover:bg-gray-100 hover:shadow-sm active:scale-95 dark:bg-gray-200 dark:text-gray-800 dark:hover:bg-gray-300 ${
             isContainerHovered ? 'opacity-100' : 'pointer-events-none opacity-0'
           }`}
           aria-label={localize('com_ui_scroll_right')}
