@@ -240,7 +240,9 @@ export default function Artifacts() {
                   isDragging ? '' : 'transition-all duration-300',
                 )
               : cn(
-                  'h-full shadow-2xl',
+                  /* No shadow of its own: canon §4 has exactly two, and the card
+                     this now sits inside already carries `shadow-sm`. */
+                  'h-full',
                   isVisible && !isClosing
                     ? 'duration-350 translate-x-0 opacity-100 transition-all'
                     : 'translate-x-5 opacity-0 transition-all duration-300',

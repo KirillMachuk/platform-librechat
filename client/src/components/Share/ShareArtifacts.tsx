@@ -128,7 +128,9 @@ export function ShareArtifactsContainer({
       >
         {mainContent}
       </ResizablePanel>
-      <ResizableHandleAlt withHandle className="bg-border-medium text-text-primary" />
+      {/* No className: a fill here would paint the 8px gap into a divider strip,
+          which canon §4 does not draw. */}
+      <ResizableHandleAlt withHandle />
       <ResizablePanel
         defaultSize={`${normalizedArtifactSize}`}
         minSize="20"

@@ -447,6 +447,10 @@ of encoded.
 | Russian build shows no untranslated keys on key screens | e2e | `e2e/specs/nightly/locale.spec.ts#with no untranslated keys left showing` | covered |
 | Russian locale renders key screens without overflow | e2e | `e2e/specs/nightly/layout.spec.ts#mainScrollWidth` | covered |
 | Artifacts panel open at a narrow desktop width | e2e | `e2e/specs/mock/artifacts.spec.ts#the panel opens at a narrow desktop width and leaves the chat usable` | covered |
+| Chat and panel are two cards with canvas showing between them | e2e | `e2e/specs/mock/artifacts.spec.ts#shows the chat and the panel as two cards with canvas between them` | covered |
+| Both panels wear the canon card, and the layer behind them stops painting | unit | `client/src/components/SidePanel/__tests__/SidePanelGroup.spec.tsx#dresses the chat and the panel as two identical cards` | covered |
+| The gap between the cards is the drag handle, with no divider strip | unit | `packages/client/src/components/Resizable.spec.tsx#is an 8px gap that paints nothing` | covered |
+| Leaving a chat with an artifact open gives every other route its card back | unit | `client/src/components/SidePanel/__tests__/SidePanelGroup.spec.tsx#tells the layers above it, for exactly as long as the split is mounted` | covered |
 
 | Every z-index on the chat screen comes from the canon scale | e2e | `e2e/specs/mock/canon.spec.ts#every z-index comes from the canon scale` | covered |
 | The file library dialog stacks on the canon dialog layer | e2e | `e2e/specs/mock/canon.spec.ts#the file library dialog is on the canon dialog layer` | covered |

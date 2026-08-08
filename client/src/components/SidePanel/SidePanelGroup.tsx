@@ -1,8 +1,11 @@
-import { useState, memo } from 'react';
+import { useState, useEffect, memo } from 'react';
+import { useSetRecoilState } from 'recoil';
 import { useDefaultLayout } from 'react-resizable-panels';
 import { ResizablePanel, ResizablePanelGroup, useMediaQuery } from '@librechat/client';
 import ArtifactsPanel from './ArtifactsPanel';
+import { PANEL_CARD } from './card';
 import { cn } from '~/utils';
+import store from '~/store';
 
 const PANEL_IDS_SINGLE = ['messages-view'];
 const PANEL_IDS_SPLIT = ['messages-view', 'artifacts-panel'];
@@ -23,13 +26,19 @@ const SidePanelGroup = memo(({ artifacts, children }: SidePanelProps) => {
   });
 
   const minSizeMain = artifacts != null ? '15' : '30';
-  /* Канон §4: с открытой панелью чат и панель — ДВЕ карточки, а зазор между
-     ними и есть ручка перетаскивания. Тогда полотно между ними должно быть
-     видно, поэтому группа не красится, а рамку и фон несут сами панели.
-     На телефоне панель уходит в оверлей — там рамы нет. */
+  /* On a phone the panel is a full-screen overlay, not a column, so there is no
+     frame to split and the group keeps painting the single card's fill. */
   const split = artifacts != null && !isSmallScreen;
-  const cardClassName =
-    'h-full overflow-hidden rounded-2xl border border-border-light bg-presentation shadow-sm';
+
+  /* The layers above this one have to stop painting for the gap between the
+     cards to show canvas, and only this component knows both halves of the
+     answer. It is published for the length of the mount so that leaving the
+     chat puts the frame back, whatever the artifact atoms still hold. */
+  const setFrameSplit = useSetRecoilState(store.artifactsFrameSplit);
+  useEffect(() => {
+    setFrameSplit(split);
+    return () => setFrameSplit(false);
+  }, [split, setFrameSplit]);
 
   return (
     <>
@@ -40,13 +49,12 @@ const SidePanelGroup = memo(({ artifacts, children }: SidePanelProps) => {
         className={cn('relative flex-1', split ? 'bg-transparent' : 'bg-presentation')}
       >
         <ResizablePanel defaultSize="50" minSize={minSizeMain} id="messages-view">
-          {split ? <div className={cardClassName}>{children}</div> : children}
+          {split ? <div className={PANEL_CARD}>{children}</div> : children}
         </ResizablePanel>
 
         {!isSmallScreen && (
           <ArtifactsPanel
             artifacts={artifacts}
-            cardClassName={cardClassName}
             minSizeMain={minSizeMain}
             shouldRender={shouldRenderArtifacts}
             onRenderChange={setShouldRenderArtifacts}

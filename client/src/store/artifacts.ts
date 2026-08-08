@@ -1,6 +1,6 @@
 import { atom, atomFamily, selectorFamily } from 'recoil';
-import { logger } from '~/utils';
 import type { Artifact } from '~/common';
+import { logger } from '~/utils';
 
 export const artifactsState = atom<Record<string, Artifact | undefined> | null>({
   key: 'artifactsState',
@@ -30,6 +30,23 @@ export const currentArtifactId = atom<string | null>({
       });
     },
   ] as const,
+});
+
+/**
+ * Whether the working area is currently split into two cards (canon §4: chat
+ * and artifacts panel are separate cards, and the gap between them is the drag
+ * handle). Published by `SidePanelGroup` for the length of its mount and read
+ * by the layers above it, which have to stop painting so the canvas shows
+ * through that gap.
+ *
+ * Deliberately NOT derived from the three atoms above. They are global and
+ * survive a move to another route, while the frame that reads this wraps every
+ * route — so an artifact left open in a chat would strip the card off Prompts,
+ * Agents and everything else.
+ */
+export const artifactsFrameSplit = atom<boolean>({
+  key: 'artifactsFrameSplit',
+  default: false,
 });
 
 export const artifactsVisibility = atom<boolean>({
