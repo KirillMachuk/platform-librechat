@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import { SettingRow, SettingGroup } from './SettingRow';
+import { SettingRow, SettingGroup, SETTINGS_TAB_BODY } from './SettingRow';
 import { Switch } from './Switch';
 
 /**
@@ -96,7 +96,9 @@ describe('SettingRow — canon §6.4', () => {
 });
 
 describe('SettingGroup — canon §6.4', () => {
-  it('draws the card the rows sit in', () => {
+  const group = (container: HTMLElement) => container.firstElementChild as HTMLElement;
+
+  it('holds its rows in one column, 5 apart', () => {
     const { container } = render(
       <SettingGroup>
         <SettingRow id="a" title="Первая" />
@@ -104,11 +106,55 @@ describe('SettingGroup — canon §6.4', () => {
       </SettingGroup>,
     );
 
-    const card = container.firstElementChild as HTMLElement;
-    expect(card.className).toContain('rounded-xl');
-    expect(card.className).toContain('border-border-light');
-    expect(card.className).toContain('overflow-hidden');
-    expect(card.children).toHaveLength(2);
+    const tokens = group(container).className.split(/\s+/);
+    expect(tokens).toContain('flex');
+    expect(tokens).toContain('flex-col');
+    expect(tokens).toContain('gap-[5px]');
+    expect(group(container).children).toHaveLength(2);
+  });
+
+  /* The card came from the agent builder, where the prototype does draw one.
+     In the settings screens it does not: the rows are loose strips, each with
+     its own hairline. */
+  it('draws no card around them', () => {
+    const { container } = render(
+      <SettingGroup>
+        <SettingRow id="a" title="Первая" />
+      </SettingGroup>,
+    );
+
+    const className = group(container).className;
+    expect(className).not.toMatch(/\brounded-/);
+    expect(className).not.toMatch(/\bborder(-|\b)/);
+    expect(className).not.toMatch(/\bbg-/);
+    expect(className).not.toContain('overflow-hidden');
+  });
+
+  it('puts the label in the same column, above its rows', () => {
+    const { container } = render(
+      <SettingGroup label="Чаты">
+        <SettingRow id="a" title="Первая" />
+      </SettingGroup>,
+    );
+
+    const children = Array.from(group(container).children);
+    expect(children).toHaveLength(2);
+    expect(children[0].textContent).toBe('Чаты');
+    /* The row itself, not a wrapper holding it: the label counts as a child of
+       the same column, so the row under it is not `:first-child` and keeps the
+       hairline the prototype draws there. */
+    expect(children[1]).toBe(screen.getByText('Первая').parentElement!.parentElement!);
+  });
+});
+
+describe('SETTINGS_TAB_BODY — canon, prototype screens 21–23', () => {
+  it('spaces what a tab stacks by 14, and pads 12 above and 16 below', () => {
+    const tokens = SETTINGS_TAB_BODY.split(/\s+/);
+    expect(tokens).toContain('flex');
+    expect(tokens).toContain('flex-col');
+    expect(tokens).toContain('gap-[14px]');
+    expect(tokens).toContain('pt-3');
+    expect(tokens).toContain('pb-4');
   });
 });
 

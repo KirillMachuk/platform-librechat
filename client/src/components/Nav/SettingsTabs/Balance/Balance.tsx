@@ -1,5 +1,5 @@
 import React from 'react';
-import { SettingGroup } from '@librechat/client';
+import { SettingGroup, SETTINGS_TAB_BODY } from '@librechat/client';
 import { useGetStartupConfig, useGetUserBalance } from '~/data-provider';
 import { useAuthContext, useLocalize } from '~/hooks';
 import AutoRefillSettings from './AutoRefillSettings';
@@ -58,7 +58,7 @@ function Balance() {
   };
 
   return (
-    <div className="flex flex-col gap-4 p-4 text-sm text-text-primary">
+    <div className={SETTINGS_TAB_BODY}>
       <SettingGroup>
         <TokenCreditsItem tokenCredits={tokenCredits} />
       </SettingGroup>

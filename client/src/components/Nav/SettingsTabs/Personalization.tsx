@@ -1,5 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Switch, SettingRow, SettingGroup, useToastContext } from '@librechat/client';
+import {
+  Switch,
+  SettingRow,
+  SettingGroup,
+  useToastContext,
+  SETTINGS_TAB_BODY,
+} from '@librechat/client';
 import { useGetUserQuery, useUpdateMemoryPreferencesMutation } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 
@@ -48,14 +54,14 @@ export default function Personalization({
 
   if (!hasAnyPersonalizationFeature) {
     return (
-      <div className="flex flex-col gap-3 text-sm text-text-primary">
+      <div className={SETTINGS_TAB_BODY}>
         <div className="text-text-secondary">{localize('com_ui_no_personalization_available')}</div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-3 p-1 text-sm text-text-primary">
+    <div className={SETTINGS_TAB_BODY}>
       {hasMemoryOptOut && (
         <SettingGroup label={localize('com_ui_memory')}>
           <SettingRow

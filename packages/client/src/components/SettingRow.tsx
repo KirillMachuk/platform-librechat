@@ -97,34 +97,35 @@ export const SettingRow: React.FC<SettingRowProps> = ({
 };
 
 /**
- * The card a run of rows lives in (`.swgroup`): the border and radius belong to
- * the group, never to the individual row, so the hairlines read as separators
- * inside one object rather than as a stack of loose strips.
+ * The frame a settings tab draws around what it stacks (prototype screens
+ * 21–23, `.sbody`): 14 between neighbours — a loose row and a labelled group
+ * are spaced the same — 12 above and 16 below.
+ *
+ * The 16 the prototype spends left and right is not repeated here: in the
+ * product the dialog already pays it, 24 to the right edge and 40 of gap to the
+ * section rail. The 4 that stays keeps focus rings clear of the scrolling edge.
+ */
+export const SETTINGS_TAB_BODY =
+  'flex flex-col gap-[14px] px-1 pb-4 pt-3 text-sm text-text-primary';
+
+/**
+ * A run of rows under an optional label (`.fld`): a plain column, 5 between the
+ * label and its rows and between the rows themselves.
+ *
+ * There is no card. In the settings screens the prototype leaves the rows as
+ * loose strips, each carrying its own hairline; the bordered card it draws in
+ * the agent builder (`.swgroup`) belongs to that screen, not to this one.
  */
 export const SettingGroup: React.FC<{
   label?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
-}> = ({ label, children, className }) => {
-  const group = (
-    <div
-      className={cn(
-        'overflow-hidden rounded-xl border border-border-light bg-surface-primary',
-        label == null && className,
-      )}
-    >
-      {children}
-    </div>
-  );
-
-  if (label == null) {
-    return group;
-  }
-
-  return (
-    <div className={cn('flex flex-col gap-1.5', className)}>
-      <div className="text-sm text-text-primary">{label}</div>
-      {group}
-    </div>
-  );
-};
+}> = ({ label, children, className }) => (
+  <div className={cn('flex flex-col gap-[5px]', className)}>
+    {/* The label is a child of the same column, so the row under it keeps the
+        hairline the prototype draws there: `first:border-t-0` fires only on a
+        run that really starts the column. */}
+    {label != null && <div className="text-sm text-text-primary">{label}</div>}
+    {children}
+  </div>
+);
