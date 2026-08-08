@@ -122,4 +122,87 @@ test.describe('artifacts', () => {
     expect(measured.mainClientWidth).toBeGreaterThan(0);
     expect(measured.mainScrollWidth).toBeLessThanOrEqual(measured.mainClientWidth + 1);
   });
+
+  /**
+   * The canon decision behind PR #265, silently reverted once already by an
+   * unrelated PR that merged from a stale base and restored in PR #309 — see
+   * `feedback_unguarded_canon_decision_gets_reverted` in project memory. That
+   * restore put the files back; this is the guard the incident was missing,
+   * so a third silent revert fails CI instead of waiting for someone to
+   * notice the live site looks wrong.
+   *
+   * The selector is `cardClassName` from `SidePanelGroup.tsx` verbatim — a
+   * plain template-string concatenation in that component, not `cn()`, so
+   * nothing merges a class away before it reaches the DOM.
+   */
+  test('the open panel gives the chat and the artifact their own card, and the gap between them is the handle', async ({
+    page,
+  }) => {
+    test.setTimeout(120000);
+    await page.setViewportSize(NARROW_DESKTOP);
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
+
+    const cards = () =>
+      page.locator(
+        '.h-full.overflow-hidden.rounded-2xl.border-border-light.bg-presentation.shadow-sm',
+      );
+    /* Before the panel opens there is one column, not a card — without this,
+     * a count of 2 after clicking the artifact would not prove anything. */
+    expect(await cards().count()).toBe(0);
+
+    const response = await sendMessage(page, 'E2E_ARTIFACT_REPLY');
+    expect(response.ok()).toBeTruthy();
+    const artifactCard = messagesView(page).getByRole('button').filter({ hasText: 'E2E Artifact' });
+    await expect(artifactCard).toBeVisible({ timeout: 60000 });
+    await artifactCard.click();
+    await expect(page.locator('#artifacts-code')).toHaveCount(1, { timeout: 30000 });
+
+    /* Two cards now: the chat column and the artifact panel, each carrying
+     * its own frame instead of the group being painted. */
+    await expect(cards()).toHaveCount(2);
+    const styles = await cards().evaluateAll((elements) =>
+      elements.map((element) => {
+        const computed = getComputedStyle(element);
+        return { radius: computed.borderRadius, borderWidth: computed.borderWidth };
+      }),
+    );
+    for (const style of styles) {
+      expect(style.radius).toBe('16px');
+      expect(style.borderWidth).not.toBe('0px');
+    }
+
+    /* The gap between the two cards is the handle, not a separate divider
+     * line — `ArtifactsPanel.tsx` renders the handle's own track transparent
+     * on purpose. Found structurally, from where the two cards' own boxes
+     * actually leave a gap, rather than guessed by class name: this repo has
+     * a documented case of `cn()` silently dropping a losing class, and the
+     * point here is what the browser actually painted. Sampled near the top
+     * of the gap, not its vertical center, to land on the track rather than
+     * the drag-grip icon that sits centered and invisible until hover. */
+    const [chatBox, artifactBox] = await cards().evaluateAll((elements) =>
+      elements.map((element) => {
+        const rect = element.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, top: rect.top };
+      }),
+    );
+    expect(artifactBox.left).toBeGreaterThan(chatBox.right);
+    const gapMidX = (chatBox.right + artifactBox.left) / 2;
+    const gapY = chatBox.top + 24;
+    const handleBackground = await page.evaluate(
+      ({ x, y }) => {
+        const element = document.elementFromPoint(x, y);
+        return element ? getComputedStyle(element).backgroundColor : null;
+      },
+      { x: gapMidX, y: gapY },
+    );
+    expect(handleBackground).toBe('rgba(0, 0, 0, 0)');
+
+    /* Mobile: the artifact panel stops being a card and becomes an overlay —
+     * `isSmallScreen` flips `split` to false in `SidePanelGroup.tsx`, whose
+     * own comment says there is no frame on the phone layout. */
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect.poll(() => cards().count(), { timeout: 10000 }).toBe(0);
+    await expect(page.locator('.fixed.inset-0.z-scrim-drawer')).toBeVisible({ timeout: 10000 });
+  });
 });
