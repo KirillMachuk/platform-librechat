@@ -935,6 +935,7 @@
   "com_ui_output": "Вывод",
   "com_ui_estimated": "Оценка по истории сообщений",
   "com_ui_pin": "Закрепить",
+  "com_ui_unread": "Непрочитанное",
   "com_ui_unpin": "Открепить",
   "com_ui_continue": "Продолжить",
   "com_ui_continue_oauth": "Продолжить с OAuth",

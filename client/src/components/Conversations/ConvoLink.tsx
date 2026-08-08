@@ -3,6 +3,8 @@ import { cn } from '~/utils';
 
 interface ConvoLinkProps {
   isActiveConvo: boolean;
+  /** Something arrived here while the person was somewhere else. */
+  isUnread?: boolean;
   isPopoverActive: boolean;
   title: string | null;
   onRename: () => void;
@@ -13,6 +15,7 @@ interface ConvoLinkProps {
 
 const ConvoLink: React.FC<ConvoLinkProps> = ({
   isActiveConvo,
+  isUnread = false,
   isPopoverActive,
   title,
   onRename,
@@ -55,12 +58,15 @@ const ConvoLink: React.FC<ConvoLinkProps> = ({
         )}
         aria-hidden="true"
       />
-      {/* Отметка открытого чата — точка `acc` справа (прототип, экран 8).
-          Стоит после градиента, иначе он бы её закрасил. */}
-      {isActiveConvo && (
+      {/* The dot means "there is something here you have not seen" — the filled
+          row already says which chat is open, and one state does not need two
+          marks. It sits after the gradient, which would otherwise paint over
+          it. Named for a screen reader: a colour alone says nothing aloud. */}
+      {isUnread && (
         <span
-          className="relative ml-auto h-[7px] w-[7px] flex-none rounded-full bg-text-accent"
-          aria-hidden="true"
+          className="relative ml-auto h-[7px] w-[7px] flex-none rounded-full bg-acc"
+          role="status"
+          aria-label={localize('com_ui_unread')}
         />
       )}
     </div>

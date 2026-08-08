@@ -5,6 +5,7 @@ import { Constants } from 'librechat-data-provider';
 import { useToastContext, useMediaQuery } from '@librechat/client';
 import type { TConversation } from 'librechat-data-provider';
 import { useNavigateToConvo, useLocalize, useShiftKey } from '~/hooks';
+import { isConversationUnread, useUnreadMarks } from '~/store/unread';
 import { useUpdateConversationMutation } from '~/data-provider';
 import { areConversationRenderPropsEqual } from './utils';
 import { cn, logger, buildConvoPath } from '~/utils';
@@ -66,6 +67,14 @@ function Conversation({
       return latestConvo === conversationId;
     }
   }, [currentConvoId, conversationId, activeConvos]);
+
+  const { marks } = useUnreadMarks();
+  const isUnread = isConversationUnread(
+    marks,
+    conversationId,
+    conversation.updatedAt,
+    isActiveConvo,
+  );
 
   const handleRename = () => {
     setIsPopoverActive(false);
@@ -221,9 +230,13 @@ function Conversation({
         /* Канон §6.5: наведение красит фон `hover`, выбранный чат — `active`.
            До этого оба состояния красились одним токеном, и наведение на любой
            чат выглядело так же, как открытый. Отметка выбора — точка `acc`
-           справа (как в прототипе), а не планка сырым чёрным цветом. */
-        'group relative flex h-11 w-full items-center rounded-xl outline-none transition-colors duration-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black dark:focus-visible:ring-white md:h-10',
-        isActiveConvo || isPopoverActive ? 'bg-surface-active' : 'hover:bg-surface-hover',
+           справа (как в прототипе), а не планка сырым чёрным цветом.
+           Prototype `.nconvo` is t2 and `.nconvo.on` is t1, so the open chat is
+           told apart by colour too, not by fill alone. */
+        'group relative flex h-11 w-full items-center rounded-xl outline-none transition-colors duration-90 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-border-focus md:h-10',
+        isActiveConvo || isPopoverActive
+          ? 'bg-surface-active text-text-primary'
+          : 'text-text-secondary hover:bg-surface-hover',
       )}
       role="button"
       tabIndex={renaming ? -1 : 0}
@@ -268,6 +281,7 @@ function Conversation({
       ) : (
         <ConvoLink
           isActiveConvo={isActiveConvo}
+          isUnread={isUnread}
           isPopoverActive={isPopoverActive}
           title={title}
           onRename={handleRename}
