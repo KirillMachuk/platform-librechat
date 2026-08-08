@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { SettingGroup } from '@librechat/client';
+import { SETTINGS_TAB_BODY } from '@librechat/client';
 import { showThinkingAtom } from '~/store/showThinking';
 import FontSizeSelector from './FontSizeSelector';
 import AdvancedPrompts from './AdvancedPrompts';
@@ -124,21 +124,19 @@ const toggleSwitchConfigs = [
 
 function Chat() {
   return (
-    <div className="p-1 text-sm text-text-primary">
-      <SettingGroup>
-        <FontSizeSelector />
-        <ChatDirection />
-        {toggleSwitchConfigs.map((config) => (
-          <ToggleSwitch
-            key={config.key}
-            stateAtom={config.stateAtom}
-            localizationKey={config.localizationKey}
-            descriptionKey={config.descriptionKey}
-            switchId={config.switchId}
-          />
-        ))}
-        <AdvancedPrompts />
-      </SettingGroup>
+    <div className={SETTINGS_TAB_BODY}>
+      <FontSizeSelector />
+      <ChatDirection />
+      {toggleSwitchConfigs.map((config) => (
+        <ToggleSwitch
+          key={config.key}
+          stateAtom={config.stateAtom}
+          localizationKey={config.localizationKey}
+          descriptionKey={config.descriptionKey}
+          switchId={config.switchId}
+        />
+      ))}
+      <AdvancedPrompts />
     </div>
   );
 }

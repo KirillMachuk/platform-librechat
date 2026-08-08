@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { SettingGroup } from '@librechat/client';
+import { SettingGroup, SETTINGS_TAB_BODY } from '@librechat/client';
 import { PermissionTypes, Permissions } from 'librechat-data-provider';
 import { useLocalize, useHasAccess } from '~/hooks';
 import ToggleSwitch from '../ToggleSwitch';
@@ -59,7 +59,7 @@ function Commands() {
   };
 
   return (
-    <div className="p-1 text-sm text-text-primary">
+    <div className={SETTINGS_TAB_BODY}>
       <SettingGroup label={localize('com_nav_chat_commands')}>
         {commandSwitchConfigs.map((config) => (
           <ToggleSwitch

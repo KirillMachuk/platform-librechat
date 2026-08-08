@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { SettingGroup, useOnClickOutside } from '@librechat/client';
 import { Permissions, PermissionTypes } from 'librechat-data-provider';
+import { SettingGroup, SETTINGS_TAB_BODY, useOnClickOutside } from '@librechat/client';
 import ImportConversations from './ImportConversations';
 import { AgentApiKeys } from './AgentApiKeys';
 import { DeleteCache } from './DeleteCache';
@@ -19,14 +19,14 @@ function Data() {
   });
 
   return (
-    <div className="flex flex-col gap-4 p-1 text-sm text-text-primary">
+    <div className={SETTINGS_TAB_BODY}>
       <SettingGroup>
         <ImportConversations />
         <SharedLinks />
         {hasAccessToApiKeys && <AgentApiKeys />}
       </SettingGroup>
-      {/* The irreversible ones sit in a card of their own — no key exists for a
-          "danger zone" heading, so the separation carries the meaning. */}
+      {/* The irreversible ones sit in a group of their own — no key exists for a
+          "danger zone" heading, so the wider gap carries the meaning. */}
       <SettingGroup>
         <RevokeKeys />
         <DeleteCache />

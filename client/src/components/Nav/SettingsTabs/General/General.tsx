@@ -1,7 +1,7 @@
 import React, { useContext, useCallback } from 'react';
 import Cookies from 'js-cookie';
 import { useRecoilState, useRecoilValue } from 'recoil';
-import { Dropdown, Spinner, ThemeContext, SettingRow, SettingGroup } from '@librechat/client';
+import { Dropdown, Spinner, ThemeContext, SettingRow, SETTINGS_TAB_BODY } from '@librechat/client';
 import ArchivedChats from './ArchivedChats';
 import ToggleSwitch from '../ToggleSwitch';
 import { useLocalize } from '~/hooks';
@@ -186,21 +186,19 @@ function General() {
   );
 
   return (
-    <div className="p-1 text-sm text-text-primary">
-      <SettingGroup>
-        <ThemeSelector theme={theme} onChange={changeTheme} />
-        <LangSelector langcode={langcode} onChange={changeLang} />
-        {toggleSwitchConfigs.map((config) => (
-          <ToggleSwitch
-            key={config.key}
-            stateAtom={config.stateAtom}
-            localizationKey={config.localizationKey}
-            descriptionKey={config.descriptionKey}
-            switchId={config.switchId}
-          />
-        ))}
-        <ArchivedChats />
-      </SettingGroup>
+    <div className={SETTINGS_TAB_BODY}>
+      <ThemeSelector theme={theme} onChange={changeTheme} />
+      <LangSelector langcode={langcode} onChange={changeLang} />
+      {toggleSwitchConfigs.map((config) => (
+        <ToggleSwitch
+          key={config.key}
+          stateAtom={config.stateAtom}
+          localizationKey={config.localizationKey}
+          descriptionKey={config.descriptionKey}
+          switchId={config.switchId}
+        />
+      ))}
+      <ArchivedChats />
     </div>
   );
 }
