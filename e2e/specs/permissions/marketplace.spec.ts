@@ -208,6 +208,47 @@ test.describe('the agent marketplace', () => {
       });
 
       await expectMarketplaceHit(pageB, sharedName);
+
+      /* And what B is allowed to READ of it. Sharing an agent hands over the
+       * right to use it, not the right to read how it was built: `GET
+       * /api/agents/:id` answers a whitelist for VIEW and keeps `instructions`
+       * — the system prompt — for `/expanded`, which needs EDIT.
+       *
+       * This is pinned here because it was broken: the route passed the handler
+       * by reference, so Express supplied `next` where the handler expected an
+       * `expandProperties` flag, and a function is truthy. The whitelist branch
+       * had never run once. Found by a review of this file's own neighbours. */
+      const asViewer = await pageB.evaluate(async (agentId) => {
+        const refresh = await fetch('/api/auth/refresh', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+        const { token } = (await refresh.json()) as { token?: string };
+        const response = await fetch(`/api/agents/${agentId}`, {
+          headers: { Authorization: `Bearer ${token ?? ''}` },
+        });
+        return (await response.json()) as Record<string, unknown>;
+      }, sharedId);
+
+      /* The half that proves the read worked at all — without it, "no
+       * instructions" is also what a 404 looks like. */
+      expect(asViewer.name).toBe(sharedName);
+      expect(asViewer.instructions).toBeUndefined();
+      expect(asViewer.versions).toBeUndefined();
+
+      /* The author, on the endpoint meant for editing, still gets them. */
+      const asAuthor = await page.evaluate(
+        async ({ agentId, authToken }) => {
+          const response = await fetch(`/api/agents/${agentId}/expanded`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+          });
+          return (await response.json()) as Record<string, unknown>;
+        },
+        { agentId: sharedId, authToken: token },
+      );
+      expect(asAuthor.instructions).toBe('Reply through the mock model.');
       /* The control. Same screen, same search box, same person — the only
        * difference is that this one was never shared. */
       await expectNoMarketplaceHit(pageB, privateName);

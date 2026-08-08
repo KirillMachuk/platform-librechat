@@ -62,7 +62,12 @@ router.get(
     requiredPermission: PermissionBits.VIEW,
     resourceIdParam: 'id',
   }),
-  v1.getAgent,
+  /* Wrapped, not passed by reference. Express calls a handler as
+   * `(req, res, next)`, and this one's third parameter is `expandProperties`,
+   * so `next` — a function, and therefore truthy — switched the full document
+   * on. The basic-info branch below it had never run, and a reader with VIEW
+   * received the agent's instructions, versions and tool arguments. */
+  (req, res) => v1.getAgent(req, res),
 );
 
 /**
