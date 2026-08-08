@@ -160,7 +160,10 @@ const LoginForm: React.FC<TLoginFormProps> = ({ onSubmit, startupConfig, error, 
            *  own, so the patch that used to live here is gone. */
           className="mt-1 h-12 w-full text-[15px] sm:h-10 sm:text-sm"
         >
-          {isSubmitting ? <Spinner /> : localize('com_auth_continue')}
+          {/* «Войти», as the prototype's sign-in card reads. «Продолжить» says
+              nothing about what the button does and belongs to multi-step flows
+              — registration and password reset keep it. */}
+          {isSubmitting ? <Spinner /> : localize('com_auth_sign_in')}
         </Button>
         {startupConfig.passwordResetEnabled && (
           <a
