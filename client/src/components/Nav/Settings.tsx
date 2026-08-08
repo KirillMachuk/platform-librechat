@@ -203,7 +203,7 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
           <div className={cn('fixed inset-0 flex w-screen items-center justify-center p-4')}>
             <DialogPanel
               className={cn(
-                'max-h-[90vh] overflow-hidden rounded-xl rounded-b-lg bg-background pb-6 shadow-2xl backdrop-blur-2xl animate-in sm:rounded-2xl md:w-[840px]',
+                'max-h-[90vh] overflow-hidden rounded-xl rounded-b-lg bg-background pb-6 shadow-lg backdrop-blur-2xl animate-in sm:rounded-2xl md:w-[840px]',
               )}
             >
               <DialogTitle
@@ -254,7 +254,13 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
                              second: the other order hangs `[data-state=active]`
                              on the svg, which never carries it. */
                           isSmallScreen
-                            ? 'flex-1 justify-center text-nowrap px-3 text-text-secondary radix-state-active:bg-ring-primary-soft radix-state-active:text-text-accent'
+                            ? /* `whitespace-nowrap`, not `text-nowrap`: twMerge
+                               files anything `text-*` it does not recognise as
+                               a size under text COLOUR, so the real colour two
+                               classes later dropped it and the phone rail wrapped
+                               its labels. Same trap as `duration-[120ms]` — the
+                               class survives the source and dies in the merge. */
+                              'flex-1 justify-center whitespace-nowrap px-3 text-text-secondary radix-state-active:bg-ring-primary-soft radix-state-active:text-text-accent'
                             : 'bg-transparent text-text-primary radix-state-active:bg-ring-primary-soft radix-state-active:text-text-accent [&>svg]:text-text-secondary [&>svg]:radix-state-active:text-text-accent',
                         )}
                         value={value}
