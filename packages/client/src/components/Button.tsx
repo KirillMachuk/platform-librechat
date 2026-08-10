@@ -59,33 +59,27 @@ const buttonVariants: (
         outline:
           'border border-border-control bg-transparent text-text-primary hover:bg-surface-hover',
         /**
-         * The filled neutral button — a real button that is not the main one.
+         * The white button with an ink edge — a real button that is not the
+         * main one.
          *
          * `outline` cannot play this part on a form: a transparent box with a
          * `control` border is the same thing a text field is, and on the
-         * sign-in card the submit button and the two inputs became one
+         * sign-in card the submit and the two inputs became one
          * indistinguishable stack ("кнопка войти сейчас по дизайну как поля
-         * ввода"). A fill is what separates a control you press from a control
-         * you type into, which is why every mature system keeps this rung —
-         * Material's filled tonal, Apple's gray, shadcn's own `secondary`.
+         * ввода"). What separates them is the edge: the fields wear `control`
+         * (#8c8c8c, 3.4:1), this wears `ink` — 17.4:1 in light, and the same
+         * value the primary button is FILLED with, so the two read as one
+         * pair, filled and outlined, the way a primary/secondary pair should.
          *
-         * The fill alone is only 1.23:1 on a card, so the `control` border
-         * stays and carries 1.4.11's 3:1. Text on the fill measures 14.6:1 in
-         * light and 11.8:1 in dark.
+         * A grey fill was tried first and the owner rejected it on sight; it
+         * also needed a token pair of its own, since borrowing `active` gave
+         * 1.05:1 against the card in dark. White plus a strong edge needs
+         * neither.
          *
-         * Its own token pair rather than the hover/active surfaces: those name
-         * STATES of a surface, and a filled button needs a resting tone and a
-         * hover tone of its own. Borrowing `active` for the resting tone was
-         * tried and measured — in dark it lands 1.05:1 against the card and
-         * the button dissolved back into the fields it was meant to differ
-         * from. `--c-btn-fill` / `--c-btn-fill-hov`, after `--c-acc` /
-         * `--c-acc-hov`.
-         *
-         * It used to be upstream's shadcn HSL tokens, off our `--c-*` layer
-         * entirely, at one call site.
+         * Not `acc`: canon §1.1 keeps one accent, and an accent-edged button
+         * beside an ink-filled one competes for the same job.
          */
-        secondary:
-          'border border-border-control bg-btn-fill text-text-primary hover:bg-btn-fill-hov',
+        secondary: 'border border-ink bg-surface-primary text-text-primary hover:bg-surface-hover',
         ghost: 'hover:bg-surface-hover hover:text-text-primary',
         link: 'text-primary underline-offset-4 hover:underline',
         /** Canon §1.1/§6.1: the main action is ink, never a colour; hover is

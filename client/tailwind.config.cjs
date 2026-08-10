@@ -159,10 +159,6 @@ module.exports = {
         'header-primary': 'var(--header-primary)',
         'header-hover': 'var(--header-hover)',
         'header-button-hover': 'var(--header-button-hover)',
-        /* Покой и наведение заливной кнопки (§2). Отдельная пара, а не
-           состояние поверхности: см. комментарий у --c-btn-fill. */
-        'btn-fill': 'var(--c-btn-fill)',
-        'btn-fill-hov': 'var(--c-btn-fill-hov)',
         'surface-active': 'var(--surface-active)',
         'surface-active-alt': 'var(--surface-active-alt)',
         'surface-hover': 'var(--surface-hover)',
