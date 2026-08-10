@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { OpenIDIcon, useToastContext } from '@librechat/client';
+import { Users } from 'lucide-react';
+import { useToastContext } from '@librechat/client';
 import { ErrorTypes, registerPage } from 'librechat-data-provider';
 import { useOutletContext, useSearchParams, useLocation } from 'react-router-dom';
 import type { TLoginLayoutContext } from '~/common';
@@ -85,9 +86,9 @@ function Login() {
             oauthPath="openid"
             Icon={() =>
               startupConfig.openidImageUrl ? (
-                <img src={startupConfig.openidImageUrl} alt="OpenID Logo" className="h-5 w-5" />
+                <img src={startupConfig.openidImageUrl} alt="" className="h-5 w-5" />
               ) : (
-                <OpenIDIcon />
+                <Users className="icon-sm" aria-hidden="true" />
               )
             }
             label={startupConfig.openidLabel}

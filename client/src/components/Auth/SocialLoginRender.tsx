@@ -1,8 +1,8 @@
+import { Users } from 'lucide-react';
 import { TStartupConfig } from 'librechat-data-provider';
 import {
   GoogleIcon,
   FacebookIcon,
-  OpenIDIcon,
   GithubIcon,
   DiscordIcon,
   AppleIcon,
@@ -84,11 +84,15 @@ function SocialLoginRender({
         enabled={startupConfig.openidLoginEnabled}
         serverDomain={startupConfig.serverDomain}
         oauthPath="openid"
+        /* The book's sign-in card draws this button with the owner-picked
+           `users` glyph — people, because the button signs a PERSON in through
+           their company. The OpenID mark it used to fall back on is a protocol
+           logo employees have never seen. An admin-configured image still wins. */
         Icon={() =>
           startupConfig.openidImageUrl ? (
-            <img src={startupConfig.openidImageUrl} alt="OpenID Logo" className="h-5 w-5" />
+            <img src={startupConfig.openidImageUrl} alt="" className="h-5 w-5" />
           ) : (
-            <OpenIDIcon />
+            <Users className="icon-sm" aria-hidden="true" />
           )
         }
         label={startupConfig.openidLabel}
