@@ -4,6 +4,7 @@ import { ErrorMessage } from '~/components/Auth/ErrorMessage';
 import { TranslationKeys, useLocalize } from '~/hooks';
 import SocialLoginRender from './SocialLoginRender';
 import { BlinkAnimation } from './BlinkAnimation';
+import RobotScene from './RobotScene';
 import { Banner } from '../Banners';
 import Footer from './Footer';
 
@@ -119,10 +120,11 @@ function AuthLayout({
         <Footer startupConfig={startupConfig} />
       </div>
 
-      {/* The picture side. A placeholder until the owner picks the product
-          shot: the canvas tone one step below the page, the mark barely
-          there. Swapping in the real image is replacing this div's content
-          with an <img class="absolute inset-0 h-full w-full object-cover">. */}
+      {/* The picture side: the brand robot from the landing (owner's pick
+          10.08 over the 21st.dev orb — that one had no stated license and
+          drags three.js in). The faint wordmark stays underneath as the
+          resting backdrop: it is what shows while the scene loads, if WebGL
+          is unavailable, and for prefers-reduced-motion. */}
       <div className="relative hidden select-none bg-surface-secondary lg:block" aria-hidden="true">
         <div className="absolute inset-0 flex items-center justify-center">
           <img
@@ -130,6 +132,9 @@ function AuthLayout({
             alt=""
             className="h-8 w-auto object-contain opacity-[0.12] dark:invert"
           />
+        </div>
+        <div className="absolute inset-0">
+          <RobotScene scene="assets/spline/robot-v1.splinecode" />
         </div>
       </div>
     </div>
