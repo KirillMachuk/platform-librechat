@@ -279,6 +279,7 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | Sharing a prompt with one named person | e2e | — | gap |
 | MCP server selection and ephemeral servers | e2e | `e2e/specs/mock/mcp.spec.ts` | covered |
 | Creating an MCP server: On-Behalf-Of auth saves without a live connection, plain auth to the same kind of URL is refused | e2e | `e2e/specs/permissions/mcp-server-creation.spec.ts` | covered |
+| Minting a remote-agent API key shows it once in full, and the listing can never hand it back | e2e | `e2e/specs/permissions/remote-agent-keys.spec.ts#the key is shown once on creation, and the list can never hand it back` | covered |
 | Configured skills load read-only for every authenticated user (API) | e2e | `e2e/specs/mock/deployment-skills.spec.ts#loads configured deployment skills for every authenticated user as read-only` | covered |
 | A model spec sees only the skills scoped to it (API) | e2e | `e2e/specs/mock/model-spec-skills.spec.ts#loads accessible configured skills and skips missing or inaccessible names` | covered |
 | A configured skill is listed, its file list is fetched on demand, and it offers no Edit | e2e | `e2e/specs/mock/skills.spec.ts#a configured skill is listed, its files open, and it stays read-only` | covered |
@@ -336,8 +337,8 @@ is what to cover.
 **On in the profile, and exercised by nothing.** These were switched on so the behaviour behind
 them could be reached, and then not reached. Written down because a profile that enables
 something without covering it is exactly the quiet claim this map exists to prevent:
-`MCP_SERVERS.USE`/`SHARE`/`SHARE_PUBLIC`, `REMOTE_AGENTS.USE`/`CREATE`/`SHARE_PUBLIC`, and
-`SKILLS.SHARE`/`SHARE_PUBLIC`. Nothing mints a remote-agent key or shares a skill.
+`MCP_SERVERS.USE`/`SHARE`/`SHARE_PUBLIC`, `REMOTE_AGENTS.SHARE_PUBLIC`, and
+`SKILLS.SHARE`/`SHARE_PUBLIC`. Nothing shares a skill.
 
 `MCP_SERVERS.CREATE` and `MCP_SERVERS.CONFIGURE_OBO` are now covered (the row above) —
 On-Behalf-Of is the half of server creation this profile can prove hermetically, since
@@ -348,6 +349,14 @@ the stand's own config: `CONFIGURE_OBO` lets any user configure a server that mi
 tokens on behalf of whoever uses it, and `REMOTE_AGENTS.CREATE` mints a long-lived API key that
 reaches agents outside the browser session — the map having a test does not by itself answer
 whether the deployment wants either turned on.
+
+`REMOTE_AGENTS.CREATE` is covered too, and it is not where its name suggests: "Remote Access"
+in the agent builder is `REMOTE_AGENTS.SHARE`, a grant-access dialog that mints nothing.
+Minting lives in Settings → Data controls → Agent API Keys. The 403/201 split is already
+proven server-side by supertest, and this profile has the permission on with no second profile
+to turn it off against — so the flow test does not claim to prove the gate. What it proves is
+the click-through and the promise the screen makes while a person uses it: the key is returned
+once, in full, and the listing carries neither it nor its hash.
 
 Covered by a flow, not just seeded: `PROMPTS.SHARE`/`SHARE_PUBLIC`, `AGENTS.SHARE`/`SHARE_PUBLIC`,
 `MARKETPLACE.USE`, `REMOTE_AGENTS.SHARE`.

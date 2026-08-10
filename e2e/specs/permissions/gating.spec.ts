@@ -76,6 +76,10 @@ test.describe('role permissions gate the interface', () => {
     expect(seeded.MCP_SERVERS?.CONFIGURE_OBO).toBe(true);
     expect(seeded.REMOTE_AGENTS?.USE).toBe(true);
     expect(seeded.REMOTE_AGENTS?.SHARE).toBe(true);
+    /* The one that mints a long-lived key reaching agents outside the browser
+     * session. `remote-agent-keys.spec.ts` walks that flow; this line is what
+     * says the profile it walks in really has the permission on. */
+    expect(seeded.REMOTE_AGENTS?.CREATE).toBe(true);
 
     /* And off, on purpose. Sharing with a named person needs the people picker;
      * sharing with everyone does not, and everyone-sharing is all this

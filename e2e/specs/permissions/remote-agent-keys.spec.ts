@@ -117,8 +117,13 @@ test.describe('minting a key for a remote agent', () => {
       const created = (await mintedResponse.json()) as CreatedKey;
       createdId = created.id;
       expect(created.name).toBe(name);
-      /* The secret itself, and only here. */
-      expect(created.key, 'creation must return the raw key').toMatch(/^sk-/);
+      /* The secret itself, and only here — matched against its whole shape,
+       * `sk-` plus 32 random bytes as hex. Anchoring on the `sk-` prefix
+       * alone was not enough and a mutation proved it: `keyPrefix` is the
+       * key's own first 8 characters and therefore starts with `sk-` too, so
+       * a build that returned the prefix in place of the key — handing every
+       * caller a truncated, useless secret — passed that assertion. */
+      expect(created.key, 'creation must return the whole raw key').toMatch(/^sk-[0-9a-f]{64}$/);
       expect(created.keyPrefix).toBe(created.key?.slice(0, 8));
 
       /* The screen says so out loud — the warning is the whole reason the
