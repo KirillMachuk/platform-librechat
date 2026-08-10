@@ -192,6 +192,9 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
+| A file row keeps the name its owner gave it | unit | `client/src/components/SidePanel/Files/__tests__/FileNameCell.test.tsx#keeps the name the person gave the file` | covered |
+| A file row says underneath what the document is | unit | `client/src/components/SidePanel/Files/__tests__/FileNameCell.test.tsx#says underneath what the document turned out to be` | covered |
+| A file nothing was extracted from gets no second line | unit | `client/src/components/SidePanel/Files/__tests__/FileNameCell.test.tsx#adds no second line to a file nothing was extracted from` | covered |
 | Panel opens with the artifact from a chat card | unit | `client/src/components/Chat/Messages/Content/Parts/__tests__/ArtifactRouting.test.tsx` | covered |
 | Panel closes and clears the current artifact | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
 | Header copy and close act on the shown file | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |

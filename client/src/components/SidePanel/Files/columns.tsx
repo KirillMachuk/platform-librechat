@@ -3,9 +3,9 @@ import { useMediaQuery } from '@librechat/client';
 import type { TableColumn } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import ImagePreview from '~/components/Chat/Input/Files/ImagePreview';
+import { formatDate, getFileType, buildDocumentCard } from '~/utils';
 import FilePreview from '~/components/Chat/Input/Files/FilePreview';
 import { TranslationKeys, useLocalize } from '~/hooks';
-import { formatDate, getFileType } from '~/utils';
 import { Paperclip } from '~/components/icons';
 
 export type TFileRow = TFile & { id: string };
@@ -52,6 +52,10 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
       }
 
       const fileType = getFileType(file.type);
+      /* What the document IS, under the name the person gave it — the answer a filename like
+       * "Скан_2026_final(3).pdf" withholds. The name itself is never touched: people name files
+       * the way they look for them. Nothing extracted, nothing shown. */
+      const card = buildDocumentCard(file.docMetadata);
       return (
         /**
          * The type badge is 40 in the composer, where a handful of chips have
@@ -59,9 +63,19 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
          * 44 — and took the space the filename needed. 28 keeps the badge
          * readable and lets the row land on the scale.
          */
-        <div className="flex gap-2">
+        /* `min-w-0` on BOTH levels: a flex item defaults to min-width:auto, so without it the
+         * text refuses to shrink and a long counterparty name runs past the panel edge
+         * instead of ending in an ellipsis. */
+        <div className="flex min-w-0 gap-2">
           {fileType && <FilePreview fileType={fileType} className="relative size-7" file={file} />}
-          <span className="self-center truncate">{file.filename}</span>
+          <div className="flex min-w-0 flex-col justify-center">
+            <span className="truncate">{file.filename}</span>
+            {card && (
+              <span className="truncate text-xs text-text-secondary" title={card}>
+                {card}
+              </span>
+            )}
+          </div>
         </div>
       );
     },
