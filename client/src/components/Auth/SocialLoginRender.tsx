@@ -7,7 +7,7 @@ import {
   AppleIcon,
   SamlIcon,
 } from '@librechat/client';
-import { Users } from '~/components/icons';
+import { LockIcon } from '~/components/icons';
 import SocialButton from './SocialButton';
 import { useLocalize } from '~/hooks';
 
@@ -84,15 +84,16 @@ function SocialLoginRender({
         enabled={startupConfig.openidLoginEnabled}
         serverDomain={startupConfig.serverDomain}
         oauthPath="openid"
-        /* The book's sign-in card draws this button with the owner-picked
-           `users` glyph — people, because the button signs a PERSON in through
-           their company. The OpenID mark it used to fall back on is a protocol
-           logo employees have never seen. An admin-configured image still wins. */
+        /* A padlock, the Cloudflare "Continue with SSO" pattern the owner
+           pointed at (10.08): the glyph says "secured corporate door", which
+           reads better than both the people icon it briefly wore and the
+           OpenID protocol mark employees have never seen. An admin-configured
+           image still wins. */
         Icon={() =>
           startupConfig.openidImageUrl ? (
             <img src={startupConfig.openidImageUrl} alt="" className="h-5 w-5" />
           ) : (
-            <Users className="icon-sm" aria-hidden="true" />
+            <LockIcon className="icon-sm" aria-hidden="true" />
           )
         }
         label={startupConfig.openidLabel}
