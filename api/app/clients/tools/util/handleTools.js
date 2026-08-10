@@ -139,6 +139,31 @@ const loadToolWithAuth = (userId, authFields, ToolConstructor, options = {}) => 
  * @param {string} toolKey
  * @returns {Array<string>}
  */
+/**
+ * Resolves the FILE_CITATIONS permission for the requesting user. Every document tool needs
+ * the same answer, and it must fail closed: a role lookup that throws denies citations rather
+ * than granting them. Returns undefined when there is no user on the request, leaving the
+ * decision to the citation processor's own check (the upstream default).
+ * @param {ServerRequest} [req]
+ * @returns {Promise<boolean | undefined>}
+ */
+const resolveFileCitations = async (req) => {
+  if (req?.user == null) {
+    return undefined;
+  }
+  try {
+    return await checkAccess({
+      user: req.user,
+      permissionType: PermissionTypes.FILE_CITATIONS,
+      permissions: [Permissions.USE],
+      getRoleByName,
+    });
+  } catch (error) {
+    logger.error('[handleTools] FILE_CITATIONS permission check failed:', error);
+    return false;
+  }
+};
+
 const getAuthFields = (toolKey) => {
   return manifestToolMap[toolKey]?.authConfig.map((auth) => auth.authField) ?? [];
 };
@@ -315,47 +340,16 @@ const loadTools = async ({
           dynamicToolContextMap[tool] = toolContext;
         }
 
-        /** @type {boolean | undefined} Check if user has FILE_CITATIONS permission */
-        let fileCitations;
-        if (fileCitations == null && options.req?.user != null) {
-          try {
-            fileCitations = await checkAccess({
-              user: options.req.user,
-              permissionType: PermissionTypes.FILE_CITATIONS,
-              permissions: [Permissions.USE],
-              getRoleByName,
-            });
-          } catch (error) {
-            logger.error('[handleTools] FILE_CITATIONS permission check failed:', error);
-            fileCitations = false;
-          }
-        }
-
         return createFileSearchTool({
           userId: user,
           files,
           entity_id: agent?.id,
-          fileCitations,
+          fileCitations: await resolveFileCitations(options.req),
         });
       };
       continue;
     } else if (tool === Tools.library_search) {
       requestedTools[tool] = async () => {
-        /** @type {boolean | undefined} */
-        let fileCitations;
-        if (options.req?.user != null) {
-          try {
-            fileCitations = await checkAccess({
-              user: options.req.user,
-              permissionType: PermissionTypes.FILE_CITATIONS,
-              permissions: [Permissions.USE],
-              getRoleByName,
-            });
-          } catch (error) {
-            logger.error('[handleTools] FILE_CITATIONS permission check failed:', error);
-            fileCitations = false;
-          }
-        }
         /* Documents attached to THIS chat, so library_search covers them alongside the whole
          * library (the "search files" toggle arms library_search alone). applyConversationFileContext
          * merges this conversation's embedded, non-library file_ids into this same resource slot;
@@ -365,7 +359,7 @@ const loadTools = async ({
         return createLibrarySearchTool({
           userId: user,
           tenantId: options.req?.user?.tenantId,
-          fileCitations,
+          fileCitations: await resolveFileCitations(options.req),
           conversationFileIds,
         });
       };
@@ -379,6 +373,7 @@ const loadTools = async ({
           userId: user,
           tenantId: options.req?.user?.tenantId,
           req: options.req,
+          fileCitations: await resolveFileCitations(options.req),
           conversationFileIds: options.tool_resources?.[EToolResources.file_search]?.file_ids ?? [],
         });
       continue;
