@@ -15,6 +15,16 @@ const UNKNOWN_DOC_TYPE = 'иное';
 const CARD_PARTIES_MAX = 2;
 
 /**
+ * Потолок длины строки. Он существует не ради вкуса, а ради вёрстки: колонка имени задана
+ * через `min-width: 46%`, а таблица раскладывается автоматически — строка в одну линию
+ * (`truncate` ставит `white-space: nowrap`) РАСТЯГИВАЕТ колонку вместо того, чтобы обрезаться,
+ * и полное юрлицо на 88 знаков уезжало за край панели. Резать здесь, а не менять раскладку
+ * общей таблицы: та обслуживает все списки продукта, и её ширины — предмет отдельного трека.
+ * Полное значение остаётся в подсказке ряда.
+ */
+const CARD_MAX_CHARS = 72;
+
+/**
  * One line describing what a document IS, under its own filename — kind, counterparties, and
  * the date it was drawn up, from facts extracted at indexing time.
  *
@@ -44,5 +54,6 @@ export function buildDocumentCard(meta?: TDocMetadata): string {
   if (date) {
     parts.push(date);
   }
-  return parts.join(' · ');
+  const card = parts.join(' · ');
+  return card.length > CARD_MAX_CHARS ? `${card.slice(0, CARD_MAX_CHARS - 1).trimEnd()}…` : card;
 }

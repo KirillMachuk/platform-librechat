@@ -63,7 +63,10 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
          * 44 — and took the space the filename needed. 28 keeps the badge
          * readable and lets the row land on the scale.
          */
-        <div className="flex gap-2">
+        /* `min-w-0` on BOTH levels: a flex item defaults to min-width:auto, so without it the
+         * text refuses to shrink and a long counterparty name runs past the panel edge
+         * instead of ending in an ellipsis. */
+        <div className="flex min-w-0 gap-2">
           {fileType && <FilePreview fileType={fileType} className="relative size-7" file={file} />}
           <div className="flex min-w-0 flex-col justify-center">
             <span className="truncate">{file.filename}</span>

@@ -69,6 +69,28 @@ describe('buildDocumentCard', () => {
     expect(card).toBe('Договор');
   });
 
+  /* Вёрстка: колонка имени задана через min-width, а строка в одну линию растягивает её
+   * вместо обрезки — полное юрлицо уезжало за край панели (замерено в DOM: ячейка 827px
+   * при панели 720). Полное значение остаётся в подсказке ряда. */
+  it('cuts a card too long for the row instead of pushing it off the panel', () => {
+    const card = buildDocumentCard(
+      meta({
+        parties: ['Общество с ограниченной ответственностью «Северо-Западная Компания»'],
+        primaryDate: '2026-01-09',
+      }),
+    );
+
+    expect(card.length).toBeLessThanOrEqual(72);
+    expect(card.endsWith('…')).toBe(true);
+  });
+
+  it('leaves a card that fits exactly as it is', () => {
+    const card = buildDocumentCard(meta());
+
+    expect(card.endsWith('…')).toBe(false);
+    expect(card).toContain('ООО «Ромашка»');
+  });
+
   it('ignores blank counterparties left by extraction', () => {
     const card = buildDocumentCard(meta({ parties: ['  ', ''], primaryDate: null }));
 
