@@ -122,10 +122,33 @@ function AuthLayout({
 
       {/* The picture side: the brand robot from the landing (owner's pick
           10.08 over the 21st.dev orb — that one had no stated license and
-          drags three.js in). The faint wordmark stays underneath as the
+          drags three.js in). Same canvas colour as the form side (owner
+          10.08 late: one background for both halves) — what sets this half
+          apart is the landing's translucent 60px grid, fading upward the
+          way the hero draws it. The faint wordmark stays underneath as the
           resting backdrop: it is what shows while the scene loads, if WebGL
           is unavailable, and for prefers-reduced-motion. */}
-      <div className="relative hidden select-none bg-surface-secondary lg:block" aria-hidden="true">
+      <div className="relative hidden select-none bg-presentation lg:block" aria-hidden="true">
+        {/* The mask sits on the <svg>, not the <rect> (Chromium ignores CSS
+            masks on SVG children), and it is ONE linear layer on purpose:
+            multiple mask layers composite as a union, which is how the
+            landing's two-layer recipe quietly cancelled itself here. The
+            fade is the point — without it the grid reads as a spreadsheet,
+            with it the cells dissolve toward the top. */}
+        <svg
+          className="pointer-events-none absolute inset-0 h-full w-full text-border-medium"
+          style={{
+            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 55%)',
+            maskImage: 'linear-gradient(to bottom, transparent 0%, black 55%)',
+          }}
+        >
+          <defs>
+            <pattern id="auth-grid" width="60" height="60" patternUnits="userSpaceOnUse">
+              <path d="M 60 0 L 0 0 0 60" fill="none" stroke="currentColor" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect fill="url(#auth-grid)" width="100%" height="100%" />
+        </svg>
         <div className="absolute inset-0 flex items-center justify-center">
           <img
             src="assets/logo.svg"

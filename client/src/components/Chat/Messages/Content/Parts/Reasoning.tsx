@@ -2,7 +2,7 @@ import { memo, useMemo, useState, useCallback, useEffect, useRef, useId } from '
 import { useAtomValue } from 'jotai';
 import { ContentTypes } from 'librechat-data-provider';
 import type { MouseEvent, FocusEvent } from 'react';
-import { ThinkingContent, ThinkingButton, FloatingThinkingBar } from './Thinking';
+import { ThinkingContent, ThinkingButton, ThinkingCard, FloatingThinkingBar } from './Thinking';
 import { useLocalize, useExpandCollapse } from '~/hooks';
 import { showThinkingAtom } from '~/store/showThinking';
 import { useMessageContext } from '~/Providers';
@@ -113,7 +113,7 @@ const Reasoning = memo(({ reasoning, isLast }: ReasoningProps) => {
       onBlur={handleBlur}
     >
       <div className="group/thinking-container">
-        <div className="mb-2 pb-2 pt-2">
+        <ThinkingCard>
           <ThinkingButton
             isExpanded={isExpanded}
             onClick={handleClick}
@@ -121,26 +121,26 @@ const Reasoning = memo(({ reasoning, isLast }: ReasoningProps) => {
             content={reasoningText}
             contentId={contentId}
           />
-        </div>
-        <div
-          id={contentId}
-          role="group"
-          aria-label={label}
-          aria-hidden={!isExpanded || undefined}
-          className={cn(nextType !== ContentTypes.THINK && isExpanded && 'mb-4')}
-          style={expandStyle}
-        >
-          <div className="relative overflow-hidden" ref={expandRef}>
-            <ThinkingContent>{reasoningText}</ThinkingContent>
-            <FloatingThinkingBar
-              isVisible={isBarVisible && isExpanded}
-              isExpanded={isExpanded}
-              onClick={handleClick}
-              content={reasoningText}
-              contentId={contentId}
-            />
+          <div
+            id={contentId}
+            role="group"
+            aria-label={label}
+            aria-hidden={!isExpanded || undefined}
+            className={cn(nextType !== ContentTypes.THINK && isExpanded && 'mb-1')}
+            style={expandStyle}
+          >
+            <div className="relative overflow-hidden" ref={expandRef}>
+              <ThinkingContent>{reasoningText}</ThinkingContent>
+              <FloatingThinkingBar
+                isVisible={isBarVisible && isExpanded}
+                isExpanded={isExpanded}
+                onClick={handleClick}
+                content={reasoningText}
+                contentId={contentId}
+              />
+            </div>
           </div>
-        </div>
+        </ThinkingCard>
       </div>
     </div>
   );

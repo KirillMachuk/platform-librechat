@@ -14,19 +14,29 @@ import { cn } from '~/utils';
 export const ThinkingContent: FC<{
   children: React.ReactNode;
 }> = memo(({ children }) => {
-  /* One step BELOW the conversation, not the raw fontSizeAtom class it wore
-   * before: text-base is 16px while the canon message body is 15px via
-   * --markdown-font-size, so the thoughts rendered LARGER than the answer
-   * they explain. --thinking-font-size (style.css) is derived from the same
-   * variable, so it follows the user's size setting and stays smaller. */
+  /* The BODY of the book's .think card: t3 text one step below the
+   * conversation (--thinking-font-size derives from the message size, so
+   * the two can never diverge), behind a dashed hairline the header sits
+   * above. The card itself — border, radius 12, panel fill — is drawn by
+   * ThinkingCard so header and body live inside ONE box, as the book draws
+   * it. pb-8 is clearance for the floating collapse/copy bar, which the
+   * book does not have but the product keeps. */
   return (
-    <div className="relative rounded-lg border border-border-light bg-surface-secondary p-3 pb-8 text-text-secondary">
+    <div className="relative border-t border-dashed border-border-light px-3 pb-8 pt-[9px] text-text-tertiary">
       <p className="whitespace-pre-wrap text-[length:var(--thinking-font-size)] leading-[1.55]">
         {children}
       </p>
     </div>
   );
 });
+
+/** The book's «Мысли» card (§6.13, `.think`): ONE hairline box, radius 12,
+ *  panel fill, holding both the toggle header and the body. */
+export const ThinkingCard: FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="mb-2.5 overflow-hidden rounded-xl border border-border-light bg-surface-secondary">
+    {children}
+  </div>
+);
 
 /**
  * ThinkingButton - Toggle button for expanding/collapsing thinking content
@@ -67,29 +77,27 @@ export const ThinkingButton = memo(
 
     return (
       <div className="group/thinking flex w-full items-center justify-between gap-2">
+        {/* The book's header row (§6.13 `.think>button`): 13-scale t2 text,
+         * the lightbulb 16px in the ACCENT — one of the few places the
+         * owner's petrol list keeps it — and the chevron waiting at the
+         * right edge, turning over when the card opens. The old
+         * hover-swaps-icon trick is gone: the book draws both at once. */}
         <button
           type="button"
           onClick={onClick}
           aria-expanded={isExpanded}
           aria-controls={contentId}
-          /* Same derived size as the content it toggles: the whole reasoning
-           * block — header and thoughts — sits a step below the answer. */
-          className="group/button flex flex-1 items-center justify-start rounded-lg text-[length:var(--thinking-font-size)] leading-[18px]"
+          className="group/button flex flex-1 items-center gap-2 px-3 py-[9px] text-left text-[length:var(--thinking-font-size)] leading-[18px] text-text-secondary"
         >
-          <span className="relative mr-1.5 inline-flex h-[18px] w-[18px] items-center justify-center">
-            <Lightbulb
-              className="icon-sm absolute text-text-secondary opacity-100 transition-opacity group-hover/button:opacity-0"
-              aria-hidden="true"
-            />
-            <ChevronDown
-              className={cn(
-                'icon-sm absolute transform-gpu text-text-primary opacity-0 transition-all duration-300 group-hover/button:opacity-100',
-                isExpanded && 'rotate-180',
-              )}
-              aria-hidden="true"
-            />
-          </span>
-          {label}
+          <Lightbulb className="icon-sm shrink-0 text-text-accent" aria-hidden="true" />
+          <span className="flex-1 truncate">{label}</span>
+          <ChevronDown
+            className={cn(
+              'h-3.5 w-3.5 shrink-0 text-text-tertiary transition-transform duration-150',
+              isExpanded && 'rotate-180',
+            )}
+            aria-hidden="true"
+          />
         </button>
         {content && showCopyButton && (
           <button
@@ -300,7 +308,7 @@ const Thinking: React.ElementType = memo(({ children }: { children: React.ReactN
       onFocus={handleFocus}
       onBlur={handleBlur}
     >
-      <div className="mb-4 pb-2 pt-2">
+      <ThinkingCard>
         <ThinkingButton
           isExpanded={isExpanded}
           onClick={handleClick}
@@ -308,26 +316,25 @@ const Thinking: React.ElementType = memo(({ children }: { children: React.ReactN
           content={textContent}
           contentId={contentId}
         />
-      </div>
-      <div
-        id={contentId}
-        role="group"
-        aria-label={label}
-        aria-hidden={!isExpanded || undefined}
-        className={cn(isExpanded && 'mb-8')}
-        style={expandStyle}
-      >
-        <div className="relative overflow-hidden" ref={expandRef}>
-          <ThinkingContent>{children}</ThinkingContent>
-          <FloatingThinkingBar
-            isVisible={isBarVisible && isExpanded}
-            isExpanded={isExpanded}
-            onClick={handleClick}
-            content={textContent}
-            contentId={contentId}
-          />
+        <div
+          id={contentId}
+          role="group"
+          aria-label={label}
+          aria-hidden={!isExpanded || undefined}
+          style={expandStyle}
+        >
+          <div className="relative overflow-hidden" ref={expandRef}>
+            <ThinkingContent>{children}</ThinkingContent>
+            <FloatingThinkingBar
+              isVisible={isBarVisible && isExpanded}
+              isExpanded={isExpanded}
+              onClick={handleClick}
+              content={textContent}
+              contentId={contentId}
+            />
+          </div>
         </div>
-      </div>
+      </ThinkingCard>
     </div>
   );
 });

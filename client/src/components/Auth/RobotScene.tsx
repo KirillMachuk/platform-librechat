@@ -77,12 +77,13 @@ export default function RobotScene({ scene }: { scene: string }) {
    * fits vertically), and the scene was framed for the landing's wide hero —
    * full column height cropped the arms at this half-page aspect.
    * (setZoom was tried first and the scene's own camera ignored it.)
-   * 85% height keeps the arms in frame; bottom-anchoring puts the scene's
-   * own leg cut-off ON the page edge, where a crop reads as composition —
-   * centered, the same cut floated mid-air as a hard artefact. */
+   * 76% height (the owner asked the 85% first cut down another tenth) keeps
+   * the arms in frame; bottom-anchoring puts the scene's own leg cut-off ON
+   * the page edge, where a crop reads as composition — centered, the same
+   * cut floated mid-air as a hard artefact. */
   return (
     <div className="flex h-full w-full items-end justify-center">
-      <div className="h-[85%] w-full">
+      <div className="h-[76%] w-full">
         <canvas
           ref={canvasRef}
           className="h-full w-full transition-opacity duration-500"

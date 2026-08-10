@@ -2573,6 +2573,13 @@ html {
    top of that is exactly the double glow this rule replaces. Containers
    focused programmatically (tabindex=-1: dialogs, popovers, main regions)
    are not controls and draw nothing. */
+/* Canon §6.14, owner 10.08 late: text selection is one of the few places
+   the brand petrol lives — the `sel` token existed unclaimed since the
+   token audit; this is its consumer. */
+::selection {
+  background: var(--c-sel);
+}
+
 :focus {
   outline: none;
 }

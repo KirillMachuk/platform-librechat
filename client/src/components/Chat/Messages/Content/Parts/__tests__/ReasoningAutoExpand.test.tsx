@@ -22,6 +22,9 @@ jest.mock('../Thinking', () => ({
   ThinkingContent: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="thinking-content">{children}</div>
   ),
+  ThinkingCard: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="thinking-card">{children}</div>
+  ),
   ThinkingButton: ({
     isExpanded,
     onClick,
