@@ -28,8 +28,10 @@ const MAX_AGENTS = 10;
 const AgentChain: React.FC<AgentChainProps> = ({ field, currentAgentId }) => {
   const localize = useLocalize();
   const [newAgentId, setNewAgentId] = useState('');
-  const agentsMap = useAgentsMapContext() || {};
-  const agentIds = field.value || [];
+  const agentsMapContext = useAgentsMapContext();
+  const agentsMap = useMemo(() => agentsMapContext || {}, [agentsMapContext]);
+  const fieldValue = field.value;
+  const agentIds = useMemo(() => fieldValue || [], [fieldValue]);
 
   const agents = useMemo(() => Object.values(agentsMap), [agentsMap]);
 

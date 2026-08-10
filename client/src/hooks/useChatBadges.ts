@@ -2,8 +2,8 @@ import { useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
 import { useRecoilCallback } from 'recoil';
 import type { BadgeItem } from '~/common';
-import { MessageCircleDashed, Box } from '~/components/icons';
 import { useLocalize, TranslationKeys } from '~/hooks';
+import { Box } from '~/components/icons';
 import store from '~/store';
 
 interface ChatBadgeConfig {
