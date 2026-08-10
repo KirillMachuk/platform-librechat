@@ -110,7 +110,11 @@ const {
 
 const { canManageResourceType } = require('~/server/middleware/roles/capabilities');
 
-const { refreshS3Url } = require('@librechat/api');
+const {
+  refreshS3Url,
+  getDeploymentSkillIds,
+  initializeDeploymentSkills,
+} = require('@librechat/api');
 
 /**
  * @type {import('mongoose').Model<import('@librechat/data-schemas').IAgent>}
@@ -2343,6 +2347,52 @@ describe('Agent Controllers - Mass Assignment Protection', () => {
       expect(response.data[0].skills_enabled).toBe(true);
       expect(response.data[0].skills).toEqual([visibleSkillId.toString()]);
       expect(response.data[0].skills).not.toContain(hiddenSkillId.toString());
+    });
+
+    /**
+     * Deployment skills are readable by everyone and carry no ACL grant, so an
+     * ACL-only accessible set reports them invisible and the sanitiser strips
+     * the agent's entire skill scope from the listing — the agent reads as
+     * having no skills to anyone who is not its editor.
+     */
+    test('should keep deployment skills in the scope shown to VIEW list callers', async () => {
+      const emptyDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'no-skills-'));
+      await initializeDeploymentSkills({
+        env: {
+          DEPLOYMENT_SKILLS_DIR: path.resolve(
+            __dirname,
+            '../../../../e2e/fixtures/deployment-skills',
+          ),
+        },
+      });
+
+      try {
+        const [deploymentSkillId] = getDeploymentSkillIds();
+        expect(deploymentSkillId).toBeDefined();
+        await Agent.findByIdAndUpdate(agentA1._id, {
+          skills_enabled: true,
+          skills: [deploymentSkillId.toString()],
+        });
+
+        mockReq.user.id = userB.toString();
+        mockReq.query.requiredPermission = String(PermissionBits.VIEW);
+        findAccessibleResources.mockImplementation(({ resourceType }) => {
+          if (resourceType === ResourceType.AGENT) {
+            return Promise.resolve([agentA1._id]);
+          }
+          return Promise.resolve([]);
+        });
+        findPubliclyAccessibleResources.mockResolvedValue([]);
+
+        await getListAgentsHandler(mockReq, mockRes);
+
+        const response = mockRes.json.mock.calls[0][0];
+        expect(response.data).toHaveLength(1);
+        expect(response.data[0].skills_enabled).toBe(true);
+        expect(response.data[0].skills).toEqual([deploymentSkillId.toString()]);
+      } finally {
+        await initializeDeploymentSkills({ env: { DEPLOYMENT_SKILLS_DIR: emptyDir } });
+      }
     });
 
     test('should omit skill scope for VIEW list callers with no accessible configured skills', async () => {

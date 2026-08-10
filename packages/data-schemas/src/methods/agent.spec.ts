@@ -646,6 +646,121 @@ describe('Agent Methods', () => {
       expect(updatedAgent!.skills_enabled).toBe(true);
     });
 
+    /**
+     * Deployment skills are read from disk into memory and given a synthetic
+     * `_id`; the catalog serves them but Mongo has never heard of them. Pruning
+     * on existence alone therefore dropped every skill a user picked and, being
+     * fail-closed, switched skills off on the way out — with no error shown.
+     * `isExternalSkillId` is how the api layer declares such ids valid, and the
+     * three tests below cover all three write paths that prune.
+     */
+    describe('skills that exist outside the Skill collection', () => {
+      const externalSkillIds = new Set<string>();
+      let external: ReturnType<typeof createAgentMethods>;
+
+      beforeAll(() => {
+        external = createAgentMethods(mongoose, {
+          removeAllPermissions: async () => undefined,
+          getActions,
+          getSoleOwnedResourceIds: createAclEntryMethods(mongoose).getSoleOwnedResourceIds,
+          isExternalSkillId: (id: string) => externalSkillIds.has(id),
+        });
+      });
+
+      beforeEach(() => {
+        externalSkillIds.clear();
+      });
+
+      test('should keep an external skill id on create', async () => {
+        const { agentId, authorId } = createTestIds();
+        const externalId = new mongoose.Types.ObjectId().toString();
+        externalSkillIds.add(externalId);
+
+        const newAgent = await external.createAgent({
+          id: agentId,
+          name: 'External Skill Agent',
+          provider: 'test',
+          model: 'test-model',
+          author: authorId,
+          skills: [externalId],
+          skills_enabled: true,
+        });
+
+        expect(newAgent.skills).toEqual([externalId]);
+        expect(newAgent.skills_enabled).toBe(true);
+      });
+
+      test('should keep an external skill id on update', async () => {
+        const { agentId, authorId } = createTestIds();
+        const externalId = new mongoose.Types.ObjectId().toString();
+        externalSkillIds.add(externalId);
+
+        await external.createAgent({
+          id: agentId,
+          name: 'External Skill Agent',
+          provider: 'test',
+          model: 'test-model',
+          author: authorId,
+        });
+
+        const updatedAgent = await external.updateAgent(
+          { id: agentId },
+          { skills: [externalId], skills_enabled: true },
+        );
+
+        expect(updatedAgent!.skills).toEqual([externalId]);
+        expect(updatedAgent!.skills_enabled).toBe(true);
+      });
+
+      test('should keep an external skill id when reverting to an earlier version', async () => {
+        const { agentId, authorId } = createTestIds();
+        const externalId = new mongoose.Types.ObjectId().toString();
+        externalSkillIds.add(externalId);
+
+        await external.createAgent({
+          id: agentId,
+          name: 'External Skill Agent',
+          provider: 'test',
+          model: 'test-model',
+          author: authorId,
+          skills: [externalId],
+          skills_enabled: true,
+        });
+        await external.updateAgent({ id: agentId }, { skills: [], name: 'No Skills Anymore' });
+
+        const revertedAgent = await external.revertAgentVersion({ id: agentId }, 0);
+
+        expect(revertedAgent.skills).toEqual([externalId]);
+        expect(revertedAgent.skills_enabled).toBe(true);
+      });
+
+      test('should still prune ids that are neither stored nor external', async () => {
+        const { agentId, authorId } = createTestIds();
+        const externalId = new mongoose.Types.ObjectId().toString();
+        const danglingId = new mongoose.Types.ObjectId().toString();
+        externalSkillIds.add(externalId);
+        const realSkill = await mongoose.models.Skill.create({
+          name: 'external-mix-skill',
+          description: 'Skill backing the mixed-allowlist test.',
+          author: authorId,
+          authorName: 'Test Author',
+        });
+
+        const newAgent = await external.createAgent({
+          id: agentId,
+          name: 'External Skill Agent',
+          provider: 'test',
+          model: 'test-model',
+          author: authorId,
+          skills: [externalId, danglingId, realSkill._id.toString()],
+          skills_enabled: true,
+        });
+
+        expect(newAgent.skills).toEqual([externalId, realSkill._id.toString()]);
+        expect(newAgent.skills_enabled).toBe(true);
+      });
+    });
+
     test('should delete an agent', async () => {
       const agentId = `agent_${uuidv4()}`;
       const authorId = new mongoose.Types.ObjectId();

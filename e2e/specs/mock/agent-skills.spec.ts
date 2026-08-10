@@ -8,44 +8,35 @@ import { getAccessToken, requestJson } from './helpers';
  *
  * Skills were covered on their own — the API loads and scopes them
  * (`deployment-skills.spec.ts`), the interface lists and opens them
- * (`skills.spec.ts`) — and agents were covered on their own. Nothing joined
- * them, and joining them turned up a defect.
+ * (`skills.spec.ts`) — and agents were covered on their own. Joining them
+ * turned up a defect that these two tests were written to pin and now guard.
  *
- * **A DEPLOYMENT skill picked in the builder is dropped on save.** The browser
- * sends `{"skills":["<id>"],"skills_enabled":true}` and the create response is
- * `{"skills":[],"skills_enabled":false}` — the switch goes off with it, and
- * `packages/api/src/agents/skills.ts` then hands the agent no skills at all.
+ * A deployment skill's id is synthetic: `packages/api/src/skills/deployment.ts`
+ * builds it as `stableObjectId('deployment-skill:<name>')` and keeps the skill
+ * in memory, never writing it to the `Skill` collection. The catalogue at
+ * `GET /api/skills` serves that id anyway, and so does the picker, but
+ * `filterExistingSkillIds` (`packages/data-schemas/src/methods/skill.ts`)
+ * checked Mongo and only Mongo — so nothing matched, the allowlist emptied, and
+ * `createAgent` failed closed and switched skills off, silently. The api layer
+ * now declares such ids valid through `isExternalSkillId`.
  *
- * Why, established rather than guessed: a deployment skill's id is synthetic.
- * `packages/api/src/skills/deployment.ts` builds it as
- * `stableObjectId('deployment-skill:<name>')` — a truncated hash — and keeps
- * the skill in memory; it is never written to the `Skill` collection. The
- * catalogue at `GET /api/skills` serves that id anyway, and so does the picker,
- * but `filterExistingSkillIds` (`packages/data-schemas/src/methods/skill.ts`)
- * checks Mongo and only Mongo. Nothing matches, the allowlist empties, and
- * `createAgent` deliberately fails closed — an empty allowlist with the switch
- * on would mean "the whole catalogue", so it turns the switch off instead.
- *
- * So this is a disagreement between the catalogue and the existence check, not
- * a server that loses valid skills. The second test below measures exactly that
- * boundary: a skill created through `POST /api/skills` — a real Mongo document
- * — survives the same path untouched. An earlier version of this file said the
- * server "stores neither the skill nor the switch" full stop, which overstated
- * it; an independent review caught that and the contrast is now asserted rather
- * than described.
- *
- * The pair is the repo's pinning shape. `test.fail` states what should happen;
- * because `test.fail` passes on ANY error, including a broken fixture, the
- * sibling pins exactly what is true today and is the one that turns red on the
- * day this is fixed.
+ * The two tests are the two classes of skill, and both must keep working: the
+ * one that lives in a file and the one that lives in Mongo. Without the second,
+ * a "fix" that simply stopped pruning would look right here while quietly
+ * re-admitting the dangling ids the pruning exists to remove.
  */
 const DEPLOYMENT_SKILL = 'e2e-deployment-skill';
 
 type AgentWithSkills = { id?: string; skills?: string[]; skills_enabled?: boolean };
 
+/**
+ * `/expanded`, not the plain `/:id`: the plain route answers VIEW callers with a
+ * hand-picked subset that deliberately omits configuration — skills included —
+ * so reading it back would say nothing about what was stored.
+ */
 async function persistedAgent(page: Page, id: string): Promise<AgentWithSkills> {
   const token = await getAccessToken(page);
-  return requestJson<AgentWithSkills>(page, { path: `/api/agents/${id}`, token });
+  return requestJson<AgentWithSkills>(page, { path: `/api/agents/${id}/expanded`, token });
 }
 
 /**
@@ -98,37 +89,7 @@ async function createAgentWithSkill(page: Page, form: Locator, agentName: string
 }
 
 test.describe('skills on an agent', () => {
-  test.fail(
-    'a skill picked in the builder is still on the agent after saving',
-    async ({ page }) => {
-      test.setTimeout(180000);
-      const agentName = uniqueAgentName('E2E Skill Agent');
-      let agentId = '';
-
-      try {
-        const form = await openAgentBuilder(page);
-        const { returned } = await createAgentWithSkill(page, form, agentName);
-        agentId = returned.id ?? '';
-        expect(agentId, 'the agent should come back with an id').toBeTruthy();
-
-        const saved = await persistedAgent(page, agentId);
-        expect(saved.skills_enabled).toBe(true);
-        expect(saved.skills).toHaveLength(1);
-      } finally {
-        if (agentId) {
-          await cleanupAgent(page, agentId);
-        }
-      }
-    },
-  );
-
-  /**
-   * The sibling. It asserts today's wrong outcome AND the half that is right,
-   * so a failure here separates the two: if the browser stops sending the
-   * skill, that is a new defect in the interface; if the server starts keeping
-   * it, this goes red and the pin above becomes the real test.
-   */
-  test('today the skill is sent and then dropped on save', async ({ page }) => {
+  test('a skill picked in the builder is still on the agent after saving', async ({ page }) => {
     test.setTimeout(180000);
     const agentName = uniqueAgentName('E2E Skill Agent');
     let agentId = '';
@@ -137,19 +98,20 @@ test.describe('skills on an agent', () => {
       const form = await openAgentBuilder(page);
       const { sent, returned } = await createAgentWithSkill(page, form, agentName);
       agentId = returned.id ?? '';
+      expect(agentId, 'the agent should come back with an id').toBeTruthy();
 
-      /* The interface half, which works: one skill picked, one skill sent, and
-       * the switch beside it sent on. */
+      /* The interface half: one skill picked, one skill sent, switch on. */
       expect(sent.skills_enabled).toBe(true);
       expect(sent.skills).toHaveLength(1);
 
-      /* And the server half, which does not. */
-      expect(returned.skills ?? []).toEqual([]);
-      expect(returned.skills_enabled).toBe(false);
+      /* Read back from the server rather than trusting the create response, so
+       * this says "stored", not "echoed". */
+      const saved = await persistedAgent(page, agentId);
+      expect(saved.skills_enabled).toBe(true);
+      expect(saved.skills).toEqual(sent.skills);
 
-      /* The id the browser sent is one the server itself serves — the first
-       * thing anyone reading this defect will suspect is a stale or invented
-       * identifier, and it is neither. */
+      /* And the id is one the catalogue itself serves — the first thing anyone
+       * reading a skills defect suspects is a stale or invented identifier. */
       const token = await getAccessToken(page);
       const catalogue = await requestJson<{ skills?: { _id: string; name: string }[] }>(page, {
         path: '/api/skills?limit=50',
@@ -157,64 +119,74 @@ test.describe('skills on an agent', () => {
       });
       const picked = (catalogue.skills ?? []).find((skill) => skill._id === sent.skills?.[0]);
       expect(picked?.name).toBe(DEPLOYMENT_SKILL);
-
-      /* And the boundary, which is the whole point of this test rather than a
-       * flourish: a skill that IS a Mongo document goes through the same
-       * endpoint and survives. Without this the file reads as "agents cannot
-       * keep skills", which is not true and would send whoever fixes this
-       * looking in the wrong place. */
-      const ownSkillName = `e2e-agent-skill-boundary-${Date.now()}`;
-      const boundary = await page.evaluate(
-        async ({ authToken, skillName }) => {
-          const made = await fetch('/api/skills', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: skillName,
-              description: 'Fixture proving a database-backed skill is kept.',
-              body: '# boundary\n\nSteps.',
-            }),
-          });
-          const skill = (await made.json()) as { _id?: string };
-          const agent = await fetch('/api/agents', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: `E2E Boundary Agent ${skillName}`,
-              provider: 'Mock Provider A',
-              model: 'mock-model-a',
-              category: 'general',
-              skills: [skill._id],
-              skills_enabled: true,
-            }),
-          });
-          const created = (await agent.json()) as {
-            id?: string;
-            skills?: string[];
-            skills_enabled?: boolean;
-          };
-          if (created.id) {
-            await fetch(`/api/agents/${created.id}`, {
-              method: 'DELETE',
-              headers: { Authorization: `Bearer ${authToken}` },
-            });
-          }
-          if (skill._id) {
-            await fetch(`/api/skills/${skill._id}`, {
-              method: 'DELETE',
-              headers: { Authorization: `Bearer ${authToken}` },
-            });
-          }
-          return { stored: created.skills ?? [], enabled: created.skills_enabled, id: skill._id };
-        },
-        { authToken: token, skillName: ownSkillName },
-      );
-      expect(boundary.stored).toEqual([boundary.id]);
-      expect(boundary.enabled).toBe(true);
     } finally {
       if (agentId) {
         await cleanupAgent(page, agentId);
       }
     }
+  });
+
+  /**
+   * The other class of skill: a real Mongo document. It went through this path
+   * untouched even while deployment skills were being dropped, and it has to
+   * keep doing so — a fix that simply stopped pruning would pass the test above
+   * and quietly re-admit the dangling ids pruning exists to remove.
+   */
+  test('a skill that is a database document is kept too', async ({ page }) => {
+    test.setTimeout(180000);
+    await openAgentBuilder(page);
+    const token = await getAccessToken(page);
+    const ownSkillName = uniqueAgentName('e2e-agent-skill-boundary')
+      .toLowerCase()
+      .replace(/ /g, '-');
+
+    const boundary = await page.evaluate(
+      async ({ authToken, skillName }) => {
+        const made = await fetch('/api/skills', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: skillName,
+            description: 'Fixture proving a database-backed skill is kept.',
+            body: '# boundary\n\nSteps.',
+          }),
+        });
+        const skill = (await made.json()) as { _id?: string };
+        const agent = await fetch('/api/agents', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: `E2E Boundary Agent ${skillName}`,
+            provider: 'Mock Provider A',
+            model: 'mock-model-a',
+            category: 'general',
+            skills: [skill._id],
+            skills_enabled: true,
+          }),
+        });
+        const created = (await agent.json()) as {
+          id?: string;
+          skills?: string[];
+          skills_enabled?: boolean;
+        };
+        if (created.id) {
+          await fetch(`/api/agents/${created.id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${authToken}` },
+          });
+        }
+        if (skill._id) {
+          await fetch(`/api/skills/${skill._id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${authToken}` },
+          });
+        }
+        return { stored: created.skills ?? [], enabled: created.skills_enabled, id: skill._id };
+      },
+      { authToken: token, skillName: ownSkillName },
+    );
+
+    expect(boundary.stored).toEqual([boundary.id]);
+    expect(boundary.enabled).toBe(true);
   });
 });

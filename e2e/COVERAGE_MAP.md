@@ -285,8 +285,8 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | A model spec sees only the skills scoped to it (API) | e2e | `e2e/specs/mock/model-spec-skills.spec.ts#loads accessible configured skills and skips missing or inaccessible names` | covered |
 | A configured skill is listed, its file list is fetched on demand, and it offers no Edit | e2e | `e2e/specs/mock/skills.spec.ts#a configured skill is listed, its files open, and it stays read-only` | covered |
 | A skill written in the interface offers its author an Edit, a configured one does not | e2e | `e2e/specs/mock/skills.spec.ts#a skill of my own is mine to edit` | covered |
-| A skill is attached to an agent from the interface | e2e | `e2e/specs/mock/agent-skills.spec.ts#a skill picked in the builder is still on the agent after saving` | fixme:Ф1 |
-| Today a picked skill is sent and then dropped on save (defect, pinned) | e2e | `e2e/specs/mock/agent-skills.spec.ts#today the skill is sent and then dropped on save` | covered |
+| A skill is attached to an agent from the interface | e2e | `e2e/specs/mock/agent-skills.spec.ts#a skill picked in the builder is still on the agent after saving` | covered |
+| A skill that is a database document stays on the agent too | e2e | `e2e/specs/mock/agent-skills.spec.ts#a skill that is a database document is kept too` | covered |
 
 | An agent shared with everyone appears in the marketplace for other people | e2e | `e2e/specs/permissions/marketplace.spec.ts#an agent shared with everyone reaches the marketplace, an unshared one does not` | covered |
 | An unshared agent stays out of other people's marketplace | e2e | `e2e/specs/permissions/marketplace.spec.ts#expectNoMarketplaceHit(pageB, privateName)` | covered |
@@ -294,24 +294,22 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | The MCP builder has an entry in the sidebar when MCP is available | e2e | `e2e/specs/permissions/gating.spec.ts#sidebar-link-mcp-builder` | covered |
 | Five of the marketplace, MCP and remote-agent permissions seed as written | e2e | `e2e/specs/permissions/gating.spec.ts#seeded.MARKETPLACE?.USE` | covered |
 
-**The skill-on-agent defect, measured 2026-08-07 and narrowed 2026-08-07 after review.**
-`fixme:Ф1` is the map's only pinned status and this is not a canon item, so read it as "pinned,
-waiting on a fix" rather than as anything to do with the redesign.
-
-What happens: a **deployment** skill picked in the builder is dropped on save. The browser sends
-`{"skills":["<id>"],"skills_enabled":true}`, the create response is
-`{"skills":[],"skills_enabled":false}`, and the agent then runs with no skills at all.
+**The skill-on-agent defect, measured 2026-08-07 and fixed 2026-08-10.** A **deployment** skill
+picked in the builder used to be dropped on save: the browser sent
+`{"skills":["<id>"],"skills_enabled":true}` and the create response came back
+`{"skills":[],"skills_enabled":false}`, so the agent ran with no skills at all.
 
 Why: a deployment skill's id is synthetic — `stableObjectId('deployment-skill:<name>')` in
 `packages/api/src/skills/deployment.ts`, kept in memory and never written to the `Skill`
-collection. `GET /api/skills` serves it anyway, and so does the picker, but
-`filterExistingSkillIds` checks Mongo only. The allowlist empties and `createAgent` fails closed,
-switching skills off rather than widening scope to the whole catalogue.
+collection. `GET /api/skills` serves it anyway, and so did the picker, but
+`filterExistingSkillIds` checked Mongo only. The allowlist emptied and `createAgent` failed
+closed, switching skills off rather than widening scope to the whole catalogue. The api layer now
+declares such ids valid through `isExternalSkillId`, wired in `api/models/index.js`.
 
-**The boundary is asserted, not assumed:** a skill created through `POST /api/skills` — a real
-Mongo document — survives the same endpoint untouched. The first version of this paragraph said
-the server "stores neither the skill nor the switch" without qualification, which overstated the
-blast radius; an independent review caught it and the contrast is now a test assertion.
+**Both classes of skill are asserted, not assumed.** The second row covers a skill created through
+`POST /api/skills` — a real Mongo document, which survived this endpoint even while deployment
+skills were dropped. It stays because a "fix" that simply stopped pruning would satisfy the first
+row while re-admitting the dangling ids pruning exists to remove.
 
 **Why sharing is tested in a profile of its own.** The Share button renders only when the USER
 role carries `PROMPTS.SHARE`, and the deployment does not give it today. Measured 2026-08-06
