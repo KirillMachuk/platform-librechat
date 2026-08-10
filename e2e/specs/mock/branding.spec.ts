@@ -101,7 +101,9 @@ test.describe('branding', () => {
     /* A stale session would silently redirect to the chat and this would become
      * a second copy of the test above, passing for the wrong screen. */
     await expect(page).toHaveURL(/\/login/, { timeout: 20000 });
-    await expect(page.getByRole('button', { name: /Log in|Continue/i }).first()).toBeVisible({
+    await expect(
+      page.getByRole('button', { name: /Sign in|Log in|Continue/i }).first(),
+    ).toBeVisible({
       timeout: 20000,
     });
 
