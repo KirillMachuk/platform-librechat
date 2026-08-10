@@ -435,7 +435,11 @@ export default function RetrievalCall({
           icon={
             <ToolIcon type="file_search" isAnimating={progress < 1 && !cancelled && !errorState} />
           }
-          hasInput={hasOutput}
+          /* Expandable only when there is something to expand INTO. A library listing
+           * ("what documents do I have") and an empty search both return prose with no file
+           * cards in it, and the panel below renders cards only — so the row invited a click
+           * and opened an empty box. */
+          hasInput={hasOutput && hasResults}
           isExpanded={showOutput}
           error={cancelled}
         />

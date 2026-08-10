@@ -167,6 +167,30 @@ describe('RetrievalCall - LGCY-02: Collapsible output panel', () => {
 
     expect(screen.queryByText('error processing tool')).not.toBeInTheDocument();
   });
+
+  /* A library listing ("what documents do I have") and an empty search both come back as
+   * prose with no file cards in it, while this panel renders cards only. Offering the expander
+   * there hands the user a click that opens an empty box. */
+  it('offers no expander when the output holds no file cards', () => {
+    renderRetrievalCall({
+      output:
+        "The user's library holds 2 indexed documents — this is all of them.\n1. Договор аренды.pdf — Document ID: f1",
+      initialProgress: 1,
+      isSubmitting: false,
+    });
+
+    expect(screen.getByTestId('progress-text')).toHaveAttribute('data-has-input', 'false');
+  });
+
+  it('still offers the expander when there are file cards to open', () => {
+    renderRetrievalCall({
+      output: 'File: notes.txt\nRelevance: 0.8\nContent: file results here',
+      initialProgress: 1,
+      isSubmitting: false,
+    });
+
+    expect(screen.getByTestId('progress-text')).toHaveAttribute('data-has-input', 'true');
+  });
 });
 
 describe('RetrievalCall - LGCY-03: Localization', () => {
