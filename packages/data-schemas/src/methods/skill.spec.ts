@@ -556,6 +556,31 @@ describe('Skill CRUD methods', () => {
     expect(filtered).toEqual([canonical]);
   });
 
+  it('filterExistingSkillIds keeps ids the caller declares external and drops the rest', async () => {
+    const { skill } = await methods.createSkill(makeSkillInput({ name: 'stored-skill' }));
+    const stored = skill._id.toString();
+    const external = new mongoose.Types.ObjectId().toString();
+    const dangling = new mongoose.Types.ObjectId().toString();
+
+    const filtered = await filterExistingSkillIds(
+      mongoose,
+      [external, dangling, stored],
+      (id) => id === external,
+    );
+    expect(filtered).toEqual([external, stored]);
+  });
+
+  it('filterExistingSkillIds matches an external id declared in uppercase hex', async () => {
+    const external = new mongoose.Types.ObjectId().toString();
+
+    const filtered = await filterExistingSkillIds(
+      mongoose,
+      [external.toUpperCase()],
+      (id) => id === external,
+    );
+    expect(filtered).toEqual([external]);
+  });
+
   it('deleteSkill prunes agent allowlists even when skill file cleanup fails', async () => {
     const { skill } = await methods.createSkill(makeSkillInput({ name: 'flaky-files' }));
     const Agent = mongoose.models.Agent;

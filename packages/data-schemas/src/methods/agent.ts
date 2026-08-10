@@ -41,6 +41,10 @@ export interface AgentDeps {
     userObjectId: Types.ObjectId,
     resourceTypes: string | string[],
   ) => Promise<Types.ObjectId[]>;
+  /** True for skill ids served by the catalog but never stored as Skill documents
+   *  (deployment skills). Injected from @librechat/api; absent means Mongo is the
+   *  only place a skill can exist. */
+  isExternalSkillId?: (id: string) => boolean;
 }
 
 /**
@@ -326,6 +330,7 @@ export function createAgentMethods(
   }) => Promise<{ matchedCount: number; modifiedCount: number }>;
 } {
   const { removeAllPermissions, getActions, getSoleOwnedResourceIds } = deps;
+  const isExternalSkillId = deps.isExternalSkillId ?? (() => false);
 
   /**
    * Create an agent with the provided data.
@@ -333,7 +338,11 @@ export function createAgentMethods(
   async function createAgent(agentData: Record<string, unknown>): Promise<IAgent> {
     const Agent = mongoose.models.Agent as Model<IAgent>;
     if (Array.isArray(agentData.skills) && agentData.skills.length > 0) {
-      const prunedSkills = await filterExistingSkillIds(mongoose, agentData.skills as string[]);
+      const prunedSkills = await filterExistingSkillIds(
+        mongoose,
+        agentData.skills as string[],
+        isExternalSkillId,
+      );
       agentData.skills = prunedSkills;
       /** Fail closed when pruning empties a non-empty allowlist — empty +
        *  enabled means the full catalog, and hygiene must never widen scope. */
@@ -466,6 +475,7 @@ export function createAgentMethods(
         const prunedSkills = await filterExistingSkillIds(
           mongoose,
           directUpdates.skills as string[],
+          isExternalSkillId,
         );
         directUpdates.skills = prunedSkills;
         updateData.skills = prunedSkills;
@@ -961,6 +971,7 @@ export function createAgentMethods(
       const prunedSkills = await filterExistingSkillIds(
         mongoose,
         revertToVersion.skills as string[],
+        isExternalSkillId,
       );
       revertToVersion.skills = prunedSkills;
       if (prunedSkills.length === 0) {

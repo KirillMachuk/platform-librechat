@@ -160,6 +160,9 @@ export interface CreateMethodsDeps {
   removeAllPermissions?: (params: { resourceType: string; resourceId: unknown }) => Promise<void>;
   /** Returns a cache store for the given key. From getLogStores. */
   getCache?: RoleDeps['getCache'];
+  /** True for skill ids the catalog serves without a Skill document behind them
+   *  (deployment skills). `isDeploymentSkillId` from @librechat/api. */
+  isExternalSkillId?: (id: string) => boolean;
 }
 
 /**
@@ -234,6 +237,7 @@ export function createMethods(
     removeAllPermissions,
     getActions: actionMethods.getActions,
     getSoleOwnedResourceIds: aclEntryMethods.getSoleOwnedResourceIds,
+    isExternalSkillId: deps.isExternalSkillId,
   };
   const agentMethods = createAgentMethods(mongoose, agentDeps);
 

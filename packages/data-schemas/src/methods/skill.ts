@@ -836,7 +836,7 @@ function resolveAlwaysApplyFromInput(
 }
 
 /**
- * Narrows candidate skill ids to those backed by an existing Skill doc.
+ * Narrows candidate skill ids to those that still resolve to a skill.
  * Existence-only check (no ACL) so pruning an agent allowlist never drops
  * skills the saving user merely can't view. Preserves input order, dedupes,
  * and drops malformed ids — they can't reference anything. Candidates are
@@ -844,10 +844,17 @@ function resolveAlwaysApplyFromInput(
  * hex, but `_id.toString()` is always lowercase, and a casing mismatch
  * would silently drop a valid id (and an emptied allowlist means the full
  * catalog — the opposite of the configured scope).
+ *
+ * Not every skill the catalog serves is a Mongo document. Deployment skills
+ * are read from disk into memory and given a synthetic `_id`, so a Mongo-only
+ * lookup reports every one of them as dangling and prunes an allowlist the
+ * user just configured. `isExternalSkillId` is how the api layer declares
+ * those ids valid; without it this stays a pure Mongo existence check.
  */
 export async function filterExistingSkillIds(
   mongoose: typeof import('mongoose'),
   skillIds: string[],
+  isExternalSkillId: (id: string) => boolean = () => false,
 ): Promise<string[]> {
   const candidates = [
     ...new Set(skillIds.filter(isValidObjectIdString).map((id) => id.toLowerCase())),
@@ -855,13 +862,17 @@ export async function filterExistingSkillIds(
   if (candidates.length === 0) {
     return [];
   }
+  const external = new Set(candidates.filter(isExternalSkillId));
+  const persisted = candidates.filter((id) => !external.has(id));
   const Skill = mongoose.models.Skill as Model<ISkillDocument>;
-  const docs = await Skill.find(
-    { _id: { $in: candidates.map((id) => new mongoose.Types.ObjectId(id)) } },
-    { _id: 1 },
-  ).lean<Array<{ _id: Types.ObjectId }>>();
+  const docs = persisted.length
+    ? await Skill.find(
+        { _id: { $in: persisted.map((id) => new mongoose.Types.ObjectId(id)) } },
+        { _id: 1 },
+      ).lean<Array<{ _id: Types.ObjectId }>>()
+    : [];
   const existing = new Set(docs.map((doc) => doc._id.toString()));
-  return candidates.filter((id) => existing.has(id));
+  return candidates.filter((id) => external.has(id) || existing.has(id));
 }
 
 /**

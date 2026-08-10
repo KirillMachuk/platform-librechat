@@ -10,6 +10,7 @@ const {
   collectEdgeAgentIds,
   reportsNoToolSupport,
   mergeAgentOcrConversion,
+  mergeDeploymentSkillIds,
   MAX_AVATAR_REFRESH_AGENTS,
   collectToolResourceFileIds,
   convertOcrToContextInPlace,
@@ -1299,12 +1300,18 @@ const getListAgentsHandler = async (req, res) => {
 
     let accessibleSkillSet = null;
     if (!canReturnSkillConfig) {
-      const accessibleSkillIds = await findAccessibleResources({
-        userId,
-        role: req.user.role,
-        resourceType: ResourceType.SKILL,
-        requiredPermissions: PermissionBits.VIEW,
-      });
+      /* Deployment skills are readable by everyone and hold no ACL grant, so an
+         ACL-only set reports them invisible and this sanitiser would strip an
+         agent's whole skill scope from the listing. Merged in the same way the
+         skills route and the run initializer already do. */
+      const accessibleSkillIds = mergeDeploymentSkillIds(
+        await findAccessibleResources({
+          userId,
+          role: req.user.role,
+          resourceType: ResourceType.SKILL,
+          requiredPermissions: PermissionBits.VIEW,
+        }),
+      );
       accessibleSkillSet = new Set(accessibleSkillIds.map((oid) => oid.toString()));
     }
 
