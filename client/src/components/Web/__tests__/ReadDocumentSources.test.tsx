@@ -5,6 +5,7 @@ import { Tools } from 'librechat-data-provider';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { TAttachment } from 'librechat-data-provider';
+import { AttachmentGroup } from '~/components/Chat/Messages/Content/Parts/Attachment';
 import { useSearchResultsByTurn } from '~/hooks/Messages/useSearchResultsByTurn';
 import Sources from '~/components/Web/Sources';
 import { SearchContext } from '~/Providers';
@@ -99,6 +100,23 @@ describe('sources panel — documents the model read', () => {
    * documents claims a provenance the answer does not have. */
   it('shows nothing when no document was read', () => {
     const { container } = renderPanel([]);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  /* The read also puts an attachment on its own tool-call block, which routes through the
+   * file-chip renderer for the first time — `library_search` results never reach it, they
+   * render inside the retrieval card. A source card is not a downloadable file and must add
+   * no chip: a blank chip under "Читаю документ" is noise the user cannot click or explain.
+   * What keeps it out is that the artifact carries no file path — give it one and this fails. */
+  it('adds no file chip under the tool call that produced it', () => {
+    const { container } = render(
+      <RecoilRoot>
+        <QueryClientProvider client={new QueryClient()}>
+          <AttachmentGroup attachments={[readAttachment('file-1', 'Договор аренды.pdf')]} />
+        </QueryClientProvider>
+      </RecoilRoot>,
+    );
 
     expect(container).toBeEmptyDOMElement();
   });

@@ -96,6 +96,7 @@ stays green, so flakes accumulate where nobody looks.
 | File-search (RAG) retrieval card renders | unit | `client/src/components/Chat/Messages/Content/__tests__/RetrievalCall.test.tsx` | covered |
 | A document the model read in full appears in the answer's sources | unit | `client/src/components/Web/__tests__/ReadDocumentSources.test.tsx#shows a document that was read in full` | covered |
 | A document read across several calls is listed once, not once per call | unit | `client/src/components/Web/__tests__/ReadDocumentSources.test.tsx#lists a document read across several calls once` | covered |
+| A read's source card adds no file chip under its tool call | unit | `client/src/components/Web/__tests__/ReadDocumentSources.test.tsx#adds no file chip under the tool call that produced it` | covered |
 | Attachment chips render under a sent message | e2e | `e2e/specs/mock/file-preview.spec.ts#opens a preview from a file attached to a sent message` | covered |
 | An attachment chip shows its display name, falling back to the filename | unit | `client/src/components/Chat/Input/Files/__tests__/FileContainer.spec.tsx#falls back to empty string when neither` | covered |
 | Artifact cards route to the panel, not inline | unit | `client/src/components/Chat/Messages/Content/Parts/__tests__/ArtifactRouting.test.tsx` | covered |
