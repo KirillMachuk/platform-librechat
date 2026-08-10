@@ -40,7 +40,7 @@ export function TemporaryChat() {
               'tap-target inline-flex size-8 flex-shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary',
               /* Канон §7: включённый временный чат — `acc` на `acc-soft`.
                  Выключенный — обычная кнопка-иконка, без заливки и тени. */
-              isTemporary && 'bg-ring-primary-soft text-text-accent hover:text-text-accent',
+              isTemporary && 'bg-acc-soft text-text-accent hover:text-text-accent',
             )}
           >
             <MessageCircleDashed className="icon-md" aria-hidden="true" />

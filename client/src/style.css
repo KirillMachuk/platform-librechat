@@ -171,7 +171,7 @@ html {
   --text-tertiary: var(--c-t3);
   --text-warning: var(--c-warnc);
   --text-destructive: var(--c-errc);
-  --ring-primary: var(--c-acc);
+  --ring-primary: var(--c-t1);
   --header-primary: var(--c-bg);
   --header-hover: var(--c-hover);
   --header-button-hover: var(--c-hover);
@@ -199,8 +199,13 @@ html {
   --border-xheavy: var(--c-acc);
   --border-destructive: var(--c-errc);
   --border-control: var(--c-control);
-  --border-focus: var(--c-acc);
-  --ring-primary-soft: var(--c-acc-soft);
+  /* Focus is NEUTRAL ink, not the brand accent (owner 10.08: the accent is
+     to be as rare as GPT's blue — «никаких обводок» in petrol on buttons,
+     fields or the composer). A focused field darkens its border to t1; the
+     soft halo is off — transparent, not deleted, so one token flip brings
+     it back if the owner's accent shortlist ever says otherwise. */
+  --border-focus: var(--c-t1);
+  --ring-primary-soft: transparent;
   /* These are test styles */
 
   --background: 0 0% 100%;
@@ -237,7 +242,7 @@ html {
   --text-tertiary: var(--c-t3);
   --text-warning: var(--c-warnc);
   --text-destructive: var(--c-errc);
-  --ring-primary: var(--c-acc);
+  --ring-primary: var(--c-t1);
   --header-primary: var(--c-bg);
   --header-hover: var(--c-hover);
   --header-button-hover: var(--c-hover);
@@ -265,8 +270,13 @@ html {
   --border-xheavy: var(--c-acc);
   --border-destructive: var(--c-errc);
   --border-control: var(--c-control);
-  --border-focus: var(--c-acc);
-  --ring-primary-soft: var(--c-acc-soft);
+  /* Focus is NEUTRAL ink, not the brand accent (owner 10.08: the accent is
+     to be as rare as GPT's blue — «никаких обводок» in petrol on buttons,
+     fields or the composer). A focused field darkens its border to t1; the
+     soft halo is off — transparent, not deleted, so one token flip brings
+     it back if the owner's accent shortlist ever says otherwise. */
+  --border-focus: var(--c-t1);
+  --ring-primary-soft: transparent;
   /* These are test styles */
 
   --background: 0 0% 7%;
@@ -2554,13 +2564,15 @@ html {
   box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.35);
 }
 
-/* Canon §1.8: ONE focus for the whole system — outline 2px `acc`, offset +2
-   (full-width rows override to -2 at the call site). Mouse focus stays silent;
-   the outline is the keyboard's. Text fields are the single exception: their
-   focus is the `acc` border plus the 3px `acc-soft` ring (see FIELD_BASE /
-   defaultTextProps), and an outline on top of that ring is exactly the double
-   glow this rule replaces. Containers focused programmatically (tabindex=-1:
-   dialogs, popovers, main regions) are not controls and draw nothing. */
+/* Canon §1.8: ONE focus for the whole system — outline 2px --border-focus
+   (neutral ink since 10.08 evening: the owner keeps the brand accent as rare
+   as GPT's blue), offset +2, full-width rows override to -2 via focus-inset.
+   Mouse focus stays silent; the outline is the keyboard's. Text fields are
+   the single exception: their focus is the border darkening to the same
+   token (the soft ring token is currently transparent), and an outline on
+   top of that is exactly the double glow this rule replaces. Containers
+   focused programmatically (tabindex=-1: dialogs, popovers, main regions)
+   are not controls and draw nothing. */
 :focus {
   outline: none;
 }

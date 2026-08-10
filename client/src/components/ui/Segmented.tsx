@@ -100,7 +100,7 @@ export function Segmented<T extends string>({
                  as surface-active, so the ring on the selected tab was 1:1. */
               'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-primary',
               isActive
-                ? 'bg-ring-primary-soft text-text-accent'
+                ? 'bg-acc-soft text-text-accent'
                 : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',
             )}
           >

@@ -1,12 +1,15 @@
 /**
  * Guards the focus canon (DESIGN_SYSTEM §1.8): ONE focus for the whole system.
  *
- * The global rule in `client/src/style.css` draws `outline: 2px var(--acc)`
- * on every `:focus-visible` (offset +2, or −2 via the named `focus-inset`
- * class for full-width rows). Text fields are the single exception: their
- * focus is the `acc` border plus the 3px `acc-soft` ring
- * (`focus:ring-[3px] focus:ring-ring-primary-soft`), and error states may ring
- * with `err-soft`. Nothing else exists.
+ * The global rule in `client/src/style.css` draws a 2px `--border-focus`
+ * outline on every `:focus-visible` (offset +2, or −2 via the named
+ * `focus-inset` class for full-width rows) — NEUTRAL ink since 10.08
+ * evening, when the owner took the brand accent out of focus entirely.
+ * Text fields are the single exception: their focus is the border
+ * darkening to the same token (`focus:ring-[3px]
+ * focus:ring-ring-primary-soft` stays in the recipe with the ring token
+ * currently transparent), and error states may ring with `err-soft`.
+ * Nothing else exists.
  *
  * Run with `npm run check:focus`.
  *
@@ -88,7 +91,7 @@ css.split('\n').forEach((line, index) => {
 
 if (problems.length) {
   console.error(
-    `\nDESIGN_SYSTEM §1.8: focus is ONE outline — 2px \`acc\`, offset +2, drawn\n` +
+    `\nDESIGN_SYSTEM §1.8: focus is ONE outline — 2px --border-focus, offset +2, drawn\n` +
       `globally in style.css (\`focus-inset\` for full-width rows). Text fields\n` +
       `alone ring instead: \`focus:ring-[3px] focus:ring-ring-primary-soft\` plus\n` +
       `the \`acc\` border. These ${problems.length} invent something else:\n`,
