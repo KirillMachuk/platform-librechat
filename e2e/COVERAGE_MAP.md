@@ -457,6 +457,7 @@ of encoded.
 | Every z-index on the chat screen comes from the canon scale | e2e | `e2e/specs/mock/canon.spec.ts#every z-index comes from the canon scale` | covered |
 | The file library dialog stacks on the canon dialog layer | e2e | `e2e/specs/mock/canon.spec.ts#the file library dialog is on the canon dialog layer` | covered |
 | A dialog opened from inside a dialog is the one drawn on top | e2e | `e2e/specs/mock/canon.spec.ts#a dialog opened from a dialog is the one you can click` | covered |
+| The buttons under an answer are visible always, on every answer and not just the newest | e2e | `e2e/specs/mock/message-actions.spec.ts#an older answer keeps its actions on screen, not behind the mouse` | covered |
 | Each answer in a comparison carries its own Copy and Keep | e2e | `e2e/specs/mock/multi-convo.spec.ts#every answer carries its own Copy and its own way to keep it` | covered |
 | A phone shows one compared answer at a time, switched by a segment | e2e | `e2e/specs/mock/multi-convo.spec.ts#a phone shows one answer at a time and switches between them` | covered |
 | Every image reserves its space before it loads | e2e | `e2e/specs/mock/canon.spec.ts#every image reserves its space before it loads` | covered |
