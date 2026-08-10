@@ -82,7 +82,7 @@ export default function ComboboxComponent({
             isCollapsed
               ? 'flex h-9 w-9 shrink-0 items-center justify-center p-0 [&>span]:w-auto [&>svg]:hidden'
               : '',
-            'bg-white text-black hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-gray-500 dark:bg-gray-850 dark:text-white',
+            'bg-white text-black hover:bg-gray-50 dark:bg-gray-850 dark:text-white',
           )}
         >
           <SelectValue placeholder={selectPlaceholder}>
@@ -116,7 +116,7 @@ export default function ComboboxComponent({
                 <Combobox
                   autoSelect
                   placeholder={searchPlaceholder}
-                  className="flex-1 rounded-md border-none bg-transparent px-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-700/10 dark:focus:ring-gray-200/10"
+                  className="flex-1 rounded-md border-none bg-transparent px-2.5 py-2 text-sm focus:outline-none focus:ring-[3px] focus:ring-ring-primary-soft"
                   // Ariakit's Combobox manually triggers a blur event on virtually
                   // blurred items, making them work as if they had actual DOM
                   // focus. These blur events might happen after the corresponding

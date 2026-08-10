@@ -261,7 +261,7 @@ const ToolArtifactCard = memo(({ attachment, artifact }: ToolArtifactCardProps) 
         className={cn(
           'flex shrink-0 items-center justify-center px-3 transition-colors duration-200',
           'rounded-r-xl bg-surface-tertiary text-text-secondary hover:bg-surface-hover hover:text-text-primary',
-          'border-l border-border-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy',
+          'border-l border-border-light focus-visible:outline-none',
         )}
       >
         <Download className="size-4" aria-hidden="true" />

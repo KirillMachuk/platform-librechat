@@ -156,7 +156,7 @@ const BookmarkForm = ({
               'min-h-[100px] w-full resize-none rounded-lg border border-border-light',
               'bg-transparent px-3 py-2 text-sm text-text-primary',
               'placeholder:text-text-tertiary',
-              'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border-heavy',
+              'focus-visible:outline-none',
             )}
             aria-labelledby="bookmark-description-label"
           />

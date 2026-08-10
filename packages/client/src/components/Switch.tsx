@@ -50,7 +50,7 @@ const Switch: React.ForwardRefExoticComponent<
       className={cn(
         'peer inline-flex shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors',
         'bg-surface-active data-[state=checked]:bg-acc',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        'focus-visible:outline-none',
         'disabled:cursor-not-allowed disabled:opacity-45',
         track[size],
         className,

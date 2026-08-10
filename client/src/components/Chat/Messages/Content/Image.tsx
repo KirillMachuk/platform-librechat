@@ -113,7 +113,7 @@ const Image = ({
         onClick={() => setIsOpen(true)}
         className={cn(
           'relative mt-1 w-full max-w-lg cursor-pointer overflow-hidden rounded-lg border border-border-light text-text-secondary-alt shadow-sm transition-shadow',
-          'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary',
+          'focus:outline-none',
           className,
         )}
         style={heightStyle}

@@ -47,7 +47,7 @@ const PresetItems: FC<{
     <>
       <div
         role="menuitem"
-        className="pointer-none group m-1.5 flex h-8 min-w-[170px] gap-2 rounded px-5 py-2.5 !pr-3 text-sm !opacity-100 focus:ring-0 radix-disabled:pointer-events-none radix-disabled:opacity-50 md:min-w-[240px]"
+        className="pointer-none group m-1.5 flex h-8 min-w-[170px] gap-2 rounded px-5 py-2.5 !pr-3 text-sm !opacity-100 radix-disabled:pointer-events-none radix-disabled:opacity-50 md:min-w-[240px]"
         tabIndex={-1}
       >
         <div className="flex h-full grow items-center justify-end gap-2">
@@ -63,7 +63,7 @@ const PresetItems: FC<{
             <DialogTrigger asChild>
               <button
                 type="button"
-                className="mr-1 flex h-[32px] cursor-pointer items-center rounded bg-transparent px-2 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-red-700 focus:ring-ring dark:bg-transparent dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-red-700"
+                className="mr-1 flex h-[32px] cursor-pointer items-center rounded bg-transparent px-2 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-red-700 dark:bg-transparent dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-red-700"
                 aria-label={localize('com_ui_clear_all')}
               >
                 <svg
@@ -111,7 +111,7 @@ const PresetItems: FC<{
       {presets && presets.length === 0 && (
         <div
           role="menuitem"
-          className="pointer-none group m-1.5 flex h-8 min-w-[170px] gap-2 rounded px-5 py-2.5 !pr-3 text-sm !opacity-100 focus:ring-0 radix-disabled:pointer-events-none radix-disabled:opacity-50 md:min-w-[240px]"
+          className="pointer-none group m-1.5 flex h-8 min-w-[170px] gap-2 rounded px-5 py-2.5 !pr-3 text-sm !opacity-100 radix-disabled:pointer-events-none radix-disabled:opacity-50 md:min-w-[240px]"
           tabIndex={-1}
         >
           <div className="flex h-full grow items-center justify-end gap-2 text-gray-600 dark:text-gray-300">

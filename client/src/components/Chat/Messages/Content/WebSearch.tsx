@@ -207,7 +207,7 @@ export default function WebSearch({
           className={cn(
             'tool-status-text group flex items-center gap-2 rounded-full py-1 transition-colors',
             hasSourceData
-              ? 'text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy'
+              ? 'text-text-secondary focus-visible:outline-none'
               : 'pointer-events-none text-text-secondary',
           )}
           disabled={!hasSourceData}

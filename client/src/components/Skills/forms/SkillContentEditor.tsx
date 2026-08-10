@@ -86,7 +86,7 @@ const SkillContentEditor: React.FC<SkillContentEditorProps> = ({
           <button
             type="button"
             aria-label={localize('com_ui_edit')}
-            className="absolute inset-0 z-10 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
+            className="absolute inset-0 z-10 rounded-xl focus:outline-none"
             onClick={() => setIsEditing(true)}
           />
         )}
@@ -100,7 +100,7 @@ const SkillContentEditor: React.FC<SkillContentEditorProps> = ({
                 {...field}
                 // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
-                className="w-full resize-none overflow-y-auto bg-transparent font-mono text-sm leading-relaxed text-text-primary placeholder:text-text-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary sm:text-base"
+                className="w-full resize-none overflow-y-auto bg-transparent font-mono text-sm leading-relaxed text-text-primary placeholder:text-text-secondary focus:outline-none sm:text-base"
                 minRows={4}
                 maxRows={16}
                 onKeyDown={(e) => {

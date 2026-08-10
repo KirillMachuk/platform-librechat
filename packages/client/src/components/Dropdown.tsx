@@ -73,7 +73,7 @@ const Dropdown: React.FC<DropdownProps> = ({
       <Select.Select
         store={selectProps}
         className={cn(
-          'focus:ring-offset-ring-offset relative inline-flex items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm text-text-primary transition-all duration-200 ease-in-out hover:bg-accent hover:text-accent-foreground focus:ring-ring-primary',
+          'relative inline-flex items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm text-text-primary transition-all duration-200 ease-in-out hover:bg-accent hover:text-accent-foreground',
           iconOnly ? 'size-10' : 'w-fit gap-2',
           className,
         )}

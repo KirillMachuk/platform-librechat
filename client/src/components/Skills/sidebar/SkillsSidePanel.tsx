@@ -56,7 +56,7 @@ export default function SkillsSidePanel({ className }: SkillsSidePanelProps) {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder={localize('com_ui_search')}
                 aria-label={localize('com_ui_search_skills')}
-                className="h-8 w-full rounded-md border border-border-light bg-transparent pl-8 pr-3 text-sm text-text-primary placeholder:text-text-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring-primary"
+                className="h-8 w-full rounded-md border border-border-light bg-transparent pl-8 pr-3 text-sm text-text-primary placeholder:text-text-secondary focus-visible:outline-none"
                 // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
               />

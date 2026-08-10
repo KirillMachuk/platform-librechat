@@ -32,7 +32,7 @@ export default function ListCard({
       {onClick && (
         <button
           type="button"
-          className="absolute inset-0 z-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
+          className="absolute inset-0 z-0 rounded-xl focus:outline-none"
           onClick={onClick}
           aria-label={ariaLabel}
           aria-describedby={snippetId}

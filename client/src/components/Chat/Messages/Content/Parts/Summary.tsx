@@ -113,7 +113,7 @@ const SummaryButton = memo(
                 ? 'opacity-0 group-focus-within/summary-container:opacity-100 group-hover/summary-container:opacity-100'
                 : 'opacity-0',
               'hover:bg-surface-hover hover:text-text-primary',
-              'focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white',
+              'focus-visible:opacity-100 focus-visible:outline-none',
             )}
           >
             <span className="sr-only">
@@ -173,7 +173,7 @@ const FloatingSummaryBar = memo(
               className={cn(
                 'flex items-center justify-center rounded-lg bg-surface-secondary p-1.5 text-text-secondary-alt shadow-sm',
                 'hover:bg-surface-hover hover:text-text-primary',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy',
+                'focus-visible:outline-none',
               )}
             >
               <ChevronUp className="h-[18px] w-[18px]" aria-hidden="true" />
@@ -192,7 +192,7 @@ const FloatingSummaryBar = memo(
                 className={cn(
                   'flex items-center justify-center rounded-lg bg-surface-secondary p-1.5 text-text-secondary-alt shadow-sm',
                   'hover:bg-surface-hover hover:text-text-primary',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy',
+                  'focus-visible:outline-none',
                 )}
               >
                 {isCopied ? (

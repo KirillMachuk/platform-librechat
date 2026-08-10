@@ -16,7 +16,7 @@ const InfoHoverCard = ({ side, text }: InfoHoverCardProps): JSX.Element => {
     <HoverCard openDelay={50} open={isOpen} onOpenChange={setIsOpen}>
       <HoverCardTrigger
         tabIndex={0}
-        className="inline-flex cursor-help items-center justify-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary focus-visible:ring-offset-2"
+        className="inline-flex cursor-help items-center justify-center rounded-sm focus-visible:outline-none"
         onFocus={() => setIsOpen(true)}
         onBlur={() => setIsOpen(false)}
         aria-label={text}

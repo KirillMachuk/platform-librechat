@@ -58,7 +58,7 @@ export default function MCPCardActions({
     'transition-colors duration-150',
     'text-text-secondary hover:text-text-primary',
     'hover:bg-surface-tertiary',
-    'focus:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy',
+    'focus:outline-none',
   );
 
   // Loading state - show spinner (with cancel option)

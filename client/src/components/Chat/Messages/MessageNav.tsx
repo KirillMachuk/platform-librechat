@@ -101,7 +101,7 @@ function computeTargetScroll(
 
 const indicatorButtonClasses = cn(
   'flex h-[5px] items-center justify-center rounded-sm',
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-xheavy',
+  'focus-visible:outline-none',
 );
 
 const MessageIndicator = memo(function MessageIndicator({
@@ -152,7 +152,7 @@ const chevronButtonClasses = cn(
   'group-hover/nav:text-text-secondary group-focus-within/nav:text-text-secondary',
   'group-hover/nav:hover:text-text-primary',
   'group-hover/nav:disabled:opacity-30 group-focus-within/nav:disabled:opacity-30',
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-xheavy',
+  'focus-visible:outline-none',
 );
 
 function MessageNav({ scrollableRef }: { scrollableRef: React.RefObject<HTMLDivElement> }) {

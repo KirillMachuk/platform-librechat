@@ -144,7 +144,7 @@ function FileMode() {
           aria-label={localize('com_ui_file_mode')}
           className={cn(
             'flex h-9 items-center gap-1.5 rounded-full border border-border-medium px-3 text-sm',
-            'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-opacity-50',
+            'hover:bg-surface-hover focus-visible:outline-none',
             isOpen && 'bg-surface-hover',
           )}
         >

@@ -51,7 +51,7 @@ export default function MultiSearch({
         onChange={onChangeHandler}
         placeholder={searchLabel}
         aria-label={searchLabel}
-        className="flex-1 rounded-md border-none bg-transparent px-2.5 py-2 text-sm placeholder-text-secondary focus:outline-none focus:ring-1 focus:ring-ring-primary"
+        className="flex-1 rounded-md border-none bg-transparent px-2.5 py-2 text-sm placeholder-text-secondary focus:outline-none focus:ring-[3px] focus:ring-ring-primary-soft"
       />
       <button
         className={cn(

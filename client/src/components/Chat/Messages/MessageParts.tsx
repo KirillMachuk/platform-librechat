@@ -64,7 +64,7 @@ export default function Message(props: TMessageProps) {
             className={cn(
               baseClasses.common,
               baseClasses.chat,
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-xheavy',
+              'focus-visible:outline-none',
               'message-render',
             )}
           >

@@ -113,7 +113,7 @@ const SecretInput: React.ForwardRefExoticComponent<
               onClick={handleCopy}
               disabled={disabled || !value}
               className={cn(
-                'tap-target inline-flex size-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary [&>svg]:block',
+                'tap-target inline-flex size-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors duration-150 focus-visible:outline-none [&>svg]:block',
                 disabled || !value
                   ? 'cursor-not-allowed opacity-50'
                   : 'hover:bg-surface-hover hover:text-text-primary',
@@ -129,7 +129,7 @@ const SecretInput: React.ForwardRefExoticComponent<
             onClick={toggleVisibility}
             disabled={disabled}
             className={cn(
-              'tap-target inline-flex size-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary [&>svg]:block',
+              'tap-target inline-flex size-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors duration-150 focus-visible:outline-none [&>svg]:block',
               disabled
                 ? 'cursor-not-allowed opacity-50'
                 : 'hover:bg-surface-hover hover:text-text-primary',

@@ -89,7 +89,7 @@ function SkillCard({
       aria-pressed={selected}
       className={cn(
         'group relative flex h-32 cursor-pointer flex-col rounded-xl border p-3.5 text-left transition-all duration-200',
-        'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary',
+        'focus:outline-none',
         selected
           ? 'border-green-500/70 bg-green-500/[0.06]'
           : 'border-border-light hover:border-border-medium hover:bg-surface-tertiary',
@@ -342,7 +342,7 @@ function SkillSelectDialog({ isOpen, setIsOpen }: SkillSelectDialogProps) {
                   onChange={(e) => setSearchValue(e.target.value)}
                   placeholder={localize('com_ui_search_skills')}
                   aria-label={localize('com_ui_search_skills')}
-                  className="h-10 w-full rounded-xl border border-border-light bg-transparent pl-9 pr-3 text-sm text-text-primary placeholder:text-text-tertiary focus:border-border-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
+                  className="h-10 w-full rounded-xl border border-border-light bg-transparent pl-9 pr-3 text-sm text-text-primary placeholder:text-text-tertiary focus:border-border-medium focus:outline-none"
                 />
               </div>
               <button

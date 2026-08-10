@@ -151,7 +151,7 @@ function ChatGroupItem({
         {/* Clickable overlay for card */}
         <button
           type="button"
-          className="absolute inset-0 z-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
+          className="absolute inset-0 z-0 rounded-xl focus:outline-none"
           onClick={onCardClick}
           aria-label={ariaLabel}
         />
@@ -217,7 +217,7 @@ function ChatGroupItem({
                   ref={menuButtonRef}
                   aria-label={localize('com_nav_convo_menu_options')}
                   className={cn(
-                    'flex size-7 items-center justify-center rounded-md text-text-secondary transition-opacity hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary',
+                    'flex size-7 items-center justify-center rounded-md text-text-secondary transition-opacity hover:bg-surface-hover focus-visible:outline-none',
                     menuOpen
                       ? 'opacity-100'
                       : 'opacity-0 focus-visible:opacity-100 group-hover/prompt:opacity-100',

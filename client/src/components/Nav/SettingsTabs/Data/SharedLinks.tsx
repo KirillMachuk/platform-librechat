@@ -201,7 +201,7 @@ export default function SharedLinks() {
                 to={`/share/${shareId}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group flex items-center gap-1 truncate rounded-sm text-blue-600 underline decoration-1 underline-offset-2 hover:decoration-2 focus:outline-none focus:ring-2 focus:ring-ring"
+                className="group flex items-center gap-1 truncate rounded-sm text-blue-600 underline decoration-1 underline-offset-2 hover:decoration-2 focus:outline-none"
                 title={title}
               >
                 <span className="truncate">{title}</span>
@@ -277,7 +277,7 @@ export default function SharedLinks() {
                   href={`/c/${row.original.conversationId}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex h-8 w-8 items-center justify-center rounded-md p-0 transition-colors hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="flex h-8 w-8 items-center justify-center rounded-md p-0 transition-colors hover:bg-surface-hover focus:outline-none"
                   aria-label={localize('com_ui_open_source_chat_new_tab_title', {
                     title: row.original.title || localize('com_ui_untitled'),
                   })}

@@ -145,7 +145,7 @@ const MessageRender = memo(function MessageRender({
   };
 
   const conditionalClasses = {
-    focus: 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-xheavy',
+    focus: 'focus-visible:outline-none',
   };
 
   const isUserTurn = msg.isCreatedByUser === true;

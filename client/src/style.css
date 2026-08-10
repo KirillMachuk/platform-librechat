@@ -1328,10 +1328,6 @@ button {
   padding: 0.5rem 0.75rem;
   transition: all 0.1s ease-in-out;
 }
-.btn:focus {
-  outline: 2px solid transparent;
-  outline-offset: 2px;
-}
 .btn:disabled {
   cursor: not-allowed;
   opacity: 0.5;
@@ -1346,27 +1342,9 @@ button {
   --tw-bg-opacity: 1;
   background-color: rgba(26, 127, 100, var(--tw-bg-opacity));
 }
-.btn-primary:focus {
-  --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width)
-    var(--tw-ring-offset-color);
-  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width))
-    var(--tw-ring-color);
-  --tw-ring-offset-width: 2px;
-  box-shadow:
-    var(--tw-ring-offset-shadow),
-    var(--tw-ring-shadow),
-    0 0 transparent;
-  box-shadow:
-    var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 transparent);
-}
-.btn-primary.focus-visible {
-  --tw-ring-opacity: 1;
-  --tw-ring-color: rgba(25, 195, 125, var(--tw-ring-opacity));
-}
-.btn-primary:focus-visible {
-  --tw-ring-opacity: 1;
-  --tw-ring-color: rgba(25, 195, 125, var(--tw-ring-opacity));
-}
+/* Upstream painted its own focus here: a box-shadow ring, ChatGPT-green
+   #19C37D for keyboards and Tailwind's preflight half-blue for clicks — the
+   stray green rectangle the owner saw on Shift. Gone; §1.8 outline applies. */
 .btn-primary:disabled:hover {
   --tw-bg-opacity: 1;
   background-color: rgba(16, 163, 127, var(--tw-bg-opacity));
@@ -1408,11 +1386,6 @@ button {
   background-color: rgba(236, 236, 241, var(--tw-bg-opacity));
 }
 
-.btn-neutral:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--ring-primary);
-}
-
 .dark .btn-neutral {
   --tw-border-opacity: 1;
   --tw-bg-opacity: 1;
@@ -1427,9 +1400,6 @@ button {
   background-color: rgba(66, 66, 66, var(--tw-bg-opacity));
 }
 
-.dark .btn-neutral:focus {
-  box-shadow: 0 0 0 2px var(--ring-primary);
-}
 .btn-small {
   padding: 0.25rem 0.5rem;
 }
@@ -1717,20 +1687,13 @@ body {
   line-height: 1.5rem;
   padding: 0.5rem 0.75rem;
 }
+/* §1.8 field focus, not the forms-plugin blue it shipped with. */
 .form-input:focus,
 .form-multiselect:focus,
 .form-select:focus,
 .form-textarea:focus {
-  --tw-ring-inset: var(--tw-empty, /*!*/ /*!*/);
-  --tw-ring-offset-width: 0px;
-  --tw-ring-offset-color: #fff;
-  --tw-ring-color: #2563eb;
-  --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width)
-    var(--tw-ring-offset-color);
-  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width))
-    var(--tw-ring-color);
-  border-color: #2563eb;
-  box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--ring-primary-soft);
   outline: 2px solid transparent;
   outline-offset: 2px;
 }
@@ -2571,18 +2534,41 @@ html {
   box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.35);
 }
 
+/* Canon §1.8: ONE focus for the whole system — outline 2px `acc`, offset +2
+   (full-width rows override to -2 at the call site). Mouse focus stays silent;
+   the outline is the keyboard's. Text fields are the single exception: their
+   focus is the `acc` border plus the 3px `acc-soft` ring (see FIELD_BASE /
+   defaultTextProps), and an outline on top of that ring is exactly the double
+   glow this rule replaces. Containers focused programmatically (tabindex=-1:
+   dialogs, popovers, main regions) are not controls and draw nothing. */
 :focus {
   outline: none;
 }
 
-:focus-visible {
-  outline: 2px solid #000;
+/* `:root` is here for specificity, not selection: at (0,2,0) and sitting
+   after the utilities layer, this beats every `focus:outline-none` /
+   `focus-visible:outline-none` a component still carries — those ~180
+   suppressions are dead classes now, not each a hole in keyboard focus. */
+:root :focus-visible {
+  outline: 2px solid var(--border-focus);
   outline-offset: 2px;
 }
 
-.dark :focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: 2px;
+:root input:focus-visible,
+:root textarea:focus-visible,
+:root select:focus-visible,
+:root [contenteditable]:focus-visible,
+:root [tabindex='-1']:focus-visible {
+  outline: none;
+}
+
+/* §1.8's second offset: full-width rows and segments keep the outline inside
+   their own box (an outside outline is clipped by every overflow-auto list
+   these rows live in). One named class, not a per-site invention. */
+:root .focus-inset:focus-visible,
+:root .focus-inset[data-focus-visible] {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
 }
 
 .popover-ui {
@@ -2624,10 +2610,12 @@ html {
   transform: scale(1) translateY(0);
 }
 
+/* The popover surface is a container, not a control: focus lands on it when a
+   menu opens, and a §1.8 outline around a whole menu is noise. (The old rule
+   here "worked" only because `outline: <color>` with no style draws nothing.) */
 .popover-ui:focus-visible,
 .popover-ui[data-focus-visible] {
-  outline: var(--bg-surface-hover);
-  outline-offset: -1px;
+  outline: none;
 }
 
 .popover-ui:where(.dark, .dark *) {

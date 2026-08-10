@@ -88,9 +88,7 @@ export default function ProgressText({
         type="button"
         className={cn(
           'inline-flex w-full items-center gap-2',
-          hasInput
-            ? 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy'
-            : 'pointer-events-none',
+          hasInput ? 'focus-visible:outline-none' : 'pointer-events-none',
         )}
         disabled={!hasInput}
         tabIndex={hasInput ? 0 : -1}

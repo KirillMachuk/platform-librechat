@@ -33,7 +33,10 @@ const buttonVariants: (
      кнопка», и 500 живёт теперь у заливных вариантов, которые главной кнопкой
      и бывают. Пока `font-medium` стоял здесь, каждая кнопка в продукте — в том
      числе аутлайн и `ghost` — была на ступень жирнее, чем в прототипе. */
-  'tap-target inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-45',
+  /* No focus classes: canon §1.8 draws ONE outline globally (style.css), and
+     the shadcn ring-2/ring-offset-2 that lived here was a second, near-black
+     ring with a white gap under it on every button in the product. */
+  'tap-target inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm transition-colors disabled:pointer-events-none disabled:opacity-45',
   {
     variants: {
       variant: {

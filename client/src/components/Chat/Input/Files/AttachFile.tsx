@@ -41,7 +41,7 @@ const AttachFile = ({
             aria-label={localize('com_sidepanel_attach_files')}
             disabled={isUploadDisabled}
             className={cn(
-              'tap-target flex size-[38px] items-center justify-center rounded-full p-1 transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-opacity-50 md:size-8',
+              'tap-target flex size-[38px] items-center justify-center rounded-full p-1 transition-colors hover:bg-surface-hover focus-visible:outline-none md:size-8',
             )}
             onKeyDownCapture={(e) => {
               if (!inputRef.current) {

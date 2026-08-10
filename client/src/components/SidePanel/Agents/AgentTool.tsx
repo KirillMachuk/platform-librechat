@@ -98,7 +98,7 @@ export default function AgentTool({
             className={cn(
               'flex h-7 w-7 items-center justify-center rounded transition-all duration-200',
               'hover:bg-gray-200 dark:hover:bg-gray-700',
-              'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
+              'focus:outline-none',
               'focus:opacity-100',
               isHovering || isFocused ? 'opacity-100' : 'pointer-events-none opacity-0',
             )}

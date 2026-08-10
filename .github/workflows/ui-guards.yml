@@ -106,3 +106,20 @@ jobs:
       # Reads files only — no dependencies, so no install step.
       - name: Check the shadow canon
         run: npm run check:shadows
+
+  focus_canon:
+    name: Focus canon
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24.16.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      # Reads files only — no dependencies, so no install step.
+      - name: Check the focus canon
+        run: npm run check:focus

@@ -74,7 +74,7 @@ const DialogContent: React.ForwardRefExoticComponent<
           {showCloseButton && (
             /* p-2.5/-m-2.5 pads the tap target to ~40px (mobile minimum) while the X keeps
                its visual position and size — the icon alone was a 20px target. */
-            <DialogPrimitive.Close className="absolute right-6 top-[1.6rem] -m-2.5 rounded-sm p-2.5 opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-gray-100 dark:focus:ring-white dark:focus:ring-offset-gray-700 dark:data-[state=open]:bg-gray-800">
+            <DialogPrimitive.Close className="absolute right-6 top-[1.6rem] -m-2.5 rounded-sm p-2.5 opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none data-[state=open]:bg-gray-100 dark:data-[state=open]:bg-gray-800">
               <X className="h-5 w-5 text-black dark:text-white" aria-hidden="true" />
               <span className="sr-only">Close</span>
             </DialogPrimitive.Close>
@@ -154,7 +154,7 @@ const DialogClose: React.ForwardRefExoticComponent<
       'mt-2 inline-flex h-10 items-center justify-center rounded-lg border border-gray-200 bg-transparent px-4 py-2 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-100 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800 sm:mt-0',
       className ?? '',
       /* Important: for accessibility */
-      'focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:focus:ring-gray-400 dark:focus:ring-offset-gray-900',
+      '',
     )}
     {...props}
   />
@@ -172,10 +172,10 @@ const DialogButton: React.ForwardRefExoticComponent<
     ref={ref}
     variant="outline"
     className={cn(
-      'mt-2 inline-flex h-10 items-center justify-center rounded-lg border border-gray-200 bg-transparent px-4 py-2 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800 dark:focus:ring-gray-400 dark:focus:ring-offset-gray-900 sm:mt-0',
+      'mt-2 inline-flex h-10 items-center justify-center rounded-lg border border-gray-200 bg-transparent px-4 py-2 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-100 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800 sm:mt-0',
       className ?? '',
       /* Important: for accessibility */
-      'focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:focus:ring-gray-400 dark:focus:ring-offset-gray-900',
+      '',
     )}
     {...props}
   />

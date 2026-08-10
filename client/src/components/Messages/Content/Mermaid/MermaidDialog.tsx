@@ -79,7 +79,7 @@ const MermaidDialog: React.FC<MermaidDialogProps> = memo(
                 ref={showCodeButtonRef}
                 variant="ghost"
                 size="sm"
-                className="h-auto min-w-[6rem] gap-1 rounded-sm px-1 py-0 text-xs text-text-secondary hover:bg-surface-hover hover:text-text-primary focus-visible:ring-border-heavy focus-visible:ring-offset-0"
+                className="h-auto min-w-[6rem] gap-1 rounded-sm px-1 py-0 text-xs text-text-secondary hover:bg-surface-hover hover:text-text-primary"
                 onClick={handleToggleCode}
               >
                 {showCode ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -89,13 +89,13 @@ const MermaidDialog: React.FC<MermaidDialogProps> = memo(
                 ref={copyButtonRef}
                 variant="ghost"
                 size="sm"
-                className="h-auto gap-1 rounded-sm px-1 py-0 text-xs text-text-secondary hover:bg-surface-hover hover:text-text-primary focus-visible:ring-border-heavy focus-visible:ring-offset-0"
+                className="h-auto gap-1 rounded-sm px-1 py-0 text-xs text-text-secondary hover:bg-surface-hover hover:text-text-primary"
                 onClick={handleCopy}
               >
                 {isCopied ? <CheckMark className="h-[18px] w-[18px]" /> : <Clipboard />}
                 {localize('com_ui_copy_code')}
               </Button>
-              <OGDialogClose className="rounded-sm p-1 text-text-secondary hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy">
+              <OGDialogClose className="rounded-sm p-1 text-text-secondary hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none">
                 <X className="h-4 w-4" />
                 <span className="sr-only">{localize('com_ui_close')}</span>
               </OGDialogClose>
