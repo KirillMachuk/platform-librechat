@@ -137,6 +137,13 @@ module.exports = {
            violet. */
         acc: 'var(--c-acc)',
         'acc-ink': 'var(--c-acc-ink)',
+        /* The SELECTED-state tint (§1.4: selection is said with tint, not
+           weight). Settings tabs, segmented controls and the temporary-chat
+           chip used to borrow the focus-ring token for this background — and
+           the day focus went neutral, that token went transparent and took
+           their tint with it. Selection and focus are different jobs; they
+           get different tokens. */
+        'acc-soft': 'var(--c-acc-soft)',
         // Пузырь пользователя (§6.13). Значение с Ф2a, потребителя до сих пор не
         // было: пузырь красился сырым #F3F3F3 с отдельным правилом для тьмы.
         bubble: 'var(--c-bubble)',
