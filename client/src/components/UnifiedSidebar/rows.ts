@@ -19,8 +19,11 @@ export const sidebarRowIconClassName =
  * Hover is restated on purpose — the base row paints hover as `hover`/t1, so
  * without these the accent would drop out from under the cursor.
  */
+/* bg-acc-soft, NOT the focus-ring token it borrowed before: the day focus
+ * went neutral, --ring-primary-soft went transparent and the tint of the
+ * open section silently vanished. Selection has its own token (§1.4). */
 export const sidebarRowActiveClassName =
-  'bg-ring-primary-soft text-text-accent hover:bg-ring-primary-soft hover:text-text-accent';
+  'bg-acc-soft text-text-accent hover:bg-acc-soft hover:text-text-accent';
 
 export const sidebarRowActiveIconClassName = 'text-text-accent group-hover:text-text-accent';
 

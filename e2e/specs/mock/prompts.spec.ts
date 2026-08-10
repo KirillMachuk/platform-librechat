@@ -285,7 +285,9 @@ test.describe('prompt manager', () => {
       /* Both, in this order of importance: the rewrite is on record, and the
        * original was not replaced by it. A test that only looked for the new
        * text would pass on a build that quietly threw the old version away. */
-      expect(versions.map((version) => version.prompt).sort()).toEqual([original, rewritten].sort());
+      expect(versions.map((version) => version.prompt).sort()).toEqual(
+        [original, rewritten].sort(),
+      );
 
       const group = await fetchJson<PromptGroup>(
         page,

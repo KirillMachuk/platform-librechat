@@ -233,16 +233,16 @@ describe('ExpandedPanel', () => {
       const classesOf = (el: HTMLElement) => el.className.split(/\s+/);
 
       expect(classesOf(prompts)).toContain('text-text-secondary');
-      expect(classesOf(prompts)).not.toContain('bg-ring-primary-soft');
+      expect(classesOf(prompts)).not.toContain('bg-acc-soft');
 
       fireEvent.click(screen.getByRole('button', { name: 'com_ui_prompts' }));
 
       /* Canon §6.5: acc-soft fill, acc text — and the t2 it replaces must be
          gone, or twMerge kept the wrong one of the pair. */
-      expect(classesOf(prompts)).toContain('bg-ring-primary-soft');
+      expect(classesOf(prompts)).toContain('bg-acc-soft');
       expect(classesOf(prompts)).toContain('text-text-accent');
       expect(classesOf(prompts)).not.toContain('text-text-secondary');
-      expect(classesOf(bookmarks)).not.toContain('bg-ring-primary-soft');
+      expect(classesOf(bookmarks)).not.toContain('bg-acc-soft');
       expect(classesOf(bookmarks)).toContain('text-text-secondary');
 
       /* The icon carries the accent too, not just the label. */
