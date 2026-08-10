@@ -34,8 +34,11 @@ const LoginForm: React.FC<TLoginFormProps> = ({ onSubmit, startupConfig, error, 
   const requireCaptcha = Boolean(startupConfig.turnstile?.siteKey);
 
   /** Canon §6.1: one ink action per screen. With corporate sign-in on the card
-   *  that button is the main action and the password form submits with an
-   *  outline; without it the password form is the only way in. */
+   *  that button is the main action and the password form submits with the
+   *  filled neutral; without it the password form is the only way in and takes
+   *  the ink itself. `outline` is not an option here — transparent with a
+   *  control border is what the two fields above it look like, and the submit
+   *  stopped reading as a button at all. */
   const hasSocialLogin =
     startupConfig.socialLoginEnabled === true && (startupConfig.socialLogins?.length ?? 0) > 0;
 
@@ -153,7 +156,7 @@ const LoginForm: React.FC<TLoginFormProps> = ({ onSubmit, startupConfig, error, 
           data-testid="login-button"
           type="submit"
           disabled={(requireCaptcha && !turnstileToken) || isSubmitting}
-          variant={hasSocialLogin ? 'outline' : 'submit'}
+          variant={hasSocialLogin ? 'secondary' : 'submit'}
           /** Canon §4: the one wide button on the sign-in card is 40 (48 on a
            *  phone), taller than the 36 every other button gets. The `outline`
            *  variant now carries `btn-line` and a plain `hover` fill on its
