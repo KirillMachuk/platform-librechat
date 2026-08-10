@@ -423,6 +423,40 @@ function renderCard(meta: TDocMetadata | undefined): string {
  * нет: у таблицы никогда нет сторон, у скана с провалившимся OCR нет ничего. Юрист по такому
  * ответу решит, что договоров два, хотя непроверенными остались двести.
  */
+function renderDocumentLines(documents: LibraryDocumentRef[]): string {
+  return documents
+    .map((doc, index) => {
+      const card = renderCard(doc.docMetadata);
+      return `${index + 1}. ${doc.filename}${card ? ` — ${card}` : ''} — Document ID: ${doc.fileId}`;
+    })
+    .join('\n');
+}
+
+/**
+ * Ответ на «что у меня вообще есть в библиотеке» — тот же список документов, но БЕЗ поискового
+ * запроса: перечисление не ретривал, ему нечего искать. Раньше такой вопрос вынуждал модель
+ * сочинить запрос («документы») и выдать пять случайно похожих файлов как ответ о содержимом
+ * библиотеки.
+ *
+ * Хвост про повторный вызов обязателен: список — не ответ о СОДЕРЖАНИИ, и модель, получившая
+ * его на вопрос «что сказано в договоре с Ромашкой», обязана сходить ещё раз уже с запросом,
+ * а не пересказывать имена файлов.
+ */
+function formatOverview(documents: LibraryDocumentRef[], total: number): string {
+  if (documents.length === 0) {
+    return '';
+  }
+  const truncated = total > documents.length;
+  const head = truncated
+    ? `The user's library holds ${total} indexed documents — here are the ${documents.length} most recently updated. ALWAYS say the list is partial and give the total (${total}).`
+    : `The user's library holds ${total} indexed document${total === 1 ? '' : 's'} — this is all of them.`;
+  return (
+    `${head}\n${renderDocumentLines(documents)}\n\n` +
+    `This is a listing of what exists, NOT an answer about what any document says. ` +
+    `To answer a question about content, call library_search again with a query.`
+  );
+}
+
 function formatMatchedList(
   documents: LibraryDocumentRef[],
   total: number,
@@ -431,10 +465,6 @@ function formatMatchedList(
   if (documents.length === 0) {
     return '';
   }
-  const lines = documents.map((doc, index) => {
-    const card = renderCard(doc.docMetadata);
-    return `${index + 1}. ${doc.filename}${card ? ` — ${card}` : ''} — Document ID: ${doc.fileId}`;
-  });
   const truncated = total > documents.length;
   const head = truncated
     ? `Documents whose extracted attributes match — showing the ${documents.length} most recently updated of ${total}. ALWAYS tell the user the list is partial and give the total (${total}); ask them to narrow the filter to see the rest.`
@@ -451,7 +481,39 @@ function formatMatchedList(
     unfilterableCount > 0
       ? `Passages from across the library (may include documents NOT in the list above):`
       : `Passages from the most relevant of them:`;
-  return `${head}${completeness}\n${lines.join('\n')}\n\n${passages}`;
+  return `${head}${completeness}\n${renderDocumentLines(documents)}\n\n${passages}`;
+}
+
+/**
+ * Перечисление документов без ретривала: «что у меня есть» и «покажи ВСЕ договоры с X», когда
+ * поискового запроса нет. Отдельная дверь, а не ветка `searchLibrary`, ровно потому, что здесь
+ * НЕЧЕГО искать — вектор без запроса не считается, и притворяться поиском значит вернуть модели
+ * пустой результат там, где ответ у нас на руках.
+ */
+export async function listLibrary({
+  documents,
+  total,
+  filtered,
+  unfilterableCount = 0,
+  transformContent,
+}: {
+  documents: LibraryDocumentRef[];
+  total: number;
+  filtered: boolean;
+  unfilterableCount?: number;
+  transformContent?: (content: string) => Promise<string>;
+}): Promise<LibrarySearchResult> {
+  const list = filtered
+    ? formatMatchedList(documents, total, unfilterableCount)
+    : formatOverview(documents, total);
+  if (!list) {
+    return { content: '', sources: [], documentCount: 0 };
+  }
+  /* Имена сторон и названия файлов — это ПДн, тот же шов маскирования, что и у фрагментов. */
+  const content = transformContent ? await transformContent(list) : list;
+  /* Источников нет намеренно: ничего не найдено ретривалом и ничего не прочитано — список имён
+   * не является цитатой, а карточка источника под ответом утверждала бы обратное. */
+  return { content, sources: [], documentCount: documents.length };
 }
 
 function formatResult(

@@ -94,6 +94,7 @@ stays green, so flakes accumulate where nobody looks.
 | A file citation opens its preview | unit | `client/src/components/Web/__tests__/Citation.test.tsx#renders composite file citations as buttons and opens the preview dialog` | covered |
 | A web-search citation links out to its source, in a new tab, without a handle back | unit | `client/src/components/Web/__tests__/Citation.test.tsx#lets a web citation click through to the browser, unlike a file one` | covered |
 | File-search (RAG) retrieval card renders | unit | `client/src/components/Chat/Messages/Content/__tests__/RetrievalCall.test.tsx` | covered |
+| A document search with no file cards offers no expander to an empty panel | unit | `client/src/components/Chat/Messages/Content/__tests__/RetrievalCall.test.tsx#offers no expander when the output holds no file cards` | covered |
 | A document the model read in full appears in the answer's sources | unit | `client/src/components/Web/__tests__/ReadDocumentSources.test.tsx#shows a document that was read in full` | covered |
 | A document read across several calls is listed once, not once per call | unit | `client/src/components/Web/__tests__/ReadDocumentSources.test.tsx#lists a document read across several calls once` | covered |
 | A read's source card adds no file chip under its tool call | unit | `client/src/components/Web/__tests__/ReadDocumentSources.test.tsx#adds no file chip under the tool call that produced it` | covered |

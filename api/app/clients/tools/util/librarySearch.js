@@ -1,6 +1,7 @@
 const { logger } = require('@librechat/data-schemas');
 const { tool } = require('@librechat/agents/langchain/tools');
 const {
+  listLibrary,
   searchLibrary,
   getRagRerankConfig,
   librarySearchSchema,
@@ -221,11 +222,22 @@ const withLibraryVisibility = (query) => {
  * @param {string} userId
  * @param {string} [tenantId]
  * @param {object} [filters] `{ doc_type, org, location, date_from, date_to }` от модели.
+ * @param {string[]} [conversationFileIds]
+ * @param {boolean} [enumerate=false] Перечисление без поискового запроса («что у меня есть»).
+ *   Набор документов и его честный размер собираются ТЕМ ЖЕ запросом, что и набор по фильтру, —
+ *   без фильтра он и есть вся библиотека. Не считаем этого на поисковом пути: там список не
+ *   нужен, а лишний проход по записям File тащит десятки МБ (в записи лежит полный текст).
  * @returns {Promise<{ fileIds: string[]; fileNames: Map<string, string>; indexingCount: number;
  *   failedCount: number; truncated: boolean; filtered: boolean; matchedCount: number;
  *   unfilterableCount: number }>}
  */
-const primeLibraryScope = async (userId, tenantId, filters, conversationFileIds = []) => {
+const primeLibraryScope = async (
+  userId,
+  tenantId,
+  filters,
+  conversationFileIds = [],
+  enumerate = false,
+) => {
   const base = { user: userId, project_id: null };
   if (tenantId != null) {
     base.tenantId = tenantId;
@@ -286,9 +298,9 @@ const primeLibraryScope = async (userId, tenantId, filters, conversationFileIds 
       unfilterable
         ? countFiles(withLibraryVisibility({ ...base, embedded: true, ...unfilterable }))
         : Promise.resolve(0),
-      filterClause
+      filterClause || enumerate
         ? getFiles(
-            withLibraryVisibility({ ...base, embedded: true, ...filterClause }),
+            withLibraryVisibility({ ...base, embedded: true, ...(filterClause ?? {}) }),
             null,
             { file_id: 1, filename: 1, docMetadata: 1 },
             LIBRARY_FILTER_LIST_MAX + 1,
@@ -306,7 +318,7 @@ const primeLibraryScope = async (userId, tenantId, filters, conversationFileIds 
   const matchedAll = matched ?? [];
   const matchedTruncated = matchedAll.length > LIBRARY_FILTER_LIST_MAX;
   const matchedCount = matchedTruncated
-    ? await countFiles(withLibraryVisibility({ ...base, embedded: true, ...filterClause }))
+    ? await countFiles(withLibraryVisibility({ ...base, embedded: true, ...(filterClause ?? {}) }))
     : matchedAll.length;
   const readyFiles = ready ?? [];
   const attachedFiles = attached ?? [];
@@ -418,12 +430,17 @@ const createLibrarySearchTool = async ({
           undefined,
         ];
       }
+      /* Перечисление вместо поиска: «что у меня есть в библиотеке», «покажи все договоры с X».
+       * Искать тут нечего — запроса нет, и вектор без запроса не считается; ответ собирается из
+       * списка документов. Пустая строка = запроса нет: модель, которой нечего искать, иногда
+       * присылает `query: ""` вместо пропуска поля. */
+      const listing = typeof query !== 'string' || query.trim() === '';
       /* Scope assembly is inside the try like every other step: it hits Mongo, and an escaping
        * exception would abort the whole chat turn instead of degrading to a message the model can
        * relay — the failure mode this tool avoids everywhere else. */
       let scope;
       try {
-        scope = await primeLibraryScope(userId, tenantId, filters, conversationFileIds);
+        scope = await primeLibraryScope(userId, tenantId, filters, conversationFileIds, listing);
       } catch (error) {
         logger.error(`[${Tools.library_search}] scope assembly failed`, error);
         return ['The library search could not be completed due to an unexpected error.', undefined];
@@ -433,7 +450,7 @@ const createLibrarySearchTool = async ({
        * скоуп пуст / всё ещё индексируется / сработал фильтр — без чтения кода и без содержимого
        * запроса. Ровно этой строки не хватило, чтобы диагностировать пустую библиотеку на лабе. */
       logger.info(
-        `[${Tools.library_search}] scope: files=${fileIds.length} attached=${scope.attachedCount} indexing=${scope.indexingCount} failed=${scope.failedCount} truncated=${scope.truncated} filtered=${scope.filtered}${scope.filtered ? ` matched=${scope.matchedCount} unfilterable=${scope.unfilterableCount}` : ''} query_chars=${query?.length ?? 0}`,
+        `[${Tools.library_search}] scope: files=${fileIds.length} attached=${scope.attachedCount} indexing=${scope.indexingCount} failed=${scope.failedCount} truncated=${scope.truncated} filtered=${scope.filtered}${scope.filtered ? ` matched=${scope.matchedCount} unfilterable=${scope.unfilterableCount}` : ''} listing=${listing} query_chars=${query?.length ?? 0}`,
       );
       const statusNote = buildStatusNote(scope);
       if (fileIds.length === 0) {
@@ -448,6 +465,26 @@ const createLibrarySearchTool = async ({
             ? `The user's library has no searchable documents yet.${statusNote} Tell them to retry in a few minutes or re-upload failed files.`
             : 'The user has no indexed documents in their library yet. Tell them to upload documents first.';
         return [emptyMessage, undefined];
+      }
+      if (listing) {
+        /* Никакого ретривала: ни JWT, ни rag_api, ни реранка — нечего ранжировать. Отсюда же
+         * следует, что перечисление не может «не найтись» по вине поиска. */
+        const result = await listLibrary({
+          documents: scope.matchedDocuments,
+          total: scope.matchedCount,
+          filtered: scope.filtered,
+          unfilterableCount: scope.unfilterableCount,
+          transformContent,
+        });
+        if (result.documentCount === 0) {
+          return [
+            scope.filtered
+              ? `No documents in the library match those attributes (${describeFilters(filters)}). Tell the user exactly that — do NOT claim the document does not exist, only that nothing matches these attributes — and offer to look without them.${statusNote}`
+              : `The user has no indexed documents in their library yet. Tell them to upload documents first.${statusNote}`,
+            undefined,
+          ];
+        }
+        return [`${result.content}${statusNote}`, undefined];
       }
       const jwtToken = generateShortLivedToken(userId);
       if (!jwtToken) {

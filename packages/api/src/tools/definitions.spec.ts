@@ -220,7 +220,12 @@ describe('definitions.ts', () => {
         }
 
         const libraryDef = result.toolDefinitions.find((d) => d.name === 'library_search');
-        expect(libraryDef?.parameters?.required).toEqual(['query']);
+        /* `query` is deliberately optional: omitting it LISTS the library instead of searching
+         * it, which is the only honest answer to "what documents do I have". Make it required
+         * again and the runtime rejects that call before the tool sees it — the listing becomes
+         * unreachable and the model is back to inventing a query for the question. */
+        expect(libraryDef?.parameters?.required ?? []).not.toContain('query');
+        expect(libraryDef?.parameters?.properties).toHaveProperty('query');
         expect(libraryDef?.parameters?.properties).toHaveProperty('doc_type');
 
         const openDef = result.toolDefinitions.find((d) => d.name === 'open_document');
