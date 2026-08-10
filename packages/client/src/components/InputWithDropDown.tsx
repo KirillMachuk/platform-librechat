@@ -97,7 +97,7 @@ const InputWithDropdown: React.ForwardRefExoticComponent<
           />
           <button
             type="button"
-            className="text-tertiary absolute inset-y-0 right-0 flex items-center rounded-md px-2 hover:text-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring-primary"
+            className="text-tertiary absolute inset-y-0 right-0 flex items-center rounded-md px-2 hover:text-secondary focus-visible:outline-none"
             onClick={() => setIsOpen(!isOpen)}
             aria-label={isOpen ? 'Close dropdown' : 'Open dropdown'}
           >
@@ -121,7 +121,7 @@ const InputWithDropdown: React.ForwardRefExoticComponent<
           <ul
             id="dropdown-list"
             role="listbox"
-            className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border-medium bg-surface-secondary shadow-lg focus:ring-1 focus:ring-inset focus:ring-ring-primary"
+            className="focus-inset absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border-medium bg-surface-secondary shadow-lg"
           >
             {options.map((option, index) => (
               <li
@@ -130,7 +130,7 @@ const InputWithDropdown: React.ForwardRefExoticComponent<
                 aria-selected={index === highlightedIndex}
                 className={cn(
                   'cursor-pointer rounded-md px-3 py-2',
-                  'focus:bg-surface-tertiary focus:outline-none focus:ring-1 focus:ring-inset focus:ring-ring-primary',
+                  'focus-inset focus:bg-surface-tertiary focus:outline-none',
                   index === highlightedIndex
                     ? 'bg-surface-active text-primary'
                     : 'text-secondary hover:bg-surface-tertiary',

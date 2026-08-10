@@ -73,7 +73,7 @@ const ToolMermaidArtifact = memo(({ attachment, text }: ToolMermaidArtifactProps
               className={cn(
                 'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs',
                 'text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy',
+                'focus-visible:outline-none',
               )}
             >
               <Download className="size-3" aria-hidden="true" />

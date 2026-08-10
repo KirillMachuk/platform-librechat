@@ -113,7 +113,7 @@ const PreviewPlaceholderCard = memo(
           className={cn(
             'flex shrink-0 items-center justify-center px-3 transition-colors duration-200',
             'rounded-r-xl bg-surface-tertiary text-text-secondary hover:bg-surface-hover hover:text-text-primary',
-            'border-l border-border-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy',
+            'border-l border-border-light focus-visible:outline-none',
           )}
         >
           <Download className="size-4" aria-hidden="true" />
@@ -267,7 +267,7 @@ const FileAttachmentGroup = memo(({ attachments }: { attachments: TAttachment[] 
         className={cn(
           'inline-flex w-full max-w-full items-center gap-2 rounded-lg py-1 pr-2 text-sm',
           'text-text-secondary transition-colors hover:text-text-primary',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy',
+          'focus-visible:outline-none',
         )}
       >
         <FilesIcon className="size-4 shrink-0" aria-hidden="true" />
@@ -393,7 +393,7 @@ const TextAttachment = memo(
                   onClick={handleDownload}
                   aria-label={`${localize('com_ui_download')} ${visibleFilename}`}
                   title={localize('com_ui_download')}
-                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy"
+                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none"
                 >
                   <Download className="size-4" aria-hidden="true" />
                 </button>
@@ -418,7 +418,7 @@ const TextAttachment = memo(
                 onClick={() => setExpanded((prev) => !prev)}
                 aria-expanded={expanded}
                 aria-controls={preId}
-                className="mt-2 text-xs text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy"
+                className="mt-2 text-xs text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-none"
               >
                 {expanded ? localize('com_ui_collapse') : localize('com_ui_show_all')}
               </button>

@@ -104,7 +104,7 @@ export const ThinkingButton = memo(
                 ? 'opacity-0 group-focus-within/thinking-container:opacity-100 group-hover/thinking-container:opacity-100'
                 : 'opacity-0',
               'hover:bg-surface-hover hover:text-text-primary',
-              'focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white',
+              'focus-visible:opacity-100 focus-visible:outline-none',
             )}
           >
             <span className="sr-only">
@@ -186,7 +186,7 @@ export const FloatingThinkingBar = memo(
               className={cn(
                 'flex items-center justify-center rounded p-1.5 text-text-tertiary',
                 'hover:bg-surface-hover hover:text-text-primary',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy',
+                'focus-visible:outline-none',
               )}
             >
               {isExpanded ? (
@@ -209,7 +209,7 @@ export const FloatingThinkingBar = memo(
                 className={cn(
                   'flex items-center justify-center rounded p-1.5 text-text-tertiary',
                   'hover:bg-surface-hover hover:text-text-primary',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy',
+                  'focus-visible:outline-none',
                 )}
               >
                 {isCopied ? (

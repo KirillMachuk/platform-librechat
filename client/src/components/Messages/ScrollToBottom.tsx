@@ -23,7 +23,7 @@ const ScrollToBottom = forwardRef<HTMLDivElement, Props>(({ scrollHandler }, ref
     >
       <button
         onClick={scrollHandler}
-        className="premium-scroll-button pointer-events-auto cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-xheavy"
+        className="premium-scroll-button pointer-events-auto cursor-pointer focus-visible:outline-none"
         aria-label={localize('com_ui_scroll_to_bottom')}
       >
         <ChevronDown className="h-4 w-4 text-text-secondary" />

@@ -75,14 +75,21 @@ describe('AgentHandoff - A11Y accessibility stubs', () => {
     expect(button.getAttribute('aria-label')).toContain('Test Agent');
   });
 
-  it('A11Y-03: button has focus-visible ring classes', () => {
+  it('A11Y-03: button leaves keyboard focus to the global §1.8 outline', () => {
     renderAgentHandoff({
       name: 'lc_transfer_to_agent-123',
       args: '{"key":"value"}',
     });
 
+    /* Focus indication moved out of components: style.css draws one 2px acc
+     * outline on every :focus-visible, and `npm run check:focus` fails the
+     * build on any hand-rolled ring. What the component must guarantee is
+     * only that the button is reachable — a real, enabled button — and that
+     * it paints no ring of its own on top of the global outline. */
     const button = screen.getByRole('button');
-    expect(button.className).toContain('focus-visible:ring-2');
+    expect(button).toBeEnabled();
+    expect(button).not.toHaveAttribute('tabindex', '-1');
+    expect(button.className).not.toMatch(/focus[\w-]*:ring-\d/);
   });
 
   it('A11Y-03: disabled button is rendered when hasInfo is false', () => {

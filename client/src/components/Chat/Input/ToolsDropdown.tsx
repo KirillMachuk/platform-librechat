@@ -417,7 +417,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
           id="tools-dropdown-button"
           aria-label={localize('com_ui_tools_options')}
           className={cn(
-            'tap-target flex size-[38px] items-center justify-center rounded-full p-1 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-opacity-50 md:size-8',
+            'tap-target flex size-[38px] items-center justify-center rounded-full p-1 hover:bg-surface-hover focus-visible:outline-none md:size-8',
             isPopoverActive && 'bg-surface-hover',
           )}
         >

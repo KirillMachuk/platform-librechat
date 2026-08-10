@@ -135,7 +135,7 @@ export default function FavoriteItem(props: FavoriteItemProps) {
       tabIndex={0}
       aria-label={ariaLabel}
       className={cn(
-        'group relative flex h-11 w-full cursor-pointer items-center justify-between rounded-xl px-2.5 text-sm text-text-primary outline-none transition-colors duration-90 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-black dark:focus-visible:ring-white md:h-10',
+        'focus-inset group relative flex h-11 w-full cursor-pointer items-center justify-between rounded-xl px-2.5 text-sm text-text-primary outline-none transition-colors duration-90 hover:bg-surface-hover focus-visible:outline-none md:h-10',
         isPopoverActive ? 'bg-surface-active' : '',
       )}
       onClick={handleClick}
@@ -165,7 +165,7 @@ export default function FavoriteItem(props: FavoriteItemProps) {
           trigger={
             <Menu.MenuButton
               className={cn(
-                'inline-flex h-7 w-7 items-center justify-center rounded-md border-none p-0 text-sm font-medium ring-ring-primary transition-all duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50',
+                'inline-flex h-7 w-7 items-center justify-center rounded-md border-none p-0 text-sm font-medium ring-ring-primary transition-all duration-200 ease-in-out focus-visible:outline-none disabled:opacity-50',
                 isPopoverActive
                   ? 'opacity-100'
                   : 'opacity-0 focus:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100 data-[open]:opacity-100',

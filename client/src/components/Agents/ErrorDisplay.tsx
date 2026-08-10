@@ -233,8 +233,8 @@ export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({ error, onRetry, cont
               variant="outline"
               size="sm"
               className={cn(
-                'border-red-300 text-red-700 hover:bg-red-50 focus:ring-2 focus:ring-red-500',
-                'dark:border-red-600 dark:text-red-400 dark:hover:bg-red-900/20 dark:focus:ring-red-400',
+                'border-red-300 text-red-700 hover:bg-red-50',
+                'dark:border-red-600 dark:text-red-400 dark:hover:bg-red-900/20',
               )}
               aria-describedby="error-message error-suggestion"
               aria-label={localize('com_agents_error_retry_label', { 0: message })}

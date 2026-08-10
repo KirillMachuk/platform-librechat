@@ -12,15 +12,8 @@ import {
   getEndpointField,
 } from 'librechat-data-provider';
 import type { AgentForm, IconComponentTypes } from '~/common';
-import {
-  removeFocusOutlines,
-  processAgentOption,
-  defaultTextProps,
-  validateEmail,
-  getIconKey,
-  cn,
-} from '~/utils';
 import ConversationStarters from '~/components/SidePanel/Builder/AssistantConversationStarters';
+import { processAgentOption, defaultTextProps, validateEmail, getIconKey, cn } from '~/utils';
 import { useLocalize, useVisibleTools, useHasAccess, useAuthContext } from '~/hooks';
 import { ToolSelectDialog, MCPToolSelectDialog } from '~/components/Tools';
 import useAgentCapabilities from '~/hooks/Agents/useAgentCapabilities';
@@ -51,10 +44,12 @@ const isConfirmedSkillMiss = (error: unknown): boolean => {
 };
 
 const labelClass = 'mb-2 text-token-text-primary block text-sm font-medium';
+/* No focus classes of its own: defaultTextProps already carries the §1.8
+   field recipe, and the ring-2 that used to sit here stacked a second ring
+   on top of it — the fat double glow on «Описание». */
 const inputClass = cn(
   defaultTextProps,
-  'flex w-full px-3 py-2 border-border-light bg-surface-secondary focus-visible:ring-2 focus-visible:ring-ring-primary',
-  removeFocusOutlines,
+  'flex w-full px-3 py-2 border-border-light bg-surface-secondary',
 );
 
 export default function AgentConfig() {

@@ -171,7 +171,7 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
             }}
             aria-label={label}
             title={localize('com_ui_attach_to_chat')}
-            className="tap-target flex size-8 items-center justify-center rounded-lg text-text-tertiary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy"
+            className="tap-target flex size-8 items-center justify-center rounded-lg text-text-tertiary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none"
           >
             <Paperclip className="icon-sm" aria-hidden="true" />
           </button>

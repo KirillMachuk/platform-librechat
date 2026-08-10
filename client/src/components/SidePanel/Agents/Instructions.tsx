@@ -5,14 +5,15 @@ import { specialVariables } from 'librechat-data-provider';
 import { Controller, useFormContext } from 'react-hook-form';
 import type { TSpecialVarLabel } from 'librechat-data-provider';
 import type { AgentForm } from '~/common';
-import { cn, defaultTextProps, removeFocusOutlines } from '~/utils';
 import { PlusCircle } from '~/components/icons';
+import { cn, defaultTextProps } from '~/utils';
 import { useLocalize } from '~/hooks';
 
+/* Same recipe as AgentConfig's inputClass: defaultTextProps already carries
+   the §1.8 field focus, nothing stacked on top. */
 const inputClass = cn(
   defaultTextProps,
-  'flex w-full px-3 py-2 border-border-light bg-surface-secondary focus-visible:ring-2 focus-visible:ring-ring-primary',
-  removeFocusOutlines,
+  'flex w-full px-3 py-2 border-border-light bg-surface-secondary',
 );
 
 interface VariableOption {

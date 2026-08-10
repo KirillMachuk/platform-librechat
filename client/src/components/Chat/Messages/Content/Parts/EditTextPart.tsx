@@ -178,7 +178,7 @@ const EditTextPart = ({
           className={cn(
             'markdown prose dark:prose-invert light whitespace-pre-wrap break-words pl-3 md:pl-4',
             'm-0 w-full resize-none border-0 bg-transparent py-[10px]',
-            'placeholder-text-secondary focus:ring-0 focus-visible:ring-0 md:py-3.5',
+            'placeholder-text-secondary md:py-3.5',
             isRTL ? 'text-right' : 'text-left',
             'max-h-[65vh] pr-3 md:max-h-[75vh] md:pr-4',
             removeFocusRings,

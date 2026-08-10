@@ -89,7 +89,7 @@ const HoverButton = memo(
          `isVisible` остаётся: во время генерации кнопок быть не должно. */
       'group-hover:visible group-focus-within:visible group-[.final-completion]:visible',
       !isVisible && 'opacity-0',
-      'focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white focus-visible:outline-none',
+      'focus-visible:outline-none',
       isActive && isVisible && 'text-text-primary bg-surface-hover',
       className,
     );

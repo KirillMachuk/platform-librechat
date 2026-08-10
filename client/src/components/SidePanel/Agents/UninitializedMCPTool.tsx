@@ -105,7 +105,7 @@ export default function UninitializedMCPTool({ serverInfo }: { serverInfo?: MCPS
           <button
             type="button"
             className={cn(
-              'flex h-7 w-7 items-center justify-center rounded transition-all duration-200 hover:bg-surface-active-alt focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
+              'flex h-7 w-7 items-center justify-center rounded transition-all duration-200 hover:bg-surface-active-alt focus:opacity-100 focus:outline-none',
               isHovering || isFocused ? 'opacity-100' : 'pointer-events-none opacity-0',
             )}
             aria-label={`Delete ${serverName}`}

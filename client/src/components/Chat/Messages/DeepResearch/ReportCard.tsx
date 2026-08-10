@@ -185,7 +185,7 @@ export default function ReportCard({
               tabIndex={0}
               role="region"
               aria-label={displayTitle}
-              className="min-h-0 flex-1 overflow-y-auto px-4 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-border-xheavy sm:px-8"
+              className="focus-inset min-h-0 flex-1 overflow-y-auto px-4 py-4 focus-visible:outline-none sm:px-8"
             >
               {children}
             </div>

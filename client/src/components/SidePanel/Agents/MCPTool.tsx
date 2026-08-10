@@ -114,7 +114,7 @@ export default function MCPTool({ serverInfo }: { serverInfo?: MCPServerInfo }) 
           >
             <AccordionPrimitive.Header asChild>
               <div
-                className="flex grow cursor-pointer select-none items-center gap-1 rounded bg-transparent p-0 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                className="flex grow cursor-pointer select-none items-center gap-1 rounded bg-transparent p-0 text-left transition-colors focus:outline-none"
                 onClick={() => setAccordionValue((prev) => (prev ? '' : currentServerName))}
               >
                 {statusIcon && <div className="flex items-center">{statusIcon}</div>}
@@ -205,7 +205,7 @@ export default function MCPTool({ serverInfo }: { serverInfo?: MCPServerInfo }) 
                             aria-pressed={allDeferred}
                             className={cn(
                               'flex h-7 w-7 items-center justify-center rounded transition-colors duration-200',
-                              'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
+                              'focus:outline-none',
                               isExpanded ? 'visible' : 'pointer-events-none invisible',
                               allDeferred
                                 ? 'bg-amber-500/20 text-amber-500 hover:bg-amber-500/30'
@@ -245,7 +245,7 @@ export default function MCPTool({ serverInfo }: { serverInfo?: MCPServerInfo }) 
                             aria-pressed={allProgrammatic}
                             className={cn(
                               'flex h-7 w-7 items-center justify-center rounded transition-colors duration-200',
-                              'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
+                              'focus:outline-none',
                               isExpanded ? 'visible' : 'pointer-events-none invisible',
                               allProgrammatic
                                 ? 'bg-violet-500/20 text-violet-500 hover:bg-violet-500/30'
@@ -275,7 +275,7 @@ export default function MCPTool({ serverInfo }: { serverInfo?: MCPServerInfo }) 
                               type="button"
                               onClick={(e) => e.stopPropagation()}
                               className={cn(
-                                'flex h-7 w-7 items-center justify-center rounded transition-colors duration-200 hover:bg-surface-active-alt focus:translate-x-0 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
+                                'flex h-7 w-7 items-center justify-center rounded transition-colors duration-200 hover:bg-surface-active-alt focus:translate-x-0 focus:opacity-100 focus:outline-none',
                                 isExpanded && 'bg-surface-active-alt',
                               )}
                               aria-label={
@@ -303,7 +303,7 @@ export default function MCPTool({ serverInfo }: { serverInfo?: MCPServerInfo }) 
                           <OGDialogTrigger asChild>
                             <button
                               type="button"
-                              className="flex h-7 w-7 items-center justify-center rounded transition-colors duration-200 hover:bg-surface-active-alt focus:translate-x-0 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                              className="flex h-7 w-7 items-center justify-center rounded transition-colors duration-200 hover:bg-surface-active-alt focus:translate-x-0 focus:opacity-100 focus:outline-none"
                               onClick={(e) => e.stopPropagation()}
                               aria-label={`Delete ${currentServerName}`}
                               tabIndex={0}

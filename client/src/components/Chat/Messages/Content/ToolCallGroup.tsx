@@ -241,7 +241,7 @@ export default function ToolCallGroup({
     <div className="mb-2 mt-1" ref={rootRef}>
       <button
         type="button"
-        className="inline-flex w-full items-center gap-2 py-1 text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy"
+        className="inline-flex w-full items-center gap-2 py-1 text-text-secondary focus-visible:outline-none"
         onClick={handleToggle}
         aria-expanded={isExpanded}
         aria-label={groupLabel}

@@ -21,7 +21,7 @@ export default function MinimalHoverButtons({ message, searchResults }: THoverBu
     <div className="visible mt-1 flex justify-center gap-1 self-end text-gray-400 lg:justify-start">
       {/* Канон §6.14: кнопки под ответом видны ВСЕГДА, не по наведению. */}
       <button
-        className="ml-0 flex items-center gap-1.5 rounded-lg p-1.5 text-xs text-text-secondary-alt transition-colors duration-200 hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white"
+        className="ml-0 flex items-center gap-1.5 rounded-lg p-1.5 text-xs text-text-secondary-alt transition-colors duration-200 hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none"
         onClick={() => copyToClipboard(setIsCopied)}
         type="button"
         title={

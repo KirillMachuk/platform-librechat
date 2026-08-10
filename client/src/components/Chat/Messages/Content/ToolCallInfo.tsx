@@ -138,7 +138,7 @@ export default function ToolCallInfo({
             type="button"
             className={cn(
               'inline-flex items-center gap-1 text-xs text-text-secondary',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy',
+              'focus-visible:outline-none',
             )}
             onClick={() => setShowParams((prev) => !prev)}
             aria-expanded={showParams}

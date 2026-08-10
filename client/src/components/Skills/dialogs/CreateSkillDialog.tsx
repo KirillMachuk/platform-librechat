@@ -112,7 +112,7 @@ export default function CreateSkillDialog({
               placeholder={localize('com_ui_skill_name_placeholder')}
               aria-invalid={errors.name ? 'true' : 'false'}
               autoComplete="off"
-              className="flex h-10 w-full rounded-xl border border-border-medium bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-10 w-full rounded-xl border border-border-medium bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
               {...register('name', {
                 required: localize('com_ui_skill_name_required'),
                 pattern: {
@@ -144,7 +144,7 @@ export default function CreateSkillDialog({
               maxRows={4}
               placeholder={localize('com_ui_skill_description_placeholder')}
               aria-label={localize('com_ui_description')}
-              className="w-full resize-none rounded-xl border border-border-medium bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
+              className="w-full resize-none rounded-xl border border-border-medium bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary focus-visible:outline-none"
               {...register('description', {
                 required: localize('com_ui_skill_description_required'),
                 maxLength: {
@@ -168,7 +168,7 @@ export default function CreateSkillDialog({
               maxRows={12}
               placeholder={localize('com_ui_skill_instructions_placeholder')}
               aria-label={localize('com_ui_skill_instructions')}
-              className="w-full resize-none rounded-xl border border-border-medium bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
+              className="w-full resize-none rounded-xl border border-border-medium bg-transparent px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary focus-visible:outline-none"
               {...register('body')}
             />
           </div>

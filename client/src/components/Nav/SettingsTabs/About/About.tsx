@@ -116,7 +116,7 @@ function About() {
         <button
           type="button"
           onClick={onCopy}
-          className="inline-flex items-center justify-center gap-2 self-start rounded-md border border-border-light bg-surface-secondary px-3 py-1.5 text-xs font-medium text-text-primary transition-colors hover:bg-surface-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-xheavy"
+          className="inline-flex items-center justify-center gap-2 self-start rounded-md border border-border-light bg-surface-secondary px-3 py-1.5 text-xs font-medium text-text-primary transition-colors hover:bg-surface-tertiary focus-visible:outline-none"
         >
           {copied ? (
             <>

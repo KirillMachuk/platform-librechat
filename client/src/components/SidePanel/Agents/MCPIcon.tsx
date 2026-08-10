@@ -42,7 +42,7 @@ export default function MCPIcon({ icon, onIconChange }: MCPIconProps) {
         onClick={handleClick}
         onKeyDown={handleKeyDown}
         aria-label={localize('com_ui_upload_icon')}
-        className="bg-token-surface-secondary dark:bg-token-surface-tertiary border-token-border-medium flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed focus:outline-none focus-visible:ring-2 focus-visible:ring-border-heavy"
+        className="bg-token-surface-secondary dark:bg-token-surface-tertiary border-token-border-medium flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed focus:outline-none"
       >
         {previewUrl ? (
           <img

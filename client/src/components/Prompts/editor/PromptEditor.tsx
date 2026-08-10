@@ -73,7 +73,7 @@ const PromptEditor: React.FC<Props> = ({ name, isEditing, setIsEditing }) => {
           <button
             type="button"
             aria-label={localize('com_ui_edit')}
-            className="absolute inset-0 z-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary"
+            className="absolute inset-0 z-0 rounded-xl focus:outline-none"
             onClick={() => setIsEditing(true)}
           />
         )}
@@ -86,7 +86,7 @@ const PromptEditor: React.FC<Props> = ({ name, isEditing, setIsEditing }) => {
                 {...field}
                 // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
-                className="w-full resize-none overflow-y-auto bg-transparent font-mono text-sm leading-relaxed text-text-primary placeholder:text-text-tertiary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring-primary sm:text-base"
+                className="w-full resize-none overflow-y-auto bg-transparent font-mono text-sm leading-relaxed text-text-primary placeholder:text-text-tertiary focus:outline-none sm:text-base"
                 minRows={4}
                 maxRows={16}
                 onBlur={() => setIsEditing(false)}

@@ -639,7 +639,7 @@ function SubagentPrompt({
           aria-expanded={expanded}
           aria-label={toggleLabel}
           title={toggleLabel}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-text-secondary transition hover:bg-surface-tertiary hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-ring"
+          className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-text-secondary transition hover:bg-surface-tertiary hover:text-text-primary focus:outline-none"
         >
           {expanded ? (
             <Minimize2 size={14} aria-hidden="true" />

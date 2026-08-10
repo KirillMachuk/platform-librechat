@@ -1,5 +1,5 @@
-import debounce from 'lodash/debounce';
 import { useState, useEffect } from 'react';
+import debounce from 'lodash/debounce';
 import { useFormContext } from 'react-hook-form';
 import { Spinner, useToastContext } from '@librechat/client';
 import {
@@ -17,8 +17,8 @@ import type {
 import type { ActionAuthForm, ActionWithNullableMetadata } from '~/common';
 import type { Spec } from './ActionsTable';
 import ActionCallback from '~/components/SidePanel/Builder/ActionCallback';
-import { useAssistantsMapContext } from '~/Providers';
 import { ActionsTable, columns } from './ActionsTable';
+import { useAssistantsMapContext } from '~/Providers';
 import { useUpdateAction } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 
@@ -244,7 +244,7 @@ export default function ActionsInput({
               onChange={handleInputChange}
               spellCheck="false"
               placeholder={localize('com_ui_enter_openapi_schema')}
-              className="text-token-text-primary block h-96 w-full bg-transparent p-2 font-mono text-xs outline-none focus:ring-1 focus:ring-border-light"
+              className="text-token-text-primary block h-96 w-full bg-transparent p-2 font-mono text-xs outline-none focus:ring-[3px] focus:ring-ring-primary-soft"
             />
             {/* TODO: format input button */}
           </div>
@@ -278,7 +278,7 @@ export default function ActionsInput({
           <input
             type="text"
             placeholder="https://api.example-weather-app.com/privacy"
-            className="flex-1 rounded-lg bg-transparent px-3 py-1.5 text-sm outline-none placeholder:text-text-secondary-alt focus:ring-1 focus:ring-border-light"
+            className="flex-1 rounded-lg bg-transparent px-3 py-1.5 text-sm outline-none placeholder:text-text-secondary-alt focus:ring-[3px] focus:ring-ring-primary-soft"
           />
         </div>
       </div>
@@ -286,7 +286,7 @@ export default function ActionsInput({
         <button
           disabled={!functions || !functions.length}
           onClick={saveAction}
-          className="focus:shadow-outline mt-1 flex min-w-[100px] items-center justify-center rounded bg-green-500 px-4 py-2 font-semibold text-white hover:bg-green-400 focus:border-green-500 focus:outline-none focus:ring-0 disabled:bg-green-400"
+          className="focus:shadow-outline mt-1 flex min-w-[100px] items-center justify-center rounded bg-green-500 px-4 py-2 font-semibold text-white hover:bg-green-400 focus:border-green-500 focus:outline-none disabled:bg-green-400"
           type="button"
         >
           {submitContext()}

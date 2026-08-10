@@ -219,7 +219,7 @@ function buttonClasses(isActive: boolean) {
        уже применили к кнопкам из `HoverButton`, а сюда оно не доехало — оценить
        ответ, который не последний, можно было только найдя кнопку наведением. */
     'group-hover:visible group-focus-within:visible group-[.final-completion]:visible',
-    'focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white focus-visible:outline-none',
+    'focus-visible:outline-none',
     isActive && 'active text-text-primary bg-surface-hover',
   );
 }

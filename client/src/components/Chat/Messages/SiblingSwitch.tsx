@@ -29,7 +29,7 @@ export default function SiblingSwitch({
     'hover-button tap-target flex h-7 w-7 items-center justify-center rounded-lg text-text-secondary-alt [&_svg]:h-4 [&_svg]:w-4',
     'hover:text-text-primary hover:bg-surface-hover',
     'group-hover:visible group-focus-within:visible group-[.final-completion]:visible',
-    'focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white focus-visible:outline-none',
+    'focus-visible:outline-none',
   );
 
   return siblingCount > 1 ? (

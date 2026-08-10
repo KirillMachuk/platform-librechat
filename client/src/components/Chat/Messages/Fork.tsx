@@ -39,7 +39,7 @@ export default function Fork({
        ответе, который не последний, ветку приходилось искать наведением.
        `isLast` больше не влияет на вид и потому не разбирается из пропсов. */
     'group-hover:visible group-focus-within:visible group-[.final-completion]:visible',
-    'focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white focus-visible:outline-none',
+    'focus-visible:outline-none',
   );
 
   const forkConvo = useForkConvoMutation({

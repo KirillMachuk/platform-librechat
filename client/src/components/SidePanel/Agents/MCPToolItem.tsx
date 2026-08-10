@@ -56,7 +56,7 @@ export default function MCPToolItem({
     <div
       className={cn(
         'group/item flex cursor-pointer items-center rounded-lg border p-2',
-        'ml-2 mr-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background',
+        'ml-2 mr-1',
         getToolItemStyle(isDeferred, isProgrammatic),
       )}
       onClick={(e) => e.stopPropagation()}
@@ -75,7 +75,7 @@ export default function MCPToolItem({
           }
         }}
         onClick={(e) => e.stopPropagation()}
-        className="relative mr-2 inline-flex h-4 w-4 shrink-0 cursor-pointer rounded border border-border-medium transition-[border-color] duration-200 hover:border-border-heavy focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+        className="relative mr-2 inline-flex h-4 w-4 shrink-0 cursor-pointer rounded border border-border-medium transition-[border-color] duration-200 hover:border-border-heavy focus:outline-none"
         aria-label={tool.metadata.name}
       />
       <span className="text-token-text-primary min-w-0 flex-1 select-none truncate">
@@ -90,7 +90,7 @@ export default function MCPToolItem({
               type="button"
               className={cn(
                 'flex h-6 w-6 items-center justify-center rounded transition-all duration-200',
-                'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
+                'focus:outline-none',
                 hasOptions
                   ? 'text-text-secondary hover:bg-surface-hover hover:text-text-primary'
                   : 'text-text-tertiary opacity-0 hover:bg-surface-hover hover:text-text-primary group-focus-within/item:opacity-100 group-hover/item:opacity-100',

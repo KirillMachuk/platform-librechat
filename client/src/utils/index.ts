@@ -83,14 +83,17 @@ export const languages = [
 ];
 
 export const removeFocusOutlines = '';
-export const removeFocusRings =
-  'focus:outline-none focus:ring-0 focus:ring-opacity-0 focus:ring-offset-0';
+export const removeFocusRings = 'focus:outline-none';
 
 export const cardStyle =
   'transition-colors rounded-md min-w-[75px] border font-normal bg-white hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700 dark:bg-gray-800 text-black dark:text-gray-600 focus:outline-none data-[state=open]:bg-gray-50 dark:data-[state=open]:bg-gray-700';
 
+/* Focus is canon §1.8 for fields: `acc` border + 3px `acc-soft` ring, no
+   ring-offset. The offset is what painted the white gap under the accent ring
+   — Tailwind's offset colour defaults to #fff even in dark theme, which is
+   the "и синим и белым" double glow the owner reported on the agent builder. */
 export const defaultTextProps =
-  'rounded-md border border-gray-200 focus:border-gray-400 focus:bg-gray-50 bg-transparent text-sm outline-none focus-within:placeholder:text-text-primary focus:placeholder:text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-gray-400 focus:ring-opacity-20 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:focus:bg-gray-600 dark:focus:border-gray-600 dark:text-gray-50 dark:focus:outline-none';
+  'rounded-md border border-gray-200 focus:border-border-focus bg-transparent text-sm outline-none focus-within:placeholder:text-text-primary focus:placeholder:text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-[3px] focus:ring-ring-primary-soft disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-50 dark:focus:outline-none';
 
 export const optionText =
   'p-0 shadow-none text-right pr-1 h-8 border-transparent hover:bg-gray-800/10 dark:hover:bg-white/10 dark:focus:bg-white/10 transition-colors';

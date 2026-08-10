@@ -79,7 +79,7 @@ function PanelDialog({ link, open, onOpenChange }: PanelDialogProps) {
                   <div ref={setHeaderSlot} className="flex items-center gap-2" />
                   <button
                     type="button"
-                    className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-border-xheavy focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-surface-primary dark:focus:ring-offset-surface-primary"
+                    className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none data-[state=open]:bg-surface-primary"
                     onClick={() => onOpenChange(false)}
                     aria-label={localize('com_ui_close')}
                   >

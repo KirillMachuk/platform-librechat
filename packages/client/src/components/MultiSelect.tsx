@@ -114,7 +114,7 @@ export default function MultiSelect<T extends string>({
           className={cn(
             'flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm',
             'bg-surface-tertiary text-text-primary shadow-sm hover:cursor-pointer hover:bg-surface-hover',
-            'outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white',
+            'outline-none focus-visible:outline-none',
             selectClassName,
             selectedValues.length > 0 && selectItemsClassName != null && selectItemsClassName,
           )}

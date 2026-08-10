@@ -17,7 +17,7 @@ function SourcesUnavailable() {
       <div className="mb-2 text-sm text-text-secondary">{localize('com_sources_unavailable')}</div>
       <button
         onClick={() => window.location.reload()}
-        className="hover:bg-surface-primary-hover rounded-md bg-surface-primary px-3 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-ring"
+        className="hover:bg-surface-primary-hover rounded-md bg-surface-primary px-3 py-1 text-sm text-text-primary focus:outline-none"
       >
         {localize('com_sources_reload_page')}
       </button>
