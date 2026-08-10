@@ -179,6 +179,9 @@ const openSettings = (page: Page) => async (): Promise<Opened> => {
 
 const openSidebarPanel = (page: Page, id: string) => async (): Promise<Opened> => {
   const trigger = page.getByTestId(`sidebar-link-${id}`);
+  if ((await trigger.count()) === 0) {
+    await page.getByTestId('sidebar-link-more').click();
+  }
   await trigger.click();
   const overlay = page.locator('div[role="dialog"]');
   await expect(overlay).toHaveCount(1, { timeout: 20000 });

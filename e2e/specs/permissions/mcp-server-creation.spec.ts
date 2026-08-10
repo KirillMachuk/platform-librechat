@@ -81,6 +81,9 @@ async function openCreateDialog(page: Page) {
    * for it when the panel genuinely isn't up yet. */
   const addButton = page.getByRole('button', { name: 'Add MCP' });
   if (!(await addButton.isVisible().catch(() => false))) {
+    if ((await page.getByTestId('sidebar-link-mcp-builder').count()) === 0) {
+      await page.getByTestId('sidebar-link-more').click();
+    }
     await page.getByTestId('sidebar-link-mcp-builder').click();
     await expect(addButton).toBeVisible({ timeout: 15000 });
   }

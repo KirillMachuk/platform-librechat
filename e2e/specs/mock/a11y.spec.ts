@@ -215,6 +215,9 @@ test.describe('accessibility of the main dialogs', () => {
   const openSidebarPanel = async (page: Page, id: string) => {
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
     await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+    if ((await page.getByTestId(`sidebar-link-${id}`).count()) === 0) {
+      await page.getByTestId('sidebar-link-more').click();
+    }
     await page.getByTestId(`sidebar-link-${id}`).click();
     await expect(page.locator(FILE_PANEL)).toHaveCount(1);
   };

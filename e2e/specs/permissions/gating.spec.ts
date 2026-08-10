@@ -118,6 +118,7 @@ test.describe('role permissions gate the interface', () => {
      * where the roles simply had not arrived. A review caught that. This link
      * appears only with `PROMPTS.USE`, which this profile leaves on, so it is
      * the signal that the permission answer is in. */
+    await page.getByTestId('sidebar-link-more').click();
     await expect(page.getByTestId('sidebar-link-prompts')).toHaveCount(1);
 
     await expect(page.getByTestId('add-multi-convo-button')).toHaveCount(0);
@@ -133,6 +134,7 @@ test.describe('role permissions gate the interface', () => {
      * through the same hook, on the same screen — so if they are here and the
      * two above are not, the difference is the permission and nothing else. */
     await expect(page.getByTestId('sidebar-link-agents')).toHaveCount(1);
+    await page.getByTestId('sidebar-link-more').click();
     await expect(page.getByTestId('sidebar-link-skills')).toHaveCount(1);
     await expect(page.getByTestId('sidebar-link-prompts')).toHaveCount(1);
 
