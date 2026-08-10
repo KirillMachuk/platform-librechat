@@ -98,7 +98,6 @@ export { Flask as Beaker } from '@phosphor-icons/react';
 export { Books as BookCopy } from '@phosphor-icons/react';
 export { BookmarkSimple as Bookmark } from '@phosphor-icons/react';
 export { BookmarkSimple as BookmarkPlusIcon } from '@phosphor-icons/react';
-export { Robot as Bot } from '@phosphor-icons/react';
 export { Cube as Box } from '@phosphor-icons/react';
 export { Cube as BoxIcon } from '@phosphor-icons/react';
 export { BracketsCurly as Braces } from '@phosphor-icons/react';
@@ -249,6 +248,10 @@ const custom = (paths: string, displayName: string): LucideIcon => {
   return C as unknown as LucideIcon;
 };
 
+export const Bot: LucideIcon = custom(
+  '<path d="M12 8V4H8" /><rect width="16" height="12" x="4" y="8" rx="2" /><path d="M2 14h2" /><path d="M20 14h2" /><path d="M15 13v2" /><path d="M9 13v2" />',
+  'Bot',
+);
 export const MessageCircleDashed: LucideIcon = custom(
   '<path d="M10.1 2.182a10 10 0 0 1 3.8 0" /><path d="M13.9 21.818a10 10 0 0 1-3.8 0" /><path d="M17.609 3.72a10 10 0 0 1 2.69 2.7" /><path d="M2.182 13.9a10 10 0 0 1 0-3.8" /><path d="M20.28 17.61a10 10 0 0 1-2.7 2.69" /><path d="M21.818 10.1a10 10 0 0 1 0 3.8" /><path d="M3.721 6.391a10 10 0 0 1 2.7-2.69" /><path d="m6.163 21.117-2.906.85a1 1 0 0 1-1.236-1.169l.965-2.98" />',
   'MessageCircleDashed',

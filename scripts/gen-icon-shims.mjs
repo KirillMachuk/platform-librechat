@@ -26,19 +26,24 @@ import { dirname, join } from 'node:path';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const map = JSON.parse(readFileSync(join(ROOT, 'scripts/icons.map.json'), 'utf8'));
 
-/* The three subjects Phosphor does not draw (catalog frozen since 2024). They
-   keep their lucide geometry inline until redrawn in Phosphor's hand; each is
-   a stroke icon on a 24 grid, unlike Phosphor's filled 256 grid, so they take
-   lucide's stroke styling explicitly. */
+/* Icons that keep lucide's geometry: the three subjects Phosphor never drew
+   (catalog frozen since 2024), plus `Bot` — Phosphor's Robot has a face, and
+   the owner called it too cartoonish for the Agents section, which sits in the
+   sidebar all day. Each is a stroke icon on a 24 grid, unlike Phosphor's
+   filled 256 grid, so they take lucide's stroke styling explicitly. */
 const CUSTOM = {
+  Bot: `<path d="M12 8V4H8" /><rect width="16" height="12" x="4" y="8" rx="2" /><path d="M2 14h2" /><path d="M20 14h2" /><path d="M15 13v2" /><path d="M9 13v2" />`,
   MessageCircleDashed: `<path d="M10.1 2.182a10 10 0 0 1 3.8 0" /><path d="M13.9 21.818a10 10 0 0 1-3.8 0" /><path d="M17.609 3.72a10 10 0 0 1 2.69 2.7" /><path d="M2.182 13.9a10 10 0 0 1 0-3.8" /><path d="M20.28 17.61a10 10 0 0 1-2.7 2.69" /><path d="M21.818 10.1a10 10 0 0 1 0 3.8" /><path d="M3.721 6.391a10 10 0 0 1 2.7-2.69" /><path d="m6.163 21.117-2.906.85a1 1 0 0 1-1.236-1.169l.965-2.98" />`,
   MessageSquareDashed: `<path d="M14 3h2" /><path d="M16 19h-2" /><path d="M2 12v-2" /><path d="M2 16v5.286a.71.71 0 0 0 1.212.502l1.149-1.149" /><path d="M20 19a2 2 0 0 0 2-2v-1" /><path d="M22 10v2" /><path d="M22 6V5a2 2 0 0 0-2-2" /><path d="M4 3a2 2 0 0 0-2 2v1" /><path d="M8 19h2" /><path d="M8 3h2" />`,
   SquareSlash: `<rect width="18" height="18" x="3" y="3" rx="2" /><line x1="9" x2="15" y1="15" y2="9" />`,
 };
 
 const entries = Object.entries(map);
-const reexports = entries.filter(([, v]) => v.to !== null);
-const missing = entries.filter(([, v]) => v.to === null).map(([k]) => k);
+/* A name listed in CUSTOM draws from lucide even when the map has a Phosphor
+   target for it — that is how a rejected pick is overridden without losing the
+   mapping's record of what it would otherwise have been. */
+const reexports = entries.filter(([k, v]) => v.to !== null && !CUSTOM[k]);
+const missing = entries.filter(([k, v]) => v.to === null || CUSTOM[k]).map(([k]) => k);
 for (const name of missing) {
   if (!CUSTOM[name]) throw new Error(`no inline geometry for unmapped icon ${name}`);
 }
