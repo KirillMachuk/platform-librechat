@@ -265,7 +265,7 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | An unsorted table shouts at no column | unit | `packages/client/src/components/DataTable/DataTable.spec.tsx#mutes the glyph on every column while nothing is sorted` | covered |
 | A button carries the canon 36/12 and reaches 44 for a finger | unit | `client/src/components/__tests__/canonControls.spec.tsx#is 36 high with radius 12, and reaches 44 for a finger` | covered |
 | An icon button keeps radius 8, not the 12 of a text button | unit | `client/src/components/__tests__/canonControls.spec.tsx#keeps radius 8 on an icon button, where §6.2 wants it` | covered |
-| The outline button wears btn-line and a plain hover fill | unit | `client/src/components/__tests__/canonControls.spec.tsx#gives the outline variant a btn-line border and a plain hover fill` | covered |
+| The outline button wears the control border and a plain hover fill | unit | `client/src/components/__tests__/canonControls.spec.tsx#gives the outline variant a control border and a plain hover fill` | covered |
 | A call site can still override the button height | unit | `client/src/components/__tests__/canonControls.spec.tsx#lets a call site win, because the sign-in card is 40 by canon` | covered |
 | The shared field is 36 on a desktop and 48 on a phone | unit | `client/src/components/__tests__/canonControls.spec.tsx#is 36 on a desktop, 48 on a phone, radius 12, on a card fill` | covered |
 | The field leaves its border to FIELD_BORDER so an error can replace it | unit | `client/src/components/__tests__/canonControls.spec.tsx#leaves the border to FIELD_BORDER, so an error can replace just that` | covered |
