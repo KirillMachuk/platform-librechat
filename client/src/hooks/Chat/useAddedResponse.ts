@@ -9,10 +9,9 @@ import {
 } from 'librechat-data-provider';
 import type { TEndpointsConfig, EModelEndpoint, TConversation } from 'librechat-data-provider';
 import type { AssistantListItem, NewConversationParams } from '~/common';
+import { buildDefaultConvo, getDefaultEndpoint, focusComposerUnlessBusy } from '~/utils';
 import useAssistantListMap from '~/hooks/Assistants/useAssistantListMap';
-import { buildDefaultConvo, getDefaultEndpoint } from '~/utils';
 import { useGetEndpointsQuery } from '~/data-provider';
-import { mainTextareaId } from '~/common';
 import store from '~/store';
 
 const ADDED_INDEX = 1;
@@ -104,12 +103,7 @@ export default function useAddedResponse() {
 
       setConversation(newConversation);
 
-      setTimeout(() => {
-        const textarea = document.getElementById(mainTextareaId);
-        if (textarea) {
-          textarea.focus();
-        }
-      }, 150);
+      focusComposerUnlessBusy();
 
       return newConversation;
     },

@@ -1,5 +1,5 @@
-import { useRecoilValue } from 'recoil';
 import { useCallback, useRef, useEffect } from 'react';
+import { useRecoilValue } from 'recoil';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
 import {
   getEndpointField,
@@ -14,12 +14,11 @@ import type {
   TConversation,
   TPreset,
 } from 'librechat-data-provider';
-import type { AssistantListItem } from '~/common';
 import type { SetterOrUpdater } from 'recoil';
+import type { AssistantListItem } from '~/common';
+import { buildDefaultConvo, getDefaultEndpoint, focusComposerUnlessBusy, logger } from '~/utils';
 import useAssistantListMap from '~/hooks/Assistants/useAssistantListMap';
-import { buildDefaultConvo, getDefaultEndpoint, logger } from '~/utils';
 import { useGetEndpointsQuery } from '~/data-provider';
-import { mainTextareaId } from '~/common';
 import store from '~/store';
 
 const useGenerateConvo = ({
@@ -35,7 +34,7 @@ const useGenerateConvo = ({
   const assistantsListMap = useAssistantListMap();
   const { data: endpointsConfig = {} as TEndpointsConfig } = useGetEndpointsQuery();
 
-  const timeoutIdRef = useRef<NodeJS.Timeout>();
+  const cancelFocusRef = useRef<(() => void) | undefined>();
   const rootConvo = useRecoilValue(store.conversationByKeySelector(rootIndex));
 
   useEffect(() => {
@@ -139,13 +138,8 @@ const useGenerateConvo = ({
         setConversation(conversation);
       }
 
-      clearTimeout(timeoutIdRef.current);
-      timeoutIdRef.current = setTimeout(() => {
-        const textarea = document.getElementById(mainTextareaId);
-        if (textarea) {
-          textarea.focus();
-        }
-      }, 150);
+      cancelFocusRef.current?.();
+      cancelFocusRef.current = focusComposerUnlessBusy();
       return conversation;
     },
     [assistantsListMap, endpointsConfig, index, modelsQuery.data, rootConvo, setConversation],

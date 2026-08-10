@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { logger } from '~/utils';
+import { logger, overlayOwnsFocus } from '~/utils';
 
 export default function useFocusChatEffect(textAreaRef: React.RefObject<HTMLTextAreaElement>) {
   const location = useLocation();
@@ -25,7 +25,15 @@ export default function useFocusChatEffect(textAreaRef: React.RefObject<HTMLText
         return;
       }
 
-      textAreaRef.current?.focus();
+      /* Not while a menu or dialog is open. This effect runs on arriving at a
+       * new chat, which is the same moment a person may have just clicked
+       * something in the sidebar — and pulling focus out of what they opened
+       * closes it, so the click reads as having done nothing. The navigate
+       * below still runs either way: the state has been handled, whether or
+       * not the cursor moved. */
+      if (!overlayOwnsFocus()) {
+        textAreaRef.current?.focus();
+      }
 
       navigate(path, {
         replace: true,

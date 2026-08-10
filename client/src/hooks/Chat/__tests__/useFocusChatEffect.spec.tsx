@@ -72,6 +72,49 @@ describe('useFocusChatEffect', () => {
       expect(mockNavigate).not.toHaveBeenCalled();
     });
 
+    /**
+     * The swallowed first click. Arriving at a new chat carries `focusChat`,
+     * and this effect used to take the cursor whatever else was going on — so
+     * a person who clicked the account avatar in that moment had the focus
+     * pulled out of the menu they had just opened, and the menu closed itself.
+     * Measured on a fresh chat before the fix: three runs in sixty, and all
+     * three of the closures were exactly this.
+     */
+    test('leaves the cursor alone when an open menu owns the keyboard', () => {
+      const menu = document.createElement('div');
+      menu.setAttribute('role', 'menu');
+      const item = document.createElement('button');
+      menu.appendChild(item);
+      document.body.appendChild(menu);
+      item.focus();
+
+      renderHook(() => useFocusChatEffect(mockTextAreaRef as any));
+
+      expect(mockTextAreaRef.current.focus).not.toHaveBeenCalled();
+      /* Still handled: the navigation state is cleared either way, or the
+       * effect would fire again on the next render. */
+      expect(mockNavigate).toHaveBeenCalledWith('/c/new', { replace: true, state: {} });
+
+      document.body.removeChild(menu);
+    });
+
+    /**
+     * The other half of the rule. Reaching a new chat by clicking "New chat"
+     * leaves focus on that button, and the cursor belongs in the composer
+     * then — only an overlay owns the keyboard, an ordinary control does not.
+     */
+    test('still takes the cursor when focus is on an ordinary control', () => {
+      const button = document.createElement('button');
+      document.body.appendChild(button);
+      button.focus();
+
+      renderHook(() => useFocusChatEffect(mockTextAreaRef as any));
+
+      expect(mockTextAreaRef.current.focus).toHaveBeenCalled();
+
+      document.body.removeChild(button);
+    });
+
     test('should not focus textarea when textAreaRef.current is null', () => {
       const nullTextAreaRef = { current: null };
 

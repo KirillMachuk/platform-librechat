@@ -220,6 +220,7 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | Conversation list loads and paginates on scroll | e2e | `e2e/specs/mock/sidebar.spec.ts#the chat list fetches the next page when you scroll to the end` | covered |
 | Chat list width tracks the sidebar through collapse and viewport cycles | e2e | `e2e/specs/mock/sidebar.spec.ts#chat list width tracks the sidebar through collapse and viewport cycles` | covered |
 | Collapsed rail still reaches settings and sign-out | e2e | `e2e/specs/mock/sidebar.spec.ts#the collapsed rail still reaches settings and sign-out` | covered |
+| Arriving at a new chat does not take the cursor out of a menu the person just opened | unit | `client/src/hooks/Chat/__tests__/useFocusChatEffect.spec.tsx#leaves the cursor alone when an open menu owns the keyboard` | covered |
 | First click after the sidebar mounts is sometimes swallowed | e2e | — | gap |
 | Open a conversation from the list | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
 | Rename a conversation | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
@@ -564,12 +565,22 @@ excludes the sidebar, whose two defects have their own owner. Proven with `--rep
 28 of 28.
 
 **The first click after the sidebar mounts is sometimes swallowed** — the click lands, no menu
-opens. Seven specs hit it, and `openAccountMenu` in `e2e/specs/mock/helpers.ts` works around it
-with one retry. That is a real product defect a user meets as "I clicked my avatar and nothing
-happened", and it was living only in a code comment: a workaround in test code is not coverage,
-and the map's own quarantine rule says an unfixed problem gets a row rather than a silent
-retry. Hence the `gap` row in section 8. The retry stays until the defect is diagnosed —
-removing it would just make seven specs flaky again without telling anyone anything new.
+opens. A user meets it as "I clicked my avatar and nothing happened". Seven specs hit it, and
+`openAccountMenu` in `e2e/specs/mock/helpers.ts` works around it with one retry.
+
+**Diagnosed and mostly fixed, 2026-08-10.** Instrumenting a fresh chat and clicking the avatar
+the instant it existed reproduced it, and every failure had one signature: at the moment the
+composer took focus, `document.activeElement` was `div[role=menu]` — the menu the person had
+just opened. `useFocusChatEffect` was the culprit; arriving at a new chat carries `focusChat`
+in the navigation state and the effect focused the composer unconditionally, pulling focus out
+of the open menu, and Ariakit closes a menu that loses focus. It now skips when an overlay owns
+the keyboard, and the rule has its own row above. Measured with the same probe on the same
+machine, 60 runs each: **before — 3 steals, 3 closed menus; after — 0 steals, 1 closed menu.**
+Before the fix the two numbers matched exactly, which is what identified the mechanism.
+
+The row stays a `gap` because that last one is **not** a focus steal — it is a second, rarer
+cause with no diagnosis yet, so the symptom is not fully closed and the retry in
+`openAccountMenu` stays until it is.
 
 **Conversation search** cannot be proven end to end in this profile: the hermetic environment
 sets `SEARCH=false`, so there is no Meilisearch instance and the search entry is not rendered at
