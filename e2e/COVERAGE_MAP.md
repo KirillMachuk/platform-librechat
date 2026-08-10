@@ -578,9 +578,25 @@ the keyboard, and the rule has its own row above. Measured with the same probe o
 machine, 60 runs each: **before — 3 steals, 3 closed menus; after — 0 steals, 1 closed menu.**
 Before the fix the two numbers matched exactly, which is what identified the mechanism.
 
-The row stays a `gap` because that last one is **not** a focus steal — it is a second, rarer
-cause with no diagnosis yet, so the symptom is not fully closed and the retry in
-`openAccountMenu` stays until it is.
+**What is left, measured further.** Across 600 more runs on the fixed build the symptom appeared
+**3 times — 0.5%**, against 5–12% before. None of the three was a focus steal: the probe records
+zero. In the two that were caught with full instrumentation the picture was identical and rules
+most things out — every pointer event reached the button, React had `onClick` wired on it, the
+button's DOM node was **not** replaced, and the menu never entered the DOM at all. The composer
+took focus ~14ms later, correctly, with no overlay present, so it cannot be what closed a menu
+that never opened.
+
+Two explanations survive that evidence — Ariakit's store opening and closing inside one React
+batch so nothing ever commits, or the toggle not running at all — and telling them apart needs
+React-internal instrumentation. Attempts to catch it again with the focus state recorded came up
+empty: 220 further runs, then 60 more with the CPU throttled 6× to widen the race, produced no
+failure at all, so throttling does not amplify it and the window is tied to some specific early
+moment rather than being simply narrow.
+
+The row therefore stays a `gap` and the retry in `openAccountMenu` stays with it. **No
+speculative change was made:** a behaviour change on the main chat screen, shipped on reasoning
+rather than measurement, is not worth a 0.5% race to dozens of daily users. What is written
+above is what the next person needs so they do not start from nothing.
 
 **Conversation search** cannot be proven end to end in this profile: the hermetic environment
 sets `SEARCH=false`, so there is no Meilisearch instance and the search entry is not rendered at
