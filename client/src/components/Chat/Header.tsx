@@ -1,6 +1,5 @@
 import { memo, useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
-import { ChevronRight } from 'lucide-react';
 import { useMediaQuery } from '@librechat/client';
 import { getConfigDefaults, PermissionTypes, Permissions } from 'librechat-data-provider';
 import { resolveIcon, resolveColor } from '~/components/Projects/iconOptions';
@@ -9,6 +8,7 @@ import ModelSelector from './Menus/Endpoints/ModelSelector';
 import { useBookmarksEnabled, useHasAccess } from '~/hooks';
 import ExportAndShareMenu from './ExportAndShareMenu';
 import { OpenSidebar, PresetsMenu } from './Menus';
+import { ChevronRight } from '~/components/icons';
 import BookmarkMenu from './Menus/BookmarkMenu';
 import { TemporaryChat } from './TemporaryChat';
 import AddMultiConvo from './AddMultiConvo';

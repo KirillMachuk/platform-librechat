@@ -1,7 +1,6 @@
 import React, { useMemo, useEffect } from 'react';
 import keyBy from 'lodash/keyBy';
 import { ControlCombobox } from '@librechat/client';
-import { ChevronLeft, RotateCcw } from 'lucide-react';
 import { useFormContext, useWatch, Controller } from 'react-hook-form';
 import {
   alternateName,
@@ -16,6 +15,7 @@ import type * as t from 'librechat-data-provider';
 import type { AgentForm, AgentModelPanelProps, StringOption } from '~/common';
 import { componentMapping } from '~/components/SidePanel/Parameters/components';
 import { cn, filterDroppedParams, modelReportsNoTools } from '~/utils';
+import { ChevronLeft, RotateCcw } from '~/components/icons';
 import { useGetEndpointsQuery } from '~/data-provider';
 import { useLiveAnnouncer } from '~/Providers';
 import { useLocalize } from '~/hooks';

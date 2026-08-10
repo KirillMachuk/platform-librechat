@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { X } from 'lucide-react';
 import { JSX } from 'react/jsx-runtime';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { X } from '~/components/icons';
 import { cn } from '~/utils';
 
 interface OGDialogProps extends DialogPrimitive.DialogProps {

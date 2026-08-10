@@ -1,6 +1,5 @@
 import { startTransition } from 'react';
 import { JSX } from 'react/jsx-runtime';
-import { Search as SearchIcon } from 'lucide-react';
 import * as RadixSelect from '@radix-ui/react-select';
 import { CheckIcon, ChevronDownIcon } from '@radix-ui/react-icons';
 import {
@@ -12,6 +11,7 @@ import {
 } from '@ariakit/react';
 import type { OptionWithIcon } from '~/common';
 import { SelectTrigger, SelectValue, SelectScrollDownButton } from './Select';
+import { Search as SearchIcon } from '~/components/icons';
 import { useCombobox } from '~/hooks';
 import { cn } from '~/utils';
 

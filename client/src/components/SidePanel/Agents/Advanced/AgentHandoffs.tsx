@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { EModelEndpoint } from 'librechat-data-provider';
-import { X, Waypoints, PlusCircle, ChevronDown } from 'lucide-react';
 import {
   Label,
   Input,
@@ -15,6 +14,7 @@ import {
 import type { TMessage, GraphEdge } from 'librechat-data-provider';
 import type { ControllerRenderProps } from 'react-hook-form';
 import type { AgentForm, OptionWithIcon } from '~/common';
+import { X, Waypoints, PlusCircle, ChevronDown } from '~/components/icons';
 import MessageIcon from '~/components/Share/MessageIcon';
 import { useAgentsMapContext } from '~/Providers';
 import { useLocalize } from '~/hooks';

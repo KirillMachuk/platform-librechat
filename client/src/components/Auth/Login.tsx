@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Users } from 'lucide-react';
 import { useToastContext } from '@librechat/client';
 import { ErrorTypes, registerPage } from 'librechat-data-provider';
 import { useOutletContext, useSearchParams, useLocation } from 'react-router-dom';
@@ -8,6 +7,7 @@ import { getLoginError, persistRedirectToSession } from '~/utils';
 import { ErrorMessage } from '~/components/Auth/ErrorMessage';
 import SocialButton from '~/components/Auth/SocialButton';
 import { useAuthContext } from '~/hooks/AuthContext';
+import { Users } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import LoginForm from './LoginForm';
 

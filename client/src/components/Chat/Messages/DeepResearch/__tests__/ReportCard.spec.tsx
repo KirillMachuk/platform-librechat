@@ -4,7 +4,7 @@ import { render, fireEvent, act } from '@testing-library/react';
 import ReportCard from '../ReportCard';
 
 jest.mock('~/hooks', () => ({ useLocalize: () => (key: string) => key }));
-jest.mock('lucide-react', () => ({
+jest.mock('~/components/icons', () => ({
   FileText: () => <svg data-testid="file-icon" />,
   Maximize2: () => <svg data-testid="max-icon" />,
 }));

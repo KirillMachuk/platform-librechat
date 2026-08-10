@@ -5,12 +5,12 @@ import rehypeKatex from 'rehype-katex';
 import supersub from 'remark-supersub';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
-import { EditIcon, Check } from 'lucide-react';
 import { Controller, useFormContext } from 'react-hook-form';
 import { TextareaAutosize, Button, TooltipAnchor } from '@librechat/client';
 import type { RegisterOptions } from 'react-hook-form';
 import type { PluggableList } from 'unified';
 import { codeNoExecution } from '~/components/Chat/Messages/Content/MarkdownComponents';
+import { EditIcon, Check } from '~/components/icons';
 import { cn, langSubset } from '~/utils';
 import { useLocalize } from '~/hooks';
 

@@ -1,4 +1,3 @@
-import { Users } from 'lucide-react';
 import { TStartupConfig } from 'librechat-data-provider';
 import {
   GoogleIcon,
@@ -8,6 +7,7 @@ import {
   AppleIcon,
   SamlIcon,
 } from '@librechat/client';
+import { Users } from '~/components/icons';
 import SocialButton from './SocialButton';
 import { useLocalize } from '~/hooks';
 

@@ -2,7 +2,7 @@ import React, { memo, useState, useCallback, useRef, useEffect } from 'react';
 import copy from 'copy-to-clipboard';
 import { TooltipAnchor } from '@librechat/client';
 
-import { Expand, ChevronUp, ChevronDown } from 'lucide-react';
+import { Expand, ChevronUp, ChevronDown } from '~/components/icons';
 import CopyButton from '~/components/Messages/Content/CopyButton';
 import { useLocalize } from '~/hooks';
 import cn from '~/utils/cn';

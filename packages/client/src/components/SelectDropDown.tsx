@@ -1,6 +1,5 @@
 import React, { useRef } from 'react';
 import { JSX } from 'react/jsx-runtime';
-import { ChevronDown } from 'lucide-react';
 import {
   Label,
   Listbox,
@@ -10,6 +9,7 @@ import {
   ListboxOptions,
 } from '@headlessui/react';
 import type { Option, OptionWithIcon, DropdownValueSetter } from '~/common';
+import { ChevronDown } from '~/components/icons';
 import { useMultiSearch } from './MultiSearch';
 import { CheckMark } from '~/svgs';
 import { cn } from '~/utils';

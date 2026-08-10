@@ -1,6 +1,6 @@
 import * as React from 'react';
-import { Minus } from 'lucide-react';
 import { OTPInput, OTPInputContext, RenderProps } from 'input-otp';
+import { Minus } from '~/components/icons';
 import { cn } from '~/utils';
 
 const InputOTP: React.ForwardRefExoticComponent<

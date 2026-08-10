@@ -2,7 +2,6 @@ import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import debounce from 'lodash/debounce';
 import { useRecoilValue } from 'recoil';
 import { useParams } from 'react-router-dom';
-import { Menu, Rocket, X } from 'lucide-react';
 import { useForm, FormProvider } from 'react-hook-form';
 import { Button, Skeleton, useToastContext, useMediaQuery } from '@librechat/client';
 import {
@@ -24,6 +23,7 @@ import OpenSidebar from '~/components/Chat/Menus/OpenSidebar';
 import CategorySelector from '../fields/CategorySelector';
 import PromptVariables from '../display/PromptVariables';
 import PromptVersions from '../display/PromptVersions';
+import { Menu, Rocket, X } from '~/components/icons';
 import { usePromptGroupsContext } from '~/Providers';
 import PromptDetails from '../display/PromptDetails';
 import DeletePrompt from '../dialogs/DeletePrompt';

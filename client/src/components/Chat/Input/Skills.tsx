@@ -1,9 +1,9 @@
 import React, { memo } from 'react';
-import { ScrollText } from 'lucide-react';
 import { CheckboxButton } from '@librechat/client';
 import { Permissions, PermissionTypes, defaultAgentCapabilities } from 'librechat-data-provider';
 import { useLocalize, useHasAccess, useAgentCapabilities } from '~/hooks';
 import { useBadgeRowContext } from '~/Providers';
+import { ScrollText } from '~/components/icons';
 
 function Skills() {
   const localize = useLocalize();

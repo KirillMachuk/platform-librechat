@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileUp } from 'lucide-react';
+import { FileUp } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils/';
 

@@ -1,5 +1,4 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Plus } from 'lucide-react';
 import { matchSorter } from 'match-sorter';
 import { SystemRoles, PermissionTypes, Permissions } from 'librechat-data-provider';
 import {
@@ -21,6 +20,7 @@ import { useLocalize, useAuthContext, useHasAccess } from '~/hooks';
 import MemoryCreateDialog from './MemoryCreateDialog';
 import MemoryUsageBadge from './MemoryUsageBadge';
 import AdminSettings from './AdminSettings';
+import { Plus } from '~/components/icons';
 import MemoryList from './MemoryList';
 
 const pageSize = 10;

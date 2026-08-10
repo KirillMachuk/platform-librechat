@@ -1,9 +1,9 @@
 import { useState, memo, useRef } from 'react';
-import { LogOut } from 'lucide-react';
 import * as Menu from '@ariakit/react/menu';
 import { LinkIcon, GearIcon, DropdownMenuSeparator, Avatar } from '@librechat/client';
 import { useGetStartupConfig, useGetUserBalance } from '~/data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
+import { LogOut } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import Settings from './Settings';
 

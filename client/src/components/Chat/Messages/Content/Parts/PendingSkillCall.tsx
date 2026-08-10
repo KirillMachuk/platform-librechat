@@ -1,4 +1,4 @@
-import { ScrollText } from 'lucide-react';
+import { ScrollText } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 

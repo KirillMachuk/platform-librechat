@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { CircleX } from 'lucide-react';
 import { Label, OGDialog, TrashIcon, OGDialogTrigger, OGDialogTemplate } from '@librechat/client';
 import { useLocalize, useRemoveMCPTool } from '~/hooks';
+import { CircleX } from '~/components/icons';
 import { cn } from '~/utils';
 
 export default function UnconfiguredMCPTool({ serverName }: { serverName?: string }) {

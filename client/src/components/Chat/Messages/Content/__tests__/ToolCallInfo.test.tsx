@@ -48,7 +48,7 @@ jest.mock('~/utils', () => ({
   cn: (...classes: any[]) => classes.filter(Boolean).join(' '),
 }));
 
-jest.mock('lucide-react', () => ({
+jest.mock('~/components/icons', () => ({
   ChevronDown: () => <span>{'ChevronDown'}</span>,
 }));
 

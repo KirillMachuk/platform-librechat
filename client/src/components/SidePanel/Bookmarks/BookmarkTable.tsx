@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus } from 'lucide-react';
 import { Button, FilterInput, OGDialogTrigger, TooltipAnchor } from '@librechat/client';
 import type { ConversationTagsResponse, TConversationTag } from 'librechat-data-provider';
 import { BookmarkContext, useBookmarkContext } from '~/Providers/BookmarkContext';
 import { BookmarkEditDialog } from '~/components/Bookmarks';
+import { Plus } from '~/components/icons';
 import BookmarkList from './BookmarkList';
 import { useLocalize } from '~/hooks';
 

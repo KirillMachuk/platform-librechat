@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
-import { FilePenLine, FilePlus2 } from 'lucide-react';
 import type { TAttachment } from 'librechat-data-provider';
 import parseJsonField, { parseJsonFieldOccurrences } from './parseJsonField';
 import ProgressText from '~/components/Chat/Messages/Content/ProgressText';
+import { FilePenLine, FilePlus2 } from '~/components/icons';
 import useToolCallState from './useToolCallState';
 import useLazyHighlight from './useLazyHighlight';
 import CodeWindowHeader from './CodeWindowHeader';

@@ -9,7 +9,7 @@ import {
   ScrollText,
   Zap,
   Wrench,
-} from 'lucide-react';
+} from '~/components/icons';
 import LangIcon from '~/components/Messages/Content/LangIcon';
 import { cn } from '~/utils';
 

@@ -53,7 +53,7 @@ jest.mock('~/components/Web/Sources', () => ({
   ),
 }));
 
-jest.mock('lucide-react', () => ({
+jest.mock('~/components/icons', () => ({
   Globe: () => <span data-testid="globe-icon" />,
   ChevronDown: () => <span data-testid="chevron-icon" />,
 }));

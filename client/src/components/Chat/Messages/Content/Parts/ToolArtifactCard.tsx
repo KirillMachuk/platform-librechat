@@ -1,5 +1,4 @@
 import { memo, useEffect, useId, useLayoutEffect, useRef } from 'react';
-import { Download } from 'lucide-react';
 import {
   useRecoilCallback,
   useRecoilState,
@@ -12,9 +11,10 @@ import type { Artifact } from '~/common';
 import FilePreview from '~/components/Chat/Input/Files/FilePreview';
 import { isCodeOnlyArtifact } from '~/utils/artifacts';
 import { displayFilename } from './attachmentTypes';
+import { Download } from '~/components/icons';
 import { useAttachmentLink } from './LogLink';
-import { useLocalize } from '~/hooks';
 import { cn, getFileType } from '~/utils';
+import { useLocalize } from '~/hooks';
 import store from '~/store';
 
 interface ToolArtifactCardProps {

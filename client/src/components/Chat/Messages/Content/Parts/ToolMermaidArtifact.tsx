@@ -1,10 +1,10 @@
 import { memo, useId, useLayoutEffect } from 'react';
-import { Download } from 'lucide-react';
 import { useRecoilState } from 'recoil';
 import type { TAttachment, TFile, TAttachmentMetadata } from 'librechat-data-provider';
 import Mermaid from '~/components/Messages/Content/Mermaid/Mermaid';
 import { toolArtifactKey } from '~/utils/artifacts';
 import { displayFilename } from './attachmentTypes';
+import { Download } from '~/components/icons';
 import { useAttachmentLink } from './LogLink';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';

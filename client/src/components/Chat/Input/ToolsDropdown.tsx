@@ -2,14 +2,6 @@ import React, { useState, useMemo, useCallback } from 'react';
 import * as Ariakit from '@ariakit/react';
 import { TooltipAnchor, DropdownPopup, PinIcon, VectorIcon } from '@librechat/client';
 import {
-  Globe,
-  ScrollText,
-  Settings,
-  Settings2,
-  TerminalSquareIcon,
-  Telescope,
-} from 'lucide-react';
-import {
   AuthType,
   Permissions,
   ArtifactModes,
@@ -17,6 +9,14 @@ import {
   defaultAgentCapabilities,
 } from 'librechat-data-provider';
 import type { MenuItemProps } from '~/common';
+import {
+  Globe,
+  ScrollText,
+  Settings,
+  Settings2,
+  TerminalSquareIcon,
+  Telescope,
+} from '~/components/icons';
 import { useLocalize, useHasAccess, useAgentCapabilities } from '~/hooks';
 import ArtifactsSubMenu from '~/components/Chat/Input/ArtifactsSubMenu';
 import MCPSubMenu from '~/components/Chat/Input/MCPSubMenu';

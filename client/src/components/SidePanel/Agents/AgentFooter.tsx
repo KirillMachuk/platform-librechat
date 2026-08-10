@@ -1,4 +1,3 @@
-import { Globe } from 'lucide-react';
 import { Spinner } from '@librechat/client';
 import { useWatch, useFormContext } from 'react-hook-form';
 import {
@@ -16,6 +15,7 @@ import AdvancedButton from './Advanced/AdvancedButton';
 import VersionButton from './Version/VersionButton';
 import DuplicateAgent from './DuplicateAgent';
 import AdminSettings from './AdminSettings';
+import { Globe } from '~/components/icons';
 import DeleteButton from './DeleteButton';
 import { Panel } from '~/common';
 

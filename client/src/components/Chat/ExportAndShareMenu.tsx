@@ -1,12 +1,12 @@
 import { useState, useId, useRef } from 'react';
 import { useRecoilValue } from 'recoil';
 import * as Ariakit from '@ariakit/react';
-import { Upload, Share2 } from 'lucide-react';
 import { PermissionTypes, Permissions } from 'librechat-data-provider';
 import { DropdownPopup, TooltipAnchor, useMediaQuery } from '@librechat/client';
 import type * as t from '~/common';
 import ExportModal from '~/components/Nav/ExportConversation/ExportModal';
 import { ShareButton } from '~/components/Conversations/ConvoOptions';
+import { Upload, Share2 } from '~/components/icons';
 import { useHasAccess, useLocalize } from '~/hooks';
 import store from '~/store';
 

@@ -1,9 +1,9 @@
 import { memo, useCallback, useRef } from 'react';
-import { MicOff } from 'lucide-react';
 import { useToastContext, TooltipAnchor, ListeningIcon, Spinner } from '@librechat/client';
 import { useLocalize, useSpeechToText, useGetAudioSettings } from '~/hooks';
 import { globalAudioId, type TAskFunction } from '~/common';
 import { useChatFormContext } from '~/Providers';
+import { MicOff } from '~/components/icons';
 import { cn } from '~/utils';
 
 /** Серверный (не браузерный) STT. `openai`/`azureOpenAI` — это ПРОВАЙДЕРЫ внешнего STT из

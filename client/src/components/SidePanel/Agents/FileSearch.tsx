@@ -1,5 +1,4 @@
 import { memo, useMemo, useRef, useState } from 'react';
-import { Folder } from 'lucide-react';
 import * as Ariakit from '@ariakit/react';
 import { useFormContext } from 'react-hook-form';
 import { SharePointIcon, AttachmentIcon, DropdownPopup } from '@librechat/client';
@@ -12,6 +11,7 @@ import { SharePointPickerDialog } from '~/components/SharePoint';
 import FileRow from '~/components/Chat/Input/Files/FileRow';
 import { useGetStartupConfig } from '~/data-provider';
 import FileSearchCheckbox from './FileSearchCheckbox';
+import { Folder } from '~/components/icons';
 import { isEphemeralAgent } from '~/common';
 
 function FileSearch({

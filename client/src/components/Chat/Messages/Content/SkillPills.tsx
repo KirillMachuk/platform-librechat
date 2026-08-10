@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Pin, ScrollText } from 'lucide-react';
+import { Pin, ScrollText } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 /**

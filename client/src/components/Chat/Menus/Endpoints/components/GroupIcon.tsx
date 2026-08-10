@@ -1,7 +1,7 @@
 import React, { memo, useState } from 'react';
-import { AlertCircle } from 'lucide-react';
 import type { IconMapProps } from '~/common';
 import { getKnownEndpointAsset, hasKnownEndpointIcon } from '~/hooks/Endpoint/UnknownIcon';
+import { AlertCircle } from '~/components/icons';
 import { icons } from '~/hooks/Endpoint/Icons';
 
 interface GroupIconProps {

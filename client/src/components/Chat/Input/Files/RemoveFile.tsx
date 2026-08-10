@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { X } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 export default function RemoveFile({ onRemove }: { onRemove: () => void }) {

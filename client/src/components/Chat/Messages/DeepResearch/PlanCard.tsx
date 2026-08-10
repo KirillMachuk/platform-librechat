@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Telescope } from 'lucide-react';
 import { Button, useToastContext } from '@librechat/client';
 import { parseDrPlanMessage, DR_START_MARKER, DR_CANCEL_MARKER } from 'librechat-data-provider';
 import type { TMessage } from 'librechat-data-provider';
 import { useGetStartupConfig } from '~/data-provider';
 import { useSubmitMessage } from '~/hooks/Messages';
+import { Telescope } from '~/components/icons';
 import { mainTextareaId } from '~/common';
 import { useLocalize } from '~/hooks';
 

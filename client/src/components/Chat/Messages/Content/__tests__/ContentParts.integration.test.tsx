@@ -1,8 +1,8 @@
 import React from 'react';
 import { RecoilRoot } from 'recoil';
 import { ContentTypes } from 'librechat-data-provider';
-import type { TAttachment, TMessageContentParts } from 'librechat-data-provider';
 import { fireEvent, render, screen } from '@testing-library/react';
+import type { TAttachment, TMessageContentParts } from 'librechat-data-provider';
 import ContentParts from '../ContentParts';
 
 jest.mock('~/hooks', () => ({
@@ -46,7 +46,7 @@ jest.mock('../ProgressText', () => ({
   ),
 }));
 
-jest.mock('lucide-react', () => ({
+jest.mock('~/components/icons', () => ({
   ChevronDown: () => <span>{'chevron'}</span>,
   TriangleAlert: () => <span>{'alert'}</span>,
   Users: () => <span>{'users'}</span>,

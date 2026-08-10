@@ -1,6 +1,6 @@
 import * as React from 'react';
-import { Check } from 'lucide-react';
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
+import { Check } from '~/components/icons';
 import { cn } from '~/utils';
 
 type BaseCheckboxProps = Omit<

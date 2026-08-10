@@ -1,4 +1,4 @@
-import { Brain } from 'lucide-react';
+import { Brain } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 interface MemoryEmptyStateProps {

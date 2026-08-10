@@ -1,5 +1,4 @@
 import React from 'react';
-import { Bot } from 'lucide-react';
 import { isAgentsEndpoint, isAssistantsEndpoint } from 'librechat-data-provider';
 import type {
   TModelSpec,
@@ -11,6 +10,7 @@ import type { useLocalize } from '~/hooks';
 import { getModelBrandIcon } from '~/components/Chat/Menus/Endpoints/components/brand';
 import SpecIcon from '~/components/Chat/Menus/Endpoints/components/SpecIcon';
 import { Endpoint, SelectedValues } from '~/common';
+import { Bot } from '~/components/icons';
 
 /** Strips the provider prefix from LiteLLM-style model IDs.
  * "anthropic/claude-sonnet-4.6" -> "claude-sonnet-4.6"

@@ -1,11 +1,11 @@
 import React from 'react';
 import { RecoilRoot } from 'recoil';
-import { MessagesSquare, NotebookPen } from 'lucide-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { render, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { NavLink } from '~/common';
+import { MessagesSquare, NotebookPen } from '~/components/icons';
 
 const mockNewConversation = jest.fn();
 const mockClearMessagesCache = jest.fn();

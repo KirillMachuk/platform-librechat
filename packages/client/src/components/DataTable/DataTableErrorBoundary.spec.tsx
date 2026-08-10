@@ -12,7 +12,7 @@ jest.mock('~/utils', () => ({
 }));
 
 // Mock lucide-react
-jest.mock('lucide-react', () => ({
+jest.mock('~/components/icons', () => ({
   RefreshCw: ({ className }: { className?: string }) => (
     <svg data-testid="refresh-icon" className={className} />
   ),

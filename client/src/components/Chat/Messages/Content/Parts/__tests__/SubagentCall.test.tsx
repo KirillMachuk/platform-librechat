@@ -96,7 +96,7 @@ jest.mock('@librechat/client', () => ({
   ),
 }));
 
-jest.mock('lucide-react', () => ({
+jest.mock('~/components/icons', () => ({
   // eslint-disable-next-line i18next/no-literal-string
   ArrowDown: () => <span>arrow-down</span>,
   // eslint-disable-next-line i18next/no-literal-string

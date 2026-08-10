@@ -2,13 +2,6 @@ import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useRecoilState } from 'recoil';
 import * as Ariakit from '@ariakit/react';
 import {
-  FileSearch,
-  ImageUpIcon,
-  FileType2Icon,
-  FileImageIcon,
-  TerminalSquareIcon,
-} from 'lucide-react';
-import {
   FileUpload,
   TooltipAnchor,
   DropdownPopup,
@@ -33,6 +26,13 @@ import {
   useFileHandlingNoChatContext,
   useLocalize,
 } from '~/hooks';
+import {
+  FileSearch,
+  ImageUpIcon,
+  FileType2Icon,
+  FileImageIcon,
+  TerminalSquareIcon,
+} from '~/components/icons';
 import { useSharePointFileHandlingNoChatContext } from '~/hooks/Files/useSharePointFileHandling';
 import { SharePointPickerDialog } from '~/components/SharePoint';
 import { useGetStartupConfig } from '~/data-provider';

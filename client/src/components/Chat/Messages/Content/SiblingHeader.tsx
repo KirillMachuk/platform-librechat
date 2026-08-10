@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Check, Copy } from 'lucide-react';
 import { useToastContext } from '@librechat/client';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
 import MessageTimestamp from '~/components/Chat/Messages/ui/MessageTimestamp';
 import { useCopyToClipboard, useSiblingIdentity } from '~/hooks/Messages';
 import { useBranchMessageMutation } from '~/data-provider/Messages';
 import MessageIcon from '~/components/Share/MessageIcon';
+import { Check, Copy } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 

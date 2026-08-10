@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import * as Ariakit from '@ariakit/react';
-import { ShieldEllipsis } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
 import { Permissions, SystemRoles } from 'librechat-data-provider';
 import {
@@ -16,6 +15,7 @@ import type { Control, UseFormSetValue, UseFormGetValues } from 'react-hook-form
 import type { PermissionTypes } from 'librechat-data-provider';
 import type { TranslationKeys } from '~/hooks/useLocalize';
 import { useLocalize, useAuthContext, useRoleSelector } from '~/hooks';
+import { ShieldEllipsis } from '~/components/icons';
 
 type FormValues = Record<Permissions, boolean>;
 

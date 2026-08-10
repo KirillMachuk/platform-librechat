@@ -1,9 +1,9 @@
 import React from 'react';
-import { GitFork } from 'lucide-react';
 import { useToastContext } from '@librechat/client';
 import { ForkOptions } from 'librechat-data-provider';
 import { useLocalize, useNavigateToConvo } from '~/hooks';
 import { useForkConvoMutation } from '~/data-provider';
+import { GitFork } from '~/components/icons';
 import { cn } from '~/utils';
 
 /**

@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { X } from 'lucide-react';
 import { isAgentsEndpoint } from 'librechat-data-provider';
 import type { TConversation } from 'librechat-data-provider';
 import type { SetterOrUpdater } from 'recoil';
@@ -7,6 +6,7 @@ import { modelDisplayName } from '~/components/Chat/Menus/Endpoints/utils';
 import { useGetEndpointsQuery } from '~/data-provider';
 import { EndpointIcon } from '~/components/Endpoints';
 import { useAgentsMapContext } from '~/Providers';
+import { X } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 export default function AddedConvo({

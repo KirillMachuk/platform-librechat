@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
-import { Variable, ChevronRight } from 'lucide-react';
 import { specialVariables } from 'librechat-data-provider';
 import type { TSpecialVarLabel } from 'librechat-data-provider';
 import { getSpecialVariableIcon } from '~/components/Prompts/utils';
+import { Variable, ChevronRight } from '~/components/icons';
 import { extractUniqueVariables } from '~/utils';
 import { useLocalize } from '~/hooks';
 

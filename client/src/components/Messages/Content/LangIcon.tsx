@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText } from 'lucide-react';
+import { FileText } from '~/components/icons';
 import LANG_ICON_PATHS from './langIconPaths';
 
 interface LangIconProps {

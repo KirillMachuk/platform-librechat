@@ -85,7 +85,7 @@ jest.mock('@librechat/client', () => {
   };
 });
 
-jest.mock('lucide-react', () => new Proxy({}, { get: () => () => null }));
+jest.mock('~/components/icons', () => new Proxy({}, { get: () => () => null }));
 
 describe('ToolsDropdown — reasoning-model tool gating', () => {
   afterEach(() => {

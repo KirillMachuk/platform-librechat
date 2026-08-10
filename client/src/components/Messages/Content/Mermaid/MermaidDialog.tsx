@@ -1,6 +1,5 @@
 import React, { memo, useState, useCallback, useRef, useEffect } from 'react';
 import copy from 'copy-to-clipboard';
-import { X, ChevronUp, ChevronDown } from 'lucide-react';
 import {
   Button,
   OGDialog,
@@ -10,6 +9,7 @@ import {
   OGDialogTitle,
   OGDialogContent,
 } from '@librechat/client';
+import { X, ChevronUp, ChevronDown } from '~/components/icons';
 import useMermaidZoom from './useMermaidZoom';
 import ZoomControls from './ZoomControls';
 import { useLocalize } from '~/hooks';

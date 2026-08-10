@@ -53,17 +53,14 @@ describe('SkillPills', () => {
       <SkillPills skills={['legal']} source="always-apply" />,
     );
     const { container: manual } = render(<SkillPills skills={['brand']} />);
-    // lucide-react icons render as SVGs with distinguishing class names. We
-    // assert on class token presence rather than the full SVG markup so a
-    // lucide internal change to path data doesn't break this contract.
+    /* Phosphor icons carry no identifying class the way lucide did, so the
+       contract is asserted on what the user actually gets: the two variants
+       draw DIFFERENT pictures. Geometry inequality survives icon-set swaps;
+       a class-name assertion did not survive this one. */
     const alwaysApplySvg = alwaysApply.querySelector('svg');
     const manualSvg = manual.querySelector('svg');
     expect(alwaysApplySvg).toBeTruthy();
     expect(manualSvg).toBeTruthy();
-    // Pin vs. ScrollText have distinct lucide class names; both carry the
-    // cyan-500 accent the component applies, but only one carries the
-    // lucide-pin class.
-    expect(alwaysApplySvg?.getAttribute('class')).toContain('lucide-pin');
-    expect(manualSvg?.getAttribute('class')).not.toContain('lucide-pin');
+    expect(alwaysApplySvg?.innerHTML).not.toBe(manualSvg?.innerHTML);
   });
 });

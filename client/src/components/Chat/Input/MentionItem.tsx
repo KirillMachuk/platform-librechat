@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock4 } from 'lucide-react';
+import { Clock4 } from '~/components/icons';
 import { cn } from '~/utils';
 
 export interface MentionItemProps {

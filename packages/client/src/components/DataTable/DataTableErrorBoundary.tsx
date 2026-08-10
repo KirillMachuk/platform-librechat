@@ -1,6 +1,6 @@
 import { Component, ErrorInfo, ReactNode, createRef } from 'react';
 import { JSX } from 'react/jsx-runtime';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { Button } from '../Button';
 import { logger } from '~/utils';

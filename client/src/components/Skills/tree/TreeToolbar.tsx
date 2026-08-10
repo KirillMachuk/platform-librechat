@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { FilePlus, FolderPlus, Upload } from 'lucide-react';
+import { FilePlus, FolderPlus, Upload } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 interface TreeToolbarProps {

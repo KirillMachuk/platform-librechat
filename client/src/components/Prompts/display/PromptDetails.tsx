@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { SquareSlash } from 'lucide-react';
 import { replaceSpecialVars } from 'librechat-data-provider';
 import type { TPromptGroup } from 'librechat-data-provider';
 import { useLocalize, useAuthContext } from '~/hooks';
 import PromptDetailHeader from './PromptDetailHeader';
+import { SquareSlash } from '~/components/icons';
 import PromptVariables from './PromptVariables';
 import PromptTextCard from './PromptTextCard';
 import PromptActions from './PromptActions';

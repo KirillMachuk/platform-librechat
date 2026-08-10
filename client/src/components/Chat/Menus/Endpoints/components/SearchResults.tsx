@@ -1,11 +1,11 @@
 import React, { Fragment } from 'react';
 import { VisuallyHidden } from '@ariakit/react';
-import { CheckCircle2, EarthIcon } from 'lucide-react';
 import { isAgentsEndpoint, isAssistantsEndpoint } from 'librechat-data-provider';
 import type { TModelSpec } from 'librechat-data-provider';
 import type { Endpoint } from '~/common';
 import MarketplaceItem, { marketplaceSearchMatches } from './Marketplace';
 import { useModelSelectorContext } from '../ModelSelectorContext';
+import { CheckCircle2, EarthIcon } from '~/components/icons';
 import { CustomMenuItem as MenuItem } from '../CustomMenu';
 import { shouldRenderEndpointOption } from '../utils';
 import SpecDescription from './SpecDescription';

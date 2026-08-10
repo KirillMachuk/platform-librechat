@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import copy from 'copy-to-clipboard';
 import { useRecoilValue } from 'recoil';
-import { Download } from 'lucide-react';
 import { OGDialog, OGDialogContent, OGDialogTitle, OGDialogDescription } from '@librechat/client';
-import CopyButton from '~/components/Messages/Content/CopyButton';
 import { logger, decodeBytes, sortPagesByRelevance, triggerDownload } from '~/utils';
+import CopyButton from '~/components/Messages/Content/CopyButton';
 import { useFileDownload, useFilePreview } from '~/data-provider';
 import { useLocalize, TranslationKeys } from '~/hooks';
+import { Download } from '~/components/icons';
 import store from '~/store';
 
 type PreviewKind = 'pdf' | 'text' | 'office' | false;

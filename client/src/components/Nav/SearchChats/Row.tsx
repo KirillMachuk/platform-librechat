@@ -1,5 +1,4 @@
 import { memo, useEffect, useCallback } from 'react';
-import { Search } from 'lucide-react';
 import { TooltipAnchor } from '@librechat/client';
 import { useRecoilValue, useSetRecoilState } from 'recoil';
 import {
@@ -7,6 +6,7 @@ import {
   sidebarRowIconClassName,
   sidebarRowClassName,
 } from '~/components/UnifiedSidebar/rows';
+import { Search } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import store from '~/store';
 

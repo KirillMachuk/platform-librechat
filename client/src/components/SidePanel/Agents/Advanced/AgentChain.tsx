@@ -1,6 +1,5 @@
-import { X, Link2, PlusCircle } from 'lucide-react';
-import { EModelEndpoint } from 'librechat-data-provider';
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { EModelEndpoint } from 'librechat-data-provider';
 import {
   ControlCombobox,
   HoverCard,
@@ -12,6 +11,7 @@ import {
 import type { ControllerRenderProps } from 'react-hook-form';
 import type { TMessage } from 'librechat-data-provider';
 import type { AgentForm, OptionWithIcon } from '~/common';
+import { X, Link2, PlusCircle } from '~/components/icons';
 import MessageIcon from '~/components/Share/MessageIcon';
 import { useAgentsMapContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
@@ -28,8 +28,10 @@ const MAX_AGENTS = 10;
 const AgentChain: React.FC<AgentChainProps> = ({ field, currentAgentId }) => {
   const localize = useLocalize();
   const [newAgentId, setNewAgentId] = useState('');
-  const agentsMap = useAgentsMapContext() || {};
-  const agentIds = field.value || [];
+  const agentsMapContext = useAgentsMapContext();
+  const agentsMap = useMemo(() => agentsMapContext || {}, [agentsMapContext]);
+  const fieldValue = field.value;
+  const agentIds = useMemo(() => fieldValue || [], [fieldValue]);
 
   const agents = useMemo(() => Object.values(agentsMap), [agentsMap]);
 

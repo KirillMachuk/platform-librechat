@@ -4,14 +4,6 @@ import debounce from 'lodash/debounce';
 import { useRecoilValue } from 'recoil';
 import { Link } from 'react-router-dom';
 import {
-  ArrowUp,
-  TrashIcon,
-  ArrowDown,
-  ArrowUpDown,
-  ExternalLink,
-  ArchiveRestore,
-} from 'lucide-react';
-import {
   Label,
   Button,
   Spinner,
@@ -30,6 +22,14 @@ import {
   useDeleteConversationMutation,
   useArchiveConvoMutation,
 } from '~/data-provider';
+import {
+  ArrowUp,
+  TrashIcon,
+  ArrowDown,
+  ArrowUpDown,
+  ExternalLink,
+  ArchiveRestore,
+} from '~/components/icons';
 import { MinimalIcon } from '~/components/Endpoints';
 import { NotificationSeverity } from '~/common';
 import { formatDate, logger } from '~/utils';

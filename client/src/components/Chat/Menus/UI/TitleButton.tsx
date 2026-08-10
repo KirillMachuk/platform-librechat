@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
 import { Trigger } from '@radix-ui/react-popover';
+import { ChevronDown } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 export default function TitleButton({ primaryText = '', secondaryText = '' }) {

@@ -1,7 +1,6 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { JSX } from 'react/jsx-runtime';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowUp, ArrowDown, ArrowDownUp } from 'lucide-react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -21,6 +20,7 @@ import { SelectionCheckbox, MemoizedTableRow, SkeletonRows } from './DataTableCo
 import { Table, TableBody, TableHead, TableHeader, TableCell, TableRow } from '../Table';
 import { useDebounced, useOptimizedRowSelection } from './DataTable.hooks';
 import { DataTableColumnVisibility } from './DataTableColumnVisibility';
+import { ArrowUp, ArrowDown, ArrowDownUp } from '~/components/icons';
 import { useMediaQuery, useLocalize } from '~/hooks';
 import { DataTableSearch } from './DataTableSearch';
 import { cn, logger } from '~/utils';

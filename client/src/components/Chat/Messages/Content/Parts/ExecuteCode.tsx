@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
-import { SquareTerminal } from 'lucide-react';
 import type { TAttachment } from 'librechat-data-provider';
 import ProgressText from '~/components/Chat/Messages/Content/ProgressText';
+import { SquareTerminal } from '~/components/icons';
 import useLazyHighlight from './useLazyHighlight';
 import useToolCallState from './useToolCallState';
 import CodeWindowHeader from './CodeWindowHeader';

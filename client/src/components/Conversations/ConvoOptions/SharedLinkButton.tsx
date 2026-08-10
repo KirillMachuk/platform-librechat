@@ -1,6 +1,5 @@
 import { useState, useRef } from 'react';
 import { Trans } from 'react-i18next';
-import { QrCode, RotateCw, Trash2 } from 'lucide-react';
 import {
   PermissionTypes,
   Permissions,
@@ -27,6 +26,7 @@ import {
 } from '~/data-provider';
 import GenericGrantAccessDialog from '~/components/Sharing/GenericGrantAccessDialog';
 import { useHasAccess, useResourcePermissions, useLocalize } from '~/hooks';
+import { QrCode, RotateCw, Trash2 } from '~/components/icons';
 import { NotificationSeverity } from '~/common';
 import { buildShareLinkUrl } from '~/utils';
 

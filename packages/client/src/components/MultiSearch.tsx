@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { JSX } from 'react/jsx-runtime';
-import { Search, X } from 'lucide-react';
+import { Search, X } from '~/components/icons';
 import { cn } from '~/utils';
 
 /** This is a generic that can be added to Menu and Select components */

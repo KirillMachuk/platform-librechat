@@ -1,9 +1,9 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import AgentCard from '../AgentCard';
-import type t from 'librechat-data-provider';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type t from 'librechat-data-provider';
+import AgentCard from '../AgentCard';
 
 // Mock useLocalize hook
 jest.mock('~/hooks/useLocalize', () => () => (key: string) => {
@@ -209,9 +209,11 @@ describe('AgentCard', () => {
       </Wrapper>,
     );
 
-    // Check for Feather icon presence by looking for the svg with lucide-feather class
-    const featherIcon = document.querySelector('.lucide-feather');
-    expect(featherIcon).toBeInTheDocument();
+    /* The fallback is "an icon instead of a picture": with no avatar the card
+       must still draw an svg glyph. Phosphor emits no per-icon class, so the
+       presence of the svg where the <img> would be IS the contract. */
+    expect(document.querySelector('img')).not.toBeInTheDocument();
+    expect(document.querySelector('svg')).toBeInTheDocument();
   });
 
   it('card is clickable and has dialog trigger', () => {

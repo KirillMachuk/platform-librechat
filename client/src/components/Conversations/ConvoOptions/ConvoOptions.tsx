@@ -4,7 +4,6 @@ import { QueryKeys } from 'librechat-data-provider';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DropdownPopup, Spinner, useToastContext } from '@librechat/client';
-import { Ellipsis, Share2, CopyPlus, Archive, Pen, Trash } from 'lucide-react';
 import type { TMessage } from 'librechat-data-provider';
 import type { MouseEvent } from 'react';
 import {
@@ -13,6 +12,7 @@ import {
   useGetStartupConfig,
   useArchiveConvoMutation,
 } from '~/data-provider';
+import { Ellipsis, Share2, CopyPlus, Archive, Pen, Trash } from '~/components/icons';
 import { useLocalize, useNavigateToConvo, useNewConvo } from '~/hooks';
 import { NotificationSeverity } from '~/common';
 import { useChatContext } from '~/Providers';

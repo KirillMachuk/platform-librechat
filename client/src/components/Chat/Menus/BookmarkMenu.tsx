@@ -1,7 +1,6 @@
 import { useState, useId, useCallback, useMemo, useRef } from 'react';
 import { useRecoilValue } from 'recoil';
 import * as Ariakit from '@ariakit/react';
-import { BookmarkPlusIcon } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Constants, QueryKeys } from 'librechat-data-provider';
 import { BookmarkFilledIcon, BookmarkIcon } from '@radix-ui/react-icons';
@@ -14,6 +13,7 @@ import { BookmarkContext } from '~/Providers/BookmarkContext';
 import { cn, isTemporaryConversation, logger } from '~/utils';
 import { BookmarkEditDialog } from '~/components/Bookmarks';
 import { useBookmarkSuccess, useLocalize } from '~/hooks';
+import { BookmarkPlusIcon } from '~/components/icons';
 import { NotificationSeverity } from '~/common';
 import store from '~/store';
 

@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { X } from 'lucide-react';
 import { JSX } from 'react/jsx-runtime';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Button, ButtonProps } from './Button';
 import { useMediaQuery } from '~/hooks';
+import { X } from '~/components/icons';
 import { cn } from '~/utils';
 
 const Dialog: React.FC<DialogPrimitive.DialogProps> = DialogPrimitive.Root;

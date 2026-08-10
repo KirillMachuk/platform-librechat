@@ -1,4 +1,3 @@
-import { KeyRoundIcon } from 'lucide-react';
 import { useRef } from 'react';
 import { AuthType, AgentCapabilities } from 'librechat-data-provider';
 import { useFormContext, Controller, useWatch } from 'react-hook-form';
@@ -12,6 +11,7 @@ import {
 } from '@librechat/client';
 import type { AgentForm } from '~/common';
 import { useLocalize, useSearchApiKeyForm } from '~/hooks';
+import { KeyRoundIcon } from '~/components/icons';
 import ApiKeyDialog from './ApiKeyDialog';
 import { ESide } from '~/common';
 import { cn } from '~/utils';

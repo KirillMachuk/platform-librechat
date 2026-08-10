@@ -1,10 +1,10 @@
 import { memo } from 'react';
-import { Share2Icon } from 'lucide-react';
 import { Button, TooltipAnchor } from '@librechat/client';
 import { Permissions, ResourceType, PermissionTypes } from 'librechat-data-provider';
 import type { TSkill } from 'librechat-data-provider';
 import { useHasAccess, useLocalize, useSkillPermissions } from '~/hooks';
 import { GenericGrantAccessDialog } from '~/components/Sharing';
+import { Share2Icon } from '~/components/icons';
 
 // Memoed because it renders inside `SkillForm`'s header, which re-renders on
 // every keystroke via react-hook-form state updates. The `skill` prop stays

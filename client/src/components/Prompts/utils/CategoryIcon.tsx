@@ -13,7 +13,7 @@ import {
   Users as UsersIcon,
   Beaker as BeakerIcon,
   Settings as SettingsIcon,
-} from 'lucide-react';
+} from '~/components/icons';
 import { cn } from '~/utils';
 
 const categoryIconMap: Record<string, React.ElementType> = {

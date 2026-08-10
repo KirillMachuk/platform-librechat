@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import * as Ariakit from '@ariakit/react';
-import { ShieldEllipsis } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
 import { Permissions, SystemRoles, PermissionTypes } from 'librechat-data-provider';
 import {
@@ -16,6 +15,7 @@ import {
 import type { Control, UseFormSetValue, UseFormGetValues } from 'react-hook-form';
 import { useUpdatePeoplePickerPermissionsMutation } from '~/data-provider';
 import { useLocalize, useAuthContext, useRoleSelector } from '~/hooks';
+import { ShieldEllipsis } from '~/components/icons';
 
 type FormValues = {
   [Permissions.VIEW_USERS]: boolean;

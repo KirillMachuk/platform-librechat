@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Copy, CopyCheck } from 'lucide-react';
 import { useFormContext } from 'react-hook-form';
 import { AuthTypeEnum } from 'librechat-data-provider';
 import { Button, useToastContext } from '@librechat/client';
 import { useLocalize, useCopyToClipboard } from '~/hooks';
+import { Copy, CopyCheck } from '~/components/icons';
 import { cn } from '~/utils';
 
 export default function ActionCallback({ action_id }: { action_id?: string }) {

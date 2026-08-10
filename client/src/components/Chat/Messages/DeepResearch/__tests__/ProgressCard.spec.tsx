@@ -15,7 +15,7 @@ jest.mock('~/store', () => ({}));
 jest.mock('@librechat/client', () => ({
   Progress: ({ value }: { value: number }) => <div data-testid="progress" data-value={value} />,
 }));
-jest.mock('lucide-react', () => ({
+jest.mock('~/components/icons', () => ({
   Check: () => <svg data-testid="icon-check" />,
   Square: () => <svg data-testid="icon-square" />,
   Loader2: () => <svg data-testid="icon-loader" />,

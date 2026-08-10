@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { Search } from 'lucide-react';
 import debounce from 'lodash/debounce';
 import * as Ariakit from '@ariakit/react';
 import { Spinner, Skeleton } from '@librechat/client';
+import { Search } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 

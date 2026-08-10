@@ -1,11 +1,11 @@
 import { memo, useState, useContext, useCallback } from 'react';
 import { Button } from '@librechat/client';
-import { ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import type { SourceData } from '~/components/Web/SourceHovercard';
 import type { CitationProps } from './types';
 import { SourceHovercard, FaviconImage, getCleanDomain } from '~/components/Web/SourceHovercard';
 import FilePreviewDialog from '~/components/Chat/Messages/Content/FilePreviewDialog';
 import { CitationContext, useCitation, useCompositeCitations } from './Context';
+import { ChevronLeft, ChevronRight, FileText } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 interface FileCitationMetadata {
