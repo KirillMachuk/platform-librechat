@@ -278,6 +278,7 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | A prompt shared with everyone reaches other people, an unshared one does not | e2e | `e2e/specs/permissions/sharing.spec.ts#what is shared with everyone reaches someone else, what is not stays put` | covered |
 | Sharing a prompt with one named person | e2e | — | gap |
 | MCP server selection and ephemeral servers | e2e | `e2e/specs/mock/mcp.spec.ts` | covered |
+| Creating an MCP server: On-Behalf-Of auth saves without a live connection, plain auth to the same kind of URL is refused | e2e | `e2e/specs/permissions/mcp-server-creation.spec.ts` | covered |
 | Configured skills load read-only for every authenticated user (API) | e2e | `e2e/specs/mock/deployment-skills.spec.ts#loads configured deployment skills for every authenticated user as read-only` | covered |
 | A model spec sees only the skills scoped to it (API) | e2e | `e2e/specs/mock/model-spec-skills.spec.ts#loads accessible configured skills and skips missing or inaccessible names` | covered |
 | A configured skill is listed, its file list is fetched on demand, and it offers no Edit | e2e | `e2e/specs/mock/skills.spec.ts#a configured skill is listed, its files open, and it stays read-only` | covered |
@@ -335,14 +336,18 @@ is what to cover.
 **On in the profile, and exercised by nothing.** These were switched on so the behaviour behind
 them could be reached, and then not reached. Written down because a profile that enables
 something without covering it is exactly the quiet claim this map exists to prevent:
-`MCP_SERVERS.USE`/`CREATE`/`SHARE`/`SHARE_PUBLIC`/`CONFIGURE_OBO`,
-`REMOTE_AGENTS.USE`/`CREATE`/`SHARE_PUBLIC`, and `SKILLS.SHARE`/`SHARE_PUBLIC`. Nothing opens the
-MCP builder, creates or shares a server, mints a remote-agent key, or shares a skill.
+`MCP_SERVERS.USE`/`SHARE`/`SHARE_PUBLIC`, `REMOTE_AGENTS.USE`/`CREATE`/`SHARE_PUBLIC`, and
+`SKILLS.SHARE`/`SHARE_PUBLIC`. Nothing mints a remote-agent key or shares a skill.
 
-Two of those are worth an owner's decision before they reach the stand's own config rather than
-this profile: `MCP_SERVERS.CONFIGURE_OBO` lets any user configure a server that mints downstream
+`MCP_SERVERS.CREATE` and `MCP_SERVERS.CONFIGURE_OBO` are now covered (the row above) —
+On-Behalf-Of is the half of server creation this profile can prove hermetically, since
+`MCPServerInspector` skips its live-connection step whenever a config carries `obo`; a plain
+server genuinely tries to connect, so an unreachable one gives the same real refusal a dead
+server would in production. Still worth an owner's decision before either permission reaches
+the stand's own config: `CONFIGURE_OBO` lets any user configure a server that mints downstream
 tokens on behalf of whoever uses it, and `REMOTE_AGENTS.CREATE` mints a long-lived API key that
-reaches agents outside the browser session.
+reaches agents outside the browser session — the map having a test does not by itself answer
+whether the deployment wants either turned on.
 
 Covered by a flow, not just seeded: `PROMPTS.SHARE`/`SHARE_PUBLIC`, `AGENTS.SHARE`/`SHARE_PUBLIC`,
 `MARKETPLACE.USE`, `REMOTE_AGENTS.SHARE`.
