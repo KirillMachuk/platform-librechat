@@ -33,15 +33,6 @@ const LoginForm: React.FC<TLoginFormProps> = ({ onSubmit, startupConfig, error, 
   const validTheme = isDark(theme) ? 'dark' : 'light';
   const requireCaptcha = Boolean(startupConfig.turnstile?.siteKey);
 
-  /** Canon §6.1: one ink action per screen. With corporate sign-in on the card
-   *  that button is the main action and the password form submits with the
-   *  filled neutral; without it the password form is the only way in and takes
-   *  the ink itself. `outline` is not an option here — transparent with a
-   *  control border is what the two fields above it look like, and the submit
-   *  stopped reading as a button at all. */
-  const hasSocialLogin =
-    startupConfig.socialLoginEnabled === true && (startupConfig.socialLogins?.length ?? 0) > 0;
-
   useEffect(() => {
     if (error && error.includes('422') && !showResendLink) {
       setShowResendLink(true);
@@ -156,11 +147,15 @@ const LoginForm: React.FC<TLoginFormProps> = ({ onSubmit, startupConfig, error, 
           data-testid="login-button"
           type="submit"
           disabled={(requireCaptcha && !turnstileToken) || isSubmitting}
-          variant={hasSocialLogin ? 'secondary' : 'submit'}
-          /** Canon §4: the one wide button on the sign-in card is 40 (48 on a
-           *  phone), taller than the 36 every other button gets. The `outline`
-           *  variant now carries `btn-line` and a plain `hover` fill on its
-           *  own, so the patch that used to live here is gone. */
+          /** Ink, identical to the AD button above — the owner's call (10.08)
+           *  after two outlined rounds: the divider keeps the two far enough
+           *  apart, and the AD button's person icon already tells them apart,
+           *  so twin styling reads as "two doors in" rather than a broken
+           *  hierarchy. The accepted exception to canon §1.1 for this card.
+           *
+           *  Canon §4 on size: the one wide button on the sign-in card is 40
+           *  (48 on a phone), taller than the 36 every other button gets. */
+          variant="submit"
           className="mt-1 h-12 w-full text-[15px] md:h-10 md:text-sm"
         >
           {/* «Войти», as the prototype's sign-in card reads. «Продолжить» says
