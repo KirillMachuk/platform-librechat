@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { Search, X } from 'lucide-react';
 import { useFormContext } from 'react-hook-form';
 import { isAgentsEndpoint } from 'librechat-data-provider';
 import { Dialog, DialogPanel, DialogTitle, Description } from '@headlessui/react';
@@ -14,6 +13,7 @@ import type { ToolDialogProps } from '~/common/types';
 import { PluginPagination, PluginAuthForm } from '~/components/Plugins/Store';
 import { useLocalize, usePluginDialogHelpers } from '~/hooks';
 import { useAvailableToolsQuery } from '~/data-provider';
+import { Search, X } from '~/components/icons';
 import ToolItem from './ToolItem';
 
 function AssistantToolsDialog({

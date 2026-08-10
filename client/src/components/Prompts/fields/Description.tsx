@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Input } from '@librechat/client';
+import { Info } from '~/components/icons';
 import { useLocalize } from '~/hooks';
-import { Info } from 'lucide-react';
 
 const MAX_LENGTH = 120;
 

@@ -1,5 +1,4 @@
 import { memo, useCallback, useEffect, useState } from 'react';
-import { Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   Label,
@@ -20,6 +19,7 @@ import { DEFAULT_PROJECT_ICON, DEFAULT_PROJECT_COLOR } from './iconOptions';
 import ProjectAppearancePopover from './ProjectAppearancePopover';
 import ProjectFormFields from './ProjectFormFields';
 import { NotificationSeverity } from '~/common';
+import { Trash2 } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 type Props = {

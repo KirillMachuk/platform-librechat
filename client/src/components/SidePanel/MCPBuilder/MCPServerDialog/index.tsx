@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, CopyCheck } from 'lucide-react';
+import {
+  SystemRoles,
+  Permissions,
+  ResourceType,
+  PermissionBits,
+  PermissionTypes,
+} from 'librechat-data-provider';
 import {
   Label,
   Input,
@@ -14,17 +20,11 @@ import {
   OGDialogContent,
   OGDialogTemplate,
 } from '@librechat/client';
-import {
-  SystemRoles,
-  Permissions,
-  ResourceType,
-  PermissionBits,
-  PermissionTypes,
-} from 'librechat-data-provider';
 import { useAuthContext, useHasAccess, useResourcePermissions, MCPServerDefinition } from '~/hooks';
 import { GenericGrantAccessDialog } from '~/components/Sharing';
 import { useMCPServerForm } from './hooks/useMCPServerForm';
 import { useLocalize, useCopyToClipboard } from '~/hooks';
+import { Copy, CopyCheck } from '~/components/icons';
 import MCPServerForm from './MCPServerForm';
 
 interface MCPServerDialogProps {

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useId, useMemo, useReducer, useRef, useState } from 'react';
 import { useRecoilValue } from 'recoil';
 import { ContentTypes, EModelEndpoint } from 'librechat-data-provider';
-import { ArrowDown, ChevronRight, Maximize2, Minimize2, Users } from 'lucide-react';
 import { OGDialog, OGDialogContent, OGDialogTitle, OGDialogDescription } from '@librechat/client';
 import type { TAttachment, TMessage, TMessageContentParts } from 'librechat-data-provider';
 import type { PartWithIndex } from '~/components/Chat/Messages/Content/ParallelContent';
 import type { SubagentTickerLine } from '~/utils/subagentContent';
+import { ArrowDown, ChevronRight, Maximize2, Minimize2, Users } from '~/components/icons';
 import ToolCallGroup from '~/components/Chat/Messages/Content/ToolCallGroup';
 import MarkdownLite from '~/components/Chat/Messages/Content/MarkdownLite';
 import { cn, groupSequentialToolCalls, parseToolName } from '~/utils';

@@ -1,10 +1,10 @@
 import { useState, useRef, useCallback, useMemo, memo } from 'react';
 import { Button } from '@librechat/client';
-import { Plus, ChevronLeft } from 'lucide-react';
 import { PermissionTypes, Permissions } from 'librechat-data-provider';
 import type t from 'librechat-data-provider';
 import { useGetAgentCategoriesQuery, useGetEndpointsQuery } from '~/data-provider';
 import AgentPanelSwitch from '~/components/SidePanel/Agents/AgentPanelSwitch';
+import { Plus, ChevronLeft } from '~/components/icons';
 import { useLocalize, useHasAccess } from '~/hooks';
 import CategoryTabs from './CategoryTabs';
 import SearchBar from './SearchBar';

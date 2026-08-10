@@ -10,7 +10,7 @@ import React, {
 } from 'react';
 import { Badge } from '@librechat/client';
 import { useRecoilValue, useRecoilCallback } from 'recoil';
-import type { LucideIcon } from 'lucide-react';
+import type { LucideIcon } from '~/components/icons';
 import type { BadgeItem } from '~/common';
 import CodeInterpreter from './CodeInterpreter';
 import { BadgeRowProvider } from '~/Providers';

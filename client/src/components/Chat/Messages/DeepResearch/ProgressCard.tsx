@@ -1,7 +1,7 @@
 import { Progress } from '@librechat/client';
-import { Check, Square, Loader2, WifiOff } from 'lucide-react';
 import type { TDeepResearchProgress } from '~/store';
 import type { TranslationKeys } from '~/hooks';
+import { Check, Square, Loader2, WifiOff } from '~/components/icons';
 import { useChatContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';

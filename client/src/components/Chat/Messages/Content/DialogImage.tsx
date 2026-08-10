@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Button, TooltipAnchor } from '@librechat/client';
-import { X, ArrowDownToLine, PanelLeftOpen, PanelLeftClose, RotateCcw } from 'lucide-react';
+import { X, ArrowDownToLine, PanelLeftOpen, PanelLeftClose, RotateCcw } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 const imageSizeCache = new Map<string, string>();

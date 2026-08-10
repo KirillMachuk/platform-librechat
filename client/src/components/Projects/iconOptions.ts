@@ -1,3 +1,4 @@
+import type { LucideIcon } from '~/components/icons';
 import {
   Palette,
   Folder,
@@ -28,8 +29,7 @@ import {
   Brain,
   Heart,
   ShoppingBasket,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+} from '~/components/icons';
 
 export type ProjectIconOption = { name: string; Icon: LucideIcon };
 

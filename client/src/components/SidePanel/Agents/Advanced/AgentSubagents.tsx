@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { MAX_SUBAGENTS, EModelEndpoint } from 'librechat-data-provider';
-import { X, PlusCircle, Users } from 'lucide-react';
 import {
   Switch,
   HoverCard,
@@ -10,9 +9,10 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from '@librechat/client';
-import type { TMessage } from 'librechat-data-provider';
 import type { ControllerRenderProps } from 'react-hook-form';
+import type { TMessage } from 'librechat-data-provider';
 import type { AgentForm, OptionWithIcon } from '~/common';
+import { X, PlusCircle, Users } from '~/components/icons';
 import MessageIcon from '~/components/Share/MessageIcon';
 import { useAgentsMapContext } from '~/Providers';
 import { useLocalize } from '~/hooks';

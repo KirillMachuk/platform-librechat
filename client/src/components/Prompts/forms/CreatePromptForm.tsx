@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller, FormProvider } from 'react-hook-form';
 import { Button, TextareaAutosize, Input, useMediaQuery } from '@librechat/client';
@@ -12,6 +11,7 @@ import { usePromptGroupsContext } from '~/Providers';
 import { useLocalize, useHasAccess } from '~/hooks';
 import { useCreatePrompt } from '~/data-provider';
 import Description from '../fields/Description';
+import { FileText } from '~/components/icons';
 import Command from '../fields/Command';
 import { cn } from '~/utils';
 

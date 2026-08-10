@@ -1,9 +1,9 @@
 import { memo, useState, useMemo, useCallback } from 'react';
 import { FixedSizeTree } from 'react-vtree';
 import { useNavigate } from 'react-router-dom';
-import { ScrollText, ChevronDown, ChevronRight, Folder, Pin } from 'lucide-react';
 import type { FixedSizeNodeData, TreeWalkerValue, TreeWalker } from 'react-vtree';
 import type { TSkill, TSkillFile } from 'librechat-data-provider';
+import { ScrollText, ChevronDown, ChevronRight, Folder, Pin } from '~/components/icons';
 import { usePanelDismiss } from '~/components/UnifiedSidebar/dismiss';
 import { useListSkillFilesQuery } from '~/data-provider';
 import { useLocalize } from '~/hooks';

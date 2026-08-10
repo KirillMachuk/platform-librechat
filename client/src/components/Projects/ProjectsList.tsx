@@ -1,8 +1,8 @@
 import { memo, useState } from 'react';
-import { Plus, ChevronRight } from 'lucide-react';
 import { Button, Spinner } from '@librechat/client';
 import { PanelHeaderAction } from '~/components/UnifiedSidebar/PanelDialog';
 import { resolveIcon, resolveColor } from './iconOptions';
+import { Plus, ChevronRight } from '~/components/icons';
 import ProjectCreateDialog from './ProjectCreateDialog';
 import { useListProjectsQuery } from '~/data-provider';
 import { useLocalize, useAuthContext } from '~/hooks';

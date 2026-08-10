@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Info, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller, FormProvider } from 'react-hook-form';
 import { Input, Button, Skeleton, TextareaAutosize, useToastContext } from '@librechat/client';
@@ -12,8 +11,9 @@ import {
 import type { TSkill, TSkillWarning, TUpdateSkillPayload } from 'librechat-data-provider';
 import { useGetSkillQuery, useUpdateSkillMutation } from '~/data-provider';
 import { useLocalize, useSkillPermissions } from '~/hooks';
-import SkillContentEditor from './SkillContentEditor';
 import InvocationModePicker from './InvocationModePicker';
+import { Info, AlertTriangle } from '~/components/icons';
+import SkillContentEditor from './SkillContentEditor';
 import CategorySelector from './CategorySelector';
 import DeleteSkill from '../dialogs/DeleteSkill';
 import { ShareSkill } from '../buttons';

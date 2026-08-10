@@ -1,10 +1,10 @@
 import { useState, useRef, useCallback } from 'react';
-import { Import } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Spinner, useToastContext, SettingRow, Button } from '@librechat/client';
 import type { TStartupConfig } from 'librechat-data-provider';
 import { startupConfigKey, useUploadConversationsMutation } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
+import { Import } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn, logger } from '~/utils';
 

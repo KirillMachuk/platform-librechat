@@ -1,6 +1,5 @@
 import { memo, useCallback, useState, lazy, Suspense } from 'react';
 import { useRecoilValue } from 'recoil';
-import { SquarePen } from 'lucide-react';
 import { QueryKeys } from 'librechat-data-provider';
 import { useQueryClient } from '@tanstack/react-query';
 import { Skeleton, Sidebar as SidebarIcon, Button, TooltipAnchor } from '@librechat/client';
@@ -20,6 +19,7 @@ import PanelDialog from '~/components/UnifiedSidebar/PanelDialog';
 import { useGetStartupConfig } from '~/data-provider';
 import { useLocalize, useNewConvo } from '~/hooks';
 import { clearMessagesCache, cn } from '~/utils';
+import { SquarePen } from '~/components/icons';
 import store from '~/store';
 
 const AccountSettings = lazy(() => import('~/components/Nav/AccountSettings'));

@@ -1,6 +1,5 @@
-import { X, Link2, PlusCircle } from 'lucide-react';
-import { EModelEndpoint } from 'librechat-data-provider';
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { EModelEndpoint } from 'librechat-data-provider';
 import {
   ControlCombobox,
   HoverCard,
@@ -12,6 +11,7 @@ import {
 import type { ControllerRenderProps } from 'react-hook-form';
 import type { TMessage } from 'librechat-data-provider';
 import type { AgentForm, OptionWithIcon } from '~/common';
+import { X, Link2, PlusCircle } from '~/components/icons';
 import MessageIcon from '~/components/Share/MessageIcon';
 import { useAgentsMapContext } from '~/Providers';
 import { useLocalize } from '~/hooks';

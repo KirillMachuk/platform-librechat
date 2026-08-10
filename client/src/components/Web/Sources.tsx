@@ -3,7 +3,6 @@ import { useRecoilValue } from 'recoil';
 import * as Ariakit from '@ariakit/react';
 import { VisuallyHidden } from '@ariakit/react';
 import { Tools } from 'librechat-data-provider';
-import { X, Globe, Newspaper, Image, ChevronDown, File, Download } from 'lucide-react';
 import {
   OGDialog,
   AnimatedTabs,
@@ -14,6 +13,7 @@ import {
   useToastContext,
 } from '@librechat/client';
 import type { ValidSource, ImageResult } from 'librechat-data-provider';
+import { X, Globe, Newspaper, Image, ChevronDown, File, Download } from '~/components/icons';
 import { FaviconImage, getCleanDomain } from '~/components/Web/SourceHovercard';
 import SourcesErrorBoundary from './SourcesErrorBoundary';
 import { useFileDownload } from '~/data-provider';

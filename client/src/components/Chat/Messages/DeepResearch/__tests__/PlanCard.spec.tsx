@@ -19,7 +19,7 @@ jest.mock('~/data-provider', () => ({
   useGetStartupConfig: () => ({ data: mockStartupConfig }),
 }));
 jest.mock('~/common', () => ({ mainTextareaId: 'prompt-textarea' }));
-jest.mock('lucide-react', () => ({ Telescope: () => <svg data-testid="telescope" /> }));
+jest.mock('~/components/icons', () => ({ Telescope: () => <svg data-testid="telescope" /> }));
 jest.mock('@librechat/client', () => ({
   // Faithful enough to assert forwarded DOM props (aria-pressed/label, className); the real
   // Button drops the custom variant/size into class variants, so strip them off the mock.

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { Constants } from 'librechat-data-provider';
-import { ChevronDown, Clock, Code2 } from 'lucide-react';
 import * as AccordionPrimitive from '@radix-ui/react-accordion';
 import {
   Label,
@@ -25,6 +24,7 @@ import {
   useLocalize,
 } from '~/hooks';
 import MCPServerStatusIcon from '~/components/MCP/MCPServerStatusIcon';
+import { ChevronDown, Clock, Code2 } from '~/components/icons';
 import MCPConfigDialog from '~/components/MCP/MCPConfigDialog';
 import MCPToolItem from './MCPToolItem';
 import { cn } from '~/utils';

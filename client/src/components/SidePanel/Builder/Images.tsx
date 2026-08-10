@@ -1,6 +1,6 @@
 import { useRef } from 'react';
-import { Plus } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
+import { Plus } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 export function NoImage() {

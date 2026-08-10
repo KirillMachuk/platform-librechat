@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
-import { Save, FileText, Circle } from 'lucide-react';
 import { Button, Spinner } from '@librechat/client';
 import { useGetSkillNodeContentQuery, useUpdateSkillNodeContentMutation } from '~/data-provider';
+import { Save, FileText, Circle } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 

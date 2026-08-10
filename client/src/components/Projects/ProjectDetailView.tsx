@@ -1,6 +1,5 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
-import { ArrowLeft, MoreHorizontal, Upload, FileText, Trash2 } from 'lucide-react';
 import {
   Label,
   Button,
@@ -27,6 +26,7 @@ import {
   DEFAULT_PROJECT_ICON,
   DEFAULT_PROJECT_COLOR,
 } from './iconOptions';
+import { ArrowLeft, MoreHorizontal, Upload, FileText, Trash2 } from '~/components/icons';
 import { useLocalize, useNavigateToConvo, useNewConvo } from '~/hooks';
 import ProjectAppearancePopover from './ProjectAppearancePopover';
 import { buildConvoPath, cn, formatDate } from '~/utils';

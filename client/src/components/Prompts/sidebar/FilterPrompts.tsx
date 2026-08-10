@@ -1,11 +1,11 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useRecoilState } from 'recoil';
-import { ListFilter, User, Share2 } from 'lucide-react';
 import { Dropdown, FilterInput } from '@librechat/client';
 import { SystemCategories } from 'librechat-data-provider';
 import type { Option } from '~/common';
 import { useLocalize, useCategories, useDebounce } from '~/hooks';
 import CreatePromptButton from '../buttons/CreatePromptButton';
+import { ListFilter, User, Share2 } from '~/components/icons';
 import { usePromptGroupsContext } from '~/Providers';
 import { cn } from '~/utils';
 import store from '~/store';

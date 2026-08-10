@@ -42,7 +42,7 @@ jest.mock('~/svgs', () => ({
 }));
 
 // Mock lucide-react icons
-jest.mock('lucide-react', () => ({
+jest.mock('~/components/icons', () => ({
   ArrowUp: ({ className }: { className?: string }) => (
     <span data-testid="arrow-up" className={className} />
   ),

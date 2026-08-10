@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { XIcon } from 'lucide-react';
 import { useRecoilState } from 'recoil';
 import { Button, cn } from '@librechat/client';
 import {
@@ -8,6 +7,7 @@ import {
   createConfigHtmlSanitizer,
 } from '~/utils/configHtml';
 import { useGetBannerQuery } from '~/data-provider';
+import { XIcon } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import store from '~/store';
 

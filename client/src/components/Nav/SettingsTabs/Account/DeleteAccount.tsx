@@ -1,5 +1,4 @@
 import React, { useState, useCallback } from 'react';
-import { LockIcon, Trash } from 'lucide-react';
 import { REGEXP_ONLY_DIGITS, REGEXP_ONLY_DIGITS_AND_CHARS } from 'input-otp';
 import {
   InputOTPSeparator,
@@ -19,6 +18,7 @@ import {
 } from '@librechat/client';
 import type { TDeleteUserRequest } from 'librechat-data-provider';
 import { useDeleteUserMutation } from '~/data-provider';
+import { LockIcon, Trash } from '~/components/icons';
 import { useAuthContext } from '~/hooks/AuthContext';
 import { LocalizeFunction } from '~/common';
 import { useLocalize } from '~/hooks';

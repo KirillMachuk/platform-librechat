@@ -1,7 +1,7 @@
-import { TriangleAlert } from 'lucide-react';
 import { Spinner, FileIcon } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import type { ExtendedFile } from '~/common';
+import { TriangleAlert } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import SourceIcon from './SourceIcon';
 import { cn } from '~/utils';

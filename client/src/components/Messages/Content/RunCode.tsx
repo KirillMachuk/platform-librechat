@@ -2,13 +2,13 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import debounce from 'lodash/debounce';
 import { useRecoilCallback } from 'recoil';
 import { Tools } from 'librechat-data-provider';
-import { TerminalSquareIcon, Check, X } from 'lucide-react';
 import { Spinner, TooltipAnchor, useToastContext } from '@librechat/client';
 import type { CodeBarProps } from '~/common';
+import { TerminalSquareIcon, Check, X } from '~/components/icons';
 import { useToolCallMutation } from '~/data-provider';
-import { useLocalize } from '~/hooks';
 import { cn, normalizeLanguage } from '~/utils';
 import { useMessageContext } from '~/Providers';
+import { useLocalize } from '~/hooks';
 import store from '~/store';
 
 type RunState = 'idle' | 'loading' | 'success' | 'error';

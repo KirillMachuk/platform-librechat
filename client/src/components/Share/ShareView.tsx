@@ -3,7 +3,6 @@ import Cookies from 'js-cookie';
 import { useRecoilState } from 'recoil';
 import { useParams } from 'react-router-dom';
 import { buildTree } from 'librechat-data-provider';
-import { CalendarDays, Settings } from 'lucide-react';
 import { useGetSharedMessages } from 'librechat-data-provider/react-query';
 import {
   Spinner,
@@ -18,6 +17,7 @@ import {
 } from '@librechat/client';
 import { ThemeSelector, LangSelector } from '~/components/Nav/SettingsTabs/General/General';
 import { ShareMessagesProvider } from './ShareMessagesProvider';
+import { CalendarDays, Settings } from '~/components/icons';
 import { ShareArtifactsContainer } from './ShareArtifacts';
 import { useLocalize, useDocumentTitle } from '~/hooks';
 import { useGetStartupConfig } from '~/data-provider';

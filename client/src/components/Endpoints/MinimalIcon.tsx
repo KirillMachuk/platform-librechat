@@ -1,4 +1,3 @@
-import { Feather } from 'lucide-react';
 import { EModelEndpoint, alternateName } from 'librechat-data-provider';
 import {
   Sparkles,
@@ -10,6 +9,7 @@ import {
   CustomMinimalIcon,
 } from '@librechat/client';
 import UnknownIcon from '~/hooks/Endpoint/UnknownIcon';
+import { Feather } from '~/components/icons';
 import { IconProps } from '~/common';
 import { cn } from '~/utils';
 

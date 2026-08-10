@@ -1,5 +1,4 @@
 import { useState, useRef, useMemo } from 'react';
-import { Plus } from 'lucide-react';
 import { PermissionTypes, Permissions } from 'librechat-data-provider';
 import { Button, Spinner, FilterInput, OGDialogTrigger, TooltipAnchor } from '@librechat/client';
 import { useLocalize, useMCPServerManager, useHasAccess } from '~/hooks';
@@ -7,6 +6,7 @@ import MCPConfigDialog from '~/components/MCP/MCPConfigDialog';
 import MCPAdminSettings from './MCPAdminSettings';
 import MCPServerDialog from './MCPServerDialog';
 import MCPServerList from './MCPServerList';
+import { Plus } from '~/components/icons';
 
 export default function MCPBuilderPanel() {
   const localize = useLocalize();

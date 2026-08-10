@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
-import { Search, X } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { PermissionTypes, Permissions } from 'librechat-data-provider';
-import { useListSkillsQuery } from '~/data-provider';
 import { useDebounce, useHasAccess, useLocalize } from '~/hooks';
-import { CreateSkillMenu } from '../buttons';
+import { useListSkillsQuery } from '~/data-provider';
 import SkillListPanel from '../lists/SkillList';
+import { Search, X } from '~/components/icons';
+import { CreateSkillMenu } from '../buttons';
 import { cn } from '~/utils';
 
 interface SkillsSidePanelProps {

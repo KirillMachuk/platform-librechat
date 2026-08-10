@@ -1,11 +1,11 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Send } from 'lucide-react';
 import { Button } from '@librechat/client';
 import type { TPromptGroup } from 'librechat-data-provider';
 import { useLocalize, useSubmitMessage } from '~/hooks';
 import { useRecordPromptUsage } from '~/data-provider';
 import VariableDialog from '../dialogs/VariableDialog';
 import SharePrompt from '../dialogs/SharePrompt';
+import { Send } from '~/components/icons';
 import { detectVariables } from '~/utils';
 
 interface PromptActionsProps {

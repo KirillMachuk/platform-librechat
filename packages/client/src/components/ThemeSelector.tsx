@@ -1,6 +1,6 @@
 import { useContext, useCallback, useEffect, useState } from 'react';
 import { JSX } from 'react/jsx-runtime';
-import { Sun, Moon, Monitor } from 'lucide-react';
+import { Sun, Moon, Monitor } from '~/components/icons';
 import { ThemeContext, isDark } from '../theme';
 import { useLocalize } from '../hooks';
 

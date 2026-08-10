@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 import { VisuallyHidden } from '@ariakit/react';
 import { Spinner, TooltipAnchor } from '@librechat/client';
-import { CheckCircle2, MousePointerClick, SettingsIcon } from 'lucide-react';
 import { EModelEndpoint, isAgentsEndpoint, isAssistantsEndpoint } from 'librechat-data-provider';
 import type { TModelSpec } from 'librechat-data-provider';
 import type { Endpoint } from '~/common';
 import { CustomMenu as Menu, CustomMenuItem as MenuItem, CustomMenuSeparator } from '../CustomMenu';
+import { CheckCircle2, MousePointerClick, SettingsIcon } from '~/components/icons';
 import MarketplaceItem, { marketplaceSearchMatches } from './Marketplace';
 import { filterModels, shouldRenderEndpointOption } from '../utils';
 import { useModelSelectorContext } from '../ModelSelectorContext';

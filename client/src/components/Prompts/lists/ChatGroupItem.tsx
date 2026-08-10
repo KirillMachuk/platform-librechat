@@ -2,7 +2,6 @@ import { useState, memo, useRef, useCallback, useId, useMemo } from 'react';
 import * as Ariakit from '@ariakit/react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PermissionBits, ResourceType } from 'librechat-data-provider';
-import { Ellipsis, Eye, SquarePen, Trash, EarthIcon, User } from 'lucide-react';
 import {
   Label,
   Button,
@@ -15,6 +14,7 @@ import {
 } from '@librechat/client';
 import type { TPromptGroup } from 'librechat-data-provider';
 import { useLocalize, useAuthContext, useSubmitMessage, useResourcePermissions } from '~/hooks';
+import { Ellipsis, Eye, SquarePen, Trash, EarthIcon, User } from '~/components/icons';
 import { useRecordPromptUsage, useDeletePromptGroup } from '~/data-provider';
 import { usePanelDismiss } from '~/components/UnifiedSidebar/dismiss';
 import VariableDialog from '../dialogs/VariableDialog';

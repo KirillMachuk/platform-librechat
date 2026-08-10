@@ -1,5 +1,4 @@
 import { memo } from 'react';
-import { Trash2 } from 'lucide-react';
 import {
   Button,
   OGDialog,
@@ -9,6 +8,7 @@ import {
   useToastContext,
 } from '@librechat/client';
 import { useDeleteSkillMutation } from '~/data-provider';
+import { Trash2 } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 // Memoed because it renders inside `SkillForm`'s header, which re-renders on

@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-import { KeyRound, PlugZap, AlertTriangle } from 'lucide-react';
 import {
   Spinner,
   OGDialog,
@@ -10,6 +9,7 @@ import {
 import type { MCPServerStatus } from 'librechat-data-provider';
 import type { ConfigFieldDetail } from '~/common';
 import ServerInitializationSection from './ServerInitializationSection';
+import { KeyRound, PlugZap, AlertTriangle } from '~/components/icons';
 import CustomUserVarsSection from './CustomUserVarsSection';
 import { useLocalize } from '~/hooks';
 

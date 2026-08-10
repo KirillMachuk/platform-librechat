@@ -1,8 +1,8 @@
-import { CopyPlus } from 'lucide-react';
 import { useFormState } from 'react-hook-form';
 import { useToastContext, Button } from '@librechat/client';
 import { useAgentPanelContext } from '~/Providers/AgentPanelContext';
 import { useDuplicateAgentMutation } from '~/data-provider';
+import { CopyPlus } from '~/components/icons';
 import { isEphemeralAgent } from '~/common';
 import { useLocalize } from '~/hooks';
 

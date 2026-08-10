@@ -1,6 +1,6 @@
 import { forwardRef } from 'react';
 import { useRecoilValue } from 'recoil';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown } from '~/components/icons';
 import { cn, chatColumnClass } from '~/utils';
 import { useLocalize } from '~/hooks';
 import store from '~/store';

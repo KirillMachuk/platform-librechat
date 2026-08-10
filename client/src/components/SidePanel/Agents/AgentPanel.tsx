@@ -1,5 +1,4 @@
 import React, { useMemo, useCallback, useEffect, useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
 import { Button, useToastContext } from '@librechat/client';
 import { useWatch, useForm, FormProvider } from 'react-hook-form';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
@@ -34,6 +33,7 @@ import { useSelectAgent, useLocalize } from '~/hooks';
 import AgentPanelSkeleton from './AgentPanelSkeleton';
 import AdvancedPanel from './Advanced/AdvancedPanel';
 import { Panel, isEphemeralAgent } from '~/common';
+import { Plus } from '~/components/icons';
 import AgentConfig from './AgentConfig';
 import AgentSelect from './AgentSelect';
 import AgentFooter from './AgentFooter';

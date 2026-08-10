@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
 import { MCPIcon, AttachmentIcon, OpenAIMinimalIcon } from '@librechat/client';
-import { Bot, Folder, Bookmark, NotebookPen, ScrollText, SlidersHorizontal } from 'lucide-react';
 import {
   Permissions,
   EModelEndpoint,
@@ -19,6 +18,14 @@ import {
   useBookmarksEnabled,
   useHasAccess,
 } from '~/hooks';
+import {
+  Bot,
+  Folder,
+  Bookmark,
+  NotebookPen,
+  ScrollText,
+  SlidersHorizontal,
+} from '~/components/icons';
 import MCPBuilderPanel from '~/components/SidePanel/MCPBuilder/MCPBuilderPanel';
 import BookmarkPanel from '~/components/SidePanel/Bookmarks/BookmarkPanel';
 import PanelSwitch from '~/components/SidePanel/Builder/PanelSwitch';

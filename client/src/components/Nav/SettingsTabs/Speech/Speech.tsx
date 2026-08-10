@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useRecoilState } from 'recoil';
 import * as Tabs from '@radix-ui/react-tabs';
-import { Lightbulb, Cog } from 'lucide-react';
 import { useGetCustomConfigSpeechQuery } from 'librechat-data-provider/react-query';
 import {
   SettingGroup,
@@ -27,6 +26,7 @@ import {
   DecibelSelector,
 } from './STT';
 import ConversationModeSwitch from './ConversationModeSwitch';
+import { Lightbulb, Cog } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 import store from '~/store';

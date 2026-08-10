@@ -1,10 +1,10 @@
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import { Button, TooltipAnchor } from '@librechat/client';
-import { Pencil, Pin, User, Calendar, EarthIcon, Sparkles } from 'lucide-react';
 import { InvocationMode } from 'librechat-data-provider';
+import { Button, TooltipAnchor } from '@librechat/client';
 import type { TSkill } from 'librechat-data-provider';
 import type { TranslationKeys } from '~/hooks';
+import { Pencil, Pin, User, Calendar, EarthIcon, Sparkles } from '~/components/icons';
 import { useLocalize, useAuthContext } from '~/hooks';
 import DeleteSkill from '../dialogs/DeleteSkill';
 import { ShareSkill } from '../buttons';

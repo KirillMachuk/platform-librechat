@@ -1,10 +1,10 @@
 import { useId, useMemo, useState } from 'react';
 import * as Menu from '@ariakit/react/menu';
-import { FilterX, ListFilter } from 'lucide-react';
 import { ArrowDownIcon, ArrowUpIcon, CaretSortIcon } from '@radix-ui/react-icons';
 import type { Column } from '@tanstack/react-table';
 import type { TranslationKeys } from '../../hooks';
 import type { MenuItemProps } from '../../common';
+import { FilterX, ListFilter } from '~/components/icons';
 import DropdownPopup from '../DropdownPopup';
 import { TooltipAnchor } from '../Tooltip';
 import { useLocalize } from '../../hooks';

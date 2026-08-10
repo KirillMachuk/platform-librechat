@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import * as Menu from '@ariakit/react/menu';
-import { Ellipsis, PinOff } from 'lucide-react';
 import { DropdownPopup } from '@librechat/client';
 import { EModelEndpoint } from 'librechat-data-provider';
 import type { Agent, TModelSpec, TEndpointsConfig } from 'librechat-data-provider';
 import type { FavoriteModel } from '~/store/favorites';
 import SpecIcon from '~/components/Chat/Menus/Endpoints/components/SpecIcon';
 import MinimalIcon from '~/components/Endpoints/MinimalIcon';
+import { Ellipsis, PinOff } from '~/components/icons';
 import { useFavorites, useLocalize } from '~/hooks';
 import { renderAgentAvatar, cn } from '~/utils';
 

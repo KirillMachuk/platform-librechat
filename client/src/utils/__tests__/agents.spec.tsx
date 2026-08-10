@@ -5,7 +5,7 @@ import type t from 'librechat-data-provider';
 import { getAgentAvatarUrl, renderAgentAvatar, getContactDisplayName } from '../agents';
 
 // Mock the Feather icon from lucide-react
-jest.mock('lucide-react', () => ({
+jest.mock('~/components/icons', () => ({
   Feather: ({ className, strokeWidth, ...props }: any) => (
     <svg
       data-testid="feather-icon"

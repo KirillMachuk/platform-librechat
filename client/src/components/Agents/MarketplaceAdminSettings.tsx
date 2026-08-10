@@ -1,10 +1,10 @@
-import { ShieldEllipsis } from 'lucide-react';
-import { Permissions, PermissionTypes } from 'librechat-data-provider';
 import { Button, useToastContext } from '@librechat/client';
-import { AdminSettingsDialog } from '~/components/ui';
-import { useUpdateMarketplacePermissionsMutation } from '~/data-provider';
-import { useLocalize } from '~/hooks';
+import { Permissions, PermissionTypes } from 'librechat-data-provider';
 import type { PermissionConfig } from '~/components/ui';
+import { useUpdateMarketplacePermissionsMutation } from '~/data-provider';
+import { AdminSettingsDialog } from '~/components/ui';
+import { ShieldEllipsis } from '~/components/icons';
+import { useLocalize } from '~/hooks';
 
 const permissions: PermissionConfig[] = [
   { permission: Permissions.USE, labelKey: 'com_ui_marketplace_allow_use' },

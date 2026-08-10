@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
-import { FileText } from 'lucide-react';
 import type { TAttachment } from 'librechat-data-provider';
 import ProgressText from '~/components/Chat/Messages/Content/ProgressText';
 import useToolCallState from './useToolCallState';
 import useLazyHighlight from './useLazyHighlight';
 import CodeWindowHeader from './CodeWindowHeader';
 import { AttachmentGroup } from './Attachment';
+import { FileText } from '~/components/icons';
 import parseJsonField from './parseJsonField';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';

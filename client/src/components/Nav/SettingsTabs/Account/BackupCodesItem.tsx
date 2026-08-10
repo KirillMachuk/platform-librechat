@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { RefreshCcw } from 'lucide-react';
 import { useSetRecoilState } from 'recoil';
 import { motion, AnimatePresence } from 'framer-motion';
 import { REGEXP_ONLY_DIGITS, REGEXP_ONLY_DIGITS_AND_CHARS } from 'input-otp';
@@ -27,6 +26,7 @@ import type {
 } from 'librechat-data-provider';
 import { useRegenerateBackupCodesMutation } from '~/data-provider';
 import { useAuthContext, useLocalize } from '~/hooks';
+import { RefreshCcw } from '~/components/icons';
 import { formatDate } from '~/utils';
 import store from '~/store';
 

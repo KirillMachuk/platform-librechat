@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { Search, X } from 'lucide-react';
 import { useFormContext } from 'react-hook-form';
 import { isAgentsEndpoint } from 'librechat-data-provider';
 import { Dialog, DialogPanel, DialogTitle, Description } from '@headlessui/react';
@@ -15,6 +14,7 @@ import type { AgentForm, ToolDialogProps } from '~/common';
 import { PluginPagination, PluginAuthForm } from '~/components/Plugins/Store';
 import { useAgentPanelContext } from '~/Providers/AgentPanelContext';
 import { useLocalize, usePluginDialogHelpers } from '~/hooks';
+import { Search, X } from '~/components/icons';
 import ToolItem from './ToolItem';
 
 function ToolSelectDialog({

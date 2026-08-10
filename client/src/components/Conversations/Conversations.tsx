@@ -1,7 +1,6 @@
 import { useMemo, memo, type FC, useCallback, useEffect, useRef } from 'react';
 import throttle from 'lodash/throttle';
 import { useRecoilValue } from 'recoil';
-import { ChevronDown } from 'lucide-react';
 import { QueryKeys } from 'librechat-data-provider';
 import { useQueryClient } from '@tanstack/react-query';
 import { List, CellMeasurer, CellMeasurerCache } from 'react-virtualized';
@@ -16,6 +15,7 @@ import {
 } from '~/hooks';
 import { groupConversationsByDate, clearMessagesCache, cn } from '~/utils';
 import FavoritesList from '~/components/Nav/Favorites/FavoritesList';
+import { ChevronDown } from '~/components/icons';
 import { useActiveJobs } from '~/data-provider';
 import Convo from './Convo';
 import store from '~/store';

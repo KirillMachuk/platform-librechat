@@ -1,5 +1,4 @@
 import { memo, useMemo, useRef, useState } from 'react';
-import { Folder } from 'lucide-react';
 import * as Ariakit from '@ariakit/react';
 import { EModelEndpoint, EToolResources } from 'librechat-data-provider';
 import {
@@ -20,6 +19,7 @@ import { SharePointPickerDialog } from '~/components/SharePoint';
 import FileRow from '~/components/Chat/Input/Files/FileRow';
 import { useGetStartupConfig } from '~/data-provider';
 import { ESide, isEphemeralAgent } from '~/common';
+import { Folder } from '~/components/icons';
 
 function FileContext({
   agent_id,

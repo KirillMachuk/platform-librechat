@@ -2,7 +2,6 @@ import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFormContext, useFormState, useWatch } from 'react-hook-form';
 import { Label, OGDialog, OGDialogContent, OGDialogTemplate } from '@librechat/client';
-import { Search, Check, EarthIcon, User, Plus, Star, ListFilter, X } from 'lucide-react';
 import { PermissionTypes, Permissions, SystemCategories } from 'librechat-data-provider';
 import type { TSkillSummary } from 'librechat-data-provider';
 import type { AgentForm } from '~/common';
@@ -13,6 +12,7 @@ import {
   useHasAccess,
   useSkillFavorites,
 } from '~/hooks';
+import { Search, Check, EarthIcon, User, Plus, Star, ListFilter, X } from '~/components/icons';
 import { usePanelDismiss } from '~/components/UnifiedSidebar/dismiss';
 import { useListSkillsQuery } from '~/data-provider';
 import { CategoryIcon } from '~/components/Prompts';

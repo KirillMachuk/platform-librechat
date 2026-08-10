@@ -1,5 +1,4 @@
 import React from 'react';
-import { Clock, MoreHorizontal, Code2 } from 'lucide-react';
 import {
   Checkbox,
   DropdownMenu,
@@ -10,6 +9,7 @@ import {
   DropdownMenuCheckboxItem,
 } from '@librechat/client';
 import type { AgentToolType } from 'librechat-data-provider';
+import { Clock, MoreHorizontal, Code2 } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 

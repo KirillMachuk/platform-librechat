@@ -1,8 +1,8 @@
-import { Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button, TooltipAnchor } from '@librechat/client';
 import { PermissionTypes, Permissions } from 'librechat-data-provider';
 import { useHasAccess, useLocalize } from '~/hooks';
+import { Plus } from '~/components/icons';
 
 export default function CreatePromptButton() {
   const localize = useLocalize();

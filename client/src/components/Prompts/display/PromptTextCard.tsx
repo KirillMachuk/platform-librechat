@@ -5,10 +5,10 @@ import rehypeKatex from 'rehype-katex';
 import supersub from 'remark-supersub';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
-import { Copy, Check } from 'lucide-react';
 import { Button, TooltipAnchor, useToastContext } from '@librechat/client';
 import { codeNoExecution } from '~/components/Chat/Messages/Content/MarkdownComponents';
 import { PromptVariableGfm } from '../editor/Markdown';
+import { Copy, Check } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 interface PromptTextCardProps {

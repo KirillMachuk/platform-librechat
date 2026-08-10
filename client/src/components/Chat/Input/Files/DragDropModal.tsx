@@ -2,13 +2,6 @@ import React, { useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
 import { OGDialog, OGDialogTemplate } from '@librechat/client';
 import {
-  ImageUpIcon,
-  FileSearch,
-  FileType2Icon,
-  FileImageIcon,
-  TerminalSquareIcon,
-} from 'lucide-react';
-import {
   Providers,
   inferMimeType,
   EToolResources,
@@ -17,6 +10,13 @@ import {
   defaultAgentCapabilities,
   isDocumentSupportedProvider,
 } from 'librechat-data-provider';
+import {
+  ImageUpIcon,
+  FileSearch,
+  FileType2Icon,
+  FileImageIcon,
+  TerminalSquareIcon,
+} from '~/components/icons';
 import {
   useAgentToolPermissions,
   useAgentCapabilities,

@@ -1,6 +1,5 @@
 import React, { useCallback, useState, useRef } from 'react';
 import { useSetRecoilState } from 'recoil';
-import { SmartphoneIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   OGDialog,
@@ -21,6 +20,7 @@ import {
 import { SetupPhase, QRPhase, VerifyPhase, BackupPhase, DisablePhase } from './TwoFactorPhases';
 import { DisableTwoFactorToggle } from './DisableTwoFactorToggle';
 import { useAuthContext, useLocalize } from '~/hooks';
+import { SmartphoneIcon } from '~/components/icons';
 import store from '~/store';
 
 export type Phase = 'setup' | 'qr' | 'verify' | 'backup' | 'disable';

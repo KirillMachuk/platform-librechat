@@ -171,16 +171,21 @@ const SRC = ['client/src', 'packages/client/src'];
 const SKIP_DIR = new Set(['node_modules', 'dist', 'build', '__tests__', '__mocks__']);
 const ICON_LIB = join(ROOT, 'packages/client/src/svgs') + sep;
 const COMPONENT = /\.(tsx|jsx)$/;
-const IS_TEST = /\.(spec|test)\.(tsx|jsx)$/;
+/* The lucide-import ban scans plain .ts too: hooks and option tables import
+   icon components without a line of JSX (useChatBadges.ts, iconOptions.ts),
+   and a probe planted in a .ts file walked straight past the component-only
+   walker on the first mutation run. */
+const ANY_SOURCE = /\.(tsx|jsx|ts)$/;
+const IS_TEST = /\.(spec|test)\.(tsx|jsx|ts)$/;
 
-function* sources(dir) {
+function* sources(dir, filter = COMPONENT) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
       if (!SKIP_DIR.has(entry.name)) {
-        yield* sources(path);
+        yield* sources(path, filter);
       }
-    } else if (entry.isFile() && COMPONENT.test(entry.name) && !IS_TEST.test(entry.name)) {
+    } else if (entry.isFile() && filter.test(entry.name) && !IS_TEST.test(entry.name)) {
       yield path;
     }
   }
@@ -261,6 +266,28 @@ const ALLOWED_INLINE_SVG = {
   'packages/client/src/components/Toast.tsx': 1,
 };
 
+/* The app draws Phosphor through the generated shims (src/components/icons.tsx,
+   one per workspace, built from scripts/icons.map.json); lucide-react stays in
+   package.json only for the artifact sandbox pin above. A direct import would
+   quietly reintroduce the old drawing style next to the new one — exactly the
+   mixed set the owner ruled out. Scans .ts as well as components. */
+for (const root of SRC) {
+  for (const path of sources(join(ROOT, root), ANY_SOURCE)) {
+    const rel = relative(ROOT, path).split(sep).join('/');
+    if (rel.endsWith('components/icons.tsx')) {
+      continue;
+    }
+    const text = stripComments(readFileSync(path, 'utf8'));
+    if (/from\s+['"]lucide-react['"]/.test(text)) {
+      fail(
+        rel,
+        `imports straight from lucide-react`,
+        `import the same name from '~/components/icons' — the shim maps it to Phosphor (scripts/icons.map.json)`,
+      );
+    }
+  }
+}
+
 const LADDER = /\bicon-(xs|sm|md|lg|xl|2xl)\b/g;
 const seenSvg = new Map();
 const seenStroke = new Map();
@@ -269,6 +296,7 @@ for (const root of SRC) {
   for (const path of sources(join(ROOT, root))) {
     const rel = relative(ROOT, path).split(sep).join('/');
     const text = stripComments(readFileSync(path, 'utf8'));
+
 
     if (!path.startsWith(ICON_LIB)) {
       const count = (text.match(/<svg[\s/>]/g) ?? []).length;

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Copy, CopyCheck } from 'lucide-react';
 import { useGetSharedLinkQuery } from 'librechat-data-provider/react-query';
 import { OGDialogTemplate, Button, Spinner, OGDialog } from '@librechat/client';
-import { useLocalize, useCopyToClipboard } from '~/hooks';
 import { useLatestMessage } from '~/hooks/Messages/useLatestMessage';
+import { useLocalize, useCopyToClipboard } from '~/hooks';
+import { Copy, CopyCheck } from '~/components/icons';
 import SharedLinkButton from './SharedLinkButton';
 import { buildShareLinkUrl, cn } from '~/utils';
 

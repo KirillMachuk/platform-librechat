@@ -2,7 +2,7 @@ import React from 'react';
 import * as Ariakit from '@ariakit/react';
 import { PinIcon } from '@librechat/client';
 import { ArtifactModes } from 'librechat-data-provider';
-import { ChevronRight, WandSparkles } from 'lucide-react';
+import { ChevronRight, WandSparkles } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 

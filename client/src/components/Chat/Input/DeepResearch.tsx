@@ -1,9 +1,9 @@
 import React, { memo } from 'react';
-import { Telescope } from 'lucide-react';
 import { CheckboxButton } from '@librechat/client';
 import { Permissions, PermissionTypes, defaultAgentCapabilities } from 'librechat-data-provider';
 import { useLocalize, useHasAccess, useAgentCapabilities } from '~/hooks';
 import { useBadgeRowContext } from '~/Providers';
+import { Telescope } from '~/components/icons';
 
 function DeepResearch() {
   const localize = useLocalize();

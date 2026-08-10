@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessagesSquare, MessageSquare } from 'lucide-react';
 import type { MouseEvent } from 'react';
+import { MessagesSquare, MessageSquare } from '~/components/icons';
 import { buildSearchResultUrl } from './url';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';

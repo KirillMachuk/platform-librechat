@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { TooltipAnchor } from '@librechat/client';
-import { User, Calendar, EarthIcon, BarChart3 } from 'lucide-react';
 import type { TPromptGroup } from 'librechat-data-provider';
+import { User, Calendar, EarthIcon, BarChart3 } from '~/components/icons';
 import { useLocalize, useAuthContext } from '~/hooks';
 import CategoryIcon from '../utils/CategoryIcon';
 

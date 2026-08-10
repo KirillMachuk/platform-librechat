@@ -1,6 +1,6 @@
 import React from 'react';
-import { Copy, Check } from 'lucide-react';
 import { TooltipAnchor } from '@librechat/client';
+import { Copy, Check } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import cn from '~/utils/cn';
 

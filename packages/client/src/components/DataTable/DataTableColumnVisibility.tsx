@@ -1,8 +1,8 @@
 import { useId, useMemo, useState } from 'react';
-import { ListFilter } from 'lucide-react';
 import * as Menu from '@ariakit/react/menu';
 import type { Table } from '@tanstack/react-table';
 import type { TranslationKeys } from '../../hooks';
+import { ListFilter } from '~/components/icons';
 import DropdownPopup from '../DropdownPopup';
 import { useLocalize } from '../../hooks';
 import { cn } from '~/utils';

@@ -4,14 +4,6 @@ import debounce from 'lodash/debounce';
 import { useRecoilValue } from 'recoil';
 import { Link } from 'react-router-dom';
 import {
-  ArrowUp,
-  TrashIcon,
-  ArrowDown,
-  ArrowUpDown,
-  ExternalLink,
-  MessageSquare,
-} from 'lucide-react';
-import {
   Label,
   Button,
   Spinner,
@@ -28,6 +20,14 @@ import {
   OGDialogTemplate,
 } from '@librechat/client';
 import type { SharedLinkItem, SharedLinksListParams } from 'librechat-data-provider';
+import {
+  ArrowUp,
+  TrashIcon,
+  ArrowDown,
+  ArrowUpDown,
+  ExternalLink,
+  MessageSquare,
+} from '~/components/icons';
 import { useDeleteSharedLinkMutation, useSharedLinksQuery } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
 import { useLocalize } from '~/hooks';

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { Check, X } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
+import { Check, X } from '~/components/icons';
 
 interface RenameFormProps {
   titleInput: string;

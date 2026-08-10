@@ -1,7 +1,7 @@
 import { JSX } from 'react/jsx-runtime';
-import { GripVertical } from 'lucide-react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import type { ComponentProps } from 'react';
+import { GripVertical } from '~/components/icons';
 import { cn } from '~/utils';
 
 const ResizablePanelGroup = ({

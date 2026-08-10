@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
-import { ScrollText } from 'lucide-react';
 import type { TAttachment } from 'librechat-data-provider';
 import ProgressText from '~/components/Chat/Messages/Content/ProgressText';
 import useToolCallState from './useToolCallState';
+import { ScrollText } from '~/components/icons';
 import { AttachmentGroup } from './Attachment';
 import parseJsonField from './parseJsonField';
 import { useLocalize } from '~/hooks';

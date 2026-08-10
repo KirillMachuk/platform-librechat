@@ -1,5 +1,4 @@
 /* eslint-disable react-hooks/rules-of-hooks */
-import { Paperclip } from 'lucide-react';
 import { useMediaQuery } from '@librechat/client';
 import type { TableColumn } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
@@ -7,6 +6,7 @@ import ImagePreview from '~/components/Chat/Input/Files/ImagePreview';
 import FilePreview from '~/components/Chat/Input/Files/FilePreview';
 import { TranslationKeys, useLocalize } from '~/hooks';
 import { formatDate, getFileType } from '~/utils';
+import { Paperclip } from '~/components/icons';
 
 export type TFileRow = TFile & { id: string };
 

@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { ChevronLeft } from 'lucide-react';
 import { useForm, FormProvider } from 'react-hook-form';
 import {
   AuthTypeEnum,
@@ -17,6 +16,7 @@ import {
 import type { AssistantPanelProps, ActionAuthForm } from '~/common';
 import { useAssistantsMapContext } from '~/Providers';
 import { useDeleteAction } from '~/data-provider';
+import { ChevronLeft } from '~/components/icons';
 import ActionsInput from './ActionsInput';
 import ActionsAuth from './ActionsAuth';
 import { useLocalize } from '~/hooks';

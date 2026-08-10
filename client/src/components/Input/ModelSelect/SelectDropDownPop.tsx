@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
 import { useMultiSearch } from '@librechat/client';
 import { Root, Trigger, Content, Portal } from '@radix-ui/react-popover';
 import type { Option } from '~/common';
 import MenuItem from '~/components/Chat/Menus/UI/MenuItem';
+import { ChevronDown } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 

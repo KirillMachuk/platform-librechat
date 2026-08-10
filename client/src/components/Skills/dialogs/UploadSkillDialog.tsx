@@ -1,5 +1,4 @@
 import { useRef, useCallback, useState } from 'react';
-import { Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { OGDialog, OGDialogContent, Spinner, useToastContext } from '@librechat/client';
 import {
@@ -9,6 +8,7 @@ import {
 } from 'librechat-data-provider';
 import { useGetFileConfig, useImportSkillMutation } from '~/data-provider';
 import { usePanelDismiss } from '~/components/UnifiedSidebar/dismiss';
+import { Upload } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 

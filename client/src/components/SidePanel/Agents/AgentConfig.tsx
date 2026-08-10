@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { X } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import { Switch, useToastContext } from '@librechat/client';
 import { Controller, useWatch, useFormContext } from 'react-hook-form';
@@ -35,6 +34,7 @@ import { icons } from '~/hooks/Endpoint/Icons';
 import Instructions from './Instructions';
 import AgentAvatar from './AgentAvatar';
 import FileContext from './FileContext';
+import { X } from '~/components/icons';
 import SearchForm from './Search/Form';
 import FileSearch from './FileSearch';
 import Artifacts from './Artifacts';

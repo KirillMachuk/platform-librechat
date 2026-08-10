@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
-import { Brain, Command, DollarSign, Info, MessageSquare, X } from 'lucide-react';
 import { PermissionTypes, Permissions, SettingsTabValues } from 'librechat-data-provider';
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react';
 import {
@@ -24,6 +23,7 @@ import {
   Account,
   About,
 } from './SettingsTabs';
+import { Brain, Command, DollarSign, Info, MessageSquare, X } from '~/components/icons';
 import usePersonalizationAccess from '~/hooks/usePersonalizationAccess';
 import { useLocalize, useHasAccess, TranslationKeys } from '~/hooks';
 import { useGetStartupConfig } from '~/data-provider';

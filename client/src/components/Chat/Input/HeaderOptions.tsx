@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Settings2 } from 'lucide-react';
 import { TooltipAnchor } from '@librechat/client';
 import { Root, Anchor } from '@radix-ui/react-popover';
 import { isParamEndpoint, getEndpointField, tConvoUpdateSchema } from 'librechat-data-provider';
@@ -7,6 +6,7 @@ import type { TPreset, TInterfaceConfig } from 'librechat-data-provider';
 import { EndpointSettings, SaveAsPresetDialog, AlternativeSettings } from '~/components/Endpoints';
 import { useSetIndexOptions, useLocalize } from '~/hooks';
 import { useGetEndpointsQuery } from '~/data-provider';
+import { Settings2 } from '~/components/icons';
 import OptionsPopover from './OptionsPopover';
 import PopoverButtons from './PopoverButtons';
 import { useChatContext } from '~/Providers';

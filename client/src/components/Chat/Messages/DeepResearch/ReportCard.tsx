@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { FileText, Maximize2 } from 'lucide-react';
 import { Button, Dialog, DialogTitle, DialogHeader, DialogContent } from '@librechat/client';
 import type { ReactNode } from 'react';
+import { FileText, Maximize2 } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 

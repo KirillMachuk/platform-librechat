@@ -1,6 +1,5 @@
 import React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Link, Pencil, Pin, PinOff } from 'lucide-react';
 import { OGDialogContent, Button, useToastContext } from '@librechat/client';
 import {
   QueryKeys,
@@ -15,6 +14,7 @@ import type t from 'librechat-data-provider';
 import { useLocalize, useDefaultConvo, useFavorites, useAuthContext } from '~/hooks';
 import { useResourcePermissions } from '~/hooks/useResourcePermissions';
 import { renderAgentAvatar, clearMessagesCache } from '~/utils';
+import { Link, Pencil, Pin, PinOff } from '~/components/icons';
 import { useChatContext } from '~/Providers';
 
 interface SupportContact {

@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Search, X } from 'lucide-react';
 import { useFormContext } from 'react-hook-form';
 import { useQueryClient } from '@tanstack/react-query';
 import { Constants, EModelEndpoint, QueryKeys } from 'librechat-data-provider';
@@ -17,6 +16,7 @@ import CustomUserVarsSection from '~/components/MCP/CustomUserVarsSection';
 import { PluginPagination } from '~/components/Plugins/Store';
 import { useAgentPanelContext } from '~/Providers';
 import { useMCPToolsQuery } from '~/data-provider';
+import { Search, X } from '~/components/icons';
 import MCPToolItem from './MCPToolItem';
 
 function MCPToolSelectDialog({

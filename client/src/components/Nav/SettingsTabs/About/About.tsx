@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import copy from 'copy-to-clipboard';
-import { Check, Copy } from 'lucide-react';
 import { Constants } from 'librechat-data-provider';
 import { SETTINGS_TAB_BODY } from '@librechat/client';
 import type { TStartupConfig } from 'librechat-data-provider';
 import { useGetStartupConfig } from '~/data-provider';
+import { Check, Copy } from '~/components/icons';
 import { resolveAppTitle } from '~/utils';
 import { useLocalize } from '~/hooks';
 

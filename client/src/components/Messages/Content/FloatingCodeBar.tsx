@@ -1,9 +1,9 @@
 import React from 'react';
-import { InfoIcon } from 'lucide-react';
 import type { CodeBarProps } from '~/common';
 import useCopyCode from '~/components/Messages/Content/useCopyCode';
 import CopyButton from '~/components/Messages/Content/CopyButton';
 import RunCode from '~/components/Messages/Content/RunCode';
+import { InfoIcon } from '~/components/icons';
 import cn from '~/utils/cn';
 
 interface FloatingCodeBarProps extends CodeBarProps {

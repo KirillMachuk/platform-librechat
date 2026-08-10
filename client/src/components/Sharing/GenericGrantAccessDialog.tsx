@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { AccessRoleIds, ResourceType } from 'librechat-data-provider';
-import { Share2Icon, Users, Link, CopyCheck, UserX, UserCheck } from 'lucide-react';
 import {
   Label,
   Button,
@@ -21,6 +20,7 @@ import {
   useCanSharePublic,
   useLocalize,
 } from '~/hooks';
+import { Share2Icon, Users, Link, CopyCheck, UserX, UserCheck } from '~/components/icons';
 import UnifiedPeopleSearch from './PeoplePicker/UnifiedPeopleSearch';
 import PeoplePickerAdminSettings from './PeoplePickerAdminSettings';
 import PublicSharingToggle from './PublicSharingToggle';

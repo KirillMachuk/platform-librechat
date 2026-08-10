@@ -1,7 +1,7 @@
 import React from 'react';
-import { RefreshCw, Trash2 } from 'lucide-react';
 import { Button, Spinner } from '@librechat/client';
 import { useLocalize, useMCPServerManager, useMCPConnectionStatus } from '~/hooks';
+import { RefreshCw, Trash2 } from '~/components/icons';
 
 interface ServerInitializationSectionProps {
   sidePanel?: boolean;

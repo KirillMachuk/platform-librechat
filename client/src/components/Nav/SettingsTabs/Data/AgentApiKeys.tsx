@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Key, ShieldEllipsis } from 'lucide-react';
 import { Permissions, PermissionTypes, SystemRoles } from 'librechat-data-provider';
 import {
   useGetAgentApiKeysQuery,
@@ -23,6 +22,7 @@ import {
 } from '@librechat/client';
 import type { PermissionConfig } from '~/components/ui';
 import { useUpdateRemoteAgentsPermissionsMutation } from '~/data-provider';
+import { Plus, Trash2, Key, ShieldEllipsis } from '~/components/icons';
 import { useAuthContext, useHasAccess, useLocalize } from '~/hooks';
 import { AdminSettingsDialog } from '~/components/ui';
 import { formatDate } from '~/utils';

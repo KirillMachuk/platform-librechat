@@ -1,7 +1,6 @@
 import { useRef } from 'react';
 import { Trans } from 'react-i18next';
 import { useRecoilValue } from 'recoil';
-import { BookCopy } from 'lucide-react';
 import { Content, Portal, Root, Trigger } from '@radix-ui/react-popover';
 import {
   Button,
@@ -14,6 +13,7 @@ import {
 import type { FC } from 'react';
 import { EditPresetDialog, PresetItems } from './Presets';
 import { useLocalize, usePresets } from '~/hooks';
+import { BookCopy } from '~/components/icons';
 import store from '~/store';
 
 const PresetsMenu: FC = () => {

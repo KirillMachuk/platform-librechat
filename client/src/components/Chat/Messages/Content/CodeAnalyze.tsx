@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRecoilValue } from 'recoil';
-import { Terminal } from 'lucide-react';
 import { useProgress, useLocalize } from '~/hooks';
+import { Terminal } from '~/components/icons';
 import ProgressText from './ProgressText';
 import MarkdownLite from './MarkdownLite';
 import { cn } from '~/utils';

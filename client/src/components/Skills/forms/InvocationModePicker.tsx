@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react';
 import * as Ariakit from '@ariakit/react';
-import { ChevronDown } from 'lucide-react';
 import { DropdownPopup } from '@librechat/client';
 import { InvocationMode } from 'librechat-data-provider';
 import type { MenuItemProps } from '@librechat/client';
 import type { TranslationKeys } from '~/hooks';
+import { ChevronDown } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 const invocationLabels: Record<InvocationMode, TranslationKeys> = {

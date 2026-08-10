@@ -1,6 +1,4 @@
 import { useState, useRef, useCallback } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
-import type { TConversationTag } from 'librechat-data-provider';
 import {
   Button,
   OGDialog,
@@ -9,8 +7,10 @@ import {
   TooltipAnchor,
   useToastContext,
 } from '@librechat/client';
+import type { TConversationTag } from 'librechat-data-provider';
 import { useDeleteConversationTagMutation } from '~/data-provider';
 import { BookmarkEditDialog } from '~/components/Bookmarks';
+import { Pencil, Trash2 } from '~/components/icons';
 import { NotificationSeverity } from '~/common';
 import { useLocalize } from '~/hooks';
 

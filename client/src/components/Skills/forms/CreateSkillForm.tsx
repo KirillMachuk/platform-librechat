@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller, FormProvider } from 'react-hook-form';
 import { Input, Button, TextareaAutosize, useToastContext } from '@librechat/client';
@@ -10,11 +9,12 @@ import {
   SKILL_DESCRIPTION_MAX_LENGTH,
 } from 'librechat-data-provider';
 import type { TSkill, TCreateSkill, TSkillWarning } from 'librechat-data-provider';
-import { useCreateSkillMutation } from '~/data-provider';
-import { useLocalize } from '~/hooks';
-import SkillContentEditor from './SkillContentEditor';
 import InvocationModePicker from './InvocationModePicker';
+import { useCreateSkillMutation } from '~/data-provider';
+import SkillContentEditor from './SkillContentEditor';
+import { AlertTriangle } from '~/components/icons';
 import CategorySelector from './CategorySelector';
+import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
 const DEFAULT_BODY = `# Overview

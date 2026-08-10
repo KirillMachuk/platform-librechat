@@ -1,5 +1,4 @@
 import { useState, useRef } from 'react';
-import { Pencil } from 'lucide-react';
 import { Trans } from 'react-i18next';
 import {
   Label,
@@ -14,6 +13,7 @@ import {
 import type { TUserMemory } from 'librechat-data-provider';
 import { useDeleteMemoryMutation } from '~/data-provider';
 import MemoryEditDialog from './MemoryEditDialog';
+import { Pencil } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 

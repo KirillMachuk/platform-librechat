@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Pencil, Check, Loader2, X } from 'lucide-react';
+import { Pencil, Check, Loader2, X } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 type Props = {

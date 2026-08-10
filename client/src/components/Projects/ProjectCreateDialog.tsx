@@ -1,5 +1,4 @@
 import { memo, useCallback, useState } from 'react';
-import { Info } from 'lucide-react';
 import {
   Button,
   Spinner,
@@ -16,6 +15,7 @@ import ProjectAppearancePopover from './ProjectAppearancePopover';
 import { useCreateProjectMutation } from '~/data-provider';
 import ProjectFormFields from './ProjectFormFields';
 import { NotificationSeverity } from '~/common';
+import { Info } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 type Props = {

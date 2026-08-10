@@ -1,24 +1,29 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
+import { useRecoilState } from 'recoil';
 import * as Ariakit from '@ariakit/react';
-import { Sparkles, FileType2Icon, FileImageIcon, FileSearch as FileSearchIcon } from 'lucide-react';
-import { TooltipAnchor, DropdownPopup } from '@librechat/client';
 import { Constants } from 'librechat-data-provider';
-import type { LucideIcon } from 'lucide-react';
+import { TooltipAnchor, DropdownPopup } from '@librechat/client';
 import type { MenuItemProps, ExtendedFile } from '~/common';
 import type { TranslationKeys } from '~/hooks/useLocalize';
+import type { LucideIcon } from '~/components/icons';
 import {
   resolveFileToolResource,
   autoModeDisplayFromFile,
   isImageMimetype,
   type FileMode,
 } from '~/utils/fileMode';
+import {
+  Sparkles,
+  FileType2Icon,
+  FileImageIcon,
+  FileSearch as FileSearchIcon,
+} from '~/components/icons';
 import { useFileHandling, useFileDeletion } from '~/hooks/Files';
 import { useDeleteFilesMutation } from '~/data-provider';
 import { useChatContext } from '~/Providers/ChatContext';
 import { useBadgeRowContext } from '~/Providers';
 import { fileModeByConvoId } from '~/store';
 import { useLocalize } from '~/hooks';
-import { useRecoilState } from 'recoil';
 import { cn } from '~/utils';
 
 const MODE_ICONS: Record<FileMode, LucideIcon> = {

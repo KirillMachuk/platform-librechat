@@ -1,0 +1,834 @@
+{
+  "AlertCircle": {
+    "to": "WarningCircle",
+    "fit": "exact"
+  },
+  "AlertTriangle": {
+    "to": "Warning",
+    "fit": "exact"
+  },
+  "Archive": {
+    "to": "Archive",
+    "fit": "exact"
+  },
+  "ArchiveRestore": {
+    "to": "BoxArrowUp",
+    "fit": "close"
+  },
+  "ArrowDown": {
+    "to": "ArrowDown",
+    "fit": "exact"
+  },
+  "ArrowDownToLine": {
+    "to": "ArrowLineDown",
+    "fit": "exact"
+  },
+  "ArrowDownUp": {
+    "to": "ArrowsDownUp",
+    "fit": "exact"
+  },
+  "ArrowLeft": {
+    "to": "ArrowLeft",
+    "fit": "exact"
+  },
+  "ArrowRight": {
+    "to": "ArrowRight",
+    "fit": "exact"
+  },
+  "ArrowRightLeft": {
+    "to": "ArrowsLeftRight",
+    "fit": "exact"
+  },
+  "ArrowUp": {
+    "to": "ArrowUp",
+    "fit": "exact"
+  },
+  "ArrowUpDown": {
+    "to": "ArrowsDownUp",
+    "fit": "close"
+  },
+  "Ban": {
+    "to": "Prohibit",
+    "fit": "exact"
+  },
+  "BarChart3": {
+    "to": "ChartBar",
+    "fit": "exact"
+  },
+  "Beaker": {
+    "to": "Flask",
+    "fit": "close"
+  },
+  "BookCopy": {
+    "to": "Books",
+    "fit": "close"
+  },
+  "Bookmark": {
+    "to": "BookmarkSimple",
+    "fit": "exact"
+  },
+  "BookmarkPlusIcon": {
+    "to": "BookmarkSimple",
+    "fit": "close"
+  },
+  "Bot": {
+    "to": "Robot",
+    "fit": "exact"
+  },
+  "Box": {
+    "to": "Cube",
+    "fit": "exact"
+  },
+  "BoxIcon": {
+    "to": "Cube",
+    "fit": "exact"
+  },
+  "Braces": {
+    "to": "BracketsCurly",
+    "fit": "exact"
+  },
+  "Brain": {
+    "to": "Brain",
+    "fit": "exact"
+  },
+  "Brush": {
+    "to": "PaintBrush",
+    "fit": "exact"
+  },
+  "Calendar": {
+    "to": "Calendar",
+    "fit": "exact"
+  },
+  "CalendarDays": {
+    "to": "CalendarDots",
+    "fit": "exact"
+  },
+  "Camera": {
+    "to": "Camera",
+    "fit": "exact"
+  },
+  "Check": {
+    "to": "Check",
+    "fit": "exact"
+  },
+  "CheckCircle": {
+    "to": "CheckCircle",
+    "fit": "exact"
+  },
+  "CheckCircle2": {
+    "to": "CheckCircle",
+    "fit": "exact"
+  },
+  "CheckIcon": {
+    "to": "Check",
+    "fit": "exact"
+  },
+  "ChevronDown": {
+    "to": "CaretDown",
+    "fit": "exact"
+  },
+  "ChevronLeft": {
+    "to": "CaretLeft",
+    "fit": "exact"
+  },
+  "ChevronRight": {
+    "to": "CaretRight",
+    "fit": "exact"
+  },
+  "ChevronRightIcon": {
+    "to": "CaretRight",
+    "fit": "exact"
+  },
+  "ChevronUp": {
+    "to": "CaretUp",
+    "fit": "exact"
+  },
+  "Circle": {
+    "to": "Circle",
+    "fit": "exact"
+  },
+  "CircleCheckBig": {
+    "to": "CheckCircle",
+    "fit": "exact"
+  },
+  "CircleHelpIcon": {
+    "to": "Question",
+    "fit": "exact"
+  },
+  "CircleIcon": {
+    "to": "Circle",
+    "fit": "exact"
+  },
+  "CircleX": {
+    "to": "XCircle",
+    "fit": "exact"
+  },
+  "Clock": {
+    "to": "Clock",
+    "fit": "exact"
+  },
+  "Clock4": {
+    "to": "Clock",
+    "fit": "exact"
+  },
+  "Code": {
+    "to": "Code",
+    "fit": "exact"
+  },
+  "Code2": {
+    "to": "CodeSimple",
+    "fit": "exact"
+  },
+  "Cog": {
+    "to": "Gear",
+    "fit": "exact"
+  },
+  "Command": {
+    "to": "Command",
+    "fit": "exact"
+  },
+  "Copy": {
+    "to": "Copy",
+    "fit": "exact"
+  },
+  "CopyCheck": {
+    "to": "Copy",
+    "fit": "close"
+  },
+  "CopyPlus": {
+    "to": "Copy",
+    "fit": "close"
+  },
+  "Database": {
+    "to": "Database",
+    "fit": "exact"
+  },
+  "Dices": {
+    "to": "DiceFive",
+    "fit": "exact"
+  },
+  "DollarSign": {
+    "to": "CurrencyDollar",
+    "fit": "exact"
+  },
+  "Download": {
+    "to": "DownloadSimple",
+    "fit": "exact"
+  },
+  "Dumbbell": {
+    "to": "Barbell",
+    "fit": "exact"
+  },
+  "EarthIcon": {
+    "to": "GlobeHemisphereWest",
+    "fit": "exact"
+  },
+  "Edit3": {
+    "to": "PencilLine",
+    "fit": "exact"
+  },
+  "EditIcon": {
+    "to": "NotePencil",
+    "fit": "exact"
+  },
+  "Ellipsis": {
+    "to": "DotsThree",
+    "fit": "exact"
+  },
+  "Expand": {
+    "to": "ArrowsOut",
+    "fit": "exact"
+  },
+  "ExternalLink": {
+    "to": "ArrowSquareOut",
+    "fit": "exact"
+  },
+  "Eye": {
+    "to": "Eye",
+    "fit": "exact"
+  },
+  "EyeOff": {
+    "to": "EyeSlash",
+    "fit": "exact"
+  },
+  "Feather": {
+    "to": "Feather",
+    "fit": "exact"
+  },
+  "File": {
+    "to": "File",
+    "fit": "exact"
+  },
+  "FileCode": {
+    "to": "FileCode",
+    "fit": "exact"
+  },
+  "FileImage": {
+    "to": "FileImage",
+    "fit": "exact"
+  },
+  "FileImageIcon": {
+    "to": "FileImage",
+    "fit": "exact"
+  },
+  "FilePenLine": {
+    "to": "NotePencil",
+    "fit": "close"
+  },
+  "FilePlus": {
+    "to": "FilePlus",
+    "fit": "exact"
+  },
+  "FilePlus2": {
+    "to": "FilePlus",
+    "fit": "exact"
+  },
+  "FileQuestion": {
+    "to": "FileDashed",
+    "fit": "close"
+  },
+  "FileSearch": {
+    "to": "FileMagnifyingGlass",
+    "fit": "exact"
+  },
+  "FileSpreadsheet": {
+    "to": "FileXls",
+    "fit": "exact"
+  },
+  "FileText": {
+    "to": "FileText",
+    "fit": "exact"
+  },
+  "FileType2Icon": {
+    "to": "FileText",
+    "fit": "close"
+  },
+  "FileUp": {
+    "to": "FileArrowUp",
+    "fit": "exact"
+  },
+  "Files": {
+    "to": "Files",
+    "fit": "exact"
+  },
+  "FilterX": {
+    "to": "FunnelX",
+    "fit": "exact"
+  },
+  "FlaskConical": {
+    "to": "Flask",
+    "fit": "exact"
+  },
+  "Flower2": {
+    "to": "Flower",
+    "fit": "exact"
+  },
+  "Folder": {
+    "to": "Folder",
+    "fit": "exact"
+  },
+  "FolderPlus": {
+    "to": "FolderPlus",
+    "fit": "exact"
+  },
+  "GitFork": {
+    "to": "GitFork",
+    "fit": "exact"
+  },
+  "Globe": {
+    "to": "Globe",
+    "fit": "exact"
+  },
+  "GraduationCap": {
+    "to": "GraduationCap",
+    "fit": "exact"
+  },
+  "GraduationCapIcon": {
+    "to": "GraduationCap",
+    "fit": "exact"
+  },
+  "GripVertical": {
+    "to": "DotsSixVertical",
+    "fit": "exact"
+  },
+  "Heart": {
+    "to": "Heart",
+    "fit": "exact"
+  },
+  "HelpCircle": {
+    "to": "Question",
+    "fit": "exact"
+  },
+  "History": {
+    "to": "ClockCounterClockwise",
+    "fit": "exact"
+  },
+  "Image": {
+    "to": "Image",
+    "fit": "exact"
+  },
+  "ImageIcon": {
+    "to": "Image",
+    "fit": "exact"
+  },
+  "ImageOff": {
+    "to": "ImageBroken",
+    "fit": "close"
+  },
+  "ImageUpIcon": {
+    "to": "Image",
+    "fit": "close"
+  },
+  "Import": {
+    "to": "TrayArrowDown",
+    "fit": "exact"
+  },
+  "Info": {
+    "to": "Info",
+    "fit": "exact"
+  },
+  "InfoIcon": {
+    "to": "Info",
+    "fit": "exact"
+  },
+  "Key": {
+    "to": "Key",
+    "fit": "exact"
+  },
+  "KeyRound": {
+    "to": "Key",
+    "fit": "exact"
+  },
+  "KeyRoundIcon": {
+    "to": "Key",
+    "fit": "exact"
+  },
+  "LayoutGrid": {
+    "to": "SquaresFour",
+    "fit": "exact"
+  },
+  "Lightbulb": {
+    "to": "Lightbulb",
+    "fit": "exact"
+  },
+  "LightbulbIcon": {
+    "to": "Lightbulb",
+    "fit": "exact"
+  },
+  "LineChartIcon": {
+    "to": "ChartLine",
+    "fit": "exact"
+  },
+  "Link": {
+    "to": "Link",
+    "fit": "exact"
+  },
+  "Link2": {
+    "to": "LinkSimple",
+    "fit": "exact"
+  },
+  "ListFilter": {
+    "to": "FunnelSimple",
+    "fit": "exact"
+  },
+  "Loader2": {
+    "to": "CircleNotch",
+    "fit": "exact"
+  },
+  "LockIcon": {
+    "to": "Lock",
+    "fit": "exact"
+  },
+  "LogOut": {
+    "to": "SignOut",
+    "fit": "exact"
+  },
+  "Maximize2": {
+    "to": "ArrowsOutSimple",
+    "fit": "exact"
+  },
+  "Menu": {
+    "to": "List",
+    "fit": "exact"
+  },
+  "MessageCircleDashed": {
+    "to": null,
+    "fit": "missing"
+  },
+  "MessageSquare": {
+    "to": "Chat",
+    "fit": "exact"
+  },
+  "MessageSquareDashed": {
+    "to": null,
+    "fit": "missing"
+  },
+  "MessagesSquare": {
+    "to": "Chats",
+    "fit": "exact"
+  },
+  "MicOff": {
+    "to": "MicrophoneSlash",
+    "fit": "exact"
+  },
+  "Minimize2": {
+    "to": "ArrowsInSimple",
+    "fit": "exact"
+  },
+  "Minus": {
+    "to": "Minus",
+    "fit": "exact"
+  },
+  "Monitor": {
+    "to": "Monitor",
+    "fit": "exact"
+  },
+  "Moon": {
+    "to": "Moon",
+    "fit": "exact"
+  },
+  "MoreHorizontal": {
+    "to": "DotsThree",
+    "fit": "exact"
+  },
+  "MousePointerClick": {
+    "to": "CursorClick",
+    "fit": "exact"
+  },
+  "Move": {
+    "to": "ArrowsOutCardinal",
+    "fit": "exact"
+  },
+  "Music": {
+    "to": "MusicNotes",
+    "fit": "exact"
+  },
+  "Newspaper": {
+    "to": "Newspaper",
+    "fit": "exact"
+  },
+  "NotebookPen": {
+    "to": "NotePencil",
+    "fit": "exact"
+  },
+  "Palette": {
+    "to": "Palette",
+    "fit": "exact"
+  },
+  "PanelLeftClose": {
+    "to": "SidebarSimple",
+    "fit": "close"
+  },
+  "PanelLeftOpen": {
+    "to": "SidebarSimple",
+    "fit": "close"
+  },
+  "Paperclip": {
+    "to": "Paperclip",
+    "fit": "exact"
+  },
+  "PawPrint": {
+    "to": "PawPrint",
+    "fit": "exact"
+  },
+  "Pen": {
+    "to": "Pen",
+    "fit": "exact"
+  },
+  "PenLine": {
+    "to": "PencilLine",
+    "fit": "exact"
+  },
+  "PenLineIcon": {
+    "to": "PencilLine",
+    "fit": "exact"
+  },
+  "PenTool": {
+    "to": "PenNib",
+    "fit": "exact"
+  },
+  "Pencil": {
+    "to": "Pencil",
+    "fit": "exact"
+  },
+  "Pill": {
+    "to": "Pill",
+    "fit": "exact"
+  },
+  "Pin": {
+    "to": "PushPin",
+    "fit": "exact"
+  },
+  "PinOff": {
+    "to": "PushPinSlash",
+    "fit": "exact"
+  },
+  "Plane": {
+    "to": "Airplane",
+    "fit": "exact"
+  },
+  "PlaneTakeoffIcon": {
+    "to": "AirplaneTakeoff",
+    "fit": "exact"
+  },
+  "Play": {
+    "to": "Play",
+    "fit": "exact"
+  },
+  "PlugZap": {
+    "to": "PlugCharging",
+    "fit": "exact"
+  },
+  "Plus": {
+    "to": "Plus",
+    "fit": "exact"
+  },
+  "PlusCircle": {
+    "to": "PlusCircle",
+    "fit": "exact"
+  },
+  "PlusCircleIcon": {
+    "to": "PlusCircle",
+    "fit": "exact"
+  },
+  "Popcorn": {
+    "to": "Popcorn",
+    "fit": "exact"
+  },
+  "QrCode": {
+    "to": "QrCode",
+    "fit": "exact"
+  },
+  "Receipt": {
+    "to": "Receipt",
+    "fit": "exact"
+  },
+  "RefreshCcw": {
+    "to": "ArrowsCounterClockwise",
+    "fit": "exact"
+  },
+  "RefreshCw": {
+    "to": "ArrowsClockwise",
+    "fit": "exact"
+  },
+  "Rocket": {
+    "to": "Rocket",
+    "fit": "exact"
+  },
+  "RotateCcw": {
+    "to": "ArrowCounterClockwise",
+    "fit": "exact"
+  },
+  "RotateCw": {
+    "to": "ArrowClockwise",
+    "fit": "exact"
+  },
+  "Save": {
+    "to": "FloppyDisk",
+    "fit": "exact"
+  },
+  "Scale": {
+    "to": "Scales",
+    "fit": "exact"
+  },
+  "ScrollText": {
+    "to": "Scroll",
+    "fit": "exact"
+  },
+  "Search": {
+    "to": "MagnifyingGlass",
+    "fit": "exact"
+  },
+  "Send": {
+    "to": "PaperPlaneTilt",
+    "fit": "exact"
+  },
+  "Settings": {
+    "to": "Gear",
+    "fit": "exact"
+  },
+  "Settings2": {
+    "to": "SlidersHorizontal",
+    "fit": "exact"
+  },
+  "SettingsIcon": {
+    "to": "Gear",
+    "fit": "exact"
+  },
+  "Share2": {
+    "to": "ShareNetwork",
+    "fit": "exact"
+  },
+  "Share2Icon": {
+    "to": "ShareNetwork",
+    "fit": "exact"
+  },
+  "Shield": {
+    "to": "Shield",
+    "fit": "exact"
+  },
+  "ShieldEllipsis": {
+    "to": "Shield",
+    "fit": "close"
+  },
+  "ShoppingBag": {
+    "to": "ShoppingBag",
+    "fit": "exact"
+  },
+  "ShoppingBagIcon": {
+    "to": "ShoppingBag",
+    "fit": "exact"
+  },
+  "ShoppingBasket": {
+    "to": "Basket",
+    "fit": "exact"
+  },
+  "SlidersHorizontal": {
+    "to": "SlidersHorizontal",
+    "fit": "exact"
+  },
+  "Smartphone": {
+    "to": "DeviceMobile",
+    "fit": "exact"
+  },
+  "SmartphoneIcon": {
+    "to": "DeviceMobile",
+    "fit": "exact"
+  },
+  "Sparkles": {
+    "to": "Sparkle",
+    "fit": "exact"
+  },
+  "Sprout": {
+    "to": "Plant",
+    "fit": "exact"
+  },
+  "Square": {
+    "to": "Square",
+    "fit": "exact"
+  },
+  "SquarePen": {
+    "to": "NotePencil",
+    "fit": "exact"
+  },
+  "SquareSlash": {
+    "to": null,
+    "fit": "missing"
+  },
+  "SquareTerminal": {
+    "to": "TerminalWindow",
+    "fit": "exact"
+  },
+  "Star": {
+    "to": "Star",
+    "fit": "exact"
+  },
+  "Stethoscope": {
+    "to": "Stethoscope",
+    "fit": "exact"
+  },
+  "Sun": {
+    "to": "Sun",
+    "fit": "exact"
+  },
+  "Telescope": {
+    "to": "Binoculars",
+    "fit": "close"
+  },
+  "Terminal": {
+    "to": "Terminal",
+    "fit": "exact"
+  },
+  "TerminalSquareIcon": {
+    "to": "TerminalWindow",
+    "fit": "exact"
+  },
+  "Trash": {
+    "to": "Trash",
+    "fit": "exact"
+  },
+  "Trash2": {
+    "to": "Trash",
+    "fit": "exact"
+  },
+  "TrashIcon": {
+    "to": "Trash",
+    "fit": "exact"
+  },
+  "TriangleAlert": {
+    "to": "Warning",
+    "fit": "exact"
+  },
+  "Type": {
+    "to": "TextT",
+    "fit": "exact"
+  },
+  "UnlockIcon": {
+    "to": "LockOpen",
+    "fit": "exact"
+  },
+  "Upload": {
+    "to": "UploadSimple",
+    "fit": "exact"
+  },
+  "User": {
+    "to": "User",
+    "fit": "exact"
+  },
+  "UserCheck": {
+    "to": "UserCheck",
+    "fit": "exact"
+  },
+  "UserX": {
+    "to": "UserMinus",
+    "fit": "close"
+  },
+  "Users": {
+    "to": "Users",
+    "fit": "exact"
+  },
+  "Variable": {
+    "to": "Function",
+    "fit": "close"
+  },
+  "WandSparkles": {
+    "to": "MagicWand",
+    "fit": "exact"
+  },
+  "Waypoints": {
+    "to": "TreeStructure",
+    "fit": "close"
+  },
+  "WifiOff": {
+    "to": "WifiSlash",
+    "fit": "exact"
+  },
+  "Wrench": {
+    "to": "Wrench",
+    "fit": "exact"
+  },
+  "X": {
+    "to": "X",
+    "fit": "exact"
+  },
+  "XCircle": {
+    "to": "XCircle",
+    "fit": "exact"
+  },
+  "XIcon": {
+    "to": "X",
+    "fit": "exact"
+  },
+  "Zap": {
+    "to": "Lightning",
+    "fit": "exact"
+  },
+  "ZoomIn": {
+    "to": "MagnifyingGlassPlus",
+    "fit": "exact"
+  },
+  "ZoomOut": {
+    "to": "MagnifyingGlassMinus",
+    "fit": "exact"
+  }
+}
