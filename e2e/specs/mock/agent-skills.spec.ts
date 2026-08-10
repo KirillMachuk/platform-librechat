@@ -29,9 +29,14 @@ const DEPLOYMENT_SKILL = 'e2e-deployment-skill';
 
 type AgentWithSkills = { id?: string; skills?: string[]; skills_enabled?: boolean };
 
+/**
+ * `/expanded`, not the plain `/:id`: the plain route answers VIEW callers with a
+ * hand-picked subset that deliberately omits configuration — skills included —
+ * so reading it back would say nothing about what was stored.
+ */
 async function persistedAgent(page: Page, id: string): Promise<AgentWithSkills> {
   const token = await getAccessToken(page);
-  return requestJson<AgentWithSkills>(page, { path: `/api/agents/${id}`, token });
+  return requestJson<AgentWithSkills>(page, { path: `/api/agents/${id}/expanded`, token });
 }
 
 /**
