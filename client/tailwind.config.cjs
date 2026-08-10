@@ -46,6 +46,11 @@ module.exports = {
       boxShadow: {
         sm: 'var(--c-shadow-sm)',
         lg: 'var(--c-shadow-lg)',
+        /* The one shadow beyond the two: the switch knob. The prototype draws
+           it itself (`.sw::before`, 0 1px 3px .3) — a knob with no edge sinks
+           into the accent track. Named so the shadow guard can tell it from
+           drift: the guard bans the SCALE and arbitrary values, not tokens. */
+        knob: '0 1px 3px rgba(0, 0, 0, 0.3)',
       },
       // Канон §5 знает две длительности: 90 мс цвет/наведение, 120 мс
       // появление. Произвольное `duration-[90ms]` Tailwind считает

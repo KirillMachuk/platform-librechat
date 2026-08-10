@@ -72,9 +72,9 @@ export default function Badge({
         'border border-border-medium text-sm font-medium transition-shadow',
         '@container-[600px]:w-full size-9 p-2',
         isActive
-          ? 'bg-surface-active shadow-md'
-          : 'bg-surface-chat shadow-sm hover:bg-surface-hover hover:shadow-md',
-        'active:scale-95 active:shadow-inner',
+          ? 'bg-surface-active shadow-sm'
+          : 'bg-surface-chat shadow-sm hover:bg-surface-hover',
+        'active:scale-95',
         isMoveable && 'cursor-move',
         isDisabled && 'cursor-not-allowed opacity-50 hover:shadow-sm',
         className,

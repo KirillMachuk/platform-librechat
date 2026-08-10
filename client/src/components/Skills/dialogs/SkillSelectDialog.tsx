@@ -264,7 +264,7 @@ function SkillSelectDialog({ isOpen, setIsOpen }: SkillSelectDialogProps) {
   return (
     <OGDialog open={isOpen} onOpenChange={setIsOpen}>
       <OGDialogContent
-        className="w-11/12 max-w-[1024px] overflow-hidden rounded-2xl border-border-medium p-0 shadow-xl md:max-h-[85vh]"
+        className="w-11/12 max-w-[1024px] overflow-hidden rounded-2xl border-border-medium p-0 shadow-lg md:max-h-[85vh]"
         showCloseButton={false}
       >
         {/*

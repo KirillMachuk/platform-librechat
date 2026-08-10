@@ -125,7 +125,7 @@ const PromptEditor: React.FC<Props> = ({ name, isEditing, setIsEditing }) => {
                   </ReactMarkdown>
                 )}
                 <div className="pointer-events-none sticky bottom-1/2 z-10 flex translate-y-1/2 items-center justify-center opacity-0 transition-all duration-200 group-hover/preview:opacity-100">
-                  <div className="flex items-center gap-2 rounded-lg border border-border-light bg-surface-primary px-3 py-1.5 shadow-md">
+                  <div className="flex items-center gap-2 rounded-lg border border-border-light bg-surface-primary px-3 py-1.5 shadow-sm">
                     <EditIcon className="size-4 text-text-secondary" aria-hidden="true" />
                     <span className="text-sm font-medium text-text-primary">
                       {localize('com_ui_click_to_edit')}

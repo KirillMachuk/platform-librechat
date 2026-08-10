@@ -60,7 +60,7 @@ const Switch: React.ForwardRefExoticComponent<
     >
       <SwitchPrimitives.Thumb
         className={cn(
-          'pointer-events-none block rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.3)] ring-0 transition-transform',
+          'pointer-events-none block rounded-full shadow-knob ring-0 transition-transform',
           'bg-text-primary data-[state=checked]:bg-acc-ink',
           'data-[state=unchecked]:translate-x-0',
           knob[size],

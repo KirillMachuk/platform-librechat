@@ -1,5 +1,5 @@
-import { Tools } from 'librechat-data-provider';
 import { useState, useRef, useMemo, useLayoutEffect, useEffect } from 'react';
+import { Tools } from 'librechat-data-provider';
 import type { MemoryArtifact, TAttachment } from 'librechat-data-provider';
 import MemoryInfo from './MemoryInfo';
 import { useLocalize } from '~/hooks';
@@ -139,7 +139,7 @@ export default function MemoryArtifacts({ attachments }: { attachments?: TAttach
       >
         <div
           className={cn(
-            'overflow-hidden rounded-xl border border-border-light bg-surface-primary-alt shadow-md',
+            'overflow-hidden rounded-xl border border-border-light bg-surface-primary-alt shadow-sm',
             showInfo && 'shadow-lg',
           )}
           style={{

@@ -355,7 +355,7 @@ export default function PixelCard({
     >
       <div
         className={cn(
-          'relative isolate grid select-none place-items-center overflow-hidden rounded-lg border border-border-light shadow-md transition-colors duration-200 ease-in-out',
+          'relative isolate grid select-none place-items-center overflow-hidden rounded-lg border border-border-light shadow-sm transition-colors duration-200 ease-in-out',
           className,
         )}
         style={{
