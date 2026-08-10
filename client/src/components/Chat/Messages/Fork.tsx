@@ -21,7 +21,6 @@ export default function Fork({
   conversationId: _convoId,
   forkingSupported = false,
   latestMessageId,
-  isLast = false,
 }: {
   messageId: string;
   conversationId: string | null;
@@ -36,9 +35,11 @@ export default function Fork({
   const buttonStyle = cn(
     'hover-button tap-target flex h-7 w-7 items-center justify-center rounded-lg text-text-secondary-alt [&_svg]:h-4 [&_svg]:w-4',
     'hover:text-text-primary hover:bg-surface-hover',
+    /* Канон §6.14, решение владельца: кнопки под ответом видны ВСЕГДА. Правило
+       уже применили к кнопкам из `HoverButton`, а сюда оно не доехало — на
+       ответе, который не последний, ветку приходилось искать наведением.
+       `isLast` больше не влияет на вид и потому не разбирается из пропсов. */
     'group-hover:visible group-focus-within:visible group-[.final-completion]:visible',
-    !isLast &&
-      'group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:hover)]:opacity-0',
     'focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white focus-visible:outline-none',
   );
 
