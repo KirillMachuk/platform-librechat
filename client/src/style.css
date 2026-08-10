@@ -143,12 +143,12 @@
   --font-size-xl: 1.25rem;
   --font-size-2xl: 1.5rem;
   --font-size-3xl: 1.875rem;
-  --markdown-font-size: 0.9375rem;
-  /* The reasoning block sits one step BELOW the conversation: 13px when
-     messages are 15 (the Kimi treatment the owner pointed at). Derived, not
-     set — whatever size the user picks, thoughts stay 13/15 of it and the
-     two can never diverge again the way text-base (16) vs 15px did. */
-  --thinking-font-size: calc(var(--markdown-font-size) * 13 / 15);
+  --markdown-font-size: 1rem;
+  /* The reasoning block sits one step BELOW the conversation: 14px when
+     messages are 16 (the Kimi ratio, kept when the owner moved the body to
+     16 on 10.08). Derived, not set — whatever size the user picks, thoughts
+     stay 14/16 of it and the two can never diverge again. */
+  --thinking-font-size: calc(var(--markdown-font-size) * 14 / 16);
 }
 html {
   font-feature-settings:
@@ -1201,12 +1201,16 @@ code,
 pre,
 kbd,
 samp {
+  /* The system's own mono, the GPT recipe the owner sent (10.08 late):
+     native rendering and full Cyrillic on every OS, zero font downloads.
+     Roboto Mono is out — its Cyrillic subset was never shipped anyway. */
   font-family:
-    'Roboto Mono',
     ui-monospace,
     SFMono-Regular,
+    'SF Mono',
     Menlo,
     Consolas,
+    'Liberation Mono',
     monospace;
 }
 code.language-text,
@@ -1224,8 +1228,10 @@ pre[class*='language-'] {
   color: var(--gray-800);
   -webkit-hyphens: none;
   hyphens: none;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  /* 13/20 (owner 10.08 late): between GPT's 12.25 and Kimi's 14 — code
+     reads as code beside 16px body text without turning into fine print. */
+  font-size: 13px;
+  line-height: 20px;
   tab-size: 4;
   text-align: left;
   white-space: pre;

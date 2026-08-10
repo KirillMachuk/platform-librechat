@@ -4,16 +4,16 @@ export const applyFontSize = (val: string): void => {
 
   switch (size) {
     case 'xs':
-      root.style.setProperty('--markdown-font-size', '0.75rem'); // 12px
+      root.style.setProperty('--markdown-font-size', '0.8125rem'); // 13px
       break;
     case 'sm':
       root.style.setProperty('--markdown-font-size', '0.875rem'); // 14px
       break;
     case 'base':
-      /* Канон §3: текст сообщений 15px. Шкала выбора осталась той же пятиступенчатой
-         и подписана словами, поэтому «Средний» просто стал канонным размером —
-         новый пункт заводить не пришлось. */
-      root.style.setProperty('--markdown-font-size', '0.9375rem'); // 15px
+      /* Канон §3 после решения владельца 10.08 (поздний вечер): текст переписки
+         16px, как у GPT и Kimi — «15 плохо читается». Всё производное (мысли,
+         подсказки) тянется формулами от этой же переменной. */
+      root.style.setProperty('--markdown-font-size', '1rem'); // 16px
       break;
     case 'lg':
       root.style.setProperty('--markdown-font-size', '1.125rem'); // 18px
