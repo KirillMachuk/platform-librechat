@@ -35,9 +35,6 @@ async function openSkillsPanel(page: Page): Promise<Locator> {
   const panel = page
     .getByRole('dialog')
     .filter({ has: page.getByRole('heading', { name: 'Skills' }) });
-  if ((await page.getByTestId('sidebar-link-skills').count()) === 0) {
-    await page.getByTestId('sidebar-link-more').click();
-  }
   await page.getByTestId('sidebar-link-skills').click();
   await expect(panel.getByRole('heading', { name: 'Skills' }).first()).toBeVisible();
   return panel;

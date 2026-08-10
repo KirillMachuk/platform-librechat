@@ -171,10 +171,6 @@ describe('ExpandedPanel', () => {
 
       expect(screen.getByTestId('close-sidebar-button')).toBeInTheDocument();
       expect(screen.getByTestId('new-chat-button')).toBeInTheDocument();
-      /* prompts and bookmarks are not primary sections: the book's sidebar
-         folds them behind «Ещё» (screen 2), so they appear on expand. */
-      expect(screen.queryByRole('button', { name: 'com_ui_prompts' })).not.toBeInTheDocument();
-      fireEvent.click(screen.getByTestId('sidebar-link-more'));
       expect(screen.getByRole('button', { name: 'com_ui_prompts' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'com_ui_bookmarks' })).toBeInTheDocument();
       expect(screen.getByTestId('conversations-section')).toBeInTheDocument();
@@ -221,7 +217,6 @@ describe('ExpandedPanel', () => {
       renderPanel({ expanded: true });
       expect(screen.queryByTestId('panel-dialog')).not.toBeInTheDocument();
 
-      fireEvent.click(screen.getByTestId('sidebar-link-more'));
       fireEvent.click(screen.getByRole('button', { name: 'com_ui_prompts' }));
 
       expect(screen.getByTestId('panel-dialog')).toBeInTheDocument();
@@ -233,7 +228,6 @@ describe('ExpandedPanel', () => {
     it('tints that row and its icon, and leaves every other row neutral', () => {
       renderPanel({ expanded: true });
 
-      fireEvent.click(screen.getByTestId('sidebar-link-more'));
       const prompts = screen.getByTestId('sidebar-link-prompts');
       const bookmarks = screen.getByTestId('sidebar-link-bookmarks');
       const classesOf = (el: HTMLElement) => el.className.split(/\s+/);
@@ -264,7 +258,6 @@ describe('ExpandedPanel', () => {
     it('stays open when the app navigates for its own reasons (panel content dismisses itself)', async () => {
       renderPanelWithNavigation();
 
-      fireEvent.click(screen.getByTestId('sidebar-link-more'));
       fireEvent.click(screen.getByRole('button', { name: 'com_ui_prompts' }));
       expect(screen.getByTestId('panel-dialog')).toBeInTheDocument();
 

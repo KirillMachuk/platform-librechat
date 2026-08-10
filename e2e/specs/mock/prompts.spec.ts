@@ -109,10 +109,6 @@ async function cleanupPromptGroup(page: Page, groupId?: string) {
 
 async function openPromptsPanel(page: Page) {
   const promptsButton = page.getByRole('button', { name: 'Prompts', exact: true });
-  /* The book's sidebar folds non-primary rows behind «Ещё» (screen 2). */
-  if (!(await promptsButton.isVisible().catch(() => false))) {
-    await page.getByTestId('sidebar-link-more').click();
-  }
   await expect(promptsButton).toBeVisible();
   if ((await promptsButton.getAttribute('aria-pressed')) !== 'true') {
     await promptsButton.click();

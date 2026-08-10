@@ -154,12 +154,6 @@ test.describe('bookmarks', () => {
 
     await expect(headerBookmark(page)).toHaveCount(0);
     await expect(sidebarBookmark(page)).toHaveCount(0);
-    /* The row lives behind «Ещё»; without expanding, count(0) would pass
-     * even with the permission on — green for the wrong reason. */
-    const more = page.getByTestId('sidebar-link-more');
-    if ((await more.count()) > 0) {
-      await more.click();
-    }
     await expect(bookmarksPanelLink(page)).toHaveCount(0);
   });
 
@@ -251,9 +245,6 @@ test.describe('bookmarks', () => {
     await expect(conversationNamed(page, plainTitle)).toHaveCount(0, { timeout: 20000 });
     await expect(sidebarBookmark(page)).toHaveAttribute('aria-pressed', 'true');
 
-    if ((await bookmarksPanelLink(page).count()) === 0) {
-      await page.getByTestId('sidebar-link-more').click();
-    }
     await bookmarksPanelLink(page).click();
     const panel = bookmarksPanel(page);
     await expect(panel).toBeVisible();
@@ -282,9 +273,6 @@ test.describe('bookmarks', () => {
     await closeMenu(page, SIDEBAR_MENU_ITEM);
     await expect(conversationNamed(page, plainTitle)).toHaveCount(0, { timeout: 20000 });
 
-    if ((await bookmarksPanelLink(page).count()) === 0) {
-      await page.getByTestId('sidebar-link-more').click();
-    }
     await bookmarksPanelLink(page).click();
     await expect(panel).toBeVisible();
     await panel
@@ -322,9 +310,6 @@ test.describe('bookmarks', () => {
     });
     await setBookmarksMenu(page, true);
 
-    if ((await bookmarksPanelLink(page).count()) === 0) {
-      await page.getByTestId('sidebar-link-more').click();
-    }
     await bookmarksPanelLink(page).click();
     const panel = bookmarksPanel(page);
     await expect(panel).toBeVisible();

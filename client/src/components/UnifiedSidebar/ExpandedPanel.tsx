@@ -14,19 +14,13 @@ import {
 } from './rows';
 import ConversationsSection from '~/components/UnifiedSidebar/ConversationsSection';
 import { SearchChatsRow, SearchChatsDialog } from '~/components/Nav/SearchChats';
-import { SquarePen, MoreHorizontal, ChevronDown } from '~/components/icons';
 import { CLOSE_SIDEBAR_ID } from '~/components/Chat/Menus/OpenSidebar';
 import PanelDialog from '~/components/UnifiedSidebar/PanelDialog';
 import { useGetStartupConfig } from '~/data-provider';
 import { useLocalize, useNewConvo } from '~/hooks';
 import { clearMessagesCache, cn } from '~/utils';
+import { SquarePen } from '~/components/icons';
 import store from '~/store';
-
-/* The book's sidebar (screen 2) shows three sections and folds the long tail
-   behind «Ещё»: a rail visited every day should read in one glance, and
-   Навыки/Промпты/Настройки MCP are builder-time surfaces, not daily ones.
-   Membership is by id, so a link the permissions hide simply never counts. */
-const PRIMARY_LINK_IDS = new Set(['projects', 'agents', 'files']);
 
 const AccountSettings = lazy(() => import('~/components/Nav/AccountSettings'));
 
@@ -168,12 +162,6 @@ function ExpandedPanel({
   }, []);
 
   const menuLinks = links.filter((link) => link.id !== 'conversations');
-  const primaryLinks = menuLinks.filter((link) => PRIMARY_LINK_IDS.has(link.id));
-  const moreLinks = menuLinks.filter((link) => !PRIMARY_LINK_IDS.has(link.id));
-  const [moreOpen, setMoreOpen] = useState(false);
-  /* A dialog opened from a row inside «Ещё» keeps the group open, so the
-     active-row highlight never points at a hidden row. */
-  const moreExpanded = moreOpen || (dialogOpen && moreLinks.some((l) => l.id === activeLink?.id));
 
   const collapsed = (
     <div className="flex h-full w-full flex-shrink-0 flex-col items-center gap-2 px-2 pb-2 pt-2.5">
@@ -244,7 +232,7 @@ function ExpandedPanel({
         <SearchChatsRow />
         {/* The open section is the one whose panel is on screen — the only notion
             of "current section" this sidebar has: nothing here is routed. */}
-        {primaryLinks.map((link) => (
+        {menuLinks.map((link) => (
           <MenuRow
             key={link.id}
             link={link}
@@ -252,36 +240,6 @@ function ExpandedPanel({
             onSelect={handleSelect}
           />
         ))}
-        {moreLinks.length > 0 && (
-          <>
-            <Button
-              variant="ghost"
-              data-testid="sidebar-link-more"
-              aria-expanded={moreExpanded}
-              className={cn(sidebarRowClassName, 'justify-start')}
-              onClick={() => setMoreOpen((prev) => !prev)}
-            >
-              <MoreHorizontal className={sidebarRowIconClassName} aria-hidden="true" />
-              <span className="flex-1 truncate text-left">{localize('com_ui_more')}</span>
-              <ChevronDown
-                className={cn(
-                  'icon-sm text-text-secondary transition-transform duration-90',
-                  moreExpanded && 'rotate-180',
-                )}
-                aria-hidden="true"
-              />
-            </Button>
-            {moreExpanded &&
-              moreLinks.map((link) => (
-                <MenuRow
-                  key={link.id}
-                  link={link}
-                  active={dialogOpen && activeLink?.id === link.id}
-                  onSelect={handleSelect}
-                />
-              ))}
-          </>
-        )}
       </div>
 
       <div className={cn('mt-3 min-h-0 flex-1 overflow-hidden')}>
