@@ -2,8 +2,8 @@ import React from 'react';
 import { useRecoilValue } from 'recoil';
 import type { TMessageContentParts } from 'librechat-data-provider';
 import type { TMessageProps } from '~/common';
+import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import { useMessageHelpers, useLocalize, useAttachments, useContentMetadata } from '~/hooks';
-import { cn, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import ContentParts from './Content/ContentParts';
 import { USER_BUBBLE_CLASS } from './ui/turn';
 import SiblingSwitch from './SiblingSwitch';
@@ -45,19 +45,9 @@ export default function Message(props: TMessageProps) {
     return null;
   }
 
-  const getChatWidthClass = () => {
-    if (maximizeChatSpace) {
-      return 'w-full max-w-full md:px-5 lg:px-1 xl:px-5';
-    }
-    if (hasParallelContent) {
-      return 'md:max-w-[58rem] xl:max-w-[70rem]';
-    }
-    return 'md:max-w-[48rem]';
-  };
-
   const baseClasses = {
     common: 'group mx-auto flex flex-1 gap-3 transition-all duration-300 transform-gpu',
-    chat: getChatWidthClass(),
+    chat: chatColumnClass(maximizeChatSpace, hasParallelContent),
   };
 
   return (

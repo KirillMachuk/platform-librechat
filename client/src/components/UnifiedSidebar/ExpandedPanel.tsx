@@ -6,7 +6,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Skeleton, Sidebar as SidebarIcon, Button, TooltipAnchor } from '@librechat/client';
 import type { NavLink } from '~/common';
 import {
+  sidebarRowActiveIconClassName,
   sidebarIconButtonClassName,
+  sidebarRowActiveClassName,
   sidebarNewChatClassName,
   sidebarRowIconClassName,
   sidebarRowClassName,
@@ -92,9 +94,11 @@ const NewChatIconButton = memo(function NewChatIconButton() {
 
 const MenuRow = memo(function MenuRow({
   link,
+  active,
   onSelect,
 }: {
   link: NavLink;
+  active: boolean;
   onSelect: (link: NavLink) => void;
 }) {
   const localize = useLocalize();
@@ -105,10 +109,15 @@ const MenuRow = memo(function MenuRow({
       variant="ghost"
       data-testid={`sidebar-link-${link.id}`}
       aria-label={localize(link.title)}
-      className={cn(sidebarRowClassName, 'justify-start')}
+      className={cn(sidebarRowClassName, 'justify-start', active && sidebarRowActiveClassName)}
       onClick={() => onSelect(link)}
     >
-      {Icon ? <Icon className={sidebarRowIconClassName} aria-hidden="true" /> : null}
+      {Icon ? (
+        <Icon
+          className={cn(sidebarRowIconClassName, active && sidebarRowActiveIconClassName)}
+          aria-hidden="true"
+        />
+      ) : null}
       <span className="truncate">{localize(link.title)}</span>
     </Button>
   );
@@ -221,8 +230,15 @@ function ExpandedPanel({
       <div className="flex flex-col">
         <NewChatRow />
         <SearchChatsRow />
+        {/* The open section is the one whose panel is on screen — the only notion
+            of "current section" this sidebar has: nothing here is routed. */}
         {menuLinks.map((link) => (
-          <MenuRow key={link.id} link={link} onSelect={handleSelect} />
+          <MenuRow
+            key={link.id}
+            link={link}
+            active={dialogOpen && activeLink?.id === link.id}
+            onSelect={handleSelect}
+          />
         ))}
       </div>
 

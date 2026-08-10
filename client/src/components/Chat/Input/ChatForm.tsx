@@ -26,7 +26,7 @@ import {
   useAddedChatContext,
   useAssistantsMapContext,
 } from '~/Providers';
-import { cn, getModelSpec, removeFocusRings, modelReportsNoTools } from '~/utils';
+import { cn, chatColumnClass, getModelSpec, removeFocusRings, modelReportsNoTools } from '~/utils';
 import { useGetStartupConfig, useGetEndpointsQuery } from '~/data-provider';
 import PendingManualSkillsChips from './PendingManualSkillsChips';
 import { mainTextareaId, BadgeItem } from '~/common';
@@ -261,8 +261,8 @@ const ChatForm = memo(function ChatForm({
     <form
       onSubmit={methods.handleSubmit(submitMessage)}
       className={cn(
-        'mx-auto flex w-full flex-row gap-3 transition-[max-width] duration-300 sm:px-2',
-        maximizeChatSpace ? 'max-w-full' : 'md:max-w-[48rem]',
+        'mx-auto flex w-full flex-row gap-3 px-2.5 transition-[max-width] duration-300 md:px-0',
+        chatColumnClass(maximizeChatSpace),
         centerFormOnLanding &&
           (conversationId == null || conversationId === Constants.NEW_CONVO) &&
           !isSubmitting &&
@@ -304,9 +304,8 @@ const ChatForm = memo(function ChatForm({
               // Смена тени с md на lg фокусом не считается: на глаз она не
               // читается, и человек, дошедший до композера по Tab, не понимал,
               // что попал в него.
-              isTextAreaFocused
-                ? 'shadow-lg ring-[3px] ring-ring-primary-soft'
-                : 'shadow-md ring-0',
+              'shadow-sm',
+              isTextAreaFocused ? 'ring-[3px] ring-ring-primary-soft' : 'ring-0',
               isTemporary
                 ? 'border-violet-800/60 bg-violet-950/10'
                 : cn(

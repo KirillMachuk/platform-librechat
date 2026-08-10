@@ -17,18 +17,18 @@ import { useLocalize, useAuthContext } from '~/hooks';
  *  wall of text. */
 function getTextSizeClass(text: string | undefined | null) {
   if (!text) {
-    return 'text-[19px] sm:text-[17px]';
+    return 'text-[19px] md:text-[17px]';
   }
 
   if (text.length < 40) {
-    return 'text-[22px] sm:text-[21px]';
+    return 'text-[22px] md:text-[21px]';
   }
 
   if (text.length < 70) {
-    return 'text-[19px] sm:text-[17px]';
+    return 'text-[19px] md:text-[17px]';
   }
 
-  return 'text-[17px] sm:text-[15px]';
+  return 'text-[17px] md:text-[15px]';
 }
 
 export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: boolean }) {
@@ -172,11 +172,11 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
         {description &&
           (descriptionIsHTML ? (
             <div
-              className="mt-1.5 flex max-w-md items-center justify-center gap-2 text-center text-[15px] font-normal text-text-tertiary sm:mt-2 [&_img]:inline-block [&_img]:h-4 [&_img]:w-4"
+              className="mt-1.5 flex max-w-md items-center justify-center gap-2 text-center text-[15px] font-normal text-text-tertiary md:mt-2 [&_img]:inline-block [&_img]:h-4 [&_img]:w-4"
               dangerouslySetInnerHTML={{ __html: sanitizeDescription(description) }}
             />
           ) : (
-            <div className="mt-1.5 max-w-md text-center text-[15px] font-normal text-text-tertiary sm:mt-2">
+            <div className="mt-1.5 max-w-md text-center text-[15px] font-normal text-text-tertiary md:mt-2">
               {description}
             </div>
           ))}

@@ -209,7 +209,7 @@ const Registration: React.FC = () => {
               type="submit"
               data-testid="registration-button"
               variant="submit"
-              className="mt-1 h-12 w-full rounded-xl text-[15px] sm:h-10 sm:text-sm"
+              className="mt-1 h-12 w-full rounded-xl text-[15px] md:h-10 md:text-sm"
             >
               {isSubmitting ? <Spinner /> : localize('com_auth_continue')}
             </Button>

@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { InfoHoverCard, ESide } from '@librechat/client';
+import { SettingGroup, SETTINGS_TAB_BODY } from '@librechat/client';
 import { PermissionTypes, Permissions } from 'librechat-data-provider';
 import { useLocalize, useHasAccess } from '~/hooks';
 import ToggleSwitch from '../ToggleSwitch';
@@ -8,21 +8,24 @@ import store from '~/store';
 const commandSwitchConfigs = [
   {
     stateAtom: store.atCommand,
-    localizationKey: 'com_nav_at_command_description' as const,
+    localizationKey: 'com_nav_at_command' as const,
+    descriptionKey: 'com_nav_at_command_description' as const,
     switchId: 'atCommand',
     key: 'atCommand',
     permissionType: undefined,
   },
   {
     stateAtom: store.plusCommand,
-    localizationKey: 'com_nav_plus_command_description' as const,
+    localizationKey: 'com_nav_plus_command' as const,
+    descriptionKey: 'com_nav_plus_command_description' as const,
     switchId: 'plusCommand',
     key: 'plusCommand',
     permissionType: PermissionTypes.MULTI_CONVO,
   },
   {
     stateAtom: store.slashCommand,
-    localizationKey: 'com_nav_slash_command_description' as const,
+    localizationKey: 'com_nav_slash_command' as const,
+    descriptionKey: 'com_nav_slash_command_description' as const,
     switchId: 'slashCommand',
     key: 'slashCommand',
     permissionType: PermissionTypes.PROMPTS,
@@ -56,25 +59,19 @@ function Commands() {
   };
 
   return (
-    <div className="space-y-4 p-1">
-      <div className="flex items-center gap-2">
-        <h3 className="text-lg font-medium text-text-primary">
-          {localize('com_nav_chat_commands')}
-        </h3>
-        <InfoHoverCard side={ESide.Bottom} text={localize('com_nav_chat_commands_info')} />
-      </div>
-      <div className="flex flex-col gap-3 text-sm text-text-primary">
+    <div className={SETTINGS_TAB_BODY}>
+      <SettingGroup label={localize('com_nav_chat_commands')}>
         {commandSwitchConfigs.map((config) => (
-          <div key={config.key} className="pb-3">
-            <ToggleSwitch
-              stateAtom={config.stateAtom}
-              localizationKey={config.localizationKey}
-              switchId={config.switchId}
-              showSwitch={getShowSwitch(config.permissionType)}
-            />
-          </div>
+          <ToggleSwitch
+            key={config.key}
+            stateAtom={config.stateAtom}
+            localizationKey={config.localizationKey}
+            descriptionKey={config.descriptionKey}
+            switchId={config.switchId}
+            showSwitch={getShowSwitch(config.permissionType)}
+          />
         ))}
-      </div>
+      </SettingGroup>
     </div>
   );
 }

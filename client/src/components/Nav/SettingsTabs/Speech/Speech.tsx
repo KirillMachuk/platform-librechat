@@ -2,8 +2,13 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useRecoilState } from 'recoil';
 import * as Tabs from '@radix-ui/react-tabs';
 import { Lightbulb, Cog } from 'lucide-react';
-import { useOnClickOutside, useMediaQuery } from '@librechat/client';
 import { useGetCustomConfigSpeechQuery } from 'librechat-data-provider/react-query';
+import {
+  SettingGroup,
+  SETTINGS_TAB_BODY,
+  useOnClickOutside,
+  useMediaQuery,
+} from '@librechat/client';
 import {
   CloudBrowserVoicesSwitch,
   AutomaticPlaybackSwitch,
@@ -187,53 +192,42 @@ function Speech() {
       </div>
 
       <Tabs.Content value={'simple'} tabIndex={-1}>
-        <div className="flex flex-col gap-3 text-sm text-text-primary">
-          <SpeechToTextSwitch />
-          <EngineSTTDropdown external={sttExternal} />
-          <LanguageSTTDropdown />
-          <div className="h-px bg-border-medium" role="none" />
-          <TextToSpeechSwitch />
-          <EngineTTSDropdown external={ttsExternal} />
-          <VoiceDropdown />
+        <div className={SETTINGS_TAB_BODY}>
+          <SettingGroup label={localize('com_nav_speech_to_text')}>
+            <SpeechToTextSwitch />
+            <EngineSTTDropdown external={sttExternal} />
+            <LanguageSTTDropdown />
+          </SettingGroup>
+          <SettingGroup label={localize('com_nav_text_to_speech')}>
+            <TextToSpeechSwitch />
+            <EngineTTSDropdown external={ttsExternal} />
+            <VoiceDropdown />
+          </SettingGroup>
         </div>
       </Tabs.Content>
 
       <Tabs.Content value={'advanced'} tabIndex={-1}>
-        <div className="flex flex-col gap-3 text-sm text-text-primary">
-          <ConversationModeSwitch />
-          <div className="mt-2 h-px bg-border-medium" role="none" />
-          <SpeechToTextSwitch />
-
-          <EngineSTTDropdown external={sttExternal} />
-
-          <LanguageSTTDropdown />
-          <div className="pb-2">
+        <div className={SETTINGS_TAB_BODY}>
+          <SettingGroup>
+            <ConversationModeSwitch />
+          </SettingGroup>
+          <SettingGroup label={localize('com_nav_speech_to_text')}>
+            <SpeechToTextSwitch />
+            <EngineSTTDropdown external={sttExternal} />
+            <LanguageSTTDropdown />
             <AutoTranscribeAudioSwitch />
-          </div>
-          {autoTranscribeAudio && (
-            <div className="pb-2">
-              <DecibelSelector />
-            </div>
-          )}
-          <div className="pb-2">
+            {autoTranscribeAudio && <DecibelSelector />}
             <AutoSendTextSelector />
-          </div>
-          <div className="h-px bg-border-medium" role="none" />
-          <div className="pb-3">
+          </SettingGroup>
+          <SettingGroup label={localize('com_nav_text_to_speech')}>
             <TextToSpeechSwitch />
-          </div>
-          <AutomaticPlaybackSwitch />
-          <EngineTTSDropdown external={ttsExternal} />
-          <VoiceDropdown />
-          {engineTTS === 'browser' && (
-            <div className="pb-2">
-              <CloudBrowserVoicesSwitch />
-            </div>
-          )}
-          <div className="pb-2">
+            <AutomaticPlaybackSwitch />
+            <EngineTTSDropdown external={ttsExternal} />
+            <VoiceDropdown />
+            {engineTTS === 'browser' && <CloudBrowserVoicesSwitch />}
             <PlaybackRate />
-          </div>
-          <CacheTTSSwitch />
+            <CacheTTSSwitch />
+          </SettingGroup>
         </div>
       </Tabs.Content>
     </Tabs.Root>

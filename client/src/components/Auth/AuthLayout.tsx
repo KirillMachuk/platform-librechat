@@ -71,7 +71,7 @@ function AuthLayout({
 
       <main className="flex flex-grow flex-col items-center justify-center gap-4 px-4 py-8">
         <DisplayError />
-        <div className="flex w-full max-w-[360px] flex-col gap-3.5 rounded-2xl border border-border-light bg-surface-primary p-5 shadow-sm sm:p-7 sm:pb-6">
+        <div className="flex w-full max-w-[360px] flex-col gap-3.5 rounded-2xl border border-border-light bg-surface-primary p-5 shadow-sm md:p-7 md:pb-6">
           <div className="mb-1 flex flex-col items-center gap-[3px] text-center">
             <BlinkAnimation active={isFetching}>
               <img

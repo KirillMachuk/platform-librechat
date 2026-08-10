@@ -135,7 +135,7 @@ describe('DataTableSearch', () => {
 
     const input = screen.getByTestId('search-input');
     expect(input.className).toContain('h-12');
-    expect(input.className).toContain('sm:h-9');
+    expect(input.className).toContain('md:h-9');
     expect(input.className).toContain('bg-surface-primary');
     expect(input.className).not.toContain('border-0');
     expect(input.className).not.toContain('rounded-b-none');

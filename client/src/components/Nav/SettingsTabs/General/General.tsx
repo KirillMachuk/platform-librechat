@@ -1,7 +1,7 @@
 import React, { useContext, useCallback } from 'react';
 import Cookies from 'js-cookie';
 import { useRecoilState, useRecoilValue } from 'recoil';
-import { Dropdown, Spinner, ThemeContext } from '@librechat/client';
+import { Dropdown, Spinner, ThemeContext, SettingRow, SETTINGS_TAB_BODY } from '@librechat/client';
 import ArchivedChats from './ArchivedChats';
 import ToggleSwitch from '../ToggleSwitch';
 import { useLocalize } from '~/hooks';
@@ -12,28 +12,28 @@ const toggleSwitchConfigs = [
     stateAtom: store.enableUserMsgMarkdown,
     localizationKey: 'com_nav_user_msg_markdown' as const,
     switchId: 'enableUserMsgMarkdown',
-    hoverCardText: undefined,
+    descriptionKey: 'com_nav_user_msg_markdown_desc' as const,
     key: 'enableUserMsgMarkdown',
   },
   {
     stateAtom: store.autoScroll,
     localizationKey: 'com_nav_auto_scroll' as const,
     switchId: 'autoScroll',
-    hoverCardText: undefined,
+    descriptionKey: undefined,
     key: 'autoScroll',
   },
   {
     stateAtom: store.keepScreenAwake,
     localizationKey: 'com_nav_keep_screen_awake' as const,
     switchId: 'keepScreenAwake',
-    hoverCardText: undefined,
+    descriptionKey: undefined,
     key: 'keepScreenAwake',
   },
   {
     stateAtom: store.newChatSwitchToHistory,
     localizationKey: 'com_nav_new_chat_switch_to_history' as const,
     switchId: 'newChatSwitchToHistory',
-    hoverCardText: undefined,
+    descriptionKey: undefined,
     key: 'newChatSwitchToHistory',
   },
 ];
@@ -55,22 +55,22 @@ export const ThemeSelector = ({
     { value: 'light', label: localize('com_nav_theme_light') },
   ];
 
-  const labelId = 'theme-selector-label';
-
   return (
-    <div className="flex items-center justify-between">
-      <div id={labelId}>{localize('com_nav_theme')}</div>
-
-      <Dropdown
-        value={theme}
-        onChange={onChange}
-        options={themeOptions}
-        sizeClasses="w-[180px]"
-        testId="theme-selector"
-        aria-labelledby={labelId}
-        portal={portal}
-      />
-    </div>
+    <SettingRow
+      id="theme-selector"
+      title={localize('com_nav_theme')}
+      control={({ labelId }) => (
+        <Dropdown
+          value={theme}
+          onChange={onChange}
+          options={themeOptions}
+          sizeClasses="w-[180px]"
+          testId="theme-selector"
+          aria-labelledby={labelId}
+          portal={portal}
+        />
+      )}
+    />
   );
 };
 
@@ -131,32 +131,32 @@ export const LangSelector = ({
     { value: 'uk-UA', label: localize('com_nav_lang_ukrainian') },
   ];
 
-  const labelId = 'language-selector-label';
-
   return (
-    <div className="flex items-center justify-between">
-      <div id={labelId}>{localize('com_nav_language')}</div>
-
-      <div className="flex items-center gap-2">
-        {isLanguageLoading && (
-          <span
-            role="status"
-            aria-label={localize('com_ui_loading')}
-            className="flex size-5 items-center justify-center text-text-secondary"
-          >
-            <Spinner className="size-4" />
-          </span>
-        )}
-        <Dropdown
-          value={langcode}
-          onChange={onChange}
-          sizeClasses="[--anchor-max-height:256px] max-h-[60vh]"
-          options={languageOptions}
-          aria-labelledby={labelId}
-          portal={portal}
-        />
-      </div>
-    </div>
+    <SettingRow
+      id="language-selector"
+      title={localize('com_nav_language')}
+      control={({ labelId }) => (
+        <div className="flex items-center gap-2">
+          {isLanguageLoading && (
+            <span
+              role="status"
+              aria-label={localize('com_ui_loading')}
+              className="flex size-5 items-center justify-center text-text-secondary"
+            >
+              <Spinner className="size-4" />
+            </span>
+          )}
+          <Dropdown
+            value={langcode}
+            onChange={onChange}
+            sizeClasses="[--anchor-max-height:256px] max-h-[60vh]"
+            options={languageOptions}
+            aria-labelledby={labelId}
+            portal={portal}
+          />
+        </div>
+      )}
+    />
   );
 };
 
@@ -186,26 +186,19 @@ function General() {
   );
 
   return (
-    <div className="flex flex-col gap-3 p-1 text-sm text-text-primary">
-      <div className="pb-3">
-        <ThemeSelector theme={theme} onChange={changeTheme} />
-      </div>
-      <div className="pb-3">
-        <LangSelector langcode={langcode} onChange={changeLang} />
-      </div>
+    <div className={SETTINGS_TAB_BODY}>
+      <ThemeSelector theme={theme} onChange={changeTheme} />
+      <LangSelector langcode={langcode} onChange={changeLang} />
       {toggleSwitchConfigs.map((config) => (
-        <div key={config.key} className="pb-3">
-          <ToggleSwitch
-            stateAtom={config.stateAtom}
-            localizationKey={config.localizationKey}
-            hoverCardText={config.hoverCardText}
-            switchId={config.switchId}
-          />
-        </div>
+        <ToggleSwitch
+          key={config.key}
+          stateAtom={config.stateAtom}
+          localizationKey={config.localizationKey}
+          descriptionKey={config.descriptionKey}
+          switchId={config.switchId}
+        />
       ))}
-      <div className="pb-3">
-        <ArchivedChats />
-      </div>
+      <ArchivedChats />
     </div>
   );
 }

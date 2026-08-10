@@ -123,6 +123,15 @@ module.exports = {
         scrim: 'var(--c-scrim)',
         ink: 'var(--c-ink)',
         'ink-label': 'var(--c-ink-label)',
+        /* The accent, and what reads ON TOP of it — a label on an accent-filled
+           plate, the knob of a switch that is on (canon §6.4). Straight off the
+           palette, like `ink`, and deliberately not through `brand-purple`:
+           that name is declared twice, once on `:root` as upstream's #ab68ff
+           and once on `html` as our accent, and `:root` wins on specificity no
+           matter the order — so anything painted `brand-purple` came out
+           violet. */
+        acc: 'var(--c-acc)',
+        'acc-ink': 'var(--c-acc-ink)',
         // Пузырь пользователя (§6.13). Значение с Ф2a, потребителя до сих пор не
         // было: пузырь красился сырым #F3F3F3 с отдельным правилом для тьмы.
         bubble: 'var(--c-bubble)',

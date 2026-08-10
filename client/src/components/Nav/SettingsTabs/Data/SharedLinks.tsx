@@ -17,6 +17,7 @@ import {
   Spinner,
   OGDialog,
   DataTable,
+  SettingRow,
   useMediaQuery,
   OGDialogTitle,
   TooltipAnchor,
@@ -313,72 +314,78 @@ export default function SharedLinks() {
   );
 
   return (
-    <div className="flex items-center justify-between">
-      <Label id="shared-links-label">{localize('com_nav_shared_links')}</Label>
+    <SettingRow
+      id="shared-links"
+      title={localize('com_nav_shared_links')}
+      stackControlOnMobile
+      control={({ labelId }) => (
+        <>
+          <OGDialog open={isOpen} onOpenChange={setIsOpen}>
+            <OGDialogTrigger asChild onClick={() => setIsOpen(true)}>
+              <Button aria-labelledby={labelId} variant="outline">
+                {localize('com_ui_manage')}
+              </Button>
+            </OGDialogTrigger>
 
-      <OGDialog open={isOpen} onOpenChange={setIsOpen}>
-        <OGDialogTrigger asChild onClick={() => setIsOpen(true)}>
-          <Button aria-labelledby="shared-links-label" variant="outline">
-            {localize('com_ui_manage')}
-          </Button>
-        </OGDialogTrigger>
-
-        <OGDialogContent
-          title={localize('com_nav_shared_links')}
-          className="w-11/12 max-w-5xl bg-background text-text-primary shadow-2xl"
-        >
-          <OGDialogHeader>
-            <OGDialogTitle>{localize('com_nav_shared_links')}</OGDialogTitle>
-          </OGDialogHeader>
-          <DataTable
-            columns={columns}
-            data={allLinks}
-            onDelete={handleDelete}
-            hasNextPage={hasNextPage}
-            isFetchingNextPage={isFetchingNextPage}
-            fetchNextPage={handleFetchNextPage}
-            onFilterChange={debouncedFilterChange}
-            filterValue={queryParams.search}
-            isLoading={isLoading}
-            config={{
-              selection: { showCheckboxes: false },
-              search: { enableSearch: searchStore.enabled === true },
-            }}
-          />
-        </OGDialogContent>
-      </OGDialog>
-      <OGDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <OGDialogTemplate
-          showCloseButton={false}
-          title={localize('com_ui_delete_shared_link_heading')}
-          className="max-w-[450px]"
-          main={
-            <>
-              <div
-                id="delete-shared-link-dialog"
-                className="flex w-full flex-col items-center gap-2"
-              >
-                <div className="grid w-full items-center gap-2">
-                  <Label htmlFor="dialog-confirm-delete" className="text-left text-sm font-medium">
-                    <Trans
-                      i18nKey="com_ui_delete_confirm_strong"
-                      values={{ title: deleteRow?.title }}
-                      components={{ strong: <strong /> }}
-                    />
-                  </Label>
+            <OGDialogContent
+              title={localize('com_nav_shared_links')}
+              className="w-11/12 max-w-5xl bg-background text-text-primary shadow-lg"
+            >
+              <OGDialogHeader>
+                <OGDialogTitle>{localize('com_nav_shared_links')}</OGDialogTitle>
+              </OGDialogHeader>
+              <DataTable
+                columns={columns}
+                data={allLinks}
+                onDelete={handleDelete}
+                hasNextPage={hasNextPage}
+                isFetchingNextPage={isFetchingNextPage}
+                fetchNextPage={handleFetchNextPage}
+                onFilterChange={debouncedFilterChange}
+                filterValue={queryParams.search}
+                isLoading={isLoading}
+                config={{
+                  selection: { showCheckboxes: false },
+                  search: { enableSearch: searchStore.enabled === true },
+                }}
+              />
+            </OGDialogContent>
+          </OGDialog>
+          <OGDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+            <OGDialogTemplate
+              showCloseButton={false}
+              title={localize('com_ui_delete_shared_link_heading')}
+              className="max-w-[450px]"
+              main={
+                <div
+                  id="delete-shared-link-dialog"
+                  className="flex w-full flex-col items-center gap-2"
+                >
+                  <div className="grid w-full items-center gap-2">
+                    <Label
+                      htmlFor="dialog-confirm-delete"
+                      className="text-left text-sm font-medium"
+                    >
+                      <Trans
+                        i18nKey="com_ui_delete_confirm_strong"
+                        values={{ title: deleteRow?.title }}
+                        components={{ strong: <strong /> }}
+                      />
+                    </Label>
+                  </div>
                 </div>
-              </div>
-            </>
-          }
-          selection={{
-            selectHandler: confirmDelete,
-            selectClasses: `bg-red-700 dark:bg-red-600 hover:bg-red-800 dark:hover:bg-red-800 text-white ${
-              deleteMutation.isLoading ? 'cursor-not-allowed opacity-80' : ''
-            }`,
-            selectText: deleteMutation.isLoading ? <Spinner /> : localize('com_ui_delete'),
-          }}
-        />
-      </OGDialog>
-    </div>
+              }
+              selection={{
+                selectHandler: confirmDelete,
+                selectClasses: `bg-red-700 dark:bg-red-600 hover:bg-red-800 dark:hover:bg-red-800 text-white ${
+                  deleteMutation.isLoading ? 'cursor-not-allowed opacity-80' : ''
+                }`,
+                selectText: deleteMutation.isLoading ? <Spinner /> : localize('com_ui_delete'),
+              }}
+            />
+          </OGDialog>
+        </>
+      )}
+    />
   );
 }
