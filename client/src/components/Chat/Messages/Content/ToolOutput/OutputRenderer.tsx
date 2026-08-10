@@ -87,9 +87,19 @@ const VISIBLE_LINES = 15;
 
 interface OutputRendererProps {
   text: string;
+  /**
+   * 'document' renders non-error text in the Inter reading style regardless
+   * of the `isStructuredText` heuristic. The heuristic exists for TOOL output
+   * (JSON-ish payloads read better mono), but it classifies virtually any
+   * document as structured too — a colon or a newline is all it takes — which
+   * put file-search snippets, i.e. the client's own CSV and docx TEXT, into
+   * monospace. Canon §6.15: file content reads in the Inter scale; mono is
+   * for code.
+   */
+  variant?: 'auto' | 'document';
 }
 
-export default function OutputRenderer({ text }: OutputRendererProps) {
+export default function OutputRenderer({ text, variant = 'auto' }: OutputRendererProps) {
   const localize = useLocalize();
   const { text: displayText, rawError, error, isJson } = useMemo(() => extractText(text), [text]);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -110,7 +120,7 @@ export default function OutputRenderer({ text }: OutputRendererProps) {
   const needsTruncation = lines.length > TRUNCATE_LINES;
   const visibleText =
     needsTruncation && !isExpanded ? lines.slice(0, VISIBLE_LINES).join('\n') : displayText;
-  const structured = !isJson && isStructuredText(displayText);
+  const structured = variant !== 'document' && !isJson && isStructuredText(displayText);
 
   return (
     <div className="relative">

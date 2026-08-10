@@ -37,9 +37,12 @@ const TextPart = memo(function TextPart({ text, isCreatedByUser, showCursor }: T
       className={cn(
         isSubmitting ? 'submitting' : '',
         showCursorState && !!text.length ? 'result-streaming' : '',
+        /* No per-role dark:text-gray-* here: those utilities outranked the
+           prose token and pinned the dark text to #ececec / #ececf1. The
+           .prose body colour is var(--text-primary) in both themes now, one
+           source for user and assistant alike. */
         'markdown prose message-content dark:prose-invert light w-full break-words',
         isCreatedByUser && !enableUserMsgMarkdown && 'whitespace-pre-wrap',
-        isCreatedByUser ? 'dark:text-gray-20' : 'dark:text-gray-100',
       )}
     >
       {content}

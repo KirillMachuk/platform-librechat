@@ -404,8 +404,11 @@ const TextAttachment = memo(
             <pre
               id={preId}
               ref={preRef}
+              /* font-sans, not mono: this is the client's own document text
+                 (canon §6.15 — file content reads in the Inter scale; mono is
+                 for code). The <pre> stays for whitespace fidelity only. */
               className={cn(
-                'whitespace-pre-wrap break-words font-mono text-sm leading-6 text-text-primary',
+                'whitespace-pre-wrap break-words font-sans text-sm leading-6 text-text-primary',
                 isClamped ? 'overflow-hidden' : 'overflow-auto',
               )}
               style={isClamped ? { maxHeight: COLLAPSED_MAX_HEIGHT } : undefined}
