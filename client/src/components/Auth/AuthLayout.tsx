@@ -60,57 +60,78 @@ function AuthLayout({
     !pathname.includes('2fa') && (pathname.includes('login') || pathname.includes('register'));
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-presentation">
-      <Banner />
-      {/* returnThemeOnly: the wrapper form of ThemeSelector positions itself
-          absolutely at the bottom-left, and nesting that inside a positioned
-          box threw the toggle 36px past the right edge of the page. */}
-      <div className="absolute right-3 top-3">
+    <div className="relative grid min-h-screen bg-presentation lg:grid-cols-2">
+      {/* Owner's decision 10.08 (REDESIGN_Plan §1.5, after shadcn's login-02):
+          the card column keeps the book's sign-in 1:1; the second column is a
+          stage for a picture of the platform. One layout for every auth
+          surface — login, registration, reset, 2FA — so none needs its own. */}
+      {/* Page level, not column level: pinned to the column it sat at the
+          seam between the two halves, which read as misplaced. z-10 keeps it
+          above the picture column. */}
+      <div className="absolute right-3 top-3 z-10">
         <ThemeSelector returnThemeOnly />
       </div>
 
-      <main className="flex flex-grow flex-col items-center justify-center gap-4 px-4 py-8">
-        <DisplayError />
-        <div className="flex w-full max-w-[360px] flex-col gap-3.5 rounded-2xl border border-border-light bg-surface-primary p-5 shadow-sm md:p-7 md:pb-6">
-          <div className="mb-1 flex flex-col items-center gap-[3px] text-center">
-            {/* Знак живёт в коробке высотой со строку, которую занимает в
+      <div className="relative flex min-h-screen flex-col">
+        <Banner />
+
+        <main className="flex flex-grow flex-col items-center justify-center gap-4 px-4 py-8">
+          <DisplayError />
+          <div className="flex w-full max-w-[360px] flex-col gap-3.5 rounded-2xl border border-border-light bg-surface-primary p-5 shadow-sm md:p-7 md:pb-6">
+            <div className="mb-1 flex flex-col items-center gap-[3px] text-center">
+              {/* Знак живёт в коробке высотой со строку, которую занимает в
                 прототипе набранное на его месте «1ma» (21px × 1,6 = 34 на
                 десктопе, 22 × 1,6 = 35 на телефоне). Картинка своего
                 межстрочного не несёт, поэтому без этой коробки подзаголовок
                 подъезжает вплотную к знаку — владелец заметил это как «шрифт
                 надписи будто выше», хотя сам шрифт уже совпадал. */}
-            <div className="flex h-[35px] items-center md:h-[34px]">
-              <BlinkAnimation active={isFetching}>
-                {/* Прототип рисует на этом месте «1ma» текстом 21/700 — это
+              <div className="flex h-[35px] items-center md:h-[34px]">
+                <BlinkAnimation active={isFetching}>
+                  {/* Прототип рисует на этом месте «1ma» текстом 21/700 — это
                   заглушка под фирменный знак, который в один html-файл не
                   вложить. Знак остаётся картинкой (решение владельца 08.08),
                   но встаёт в тот же оптический размер: у книжного начертания
                   высота прописных ≈15px при ширине блока 42px, у знака при
                   16px высоты ширина выходит ≈47px. Раньше стояло 30px — вдвое
                   крупнее книги, и это было первым, что бросалось в глаза. */}
-                <img
-                  src="assets/logo.svg"
-                  className="h-[17px] w-auto object-contain dark:invert md:h-4"
-                  width={1920}
-                  height={648}
-                  alt={localize('com_ui_logo', { 0: startupConfig?.appTitle ?? '1ma' })}
-                />
-              </BlinkAnimation>
+                  <img
+                    src="assets/logo.svg"
+                    className="h-[17px] w-auto object-contain dark:invert md:h-4"
+                    width={1920}
+                    height={648}
+                    alt={localize('com_ui_logo', { 0: startupConfig?.appTitle ?? '1ma' })}
+                  />
+                </BlinkAnimation>
+              </div>
+              {!hasStartupConfigError && !isFetching && header && (
+                <h1
+                  className="text-[13px] font-normal text-text-tertiary"
+                  style={{ userSelect: 'none' }}
+                >
+                  {header}
+                </h1>
+              )}
             </div>
-            {!hasStartupConfigError && !isFetching && header && (
-              <h1
-                className="text-[13px] font-normal text-text-tertiary"
-                style={{ userSelect: 'none' }}
-              >
-                {header}
-              </h1>
-            )}
+            {showSocialLogin && <SocialLoginRender startupConfig={startupConfig} />}
+            {children}
           </div>
-          {showSocialLogin && <SocialLoginRender startupConfig={startupConfig} />}
-          {children}
+        </main>
+        <Footer startupConfig={startupConfig} />
+      </div>
+
+      {/* The picture side. A placeholder until the owner picks the product
+          shot: the canvas tone one step below the page, the mark barely
+          there. Swapping in the real image is replacing this div's content
+          with an <img class="absolute inset-0 h-full w-full object-cover">. */}
+      <div className="relative hidden select-none bg-surface-secondary lg:block" aria-hidden="true">
+        <div className="absolute inset-0 flex items-center justify-center">
+          <img
+            src="assets/logo.svg"
+            alt=""
+            className="h-8 w-auto object-contain opacity-[0.12] dark:invert"
+          />
         </div>
-      </main>
-      <Footer startupConfig={startupConfig} />
+      </div>
     </div>
   );
 }
