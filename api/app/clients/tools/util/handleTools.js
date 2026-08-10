@@ -139,6 +139,10 @@ const loadToolWithAuth = (userId, authFields, ToolConstructor, options = {}) => 
  * @param {string} toolKey
  * @returns {Array<string>}
  */
+const getAuthFields = (toolKey) => {
+  return manifestToolMap[toolKey]?.authConfig.map((auth) => auth.authField) ?? [];
+};
+
 /**
  * Resolves the FILE_CITATIONS permission for the requesting user. Every document tool needs
  * the same answer, and it must fail closed: a role lookup that throws denies citations rather
@@ -162,10 +166,6 @@ const resolveFileCitations = async (req) => {
     logger.error('[handleTools] FILE_CITATIONS permission check failed:', error);
     return false;
   }
-};
-
-const getAuthFields = (toolKey) => {
-  return manifestToolMap[toolKey]?.authConfig.map((auth) => auth.authField) ?? [];
 };
 
 /**
