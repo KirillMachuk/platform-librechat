@@ -102,6 +102,13 @@ export default function useTextarea({
         return placeholder;
       }
 
+      /* The empty chat asks a question, the way the book's screen 2 draws it
+       * («Спросите что-нибудь…»); «Сообщение <имя>» is the REPLY prompt and
+       * belongs to a dialog that already has messages. */
+      if (latestMessage == null) {
+        return localize('com_ui_ask_anything');
+      }
+
       const sender =
         isAssistant || isAgent
           ? getEntityName({ name: entityName, isAgent, localize })

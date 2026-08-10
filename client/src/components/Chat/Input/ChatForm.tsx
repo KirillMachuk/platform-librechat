@@ -250,7 +250,10 @@ const ChatForm = memo(function ChatForm({
   const baseClasses = useMemo(
     () =>
       cn(
-        'md:py-3.5 m-0 w-full resize-none py-[13px] placeholder-black/60 bg-transparent dark:placeholder-white/60',
+        /* text-base, not the inherited 14: canon §6.13 sets the composer at
+           16px on every width (16 is also what stops iOS zooming the page on
+           focus) — the book's box draws its placeholder at 16 too. */
+        'md:py-3.5 m-0 w-full resize-none py-[13px] text-base placeholder-black/60 bg-transparent dark:placeholder-white/60',
         isCollapsed ? 'max-h-[52px]' : 'max-h-[45vh] md:max-h-[55vh]',
         isMoreThanThreeRows ? 'pl-5' : 'px-5',
       ),
