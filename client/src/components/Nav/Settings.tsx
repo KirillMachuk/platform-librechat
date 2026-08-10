@@ -260,8 +260,8 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
                                classes later dropped it and the phone rail wrapped
                                its labels. Same trap as `duration-[120ms]` — the
                                class survives the source and dies in the merge. */
-                              'flex-1 justify-center whitespace-nowrap px-3 text-text-secondary radix-state-active:bg-acc-soft radix-state-active:text-text-accent'
-                            : 'bg-transparent text-text-primary radix-state-active:bg-acc-soft radix-state-active:text-text-accent [&>svg]:text-text-secondary [&>svg]:radix-state-active:text-text-accent',
+                              'flex-1 justify-center whitespace-nowrap px-3 text-text-secondary radix-state-active:bg-surface-active radix-state-active:text-text-primary'
+                            : 'bg-transparent text-text-primary radix-state-active:bg-surface-active radix-state-active:text-text-primary [&>svg]:text-text-secondary [&>svg]:radix-state-active:text-text-primary',
                         )}
                         value={value}
                         ref={(el) => (tabRefs.current[value] = el)}

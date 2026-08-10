@@ -110,11 +110,6 @@ export default defineConfig(({ command }) => ({
           'assets/rum.*.js',
           'assets/locale-*.js',
           'assets/query-devtools*.js',
-          /* The sign-in robot's WebGL runtime: 4.5MB reached only through a
-             dynamic import on one decorative surface. Precaching it would
-             push those megabytes to every PWA install for a scene most
-             sessions never render — the network fetches it on first need. */
-          'assets/spline-runtime*.js',
         ],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         /** LibreChat mutates index.html per request for subpath and language support. */
@@ -357,15 +352,6 @@ export default defineConfig(({ command }) => ({
 
                   if (normalizedId.includes('@icons-pack/react-simple-icons/icons/')) {
                     return null;
-                  }
-
-                  /* The Spline WebGL runtime (~4MB) exists for one decorative
-                     scene on the sign-in page and is reached ONLY through a
-                     dynamic import. Folding it into `vendor` would ship it to
-                     every visitor on every page AND push vendor past the PWA
-                     precache limit — its own chunk keeps it lazy. */
-                  if (normalizedId.includes('@splinetool')) {
-                    return 'spline-runtime';
                   }
 
                   // Everything else falls into a generic vendor chunk.

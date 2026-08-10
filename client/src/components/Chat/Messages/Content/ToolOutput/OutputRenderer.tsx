@@ -125,18 +125,21 @@ export default function OutputRenderer({ text, variant = 'auto' }: OutputRendere
   return (
     <div className="relative">
       {isJson ? (
-        <pre className="max-h-[300px] overflow-auto rounded text-xs">
+        <pre className="max-h-[300px] overflow-auto rounded text-[12.5px] leading-5">
           <code className="hljs language-json !whitespace-pre-wrap !break-words">
             {visibleText}
           </code>
         </pre>
       ) : (
         <pre
+          /* The inner-card scale the owner sent from GPT (10.08 late):
+             tool output in mono 12.5/20; the client's own document text in
+             Inter 13/20 — a quote, not a terminal. */
           className={cn(
-            'max-h-[300px] overflow-auto whitespace-pre-wrap break-words text-xs',
-            error && 'font-mono text-red-600 dark:text-red-400',
-            !error && structured && 'font-mono text-text-secondary',
-            !error && !structured && 'font-sans text-sm text-text-primary',
+            'max-h-[300px] overflow-auto whitespace-pre-wrap break-words',
+            error && 'font-mono text-[12.5px] leading-5 text-red-600 dark:text-red-400',
+            !error && structured && 'font-mono text-[12.5px] leading-5 text-text-secondary',
+            !error && !structured && 'font-sans text-[13px] leading-5 text-text-primary',
           )}
         >
           {visibleText}

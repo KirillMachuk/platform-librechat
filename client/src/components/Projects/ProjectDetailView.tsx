@@ -389,7 +389,7 @@ function ProjectDetailView({ projectId, onBack, onClose }: Props) {
                       <span className="text-xs text-text-secondary">
                         {formatBytes(file.bytes)}
                         {' · '}
-                        <span className={cn(sourceReady(file) && 'text-text-accent')}>
+                        <span className={cn(sourceReady(file) && 'text-text-primary')}>
                           {localize(sourceStatusKey(file))}
                         </span>
                       </span>
