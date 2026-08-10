@@ -109,6 +109,10 @@ async function cleanupPromptGroup(page: Page, groupId?: string) {
 
 async function openPromptsPanel(page: Page) {
   const promptsButton = page.getByRole('button', { name: 'Prompts', exact: true });
+  /* The book's sidebar folds non-primary rows behind «Ещё» (screen 2). */
+  if (!(await promptsButton.isVisible().catch(() => false))) {
+    await page.getByTestId('sidebar-link-more').click();
+  }
   await expect(promptsButton).toBeVisible();
   if ((await promptsButton.getAttribute('aria-pressed')) !== 'true') {
     await promptsButton.click();
@@ -285,7 +289,9 @@ test.describe('prompt manager', () => {
       /* Both, in this order of importance: the rewrite is on record, and the
        * original was not replaced by it. A test that only looked for the new
        * text would pass on a build that quietly threw the old version away. */
-      expect(versions.map((version) => version.prompt).sort()).toEqual([original, rewritten].sort());
+      expect(versions.map((version) => version.prompt).sort()).toEqual(
+        [original, rewritten].sort(),
+      );
 
       const group = await fetchJson<PromptGroup>(
         page,

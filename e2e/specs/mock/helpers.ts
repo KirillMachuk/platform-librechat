@@ -89,6 +89,12 @@ export async function enableSkills(page: Page) {
   await page.getByRole('button', { name: 'Tools Options' }).click();
   await page.getByTestId('tools-menu-skills').click();
   await page.keyboard.press('Escape');
+  /* The capability's readiness signal is the sidebar Skills row — folded
+   * behind «Ещё» since the book's screen 2, so open the group to read it. */
+  const moreRow = page.getByTestId('sidebar-link-more');
+  if ((await moreRow.getAttribute('aria-expanded')) !== 'true') {
+    await moreRow.click();
+  }
   await expect(page.getByRole('button', { name: 'Skills' })).toBeVisible();
 }
 

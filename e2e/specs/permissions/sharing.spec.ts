@@ -90,6 +90,9 @@ async function deletePrompt(page: Page, token: string, groupId: string | undefin
  */
 async function openPromptsPanel(page: Page) {
   const promptsButton = page.getByRole('button', { name: 'Prompts', exact: true });
+  if (!(await promptsButton.isVisible().catch(() => false))) {
+    await page.getByTestId('sidebar-link-more').click();
+  }
   await expect(promptsButton).toBeVisible({ timeout: 20000 });
   await promptsButton.click({ timeout: 15000 });
   await expect(page.getByRole('search')).toBeVisible({ timeout: 15000 });
