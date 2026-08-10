@@ -4,6 +4,7 @@ const {
   countTokens,
   openDocumentSlice,
   openDocumentSchema,
+  openDocumentSource,
   openDocumentDescription,
   resolveOpenDocumentTokenLimit,
 } = require('@librechat/api');
@@ -37,12 +38,25 @@ const readsByRequest = new WeakMap();
  * when a user attaches the file to the chat (`extractFileContext`), with an added offset
  * so a long contract can be read across calls.
  *
+ * Every successful read also emits a `file_search` source card, so the document lands in the
+ * answer's source list exactly like one found by `library_search`. The list is therefore built
+ * from the reads that actually happened, not from what the answer says it read.
+ *
  * @param {Object} options
  * @param {string} options.userId
  * @param {string} [options.tenantId]
+ * @param {boolean} [options.fileCitations] Resolved FILE_CITATIONS permission, passed through to
+ *   the citation processor exactly as `library_search` does — one permission, one behaviour,
+ *   whether the document was found or read.
  * @param {ServerRequest} [options.req] Supplies the file token budget for this request.
  */
-const createOpenDocumentTool = async ({ userId, tenantId, req, conversationFileIds = [] }) => {
+const createOpenDocumentTool = async ({
+  userId,
+  tenantId,
+  req,
+  fileCitations,
+  conversationFileIds = [],
+}) => {
   const tokenLimit = resolveOpenDocumentTokenLimit(req);
   const counterKey = req ?? {};
   const attachedIds = new Set(Array.isArray(conversationFileIds) ? conversationFileIds : []);
@@ -51,11 +65,14 @@ const createOpenDocumentTool = async ({ userId, tenantId, req, conversationFileI
     async ({ document_id, offset }) => {
       const documentId = typeof document_id === 'string' ? document_id.trim() : '';
       if (!documentId) {
-        return 'Provide the "Document ID" of a document from library_search results.';
+        return ['Provide the "Document ID" of a document from library_search results.', undefined];
       }
       const reads = readsByRequest.get(counterKey) ?? 0;
       if (reads >= MAX_OPEN_CALLS_PER_TURN) {
-        return `Read limit reached for this turn (${MAX_OPEN_CALLS_PER_TURN} reads). Answer from what you have already read; if part of a document is still unread, tell the user you can continue reading it in the next message.`;
+        return [
+          `Read limit reached for this turn (${MAX_OPEN_CALLS_PER_TURN} reads). Answer from what you have already read; if part of a document is still unread, tell the user you can continue reading it in the next message.`,
+          undefined,
+        ];
       }
 
       /* The id comes FROM THE MODEL, so it is never trusted: the file is re-fetched under
@@ -83,12 +100,15 @@ const createOpenDocumentTool = async ({ userId, tenantId, req, conversationFileI
         );
       } catch (error) {
         logger.error(`[${Tools.open_document}] lookup failed`, error);
-        return 'The document could not be opened due to an unexpected error.';
+        return ['The document could not be opened due to an unexpected error.', undefined];
       }
 
       const file = files?.[0];
       if (!file) {
-        return `No document with ID "${documentId.slice(0, 60)}" is available. Use library_search first and copy the "Document ID" exactly as printed in its results.`;
+        return [
+          `No document with ID "${documentId.slice(0, 60)}" is available. Use library_search first and copy the "Document ID" exactly as printed in its results.`,
+          undefined,
+        ];
       }
 
       /* `text` is set on documents read as full text; `fullText` on those routed to RAG,
@@ -96,14 +116,16 @@ const createOpenDocumentTool = async ({ userId, tenantId, req, conversationFileI
        * Either one is "the document's text" as far as reading goes. */
       const documentText = file.text || file.fullText;
 
+      const filename = file.filename ?? 'unknown';
+
       /* Reading is inside the try for the same reason the lookup is: an exception escaping a
        * tool aborts the whole chat turn, while a returned string degrades into something the
        * model can relay. Tokenising a 200k-character contract is the realistic failure here. */
-      let slice;
+      let result;
       try {
-        slice = await openDocumentSlice({
+        result = await openDocumentSlice({
           documentId,
-          filename: file.filename ?? 'unknown',
+          filename,
           text: documentText,
           offset,
           tokenLimit,
@@ -111,22 +133,41 @@ const createOpenDocumentTool = async ({ userId, tenantId, req, conversationFileI
         });
       } catch (error) {
         logger.error(`[${Tools.open_document}] read failed`, error);
-        return 'The document could not be read due to an unexpected error.';
+        return ['The document could not be read due to an unexpected error.', undefined];
       }
 
-      const nextReads = documentText ? reads + 1 : reads;
-      if (documentText) {
+      /* The reader itself says whether text came back, which is stricter than "the document
+       * has text": an offset past the end and a budget too small to yield a slice both return
+       * an explanation and no text. Those are not reads — they must not spend the turn's read
+       * budget (the cap is documented as counting successful reads only) and must not put the
+       * document in the source list, which would claim it was read. */
+      const nextReads = result.read ? reads + 1 : reads;
+      if (result.read) {
         readsByRequest.set(counterKey, nextReads);
       }
       /* PII-safe: answers "was it called, on what, and did it hit the cap" without content.
        * The exact character range read is on the debug line inside openDocumentSlice. */
       logger.info(
-        `[${Tools.open_document}] file=${documentId} total=${documentText?.length ?? 0} offset=${Math.trunc(Number(offset)) || 0} reads=${nextReads}/${MAX_OPEN_CALLS_PER_TURN}`,
+        `[${Tools.open_document}] file=${documentId} total=${documentText?.length ?? 0} offset=${Math.trunc(Number(offset)) || 0} read=${result.read != null} reads=${nextReads}/${MAX_OPEN_CALLS_PER_TURN}`,
       );
-      return slice;
+      if (!result.read) {
+        return [result.content, undefined];
+      }
+      return [
+        result.content,
+        {
+          [Tools.file_search]: {
+            sources: [
+              openDocumentSource({ fileId: file.file_id, fileName: filename, read: result.read }),
+            ],
+            fileCitations,
+          },
+        },
+      ];
     },
     {
       name: Tools.open_document,
+      responseFormat: 'content_and_artifact',
       description: openDocumentDescription,
       schema: openDocumentSchema,
     },

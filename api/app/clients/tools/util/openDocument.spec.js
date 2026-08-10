@@ -25,6 +25,7 @@ const read = (openTool, args = {}) =>
   });
 
 const contentOf = (result) => (typeof result === 'string' ? result : result.content);
+const sourcesOf = (result) => result?.artifact?.[Tools.file_search]?.sources;
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -263,5 +264,123 @@ describe('open_document — чтение длинного документа', (
 
     expect(content).toContain('library_search');
     expect(content).toContain('indexed for search only');
+  });
+});
+
+/* Список источников под ответом собирает СЕРВЕР из фактических чтений, а не модель текстом:
+ * подделать его ответом нельзя. Прочитанный документ обязан попасть туда так же, как найденный
+ * поиском — иначе «оцени риски договора» отвечает по документу, которого в источниках нет. */
+describe('open_document — источники под ответом', () => {
+  it('успешное чтение отдаёт РОВНО один источник — тот документ, что прочитан', async () => {
+    getFiles.mockResolvedValueOnce([{ file_id: 'f1', filename: 'lease.pdf', text: LEASE_TEXT }]);
+
+    const openTool = await createOpenDocumentTool({ userId: 'user-1' });
+    const sources = sourcesOf(await read(openTool));
+
+    expect(sources).toHaveLength(1);
+    expect(sources[0]).toMatchObject({ type: 'file', fileId: 'f1', fileName: 'lease.pdf' });
+  });
+
+  it('источник несёт выдержку из прочитанного, а не чужой текст', async () => {
+    getFiles.mockResolvedValueOnce([{ file_id: 'f1', filename: 'lease.pdf', text: LEASE_TEXT }]);
+
+    const openTool = await createOpenDocumentTool({ userId: 'user-1' });
+    const sources = sourcesOf(await read(openTool));
+
+    expect(LEASE_TEXT.startsWith(sources[0].content)).toBe(true);
+  });
+
+  it('документ из fullText (RAG-маршрут) тоже попадает в источники', async () => {
+    getFiles.mockResolvedValueOnce([
+      { file_id: 'f1', filename: 'big-contract.pdf', fullText: LEASE_TEXT },
+    ]);
+
+    const openTool = await createOpenDocumentTool({ userId: 'user-1' });
+    const sources = sourcesOf(await read(openTool));
+
+    expect(sources).toHaveLength(1);
+    expect(sources[0].fileName).toBe('big-contract.pdf');
+  });
+
+  it('чужой id источников не даёт', async () => {
+    getFiles.mockResolvedValueOnce([]);
+
+    const openTool = await createOpenDocumentTool({ userId: 'user-1' });
+    const result = await read(openTool, { document_id: 'someone-elses-file' });
+
+    expect(sourcesOf(result)).toBeUndefined();
+  });
+
+  /* Документ, у которого текста нет, НЕ прочитан. Источник на него означал бы «ответ опирается
+   * на этот документ», хотя модель не увидела ни строчки. */
+  it('документ без текста в источники не попадает', async () => {
+    getFiles.mockResolvedValueOnce([{ file_id: 'f1', filename: 'huge.pdf' }]);
+
+    const openTool = await createOpenDocumentTool({ userId: 'user-1' });
+
+    expect(sourcesOf(await read(openTool))).toBeUndefined();
+  });
+
+  /* Offset за концом документа — не чтение: текст уже прочитан ранее и в источниках уже есть,
+   * второй раз его туда класть не за что. */
+  it('offset за концом документа источник не создаёт', async () => {
+    getFiles.mockResolvedValueOnce([{ file_id: 'f1', filename: 'lease.pdf', text: LEASE_TEXT }]);
+
+    const openTool = await createOpenDocumentTool({ userId: 'user-1' });
+    const result = await read(openTool, { offset: LEASE_TEXT.length });
+
+    expect(contentOf(result)).toContain('already been read in full');
+    expect(sourcesOf(result)).toBeUndefined();
+  });
+
+  it('отказ по исчерпанному лимиту источников не даёт', async () => {
+    getFiles.mockResolvedValue([{ file_id: 'f1', filename: 'lease.pdf', text: LEASE_TEXT }]);
+
+    const openTool = await createOpenDocumentTool({ userId: 'user-1' });
+    for (let i = 0; i < MAX_OPEN_CALLS_PER_TURN; i++) {
+      await read(openTool);
+    }
+    const overflow = await read(openTool);
+
+    expect(contentOf(overflow)).toContain('Read limit reached');
+    expect(sourcesOf(overflow)).toBeUndefined();
+  });
+
+  it('сбой чтения источников не даёт', async () => {
+    getFiles.mockResolvedValueOnce([{ file_id: 'f1', filename: 'lease.pdf', text: LEASE_TEXT }]);
+    countTokens.mockImplementationOnce(() => {
+      throw new Error('tokenizer exploded');
+    });
+
+    const openTool = await createOpenDocumentTool({ userId: 'user-1' });
+
+    expect(sourcesOf(await read(openTool))).toBeUndefined();
+  });
+
+  /* Права на цитаты решаются ОДИН раз на запрос и передаются тулу — ровно как у library_search.
+   * Иначе «найденный» и «прочитанный» документ подчинялись бы разным правилам. */
+  it('прокидывает решение по правам на цитаты в артефакт', async () => {
+    getFiles.mockResolvedValue([{ file_id: 'f1', filename: 'lease.pdf', text: LEASE_TEXT }]);
+
+    for (const fileCitations of [true, false]) {
+      const openTool = await createOpenDocumentTool({ userId: 'user-1', fileCitations });
+      const result = await read(openTool);
+
+      expect(result.artifact[Tools.file_search].fileCitations).toBe(fileCitations);
+    }
+  });
+
+  /* Каждая часть длинного договора — отдельное чтение, но документ в панели один: клиент
+   * схлопывает источники по fileId, поэтому оба чтения обязаны нести ОДИН и тот же id. */
+  it('чтение по частям ссылается на один и тот же документ', async () => {
+    const longText = 'А'.repeat(200000);
+    getFiles.mockResolvedValue([{ file_id: 'f1', filename: 'big.pdf', text: longText }]);
+
+    const openTool = await createOpenDocumentTool({ userId: 'user-1' });
+    const first = sourcesOf(await read(openTool));
+    const second = sourcesOf(await read(openTool, { offset: 1000 }));
+
+    expect(first[0].fileId).toBe('f1');
+    expect(second[0].fileId).toBe('f1');
   });
 });

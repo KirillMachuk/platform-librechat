@@ -1,7 +1,9 @@
 import type { ServerRequest } from '~/types';
 import {
   openDocumentSlice,
+  openDocumentSource,
   OPEN_DOCUMENT_SLICE_TOKENS,
+  OPEN_DOCUMENT_EXCERPT_CHARS,
   resolveOpenDocumentTokenLimit,
 } from './open';
 
@@ -23,7 +25,7 @@ describe('openDocumentSlice', () => {
   it('returns the whole document in one call when it fits the budget', async () => {
     const text = 'Договор аренды №14/7 от 2026-03-01. Арендодатель: ООО «Ромашка».';
 
-    const output = await openDocumentSlice({
+    const { content, read } = await openDocumentSlice({
       documentId: 'file-1',
       filename: 'Договор.pdf',
       text,
@@ -31,10 +33,11 @@ describe('openDocumentSlice', () => {
       tokenCountFn,
     });
 
-    expect(output).toContain('Договор.pdf');
-    expect(output).toContain('(end of document)');
-    expect(output).toContain(text);
-    expect(output).not.toContain('Truncated');
+    expect(content).toContain('Договор.pdf');
+    expect(content).toContain('(end of document)');
+    expect(content).toContain(text);
+    expect(content).not.toContain('Truncated');
+    expect(read).toEqual({ text, charStart: 0, charEnd: text.length, total: text.length });
   });
 
   /* The whole point of `offset`: a long contract must come back across several calls
@@ -48,7 +51,7 @@ describe('openDocumentSlice', () => {
     let calls = 0;
 
     for (;;) {
-      const output = await openDocumentSlice({
+      const { content, read } = await openDocumentSlice({
         documentId: 'file-1',
         filename: 'Долгий.txt',
         text,
@@ -56,20 +59,28 @@ describe('openDocumentSlice', () => {
         tokenLimit,
         tokenCountFn,
       });
-      const range = readRange(output);
+      const range = readRange(content);
       calls++;
 
       expect(range.total).toBe(text.length);
       expect(range.start).toBe(offset + 1);
-      expect(output).toContain(text.slice(range.start - 1, range.end));
+      expect(content).toContain(text.slice(range.start - 1, range.end));
+      /* The reported range and the machine-readable one describe the same read — the source
+       * card is built from the second, so a drift between them would credit the wrong span. */
+      expect(read).toEqual({
+        text: text.slice(range.start - 1, range.end),
+        charStart: range.start - 1,
+        charEnd: range.end,
+        total: text.length,
+      });
 
       reassembled += text.slice(range.start - 1, range.end);
       offset = range.end;
 
-      if (output.includes('(end of document)')) {
+      if (content.includes('(end of document)')) {
         break;
       }
-      expect(output).toContain(`offset ${range.end}`);
+      expect(content).toContain(`offset ${range.end}`);
       expect(calls).toBeLessThan(50);
     }
 
@@ -80,7 +91,7 @@ describe('openDocumentSlice', () => {
   it('reports how much is left so the model can decide whether to keep reading', async () => {
     const text = makeText(4000);
 
-    const output = await openDocumentSlice({
+    const { content } = await openDocumentSlice({
       documentId: 'file-1',
       filename: 'Долгий.txt',
       tokenLimit: 100,
@@ -88,15 +99,15 @@ describe('openDocumentSlice', () => {
       tokenCountFn,
     });
 
-    const { end } = readRange(output);
-    expect(output).toContain(`${text.length - end} characters remain`);
-    expect(output).toContain('document_id "file-1"');
+    const { end } = readRange(content);
+    expect(content).toContain(`${text.length - end} characters remain`);
+    expect(content).toContain('document_id "file-1"');
   });
 
   it('tells the model the document is finished when offset is past the end', async () => {
     const text = makeText(100);
 
-    const output = await openDocumentSlice({
+    const { content, read } = await openDocumentSlice({
       documentId: 'file-1',
       filename: 'Короткий.txt',
       text,
@@ -105,14 +116,17 @@ describe('openDocumentSlice', () => {
       tokenCountFn,
     });
 
-    expect(output).toContain('already been read in full');
+    expect(content).toContain('already been read in full');
+    /* Nothing was read, so nothing may be credited as read: this call must not spend the
+     * turn's read budget nor put the document in the answer's source list. */
+    expect(read).toBeUndefined();
   });
 
   it('clamps a negative or malformed offset to the start of the document', async () => {
     const text = makeText(200);
 
     for (const offset of [-50, Number.NaN]) {
-      const output = await openDocumentSlice({
+      const { content, read } = await openDocumentSlice({
         documentId: 'file-1',
         filename: 'Короткий.txt',
         text,
@@ -120,14 +134,15 @@ describe('openDocumentSlice', () => {
         tokenLimit: 8000,
         tokenCountFn,
       });
-      expect(readRange(output).start).toBe(1);
+      expect(readRange(content).start).toBe(1);
+      expect(read?.charStart).toBe(0);
     }
   });
 
   /* Files uploaded before the library stored full text: the honest answer is "re-upload",
    * never a silent empty read the model would report as "the document is blank". */
   it('asks for a re-upload when the document has no stored text', async () => {
-    const output = await openDocumentSlice({
+    const { content, read } = await openDocumentSlice({
       documentId: 'file-1',
       filename: 'Старый.pdf',
       text: '',
@@ -135,12 +150,13 @@ describe('openDocumentSlice', () => {
       tokenCountFn,
     });
 
-    expect(output).toContain('re-upload');
+    expect(content).toContain('re-upload');
+    expect(read).toBeUndefined();
   });
 
   /* A budget too small to yield any text would otherwise return the same offset forever. */
   it('refuses to return an empty slice instead of looping on the same offset', async () => {
-    const output = await openDocumentSlice({
+    const { content, read } = await openDocumentSlice({
       documentId: 'file-1',
       filename: 'Долгий.txt',
       text: makeText(4000),
@@ -148,7 +164,55 @@ describe('openDocumentSlice', () => {
       tokenCountFn,
     });
 
-    expect(output).toContain('too small');
+    expect(content).toContain('too small');
+    expect(read).toBeUndefined();
+  });
+});
+
+describe('openDocumentSource', () => {
+  const read = { text: 'Договор аренды №14/7', charStart: 0, charEnd: 20, total: 20 };
+
+  it('describes the read document the same way a found one is described', () => {
+    const source = openDocumentSource({ fileId: 'file-1', fileName: 'Договор.pdf', read });
+
+    expect(source).toMatchObject({
+      type: 'file',
+      fileId: 'file-1',
+      fileName: 'Договор.pdf',
+      content: read.text,
+    });
+  });
+
+  /* The citation processor drops any source below `minRelevanceScore` (0.45 by default).
+   * A read that scored itself out of its own source list is exactly the failure this
+   * feature exists to prevent, so the floor is asserted, not assumed. */
+  it('clears the citation relevance floor', () => {
+    const source = openDocumentSource({ fileId: 'file-1', fileName: 'Договор.pdf', read });
+
+    expect(source.relevance).toBeGreaterThanOrEqual(0.45);
+  });
+
+  /* Reading works on stored text, which carries no page index. An invented page number
+   * would point the user at the wrong part of their own contract. */
+  it('claims no pages, because a full-text read has none', () => {
+    const source = openDocumentSource({ fileId: 'file-1', fileName: 'Договор.pdf', read });
+
+    expect(source.pages).toEqual([]);
+    expect(source.pageRelevance).toEqual({});
+  });
+
+  /* The panel shows the filename, not the text: carrying the whole slice would add tens of
+   * KB per read to the stored attachment and the stream for nothing on screen. */
+  it('keeps only a short excerpt of a long read', () => {
+    const long = 'я'.repeat(5000);
+    const source = openDocumentSource({
+      fileId: 'file-1',
+      fileName: 'Долгий.txt',
+      read: { text: long, charStart: 0, charEnd: long.length, total: long.length },
+    });
+
+    expect(source.content).toHaveLength(OPEN_DOCUMENT_EXCERPT_CHARS);
+    expect(long.startsWith(source.content)).toBe(true);
   });
 });
 

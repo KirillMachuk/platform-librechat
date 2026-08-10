@@ -548,6 +548,7 @@ export const toolDefinitions: Record<string, ToolRegistryDefinition> = {
     description: openDocumentDescription,
     schema: openDocumentSchema,
     toolType: 'builtin',
+    responseFormat: 'content_and_artifact',
   },
   image_gen_oai: {
     name: oaiToolkit.image_gen_oai.name,
