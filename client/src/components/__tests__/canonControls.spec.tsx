@@ -44,10 +44,15 @@ describe('the canon a button carries', () => {
     expect(c).toContain('tap-target');
   });
 
-  it('gives the outline variant a btn-line border and a plain hover fill', () => {
+  it('gives the outline variant a control border and a plain hover fill', () => {
     const c = classesOf(<Button variant="outline">{LABEL}</Button>);
 
-    expect(c).toContain('border-border-medium');
+    /* `control`, not `btn-line`: the boundary of an interactive control must
+       hold 3:1 (WCAG 2.2 SC 1.4.11, canon §1.6). btn-line measures 1.45:1 on
+       the card and stays for dividers only — decided and merged in #315; the
+       owner's words for the old border were «совсем не видна». */
+    expect(c).toContain('border-border-control');
+    expect(c).not.toContain('border-border-medium');
     expect(c).toContain('hover:bg-surface-hover');
     /* Upstream's shadcn hover recoloured the label too; the canon does not. */
     expect(c).not.toContain('hover:text-accent-foreground');
