@@ -68,7 +68,7 @@
     "fit": "exact"
   },
   "BookmarkPlusIcon": {
-    "to": "BookmarkSimple",
+    "to": "Bookmarks",
     "fit": "close"
   },
   "Bot": {
@@ -192,11 +192,11 @@
     "fit": "exact"
   },
   "CopyCheck": {
-    "to": "Copy",
-    "fit": "close"
+    "to": "CheckSquare",
+    "fit": "exact"
   },
   "CopyPlus": {
-    "to": "Copy",
+    "to": "CopySimple",
     "fit": "close"
   },
   "Database": {
@@ -376,7 +376,7 @@
     "fit": "close"
   },
   "ImageUpIcon": {
-    "to": "Image",
+    "to": "ImageSquare",
     "fit": "close"
   },
   "Import": {
@@ -516,7 +516,7 @@
     "fit": "exact"
   },
   "PanelLeftClose": {
-    "to": "SidebarSimple",
+    "to": "CaretLineLeft",
     "fit": "close"
   },
   "PanelLeftOpen": {
@@ -668,7 +668,7 @@
     "fit": "exact"
   },
   "ShieldEllipsis": {
-    "to": "Shield",
+    "to": "ShieldCheck",
     "fit": "close"
   },
   "ShoppingBag": {

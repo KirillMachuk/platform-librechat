@@ -19,7 +19,7 @@
  *
  * Run: node scripts/gen-icon-shims.mjs   (rewrites both shims; commit them)
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -50,6 +50,82 @@ for (const name of missing) {
 
 /* Grouped so a reader can audit renames at a glance: identity re-exports
    first, renames after, each rename on its own line. */
+/* Two lucide names that DRAW DIFFERENTLY must not land on one Phosphor icon
+   IF the code uses them together in one file — that is where a two-branch
+   toggle lives, and collapsing its branches makes a control that cannot show
+   its state. `Copy` and `CopyCheck` did exactly that: the copy button drew
+   the same glyph before and after copying.
+
+   Synonyms are deliberately allowed. `Cog` and `Settings` draw differently in
+   lucide but mean one thing and never appear as alternatives; merging them is
+   the point of a mapping. So geometry alone does not fail the build —
+   geometry AND co-occurrence do.
+
+   Both halves are read from disk, not asserted: the drawing from the installed
+   lucide, the co-occurrence from the source tree. */
+const LUCIDE = join(ROOT, 'node_modules/lucide-react/dist/esm/icons');
+const kebab = (n) =>
+  n
+    .replace(/Icon$/, '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+    .toLowerCase();
+const lucideShape = (name) => {
+  for (const candidate of [kebab(name), `${kebab(name)}-icon`]) {
+    const file = join(LUCIDE, `${candidate}.js`);
+    if (!existsSync(file)) continue;
+    const block = /const __iconNode = \[([\s\S]*?)\n\];/.exec(readFileSync(file, 'utf8'));
+    if (block) return block[1].replace(/,\s*key:\s*"[^"]*"/g, '').replace(/\s+/g, '');
+  }
+  return null;
+};
+
+function* sources(dir) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const child = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name !== 'node_modules' && entry.name !== 'dist') yield* sources(child);
+    } else if (/\.(tsx?|jsx?)$/.test(entry.name) && entry.name !== 'icons.tsx') {
+      yield child;
+    }
+  }
+}
+const files = [];
+for (const root of ['client/src', 'packages/client/src']) {
+  for (const file of sources(join(ROOT, root))) files.push(readFileSync(file, 'utf8'));
+}
+const usedTogether = (a, b) => {
+  const re = (n) => new RegExp(`\\b${n}\\b`);
+  return files.some((text) => re(a).test(text) && re(b).test(text));
+};
+
+const byTarget = new Map();
+for (const [name, value] of reexports) {
+  if (!byTarget.has(value.to)) byTarget.set(value.to, []);
+  byTarget.get(value.to).push(name);
+}
+const collisions = [];
+for (const [target, names] of byTarget) {
+  if (names.length < 2) continue;
+  for (let i = 0; i < names.length; i++) {
+    for (let j = i + 1; j < names.length; j++) {
+      const [a, b] = [names[i], names[j]];
+      const [sa, sb] = [lucideShape(a), lucideShape(b)];
+      if (!sa || !sb || sa === sb) continue;
+      if (usedTogether(a, b)) collisions.push(`${target} ← ${a} + ${b}`);
+    }
+  }
+}
+if (collisions.length) {
+  throw new Error(
+    `icons.map.json: ${collisions.length} pair(s) draw differently in lucide, land on one ` +
+      `Phosphor icon, and are used in the same file — a control switching between them ` +
+      `would not change:\n  ` +
+      collisions.join('\n  ') +
+      `\nGive one of each pair its own target, or add it to CUSTOM to keep lucide's drawing.`,
+  );
+}
+
 const identity = reexports.filter(([k, v]) => k === v.to).map(([k]) => k);
 const renamed = reexports.filter(([k, v]) => k !== v.to);
 
