@@ -60,24 +60,15 @@ const buttonVariants: (
           'border border-border-control bg-transparent text-text-primary hover:bg-surface-hover',
         /**
          * The white button with an ink edge — a real button that is not the
-         * main one.
-         *
-         * `outline` cannot play this part on a form: a transparent box with a
-         * `control` border is the same thing a text field is, and on the
-         * sign-in card the submit and the two inputs became one
-         * indistinguishable stack ("кнопка войти сейчас по дизайну как поля
-         * ввода"). What separates them is the edge: the fields wear `control`
-         * (#8c8c8c, 3.4:1), this wears `ink` — 17.4:1 in light, and the same
-         * value the primary button is FILLED with, so the two read as one
-         * pair, filled and outlined, the way a primary/secondary pair should.
-         *
-         * A grey fill was tried first and the owner rejected it on sight; it
-         * also needed a token pair of its own, since borrowing `active` gave
-         * 1.05:1 against the card in dark. White plus a strong edge needs
-         * neither.
+         * main one. Where `outline` (a `control` border, same as a field's)
+         * would sink into a form, this stays a button: the `ink` edge is
+         * 17.4:1 in light and the same value the primary is FILLED with, so
+         * primary/secondary read as one pair, filled and outlined.
          *
          * Not `acc`: canon §1.1 keeps one accent, and an accent-edged button
-         * beside an ink-filled one competes for the same job.
+         * beside an ink-filled one competes for the same job. A grey fill was
+         * tried and rejected on sight (and needed its own token pair; dark
+         * theme gave 1.05:1 borrowing `active`).
          */
         secondary: 'border border-ink bg-surface-primary text-text-primary hover:bg-surface-hover',
         ghost: 'hover:bg-surface-hover hover:text-text-primary',
