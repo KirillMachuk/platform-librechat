@@ -144,6 +144,11 @@
   --font-size-2xl: 1.5rem;
   --font-size-3xl: 1.875rem;
   --markdown-font-size: 0.9375rem;
+  /* The reasoning block sits one step BELOW the conversation: 13px when
+     messages are 15 (the Kimi treatment the owner pointed at). Derived, not
+     set — whatever size the user picks, thoughts stay 13/15 of it and the
+     two can never diverge again the way text-base (16) vs 15px did. */
+  --thinking-font-size: calc(var(--markdown-font-size) * 13 / 15);
 }
 html {
   font-feature-settings:
@@ -977,11 +982,16 @@ pre {
   vertical-align: top;
 }
 .prose {
-  --tw-prose-body: #424242;
-  --tw-prose-headings: #111827;
+  /* Body text is t1, not a grey between t1 and t2. The vendored plugin CSS
+     shipped #424242 (the fork's gray-600) here, which painted every AI answer
+     and user bubble a secondary-text weight — the owner's words were that the
+     reply text looks «тусклый». Headings and bold follow the same token so
+     nothing inside a message is darker than the message. Canon §2: t1. */
+  --tw-prose-body: var(--text-primary);
+  --tw-prose-headings: var(--text-primary);
   --tw-prose-lead: #4b5563;
   --tw-prose-links: #0066cc;
-  --tw-prose-bold: #111827;
+  --tw-prose-bold: var(--text-primary);
   --tw-prose-counters: #6b7280;
   --tw-prose-bullets: #d1d5db;
   --tw-prose-hr: #cdcdcd;
@@ -993,11 +1003,13 @@ pre {
   --tw-prose-pre-bg: #1f2937;
   --tw-prose-th-borders: #d1d5db;
   --tw-prose-td-borders: #e5e7eb;
-  --tw-prose-invert-body: #d1d5db;
-  --tw-prose-invert-headings: #fff;
+  /* Same token in the dark half: --text-primary resolves per theme, so the
+     invert body is t1 dark (#F0F0F0), not the plugin's dimmer #d1d5db. */
+  --tw-prose-invert-body: var(--text-primary);
+  --tw-prose-invert-headings: var(--text-primary);
   --tw-prose-invert-lead: #9ca3af;
   --tw-prose-invert-links: #fff;
-  --tw-prose-invert-bold: #fff;
+  --tw-prose-invert-bold: var(--text-primary);
   --tw-prose-invert-counters: #9ca3af;
   --tw-prose-invert-bullets: #4b5563;
   --tw-prose-invert-hr: #424242;
@@ -1170,14 +1182,22 @@ pre {
   margin-top: 0;
 }
 
+/* Canon §3: mono is Roboto Mono, and it belongs to code — this rule is a
+   default, not a decree. Upstream shipped it Consolas-first WITH !important,
+   which dragged every <pre> in the product into Consolas: file previews,
+   search snippets, attachment text, all of them beyond the reach of their
+   own font classes. No !important — a file preview saying font-sans wins. */
 code,
-pre {
+pre,
+kbd,
+samp {
   font-family:
+    'Roboto Mono',
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
     Consolas,
-    Monaco,
-    Andale Mono,
-    Ubuntu Mono,
-    monospace !important;
+    monospace;
 }
 code.language-text,
 code.language-txt,

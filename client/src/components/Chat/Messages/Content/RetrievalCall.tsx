@@ -462,7 +462,7 @@ export default function RetrievalCall({
                     />
                     {item.content && (
                       <div className="border-t border-border-light px-3 py-3">
-                        <OutputRenderer text={item.content} />
+                        <OutputRenderer text={item.content} variant="document" />
                       </div>
                     )}
                   </div>

@@ -446,7 +446,8 @@ export default function FilePreviewDialog({
                 />
               </div>
               <div className="-mt-8 rounded-lg bg-surface-secondary p-4">
-                <pre className="whitespace-pre-wrap break-words pr-8 font-mono text-sm leading-6 text-text-primary">
+                {/* Inter, not mono — document text, canon §6.15. */}
+                <pre className="whitespace-pre-wrap break-words pr-8 font-sans text-sm leading-6 text-text-primary">
                   {fileContent}
                 </pre>
               </div>

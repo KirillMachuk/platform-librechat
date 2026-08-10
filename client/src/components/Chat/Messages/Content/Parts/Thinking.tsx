@@ -5,7 +5,6 @@ import type { FocusEvent, FC } from 'react';
 import { Lightbulb, ChevronDown, ChevronUp } from '~/components/icons';
 import { useLocalize, useExpandCollapse } from '~/hooks';
 import { showThinkingAtom } from '~/store/showThinking';
-import { fontSizeAtom } from '~/store/fontSize';
 import { cn } from '~/utils';
 
 /**
@@ -15,11 +14,16 @@ import { cn } from '~/utils';
 export const ThinkingContent: FC<{
   children: React.ReactNode;
 }> = memo(({ children }) => {
-  const fontSize = useAtomValue(fontSizeAtom);
-
+  /* One step BELOW the conversation, not the raw fontSizeAtom class it wore
+   * before: text-base is 16px while the canon message body is 15px via
+   * --markdown-font-size, so the thoughts rendered LARGER than the answer
+   * they explain. --thinking-font-size (style.css) is derived from the same
+   * variable, so it follows the user's size setting and stays smaller. */
   return (
     <div className="relative rounded-lg border border-border-light bg-surface-secondary p-3 pb-8 text-text-secondary">
-      <p className={cn('whitespace-pre-wrap leading-[26px]', fontSize)}>{children}</p>
+      <p className="whitespace-pre-wrap text-[length:var(--thinking-font-size)] leading-[1.55]">
+        {children}
+      </p>
     </div>
   );
 });
@@ -46,7 +50,6 @@ export const ThinkingButton = memo(
     showCopyButton?: boolean;
   }) => {
     const localize = useLocalize();
-    const fontSize = useAtomValue(fontSizeAtom);
 
     const [isCopied, setIsCopied] = useState(false);
 
@@ -69,10 +72,9 @@ export const ThinkingButton = memo(
           onClick={onClick}
           aria-expanded={isExpanded}
           aria-controls={contentId}
-          className={cn(
-            'group/button flex flex-1 items-center justify-start rounded-lg leading-[18px]',
-            fontSize,
-          )}
+          /* Same derived size as the content it toggles: the whole reasoning
+           * block — header and thoughts — sits a step below the answer. */
+          className="group/button flex flex-1 items-center justify-start rounded-lg text-[length:var(--thinking-font-size)] leading-[18px]"
         >
           <span className="relative mr-1.5 inline-flex h-[18px] w-[18px] items-center justify-center">
             <Lightbulb
