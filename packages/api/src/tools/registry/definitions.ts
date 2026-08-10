@@ -367,7 +367,7 @@ export const librarySearchSchema: ExtendedJsonSchema = {
     query: {
       type: 'string',
       description:
-        "A natural language query describing the document(s) or information to find across the user's whole library. Be specific — include any names, identifiers (document/article/invoice numbers, phone numbers, emails), dates, or topics the user mentions.",
+        'A natural language query describing the document(s) or information to find across the user\'s whole library. Be specific — include any names, identifiers (document/article/invoice numbers, phone numbers, emails), dates, or topics the user mentions. OMIT this ONLY to LIST documents rather than search them ("what documents do I have", "what is in my library", "show me all invoices" with a filter) — a listing returns names and attributes, never what a document says. For ANY question about content, pass a query.',
     },
     doc_type: {
       type: 'string',
@@ -409,7 +409,12 @@ export const librarySearchSchema: ExtendedJsonSchema = {
         'Optional. Latest document date, ISO YYYY-MM-DD. For a whole year use 2025-12-31.',
     },
   },
-  required: ['query'],
+  /* `query` is deliberately NOT required: without one the tool LISTS the library instead of
+   * searching it, which is the only honest answer to "what documents do I have". Requiring it
+   * forced the model to invent a query for that question and pass off five vaguely similar
+   * files as the contents of the library. The description carries the narrow licence to omit
+   * it; everything about content still goes through a query. */
+  required: [],
 };
 
 /**
@@ -427,6 +432,10 @@ export const librarySearchDescription =
   `Leave them out when the user did not name the attribute — a wrong filter hides the very document they want. ` +
   `Never invent an attribute to "help" the search; put descriptive wording in "query" instead. ` +
   `If a filtered search comes back empty, retry WITHOUT the filters before telling the user anything is missing.\n\n` +
+  `**LISTING INSTEAD OF SEARCHING:** omit "query" to list documents rather than search inside them. ` +
+  `Use it for "what documents do I have", "what is in my library", "what have I uploaded" — questions about WHICH documents exist, not what they say — ` +
+  `and with a filter for "show me all the invoices". You get names, attributes and Document IDs with an honest total, and NO passages. ` +
+  `Never omit "query" for a question about content: a listing cannot answer what a document says, and reporting file names as if they were the answer misleads the user.\n\n` +
   `**READING ONE DOCUMENT IN FULL:** every result carries a \`Document ID\`. The passages shown are only the excerpts that matched — ` +
   `when the user asks about a SPECIFIC document in depth (risks in it, an exact clause or wording, a summary, a comparison), ` +
   `call open_document with that id and answer from the full text instead of guessing from the excerpts.`;
