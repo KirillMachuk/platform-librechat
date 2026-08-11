@@ -249,11 +249,12 @@ const ChatForm = memo(function ChatForm({
            starts 16 from the left, 12 from the top, 10 from the right. */
         'm-0 w-full resize-none pt-3 pb-1.5 text-base leading-[1.6] placeholder:text-text-tertiary bg-transparent',
         /* Resting height (owner 11.08-3, Kimi as the yardstick — its box is
-           ~768×130): the desktop text zone holds min 84, which with the 34px
-           button row, its 10px bottom pad and the 2px of border lands the box
-           at 130. The phone keeps the single 44 row. Collapse wins: an
-           unconditional min would hold the collapsed box open. */
-        isCollapsed ? 'max-h-[52px]' : 'max-h-[45vh] md:min-h-[84px] md:max-h-[55vh]',
+           ~768×130): the desktop text zone holds min 76, which with the rest
+           of the shell (button row 46, border 2, the 6px of header slack —
+           measured live 11.08) lands the box at 130 exactly. The phone keeps
+           the single 44 row. Collapse wins: an unconditional min would hold
+           the collapsed box open. */
+        isCollapsed ? 'max-h-[52px]' : 'max-h-[45vh] md:min-h-[76px] md:max-h-[55vh]',
         isMoreThanThreeRows ? 'ps-3.5 md:ps-4' : 'ps-3.5 pe-2 md:ps-4 md:pe-2.5',
       ),
     [isCollapsed, isMoreThanThreeRows],
