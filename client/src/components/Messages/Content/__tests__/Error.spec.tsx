@@ -126,7 +126,61 @@ describe('Error – a key nobody registered', () => {
   it('still routes a key that really is registered', () => {
     const { container } = renderError(JSON.stringify({ code: 'invalid_api_key' }), 'en');
 
-    expect(container.textContent).toContain('Invalid API key');
+    expect(container.textContent).toContain('The API key was not accepted');
+  });
+});
+
+/**
+ * Five handlers built their English sentence inside the component instead of going through a
+ * translation key, so a Russian-speaking user met English at the worst possible moment. The
+ * owner hit the concurrency one by opening a third chat.
+ *
+ * Language is switched on the app's own i18n instance, not through I18nextProvider: the
+ * suite-wide react-i18next mock ignores the provider and reads that instance — the same
+ * reason the plain-message suite above does it this way.
+ */
+describe('Error – сообщения об ошибках говорят на языке пользователя', () => {
+  const cases: Array<[string, string, string]> = [
+    ['concurrent', 'Одновременно может готовиться', 'You can have'],
+    ['message_limit', 'Достигнут предел сообщений', 'You have reached the message limit'],
+    ['invalid_api_key', 'Ключ доступа не принят', 'The API key was not accepted'],
+    ['insufficient_quota', 'У ключа доступа закончился лимит', 'The API key has run out'],
+    ['ban', 'Аккаунт временно заблокирован', 'Your account has been temporarily suspended'],
+  ];
+
+  const body = (code: string) =>
+    JSON.stringify({ type: code, code, limit: 2, max: 40, windowInMinutes: 60 });
+
+  afterEach(async () => {
+    await appI18n.changeLanguage('en');
+  });
+
+  it.each(cases)('%s: по-русски, без английского оригинала', async (code, russian, english) => {
+    appI18n.addResourceBundle('ru', 'translation', translationRu, true, true);
+    await appI18n.changeLanguage('ru');
+
+    const { container } = render(<Error text={body(code)} />);
+
+    expect(container.textContent).toContain(russian);
+    /** Точная английская строка, а не «нет латиницы»: пузырь рисует и другое, и широкий
+     *  запрет краснел бы по чужой причине. */
+    expect(container.textContent).not.toContain(english);
+  });
+
+  it.each(cases)('%s: по-английски остаётся английским', (code, _russian, english) => {
+    const { container } = render(<Error text={body(code)} />);
+
+    expect(container.textContent).toContain(english);
+  });
+
+  it('подставляет число в текст, а не печатает заглушку', async () => {
+    appI18n.addResourceBundle('ru', 'translation', translationRu, true, true);
+    await appI18n.changeLanguage('ru');
+
+    const { container } = render(<Error text={body('concurrent')} />);
+
+    expect(container.textContent).toContain('2');
+    expect(container.textContent).not.toContain('{{0}}');
   });
 });
 
