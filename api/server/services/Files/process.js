@@ -1347,10 +1347,12 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
          * doc-gateway OCRs it whenever the lane frees up). The document arrives searchable with
          * its full text a few minutes later instead of not arriving at all.
          *
-         * Only when file_search is actually available — with the capability off there is nowhere
-         * to degrade to, so the honest "busy, retry" error is all we can offer. */
-        const canDeferToSearch =
-          transientParseFailure && (await checkCapability(req, AgentCapabilities.file_search));
+         * The same applies when no text can be had at all — a scan with no OCR configured, a
+         * password-protected or damaged PDF. The document is still the user's document: stored,
+         * it opens in the viewer and the worker can index it later if a parser appears. Losing
+         * it teaches the user only that the product dropped their file. So the honest error is
+         * reserved for the one case with nowhere to put it: file_search unavailable. */
+        const canDeferToSearch = await checkCapability(req, AgentCapabilities.file_search);
         if (!canDeferToSearch) {
           throw new Error(
             transientParseFailure
@@ -1359,7 +1361,9 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
           );
         }
         logger.info(
-          `[processAgentFileUpload] parser busy or over budget for "${file.originalname}"; deferring to file_search so the embed worker parses it in the background`,
+          transientParseFailure
+            ? `[processAgentFileUpload] parser busy or over budget for "${file.originalname}"; deferring to file_search so the embed worker parses it in the background`
+            : `[processAgentFileUpload] no text could be extracted from "${file.originalname}"; storing it for file_search rather than rejecting the upload`,
         );
         tool_resource = EToolResources.file_search;
       }

@@ -625,18 +625,43 @@ describe('processAgentFileUpload', () => {
       expect(parseText).toHaveBeenCalled();
     });
 
-    test('throws when document_parser fails and the RAG /text OCR fallback also yields no text', async () => {
-      getStrategyFunctions.mockReturnValue({
-        handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
-      });
+    /* A scan with no OCR configured, a password-protected PDF, a damaged one — no text can be
+     * had, but the document is still the user's document. Stored, it opens in the viewer and a
+     * parser added later can still index it; rejected, it simply disappears. */
+    test('stores a document no parser could read instead of rejecting the upload', async () => {
+      getStrategyFunctions.mockImplementation((src) =>
+        src === FileSources.document_parser
+          ? {
+              handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
+            }
+          : {
+              handleFileUpload: jest
+                .fn()
+                .mockResolvedValue({ filepath: '/uploads/scan.pdf', bytes: 100 }),
+            },
+      );
       const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
       const { parseText } = require('@librechat/api');
 
       await expect(
         processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
-      ).rejects.toThrow(/image-based and requires an OCR service/);
+      ).resolves.not.toThrow();
 
       expect(parseText).toHaveBeenCalled();
+      const persisted = db.createFile.mock.calls.at(-1)[0];
+      expect(persisted.text).toBeUndefined();
+    });
+
+    test('and says so honestly when there is nowhere to store it', async () => {
+      getStrategyFunctions.mockReturnValue({
+        handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
+      });
+      const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
+      checkCapability.mockResolvedValue(false);
+
+      await expect(
+        processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
+      ).rejects.toThrow(/image-based and requires an OCR service/);
     });
 
     /* doc-gateway OCRs one scan at a time and 503s the rest (DOCGW_SCAN_QUEUE_TIMEOUT_S). That is
@@ -733,6 +758,9 @@ describe('processAgentFileUpload', () => {
         handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
       });
       const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
+      /* Without file_search there is nowhere to store it, which is the one case that still
+       * ends in an error rather than a stored document. */
+      checkCapability.mockResolvedValue(false);
       withTimeout.mockRejectedValueOnce(new Error('connection reset by peer'));
 
       await expect(
@@ -774,12 +802,18 @@ describe('processAgentFileUpload', () => {
         ocrConfig: { strategy: FileSources.mistral_ocr },
       });
       const { parseText } = require('@librechat/api');
+      /* Selective: the OCR capability must stay ON, or the upload dies earlier with a different
+       * error and the test would pass without ever reaching the branch it names. */
+      checkCapability.mockImplementation((_req, capability) =>
+        Promise.resolve(capability !== AgentCapabilities.file_search),
+      );
 
       await expect(
         processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
       ).rejects.toThrow(/image-based and requires an OCR service/);
 
       expect(parseText).toHaveBeenCalled();
+      checkCapability.mockResolvedValue(true);
     });
   });
 
