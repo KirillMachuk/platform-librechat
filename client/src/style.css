@@ -169,6 +169,7 @@ html {
   --text-secondary: var(--c-t2);
   --text-secondary-alt: var(--c-t3);
   --text-tertiary: var(--c-t3);
+  --sidebar-ink: var(--c-side-ink);
   --text-warning: var(--c-warnc);
   --text-destructive: var(--c-errc);
   --ring-primary: var(--c-t1);
@@ -240,6 +241,7 @@ html {
   --text-secondary: var(--c-t2);
   --text-secondary-alt: var(--c-t3);
   --text-tertiary: var(--c-t3);
+  --sidebar-ink: var(--c-side-ink);
   --text-warning: var(--c-warnc);
   --text-destructive: var(--c-errc);
   --ring-primary: var(--c-t1);
@@ -395,6 +397,9 @@ html {
   --c-t1: #171717;
   --c-t2: #525252;
   --c-t3: #666666;
+  /* Чернила рядов сайдбара — решение владельца 11.08 поверх книги (t2/t3 ему
+     тусклы, ориентир — Kimi): подпись И иконка ряда — один этот цвет. */
+  --c-side-ink: rgba(0, 0, 0, 0.9);
   /* чернильная кнопка */
   --c-ink: #171717;
   --c-ink-label: #ffffff;
@@ -434,6 +439,7 @@ html {
   --c-t1: #f0f0f0;
   --c-t2: #a8a8a8;
   --c-t3: #999999;
+  --c-side-ink: rgba(255, 255, 255, 0.84);
   --c-ink: #f0f0f0;
   --c-ink-label: #171717;
   --c-acc: #5cc0dd;

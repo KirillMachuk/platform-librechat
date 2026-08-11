@@ -83,12 +83,16 @@ const HoverButton = memo(
     const buttonStyle = cn(
       'hover-button tap-target flex h-7 w-7 items-center justify-center rounded-lg text-text-secondary-alt [&_svg]:h-4 [&_svg]:w-4',
       'hover:text-text-primary hover:bg-surface-hover',
-      /* Канон §6.2, решение владельца: кнопки под ответом видны ВСЕГДА, а не
-         по наведению. Раньше так вёл себя только последний ответ, у остальных
-         кнопки на мыши прятались — их приходилось искать наведением. Гейт
-         `isVisible` остаётся: во время генерации кнопок быть не должно. */
+      /* Канон §6.2, решение владельца: кнопки под сообщением видны ВСЕГДА.
+         `isVisible` остаётся только для СТРУКТУРНЫХ случаев (это сообщение в
+         этом чате нередактируемо в принципе); временная невозможность — это
+         disabled с канонным затемнением 45, а не исчезновение. Ветки взаимо-
+         исключающие, иначе twMerge оставил бы обе opacity и позднее правило
+         в каскаде тихо победило бы. */
       'group-hover:visible group-focus-within:visible group-[.final-completion]:visible',
-      !isVisible && 'opacity-0',
+      isVisible
+        ? 'disabled:cursor-not-allowed disabled:opacity-45'
+        : 'pointer-events-none opacity-0',
       'focus-visible:outline-none',
       isActive && isVisible && 'text-text-primary bg-surface-hover',
       className,
@@ -161,7 +165,7 @@ const HoverButtons = ({
   });
 
   const {
-    hideEditButton,
+    editUnavailable,
     regenerateEnabled,
     continueSupported,
     forkingSupported,
@@ -219,7 +223,10 @@ const HoverButtons = ({
         />
       )}
 
-      {/* Copy Button — see isComparison */}
+      {/* Copy Button — see isComparison. Never hidden while a generation runs:
+          copying your own question is harmless at any moment, and the vanishing
+          act (opacity-0 until hover) read as «иконки куда-то пропадают» in
+          every chat with a long-running answer. */}
       {!isComparison && (
         <HoverButton
           onClick={handleCopy}
@@ -228,16 +235,14 @@ const HoverButtons = ({
           }
           icon={isCopied ? <CheckMark className="h-[18px] w-[18px]" /> : <Clipboard size="19" />}
           isLast={isLast}
-          className={cn(
-            'ml-0 flex items-center gap-1.5 text-xs',
-            isSubmitting && isCreatedByUser
-              ? 'group-hover:opacity-100 [@media(hover:hover)]:opacity-0'
-              : '',
-          )}
+          className="ml-0 flex items-center gap-1.5 text-xs"
         />
       )}
 
-      {/* Edit Button */}
+      {/* Edit Button: hidden only when this message can never be edited here;
+          while a generation runs it stays VISIBLE and merely disabled — a
+          button that vanishes for the stream's duration looks like a bug, a
+          disabled one explains itself. */}
       {isEditableEndpoint && (
         <HoverButton
           id={`edit-${message.messageId}`}
@@ -245,8 +250,8 @@ const HoverButtons = ({
           title={localize('com_ui_edit')}
           icon={<EditIcon size="19" />}
           isActive={isEditing}
-          isVisible={!hideEditButton}
-          isDisabled={hideEditButton}
+          isVisible={!editUnavailable}
+          isDisabled={editUnavailable || isSubmitting}
           isLast={isLast}
           className={isCreatedByUser ? '' : 'active'}
         />

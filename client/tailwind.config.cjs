@@ -158,6 +158,9 @@ module.exports = {
         'text-accent': 'var(--c-acc)',
         'text-warning': 'var(--text-warning)',
         'text-destructive': 'var(--text-destructive)',
+        /* Чернила рядов сайдбара — решение владельца 11.08 поверх книги
+           (ориентир Kimi): подпись и иконка ряда носят один этот цвет. */
+        'sidebar-ink': 'var(--sidebar-ink)',
         'ring-primary': 'var(--ring-primary)',
         'ring-primary-soft': 'var(--ring-primary-soft)',
         // Мягкая подложка ошибки: кольцо фокуса поля в ошибке (§6.4) и инлайн-

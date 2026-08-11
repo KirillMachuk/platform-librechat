@@ -80,7 +80,6 @@ const ChatForm = memo(function ChatForm({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [, setIsScrollable] = useState(false);
   const [visualRowCount, setVisualRowCount] = useState(1);
-  const [isTextAreaFocused, setIsTextAreaFocused] = useState(false);
   const [backupBadges, setBackupBadges] = useState<Pick<BadgeItem, 'id'>[]>([]);
 
   const SpeechToText = useRecoilValue(store.speechToText);
@@ -168,15 +167,6 @@ const ChatForm = memo(function ChatForm({
     }
   }, [isCollapsed]);
 
-  const handleTextareaFocus = useCallback(() => {
-    handleFocusOrClick();
-    setIsTextAreaFocused(true);
-  }, [handleFocusOrClick]);
-
-  const handleTextareaBlur = useCallback(() => {
-    setIsTextAreaFocused(false);
-  }, []);
-
   useAutoSave({
     files,
     setFiles,
@@ -252,8 +242,10 @@ const ChatForm = memo(function ChatForm({
       cn(
         /* text-base, not the inherited 14: canon §6.13 sets the composer at
            16px on every width (16 is also what stops iOS zooming the page on
-           focus) — the book's box draws its placeholder at 16 too. */
-        'md:py-3.5 m-0 w-full resize-none py-[13px] text-base placeholder-black/60 bg-transparent dark:placeholder-white/60',
+           focus). The book's box draws its placeholder at 16/25.6 in t3, so
+           the leading and the placeholder colour are the book's numbers, not
+           an alpha blend of the theme's ink. */
+        'md:py-3.5 m-0 w-full resize-none py-[13px] text-base leading-[1.6] placeholder:text-text-tertiary bg-transparent',
         isCollapsed ? 'max-h-[52px]' : 'max-h-[45vh] md:max-h-[55vh]',
         isMoreThanThreeRows ? 'pl-5' : 'px-5',
       ),
@@ -301,20 +293,19 @@ const ChatForm = memo(function ChatForm({
           />
           <div
             onClick={handleContainerClick}
+            data-testid="composer-shell"
             className={cn(
-              'relative flex w-full flex-grow flex-col overflow-hidden rounded-3xl border text-text-primary transition-all duration-200',
-              // Канон §6.4: фокус поля — рамка `acc` и кольцо 3px `acc-soft`.
-              // Смена тени с md на lg фокусом не считается: на глаз она не
-              // читается, и человек, дошедший до композера по Tab, не понимал,
-              // что попал в него.
-              'shadow-sm',
-              isTextAreaFocused ? 'ring-[3px] ring-ring-primary-soft' : 'ring-0',
+              // Owner's decision 11.08, an exception to the §1.8 field recipe:
+              // the composer wears the login card's dress — hairline border and
+              // the sm shadow token — and does NOT react to focus or typing.
+              // The only thing that answers input is the send button's icon.
+              // Keyboard focus is shown by the caret alone; the global focus
+              // canon already exempts textareas from the outline.
+              'relative flex w-full flex-grow flex-col overflow-hidden rounded-3xl border shadow-sm transition-colors duration-90',
+              'text-text-primary',
               isTemporary
                 ? 'border-violet-800/60 bg-violet-950/10'
-                : cn(
-                    'bg-surface-chat',
-                    isTextAreaFocused ? 'border-border-focus' : 'border-border-control',
-                  ),
+                : 'border-border-light bg-surface-chat',
             )}
           >
             <TextareaHeader addedConvo={addedConvo} setAddedConvo={setAddedConvo} />
@@ -362,8 +353,7 @@ const ChatForm = memo(function ChatForm({
                     tabIndex={0}
                     data-testid="text-input"
                     rows={1}
-                    onFocus={handleTextareaFocus}
-                    onBlur={handleTextareaBlur}
+                    onFocus={handleFocusOrClick}
                     aria-label={localize('com_ui_message_input')}
                     onClick={handleFocusOrClick}
                     style={{ height: 44, overflowY: 'auto' }}
@@ -389,7 +379,10 @@ const ChatForm = memo(function ChatForm({
                 isRTL ? 'flex-row-reverse' : 'flex-row',
               )}
             >
-              <div className={`${isRTL ? 'mr-2' : 'ml-2'}`}>
+              {/* Desktop keeps the paperclip; on the phone the «+» sheet inside
+                  BadgeRow is the one entry point for uploads AND tools (book,
+                  mobile screen: no separate tools button below md). */}
+              <div className={cn('hidden md:block', isRTL ? 'mr-2' : 'ml-2')}>
                 <AttachFileChat
                   conversation={conversation}
                   disableInputs={disableInputs}
@@ -414,6 +407,13 @@ const ChatForm = memo(function ChatForm({
                 isInChat={
                   Array.isArray(conversation?.messages) && conversation.messages.length >= 1
                 }
+                plusSheet={{
+                  conversation,
+                  disableInputs,
+                  files,
+                  setFiles,
+                  setFilesLoading,
+                }}
               />
               <div className="mx-auto flex" />
               <TokenUsage index={index} conversation={conversation} isSubmitting={isSubmitting} />

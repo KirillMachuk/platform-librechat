@@ -26,7 +26,7 @@ function AccountSettings({ collapsed = false }: { collapsed?: boolean }) {
         className={
           collapsed
             ? 'tap-target flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-90 hover:bg-surface-hover aria-[expanded=true]:bg-surface-active'
-            : 'flex h-auto w-full items-center gap-2.5 rounded-xl p-1.5 text-sm text-text-secondary transition-colors duration-90 hover:bg-surface-hover aria-[expanded=true]:bg-surface-active'
+            : 'flex h-auto w-full items-center gap-2.5 rounded-xl p-1.5 text-sm text-sidebar-ink transition-colors duration-90 hover:bg-surface-hover aria-[expanded=true]:bg-surface-active'
         }
       >
         <div className={collapsed ? 'size-7 flex-shrink-0' : 'h-8 w-8 flex-shrink-0'}>

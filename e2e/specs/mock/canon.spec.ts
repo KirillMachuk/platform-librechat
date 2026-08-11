@@ -21,6 +21,16 @@ import { NEW_CHAT_PATH, openAccountMenu } from './helpers';
 type FocusResult = { element: string; name: string };
 
 /**
+ * The ONE control allowed to stay visually silent on focus: the composer.
+ * Owner's decision of 11.08 (DESIGN_SYSTEM §6.13, a named exception to §1.8):
+ * the composer wears the sign-in card's dress and does not react to focus or
+ * typing — the caret is its focus mark, and only the send icon answers input.
+ * The exception is by id, not by element kind, so a second silent textarea
+ * anywhere else still turns this spec red.
+ */
+const FOCUS_SILENT_IDS = new Set(['prompt-textarea']);
+
+/**
  * `visited` is how many distinct controls the Tab walk actually landed on — not
  * how many the page has. Without it, a walk that stops moving focus reports an
  * empty list of offenders, which reads exactly like a clean screen.
@@ -111,7 +121,8 @@ async function controlsWithoutVisibleFocus(page: Page, limit = 60): Promise<Focu
       break;
     }
     seen.add(current.index);
-    if (current.unchanged === true) {
+    const silent = [...FOCUS_SILENT_IDS].some((id) => current.element.includes(`#${id}`));
+    if (current.unchanged === true && !silent) {
       unmarked.push({ element: current.element, name: current.name });
     }
   }

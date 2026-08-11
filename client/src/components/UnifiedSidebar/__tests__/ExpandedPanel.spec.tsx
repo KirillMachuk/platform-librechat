@@ -232,19 +232,29 @@ describe('ExpandedPanel', () => {
       const bookmarks = screen.getByTestId('sidebar-link-bookmarks');
       const classesOf = (el: HTMLElement) => el.className.split(/\s+/);
 
-      expect(classesOf(prompts)).toContain('text-text-secondary');
+      /* Owner 11.08: a resting row's label AND icon wear the one sidebar ink
+         (the book's t2/t3 pair read as two random greys to him), and the icon
+         is the book's 20, not the §4 ladder's 18. */
+      expect(classesOf(prompts)).toContain('text-sidebar-ink');
+      expect(classesOf(prompts)).not.toContain('text-text-secondary');
       expect(classesOf(prompts)).not.toContain('bg-surface-active');
+      const restingIcon = bookmarks.querySelector('svg');
+      expect(restingIcon).not.toBeNull();
+      const restingIconClasses = (restingIcon as SVGElement).getAttribute('class')?.split(/\s+/);
+      expect(restingIconClasses).toContain('text-sidebar-ink');
+      expect(restingIconClasses).not.toContain('text-text-tertiary');
+      expect(restingIconClasses).toEqual(expect.arrayContaining(['h-5', 'w-5']));
 
       fireEvent.click(screen.getByRole('button', { name: 'com_ui_prompts' }));
 
       /* Canon §6.5 as the owner rewrote it on 10.08: the selected row is the
-         neutral `active` tint with t1 text — and the t2 it replaces must be
-         gone, or twMerge kept the wrong one of the pair. */
+         neutral `active` tint with t1 text — and the resting ink it replaces
+         must be gone, or twMerge kept the wrong one of the pair. */
       expect(classesOf(prompts)).toContain('bg-surface-active');
       expect(classesOf(prompts)).toContain('text-text-primary');
-      expect(classesOf(prompts)).not.toContain('text-text-secondary');
+      expect(classesOf(prompts)).not.toContain('text-sidebar-ink');
       expect(classesOf(bookmarks)).not.toContain('bg-surface-active');
-      expect(classesOf(bookmarks)).toContain('text-text-secondary');
+      expect(classesOf(bookmarks)).toContain('text-sidebar-ink');
 
       /* The guard, not the decoration: §1.1 excludes a sidebar section from the
          exhaustive list of places the brand petrol may appear, so the petrol

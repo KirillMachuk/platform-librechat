@@ -10,8 +10,9 @@ import React, {
 } from 'react';
 import { Badge } from '@librechat/client';
 import { useRecoilValue, useRecoilCallback } from 'recoil';
+import type { TConversation } from 'librechat-data-provider';
+import type { BadgeItem, ExtendedFile, FileSetter } from '~/common';
 import type { LucideIcon } from '~/components/icons';
-import type { BadgeItem } from '~/common';
 import CodeInterpreter from './CodeInterpreter';
 import { BadgeRowProvider } from '~/Providers';
 import ToolsDropdown from './ToolsDropdown';
@@ -19,6 +20,7 @@ import DeepResearch from './DeepResearch';
 import { useChatBadges } from '~/hooks';
 import ToolDialogs from './ToolDialogs';
 import FileSearch from './FileSearch';
+import PlusSheet from './PlusSheet';
 import Artifacts from './Artifacts';
 import MCPSelect from './MCPSelect';
 import WebSearch from './WebSearch';
@@ -40,6 +42,15 @@ interface BadgeRowProps {
   toolLoopUnavailable?: boolean;
   /** Its name, so the tools menu can say which model cannot use them. */
   activeModel?: string | null;
+  /** Upload wiring for the phone's «+» sheet, which lives inside this row so
+   *  it can read the tool context. Omitted (in tests) — no sheet. */
+  plusSheet?: {
+    conversation: TConversation | null;
+    disableInputs: boolean;
+    files: Map<string, ExtendedFile>;
+    setFiles: FileSetter;
+    setFilesLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  };
 }
 
 interface BadgeWrapperProps {
@@ -159,6 +170,7 @@ function BadgeRow({
   isInChat,
   toolLoopUnavailable,
   activeModel,
+  plusSheet,
 }: BadgeRowProps) {
   const [orderedBadges, setOrderedBadges] = useState<BadgeItem[]>([]);
   const [dragState, dispatch] = useReducer(dragReducer, {
@@ -341,6 +353,18 @@ function BadgeRow({
       activeModel={activeModel}
     >
       <div ref={containerRef} className="relative flex flex-wrap items-center gap-2">
+        {/* The phone's «+»: the book's mobile composer has ONE entry point for
+            uploads and tools, and no separate tools button below md. */}
+        {plusSheet != null && (
+          <PlusSheet
+            conversation={plusSheet.conversation}
+            disableInputs={plusSheet.disableInputs}
+            showEphemeralBadges={showEphemeralBadges === true}
+            files={plusSheet.files}
+            setFiles={plusSheet.setFiles}
+            setFilesLoading={plusSheet.setFilesLoading}
+          />
+        )}
         {showEphemeralBadges === true && <ToolsDropdown />}
         {tempBadges.map((badge, index) => (
           <React.Fragment key={badge.id}>
