@@ -79,6 +79,10 @@ stays green, so flakes accumulate where nobody looks.
 | A reload mid-reply keeps what the server already persisted | e2e | `e2e/specs/mock/chat.spec.ts#a reload mid-reply keeps everything the server had already persisted` | covered |
 | A dropped connection mid-reply loses nothing already received | e2e | — | gap |
 | A dropped connection is noticed and shown to the user | e2e | — | gap |
+| Composer shell never changes its look on focus or typing (owner 11.08) | unit | `client/src/components/Chat/Input/__tests__/ChatForm.spec.tsx#does not change a single class` | covered |
+| Sidebar rows wear one ink on label AND icon (owner 11.08) | unit | `client/src/components/UnifiedSidebar/__tests__/ExpandedPanel.spec.tsx#text-sidebar-ink` | covered |
+| Actions under a user message stay visible during a stream (Copy usable, Edit dimmed) | unit | `client/src/components/Chat/Messages/__tests__/HoverButtons.spec.tsx#disabled and dimmed` | covered |
+| Phone «+» sheet: tiles arm the right picker (Camera adds capture), switch rows drive tool toggles | unit | `client/src/components/Chat/Input/__tests__/PlusSheet.spec.tsx#arms the camera capture` | covered |
 
 ## 3. Message rendering
 
