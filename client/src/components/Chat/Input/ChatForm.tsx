@@ -379,7 +379,10 @@ const ChatForm = memo(function ChatForm({
                 isRTL ? 'flex-row-reverse' : 'flex-row',
               )}
             >
-              <div className={`${isRTL ? 'mr-2' : 'ml-2'}`}>
+              {/* Desktop keeps the paperclip; on the phone the «+» sheet inside
+                  BadgeRow is the one entry point for uploads AND tools (book,
+                  mobile screen: no separate tools button below md). */}
+              <div className={cn('hidden md:block', isRTL ? 'mr-2' : 'ml-2')}>
                 <AttachFileChat
                   conversation={conversation}
                   disableInputs={disableInputs}
@@ -404,6 +407,13 @@ const ChatForm = memo(function ChatForm({
                 isInChat={
                   Array.isArray(conversation?.messages) && conversation.messages.length >= 1
                 }
+                plusSheet={{
+                  conversation,
+                  disableInputs,
+                  files,
+                  setFiles,
+                  setFilesLoading,
+                }}
               />
               <div className="mx-auto flex" />
               <TokenUsage index={index} conversation={conversation} isSubmitting={isSubmitting} />

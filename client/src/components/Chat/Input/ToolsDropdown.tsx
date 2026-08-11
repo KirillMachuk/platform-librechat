@@ -417,7 +417,9 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
           id="tools-dropdown-button"
           aria-label={localize('com_ui_tools_options')}
           className={cn(
-            'tap-target flex size-[38px] items-center justify-center rounded-full p-1 hover:bg-surface-hover focus-visible:outline-none md:size-8',
+            /* hidden below md: on the phone the tools live in the «+» sheet
+               (book: no separate tools button in the mobile composer). */
+            'tap-target hidden size-[38px] items-center justify-center rounded-full p-1 hover:bg-surface-hover focus-visible:outline-none md:flex md:size-8',
             isPopoverActive && 'bg-surface-hover',
           )}
         >

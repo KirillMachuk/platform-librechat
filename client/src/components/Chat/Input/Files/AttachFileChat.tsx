@@ -1,17 +1,7 @@
-import { memo, useMemo } from 'react';
-import {
-  Constants,
-  supportsFiles,
-  mergeFileConfig,
-  isAgentsEndpoint,
-  resolveEndpointType,
-  isAssistantsEndpoint,
-  getEndpointFileConfig,
-} from 'librechat-data-provider';
+import { memo } from 'react';
 import type { TConversation } from 'librechat-data-provider';
 import type { ExtendedFile, FileSetter } from '~/common';
-import { useGetFileConfig, useGetEndpointsQuery, useGetAgentByIdQuery } from '~/data-provider';
-import { useAgentsMapContext } from '~/Providers';
+import useAttachConfig from './useAttachConfig';
 import AttachFileMenu from './AttachFileMenu';
 import AttachFile from './AttachFile';
 
@@ -28,81 +18,18 @@ function AttachFileChat({
   setFiles: FileSetter;
   setFilesLoading: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
-  const conversationId = conversation?.conversationId ?? Constants.NEW_CONVO;
-  const { endpoint } = conversation ?? { endpoint: null };
-  const isAgents = useMemo(() => isAgentsEndpoint(endpoint), [endpoint]);
-  const isAssistants = useMemo(() => isAssistantsEndpoint(endpoint), [endpoint]);
+  /** Which attach behaviour this chat gets is decided in useAttachConfig,
+   *  shared with the phone's «+» sheet — see the hook for the reasoning. */
+  const {
+    attachMode,
+    endpoint,
+    endpointType,
+    endpointFileConfig,
+    useResponsesApi,
+    conversationId,
+  } = useAttachConfig({ conversation, disableInputs });
 
-  const agentsMap = useAgentsMapContext();
-
-  const needsAgentFetch = useMemo(() => {
-    if (!isAgents || !conversation?.agent_id) {
-      return false;
-    }
-    const agent = agentsMap?.[conversation.agent_id];
-    return !agent?.model_parameters;
-  }, [isAgents, conversation?.agent_id, agentsMap]);
-
-  const { data: agentData } = useGetAgentByIdQuery(conversation?.agent_id, {
-    enabled: needsAgentFetch,
-  });
-
-  const useResponsesApi = useMemo(() => {
-    if (!isAgents || !conversation?.agent_id || conversation?.useResponsesApi !== undefined) {
-      return conversation?.useResponsesApi;
-    }
-    return (
-      agentData?.model_parameters?.useResponsesApi ??
-      agentsMap?.[conversation.agent_id]?.model_parameters?.useResponsesApi
-    );
-  }, [isAgents, conversation?.agent_id, conversation?.useResponsesApi, agentData, agentsMap]);
-
-  const { data: fileConfig = null } = useGetFileConfig({
-    select: (data) => mergeFileConfig(data),
-  });
-
-  const { data: endpointsConfig } = useGetEndpointsQuery();
-
-  const agentProvider = useMemo(() => {
-    if (!isAgents || !conversation?.agent_id) {
-      return undefined;
-    }
-    return agentData?.provider ?? agentsMap?.[conversation.agent_id]?.provider;
-  }, [isAgents, conversation?.agent_id, agentData, agentsMap]);
-
-  const endpointType = useMemo(
-    () => resolveEndpointType(endpointsConfig, endpoint, agentProvider),
-    [endpointsConfig, endpoint, agentProvider],
-  );
-
-  const fileConfigEndpoint = useMemo(
-    () => (isAgents && agentProvider ? agentProvider : endpoint),
-    [isAgents, agentProvider, endpoint],
-  );
-  const endpointFileConfig = useMemo(
-    () =>
-      getEndpointFileConfig({
-        fileConfig,
-        endpointType,
-        endpoint: fileConfigEndpoint,
-      }),
-    [fileConfigEndpoint, fileConfig, endpointType],
-  );
-  const endpointSupportsFiles: boolean = useMemo(
-    () => supportsFiles[endpointType ?? endpoint ?? ''] ?? false,
-    [endpointType, endpoint],
-  );
-  const isUploadDisabled = useMemo(
-    () => (disableInputs || endpointFileConfig?.disabled) ?? false,
-    [disableInputs, endpointFileConfig?.disabled],
-  );
-
-  // ChatGPT-style attach: assistants and plain custom/LLM endpoints get a
-  // single paperclip that uploads any supported file immediately (no mode
-  // menu, no per-type accept filter). The file's handling mode is decided by
-  // Auto and surfaced in the toolbar FileMode control. Only real agents keep
-  // the multi-resource menu (code environment, etc.).
-  if ((isAssistants || (!isAgents && endpointSupportsFiles)) && !isUploadDisabled) {
+  if (attachMode === 'direct') {
     return (
       <AttachFile
         disabled={disableInputs}
@@ -112,7 +39,8 @@ function AttachFileChat({
         conversation={conversation}
       />
     );
-  } else if ((isAgents || endpointSupportsFiles) && !isUploadDisabled) {
+  }
+  if (attachMode === 'menu') {
     return (
       <AttachFileMenu
         endpoint={endpoint}
