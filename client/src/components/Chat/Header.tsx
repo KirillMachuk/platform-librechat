@@ -63,8 +63,15 @@ function Header() {
 
   const isSmallScreen = useMediaQuery('(max-width: 768px)');
 
+  /* Непрозрачная подложка, а не градиент: классы с прозрачностью
+     (`via-presentation/70` и соседи) НЕ порождали CSS — цвет объявлен как
+     `var(--presentation)` без плейсхолдера `<alpha-value>`, — поэтому шапка
+     оставалась полупрозрачной на всех ширинах и лента печаталась сквозь неё
+     по её же подписям (§7 «закон шапок»: контент под шапкой не виден).
+     Высота по канону разная: §7 — 56 на телефоне, §4 — 52 на десктопе,
+     чтобы селектор встал на одну ось с логотипом в сайдбаре. */
   return (
-    <div className="via-presentation/70 md:from-presentation/80 md:via-presentation/50 2xl:from-presentation/0 absolute top-0 z-10 flex h-[52px] w-full items-center justify-between bg-gradient-to-b from-presentation to-transparent p-2 font-semibold text-text-primary 2xl:via-transparent">
+    <div className="absolute top-0 z-10 flex h-14 w-full items-center justify-between bg-presentation p-2 font-semibold text-text-primary md:h-[52px]">
       <div className="hide-scrollbar flex w-full items-center justify-between gap-2 overflow-x-auto">
         <div className="mx-1 flex items-center">
           {isSmallScreen ? <OpenSidebar /> : null}

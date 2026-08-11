@@ -37,7 +37,12 @@ export function TemporaryChat() {
             aria-label={localize('com_ui_temporary')}
             aria-pressed={isTemporary}
             className={cn(
-              'tap-target inline-flex size-8 flex-shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary',
+              /* Канон §7: на телефоне кнопка-иконка шапки САМА 44, §6.2: на
+                 десктопе 32 — Header.tsx рендерит эту кнопку в обеих шапках.
+                 `h-11 w-11 … md:h-8 md:w-8`, а не `size-*`: tailwind-merge 1.14
+                 группу `size-*` не знает, пара базовый/md через неё не
+                 прошла бы. */
+              'tap-target inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary md:h-8 md:w-8',
               /* Канон §7: включённый временный чат — `acc` на `acc-soft`.
                  Выключенный — обычная кнопка-иконка, без заливки и тени. */
               isTemporary && 'bg-acc-soft text-text-accent hover:text-text-accent',

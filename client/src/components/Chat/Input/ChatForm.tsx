@@ -264,7 +264,7 @@ const ChatForm = memo(function ChatForm({
     <form
       onSubmit={methods.handleSubmit(submitMessage)}
       className={cn(
-        'mx-auto flex w-full flex-row gap-3 px-2.5 transition-[max-width] duration-300 md:px-0',
+        'mx-auto flex w-full flex-row gap-3 px-2.5 pb-[calc(14px+env(safe-area-inset-bottom,0px))] transition-[max-width] duration-300 sm:pb-0 md:px-0',
         chatColumnClass(maximizeChatSpace),
         centerFormOnLanding &&
           (conversationId == null || conversationId === Constants.NEW_CONVO) &&
@@ -302,7 +302,7 @@ const ChatForm = memo(function ChatForm({
           <div
             onClick={handleContainerClick}
             className={cn(
-              'relative flex w-full flex-grow flex-col overflow-hidden rounded-t-3xl border pb-4 text-text-primary transition-all duration-200 sm:rounded-3xl sm:pb-0',
+              'relative flex w-full flex-grow flex-col overflow-hidden rounded-3xl border text-text-primary transition-all duration-200',
               // Канон §6.4: фокус поля — рамка `acc` и кольцо 3px `acc-soft`.
               // Смена тени с md на lg фокусом не считается: на глаз она не
               // читается, и человек, дошедший до композера по Tab, не понимал,

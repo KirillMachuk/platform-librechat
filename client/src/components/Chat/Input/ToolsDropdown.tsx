@@ -422,7 +422,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
           )}
         >
           <div className="flex w-full items-center justify-center gap-2">
-            <Settings2 className="size-5" aria-hidden="true" />
+            <Settings2 className="icon-md" aria-hidden="true" />
           </div>
         </Ariakit.MenuButton>
       }
