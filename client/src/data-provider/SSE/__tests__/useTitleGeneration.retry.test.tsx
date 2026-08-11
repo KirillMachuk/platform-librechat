@@ -46,6 +46,14 @@ const getActiveJobs = dataService.getActiveJobs as jest.Mock;
 /** One initial attempt plus the three 404 retries the hook is allowed. */
 const ATTEMPTS_PER_CYCLE = 4;
 
+/** Simulated quiet stretch used to prove the polling really stopped. */
+const IDLE_WINDOW_MS = 5 * 60_000;
+
+/* Simulated time is advanced in one-second slices, so a case walks through
+ * hundreds of React commits. Well under a second here, but the default 5s
+ * budget is close enough to a loaded CI runner to be worth widening. */
+jest.setTimeout(30_000);
+
 /** Axios-shaped failure, matching what `request.get` rejects with. */
 function httpError(status: number): Error {
   const err = new Error(`Request failed with status code ${status}`) as Error & {
@@ -114,7 +122,7 @@ describe('useTitleGeneration — request budget on a 404ing endpoint', () => {
     await tick(60_000);
     const settled = genTitle.mock.calls.length;
 
-    await tick(12 * 60_000);
+    await tick(IDLE_WINDOW_MS);
 
     expect(settled).toBe(ATTEMPTS_PER_CYCLE);
     expect(genTitle).toHaveBeenCalledTimes(ATTEMPTS_PER_CYCLE);
@@ -156,7 +164,7 @@ describe('useTitleGeneration — request budget on a 404ing endpoint', () => {
     await tick(60_000);
     expect(genTitle).toHaveBeenCalledTimes(2 * ATTEMPTS_PER_CYCLE);
 
-    await tick(12 * 60_000);
+    await tick(IDLE_WINDOW_MS);
     expect(genTitle).toHaveBeenCalledTimes(2 * ATTEMPTS_PER_CYCLE);
   });
 
