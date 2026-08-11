@@ -2015,6 +2015,34 @@ describe('Code Process', () => {
       filterFilesByAgentAccess.mockImplementation(({ files }) => Promise.resolve(files));
     }
 
+    it('uses the exact sandbox filename without changing the visible DB filename', async () => {
+      setupSessionInfoOk();
+      const dbFile = makeFile({
+        filename: 'Совет директоров.pptx',
+        metadata: {
+          codeEnvRef: {
+            kind: 'user',
+            id: 'user-123',
+            storage_session_id: 'CURRENT_SESSION',
+            file_id: 'CURRENT_ID',
+            filename: 'Совет_директоров.pptx',
+          },
+        },
+      });
+      getFiles.mockResolvedValue([dbFile]);
+
+      const result = await primeFiles({
+        req: { user: { id: 'user-123', role: 'USER' } },
+        tool_resources: { execute_code: { file_ids: [dbFile.file_id], files: [] } },
+        agentId: 'agent-id',
+      });
+
+      expect(result.files).toEqual([expect.objectContaining({ name: 'Совет_директоров.pptx' })]);
+      expect(result.toolContext).toContain('/mnt/data/Совет_директоров.pptx');
+      expect(result.toolContext).not.toContain('/mnt/data/Совет директоров.pptx');
+      expect(dbFile.filename).toBe('Совет директоров.pptx');
+    });
+
     it('does not include generated code files in model-visible toolContext', async () => {
       setupSessionInfoOk();
       getFiles.mockResolvedValue([

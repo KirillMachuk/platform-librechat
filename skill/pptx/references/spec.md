@@ -177,7 +177,7 @@ The builder writes `<output>.artifact-report.json` next to the presentation. Con
   "changeLog": [
     { "target": "Presentation", "summary": "Created a new decision deck" }
   ],
-  "skillVersion": "3.0.0",
+  "skillVersion": "3.1.0",
   "repairIterations": 0
 }
 ```

@@ -47,6 +47,40 @@ describe('File Methods', () => {
   });
 
   describe('createFile', () => {
+    it('persists the exact sandbox filename alongside the user-facing filename', async () => {
+      const fileId = uuidv4();
+      const userId = new mongoose.Types.ObjectId();
+      /* Keep the fixture as a variable so this package can type-check before
+       * the sibling data-provider package's generated declarations are rebuilt
+       * in a fresh workspace. The canonical source type is covered in
+       * `codeEnvRef.spec.ts`; this test verifies Mongoose persistence. */
+      const codeEnvRef = {
+        kind: 'user' as const,
+        id: userId.toString(),
+        storage_session_id: 'session-1',
+        file_id: 'sandbox-file-1',
+        filename: 'Совет_директоров.pptx',
+      };
+
+      const file = await fileMethods.createFile(
+        {
+          file_id: fileId,
+          user: userId,
+          filename: 'Совет директоров.pptx',
+          filepath: '/uploads/deck.pptx',
+          type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          bytes: 2048,
+          metadata: { codeEnvRef },
+        },
+        true,
+      );
+
+      expect(file?.filename).toBe('Совет директоров.pptx');
+      expect((file?.metadata?.codeEnvRef as { filename?: string } | undefined)?.filename).toBe(
+        'Совет_директоров.pptx',
+      );
+    });
+
     it('should create a new file with TTL', async () => {
       const fileId = uuidv4();
       const userId = new mongoose.Types.ObjectId();

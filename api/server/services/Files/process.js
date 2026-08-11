@@ -137,6 +137,69 @@ const createSanitizedUploadWrapper = (uploadFunction) => {
 
 const hasCodeEnvRef = (file) => file?.metadata?.codeEnvRef != null;
 
+const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+
+/**
+ * A small PowerPoint attached in Auto mode is routed through `context`: the
+ * model receives extracted text while the original stays in durable storage
+ * for preview/download. Revision work also needs the original binary inside
+ * the code sandbox. Persist a second, user-scoped code-environment reference
+ * for message-attached PPTX files so both use cases work from the same upload.
+ *
+ * This is intentionally PPTX-only for the first presentation-quality release.
+ * It does not make macros or legacy PowerPoint formats executable/editable, and
+ * it never changes the primary storage source. Failure is non-fatal: reading,
+ * previewing, and downloading the attachment must continue to work even if the
+ * optional sandbox copy is temporarily unavailable.
+ *
+ * @param {object} params
+ * @param {ServerRequest} params.req
+ * @param {Express.Multer.File} params.file
+ * @param {boolean} params.messageAttachment
+ * @param {string} params.toolResource
+ * @returns {Promise<object | null>}
+ */
+const uploadAttachedPptxToCodeEnv = async ({ req, file, messageAttachment, toolResource }) => {
+  const isPptx =
+    file?.mimetype === PPTX_MIME ||
+    path.extname(file?.originalname ?? '').toLowerCase() === '.pptx';
+  if (!messageAttachment || !isPptx || toolResource === EToolResources.execute_code) {
+    return null;
+  }
+  const sandboxFilename = sanitizeFilename(file.filename || file.originalname);
+
+  try {
+    if (!(await checkCapability(req, AgentCapabilities.execute_code))) {
+      return null;
+    }
+    const { handleFileUpload } = getStrategyFunctions(FileSources.execute_code);
+    /* Multer already wrote the temporary upload under the exact sanitized
+     * basename in `file.filename`. Persist that name with the sandbox ref so
+     * priming can describe and inject the real `/mnt/data` path while the DB's
+     * top-level `filename` remains the original user-facing Cyrillic name. The
+     * fallback covers tests and non-multer callers. */
+    const uploaded = await handleFileUpload({
+      req,
+      stream: fs.createReadStream(file.path),
+      filename: sandboxFilename,
+      kind: 'user',
+      id: req.user.id,
+    });
+    return {
+      kind: 'user',
+      id: req.user.id,
+      storage_session_id: uploaded.storage_session_id,
+      file_id: uploaded.file_id,
+      filename: sandboxFilename,
+    };
+  } catch (error) {
+    logger.warn(
+      `[processAgentFileUpload] Could not stage editable PPTX "${sandboxFilename}" in the code environment; continuing with the retained original: ${error.message}`,
+    );
+    return null;
+  }
+};
+
 /**
  * Compensating delete for the synchronous file_search path: storage is written
  * first, then vectors are embedded. If the embed throws, the storage object is
@@ -1162,6 +1225,12 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         storageKey: stored.storageKey,
         storageRegion: stored.storageRegion,
       });
+      const codeEnvRef = await uploadAttachedPptxToCodeEnv({
+        req,
+        file,
+        messageAttachment,
+        toolResource: tool_resource,
+      });
 
       /* "Index everything" for cross-chat library_search: a `context` file is
        * read as full text in this chat, but we ALSO embed it (async) so the
@@ -1194,6 +1263,7 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
           tenantId: req.user.tenantId,
           filepath: stored.filepath,
           source: storageSource,
+          metadata: codeEnvRef ? { codeEnvRef } : undefined,
           temporary,
           ...storageMetadata,
           ...(indexForLibrary
@@ -1591,6 +1661,18 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
       storageKey: result.storageKey,
       storageRegion: result.storageRegion,
     });
+  }
+
+  if (tool_resource !== EToolResources.execute_code) {
+    const codeEnvRef = await uploadAttachedPptxToCodeEnv({
+      req,
+      file,
+      messageAttachment,
+      toolResource: tool_resource,
+    });
+    if (codeEnvRef) {
+      fileInfoMetadata = { ...(fileInfoMetadata ?? {}), codeEnvRef };
+    }
   }
 
   const retentionExpiry = await getAgentFileRetentionExpiry({

@@ -33,7 +33,8 @@ jest.mock('@librechat/agents', () => ({
 }));
 
 import { Providers } from '@librechat/agents';
-import { EModelEndpoint, EToolResources, Tools } from 'librechat-data-provider';
+import { Constants, EModelEndpoint, EToolResources, Tools } from 'librechat-data-provider';
+import type { IMongoFile } from '@librechat/data-schemas';
 import type { Agent } from 'librechat-data-provider';
 import type { ServerRequest, InitializeResultBase, EndpointTokenConfig } from '~/types';
 import type { InitializeAgentDbMethods } from '../initialize';
@@ -1941,6 +1942,63 @@ describe('initializeAgent — code-generated file thread filter (regression)', (
      * design that closes the sibling-branch hole. */
     expect(getUserCodeFiles).toHaveBeenCalledWith(['file-pptx-skill', 'file-output-csv'], {
       userId: 'user-1',
+      tenantId: undefined,
+    });
+  });
+
+  it('counts a dual-stored editable document once when search and code queries both return it', async () => {
+    const { agent, req, res, loadTools, db } = setupExecuteCodeAgent();
+    agent.tools = ['execute_code', 'file_search'];
+    const dualFile = {
+      file_id: 'editable-deck',
+      filename: 'board-deck.pptx',
+      embedded: true,
+      metadata: {
+        codeEnvRef: {
+          kind: 'user',
+          id: 'user-1',
+          storage_session_id: 'sess',
+          file_id: 'fid',
+        },
+      },
+    } as unknown as IMongoFile;
+    mockGetThreadData.mockReturnValue({
+      messageIds: ['msgN'],
+      fileIds: ['editable-deck'],
+    });
+
+    const getMessages = jest.fn().mockResolvedValue([
+      {
+        messageId: 'msgN',
+        parentMessageId: Constants.NO_PARENT,
+        files: [{ file_id: 'editable-deck' }],
+      },
+    ]);
+    const getCodeGeneratedFiles = jest.fn().mockResolvedValue([]);
+    const getUserCodeFiles = jest.fn().mockResolvedValue([dualFile]);
+    db.getConvoFiles = jest.fn().mockResolvedValue(['editable-deck']);
+    db.getToolFilesByIds = jest.fn().mockResolvedValue([dualFile]);
+    db.updateFilesUsage = jest.fn().mockImplementation(async (files) => files);
+
+    await initializeAgent(
+      {
+        req,
+        res,
+        agent,
+        loadTools,
+        endpointOption: { endpoint: EModelEndpoint.agents },
+        conversationId: 'conv-1',
+        parentMessageId: 'msgN',
+        allowedProviders: new Set([Providers.OPENAI]),
+        isInitialAgent: true,
+        codeEnvAvailable: true,
+      },
+      { ...db, getMessages, getCodeGeneratedFiles, getUserCodeFiles },
+    );
+
+    expect(db.updateFilesUsage).toHaveBeenCalledTimes(1);
+    expect(db.updateFilesUsage).toHaveBeenCalledWith([dualFile], undefined, {
+      user: 'user-1',
       tenantId: undefined,
     });
   });

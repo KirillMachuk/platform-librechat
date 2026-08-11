@@ -116,6 +116,7 @@ const skillFileSchema: Schema<ISkillFileDocument> = new Schema(
           id: { type: String, required: true },
           storage_session_id: { type: String, required: true },
           file_id: { type: String, required: true },
+          filename: { type: String },
           version: { type: Number },
         },
         { _id: false },

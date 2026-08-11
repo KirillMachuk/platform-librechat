@@ -4,8 +4,8 @@
  * agents `ToolNode` (forward to codeapi). This file just pins the
  * shape so a future refactor can't silently widen or narrow the
  * fields without surfacing here. */
-import { CODE_ENV_KINDS } from './codeEnvRef';
 import type { CodeEnvKind, CodeEnvRef } from './codeEnvRef';
+import { CODE_ENV_KINDS } from './codeEnvRef';
 
 describe('CodeEnvRef', () => {
   it('accepts the canonical shape for kind: skill', () => {
@@ -26,8 +26,10 @@ describe('CodeEnvRef', () => {
       id: 'user_456',
       storage_session_id: 'sess_def',
       file_id: 'file_uvw',
+      filename: 'Совет_директоров.pptx',
     };
     expect(ref.kind).toBe('user');
+    expect(ref.filename).toBe('Совет_директоров.pptx');
     /* `version` is statically absent on the user variant of the
      * discriminated union — the property doesn't exist on the type, so
      * accessing it would be a compile error. Probe at runtime via an
