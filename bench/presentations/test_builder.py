@@ -375,6 +375,41 @@ class PresentationBuilderTests(unittest.TestCase):
             )
         )
 
+    def test_targeted_edit_qa_refuses_to_vouch_for_a_duplicate_part_package(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source = root / "source.pptx"
+            _save(_base_spec(source.name), source)
+            duplicated = root / "duplicated.pptx"
+            with zipfile.ZipFile(source) as original, zipfile.ZipFile(duplicated, "w") as clone:
+                for info in original.infolist():
+                    clone.writestr(info, original.read(info.filename))
+                clone.writestr("ppt/slides/slide3.xml", original.read("ppt/slides/slide3.xml"))
+            output = root / "updated.pptx"
+            spec = {
+                "job": _job(output.name),
+                "inputPath": str(duplicated),
+                "edits": [
+                    {
+                        "slide": 3,
+                        "replacements": {"+41% к 2026 году": "+44% к 2026 году"},
+                    }
+                ],
+            }
+            _save(spec, output)
+
+            checks, issues = BUILDER._check_structure(output, spec)
+
+        scope_check = next(check for check in checks if check["name"] == "targeted-edit-scope")
+        self.assertEqual(scope_check["status"], "failed")
+        self.assertIn("ValueError", scope_check["message"])
+        self.assertTrue(
+            any(
+                issue["code"] == "edit-scope" and issue["severity"] == "critical"
+                for issue in issues
+            )
+        )
+
     def test_skill_runtime_contract_keeps_scratch_and_final_files_separate(self):
         instructions = (ROOT / "skill/pptx/SKILL.md").read_text(encoding="utf-8")
 

@@ -131,6 +131,15 @@ def _sha256(path: Path) -> str:
 def _changed_package_parts(source: Path, output: Path) -> set[str]:
     """Return OPC package parts whose payload changed, appeared, or disappeared."""
     with zipfile.ZipFile(source) as before, zipfile.ZipFile(output) as after:
+        # A valid OPC package names every part once. A duplicate central-directory
+        # entry would collapse into one set member and `getinfo` would silently pick
+        # a single one, so the comparison could report an unchanged part while the
+        # other copy was dropped or rewritten. Refuse to answer instead of vouching
+        # for scope the comparison cannot actually establish; the caller fails closed.
+        for archive, label in ((before, "source"), (after, "output")):
+            names = archive.namelist()
+            if len(names) != len(set(names)):
+                raise ValueError(f"duplicate part names in the {label} package")
         before_names = set(before.namelist())
         after_names = set(after.namelist())
         changed = before_names ^ after_names
