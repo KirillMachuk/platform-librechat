@@ -181,7 +181,7 @@ const AttachFileMenu = ({
         </Ariakit.MenuButton>
       }
       id="attach-file-menu-button"
-      description={localize('com_sidepanel_attach_files')}
+      description={localize('com_ui_attach_files')}
       disabled={isUploadDisabled}
     />
   );

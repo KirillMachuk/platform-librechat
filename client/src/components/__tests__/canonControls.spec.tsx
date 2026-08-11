@@ -80,7 +80,13 @@ describe('the canon a field carries', () => {
 
   it('leaves the border to FIELD_BORDER, so an error can replace just that', () => {
     expect(FIELD_BASE).not.toMatch(/\bborder-border-/);
-    expect(FIELD_BORDER).toContain('border-border-control');
+    /* §6.4 ред. 11.08-3: покой — волосяная линия + тень sm (владелец снял
+       рамку `control` со всех полей: «чёрная полоса»); контраст ≥3:1 несёт
+       ФОКУС — потемнение рамки до чернил, которое обязано остаться. */
+    expect(FIELD_BORDER).toContain('border-border-light');
+    expect(FIELD_BORDER).toContain('shadow-sm');
+    expect(FIELD_BORDER).not.toContain('border-border-control');
+    expect(FIELD_BORDER).toContain('focus-visible:border-border-focus');
     expect(FIELD_BORDER).toContain('focus-visible:ring-ring-primary-soft');
   });
 });

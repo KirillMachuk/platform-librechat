@@ -50,6 +50,10 @@ jest.mock('@librechat/client', () => {
     }) => R.cloneElement(render, {}, ...(Array.isArray(children) ? children : [children])),
     MCPIcon: ({ className }: { className?: string }) => R.createElement('span', { className }),
     Spinner: ({ className }: { className?: string }) => R.createElement('span', { className }),
+    /* Sentinels, not the real strings: the tests below assert the MCP pill
+       draws from the shared chip recipe rather than what the recipe says. */
+    CHIP_BASE: 'test-chip-base',
+    CHIP_CHECKED: 'test-chip-checked',
   };
 });
 
@@ -80,6 +84,25 @@ describe('MCPSelect', () => {
   it('renders the menu button', () => {
     render(<MCPSelect />);
     expect(screen.getByRole('button', { name: /MCP Servers/i })).toBeInTheDocument();
+  });
+
+  /* §6.3: the MCP pill is a tool chip — same shared recipe, same 34 height,
+     and the neutral "on" fill once servers are selected. It used to carry its
+     own hand-copied 36px look, which the owner read as a stray white pill. */
+  it('wears the shared chip recipe', () => {
+    render(<MCPSelect />);
+    const button = screen.getByRole('button', { name: /MCP Servers/i });
+    expect(button.className).toContain('test-chip-base');
+    expect(button.className).toContain('h-[34px]');
+    expect(button.className).not.toContain('test-chip-checked');
+  });
+
+  it('wears the checked chip fill when servers are selected', () => {
+    mockMcpServerManager = { ...defaultMcpServerManager, mcpValues: ['server-a'] };
+    render(<MCPSelect />);
+    const button = screen.getByRole('button', { name: /Server A/i });
+    expect(button.className).toContain('test-chip-base');
+    expect(button.className).toContain('test-chip-checked');
   });
 
   it('opens menu on button click and shows server items', async () => {

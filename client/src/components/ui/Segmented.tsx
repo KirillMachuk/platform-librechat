@@ -95,7 +95,11 @@ export function Segmented<T extends string>({
             onClick={() => onChange(item.id)}
             onKeyDown={(event) => handleKeyDown(event, index)}
             className={cn(
-              'h-11 min-w-0 flex-1 truncate rounded-[9px] px-3 text-[15px] font-medium transition-colors duration-90 md:h-[30px] md:text-[13px]',
+              /* Tab heights derive from the field (§6.4): track = tab + 2×3px
+                 pad + 2px border must equal the control height, 48 phone / 36
+                 desktop — next to a search field the old 52/38 track read as
+                 "taller for no reason" (owner, 11.08-3). */
+              'h-10 min-w-0 flex-1 truncate rounded-[9px] px-3 text-[15px] font-medium transition-colors duration-90 md:h-[28px] md:text-[13px]',
               /* Not ring-primary: in the dark theme it resolves to the same grey
                  as surface-active, so the ring on the selected tab was 1:1. */
               'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-primary',
