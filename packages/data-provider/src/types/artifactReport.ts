@@ -68,13 +68,30 @@ export const artifactReportSchema = z
     format: artifactFormatSchema,
     sourceFileIds: z.array(z.string()),
     previewAssets: z.array(artifactPreviewAssetSchema),
-    qaChecks: z.array(artifactQACheckSchema),
+    qaChecks: z.array(artifactQACheckSchema).min(1),
     issues: z.array(artifactIssueSchema),
     changeLog: z.array(artifactChangeSchema),
     skillVersion: z.string().min(1),
     repairIterations: z.number().int().min(0).max(2),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((report, context) => {
+    if (report.status !== 'ready') {
+      return;
+    }
+
+    const hasFailedCheck = report.qaChecks.some((check) => check.status === 'failed');
+    const hasCriticalIssue = report.issues.some((issue) => issue.severity === 'critical');
+    if (!hasFailedCheck && !hasCriticalIssue) {
+      return;
+    }
+
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['status'],
+      message: 'Ready reports cannot contain failed QA checks or critical issues',
+    });
+  });
 
 export type TArtifactFormat = z.infer<typeof artifactFormatSchema>;
 export type TArtifactJob = z.infer<typeof artifactJobSchema>;

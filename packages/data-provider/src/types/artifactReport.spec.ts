@@ -15,6 +15,53 @@ describe('artifactReportSchema', () => {
       artifactReportSchema.parse({ ...pptxArtifactReportFixture, repairIterations: 3 }),
     ).toThrow();
   });
+
+  it('rejects ready reports without QA evidence', () => {
+    expect(
+      artifactReportSchema.safeParse({ ...pptxArtifactReportFixture, qaChecks: [] }).success,
+    ).toBe(false);
+  });
+
+  it('rejects ready reports with a failed QA check', () => {
+    expect(
+      artifactReportSchema.safeParse({
+        ...pptxArtifactReportFixture,
+        qaChecks: [{ name: 'render', status: 'failed', message: 'Title is clipped' }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects ready reports with a critical issue', () => {
+    expect(
+      artifactReportSchema.safeParse({
+        ...pptxArtifactReportFixture,
+        issues: [
+          {
+            code: 'clipped-title',
+            severity: 'critical',
+            message: 'The title is clipped',
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('accepts explicit needs_review reports with failed QA evidence', () => {
+    expect(
+      artifactReportSchema.safeParse({
+        ...pptxArtifactReportFixture,
+        status: 'needs_review',
+        qaChecks: [{ name: 'render', status: 'failed', message: 'Title is clipped' }],
+        issues: [
+          {
+            code: 'clipped-title',
+            severity: 'critical',
+            message: 'The title is clipped',
+          },
+        ],
+      }).success,
+    ).toBe(true);
+  });
 });
 
 describe('artifactJobSchema', () => {

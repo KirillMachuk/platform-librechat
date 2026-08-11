@@ -7,17 +7,16 @@ const mockAxios = jest.fn();
 jest.mock('librechat-data-provider', () => {
   const actual = jest.requireActual('librechat-data-provider');
   const { z } = require('zod');
-  return {
-    ...actual,
-    artifactReportSchema: z
-      .object({
-        status: z.enum(['ready', 'needs_review']),
-        format: z.enum(['pptx', 'docx', 'xlsx', 'pdf', 'csv']),
-        sourceFileIds: z.array(z.string()),
-        previewAssets: z.array(
-          z.object({ filename: z.string().min(1), kind: z.enum(['pdf', 'image']) }).passthrough(),
-        ),
-        qaChecks: z.array(
+  const artifactReportSchema = z
+    .object({
+      status: z.enum(['ready', 'needs_review']),
+      format: z.enum(['pptx', 'docx', 'xlsx', 'pdf', 'csv']),
+      sourceFileIds: z.array(z.string()),
+      previewAssets: z.array(
+        z.object({ filename: z.string().min(1), kind: z.enum(['pdf', 'image']) }).passthrough(),
+      ),
+      qaChecks: z
+        .array(
           z
             .object({
               name: z.string().min(1),
@@ -25,15 +24,45 @@ jest.mock('librechat-data-provider', () => {
               message: z.string(),
             })
             .passthrough(),
-        ),
-        issues: z.array(z.object({ code: z.string() }).passthrough()),
-        changeLog: z.array(
-          z.object({ target: z.string().min(1), summary: z.string().min(1) }).passthrough(),
-        ),
-        skillVersion: z.string().min(1),
-        repairIterations: z.number().int().min(0).max(2),
-      })
-      .passthrough(),
+        )
+        .min(1),
+      issues: z.array(
+        z
+          .object({
+            code: z.string().min(1),
+            severity: z.enum(['warning', 'critical']),
+            message: z.string().min(1),
+          })
+          .passthrough(),
+      ),
+      changeLog: z.array(
+        z.object({ target: z.string().min(1), summary: z.string().min(1) }).passthrough(),
+      ),
+      skillVersion: z.string().min(1),
+      repairIterations: z.number().int().min(0).max(2),
+    })
+    .passthrough()
+    .superRefine((report, context) => {
+      if (report.status !== 'ready') {
+        return;
+      }
+
+      const hasFailedCheck = report.qaChecks.some((check) => check.status === 'failed');
+      const hasCriticalIssue = report.issues.some((issue) => issue.severity === 'critical');
+      if (!hasFailedCheck && !hasCriticalIssue) {
+        return;
+      }
+
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['status'],
+        message: 'Ready reports cannot contain failed QA checks or critical issues',
+      });
+    });
+
+  return {
+    ...actual,
+    artifactReportSchema,
   };
 });
 
@@ -151,6 +180,41 @@ describe('artifact report sidecars', () => {
 
     expect(reports).toHaveProperty('size', 0);
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('does not match'));
+  });
+
+  it('ignores a ready report whose own QA evidence failed', async () => {
+    mockAxios.mockResolvedValue({
+      data: Buffer.from(
+        JSON.stringify({
+          ...validReport,
+          qaChecks: [{ name: 'render', status: 'failed', message: 'Title is clipped' }],
+          issues: [
+            {
+              code: 'clipped-title',
+              severity: 'critical',
+              message: 'The title is clipped',
+            },
+          ],
+        }),
+      ),
+    });
+
+    const reports = await collectArtifactReports({
+      req,
+      files: [
+        { id: 'pptx-id', name: 'board-deck.pptx', session_id: 'session-1' },
+        {
+          id: 'report-id',
+          name: 'board-deck.pptx.artifact-report.json',
+          session_id: 'session-1',
+        },
+      ],
+    });
+
+    expect(reports).toHaveProperty('size', 0);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Ready reports cannot contain failed QA checks or critical issues'),
+    );
   });
 
   it('rejects oversized or MongoDB-unsafe report payloads', () => {
