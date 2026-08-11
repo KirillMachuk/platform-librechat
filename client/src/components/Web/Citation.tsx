@@ -126,6 +126,38 @@ export function CompositeCitation(props: CompositeCitationProps) {
         filePages={filePages}
         fileRelevance={fileRelevance}
       >
+        {/* GPT's card header (owner 11.08): the pager lives on TOP — arrows
+         * left, «N/M» right — and the source body reads underneath. */}
+        {totalPages > 1 && (
+          <div className="mb-2 flex items-center justify-between border-b border-border-light pb-2">
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handlePrevPage}
+                disabled={currentPage === 0}
+                className="size-7"
+                aria-label={localize('com_ui_source_prev')}
+              >
+                <ChevronLeft className="size-3.5" aria-hidden="true" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages - 1}
+                className="size-7"
+                aria-label={localize('com_ui_source_next')}
+              >
+                <ChevronRight className="size-3.5" aria-hidden="true" />
+              </Button>
+            </div>
+            <span
+              className="text-[12.5px] tabular-nums text-text-secondary"
+              aria-live="polite"
+            >{`${currentPage + 1}/${totalPages}`}</span>
+          </div>
+        )}
         {isFileType ? (
           <>
             <div className="flex items-center gap-2">
@@ -156,72 +188,25 @@ export function CompositeCitation(props: CompositeCitationProps) {
                 {currentSource.snippet}
               </p>
             )}
-            {totalPages > 1 && (
-              <div className="mt-2 flex items-center gap-1 border-t border-border-light pt-2">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={handlePrevPage}
-                  disabled={currentPage === 0}
-                  className="size-7"
-                  aria-label={localize('com_ui_source_prev')}
-                >
-                  <ChevronLeft className="size-3.5" aria-hidden="true" />
-                </Button>
-                {sources.map((source, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setCurrentPage(i);
-                    }}
-                    className={`flex size-6 items-center justify-center rounded text-xs transition-colors ${
-                      i === currentPage
-                        ? 'bg-surface-hover font-medium text-text-primary'
-                        : 'text-text-secondary hover:bg-surface-hover'
-                    }`}
-                    aria-label={`Source ${i + 1}`}
-                    aria-current={i === currentPage ? 'true' : undefined}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={handleNextPage}
-                  disabled={currentPage === totalPages - 1}
-                  className="size-7"
-                  aria-label={localize('com_ui_source_next')}
-                >
-                  <ChevronRight className="size-3.5" aria-hidden="true" />
-                </Button>
-              </div>
-            )}
           </>
         ) : (
           <>
-            <div className="mb-1.5 overflow-hidden text-sm">
-              <FaviconImage
-                domain={getCleanDomain(currentSource.link || '')}
-                className="float-left mr-2 mt-0.5"
-              />
-              <span className="float-right ml-2 max-w-[40%] truncate text-xs text-text-secondary">
+            <div className="mb-1.5 flex items-center gap-2">
+              <FaviconImage domain={getCleanDomain(currentSource.link || '')} />
+              <span className="min-w-0 truncate text-[12.5px] text-text-secondary">
                 {getCleanDomain(currentSource.link || '')}
               </span>
-              <a
-                href={currentSource.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium text-text-primary hover:underline"
-              >
-                {currentSource.title}
-              </a>
             </div>
+            <a
+              href={currentSource.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block truncate text-sm font-medium text-text-primary hover:underline"
+            >
+              {currentSource.title || currentSource.link}
+            </a>
             {currentSource.snippet && (
-              <p className="line-clamp-4 break-words text-xs text-text-secondary md:text-sm">
+              <p className="mt-1.5 line-clamp-4 break-words text-[12.5px] leading-5 text-text-secondary">
                 {currentSource.snippet}
               </p>
             )}
