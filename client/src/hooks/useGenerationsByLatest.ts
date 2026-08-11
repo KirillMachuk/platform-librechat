@@ -58,12 +58,13 @@ export default function useGenerationsByLatest({
   const regenerateEnabled =
     !isCreatedByUser && !searchResult && !isEditing && !isSubmitting && branchingSupported;
 
-  const hideEditButton =
-    isSubmitting ||
-    error ||
-    searchResult ||
-    !branchingSupported ||
-    (!isEditableEndpoint && !isCreatedByUser);
+  /** This message can never be edited in this chat — an error turn, a search
+   *  result, or an endpoint without branching. A RUNNING generation is not in
+   *  here on purpose: that is a temporary state, and the owner's rule for the
+   *  action row is that buttons stay visible — the caller disables the edit
+   *  button for the stream's duration instead of vanishing it. */
+  const editUnavailable =
+    error || searchResult || !branchingSupported || (!isEditableEndpoint && !isCreatedByUser);
 
   const forkingSupported = !isAssistantsEndpoint(endpoint) && !searchResult;
 
@@ -72,6 +73,6 @@ export default function useGenerationsByLatest({
     continueSupported,
     regenerateEnabled,
     isEditableEndpoint,
-    hideEditButton,
+    editUnavailable,
   };
 }
