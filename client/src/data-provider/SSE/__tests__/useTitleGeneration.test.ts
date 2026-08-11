@@ -4,8 +4,12 @@
  * Complements the helper unit tests in `queries.test.ts` by driving the REAL
  * hook (real React state/effects) with a controllable react-query surface, so
  * the stateful decisions — immediate-vs-final eligibility, success application,
- * defer-while-active, and the post-completion `resetQueries` remount — are
+ * defer-while-active, and giving up once a cycle has run post-completion — are
  * deterministically locked down without timer/async flakiness.
+ *
+ * react-query being mocked here means the real `retry`/`retryDelay` options never
+ * execute: the request budget they produce is pinned in
+ * `useTitleGeneration.retry.test.tsx`, which drives a real QueryClient.
  *
  * `~/utils` re-exports from `@librechat/client` (framer-motion peer, absent in
  * jsdom); mocked to the two symbols the hook uses. react-query is mocked so we
