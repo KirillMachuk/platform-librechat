@@ -648,6 +648,7 @@ const DOWNLOAD_METADATA_FIELDS = [
   'textFormat',
   'status',
   'previewError',
+  'artifactReport',
   'createdAt',
   'updatedAt',
 ];

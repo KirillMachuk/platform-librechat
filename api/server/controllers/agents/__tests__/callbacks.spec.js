@@ -1,4 +1,5 @@
 const { Tools } = require('librechat-data-provider');
+const mockCollectArtifactReports = jest.fn(async () => new Map());
 
 // Mock all dependencies before requiring the module
 jest.mock('nanoid', () => ({
@@ -56,6 +57,14 @@ jest.mock('~/server/services/Files/Code/process', () => ({
   },
 }));
 
+jest.mock('~/server/services/Files/Code/artifactReports', () => ({
+  collectArtifactReports: (...args) => mockCollectArtifactReports(...args),
+  getArtifactReportTargetName: (name) =>
+    /\.(pptx|docx|xlsx|pdf|csv)\.artifact-report\.json$/i.test(name)
+      ? name.replace(/\.artifact-report\.json$/i, '')
+      : null,
+}));
+
 jest.mock('~/server/services/Tools/credentials', () => ({
   loadAuthValues: jest.fn(),
 }));
@@ -70,6 +79,7 @@ describe('createToolEndCallback', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCollectArtifactReports.mockResolvedValue(new Map());
 
     // Get the mocked logger
     logger = require('@librechat/data-schemas').logger;
@@ -397,6 +407,58 @@ describe('createToolEndCallback', () => {
       const dataLine = frame.split('\n').find((l) => l.startsWith('data: '));
       return JSON.parse(dataLine.slice('data: '.length));
     }
+
+    it('attaches a validated report to its PPTX and hides the JSON sidecar', async () => {
+      const artifactReport = {
+        status: 'ready',
+        format: 'pptx',
+        sourceFileIds: [],
+        previewAssets: [{ filename: 'deck.pdf', kind: 'pdf' }],
+        qaChecks: [{ name: 'render', status: 'passed', message: 'Rendered' }],
+        issues: [],
+        changeLog: [{ target: 'Presentation', summary: 'Created deck' }],
+        skillVersion: '3.0.0',
+        repairIterations: 0,
+      };
+      mockCollectArtifactReports.mockResolvedValue(new Map([['deck.pptx', artifactReport]]));
+      processCodeOutput.mockResolvedValue({
+        file: {
+          file_id: 'pptx-id',
+          filename: 'deck.pptx',
+          filepath: '/uploads/deck.pptx',
+          type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          messageId: 'run-1',
+          toolCallId: 'tool-1',
+          artifactReport,
+        },
+      });
+
+      const toolEndCallback = createToolEndCallback({ req, res, artifactPromises });
+      const event = makeCodeExecutionEvent({
+        runId: 'run-1',
+        threadId: 'thread-1',
+        toolCallId: 'tool-1',
+        fileId: 'pptx-id',
+        name: 'deck.pptx',
+      });
+      event.output.artifact.files.push({
+        id: 'report-id',
+        name: 'deck.pptx.artifact-report.json',
+        session_id: 'sess-1',
+      });
+
+      await toolEndCallback({ output: event.output }, event.metadata);
+      const attachments = await Promise.all(artifactPromises);
+
+      expect(attachments).toHaveLength(1);
+      expect(processCodeOutput).toHaveBeenCalledTimes(1);
+      expect(processCodeOutput).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'deck.pptx',
+          artifactReport,
+        }),
+      );
+    });
 
     it('the preview update emit uses the current run messageId, not the persisted DB messageId (cross-turn filename reuse)', async () => {
       /* Simulate turn-2 reusing `output.csv` from turn-1. The DB record

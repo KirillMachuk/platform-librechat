@@ -12,6 +12,10 @@ const { getRoleByName, createToolCall, getToolCallsByConvo, getMessage } = requi
 const { processFileURL, uploadImageBuffer } = require('~/server/services/Files/process');
 const { getRetentionExpiry } = require('~/server/services/Files/retention');
 const { processCodeOutput, runPreviewFinalize } = require('~/server/services/Files/Code/process');
+const {
+  collectArtifactReports,
+  getArtifactReportTargetName,
+} = require('~/server/services/Files/Code/artifactReports');
 const { loadAuthValues } = require('~/server/services/Tools/credentials');
 const { loadTools } = require('~/app/clients/tools/util');
 
@@ -181,6 +185,11 @@ const callTool = async (req, res) => {
     }
 
     const artifactPromises = [];
+    const reportsPromise = collectArtifactReports({
+      req,
+      files: artifact.files,
+      session_id: artifact.session_id,
+    });
     for (const file of artifact.files) {
       /* Files flagged `inherited` by codeapi are unchanged passthroughs of
        * inputs the caller already owns (skill files, prior downloaded inputs,
@@ -188,12 +197,13 @@ const callTool = async (req, res) => {
        * 403s when the file is scoped to a different entity (e.g. skill
        * entity_id) than the user's session key. They remain available for
        * subsequent tool calls via primeInvokedSkills / session inheritance. */
-      if (file.inherited) {
+      if (file.inherited || getArtifactReportTargetName(file.name)) {
         continue;
       }
       const { id, name } = file;
       artifactPromises.push(
         (async () => {
+          const reportsByFilename = await reportsPromise;
           const result = await processCodeOutput({
             req,
             id,
@@ -201,7 +211,8 @@ const callTool = async (req, res) => {
             messageId,
             toolCallId,
             conversationId,
-            session_id: artifact.session_id,
+            session_id: file.storage_session_id ?? file.session_id ?? artifact.session_id,
+            artifactReport: reportsByFilename.get(name),
           });
           const fileMetadata = result?.file ?? null;
           const finalize = result?.finalize;
