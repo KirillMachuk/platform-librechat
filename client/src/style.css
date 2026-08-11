@@ -773,8 +773,9 @@ pre {
   color: var(--tw-prose-body);
   max-width: 65ch;
   font-size: var(--markdown-font-size, var(--font-size-base));
+  /* 16/26 — the GPT reading rhythm; keep in step with .markdown above. */
   line-height: calc(
-    25.6px * var(--markdown-font-size, var(--font-size-base)) / var(--font-size-base)
+    26px * var(--markdown-font-size, var(--font-size-base)) / var(--font-size-base)
   );
 }
 
@@ -786,9 +787,13 @@ pre {
   margin-top: 1.2em;
 }
 .prose :where(a):not(:where([class~='not-prose'] *)) {
-  color: var(--tw-prose-links);
-  font-weight: 500;
+  /* Canon §2: links are the accent, underlined always, offset 2 — not the
+     plugin's raw #0066cc, which was the one blue in the whole product. Weight
+     stays 400: §1.4 says state and kind are never said with weight. */
+  color: var(--c-acc);
+  font-weight: 400;
   text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .prose :where(strong):not(:where([class~='not-prose'] *)) {
   color: var(--tw-prose-bold);
@@ -1000,7 +1005,7 @@ pre {
   --tw-prose-body: var(--text-primary);
   --tw-prose-headings: var(--text-primary);
   --tw-prose-lead: #4b5563;
-  --tw-prose-links: #0066cc;
+  --tw-prose-links: var(--c-acc);
   --tw-prose-bold: var(--text-primary);
   --tw-prose-counters: #6b7280;
   --tw-prose-bullets: #d1d5db;
@@ -1018,7 +1023,7 @@ pre {
   --tw-prose-invert-body: var(--text-primary);
   --tw-prose-invert-headings: var(--text-primary);
   --tw-prose-invert-lead: #9ca3af;
-  --tw-prose-invert-links: #fff;
+  --tw-prose-invert-links: var(--c-acc);
   --tw-prose-invert-bold: var(--text-primary);
   --tw-prose-invert-counters: #9ca3af;
   --tw-prose-invert-bullets: #4b5563;
@@ -1545,37 +1550,42 @@ body {
 .markdown {
   max-width: none;
   font-size: var(--markdown-font-size, var(--font-size-base));
-  line-height: calc(
-    25.6px * var(--markdown-font-size, var(--font-size-base)) / var(--font-size-base)
-  );
+  /* 26px at the 16px default — the GPT reading rhythm the owner measured
+     (16/26); the old 25.6px was the 1.6 ratio and read too dense. */
+  line-height: calc(26px * var(--markdown-font-size, var(--font-size-base)) / var(--font-size-base));
 }
 
+/* The chat heading scale, owner 11.08 after reading real answers: the old
+   x1.75/x1.5 (28/24px) headings towered over 16px text with an 1.1 line-height
+   and a 12px gap — «шрифт большой, расстояние узкое». GPT's chat drops the
+   whole scale a step (their h2 measures 20/28/600 with a roomy top margin) and
+   Kimi never draws chat headings above ~20 at all. Ratios keep everything
+   derived from --markdown-font-size, so the user's size setting scales the
+   headings with the body. Margins are em-based: the gap ABOVE a heading is the
+   section boundary (1.4em ≈ 28px at h2), below it stays close to its text. */
 .markdown h1 {
-  font-size: calc(var(--markdown-font-size) * 1.75);
-}
-.markdown h2 {
-  font-size: calc(var(--markdown-font-size) * 1.5);
-}
-
-.markdown h2 {
-  margin-bottom: 0.4rem;
-  margin-top: 0.8rem;
-}
-
-.markdown h3 {
+  font-size: calc(var(--markdown-font-size) * 1.375);
+  line-height: 1.35;
   font-weight: 600;
+  margin: 1.2em 0 0.5em;
+}
+.markdown h2 {
   font-size: calc(var(--markdown-font-size) * 1.25);
+  line-height: 1.4;
+  font-weight: 600;
+  margin: 1.4em 0 0.6em;
 }
-
-.markdown h3,
-.markdown h4 {
-  margin-bottom: 0.3rem;
-  margin-top: 0.6rem;
+.markdown h3 {
+  font-size: calc(var(--markdown-font-size) * 1.125);
+  line-height: 1.45;
+  font-weight: 600;
+  margin: 1.3em 0 0.5em;
 }
-
 .markdown h4 {
-  font-weight: 400;
-  font-size: calc(var(--markdown-font-size) * 1.1);
+  font-size: var(--markdown-font-size);
+  line-height: 1.5;
+  font-weight: 600;
+  margin: 1.25em 0 0.5em;
 }
 
 .markdown h5 {
@@ -1791,25 +1801,9 @@ html {
 .markdown {
   max-width: none;
 }
-.markdown h1,
-.markdown h2 {
-  font-weight: 600;
-}
-.markdown h2 {
-  margin-bottom: 0.4rem;
-  margin-top: 0.8rem;
-}
-.markdown h3 {
-  font-weight: 600;
-}
-.markdown h3,
-.markdown h4 {
-  margin-bottom: 0.3rem;
-  margin-top: 0.6rem;
-}
-.markdown h4 {
-  font-weight: 400;
-}
+/* Heading sizes, weights and margins live in ONE block further up (the
+   owner-approved chat scale) — this legacy duplicate used to restate margins
+   and weights and the two blocks fought over the rhythm. */
 .markdown h5 {
   font-weight: 600;
 }
@@ -2507,12 +2501,19 @@ html {
 
 .message-content {
   font-size: var(--markdown-font-size, var(--font-size-base));
-  /* Канон §6.13: текст ответа 15/1.6 — тот же межстрочный, что у markdown выше. */
-  line-height: 1.6;
+  /* Канон §3 (11.08): 16/26 — тот же ритм, что у .markdown/.prose выше; это
+     правило стоит ПОЗЖЕ их в файле и на том же элементе, поэтому обязано
+     повторять их значение, а не спорить с ним (1.6 давал 25,6 и побеждал). */
+  line-height: calc(26px * var(--markdown-font-size, var(--font-size-base)) / var(--font-size-base));
 }
 
 .message-content pre code {
-  font-size: calc(0.9 * var(--markdown-font-size, var(--font-size-base)));
+  /* Canon §3: code is a FIXED 13/20 — it does not scale with the user's text
+     setting the way prose does. This 0.9×body multiplier is what the review
+     measured as «14,4px вместо 13»: it outranked the hljs rule and dragged
+     code past the canon on the 16px default. */
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .message-content pre {
