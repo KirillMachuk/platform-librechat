@@ -70,8 +70,13 @@ export default function Presentation({ children }: { children: React.ReactNode }
     return null;
   }, [panelOpen]);
 
+  /* No own background on the wrapper: in the two-card mode (artifacts open)
+     it is the CANVAS between the cards, and its old near-white
+     bg-presentation poked out past their rounded corners as a square
+     backdrop (owner, 11.08-4: «выглядит ужасно»). Single-card mode paints
+     itself inside SidePanelGroup, so nothing is lost. */
   return (
-    <DragDropWrapper className="relative flex w-full grow overflow-hidden bg-presentation">
+    <DragDropWrapper className="relative flex w-full grow overflow-hidden">
       <SidePanelGroup artifacts={artifactsElement}>
         <main className="flex h-full flex-col overflow-y-auto" role="main">
           {children}

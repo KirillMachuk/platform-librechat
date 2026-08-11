@@ -2,7 +2,7 @@ import { memo, useMemo, useState, useCallback, useEffect, useRef, useId } from '
 import { useAtomValue } from 'jotai';
 import { ContentTypes } from 'librechat-data-provider';
 import type { MouseEvent, FocusEvent } from 'react';
-import { ThinkingContent, ThinkingButton, ThinkingCard, FloatingThinkingBar } from './Thinking';
+import { ThinkingContent, ThinkingButton, ThinkingCard } from './Thinking';
 import { useLocalize, useExpandCollapse } from '~/hooks';
 import { showThinkingAtom } from '~/store/showThinking';
 import { useMessageContext } from '~/Providers';
@@ -41,7 +41,6 @@ const Reasoning = memo(({ reasoning, isLast }: ReasoningProps) => {
   const showThinking = useAtomValue(showThinkingAtom);
   const { isSubmitting, isLatestMessage, nextType, autoExpandReasoning } = useMessageContext();
   const [isExpanded, setIsExpanded] = useState(showThinking || autoExpandReasoning === true);
-  const [isBarVisible, setIsBarVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { style: expandStyle, ref: expandRef } = useExpandCollapse(isExpanded);
 
@@ -71,26 +70,6 @@ const Reasoning = memo(({ reasoning, isLast }: ReasoningProps) => {
     setIsExpanded((prev) => !prev);
   }, []);
 
-  const handleFocus = useCallback(() => {
-    setIsBarVisible(true);
-  }, []);
-
-  const handleBlur = useCallback((e: FocusEvent) => {
-    if (!containerRef.current?.contains(e.relatedTarget as Node)) {
-      setIsBarVisible(false);
-    }
-  }, []);
-
-  const handleMouseEnter = useCallback(() => {
-    setIsBarVisible(true);
-  }, []);
-
-  const handleMouseLeave = useCallback(() => {
-    if (!containerRef.current?.contains(document.activeElement)) {
-      setIsBarVisible(false);
-    }
-  }, []);
-
   const effectiveIsSubmitting = isLatestMessage ? isSubmitting : false;
 
   const label = useMemo(
@@ -104,14 +83,7 @@ const Reasoning = memo(({ reasoning, isLast }: ReasoningProps) => {
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="group/reasoning"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
-    >
+    <div ref={containerRef} className="group/reasoning">
       <div className="group/thinking-container">
         <ThinkingCard>
           <ThinkingButton
@@ -131,13 +103,6 @@ const Reasoning = memo(({ reasoning, isLast }: ReasoningProps) => {
           >
             <div className="relative overflow-hidden" ref={expandRef}>
               <ThinkingContent>{reasoningText}</ThinkingContent>
-              <FloatingThinkingBar
-                isVisible={isBarVisible && isExpanded}
-                isExpanded={isExpanded}
-                onClick={handleClick}
-                content={reasoningText}
-                contentId={contentId}
-              />
             </div>
           </div>
         </ThinkingCard>

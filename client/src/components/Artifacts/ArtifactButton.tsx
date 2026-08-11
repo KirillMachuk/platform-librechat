@@ -70,12 +70,15 @@ const ArtifactButton = ({ artifact }: { artifact: Artifact | null }) => {
           }
         };
 
+        /* The in-chat artifact chip follows the §1.1 selected-state system
+           (owner 11.08-4, Kimi as the reference — «тень неуместная»): open =
+           card + hairline, closed = flat panel fill that darkens on hover.
+           No shadows, no scale — a chip in the text is not a floating card. */
         const buttonClass = cn(
-          'relative overflow-hidden rounded-xl transition-all duration-300 hover:border-border-medium hover:bg-surface-hover hover:shadow-lg active:scale-[0.98]',
-          {
-            'border-border-medium bg-surface-hover shadow-lg': isSelected,
-            'border-border-light bg-surface-tertiary shadow-sm': !isSelected,
-          },
+          'relative overflow-hidden rounded-xl border transition-colors duration-90',
+          isSelected
+            ? 'border-border-light bg-surface-primary'
+            : 'border-transparent bg-surface-primary-alt hover:bg-surface-active',
         );
 
         const actionLabel = isSelected

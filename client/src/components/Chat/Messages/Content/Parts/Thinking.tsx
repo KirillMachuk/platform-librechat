@@ -1,8 +1,8 @@
 import { useState, useMemo, memo, useCallback, useRef, useId, type MouseEvent } from 'react';
 import { useAtomValue } from 'jotai';
-import { Clipboard, CheckMark, TooltipAnchor } from '@librechat/client';
+import { Clipboard, CheckMark } from '@librechat/client';
 import type { FocusEvent, FC } from 'react';
-import { Lightbulb, ChevronDown, ChevronUp } from '~/components/icons';
+import { Lightbulb, ChevronDown } from '~/components/icons';
 import { useLocalize, useExpandCollapse } from '~/hooks';
 import { showThinkingAtom } from '~/store/showThinking';
 import { cn } from '~/utils';
@@ -19,10 +19,9 @@ export const ThinkingContent: FC<{
    * the two can never diverge), behind a dashed hairline the header sits
    * above. The card itself — border, radius 12, panel fill — is drawn by
    * ThinkingCard so header and body live inside ONE box, as the book draws
-   * it. pb-8 is clearance for the floating collapse/copy bar, which the
-   * book does not have but the product keeps. */
+   * it. */
   return (
-    <div className="relative border-t border-dashed border-border-light px-3 pb-8 pt-[9px] text-text-tertiary">
+    <div className="relative border-t border-dashed border-border-light px-3 pb-3 pt-[9px] text-text-tertiary">
       <p className="whitespace-pre-wrap text-[length:var(--thinking-font-size)] leading-[1.55]">
         {children}
       </p>
@@ -135,108 +134,6 @@ export const ThinkingButton = memo(
 );
 
 /**
- * FloatingThinkingBar - Floating bar with expand/collapse and copy buttons
- * Shows on hover/focus, positioned at bottom right of thinking content
- * Inspired by CodeBlock's FloatingCodeBar pattern
- */
-export const FloatingThinkingBar = memo(
-  ({
-    isVisible,
-    isExpanded,
-    onClick,
-    content,
-    contentId,
-  }: {
-    isVisible: boolean;
-    isExpanded: boolean;
-    onClick: (e: MouseEvent<HTMLButtonElement>) => void;
-    content?: string;
-    contentId: string;
-  }) => {
-    const localize = useLocalize();
-    const [isCopied, setIsCopied] = useState(false);
-
-    const handleCopy = useCallback(
-      (e: MouseEvent<HTMLButtonElement>) => {
-        e.stopPropagation();
-        if (content) {
-          navigator.clipboard.writeText(content);
-          setIsCopied(true);
-          setTimeout(() => setIsCopied(false), 2000);
-        }
-      },
-      [content],
-    );
-
-    const collapseTooltip = isExpanded
-      ? localize('com_ui_collapse_thoughts')
-      : localize('com_ui_expand_thoughts');
-
-    const copyTooltip = isCopied
-      ? localize('com_ui_copied_to_clipboard')
-      : localize('com_ui_copy_thoughts_to_clipboard');
-
-    return (
-      <div
-        className={cn(
-          'absolute bottom-3 right-3 flex items-center gap-2 transition-opacity duration-150',
-          isVisible ? 'opacity-100' : 'pointer-events-none opacity-0',
-        )}
-      >
-        <TooltipAnchor
-          description={collapseTooltip}
-          render={
-            <button
-              type="button"
-              tabIndex={isVisible ? 0 : -1}
-              onClick={onClick}
-              aria-label={collapseTooltip}
-              aria-expanded={isExpanded}
-              aria-controls={contentId}
-              className={cn(
-                'flex items-center justify-center rounded p-1.5 text-text-tertiary',
-                'hover:bg-surface-hover hover:text-text-primary',
-                'focus-visible:outline-none',
-              )}
-            >
-              {isExpanded ? (
-                <ChevronUp className="h-[18px] w-[18px]" aria-hidden="true" />
-              ) : (
-                <ChevronDown className="h-[18px] w-[18px]" aria-hidden="true" />
-              )}
-            </button>
-          }
-        />
-        {content && (
-          <TooltipAnchor
-            description={copyTooltip}
-            render={
-              <button
-                type="button"
-                tabIndex={isVisible ? 0 : -1}
-                onClick={handleCopy}
-                aria-label={copyTooltip}
-                className={cn(
-                  'flex items-center justify-center rounded p-1.5 text-text-tertiary',
-                  'hover:bg-surface-hover hover:text-text-primary',
-                  'focus-visible:outline-none',
-                )}
-              >
-                {isCopied ? (
-                  <CheckMark className="h-[18px] w-[18px]" aria-hidden="true" />
-                ) : (
-                  <Clipboard size="18" aria-hidden="true" />
-                )}
-              </button>
-            }
-          />
-        )}
-      </div>
-    );
-  },
-);
-
-/**
  * Thinking Component (LEGACY SYSTEM)
  *
  * Used for simple text-based messages with `:::thinking:::` markers.
@@ -255,7 +152,6 @@ const Thinking: React.ElementType = memo(({ children }: { children: React.ReactN
   const localize = useLocalize();
   const showThinking = useAtomValue(showThinkingAtom);
   const [isExpanded, setIsExpanded] = useState(showThinking);
-  const [isBarVisible, setIsBarVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentId = useId();
   const { style: expandStyle, ref: expandRef } = useExpandCollapse(isExpanded);
@@ -263,26 +159,6 @@ const Thinking: React.ElementType = memo(({ children }: { children: React.ReactN
   const handleClick = useCallback((e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     setIsExpanded((prev) => !prev);
-  }, []);
-
-  const handleFocus = useCallback(() => {
-    setIsBarVisible(true);
-  }, []);
-
-  const handleBlur = useCallback((e: FocusEvent) => {
-    if (!containerRef.current?.contains(e.relatedTarget as Node)) {
-      setIsBarVisible(false);
-    }
-  }, []);
-
-  const handleMouseEnter = useCallback(() => {
-    setIsBarVisible(true);
-  }, []);
-
-  const handleMouseLeave = useCallback(() => {
-    if (!containerRef.current?.contains(document.activeElement)) {
-      setIsBarVisible(false);
-    }
   }, []);
 
   const label = useMemo(() => localize('com_ui_thoughts'), [localize]);
@@ -300,14 +176,7 @@ const Thinking: React.ElementType = memo(({ children }: { children: React.ReactN
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="group/thinking-container"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
-    >
+    <div ref={containerRef} className="group/thinking-container">
       <ThinkingCard>
         <ThinkingButton
           isExpanded={isExpanded}
@@ -325,13 +194,6 @@ const Thinking: React.ElementType = memo(({ children }: { children: React.ReactN
         >
           <div className="relative overflow-hidden" ref={expandRef}>
             <ThinkingContent>{children}</ThinkingContent>
-            <FloatingThinkingBar
-              isVisible={isBarVisible && isExpanded}
-              isExpanded={isExpanded}
-              onClick={handleClick}
-              content={textContent}
-              contentId={contentId}
-            />
           </div>
         </div>
       </ThinkingCard>
@@ -341,7 +203,6 @@ const Thinking: React.ElementType = memo(({ children }: { children: React.ReactN
 
 ThinkingButton.displayName = 'ThinkingButton';
 ThinkingContent.displayName = 'ThinkingContent';
-FloatingThinkingBar.displayName = 'FloatingThinkingBar';
 Thinking.displayName = 'Thinking';
 
 export default Thinking;
