@@ -25,8 +25,12 @@
  * What is deliberately allowed:
  *   - `focus:ring-[3px]` / `ring-ring-primary-soft` — the §1.8 field recipe;
  *   - `ring-err-soft` — the §6.2 field error state;
- *   - `focus:outline-none` / `focus-visible:outline-none` — dead classes since
- *     the global rule outranks them, tolerated as upstream noise;
+ *   - `focus:outline-none` / `focus-visible:outline-none` — harmless ONLY
+ *     because the global rule now outranks them at (0,3,0). It did not at
+ *     first: measured on the built bundle, Tailwind emits utilities after the
+ *     raw CSS following `@tailwind utilities`, so at equal specificity every
+ *     one of these ~180 classes was a live hole in keyboard focus. If the
+ *     global block's specificity is ever lowered, they all come back;
  *   - non-focus rings (`ring-1` on a static badge) — not focus treatments.
  */
 import { readFileSync, readdirSync } from 'node:fs';

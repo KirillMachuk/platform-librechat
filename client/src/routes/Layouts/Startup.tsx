@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import type { TStartupConfig } from 'librechat-data-provider';
-import { TranslationKeys, useLocalize } from '~/hooks';
+import { TranslationKeys, useDocumentTitle, useLocalize } from '~/hooks';
+import { REDIRECT_PARAM, SESSION_KEY, isChatRoute } from '~/utils';
 import { useGetStartupConfig } from '~/data-provider';
 import AuthLayout from '~/components/Auth/AuthLayout';
-import { REDIRECT_PARAM, SESSION_KEY, isChatRoute } from '~/utils';
 
 const headerMap: Record<string, TranslationKeys> = {
   '/login': 'com_auth_welcome_back',
@@ -46,9 +46,12 @@ export default function StartupLayout({ isAuthenticated }: { isAuthenticated?: b
     }
   }, [isAuthenticated, navigate, data, location.pathname]);
 
-  useEffect(() => {
-    document.title = startupConfig?.appTitle || '1ma';
-  }, [startupConfig?.appTitle]);
+  /* Заголовок вкладки — свой на каждый маршрут (§9 приёмки): вкладки, история
+     и закладки трёх экранов входа были неразличимы. Ключ берётся из того же
+     headerMap, что и подпись под знаком, поэтому вторая карта не заводится. */
+  const appTitle = startupConfig?.appTitle || '1ma';
+  const routeTitleKey = headerMap[location.pathname];
+  useDocumentTitle(routeTitleKey ? `${localize(routeTitleKey)} | ${appTitle}` : appTitle);
 
   useEffect(() => {
     setError(null);

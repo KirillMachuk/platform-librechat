@@ -20,6 +20,9 @@ function Login() {
   const { showToast } = useToastContext();
   const { error, setError, login } = useAuthContext();
   const { startupConfig } = useOutletContext<TLoginLayoutContext>();
+  /* Одна подпись на оба места: если стенд не задал OPENID_BUTTON_LABEL,
+     берём локализованную — английский дефолт с сервера снят. */
+  const openidLabel = startupConfig?.openidLabel || localize('com_auth_openid_login');
 
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
@@ -76,7 +79,7 @@ function Login() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4">
         <p className="text-lg font-semibold">
-          {localize('com_ui_redirecting_to_provider', { 0: startupConfig.openidLabel })}
+          {localize('com_ui_redirecting_to_provider', { 0: openidLabel })}
         </p>
         <div className="mt-4 w-full max-w-[380px]">
           <SocialButton
@@ -91,7 +94,7 @@ function Login() {
                 <Users className="icon-sm" aria-hidden="true" />
               )
             }
-            label={startupConfig.openidLabel}
+            label={openidLabel}
             id="openid"
           />
         </div>
@@ -115,7 +118,7 @@ function Login() {
           {localize('com_auth_no_account')}{' '}
           <a
             href={registerPage()}
-            className="tap-target inline-block text-text-accent hover:underline"
+            className="tap-target inline-block text-text-accent underline underline-offset-2"
           >
             {localize('com_auth_sign_up')}
           </a>

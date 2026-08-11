@@ -24,7 +24,7 @@ const LoginForm: React.FC<TLoginFormProps> = ({ onSubmit, startupConfig, error, 
     getValues,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<TLoginUser>({ mode: 'onTouched', reValidateMode: 'onChange' });
+  } = useForm<TLoginUser>({ mode: 'onSubmit', reValidateMode: 'onChange' });
   const [showResendLink, setShowResendLink] = useState<boolean>(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
@@ -68,7 +68,7 @@ const LoginForm: React.FC<TLoginFormProps> = ({ onSubmit, startupConfig, error, 
           {localize('com_auth_email_verification_resend_prompt')}
           <button
             type="button"
-            className="ml-2 text-text-accent hover:underline"
+            className="ml-2 text-text-accent underline underline-offset-2"
             onClick={handleResendEmail}
             disabled={resendLinkMutation.isLoading}
           >
@@ -76,7 +76,12 @@ const LoginForm: React.FC<TLoginFormProps> = ({ onSubmit, startupConfig, error, 
           </button>
         </div>
       )}
+      {/* noValidate: поля почты снова type="email" ради клавиатуры с «@» на
+          телефоне, но проверку и сообщения должен показывать ОДИН источник —
+          наш. Иначе браузер молча блокирует отправку и рисует свой пузырь
+          мимо оформления поля. */}
       <form
+        noValidate
         className="flex flex-col gap-3"
         aria-label={localize('com_ui_form_login')}
         method="POST"
@@ -92,7 +97,7 @@ const LoginForm: React.FC<TLoginFormProps> = ({ onSubmit, startupConfig, error, 
           error={emailError}
         >
           <input
-            type="text"
+            type={useUsernameLogin ? 'text' : 'email'}
             id="email"
             autoComplete={useUsernameLogin ? 'username' : 'email'}
             {...register('email', {
@@ -166,7 +171,7 @@ const LoginForm: React.FC<TLoginFormProps> = ({ onSubmit, startupConfig, error, 
         {startupConfig.passwordResetEnabled && (
           <a
             href="/forgot-password"
-            className="tap-target mt-1 inline-block self-center text-[13px] text-text-accent hover:underline"
+            className="tap-target mt-1 inline-block self-center text-[13px] text-text-accent underline underline-offset-2"
           >
             {localize('com_auth_password_forgot')}
           </a>

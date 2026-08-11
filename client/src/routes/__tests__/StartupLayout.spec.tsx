@@ -24,6 +24,10 @@ jest.mock('~/data-provider', () => ({
 
 jest.mock('~/hooks', () => ({
   useLocalize: jest.fn(() => (key: string) => key),
+  /* The layout titles the tab per route now; without this the partial mock
+     leaves useDocumentTitle undefined and the whole layout throws, which
+     reads as «не перешли на /c/new» rather than as a missing mock. */
+  useDocumentTitle: jest.fn(),
   TranslationKeys: {},
 }));
 

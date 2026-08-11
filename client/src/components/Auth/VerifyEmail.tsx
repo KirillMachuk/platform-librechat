@@ -88,7 +88,7 @@ function RequestPasswordReset() {
         <p className="text-center text-[15px] text-text-secondary">
           {localize('com_auth_email_verification_resend_prompt')}
           <button
-            className="ml-2 text-blue-600 hover:underline"
+            className="ml-2 text-text-accent underline underline-offset-2"
             onClick={handleResendEmail}
             disabled={resendEmailMutation.isLoading}
           >

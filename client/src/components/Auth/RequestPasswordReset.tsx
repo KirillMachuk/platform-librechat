@@ -26,7 +26,7 @@ const ResetPasswordBodyText = () => {
   return (
     <div className="flex flex-col space-y-4">
       <p>{localize('com_auth_reset_password_if_email_exists')}</p>
-      <a className="text-[13px] text-text-accent hover:underline" href={loginPage()}>
+      <a className="text-[13px] text-text-accent underline underline-offset-2" href={loginPage()}>
         {localize('com_auth_back_to_login')}
       </a>
     </div>
@@ -54,7 +54,7 @@ function RequestPasswordReset() {
           setBodyText(
             <span>
               {localize('com_auth_click')}{' '}
-              <a className="text-text-accent hover:underline" href={data.link}>
+              <a className="text-text-accent underline underline-offset-2" href={data.link}>
                 {localize('com_auth_here')}
               </a>{' '}
               {localize('com_auth_to_reset_your_password')}
@@ -78,6 +78,7 @@ function RequestPasswordReset() {
 
   return (
     <form
+      noValidate
       className="flex flex-col gap-3"
       aria-label={localize('com_ui_form_password_reset')}
       method="POST"
@@ -124,7 +125,7 @@ function RequestPasswordReset() {
       </Button>
       <a
         href={loginPage()}
-        className="tap-target mt-1 inline-block self-center text-[13px] text-text-accent hover:underline"
+        className="tap-target mt-1 inline-block self-center text-[13px] text-text-accent underline underline-offset-2"
       >
         {localize('com_auth_back_to_login')}
       </a>

@@ -141,8 +141,11 @@ test('submits login form', async () => {
   expect(mockLogin).toHaveBeenCalledWith({ email: 'test@example.com', password: 'password' });
 });
 
-test('displays validation error messages', async () => {
-  const { getByLabelText, getByText } = render(
+/* Ошибки появляются ПОСЛЕ отправки, а не по уходу из пустого поля
+   (владелец 10.08: «поле краснеет от простого прохода по форме»). Значит и
+   ждать их надо асинхронно — findBy, а не getBy сразу после клика. */
+test('displays validation error messages after submit', async () => {
+  const { getByLabelText, findByText } = render(
     <Login
       onSubmit={mockLogin}
       startupConfig={mockStartupConfig}
@@ -158,6 +161,6 @@ test('displays validation error messages', async () => {
   await userEvent.type(passwordInput, 'pass');
   await userEvent.click(submitButton);
 
-  expect(getByText(/You must enter a valid email address/i)).toBeInTheDocument();
-  expect(getByText(/Password must be at least 8 characters/i)).toBeInTheDocument();
+  expect(await findByText(/You must enter a valid email address/i)).toBeInTheDocument();
+  expect(await findByText(/Password must be at least 8 characters/i)).toBeInTheDocument();
 });
