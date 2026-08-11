@@ -244,10 +244,12 @@ const ChatForm = memo(function ChatForm({
            16px on every width (16 is also what stops iOS zooming the page on
            focus). The book's box draws its placeholder at 16/25.6 in t3, so
            the leading and the placeholder colour are the book's numbers, not
-           an alpha blend of the theme's ink. */
-        'md:py-3.5 m-0 w-full resize-none py-[13px] text-base leading-[1.6] placeholder:text-text-tertiary bg-transparent',
+           an alpha blend of the theme's ink. Geometry is the book's too: the
+           box padding is 12px 10px 8px 16px (d02, measured), so the text
+           starts 16 from the left, 12 from the top, 10 from the right. */
+        'm-0 w-full resize-none pt-3 pb-1.5 text-base leading-[1.6] placeholder:text-text-tertiary bg-transparent',
         isCollapsed ? 'max-h-[52px]' : 'max-h-[45vh] md:max-h-[55vh]',
-        isMoreThanThreeRows ? 'pl-5' : 'px-5',
+        isMoreThanThreeRows ? 'ps-3.5 md:ps-4' : 'ps-3.5 pe-2 md:ps-4 md:pe-2.5',
       ),
     [isCollapsed, isMoreThanThreeRows],
   );
@@ -375,14 +377,19 @@ const ChatForm = memo(function ChatForm({
             )}
             <div
               className={cn(
-                '@container items-between flex gap-2 pb-2',
+                /* The book's OPTICAL row offsets, measured on d02/m02 with the
+                   1px box border included: first button lands at 9 (desktop)
+                   / 7 (phone) from the box edge, send ends 11 / 9 from the
+                   right, the row sits 11 / 9 above the bottom. Logical props,
+                   so RTL mirrors without per-child conditionals. */
+                '@container items-between flex gap-2 pb-2 pe-2 ps-1.5 md:pb-2.5 md:pe-2.5 md:ps-2',
                 isRTL ? 'flex-row-reverse' : 'flex-row',
               )}
             >
-              {/* Desktop keeps the paperclip; on the phone the «+» sheet inside
-                  BadgeRow is the one entry point for uploads AND tools (book,
-                  mobile screen: no separate tools button below md). */}
-              <div className={cn('hidden md:block', isRTL ? 'mr-2' : 'ml-2')}>
+              {/* Desktop keeps its own attach trigger; on the phone the «+»
+                  sheet inside BadgeRow is the one entry point for uploads AND
+                  tools (book: no separate tools button below md). */}
+              <div className="hidden md:block">
                 <AttachFileChat
                   conversation={conversation}
                   disableInputs={disableInputs}
@@ -425,7 +432,7 @@ const ChatForm = memo(function ChatForm({
                   isSubmitting={isSubmitting}
                 />
               )}
-              <div className={`${isRTL ? 'ml-2' : 'mr-2'}`}>
+              <div>
                 {isSubmitting && showStopButton ? (
                   <StopButton stop={handleStopGenerating} setShowStopButton={setShowStopButton} />
                 ) : (

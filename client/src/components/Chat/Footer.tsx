@@ -81,7 +81,10 @@ function Footer({ className, startupConfig }: FooterProps) {
       <div
         className={
           className ??
-          'absolute bottom-0 left-0 right-0 hidden items-center justify-center gap-2 px-2 py-2 text-center text-xs text-text-primary sm:flex md:px-[60px]'
+          /* Book d02, measured: the disclaimer under the composer is 11px in
+             t3 — a caption, not body ink. It was 12px t1 and read louder than
+             the interface around it. */
+          'absolute bottom-0 left-0 right-0 hidden items-center justify-center gap-2 px-2 py-2 text-center text-[11px] text-text-tertiary sm:flex md:px-[60px]'
         }
         role="contentinfo"
       >

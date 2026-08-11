@@ -1,14 +1,8 @@
 import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useRecoilState } from 'recoil';
 import * as Ariakit from '@ariakit/react';
+import { FileUpload, TooltipAnchor, DropdownPopup, SharePointIcon } from '@librechat/client';
 import { EToolResources, EModelEndpoint, defaultAgentCapabilities } from 'librechat-data-provider';
-import {
-  FileUpload,
-  TooltipAnchor,
-  DropdownPopup,
-  AttachmentIcon,
-  SharePointIcon,
-} from '@librechat/client';
 import type { EndpointFileConfig, TConversation } from 'librechat-data-provider';
 import type { ExtendedFile, FileSetter } from '~/common';
 import type { FileUploadType } from './attachItems';
@@ -21,6 +15,8 @@ import {
 } from '~/hooks';
 import { useSharePointFileHandlingNoChatContext } from '~/hooks/Files/useSharePointFileHandling';
 import { buildAttachItems, acceptForFileType } from './attachItems';
+/* The book's composer opens with «+», not a paperclip (screen 2 caption). */
+import { Plus } from '~/components/icons';
 import { SharePointPickerDialog } from '~/components/SharePoint';
 import { useGetStartupConfig } from '~/data-provider';
 import { ephemeralAgentByConvoId } from '~/store';
@@ -180,7 +176,7 @@ const AttachFileMenu = ({
           )}
         >
           <div className="flex w-full items-center justify-center gap-2">
-            <AttachmentIcon className="icon-md" />
+            <Plus className="icon-md" aria-hidden="true" />
           </div>
         </Ariakit.MenuButton>
       }
