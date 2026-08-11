@@ -39,7 +39,10 @@ function AuthLayout({
         <div className="mx-auto w-full max-w-[360px]">
           <ErrorMessage>
             {localize('com_auth_error_invalid_reset_token')}{' '}
-            <a className="font-medium text-text-accent hover:underline" href="/forgot-password">
+            <a
+              className="font-medium text-text-accent underline underline-offset-2"
+              href="/forgot-password"
+            >
               {localize('com_auth_click_here')}
             </a>{' '}
             {localize('com_auth_to_try_again')}

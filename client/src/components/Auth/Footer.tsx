@@ -1,8 +1,7 @@
 import { TStartupConfig } from 'librechat-data-provider';
 import { useLocalize } from '~/hooks';
 
-const legalLinkClassName =
-  'text-[12.5px] text-text-accent underline decoration-transparent transition-all duration-200 hover:decoration-current focus:decoration-current';
+const legalLinkClassName = 'text-[12.5px] text-text-accent underline underline-offset-2';
 
 function Footer({ startupConfig }: { startupConfig: TStartupConfig | null | undefined }) {
   const localize = useLocalize();

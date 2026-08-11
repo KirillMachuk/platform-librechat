@@ -96,7 +96,7 @@ function SocialLoginRender({
             <LockIcon className="icon-sm" aria-hidden="true" />
           )
         }
-        label={startupConfig.openidLabel}
+        label={startupConfig.openidLabel || localize('com_auth_openid_login')}
         id="openid"
       />
     ),

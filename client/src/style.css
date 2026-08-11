@@ -2594,28 +2594,37 @@ html {
   outline: none;
 }
 
-/* `:root` is here for specificity, not selection: at (0,2,0) and sitting
-   after the utilities layer, this beats every `focus:outline-none` /
-   `focus-visible:outline-none` a component still carries — those ~180
-   suppressions are dead classes now, not each a hole in keyboard focus. */
-:root :focus-visible {
+/* `:root:root` is here for SPECIFICITY, not selection — and the doubling is
+   not decoration. The first draft used a single `:root` on the belief that
+   this block sits after the utilities layer and therefore wins; a cascade
+   measurement of the built bundle proved the opposite: Tailwind emits its
+   utilities AFTER the raw CSS that follows `@tailwind utilities`
+   (`:root :focus-visible` at byte 136621, `.focus-visible\:outline-none` at
+   159367). At equal specificity (0,2,0) the later one won, so every one of
+   the ~180 `focus:outline-none` suppressions in the app was a live hole in
+   keyboard focus while the comment here claimed they were dead. `:root:root`
+   is (0,3,0) and outranks a single-class utility outright. */
+:root:root :focus-visible {
   outline: 2px solid var(--border-focus);
   outline-offset: 2px;
 }
 
-:root input:focus-visible,
-:root textarea:focus-visible,
-:root select:focus-visible,
-:root [contenteditable]:focus-visible,
-:root [tabindex='-1']:focus-visible {
+/* Text fields keep their own §1.8 treatment (acc border + 3px acc-soft ring),
+   so no outline on top; containers focused programmatically are not controls.
+   Same (0,3,0) so they still beat the block above them. */
+:root:root input:focus-visible,
+:root:root textarea:focus-visible,
+:root:root select:focus-visible,
+:root:root [contenteditable]:focus-visible,
+:root:root [tabindex='-1']:focus-visible {
   outline: none;
 }
 
 /* §1.8's second offset: full-width rows and segments keep the outline inside
    their own box (an outside outline is clipped by every overflow-auto list
    these rows live in). One named class, not a per-site invention. */
-:root .focus-inset:focus-visible,
-:root .focus-inset[data-focus-visible] {
+:root:root .focus-inset:focus-visible,
+:root:root .focus-inset[data-focus-visible] {
   outline: 2px solid var(--border-focus);
   outline-offset: -2px;
 }

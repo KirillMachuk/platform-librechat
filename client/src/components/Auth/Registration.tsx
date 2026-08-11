@@ -130,6 +130,7 @@ const Registration: React.FC = () => {
       {!startupConfigError && !isFetching && (
         <>
           <form
+            noValidate
             className="flex flex-col gap-3"
             aria-label={localize('com_ui_form_registration')}
             method="POST"
@@ -219,7 +220,7 @@ const Registration: React.FC = () => {
             {localize('com_auth_already_have_account')}{' '}
             <a
               href={loginPage()}
-              className="tap-target inline-block text-text-accent hover:underline"
+              className="tap-target inline-block text-text-accent underline underline-offset-2"
             >
               {localize('com_auth_login')}
             </a>

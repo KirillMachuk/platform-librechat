@@ -158,7 +158,7 @@ const TwoFactorScreen: React.FC = React.memo(() => {
             <button
               type="button"
               onClick={toggleBackupOn}
-              className="text-[13px] text-text-accent hover:underline"
+              className="text-[13px] text-text-accent underline underline-offset-2"
             >
               {localize('com_ui_use_backup_code')}
             </button>
@@ -166,7 +166,7 @@ const TwoFactorScreen: React.FC = React.memo(() => {
             <button
               type="button"
               onClick={toggleBackupOff}
-              className="text-[13px] text-text-accent hover:underline"
+              className="text-[13px] text-text-accent underline underline-offset-2"
             >
               {localize('com_ui_use_2fa_code')}
             </button>
