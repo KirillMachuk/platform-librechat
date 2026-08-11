@@ -27,7 +27,7 @@ export function SelectorTabs({ activeTab, onTabChange }: SelectorTabsProps) {
       value={activeTab}
       onChange={onTabChange}
       label={localize('com_ui_select_model')}
-      className="mx-2 my-1.5"
+      className="mx-1.5 my-1.5"
     />
   );
 }

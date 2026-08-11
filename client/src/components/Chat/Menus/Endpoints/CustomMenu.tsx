@@ -84,21 +84,24 @@ export const CustomMenu = React.forwardRef<HTMLDivElement, CustomMenuProps>(func
         <SearchableContext.Provider value={searchable}>
           {searchable ? (
             <>
-              <div className="sticky top-0 z-10 bg-inherit p-1">
+              {/* 8px side inset — the same optical inset the Segmented tabs
+                  land on (list 2px + their 6px margin), so the field and the
+                  tabs under it are exactly one width (11.08-3: they weren't,
+                  and the pair read as two unrelated widgets). */}
+              <div className="sticky top-0 z-10 bg-inherit p-2 pb-1">
                 <div className="relative">
                   <Ariakit.Combobox
                     autoSelect
                     render={combobox}
                     className={cn(
-                      /* Прототип `.selsearch` и канон §6.4: поле — контрол, а не
-                         прозрачная строка: 48 на телефоне и 36 на десктопе,
-                         радиус 12, рамка `control` (3:1 обязательна).
+                      /* Канон §6.4 (ред. 11.08-3): поле — контрол на 48/36,
+                         радиус 12, волосяная линия + тень sm — рамку `control`
+                         владелец забраковал как «чёрную обводку».
                          Рамка СТАТИЧНА: комбобокс автофокусируется при каждом
                          открытии меню, и §1.8-потемнение до чернил означало бы
-                         «тёмная рамка всегда» — ровно то, что владелец 11.08
-                         забраковал. Фокус здесь и так очевиден: меню открыто,
-                         каретка в поле. */
-                      'peer flex h-12 w-full items-center justify-center rounded-xl border border-border-control bg-transparent px-2.5 text-base',
+                         «тёмная рамка всегда». Фокус здесь и так очевиден:
+                         меню открыто, каретка в поле. */
+                      'peer flex h-12 w-full items-center justify-center rounded-xl border border-border-light bg-transparent px-2.5 text-base shadow-sm',
                       'sm:h-9 sm:text-sm',
                       'focus:outline-none',
                     )}

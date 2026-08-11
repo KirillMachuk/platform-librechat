@@ -29,7 +29,9 @@ function WebSearch() {
         className="max-w-fit"
         checked={webSearch}
         setValue={debouncedChange}
-        label={localize('com_ui_web_search')}
+        /* Chip wears the short name (owner 11.08-3, room in the row);
+           the tools dropdown keeps the full one. */
+        label={localize('com_ui_chip_web_search')}
         icon={<Globe className="icon-sm" aria-hidden="true" />}
       />
     )

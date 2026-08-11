@@ -83,7 +83,8 @@ const SecretInput: React.ForwardRefExoticComponent<
           id={id}
           type={isVisible ? 'text' : 'password'}
           className={cn(
-            'flex h-10 w-full rounded-lg border border-border-control bg-transparent py-2 pl-3 text-sm transition-colors placeholder:text-text-tertiary focus-visible:border-border-focus focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring-primary-soft disabled:cursor-not-allowed disabled:opacity-50',
+            // §6.4 (ред. 11.08-3): покой — волосяная линия, фокус темнеет до чернил.
+            'flex h-10 w-full rounded-lg border border-border-light bg-transparent py-2 pl-3 text-sm transition-colors placeholder:text-text-tertiary focus-visible:border-border-focus focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring-primary-soft disabled:cursor-not-allowed disabled:opacity-50',
             className ?? '',
             showCopy ? 'pr-20' : 'pr-11',
           )}

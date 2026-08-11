@@ -83,6 +83,9 @@ stays green, so flakes accumulate where nobody looks.
 | Sidebar rows wear one ink on label AND icon (owner 11.08) | unit | `client/src/components/UnifiedSidebar/__tests__/ExpandedPanel.spec.tsx#text-sidebar-ink` | covered |
 | Actions under a user message stay visible during a stream (Copy usable, Edit dimmed) | unit | `client/src/components/Chat/Messages/__tests__/HoverButtons.spec.tsx#disabled and dimmed` | covered |
 | Phone «+» sheet: tiles arm the right picker (Camera adds capture), switch rows drive tool toggles | unit | `client/src/components/Chat/Input/__tests__/PlusSheet.spec.tsx#arms the camera capture` | covered |
+| MCP pill is a tool chip: shared recipe, neutral "on" fill with servers selected (owner 11.08-3) | unit | `client/src/components/Chat/Input/__tests__/MCPSelect.spec.tsx#wears the shared chip recipe` | covered |
+| Empty chat: greeting sits entirely above the composer, in both landing modes and on a phone | e2e | `e2e/specs/mock/canon.spec.ts#the greeting clears the composer` | covered |
+| Desktop composer rests at ~130 tall (owner 11.08-3, Kimi yardstick) | e2e | `e2e/specs/mock/canon.spec.ts#the composer stands ~130 tall` | covered |
 
 ## 3. Message rendering
 

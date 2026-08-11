@@ -3,6 +3,18 @@ import { useEffect } from 'react';
 import { Checkbox, useStoreState, useCheckboxStore } from '@ariakit/react';
 import { cn } from '~/utils';
 
+/** Canon §6.3, the tool chip's look minus its size, exported so every chip in
+ *  the composer — including ones that are not checkboxes, like the MCP menu
+ *  button — draws from the same source instead of hand-copying the recipe. */
+export const CHIP_BASE =
+  'group relative inline-flex items-center justify-center gap-1.5 rounded-full border border-border-medium bg-transparent text-sm font-medium shadow-sm transition-all hover:bg-surface-hover';
+
+/** An enabled chip joins the neutral selected family (§1.1: selected states are
+ *  the `active` tint + t1 ink — the owner retired the accent here 11.08 round 3,
+ *  the soft-petrol fill read as "green noise" next to the composer). */
+export const CHIP_CHECKED =
+  'border-transparent bg-surface-active text-text-primary hover:bg-surface-active';
+
 const CheckboxButton: React.ForwardRefExoticComponent<
   {
     icon?: React.ReactNode;
@@ -61,22 +73,15 @@ const CheckboxButton: React.ForwardRefExoticComponent<
       store={checkbox}
       onChange={onChange}
       className={cn(
-        // Base styling from MultiSelect's selectClassName
-        'group relative inline-flex items-center justify-center gap-1.5',
-        'rounded-full border border-border-medium text-sm font-medium',
+        CHIP_BASE,
         /* Book: the chip is a 34 circle on the phone and a 34 pill on the
            desktop (§6.3), with the §4 tap zone — it sat at 36 with no zone. */
-        'tap-target size-[34px] p-2 transition-all md:h-[34px] md:w-full md:p-3',
-        'bg-transparent shadow-sm hover:bg-surface-hover',
+        'tap-target size-[34px] p-2 md:h-[34px] md:w-full md:p-3',
 
-        /* An enabled tool chip is a switch in chip form, and the book draws it
-           the way every switch is drawn: the accent's soft fill with the accent
-           ink, no border. One look for every tool — the raw blue/purple/amber
-           per-tool tints this replaces were exactly the kind of colour zoo the
-           canon bans. A caller may still override via isCheckedClassName. */
-        isChecked &&
-          (isCheckedClassName ??
-            'border-transparent bg-acc-soft text-text-accent hover:bg-acc-soft'),
+        /* One look for every enabled tool — the raw blue/purple/amber per-tool
+           tints this replaced were exactly the kind of colour zoo the canon
+           bans. A caller may still override via isCheckedClassName. */
+        isChecked && (isCheckedClassName ?? CHIP_CHECKED),
 
         // Additional custom classes
         className,

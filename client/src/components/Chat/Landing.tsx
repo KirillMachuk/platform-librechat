@@ -151,11 +151,15 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
 
   return (
     <div
-      /* pt matches the absolute header (56 phone / 52 desktop), not pb-16:
-         the container starts UNDER the header, so a bottom-only padding
-         pushed the greeting 61px above the visual centre of the thread area
-         (book m02 centres it — measured by the 11.08 review). */
-      className={`flex h-full transform-gpu flex-col items-center justify-center pt-14 transition-all duration-200 md:pt-[52px] ${centerFormOnLanding ? 'max-h-full sm:max-h-0' : 'max-h-full'} ${getDynamicMargin}`}
+      /* Two geometries, two paddings — mixing them was the 11.08-3 overlap bug.
+         Full-height container (phone, or the "form at bottom" setting): the
+         greeting centres in the thread area, and pt compensates the absolute
+         header above it (56 phone / 52 desktop). Centred landing on sm+: the
+         container is a zero-height line right above the composer and the
+         greeting overflows around it — there pt shifted the text DOWN under
+         the composer; what it needs is pb, which floats the overflow up clear
+         of the box (the pre-11.08 behaviour, kept deliberately). */
+      className={`flex h-full transform-gpu flex-col items-center justify-center transition-all duration-200 ${centerFormOnLanding ? 'max-h-full pt-14 sm:max-h-0 sm:pb-16 sm:pt-0' : 'max-h-full pt-14 md:pt-[52px]'} ${getDynamicMargin}`}
     >
       <div ref={contentRef} className="flex flex-col items-center gap-0 p-2">
         {((isAgent || isAssistant) && name) || name ? (

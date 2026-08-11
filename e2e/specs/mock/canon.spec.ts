@@ -307,3 +307,60 @@ test.describe('canon — layers, keyboard reach, layout shift', () => {
     expect(chat.cls).toEqual([]);
   });
 });
+
+/**
+ * Empty-chat geometry (§6.13). Two owner decisions of 11.08 round 3, both of
+ * which regressed silently once already:
+ *
+ *  - the greeting sits ENTIRELY above the composer. The centred landing keeps
+ *    the greeting in a zero-height container and overflows it around a line,
+ *    so a padding change meant for the full-height branch shoved the text
+ *    under the composer without any test noticing.
+ *  - the resting desktop composer is ~130 tall (Kimi as the yardstick).
+ *
+ * Both branches of the landing layout are asserted: the default centred one,
+ * and the "form at bottom" setting, whose container really is full-height.
+ */
+test.describe('canon — empty chat geometry', () => {
+  const boxes = async (page: Page) => {
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+    const greeting = page.locator('h1').first();
+    await expect(greeting).toBeVisible();
+    const greetingBox = await greeting.boundingBox();
+    const composerBox = await page.getByTestId('composer-shell').boundingBox();
+    if (!greetingBox || !composerBox) {
+      throw new Error('greeting or composer not measurable');
+    }
+    return { greetingBox, composerBox };
+  };
+
+  test('the greeting clears the composer and the composer stands ~130 tall', async ({ page }) => {
+    test.setTimeout(90000);
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    const { greetingBox, composerBox } = await boxes(page);
+
+    expect(greetingBox.y + greetingBox.height).toBeLessThanOrEqual(composerBox.y);
+    expect(composerBox.height).toBeGreaterThanOrEqual(126);
+    expect(composerBox.height).toBeLessThanOrEqual(140);
+  });
+
+  test('the greeting clears the composer with the form parked at the bottom', async ({ page }) => {
+    test.setTimeout(90000);
+    await page.addInitScript(() => {
+      window.localStorage.setItem('centerFormOnLanding', 'false');
+    });
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    const { greetingBox, composerBox } = await boxes(page);
+
+    expect(greetingBox.y + greetingBox.height).toBeLessThanOrEqual(composerBox.y);
+  });
+
+  test('the greeting clears the composer on a phone', async ({ page }) => {
+    test.setTimeout(90000);
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    const { greetingBox, composerBox } = await boxes(page);
+
+    expect(greetingBox.y + greetingBox.height).toBeLessThanOrEqual(composerBox.y);
+  });
+});

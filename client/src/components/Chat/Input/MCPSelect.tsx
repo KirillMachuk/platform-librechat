@@ -1,7 +1,7 @@
 import React, { memo, useMemo } from 'react';
 import * as Ariakit from '@ariakit/react';
-import { TooltipAnchor } from '@librechat/client';
 import { PermissionTypes, Permissions } from 'librechat-data-provider';
+import { TooltipAnchor, CHIP_BASE, CHIP_CHECKED } from '@librechat/client';
 import MCPServerMenuItem from '~/components/MCP/MCPServerMenuItem';
 import MCPConfigDialog from '~/components/MCP/MCPConfigDialog';
 import StackedMCPIcons from '~/components/MCP/StackedMCPIcons';
@@ -70,13 +70,15 @@ function MCPSelectContent() {
           disabled={isOpen}
           render={
             <Ariakit.MenuButton
+              /* The MCP pill is a tool chip (§6.3) that happens to open a menu:
+                 same base, same 34 height, and with servers selected it wears
+                 the same neutral "on" fill as every other enabled chip — it
+                 used to be a lone 36px white pill next to tinted ones. */
               className={cn(
-                'group relative inline-flex items-center justify-center gap-1.5',
-                'border border-border-medium text-sm font-medium transition-all',
-                'h-9 min-w-9 rounded-full bg-transparent px-2.5 shadow-sm',
-                'hover:bg-surface-hover',
-                'md:w-fit md:justify-start md:px-3',
-                isOpen && 'bg-surface-hover',
+                CHIP_BASE,
+                'h-[34px] min-w-[34px] px-2.5 md:w-fit md:justify-start md:px-3',
+                (mcpValues?.length ?? 0) > 0 && CHIP_CHECKED,
+                isOpen && (mcpValues?.length ?? 0) === 0 && 'bg-surface-hover',
               )}
             />
           }
@@ -101,7 +103,9 @@ function MCPSelectContent() {
           aria-label={localize('com_ui_mcp_servers')}
           className={cn(
             'z-popover flex min-w-[260px] max-w-[320px] flex-col rounded-xl',
-            'border border-border-light bg-presentation p-1.5 shadow-lg',
+            /* card, not presentation — same 11.08 menu-surface fix as the
+               selector: presentation is the page behind the card. */
+            'border border-border-light bg-surface-primary p-1.5 shadow-lg',
             'origin-top opacity-0 transition-[opacity,transform] duration-200 ease-out',
             'data-[enter]:scale-100 data-[enter]:opacity-100',
             'scale-95 data-[leave]:scale-95 data-[leave]:opacity-0',

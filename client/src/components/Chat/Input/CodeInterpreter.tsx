@@ -25,7 +25,7 @@ function CodeInterpreter() {
         className="max-w-fit"
         checked={runCode}
         setValue={debouncedChange}
-        label={localize('com_ui_run_code')}
+        label={localize('com_ui_chip_run_code')}
         icon={<TerminalSquareIcon className="icon-sm" aria-hidden="true" />}
       />
     )

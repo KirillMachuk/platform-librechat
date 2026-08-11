@@ -95,9 +95,11 @@ const SearchChatsDialog = memo(function SearchChatsDialog() {
         className="flex max-h-[540px] w-[calc(100vw-2rem)] max-w-[560px] flex-col gap-0 overflow-hidden p-1.5 supports-[height:85dvh]:max-h-[min(540px,85dvh)] sm:w-full"
         showCloseButton={false}
       >
-        <div /* Поиск — контрол (§6.4): рамка `control`, радиус 12, высота 36/48,
-            а не строка с линией снизу. */
-          className="mb-1 flex h-12 flex-none items-center gap-2 rounded-xl border border-border-control px-2.5 sm:h-9"
+        <div /* Поиск — контрол (§6.4, ред. 11.08-3): волосяная линия + тень sm,
+            радиус 12, высота 36/48. Рамка статична — диалог сам фокусирует
+            поле при открытии (именованное исключение §6.4: потемнение на
+            автофокусе читалось бы как цвет покоя). */
+          className="mb-1 flex h-12 flex-none items-center gap-2 rounded-xl border border-border-light px-2.5 shadow-sm sm:h-9"
         >
           <Search className="h-5 w-5 flex-shrink-0 text-text-secondary" aria-hidden="true" />
           <input

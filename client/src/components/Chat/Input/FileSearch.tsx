@@ -25,7 +25,7 @@ function FileSearch() {
           className="max-w-fit"
           checked={fileSearchEnabled}
           setValue={debouncedChange}
-          label={localize('com_assistants_file_search')}
+          label={localize('com_ui_chip_file_search')}
           icon={<VectorIcon className="icon-sm" />}
         />
       )}
