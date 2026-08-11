@@ -27,7 +27,7 @@ const {
   processDeleteRequest,
   processAgentFileUpload,
 } = require('~/server/services/Files/process');
-const { getFileUploadAllowance } = require('~/server/middleware/limiters/uploadLimiters');
+const { getFileUploadAllowance } = require('~/server/middleware/limiters/config');
 const { fileAccess } = require('~/server/middleware/accessResources/fileAccess');
 const { getStrategyFunctions } = require('~/server/services/Files/strategies');
 const { getOpenAIClient } = require('~/server/controllers/assistants/helpers');
