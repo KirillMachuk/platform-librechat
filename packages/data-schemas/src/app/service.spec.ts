@@ -1,5 +1,5 @@
-import type { DeepPartial, TCustomConfig } from 'librechat-data-provider';
 import { EModelEndpoint, defaultAssistantsVersion } from 'librechat-data-provider';
+import type { DeepPartial, TCustomConfig } from 'librechat-data-provider';
 import { AppService, loadSummarizationConfig } from './service';
 import logger from '~/config/winston';
 
@@ -144,6 +144,46 @@ describe('AppService assistants config', () => {
     expect(result.endpoints?.[EModelEndpoint.azureAssistants]?.version).toBe(
       defaultAssistantsVersion.azureAssistants,
     );
+  });
+
+  /**
+   * `AppService` copies the parsed config into `AppConfig` field by field, so a block nobody
+   * lists is simply absent at runtime while the type still promises it. Nothing fails: the
+   * server boots, the start-up config dump prints the block, and every consumer test keeps
+   * passing because each hands its own object straight to the consumer.
+   *
+   * That is how the Auto orchestrator's mode config was lost. `appConfig.auto` was always
+   * `undefined` in production, which silently took out three things at once — the admin screen
+   * reported "modes not configured", switching to Smart did nothing, and the fallback model
+   * list was never sent, so the promised rescue to Sonnet could not have fired. Standard mode
+   * kept working only because the model spec repeats its settings.
+   */
+  it('surfaces auto (activeMode + per-mode models) at the top level for readers', async () => {
+    const config = {
+      auto: {
+        spec: 'auto',
+        activeMode: 'standard',
+        modes: {
+          standard: {
+            model: 'deepseek/deepseek-v4-flash-0731',
+            researcherId: 'researcher-standard',
+          },
+          smart: { model: 'anthropic/claude-opus-5', researcherId: 'researcher-smart' },
+        },
+      },
+    } as unknown as DeepPartial<TCustomConfig>;
+
+    const result = await AppService({ config });
+
+    expect(result.auto?.activeMode).toBe('standard');
+    expect(result.auto?.modes?.standard?.researcherId).toBe('researcher-standard');
+    expect(result.auto?.modes?.smart?.model).toBe('anthropic/claude-opus-5');
+  });
+
+  it('does not invent an auto block when the config has none', async () => {
+    const result = await AppService({ config: {} as DeepPartial<TCustomConfig> });
+
+    expect(result.auto).toBeUndefined();
   });
 
   it('surfaces deepResearch (activeMode + per-mode models) at the top level for readers', async () => {
