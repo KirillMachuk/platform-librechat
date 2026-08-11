@@ -152,7 +152,7 @@ const header = `/**
  */
 /* eslint-disable */
 import * as React from 'react';
-import type { IconProps } from '@tabler/icons-react';
+import type { IconProps, TablerIcon } from '@tabler/icons-react';
 import {
 ${imported.map((n) => `  ${n},`).join('\n')}
 } from '@tabler/icons-react';
@@ -160,7 +160,7 @@ ${imported.map((n) => `  ${n},`).join('\n')}
 export type LucideIcon = React.ComponentType<IconProps>;
 
 /** The canon's stroke as a default the call site can still override. */
-const canon = (Target: LucideIcon, displayName: string): LucideIcon => {
+const canon = (Target: TablerIcon, displayName: string): LucideIcon => {
   const C = React.forwardRef<SVGSVGElement, IconProps>((props, ref) =>
     React.createElement(Target, { stroke: 1.25, ref, ...props }),
   );

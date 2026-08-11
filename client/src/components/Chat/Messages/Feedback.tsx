@@ -286,7 +286,7 @@ export default function Feedback({ handleFeedback, feedback: initialFeedback }: 
         title={label}
         aria-pressed="true"
       >
-        <Icon size="19" bold />
+        <Icon size="19" />
       </button>
     );
   };
