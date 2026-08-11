@@ -24,6 +24,7 @@ const {
   sanitizeFilename,
   parseText,
   parseTextNative,
+  parseTextNativeIfReadable,
   FULL_TEXT_MAX_BYTES,
   probePdf,
   withTimeout,
@@ -1401,17 +1402,36 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         );
       } catch (err) {
         logger.warn(`[processAgentFileUpload] ${err.message}; falling back to native text parsing`);
-        parsedText = await parseTextNative(file);
+        /* Guarded, because this branch also serves types the raw reader cannot handle: .doc,
+         * .rtf and .pptx sit in the configured text set but never reach the document parser, so
+         * an unguarded read stored the file's own OLE2/zip bytes as its text. A timeout is
+         * transient, so a refusal here defers rather than fails. */
+        parsedText = await parseTextNativeIfReadable(file, err instanceof TimeoutError);
       }
-      const { text, bytes } = parsedText;
-      tool_resource = await resolveExtractedTextRouting({
-        req,
-        toolResource: tool_resource,
-        textChars: text?.length ?? 0,
-        filename: file.originalname,
-      });
-      if (tool_resource === EToolResources.context) {
-        return await createTextFile({ text, bytes, type: file.mimetype });
+      const { text, bytes, retryable } = parsedText;
+      /* Nothing extracted for a transient reason is not an empty document: creating one would
+       * answer 200 and leave a blank record in the library forever. Defer it exactly as the OCR
+       * branch does, or say honestly that the parser is busy when there is nowhere to defer. */
+      if (!text?.trim() && retryable) {
+        if (!(await checkCapability(req, AgentCapabilities.file_search))) {
+          throw new Error(
+            `The document parser is busy and could not finish "${file.originalname}" in time. Please upload it again in a few minutes.`,
+          );
+        }
+        logger.info(
+          `[processAgentFileUpload] parser unavailable for "${file.originalname}"; deferring to file_search so the embed worker parses it in the background`,
+        );
+        tool_resource = EToolResources.file_search;
+      } else {
+        tool_resource = await resolveExtractedTextRouting({
+          req,
+          toolResource: tool_resource,
+          textChars: text?.length ?? 0,
+          filename: file.originalname,
+        });
+        if (tool_resource === EToolResources.context) {
+          return await createTextFile({ text, bytes, type: file.mimetype });
+        }
       }
       /* Over-threshold plain text: fall through to the RAG pipeline below. */
     }

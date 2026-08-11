@@ -121,11 +121,12 @@ function isTransientParseFailure(error: unknown): boolean {
 /**
  * Native parsing, refused for content it cannot actually read.
  *
- * Every fallback in `parseText` goes through here. Guarding only the one after a failed POST
+ * Every fallback in `parseText` goes through here, and so does the caller that keeps its own
+ * (`processAgentFileUpload`'s plain-text branch). Guarding only the one after a failed POST
  * left the others — no RAG_API_URL, no user, a failed health check — handing back a scan's own
  * bytes as its text, and the health check fails on every stack restart.
  */
-async function nativeFallback(
+export async function parseTextNativeIfReadable(
   file: Express.Multer.File,
   retryable = false,
 ): Promise<{ text: string; bytes: number; source: string; retryable?: boolean }> {
@@ -182,20 +183,20 @@ export async function parseText({
 }): Promise<{ text: string; bytes: number; source: string; retryable?: boolean }> {
   if (!process.env.RAG_API_URL) {
     logger.debug('[parseText] RAG_API_URL not defined, falling back to native text parsing');
-    return nativeFallback(file);
+    return parseTextNativeIfReadable(file);
   }
 
   if (isMarkdownFile(file)) {
     logger.debug(
       `[parseText] Markdown file detected (${file.originalname}, ${file.mimetype}), using native parsing to preserve raw formatting`,
     );
-    return nativeFallback(file);
+    return parseTextNativeIfReadable(file);
   }
 
   const userId = req.user?.id;
   if (!userId) {
     logger.debug('[parseText] No user ID provided, falling back to native text parsing');
-    return nativeFallback(file);
+    return parseTextNativeIfReadable(file);
   }
 
   try {
@@ -204,14 +205,14 @@ export async function parseText({
     });
     if (healthResponse?.statusText !== 'OK' && healthResponse?.status !== 200) {
       logger.debug('[parseText] RAG API health check failed, falling back to native parsing');
-      return nativeFallback(file, true);
+      return parseTextNativeIfReadable(file, true);
     }
   } catch (healthError) {
     logAxiosError({
       message: '[parseText] RAG API health check failed, falling back to native parsing:',
       error: healthError,
     });
-    return nativeFallback(file, true);
+    return parseTextNativeIfReadable(file, true);
   }
 
   try {
@@ -253,7 +254,7 @@ export async function parseText({
      * was discarded and the caller reported a busy scan lane as "this document may be
      * image-based". Measured on the stand: a 6 MB scan that indexes in 34s on its own was lost
      * this way whenever another scan held the lane. */
-    return nativeFallback(file, isTransientParseFailure(error));
+    return parseTextNativeIfReadable(file, isTransientParseFailure(error));
   }
 }
 
