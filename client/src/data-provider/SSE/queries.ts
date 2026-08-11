@@ -216,26 +216,24 @@ export function useTitleGeneration(enabled = true) {
       } else if (titleQuery.isError) {
         // Retries are exhausted here (the query only retries on 404). A title may
         // still be generated *after* the stream completes (final mode generates
-        // only once the response ends), so don't treat the first 404 as final —
-        // guarantee one fresh, full-budget fetch cycle that runs post-completion.
+        // only once the response ends), so a cycle that died mid-stream does not
+        // count as the answer — it is dropped and re-promoted on completion for
+        // one fresh, full-budget cycle.
         if (activeSet.has(conversationId)) {
           // Failed while still streaming: drop and clear so the completion
           // transition re-promotes a fresh fetch (instead of busy-looping).
           deferredTitles.add(conversationId);
           queryClient.removeQueries(genTitleQueryKey(conversationId));
-          setReadyToFetch((prev) => prev.filter((id) => id !== conversationId));
-        } else if (!deferredTitles.has(conversationId)) {
-          // First failure at/after completion without a prior deferral: grant one
-          // fresh cycle. Polling has stopped (no re-promotion), so reset the query
-          // in place — `resetQueries` refetches active observers with a fresh retry
-          // budget, unlike `removeQueries`, which leaves the observer in error state.
-          deferredTitles.add(conversationId);
-          queryClient.resetQueries(genTitleQueryKey(conversationId));
         } else {
-          // The post-completion fetch also failed — the title is genuinely absent.
+          // A full retry cycle ran with the stream already over: the title is
+          // absent, not late. Stop here — a second cycle buys nothing (a title
+          // arriving later still reaches the row over SSE and is persisted by
+          // the server), and on a stand with title generation off it doubled
+          // every new conversation's cost to 8 requests / ~2.6 min of 404s,
+          // each one held ~15.5s by the server's own wait loop.
           markTitleGenerationProcessed(conversationId);
-          setReadyToFetch((prev) => prev.filter((id) => id !== conversationId));
         }
+        setReadyToFetch((prev) => prev.filter((id) => id !== conversationId));
       }
     });
   }, [titleQueries, readyToFetch, queryClient, activeJobIds, applyTitleToActiveConvo]);

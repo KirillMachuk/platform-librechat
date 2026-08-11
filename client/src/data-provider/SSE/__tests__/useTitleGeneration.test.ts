@@ -181,7 +181,7 @@ describe('useTitleGeneration — result handling', () => {
     expect(mockResetQueries).not.toHaveBeenCalled();
   });
 
-  it('a 404 after the stream completes forces a fresh fetch via resetQueries', () => {
+  it('a 404 after the stream completes ends the polling instead of buying a second cycle', () => {
     mockTiming = 'immediate';
     mockActiveJobIds = []; // stream already complete
 
@@ -191,6 +191,12 @@ describe('useTitleGeneration — result handling', () => {
     mockQueriesResults = [{ isError: true, isSuccess: false, error: notFound }];
     rerender();
 
-    expect(mockResetQueries).toHaveBeenCalledWith(genTitleQueryKey('conv-done404'));
+    /* The retry cycle that just failed ran with the stream already over, so the
+     * server had its full window: the title is absent, not late. Re-running the
+     * cycle only doubles the 404s on a stand with title generation disabled. */
+    expect(mockResetQueries).not.toHaveBeenCalled();
+    mockQueriesResults = [];
+    rerender();
+    expect(isEligible('conv-done404')).toBe(false);
   });
 });
