@@ -87,7 +87,7 @@ test.describe('the buttons under an answer', () => {
      * message under test — so "the older row is simply not painted yet" cannot
      * explain a failure below. */
     expect(
-      await paintedOpacity(page.getByTitle('Copy to clipboard').first()),
+      await paintedOpacity(page.getByLabel('Copy to clipboard').first()),
       'copy on the older turn already follows the canon',
     ).toBeGreaterThan(0.99);
 

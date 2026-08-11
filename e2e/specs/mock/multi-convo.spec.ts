@@ -46,8 +46,28 @@ test.describe('comparing two answers', () => {
 
   test('a phone shows one answer at a time and switches between them', async ({ page }) => {
     test.setTimeout(120000);
-    await page.setViewportSize({ width: 375, height: 812 });
+    /* The comparison is STARTED at a desktop width: the book's mobile header
+       law has no Compare button on the phone (hidden below md since 11.08) —
+       a phone VIEWS a comparison with the segment, it does not begin one. */
     await compareTwoAnswers(page);
+    await page.setViewportSize({ width: 375, height: 812 });
+    /* The desktop-expanded sidebar becomes the phone's open drawer after the
+       resize and would cover the thread — close it the way a person would. */
+    const closeSidebar = page.locator('#close-sidebar-button');
+    if (await closeSidebar.isVisible()) {
+      await closeSidebar.click();
+      /* The drawer slides out by transform and keeps its layout box, so
+         toBeHidden never turns true — wait for it to stop covering the
+         thread instead. */
+      await expect
+        .poll(async () =>
+          page.evaluate(() => {
+            const drawer = document.querySelector('[data-testid="sidebar-drawer"]');
+            return drawer ? drawer.getBoundingClientRect().right <= 0 : true;
+          }),
+        )
+        .toBe(true);
+    }
 
     const columns = page.locator('.sibling-content-group > div');
     await expect(columns.nth(0)).toBeVisible();
