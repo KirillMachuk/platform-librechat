@@ -248,7 +248,6 @@ const ALLOWED_INLINE_SVG = {
   'client/src/components/Agents/ErrorDisplay.tsx': 1,
   'client/src/components/Chat/Input/Files/DragDropOverlay.tsx': 1,
   'client/src/components/Chat/Input/Files/ProgressCircle.tsx': 1,
-  'client/src/components/Chat/Input/StopButton.tsx': 1,
   'client/src/components/Chat/Input/TokenUsage/Gauge.tsx': 1,
   'client/src/components/Chat/Menus/Endpoints/components/brand.tsx': 1,
   'client/src/components/Chat/Menus/Presets/PresetItems.tsx': 1,
@@ -282,7 +281,14 @@ for (const root of SRC) {
       fail(
         rel,
         `imports straight from lucide-react`,
-        `import the same name from '~/components/icons' — the shim maps it to Phosphor (scripts/icons.map.json)`,
+        `import the same name from '~/components/icons' — the shim maps it to Tabler (scripts/icons.map.json)`,
+      );
+    }
+    if (/from\s+['"]@tabler\/icons-react['"]/.test(text)) {
+      fail(
+        rel,
+        `imports straight from @tabler/icons-react`,
+        `import a semantic name from '~/components/icons' — the shim owns the stroke and the mapping (scripts/icons.map.json)`,
       );
     }
   }

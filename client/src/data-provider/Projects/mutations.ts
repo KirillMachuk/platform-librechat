@@ -1,12 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { MutationKeys, QueryKeys, dataService } from 'librechat-data-provider';
+import type { TFile, TProject, TProjectCreate, TProjectUpdate } from 'librechat-data-provider';
 import type { UseMutationOptions } from '@tanstack/react-query';
-import type {
-  TFile,
-  TProject,
-  TProjectCreate,
-  TProjectUpdate,
-} from 'librechat-data-provider';
 
 export const useCreateProjectMutation = (
   options?: UseMutationOptions<TProject, Error, TProjectCreate>,
@@ -27,23 +22,18 @@ export const useUpdateProjectMutation = (
   options?: UseMutationOptions<TProject, Error, TProjectUpdate>,
 ) => {
   const queryClient = useQueryClient();
-  return useMutation(
-    (payload: TProjectUpdate) => dataService.updateProject(projectId, payload),
-    {
-      mutationKey: [MutationKeys.updateProject, projectId],
-      ...options,
-      onSuccess: (data, variables, context) => {
-        queryClient.invalidateQueries([QueryKeys.projects]);
-        queryClient.invalidateQueries([QueryKeys.project, projectId]);
-        options?.onSuccess?.(data, variables, context);
-      },
+  return useMutation((payload: TProjectUpdate) => dataService.updateProject(projectId, payload), {
+    mutationKey: [MutationKeys.updateProject, projectId],
+    ...options,
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries([QueryKeys.projects]);
+      queryClient.invalidateQueries([QueryKeys.project, projectId]);
+      options?.onSuccess?.(data, variables, context);
     },
-  );
+  });
 };
 
-export const useDeleteProjectMutation = (
-  options?: UseMutationOptions<void, Error, string>,
-) => {
+export const useDeleteProjectMutation = (options?: UseMutationOptions<void, Error, string>) => {
   const queryClient = useQueryClient();
   return useMutation((projectId: string) => dataService.deleteProject(projectId), {
     mutationKey: [MutationKeys.deleteProject],

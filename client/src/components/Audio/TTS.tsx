@@ -1,9 +1,10 @@
 /* eslint-disable jsx-a11y/media-has-caption */
 import { useEffect } from 'react';
 import { useRecoilValue } from 'recoil';
-import { VolumeIcon, VolumeMuteIcon, Spinner } from '@librechat/client';
+import { Spinner } from '@librechat/client';
 import type { TMessageAudio } from '~/common';
 import { useLocalize, useTTSBrowser, useTTSExternal } from '~/hooks';
+import { Volume2, VolumeOff } from '~/components/icons';
 import { logger } from '~/utils';
 import store from '~/store';
 
@@ -31,10 +32,10 @@ export function BrowserTTS({
     }
 
     if (isSpeaking === true) {
-      return <VolumeMuteIcon className="icon-md" />;
+      return <VolumeOff className="icon-md" />;
     }
 
-    return <VolumeIcon className="icon-md" />;
+    return <Volume2 className="icon-md" />;
   };
 
   useEffect(() => {
@@ -124,10 +125,10 @@ export function ExternalTTS({
     }
 
     if (isSpeaking === true) {
-      return <VolumeMuteIcon className="icon-md" />;
+      return <VolumeOff className="icon-md" />;
     }
 
-    return <VolumeIcon className="icon-md" />;
+    return <Volume2 className="icon-md" />;
   };
 
   useEffect(() => {

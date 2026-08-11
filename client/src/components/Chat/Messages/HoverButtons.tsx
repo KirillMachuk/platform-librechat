@@ -1,13 +1,9 @@
 import React, { useState, useMemo, memo } from 'react';
 import { useRecoilState } from 'recoil';
-import {
-  EditIcon,
-  Clipboard,
-  CheckMark,
-  ContinueIcon,
-  RegenerateIcon,
-  TooltipAnchor,
-} from '@librechat/client';
+import { TooltipAnchor } from '@librechat/client';
+/* Owner's 11.08-4 picks: pencil / copy / check / repeat, drawn by the Tabler
+   shims — the upstream hand-drawn svgs these replace predated the migration. */
+import { Check, Copy, Pencil, PlayerTrackNext, Repeat } from '~/components/icons';
 import type { TConversation, TMessage, TFeedback } from 'librechat-data-provider';
 import { useGenerationsByLatest, useLocalize } from '~/hooks';
 import { Fork } from '~/components/Conversations';
@@ -199,7 +195,7 @@ const HoverButtons = ({
           <HoverButton
             onClick={regenerate}
             title={localize('com_ui_regenerate')}
-            icon={<RegenerateIcon size="19" />}
+            icon={<Repeat size="19" />}
             isLast={isLast}
           />
         )}
@@ -247,7 +243,7 @@ const HoverButtons = ({
           title={
             isCopied ? localize('com_ui_copied_to_clipboard') : localize('com_ui_copy_to_clipboard')
           }
-          icon={isCopied ? <CheckMark className="h-[18px] w-[18px]" /> : <Clipboard size="19" />}
+          icon={isCopied ? <Check className="h-[18px] w-[18px]" /> : <Copy size="19" />}
           isLast={isLast}
           className="ml-0 flex items-center gap-1.5 text-xs"
         />
@@ -262,7 +258,7 @@ const HoverButtons = ({
           id={`edit-${message.messageId}`}
           onClick={onEdit}
           title={localize('com_ui_edit')}
-          icon={<EditIcon size="19" />}
+          icon={<Pencil size="19" />}
           isActive={isEditing}
           isVisible={!editUnavailable}
           isDisabled={editUnavailable || isSubmitting}
@@ -289,7 +285,7 @@ const HoverButtons = ({
         <HoverButton
           onClick={regenerate}
           title={localize('com_ui_regenerate')}
-          icon={<RegenerateIcon size="19" />}
+          icon={<Repeat size="19" />}
           isLast={isLast}
         />
       )}
@@ -299,7 +295,7 @@ const HoverButtons = ({
         <HoverButton
           onClick={(e) => e && handleContinue(e)}
           title={localize('com_ui_continue')}
-          icon={<ContinueIcon className="w-19 h-19 -rotate-180" />}
+          icon={<PlayerTrackNext className="w-19 h-19 -rotate-180" />}
           isLast={isLast}
         />
       )}

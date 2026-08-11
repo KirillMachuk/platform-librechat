@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
-import { CheckboxButton, VectorIcon } from '@librechat/client';
+import { CheckboxButton } from '@librechat/client';
 import { PermissionTypes, Permissions } from 'librechat-data-provider';
+import { FileSearchIcon } from '~/components/icons';
 import { useLocalize, useHasAccess } from '~/hooks';
 import { useBadgeRowContext } from '~/Providers';
 
@@ -26,7 +27,7 @@ function FileSearch() {
           checked={fileSearchEnabled}
           setValue={debouncedChange}
           label={localize('com_ui_chip_file_search')}
-          icon={<VectorIcon className="icon-sm" />}
+          icon={<FileSearchIcon className="icon-sm" aria-hidden="true" />}
         />
       )}
     </>
