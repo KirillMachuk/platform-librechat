@@ -1878,7 +1878,7 @@
   "com_ui_revoke_key_success": "API-ключ успешно отозван",
   "com_ui_running": "Выполняется...",
   "com_ui_running_command": "Выполнение команды",
-  "com_ui_running_n_agents": "Запущено агентов: {{0}}",
+  "com_ui_running_n_agents": "Работают агенты: {{0}}",
   "com_ui_scroll_to_bottom": "Прокрутить вниз",
   "com_ui_scroll_right": "Прокрутить вправо",
   "com_ui_scroll_left": "Прокрутить влево",
