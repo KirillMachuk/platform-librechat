@@ -52,7 +52,7 @@ const ArtifactsPanel = memo(function ArtifactsPanel({
         panelRef={artifactsPanelRef}
         id="artifacts-panel"
       >
-        <div className={`min-w-[400px] ${cardClassName}`}>{artifacts}</div>
+        <div className={cardClassName}>{artifacts}</div>
       </ResizablePanel>
     </>
   );

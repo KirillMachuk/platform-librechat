@@ -93,10 +93,12 @@ export default function Root() {
                       !panelOpen &&
                         'md:rounded-2xl md:border md:border-border-light md:bg-presentation md:shadow-sm',
                     )}
-                    style={{
-                      transform: isSmallScreen && sidebarExpanded ? 'translateX(72vw)' : 'none',
-                      transition: 'transform 300ms cubic-bezier(0.2, 0, 0, 1)',
-                    }}
+                    /* Канон §7: на телефоне меню — панель 72% ПОВЕРХ чата: чат
+                       остаётся на месте под `scrim` (drawer z-110, scrim z-109 —
+                       UnifiedSidebar.tsx), закрытие тапом по вуали. Сдвиг обёртки
+                       на translateX(72vw) уносил приветствие за экран целиком и
+                       оставлял от композера 94px из 343. `inert` остаётся: чат под
+                       вуалью не должен ловить фокус с клавиатуры. */
                     inert={isSmallScreen && sidebarExpanded ? '' : undefined}
                   >
                     <Outlet />

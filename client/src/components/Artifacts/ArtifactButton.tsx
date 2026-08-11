@@ -3,8 +3,8 @@ import debounce from 'lodash/debounce';
 import { useLocation } from 'react-router-dom';
 import { useRecoilState, useSetRecoilState, useResetRecoilState } from 'recoil';
 import type { Artifact } from '~/common';
-import FilePreview from '~/components/Chat/Input/Files/FilePreview';
-import { cn, getFileType, logger, isArtifactRoute } from '~/utils';
+import { cn, logger, isArtifactRoute } from '~/utils';
+import { FileCode } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import store from '~/store';
 
@@ -51,7 +51,6 @@ const ArtifactButton = ({ artifact }: { artifact: Artifact | null }) => {
   if (artifact === null || artifact === undefined) {
     return null;
   }
-  const fileType = getFileType('artifact');
 
   return (
     <div className="group relative my-4 rounded-xl text-sm text-text-primary">
@@ -87,10 +86,12 @@ const ArtifactButton = ({ artifact }: { artifact: Artifact | null }) => {
           <button type="button" onClick={handleClick} className={buttonClass}>
             <div className="w-fit p-2">
               <div className="flex flex-row items-center gap-2">
-                <FilePreview fileType={fileType} className="relative" />
+                <FileCode size={18} className="shrink-0 text-text-tertiary" aria-hidden="true" />
                 <div className="overflow-hidden text-left">
-                  <div className="truncate font-medium">{artifact.title}</div>
-                  <div className="truncate text-text-secondary">{actionLabel}</div>
+                  <div className="truncate text-[13px] font-medium">{artifact.title}</div>
+                  <div className="truncate text-[12.5px] leading-4 text-text-tertiary">
+                    {actionLabel}
+                  </div>
                 </div>
               </div>
             </div>

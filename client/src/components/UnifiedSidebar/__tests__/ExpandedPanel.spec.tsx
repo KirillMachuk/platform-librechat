@@ -224,7 +224,7 @@ describe('ExpandedPanel', () => {
     });
   });
 
-  describe('the section whose panel is open wears the accent', () => {
+  describe('the section whose panel is open wears the neutral tint, never the brand', () => {
     it('tints that row and its icon, and leaves every other row neutral', () => {
       renderPanel({ expanded: true });
 
@@ -233,24 +233,33 @@ describe('ExpandedPanel', () => {
       const classesOf = (el: HTMLElement) => el.className.split(/\s+/);
 
       expect(classesOf(prompts)).toContain('text-text-secondary');
-      expect(classesOf(prompts)).not.toContain('bg-acc-soft');
+      expect(classesOf(prompts)).not.toContain('bg-surface-active');
 
       fireEvent.click(screen.getByRole('button', { name: 'com_ui_prompts' }));
 
-      /* Canon §6.5: acc-soft fill, acc text — and the t2 it replaces must be
+      /* Canon §6.5 as the owner rewrote it on 10.08: the selected row is the
+         neutral `active` tint with t1 text — and the t2 it replaces must be
          gone, or twMerge kept the wrong one of the pair. */
-      expect(classesOf(prompts)).toContain('bg-acc-soft');
-      expect(classesOf(prompts)).toContain('text-text-accent');
+      expect(classesOf(prompts)).toContain('bg-surface-active');
+      expect(classesOf(prompts)).toContain('text-text-primary');
       expect(classesOf(prompts)).not.toContain('text-text-secondary');
-      expect(classesOf(bookmarks)).not.toContain('bg-acc-soft');
+      expect(classesOf(bookmarks)).not.toContain('bg-surface-active');
       expect(classesOf(bookmarks)).toContain('text-text-secondary');
 
-      /* The icon carries the accent too, not just the label. */
+      /* The guard, not the decoration: §1.1 excludes a sidebar section from the
+         exhaustive list of places the brand petrol may appear, so the petrol
+         must be provably absent — from the row AND from its icon. This is the
+         assertion that stops the decision from being reverted by the next
+         person who reads the old §6.5. */
+      expect(classesOf(prompts)).not.toContain('bg-acc-soft');
+      expect(classesOf(prompts)).not.toContain('text-text-accent');
+
+      /* The icon carries the same neutral t1, not just the label. */
       const icon = prompts.querySelector('svg');
       expect(icon).not.toBeNull();
-      expect((icon as SVGElement).getAttribute('class')?.split(/\s+/)).toContain(
-        'text-text-accent',
-      );
+      const iconClasses = (icon as SVGElement).getAttribute('class')?.split(/\s+/);
+      expect(iconClasses).toContain('text-text-primary');
+      expect(iconClasses).not.toContain('text-text-accent');
     });
   });
 

@@ -42,7 +42,10 @@ function AddMultiConvo() {
       aria-label={localize('com_ui_add_multi_conversation')}
       onClick={clickHandler}
       data-testid="add-multi-convo-button"
-      className="tap-target inline-flex size-8 flex-shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-50 radix-state-open:bg-surface-tertiary"
+      /* Канон §7: на телефоне кнопка-иконка шапки сама 44; §6.2: на десктопе 32.
+         Тот же случай, что у TemporaryChat — компонент стоит в общей группе
+         шапки и рендерится на обеих ширинах. */
+      className="tap-target inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-50 radix-state-open:bg-surface-tertiary md:h-8 md:w-8"
     >
       <PlusCircle className="icon-sm" aria-hidden="true" />
     </TooltipAnchor>

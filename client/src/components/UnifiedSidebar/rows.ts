@@ -13,19 +13,23 @@ export const sidebarRowIconClassName =
   'icon-md flex-shrink-0 text-text-tertiary transition-colors duration-90 group-hover:text-text-primary';
 
 /**
- * The open section (canon §6.5, `.nrow.on` in the prototype): `acc-soft` fill,
- * `acc` text AND `acc` icon.
+ * The open section (canon §6.5, rewritten by the owner's decision of 10.08 late
+ * evening): a selected sidebar row is NEUTRAL — `active` tint plus t1 text and
+ * t1 icon. Exactly what the active conversation row further down the same
+ * sidebar already wears (Convo.tsx: `bg-surface-active text-text-primary`), so
+ * the two selected states finally read as one state.
+ *
+ * Petrol is off this role for good: §1.1 lists every place the brand colour is
+ * still allowed and names «раздел сайдбара» as excluded from it. Do not
+ * restore `acc-soft`/`text-text-accent` here.
  *
  * Hover is restated on purpose — the base row paints hover as `hover`/t1, so
- * without these the accent would drop out from under the cursor.
+ * without these the tint would drop out from under the cursor.
  */
-/* bg-acc-soft, NOT the focus-ring token it borrowed before: the day focus
- * went neutral, --ring-primary-soft went transparent and the tint of the
- * open section silently vanished. Selection has its own token (§1.4). */
 export const sidebarRowActiveClassName =
-  'bg-acc-soft text-text-accent hover:bg-acc-soft hover:text-text-accent';
+  'bg-surface-active text-text-primary hover:bg-surface-active hover:text-text-primary';
 
-export const sidebarRowActiveIconClassName = 'text-text-accent group-hover:text-text-accent';
+export const sidebarRowActiveIconClassName = 'text-text-primary group-hover:text-text-primary';
 
 /**
  * «Новый чат» — единственная строка-карточка: рамка hairline, фон `card`,

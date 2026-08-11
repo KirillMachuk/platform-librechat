@@ -183,6 +183,11 @@ module.exports = {
         'surface-destructive': 'var(--surface-destructive)',
         'surface-destructive-hover': 'var(--surface-destructive-hover)',
         'surface-chat': 'var(--surface-chat)',
+        /* §2 code-bg / code-ink — единственная подложка и чернила код-блока.
+           Токен уже следует теме сам (:root/.dark в style.css), поэтому
+           dark:-вариантов у потребителей быть не должно (§10.2). */
+        'surface-code': 'var(--c-code-bg)',
+        'code-ink': 'var(--c-code-ink)',
         'border-control': 'var(--border-control)',
         'border-focus': 'var(--border-focus)',
         'border-light': 'var(--border-light)',

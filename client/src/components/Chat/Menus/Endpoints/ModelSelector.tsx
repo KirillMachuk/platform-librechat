@@ -110,12 +110,14 @@ function ModelSelectorContent() {
         // тому слову, которое человек видит на экране.
         <button
           data-testid="model-selector-trigger"
-          /* Канон §7: селектор в шапке — пилюля 38 без рамки и заливки, 15/500.
+          /* Канон §7: селектор в шапке — пилюля 38 без рамки и заливки. Кегль
+             у шкал разный: 15 — мобильная база §7, на десктопе интерфейсный
+             шаг §3 равен 14 (так же нарисовано в прототипе, `.dt .model`).
              Рамка делала выбор похожим на поле ввода. Заливку и наведение
              красит меню (оно знает состояние «открыто»), геометрию — эта
              кнопка: склеивание классов Ariakit не позволяет задавать одно и
              то же с двух сторон. */
-          className="tap-target my-1 flex h-[38px] w-full max-w-[70vw] items-center justify-center gap-1.5 rounded-full px-2.5 text-[15px] font-medium text-text-primary transition-colors duration-90"
+          className="tap-target my-1 flex h-[38px] w-full max-w-[70vw] items-center justify-center gap-1.5 rounded-full px-2.5 text-[15px] font-medium text-text-primary transition-colors duration-90 md:text-sm"
         >
           {selectedIcon && React.isValidElement(selectedIcon) && (
             <div className="flex flex-shrink-0 items-center justify-center overflow-hidden">
