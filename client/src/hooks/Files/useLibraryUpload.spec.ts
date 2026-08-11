@@ -179,6 +179,83 @@ describe('useLibraryUpload', () => {
     expect(localizeCalls).toContainEqual(['com_ui_library_upload_too_many', { 0: '200' }]);
   });
 
+  it('keeps its own ceiling when the server reports an implausible one', async () => {
+    mockFileConfig = { uploadLimits: { userMax: 5000, userWindowInMinutes: 60 } };
+    const { result } = renderHook(() => useLibraryUpload());
+    const many = Array.from(
+      { length: 201 },
+      (_, i) => new File(['x'], `f${i}.pdf`, { type: 'application/pdf' }),
+    );
+
+    await pick(result.current.openFilePicker, many);
+
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+    expect(localizeCalls).toContainEqual(['com_ui_library_upload_too_many', { 0: '200' }]);
+  });
+
+  /* The endpoint's aggregate budget is a chat limit (200 MB here) and silently contradicted the
+   * batch: 200 files at that ceiling demands an average under 1 MB, while the client's scanned
+   * contracts average 6.7 MB. A realistic archive was refused in full before a single upload. */
+  it('sizes the aggregate budget to the batch it offers, not to the chat budget', async () => {
+    mockFileConfig = { uploadLimits: { userMax: 400, userWindowInMinutes: 60 } };
+    const { result } = renderHook(() => useLibraryUpload());
+
+    await pick(result.current.openFilePicker, [
+      new File(['x'], 'scan.pdf', { type: 'application/pdf' }),
+    ]);
+
+    const passed = mockValidateFiles.mock.calls[0][0].endpointFileConfig;
+    expect(passed.fileLimit).toBe(200);
+    expect(passed.totalSizeLimit).toBe(200 * 10 * 1024 * 1024);
+  });
+
+  it('names the limit even when every file was refused', async () => {
+    mockFileConfig = { uploadLimits: { userMax: 50, userWindowInMinutes: 60 } };
+    mockMutateAsync.mockRejectedValue({ response: { status: 429 } });
+    const { result } = renderHook(() => useLibraryUpload());
+
+    await pick(result.current.openFilePicker, [
+      new File(['x'], 'a.pdf', { type: 'application/pdf' }),
+      new File(['x'], 'b.pdf', { type: 'application/pdf' }),
+    ]);
+
+    expect(localizeCalls).toContainEqual([
+      'com_ui_library_upload_rate_limited',
+      { 0: '0', 1: '2', 2: '50', 3: '60' },
+    ]);
+    expect(localizeCalls.map(([key]) => key)).not.toContain('com_error_files_upload');
+  });
+
+  it('does not blame the limit for an ordinary failure', async () => {
+    mockFileConfig = { uploadLimits: { userMax: 50, userWindowInMinutes: 60 } };
+    mockMutateAsync.mockRejectedValue({ response: { status: 500 } });
+    const { result } = renderHook(() => useLibraryUpload());
+
+    await pick(result.current.openFilePicker, [
+      new File(['x'], 'a.pdf', { type: 'application/pdf' }),
+    ]);
+
+    expect(localizeCalls.map(([key]) => key)).not.toContain('com_ui_library_upload_rate_limited');
+    expect(localizeCalls.map(([key]) => key)).toContain('com_error_files_upload');
+  });
+
+  /* Server numbers unavailable: still "later", never "retry them" — that advice is what makes
+   * the wait longer, because a refused request counts against the window too. */
+  it('avoids the harmful retry advice when the limit is unknown', async () => {
+    mockFileConfig = {};
+    mockMutateAsync.mockResolvedValueOnce({}).mockRejectedValueOnce({ response: { status: 429 } });
+    const { result } = renderHook(() => useLibraryUpload());
+
+    await pick(result.current.openFilePicker, [
+      new File(['x'], 'a.pdf', { type: 'application/pdf' }),
+      new File(['x'], 'b.pdf', { type: 'application/pdf' }),
+    ]);
+
+    const keys = localizeCalls.map(([key]) => key);
+    expect(keys).toContain('com_ui_library_upload_rate_limited_unknown');
+    expect(keys).not.toContain('com_ui_library_uploaded_partial');
+  });
+
   it('does not upload when validation fails', async () => {
     mockValidateFiles.mockImplementation(({ setError }: { setError: (e: string) => void }) => {
       setError('Unsupported file type: application/x-msdownload');

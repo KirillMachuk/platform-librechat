@@ -32,6 +32,16 @@ const LIBRARY_UPLOAD_CONCURRENCY = 4;
  * actually offered is the smaller of this and what the server will accept — see `maxBatch`. */
 const LIBRARY_UPLOAD_MAX_BATCH = 200;
 
+/** Aggregate size allowed for one library selection, per file offered.
+ *
+ * The endpoint's own `totalSizeLimit` is a chat budget — 200 MB on this deployment — and it
+ * silently contradicted the batch: offering 200 files while capping the selection at 200 MB
+ * demands an average file under 1 MB, when the client's own scanned contracts average 6.7 MB.
+ * A realistic archive import was rejected in full, before a single upload left the browser.
+ * Per-file size and the server's rate limit remain the real ceilings; this only keeps a stray
+ * selection from queueing an unbounded pile. */
+const LIBRARY_UPLOAD_AVG_FILE_BYTES = 10 * 1024 * 1024;
+
 /** Whether an upload was turned away by the server's rate limiter rather than failing. */
 function isRateLimited(error: unknown): boolean {
   return (error as { response?: { status?: number } })?.response?.status === 429;
@@ -118,6 +128,7 @@ export function useLibraryUpload() {
         // dump legitimately uploads many, so validate size/MIME against a much
         // higher batch cap instead.
         fileLimit: maxBatch,
+        totalSizeLimit: maxBatch * LIBRARY_UPLOAD_AVG_FILE_BYTES,
       };
       validateFiles({
         files: new Map(),
@@ -206,6 +217,8 @@ export function useLibraryUpload() {
       if (rateLimited > 0) {
         const limits = fileConfig?.uploadLimits;
         showToast({
+          /* Without the server's numbers the honest thing is still to say "later", never
+           * "retry them" — that advice is what makes the wait longer. */
           message: limits
             ? localize('com_ui_library_upload_rate_limited', {
                 0: String(total - failed),
@@ -213,7 +226,7 @@ export function useLibraryUpload() {
                 2: String(limits.userMax),
                 3: String(limits.userWindowInMinutes),
               })
-            : localize('com_ui_library_uploaded_partial', {
+            : localize('com_ui_library_upload_rate_limited_unknown', {
                 0: String(total - failed),
                 1: String(total),
               }),
