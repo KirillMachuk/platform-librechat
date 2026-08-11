@@ -23,7 +23,6 @@ const { logger, runAsSystem } = require('@librechat/data-schemas');
 const {
   sanitizeFilename,
   parseText,
-  parseTextNative,
   parseTextNativeIfReadable,
   FULL_TEXT_MAX_BYTES,
   probePdf,

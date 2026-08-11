@@ -1,3 +1,5 @@
+import { join } from 'path';
+import { readFileSync } from 'fs';
 import { expect, test } from '@playwright/test';
 import type { Page, Response } from '@playwright/test';
 import {
@@ -18,22 +20,14 @@ type UploadFixture = {
   buffer: Buffer;
 };
 
+/* A real digital PDF, not a hand-built one. The previous inline fixture declared ZERO pages, so
+ * nothing could extract text from it — it only uploaded successfully because the native fallback
+ * handed the file's own bytes back as its "text", which is the defect this suite should be
+ * catching rather than depending on. */
 const pdfFixture: UploadFixture = {
   name: 'provider-context.pdf',
   mimeType: 'application/pdf',
-  buffer: Buffer.from(
-    `%PDF-1.4
-1 0 obj
-<< /Type /Catalog /Pages 2 0 R >>
-endobj
-2 0 obj
-<< /Type /Pages /Count 0 >>
-endobj
-trailer
-<< /Root 1 0 R >>
-%%EOF
-`,
-  ),
+  buffer: readFileSync(join(__dirname, '../../fixtures/files/digital.pdf')),
 };
 
 const textFixture: UploadFixture = {
