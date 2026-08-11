@@ -89,10 +89,15 @@ export const CustomMenu = React.forwardRef<HTMLDivElement, CustomMenuProps>(func
                     className={cn(
                       /* Прототип `.selsearch` и канон §6.4: поле — контрол, а не
                          прозрачная строка: 48 на телефоне и 36 на десктопе,
-                         радиус 12, рамка `control` (3:1 обязательна). */
+                         радиус 12, рамка `control` (3:1 обязательна).
+                         Рамка СТАТИЧНА: комбобокс автофокусируется при каждом
+                         открытии меню, и §1.8-потемнение до чернил означало бы
+                         «тёмная рамка всегда» — ровно то, что владелец 11.08
+                         забраковал. Фокус здесь и так очевиден: меню открыто,
+                         каретка в поле. */
                       'peer flex h-12 w-full items-center justify-center rounded-xl border border-border-control bg-transparent px-2.5 text-base',
                       'sm:h-9 sm:text-sm',
-                      'focus:outline-none focus-visible:border-border-focus focus-visible:ring-[3px] focus-visible:ring-ring-primary-soft',
+                      'focus:outline-none',
                     )}
                   />
                   {comboboxLabel && (

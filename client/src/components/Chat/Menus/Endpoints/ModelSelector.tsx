@@ -101,7 +101,15 @@ function ModelSelectorContent() {
 
   const trigger = (
     <TooltipAnchor
-      description={localize('com_ui_select_model')}
+      /* Экран 6 книги: «в пилюлю попадает короткое имя, полное — в подсказке».
+         «Выберите модель» остаётся только пока ничего не выбрано; на выбранной
+         модели такая подсказка была инструкцией ни о чём (и владелец 11.08
+         назвал её «ужасным окном» — само окно теперь канонная плашка §6.6). */
+      description={
+        typeof selectedDisplayValue === 'string' && selectedDisplayValue.trim() !== ''
+          ? selectedDisplayValue
+          : localize('com_ui_select_model')
+      }
       render={
         // Имя кнопки НЕ задаётся aria-label намеренно: оно должно считаться из
         // содержимого, то есть равняться видимому названию модели. Раньше
@@ -124,14 +132,10 @@ function ModelSelectorContent() {
               {selectedIcon}
             </div>
           )}
-          {/* Имя усекается, поэтому полное обязано быть достижимым: нативный
-              `title` даёт его по наведению и не трогает доступное имя кнопки. */}
-          <span
-            className="max-w-[170px] flex-grow truncate text-left"
-            title={typeof selectedDisplayValue === 'string' ? selectedDisplayValue : undefined}
-          >
-            {selectedDisplayValue}
-          </span>
+          {/* Имя усекается; полное имя показывает подсказка §6.6 на кнопке.
+              Нативного title больше нет: рядом с кастомной плашкой он рисовал
+              ВТОРОЕ окно с тем же текстом. */}
+          <span className="max-w-[170px] flex-grow truncate text-left">{selectedDisplayValue}</span>
         </button>
       }
     />
