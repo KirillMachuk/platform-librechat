@@ -35,13 +35,16 @@ const AttachFile = ({
   return (
     <FileUpload ref={inputRef} handleFileChange={handleFileChange}>
       <TooltipAnchor
-        description={localize('com_sidepanel_attach_files')}
+        description={localize('com_ui_attach_files')}
         id="attach-file"
         disabled={isUploadDisabled}
         render={
           <button
             type="button"
-            aria-label={localize('com_sidepanel_attach_files')}
+            /* Own key, not the sidebar section's «Файлы»: the file-search
+               chip next to this button is called «Файлы» now (11.08-3), and
+               two same-named controls in one row confuse a reader. */
+            aria-label={localize('com_ui_attach_files')}
             disabled={isUploadDisabled}
             className={cn(
               'tap-target flex size-[38px] items-center justify-center rounded-full p-1 transition-colors hover:bg-surface-hover focus-visible:outline-none md:size-8',
