@@ -2,15 +2,20 @@
  * Вид строк сайдбара живёт в одном месте: одинаково выглядят навигационные
  * строки, строка поиска и «Новый чат», и они собираются в трёх разных файлах.
  *
- * Канон §4 и §6.5: строка бокового меню — 40 на десктопе, 48 на телефоне,
- * радиус 12, зазор 12, текст t2, иконка 18 (на телефоне 20) цвета t3;
- * наведение красит фон `hover` и поднимает и текст, и иконку до t1.
+ * Канон §4 и §6.5, поверх него решение владельца 11.08: строка бокового
+ * меню — 40 на десктопе, 48 на телефоне, радиус 12, зазор 12; подпись И
+ * иконка носят ОДИН цвет — `sidebar-ink` (книжные t2/t3 владельцу тусклы,
+ * ориентир — Kimi; разные цвета подписи и иконки он назвал «бардаком»).
+ * Иконка 20 на всех ширинах — так книга и рисует ряды d02, лестница §4
+ * (18/20) на этот частный случай не распространяется, поэтому размер задан
+ * числом, как и у других «частных мест» канона. Наведение красит фон
+ * `hover` и поднимает цвет до t1 — в тёмной теме это лёгкое высветление.
  */
 export const sidebarRowClassName =
-  'group flex h-12 w-full items-center gap-3 rounded-xl px-2.5 text-[15px] font-normal text-text-secondary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary md:h-10 md:text-sm';
+  'group flex h-12 w-full items-center gap-3 rounded-xl px-2.5 text-[15px] font-normal text-sidebar-ink transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary md:h-10 md:text-sm';
 
 export const sidebarRowIconClassName =
-  'icon-md flex-shrink-0 text-text-tertiary transition-colors duration-90 group-hover:text-text-primary';
+  'h-5 w-5 flex-shrink-0 text-sidebar-ink transition-colors duration-90 group-hover:text-text-primary';
 
 /**
  * The open section (canon §6.5, rewritten by the owner's decision of 10.08 late

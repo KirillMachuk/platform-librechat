@@ -231,12 +231,14 @@ function Conversation({
            До этого оба состояния красились одним токеном, и наведение на любой
            чат выглядело так же, как открытый. Отметка выбора — точка `acc`
            справа (как в прототипе), а не планка сырым чёрным цветом.
-           Prototype `.nconvo` is t2 and `.nconvo.on` is t1, so the open chat is
-           told apart by colour too, not by fill alone. */
+           Покой — `sidebar-ink`, не книжный t2: владелец 11.08 выбрал одни
+           чернила на весь сайдбар (ориентир Kimi), и оставить заголовкам чатов
+           второй серый значило бы вернуть «бардак», который он и забраковал.
+           Открытый чат по-прежнему отличим заливкой `active`, точкой и t1. */
         'group relative flex h-11 w-full items-center rounded-xl outline-none transition-colors duration-90 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-border-focus md:h-10',
         isActiveConvo || isPopoverActive
           ? 'bg-surface-active text-text-primary'
-          : 'text-text-secondary hover:bg-surface-hover',
+          : 'text-sidebar-ink hover:bg-surface-hover',
       )}
       role="button"
       tabIndex={renaming ? -1 : 0}
