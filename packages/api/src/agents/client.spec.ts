@@ -1,5 +1,9 @@
 import { ContentTypes } from 'librechat-data-provider';
-import { prependFileContext, type FormattedMessageWithContent } from './client';
+import {
+  prependFileContext,
+  disableTitleReasoning,
+  type FormattedMessageWithContent,
+} from './client';
 
 describe('prependFileContext', () => {
   it('prepends file context to string content', () => {
@@ -50,5 +54,53 @@ describe('prependFileContext', () => {
     prependFileContext(message, '');
 
     expect(message.content).toBe('Answer this question.');
+  });
+});
+
+describe('disableTitleReasoning', () => {
+  it('turns reasoning off for a config that opted it in', () => {
+    const clientOptions: { include_reasoning?: boolean; modelKwargs?: Record<string, unknown> } = {
+      include_reasoning: true,
+    };
+
+    disableTitleReasoning(clientOptions);
+
+    expect(clientOptions.include_reasoning).toBe(false);
+    expect(clientOptions.modelKwargs).toEqual({ reasoning: { enabled: false } });
+  });
+
+  it('keeps the other modelKwargs a provider needs', () => {
+    const clientOptions = {
+      include_reasoning: true,
+      modelKwargs: { safe_prompt: true },
+    };
+
+    disableTitleReasoning(clientOptions);
+
+    expect(clientOptions.modelKwargs).toEqual({
+      safe_prompt: true,
+      reasoning: { enabled: false },
+    });
+  });
+
+  it('leaves a config that never opted reasoning in untouched', () => {
+    const clientOptions: { include_reasoning?: boolean; modelKwargs?: Record<string, unknown> } = {
+      modelKwargs: { safe_prompt: true },
+    };
+
+    disableTitleReasoning(clientOptions);
+
+    expect(clientOptions).toEqual({ modelKwargs: { safe_prompt: true } });
+    expect(clientOptions.include_reasoning).toBeUndefined();
+  });
+
+  it('leaves an already-disabled config untouched', () => {
+    const clientOptions: { include_reasoning?: boolean; modelKwargs?: Record<string, unknown> } = {
+      include_reasoning: false,
+    };
+
+    disableTitleReasoning(clientOptions);
+
+    expect(clientOptions.modelKwargs).toBeUndefined();
   });
 });
