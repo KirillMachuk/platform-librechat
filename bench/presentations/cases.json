@@ -1,0 +1,85 @@
+[
+  {
+    "id": "ru-board-notes",
+    "locale": "ru-RU",
+    "inputKinds": ["notes"],
+    "prompt": "Собери презентацию для совета директоров из заметок к квартальному обзору.",
+    "requirements": { "minSlides": 7, "nativeCharts": 1, "sources": true }
+  },
+  {
+    "id": "ru-sales-proposal",
+    "locale": "ru-RU",
+    "inputKinds": ["notes", "images"],
+    "prompt": "Подготовь коммерческое предложение для директора по закупкам.",
+    "requirements": { "minSlides": 6, "sources": true }
+  },
+  {
+    "id": "ru-xlsx-analysis",
+    "locale": "ru-RU",
+    "inputKinds": ["xlsx"],
+    "prompt": "Преврати финансовую модель в тезисную презентацию с редактируемыми графиками.",
+    "requirements": { "minSlides": 8, "nativeCharts": 2, "sources": true }
+  },
+  {
+    "id": "ru-docx-strategy",
+    "locale": "ru-RU",
+    "inputKinds": ["docx"],
+    "prompt": "Собери стратегическую презентацию из приложенного мемо.",
+    "requirements": { "minSlides": 7, "sources": true }
+  },
+  {
+    "id": "ru-long-copy",
+    "locale": "ru-RU",
+    "inputKinds": ["notes"],
+    "prompt": "Сделай презентацию с длинными русскими заголовками без обрезаний и мелкого текста.",
+    "requirements": { "minSlides": 6, "sources": true, "longRussianCopy": true }
+  },
+  {
+    "id": "ru-source-traceability",
+    "locale": "ru-RU",
+    "inputKinds": ["notes", "pdf"],
+    "prompt": "Собери доказательную презентацию и укажи источник каждого фактологического слайда.",
+    "requirements": {
+      "minSlides": 7,
+      "sources": true,
+      "factSlideSources": true
+    }
+  },
+  {
+    "id": "ru-targeted-slide-edit",
+    "locale": "ru-RU",
+    "inputKinds": ["pptx"],
+    "prompt": "Измени только третий слайд презентации, остальные оставь без изменений.",
+    "requirements": { "targetedEdit": true, "immutableInput": true }
+  },
+  {
+    "id": "ru-template-fidelity",
+    "locale": "ru-RU",
+    "inputKinds": ["pptx-template", "notes"],
+    "prompt": "Собери презентацию в приложенном шаблоне, сохранив его стили и геометрию.",
+    "requirements": {
+      "minSlides": 6,
+      "templateFidelity": true,
+      "sources": true
+    }
+  },
+  {
+    "id": "ru-process-deck",
+    "locale": "ru-RU",
+    "inputKinds": ["notes"],
+    "prompt": "Объясни новый процесс запуска продукта в виде наглядной презентации.",
+    "requirements": { "minSlides": 6, "editableProcess": true, "sources": true }
+  },
+  {
+    "id": "ru-en-mixed-business",
+    "locale": "ru-RU",
+    "inputKinds": ["notes", "xlsx"],
+    "prompt": "Подготовь русскую бизнес-презентацию с английскими аббревиатурами, рублями, процентами и датами.",
+    "requirements": {
+      "minSlides": 7,
+      "nativeCharts": 1,
+      "sources": true,
+      "mixedTypography": true
+    }
+  }
+]
