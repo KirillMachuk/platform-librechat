@@ -169,10 +169,14 @@ export function getProps(type: string): Partial<SandpackProviderProps> {
   };
 }
 
-/** Fragment hint lets Sandpack's static-template regex detect `.js` from the URL;
- * without it, the versioned CDN path (`/3.4.17`) has no recognised extension and
- * `injectExternalResources` throws "Unable to determine file type". */
-const TAILWIND_CDN = 'https://cdn.tailwindcss.com/3.4.17#tailwind.js';
+/** Served from OUR origin, not cdn.tailwindcss.com: an artifact preview shows
+ * the client's own document, and a CDN script tag hands that CDN the reader's
+ * IP and referrer. The file is vendored at the same pinned version
+ * (`client/public/assets/tailwind-3.4.17.js`, MIT, hash recorded beside it).
+ * The `#tailwind.js` fragment stays — Sandpack's static-template regex reads
+ * the extension off the URL and throws "Unable to determine file type"
+ * without it. */
+const TAILWIND_CDN = '/assets/tailwind-3.4.17.js#tailwind.js';
 
 export const sharedOptions: SandpackProviderProps['options'] = {
   externalResources: [TAILWIND_CDN],
@@ -965,7 +969,7 @@ export const sharedFiles = {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Document</title>
-        <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+        <script src="/assets/tailwind-3.4.17.js"></script>
         <style>
           ::-webkit-scrollbar{height:.1em;width:.5rem}
           ::-webkit-scrollbar-thumb{background-color:rgba(0,0,0,.1);border-radius:9999px}

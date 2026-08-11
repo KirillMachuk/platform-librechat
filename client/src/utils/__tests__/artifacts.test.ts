@@ -1,3 +1,4 @@
+import type { ToolArtifactType } from '../artifacts';
 import {
   buildSandpackOptions,
   detectArtifactTypeFromFile,
@@ -7,9 +8,10 @@ import {
   languageForFilename,
   TOOL_ARTIFACT_TYPES,
 } from '../artifacts';
-import type { ToolArtifactType } from '../artifacts';
 
-const TAILWIND_CDN = 'https://cdn.tailwindcss.com/3.4.17#tailwind.js';
+/* Same-origin on purpose: the previews must not phone a CDN. If this ever
+   points at an external host again, `npm run check:artifacts-offline` fails. */
+const TAILWIND_CDN = '/assets/tailwind-3.4.17.js#tailwind.js';
 
 describe('buildSandpackOptions', () => {
   it('includes externalResources with .js fragment hint for static template', () => {

@@ -121,7 +121,8 @@
     "e2e:burn-in": "playwright test --config=e2e/playwright.config.mock.ts --repeat-each=5 --fail-on-flaky-tests",
     "check:layers": "node scripts/check-layers.mjs",
     "check:shadows": "node scripts/check-shadows.mjs",
-    "check:focus": "node scripts/check-focus.mjs"
+    "check:focus": "node scripts/check-focus.mjs",
+    "check:artifacts-offline": "node scripts/check-artifacts-offline.mjs"
   },
   "repository": {
     "type": "git",
