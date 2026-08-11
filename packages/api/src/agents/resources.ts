@@ -78,7 +78,9 @@ const addFileToResource = ({
 };
 
 /**
- * Categorizes a file into the appropriate tool resource based on its properties
+ * Categorizes a file into the appropriate tool resources based on its properties.
+ * A dual-stored editable document may intentionally belong to both execute_code
+ * and file_search so the model can search its content and revise its binary.
  * Files are categorized as:
  * - execute_code: Files with a code-environment ref (`codeEnvRef`)
  * - file_search: Files marked as embedded
@@ -100,26 +102,31 @@ const categorizeFileForToolResources = ({
   requestFileSet: Set<string>;
   processedResourceFiles: Set<string>;
 }): void => {
-  if (file.metadata?.codeEnvRef) {
+  const isCodeFile = file.metadata?.codeEnvRef != null;
+  const isSearchFile = file.embedded === true && file.embeddingScope !== 'library';
+
+  if (isCodeFile) {
     addFileToResource({
       file,
       resourceType: EToolResources.execute_code,
       tool_resources,
       processedResourceFiles,
     });
-    return;
   }
 
   // `embeddingScope === 'library'` files are context documents indexed only for
   // cross-chat library_search; they must NOT enter file_search resources, or the
   // floor would inject their chunks on top of their already-inlined full text.
-  if (file.embedded === true && file.embeddingScope !== 'library') {
+  if (isSearchFile) {
     addFileToResource({
       file,
       resourceType: EToolResources.file_search,
       tool_resources,
       processedResourceFiles,
     });
+  }
+
+  if (isCodeFile || isSearchFile) {
     return;
   }
 

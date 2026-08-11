@@ -179,6 +179,42 @@ describe('primeResources', () => {
       expect(result.tool_resources?.[EToolResources.file_search]?.files).toEqual(mockFiles);
     });
 
+    it('should expose a dual-stored editable document to execute_code and file_search', async () => {
+      const mockFiles: TFile[] = [
+        {
+          user: 'user1',
+          file_id: 'editable-deck',
+          filename: 'board-deck.pptx',
+          filepath: '/uploads/board-deck.pptx',
+          object: 'file',
+          type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          bytes: 4096,
+          embedded: true,
+          usage: 0,
+          metadata: {
+            codeEnvRef: {
+              kind: 'user',
+              id: 'user1',
+              storage_session_id: 'sess',
+              file_id: 'fid',
+            },
+          },
+        },
+      ];
+
+      const result = await primeResources({
+        req: mockReq,
+        appConfig: mockAppConfig,
+        getFiles: mockGetFiles,
+        requestFileSet,
+        attachments: Promise.resolve(mockFiles),
+        tool_resources: {},
+      });
+
+      expect(result.tool_resources?.[EToolResources.execute_code]?.files).toEqual(mockFiles);
+      expect(result.tool_resources?.[EToolResources.file_search]?.files).toEqual(mockFiles);
+    });
+
     it('should NOT put embeddingScope="library" files into file_search resources (no floor double-injection)', async () => {
       const mockFiles: TFile[] = [
         {

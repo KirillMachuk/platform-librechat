@@ -51,6 +51,12 @@ interface CodeEnvRefBase {
   id: string;
   storage_session_id: string;
   file_id: string;
+  /** Exact safe basename used inside `/mnt/data`. This is optional for
+   * references created before filename-aware priming; readers fall back to the
+   * user-facing file name for those records. Keeping the sandbox name on the
+   * ref preserves the original display name while preventing path drift when
+   * spaces or other unsafe filename characters are sanitized during upload. */
+  filename?: string;
 }
 
 export type CodeEnvRef =

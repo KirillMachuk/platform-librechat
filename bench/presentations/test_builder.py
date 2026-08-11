@@ -11,6 +11,7 @@ import unittest
 import zipfile
 from collections import Counter
 from pathlib import Path
+from unittest import mock
 
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
@@ -266,10 +267,17 @@ class PresentationBuilderTests(unittest.TestCase):
             source = root / "source.pptx"
             _save(_base_spec(source.name), source)
             source_bytes = source.read_bytes()
+            source_properties = Presentation(source).core_properties
+            source_title = source_properties.title
+            source_subject = source_properties.subject
+            source_comments = source_properties.comments
             before = {number: _slide_xml(source, number) for number in (1, 2, 4)}
             output = root / "updated.pptx"
+            revision_job = _job(output.name)
+            revision_job["goal"] = "A different request description must not rewrite deck metadata"
+            revision_job["audience"] = "A different audience must not rewrite deck metadata"
             spec = {
-                "job": _job(output.name),
+                "job": revision_job,
                 "inputPath": str(source),
                 "edits": [
                     {
@@ -284,6 +292,132 @@ class PresentationBuilderTests(unittest.TestCase):
             self.assertEqual(source.read_bytes(), source_bytes)
             for number, xml in before.items():
                 self.assertEqual(_slide_xml(output, number), xml, f"slide {number}")
+            self.assertEqual(
+                BUILDER._changed_package_parts(source, output),
+                {"ppt/slides/slide3.xml"},
+            )
+            output_properties = Presentation(output).core_properties
+            self.assertEqual(output_properties.title, source_title)
+            self.assertEqual(output_properties.subject, source_subject)
+            self.assertEqual(output_properties.comments, source_comments)
+
+    def test_targeted_edit_qa_rejects_an_unrequested_package_change(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source = root / "source.pptx"
+            _save(_base_spec(source.name), source)
+            output = root / "updated.pptx"
+            spec = {
+                "job": _job(output.name),
+                "inputPath": str(source),
+                "edits": [
+                    {
+                        "slide": 3,
+                        "replacements": {"+41% к 2026 году": "+44% к 2026 году"},
+                    }
+                ],
+            }
+            _save(spec, output)
+            damaged = Presentation(output)
+            title = next(
+                shape
+                for shape in damaged.slides[1].shapes
+                if getattr(shape, "has_text_frame", False) and shape.text.strip()
+            )
+            title.text_frame.paragraphs[0].runs[0].text = "Незапрошенное изменение"
+            damaged.save(output)
+
+            checks, issues = BUILDER._check_structure(output, spec)
+
+        scope_check = next(check for check in checks if check["name"] == "targeted-edit-scope")
+        self.assertEqual(scope_check["status"], "failed")
+        self.assertTrue(
+            any(
+                issue["code"] == "edit-scope"
+                and issue["severity"] == "critical"
+                and "outside" in issue["message"]
+                for issue in issues
+            )
+        )
+
+    def test_targeted_edit_qa_fails_closed_when_package_comparison_errors(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source = root / "source.pptx"
+            _save(_base_spec(source.name), source)
+            output = root / "updated.pptx"
+            spec = {
+                "job": _job(output.name),
+                "inputPath": str(source),
+                "edits": [
+                    {
+                        "slide": 3,
+                        "replacements": {"+41% к 2026 году": "+44% к 2026 году"},
+                    }
+                ],
+            }
+            _save(spec, output)
+
+            with mock.patch.object(
+                BUILDER,
+                "_changed_package_parts",
+                side_effect=zipfile.BadZipFile("invalid package"),
+            ):
+                checks, issues = BUILDER._check_structure(output, spec)
+
+        scope_check = next(check for check in checks if check["name"] == "targeted-edit-scope")
+        self.assertEqual(scope_check["status"], "failed")
+        self.assertIn("BadZipFile", scope_check["message"])
+        self.assertTrue(
+            any(
+                issue["code"] == "edit-scope" and issue["severity"] == "critical"
+                for issue in issues
+            )
+        )
+
+    def test_targeted_edit_qa_refuses_to_vouch_for_a_duplicate_part_package(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source = root / "source.pptx"
+            _save(_base_spec(source.name), source)
+            duplicated = root / "duplicated.pptx"
+            with zipfile.ZipFile(source) as original, zipfile.ZipFile(duplicated, "w") as clone:
+                for info in original.infolist():
+                    clone.writestr(info, original.read(info.filename))
+                clone.writestr("ppt/slides/slide3.xml", original.read("ppt/slides/slide3.xml"))
+            output = root / "updated.pptx"
+            spec = {
+                "job": _job(output.name),
+                "inputPath": str(duplicated),
+                "edits": [
+                    {
+                        "slide": 3,
+                        "replacements": {"+41% к 2026 году": "+44% к 2026 году"},
+                    }
+                ],
+            }
+            _save(spec, output)
+
+            checks, issues = BUILDER._check_structure(output, spec)
+
+        scope_check = next(check for check in checks if check["name"] == "targeted-edit-scope")
+        self.assertEqual(scope_check["status"], "failed")
+        self.assertIn("ValueError", scope_check["message"])
+        self.assertTrue(
+            any(
+                issue["code"] == "edit-scope" and issue["severity"] == "critical"
+                for issue in issues
+            )
+        )
+
+    def test_skill_runtime_contract_keeps_scratch_and_final_files_separate(self):
+        instructions = (ROOT / "skill/pptx/SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIn("Treat the builder as an executable", instructions)
+        self.assertIn("Never reconstruct an attached presentation", instructions)
+        self.assertIn("same-call scratch", instructions)
+        self.assertIn("Final user files must be direct children of `/mnt/data`", instructions)
+        self.assertIn("Do not deliver or mention the JSON spec", instructions)
 
     def test_template_mode_rejects_layout_without_inherited_content_slots(self):
         with tempfile.TemporaryDirectory() as folder:

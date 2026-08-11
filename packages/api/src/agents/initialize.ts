@@ -729,7 +729,17 @@ export async function initializeAgent(
       }
     }
 
-    const allToolFiles = toolFiles.concat(codeGeneratedFiles, userCodeFiles);
+    /** A dual-stored editable document can be returned by both the search-file
+     * query (`embedded: true`) and the user-code-file query (`codeEnvRef`). Keep
+     * one record per file_id so usage is incremented once while primeResources
+     * still categorizes the record into both tool resources. */
+    const allToolFiles = Array.from(
+      new Map(
+        toolFiles
+          .concat(codeGeneratedFiles, userCodeFiles)
+          .map((file) => [file.file_id, file] as const),
+      ).values(),
+    );
     if (requestFiles.length || allToolFiles.length) {
       const requestUsageFiles =
         requestFiles.length && requestFileOwnerId

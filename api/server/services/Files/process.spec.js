@@ -221,6 +221,7 @@ const {
 } = require('./process');
 
 const PDF_MIME = 'application/pdf';
+const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const XLS_MIME = 'application/vnd.ms-excel';
@@ -844,6 +845,164 @@ describe('processAgentFileUpload', () => {
       expect(persisted.text).toBe('Дата: 2026\nИмя:'); // model text = reformatted extract, untouched
       expect(persisted).not.toHaveProperty('previewText');
       expect(persisted).not.toHaveProperty('status');
+    });
+  });
+
+  describe('stages editable PPTX attachments in the code environment', () => {
+    const fs = require('fs');
+    const { Readable } = require('stream');
+    let createReadStreamSpy;
+
+    beforeEach(() => {
+      createReadStreamSpy = jest
+        .spyOn(fs, 'createReadStream')
+        .mockImplementation(() => Readable.from(Buffer.from('pptx-bytes')));
+    });
+
+    afterEach(() => {
+      createReadStreamSpy.mockRestore();
+    });
+
+    const makePptxReq = (originalname = 'deck.pptx') => {
+      mergeFileConfig.mockReturnValue(makeFileConfig({ ocrSupportedMimeTypes: [PPTX_MIME] }));
+      const req = makeReq({
+        mimetype: PPTX_MIME,
+        ocrConfig: { strategy: FileSources.document_parser },
+      });
+      req.file.originalname = originalname;
+      req.file.filename = originalname.replaceAll(' ', '_');
+      return req;
+    };
+
+    const setupPptxStrategies = ({ codeError } = {}) => {
+      const codeEnvUpload = codeError
+        ? jest.fn().mockRejectedValue(codeError)
+        : jest.fn().mockResolvedValue({ storage_session_id: 'pptx-session', file_id: 'pptx-file' });
+      const documentUpload = jest.fn().mockResolvedValue({
+        text: 'Текст презентации',
+        bytes: 34,
+        filepath: 'doc://deck',
+      });
+      const localUpload = jest.fn().mockResolvedValue({
+        bytes: 2048,
+        filename: 'deck.pptx',
+        filepath: '/uploads/deck.pptx',
+      });
+      getStrategyFunctions.mockImplementation((source) => {
+        if (source === FileSources.execute_code) {
+          return { handleFileUpload: codeEnvUpload };
+        }
+        if (source === FileSources.document_parser) {
+          return { handleFileUpload: documentUpload };
+        }
+        return { handleFileUpload: localUpload, saveBuffer: jest.fn() };
+      });
+      return { codeEnvUpload, documentUpload, localUpload };
+    };
+
+    test('keeps extracted text and durable storage while mounting a context PPTX binary', async () => {
+      const { codeEnvUpload } = setupPptxStrategies();
+      const req = makePptxReq('Совет директоров.pptx');
+
+      await processAgentFileUpload({
+        req,
+        res: mockRes,
+        metadata: { ...makeMetadata(), message_file: true },
+      });
+
+      expect(codeEnvUpload).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filename: 'Совет_директоров.pptx',
+          kind: 'user',
+          id: 'user-123',
+        }),
+      );
+      expect(db.createFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: 'Текст презентации',
+          filename: 'Совет директоров.pptx',
+          filepath: '/uploads/deck.pptx',
+          source: FileSources.local,
+          metadata: {
+            codeEnvRef: {
+              kind: 'user',
+              id: 'user-123',
+              storage_session_id: 'pptx-session',
+              file_id: 'pptx-file',
+              filename: 'Совет_директоров.pptx',
+            },
+          },
+        }),
+        true,
+      );
+    });
+
+    test('also mounts a large PPTX routed through file_search', async () => {
+      setupPptxStrategies();
+      const req = makePptxReq('large-deck.pptx');
+
+      await processAgentFileUpload({
+        req,
+        res: mockRes,
+        metadata: {
+          ...makeMetadata(),
+          tool_resource: EToolResources.file_search,
+          message_file: true,
+        },
+      });
+
+      expect(db.createFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          embedded: true,
+          metadata: expect.objectContaining({
+            codeEnvRef: expect.objectContaining({
+              kind: 'user',
+              storage_session_id: 'pptx-session',
+              file_id: 'pptx-file',
+            }),
+          }),
+        }),
+        true,
+      );
+    });
+
+    test('keeps a readable attachment when optional sandbox staging fails', async () => {
+      setupPptxStrategies({ codeError: new Error('code environment unavailable') });
+      const req = makePptxReq();
+
+      await expect(
+        processAgentFileUpload({
+          req,
+          res: mockRes,
+          metadata: { ...makeMetadata(), message_file: true },
+        }),
+      ).resolves.not.toThrow();
+
+      expect(db.createFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: 'Текст презентации',
+          filepath: '/uploads/deck.pptx',
+        }),
+        true,
+      );
+      expect(db.createFile.mock.calls[0][0]).not.toHaveProperty('metadata');
+    });
+
+    test('does not stage the binary when execute_code capability is disabled', async () => {
+      const { codeEnvUpload } = setupPptxStrategies();
+      checkCapability.mockImplementation(
+        (_req, capability) => capability !== AgentCapabilities.execute_code,
+      );
+      const req = makePptxReq();
+
+      await processAgentFileUpload({
+        req,
+        res: mockRes,
+        metadata: { ...makeMetadata(), message_file: true },
+      });
+
+      expect(codeEnvUpload).not.toHaveBeenCalled();
+      expect(db.createFile.mock.calls[0][0]).not.toHaveProperty('metadata');
     });
   });
 

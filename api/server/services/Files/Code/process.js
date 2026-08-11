@@ -748,7 +748,8 @@ const getVisibleCodeFileContextLine = (file, agentResourceIds) => {
   }
 
   const fileSuffix = agentResourceIds.has(file.file_id) ? '' : ' (attached by user)';
-  return `\n\t- /mnt/data/${file.filename}${fileSuffix}${getPreviewContextSuffix(file)}`;
+  const sandboxFilename = file.metadata?.codeEnvRef?.filename || file.filename;
+  return `\n\t- /mnt/data/${sandboxFilename}${fileSuffix}${getPreviewContextSuffix(file)}`;
 };
 
 const appendVisibleCodeFileContext = (toolContext, contextLine) => {
@@ -834,6 +835,7 @@ const primeFiles = async (options) => {
     }
     const session_id = ref.storage_session_id;
     const id = ref.file_id;
+    const sandboxFilename = ref.filename || file.filename;
 
     /**
      * `pushFile` accepts optional overrides so the reupload path can
@@ -866,7 +868,7 @@ const primeFiles = async (options) => {
         id: overrideId ?? id,
         resource_id: ref.id,
         storage_session_id: overrideSessionId ?? session_id,
-        name: file.filename,
+        name: sandboxFilename,
         kind: ref.kind,
         ...(ref.kind === 'skill' ? { version: ref.version } : {}),
       });
@@ -895,7 +897,7 @@ const primeFiles = async (options) => {
         const uploaded = await uploadCodeEnvFile({
           req: options.req,
           stream,
-          filename: file.filename,
+          filename: sandboxFilename,
           kind: ref.kind,
           id: ref.id,
           ...(ref.kind === 'skill' ? { version: ref.version } : {}),
@@ -919,6 +921,7 @@ const primeFiles = async (options) => {
           id: ref.id,
           storage_session_id: uploaded.storage_session_id,
           file_id: uploaded.file_id,
+          ...(ref.filename ? { filename: ref.filename } : {}),
           ...(ref.kind === 'skill' ? { version: ref.version } : {}),
         };
 
