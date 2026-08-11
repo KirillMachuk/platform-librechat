@@ -8,7 +8,9 @@ Run the full structural matrix:
 python3 bench/presentations/run_goldens.py --runs 3
 ```
 
-Use `--skip-visual-gate` only while establishing a new baseline. After reviewing every distinct rendered slide at full size, record the five rubric dimensions and their sum in `visual_scores.json`, then run the complete command above. The runner rejects missing cases, incomplete dimensions, out-of-range values, and incorrect score arithmetic.
+Use `--skip-visual-gate` only while establishing a new baseline. After reviewing every distinct rendered slide at full size, record the five rubric dimensions, their sum, and the `renderEvidence` digest from `results/matrix-summary.json` in `visual_scores.json`, then run the complete command above. The runner rejects missing cases, incomplete dimensions, out-of-range values, incorrect score arithmetic, and a scorecard whose human review belongs to an older render.
+
+The digest deliberately includes the exact LibreOffice raster hashes for every run-one slide. A PPTX layout change or a rendering-tool upgrade therefore requires a fresh full-size visual review rather than allowing an old “9/10” score to pass CI.
 
 The visual gate requires an average score of at least 9.0, no result below 8.0, and at least 90% of cases at 9.0 or higher. A score is the sum of five two-point dimensions: narrative, hierarchy, readability, visual craft, and evidence/editability.
 

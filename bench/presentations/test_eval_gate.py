@@ -10,8 +10,10 @@ from pathlib import Path
 from PIL import Image
 
 from bench.presentations.run_goldens import (
+    RENDER_EVIDENCE_ALGORITHM,
     _reset_run_dir,
     _write_montage,
+    build_render_evidence_digest,
     evaluate_visual_scorecard,
     evaluate_visual_scores,
 )
@@ -56,6 +58,10 @@ class VisualGateTests(unittest.TestCase):
     def test_visual_scorecard_rejects_incomplete_or_inconsistent_rubrics(self):
         payload = {
             "rubric": {"narrative": 2, "readability": 2},
+            "renderEvidence": {
+                "algorithm": RENDER_EVIDENCE_ALGORITHM,
+                "matrixDigest": "current-render",
+            },
             "cases": {
                 "case-a": {
                     "score": 4,
@@ -64,9 +70,55 @@ class VisualGateTests(unittest.TestCase):
             },
         }
 
-        issues = evaluate_visual_scorecard(payload, ["case-a"])
+        issues = evaluate_visual_scorecard(payload, ["case-a"], "current-render")
 
         self.assertTrue(any("dimension sum" in issue for issue in issues))
+
+    def test_visual_scorecard_rejects_stale_render_evidence(self):
+        payload = {
+            "rubric": {"narrative": 2},
+            "renderEvidence": {
+                "algorithm": RENDER_EVIDENCE_ALGORITHM,
+                "matrixDigest": "reviewed-render",
+            },
+            "cases": {
+                "case-a": {"score": 2, "dimensions": {"narrative": 2}}
+            },
+        }
+
+        issues = evaluate_visual_scorecard(payload, ["case-a"], "changed-render")
+
+        self.assertTrue(any("stale" in issue for issue in issues))
+
+    def test_visual_scorecard_requires_render_evidence(self):
+        payload = {
+            "rubric": {"narrative": 2},
+            "cases": {
+                "case-a": {"score": 2, "dimensions": {"narrative": 2}}
+            },
+        }
+
+        issues = evaluate_visual_scorecard(payload, ["case-a"], "current-render")
+
+        self.assertTrue(any("evidence is missing" in issue for issue in issues))
+
+    def test_render_evidence_digest_requires_each_case_and_is_order_independent(self):
+        results = [
+            {"case": "case-b", "run": 1, "imageHashes": ["b1", "b2"]},
+            {"case": "case-a", "run": 1, "imageHashes": ["a1"]},
+            {"case": "case-a", "run": 2, "imageHashes": ["different-run"]},
+        ]
+
+        digest, issues = build_render_evidence_digest(results, ["case-a", "case-b"])
+        reordered_digest, reordered_issues = build_render_evidence_digest(
+            results, ["case-b", "case-a"]
+        )
+        _missing_digest, missing_issues = build_render_evidence_digest(results, ["case-a", "case-c"])
+
+        self.assertFalse(issues)
+        self.assertFalse(reordered_issues)
+        self.assertEqual(digest, reordered_digest)
+        self.assertTrue(any("case-c" in issue for issue in missing_issues))
 
 
 if __name__ == "__main__":

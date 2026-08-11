@@ -33,6 +33,40 @@ SOURCES = [
     {"label": "Управленческий отчёт", "url": "management-report.xlsx — июль 2026"},
     {"label": "CRM-выгрузка", "url": "crm-export.csv — срез от 31.07.2026"},
 ]
+RENDER_EVIDENCE_ALGORITHM = "sha256-json-v1"
+
+
+def build_render_evidence_digest(
+    results: list[dict[str, Any]], expected_cases: list[str]
+) -> tuple[str | None, list[str]]:
+    """Bind a human visual scorecard to the exact freshly rendered matrix.
+
+    The full-slide hashes are intentionally platform-specific. A renderer or
+    layout change must therefore invalidate the recorded human review instead
+    of silently reusing an old 9/10 score.
+    """
+    evidence: dict[str, list[str]] = {}
+    for result in results:
+        if result.get("run") != 1 or result.get("case") not in expected_cases:
+            continue
+        image_hashes = result.get("imageHashes")
+        if isinstance(image_hashes, list) and image_hashes and all(
+            isinstance(value, str) and value for value in image_hashes
+        ):
+            evidence[str(result["case"])] = image_hashes
+
+    missing = [case_id for case_id in expected_cases if case_id not in evidence]
+    if missing:
+        return None, [
+            "render evidence is missing for: " + ", ".join(sorted(missing))
+        ]
+
+    canonical = json.dumps(
+        {case_id: evidence[case_id] for case_id in sorted(expected_cases)},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest(), []
 
 
 def evaluate_visual_scores(scores: dict[str, float]) -> list[str]:
@@ -53,12 +87,23 @@ def evaluate_visual_scores(scores: dict[str, float]) -> list[str]:
 
 
 def evaluate_visual_scorecard(
-    payload: dict[str, Any], expected_cases: list[str]
+    payload: dict[str, Any], expected_cases: list[str], render_evidence: str | None
 ) -> list[str]:
     """Validate reviewer coverage, rubric arithmetic, and the visual quality gate."""
     rubric = payload.get("rubric", {})
     cases = payload.get("cases", {})
     issues: list[str] = []
+    recorded_evidence = payload.get("renderEvidence")
+    if render_evidence is None:
+        issues.append("current render evidence is unavailable")
+    elif not isinstance(recorded_evidence, dict):
+        issues.append("visual scorecard render evidence is missing")
+    elif recorded_evidence.get("algorithm") != RENDER_EVIDENCE_ALGORITHM:
+        issues.append("visual scorecard render evidence uses an unsupported algorithm")
+    elif recorded_evidence.get("matrixDigest") != render_evidence:
+        issues.append(
+            "visual scorecard evidence is stale; review the fresh renders and update the scorecard"
+        )
     scores: dict[str, float] = {}
     for case_id in expected_cases:
         value = cases.get(case_id, {})
@@ -580,18 +625,24 @@ def run_matrix(runs: int, selected_case: str | None, skip_visual_gate: bool) -> 
                 }
             )
 
-    visual_issues: list[str] = []
+    expected_case_ids = [str(case["id"]) for case in cases]
+    render_evidence, render_evidence_issues = build_render_evidence_digest(
+        results, expected_case_ids
+    )
+    visual_issues: list[str] = [*render_evidence_issues]
     if not skip_visual_gate and not selected_case:
         score_payload = json.loads(SCORES_PATH.read_text(encoding="utf-8"))
         visual_issues.extend(
-            evaluate_visual_scorecard(
-                score_payload, [str(case["id"]) for case in cases]
-            )
+            evaluate_visual_scorecard(score_payload, expected_case_ids, render_evidence)
         )
 
     failed = [result for result in results if result["status"] == "failed"]
     summary = {
         "runsPerCase": runs,
+        "renderEvidence": {
+            "algorithm": RENDER_EVIDENCE_ALGORITHM,
+            "matrixDigest": render_evidence,
+        },
         "results": results,
         "visualGateIssues": visual_issues,
         "status": "passed" if not failed and not visual_issues else "failed",
