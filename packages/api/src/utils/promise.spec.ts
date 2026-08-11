@@ -1,4 +1,5 @@
-import { createConcurrencyLimiter, withTimeout } from './promise';
+import { createConcurrencyLimiter, withTimeout, TimeoutError } from './promise';
+import * as packageIndex from '../index';
 
 const tick = (ms = 0): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -310,5 +311,37 @@ describe('createConcurrencyLimiter', () => {
     block.resolve();
     await Promise.all([pHead, pQueued]);
     expect(queuedTaskCalled).toBe(true);
+  });
+});
+
+/* The whole deferred-indexing path keys on this: an upload whose OCR outran its budget is
+ * retried in the background only because `err instanceof TimeoutError` distinguishes "too slow"
+ * from "failed". Nothing else asserted it — turning this back into a plain `Error` left every
+ * suite green while a long scan silently went back to being dropped. */
+describe('withTimeout — the timeout is identifiable', () => {
+  it('rejects with a TimeoutError, not a bare Error', async () => {
+    const never = new Promise(() => {});
+
+    await expect(withTimeout(never, 5, 'took too long')).rejects.toBeInstanceOf(TimeoutError);
+  });
+
+  it('keeps the caller-supplied message, so matching on text is never needed', async () => {
+    const never = new Promise(() => {});
+
+    await expect(withTimeout(never, 5, 'OCR fallback timed out')).rejects.toThrow(
+      'OCR fallback timed out',
+    );
+  });
+
+  it('leaves a genuine failure as itself', async () => {
+    const boom = new TypeError('not callable');
+
+    await expect(withTimeout(Promise.reject(boom), 1000)).rejects.toBe(boom);
+  });
+
+  /* The consumer is `/api`, which reaches it through the package index. An export dropped there
+   * turns `err instanceof TimeoutError` into a TypeError inside a catch block in production. */
+  it('is exported from the package index', () => {
+    expect(packageIndex.TimeoutError).toBe(TimeoutError);
   });
 });

@@ -23,7 +23,7 @@ const { logger, runAsSystem } = require('@librechat/data-schemas');
 const {
   sanitizeFilename,
   parseText,
-  parseTextNative,
+  parseTextNativeIfReadable,
   FULL_TEXT_MAX_BYTES,
   probePdf,
   withTimeout,
@@ -1417,21 +1417,36 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
          * doc-gateway OCRs it whenever the lane frees up). The document arrives searchable with
          * its full text a few minutes later instead of not arriving at all.
          *
-         * Only when file_search is actually available — with the capability off there is nowhere
-         * to degrade to, so the honest "busy, retry" error is all we can offer. */
-        const canDeferToSearch =
-          transientParseFailure && (await checkCapability(req, AgentCapabilities.file_search));
-        if (!canDeferToSearch) {
-          throw new Error(
-            transientParseFailure
-              ? `The document parser is busy and could not finish "${file.originalname}" in time. Please upload it again in a few minutes.`
-              : `Unable to extract text from "${file.originalname}". The document may be image-based and requires an OCR service to process.`,
+         * The same applies when no text can be had at all — a scan with no OCR configured, a
+         * password-protected or damaged PDF. The document is still the user's document: stored,
+         * it opens in the viewer and the worker can index it later if a parser appears. Losing
+         * it teaches the user only that the product dropped their file. So the honest error is
+         * reserved for the one case with nowhere to put it: file_search unavailable. */
+        /* Indexing needs somewhere to index INTO: the capability alone is not enough, the
+         * vector pipeline also has to exist (it throws "RAG_API_URL not defined" otherwise, and
+         * routing there would trade a lost document for a failed upload). */
+        const canIndexLater =
+          !!process.env.RAG_API_URL && (await checkCapability(req, AgentCapabilities.file_search));
+
+        if (transientParseFailure) {
+          if (!canIndexLater) {
+            throw new Error(
+              `The document parser is busy and could not finish "${file.originalname}" in time. Please upload it again in a few minutes.`,
+            );
+          }
+          logger.info(
+            `[processAgentFileUpload] parser busy or over budget for "${file.originalname}"; deferring to file_search so the embed worker parses it in the background`,
           );
+          tool_resource = EToolResources.file_search;
+        } else {
+          /* No text to be had — a scan with no OCR, a password-protected or damaged file. Keep
+           * the document: stored, it opens in the viewer and can be indexed once a parser
+           * exists. Rejecting it teaches the user only that the product drops their files. */
+          logger.info(
+            `[processAgentFileUpload] no text could be extracted from "${file.originalname}"; keeping it as a plain file${canIndexLater ? ' for file_search' : ''}`,
+          );
+          tool_resource = canIndexLater ? EToolResources.file_search : undefined;
         }
-        logger.info(
-          `[processAgentFileUpload] parser busy or over budget for "${file.originalname}"; deferring to file_search so the embed worker parses it in the background`,
-        );
-        tool_resource = EToolResources.file_search;
       }
     }
 
@@ -1471,17 +1486,36 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         );
       } catch (err) {
         logger.warn(`[processAgentFileUpload] ${err.message}; falling back to native text parsing`);
-        parsedText = await parseTextNative(file);
+        /* Guarded, because this branch also serves types the raw reader cannot handle: .doc,
+         * .rtf and .pptx sit in the configured text set but never reach the document parser, so
+         * an unguarded read stored the file's own OLE2/zip bytes as its text. A timeout is
+         * transient, so a refusal here defers rather than fails. */
+        parsedText = await parseTextNativeIfReadable(file, err instanceof TimeoutError);
       }
-      const { text, bytes } = parsedText;
-      tool_resource = await resolveExtractedTextRouting({
-        req,
-        toolResource: tool_resource,
-        textChars: text?.length ?? 0,
-        filename: file.originalname,
-      });
-      if (tool_resource === EToolResources.context) {
-        return await createTextFile({ text, bytes, type: file.mimetype });
+      const { text, bytes, retryable } = parsedText;
+      /* Nothing extracted for a transient reason is not an empty document: creating one would
+       * answer 200 and leave a blank record in the library forever. Defer it exactly as the OCR
+       * branch does, or say honestly that the parser is busy when there is nowhere to defer. */
+      if (!text?.trim() && retryable) {
+        if (!(await checkCapability(req, AgentCapabilities.file_search))) {
+          throw new Error(
+            `The document parser is busy and could not finish "${file.originalname}" in time. Please upload it again in a few minutes.`,
+          );
+        }
+        logger.info(
+          `[processAgentFileUpload] parser unavailable for "${file.originalname}"; deferring to file_search so the embed worker parses it in the background`,
+        );
+        tool_resource = EToolResources.file_search;
+      } else {
+        tool_resource = await resolveExtractedTextRouting({
+          req,
+          toolResource: tool_resource,
+          textChars: text?.length ?? 0,
+          filename: file.originalname,
+        });
+        if (tool_resource === EToolResources.context) {
+          return await createTextFile({ text, bytes, type: file.mimetype });
+        }
       }
       /* Over-threshold plain text: fall through to the RAG pipeline below. */
     }

@@ -102,7 +102,23 @@ const checkSkillCreate = generateCheckAccess({
 // ---------------------------------------------------------------------------
 // Rate limiters (reuse existing file upload limiters)
 // ---------------------------------------------------------------------------
-const { fileUploadIpLimiter, fileUploadUserLimiter } = createFileLimiters();
+/**
+ * Built on the first request, not at import.
+ *
+ * This module is required from `routes/index.js` while `api/server/index.js` is still loading —
+ * long before `performStartupChecks` copies librechat.yaml's `rateLimits` into the environment.
+ * Building the limiters here froze them at the library defaults, and they share a Redis counter
+ * with `/api/files` (same store prefix, same user key), so the two must agree on the ceiling.
+ * With the stand configured for 400 uploads per hour, skills still refused at 50: a library
+ * import locked skill uploads out for the rest of the window, and `/api/files/config` reported
+ * a limit this route did not honour. `files/index.js` and `projects/index.js` already defer.
+ */
+let fileLimiters;
+const getFileLimiters = () => (fileLimiters ??= createFileLimiters());
+const fileUploadIpLimiter = (req, res, next) =>
+  getFileLimiters().fileUploadIpLimiter(req, res, next);
+const fileUploadUserLimiter = (req, res, next) =>
+  getFileLimiters().fileUploadUserLimiter(req, res, next);
 const skillDbMethods = getSkillDbMethods();
 
 router.use(requireJwtAuth);
