@@ -348,6 +348,8 @@ function groupByDocument(
  * У нормативки десятки статей, у таблицы — до сорока колонок, и всё это множится на список
  * набора (до `LIBRARY_FILTER_LIST_MAX` карточек) в каждом вызове тула.
  */
+/** Слово извлекателя для «вид определить не удалось» (doc-gateway `app/meta.py` DEFAULT_TYPE). */
+const UNKNOWN_DOC_TYPE = 'иное';
 const CARD_ARTICLES_MAX = 5;
 const CARD_COLUMNS_MAX = 10;
 const CARD_PARTIES_MAX = 6;
@@ -382,7 +384,11 @@ function renderCard(meta: TDocMetadata | undefined): string {
     return '';
   }
   const parts: string[] = [];
-  if (meta.docType) {
+  /* «иное» — слово извлекателя для «не смог определить» (doc-gateway DEFAULT_TYPE), а не вид
+   * документа. Модель, прочитав «Type: иное», пересказывает это пользователю как факт о
+   * документе. Клиентская карточка молчит на этом значении с самого начала — здесь такой
+   * проверки не было. */
+  if (meta.docType && meta.docType !== UNKNOWN_DOC_TYPE) {
     parts.push(`Type: ${meta.docType}`);
   }
   if (meta.parties?.length) {
