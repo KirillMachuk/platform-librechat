@@ -407,11 +407,43 @@ describe('text', () => {
         expect(result.retryable).toBeUndefined();
       });
 
-      it('does not flag a 503 when native parsing still recovered the text (digital PDF)', async () => {
+      it('treats a gateway timeout and a throttle as retryable too', async () => {
+        for (const status of [429, 504]) {
+          mockedAxios.post.mockRejectedValue({ response: { status } });
+          mockedReadFileAsString.mockResolvedValue({ content: '', bytes: 0 });
+
+          const result = await parseText({ req: mockReq, file: scan, file_id: mockFileId });
+
+          expect(result.retryable).toBe(true);
+        }
+      });
+
+      /* The production defect this pair guards: native parsing decodes raw bytes, so on a PDF it
+       * returns megabytes of mojibake beginning with "%PDF". That non-empty string looked like a
+       * successful extraction, so the 503 was discarded and the upload failed with "the document
+       * may be image-based" — for a scan that indexes in 34s once the lane is free. The old test
+       * here asserted the opposite behaviour using a mock that returned clean prose for a PDF,
+       * which no real native parse can produce. */
+      it('never returns a binary document as extracted text', async () => {
+        mockedAxios.post.mockRejectedValue({ response: { status: 503 } });
+        mockedReadFileAsString.mockResolvedValue({
+          content: `%PDF-1.7\n%µ¶\n${'ÿ'.repeat(4096)}`,
+          bytes: 6533714,
+        });
+
+        const result = await parseText({ req: mockReq, file: scan, file_id: mockFileId });
+
+        expect(result.text).toBe('');
+        expect(result.retryable).toBe(true);
+        expect(mockedReadFileAsString).not.toHaveBeenCalled();
+      });
+
+      it('still falls back to native parsing for real text files', async () => {
+        const note = { ...mockFile, originalname: 'note.txt', mimetype: 'text/plain' };
         mockedAxios.post.mockRejectedValue({ response: { status: 503 } });
         mockedReadFileAsString.mockResolvedValue({ content: 'договор аренды', bytes: 26 });
 
-        const result = await parseText({ req: mockReq, file: scan, file_id: mockFileId });
+        const result = await parseText({ req: mockReq, file: note, file_id: mockFileId });
 
         expect(result.text).toBe('договор аренды');
         expect(result.retryable).toBeUndefined();
