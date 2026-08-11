@@ -1336,3 +1336,21 @@ describe('isPermissiveMimeConfig', () => {
     expect(isPermissiveMimeConfig(converted)).toBe(true);
   });
 });
+
+/* mergeFileConfig rebuilds the object field by field, so anything it does not name is dropped
+ * on the way to the client. The upload allowance travelling this path is what keeps the UI from
+ * offering a bigger batch than the server accepts. */
+describe('mergeFileConfig — upload allowance', () => {
+  it('carries the server-reported upload limits through to the client', () => {
+    const merged = mergeFileConfig({
+      uploadLimits: { userMax: 250, userWindowInMinutes: 60 },
+    });
+
+    expect(merged.uploadLimits).toEqual({ userMax: 250, userWindowInMinutes: 60 });
+  });
+
+  it('leaves them unset when the server states none', () => {
+    expect(mergeFileConfig({}).uploadLimits).toBeUndefined();
+    expect(mergeFileConfig(undefined).uploadLimits).toBeUndefined();
+  });
+});
