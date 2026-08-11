@@ -2,7 +2,11 @@ import { memo, useCallback, useState, lazy, Suspense } from 'react';
 import { useRecoilValue } from 'recoil';
 import { QueryKeys } from 'librechat-data-provider';
 import { useQueryClient } from '@tanstack/react-query';
-import { Skeleton, Sidebar as SidebarIcon, Button, TooltipAnchor } from '@librechat/client';
+import { Skeleton, Button, TooltipAnchor } from '@librechat/client';
+/* Phosphor's SidebarSimple (exported as PanelLeftOpen) — the book's panel
+   glyph; the lucide `Sidebar` from @librechat/client predated the icon
+   migration and was the «старая иконка» the owner flagged on 11.08. */
+import { PanelLeftOpen as SidebarIcon } from '~/components/icons';
 import type { NavLink } from '~/common';
 import {
   sidebarRowActiveIconClassName,

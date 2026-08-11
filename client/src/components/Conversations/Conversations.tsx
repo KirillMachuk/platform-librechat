@@ -4,7 +4,10 @@ import { useRecoilValue } from 'recoil';
 import { QueryKeys } from 'librechat-data-provider';
 import { useQueryClient } from '@tanstack/react-query';
 import { List, CellMeasurer, CellMeasurerCache } from 'react-virtualized';
-import { Spinner, TooltipAnchor, NewChatIcon, useMediaQuery } from '@librechat/client';
+import { Spinner, TooltipAnchor, useMediaQuery } from '@librechat/client';
+/* The same Phosphor pencil the «Новый чат» card wears — the lucide NewChatIcon
+   from @librechat/client predated the icon migration (owner, 11.08). */
+import { SquarePen } from '~/components/icons';
 import type { TConversation } from 'librechat-data-provider';
 import {
   useLocalize,
@@ -134,7 +137,7 @@ const ChatsHeader: FC<ChatsHeaderProps> = memo(({ isExpanded, onToggle, actions 
             className={headerIconButtonClassName}
             onClick={handleNewChat}
           >
-            <NewChatIcon className="h-4 w-4" />
+            <SquarePen className="h-4 w-4" aria-hidden="true" />
           </button>
         }
       />

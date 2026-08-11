@@ -1,6 +1,10 @@
 import { startTransition } from 'react';
 import { useSetRecoilState } from 'recoil';
-import { TooltipAnchor, Button, Sidebar } from '@librechat/client';
+import { TooltipAnchor, Button } from '@librechat/client';
+/* PanelLeftOpen IS Phosphor's SidebarSimple — the panel glyph the book draws.
+   The old `Sidebar` from @librechat/client was a lucide leftover the icon
+   migration (#319) never reached, which the owner spotted on 11.08. */
+import { PanelLeftOpen } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 import store from '~/store';
@@ -48,7 +52,7 @@ export default function OpenSidebar({ className }: { className?: string }) {
           )}
           onClick={handleClick}
         >
-          <Sidebar className="icon-md" aria-hidden="true" />
+          <PanelLeftOpen className="icon-md" aria-hidden="true" />
         </Button>
       }
     />

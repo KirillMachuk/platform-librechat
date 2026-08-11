@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
-import { MCPIcon, AttachmentIcon, OpenAIMinimalIcon } from '@librechat/client';
+import { MCPIcon, OpenAIMinimalIcon } from '@librechat/client';
 import {
   Permissions,
   EModelEndpoint,
@@ -22,6 +22,7 @@ import {
   Bot,
   Folder,
   Bookmark,
+  Paperclip,
   NotebookPen,
   ScrollText,
   SlidersHorizontal,
@@ -146,7 +147,7 @@ export default function useSideNavLinks({
     links.push({
       title: 'com_sidepanel_attach_files',
       label: '',
-      icon: AttachmentIcon,
+      icon: Paperclip,
       id: 'files',
       Component: FilesPanel,
     });
