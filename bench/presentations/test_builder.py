@@ -14,6 +14,8 @@ from pathlib import Path
 
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
+from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE
+from pptx.util import Inches
 
 ROOT = Path(__file__).resolve().parents[2]
 BUILDER_PATH = ROOT / "skill/pptx/scripts/build_presentation.py"
@@ -147,6 +149,26 @@ class PresentationBuilderTests(unittest.TestCase):
                         minimum = 35 if shape.name == "Slide title" else 16
                         self.assertGreaterEqual(run.font.size.pt, minimum, shape.name)
 
+    def test_long_russian_slide_title_reserves_content_space(self):
+        spec = _base_spec()
+        spec["slides"] = [
+            {
+                "layout": "comparison",
+                "title": "Перераспределение ответственности сокращает путь от подписания договора до первой измеримой ценности",
+                "left": {"heading": "До изменения", "bullets": ["Один владелец"]},
+                "right": {"heading": "После изменения", "bullets": ["Разделённая ответственность"]},
+                "source": "Источник: анализ внедрений",
+            }
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "presentation.pptx"
+            deck = _save(spec, output)
+            title = next(shape for shape in deck.slides[0].shapes if shape.name == "Slide title")
+            headings = [shape for shape in deck.slides[0].shapes if shape.name == "Column heading"]
+
+        self.assertGreater(title.height, Inches(0.92))
+        self.assertTrue(all(heading.top >= title.top + title.height for heading in headings))
+
     def test_metric_and_process_layouts_remain_editable_powerpoint_objects(self):
         spec = _base_spec()
         spec["slides"] = [
@@ -218,6 +240,26 @@ class PresentationBuilderTests(unittest.TestCase):
 
         self.assertTrue(any(issue["code"] == "missing-slide-source" and issue["severity"] == "critical" for issue in issues))
 
+    def test_structural_qa_rejects_text_exceeding_shape_capacity(self):
+        spec = _base_spec()
+        spec["slides"] = [
+            {
+                "layout": "bullets",
+                "title": "Слишком плотный слайд",
+                "bullets": ["Очень длинный тезис " * 35],
+            }
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "presentation.pptx"
+            _save(spec, output)
+            _checks, issues = BUILDER._check_structure(output, spec)
+
+        overflow = next(
+            issue for issue in issues if issue["code"] == "text-overflow-risk"
+        )
+        self.assertEqual(overflow["severity"], "critical")
+        self.assertEqual(overflow["target"], "Slide 1")
+
     def test_targeted_edit_preserves_unaffected_slide_xml(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -269,6 +311,61 @@ class PresentationBuilderTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "inherited content placeholder"):
                 BUILDER._build(spec, root / "output.pptx")
+
+    def test_template_mode_enables_native_text_fitting_for_inherited_placeholders(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            template_path = root / "template.pptx"
+            template = Presentation()
+            title_and_content = template.slide_layouts[1]
+            template.save(template_path)
+            output = root / "output.pptx"
+            spec = {
+                "job": _job(output.name),
+                "templatePath": str(template_path),
+                "slides": [
+                    {
+                        "layout": "bullets",
+                        "templateLayout": title_and_content.name,
+                        "title": "Длинный русский заголовок должен оставаться внутри унаследованного поля",
+                        "bullets": [
+                            "Первый содержательный тезис для проверки заполнения",
+                            "Второй содержательный тезис для проверки заполнения",
+                        ],
+                    },
+                    {
+                        "layout": "bullets",
+                        "templateLayout": title_and_content.name,
+                        "title": "Короткий заголовок",
+                        "bullets": ["Наследует размер шрифта шаблона"],
+                    },
+                ],
+            }
+
+            deck = _save(spec, output)
+            slide = deck.slides[0]
+            title = slide.shapes.title
+            bodies = BUILDER._template_body_placeholders(slide)
+
+            self.assertEqual(title.text_frame.auto_size, MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE)
+            self.assertEqual(bodies[0].text_frame.auto_size, MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE)
+            self.assertEqual(title.text_frame.vertical_anchor, MSO_ANCHOR.TOP)
+            title_sizes = [
+                run.font.size.pt
+                for paragraph in title.text_frame.paragraphs
+                for run in paragraph.runs
+                if run.font.size is not None
+            ]
+            self.assertTrue(title_sizes)
+            self.assertLessEqual(max(title_sizes), 30)
+            short_title = deck.slides[1].shapes.title
+            self.assertTrue(
+                all(
+                    run.font.size is None
+                    for paragraph in short_title.text_frame.paragraphs
+                    for run in paragraph.runs
+                )
+            )
 
 
 if __name__ == "__main__":

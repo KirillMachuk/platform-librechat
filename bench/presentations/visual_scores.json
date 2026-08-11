@@ -1,0 +1,128 @@
+{
+  "rubric": {
+    "narrative": 2,
+    "hierarchy": 2,
+    "readability": 2,
+    "visualCraft": 2,
+    "evidenceAndEditability": 2
+  },
+  "acceptance": {
+    "average": 9,
+    "minimum": 8,
+    "shareAtLeastNine": 0.9
+  },
+  "reviewer": "Codex full-size visual review",
+  "reviewedAt": "2026-08-11",
+  "cases": {
+    "ru-board-notes": {
+      "score": 9.4,
+      "dimensions": {
+        "narrative": 1.9,
+        "hierarchy": 1.9,
+        "readability": 2,
+        "visualCraft": 1.8,
+        "evidenceAndEditability": 1.8
+      },
+      "notes": "Clear executive storyline, strong decision slide, native chart, readable Cyrillic, and compact source traceability."
+    },
+    "ru-sales-proposal": {
+      "score": 9.1,
+      "dimensions": {
+        "narrative": 1.9,
+        "hierarchy": 1.8,
+        "readability": 1.9,
+        "visualCraft": 1.8,
+        "evidenceAndEditability": 1.7
+      },
+      "notes": "Coherent proposal flow with a purposeful pictogram, editable process, clean comparison, and visible evidence."
+    },
+    "ru-xlsx-analysis": {
+      "score": 9.2,
+      "dimensions": {
+        "narrative": 1.9,
+        "hierarchy": 1.9,
+        "readability": 1.9,
+        "visualCraft": 1.7,
+        "evidenceAndEditability": 1.8
+      },
+      "notes": "Decision-focused financial narrative with editable native charts, legible table, metrics, and explicit sources."
+    },
+    "ru-docx-strategy": {
+      "score": 9.1,
+      "dimensions": {
+        "narrative": 1.9,
+        "hierarchy": 1.9,
+        "readability": 1.9,
+        "visualCraft": 1.7,
+        "evidenceAndEditability": 1.7
+      },
+      "notes": "Strong sectioning and strategy arc; comparison and process remain editable and readable at presentation distance."
+    },
+    "ru-long-copy": {
+      "score": 9,
+      "dimensions": {
+        "narrative": 1.8,
+        "hierarchy": 1.8,
+        "readability": 1.8,
+        "visualCraft": 1.8,
+        "evidenceAndEditability": 1.8
+      },
+      "notes": "Long Russian titles and denser copy remain unclipped, structured, and readable after dynamic title spacing."
+    },
+    "ru-source-traceability": {
+      "score": 9.1,
+      "dimensions": {
+        "narrative": 1.8,
+        "hierarchy": 1.8,
+        "readability": 1.9,
+        "visualCraft": 1.7,
+        "evidenceAndEditability": 1.9
+      },
+      "notes": "Assumptions and facts are traceable slide by slide, with a structured sources appendix and editable evidence views."
+    },
+    "ru-targeted-slide-edit": {
+      "score": 9.3,
+      "dimensions": {
+        "narrative": 1.9,
+        "hierarchy": 1.9,
+        "readability": 1.9,
+        "visualCraft": 1.8,
+        "evidenceAndEditability": 1.8
+      },
+      "notes": "Edited forecast is visually coherent while unaffected slide XML remains byte-identical to the source deck."
+    },
+    "ru-template-fidelity": {
+      "score": 8,
+      "dimensions": {
+        "narrative": 1.7,
+        "hierarchy": 1.6,
+        "readability": 1.8,
+        "visualCraft": 1.2,
+        "evidenceAndEditability": 1.7
+      },
+      "notes": "Intentionally plain because the fixture uses PowerPoint's neutral default template; master, layouts, geometry, and inherited placeholders are preserved."
+    },
+    "ru-process-deck": {
+      "score": 9.2,
+      "dimensions": {
+        "narrative": 1.9,
+        "hierarchy": 1.9,
+        "readability": 1.9,
+        "visualCraft": 1.8,
+        "evidenceAndEditability": 1.7
+      },
+      "notes": "Five-step and four-step flows stay aligned, editable, and legible, with a clear move from gates to decisions."
+    },
+    "ru-en-mixed-business": {
+      "score": 9.1,
+      "dimensions": {
+        "narrative": 1.8,
+        "hierarchy": 1.8,
+        "readability": 1.9,
+        "visualCraft": 1.8,
+        "evidenceAndEditability": 1.8
+      },
+      "notes": "Russian and English business notation, currency, ratios, dates, native chart, and table render consistently."
+    }
+  }
+}

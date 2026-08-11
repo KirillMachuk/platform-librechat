@@ -18,7 +18,7 @@ from pptx.chart.data import ChartData
 from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
 from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE, MSO_SHAPE_TYPE
-from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR, MSO_AUTO_SIZE
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
@@ -214,14 +214,37 @@ def _add_text(
     return shape
 
 
-def _add_slide_title(slide, title: str, source: str = "") -> None:
+def _estimated_line_count(text: str, max_chars: int) -> int:
+    lines = 0
+    for raw_line in str(text).splitlines() or [""]:
+        words = raw_line.split()
+        if not words:
+            lines += 1
+            continue
+        current = 0
+        for word in words:
+            needed = len(word) if current == 0 else len(word) + 1
+            if current and current + needed > max_chars:
+                lines += 1
+                current = len(word)
+            else:
+                current += needed
+        lines += 1
+    return max(lines, 1)
+
+
+def _add_slide_title(slide, title: str, source: str = "") -> float:
+    line_count = _estimated_line_count(title, 44)
+    if line_count > 3:
+        raise ValueError("Slide title exceeds three readable lines; shorten or split the slide")
+    height = max(0.92, line_count * 0.52)
     _add_text(
         slide,
         title,
         Inches(0.85),
         Inches(0.48),
         Inches(11.65),
-        Inches(0.92),
+        Inches(height),
         size=35,
         bold=True,
         name="Slide title",
@@ -238,6 +261,7 @@ def _add_slide_title(slide, title: str, source: str = "") -> None:
             color=MUTED,
             name="Source note",
         )
+    return 0.48 + height + 0.22
 
 
 def _add_bullets(frame, bullets: list[Any], size: float = 20, color: RGBColor = INK) -> None:
@@ -351,46 +375,44 @@ def _render_title(prs: Presentation, item: dict[str, Any]):
 def _render_claim(prs: Presentation, item: dict[str, Any]):
     slide = prs.slides.add_slide(_template_layout(prs, item.get("templateLayout")))
     _add_rect(slide, 0, 0, prs.slide_width, prs.slide_height, PAPER, "Slide background")
-    _add_text(
-        slide,
-        item.get("title", "Key message"),
-        Inches(0.85),
-        Inches(0.5),
-        Inches(11.55),
-        Inches(0.92),
-        size=35,
-        color=INK,
-        bold=True,
-        name="Slide title",
+    content_top = _add_slide_title(
+        slide, item.get("title", "Главный вывод"), item.get("source", "")
     )
-    _add_ellipse(slide, Inches(0.88), Inches(1.72), Inches(0.2), Inches(0.2), ACCENT)
+    claim_top = max(1.52, content_top + 0.02)
+    divider_top = min(claim_top + 2.72, 4.78)
+    _add_ellipse(
+        slide,
+        Inches(0.88),
+        Inches(claim_top + 0.2),
+        Inches(0.2),
+        Inches(0.2),
+        ACCENT,
+    )
     _add_text(
         slide,
         item.get("claim", ""),
         Inches(1.28),
-        Inches(1.52),
+        Inches(claim_top),
         Inches(10.6),
-        Inches(2.65),
+        Inches(divider_top - claim_top - 0.12),
         size=40,
         color=NAVY,
         bold=True,
         valign=MSO_ANCHOR.MIDDLE,
         name="Claim",
     )
-    _add_line(slide, Inches(1.28), Inches(4.52), Inches(9.8))
+    _add_line(slide, Inches(1.28), Inches(divider_top), Inches(9.8))
     _add_text(
         slide,
         item.get("support", ""),
         Inches(1.28),
-        Inches(4.88),
+        Inches(divider_top + 0.34),
         Inches(9.9),
-        Inches(1.2),
+        Inches(6.62 - divider_top - 0.34),
         size=20,
         color=INK,
         name="Claim support",
     )
-    if item.get("source"):
-        _add_text(slide, item["source"], Inches(0.85), Inches(7.03), Inches(11), Inches(0.25), size=10, color=MUTED, name="Source note")
     return slide
 
 
@@ -405,14 +427,14 @@ def _render_section(prs: Presentation, item: dict[str, Any]):
 
 def _render_bullets(prs: Presentation, item: dict[str, Any]):
     slide = prs.slides.add_slide(_template_layout(prs, item.get("templateLayout")))
-    _add_slide_title(slide, item.get("title", ""), item.get("source", ""))
+    content_top = _add_slide_title(slide, item.get("title", ""), item.get("source", ""))
     bullets = list(item.get("bullets", []))
     if len(bullets) > 5:
         raise ValueError("Narrative list supports at most five points; split the slide")
-    row_height = 0.9 if len(bullets) >= 5 else 1.05
+    row_height = min(1.05, (6.58 - content_top) / max(len(bullets), 1))
     for index, raw in enumerate(bullets, 1):
         text = str(raw.get("text", "")) if isinstance(raw, dict) else str(raw)
-        y = 1.62 + (index - 1) * row_height
+        y = content_top + (index - 1) * row_height
         _add_text(slide, f"{index:02d}", Inches(0.9), Inches(y), Inches(0.58), Inches(0.42), size=16, color=ACCENT, bold=True, name="Narrative point number")
         _add_text(slide, text, Inches(1.65), Inches(y - 0.03), Inches(10.45), Inches(0.66), size=20, color=INK, name="Narrative point")
         if index < len(bullets):
@@ -420,19 +442,22 @@ def _render_bullets(prs: Presentation, item: dict[str, Any]):
     return slide
 
 
-def _column(slide, content: dict[str, Any], x, width, accent: RGBColor = ACCENT):
-    _add_ellipse(slide, x, Inches(1.75), Inches(0.18), Inches(0.18), accent)
-    _add_text(slide, content.get("heading", ""), x + Inches(0.34), Inches(1.62), width - Inches(0.48), Inches(0.72), size=24, bold=True, color=NAVY, name="Column heading")
-    _add_bullet_box(slide, content.get("bullets", []), x + Inches(0.34), Inches(2.58), width - Inches(0.48), Inches(3.75), size=18, name="Column bullets")
+def _column(
+    slide, content: dict[str, Any], x, width, top: float, accent: RGBColor = ACCENT
+):
+    _add_ellipse(slide, x, Inches(top + 0.13), Inches(0.18), Inches(0.18), accent)
+    _add_text(slide, content.get("heading", ""), x + Inches(0.34), Inches(top), width - Inches(0.48), Inches(0.72), size=24, bold=True, color=NAVY, name="Column heading")
+    body_top = top + 0.96
+    _add_bullet_box(slide, content.get("bullets", []), x + Inches(0.34), Inches(body_top), width - Inches(0.48), Inches(6.58 - body_top), size=18, name="Column bullets")
 
 
 def _render_two_column(prs: Presentation, item: dict[str, Any], comparison: bool = False):
     slide = prs.slides.add_slide(_template_layout(prs, item.get("templateLayout")))
     _add_rect(slide, 0, 0, prs.slide_width, prs.slide_height, PAPER, "Slide background")
-    _add_slide_title(slide, item.get("title", ""), item.get("source", ""))
-    _column(slide, item.get("left", {}), Inches(0.88), Inches(5.55), ACCENT)
-    _add_rect(slide, Inches(6.62), Inches(1.72), Inches(0.012), Inches(4.72), LINE, "Column divider")
-    _column(slide, item.get("right", {}), Inches(6.88), Inches(5.52), POSITIVE if comparison else ACCENT_DARK)
+    content_top = _add_slide_title(slide, item.get("title", ""), item.get("source", ""))
+    _column(slide, item.get("left", {}), Inches(0.88), Inches(5.55), content_top, ACCENT)
+    _add_rect(slide, Inches(6.62), Inches(content_top + 0.1), Inches(0.012), Inches(6.48 - content_top), LINE, "Column divider")
+    _column(slide, item.get("right", {}), Inches(6.88), Inches(5.52), content_top, POSITIVE if comparison else ACCENT_DARK)
     return slide
 
 
@@ -441,12 +466,12 @@ def _render_image(prs: Presentation, item: dict[str, Any]):
     if not image_path.exists():
         raise ValueError(f"Image not found: {image_path}")
     slide = prs.slides.add_slide(_template_layout(prs, item.get("templateLayout")))
-    _add_slide_title(slide, item.get("title", ""), item.get("source", ""))
+    content_top = _add_slide_title(slide, item.get("title", ""), item.get("source", ""))
     from PIL import Image
 
     with Image.open(image_path) as img:
         ratio = img.width / max(img.height, 1)
-    box_x, box_y, box_w, box_h = Inches(0.8), Inches(1.55), Inches(11.75), Inches(4.95)
+    box_x, box_y, box_w, box_h = Inches(0.8), Inches(content_top), Inches(11.75), Inches(6.5 - content_top)
     box_ratio = box_w / box_h
     if ratio >= box_ratio:
         width = box_w
@@ -484,7 +509,7 @@ def _normalize_chart_axis_ids(chart) -> None:
 
 def _render_chart(prs: Presentation, item: dict[str, Any]):
     slide = prs.slides.add_slide(_template_layout(prs, item.get("templateLayout")))
-    _add_slide_title(slide, item.get("title", ""), item.get("source", ""))
+    content_top = _add_slide_title(slide, item.get("title", ""), item.get("source", ""))
     chart_spec = item.get("chart", {})
     chart_type = CHART_TYPES.get(str(chart_spec.get("type", "column")).lower())
     if chart_type is None:
@@ -498,9 +523,9 @@ def _render_chart(prs: Presentation, item: dict[str, Any]):
     chart_frame = slide.shapes.add_chart(
         chart_type,
         Inches(0.85),
-        Inches(1.62),
+        Inches(content_top),
         chart_width,
-        Inches(4.95),
+        Inches(6.58 - content_top),
         data,
     )
     _shape_name(chart_frame, "Native chart")
@@ -538,7 +563,7 @@ def _render_chart(prs: Presentation, item: dict[str, Any]):
             slide,
             takeaway,
             Inches(9.72),
-            Inches(2.15),
+            Inches(content_top + 0.48),
             Inches(2.55),
             Inches(1.65),
             size=30,
@@ -553,7 +578,7 @@ def _render_chart(prs: Presentation, item: dict[str, Any]):
                 slide,
                 detail,
                 Inches(9.72),
-                Inches(4.02),
+                Inches(content_top + 2.35),
                 Inches(2.55),
                 Inches(1.2),
                 size=17,
@@ -566,14 +591,14 @@ def _render_chart(prs: Presentation, item: dict[str, Any]):
 
 def _render_table(prs: Presentation, item: dict[str, Any]):
     slide = prs.slides.add_slide(_template_layout(prs, item.get("templateLayout")))
-    _add_slide_title(slide, item.get("title", ""), item.get("source", ""))
+    content_top = _add_slide_title(slide, item.get("title", ""), item.get("source", ""))
     columns = item.get("columns", [])
     rows = item.get("rows", [])
     if not columns:
         raise ValueError("Table slide requires columns")
     if len(columns) > 5 or len(rows) > 7:
         raise ValueError("Readable table slides support at most five columns and seven rows")
-    shape = slide.shapes.add_table(len(rows) + 1, len(columns), Inches(0.8), Inches(1.62), Inches(11.75), Inches(4.9))
+    shape = slide.shapes.add_table(len(rows) + 1, len(columns), Inches(0.8), Inches(content_top), Inches(11.75), Inches(6.55 - content_top))
     _shape_name(shape, "Data table")
     table = shape.table
     for col_index, value in enumerate(columns):
@@ -606,20 +631,21 @@ def _render_table(prs: Presentation, item: dict[str, Any]):
 
 def _render_metrics(prs: Presentation, item: dict[str, Any]):
     slide = prs.slides.add_slide(_template_layout(prs, item.get("templateLayout")))
-    _add_slide_title(slide, item.get("title", ""), item.get("source", ""))
+    content_top = _add_slide_title(slide, item.get("title", ""), item.get("source", ""))
     metrics = list(item.get("metrics", []))
     if not 1 <= len(metrics) <= 3:
         raise ValueError("Metrics slide requires one to three metrics")
     available = 11.55
     gap = 0.42
     width = (available - gap * (len(metrics) - 1)) / len(metrics)
+    value_top = content_top + 0.35
     for index, metric in enumerate(metrics):
         x = 0.88 + index * (width + gap)
         _add_text(
             slide,
             str(metric.get("value", "")),
             Inches(x),
-            Inches(2.0),
+            Inches(value_top),
             Inches(width),
             Inches(1.45),
             size=48,
@@ -628,12 +654,12 @@ def _render_metrics(prs: Presentation, item: dict[str, Any]):
             valign=MSO_ANCHOR.BOTTOM,
             name="Metric value",
         )
-        _add_line(slide, Inches(x), Inches(3.7), Inches(width - 0.15))
+        _add_line(slide, Inches(x), Inches(value_top + 1.7), Inches(width - 0.15))
         _add_text(
             slide,
             str(metric.get("label", "")),
             Inches(x),
-            Inches(4.0),
+            Inches(value_top + 2.0),
             Inches(width - 0.15),
             Inches(0.82),
             size=19,
@@ -647,7 +673,7 @@ def _render_metrics(prs: Presentation, item: dict[str, Any]):
                 slide,
                 detail,
                 Inches(x),
-                Inches(5.0),
+                Inches(value_top + 3.0),
                 Inches(width - 0.15),
                 Inches(0.9),
                 size=16,
@@ -659,13 +685,13 @@ def _render_metrics(prs: Presentation, item: dict[str, Any]):
 
 def _render_process(prs: Presentation, item: dict[str, Any]):
     slide = prs.slides.add_slide(_template_layout(prs, item.get("templateLayout")))
-    _add_slide_title(slide, item.get("title", ""), item.get("source", ""))
+    content_top = _add_slide_title(slide, item.get("title", ""), item.get("source", ""))
     steps = list(item.get("steps", []))
     if not 2 <= len(steps) <= 5:
         raise ValueError("Process slide requires two to five steps")
     start_x = 1.3
     end_x = 12.0
-    center_y = 3.18
+    center_y = max(3.18, content_top + 1.42)
     spacing = (end_x - start_x) / (len(steps) - 1)
     _add_rect(
         slide,
@@ -705,7 +731,7 @@ def _render_process(prs: Presentation, item: dict[str, Any]):
             slide,
             str(step.get("title", "")),
             Inches(center_x - box_width / 2),
-            Inches(4.12),
+            Inches(center_y + 0.94),
             Inches(box_width),
             Inches(0.78),
             size=18,
@@ -718,7 +744,7 @@ def _render_process(prs: Presentation, item: dict[str, Any]):
             slide,
             str(step.get("detail", "")),
             Inches(center_x - box_width / 2),
-            Inches(5.02),
+            Inches(center_y + 1.84),
             Inches(box_width),
             Inches(0.82),
             size=16,
@@ -732,11 +758,23 @@ def _render_process(prs: Presentation, item: dict[str, Any]):
 def _render_summary(prs: Presentation, item: dict[str, Any]):
     slide = prs.slides.add_slide(_template_layout(prs, item.get("templateLayout")))
     _add_rect(slide, 0, 0, prs.slide_width, prs.slide_height, NAVY, "Summary background")
-    _add_text(slide, item.get("title", "Следующие шаги"), Inches(0.85), Inches(0.6), Inches(11.5), Inches(0.92), size=38, color=WHITE, bold=True, name="Slide title")
-    bullets = item.get("bullets", [])
-    shape = slide.shapes.add_textbox(Inches(0.9), Inches(1.72), Inches(10.8), Inches(4.65))
-    _shape_name(shape, "Summary bullets")
-    _add_bullets(shape.text_frame, bullets, size=22, color=WHITE)
+    title = str(item.get("title", "Следующие шаги"))
+    title_lines = _estimated_line_count(title, 42)
+    if title_lines > 3:
+        raise ValueError("Summary title exceeds three readable lines")
+    title_height = max(0.92, title_lines * 0.56)
+    _add_text(slide, title, Inches(0.85), Inches(0.6), Inches(11.5), Inches(title_height), size=38, color=WHITE, bold=True, name="Slide title")
+    bullets = list(item.get("bullets", []))
+    if len(bullets) > 5:
+        raise ValueError("Summary supports at most five decisions")
+    content_top = 0.6 + title_height + 0.34
+    row_height = min(1.0, (6.55 - content_top) / max(len(bullets), 1))
+    for index, bullet in enumerate(bullets, 1):
+        y = content_top + (index - 1) * row_height
+        _add_text(slide, f"{index:02d}", Inches(0.9), Inches(y), Inches(0.55), Inches(0.42), size=16, color=ACCENT, bold=True, name="Summary point number")
+        _add_text(slide, str(bullet), Inches(1.65), Inches(y - 0.04), Inches(10.2), Inches(0.68), size=22, color=WHITE, name="Summary point")
+        if index < len(bullets):
+            _add_line(slide, Inches(1.65), Inches(y + 0.72), Inches(9.9), RGBColor(53, 64, 79), name="Summary divider")
     if item.get("source"):
         _add_text(slide, item["source"], Inches(0.85), Inches(7.03), Inches(11), Inches(0.25), size=10, color=RGBColor(172, 189, 208), name="Source note")
     return slide
@@ -744,22 +782,20 @@ def _render_summary(prs: Presentation, item: dict[str, Any]):
 
 def _render_sources(prs: Presentation, item: dict[str, Any]):
     slide = prs.slides.add_slide(_template_layout(prs, item.get("templateLayout")))
-    _add_slide_title(slide, item.get("title", "Sources"))
-    entries = item.get("entries", [])
-    shape = slide.shapes.add_textbox(Inches(0.9), Inches(1.55), Inches(11.35), Inches(5.25))
-    _shape_name(shape, "Sources list")
-    frame = shape.text_frame
-    frame.clear()
-    for idx, entry in enumerate(entries):
-        paragraph = frame.paragraphs[0] if idx == 0 else frame.add_paragraph()
+    content_top = _add_slide_title(slide, item.get("title", "Sources"))
+    entries = list(item.get("entries", []))
+    if len(entries) > 8:
+        raise ValueError("Sources slide supports at most eight entries")
+    row_height = min(0.68, (6.72 - content_top) / max(len(entries), 1))
+    for idx, entry in enumerate(entries, 1):
         label = entry.get("label", "Source") if isinstance(entry, dict) else "Source"
         url = entry.get("url", "") if isinstance(entry, dict) else str(entry)
-        paragraph.text = f"{idx + 1}. {label} — {url}"
-        for run in paragraph.runs:
-            run.font.name = FONT
-            run.font.size = Pt(16)
-            run.font.color.rgb = INK
-        paragraph.space_after = Pt(9)
+        y = content_top + (idx - 1) * row_height
+        _add_text(slide, f"{idx:02d}", Inches(0.88), Inches(y), Inches(0.48), Inches(0.3), size=16, color=ACCENT, bold=True, name="Source number")
+        _add_text(slide, str(label), Inches(1.55), Inches(y - 0.02), Inches(4.0), Inches(0.42), size=18, color=INK, bold=True, name="Source label")
+        _add_text(slide, str(url), Inches(5.65), Inches(y - 0.01), Inches(6.35), Inches(0.42), size=16, color=MUTED, name="Source location")
+        if idx < len(entries):
+            _add_line(slide, Inches(1.55), Inches(y + 0.5), Inches(10.45), name="Source divider")
     return slide
 
 
@@ -797,6 +833,7 @@ def _set_template_text(shape, text: str = "", bullets: list[Any] | None = None) 
     frame = shape.text_frame
     frame.clear()
     frame.word_wrap = True
+    frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
     values = bullets if bullets is not None else [text]
     for index, item in enumerate(values):
         if isinstance(item, dict):
@@ -808,6 +845,34 @@ def _set_template_text(shape, text: str = "", bullets: list[Any] | None = None) 
         paragraph = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
         paragraph.text = value
         paragraph.level = level
+
+
+def _fit_template_title(shape, text: str) -> None:
+    """Conservatively size multiline inherited titles for PowerPoint and LibreOffice."""
+    frame = shape.text_frame
+    available_width = max(
+        1.0,
+        (shape.width - frame.margin_left - frame.margin_right) / Inches(1) * 72,
+    )
+    conservative_chars = max(8, int(available_width / (30 * 0.52)))
+    if _estimated_line_count(text, conservative_chars) <= 1:
+        return
+    frame.vertical_anchor = MSO_ANCHOR.TOP
+    available_height = max(
+        1.0,
+        (shape.height - frame.margin_top - frame.margin_bottom) / Inches(1) * 72,
+    )
+    selected_size = 18
+    for size in range(30, 17, -1):
+        average_character_width = size * 0.52
+        max_chars = max(8, int(available_width / average_character_width))
+        lines = _estimated_line_count(text, max_chars)
+        if lines * size * 1.2 <= available_height:
+            selected_size = size
+            break
+    for paragraph in frame.paragraphs:
+        for run in paragraph.runs:
+            run.font.size = Pt(selected_size)
 
 
 def _template_content_box(slide, prs: Presentation):
@@ -844,6 +909,7 @@ def _render_template_item(prs: Presentation, item: dict[str, Any]):
     title_text = str(item.get("title", item.get("claim", "")))
     if title is not None:
         _set_template_text(title, title_text)
+        _fit_template_title(title, title_text)
     elif title_text:
         _add_text(
             slide,
@@ -1043,11 +1109,45 @@ def _build(spec: dict[str, Any], output: Path) -> tuple[Presentation, list[dict[
     return prs, changes
 
 
-def _issue(code: str, severity: str, message: str, location: str | None = None) -> dict[str, Any]:
+def _issue(code: str, severity: str, message: str, target: str | None = None) -> dict[str, Any]:
     result = {"code": code, "severity": severity, "message": message}
-    if location:
-        result["location"] = location
+    if target:
+        result["target"] = target
     return result
+
+
+def _text_exceeds_shape_capacity(shape) -> bool:
+    if not getattr(shape, "has_text_frame", False) or not shape.text.strip():
+        return False
+    frame = shape.text_frame
+    width_pt = max(
+        (shape.width - frame.margin_left - frame.margin_right) / 12700,
+        1,
+    )
+    height_pt = max(
+        (shape.height - frame.margin_top - frame.margin_bottom) / 12700,
+        1,
+    )
+    required_pt = 0.0
+    measured = False
+    for paragraph in frame.paragraphs:
+        text = paragraph.text.strip()
+        if not text:
+            continue
+        sizes = [
+            run.font.size.pt
+            for run in paragraph.runs
+            if run.text.strip() and run.font.size is not None
+        ]
+        if not sizes:
+            continue
+        measured = True
+        font_size = max(sizes)
+        max_chars = max(int(width_pt / max(font_size * 0.5, 1)), 1)
+        required_pt += _estimated_line_count(text, max_chars) * font_size * 1.02
+        if paragraph.space_after is not None:
+            required_pt += paragraph.space_after.pt
+    return measured and required_pt > height_pt * 1.04
 
 
 def _check_structure(path: Path, spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -1085,6 +1185,7 @@ def _check_structure(path: Path, spec: dict[str, Any]) -> tuple[list[dict[str, A
     dense = 0
     title_risks = 0
     undersized_text = 0
+    overflow_risks = 0
     native_charts = 0
     for slide_index, slide in enumerate(prs.slides, 1):
         for shape in slide.shapes:
@@ -1095,6 +1196,16 @@ def _check_structure(path: Path, spec: dict[str, Any]) -> tuple[list[dict[str, A
                 native_charts += 1
             if getattr(shape, "has_text_frame", False):
                 text = shape.text.strip()
+                if _text_exceeds_shape_capacity(shape):
+                    overflow_risks += 1
+                    issues.append(
+                        _issue(
+                            "text-overflow-risk",
+                            "critical",
+                            f"Text is unlikely to fit inside '{shape.name}' at the configured font size",
+                            f"Slide {slide_index}",
+                        )
+                    )
                 if shape.name in {"Slide title", "Deck title", "Section title"} and len(text) > 100:
                     title_risks += 1
                     issues.append(_issue("title-wrap", "warning", "Title is likely to wrap excessively", f"Slide {slide_index}"))
@@ -1122,6 +1233,7 @@ def _check_structure(path: Path, spec: dict[str, Any]) -> tuple[list[dict[str, A
 
     checks.append({"name": "slide-bounds", "status": "failed" if off_slide else "passed", "message": f"{off_slide} shapes cross slide bounds" if off_slide else "All shapes stay inside slide bounds"})
     checks.append({"name": "text-density", "status": "warning" if dense or title_risks else "passed", "message": f"{dense + title_risks} slides need text review" if dense or title_risks else "Titles and body text fit presentation limits"})
+    checks.append({"name": "text-fit", "status": "failed" if overflow_risks else "passed", "message": f"{overflow_risks} text boxes are likely to overflow" if overflow_risks else "Text fits the configured shape capacities"})
     checks.append({"name": "type-scale", "status": "warning" if undersized_text else "passed", "message": f"{undersized_text} text boxes use undersized presentation text" if undersized_text else "Presentation type scale meets minimums"})
     requested_charts = sum(1 for slide in spec.get("slides", []) if slide.get("layout") == "chart")
     chart_status = "passed" if native_charts >= requested_charts else "failed"
@@ -1165,7 +1277,9 @@ def _check_structure(path: Path, spec: dict[str, Any]) -> tuple[list[dict[str, A
     return checks, issues
 
 
-def _render(path: Path, keep_pdf: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]], Path | None]:
+def _render(
+    path: Path, keep_pdf: bool, expected_slides: int
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], Path | None]:
     checks: list[dict[str, Any]] = []
     issues: list[dict[str, Any]] = []
     soffice = shutil.which("soffice") or shutil.which("libreoffice")
@@ -1207,25 +1321,58 @@ def _render(path: Path, keep_pdf: bool) -> tuple[list[dict[str, Any]], list[dict
                 from PIL import Image, ImageStat
 
                 blank = 0
+                image_hashes: list[str] = []
                 for image_path in images:
-                    with Image.open(image_path).convert("L") as image:
-                        stat = ImageStat.Stat(image)
+                    with Image.open(image_path) as source_image:
+                        rgb = source_image.convert("RGB")
+                        stat = ImageStat.Stat(rgb.convert("L"))
                         if stat.var[0] < 2.0:
                             blank += 1
-                checks.append({"name": "visual-raster", "status": "failed" if blank else "passed", "message": f"{blank} blank slide renders" if blank else f"Raster-checked {len(images)} rendered slides"})
+                        image_hashes.append(hashlib.sha256(rgb.tobytes()).hexdigest())
+                wrong_count = len(images) != expected_slides
+                failed = bool(blank or wrong_count)
+                message = (
+                    f"Rendered {len(images)} of {expected_slides} expected slides"
+                    if wrong_count
+                    else f"{blank} blank slide renders"
+                    if blank
+                    else f"Raster-checked {len(images)} rendered slides"
+                )
+                checks.append(
+                    {
+                        "name": "visual-raster",
+                        "status": "failed" if failed else "passed",
+                        "message": message,
+                        "details": {"imageHashes": image_hashes},
+                    }
+                )
                 if blank:
                     issues.append(_issue("blank-render", "critical", f"{blank} slides rendered blank"))
+                if wrong_count:
+                    issues.append(
+                        _issue(
+                            "render-page-count",
+                            "critical",
+                            f"Rendered {len(images)} of {expected_slides} expected slides",
+                        )
+                    )
             else:
                 checks.append({"name": "visual-raster", "status": "warning", "message": "PDF rasterization was unavailable"})
                 issues.append(_issue("raster-unavailable", "warning", "Rendered PDF could not be raster-checked"))
         else:
             checks.append({"name": "visual-raster", "status": "warning", "message": "Poppler rasterizer is unavailable"})
             issues.append(_issue("raster-unavailable", "warning", "Rendered PDF could not be raster-checked"))
-        return checks, issues, pdf if keep_pdf else None
+        preview_pdf = None
+        if keep_pdf:
+            preview_pdf = path.with_suffix(".pdf")
+            shutil.copy2(pdf, preview_pdf)
+        return checks, issues, preview_pdf
     except subprocess.TimeoutExpired:
         checks.append({"name": "render", "status": "failed", "message": "LibreOffice render timed out"})
         issues.append(_issue("render-timeout", "critical", "LibreOffice render exceeded 45 seconds"))
         return checks, issues, None
+    finally:
+        shutil.rmtree(render_dir, ignore_errors=True)
 
 
 def _report(spec: dict[str, Any], checks: list[dict[str, Any]], issues: list[dict[str, Any]], changes: list[dict[str, str]], preview_pdf: Path | None, repair_iterations: int = 0) -> dict[str, Any]:
@@ -1262,13 +1409,14 @@ def main() -> int:
         checks.append({"name": "immutable-input", "status": "passed" if immutable else "failed", "message": "Input/template file was not modified" if immutable else "Input/template file changed during authoring"})
         if not immutable:
             issues.append(_issue("input-modified", "critical", "Input/template file changed during authoring"))
-    render_checks, render_issues, rendered_pdf = _render(output, keep_pdf=bool(spec.get("outputPdf", True)))
+    render_checks, render_issues, rendered_pdf = _render(
+        output,
+        keep_pdf=bool(spec.get("outputPdf", True)),
+        expected_slides=len(prs.slides),
+    )
     checks.extend(render_checks)
     issues.extend(render_issues)
-    preview_pdf = None
-    if rendered_pdf:
-        preview_pdf = output.with_suffix(".pdf")
-        shutil.copy2(rendered_pdf, preview_pdf)
+    preview_pdf = rendered_pdf
     report = _report(spec, checks, issues, changes, preview_pdf, int(spec.get("repairIterations", 0)))
     report_path = Path(f"{output}.artifact-report.json")
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
