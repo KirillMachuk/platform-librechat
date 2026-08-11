@@ -7,6 +7,7 @@ import type {
 import type { TStartupConfig } from 'librechat-data-provider';
 import type { ArtifactFiles } from '~/common';
 import { sharedFiles, buildSandpackOptions } from '~/utils/artifacts';
+import StaticPreview from './StaticPreview';
 
 export const ArtifactPreview = memo(function ({
   files,
@@ -44,8 +45,33 @@ export const ArtifactPreview = memo(function ({
     [startupConfig, template],
   );
 
+  /* The `static` bucket — HTML, markdown, code and every office preview —
+     always resolves to a finished `index.html` (useArtifactProps), so it needs
+     no bundler at all. It renders in our own sandboxed iframe instead of a
+     third party's; see StaticPreview for why that matters here. */
+  const staticHtml = useMemo(() => {
+    if (template !== 'static') {
+      return undefined;
+    }
+    /* The live-editing path above replaces the edited file with `{ code }`;
+       every other entry is the string itself. */
+    const entry = (artifactFiles as Record<string, unknown>)['index.html'];
+    if (typeof entry === 'string') {
+      return entry;
+    }
+    if (entry !== null && typeof entry === 'object' && 'code' in entry) {
+      const { code } = entry as { code?: unknown };
+      return typeof code === 'string' ? code : undefined;
+    }
+    return undefined;
+  }, [artifactFiles, template]);
+
   if (Object.keys(artifactFiles).length === 0) {
     return null;
+  }
+
+  if (staticHtml !== undefined) {
+    return <StaticPreview html={staticHtml} title={fileKey} />;
   }
 
   return (
