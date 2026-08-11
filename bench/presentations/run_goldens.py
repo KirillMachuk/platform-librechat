@@ -379,6 +379,12 @@ def _run_builder(spec: dict[str, Any], output: Path) -> dict[str, Any]:
     return json.loads(Path(f"{output}.artifact-report.json").read_text(encoding="utf-8"))
 
 
+def _reset_run_dir(run_dir: Path) -> None:
+    if run_dir.exists():
+        shutil.rmtree(run_dir)
+    run_dir.mkdir(parents=True)
+
+
 def _write_montage(slides: list[Path], output: Path) -> None:
     columns = min(5, max(len(slides), 1))
     tile_width, tile_height, gutter = 480, 270, 18
@@ -539,7 +545,7 @@ def run_matrix(runs: int, selected_case: str | None, skip_visual_gate: bool) -> 
         hashes: list[list[str]] = []
         for run_number in range(1, runs + 1):
             run_dir = RESULTS_DIR / case["id"] / f"run-{run_number}"
-            run_dir.mkdir(parents=True, exist_ok=True)
+            _reset_run_dir(run_dir)
             output = run_dir / f"{case['id']}.pptx"
             spec, context = _prepare_case(case["id"], run_dir, output.name)
             report = _run_builder(spec, output)

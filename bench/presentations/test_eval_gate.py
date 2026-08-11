@@ -10,6 +10,7 @@ from pathlib import Path
 from PIL import Image
 
 from bench.presentations.run_goldens import (
+    _reset_run_dir,
     _write_montage,
     evaluate_visual_scorecard,
     evaluate_visual_scores,
@@ -17,6 +18,17 @@ from bench.presentations.run_goldens import (
 
 
 class VisualGateTests(unittest.TestCase):
+    def test_run_directory_is_cleared_before_each_build(self):
+        with tempfile.TemporaryDirectory() as folder:
+            run_dir = Path(folder) / "run-1"
+            run_dir.mkdir()
+            (run_dir / "stale.pdf").write_bytes(b"stale render")
+
+            _reset_run_dir(run_dir)
+
+            self.assertTrue(run_dir.is_dir())
+            self.assertEqual(list(run_dir.iterdir()), [])
+
     def test_visual_gate_requires_professional_scores(self):
         passing = {f"case-{index}": 9.0 for index in range(10)}
         failing_average = {**passing, "case-0": 8.0, "case-1": 8.0}
