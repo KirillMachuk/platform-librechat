@@ -3,7 +3,7 @@ import { CheckboxButton } from '@librechat/client';
 import { Permissions, PermissionTypes } from 'librechat-data-provider';
 import { useLocalize, useHasAccess } from '~/hooks';
 import { useBadgeRowContext } from '~/Providers';
-import { Globe } from '~/components/icons';
+import { WorldSearch } from '~/components/icons';
 
 function WebSearch() {
   const localize = useLocalize();
@@ -32,7 +32,7 @@ function WebSearch() {
         /* Chip wears the short name (owner 11.08-3, room in the row);
            the tools dropdown keeps the full one. */
         label={localize('com_ui_chip_web_search')}
-        icon={<Globe className="icon-sm" aria-hidden="true" />}
+        icon={<WorldSearch className="icon-sm" aria-hidden="true" />}
       />
     )
   );

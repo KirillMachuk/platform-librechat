@@ -210,50 +210,6 @@ export function CompositeCitation(props: CompositeCitationProps) {
                 {currentSource.snippet}
               </p>
             )}
-            {totalPages > 1 && (
-              <div className="flex items-center gap-1 border-t border-border-light pt-2">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={handlePrevPage}
-                  disabled={currentPage === 0}
-                  className="size-7"
-                  aria-label={localize('com_ui_source_prev')}
-                >
-                  <ChevronLeft className="size-3.5" aria-hidden="true" />
-                </Button>
-                {sources.map((source, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setCurrentPage(i);
-                    }}
-                    className={`flex size-6 items-center justify-center rounded text-xs transition-colors ${
-                      i === currentPage
-                        ? 'bg-surface-hover font-medium text-text-primary'
-                        : 'text-text-secondary hover:bg-surface-hover'
-                    }`}
-                    aria-label={`Source ${i + 1}`}
-                    aria-current={i === currentPage ? 'true' : undefined}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={handleNextPage}
-                  disabled={currentPage === totalPages - 1}
-                  className="size-7"
-                  aria-label={localize('com_ui_source_next')}
-                >
-                  <ChevronRight className="size-3.5" aria-hidden="true" />
-                </Button>
-              </div>
-            )}
           </>
         )}
       </SourceHovercard>

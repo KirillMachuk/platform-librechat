@@ -1,23 +1,12 @@
 import { useMemo, memo, type FC, useCallback, useEffect, useRef } from 'react';
 import throttle from 'lodash/throttle';
 import { useRecoilValue } from 'recoil';
-import { QueryKeys } from 'librechat-data-provider';
-import { useQueryClient } from '@tanstack/react-query';
+import { Spinner, useMediaQuery } from '@librechat/client';
 import { List, CellMeasurer, CellMeasurerCache } from 'react-virtualized';
-import { Spinner, TooltipAnchor, useMediaQuery } from '@librechat/client';
-/* The same Phosphor pencil the «Новый чат» card wears — the lucide NewChatIcon
-   from @librechat/client predated the icon migration (owner, 11.08). */
-import { SquarePen } from '~/components/icons';
 import type { TConversation } from 'librechat-data-provider';
-import {
-  useLocalize,
-  useFavorites,
-  useShowMarketplace,
-  useNewConvo,
-  useElementSize,
-} from '~/hooks';
-import { groupConversationsByDate, clearMessagesCache, cn } from '~/utils';
+import { useLocalize, useFavorites, useShowMarketplace, useElementSize } from '~/hooks';
 import FavoritesList from '~/components/Nav/Favorites/FavoritesList';
+import { groupConversationsByDate, cn } from '~/utils';
 import { ChevronDown } from '~/components/icons';
 import { useActiveJobs } from '~/data-provider';
 import Convo from './Convo';
@@ -98,15 +87,6 @@ export const headerIconButtonClassName =
 /** Collapsible header for the Chats section */
 const ChatsHeader: FC<ChatsHeaderProps> = memo(({ isExpanded, onToggle, actions }) => {
   const localize = useLocalize();
-  const queryClient = useQueryClient();
-  const { newConversation } = useNewConvo();
-  const conversation = useRecoilValue(store.conversationByIndex(0));
-
-  const handleNewChat = useCallback(() => {
-    clearMessagesCache(queryClient, conversation?.conversationId);
-    queryClient.invalidateQueries([QueryKeys.messages]);
-    newConversation();
-  }, [conversation?.conversationId, newConversation, queryClient]);
 
   /** Канон §3: заголовок секции — 12,5/500 цвета t3, а не 12/700.
    *  Focus is §1.8 with offset −2: the control runs the full width of the row. */
@@ -128,19 +108,6 @@ const ChatsHeader: FC<ChatsHeaderProps> = memo(({ isExpanded, onToggle, actions 
         />
       </button>
       {actions}
-      <TooltipAnchor
-        description={localize('com_ui_new_chat')}
-        render={
-          <button
-            type="button"
-            aria-label={localize('com_ui_new_chat')}
-            className={headerIconButtonClassName}
-            onClick={handleNewChat}
-          >
-            <SquarePen className="h-4 w-4" aria-hidden="true" />
-          </button>
-        }
-      />
     </div>
   );
 });

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import * as Ariakit from '@ariakit/react';
-import { TooltipAnchor, DropdownPopup, PinIcon, VectorIcon } from '@librechat/client';
+import { TooltipAnchor, DropdownPopup } from '@librechat/client';
 import {
   AuthType,
   Permissions,
@@ -10,12 +10,15 @@ import {
 } from 'librechat-data-provider';
 import type { MenuItemProps } from '~/common';
 import {
-  Globe,
-  ScrollText,
+  FileSearchIcon,
+  Pin,
+  PinOff,
   Settings,
   Settings2,
-  TerminalSquareIcon,
   Telescope,
+  TerminalSquareIcon,
+  WorldSearch,
+  Zap,
 } from '~/components/icons';
 import { useLocalize, useHasAccess, useAgentCapabilities } from '~/hooks';
 import ArtifactsSubMenu from '~/components/Chat/Input/ArtifactsSubMenu';
@@ -191,7 +194,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
       render: (props) => (
         <div {...props}>
           <div className="flex items-center gap-2">
-            <Globe className="icon-md" aria-hidden="true" />
+            <WorldSearch className="icon-md" aria-hidden="true" />
             <span>{localize('com_ui_web_search')}</span>
           </div>
           <div className="flex items-center gap-1">
@@ -229,7 +232,11 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
               aria-label={isSearchPinned ? localize('com_ui_unpin') : localize('com_ui_pin')}
             >
               <div className="h-4 w-4">
-                <PinIcon unpin={isSearchPinned} />
+                {isSearchPinned ? (
+                  <PinOff className="icon-sm" aria-hidden="true" />
+                ) : (
+                  <Pin className="icon-sm" aria-hidden="true" />
+                )}
               </div>
             </button>
           </div>
@@ -265,7 +272,11 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
             aria-label={isDeepResearchPinned ? localize('com_ui_unpin') : localize('com_ui_pin')}
           >
             <div className="h-4 w-4">
-              <PinIcon unpin={isDeepResearchPinned} />
+              {isDeepResearchPinned ? (
+                <PinOff className="icon-sm" aria-hidden="true" />
+              ) : (
+                <Pin className="icon-sm" aria-hidden="true" />
+              )}
             </div>
           </button>
         </div>
@@ -298,7 +309,11 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
               aria-label={isCodePinned ? localize('com_ui_unpin') : localize('com_ui_pin')}
             >
               <div className="h-4 w-4">
-                <PinIcon unpin={isCodePinned} />
+                {isCodePinned ? (
+                  <PinOff className="icon-sm" aria-hidden="true" />
+                ) : (
+                  <Pin className="icon-sm" aria-hidden="true" />
+                )}
               </div>
             </button>
           </div>
@@ -314,7 +329,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
       render: (props) => (
         <div {...props}>
           <div className="flex items-center gap-2">
-            <VectorIcon className="icon-md" />
+            <FileSearchIcon className="icon-md" />
             <span>{localize('com_assistants_file_search')}</span>
           </div>
           <button
@@ -331,7 +346,11 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
             aria-label={isFileSearchPinned ? localize('com_ui_unpin') : localize('com_ui_pin')}
           >
             <div className="h-4 w-4">
-              <PinIcon unpin={isFileSearchPinned} />
+              {isFileSearchPinned ? (
+                <PinOff className="icon-sm" aria-hidden="true" />
+              ) : (
+                <Pin className="icon-sm" aria-hidden="true" />
+              )}
             </div>
           </button>
         </div>
@@ -346,7 +365,7 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
       render: (props) => (
         <div {...props} data-testid="tools-menu-skills">
           <div className="flex items-center gap-2">
-            <ScrollText className="icon-md" aria-hidden="true" />
+            <Zap className="icon-md" aria-hidden="true" />
             <span>{localize('com_ui_skills')}</span>
           </div>
           <button
@@ -363,7 +382,11 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
             aria-label={isSkillsPinned ? localize('com_ui_unpin') : localize('com_ui_pin')}
           >
             <div className="h-4 w-4">
-              <PinIcon unpin={isSkillsPinned} />
+              {isSkillsPinned ? (
+                <PinOff className="icon-sm" aria-hidden="true" />
+              ) : (
+                <Pin className="icon-sm" aria-hidden="true" />
+              )}
             </div>
           </button>
         </div>

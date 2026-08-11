@@ -1,14 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import * as Ariakit from '@ariakit/react';
 import { TFeedback, TFeedbackTag, getTagsForRating } from 'librechat-data-provider';
-import {
-  Button,
-  OGDialog,
-  OGDialogContent,
-  OGDialogTitle,
-  ThumbUpIcon,
-  ThumbDownIcon,
-} from '@librechat/client';
+import { Button, OGDialog, OGDialogContent, OGDialogTitle } from '@librechat/client';
 import {
   AlertCircle,
   PenTool,
@@ -18,6 +11,8 @@ import {
   CheckCircle,
   Lightbulb,
   Search,
+  ThumbsUp,
+  ThumbsDown,
 } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -36,8 +31,8 @@ const ICONS = {
   CheckCircle,
   Lightbulb,
   Search,
-  ThumbsUp: ThumbUpIcon,
-  ThumbsDown: ThumbDownIcon,
+  ThumbsUp,
+  ThumbsDown,
 };
 
 function FeedbackOptionButton({
@@ -64,7 +59,7 @@ function FeedbackOptionButton({
       aria-label={label}
       aria-pressed={active}
     >
-      <Icon size="19" bold={active} aria-hidden="true" />
+      <Icon size="19" aria-hidden="true" />
       <span>{label}</span>
     </button>
   );
@@ -151,7 +146,7 @@ function FeedbackButtons({
             aria-pressed={feedback?.rating === 'thumbsUp'}
             aria-haspopup="menu"
           >
-            <ThumbUpIcon size="19" bold={feedback?.rating === 'thumbsUp'} />
+            <ThumbsUp size="19" />
           </button>
         }
       />
@@ -185,7 +180,7 @@ function FeedbackButtons({
             aria-pressed={feedback?.rating === 'thumbsDown'}
             aria-haspopup="menu"
           >
-            <ThumbDownIcon size="19" bold={feedback?.rating === 'thumbsDown'} />
+            <ThumbsDown size="19" />
           </button>
         }
       />
@@ -273,7 +268,7 @@ export default function Feedback({ handleFeedback, feedback: initialFeedback }: 
   const renderSingleFeedbackButton = () => {
     if (!feedback) return null;
     const isThumbsUp = feedback.rating === 'thumbsUp';
-    const Icon = isThumbsUp ? ThumbUpIcon : ThumbDownIcon;
+    const Icon = isThumbsUp ? ThumbsUp : ThumbsDown;
     const label = isThumbsUp
       ? localize('com_ui_feedback_positive')
       : localize('com_ui_feedback_negative');
@@ -291,7 +286,7 @@ export default function Feedback({ handleFeedback, feedback: initialFeedback }: 
         title={label}
         aria-pressed="true"
       >
-        <Icon size="19" bold />
+        <Icon size="19" />
       </button>
     );
   };

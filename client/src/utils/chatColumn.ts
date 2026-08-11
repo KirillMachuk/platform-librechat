@@ -17,12 +17,19 @@
  * The composer does not pass it: there is one composer under two columns, and
  * which width it should take there is a design question, not a copy of this one.
  */
+/**
+ * The column carries its own 16px side air (owner, 11.08-4): when a side panel
+ * squeezes the centre below the cap, the width clamp stops biting and the
+ * column used to run edge-to-edge — the composer sat flush against the panel
+ * with zero breathing room. Every cap below is raised by the 2rem the padding
+ * takes, so the CONTENT width in the unclamped case is exactly what it was.
+ */
 export const chatColumnClass = (maximize: boolean, parallel = false): string => {
   if (maximize) {
     return 'w-full max-w-full md:px-5 lg:px-1 xl:px-5';
   }
   if (parallel) {
-    return 'md:max-w-[58rem] xl:max-w-[70rem]';
+    return 'md:max-w-[60rem] md:px-4 xl:max-w-[72rem]';
   }
-  return 'md:max-w-[48rem]';
+  return 'md:max-w-[50rem] md:px-4';
 };

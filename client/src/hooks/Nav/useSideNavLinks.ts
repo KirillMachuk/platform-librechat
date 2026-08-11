@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
-import { MCPIcon, OpenAIMinimalIcon } from '@librechat/client';
+import { OpenAIMinimalIcon } from '@librechat/client';
 import {
   Permissions,
   EModelEndpoint,
@@ -20,11 +20,12 @@ import {
 } from '~/hooks';
 import {
   Bot,
-  Folder,
   Bookmark,
-  Paperclip,
+  Files,
+  FolderOpen,
+  LoadBalancer,
   NotebookPen,
-  ScrollText,
+  Plug,
   SlidersHorizontal,
 } from '~/components/icons';
 import MCPBuilderPanel from '~/components/SidePanel/MCPBuilder/MCPBuilderPanel';
@@ -86,7 +87,7 @@ export default function useSideNavLinks({
     links.push({
       title: 'com_projects_section',
       label: '',
-      icon: Folder,
+      icon: FolderOpen,
       id: 'projects',
       Component: ProjectsPanel,
     });
@@ -128,7 +129,7 @@ export default function useSideNavLinks({
       links.push({
         title: 'com_ui_skills',
         label: '',
-        icon: ScrollText,
+        icon: LoadBalancer,
         id: 'skills',
         Component: SkillsAccordion,
       });
@@ -147,7 +148,7 @@ export default function useSideNavLinks({
     links.push({
       title: 'com_sidepanel_attach_files',
       label: '',
-      icon: Paperclip,
+      icon: Files,
       id: 'files',
       Component: FilesPanel,
     });
@@ -185,7 +186,7 @@ export default function useSideNavLinks({
       links.push({
         title: 'com_nav_setting_mcp',
         label: '',
-        icon: MCPIcon,
+        icon: Plug,
         id: 'mcp-builder',
         Component: MCPBuilderPanel,
       });

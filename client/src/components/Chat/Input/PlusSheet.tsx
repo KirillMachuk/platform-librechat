@@ -1,6 +1,6 @@
 import { Fragment, memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useRecoilState } from 'recoil';
-import { FileUpload, Switch, VectorIcon } from '@librechat/client';
+import { FileUpload, Switch } from '@librechat/client';
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react';
 import {
   Permissions,
@@ -11,16 +11,17 @@ import {
 import type { EToolResources, TConversation } from 'librechat-data-provider';
 import type { ExtendedFile, FileSetter } from '~/common';
 import {
-  X,
-  Plus,
-  Globe,
   Camera,
+  FileSearchIcon,
   Folder,
   ImageIcon,
+  Plus,
   Telescope,
-  ScrollText,
-  WandSparkles,
   TerminalSquareIcon,
+  WandSparkles,
+  WorldSearch,
+  X,
+  Zap,
 } from '~/components/icons';
 import {
   useLocalize,
@@ -265,7 +266,7 @@ function PlusSheet({
           canUseWebSearch &&
           toolLoopAvailable && {
             key: 'web_search',
-            icon: <Globe className="icon-md" aria-hidden="true" />,
+            icon: <WorldSearch className="icon-md" aria-hidden="true" />,
             label: localize('com_ui_web_search'),
             checked: webSearch?.toggleState === true,
             onToggle: (value: boolean) => webSearch?.debouncedChange({ value }),
@@ -292,7 +293,7 @@ function PlusSheet({
           canUseFileSearch &&
           toolLoopAvailable && {
             key: 'file_search',
-            icon: <VectorIcon className="icon-md" />,
+            icon: <FileSearchIcon className="icon-md" />,
             label: localize('com_assistants_file_search'),
             checked: fileSearch?.toggleState === true,
             onToggle: (value: boolean) => fileSearch?.debouncedChange({ value }),
@@ -300,7 +301,7 @@ function PlusSheet({
         canUseSkills &&
           capabilities.skillsEnabled && {
             key: 'skills',
-            icon: <ScrollText className="icon-md" aria-hidden="true" />,
+            icon: <Zap className="icon-md" aria-hidden="true" />,
             label: localize('com_ui_skills'),
             checked: skills?.toggleState === true,
             onToggle: (value: boolean) => skills?.debouncedChange({ value }),

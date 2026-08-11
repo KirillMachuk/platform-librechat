@@ -1,9 +1,9 @@
 import { memo, useCallback, useRef } from 'react';
-import { useToastContext, TooltipAnchor, ListeningIcon, Spinner } from '@librechat/client';
+import { useToastContext, TooltipAnchor, Spinner } from '@librechat/client';
 import { useLocalize, useSpeechToText, useGetAudioSettings } from '~/hooks';
 import { globalAudioId, type TAskFunction } from '~/common';
 import { useChatFormContext } from '~/Providers';
-import { MicOff } from '~/components/icons';
+import { Mic, MicOff } from '~/components/icons';
 import { cn } from '~/utils';
 
 /** Серверный (не браузерный) STT. `openai`/`azureOpenAI` — это ПРОВАЙДЕРЫ внешнего STT из
@@ -107,7 +107,7 @@ export default memo(function AudioRecorder({
     if (isLoading === true) {
       return <Spinner className="stroke-text-secondary" />;
     }
-    return <ListeningIcon className="stroke-text-secondary" />;
+    return <Mic className="stroke-text-secondary" />;
   };
 
   return (

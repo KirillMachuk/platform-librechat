@@ -8,7 +8,7 @@ import { displayFilename } from '~/components/Chat/Messages/Content/Parts/attach
 import { isCodeOnlyArtifact, isPreviewOnlyArtifact } from '~/utils/artifacts';
 import CopyButton from '~/components/Messages/Content/CopyButton';
 import { useShareContext, useMutationState } from '~/Providers';
-import { Code, Play, RefreshCw, X } from '~/components/icons';
+import { Code, Play, Reload, X } from '~/components/icons';
 import useArtifacts from '~/hooks/Artifacts/useArtifacts';
 import DownloadArtifact from './DownloadArtifact';
 import ArtifactVersion from './ArtifactVersion';
@@ -305,7 +305,7 @@ export default function Artifacts() {
                   {isRefreshing ? (
                     <Spinner size={16} />
                   ) : (
-                    <RefreshCw
+                    <Reload
                       size={16}
                       className="transition-transform duration-200"
                       aria-hidden="true"
@@ -314,7 +314,7 @@ export default function Artifacts() {
                 </Button>
               )}
               {displayedTab !== 'preview' && isMutating && (
-                <RefreshCw size={16} className="animate-spin text-text-secondary" />
+                <Reload size={16} className="animate-spin text-text-secondary" />
               )}
               {orderedArtifactIds.length > 1 && (
                 <ArtifactVersion

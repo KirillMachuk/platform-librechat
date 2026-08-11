@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { TooltipAnchor } from '@librechat/client';
 import { useSetRecoilState, useRecoilValue } from 'recoil';
 import { isAssistantsEndpoint } from 'librechat-data-provider';
-import { PlusCircle } from '~/components/icons';
+import { Split } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import store from '~/store';
 
@@ -48,7 +48,7 @@ function AddMultiConvo() {
          Десктоп: §6.2 кнопка 32, иконка основного шага (18), не icon-sm. */
       className="hidden flex-shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary disabled:pointer-events-none disabled:opacity-50 radix-state-open:bg-surface-tertiary md:inline-flex md:h-8 md:w-8"
     >
-      <PlusCircle className="icon-md" aria-hidden="true" />
+      <Split className="icon-md" aria-hidden="true" />
     </TooltipAnchor>
   );
 }

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { QueryKeys, dataService } from 'librechat-data-provider';
-import type { UseQueryOptions, QueryObserverResult } from '@tanstack/react-query';
 import type { TProject, TFile, ConversationListResponse } from 'librechat-data-provider';
+import type { UseQueryOptions, QueryObserverResult } from '@tanstack/react-query';
 
 export const useListProjectsQuery = (
   config?: UseQueryOptions<TProject[]>,
@@ -16,15 +16,11 @@ export const useGetProjectQuery = (
   projectId: string,
   config?: UseQueryOptions<TProject>,
 ): QueryObserverResult<TProject> =>
-  useQuery<TProject>(
-    [QueryKeys.project, projectId],
-    () => dataService.getProject(projectId),
-    {
-      enabled: !!projectId,
-      refetchOnWindowFocus: false,
-      ...config,
-    },
-  );
+  useQuery<TProject>([QueryKeys.project, projectId], () => dataService.getProject(projectId), {
+    enabled: !!projectId,
+    refetchOnWindowFocus: false,
+    ...config,
+  });
 
 export const useProjectConversationsQuery = (
   projectId: string,

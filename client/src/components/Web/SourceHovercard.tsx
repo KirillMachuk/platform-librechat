@@ -63,7 +63,7 @@ const hovercardClass = cn(
  * per the §3 caption step; no visible chevron — the card opens on hover, and
  * for the keyboard the Ariakit disclosure below stays reachable unseen. */
 export const citationChipClass = cn(
-  'ml-1 inline-flex h-[22px] max-w-40 items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap',
+  'ml-1 inline-flex h-[22px] max-w-40 items-center overflow-hidden text-ellipsis whitespace-nowrap',
   'rounded-full border border-border-light bg-surface-secondary px-2 align-[2px]',
   'text-[12.5px] leading-none text-text-secondary no-underline',
   'transition-colors hover:bg-surface-hover hover:text-text-primary',
@@ -157,7 +157,6 @@ export function SourceHovercard({
                     isLocalFile ? localize('com_sources_download_local_unavailable') : undefined
                   }
                 >
-                  <FileText className="size-3 shrink-0" aria-hidden="true" />
                   <span className="truncate">{label}</span>
                 </button>
               ) : (
@@ -169,7 +168,6 @@ export function SourceHovercard({
                   onMouseEnter={onMouseEnter}
                   onMouseLeave={onMouseLeave}
                 >
-                  <FaviconImage domain={domain} className="size-3" />
                   <span className="truncate">{label}</span>
                 </a>
               )

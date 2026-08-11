@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
 import { ContentTypes } from 'librechat-data-provider';
+import { render, screen } from '@testing-library/react';
 import type { TMessageContentParts } from 'librechat-data-provider';
 
 /**
@@ -116,7 +116,9 @@ describe('ContentParts — auto-expand for replies hidden in the thinking channe
   });
 
   it('ignores whitespace-only THINK parts', () => {
-    render(<ContentParts {...baseProps} content={[think('   '), think('the reply'), toolCall()]} />);
+    render(
+      <ContentParts {...baseProps} content={[think('   '), think('the reply'), toolCall()]} />,
+    );
     expect(screen.getByTestId('part-0')).toHaveAttribute('data-auto-expand', 'false');
     expect(screen.getByTestId('part-1')).toHaveAttribute('data-auto-expand', 'true');
   });

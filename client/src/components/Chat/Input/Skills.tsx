@@ -3,7 +3,7 @@ import { CheckboxButton } from '@librechat/client';
 import { Permissions, PermissionTypes, defaultAgentCapabilities } from 'librechat-data-provider';
 import { useLocalize, useHasAccess, useAgentCapabilities } from '~/hooks';
 import { useBadgeRowContext } from '~/Providers';
-import { ScrollText } from '~/components/icons';
+import { Zap } from '~/components/icons';
 
 function Skills() {
   const localize = useLocalize();
@@ -30,7 +30,7 @@ function Skills() {
         checked={skillsActive}
         setValue={debouncedChange}
         label={localize('com_ui_skills')}
-        icon={<ScrollText className="icon-sm" aria-hidden="true" />}
+        icon={<Zap className="icon-sm" aria-hidden="true" />}
       />
     )
   );

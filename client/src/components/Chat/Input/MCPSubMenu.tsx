@@ -1,9 +1,9 @@
 import React from 'react';
 import * as Ariakit from '@ariakit/react';
-import { MCPIcon, PinIcon } from '@librechat/client';
+import { MCPIcon } from '@librechat/client';
 import MCPServerMenuItem from '~/components/MCP/MCPServerMenuItem';
 import MCPConfigDialog from '~/components/MCP/MCPConfigDialog';
-import { ChevronRight } from '~/components/icons';
+import { ChevronRight, Pin, PinOff } from '~/components/icons';
 import { useBadgeRowContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -82,7 +82,11 @@ const MCPSubMenu = React.forwardRef<HTMLDivElement, MCPSubMenuProps>(
               aria-label={isPinned ? localize('com_ui_unpin') : localize('com_ui_pin')}
             >
               <div className="h-4 w-4">
-                <PinIcon unpin={isPinned} />
+                {isPinned ? (
+                  <PinOff className="icon-sm" aria-hidden="true" />
+                ) : (
+                  <Pin className="icon-sm" aria-hidden="true" />
+                )}
               </div>
             </button>
           </Ariakit.MenuItem>
