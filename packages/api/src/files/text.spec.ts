@@ -486,6 +486,19 @@ describe('text', () => {
         expect(mockedReadFileAsString).not.toHaveBeenCalled();
       });
 
+      /* Two distinct ways the health check says no: it can throw, or it can answer with a
+       * status. Both reach a fallback, and only one of them was covered — a mutation that
+       * unguarded the other passed the whole suite. */
+      it('refuses a scan when the health check answers unhealthy without throwing', async () => {
+        mockedAxios.get.mockResolvedValue({ status: 503, statusText: 'Service Unavailable' });
+
+        const result = await parseText({ req: mockReq, file: scan, file_id: mockFileId });
+
+        expect(result.text).toBe('');
+        expect(result.retryable).toBe(true);
+        expect(mockedReadFileAsString).not.toHaveBeenCalled();
+      });
+
       it('refuses a scan when no RAG service is configured, and does NOT promise a retry', async () => {
         delete process.env.RAG_API_URL;
 
