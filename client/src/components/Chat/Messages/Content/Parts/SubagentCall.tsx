@@ -529,7 +529,9 @@ export default function SubagentCall({
             <OGDialogTitle>
               {isSelfSpawn
                 ? localize('com_ui_subagent_dialog_title_self')
-                : localize('com_ui_subagent_dialog_title', { 0: subagentType })}
+                : localize('com_ui_subagent_dialog_title', {
+                    0: subagentAgent?.name || subagentType,
+                  })}
             </OGDialogTitle>
             <OGDialogDescription className="sr-only">
               {localize('com_ui_subagent_dialog_description')}
@@ -728,9 +730,22 @@ function ToolIdentifier({
  * into its own `shrink-0` span so the label is never clipped when the
  * body overflows; the body then uses `dir="rtl"` + `text-align: left`
  * to push tail-side ellipsis behavior (newest characters stay flush-
- * right, oldest clip off the left). The rtl trick is scoped to the
- * body span so trailing punctuation on non-streaming lines (e.g. the
- * `…` in "Waiting for first update…") can't get flipped by bidi.
+ * right, oldest clip off the left).
+ *
+ * Scoping the rtl to the body span does NOT protect its punctuation, as
+ * an earlier version of this comment claimed. Bidi rule N2 resolves a
+ * neutral at the paragraph edge to the paragraph direction, so in an rtl
+ * body a trailing `.`, `}` or `)` is painted at the FAR LEFT: measured in
+ * a browser, "Собираю данные." paints as ".Собираю данные" and a JSON
+ * snippet comes out with its braces swapped. During a multi-minute
+ * delegation this is the line the user watches, and the flipped character
+ * moves with every token — it reads as corrupted text.
+ *
+ * The body is therefore wrapped in `<bdi>`, which isolates it from the
+ * surrounding paragraph direction. Measured: order correct AND the tail
+ * still survives the clip. `unicode-bidi: plaintext` on the same span
+ * fixes the order too, but flips the ellipsis to the other side and shows
+ * the head instead of the tail — the opposite of what this line is for.
  *
  * Tool lines (`using_tool`, `tool_complete`) go through `ToolIdentifier`
  * so MCP-hosted tools render as `<server> · <tool>` badges and native
@@ -751,7 +766,7 @@ function TickerLineView({ line }: { line: SubagentTickerLine }): JSX.Element {
           dir="rtl"
           className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-left"
         >
-          {line.body}
+          <bdi>{line.body}</bdi>
         </span>
       </li>
     );
@@ -784,7 +799,7 @@ function TickerLineView({ line }: { line: SubagentTickerLine }): JSX.Element {
           dir="rtl"
           className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-left"
         >
-          {line.outputSnippet ?? localize('com_ui_subagent_ticker_tool_done')}
+          <bdi>{line.outputSnippet ?? localize('com_ui_subagent_ticker_tool_done')}</bdi>
         </span>
       </li>
     );

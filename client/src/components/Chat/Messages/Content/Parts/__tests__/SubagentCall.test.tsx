@@ -735,3 +735,63 @@ describe('SubagentCall — dialog content', () => {
     expect(screen.getAllByText('Live answer.').length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * The ticker body sits in a `dir="rtl"` span so the newest characters stay visible and the
+ * oldest clip off the left. Bidi rule N2 then resolves a trailing neutral — `.`, `}`, `)` —
+ * to the paragraph direction and paints it at the FAR LEFT of the line. Measured in a
+ * browser: "Собираю данные." painted as ".Собираю данные", and a JSON snippet came out with
+ * its braces swapped. `<bdi>` isolates the body from that paragraph direction while keeping
+ * the tail-side clipping the rtl span exists for.
+ *
+ * Asserting on the element rather than on painted glyphs is deliberate: jsdom does not run
+ * the bidi algorithm, so a text assertion would pass with or without the fix.
+ */
+describe('SubagentCall — тикер не выворачивает знаки препинания', () => {
+  const withBody = (text: string) =>
+    progressFromEvents({
+      subagentRunId: 'run_bidi',
+      subagentType: 'self',
+      status: 'run_step',
+      events: [
+        {
+          runId: 'p',
+          subagentRunId: 'run_bidi',
+          subagentType: 'self',
+          subagentAgentId: 'child',
+          phase: 'message_delta',
+          data: { delta: { content: [{ type: 'text', text }] } },
+          timestamp: '',
+        },
+      ],
+    });
+
+  it('строка с текстом изолирована через <bdi>', () => {
+    const { container } = renderWithState({
+      toolCallId: 'call_bidi_text',
+      initialProgress: 0.3,
+      isSubmitting: true,
+      progress: withBody('Собираю данные по рынку стали.'),
+    });
+
+    const rtl = container.querySelector('span[dir="rtl"]');
+    expect(rtl).not.toBeNull();
+    expect(rtl!.querySelector('bdi')).not.toBeNull();
+    expect(rtl!.querySelector('bdi')!.textContent).toBe('Собираю данные по рынку стали.');
+  });
+
+  it('каждая rtl-строка тикера обёрнута, а не только первая', () => {
+    const { container } = renderWithState({
+      toolCallId: 'call_bidi_all',
+      initialProgress: 0.3,
+      isSubmitting: true,
+      progress: withBody('Промежуточный вывод.'),
+    });
+
+    const rtlSpans = Array.from(container.querySelectorAll('span[dir="rtl"]'));
+    expect(rtlSpans.length).toBeGreaterThan(0);
+    for (const span of rtlSpans) {
+      expect(span.querySelector('bdi')).not.toBeNull();
+    }
+  });
+});
