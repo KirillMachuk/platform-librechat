@@ -14,7 +14,9 @@ export default function SendIcon({
       height={size}
       viewBox={'0 0 24 24'}
       fill="none"
-      className={cn('text-white dark:text-black', className)}
+      /* ink-label, not raw white/black: the dark theme's ink circle is
+         #F0F0F0 and its label token is #171717 — raw black measured wrong. */
+      className={cn('text-ink-label', className)}
       aria-hidden="true"
     >
       <path

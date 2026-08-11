@@ -36,7 +36,7 @@ function DeepResearch() {
         checked={deepResearch === true}
         setValue={debouncedChange}
         label={localize('com_ui_deep_research')}
-        icon={<Telescope className="icon-md" aria-hidden="true" />}
+        icon={<Telescope className="icon-sm" aria-hidden="true" />}
       />
     )
   );

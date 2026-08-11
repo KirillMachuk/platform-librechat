@@ -1,6 +1,13 @@
 import React, { useState, useMemo, memo } from 'react';
 import { useRecoilState } from 'recoil';
-import { EditIcon, Clipboard, CheckMark, ContinueIcon, RegenerateIcon } from '@librechat/client';
+import {
+  EditIcon,
+  Clipboard,
+  CheckMark,
+  ContinueIcon,
+  RegenerateIcon,
+  TooltipAnchor,
+} from '@librechat/client';
 import type { TConversation, TMessage, TFeedback } from 'librechat-data-provider';
 import { useGenerationsByLatest, useLocalize } from '~/hooks';
 import { Fork } from '~/components/Conversations';
@@ -99,16 +106,23 @@ const HoverButton = memo(
     );
 
     return (
-      <button
-        id={id}
-        className={buttonStyle}
-        onClick={onClick}
-        type="button"
-        title={title}
-        disabled={isDisabled}
-      >
-        {icon}
-      </button>
+      /* The canon §6.6 plate instead of the native title balloon, and an
+         aria-label so the row reads to a screen reader (review 11.08). */
+      <TooltipAnchor
+        description={title}
+        render={
+          <button
+            id={id}
+            className={buttonStyle}
+            onClick={onClick}
+            type="button"
+            aria-label={title}
+            disabled={isDisabled}
+          >
+            {icon}
+          </button>
+        }
+      />
     );
   },
 );

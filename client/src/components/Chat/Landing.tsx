@@ -151,7 +151,11 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
 
   return (
     <div
-      className={`flex h-full transform-gpu flex-col items-center justify-center pb-16 transition-all duration-200 ${centerFormOnLanding ? 'max-h-full sm:max-h-0' : 'max-h-full'} ${getDynamicMargin}`}
+      /* pt matches the absolute header (56 phone / 52 desktop), not pb-16:
+         the container starts UNDER the header, so a bottom-only padding
+         pushed the greeting 61px above the visual centre of the thread area
+         (book m02 centres it — measured by the 11.08 review). */
+      className={`flex h-full transform-gpu flex-col items-center justify-center pt-14 transition-all duration-200 md:pt-[52px] ${centerFormOnLanding ? 'max-h-full sm:max-h-0' : 'max-h-full'} ${getDynamicMargin}`}
     >
       <div ref={contentRef} className="flex flex-col items-center gap-0 p-2">
         {((isAgent || isAssistant) && name) || name ? (

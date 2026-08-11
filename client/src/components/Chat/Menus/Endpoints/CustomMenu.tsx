@@ -72,7 +72,10 @@ export const CustomMenu = React.forwardRef<HTMLDivElement, CustomMenuProps>(func
           parent ? 'animate-popover-left ml-3' : 'animate-popover',
           'outline-none! z-popover flex max-h-[min(450px,var(--popover-available-height))] w-full',
           'w-[var(--menu-width,auto)] min-w-[300px] flex-col overflow-auto rounded-xl border border-border-light',
-          'bg-presentation text-sm text-text-primary shadow-lg',
+          /* card, not presentation: the book's selector menu is the card
+             surface (#FFF / #232323); presentation is the page behind it —
+             in dark that read as a second, wrong grey (review 11.08). */
+          'bg-surface-primary text-sm text-text-primary shadow-lg',
           parent ? 'px-0.5 py-0.5' : 'px-3 py-2',
           'max-w-[calc(100vw-4rem)] sm:max-h-[calc(65vh)] sm:max-w-[400px]',
           searchable && 'p-0',
@@ -101,7 +104,7 @@ export const CustomMenu = React.forwardRef<HTMLDivElement, CustomMenuProps>(func
                     )}
                   />
                   {comboboxLabel && (
-                    <label className="pointer-events-none absolute left-3 top-3.5 text-sm text-text-secondary transition-all duration-200 peer-[:not(:placeholder-shown)]:-top-1.5 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:bg-presentation peer-[:not(:placeholder-shown)]:px-1 peer-[:not(:placeholder-shown)]:text-xs sm:top-2">
+                    <label className="pointer-events-none absolute left-3 top-3.5 text-sm text-text-secondary transition-all duration-200 peer-[:not(:placeholder-shown)]:-top-1.5 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:bg-surface-primary peer-[:not(:placeholder-shown)]:px-1 peer-[:not(:placeholder-shown)]:text-xs sm:top-2">
                       {comboboxLabel}
                     </label>
                   )}

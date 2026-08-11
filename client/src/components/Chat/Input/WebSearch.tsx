@@ -30,7 +30,7 @@ function WebSearch() {
         checked={webSearch}
         setValue={debouncedChange}
         label={localize('com_ui_web_search')}
-        icon={<Globe className="icon-md" aria-hidden="true" />}
+        icon={<Globe className="icon-sm" aria-hidden="true" />}
       />
     )
   );

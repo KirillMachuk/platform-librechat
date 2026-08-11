@@ -121,7 +121,9 @@ const OGDialogTemplate: ForwardRefExoticComponent<
       overlayClassName={overlayClassName}
       showCloseButton={showCloseButton}
       ref={ref}
-      className={cn('w-11/12 border-none bg-background text-foreground', className ?? '')}
+      /* surface-dialog, not the shadcn test-token bg-background: that one is
+         #121212 in dark — no canon surface has that value (review 11.08). */
+      className={cn('w-11/12 border-none bg-surface-dialog text-text-primary', className ?? '')}
       onClick={(e) => e.stopPropagation()}
     >
       <OGDialogHeader className={cn(headerClassName ?? '')}>

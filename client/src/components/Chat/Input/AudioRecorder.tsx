@@ -121,9 +121,10 @@ export default memo(function AudioRecorder({
           onClick={isListening === true ? handleStopRecording : handleStartRecording}
           disabled={disabled}
           className={cn(
-            'flex size-9 items-center justify-center rounded-full p-1 transition-colors hover:bg-surface-hover',
+            /* Book: a composer round button is 38 on the phone, 32 on the
+               desktop, and §4 wants the 44 tap zone — the mic had neither. */
+            'tap-target flex size-[38px] items-center justify-center rounded-full p-1 transition-colors hover:bg-surface-hover md:size-8',
           )}
-          title={localize('com_ui_use_micrphone')}
           aria-pressed={isListening}
         >
           {renderIcon()}

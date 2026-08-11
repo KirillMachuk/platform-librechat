@@ -64,7 +64,9 @@ const CheckboxButton: React.ForwardRefExoticComponent<
         // Base styling from MultiSelect's selectClassName
         'group relative inline-flex items-center justify-center gap-1.5',
         'rounded-full border border-border-medium text-sm font-medium',
-        'size-9 p-2 transition-all md:w-full md:p-3',
+        /* Book: the chip is a 34 circle on the phone and a 34 pill on the
+           desktop (§6.3), with the §4 tap zone — it sat at 36 with no zone. */
+        'tap-target size-[34px] p-2 transition-all md:h-[34px] md:w-full md:p-3',
         'bg-transparent shadow-sm hover:bg-surface-hover',
 
         /* An enabled tool chip is a switch in chip form, and the book draws it
@@ -81,8 +83,10 @@ const CheckboxButton: React.ForwardRefExoticComponent<
       )}
       render={<button type="button" aria-label={label} />}
     >
-      {/* Icon colour follows the button, so the checked accent paints it too. */}
-      {icon && <span className="icon-md">{icon as React.JSX.Element}</span>}
+      {/* Icon colour follows the button, so the checked accent paints it too.
+          Small step (16): the book draws 16 inside the 34 chip — call sites
+          pass icon-sm icons. */}
+      {icon && <span className="icon-sm">{icon as React.JSX.Element}</span>}
 
       {/* Show the label on larger screens */}
       <span className="hidden truncate md:block">{label}</span>

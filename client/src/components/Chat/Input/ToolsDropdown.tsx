@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import * as Ariakit from '@ariakit/react';
 import { TooltipAnchor, DropdownPopup, PinIcon, VectorIcon } from '@librechat/client';
 import {
@@ -74,6 +74,18 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
 
   const [isPopoverActive, setIsPopoverActive] = useState(false);
   const isDisabled = disabled ?? false;
+  const searchDialogOpen = context?.searchApiKeyForm?.isDialogOpen === true;
+  /* The Web Search row (and its gear) opens the API-key dialog while the menu
+     deliberately stays open (`hideOnClick: false` serves the pin buttons).
+     The modal menu's INVISIBLE backdrop then sits at z-1001 under the dialog,
+     and once the dialog closes it keeps swallowing every click — measured
+     11.08: the whole app dead until F5. A dialog on top of this menu means
+     the menu's job is done — close it. */
+  useEffect(() => {
+    if (searchDialogOpen) {
+      setIsPopoverActive(false);
+    }
+  }, [searchDialogOpen]);
   const {
     skills,
     webSearch,
@@ -168,37 +180,9 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
 
   const dropdownItems: MenuItemProps[] = [];
 
-  if (fileSearchEnabled && canUseFileSearch && toolLoopAvailable) {
-    dropdownItems.push({
-      onClick: handleFileSearchToggle,
-      hideOnClick: false,
-      render: (props) => (
-        <div {...props}>
-          <div className="flex items-center gap-2">
-            <VectorIcon className="icon-md" />
-            <span>{localize('com_assistants_file_search')}</span>
-          </div>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsFileSearchPinned?.(!isFileSearchPinned);
-            }}
-            className={cn(
-              'rounded p-1 transition-all duration-200',
-              'hover:bg-surface-secondary hover:shadow-sm',
-              !isFileSearchPinned && 'text-text-secondary hover:text-text-primary',
-            )}
-            aria-label={isFileSearchPinned ? localize('com_ui_unpin') : localize('com_ui_pin')}
-          >
-            <div className="h-4 w-4">
-              <PinIcon unpin={isFileSearchPinned} />
-            </div>
-          </button>
-        </div>
-      ),
-    });
-  }
+  /* The book's order for tools, same as the phone's «+» sheet: search,
+     research, code, file search, skills — the two surfaces must not
+     disagree (review 11.08 caught them differing). */
 
   if (canUseWebSearch && webSearchEnabled && toolLoopAvailable) {
     dropdownItems.push({
@@ -289,38 +273,6 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
     });
   }
 
-  if (canUseSkills && skillsEnabled) {
-    dropdownItems.push({
-      onClick: handleSkillsToggle,
-      hideOnClick: false,
-      render: (props) => (
-        <div {...props} data-testid="tools-menu-skills">
-          <div className="flex items-center gap-2">
-            <ScrollText className="icon-md" aria-hidden="true" />
-            <span>{localize('com_ui_skills')}</span>
-          </div>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsSkillsPinned?.(!isSkillsPinned);
-            }}
-            className={cn(
-              'rounded p-1 transition-all duration-200',
-              'hover:bg-surface-secondary hover:shadow-sm',
-              !isSkillsPinned && 'text-text-secondary hover:text-text-primary',
-            )}
-            aria-label={isSkillsPinned ? localize('com_ui_unpin') : localize('com_ui_pin')}
-          >
-            <div className="h-4 w-4">
-              <PinIcon unpin={isSkillsPinned} />
-            </div>
-          </button>
-        </div>
-      ),
-    });
-  }
-
   if (canRunCode && codeEnabled && toolLoopAvailable) {
     dropdownItems.push({
       onClick: handleCodeInterpreterToggle,
@@ -350,6 +302,70 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
               </div>
             </button>
           </div>
+        </div>
+      ),
+    });
+  }
+
+  if (fileSearchEnabled && canUseFileSearch && toolLoopAvailable) {
+    dropdownItems.push({
+      onClick: handleFileSearchToggle,
+      hideOnClick: false,
+      render: (props) => (
+        <div {...props}>
+          <div className="flex items-center gap-2">
+            <VectorIcon className="icon-md" />
+            <span>{localize('com_assistants_file_search')}</span>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsFileSearchPinned?.(!isFileSearchPinned);
+            }}
+            className={cn(
+              'rounded p-1 transition-all duration-200',
+              'hover:bg-surface-secondary hover:shadow-sm',
+              !isFileSearchPinned && 'text-text-secondary hover:text-text-primary',
+            )}
+            aria-label={isFileSearchPinned ? localize('com_ui_unpin') : localize('com_ui_pin')}
+          >
+            <div className="h-4 w-4">
+              <PinIcon unpin={isFileSearchPinned} />
+            </div>
+          </button>
+        </div>
+      ),
+    });
+  }
+
+  if (canUseSkills && skillsEnabled) {
+    dropdownItems.push({
+      onClick: handleSkillsToggle,
+      hideOnClick: false,
+      render: (props) => (
+        <div {...props} data-testid="tools-menu-skills">
+          <div className="flex items-center gap-2">
+            <ScrollText className="icon-md" aria-hidden="true" />
+            <span>{localize('com_ui_skills')}</span>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsSkillsPinned?.(!isSkillsPinned);
+            }}
+            className={cn(
+              'rounded p-1 transition-all duration-200',
+              'hover:bg-surface-secondary hover:shadow-sm',
+              !isSkillsPinned && 'text-text-secondary hover:text-text-primary',
+            )}
+            aria-label={isSkillsPinned ? localize('com_ui_unpin') : localize('com_ui_pin')}
+          >
+            <div className="h-4 w-4">
+              <PinIcon unpin={isSkillsPinned} />
+            </div>
+          </button>
         </div>
       ),
     });
@@ -436,7 +452,8 @@ const ToolsDropdown = ({ disabled }: ToolsDropdownProps) => {
 
   return (
     <DropdownPopup
-      itemClassName="flex w-full cursor-pointer rounded-lg items-center justify-between hover:bg-surface-hover gap-5"
+      /* h-9: canon §6.5 menu row is 36, the popup's default padding made 40. */
+      itemClassName="flex h-9 w-full cursor-pointer rounded-lg items-center justify-between hover:bg-surface-hover gap-5"
       menuId="tools-dropdown-menu"
       isOpen={isPopoverActive}
       setIsOpen={setIsPopoverActive}

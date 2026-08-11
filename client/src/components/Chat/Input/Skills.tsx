@@ -30,7 +30,7 @@ function Skills() {
         checked={skillsActive}
         setValue={debouncedChange}
         label={localize('com_ui_skills')}
-        icon={<ScrollText className="icon-md" aria-hidden="true" />}
+        icon={<ScrollText className="icon-sm" aria-hidden="true" />}
       />
     )
   );

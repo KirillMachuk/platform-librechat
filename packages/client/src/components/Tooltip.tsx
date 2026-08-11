@@ -124,7 +124,9 @@ export const TooltipAnchor: ForwardRefExoticComponent<
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (role === 'button' && event.key === 'Enter') {
+      /* A div with role=button must answer Space as well as Enter — a real
+         button does, and the 11.08 keyboard review caught the gap. */
+      if (role === 'button' && (event.key === 'Enter' || event.key === ' ')) {
         event.preventDefault();
         (event.target as HTMLDivElement).click();
       }

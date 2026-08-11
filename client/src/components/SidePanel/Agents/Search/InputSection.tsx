@@ -103,7 +103,9 @@ export default function InputSection({
                   href={config.link.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
+                  /* Canon §2: a link is the accent with an always-on underline —
+                     the raw blues were upstream's (review 11.08). */
+                  className="text-text-accent underline underline-offset-2 hover:opacity-80"
                 >
                   {config.link.text}
                 </a>
