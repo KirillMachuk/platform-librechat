@@ -1,5 +1,5 @@
-import type { CodeEnvRef } from '../codeEnvRef';
 import type { TArtifactReport } from './artifactReport';
+import type { CodeEnvRef } from '../codeEnvRef';
 import { EToolResources } from './assistants';
 
 export enum FileSources {
