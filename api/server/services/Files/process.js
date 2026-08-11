@@ -27,6 +27,7 @@ const {
   FULL_TEXT_MAX_BYTES,
   probePdf,
   withTimeout,
+  TimeoutError,
   routePdfBySize,
   isContentRoutingEnabled,
   readDocRoutingThresholds,
@@ -1239,7 +1240,7 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
 
     const shouldUseOCR = shouldUseConfiguredOCR || shouldUseDocumentParser;
 
-    let parserSaturated = false;
+    let transientParseFailure = false;
     const resolveDocumentText = async () => {
       if (shouldUseConfiguredOCR) {
         try {
@@ -1304,12 +1305,17 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         }
         // Empty because doc-gateway's scan lane was saturated (503), not because the
         // document is unreadable — remember it so the caller reports the real cause.
-        parserSaturated = parsed?.retryable === true;
+        transientParseFailure = parsed?.retryable === true;
       } catch (err) {
         logger.error(
           `[processAgentFileUpload] RAG /text OCR fallback failed for "${file.originalname}":`,
           err,
         );
+        /* A scan that outran DOC_OCR_TIMEOUT_MS is not a broken document, it is a long one:
+         * doc-gateway allows 15 minutes per parse and the embed worker 30, while this upload
+         * may only wait 4. Measured: a 64-page scan died here and was lost outright. Treat it
+         * like a busy lane and let the background worker finish it. */
+        transientParseFailure = err instanceof TimeoutError;
       }
     };
 
@@ -1344,16 +1350,16 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
          * Only when file_search is actually available — with the capability off there is nowhere
          * to degrade to, so the honest "busy, retry" error is all we can offer. */
         const canDeferToSearch =
-          parserSaturated && (await checkCapability(req, AgentCapabilities.file_search));
+          transientParseFailure && (await checkCapability(req, AgentCapabilities.file_search));
         if (!canDeferToSearch) {
           throw new Error(
-            parserSaturated
-              ? `The document parser is busy processing another scan and could not get to "${file.originalname}" in time. Please upload it again in a few minutes.`
+            transientParseFailure
+              ? `The document parser is busy and could not finish "${file.originalname}" in time. Please upload it again in a few minutes.`
               : `Unable to extract text from "${file.originalname}". The document may be image-based and requires an OCR service to process.`,
           );
         }
         logger.info(
-          `[processAgentFileUpload] scan lane saturated for "${file.originalname}"; deferring to file_search so the embed worker parses it in the background`,
+          `[processAgentFileUpload] parser busy or over budget for "${file.originalname}"; deferring to file_search so the embed worker parses it in the background`,
         );
         tool_resource = EToolResources.file_search;
       }

@@ -44,6 +44,15 @@ jest.mock('@librechat/api', () => {
     // Pass-through by default so existing tests are unaffected; individual D6
     // tests override with mockRejectedValueOnce to simulate a timeout.
     withTimeout: jest.fn((promise) => promise),
+    // Real class, not a stand-in: the code under test does `err instanceof TimeoutError`, so a
+    // missing export here would not fail the assertion — it would throw "not callable" inside
+    // the production path, and a test that rejects for the wrong reason still reads as green.
+    TimeoutError: class TimeoutError extends Error {
+      constructor(message) {
+        super(message);
+        this.name = 'TimeoutError';
+      }
+    },
     processAudioFile: jest.fn(),
     getStorageMetadata: jest.fn(() => ({})),
     // Faithful minimal limiter (same algorithm as the real one) so the D12
@@ -671,22 +680,37 @@ describe('processAgentFileUpload', () => {
 
       await expect(
         processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
-      ).rejects.toThrow(/busy processing another scan/);
+      ).rejects.toThrow(/busy and could not finish/);
     });
 
-    test('D6: a timed-out RAG /text OCR fallback degrades to an honest error, not a hang', async () => {
-      getStrategyFunctions.mockReturnValue({
-        handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
-      });
+    /* A scan that outruns the upload's OCR budget is a LONG document, not a broken one:
+     * doc-gateway allows 15 minutes per parse and the embed worker 30, while the upload waits
+     * only DOC_OCR_TIMEOUT_MS. Measured live: a 64-page scan died here and was lost outright. */
+    test('D6: an OCR fallback that outran its budget is deferred to the embed worker, not lost', async () => {
+      getStrategyFunctions.mockImplementation((src) =>
+        src === FileSources.document_parser
+          ? {
+              handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
+            }
+          : {
+              handleFileUpload: jest
+                .fn()
+                .mockResolvedValue({ filepath: '/uploads/scan.pdf', bytes: 100 }),
+            },
+      );
       const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
-      // Simulate the OCR fallback exceeding its timeout: withTimeout rejects,
-      // resolveDocumentText swallows it and returns undefined, and the caller raises
-      // the same "unable to extract" error instead of blocking on the 300s parseText.
-      withTimeout.mockRejectedValueOnce(new Error('RAG /text OCR fallback timed out'));
+      const { TimeoutError } = require('@librechat/api');
+      withTimeout.mockRejectedValueOnce(new TimeoutError('RAG /text OCR fallback timed out'));
+      const { asyncEmbedEnabled } = require('./Embed');
+      asyncEmbedEnabled.mockReturnValueOnce(true);
 
       await expect(
         processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
-      ).rejects.toThrow(/image-based and requires an OCR service/);
+      ).resolves.not.toThrow();
+
+      const persisted = db.createFile.mock.calls.at(-1)[0];
+      expect(persisted.embeddingStatus).toBe('pending');
+      expect(persisted.embedded).toBe(false);
 
       // The scanned-document OCR fallback must use the GENEROUS OCR timeout (120s),
       // not the fast 30s probe/text timeout — a short cap falsely fails real
@@ -696,6 +720,23 @@ describe('processAgentFileUpload', () => {
       );
       expect(ocrCall).toBeDefined();
       expect(ocrCall[1]).toBe(120000);
+
+      withTimeout.mockImplementation((promise) => promise);
+    });
+
+    /* Only a TIMEOUT earns the deferral. Any other failure of the fallback is a real parse
+     * failure, and turning those into "pending" would fill the library with documents the
+     * worker can never index. */
+    test('D6b: a non-timeout failure of the OCR fallback still raises an honest error', async () => {
+      getStrategyFunctions.mockReturnValue({
+        handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
+      });
+      const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
+      withTimeout.mockRejectedValueOnce(new Error('connection reset by peer'));
+
+      await expect(
+        processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
+      ).rejects.toThrow(/image-based and requires an OCR service/);
 
       withTimeout.mockImplementation((promise) => promise);
     });

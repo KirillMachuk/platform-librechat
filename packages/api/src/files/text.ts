@@ -33,6 +33,54 @@ function isMarkdownFile(file: Express.Multer.File): boolean {
   return MARKDOWN_EXTENSIONS_RE.test(file.originalname ?? '');
 }
 
+const NATIVE_TEXT_MIME_TYPES = new Set([
+  'application/json',
+  'application/ld+json',
+  'application/xml',
+  'application/xhtml+xml',
+  'application/javascript',
+  'application/x-javascript',
+  'application/yaml',
+  'application/x-yaml',
+  'application/sql',
+  'application/x-sh',
+  'application/x-httpd-php',
+]);
+
+const NATIVE_TEXT_EXTENSIONS_RE =
+  /\.(txt|text|log|csv|tsv|json|xml|ya?ml|ini|cfg|conf|toml|sql|html?|css|js|ts|jsx|tsx|py|rb|go|rs|java|c|h|cpp|sh)$/i;
+
+/**
+ * Whether `parseTextNative` can read this file at all.
+ *
+ * It decodes raw bytes as a string, so it is correct for text and nonsense for anything else:
+ * on a PDF it returns megabytes of mojibake beginning with `%PDF`, on a DOCX the bytes of a zip.
+ * Deliberately keyed on the declared type rather than sniffing the content — a Windows-1251
+ * contract is indistinguishable from binary once decoded, and rejecting it would break exactly
+ * the documents this product exists for.
+ */
+function isNativelyReadable(file: Express.Multer.File): boolean {
+  const mimetype = normalizeMimeType(file.mimetype);
+  if (mimetype.startsWith('text/') || NATIVE_TEXT_MIME_TYPES.has(mimetype)) {
+    return true;
+  }
+  return NATIVE_TEXT_EXTENSIONS_RE.test(file.originalname ?? '');
+}
+
+/**
+ * Whether an upstream parse failure means "try again later" rather than "this document is
+ * unreadable". doc-gateway answers 503 + Retry-After while its single scan lane is busy, and a
+ * missing response means it is restarting or unreachable — in both cases the document is fine
+ * and the caller should defer it to the background embed worker instead of rejecting it.
+ */
+function isTransientParseFailure(error: unknown): boolean {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  if (status == null) {
+    return true;
+  }
+  return status === 429 || status === 503 || status === 504;
+}
+
 /**
  * Attempts to parse text using RAG API, falls back to native text parsing
  * @param params - The parameters object
@@ -118,14 +166,22 @@ export async function parseText({
       message: '[parseText] RAG API text parsing failed, falling back to native parsing',
       error,
     });
+    const retryable = isTransientParseFailure(error);
+    /* Native parsing is not a fallback for a document — it is a raw text reader. Handing it a
+     * scan returned the PDF's own bytes as "extracted text": non-empty, so the retryable cause
+     * was discarded and the caller reported a busy scan lane as "this document may be
+     * image-based". Measured on the stand: a 6 MB scan that indexes in 34s on its own was lost
+     * this way whenever another scan held the lane. */
+    if (!isNativelyReadable(file)) {
+      return {
+        text: '',
+        bytes: 0,
+        source: FileSources.text,
+        ...(retryable ? { retryable: true } : {}),
+      };
+    }
     const parsed = await parseTextNative(file);
-    /* doc-gateway answers 503 + Retry-After when its scan lane is saturated (it OCRs one
-     * document at a time). Native parsing reads only a PDF's text layer, so a scan yields
-     * nothing here and the caller would report it as "image-based, needs OCR" — a permanent
-     * verdict for what is really a queue wait. Flag the retryable cause so the caller can say
-     * so honestly instead of blaming the document. */
-    const upstreamStatus = (error as { response?: { status?: number } })?.response?.status;
-    if (!parsed.text.trim() && upstreamStatus === 503) {
+    if (!parsed.text.trim() && retryable) {
       return { ...parsed, retryable: true };
     }
     return parsed;

@@ -5,11 +5,15 @@ const mockMutateAsync = jest.fn();
 const mockShowToast = jest.fn();
 const mockValidateFiles = jest.fn();
 let mockFilesList: Array<{ filename: string }> = [];
+let mockFileConfig: Record<string, unknown> = {};
+/** Every localize(key, values) call, so a test can assert the NUMBERS a message carries and not
+ * just its key — the whole point of naming the limit is the numbers inside it. */
+const localizeCalls: Array<[string, Record<string, string> | undefined]> = [];
 
 jest.mock('~/data-provider', () => ({
   useGetFiles: () => ({ data: mockFilesList }),
   useUploadFileMutation: () => ({ mutateAsync: mockMutateAsync }),
-  useGetFileConfig: () => ({ data: {} }),
+  useGetFileConfig: () => ({ data: mockFileConfig }),
 }));
 /* NO ChatContext mock — deliberately. The hook is rendered here WITHOUT a ChatContext.Provider,
  * exactly as it is in production when the Files modal opens from the global sidebar / account
@@ -17,7 +21,10 @@ jest.mock('~/data-provider', () => ({
  * hid that the upload died before any request left the browser. The library is standalone, so
  * the hook must not depend on chat context at all. */
 jest.mock('~/hooks', () => ({
-  useLocalize: () => (key: string) => key,
+  useLocalize: () => (key: string, values?: Record<string, string>) => {
+    localizeCalls.push([key, values]);
+    return key;
+  },
 }));
 jest.mock('@librechat/client', () => ({
   useToastContext: () => ({ showToast: mockShowToast }),
@@ -66,6 +73,8 @@ function dropEvent(files: File[]) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockFilesList = [];
+  mockFileConfig = {};
+  localizeCalls.length = 0;
   mockMutateAsync.mockResolvedValue({});
   mockValidateFiles.mockReturnValue(true); // valid by default
 });
@@ -118,6 +127,56 @@ describe('useLibraryUpload', () => {
     expect(mockShowToast).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'com_ui_library_upload_too_many', status: 'warning' }),
     );
+  });
+
+  /* The conflict this pair guards: the hook advertised a 200-file batch while the stand was
+   * configured for 50 per hour. Measured live — 100 files in, 50 accepted in 3 seconds, 50
+   * refused, and the user was told only "uploaded 50 of 100". The offer now comes from the
+   * server's own limit, and a refusal names it. */
+  it('never offers a bigger batch than the server accepts', async () => {
+    mockFileConfig = { uploadLimits: { userMax: 50, userWindowInMinutes: 60 } };
+    const { result } = renderHook(() => useLibraryUpload());
+    const many = Array.from(
+      { length: 51 },
+      (_, i) => new File(['x'], `f${i}.pdf`, { type: 'application/pdf' }),
+    );
+
+    await pick(result.current.openFilePicker, many);
+
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+    expect(localizeCalls).toContainEqual(['com_ui_library_upload_too_many', { 0: '50' }]);
+  });
+
+  it('names the server limit when a batch is cut short by it', async () => {
+    mockFileConfig = { uploadLimits: { userMax: 50, userWindowInMinutes: 60 } };
+    mockMutateAsync
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce({ response: { status: 429 } })
+      .mockRejectedValueOnce({ response: { status: 429 } });
+    const { result } = renderHook(() => useLibraryUpload());
+    const files = [0, 1, 2].map((i) => new File(['x'], `f${i}.pdf`, { type: 'application/pdf' }));
+
+    await pick(result.current.openFilePicker, files);
+
+    expect(localizeCalls).toContainEqual([
+      'com_ui_library_upload_rate_limited',
+      { 0: '1', 1: '3', 2: '50', 3: '60' },
+    ]);
+    /* "the rest failed, please retry them" is the advice that makes it worse: a refused request
+     * counts against the window too. */
+    expect(localizeCalls.map(([key]) => key)).not.toContain('com_ui_library_uploaded_partial');
+  });
+
+  it('falls back to its own cap when the server states no limit', async () => {
+    const { result } = renderHook(() => useLibraryUpload());
+    const many = Array.from(
+      { length: 201 },
+      (_, i) => new File(['x'], `f${i}.pdf`, { type: 'application/pdf' }),
+    );
+
+    await pick(result.current.openFilePicker, many);
+
+    expect(localizeCalls).toContainEqual(['com_ui_library_upload_too_many', { 0: '200' }]);
   });
 
   it('does not upload when validation fails', async () => {

@@ -1,4 +1,19 @@
 /**
+ * Rejection raised by {@link withTimeout} when the deadline passes.
+ *
+ * A distinct type, because callers need to tell "this took too long" from "this failed":
+ * a document that outran an upload's parse budget can still be finished by the background
+ * worker, while one that genuinely failed to parse cannot. Matching on the message text
+ * would break the moment a caller passes its own `errorMessage` — which they all do.
+ */
+export class TimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TimeoutError';
+  }
+}
+
+/**
  * Wraps a promise with a timeout. If the promise doesn't resolve/reject within
  * the specified time, it will be rejected with a timeout error.
  *
@@ -28,7 +43,7 @@ export async function withTimeout<T>(
 
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => {
-      const error = new Error(errorMessage ?? `Operation timed out after ${timeoutMs}ms`);
+      const error = new TimeoutError(errorMessage ?? `Operation timed out after ${timeoutMs}ms`);
       if (logger) logger(error.message, error);
       reject(error);
     }, timeoutMs);

@@ -117,6 +117,7 @@ describe('File Routes - Delete with Agent Access', () => {
         role: SystemRoles.USER,
       };
       req.app.locals = {};
+      req.config = { fileConfig: { serverFileSizeLimit: 512 } };
       next();
     });
 
@@ -548,6 +549,42 @@ describe('File Routes - Delete with Agent Access', () => {
 
       const updatedAgent = await Agent.findOne({ id: agent.id }).lean();
       expect(updatedAgent.tool_resources.file_search.file_ids).toEqual([missingFileId]);
+    });
+  });
+
+  /* The client sizes its upload batch from this response. When it is missing the UI silently
+   * falls back to its own number, which is exactly how a 200-file batch came to be offered
+   * against a server that accepted 50 — and every file past the limit vanished with no reason
+   * given. The allowance is read from the limiter's own configuration, so the number shown and
+   * the number enforced cannot drift. */
+  describe('GET /files/config', () => {
+    const originalUserMax = process.env.FILE_UPLOAD_USER_MAX;
+    const originalUserWindow = process.env.FILE_UPLOAD_USER_WINDOW;
+
+    afterEach(() => {
+      process.env.FILE_UPLOAD_USER_MAX = originalUserMax;
+      process.env.FILE_UPLOAD_USER_WINDOW = originalUserWindow;
+    });
+
+    it('reports the per-user upload allowance the limiter enforces', async () => {
+      process.env.FILE_UPLOAD_USER_MAX = '250';
+      process.env.FILE_UPLOAD_USER_WINDOW = '60';
+
+      const res = await request(app).get('/files/config');
+
+      expect(res.status).toBe(200);
+      expect(res.body.uploadLimits).toEqual({ userMax: 250, userWindowInMinutes: 60 });
+      expect(res.body.serverFileSizeLimit).toBe(512);
+    });
+
+    it('reports the defaults when nothing is configured', async () => {
+      delete process.env.FILE_UPLOAD_USER_MAX;
+      delete process.env.FILE_UPLOAD_USER_WINDOW;
+
+      const res = await request(app).get('/files/config');
+
+      expect(res.body.uploadLimits.userMax).toBeGreaterThan(0);
+      expect(res.body.uploadLimits.userWindowInMinutes).toBeGreaterThan(0);
     });
   });
 

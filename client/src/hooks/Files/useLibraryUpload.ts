@@ -7,7 +7,7 @@ import {
   mergeFileConfig,
   getEndpointFileConfig,
 } from 'librechat-data-provider';
-import type { TFile } from 'librechat-data-provider';
+import type { TFile, FileConfig } from 'librechat-data-provider';
 import type { TranslationKeys } from '~/hooks';
 import type { FileError } from '~/common';
 import { useGetFiles, useUploadFileMutation, useGetFileConfig } from '~/data-provider';
@@ -28,8 +28,28 @@ const LIBRARY_UPLOAD_ENDPOINT = EModelEndpoint.agents;
 /** Concurrent uploads: bounded so a large batch can't open hundreds of parallel
  * requests (browser stalls, doc-gateway/embed overload). */
 const LIBRARY_UPLOAD_CONCURRENCY = 4;
-/** Hard cap per selection so a stray "select 5000 files" can't be enqueued at all. */
+/** Hard cap per selection so a stray "select 5000 files" can't be enqueued at all. The batch
+ * actually offered is the smaller of this and what the server will accept — see `maxBatch`. */
 const LIBRARY_UPLOAD_MAX_BATCH = 200;
+
+/** Whether an upload was turned away by the server's rate limiter rather than failing. */
+function isRateLimited(error: unknown): boolean {
+  return (error as { response?: { status?: number } })?.response?.status === 429;
+}
+
+/**
+ * The batch this instance may really upload: the UI must never offer more than the server takes.
+ * Measured on the stand before this was derived — the hook advertised 200 while the server was
+ * configured for 50 per hour, so a 100-file import ended as "uploaded 50 of 100" with no reason
+ * shown, no limit named, and no hint that the remainder needed an hour's wait.
+ */
+function resolveMaxBatch(uploadLimits?: FileConfig['uploadLimits']): number {
+  const serverMax = uploadLimits?.userMax;
+  if (typeof serverMax !== 'number' || serverMax <= 0) {
+    return LIBRARY_UPLOAD_MAX_BATCH;
+  }
+  return Math.min(LIBRARY_UPLOAD_MAX_BATCH, serverMax);
+}
 
 interface PendingUpload {
   file_id: string;
@@ -83,6 +103,7 @@ export function useLibraryUpload() {
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
 
   const uploadFileMutation = useUploadFileMutation();
+  const maxBatch = resolveMaxBatch(fileConfig?.uploadLimits);
 
   const removePending = useCallback((file_id: string) => {
     setPendingUploads((prev) => prev.filter((p) => p.file_id !== file_id));
@@ -96,7 +117,7 @@ export function useLibraryUpload() {
         // Chat's default fileLimit (10) is for keeping context small; a library
         // dump legitimately uploads many, so validate size/MIME against a much
         // higher batch cap instead.
-        fileLimit: LIBRARY_UPLOAD_MAX_BATCH,
+        fileLimit: maxBatch,
       };
       validateFiles({
         files: new Map(),
@@ -117,7 +138,7 @@ export function useLibraryUpload() {
       });
       return ok;
     },
-    [fileConfig, showToast, localize],
+    [fileConfig, maxBatch, showToast, localize],
   );
 
   const processFiles = useCallback(
@@ -125,11 +146,9 @@ export function useLibraryUpload() {
       if (all.length === 0) {
         return;
       }
-      if (all.length > LIBRARY_UPLOAD_MAX_BATCH) {
+      if (all.length > maxBatch) {
         showToast({
-          message: localize('com_ui_library_upload_too_many', {
-            0: String(LIBRARY_UPLOAD_MAX_BATCH),
-          }),
+          message: localize('com_ui_library_upload_too_many', { 0: String(maxBatch) }),
           status: 'warning',
         });
         return;
@@ -169,9 +188,9 @@ export function useLibraryUpload() {
         }
         try {
           await uploadFileMutation.mutateAsync(formData);
-          return { ok: true };
-        } catch {
-          return { ok: false };
+          return { ok: true, rateLimited: false };
+        } catch (error) {
+          return { ok: false, rateLimited: isRateLimited(error) };
         } finally {
           removePending(item.file_id);
         }
@@ -179,7 +198,28 @@ export function useLibraryUpload() {
 
       const failed = outcomes.filter((o) => !o.ok).length;
       const total = outcomes.length;
-      if (failed === total) {
+      /* A rejection for hitting the server's rate limit is not a failure of the document, and
+       * folding it into "the rest failed, please retry them" told the user to do the one thing
+       * that makes it worse: every rejected request counts against the window too. Name the
+       * limit instead, so the wait is understood rather than fought. */
+      const rateLimited = outcomes.filter((o) => o.rateLimited).length;
+      if (rateLimited > 0) {
+        const limits = fileConfig?.uploadLimits;
+        showToast({
+          message: limits
+            ? localize('com_ui_library_upload_rate_limited', {
+                0: String(total - failed),
+                1: String(total),
+                2: String(limits.userMax),
+                3: String(limits.userWindowInMinutes),
+              })
+            : localize('com_ui_library_uploaded_partial', {
+                0: String(total - failed),
+                1: String(total),
+              }),
+          status: 'warning',
+        });
+      } else if (failed === total) {
         showToast({ message: localize('com_error_files_upload'), status: 'error' });
       } else if (failed > 0) {
         showToast({
@@ -213,7 +253,16 @@ export function useLibraryUpload() {
         });
       }
     },
-    [filesList, localize, removePending, showToast, uploadFileMutation, validateBatch],
+    [
+      fileConfig,
+      filesList,
+      localize,
+      maxBatch,
+      removePending,
+      showToast,
+      uploadFileMutation,
+      validateBatch,
+    ],
   );
 
   /**
