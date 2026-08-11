@@ -228,6 +228,37 @@ describe('definitions.ts', () => {
         expect(libraryDef?.parameters?.properties).toHaveProperty('query');
         expect(libraryDef?.parameters?.properties).toHaveProperty('doc_type');
 
+        /* Перечень видов ОБЯЗАН совпадать с тем, что умеет извлекатель (другой репозиторий:
+         * 1ma-lab `services/doc-gateway/app/meta.py` DOC_TYPE_RULES). CI это сверить не может,
+         * поэтому канон зафиксирован здесь: расхождение = вид, который модель либо не может
+         * запросить, либо запрашивает в пустоту. Меняешь извлекатель — меняй и этот список.
+         * «иное» отсутствует намеренно: это «не смог определить», а не вид. */
+        const docType = (libraryDef?.parameters?.properties as { doc_type?: { enum?: string[] } })
+          ?.doc_type;
+        expect(docType?.enum).toEqual([
+          'договор',
+          'положение',
+          'приказ',
+          'бриф',
+          'таблица',
+          'акт',
+          'счёт',
+          'протокол',
+          'доверенность',
+          'письмо',
+          'отчёт',
+          'резюме',
+          'коммерческое предложение',
+          'прайс-лист',
+          'накладная',
+          'платёжное поручение',
+          'спецификация',
+          'претензия',
+          'уведомление',
+          'записка',
+        ]);
+        expect(docType?.enum).not.toContain('иное');
+
         const openDef = result.toolDefinitions.find((d) => d.name === 'open_document');
         expect(openDef?.parameters?.required).toEqual(['document_id']);
         expect(openDef?.parameters?.properties).toHaveProperty('offset');

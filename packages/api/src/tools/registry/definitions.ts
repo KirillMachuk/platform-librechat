@@ -371,6 +371,10 @@ export const librarySearchSchema: ExtendedJsonSchema = {
     },
     doc_type: {
       type: 'string',
+      /* Список ОБЯЗАН совпадать с видами извлекателя (doc-gateway `app/meta.py`
+       * DOC_TYPE_RULES): вида, которого здесь нет, модель запросить не может, а значение,
+       * которого не бывает в данных, даёт пустую выдачу. Сторож — definitions.spec.ts.
+       * «иное» отсутствует намеренно: это не вид, а «не смог определить». */
       enum: [
         'договор',
         'положение',
@@ -384,9 +388,17 @@ export const librarySearchSchema: ExtendedJsonSchema = {
         'письмо',
         'отчёт',
         'резюме',
+        'коммерческое предложение',
+        'прайс-лист',
+        'накладная',
+        'платёжное поручение',
+        'спецификация',
+        'претензия',
+        'уведомление',
+        'записка',
       ],
       description:
-        'Optional. Narrow to one kind of document, ONLY when the user explicitly names it. The library stores ONE canonical kind per document — pass a value from the enum EXACTLY, never the wording used on the document or by the user. Map synonyms yourself: контракт/соглашение → "договор"; регламент/инструкция/политика/устав/правила/порядок/методика → "положение"; распоряжение → "приказ"; счёт-фактура/инвойс → "счёт"; CSV/Excel → "таблица". A kind that is not in the enum cannot be filtered — leave doc_type out and describe it in "query" instead.',
+        'Optional. Narrow to one kind of document, ONLY when the user explicitly names it. The library stores ONE canonical kind per document — pass a value from the enum EXACTLY, never the wording used on the document or by the user. Map synonyms yourself: контракт/соглашение/допсоглашение/NDA/соглашение о неразглашении → "договор"; регламент/инструкция/политика/устав/правила/порядок/методика/должностная инструкция → "положение"; распоряжение → "приказ"; счёт-фактура/инвойс → "счёт"; CSV/Excel/реестр/номенклатура/выгрузка/база клиентов/ведомость → "таблица"; КП/ТКП/оферта/предложение о сотрудничестве → "коммерческое предложение"; прейскурант/перечень цен → "прайс-лист"; УПД/ТТН/ТН-2/ТОРГ-12/товарная накладная → "накладная"; платёжка/плат. поручение → "платёжное поручение"; досудебная претензия/требование об уплате → "претензия"; докладная/объяснительная/пояснительная записка/служебка/мемо → "записка"; CV/curriculum vitae → "резюме". A kind that is not in the enum cannot be filtered — leave doc_type out and describe it in "query" instead.',
     },
     org: {
       type: 'string',

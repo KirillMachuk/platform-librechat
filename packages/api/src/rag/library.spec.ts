@@ -527,6 +527,21 @@ describe('searchLibrary — карточка документа и перечи�
     expect(result.content).not.toContain('Parties:');
   });
 
+  /* «иное» — слово извлекателя для «не смог определить», а не вид документа. Модель,
+   * прочитав «Type: иное», пересказывает это пользователю как факт о документе. */
+  it('не выдаёт модели «иное» за вид документа', async () => {
+    const result = await searchLibrary(
+      baseParams({
+        fetchImpl: fetchOne() as never,
+        fileMetadata: new Map([
+          ['f1', { docType: 'иное', parties: ['Ромашка'], identifiers: [], columns: [] }],
+        ]),
+      }),
+    );
+    expect(result.content).not.toContain('иное');
+    expect(result.content).toContain('Parties: Ромашка');
+  });
+
   it('пустые поля опускает: «Parties: —» модель прочла бы как «сторон нет»', async () => {
     const result = await searchLibrary(
       baseParams({
