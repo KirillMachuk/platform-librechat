@@ -84,29 +84,22 @@ const errorMessages = {
   [ErrorTypes.DEEP_RESEARCH_MODEL_INCOMPATIBLE]: 'com_error_deep_research_model_incompatible',
   [ErrorTypes.STREAM_EXPIRED]: 'com_error_stream_expired',
   [ErrorTypes.GENERATION_INTERRUPTED]: 'com_error_generation_interrupted',
-  [ViolationTypes.BAN]:
-    'Your account has been temporarily banned due to violations of our service.',
+  [ViolationTypes.BAN]: 'com_error_ban',
   [ViolationTypes.ILLEGAL_MODEL_REQUEST]: (json: TGenericError, localize: LocalizeFunction) => {
     const { info } = json;
     const [endpoint, model = 'unknown'] = info?.split('|') ?? [];
     const provider = (alternateName[endpoint ?? ''] as string | undefined) ?? endpoint ?? 'unknown';
     return localize('com_error_illegal_model_request', { 0: model, 1: provider });
   },
-  invalid_api_key:
-    'Invalid API key. Please check your API key and try again. You can do this by clicking on the model logo in the left corner of the textbox and selecting "Set Token" for the current selected endpoint. Thank you for your understanding.',
-  insufficient_quota:
-    'We apologize for any inconvenience caused. The default API key has reached its limit. To continue using this service, please set up your own API key. You can do this by clicking on the model logo in the left corner of the textbox and selecting "Set Token" for the current selected endpoint. Thank you for your understanding.',
-  concurrent: (json: TConcurrent) => {
+  invalid_api_key: 'com_error_invalid_api_key',
+  insufficient_quota: 'com_error_insufficient_quota',
+  concurrent: (json: TConcurrent, localize: LocalizeFunction) => {
     const { limit } = json;
-    const plural = limit > 1 ? 's' : '';
-    return `Only ${limit} message${plural} at a time. Please allow any other responses to complete before sending another message, or wait one minute.`;
+    return localize('com_error_concurrent', { 0: limit });
   },
-  message_limit: (json: TMessageLimit) => {
+  message_limit: (json: TMessageLimit, localize: LocalizeFunction) => {
     const { max, windowInMinutes } = json;
-    const plural = max > 1 ? 's' : '';
-    return `You hit the message limit. You have a cap of ${max} message${plural} per ${
-      windowInMinutes > 1 ? `${windowInMinutes} minutes` : 'minute'
-    }.`;
+    return localize('com_error_message_limit', { 0: max, 1: windowInMinutes });
   },
   token_balance: (json: TTokenBalance, localize: LocalizeFunction) => {
     const { generations } = json;
