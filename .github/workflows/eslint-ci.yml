@@ -59,8 +59,13 @@ jobs:
             exit 0
           fi
 
-          # Run ESLint
+          # Run ESLint. --no-warn-ignored: a PR may legitimately touch a file
+          # the config already ignores (a vendored library under
+          # client/public/assets, for one). ESLint warns when such a file is
+          # passed explicitly, and --max-warnings=0 then fails a PR over a file
+          # nobody asked it to lint.
           npx eslint --no-error-on-unmatched-pattern \
+            --no-warn-ignored \
             --config eslint.config.mjs \
             --max-warnings=0 \
             -- "${CHANGED_FILES[@]}"
