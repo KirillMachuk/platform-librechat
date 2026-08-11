@@ -48,37 +48,119 @@ const NATIVE_TEXT_MIME_TYPES = new Set([
 ]);
 
 const NATIVE_TEXT_EXTENSIONS_RE =
-  /\.(txt|text|log|csv|tsv|json|xml|ya?ml|ini|cfg|conf|toml|sql|html?|css|js|ts|jsx|tsx|py|rb|go|rs|java|c|h|cpp|sh)$/i;
+  /\.(txt|text|log|csv|tsv|json|xml|ya?ml|ini|cfg|conf|toml|sql|html?|css|js|jsx|tsx|py|rb|go|rs|java|c|h|cpp|sh|rtf|eml|srt|vtt|tex|md|markdown|mdown|mkdn|mkd|mdwn)$/i;
+
+const BINARY_MIME_PREFIXES = ['image/', 'audio/', 'video/', 'font/'];
 
 /**
- * Whether `parseTextNative` can read this file at all.
+ * Whether the declared type says this is text.
  *
- * It decodes raw bytes as a string, so it is correct for text and nonsense for anything else:
- * on a PDF it returns megabytes of mojibake beginning with `%PDF`, on a DOCX the bytes of a zip.
- * Deliberately keyed on the declared type rather than sniffing the content — a Windows-1251
- * contract is indistinguishable from binary once decoded, and rejecting it would break exactly
- * the documents this product exists for.
+ * `parseTextNative` decodes raw bytes as a string, so it is correct for text and nonsense for
+ * anything else: on a PDF it returns megabytes of mojibake beginning with `%PDF`, on a DOCX the
+ * bytes of a zip. Keyed on the declaration rather than the content, because a Windows-1251
+ * contract is indistinguishable from binary once decoded — rejecting those would break exactly
+ * the documents this product exists for. A file whose type says nothing is decided by
+ * {@link looksBinary} instead.
  */
-function isNativelyReadable(file: Express.Multer.File): boolean {
+function isDeclaredText(file: Express.Multer.File): boolean {
   const mimetype = normalizeMimeType(file.mimetype);
   if (mimetype.startsWith('text/') || NATIVE_TEXT_MIME_TYPES.has(mimetype)) {
     return true;
   }
+  if (BINARY_MIME_PREFIXES.some((prefix) => mimetype.startsWith(prefix))) {
+    return false;
+  }
   return NATIVE_TEXT_EXTENSIONS_RE.test(file.originalname ?? '');
+}
+
+/** Sampled from the head; a binary payload betrays itself immediately. */
+const BINARY_SNIFF_CHARS = 8192;
+
+/**
+ * Whether decoded content cannot be text.
+ *
+ * NUL and C0 control characters do not occur in prose in any single-byte or UTF-8 encoding, but
+ * do occur within the first bytes of a PDF, a zip or an image. Deliberately NOT keyed on
+ * replacement characters: a Windows-1251 document decoded as UTF-8 is full of them and is
+ * perfectly good text.
+ */
+function looksBinary(text: string): boolean {
+  const end = Math.min(text.length, BINARY_SNIFF_CHARS);
+  let control = 0;
+  for (let i = 0; i < end; i++) {
+    const code = text.charCodeAt(i);
+    if (code === 0) {
+      return true;
+    }
+    if (code < 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d && code !== 0x0c) {
+      control += 1;
+    }
+  }
+  return end > 0 && control / end > 0.01;
 }
 
 /**
  * Whether an upstream parse failure means "try again later" rather than "this document is
  * unreadable". doc-gateway answers 503 + Retry-After while its single scan lane is busy, and a
- * missing response means it is restarting or unreachable — in both cases the document is fine
- * and the caller should defer it to the background embed worker instead of rejecting it.
+ * request that left this process without an answer means it is restarting or unreachable — in
+ * both cases the document is fine and the caller should defer it to the background embed worker.
+ *
+ * A missing status alone is not enough: an exception raised BEFORE the request goes out (a
+ * missing signing secret, an unreadable path) has no status either, and treating it as
+ * backpressure would defer every upload forever while telling the user the parser is busy.
  */
 function isTransientParseFailure(error: unknown): boolean {
-  const status = (error as { response?: { status?: number } })?.response?.status;
-  if (status == null) {
-    return true;
+  const failure = error as { response?: { status?: number }; request?: unknown };
+  const status = failure?.response?.status;
+  if (status != null) {
+    return status === 429 || status === 503 || status === 504;
   }
-  return status === 429 || status === 503 || status === 504;
+  return failure?.request != null;
+}
+
+/**
+ * Native parsing, refused for content it cannot actually read.
+ *
+ * Every fallback in `parseText` goes through here. Guarding only the one after a failed POST
+ * left the others — no RAG_API_URL, no user, a failed health check — handing back a scan's own
+ * bytes as its text, and the health check fails on every stack restart.
+ */
+async function nativeFallback(
+  file: Express.Multer.File,
+  retryable = false,
+): Promise<{ text: string; bytes: number; source: string; retryable?: boolean }> {
+  const refused = {
+    text: '',
+    bytes: 0,
+    source: FileSources.text,
+    ...(retryable ? { retryable: true } : {}),
+  };
+
+  if (isDeclaredText(file)) {
+    const parsed = await parseTextNative(file);
+    return retryable && !parsed.text.trim() ? { ...parsed, retryable: true } : parsed;
+  }
+
+  /* An undeclared type still gets a chance: a text file with no extension arrives as
+   * application/octet-stream, and refusing those outright would lose documents that read
+   * perfectly well. Anything declared binary is refused without reading it at all. */
+  if (!isUndeclaredType(file)) {
+    return refused;
+  }
+  const probed = await parseTextNative(file);
+  if (looksBinary(probed.text) || !probed.text.trim()) {
+    return refused;
+  }
+  return probed;
+}
+
+/** No usable type declaration: neither a meaningful MIME type nor a file extension. */
+function isUndeclaredType(file: Express.Multer.File): boolean {
+  const mimetype = normalizeMimeType(file.mimetype);
+  if (mimetype && mimetype !== 'application/octet-stream' && mimetype !== 'binary/octet-stream') {
+    return false;
+  }
+  return !/\.[a-z0-9]{1,8}$/i.test(file.originalname ?? '');
 }
 
 /**
@@ -100,20 +182,20 @@ export async function parseText({
 }): Promise<{ text: string; bytes: number; source: string; retryable?: boolean }> {
   if (!process.env.RAG_API_URL) {
     logger.debug('[parseText] RAG_API_URL not defined, falling back to native text parsing');
-    return parseTextNative(file);
+    return nativeFallback(file);
   }
 
   if (isMarkdownFile(file)) {
     logger.debug(
       `[parseText] Markdown file detected (${file.originalname}, ${file.mimetype}), using native parsing to preserve raw formatting`,
     );
-    return parseTextNative(file);
+    return nativeFallback(file);
   }
 
   const userId = req.user?.id;
   if (!userId) {
     logger.debug('[parseText] No user ID provided, falling back to native text parsing');
-    return parseTextNative(file);
+    return nativeFallback(file);
   }
 
   try {
@@ -122,14 +204,14 @@ export async function parseText({
     });
     if (healthResponse?.statusText !== 'OK' && healthResponse?.status !== 200) {
       logger.debug('[parseText] RAG API health check failed, falling back to native parsing');
-      return parseTextNative(file);
+      return nativeFallback(file, true);
     }
   } catch (healthError) {
     logAxiosError({
       message: '[parseText] RAG API health check failed, falling back to native parsing:',
       error: healthError,
     });
-    return parseTextNative(file);
+    return nativeFallback(file, true);
   }
 
   try {
@@ -166,25 +248,12 @@ export async function parseText({
       message: '[parseText] RAG API text parsing failed, falling back to native parsing',
       error,
     });
-    const retryable = isTransientParseFailure(error);
     /* Native parsing is not a fallback for a document — it is a raw text reader. Handing it a
      * scan returned the PDF's own bytes as "extracted text": non-empty, so the retryable cause
      * was discarded and the caller reported a busy scan lane as "this document may be
      * image-based". Measured on the stand: a 6 MB scan that indexes in 34s on its own was lost
      * this way whenever another scan held the lane. */
-    if (!isNativelyReadable(file)) {
-      return {
-        text: '',
-        bytes: 0,
-        source: FileSources.text,
-        ...(retryable ? { retryable: true } : {}),
-      };
-    }
-    const parsed = await parseTextNative(file);
-    if (!parsed.text.trim() && retryable) {
-      return { ...parsed, retryable: true };
-    }
-    return parsed;
+    return nativeFallback(file, isTransientParseFailure(error));
   }
 }
 
