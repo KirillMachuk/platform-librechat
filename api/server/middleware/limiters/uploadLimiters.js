@@ -80,6 +80,21 @@ const createFileLimiters = () => {
   return { fileUploadIpLimiter, fileUploadUserLimiter };
 };
 
+/**
+ * The per-user upload allowance, for surfacing to the client.
+ *
+ * Read here rather than re-derived at the call site so the number the UI shows and the number
+ * the limiter enforces can never drift: the client used to offer a 200-file batch against a
+ * server that took 50, and everything past the limit disappeared with no reason given.
+ *
+ * @returns {{ userMax: number, userWindowInMinutes: number }}
+ */
+const getFileUploadAllowance = () => {
+  const { fileUploadUserMax, fileUploadUserWindowInMinutes } = getEnvironmentVariables();
+  return { userMax: fileUploadUserMax, userWindowInMinutes: fileUploadUserWindowInMinutes };
+};
+
 module.exports = {
   createFileLimiters,
+  getFileUploadAllowance,
 };

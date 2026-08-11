@@ -497,6 +497,12 @@ export const fileConfigSchema = z.object({
       supportedMimeTypes: supportedMimeTypesSchema.optional(),
     })
     .optional(),
+  uploadLimits: z
+    .object({
+      userMax: z.number().min(0),
+      userWindowInMinutes: z.number().min(0),
+    })
+    .optional(),
 });
 
 export type TFileConfig = z.infer<typeof fileConfigSchema>;
@@ -691,6 +697,10 @@ export function mergeFileConfig(dynamic: z.infer<typeof fileConfigSchema> | unde
 
   if (dynamic.fileTokenLimit !== undefined) {
     mergedConfig.fileTokenLimit = dynamic.fileTokenLimit;
+  }
+
+  if (dynamic.uploadLimits !== undefined) {
+    mergedConfig.uploadLimits = dynamic.uploadLimits;
   }
 
   if (dynamic.skills?.fileSizeLimit !== undefined) {

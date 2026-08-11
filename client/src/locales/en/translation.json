@@ -1982,6 +1982,7 @@
   "com_ui_library_duplicate_names": "{{0}} file(s) with this name were already in your library ({{1}}) — uploaded as a new copy.",
   "com_ui_library_images_not_indexed": "Images uploaded: {{0}}. They can't be found by content search.",
   "com_ui_library_upload_too_many": "Too many files selected. Please upload up to {{0}} at a time.",
+  "com_ui_library_upload_rate_limited": "Uploaded {{0}} of {{1}} files. The server accepts {{2}} files per {{3}} minutes — please add the rest a little later.",
   "com_ui_library_uploaded_partial": "Uploaded {{0}} of {{1}} files — the rest failed. Please retry them.",
   "com_ui_uploading_file": "Uploading {{0}}",
   "com_ui_uploading_files_count": "Uploading {{0}} files",

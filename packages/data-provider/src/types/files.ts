@@ -74,6 +74,14 @@ export type FileConfig = {
   stt?: {
     supportedMimeTypes?: RegExp[];
   };
+  /** How many uploads the server will accept from one user before it answers 429. Served from
+   * the same values the rate limiter itself uses, so the UI can never offer a batch larger than
+   * the server takes — a library import used to lose everything past the limit as a silent
+   * partial, with no reason shown and no hint of how long to wait. */
+  uploadLimits?: {
+    userMax: number;
+    userWindowInMinutes: number;
+  };
   checkType?: (fileType: string, supportedTypes: RegExp[]) => boolean;
 };
 
