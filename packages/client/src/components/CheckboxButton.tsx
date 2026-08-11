@@ -5,15 +5,18 @@ import { cn } from '~/utils';
 
 /** Canon §6.3, the tool chip's look minus its size, exported so every chip in
  *  the composer — including ones that are not checkboxes, like the MCP menu
- *  button — draws from the same source instead of hand-copying the recipe. */
+ *  button — draws from the same source instead of hand-copying the recipe.
+ *
+ *  §6.3 ред. 11.08-4 (владелец, референс Perplexity): пассивный чип — ЗАЛИВКА
+ *  (panel), без рамки и тени, под курсором слегка темнеет. */
 export const CHIP_BASE =
-  'group relative inline-flex items-center justify-center gap-1.5 rounded-full border border-border-medium bg-transparent text-sm font-medium shadow-sm transition-all hover:bg-surface-hover';
+  'group relative inline-flex items-center justify-center gap-1.5 rounded-full border border-transparent bg-surface-primary-alt text-sm font-medium text-text-secondary transition-all hover:bg-surface-active hover:text-text-primary';
 
-/** An enabled chip joins the neutral selected family (§1.1: selected states are
- *  the `active` tint + t1 ink — the owner retired the accent here 11.08 round 3,
- *  the soft-petrol fill read as "green noise" next to the composer). */
+/** The enabled chip is a CARD: card fill + hairline border + t1 — the exact
+ *  recipe the sidebar's «Новый чат» wears (the owner named it as the model).
+ *  The grey "active" fill of round 3 read backwards — as a disabled state. */
 export const CHIP_CHECKED =
-  'border-transparent bg-surface-active text-text-primary hover:bg-surface-active';
+  'border-border-light bg-surface-primary text-text-primary hover:bg-surface-hover';
 
 const CheckboxButton: React.ForwardRefExoticComponent<
   {

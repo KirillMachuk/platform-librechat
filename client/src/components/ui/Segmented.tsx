@@ -99,13 +99,17 @@ export function Segmented<T extends string>({
                  pad + 2px border must equal the control height, 48 phone / 36
                  desktop — next to a search field the old 52/38 track read as
                  "taller for no reason" (owner, 11.08-3). */
-              'h-10 min-w-0 flex-1 truncate rounded-[9px] px-3 text-[15px] font-medium transition-colors duration-90 md:h-[28px] md:text-[13px]',
+              'h-10 min-w-0 flex-1 truncate rounded-[9px] border px-3 text-[15px] font-medium transition-colors duration-90 md:h-[28px] md:text-[13px]',
               /* Not ring-primary: in the dark theme it resolves to the same grey
                  as surface-active, so the ring on the selected tab was 1:1. */
               'focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-primary',
+              /* §6.5 ред. 11.08-4, владелец (референс Perplexity): активный —
+                 КАРТОЧКА (card + hairline, тот же рецепт, что у «Нового чата»),
+                 пассив остаётся заливкой дорожки и слегка темнеет под курсором.
+                 Прежний серый тинт актива читался наоборот — как выключенный. */
               isActive
-                ? 'bg-surface-active text-text-primary'
-                : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',
+                ? 'border-border-light bg-surface-primary text-text-primary'
+                : 'border-transparent text-text-secondary hover:bg-surface-active hover:text-text-primary',
             )}
           >
             {item.label}

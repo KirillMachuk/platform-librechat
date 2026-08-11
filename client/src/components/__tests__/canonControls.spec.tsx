@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { Button, FIELD_BASE, FIELD_BORDER } from '@librechat/client';
+import { Button, FIELD_BASE, FIELD_BORDER, CHIP_BASE, CHIP_CHECKED } from '@librechat/client';
 
 /**
  * The canon numbers for the two shared controls, asserted on the class string
@@ -88,5 +88,24 @@ describe('the canon a field carries', () => {
     expect(FIELD_BORDER).not.toContain('border-border-control');
     expect(FIELD_BORDER).toContain('focus-visible:border-border-focus');
     expect(FIELD_BORDER).toContain('focus-visible:ring-ring-primary-soft');
+  });
+});
+
+/* §6.3/§1.1 ред. 11.08-4 (владелец, референс Perplexity): включённый чип и
+ * активный сегмент — КАРТОЧКА (card + hairline, рецепт «Нового чата»);
+ * пассив — заливка без рамки, hover темнеет до `active`. Серый тинт актива
+ * из 11.08-3 читался наоборот — как выключенное состояние. */
+describe('the canon a tool chip carries', () => {
+  it('draws the enabled chip as a card', () => {
+    expect(CHIP_CHECKED).toContain('bg-surface-primary');
+    expect(CHIP_CHECKED).toContain('border-border-light');
+    expect(CHIP_CHECKED).not.toContain('bg-surface-active');
+  });
+
+  it('draws the passive chip as a plain fill that darkens under the cursor', () => {
+    expect(CHIP_BASE).toContain('bg-surface-primary-alt');
+    expect(CHIP_BASE).toContain('border-transparent');
+    expect(CHIP_BASE).not.toContain('shadow');
+    expect(CHIP_BASE).toContain('hover:bg-surface-active');
   });
 });

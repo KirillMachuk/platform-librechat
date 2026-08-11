@@ -92,11 +92,11 @@ function Artifacts() {
           <Ariakit.MenuButton
             aria-label={localize('com_ui_more_options')}
             className={cn(
-              /* The mode segment wears the SAME fill the enabled chip wears —
-                 neutral `active` + t1 since 11.08 round 3 (owner: the soft
-                 petrol was too loud next to the composer). */
-              'w-7 rounded-l-none rounded-r-full border-0 md:w-6',
-              'bg-surface-active text-text-primary hover:bg-surface-active',
+              /* The mode segment continues the enabled chip's card (11.08-4):
+                 same fill, same hairline, minus the left edge so the pair
+                 reads as one pill split by nothing. */
+              'w-7 rounded-l-none rounded-r-full border border-l-0 md:w-6',
+              'border-border-light bg-surface-primary text-text-primary hover:bg-surface-hover',
               'transition-colors',
             )}
             onClick={handleMenuButtonClick}
