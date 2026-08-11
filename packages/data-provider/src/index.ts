@@ -24,6 +24,7 @@ export * from './preferences';
 export * from './types';
 export * from './types/agents';
 export * from './types/assistants';
+export * from './types/artifactReport';
 export * from './types/files';
 export * from './types/mcpServers';
 export * from './types/mutations';

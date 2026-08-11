@@ -1,3 +1,4 @@
+import type { TArtifactReport } from './artifactReport';
 import type { CodeEnvRef } from '../codeEnvRef';
 import { EToolResources } from './assistants';
 
@@ -233,6 +234,12 @@ export type TFile = {
    * Suitable for tooltip text but not user-facing prose.
    */
   previewError?: string;
+  /**
+   * Validated authoring QA metadata emitted by an artifact skill.
+   * Optional for backward compatibility and null when a newer version
+   * of the same file was created without a trusted report sidecar.
+   */
+  artifactReport?: TArtifactReport | null;
   /**
    * Preview-only sanitized office HTML rendered at upload for office-bucket
    * files taken down the full-text `context` path (which keeps only the

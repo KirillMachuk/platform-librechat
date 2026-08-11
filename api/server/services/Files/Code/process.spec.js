@@ -345,6 +345,41 @@ describe('Code Process', () => {
     });
 
     describe('non-image file processing', () => {
+      it('persists validated artifact QA metadata with the authored file', async () => {
+        const artifactReport = {
+          status: 'ready',
+          format: 'pptx',
+          sourceFileIds: ['brief.docx'],
+          previewAssets: [{ filename: 'deck.pdf', kind: 'pdf' }],
+          qaChecks: [{ name: 'render', status: 'passed', message: 'Rendered' }],
+          issues: [],
+          changeLog: [{ target: 'Presentation', summary: 'Created deck' }],
+          skillVersion: '3.0.0',
+          repairIterations: 0,
+        };
+        mockAxios.mockResolvedValue({ data: Buffer.alloc(100) });
+
+        const { file } = await processCodeOutput({
+          ...baseParams,
+          name: 'deck.pptx',
+          artifactReport,
+        });
+
+        expect(file.artifactReport).toEqual(artifactReport);
+        expect(createFile).toHaveBeenCalledWith(expect.objectContaining({ artifactReport }), true);
+      });
+
+      it('clears stale artifact QA metadata when no report was emitted', async () => {
+        mockAxios.mockResolvedValue({ data: Buffer.alloc(100) });
+
+        await processCodeOutput({ ...baseParams, name: 'deck.pptx' });
+
+        expect(createFile).toHaveBeenCalledWith(
+          expect.objectContaining({ artifactReport: null }),
+          true,
+        );
+      });
+
       it('should process non-image files using saveBuffer', async () => {
         const smallBuffer = Buffer.alloc(100);
         mockAxios.mockResolvedValue({ data: smallBuffer });

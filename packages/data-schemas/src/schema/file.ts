@@ -203,6 +203,12 @@ const file: Schema<IMongoFile> = new Schema(
        * text into the UI tooltip. */
       maxlength: 200,
     },
+    artifactReport: {
+      /* Validated before persistence by collectArtifactReports. Mixed is
+       * intentional: the public contract preserves unknown optional
+       * fields so newer artifact skills remain backward compatible. */
+      type: Schema.Types.Mixed,
+    },
     previewRevision: {
       /* Generation marker for the deferred-preview lifecycle. Stamped
        * by the immediate persist step on every emit (each new emit

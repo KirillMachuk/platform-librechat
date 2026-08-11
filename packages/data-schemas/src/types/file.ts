@@ -1,5 +1,5 @@
 import { Document, Types } from 'mongoose';
-import type { CodeEnvRef, TDocMetadata } from 'librechat-data-provider';
+import type { CodeEnvRef, TArtifactReport, TDocMetadata } from 'librechat-data-provider';
 
 export interface IMongoFile extends Omit<Document, 'model'> {
   user: Types.ObjectId;
@@ -48,6 +48,8 @@ export interface IMongoFile extends Omit<Document, 'model'> {
    * for tooltip text; not user-facing prose. Absent otherwise.
    */
   previewError?: string;
+  /** Validated QA metadata for a code-authored Office/PDF/CSV artifact. */
+  artifactReport?: TArtifactReport | null;
   /**
    * Generation marker for the deferred-preview lifecycle. The
    * immediate persist step stamps a fresh UUID on every emit; the

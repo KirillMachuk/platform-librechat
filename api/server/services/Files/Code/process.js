@@ -52,6 +52,7 @@ const axios = createAxiosInstance();
  * @param {string} params.toolCallId - The tool call ID that generated the file.
  * @param {string} params.messageId - The current message ID.
  * @param {number} params.expiresAt - Expiration timestamp (24 hours from creation).
+ * @param {import('librechat-data-provider').TArtifactReport} [params.artifactReport]
  * @returns {Object} Fallback response with download URL.
  */
 const createDownloadFallback = ({
@@ -62,6 +63,7 @@ const createDownloadFallback = ({
   session_id,
   toolCallId,
   conversationId,
+  artifactReport,
 }) => {
   const basePath = getBasePath();
   return {
@@ -71,6 +73,7 @@ const createDownloadFallback = ({
     conversationId,
     toolCallId,
     messageId,
+    ...(artifactReport ? { artifactReport } : {}),
   };
 };
 
@@ -311,6 +314,7 @@ const runPreviewFinalize = ({ finalize, fileId, previewRevision, onResolved }) =
  * @param {string} params.session_id - The code execution session ID.
  * @param {string} params.conversationId - The current conversation ID.
  * @param {string} params.messageId - The current message ID.
+ * @param {import('librechat-data-provider').TArtifactReport} [params.artifactReport] - Validated authoring QA metadata.
  * @returns {Promise<{ file: MongoFile & { messageId: string, toolCallId: string }, finalize?: () => Promise<MongoFile | null> }>}
  */
 const processCodeOutput = async ({
@@ -321,6 +325,7 @@ const processCodeOutput = async ({
   conversationId,
   messageId,
   session_id,
+  artifactReport,
 }) => {
   const appConfig = req.config;
   const currentDate = new Date();
@@ -373,6 +378,7 @@ const processCodeOutput = async ({
           session_id,
           conversationId,
           expiresAt: currentDate.getTime() + 86400000,
+          artifactReport,
         }),
       };
     }
@@ -484,6 +490,7 @@ const processCodeOutput = async ({
           session_id,
           conversationId,
           expiresAt: currentDate.getTime() + 86400000,
+          artifactReport,
         }),
       };
     }
@@ -567,6 +574,9 @@ const processCodeOutput = async ({
       context: FileContext.execute_code,
       usage: isUpdate ? (claimed.usage ?? 0) + 1 : 1,
       createdAt: isUpdate ? claimed.createdAt : formattedDate,
+      /* Explicit null clears stale QA metadata when a later turn reuses
+       * the filename without emitting a validated report sidecar. */
+      artifactReport: artifactReport ?? null,
       ...(await getRetentionExpiry(req)),
     };
 
@@ -656,6 +666,7 @@ const processCodeOutput = async ({
         session_id,
         conversationId,
         expiresAt: currentDate.getTime() + 86400000,
+        artifactReport,
       }),
     };
   }

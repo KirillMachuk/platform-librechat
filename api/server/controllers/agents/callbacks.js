@@ -24,6 +24,10 @@ const {
 } = require('@librechat/api');
 const { processFileCitations } = require('~/server/services/Files/Citations');
 const { processCodeOutput, runPreviewFinalize } = require('~/server/services/Files/Code/process');
+const {
+  collectArtifactReports,
+  getArtifactReportTargetName,
+} = require('~/server/services/Files/Code/artifactReports');
 const { saveBase64Image } = require('~/server/services/Files/process');
 
 function isHostFileAuthoringArtifact(artifact) {
@@ -783,6 +787,12 @@ function createToolEndCallback({ req, res, artifactPromises, streamId = null }) 
       return;
     }
 
+    const reportsPromise = collectArtifactReports({
+      req,
+      files: output.artifact.files,
+      session_id: output.artifact.session_id,
+    });
+
     for (const file of output.artifact.files) {
       /* `inherited` files are unchanged passthroughs of inputs the caller
        * already owns (skill files, prior session inputs, inherited
@@ -790,13 +800,14 @@ function createToolEndCallback({ req, res, artifactPromises, streamId = null }) 
        * user's session key 403s when the file is entity-scoped, and the
        * input is already persisted at its origin. They remain available
        * to subsequent calls via primeInvokedSkills / session inheritance. */
-      if (file.inherited) {
+      if (file.inherited || getArtifactReportTargetName(file.name)) {
         continue;
       }
       const { id, name } = file;
       const toolCallId = output.tool_call_id;
       artifactPromises.push(
         (async () => {
+          const reportsByFilename = await reportsPromise;
           const result = await processCodeOutput({
             req,
             id,
@@ -822,6 +833,7 @@ function createToolEndCallback({ req, res, artifactPromises, streamId = null }) 
              * ids.
              */
             session_id: file.storage_session_id ?? output.artifact.session_id,
+            artifactReport: reportsByFilename.get(name),
           });
           const fileMetadata = result?.file ?? null;
           const finalize = result?.finalize;
@@ -1050,6 +1062,12 @@ function createResponsesToolEndCallback({ req, res, tracker, artifactPromises })
       return;
     }
 
+    const reportsPromise = collectArtifactReports({
+      req,
+      files: output.artifact.files,
+      session_id: output.artifact.session_id,
+    });
+
     for (const file of output.artifact.files) {
       /* `inherited` files are unchanged passthroughs of inputs the caller
        * already owns (skill files, prior session inputs, inherited
@@ -1057,13 +1075,14 @@ function createResponsesToolEndCallback({ req, res, tracker, artifactPromises })
        * user's session key 403s when the file is entity-scoped, and the
        * input is already persisted at its origin. They remain available
        * to subsequent calls via primeInvokedSkills / session inheritance. */
-      if (file.inherited) {
+      if (file.inherited || getArtifactReportTargetName(file.name)) {
         continue;
       }
       const { id, name } = file;
       const toolCallId = output.tool_call_id;
       artifactPromises.push(
         (async () => {
+          const reportsByFilename = await reportsPromise;
           const result = await processCodeOutput({
             req,
             id,
@@ -1089,6 +1108,7 @@ function createResponsesToolEndCallback({ req, res, tracker, artifactPromises })
              * ids.
              */
             session_id: file.storage_session_id ?? output.artifact.session_id,
+            artifactReport: reportsByFilename.get(name),
           });
           const fileMetadata = result?.file ?? null;
           const finalize = result?.finalize;
@@ -1158,6 +1178,7 @@ function buildResponsesAttachment(fileMetadata, toolCallId) {
     textFormat: fileMetadata.textFormat ?? null,
     status: fileMetadata.status,
     previewError: fileMetadata.previewError,
+    artifactReport: fileMetadata.artifactReport,
   };
 }
 

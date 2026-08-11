@@ -1,95 +1,57 @@
 ---
 name: pptx
-description: Build .pptx presentations with python-pptx in the code sandbox. Use for any request for slides, a deck or a presentation file. python-pptx is installed and works; never route the deck through LibreOffice, Markdown or PDF.
+description: Create or revise editable PowerPoint presentations with a Russian-first professional workflow, native charts, visible sources, template preservation, and render-based QA. Use whenever the user requests slides, a deck, a presentation, PowerPoint, or a .pptx file.
 ---
 
-# Building .pptx files
+# Professional PowerPoint authoring
 
-## What the sandbox already has
+Create the requested `.pptx`; do not substitute Markdown, HTML, or PDF. The editable PowerPoint file is the primary artifact. A PDF may only be a derived preview.
 
-- **`python-pptx` is installed and importable as `pptx`.** Do not test for it, do not
-  try to install it, do not look for an alternative.
-- **A ready-made 16:9 deck builder at `/opt/1ma/python/deck.py`.** It does all the
-  layout. You supply content only.
-- The interpreter is **`python3`**. There is no bare `python`.
-- **No network access.** `pip install` cannot work and is not needed.
-- LibreOffice (`soffice`) is installed, and Cyrillic-capable fonts are installed.
+## Available runtime
 
-## Rules
+- `python3`, `python-pptx`, LibreOffice, Poppler, Pillow, and Cyrillic fonts are installed.
+- The deterministic builder is at `/mnt/data/pptx/scripts/build_presentation.py`.
+- The builder's input contract and layout examples are in `/mnt/data/pptx/references/spec.md`.
+- The sandbox has no network access. Do not install packages or depend on remote assets.
 
-1. **Write the `.pptx` with python-pptx through the builder.** Never author Markdown,
-   HTML or a PDF and convert it into slides — that produces a file full of unrendered
-   source text.
-2. **Never tell the user a `.pptx` cannot be produced here.** It can.
-3. **Never compute slide coordinates yourself, and never copy the builder into your
-   script.** Hand-placed text boxes are what pushes content off the slide. Import the
-   builder; it fixes every position from the real slide size.
-4. Save the deck to `/mnt/data/<name>.pptx` and write your script to `/tmp`. Everything
-   left in `/mnt/data` is delivered to the user, so a script written there arrives
-   attached to your answer next to the deck.
-5. **Always call `deck.check(path)` after saving** and fix whatever it reports before
-   you answer the user.
-6. If `import deck` fails, say plainly that the sandbox image is out of date. Do not
-   fall back to hand-written slide geometry.
+## Default product standard
 
-## The command
+- Default to `ru-RU`, Arial, 16:9, Russian typography, and `₽` when the user does not specify another locale.
+- Treat every supplied file as immutable. Write a new, clearly named version.
+- Decide the audience, decision, narrative, and one-sentence takeaway for each slide before styling.
+- Prefer one strong idea per slide. Keep titles as conclusions, not topic labels.
+- Use editable PowerPoint text, shapes, tables, and native charts. Use a bitmap only for a supplied photo or a visualization PowerPoint cannot represent.
+- Put a short visible source note on every factual claim, chart, table, and metric slide. Add a final sources slide when sources exist.
+- Do not invent facts, sources, dates, or numeric precision. Record necessary assumptions explicitly.
+- Preserve a user's slide size, masters, layouts, theme, and placeholders. If the selected template layout lacks the required inherited placeholders, stop and request a compatible layout instead of drawing a new design over it.
+- For a targeted revision, change only the requested slide or text and save a new version.
 
-One `bash` call. Change the content; keep the first three lines and the last two.
+## Workflow
 
-```bash
-cat > /tmp/build.py <<'PYEOF'
-import sys
+1. Inspect all supplied files and summarize the communication job internally: audience, decision, evidence, constraints, locale, and filename.
+2. Draft a short story outline. Typical business flow: context → implication → evidence → decision → next steps. Do not create filler slides.
+3. Write one JSON spec following `references/spec.md`. Always include the complete `ArtifactJob` and acceptance criteria.
+4. Run the builder:
 
-sys.path.insert(0, "/opt/1ma/python")
-import deck
+   ```bash
+   python3 /mnt/data/pptx/scripts/build_presentation.py /tmp/deck-spec.json /mnt/data/<clear-name>.pptx
+   ```
 
-prs = deck.new_deck()
-deck.title_slide(prs, "Quarterly sales report", "Prepared for the board")
-deck.bullets_slide(prs, "Key results", [
-    "Revenue up 23% year over year",
-    ("Retail: +18%", 1),
-    ("Corporate: +41%", 1),
-    "Churn down to 4.2%, the best figure on record",
-])
-deck.table_slide(prs, "By segment",
-    ["Segment", "Revenue", "Margin"],
-    [["Retail", "4 120", "38%"], ["Corporate", "6 890", "34%"]])
-# deck.image_slide(prs, "Revenue trend", "/mnt/data/chart.png", "Source: internal")
+5. Read `<clear-name>.pptx.artifact-report.json`. The builder reopens the file, checks structure and editability, renders every slide through LibreOffice, raster-checks the result, and verifies that inputs were not modified.
+6. Inspect the derived PDF when the environment exposes visual file inspection. Review every slide, not only a contact sheet: clipping, wrapping, contrast, hierarchy, whitespace, alignment, factual sources, and consistency with the template.
+7. If a defect remains, revise the JSON and rerun. Allow at most two repair iterations and set `repairIterations` to the actual count.
+8. Deliver the `.pptx` only when the report status is `ready` and the visual review is clean. If a critical issue remains, deliver it as `needs_review` and state the exact issue plainly.
 
-prs.save("/mnt/data/report.pptx")
-deck.check("/mnt/data/report.pptx")
-PYEOF
-python3 /tmp/build.py
-```
+## Core layouts
 
-`check` prints `layout OK: N slides, ...`. If it prints `LAYOUT PROBLEMS`, shorten the
-offending text or move it to another slide and rerun — do not hand the file over until
-it passes.
+Use only the layout needed for the message: `title`, `claim`, `section`, `bullets`, `two_column`, `comparison`, `image`, `chart`, `table`, `metrics`, `process`, `summary`, or `sources`.
 
-## The builder
+- `chart` must remain a native PowerPoint chart.
+- `metrics` supports one to three decision-relevant metrics.
+- `process` supports two to five steps.
+- `table` supports at most five columns and seven data rows; move detailed data to an appendix or workbook.
+- Do not shrink body text below 16 pt to make content fit. Split or shorten the slide.
 
-Slides are 16:9. Titles, body text and tables are placed from the real slide size, font
-sizes are set for you, and text that does not fit continues on a `title (2)` slide
-rather than overflowing. Keep every bullet to one idea and let it split.
+## Completion response
 
-- `new_deck()` — empty 16:9 presentation.
-- `title_slide(prs, title, subtitle="")` — opening slide.
-- `bullets_slide(prs, title, bullets, size=20)` — `bullets` is a list of strings, or
-  `(text, level)` tuples for sub-bullets. Returns the slides it created.
-- `table_slide(prs, title, header, rows, size=14)` — `header` is a list of column names,
-  `rows` a list of row lists. Long tables continue on further slides.
-- `image_slide(prs, title, image_path, caption="")` — image fitted to the content box,
-  aspect ratio preserved.
-- `check(path)` — reopens the saved file and fails on anything off-slide or overfull.
-
-## Charts
-
-Build them with matplotlib, save a PNG to `/mnt/data`, then place it with
-`deck.image_slide`. Set `plt.rcParams["font.family"] = "Liberation Sans"` first so
-non-Latin labels render instead of coming out as boxes.
-
-## If the user supplied their own template
-
-Open it with `Presentation("/mnt/data/template.pptx")` and use its own layouts and
-placeholders unchanged — do not resize its slides and do not re-place its placeholders.
-The builder is for decks created from scratch.
+Give the user the `.pptx` link first. Briefly mention the audience/goal, source or assumption caveats, QA status, and any derived PDF. Never claim that a deck is verified if the artifact report says `needs_review`.
