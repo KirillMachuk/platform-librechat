@@ -366,10 +366,7 @@ describe('Code Process', () => {
         });
 
         expect(file.artifactReport).toEqual(artifactReport);
-        expect(createFile).toHaveBeenCalledWith(
-          expect.objectContaining({ artifactReport }),
-          true,
-        );
+        expect(createFile).toHaveBeenCalledWith(expect.objectContaining({ artifactReport }), true);
       });
 
       it('clears stale artifact QA metadata when no report was emitted', async () => {
