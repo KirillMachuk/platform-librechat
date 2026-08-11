@@ -478,6 +478,13 @@ describe('processAgentFileUpload', () => {
         .mockResolvedValue({ text: 'extracted text', bytes: 42, filepath: 'doc://result' }),
     });
     mergeFileConfig.mockReturnValue(makeFileConfig());
+    /* A normal deployment has a vector pipeline; deferral is only possible when there is
+     * somewhere to defer INTO. Tests that model its absence delete this themselves. */
+    process.env.RAG_API_URL = 'http://rag-api.test';
+  });
+
+  afterEach(() => {
+    delete process.env.RAG_API_URL;
   });
 
   describe('OCR strategy selection', () => {
@@ -652,16 +659,34 @@ describe('processAgentFileUpload', () => {
       expect(persisted.text).toBeUndefined();
     });
 
-    test('and says so honestly when there is nowhere to store it', async () => {
-      getStrategyFunctions.mockReturnValue({
-        handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
-      });
+    /* With no vector pipeline at all, routing to file_search would trade a lost document for a
+     * failed upload ("RAG_API_URL not defined"). The document is kept as a plain file. */
+    test('keeps it as a plain file when there is no index to put it in', async () => {
+      const ragUrl = process.env.RAG_API_URL;
+      delete process.env.RAG_API_URL;
+      getStrategyFunctions.mockImplementation((src) =>
+        src === FileSources.document_parser
+          ? {
+              handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
+            }
+          : {
+              handleFileUpload: jest
+                .fn()
+                .mockResolvedValue({ filepath: '/uploads/scan.pdf', bytes: 100 }),
+            },
+      );
       const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
-      checkCapability.mockResolvedValue(false);
 
       await expect(
         processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
-      ).rejects.toThrow(/image-based and requires an OCR service/);
+      ).resolves.not.toThrow();
+
+      const persisted = db.createFile.mock.calls.at(-1)[0];
+      expect(persisted.text).toBeUndefined();
+      expect(persisted.embeddingStatus).toBeUndefined();
+      if (ragUrl != null) {
+        process.env.RAG_API_URL = ragUrl;
+      }
     });
 
     /* doc-gateway OCRs one scan at a time and 503s the rest (DOCGW_SCAN_QUEUE_TIMEOUT_S). That is
@@ -750,24 +775,38 @@ describe('processAgentFileUpload', () => {
       withTimeout.mockImplementation((promise) => promise);
     });
 
-    /* Only a TIMEOUT earns the deferral. Any other failure of the fallback is a real parse
-     * failure, and turning those into "pending" would fill the library with documents the
-     * worker can never index. */
-    test('D6b: a non-timeout failure of the OCR fallback still raises an honest error', async () => {
-      getStrategyFunctions.mockReturnValue({
-        handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
-      });
+    /* Only a TIMEOUT promises a retry. Any other failure is a real parse failure: the document
+     * is still kept, but nothing tells the user to come back in a few minutes for text that is
+     * never going to arrive. */
+    test('D6b: a non-timeout failure keeps the document without promising a retry', async () => {
+      const ragUrl = process.env.RAG_API_URL;
+      delete process.env.RAG_API_URL;
+      getStrategyFunctions.mockImplementation((src) =>
+        src === FileSources.document_parser
+          ? {
+              handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
+            }
+          : {
+              handleFileUpload: jest
+                .fn()
+                .mockResolvedValue({ filepath: '/uploads/scan.pdf', bytes: 100 }),
+            },
+      );
       const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
-      /* Without file_search there is nowhere to store it, which is the one case that still
-       * ends in an error rather than a stored document. */
-      checkCapability.mockResolvedValue(false);
       withTimeout.mockRejectedValueOnce(new Error('connection reset by peer'));
 
       await expect(
         processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
-      ).rejects.toThrow(/image-based and requires an OCR service/);
+      ).resolves.not.toThrow();
+
+      const persisted = db.createFile.mock.calls.at(-1)[0];
+      expect(persisted.embeddingStatus).toBeUndefined();
+      expect(persisted.text).toBeUndefined();
 
       withTimeout.mockImplementation((promise) => promise);
+      if (ragUrl != null) {
+        process.env.RAG_API_URL = ragUrl;
+      }
     });
 
     test('falls back to document_parser when configured OCR fails for a document MIME type', async () => {
@@ -792,28 +831,36 @@ describe('processAgentFileUpload', () => {
       expect(getStrategyFunctions).toHaveBeenCalledWith(FileSources.document_parser);
     });
 
-    test('throws when configured OCR, document_parser, and RAG /text fallback all fail', async () => {
+    test('keeps the file when configured OCR, document_parser and the RAG fallback all fail', async () => {
       mergeFileConfig.mockReturnValue(makeFileConfig({ ocrSupportedMimeTypes: [PDF_MIME] }));
-      getStrategyFunctions.mockReturnValue({
-        handleFileUpload: jest.fn().mockRejectedValue(new Error('failure')),
-      });
+      /* Every EXTRACTOR fails; storage still works, which is the whole point — the bytes are
+       * kept even when no reader can make text of them. */
+      getStrategyFunctions.mockImplementation((src) =>
+        src === FileSources.mistral_ocr || src === FileSources.document_parser
+          ? { handleFileUpload: jest.fn().mockRejectedValue(new Error('failure')) }
+          : {
+              handleFileUpload: jest
+                .fn()
+                .mockResolvedValue({ filepath: '/uploads/scan.pdf', bytes: 100 }),
+            },
+      );
       const req = makeReq({
         mimetype: PDF_MIME,
         ocrConfig: { strategy: FileSources.mistral_ocr },
       });
       const { parseText } = require('@librechat/api');
-      /* Selective: the OCR capability must stay ON, or the upload dies earlier with a different
-       * error and the test would pass without ever reaching the branch it names. */
-      checkCapability.mockImplementation((_req, capability) =>
-        Promise.resolve(capability !== AgentCapabilities.file_search),
-      );
+      const ragUrl = process.env.RAG_API_URL;
+      delete process.env.RAG_API_URL;
 
       await expect(
         processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
-      ).rejects.toThrow(/image-based and requires an OCR service/);
+      ).resolves.not.toThrow();
 
       expect(parseText).toHaveBeenCalled();
-      checkCapability.mockResolvedValue(true);
+      expect(db.createFile.mock.calls.at(-1)[0].text).toBeUndefined();
+      if (ragUrl != null) {
+        process.env.RAG_API_URL = ragUrl;
+      }
     });
   });
 
