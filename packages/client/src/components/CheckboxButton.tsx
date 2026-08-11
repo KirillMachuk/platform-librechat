@@ -67,16 +67,22 @@ const CheckboxButton: React.ForwardRefExoticComponent<
         'size-9 p-2 transition-all md:w-full md:p-3',
         'bg-transparent shadow-sm hover:bg-surface-hover',
 
-        // Checked state styling
-        isChecked && isCheckedClassName && isCheckedClassName,
+        /* An enabled tool chip is a switch in chip form, and the book draws it
+           the way every switch is drawn: the accent's soft fill with the accent
+           ink, no border. One look for every tool — the raw blue/purple/amber
+           per-tool tints this replaces were exactly the kind of colour zoo the
+           canon bans. A caller may still override via isCheckedClassName. */
+        isChecked &&
+          (isCheckedClassName ??
+            'border-transparent bg-acc-soft text-text-accent hover:bg-acc-soft'),
 
         // Additional custom classes
         className,
       )}
       render={<button type="button" aria-label={label} />}
     >
-      {/* Icon if provided */}
-      {icon && <span className="icon-md text-text-primary">{icon as React.JSX.Element}</span>}
+      {/* Icon colour follows the button, so the checked accent paints it too. */}
+      {icon && <span className="icon-md">{icon as React.JSX.Element}</span>}
 
       {/* Show the label on larger screens */}
       <span className="hidden truncate md:block">{label}</span>
