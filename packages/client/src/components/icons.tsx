@@ -162,6 +162,7 @@ export { Lock as LockIcon } from '@phosphor-icons/react';
 export { SignOut as LogOut } from '@phosphor-icons/react';
 export { ArrowsOutSimple as Maximize2 } from '@phosphor-icons/react';
 export { List as Menu } from '@phosphor-icons/react';
+export { ClockCountdown as MessageCircleDashed } from '@phosphor-icons/react';
 export { Chat as MessageSquare } from '@phosphor-icons/react';
 export { Chats as MessagesSquare } from '@phosphor-icons/react';
 export { MicrophoneSlash as MicOff } from '@phosphor-icons/react';
@@ -251,10 +252,6 @@ const custom = (paths: string, displayName: string): LucideIcon => {
 export const Bot: LucideIcon = custom(
   '<path d="M12 8V4H8" /><rect width="16" height="12" x="4" y="8" rx="2" /><path d="M2 14h2" /><path d="M20 14h2" /><path d="M15 13v2" /><path d="M9 13v2" />',
   'Bot',
-);
-export const MessageCircleDashed: LucideIcon = custom(
-  '<path d="M10.1 2.182a10 10 0 0 1 3.8 0" /><path d="M13.9 21.818a10 10 0 0 1-3.8 0" /><path d="M17.609 3.72a10 10 0 0 1 2.69 2.7" /><path d="M2.182 13.9a10 10 0 0 1 0-3.8" /><path d="M20.28 17.61a10 10 0 0 1-2.7 2.69" /><path d="M21.818 10.1a10 10 0 0 1 0 3.8" /><path d="M3.721 6.391a10 10 0 0 1 2.7-2.69" /><path d="m6.163 21.117-2.906.85a1 1 0 0 1-1.236-1.169l.965-2.98" />',
-  'MessageCircleDashed',
 );
 export const MessageSquareDashed: LucideIcon = custom(
   '<path d="M14 3h2" /><path d="M16 19h-2" /><path d="M2 12v-2" /><path d="M2 16v5.286a.71.71 0 0 0 1.212.502l1.149-1.149" /><path d="M20 19a2 2 0 0 0 2-2v-1" /><path d="M22 10v2" /><path d="M22 6V5a2 2 0 0 0-2-2" /><path d="M4 3a2 2 0 0 0-2 2v1" /><path d="M8 19h2" /><path d="M8 3h2" />',

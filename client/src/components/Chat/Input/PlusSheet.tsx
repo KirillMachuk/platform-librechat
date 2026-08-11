@@ -91,6 +91,14 @@ function PlusSheet({
   const localize = useLocalize();
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  /** Escape/scrim must hand focus back to the «+» that opened the sheet — the
+   *  composer's autofocus otherwise swallows it (keyboard review 11.08). */
+  const closeSheet = useCallback(() => {
+    setOpen(false);
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  }, []);
   const toolResourceRef = useRef<EToolResources | undefined>();
 
   const context = useBadgeRowContext();
@@ -315,6 +323,7 @@ function PlusSheet({
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         aria-label={localize('com_ui_add')}
         data-testid="plus-sheet-trigger"
@@ -336,7 +345,7 @@ function PlusSheet({
       </FileUpload>
 
       <Transition appear show={open} as={Fragment}>
-        <Dialog as="div" className="relative z-dialog md:hidden" onClose={() => setOpen(false)}>
+        <Dialog as="div" className="relative z-dialog md:hidden" onClose={closeSheet}>
           <TransitionChild
             enter="ease-out duration-120"
             enterFrom="opacity-0"
@@ -372,7 +381,7 @@ function PlusSheet({
                 <button
                   type="button"
                   aria-label={localize('com_ui_close')}
-                  onClick={() => setOpen(false)}
+                  onClick={closeSheet}
                   className="absolute right-0 top-2 flex h-11 w-11 items-center justify-center rounded-lg text-text-secondary hover:bg-surface-hover"
                 >
                   <X className="icon-md" aria-hidden="true" />

@@ -452,8 +452,8 @@
     "fit": "exact"
   },
   "MessageCircleDashed": {
-    "to": null,
-    "fit": "missing"
+    "to": "ClockCountdown",
+    "fit": "close"
   },
   "MessageSquare": {
     "to": "Chat",

@@ -1,5 +1,8 @@
 import React, { useRef } from 'react';
-import { FileUpload, TooltipAnchor, AttachmentIcon } from '@librechat/client';
+import { FileUpload, TooltipAnchor } from '@librechat/client';
+/* The book's desktop composer opens with «+», not a paperclip (screen 2
+   caption: «слева „+" и „Инструменты"») — the aria still says attach. */
+import { Plus } from '~/components/icons';
 import type { TConversation } from 'librechat-data-provider';
 import type { ExtendedFile, FileSetter } from '~/common';
 import { useFileHandlingNoChatContext, useLocalize } from '~/hooks';
@@ -61,7 +64,7 @@ const AttachFile = ({
             }}
           >
             <div className="flex w-full items-center justify-center gap-2">
-              <AttachmentIcon className="icon-md" />
+              <Plus className="icon-md" aria-hidden="true" />
             </div>
           </button>
         }

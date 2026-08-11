@@ -88,14 +88,17 @@ const TooltipPopup = memo(function TooltipPopup({
           alwaysVisible
           className="tooltip"
           render={
+            /* Canon §5/§6.6: appearance is the 120ms step. No arrow — the
+               plate hangs by the control it names, the way the owner's
+               reference (GitHub's «Найти ⌘K») draws it. */
             <motion.div
               initial={{ opacity: 0, x, y }}
               animate={{ opacity: 1, x: 0, y: 0 }}
               exit={{ opacity: 0, x, y }}
+              transition={{ duration: 0.12 }}
             />
           }
         >
-          <Ariakit.TooltipArrow />
           {enableHTML ? (
             <div
               dangerouslySetInnerHTML={{
@@ -121,7 +124,9 @@ export const TooltipAnchor: ForwardRefExoticComponent<
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (role === 'button' && event.key === 'Enter') {
+      /* A div with role=button must answer Space as well as Enter — a real
+         button does, and the 11.08 keyboard review caught the gap. */
+      if (role === 'button' && (event.key === 'Enter' || event.key === ' ')) {
         event.preventDefault();
         (event.target as HTMLDivElement).click();
       }
@@ -130,7 +135,9 @@ export const TooltipAnchor: ForwardRefExoticComponent<
   );
 
   return (
-    <Ariakit.TooltipProvider store={tooltip} hideTimeout={0}>
+    /* Canon §6.6: the plate waits 300ms — a cursor passing through a row of
+       icon buttons must not fire a chain of tooltips. */
+    <Ariakit.TooltipProvider store={tooltip} showTimeout={300} hideTimeout={0}>
       <Ariakit.TooltipAnchor
         {...props}
         ref={ref}

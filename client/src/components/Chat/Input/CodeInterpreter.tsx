@@ -26,7 +26,7 @@ function CodeInterpreter() {
         checked={runCode}
         setValue={debouncedChange}
         label={localize('com_ui_run_code')}
-        icon={<TerminalSquareIcon className="icon-md" aria-hidden="true" />}
+        icon={<TerminalSquareIcon className="icon-sm" aria-hidden="true" />}
       />
     )
   );

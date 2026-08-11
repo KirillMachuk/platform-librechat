@@ -26,7 +26,7 @@ function FileSearch() {
           checked={fileSearchEnabled}
           setValue={debouncedChange}
           label={localize('com_assistants_file_search')}
-          icon={<VectorIcon className="icon-md" />}
+          icon={<VectorIcon className="icon-sm" />}
         />
       )}
     </>

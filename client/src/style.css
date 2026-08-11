@@ -1551,8 +1551,9 @@ body {
 
 .dark body,
 .dark html {
-  --tw-bg-opacity: 1;
-  background-color: rgba(23, 23, 23, var(--tw-bg-opacity));
+  /* The page ground is the bg token, not a raw grey — every visible surface
+     sits on --c-bg and the body must agree with them (review 11.08). */
+  background-color: var(--c-bg);
 }
 
 #__next,
@@ -2559,25 +2560,12 @@ html {
   line-height: inherit;
 }
 
-.tooltip {
-  z-index: var(--c-z-popover);
-  cursor: pointer;
-  border-radius: 0.275rem;
-  background-color: var(--surface-primary);
-  padding-top: 0.25rem;
-  padding-bottom: 0.25rem;
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
-  font-size: 1rem;
-  line-height: 1.5rem;
-  color: black;
-  box-shadow: 0 2px 4px 0 rgb(0 0 0 / 0.25);
-}
-
-.tooltip:where(.dark, .dark *) {
-  background-color: var(--surface-primary);
-  color: white;
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.35);
+/* Canon §6.6: the tooltip's ONE look (ink plate, 12.5, r8) lives with its
+   component — packages/client/src/components/Tooltip.css. The white-card
+   duplicate that used to sit here fought it for the same class name and won
+   or lost by stylesheet order; a second .tooltip block is a regression. */
+.tooltip-retired-duplicate-do-not-recreate {
+  display: none;
 }
 
 /* Canon §1.8: ONE focus for the whole system — outline 2px --border-focus
@@ -2641,7 +2629,9 @@ html {
   flex-direction: column;
   overflow: auto;
   overscroll-behavior: contain;
-  border-radius: 0.7rem;
+  /* Canon §6.5: a dropdown card is radius 12 exactly — 0.7rem read as 11.2
+     and drifted every menu off the book by a hair. */
+  border-radius: 0.75rem;
   border-width: 1px;
   border-style: solid;
   border-color: var(--border-light);

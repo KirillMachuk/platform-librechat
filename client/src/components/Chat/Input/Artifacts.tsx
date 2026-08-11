@@ -84,22 +84,26 @@ function Artifacts() {
         checked={isEnabled}
         setValue={handleToggle}
         label={localize('com_ui_artifacts')}
-        icon={<WandSparkles className="icon-md" aria-hidden="true" />}
+        icon={<WandSparkles className="icon-sm" aria-hidden="true" />}
       />
 
       {isEnabled && (
         <Ariakit.MenuProvider open={isPopoverOpen} setOpen={setIsPopoverOpen}>
           <Ariakit.MenuButton
+            aria-label={localize('com_ui_more_options')}
             className={cn(
-              'w-7 rounded-l-none rounded-r-full border-b border-l-0 border-r border-t border-border-light md:w-6',
-              'border-amber-600/40 bg-amber-500/10 hover:bg-amber-700/10',
+              /* The mode segment wears the SAME acc-soft the enabled chip
+                 wears — the raw amber here was the one the tint purge missed
+                 (found by the 11.08 review). */
+              'w-7 rounded-l-none rounded-r-full border-0 md:w-6',
+              'bg-acc-soft text-text-accent hover:bg-acc-soft',
               'transition-colors',
             )}
             onClick={handleMenuButtonClick}
           >
             <ChevronDown
               className={cn(
-                'ml-1 h-4 w-4 text-text-secondary transition-transform duration-300 md:ml-0.5',
+                'ml-1 h-4 w-4 transition-transform duration-300 md:ml-0.5',
                 isButtonExpanded && 'rotate-180',
               )}
               aria-hidden="true"

@@ -124,7 +124,7 @@ test.describe('context usage gauge', () => {
     /** Regenerate to create a sibling branch (B). */
     const assistantMessage = messagesView(page).locator('.message-render').nth(1);
     await assistantMessage.hover();
-    const regenerateButton = assistantMessage.locator('button[title="Regenerate"]').last();
+    const regenerateButton = assistantMessage.locator('button[aria-label="Regenerate"]').last();
     await expect(regenerateButton).toBeVisible();
     const [regen] = await Promise.all([
       page.waitForResponse(isAgentsStream, { timeout: 30000 }),
@@ -166,7 +166,7 @@ test.describe('context usage gauge', () => {
      *  chat.spec.ts's branch test). */
     const assistantMessage = messagesView(page).locator('.message-render').nth(1);
     await assistantMessage.hover();
-    const regenerateButton = assistantMessage.locator('button[title="Regenerate"]').last();
+    const regenerateButton = assistantMessage.locator('button[aria-label="Regenerate"]').last();
     await expect(regenerateButton).toBeVisible();
     const [regen] = await Promise.all([
       page.waitForResponse(isAgentsStream, { timeout: 30000 }),

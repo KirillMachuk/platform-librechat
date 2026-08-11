@@ -72,7 +72,10 @@ export const CustomMenu = React.forwardRef<HTMLDivElement, CustomMenuProps>(func
           parent ? 'animate-popover-left ml-3' : 'animate-popover',
           'outline-none! z-popover flex max-h-[min(450px,var(--popover-available-height))] w-full',
           'w-[var(--menu-width,auto)] min-w-[300px] flex-col overflow-auto rounded-xl border border-border-light',
-          'bg-presentation text-sm text-text-primary shadow-lg',
+          /* card, not presentation: the book's selector menu is the card
+             surface (#FFF / #232323); presentation is the page behind it —
+             in dark that read as a second, wrong grey (review 11.08). */
+          'bg-surface-primary text-sm text-text-primary shadow-lg',
           parent ? 'px-0.5 py-0.5' : 'px-3 py-2',
           'max-w-[calc(100vw-4rem)] sm:max-h-[calc(65vh)] sm:max-w-[400px]',
           searchable && 'p-0',
@@ -89,14 +92,19 @@ export const CustomMenu = React.forwardRef<HTMLDivElement, CustomMenuProps>(func
                     className={cn(
                       /* Прототип `.selsearch` и канон §6.4: поле — контрол, а не
                          прозрачная строка: 48 на телефоне и 36 на десктопе,
-                         радиус 12, рамка `control` (3:1 обязательна). */
+                         радиус 12, рамка `control` (3:1 обязательна).
+                         Рамка СТАТИЧНА: комбобокс автофокусируется при каждом
+                         открытии меню, и §1.8-потемнение до чернил означало бы
+                         «тёмная рамка всегда» — ровно то, что владелец 11.08
+                         забраковал. Фокус здесь и так очевиден: меню открыто,
+                         каретка в поле. */
                       'peer flex h-12 w-full items-center justify-center rounded-xl border border-border-control bg-transparent px-2.5 text-base',
                       'sm:h-9 sm:text-sm',
-                      'focus:outline-none focus-visible:border-border-focus focus-visible:ring-[3px] focus-visible:ring-ring-primary-soft',
+                      'focus:outline-none',
                     )}
                   />
                   {comboboxLabel && (
-                    <label className="pointer-events-none absolute left-3 top-3.5 text-sm text-text-secondary transition-all duration-200 peer-[:not(:placeholder-shown)]:-top-1.5 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:bg-presentation peer-[:not(:placeholder-shown)]:px-1 peer-[:not(:placeholder-shown)]:text-xs sm:top-2">
+                    <label className="pointer-events-none absolute left-3 top-3.5 text-sm text-text-secondary transition-all duration-200 peer-[:not(:placeholder-shown)]:-top-1.5 peer-[:not(:placeholder-shown)]:left-2 peer-[:not(:placeholder-shown)]:bg-surface-primary peer-[:not(:placeholder-shown)]:px-1 peer-[:not(:placeholder-shown)]:text-xs sm:top-2">
                       {comboboxLabel}
                     </label>
                   )}

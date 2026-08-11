@@ -7,8 +7,8 @@ import {
   ScraperProviders,
   SearchCategories,
 } from 'librechat-data-provider';
-import type { SearchApiKeyFormData } from '~/hooks/Plugins/useAuthSearchTool';
 import type { UseFormRegister, UseFormHandleSubmit } from 'react-hook-form';
+import type { SearchApiKeyFormData } from '~/hooks/Plugins/useAuthSearchTool';
 import InputSection, { type DropdownOption } from './InputSection';
 import { useGetStartupConfig } from '~/data-provider';
 import { useLocalize } from '~/hooks';
@@ -273,16 +273,14 @@ export default function ApiKeyDialog({
         }
         selection={{
           selectHandler: handleSubmit(onSubmit),
-          selectClasses: 'bg-green-500 hover:bg-green-600 text-white',
+          /* Canon §6.1: the dialog's primary action is the ink button — the
+             raw green was upstream's and measured 3.2:1 in dark (review 11.08). */
+          selectClasses: 'bg-ink text-ink-label hover:opacity-90',
           selectText: localize('com_ui_save'),
         }}
         buttons={
           isToolAuthenticated && (
-            <Button
-              onClick={onRevoke}
-              className="bg-red-500 text-white hover:bg-red-600"
-              aria-label={localize('com_ui_revoke')}
-            >
+            <Button onClick={onRevoke} variant="destructive" aria-label={localize('com_ui_revoke')}>
               {localize('com_ui_revoke')}
             </Button>
           )

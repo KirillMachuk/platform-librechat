@@ -1,6 +1,10 @@
 import { startTransition } from 'react';
 import { useSetRecoilState } from 'recoil';
-import { TooltipAnchor, Button, Sidebar } from '@librechat/client';
+import { TooltipAnchor, Button } from '@librechat/client';
+/* PanelLeftOpen IS Phosphor's SidebarSimple — the panel glyph the book draws.
+   The old `Sidebar` from @librechat/client was a lucide leftover the icon
+   migration (#319) never reached, which the owner spotted on 11.08. */
+import { PanelLeftOpen } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 import store from '~/store';
@@ -28,7 +32,10 @@ export default function OpenSidebar({ className }: { className?: string }) {
         <Button
           id={OPEN_SIDEBAR_ID}
           size="icon"
-          variant="outline"
+          /* ghost, not outline: the book's header icon button is flat (r8, no
+             border) — the control border made it read as a field/card, the
+             most conspicuous element of the bar (review 11.08). */
+          variant="ghost"
           data-testid="open-sidebar-button"
           aria-label={localize('com_nav_open_sidebar')}
           aria-expanded={false}
@@ -43,12 +50,12 @@ export default function OpenSidebar({ className }: { className?: string }) {
                `h-11 w-11`, а НЕ `size-11`: tailwind-merge 1.14 группы `size-*` не
                знает, и `size-11` не вытеснил бы `size-10` из варианта `icon`
                (Button.tsx) — в разметке остались бы оба класса. */
-            'tap-target h-11 w-11 rounded-xl bg-presentation duration-0 hover:bg-surface-active-alt',
+            'tap-target h-11 w-11 rounded-lg bg-transparent duration-0 hover:bg-surface-active-alt',
             className,
           )}
           onClick={handleClick}
         >
-          <Sidebar className="icon-md" aria-hidden="true" />
+          <PanelLeftOpen className="icon-md" aria-hidden="true" />
         </Button>
       }
     />

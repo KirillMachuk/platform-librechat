@@ -60,7 +60,7 @@ const renderButtons = (props: { isSubmitting: boolean; message: TMessage }) =>
 describe('actions under a user message while a generation runs', () => {
   it('keeps Copy fully visible and clickable', () => {
     renderButtons({ isSubmitting: true, message: userMessage() });
-    const copy = screen.getByTitle('com_ui_copy_to_clipboard');
+    const copy = screen.getByLabelText('com_ui_copy_to_clipboard');
 
     expect(copy).toBeEnabled();
     const classes = copy.className.split(/\s+/);
@@ -70,7 +70,7 @@ describe('actions under a user message while a generation runs', () => {
 
   it('keeps Edit visible — disabled and dimmed, not vanished', () => {
     renderButtons({ isSubmitting: true, message: userMessage() });
-    const edit = screen.getByTitle('com_ui_edit');
+    const edit = screen.getByLabelText('com_ui_edit');
 
     expect(edit).toBeDisabled();
     const classes = edit.className.split(/\s+/);
@@ -82,13 +82,13 @@ describe('actions under a user message while a generation runs', () => {
 describe('actions under a user message at rest', () => {
   it('enables Edit again the moment nothing is streaming', () => {
     renderButtons({ isSubmitting: false, message: userMessage() });
-    expect(screen.getByTitle('com_ui_edit')).toBeEnabled();
-    expect(screen.getByTitle('com_ui_copy_to_clipboard')).toBeEnabled();
+    expect(screen.getByLabelText('com_ui_edit')).toBeEnabled();
+    expect(screen.getByLabelText('com_ui_copy_to_clipboard')).toBeEnabled();
   });
 
   it('still hides Edit for a structural reason: a search result', () => {
     renderButtons({ isSubmitting: false, message: userMessage({ searchResult: true }) });
-    const edit = screen.getByTitle('com_ui_edit');
+    const edit = screen.getByLabelText('com_ui_edit');
     const classes = edit.className.split(/\s+/);
 
     expect(classes).toContain('opacity-0');
