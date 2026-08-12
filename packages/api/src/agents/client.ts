@@ -26,6 +26,35 @@ export const omitTitleOptions: Set<string> = new Set([
   'additionalModelRequestFields',
 ]);
 
+/**
+ * Stops a hybrid model from reasoning over a chat title.
+ *
+ * `omitTitleOptions` drops the Anthropic thinking carriers, but an OpenRouter
+ * hybrid reasons by *default*: `getOpenAIConfig` sets `include_reasoning: true`
+ * for every non-Anthropic OpenRouter model, and the hidden tokens are both billed
+ * and waited for. Measured on `deepseek/deepseek-v4-flash-0731`, 75 title calls
+ * each way: reasoning on burns 728 hidden tokens at an 8.3s median, with 1 call
+ * past the 45s title timeout (that chat keeps the name "New Chat"); reasoning off
+ * burns none at a 0.9s median.
+ *
+ * Only `reasoning.enabled: false` skips the work. `include_reasoning: false`,
+ * `reasoning.exclude: true` and `reasoning.max_tokens: 0` were each measured to
+ * still bill full reasoning tokens — they hide the text, they do not skip it.
+ *
+ * Narrowed to configs that opted reasoning in, so every other provider keeps the
+ * request it already had.
+ */
+export function disableTitleReasoning(clientOptions: {
+  include_reasoning?: boolean;
+  modelKwargs?: Record<string, unknown>;
+}): void {
+  if (clientOptions.include_reasoning !== true) {
+    return;
+  }
+  clientOptions.include_reasoning = false;
+  clientOptions.modelKwargs = { ...clientOptions.modelKwargs, reasoning: { enabled: false } };
+}
+
 export function payloadParser({
   req,
   endpoint,

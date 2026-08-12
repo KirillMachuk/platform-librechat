@@ -15,6 +15,7 @@ const {
   countTokens,
   getBalanceConfig,
   omitTitleOptions,
+  disableTitleReasoning,
   getProviderConfig,
   getMemoryInstructions,
   createTokenCounter,
@@ -1999,6 +2000,7 @@ class AgentClient extends BaseClient {
     if (clientOptions?.modelKwargs?.max_output_tokens != null) {
       delete clientOptions.modelKwargs.max_output_tokens;
     }
+    disableTitleReasoning(clientOptions);
 
     /** `omitTitleOptions` drops the Anthropic `clientOptions` carrier (thinking,
      *  streaming, etc.), which would also drop its `defaultHeaders` — preserve the

@@ -12,6 +12,11 @@ jest.mock('@librechat/agents', () => ({
 
 jest.mock('@librechat/api', () => ({
   ...jest.requireActual('@librechat/api'),
+  /** Overridable per test so a title request can be given a provider config that
+   *  opted reasoning in; delegates to the real implementation otherwise. */
+  getProviderConfig: jest.fn((...args) =>
+    jest.requireActual('@librechat/api').getProviderConfig(...args),
+  ),
   checkAccess: jest.fn(),
   countFormattedMessageTokens: jest.fn(() => 42),
   countTokens: jest.fn((text) => Math.ceil(String(text ?? '').length / 4)),
@@ -223,6 +228,48 @@ describe('AgentClient - titleConvo', () => {
       // Check that generateTitle was called with correct clientOptions
       const generateTitleCall = mockRun.generateTitle.mock.calls[0][0];
       expect(generateTitleCall.clientOptions.model).toBe('gpt-3.5-turbo');
+    });
+
+    it('stops a hybrid title model from reasoning over the title', async () => {
+      const { getProviderConfig } = require('@librechat/api');
+      getProviderConfig.mockReturnValue({
+        getOptions: async () => ({
+          llmConfig: { model: 'deepseek/deepseek-v4-flash-0731', include_reasoning: true },
+        }),
+        overrideProvider: Providers.OPENAI,
+      });
+
+      try {
+        await client.titleConvo({ text: 'Test', abortController: new AbortController() });
+
+        const { clientOptions } = mockRun.generateTitle.mock.calls[0][0];
+        expect(clientOptions.include_reasoning).toBe(false);
+        expect(clientOptions.modelKwargs).toEqual({ reasoning: { enabled: false } });
+      } finally {
+        getProviderConfig.mockImplementation((...args) =>
+          jest.requireActual('@librechat/api').getProviderConfig(...args),
+        );
+      }
+    });
+
+    it('leaves a title model that never opted reasoning in alone', async () => {
+      const { getProviderConfig } = require('@librechat/api');
+      getProviderConfig.mockReturnValue({
+        getOptions: async () => ({ llmConfig: { model: 'gpt-4o-mini' } }),
+        overrideProvider: Providers.OPENAI,
+      });
+
+      try {
+        await client.titleConvo({ text: 'Test', abortController: new AbortController() });
+
+        const { clientOptions } = mockRun.generateTitle.mock.calls[0][0];
+        expect(clientOptions.include_reasoning).toBeUndefined();
+        expect(clientOptions.modelKwargs).toBeUndefined();
+      } finally {
+        getProviderConfig.mockImplementation((...args) =>
+          jest.requireActual('@librechat/api').getProviderConfig(...args),
+        );
+      }
     });
 
     it('preserves Anthropic custom headers on title requests despite omitTitleOptions', async () => {
