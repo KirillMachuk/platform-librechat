@@ -94,6 +94,23 @@ describe('disableTitleReasoning', () => {
     expect(clientOptions.include_reasoning).toBeUndefined();
   });
 
+  /**
+   * Pins the documented gap rather than hiding it: an effort directive with no
+   * `include_reasoning` alongside it cannot be attributed to OpenRouter, and
+   * stripping it would hand a reasoning model back to the provider's default
+   * effort. Whoever changes this has to change the test and read the reason.
+   */
+  it('does not touch an effort directive it cannot attribute to OpenRouter', () => {
+    const clientOptions: { include_reasoning?: boolean; modelKwargs?: Record<string, unknown> } = {
+      modelKwargs: { reasoning: { effort: 'low' } },
+    };
+
+    disableTitleReasoning(clientOptions);
+
+    expect(clientOptions.modelKwargs).toEqual({ reasoning: { effort: 'low' } });
+    expect(clientOptions.include_reasoning).toBeUndefined();
+  });
+
   it('leaves an already-disabled config untouched', () => {
     const clientOptions: { include_reasoning?: boolean; modelKwargs?: Record<string, unknown> } = {
       include_reasoning: false,
