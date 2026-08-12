@@ -38,7 +38,12 @@ import { RecoilRoot } from 'recoil';
 import { renderHook, act } from '@testing-library/react';
 import { QueryKeys, dataService } from 'librechat-data-provider';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useTitleGeneration, queueTitleGeneration, resetTitleGenerationState } from '../queries';
+import {
+  genTitleQueryKey,
+  useTitleGeneration,
+  queueTitleGeneration,
+  resetTitleGenerationState,
+} from '../queries';
 
 const genTitle = dataService.genTitle as jest.Mock;
 const getActiveJobs = dataService.getActiveJobs as jest.Mock;
@@ -142,6 +147,13 @@ describe('useTitleGeneration — request budget on a 404ing endpoint', () => {
       conversationId: 'conv-fallback',
       title: 'New Chat',
     });
+    /* The hook has to let the query go, not sit on an errored one: a conversation
+     * left in the fetch set keeps an observer alive for the rest of the session. */
+    const observers = queryClient
+      .getQueryCache()
+      .find(genTitleQueryKey('conv-fallback'))
+      ?.getObserversCount();
+    expect(observers ?? 0).toBe(0);
     /* Marked processed, so a later re-queue (finalHandler fires after the stream
      * handler already queued the same id) cannot restart the polling. */
     await act(async () => {
