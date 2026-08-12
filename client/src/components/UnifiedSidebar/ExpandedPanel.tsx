@@ -231,7 +231,10 @@ function ExpandedPanel({
         />
       </div>
 
-      <div className="flex flex-col">
+      {/* min-h-0 + overflow: on a short phone viewport THIS block gives way and
+          scrolls, so the chats below keep their guaranteed minimum. On a
+          desktop height nothing changes — the block fits and never scrolls. */}
+      <div className="flex min-h-0 flex-col overflow-y-auto overscroll-contain">
         <NewChatRow />
         <SearchChatsRow />
         {/* The open section is the one whose panel is on screen — the only notion
@@ -246,7 +249,11 @@ function ExpandedPanel({
         ))}
       </div>
 
-      <div className={cn('mt-3 min-h-0 flex-1 overflow-hidden')}>
+      {/* 12.08, владелец (айфон): секции выше зажимали список чатов в ноль —
+          «Чаты» открывались, а строк не было и скролла не было. Списку
+          гарантирован минимум пяти строк; при нехватке высоты сжимается и
+          прокручивается НАВИГАЦИЯ выше, а не чаты. */}
+      <div className={cn('mt-3 min-h-[240px] flex-1 overflow-hidden')}>
         <ConversationsSection />
       </div>
 

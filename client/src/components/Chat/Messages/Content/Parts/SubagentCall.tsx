@@ -455,7 +455,7 @@ export default function SubagentCall({
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          'group my-1.5 flex w-full flex-col gap-1 rounded-lg border border-border-light bg-surface-secondary px-3 py-2 text-left transition hover:bg-surface-tertiary',
+          'group my-1.5 flex w-full flex-col gap-1 rounded-lg border border-border-light bg-surface-primary px-3 py-2 text-left transition [@media(hover:hover)]:hover:bg-surface-hover',
           running && 'animate-pulse-slow',
         )}
         aria-label={headerText}

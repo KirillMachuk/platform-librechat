@@ -186,7 +186,7 @@ export default function FileAuthoringCall({
       <div style={expandStyle}>
         <div className="overflow-hidden" ref={expandRef}>
           {!!preview && (
-            <div className="my-2 overflow-hidden rounded-lg border border-border-light bg-surface-secondary">
+            <div className="my-2 overflow-hidden rounded-lg border border-border-light bg-surface-primary">
               <CodeWindowHeader language={previewIsDiff ? 'diff' : fileName} code={preview} />
               <pre className="max-h-[300px] overflow-auto bg-surface-chat p-4 font-mono text-xs dark:bg-surface-primary-alt">
                 <code className={`hljs language-${previewLang} !whitespace-pre`}>

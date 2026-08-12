@@ -30,7 +30,7 @@ import {
   useAgentToolPermissions,
   useFileHandlingNoChatContext,
 } from '~/hooks';
-import { buildAttachItems, acceptForFileType } from './Files/attachItems';
+import { buildAttachItems, acceptForFileType, DOCUMENTS_ONLY_ACCEPT } from './Files/attachItems';
 import useAttachConfig from './Files/useAttachConfig';
 import { ephemeralAgentByConvoId } from '~/store';
 import { useBadgeRowContext } from '~/Providers';
@@ -252,7 +252,10 @@ function PlusSheet({
             key: 'files',
             label: localize('com_ui_files'),
             icon: <Folder className="icon-lg" aria-hidden="true" />,
-            onClick: () => openPicker({ accept: defaultAccept }),
+            /* Docs-only accept: with image/video types present iOS inserts its
+               own chooser sheet; without them it opens the Files browser
+               directly. Photos and the camera are the two rows above. */
+            onClick: () => openPicker({ accept: DOCUMENTS_ONLY_ACCEPT }),
           },
         ];
 

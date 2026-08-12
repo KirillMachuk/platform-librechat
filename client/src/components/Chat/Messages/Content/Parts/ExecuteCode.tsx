@@ -103,7 +103,7 @@ export default function ExecuteCode({
       </div>
       <div style={expandStyle}>
         <div className="overflow-hidden" ref={expandRef}>
-          <div className="my-2 overflow-hidden rounded-lg border border-border-light bg-surface-secondary">
+          <div className="my-2 overflow-hidden rounded-lg border border-border-light bg-surface-primary">
             {code && <CodeWindowHeader language={lang} code={code} />}
             {code && (
               <pre className="max-h-[300px] overflow-auto bg-surface-chat p-4 font-mono text-xs dark:bg-surface-primary-alt">

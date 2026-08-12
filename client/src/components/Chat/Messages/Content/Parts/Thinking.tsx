@@ -1,6 +1,5 @@
 import { useState, useMemo, memo, useCallback, useRef, useId, type MouseEvent } from 'react';
 import { useAtomValue } from 'jotai';
-import { Clipboard, CheckMark } from '@librechat/client';
 import type { FocusEvent, FC } from 'react';
 import { Lightbulb, ChevronDown } from '~/components/icons';
 import { useLocalize, useExpandCollapse } from '~/hooks';
@@ -32,7 +31,9 @@ export const ThinkingContent: FC<{
 /** The book's «Мысли» card (§6.13, `.think`): ONE hairline box, radius 12,
  *  panel fill, holding both the toggle header and the body. */
 export const ThinkingCard: FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="mb-2.5 overflow-hidden rounded-xl border border-border-light bg-surface-secondary">
+  /* 12.08, владелец: карточка БЕЛАЯ с волосяной рамкой (как «Новый чат»),
+     серой становится только под курсором. */
+  <div className="mb-2.5 overflow-hidden rounded-xl border border-border-light bg-surface-primary transition-colors [@media(hover:hover)]:hover:bg-surface-hover">
     {children}
   </div>
 );
@@ -47,33 +48,13 @@ export const ThinkingButton = memo(
     isExpanded,
     onClick,
     label,
-    content,
     contentId,
-    showCopyButton = true,
   }: {
     isExpanded: boolean;
     onClick: (e: MouseEvent<HTMLButtonElement>) => void;
     label: string;
-    content?: string;
     contentId: string;
-    showCopyButton?: boolean;
   }) => {
-    const localize = useLocalize();
-
-    const [isCopied, setIsCopied] = useState(false);
-
-    const handleCopy = useCallback(
-      (e: MouseEvent<HTMLButtonElement>) => {
-        e.stopPropagation();
-        if (content) {
-          navigator.clipboard.writeText(content);
-          setIsCopied(true);
-          setTimeout(() => setIsCopied(false), 2000);
-        }
-      },
-      [content],
-    );
-
     return (
       <div className="group/thinking flex w-full items-center justify-between gap-2">
         {/* The book's header row (§6.13 `.think>button`): 13-scale t2 text,
@@ -90,44 +71,16 @@ export const ThinkingButton = memo(
         >
           <Lightbulb className="icon-sm shrink-0 text-text-accent" aria-hidden="true" />
           <span className="flex-1 truncate">{label}</span>
+          {/* Kimi (референс владельца 12.08): галочка у правого края, закрытая
+              смотрит ВПРАВО, открытая — вниз; 18px — прежние 14 «еле видно». */}
           <ChevronDown
             className={cn(
-              'h-3.5 w-3.5 shrink-0 text-text-tertiary transition-transform duration-150',
-              isExpanded && 'rotate-180',
+              'h-[18px] w-[18px] shrink-0 text-text-tertiary transition-transform duration-150',
+              !isExpanded && '-rotate-90',
             )}
             aria-hidden="true"
           />
         </button>
-        {content && showCopyButton && (
-          <button
-            type="button"
-            onClick={handleCopy}
-            aria-label={
-              isCopied
-                ? localize('com_ui_copied_to_clipboard')
-                : localize('com_ui_copy_thoughts_to_clipboard')
-            }
-            className={cn(
-              'rounded-lg p-1.5 text-text-secondary-alt',
-              isExpanded
-                ? 'opacity-0 group-focus-within/thinking-container:opacity-100 group-hover/thinking-container:opacity-100'
-                : 'opacity-0',
-              'hover:bg-surface-hover hover:text-text-primary',
-              'focus-visible:opacity-100 focus-visible:outline-none',
-            )}
-          >
-            <span className="sr-only">
-              {isCopied
-                ? localize('com_ui_copied_to_clipboard')
-                : localize('com_ui_copy_thoughts_to_clipboard')}
-            </span>
-            {isCopied ? (
-              <CheckMark className="h-[18px] w-[18px]" aria-hidden="true" />
-            ) : (
-              <Clipboard size="19" aria-hidden="true" />
-            )}
-          </button>
-        )}
       </div>
     );
   },
@@ -163,14 +116,6 @@ const Thinking: React.ElementType = memo(({ children }: { children: React.ReactN
 
   const label = useMemo(() => localize('com_ui_thoughts'), [localize]);
 
-  // Extract text content for copy functionality
-  const textContent = useMemo(() => {
-    if (typeof children === 'string') {
-      return children;
-    }
-    return '';
-  }, [children]);
-
   if (children == null) {
     return null;
   }
@@ -182,7 +127,6 @@ const Thinking: React.ElementType = memo(({ children }: { children: React.ReactN
           isExpanded={isExpanded}
           onClick={handleClick}
           label={label}
-          content={textContent}
           contentId={contentId}
         />
         <div
