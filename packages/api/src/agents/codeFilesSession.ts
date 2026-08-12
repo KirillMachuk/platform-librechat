@@ -131,11 +131,24 @@ export function seedCodeFilesIntoSessions(
  * @param agents - The complete set of code-execution-capable agents in
  *   the run. Caller passes `[primaryConfig, ...agentConfigs.values()]`;
  *   this function recurses into each one's `subagentAgentConfigs`.
+ *
+ * **Always returns a map, empty when there was nothing to seed.** The map is
+ * not only the seed — it is also the run's only memory of which sandbox the
+ * code tools are talking to. `ToolNode` writes the execution `session_id`
+ * returned by call #1 into it (`storeCodeSessionFromResults`) and reads it back
+ * for call #2 (`getCodeSessionContext`), and both of those bail on
+ * `if (!this.sessions) return`. Handing back `undefined` therefore did not mean
+ * "nothing primed", it meant "no session continuity at all": every
+ * `execute_code` / `bash_tool` / file-authoring call in a conversation without
+ * attached files or skills opened a FRESH sandbox, so a file written in one step
+ * was gone by the next. The agent could not converge — it re-created the same
+ * files until the graph recursion limit aborted the whole request. Seeded runs
+ * (attached files, primed skills) never showed it, because those got a map.
  */
 export function buildInitialToolSessions(params: {
   skillSessions?: ToolSessionMap;
   agents: Iterable<CodeFilesAgent | undefined | null>;
-}): ToolSessionMap | undefined {
+}): ToolSessionMap {
   const { skillSessions, agents } = params;
   let sessions = skillSessions;
   const visited = new Set<CodeFilesAgent>();
@@ -165,5 +178,5 @@ export function buildInitialToolSessions(params: {
       }
     }
   }
-  return sessions;
+  return sessions ?? new Map();
 }

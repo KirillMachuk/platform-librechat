@@ -1,4 +1,4 @@
-import { Constants } from '@librechat/agents';
+import { Constants, ToolNode } from '@librechat/agents';
 import type { CodeEnvFile, CodeSessionContext, ToolSessionMap } from '@librechat/agents';
 import {
   buildInitialToolSessions,
@@ -175,12 +175,20 @@ describe('buildInitialToolSessions', () => {
     expect(entry.files).toHaveLength(1);
   });
 
-  it('returns undefined when no skills and no agents have primed files', () => {
+  it('returns an empty map — never undefined — when nothing was primed', () => {
+    /**
+     * This case used to assert `undefined`, which is what the defect was: the
+     * map is also the run's memory of which sandbox the code tools are talking
+     * to, and `ToolNode` drops both of its session hooks when it is absent. The
+     * two cases below drive the real ToolNode to show the difference.
+     */
     const result = buildInitialToolSessions({
       skillSessions: undefined,
       agents: [agent('primary')],
     });
-    expect(result).toBeUndefined();
+
+    expect(result).toBeInstanceOf(Map);
+    expect(result.size).toBe(0);
   });
 
   it('merges primary + handoff agents into one EXECUTE_CODE entry', () => {
@@ -326,5 +334,52 @@ describe('buildInitialToolSessions', () => {
     const entry = result!.get(Constants.EXECUTE_CODE) as CodeSessionContext;
     expect(entry.files).toHaveLength(2);
     expect(entry.files!.map((f) => f.name).sort()).toEqual(['shared.csv', 'top.csv']);
+  });
+
+  /**
+   * The map is not only a seed — it is the run's only memory of which sandbox
+   * the code tools are talking to. These two cases drive the REAL `ToolNode`
+   * rather than a stand-in, because the whole defect lived in two
+   * `if (!this.sessions) return` guards inside it: with no map, nothing recorded
+   * the session id call #1 came back with, so call #2 opened a fresh sandbox and
+   * whatever the agent had written was gone.
+   */
+  /**
+   * Element access rather than dot: both hooks are `private` in ToolNode's
+   * declarations, and they are exactly where the defect lived — a structural
+   * stand-in would assert against a copy of the behaviour instead of the
+   * behaviour. Element access is TypeScript's sanctioned escape hatch and keeps
+   * the real implementation under test.
+   */
+  const execResult = (sessionId: string) => ({
+    results: [
+      {
+        toolCallId: 'call-1',
+        status: 'success' as const,
+        artifact: { session_id: sessionId, files: [] },
+      },
+    ],
+    requests: new Map([['call-1', { name: Constants.EXECUTE_CODE }]]),
+  });
+
+  it('lets ToolNode carry the sandbox from one tool call to the next with nothing primed', () => {
+    const sessions = buildInitialToolSessions({ agents: [agent('primary')] });
+    const node = new ToolNode({ tools: [], sessions });
+
+    expect(node['getCodeSessionContext']()).toBeUndefined();
+
+    const { results, requests } = execResult('SANDBOX-1');
+    node['storeCodeSessionFromResults'](results, requests);
+
+    expect(node['getCodeSessionContext']()).toEqual({ session_id: 'SANDBOX-1' });
+  });
+
+  it('pins the upstream guard this fix exists for: no map, no continuity', () => {
+    const node = new ToolNode({ tools: [], sessions: undefined });
+
+    const { results, requests } = execResult('SANDBOX-1');
+    node['storeCodeSessionFromResults'](results, requests);
+
+    expect(node['getCodeSessionContext']()).toBeUndefined();
   });
 });
