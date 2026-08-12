@@ -47,6 +47,15 @@ interface BuildAttachItemsArgs {
   codeEnabled: boolean;
 }
 
+/** Document types only — no image/video/audio classes. iOS Safari shows its
+ *  own «Медиатека / Снять / Выбрать файлы» sheet whenever the accept list
+ *  includes image or video types; a docs-only list opens the Files browser
+ *  DIRECTLY (owner, 12.08: the double chooser on the phone). Photos keep
+ *  image/*: the web has no API to jump straight into the photo library, that
+ *  step is Safari's own. */
+export const DOCUMENTS_ONLY_ACCEPT =
+  '.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.md,.rtf,.json,.xml,.html,.odt,.ods,.odp,.epub';
+
 /** Accept preset for a picker, shared by the menu and the sheet. */
 export function acceptForFileType(
   fileType: FileUploadType | undefined,

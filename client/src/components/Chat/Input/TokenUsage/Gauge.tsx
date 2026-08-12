@@ -12,9 +12,12 @@ interface GaugeProps {
   indeterminate: boolean;
 }
 
+/* 12.08, владелец: заполнение — фирменный петроль на СВЕТЛОЙ дорожке;
+   тёмно-серое на тёмно-сером не читалось. Жёлтый/красный остаются
+   семантической эскалацией заполненности. */
 function getStrokeClass(percent: number, indeterminate: boolean): string {
   if (indeterminate) {
-    return 'stroke-text-secondary';
+    return 'stroke-text-tertiary';
   }
   if (percent > 90) {
     return 'stroke-red-500';
@@ -22,7 +25,7 @@ function getStrokeClass(percent: number, indeterminate: boolean): string {
   if (percent > 75) {
     return 'stroke-yellow-500';
   }
-  return 'stroke-text-secondary';
+  return 'stroke-[var(--c-acc)]';
 }
 
 export default function Gauge({ percent, indeterminate }: GaugeProps) {
@@ -43,7 +46,7 @@ export default function Gauge({ percent, indeterminate }: GaugeProps) {
         r={RADIUS}
         fill="transparent"
         strokeWidth={STROKE_WIDTH}
-        className="stroke-border-heavy"
+        className="stroke-border-light"
         strokeDasharray={indeterminate ? '2 4' : undefined}
       />
       <circle

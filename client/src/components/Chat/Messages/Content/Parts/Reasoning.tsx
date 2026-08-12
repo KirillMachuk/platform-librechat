@@ -90,7 +90,6 @@ const Reasoning = memo(({ reasoning, isLast }: ReasoningProps) => {
             isExpanded={isExpanded}
             onClick={handleClick}
             label={label}
-            content={reasoningText}
             contentId={contentId}
           />
           <div

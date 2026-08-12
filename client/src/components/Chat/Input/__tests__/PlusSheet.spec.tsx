@@ -137,6 +137,22 @@ describe('the plus sheet', () => {
     expect(click).toHaveBeenCalledTimes(2);
   });
 
+  /* 12.08, владелец: iOS вставляет свой выбор «Медиатека/Снять/Файлы», когда в
+   * accept есть image/video; список из ОДНИХ документов открывает Файлы сразу.
+   * Сторож держит ровно момент клика — после него accept сбрасывается. */
+  it('keeps image types out of the Files tile, so iOS opens its file browser directly', async () => {
+    const { container } = renderSheet();
+    await openSheet();
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const click = jest.spyOn(input, 'click').mockImplementation(() => {
+      expect(input.accept).toContain('.pdf');
+      expect(input.accept).not.toMatch(/image|video|audio|heic|heif/);
+      expect(input.getAttribute('capture')).toBeNull();
+    });
+    fireEvent.click(screen.getByText('com_ui_files'));
+    expect(click).toHaveBeenCalledTimes(1);
+  });
+
   it('drives a tool toggle from its switch row', async () => {
     renderSheet();
     await openSheet();

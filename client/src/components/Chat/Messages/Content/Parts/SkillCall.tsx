@@ -62,7 +62,7 @@ export default function SkillCall({
       <div style={expandStyle}>
         <div className="overflow-hidden" ref={expandRef}>
           {hasOutput && (
-            <div className="my-2 overflow-hidden rounded-lg border border-border-light bg-surface-secondary">
+            <div className="my-2 overflow-hidden rounded-lg border border-border-light bg-surface-primary">
               <div className="bg-surface-primary-alt p-4 text-xs dark:bg-transparent">
                 <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-text-secondary">
                   {localize('com_ui_output')}
