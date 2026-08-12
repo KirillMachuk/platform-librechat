@@ -168,6 +168,21 @@ describe('useTitleGeneration — request budget on a 404ing endpoint', () => {
     expect(genTitle).toHaveBeenCalledTimes(2 * ATTEMPTS_PER_CYCLE);
   });
 
+  it('keeps the second cycle in final mode, where no title event can follow', async () => {
+    /* `final` generates the title only after the job completes and the stream is
+     * closed, so nothing can be pushed over SSE: the poll is the sole channel and
+     * has to outlast a title model running to its long timeout. */
+    mockTiming = 'final';
+    genTitle.mockRejectedValue(httpError(404));
+
+    await startPolling('conv-final');
+    await tick(120_000);
+    expect(genTitle).toHaveBeenCalledTimes(2 * ATTEMPTS_PER_CYCLE);
+
+    await tick(5 * 60_000);
+    expect(genTitle).toHaveBeenCalledTimes(2 * ATTEMPTS_PER_CYCLE);
+  });
+
   it('does not retry a non-404 failure', async () => {
     genTitle.mockRejectedValue(httpError(500));
 

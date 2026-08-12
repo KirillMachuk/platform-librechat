@@ -97,6 +97,16 @@ export function useTitleGeneration(enabled = true) {
   const { data: startupConfig } = useGetStartupConfig();
   /** Defaults to immediate until startup config loads. */
   const timing = startupConfig?.titleGenerationTiming ?? 'immediate';
+  /**
+   * Only `immediate` mode has a live channel for a late title: the server starts
+   * the title in parallel with the response and holds the stream open until it
+   * settles, regenerating and pushing it over SSE if the first attempt came back
+   * empty (`api/server/controllers/agents/request.js`, the recovery before
+   * `acceptsTitleEvents` is cleared). Every other timing generates the title
+   * *after* the job is completed and the stream closed, so nothing can be emitted
+   * and the `/gen_title` poll is the only way the title reaches the row.
+   */
+  const titleArrivesOverSSE = timing === 'immediate';
 
   const [queueVersion, setQueueVersion] = useState(0);
   const [readyToFetch, setReadyToFetch] = useState<string[]>([]);
@@ -224,19 +234,35 @@ export function useTitleGeneration(enabled = true) {
           // transition re-promotes a fresh fetch (instead of busy-looping).
           deferredTitles.add(conversationId);
           queryClient.removeQueries(genTitleQueryKey(conversationId));
+          setReadyToFetch((prev) => prev.filter((id) => id !== conversationId));
+        } else if (!titleArrivesOverSSE && !deferredTitles.has(conversationId)) {
+          // No live channel in this mode, so the poll is the only way a slow title
+          // reaches the row before a reload: keep the historical second cycle,
+          // which covers a title model running to its long (reasoning) timeout.
+          // Polling has stopped (no re-promotion), so reset the query in place —
+          // `resetQueries` refetches active observers with a fresh retry budget,
+          // unlike `removeQueries`, which leaves the observer in error state.
+          deferredTitles.add(conversationId);
+          queryClient.resetQueries(genTitleQueryKey(conversationId));
         } else {
           // A full retry cycle ran with the stream already over: the title is
-          // absent, not late. Stop here — a second cycle buys nothing (a title
-          // arriving later still reaches the row over SSE and is persisted by
-          // the server), and on a stand with title generation off it doubled
-          // every new conversation's cost to 8 requests / ~2.6 min of 404s,
-          // each one held ~15.5s by the server's own wait loop.
+          // absent, not late. Stop here — a second cycle buys nothing, and on a
+          // stand with title generation off it doubled every new conversation's
+          // cost to 8 requests / ~2.6 min of 404s, each one held ~15.5s by the
+          // server's own wait loop.
           markTitleGenerationProcessed(conversationId);
+          setReadyToFetch((prev) => prev.filter((id) => id !== conversationId));
         }
-        setReadyToFetch((prev) => prev.filter((id) => id !== conversationId));
       }
     });
-  }, [titleQueries, readyToFetch, queryClient, activeJobIds, applyTitleToActiveConvo]);
+  }, [
+    titleQueries,
+    readyToFetch,
+    queryClient,
+    activeJobIds,
+    applyTitleToActiveConvo,
+    titleArrivesOverSSE,
+  ]);
 }
 
 /**
