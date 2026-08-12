@@ -1,16 +1,13 @@
 import { useMemo, useCallback, useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { EModelEndpoint } from 'librechat-data-provider';
 import {
-  getIconEndpoint,
-  getEntity,
   getModelSpec,
   createConfigHtmlSanitizer,
   CONFIG_HTML_MEDIA_TAGS,
   CONFIG_HTML_MEDIA_ATTR,
 } from '~/utils';
-import { useChatContext, useAgentsMapContext, useAssistantsMapContext } from '~/Providers';
-import { useGetEndpointsQuery, useGetStartupConfig } from '~/data-provider';
+import { useGetStartupConfig } from '~/data-provider';
 import { useLocalize, useAuthContext } from '~/hooks';
+import { useChatContext } from '~/Providers';
 
 /** Canon §3: the empty-chat greeting is 22/500 on a phone and 21/500 on the
  *  desktop scale. Long agent names still step down rather than wrap into a
@@ -33,10 +30,7 @@ function getTextSizeClass(text: string | undefined | null) {
 
 export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: boolean }) {
   const { conversation } = useChatContext();
-  const agentsMap = useAgentsMapContext();
-  const assistantMap = useAssistantsMapContext();
   const { data: startupConfig } = useGetStartupConfig();
-  const { data: endpointsConfig } = useGetEndpointsQuery();
   const { user } = useAuthContext();
   const localize = useLocalize();
 
@@ -46,36 +40,15 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
   const contentRef = useRef<HTMLDivElement>(null);
   const greetingRef = useRef<HTMLSpanElement>(null);
 
-  const endpointType = useMemo(() => {
-    let ep = conversation?.endpoint ?? '';
-    if (ep === EModelEndpoint.azureOpenAI) {
-      ep = EModelEndpoint.openAI;
-    }
-    return getIconEndpoint({
-      endpointsConfig,
-      iconURL: conversation?.iconURL,
-      endpoint: ep,
-    });
-  }, [conversation?.endpoint, conversation?.iconURL, endpointsConfig]);
-
-  const { entity, isAgent, isAssistant } = getEntity({
-    endpoint: endpointType,
-    agentsMap,
-    assistantMap,
-    agent_id: conversation?.agent_id,
-    assistant_id: conversation?.assistant_id,
-  });
-
   const modelSpec = useMemo(
     () => getModelSpec({ specName: conversation?.spec, startupConfig }),
     [conversation?.spec, startupConfig],
   );
 
-  const brandedSpecLabel = modelSpec?.showOnLanding ? modelSpec.label : '';
-  const brandedSpecDescription = (modelSpec?.showOnLanding && modelSpec.description) || '';
-  const name = entity?.name ?? brandedSpecLabel;
-  const description =
-    (entity?.description || brandedSpecDescription || conversation?.greeting) ?? '';
+  /* Под приветствием живёт ТОЛЬКО описание карточки с явным showOnLanding
+     (осознанный брендинг из конфига). Описание агента и greeting диалога на
+     лендинг больше не попадают — это они писали «авыа» на пустом экране. */
+  const description = (modelSpec?.showOnLanding && modelSpec.description) || '';
   const descriptionIsHTML = description.trim().startsWith('<');
 
   const sanitizeDescription = useMemo(
@@ -147,7 +120,7 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
     const observer = new ResizeObserver(measure);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [name, greetingText, handleLineCountChange]);
+  }, [greetingText, handleLineCountChange]);
 
   return (
     <div
@@ -162,21 +135,14 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
       className={`flex h-full transform-gpu flex-col items-center justify-center transition-all duration-200 ${centerFormOnLanding ? 'max-h-full pt-14 sm:max-h-0 sm:pb-16 sm:pt-0' : 'max-h-full pt-14 md:pt-[52px]'} ${getDynamicMargin}`}
     >
       <div ref={contentRef} className="flex flex-col items-center gap-0 p-2">
-        {((isAgent || isAssistant) && name) || name ? (
-          <div className="flex flex-col items-center gap-0 p-2">
-            <h1
-              className={`${getTextSizeClass(name)} text-center font-medium tracking-[-0.02em] text-text-primary`}
-            >
-              <span ref={greetingRef}>{name}</span>
-            </h1>
-          </div>
-        ) : (
-          <h1
-            className={`${getTextSizeClass(greetingText)} text-center font-medium tracking-[-0.02em] text-text-primary`}
-          >
-            <span ref={greetingRef}>{greetingText}</span>
-          </h1>
-        )}
+        {/* ВСЕГДА продуктовая строка (владелец, 12.08: «Всегда должно быть
+            С чего начнём над композером») — имя выбранного агента больше не
+            подменяет приветствие; кто выбран, видно в пилюле селектора. */}
+        <h1
+          className={`${getTextSizeClass(greetingText)} text-center font-medium tracking-[-0.02em] text-text-primary`}
+        >
+          <span ref={greetingRef}>{greetingText}</span>
+        </h1>
         {description &&
           (descriptionIsHTML ? (
             <div

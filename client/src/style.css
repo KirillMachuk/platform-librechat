@@ -1542,6 +1542,9 @@ body {
   font-size: 15px;
   line-height: 1.6;
   color: var(--c-t1);
+  /* The page ground = the app canvas (--c-panel): white body showed through
+     Safari's overscroll and its bottom bar picked it up (owner, 12.08). */
+  background-color: var(--c-panel);
 }
 
 @media (min-width: 768px) {
@@ -1552,9 +1555,9 @@ body {
 
 .dark body,
 .dark html {
-  /* The page ground is the bg token, not a raw grey — every visible surface
-     sits on --c-bg and the body must agree with them (review 11.08). */
-  background-color: var(--c-bg);
+  /* Same canvas token as the light theme's body — Safari's bars and the
+     overscroll must continue the app ground in both themes. */
+  background-color: var(--c-panel);
 }
 
 #__next,
@@ -2699,10 +2702,6 @@ html {
 .select-item[data-active-item] {
   background-color: var(--surface-hover);
   color: var(--text-primary);
-}
-
-.account-settings-popover .select-item[data-active-item] {
-  box-shadow: 0 0 0 2px hsl(var(--ring));
 }
 
 .popover-ui[data-enter] {

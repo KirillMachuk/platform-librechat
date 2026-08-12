@@ -303,12 +303,8 @@
   outline: none !important;
 }
 
-p.whitespace-pre-wrap a, li a {
-  color: #0066cc;
-  text-decoration: underline;
-  font-weight: bold;
-}
-
-.dark p.whitespace-pre-wrap a, .dark li a {
-  color: #52a0ff;
-}
+/* The legacy #0066cc rule that painted links inside list items and pre-wrap
+   paragraphs blue AND bold is gone (owner, 12.08: «иногда синего цвета и
+   жирный шрифт»). Its (0,1,2) specificity beat the canon's zero-specificity
+   `.prose :where(a)` accent, so the SAME message showed two link styles.
+   Links are owned by the prose rule: accent, weight 400, underline. */

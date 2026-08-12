@@ -109,7 +109,7 @@ export function Segmented<T extends string>({
                  Прежний серый тинт актива читался наоборот — как выключенный. */
               isActive
                 ? 'border-border-light bg-surface-primary text-text-primary'
-                : 'border-transparent text-text-secondary hover:bg-surface-active hover:text-text-primary',
+                : 'border-transparent text-text-secondary [@media(hover:hover)]:hover:bg-surface-active [@media(hover:hover)]:hover:text-text-primary',
             )}
           >
             {item.label}

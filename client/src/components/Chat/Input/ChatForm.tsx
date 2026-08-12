@@ -254,7 +254,7 @@ const ChatForm = memo(function ChatForm({
            measured live 11.08) lands the box at 130 exactly. The phone keeps
            the single 44 row. Collapse wins: an unconditional min would hold
            the collapsed box open. */
-        isCollapsed ? 'max-h-[52px]' : 'max-h-[45vh] md:min-h-[76px] md:max-h-[55vh]',
+        isCollapsed ? 'max-h-[52px]' : 'min-h-[76px] max-h-[45vh] md:max-h-[55vh]',
         isMoreThanThreeRows ? 'ps-3.5 md:ps-4' : 'ps-3.5 pe-2 md:ps-4 md:pe-2.5',
       ),
     [isCollapsed, isMoreThanThreeRows],

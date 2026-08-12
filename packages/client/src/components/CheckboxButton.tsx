@@ -9,14 +9,18 @@ import { cn } from '~/utils';
  *
  *  §6.3 ред. 11.08-4 (владелец, референс Perplexity): пассивный чип — ЗАЛИВКА
  *  (panel), без рамки и тени, под курсором слегка темнеет. */
+/* Hover only where a cursor exists: on touch, iOS keeps :hover armed after a
+ * tap, and when toggling a chip off collapses the row, the neighbour sliding
+ * under the finger wore the hover fill until the next tap (owner, 12.08:
+ * «предыдущая становится светло-серой»). */
 export const CHIP_BASE =
-  'group relative inline-flex items-center justify-center gap-1.5 rounded-full border border-transparent bg-surface-primary-alt text-sm font-medium text-text-secondary transition-all hover:bg-surface-active hover:text-text-primary';
+  'group relative inline-flex items-center justify-center gap-1.5 rounded-full border border-transparent bg-surface-primary-alt text-sm font-medium text-text-secondary transition-all [@media(hover:hover)]:hover:bg-surface-active [@media(hover:hover)]:hover:text-text-primary';
 
 /** The enabled chip is a CARD: card fill + hairline border + t1 — the exact
  *  recipe the sidebar's «Новый чат» wears (the owner named it as the model).
  *  The grey "active" fill of round 3 read backwards — as a disabled state. */
 export const CHIP_CHECKED =
-  'border-border-light bg-surface-primary text-text-primary hover:bg-surface-hover';
+  'border-border-light bg-surface-primary text-text-primary [@media(hover:hover)]:hover:bg-surface-hover';
 
 const CheckboxButton: React.ForwardRefExoticComponent<
   {
