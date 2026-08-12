@@ -189,7 +189,6 @@ function PlusSheet({
       codeAllowedByAgent,
     ],
   );
-  const defaultItem = attachItems.find((item) => item.key === 'default');
   const modeItems = attachMode === 'menu' ? attachItems.filter((i) => i.key !== 'default') : [];
 
   const openPicker = useCallback(
@@ -226,11 +225,6 @@ function PlusSheet({
     },
     [setEphemeralAgent],
   );
-
-  /** «Файлы» behaves exactly like the chat's own attach button: no filter for
-   *  the direct paperclip, the provider's default accept for an agent. */
-  const defaultAccept =
-    attachMode === 'menu' ? acceptForFileType(defaultItem?.fileType, endpointFileConfig) : '';
 
   const tiles =
     attachMode == null

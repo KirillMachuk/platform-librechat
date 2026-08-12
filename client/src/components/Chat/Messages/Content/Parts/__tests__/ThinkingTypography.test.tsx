@@ -38,13 +38,7 @@ describe('reasoning block typography (canon: one step below the conversation)', 
   it('ThinkingButton header wears the same derived size', () => {
     render(
       <RecoilRoot>
-        <ThinkingButton
-          isExpanded={false}
-          onClick={jest.fn()}
-          label="Мысли"
-          contentId="think-1"
-          showCopyButton={false}
-        />
+        <ThinkingButton isExpanded={false} onClick={jest.fn()} label="Мысли" contentId="think-1" />
       </RecoilRoot>,
     );
     const button = screen.getByRole('button', { name: /Мысли/ });
