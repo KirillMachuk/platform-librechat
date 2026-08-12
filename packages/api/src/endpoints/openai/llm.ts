@@ -345,6 +345,12 @@ function applyOpenRouterReasoningConfig({
      * so after a file_search/tool round-trip Anthropic rejects the follow-up
      * request and OpenRouter surfaces it as a generic "Provider returned error".
      * Non-Anthropic providers keep the default so their reasoning still streams.
+     *
+     * This assignment is the only one in the codebase, and the title path leans on
+     * that: `disableTitleReasoning` treats `include_reasoning === true` as proof the
+     * request speaks OpenRouter's reasoning dialect before it adds a directive of
+     * its own. Setting the flag anywhere outside an OpenRouter config would send
+     * `reasoning: { enabled: false }` to a provider that never agreed to it.
      */
     const isAnthropic =
       typeof model === 'string' && normalizeOpenRouterModel(model).startsWith('anthropic/');

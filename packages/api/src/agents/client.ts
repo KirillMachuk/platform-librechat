@@ -42,7 +42,19 @@ export const omitTitleOptions: Set<string> = new Set([
  * still bill full reasoning tokens — they hide the text, they do not skip it.
  *
  * Narrowed to configs that opted reasoning in, so every other provider keeps the
- * request it already had.
+ * request it already had: `include_reasoning` is assigned nowhere but
+ * `applyOpenRouterReasoningConfig`, which only runs for OpenRouter, and that is
+ * what makes it safe to add an OpenRouter-dialect directive here.
+ *
+ * KNOWN GAP, deliberate: an admin `reasoning_effort` default (endpoint
+ * `customParams.paramDefinitions` or `addParams`) reaches the title request too,
+ * and it sends `applyOpenRouterReasoningConfig` down its effort branch, which
+ * sets `modelKwargs.reasoning = { effort }` and never sets `include_reasoning` —
+ * so titles would reason again. Stripping an effort directive blindly is not the
+ * fix: on a model that reasons unconditionally, removing an explicit `low` hands
+ * the request back to the provider's default effort, which is the same regression
+ * pointing the other way. Closing it properly needs the caller to say which
+ * dialect the endpoint speaks.
  */
 export function disableTitleReasoning(clientOptions: {
   include_reasoning?: boolean;
