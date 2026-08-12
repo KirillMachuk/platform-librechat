@@ -260,7 +260,7 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | Behavior | Level | Owning test | Status |
 |---|---|---|---|
 | Model selector lists and switches endpoints | e2e | `e2e/specs/mock/model-switching.spec.ts` | covered |
-| Model spec branding replaces the greeting and shows in the selector | e2e | `e2e/specs/mock/model-spec-branding.spec.ts#branded spec replaces the greeting with its label and rendered description` | covered |
+| Model spec branding renders below the canonical greeting and in the selector | e2e | `e2e/specs/mock/model-spec-branding.spec.ts#branded spec keeps the greeting and renders its description below` | covered |
 | Model spec conversation starters render, and clicking one sends it | e2e | `e2e/specs/mock/model-spec-starters.spec.ts#clicking a starter submits it as the first message` | covered |
 | A model spec stream keeps its reply across navigation, abort and reload | e2e | `e2e/specs/mock/model-spec-icons.spec.ts#keeps the assistant message when resuming an active stream after navigation` | covered |
 | Default model selection rules | unit | `client/src/utils/__tests__/getDefaultModelSpec.test.ts` | covered |

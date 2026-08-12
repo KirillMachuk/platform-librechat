@@ -1,6 +1,6 @@
 import React from 'react';
-import { FileSources } from 'librechat-data-provider';
 import { useToastContext } from '@librechat/client';
+import { FileSources } from 'librechat-data-provider';
 import { useCodeOutputDownload, useFileDownload } from '~/data-provider';
 import { isHttpDownloadTarget, triggerDownload } from '~/utils';
 
@@ -86,7 +86,7 @@ const LogLink: React.FC<LogLinkProps> = ({ href, filename, file_id, user, source
       onClick={handleDownload}
       target="_blank"
       rel="noopener noreferrer"
-      className="!text-blue-400 visited:!text-purple-400 hover:underline"
+      className="text-text-accent underline underline-offset-2 hover:opacity-80"
     >
       {children}
     </a>

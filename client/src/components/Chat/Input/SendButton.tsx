@@ -26,7 +26,12 @@ const SubmitButton = React.memo(
             className={cn(
               /* Канон §6.13: чернильный круг 36 на десктопе и 38 на телефоне,
                  иконка 20. До этого круг был 36 на обеих ширинах с иконкой 24. */
-              'tap-target flex size-[38px] items-center justify-center rounded-full bg-text-primary text-text-primary outline-offset-4 transition-all duration-200 disabled:cursor-not-allowed disabled:text-text-secondary disabled:opacity-45 md:size-9',
+              /* Чернильный круг, стрелка цвета БУМАГИ (ink-label: белая в светлой,
+                 тёмная в тёмной — слова владельца 12.08). Прежний text-text-primary
+                 рисовал чернила по чернилам: у старой SendIcon был свой белый класс,
+                 и подмена глифа на голый ArrowUp это вскрыла. У выключенной кнопки
+                 стрелка та же — состояние говорит прозрачность, не цвет. */
+              'tap-target flex size-[38px] items-center justify-center rounded-full bg-text-primary text-ink-label outline-offset-4 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-45 md:size-9',
             )}
             data-testid="send-button"
             type="submit"
