@@ -71,6 +71,10 @@
     "fit": "exact",
     "to": "bookmark"
   },
+  "BookmarkFilled": {
+    "fit": "exact",
+    "to": "bookmark-filled"
+  },
   "BookmarkPlusIcon": {
     "fit": "close",
     "to": "bookmark-plus"
@@ -146,6 +150,10 @@
   "ChevronUp": {
     "fit": "exact",
     "to": "chevron-up"
+  },
+  "ChevronsUpDown": {
+    "fit": "close",
+    "to": "selector"
   },
   "Circle": {
     "fit": "exact",

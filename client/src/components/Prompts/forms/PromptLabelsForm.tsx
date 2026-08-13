@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Input } from '@librechat/client';
-import { Cross1Icon } from '@radix-ui/react-icons';
 import type { TPrompt } from 'librechat-data-provider';
 import { useUpdatePromptLabels } from '~/data-provider';
+import { X } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 const PromptLabelsForm = ({ selectedPrompt }: { selectedPrompt?: TPrompt }) => {
@@ -62,7 +62,7 @@ const PromptLabelsForm = ({ selectedPrompt }: { selectedPrompt?: TPrompt }) => {
                 className="cursor-pointer"
                 aria-label={`${localize('com_ui_delete')} ${label}`}
               >
-                <Cross1Icon aria-hidden="true" />
+                <X aria-hidden="true" />
               </button>
             </span>
           ))

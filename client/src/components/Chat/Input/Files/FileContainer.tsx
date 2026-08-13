@@ -1,8 +1,8 @@
 import type { TFile } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { ExtendedFile } from '~/common';
+import { fileTypeMeta, fileBadge } from './typeMeta';
 import { getFileType, cn } from '~/utils';
-import { fileTypeMeta } from './typeMeta';
 import FilePreview from './FilePreview';
 import { useLocalize } from '~/hooks';
 import RemoveFile from './RemoveFile';
@@ -17,6 +17,7 @@ const FileContainer = ({
   onDelete,
   onClick,
   trailing,
+  pressed,
 }: {
   file: Partial<ExtendedFile | TFile>;
   overrideType?: string;
@@ -42,25 +43,40 @@ const FileContainer = ({
   /** Rendered at the card's right edge, revealed on hover/focus — the chat
    *  passes its download button here (owner 12.08-2, скрины 3-4). */
   trailing?: ReactNode;
+  /** Toggle semantics for cards that open a panel (the artifact card):
+   *  aria-pressed mirrors «открытая держит серый». */
+  pressed?: boolean;
 }) => {
   const localize = useLocalize();
   const fileType = getFileType(overrideType ?? file.type);
   const typeLabel = localize(fileTypeMeta(overrideType ?? file.type ?? '').labelKey);
   const visibleName = displayName ?? file.filename ?? '';
+  /* 12.08-3, владелец: вторая строка — расширение + вес («DOCX 18.5 KB»);
+     когда ни того ни другого не знаем, остаётся имя типа. bytes лежит в
+     TFile.bytes у сохранённых файлов и в ExtendedFile.size у загружаемых. */
+  const { extension, size } = fileBadge(
+    file.filename,
+    (file as { bytes?: number }).bytes ?? (file as { size?: number }).size,
+  );
+  const badge = [extension, size].filter(Boolean).join(' ');
 
   return (
     <div
-      className={cn('group relative inline-block text-sm text-text-primary', containerClassName)}
+      className={cn(
+        'group/card relative inline-block text-sm text-text-primary',
+        containerClassName,
+      )}
     >
       <button
         type="button"
         onClick={onClick}
+        aria-pressed={pressed}
         aria-label={visibleName}
         className={cn(
           /* Канон §6.13 ред. 12.08-2: карточка файла — card + hairline, под
              курсором hover; серых заливок в покое больше нет. */
           'relative overflow-hidden rounded-xl border border-border-light bg-surface-primary transition-colors',
-          '[@media(hover:hover)]:group-hover:bg-surface-hover',
+          '[@media(hover:hover)]:group-hover/card:bg-surface-hover',
           buttonClassName,
         )}
       >
@@ -74,8 +90,8 @@ const FileContainer = ({
               {subtitle != null ? (
                 subtitle
               ) : (
-                <div className="truncate text-text-secondary" title={typeLabel}>
-                  {typeLabel}
+                <div className="truncate text-text-secondary" title={badge || typeLabel}>
+                  {badge || typeLabel}
                 </div>
               )}
             </div>
@@ -83,7 +99,7 @@ const FileContainer = ({
         </div>
       </button>
       {trailing != null && (
-        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
+        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity focus-within:opacity-100 group-hover/card:opacity-100 [@media(hover:none)]:opacity-100">
           {trailing}
         </span>
       )}

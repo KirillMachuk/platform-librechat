@@ -30,6 +30,7 @@ jest.mock('~/utils', () => ({
     log: jest.fn(),
   },
   getCachedPreview: jest.fn(() => undefined),
+  cn: (...classes: Array<string | false | undefined>) => classes.filter(Boolean).join(' '),
 }));
 
 const mockShowToast = jest.fn();

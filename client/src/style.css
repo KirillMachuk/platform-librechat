@@ -1465,6 +1465,17 @@ button {
   --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
 }
 
+/* Лента, которая прокручивается вбок БЕЗ полосы (чипы и файлы композера,
+   12.08-3): полоса под пальцем на телефоне и под курсором на десктопе —
+   шум; прокрутка остаётся жестом и колесом. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Webkit scrollbar */
 ::-webkit-scrollbar {
   height: 0.1em;

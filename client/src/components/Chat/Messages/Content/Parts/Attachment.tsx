@@ -19,15 +19,16 @@ import {
   ChevronDown,
   Files as FilesIcon,
 } from '~/components/icons';
+import FilePreviewDialog from '~/components/Chat/Messages/Content/FilePreviewDialog';
 import { useLocalize, useAttachmentPreviewSync, useExpandCollapse } from '~/hooks';
+import CardDownloadButton from '~/components/Chat/Input/Files/CardDownloadButton';
 import FileContainer from '~/components/Chat/Input/Files/FileContainer';
 import { fileToArtifact, TOOL_ARTIFACT_TYPES } from '~/utils/artifacts';
-import FilePreview from '~/components/Chat/Input/Files/FilePreview';
 import Image from '~/components/Chat/Messages/Content/Image';
 import ToolMermaidArtifact from './ToolMermaidArtifact';
 import ToolArtifactCard from './ToolArtifactCard';
 import { useAttachmentLink } from './LogLink';
-import { cn, getFileType } from '~/utils';
+import { cn } from '~/utils';
 
 const COLLAPSED_MAX_HEIGHT = 320;
 
@@ -66,59 +67,35 @@ const PreviewPlaceholderCard = memo(
       user: file.user,
       source: file.source,
     });
-    const fileType = getFileType('artifact');
     const visibleFilename = displayFilename(attachment.filename);
     const subtitleText =
       status === 'pending'
         ? localize('com_ui_preview_preparing')
         : localize('com_ui_preview_failed');
     return (
-      <div className="group relative my-2 inline-flex max-w-fit items-stretch gap-px overflow-hidden rounded-xl text-sm text-text-primary shadow-sm">
-        <div
-          aria-disabled="true"
-          aria-busy={status === 'pending'}
-          className="relative overflow-hidden rounded-l-xl border-border-light bg-surface-tertiary"
-          title={status === 'failed' ? (previewError ?? subtitleText) : undefined}
-        >
-          <div className="w-fit p-2">
-            <div className="flex flex-row items-center gap-2">
-              {/* Don't pass `file` here — it triggers `SourceIcon`'s
-                  Terminal overlay for code-exec files (matches the
-                  `metadata.fileIdentifier` marker), which is the
-                  download-chip look. The artifact card doesn't show
-                  that overlay; the placeholder shouldn't either, so
-                  the pending→resolved transition is visually seamless. */}
-              <FilePreview fileType={fileType} className="relative" />
-              <div className="overflow-hidden text-left">
-                <div className="truncate font-medium" title={visibleFilename}>
-                  {visibleFilename}
-                </div>
-                <div className="flex items-center gap-1.5 truncate text-xs text-text-secondary">
-                  {status === 'pending' ? (
-                    <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <AlertCircle className="h-3 w-3 shrink-0" aria-hidden="true" />
-                  )}
-                  <span className="truncate">{subtitleText}</span>
-                </div>
-              </div>
-            </div>
+      <FileContainer
+        file={attachment}
+        overrideType={attachment.filename?.split('.').pop()}
+        displayName={visibleFilename}
+        containerClassName="my-2 max-w-fit"
+        buttonClassName="cursor-default"
+        subtitle={
+          <div className="flex items-center gap-1.5 truncate text-xs text-text-secondary">
+            {status === 'pending' ? (
+              <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden="true" />
+            ) : (
+              <AlertCircle className="h-3 w-3 shrink-0" aria-hidden="true" />
+            )}
+            <span
+              className="truncate"
+              title={status === 'failed' ? (previewError ?? undefined) : undefined}
+            >
+              {subtitleText}
+            </span>
           </div>
-        </div>
-        <button
-          type="button"
-          onClick={handleDownload}
-          aria-label={`${localize('com_ui_download')} ${visibleFilename}`}
-          title={localize('com_ui_download')}
-          className={cn(
-            'flex shrink-0 items-center justify-center px-3 transition-colors duration-200',
-            'rounded-r-xl bg-surface-tertiary text-text-secondary hover:bg-surface-hover hover:text-text-primary',
-            'border-l border-border-light focus-visible:outline-none',
-          )}
-        >
-          <Download className="size-4" aria-hidden="true" />
-        </button>
-      </div>
+        }
+        trailing={<CardDownloadButton onClick={handleDownload} name={visibleFilename} />}
+      />
     );
   },
 );
@@ -126,6 +103,7 @@ PreviewPlaceholderCard.displayName = 'PreviewPlaceholderCard';
 
 const FileAttachment = memo(({ attachment }: { attachment: Partial<TAttachment> }) => {
   const [isVisible, setIsVisible] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const file = attachment as TFile & TAttachmentMetadata;
   const { handleDownload } = useAttachmentLink({
     href: attachment.filepath ?? '',
@@ -191,14 +169,34 @@ const FileAttachment = memo(({ attachment }: { attachment: Partial<TAttachment> 
         WebkitFontSmoothing: 'subpixel-antialiased',
       }}
     >
+      {/* 12.08-3, владелец: поведение ЕДИНОЕ для всех файлов — клик открывает
+          предпросмотр, скачивает только глиф на hover. Старые серые перекраски
+          карточки убраны: рецепт один на композер и чат. */}
       <FileContainer
         file={attachment}
-        onClick={handleDownload}
+        onClick={() => setShowPreview(true)}
         overrideType={extension}
         displayName={displayFilename(attachment.filename)}
         containerClassName="max-w-fit"
-        buttonClassName="bg-surface-secondary hover:cursor-pointer hover:bg-surface-hover active:bg-surface-secondary focus:bg-surface-hover hover:border-border-heavy active:border-border-heavy"
+        trailing={
+          <CardDownloadButton
+            onClick={handleDownload}
+            name={displayFilename(attachment.filename)}
+          />
+        }
       />
+      {/* Смонтирован только после клика: закрытый диалог не должен тащить
+          свои хуки и запросы в каждую карточку ленты. */}
+      {showPreview && (
+        <FilePreviewDialog
+          open={showPreview}
+          onOpenChange={setShowPreview}
+          fileName={attachment.filename ?? ''}
+          fileId={file.file_id}
+          fileType={file.type ?? undefined}
+          fileSize={file.bytes}
+        />
+      )}
     </div>
   );
 });

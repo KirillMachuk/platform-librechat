@@ -33,6 +33,7 @@ import {
   IconBlockquote,
   IconBolt,
   IconBookmark,
+  IconBookmarkFilled,
   IconBookmarkPlus,
   IconBooks,
   IconBox,
@@ -157,6 +158,7 @@ import {
   IconSchool,
   IconScript,
   IconSearch,
+  IconSelector,
   IconSend,
   IconSettings,
   IconSettings2,
@@ -227,6 +229,7 @@ export const BarChart3: LucideIcon = canon(IconChartBar, 'BarChart3');
 export const Beaker: LucideIcon = canon(IconFlask, 'Beaker');
 export const BookCopy: LucideIcon = canon(IconBooks, 'BookCopy');
 export const Bookmark: LucideIcon = canon(IconBookmark, 'Bookmark');
+export const BookmarkFilled: LucideIcon = canon(IconBookmarkFilled, 'BookmarkFilled');
 export const BookmarkPlusIcon: LucideIcon = canon(IconBookmarkPlus, 'BookmarkPlusIcon');
 export const Bot: LucideIcon = canon(IconSparkles, 'Bot');
 export const Box: LucideIcon = canon(IconBox, 'Box');
@@ -246,6 +249,7 @@ export const ChevronLeft: LucideIcon = canon(IconChevronLeft, 'ChevronLeft');
 export const ChevronRight: LucideIcon = canon(IconChevronRight, 'ChevronRight');
 export const ChevronRightIcon: LucideIcon = canon(IconChevronRight, 'ChevronRightIcon');
 export const ChevronUp: LucideIcon = canon(IconChevronUp, 'ChevronUp');
+export const ChevronsUpDown: LucideIcon = canon(IconSelector, 'ChevronsUpDown');
 export const Circle: LucideIcon = canon(IconCircle, 'Circle');
 export const CircleCheckBig: LucideIcon = canon(IconCircleCheck, 'CircleCheckBig');
 export const CircleHelpIcon: LucideIcon = canon(IconHelp, 'CircleHelpIcon');

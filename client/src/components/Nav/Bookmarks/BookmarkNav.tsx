@@ -1,11 +1,10 @@
 import { useState, useId, useMemo, useCallback, memo } from 'react';
 import * as Ariakit from '@ariakit/react';
-import { CrossCircledIcon } from '@radix-ui/react-icons';
 import { DropdownPopup, TooltipAnchor } from '@librechat/client';
-import { BookmarkFilledIcon, BookmarkIcon } from '@radix-ui/react-icons';
 import type { FC } from 'react';
 import type * as t from '~/common';
 import { headerIconButtonClassName } from '~/components/Conversations/Conversations';
+import { Bookmark, BookmarkFilled, XCircle } from '~/components/icons';
 import { useGetConversationTags } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -55,7 +54,7 @@ const BookmarkNav: FC<BookmarkNavProps> = ({ tags, setTags }: BookmarkNavProps) 
       {
         id: 'clear-all',
         label: localize('com_ui_clear_all'),
-        icon: <CrossCircledIcon className="size-4" />,
+        icon: <XCircle className="size-4" aria-hidden="true" />,
         hideOnClick: false,
         onClick: handleClear,
       },
@@ -76,9 +75,9 @@ const BookmarkNav: FC<BookmarkNavProps> = ({ tags, setTags }: BookmarkNavProps) 
           label: bookmark.tag,
           hideOnClick: false,
           icon: isSelected ? (
-            <BookmarkFilledIcon className="size-4" />
+            <BookmarkFilled className="size-4" />
           ) : (
-            <BookmarkIcon className="size-4" />
+            <Bookmark className="size-4" />
           ),
           onClick: () => handleTagClick(bookmark.tag),
           ariaChecked: isSelected,
@@ -114,9 +113,9 @@ const BookmarkNav: FC<BookmarkNavProps> = ({ tags, setTags }: BookmarkNavProps) 
               data-testid="bookmark-nav"
             >
               {tags.length > 0 ? (
-                <BookmarkFilledIcon aria-hidden="true" className="h-4 w-4" />
+                <BookmarkFilled aria-hidden="true" className="h-4 w-4" />
               ) : (
-                <BookmarkIcon aria-hidden="true" className="h-4 w-4" />
+                <Bookmark aria-hidden="true" className="h-4 w-4" />
               )}
             </Ariakit.MenuButton>
           }
