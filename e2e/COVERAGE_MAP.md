@@ -36,7 +36,7 @@ fact none of them did.
 
 ## What to do with a test that fails intermittently
 
-A test that passes on retry is not a passing test. Playwright reports it as *flaky* and the run
+A test that passes on retry is not a passing test. Playwright reports it as _flaky_ and the run
 stays green, so flakes accumulate where nobody looks.
 
 1. The nightly run uses `--fail-on-flaky-tests`, so a flake turns that run red within a day. It
@@ -53,80 +53,80 @@ stays green, so flakes accumulate where nobody looks.
 
 ## 1. Authentication and app load
 
-| Behavior | Level | Owning test | Status |
-|---|---|---|---|
-| Login with valid credentials reaches the chat | e2e | `e2e/specs/mock/auth.spec.ts` | covered |
-| Invalid credentials show an error and stay on login | e2e | `e2e/specs/mock/auth.spec.ts` | covered |
-| Registration creates a usable account | e2e | `e2e/specs/mock/auth.spec.ts` | covered |
-| Logout clears the session | e2e | `e2e/specs/mock/auth.spec.ts` | covered |
-| Two-factor enrolment and challenge | e2e | `e2e/specs/mock/two-factor.spec.ts` | covered |
-| Login form validation and states | unit | `client/src/components/Auth/__tests__/LoginForm.spec.tsx` | covered |
-| Unauthenticated user is redirected to login | unit | `client/src/routes/__tests__/useAuthRedirect.spec.tsx` | covered |
-| App boots to a usable new-chat screen | e2e | `e2e/specs/mock/app-load.spec.ts` | covered |
+| Behavior                                            | Level | Owning test                                               | Status  |
+| --------------------------------------------------- | ----- | --------------------------------------------------------- | ------- |
+| Login with valid credentials reaches the chat       | e2e   | `e2e/specs/mock/auth.spec.ts`                             | covered |
+| Invalid credentials show an error and stay on login | e2e   | `e2e/specs/mock/auth.spec.ts`                             | covered |
+| Registration creates a usable account               | e2e   | `e2e/specs/mock/auth.spec.ts`                             | covered |
+| Logout clears the session                           | e2e   | `e2e/specs/mock/auth.spec.ts`                             | covered |
+| Two-factor enrolment and challenge                  | e2e   | `e2e/specs/mock/two-factor.spec.ts`                       | covered |
+| Login form validation and states                    | unit  | `client/src/components/Auth/__tests__/LoginForm.spec.tsx` | covered |
+| Unauthenticated user is redirected to login         | unit  | `client/src/routes/__tests__/useAuthRedirect.spec.tsx`    | covered |
+| App boots to a usable new-chat screen               | e2e   | `e2e/specs/mock/app-load.spec.ts`                         | covered |
 
 ## 2. Chat core
 
-| Behavior | Level | Owning test | Status |
-|---|---|---|---|
-| Send a message and receive a streamed reply | e2e | `e2e/specs/mock/chat.spec.ts` | covered |
-| Stop generation mid-stream keeps the partial reply | e2e | `e2e/specs/mock/message-tree.spec.ts#keeps an aborted response as the next parent` | covered |
-| Regenerate produces a sibling reply | e2e | `e2e/specs/mock/message-tree.spec.ts` | covered |
-| Edit own message and resubmit branches the tree | e2e | `e2e/specs/mock/message-tree.spec.ts` | covered |
-| Cycle between sibling replies | e2e | `e2e/specs/mock/message-tree.spec.ts` | covered |
-| Fork a conversation from a message | unit | `client/src/components/Chat/Messages/__tests__/Fork.spec.tsx` | covered |
-| Error mid-stream surfaces a readable message | e2e | `e2e/specs/mock/message-tree.spec.ts#error responses remain valid parents for follow-ups` | covered |
-| Submit is blocked while a run is in flight | unit | `client/src/hooks/Chat/__tests__/useChatFunctions.spec.ts` | covered |
-| A reload mid-reply keeps what the server already persisted | e2e | `e2e/specs/mock/chat.spec.ts#a reload mid-reply keeps everything the server had already persisted` | covered |
-| A dropped connection mid-reply loses nothing already received | e2e | — | gap |
-| A dropped connection is noticed and shown to the user | e2e | — | gap |
-| Composer shell never changes its look on focus or typing (owner 11.08) | unit | `client/src/components/Chat/Input/__tests__/ChatForm.spec.tsx#does not change a single class` | covered |
-| Sidebar rows wear one ink on label AND icon (owner 11.08) | unit | `client/src/components/UnifiedSidebar/__tests__/ExpandedPanel.spec.tsx#text-sidebar-ink` | covered |
-| Actions under a user message stay visible during a stream (Copy usable, Edit dimmed) | unit | `client/src/components/Chat/Messages/__tests__/HoverButtons.spec.tsx#disabled and dimmed` | covered |
-| Phone «+» sheet: tiles arm the right picker (Camera adds capture), switch rows drive tool toggles | unit | `client/src/components/Chat/Input/__tests__/PlusSheet.spec.tsx#arms the camera capture` | covered |
-| MCP pill is a tool chip: shared recipe, neutral "on" fill with servers selected (owner 11.08-3) | unit | `client/src/components/Chat/Input/__tests__/MCPSelect.spec.tsx#wears the shared chip recipe` | covered |
-| Empty chat: greeting sits entirely above the composer, in both landing modes and on a phone | e2e | `e2e/specs/mock/canon.spec.ts#the greeting clears the composer` | covered |
-| Desktop composer rests at ~130 tall (owner 11.08-3, Kimi yardstick) | e2e | `e2e/specs/mock/canon.spec.ts#the composer stands ~130 tall` | covered |
+| Behavior                                                                                          | Level | Owning test                                                                                        | Status  |
+| ------------------------------------------------------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------- | ------- |
+| Send a message and receive a streamed reply                                                       | e2e   | `e2e/specs/mock/chat.spec.ts`                                                                      | covered |
+| Stop generation mid-stream keeps the partial reply                                                | e2e   | `e2e/specs/mock/message-tree.spec.ts#keeps an aborted response as the next parent`                 | covered |
+| Regenerate produces a sibling reply                                                               | e2e   | `e2e/specs/mock/message-tree.spec.ts`                                                              | covered |
+| Edit own message and resubmit branches the tree                                                   | e2e   | `e2e/specs/mock/message-tree.spec.ts`                                                              | covered |
+| Cycle between sibling replies                                                                     | e2e   | `e2e/specs/mock/message-tree.spec.ts`                                                              | covered |
+| Fork a conversation from a message                                                                | unit  | `client/src/components/Chat/Messages/__tests__/Fork.spec.tsx`                                      | covered |
+| Error mid-stream surfaces a readable message                                                      | e2e   | `e2e/specs/mock/message-tree.spec.ts#error responses remain valid parents for follow-ups`          | covered |
+| Submit is blocked while a run is in flight                                                        | unit  | `client/src/hooks/Chat/__tests__/useChatFunctions.spec.ts`                                         | covered |
+| A reload mid-reply keeps what the server already persisted                                        | e2e   | `e2e/specs/mock/chat.spec.ts#a reload mid-reply keeps everything the server had already persisted` | covered |
+| A dropped connection mid-reply loses nothing already received                                     | e2e   | —                                                                                                  | gap     |
+| A dropped connection is noticed and shown to the user                                             | e2e   | —                                                                                                  | gap     |
+| Composer shell never changes its look on focus or typing (owner 11.08)                            | unit  | `client/src/components/Chat/Input/__tests__/ChatForm.spec.tsx#does not change a single class`      | covered |
+| Sidebar rows wear one ink on label AND icon (owner 11.08)                                         | unit  | `client/src/components/UnifiedSidebar/__tests__/ExpandedPanel.spec.tsx#text-sidebar-ink`           | covered |
+| Actions under a user message stay visible during a stream (Copy usable, Edit dimmed)              | unit  | `client/src/components/Chat/Messages/__tests__/HoverButtons.spec.tsx#disabled and dimmed`          | covered |
+| Phone «+» sheet: tiles arm the right picker (Camera adds capture), switch rows drive tool toggles | unit  | `client/src/components/Chat/Input/__tests__/PlusSheet.spec.tsx#arms the camera capture`            | covered |
+| MCP pill is a tool chip: shared recipe, neutral "on" fill with servers selected (owner 11.08-3)   | unit  | `client/src/components/Chat/Input/__tests__/MCPSelect.spec.tsx#wears the shared chip recipe`       | covered |
+| Empty chat: greeting sits entirely above the composer, in both landing modes and on a phone       | e2e   | `e2e/specs/mock/canon.spec.ts#the greeting clears the composer`                                    | covered |
+| Desktop composer rests at ~130 tall (owner 11.08-3, Kimi yardstick)                               | e2e   | `e2e/specs/mock/canon.spec.ts#the composer stands ~130 tall`                                       | covered |
 
 ## 3. Message rendering
 
-| Behavior | Level | Owning test | Status |
-|---|---|---|---|
-| Markdown renders (headings, lists, tables, links) | unit | `client/src/components/Chat/Messages/Content/__tests__/MarkdownBlocks.test.tsx` | covered |
-| Code block renders with its language highlighted | e2e | `e2e/specs/mock/chat.spec.ts#language-javascript` | covered |
-| Copy button on a code block copies it | e2e | `e2e/specs/mock/chat.spec.ts#the copy button on a code block puts the code on the clipboard` | covered |
-| Reasoning ("Мысли") block auto-expands then collapses | unit | `client/src/components/Chat/Messages/Content/Parts/__tests__/ReasoningAutoExpand.test.tsx` | covered |
-| A tool call hands its input, output and attachments to the renderer | unit | `client/src/components/Chat/Messages/Content/__tests__/ToolCall.test.tsx#should pass input and output props to ToolCallInfo` | covered |
-| Tool calls render their status and result | unit | `client/src/components/Chat/Messages/Content/__tests__/ToolCallStatus.test.tsx#says it finished, and shows what came back` | covered |
-| Web-search citations render as links | unit | `client/src/components/Web/__tests__/Citation.test.tsx#keeps standalone web citations as links` | covered |
-| A file citation opens its preview | unit | `client/src/components/Web/__tests__/Citation.test.tsx#renders composite file citations as buttons and opens the preview dialog` | covered |
-| A web-search citation links out to its source, in a new tab, without a handle back | unit | `client/src/components/Web/__tests__/Citation.test.tsx#lets a web citation click through to the browser, unlike a file one` | covered |
-| File-search (RAG) retrieval card renders | unit | `client/src/components/Chat/Messages/Content/__tests__/RetrievalCall.test.tsx` | covered |
-| A document search with no file cards offers no expander to an empty panel | unit | `client/src/components/Chat/Messages/Content/__tests__/RetrievalCall.test.tsx#offers no expander when the output holds no file cards` | covered |
-| A document the model read in full appears in the answer's sources | unit | `client/src/components/Web/__tests__/ReadDocumentSources.test.tsx#shows a document that was read in full` | covered |
-| A document read across several calls is listed once, not once per call | unit | `client/src/components/Web/__tests__/ReadDocumentSources.test.tsx#lists a document read across several calls once` | covered |
-| A read's source card adds no file chip under its tool call | unit | `client/src/components/Web/__tests__/ReadDocumentSources.test.tsx#adds no file chip under the tool call that produced it` | covered |
-| Attachment chips render under a sent message | e2e | `e2e/specs/mock/file-preview.spec.ts#opens a preview from a file attached to a sent message` | covered |
-| An attachment chip shows its display name, falling back to the filename | unit | `client/src/components/Chat/Input/Files/__tests__/FileContainer.spec.tsx#falls back to empty string when neither` | covered |
-| Artifact cards route to the panel, not inline | unit | `client/src/components/Chat/Messages/Content/Parts/__tests__/ArtifactRouting.test.tsx` | covered |
+| Behavior                                                                           | Level | Owning test                                                                                                                           | Status  |
+| ---------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Markdown renders (headings, lists, tables, links)                                  | unit  | `client/src/components/Chat/Messages/Content/__tests__/MarkdownBlocks.test.tsx`                                                       | covered |
+| Code block renders with its language highlighted                                   | e2e   | `e2e/specs/mock/chat.spec.ts#language-javascript`                                                                                     | covered |
+| Copy button on a code block copies it                                              | e2e   | `e2e/specs/mock/chat.spec.ts#the copy button on a code block puts the code on the clipboard`                                          | covered |
+| Reasoning ("Мысли") block auto-expands then collapses                              | unit  | `client/src/components/Chat/Messages/Content/Parts/__tests__/ReasoningAutoExpand.test.tsx`                                            | covered |
+| A tool call hands its input, output and attachments to the renderer                | unit  | `client/src/components/Chat/Messages/Content/__tests__/ToolCall.test.tsx#should pass input and output props to ToolCallInfo`          | covered |
+| Tool calls render their status and result                                          | unit  | `client/src/components/Chat/Messages/Content/__tests__/ToolCallStatus.test.tsx#says it finished, and shows what came back`            | covered |
+| Web-search citations render as links                                               | unit  | `client/src/components/Web/__tests__/Citation.test.tsx#keeps standalone web citations as links`                                       | covered |
+| A file citation opens its preview                                                  | unit  | `client/src/components/Web/__tests__/Citation.test.tsx#renders composite file citations as buttons and opens the preview dialog`      | covered |
+| A web-search citation links out to its source, in a new tab, without a handle back | unit  | `client/src/components/Web/__tests__/Citation.test.tsx#lets a web citation click through to the browser, unlike a file one`           | covered |
+| File-search (RAG) retrieval card renders                                           | unit  | `client/src/components/Chat/Messages/Content/__tests__/RetrievalCall.test.tsx`                                                        | covered |
+| A document search with no file cards offers no expander to an empty panel          | unit  | `client/src/components/Chat/Messages/Content/__tests__/RetrievalCall.test.tsx#offers no expander when the output holds no file cards` | covered |
+| A document the model read in full appears in the answer's sources                  | unit  | `client/src/components/Web/__tests__/ReadDocumentSources.test.tsx#shows a document that was read in full`                             | covered |
+| A document read across several calls is listed once, not once per call             | unit  | `client/src/components/Web/__tests__/ReadDocumentSources.test.tsx#lists a document read across several calls once`                    | covered |
+| A read's source card adds no file chip under its tool call                         | unit  | `client/src/components/Web/__tests__/ReadDocumentSources.test.tsx#adds no file chip under the tool call that produced it`             | covered |
+| Attachment chips render under a sent message                                       | e2e   | `e2e/specs/mock/file-preview.spec.ts#opens a preview from a file attached to a sent message`                                          | covered |
+| An attachment chip shows its display name, falling back to the filename            | unit  | `client/src/components/Chat/Input/Files/__tests__/FileContainer.spec.tsx#falls back to empty string when neither`                     | covered |
+| Artifact cards route to the panel, not inline                                      | unit  | `client/src/components/Chat/Messages/Content/Parts/__tests__/ArtifactRouting.test.tsx`                                                | covered |
 
 ## 4. File attachments
 
-| Behavior | Level | Owning test | Status |
-|---|---|---|---|
-| Attach a file via the attach button | e2e | `e2e/specs/mock/chat.spec.ts` | covered |
-| Drag-and-drop a file onto the composer | unit | `client/src/components/Chat/Input/Files/__tests__/DragDropModal.spec.tsx` | covered |
-| Upload progress and completion states | unit | `client/src/hooks/Files/__tests__/useFileHandling.test.ts` | covered |
-| Image on a model that cannot see it warns to switch model | unit | `client/src/hooks/Files/__tests__/useFileHandling.test.ts#warns when the gateway says the model does not read images` | covered |
-| Image the server read as text raises no such warning | unit | `client/src/hooks/Files/__tests__/useFileHandling.test.ts#stays silent when the server read the image and returned its text` | covered |
-| "Upload is taking a while" notice never outlives its upload | unit | `client/src/hooks/Files/__tests__/useDelayedUploadToast.spec.ts#cancels the notice for an upload that finishes within the same render` | covered |
-| Any picture is offered for shrinking, not only one above 51 MB | unit | `client/src/utils/__tests__/imageResize.test.ts#offers a phone photo too, which the old size rule skipped` | covered |
-| Rejected file type is refused with a reason | unit | `client/src/utils/__tests__/validateFiles.spec.ts#rejects unsupported MIME type` | covered |
-| Remove an attached file before sending | unit | `client/src/hooks/Files/__tests__/useFileDeletion.spec.ts` | covered |
-| "Original file" handling toggle changes the mode | e2e | `e2e/specs/mock/chat.spec.ts` | covered |
-| Attachment preview status polls until ready/failed | unit | `client/src/hooks/Files/__tests__/useAttachmentPreviewSync.spec.tsx` | covered |
-| Preview poll interval and error cap | unit | `client/src/data-provider/Files/__tests__/previewRefetchInterval.spec.ts` | covered |
-| Clicking a file in a sent message opens its preview | e2e | `e2e/specs/mock/file-preview.spec.ts#opens a preview from a file attached to a sent message` | covered |
-| Opening a file from the library opens its preview | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
+| Behavior                                                       | Level | Owning test                                                                                                                            | Status  |
+| -------------------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Attach a file via the attach button                            | e2e   | `e2e/specs/mock/chat.spec.ts`                                                                                                          | covered |
+| Drag-and-drop a file onto the composer                         | unit  | `client/src/components/Chat/Input/Files/__tests__/DragDropModal.spec.tsx`                                                              | covered |
+| Upload progress and completion states                          | unit  | `client/src/hooks/Files/__tests__/useFileHandling.test.ts`                                                                             | covered |
+| Image on a model that cannot see it warns to switch model      | unit  | `client/src/hooks/Files/__tests__/useFileHandling.test.ts#warns when the gateway says the model does not read images`                  | covered |
+| Image the server read as text raises no such warning           | unit  | `client/src/hooks/Files/__tests__/useFileHandling.test.ts#stays silent when the server read the image and returned its text`           | covered |
+| "Upload is taking a while" notice never outlives its upload    | unit  | `client/src/hooks/Files/__tests__/useDelayedUploadToast.spec.ts#cancels the notice for an upload that finishes within the same render` | covered |
+| Any picture is offered for shrinking, not only one above 51 MB | unit  | `client/src/utils/__tests__/imageResize.test.ts#offers a phone photo too, which the old size rule skipped`                             | covered |
+| Rejected file type is refused with a reason                    | unit  | `client/src/utils/__tests__/validateFiles.spec.ts#rejects unsupported MIME type`                                                       | covered |
+| Remove an attached file before sending                         | unit  | `client/src/hooks/Files/__tests__/useFileDeletion.spec.ts`                                                                             | covered |
+| "Original file" handling toggle changes the mode               | e2e   | `e2e/specs/mock/chat.spec.ts`                                                                                                          | covered |
+| Attachment preview status polls until ready/failed             | unit  | `client/src/hooks/Files/__tests__/useAttachmentPreviewSync.spec.tsx`                                                                   | covered |
+| Preview poll interval and error cap                            | unit  | `client/src/data-provider/Files/__tests__/previewRefetchInterval.spec.ts`                                                              | covered |
+| Clicking a file in a sent message opens its preview            | e2e   | `e2e/specs/mock/file-preview.spec.ts#opens a preview from a file attached to a sent message`                                           | covered |
+| Opening a file from the library opens its preview              | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                                                  | covered |
 
 ## 5. File preview — rendering matrix
 
@@ -135,30 +135,30 @@ Canon: `FRONTEND_TESTING_Canon_Checklist.md` part A. Fixtures: `e2e/fixtures/fil
 Previews are opened from the file library rather than from a chat transcript — see section 13
 for why that matters.
 
-| Behavior | Level | Owning test | Status |
-|---|---|---|---|
-| docx (short) renders as a reading flow | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| docx (multipage) scrolls as one document | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| A heavy docx renders without timing out | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| docx shows no fabricated page numbers | e2e | — | gap |
-| docx over the CDN size bound falls back to server HTML | unit | `packages/api/src/files/documents/html.spec.ts#routes a docx above the size cap through the mammoth fallback` | covered |
-| xlsx renders a grid with its sheet names | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| xlsx sheet switching works and returns | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| xlsx merged and empty cells keep the layout | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| xlsx over 5000 rows truncates with a plate | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| xlsx keeps spreadsheet addresses visible while scrolling | e2e | — | todo:Ф1 |
-| pptx 16:9 renders slides | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| pptx 4:3 renders slides | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| pptx with many slides renders every slide | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| md opens as readable text | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| md offers rendered and source views | e2e | — | todo:Ф1 |
-| Source code file opens as text | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| Source code file renders with syntax view | e2e | — | todo:Ф1 |
-| csv renders as a sheet | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| PDF (digital) opens in a viewer, not as raw text | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| PDF (scan) opens in the viewer despite having no text layer | e2e | `e2e/specs/mock/file-preview.spec.ts` | covered |
-| PDF (scan) carries a recognition note | e2e | — | todo:Ф1 |
-| Text preview truncates at the byte cap with a notice | e2e | `e2e/specs/mock/file-preview.spec.ts#TEXT_PREVIEW_MAX_BYTES` | covered |
+| Behavior                                                    | Level | Owning test                                                                                                   | Status  |
+| ----------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------- | ------- |
+| docx (short) renders as a reading flow                      | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
+| docx (multipage) scrolls as one document                    | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
+| A heavy docx renders without timing out                     | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
+| docx shows no fabricated page numbers                       | e2e   | —                                                                                                             | gap     |
+| docx over the CDN size bound falls back to server HTML      | unit  | `packages/api/src/files/documents/html.spec.ts#routes a docx above the size cap through the mammoth fallback` | covered |
+| xlsx renders a grid with its sheet names                    | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
+| xlsx sheet switching works and returns                      | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
+| xlsx merged and empty cells keep the layout                 | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
+| xlsx over 5000 rows truncates with a plate                  | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
+| xlsx keeps spreadsheet addresses visible while scrolling    | e2e   | —                                                                                                             | todo:Ф1 |
+| pptx 16:9 renders slides                                    | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
+| pptx 4:3 renders slides                                     | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
+| pptx with many slides renders every slide                   | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
+| md opens as readable text                                   | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
+| md offers rendered and source views                         | e2e   | —                                                                                                             | todo:Ф1 |
+| Source code file opens as text                              | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
+| Source code file renders with syntax view                   | e2e   | —                                                                                                             | todo:Ф1 |
+| csv renders as a sheet                                      | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
+| PDF (digital) opens in a viewer, not as raw text            | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
+| PDF (scan) opens in the viewer despite having no text layer | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
+| PDF (scan) carries a recognition note                       | e2e   | —                                                                                                             | todo:Ф1 |
+| Text preview truncates at the byte cap with a notice        | e2e   | `e2e/specs/mock/file-preview.spec.ts#TEXT_PREVIEW_MAX_BYTES`                                                  | covered |
 
 One row above is a `gap`, not `planned`, because this profile cannot prove it: no renderer in
 this configuration produces page numbers at all, so an assertion that none appear passes without
@@ -171,18 +171,18 @@ same time. Owned properly now.
 
 ## 6. File preview — honest states (negative cases)
 
-| Behavior | Level | Owning test | Status |
-|---|---|---|---|
-| Corrupted file says plainly it could not be shown, and offers download | e2e | `e2e/specs/mock/file-preview.spec.ts#says plainly that a damaged document could not be shown` | covered |
-| Archive / unsupported format offers download, not an error | e2e | `e2e/specs/mock/file-preview.spec.ts#offers download instead of a preview for an archive` | covered |
-| Password-protected PDF stays inside the preview surface (today's behavior, pinned) | e2e | `e2e/specs/mock/file-preview.spec.ts#today a password-protected PDF stays in the browser viewer` | covered |
-| Password-protected Word file says plainly it could not be shown | e2e | `e2e/specs/mock/file-preview.spec.ts#says plainly that a password-protected document could not be shown` | covered |
-| Every preview settles on a real surface — never an empty rectangle | e2e | `e2e/specs/mock/files.helpers.ts#const settled = previewFrameElement` | covered |
-| A failed preview offers Retry alongside Download | e2e | — | todo:Ф1 |
-| Password-protected file shows the shared honest failure instead of the browser viewer | e2e | `e2e/specs/mock/file-preview.spec.ts#a password-protected PDF says plainly it could not be shown` | fixme:Ф1 |
-| File still in the recognition queue shows queue position and estimate | e2e | — | todo:Ф1 |
-| A file type the app cannot handle is refused before upload | e2e | `e2e/specs/mock/file-preview.spec.ts#refuses a file type it cannot handle, before uploading it` | covered |
-| A file over the size limit is refused before upload | unit | `client/src/utils/__tests__/validateFiles.spec.ts#rejects when file size equals fileSizeLimit` | covered |
+| Behavior                                                                              | Level | Owning test                                                                                              | Status   |
+| ------------------------------------------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------- | -------- |
+| Corrupted file says plainly it could not be shown, and offers download                | e2e   | `e2e/specs/mock/file-preview.spec.ts#says plainly that a damaged document could not be shown`            | covered  |
+| Archive / unsupported format offers download, not an error                            | e2e   | `e2e/specs/mock/file-preview.spec.ts#offers download instead of a preview for an archive`                | covered  |
+| Password-protected PDF stays inside the preview surface (today's behavior, pinned)    | e2e   | `e2e/specs/mock/file-preview.spec.ts#today a password-protected PDF stays in the browser viewer`         | covered  |
+| Password-protected Word file says plainly it could not be shown                       | e2e   | `e2e/specs/mock/file-preview.spec.ts#says plainly that a password-protected document could not be shown` | covered  |
+| Every preview settles on a real surface — never an empty rectangle                    | e2e   | `e2e/specs/mock/files.helpers.ts#const settled = previewFrameElement`                                    | covered  |
+| A failed preview offers Retry alongside Download                                      | e2e   | —                                                                                                        | todo:Ф1  |
+| Password-protected file shows the shared honest failure instead of the browser viewer | e2e   | `e2e/specs/mock/file-preview.spec.ts#a password-protected PDF says plainly it could not be shown`        | fixme:Ф1 |
+| File still in the recognition queue shows queue position and estimate                 | e2e   | —                                                                                                        | todo:Ф1  |
+| A file type the app cannot handle is refused before upload                            | e2e   | `e2e/specs/mock/file-preview.spec.ts#refuses a file type it cannot handle, before uploading it`          | covered  |
+| A file over the size limit is refused before upload                                   | unit  | `client/src/utils/__tests__/validateFiles.spec.ts#rejects when file size equals fileSizeLimit`           | covered  |
 
 "Never an empty rectangle" has no test of its own: `openPreview` in
 `e2e/specs/mock/files.helpers.ts` refuses to return until the dialog shows a frame, a text block
@@ -197,111 +197,114 @@ Canon: `FRONTEND_TESTING_Canon_Checklist.md` part B. Rows marked `todo:Ф1` desc
 agreed redesign and are the acceptance criteria for it — a tab strip that does not exist yet
 cannot have a skipped test waiting for it, only an entry saying nobody has written one.
 
-| Behavior | Level | Owning test | Status |
-|---|---|---|---|
-| A file row keeps the name its owner gave it | unit | `client/src/components/SidePanel/Files/__tests__/FileNameCell.test.tsx#keeps the name the person gave the file` | covered |
-| A file row says underneath what the document is | unit | `client/src/components/SidePanel/Files/__tests__/FileNameCell.test.tsx#says underneath what the document turned out to be` | covered |
-| A file nothing was extracted from gets no second line | unit | `client/src/components/SidePanel/Files/__tests__/FileNameCell.test.tsx#adds no second line to a file nothing was extracted from` | covered |
-| Panel opens with the artifact from a chat card | unit | `client/src/components/Chat/Messages/Content/Parts/__tests__/ArtifactRouting.test.tsx` | covered |
-| Panel closes and clears the current artifact | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
-| Header copy and close act on the shown file | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
-| Download saves the shown file, edited buffer winning over stored content | unit | `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx#downloads what the user edited rather than the original content` | covered |
-| A downloaded artifact keeps the name the panel shows | unit | `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx#saves under the name the panel shows` | fixme:Ф1 |
-| Downloading an office artifact saves the stored file, not its HTML preview | unit | `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx#saves the stored .pptx, not the HTML preview standing in for it` | covered |
-| Office and code files expose only their meaningful view | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
-| View switch is locked while a save is in flight | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
-| Editor keeps unsaved edits while the same file keeps streaming | unit | `client/src/components/Artifacts/__tests__/ArtifactTabs.test.tsx` | covered |
-| Refresh button appears only for a live preview | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
-| Stepper moves between open artifacts | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
-| Code/Preview choice is per file, not per panel | unit | — | todo:Ф1 |
-| Unsaved editor edits survive switching files — today they are dropped, pinned | unit | `client/src/components/Artifacts/__tests__/ArtifactTabs.test.tsx#drops unsaved edits when another file is opened` | fixme:Ф1 |
-| Tab strip appears from the second file | e2e | — | todo:Ф1 |
-| New tabs are added at the right end | e2e | — | todo:Ф1 |
-| A file arriving while reading another marks a dot, no focus steal | e2e | — | todo:Ф1 |
-| Closing a tab activates the neighbour | e2e | — | todo:Ф1 |
-| Closing the last tab closes the panel | e2e | — | todo:Ф1 |
-| Header cross hides the panel but keeps the tab set | e2e | — | todo:Ф1 |
-| Counter button in the chat header restores the panel | e2e | — | todo:Ф1 |
-| Fullscreen takes the work area, sidebar stays | e2e | — | todo:Ф1 |
-| Escape leaves fullscreen | e2e | — | todo:Ф1 |
-| Active file and scroll survive fullscreen toggling | e2e | — | todo:Ф1 |
-| Every file open lands in the side panel, never a centred modal | e2e | — | todo:Ф1 |
-| Panel width drag respects the minimum and the chat guarantee | e2e | — | todo:Ф1 |
+| Behavior                                                                              | Level | Owning test                                                                                                                                  | Status   |
+| ------------------------------------------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| A file row keeps the name its owner gave it                                           | unit  | `client/src/components/SidePanel/Files/__tests__/FileNameCell.test.tsx#keeps the name the person gave the file`                              | covered  |
+| A file row says underneath what the document is                                       | unit  | `client/src/components/SidePanel/Files/__tests__/FileNameCell.test.tsx#says underneath what the document turned out to be`                   | covered  |
+| A file nothing was extracted from gets no second line                                 | unit  | `client/src/components/SidePanel/Files/__tests__/FileNameCell.test.tsx#adds no second line to a file nothing was extracted from`             | covered  |
+| Panel opens with the artifact from a chat card                                        | unit  | `client/src/components/Chat/Messages/Content/Parts/__tests__/ArtifactRouting.test.tsx`                                                       | covered  |
+| Panel closes and clears the current artifact                                          | unit  | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx`                                                                               | covered  |
+| Header copy and close act on the shown file                                           | unit  | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx`                                                                               | covered  |
+| Download saves the shown file, edited buffer winning over stored content              | unit  | `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx#downloads what the user edited rather than the original content`        | covered  |
+| A downloaded artifact keeps the name the panel shows                                  | unit  | `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx#saves under the name the panel shows`                                   | fixme:Ф1 |
+| Downloading an office artifact saves the stored file, not its HTML preview            | unit  | `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx#saves the stored .pptx, not the HTML preview standing in for it`        | covered  |
+| A download is named after the bytes it saves, never after a binary it only stands for | unit  | `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx#does not name extracted text after the binary it was extracted from`    | covered  |
+| The download button confirms success only when bytes actually arrived                 | unit  | `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx#does not report success when the download failed`                       | covered  |
+| A shared conversation still downloads what the panel can serve                        | unit  | `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx#falls back to the shown content when the stored file cannot be fetched` | covered  |
+| Office and code files expose only their meaningful view                               | unit  | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx`                                                                               | covered  |
+| View switch is locked while a save is in flight                                       | unit  | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx`                                                                               | covered  |
+| Editor keeps unsaved edits while the same file keeps streaming                        | unit  | `client/src/components/Artifacts/__tests__/ArtifactTabs.test.tsx`                                                                            | covered  |
+| Refresh button appears only for a live preview                                        | unit  | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx`                                                                               | covered  |
+| Stepper moves between open artifacts                                                  | unit  | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx`                                                                               | covered  |
+| Code/Preview choice is per file, not per panel                                        | unit  | —                                                                                                                                            | todo:Ф1  |
+| Unsaved editor edits survive switching files — today they are dropped, pinned         | unit  | `client/src/components/Artifacts/__tests__/ArtifactTabs.test.tsx#drops unsaved edits when another file is opened`                            | fixme:Ф1 |
+| Tab strip appears from the second file                                                | e2e   | —                                                                                                                                            | todo:Ф1  |
+| New tabs are added at the right end                                                   | e2e   | —                                                                                                                                            | todo:Ф1  |
+| A file arriving while reading another marks a dot, no focus steal                     | e2e   | —                                                                                                                                            | todo:Ф1  |
+| Closing a tab activates the neighbour                                                 | e2e   | —                                                                                                                                            | todo:Ф1  |
+| Closing the last tab closes the panel                                                 | e2e   | —                                                                                                                                            | todo:Ф1  |
+| Header cross hides the panel but keeps the tab set                                    | e2e   | —                                                                                                                                            | todo:Ф1  |
+| Counter button in the chat header restores the panel                                  | e2e   | —                                                                                                                                            | todo:Ф1  |
+| Fullscreen takes the work area, sidebar stays                                         | e2e   | —                                                                                                                                            | todo:Ф1  |
+| Escape leaves fullscreen                                                              | e2e   | —                                                                                                                                            | todo:Ф1  |
+| Active file and scroll survive fullscreen toggling                                    | e2e   | —                                                                                                                                            | todo:Ф1  |
+| Every file open lands in the side panel, never a centred modal                        | e2e   | —                                                                                                                                            | todo:Ф1  |
+| Panel width drag respects the minimum and the chat guarantee                          | e2e   | —                                                                                                                                            | todo:Ф1  |
 
 ## 8. Conversations and navigation
 
-| Behavior | Level | Owning test | Status |
-|---|---|---|---|
-| Conversation list loads and paginates on scroll | e2e | `e2e/specs/mock/sidebar.spec.ts#the chat list fetches the next page when you scroll to the end` | covered |
-| Chat list width tracks the sidebar through collapse and viewport cycles | e2e | `e2e/specs/mock/sidebar.spec.ts#chat list width tracks the sidebar through collapse and viewport cycles` | covered |
-| Collapsed rail still reaches settings and sign-out | e2e | `e2e/specs/mock/sidebar.spec.ts#the collapsed rail still reaches settings and sign-out` | covered |
-| Arriving at a new chat does not take the cursor out of a menu the person just opened | unit | `client/src/hooks/Chat/__tests__/useFocusChatEffect.spec.tsx#leaves the cursor alone when an open menu owns the keyboard` | covered |
-| First click after the sidebar mounts is sometimes swallowed | e2e | — | gap |
-| Open a conversation from the list | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
-| Rename a conversation | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
-| Delete a conversation | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
-| Favourite a conversation and see it pinned | unit | `client/src/components/Nav/Favorites/tests/FavoriteItem.spec.tsx` | covered |
-| One user cannot see another user's conversations | e2e | `e2e/specs/mock/isolation.spec.ts` | covered |
-| Search results show chats and messages separately | unit | `client/src/components/Nav/SearchChats/__tests__/Results.spec.tsx` | covered |
-| Search says plainly when it found nothing | unit | `client/src/components/Nav/SearchChats/__tests__/Results.spec.tsx` | covered |
-| Search shows a busy state instead of an empty box | unit | `client/src/components/Nav/SearchChats/__tests__/Results.spec.tsx` | covered |
-| A running search is announced to a screen reader | a11y | — | todo:Ф1 |
-| Search finds real matches end to end | e2e | — | gap |
-| Bookmarks: create, attach, filter | e2e | `e2e/specs/mock/bookmarks.spec.ts#toHaveAttribute('aria-checked', 'true')` | covered |
-| Bookmarks: a chat can be taken back out of a bookmark | e2e | `e2e/specs/mock/bookmarks.spec.ts#toHaveAttribute('aria-pressed', 'false')` | covered |
-| Bookmarks stay hidden on every surface while the switch is off | e2e | `e2e/specs/mock/bookmarks.spec.ts#stay out of sight entirely while the switch is off` | covered |
-| Bookmarks panel: create, rename, delete a bookmark | e2e | `e2e/specs/mock/bookmarks.spec.ts#the sidebar panel creates, renames and deletes a bookmark` | covered |
-| Renaming or deleting a bookmark releases a chat-list filter using it | e2e | `e2e/specs/mock/bookmarks.spec.ts#renaming or deleting a bookmark releases a filter that was using it` | covered |
-| Switching bookmarks off releases the bookmark filter on the chat list | e2e | `e2e/specs/mock/bookmarks.spec.ts#await setBookmarksMenu(page, false)` | covered |
-| Archive a conversation and bring it back | e2e | `e2e/specs/mock/conversation-management.spec.ts` | covered |
-| Mobile sidebar opens and dismisses | e2e | `e2e/specs/mock/mobile-sidebar.spec.ts` | covered |
+| Behavior                                                                             | Level | Owning test                                                                                                               | Status  |
+| ------------------------------------------------------------------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Conversation list loads and paginates on scroll                                      | e2e   | `e2e/specs/mock/sidebar.spec.ts#the chat list fetches the next page when you scroll to the end`                           | covered |
+| Chat list width tracks the sidebar through collapse and viewport cycles              | e2e   | `e2e/specs/mock/sidebar.spec.ts#chat list width tracks the sidebar through collapse and viewport cycles`                  | covered |
+| Collapsed rail still reaches settings and sign-out                                   | e2e   | `e2e/specs/mock/sidebar.spec.ts#the collapsed rail still reaches settings and sign-out`                                   | covered |
+| Arriving at a new chat does not take the cursor out of a menu the person just opened | unit  | `client/src/hooks/Chat/__tests__/useFocusChatEffect.spec.tsx#leaves the cursor alone when an open menu owns the keyboard` | covered |
+| First click after the sidebar mounts is sometimes swallowed                          | e2e   | —                                                                                                                         | gap     |
+| Open a conversation from the list                                                    | e2e   | `e2e/specs/mock/conversation-management.spec.ts`                                                                          | covered |
+| Rename a conversation                                                                | e2e   | `e2e/specs/mock/conversation-management.spec.ts`                                                                          | covered |
+| Delete a conversation                                                                | e2e   | `e2e/specs/mock/conversation-management.spec.ts`                                                                          | covered |
+| Favourite a conversation and see it pinned                                           | unit  | `client/src/components/Nav/Favorites/tests/FavoriteItem.spec.tsx`                                                         | covered |
+| One user cannot see another user's conversations                                     | e2e   | `e2e/specs/mock/isolation.spec.ts`                                                                                        | covered |
+| Search results show chats and messages separately                                    | unit  | `client/src/components/Nav/SearchChats/__tests__/Results.spec.tsx`                                                        | covered |
+| Search says plainly when it found nothing                                            | unit  | `client/src/components/Nav/SearchChats/__tests__/Results.spec.tsx`                                                        | covered |
+| Search shows a busy state instead of an empty box                                    | unit  | `client/src/components/Nav/SearchChats/__tests__/Results.spec.tsx`                                                        | covered |
+| A running search is announced to a screen reader                                     | a11y  | —                                                                                                                         | todo:Ф1 |
+| Search finds real matches end to end                                                 | e2e   | —                                                                                                                         | gap     |
+| Bookmarks: create, attach, filter                                                    | e2e   | `e2e/specs/mock/bookmarks.spec.ts#toHaveAttribute('aria-checked', 'true')`                                                | covered |
+| Bookmarks: a chat can be taken back out of a bookmark                                | e2e   | `e2e/specs/mock/bookmarks.spec.ts#toHaveAttribute('aria-pressed', 'false')`                                               | covered |
+| Bookmarks stay hidden on every surface while the switch is off                       | e2e   | `e2e/specs/mock/bookmarks.spec.ts#stay out of sight entirely while the switch is off`                                     | covered |
+| Bookmarks panel: create, rename, delete a bookmark                                   | e2e   | `e2e/specs/mock/bookmarks.spec.ts#the sidebar panel creates, renames and deletes a bookmark`                              | covered |
+| Renaming or deleting a bookmark releases a chat-list filter using it                 | e2e   | `e2e/specs/mock/bookmarks.spec.ts#renaming or deleting a bookmark releases a filter that was using it`                    | covered |
+| Switching bookmarks off releases the bookmark filter on the chat list                | e2e   | `e2e/specs/mock/bookmarks.spec.ts#await setBookmarksMenu(page, false)`                                                    | covered |
+| Archive a conversation and bring it back                                             | e2e   | `e2e/specs/mock/conversation-management.spec.ts`                                                                          | covered |
+| Mobile sidebar opens and dismisses                                                   | e2e   | `e2e/specs/mock/mobile-sidebar.spec.ts`                                                                                   | covered |
 
 ## 9. Models, agents, projects
 
-| Behavior | Level | Owning test | Status |
-|---|---|---|---|
-| Model selector lists and switches endpoints | e2e | `e2e/specs/mock/model-switching.spec.ts` | covered |
-| Model spec branding renders below the canonical greeting and in the selector | e2e | `e2e/specs/mock/model-spec-branding.spec.ts#branded spec keeps the greeting and renders its description below` | covered |
-| Model spec conversation starters render, and clicking one sends it | e2e | `e2e/specs/mock/model-spec-starters.spec.ts#clicking a starter submits it as the first message` | covered |
-| A model spec stream keeps its reply across navigation, abort and reload | e2e | `e2e/specs/mock/model-spec-icons.spec.ts#keeps the assistant message when resuming an active stream after navigation` | covered |
-| Default model selection rules | unit | `client/src/utils/__tests__/getDefaultModelSpec.test.ts` | covered |
-| Agent marketplace lists and opens agents | e2e | `e2e/specs/mock/agents.spec.ts` | covered |
-| Agent builder saves a version | unit | `client/src/components/SidePanel/Agents/AgentPanel.test.tsx` | covered |
-| Project is created from the popup and listed | e2e | `e2e/specs/mock/projects.spec.ts#creates a project via the popup and lists it` | covered |
-| A project-scoped chat stays under its project | e2e | `e2e/specs/mock/projects.spec.ts#starts a project-scoped chat and persists it under the project` | covered |
-| Project rename, colour and icon survive a reload | e2e | `e2e/specs/mock/projects.spec.ts#a renamed, recoloured project keeps all three across a reload` | covered |
-| Every project colour and icon is named in words, in both languages | unit | `client/src/components/Projects/__tests__/ProjectAppearancePopover.spec.tsx#has a label for every colour and icon, in both languages` | covered |
-| A project with no stored colour falls back to the default | unit | `client/src/components/Projects/__tests__/iconOptions.spec.ts#falls back to the default colour when a project has none stored` | covered |
-| Deleting a project asks in an in-app dialog, never window.confirm | unit | `client/src/components/Projects/__tests__/ProjectEditDialog.spec.tsx#asks in an in-app dialog and never through window.confirm` | covered |
-| Cancelling the project edit dialog leaves the project alone | unit | `client/src/components/Projects/__tests__/ProjectEditDialog.spec.tsx#cancelling leaves the project alone` | covered |
-| Removing a project source confirms by naming the file | unit | `client/src/components/Projects/__tests__/ProjectDetailView.spec.tsx#confirms in a dialog naming the file, never through window.confirm` | covered |
-| The file library is one window, not a short list over a full one | e2e | `e2e/specs/mock/file-library.spec.ts#is one window, with the columns and the actions in it` | covered |
-| The table search reads as a field, not the edge of a card | unit | `packages/client/src/components/DataTable/DataTableSearch.spec.tsx#is a field: 48 on a phone, 36 on a desktop, on a card fill` | covered |
-| A table says which column it is sorted by | unit | `packages/client/src/components/DataTable/DataTable.spec.tsx#gives the sorted column a loud arrow and leaves the rest quiet` | covered |
-| An unsorted table shouts at no column | unit | `packages/client/src/components/DataTable/DataTable.spec.tsx#mutes the glyph on every column while nothing is sorted` | covered |
-| A button carries the canon 36/12 and reaches 44 for a finger | unit | `client/src/components/__tests__/canonControls.spec.tsx#is 36 high with radius 12, and reaches 44 for a finger` | covered |
-| An icon button keeps radius 8, not the 12 of a text button | unit | `client/src/components/__tests__/canonControls.spec.tsx#keeps radius 8 on an icon button, where §6.2 wants it` | covered |
-| The outline button wears the control border and a plain hover fill | unit | `client/src/components/__tests__/canonControls.spec.tsx#gives the outline variant a control border and a plain hover fill` | covered |
-| A call site can still override the button height | unit | `client/src/components/__tests__/canonControls.spec.tsx#lets a call site win, because the sign-in card is 40 by canon` | covered |
-| The shared field is 36 on a desktop and 48 on a phone | unit | `client/src/components/__tests__/canonControls.spec.tsx#is 36 on a desktop, 48 on a phone, radius 12, on a card fill` | covered |
-| The field leaves its border to FIELD_BORDER so an error can replace it | unit | `client/src/components/__tests__/canonControls.spec.tsx#leaves the border to FIELD_BORDER, so an error can replace just that` | covered |
-| The instruction every chat in a project gets is visible on the card | unit | `client/src/components/Projects/__tests__/ProjectDetailView.spec.tsx#shows the instruction every chat in the project gets` | covered |
-| A project without instructions says nothing about them | unit | `client/src/components/Projects/__tests__/ProjectDetailView.spec.tsx#says nothing about instructions when the project has none` | covered |
-| Each project source says whether the chat can read it yet | unit | `client/src/components/Projects/__tests__/ProjectDetailView.spec.tsx#says of each source whether the chat can read it yet` | covered |
-| Prompts library: create and use a prompt | e2e | `e2e/specs/mock/prompts.spec.ts` | covered |
-| A prompt's variables are read and shown by kind | unit | `client/src/components/Prompts/display/__tests__/PromptVariables.spec.tsx` | covered |
-| Editing a prompt adds a version and the new one is what gets sent | e2e | `e2e/specs/mock/prompts.spec.ts#editing a prompt adds a version and it is the new one that gets sent` | covered |
-| A prompt shared with everyone reaches other people, an unshared one does not | e2e | `e2e/specs/permissions/sharing.spec.ts#what is shared with everyone reaches someone else, what is not stays put` | covered |
-| Sharing a prompt with one named person | e2e | — | gap |
-| MCP server selection and ephemeral servers | e2e | `e2e/specs/mock/mcp.spec.ts` | covered |
-| Creating an MCP server: On-Behalf-Of auth saves without a live connection, plain auth to the same kind of URL is refused | e2e | `e2e/specs/permissions/mcp-server-creation.spec.ts` | covered |
-| Minting a remote-agent API key shows it once in full, and the listing can never hand it back | e2e | `e2e/specs/permissions/remote-agent-keys.spec.ts#the key is shown once on creation, and the list can never hand it back` | covered |
-| Configured skills load read-only for every authenticated user (API) | e2e | `e2e/specs/mock/deployment-skills.spec.ts#loads configured deployment skills for every authenticated user as read-only` | covered |
-| A model spec sees only the skills scoped to it (API) | e2e | `e2e/specs/mock/model-spec-skills.spec.ts#loads accessible configured skills and skips missing or inaccessible names` | covered |
-| A configured skill is listed, its file list is fetched on demand, and it offers no Edit | e2e | `e2e/specs/mock/skills.spec.ts#a configured skill is listed, its files open, and it stays read-only` | covered |
-| A skill written in the interface offers its author an Edit, a configured one does not | e2e | `e2e/specs/mock/skills.spec.ts#a skill of my own is mine to edit` | covered |
-| A skill is attached to an agent from the interface | e2e | `e2e/specs/mock/agent-skills.spec.ts#a skill picked in the builder is still on the agent after saving` | covered |
-| A skill that is a database document stays on the agent too | e2e | `e2e/specs/mock/agent-skills.spec.ts#a skill that is a database document is kept too` | covered |
+| Behavior                                                                                                                 | Level | Owning test                                                                                                                              | Status  |
+| ------------------------------------------------------------------------------------------------------------------------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Model selector lists and switches endpoints                                                                              | e2e   | `e2e/specs/mock/model-switching.spec.ts`                                                                                                 | covered |
+| Model spec branding renders below the canonical greeting and in the selector                                             | e2e   | `e2e/specs/mock/model-spec-branding.spec.ts#branded spec keeps the greeting and renders its description below`                           | covered |
+| Model spec conversation starters render, and clicking one sends it                                                       | e2e   | `e2e/specs/mock/model-spec-starters.spec.ts#clicking a starter submits it as the first message`                                          | covered |
+| A model spec stream keeps its reply across navigation, abort and reload                                                  | e2e   | `e2e/specs/mock/model-spec-icons.spec.ts#keeps the assistant message when resuming an active stream after navigation`                    | covered |
+| Default model selection rules                                                                                            | unit  | `client/src/utils/__tests__/getDefaultModelSpec.test.ts`                                                                                 | covered |
+| Agent marketplace lists and opens agents                                                                                 | e2e   | `e2e/specs/mock/agents.spec.ts`                                                                                                          | covered |
+| Agent builder saves a version                                                                                            | unit  | `client/src/components/SidePanel/Agents/AgentPanel.test.tsx`                                                                             | covered |
+| Project is created from the popup and listed                                                                             | e2e   | `e2e/specs/mock/projects.spec.ts#creates a project via the popup and lists it`                                                           | covered |
+| A project-scoped chat stays under its project                                                                            | e2e   | `e2e/specs/mock/projects.spec.ts#starts a project-scoped chat and persists it under the project`                                         | covered |
+| Project rename, colour and icon survive a reload                                                                         | e2e   | `e2e/specs/mock/projects.spec.ts#a renamed, recoloured project keeps all three across a reload`                                          | covered |
+| Every project colour and icon is named in words, in both languages                                                       | unit  | `client/src/components/Projects/__tests__/ProjectAppearancePopover.spec.tsx#has a label for every colour and icon, in both languages`    | covered |
+| A project with no stored colour falls back to the default                                                                | unit  | `client/src/components/Projects/__tests__/iconOptions.spec.ts#falls back to the default colour when a project has none stored`           | covered |
+| Deleting a project asks in an in-app dialog, never window.confirm                                                        | unit  | `client/src/components/Projects/__tests__/ProjectEditDialog.spec.tsx#asks in an in-app dialog and never through window.confirm`          | covered |
+| Cancelling the project edit dialog leaves the project alone                                                              | unit  | `client/src/components/Projects/__tests__/ProjectEditDialog.spec.tsx#cancelling leaves the project alone`                                | covered |
+| Removing a project source confirms by naming the file                                                                    | unit  | `client/src/components/Projects/__tests__/ProjectDetailView.spec.tsx#confirms in a dialog naming the file, never through window.confirm` | covered |
+| The file library is one window, not a short list over a full one                                                         | e2e   | `e2e/specs/mock/file-library.spec.ts#is one window, with the columns and the actions in it`                                              | covered |
+| The table search reads as a field, not the edge of a card                                                                | unit  | `packages/client/src/components/DataTable/DataTableSearch.spec.tsx#is a field: 48 on a phone, 36 on a desktop, on a card fill`           | covered |
+| A table says which column it is sorted by                                                                                | unit  | `packages/client/src/components/DataTable/DataTable.spec.tsx#gives the sorted column a loud arrow and leaves the rest quiet`             | covered |
+| An unsorted table shouts at no column                                                                                    | unit  | `packages/client/src/components/DataTable/DataTable.spec.tsx#mutes the glyph on every column while nothing is sorted`                    | covered |
+| A button carries the canon 36/12 and reaches 44 for a finger                                                             | unit  | `client/src/components/__tests__/canonControls.spec.tsx#is 36 high with radius 12, and reaches 44 for a finger`                          | covered |
+| An icon button keeps radius 8, not the 12 of a text button                                                               | unit  | `client/src/components/__tests__/canonControls.spec.tsx#keeps radius 8 on an icon button, where §6.2 wants it`                           | covered |
+| The outline button wears the control border and a plain hover fill                                                       | unit  | `client/src/components/__tests__/canonControls.spec.tsx#gives the outline variant a control border and a plain hover fill`               | covered |
+| A call site can still override the button height                                                                         | unit  | `client/src/components/__tests__/canonControls.spec.tsx#lets a call site win, because the sign-in card is 40 by canon`                   | covered |
+| The shared field is 36 on a desktop and 48 on a phone                                                                    | unit  | `client/src/components/__tests__/canonControls.spec.tsx#is 36 on a desktop, 48 on a phone, radius 12, on a card fill`                    | covered |
+| The field leaves its border to FIELD_BORDER so an error can replace it                                                   | unit  | `client/src/components/__tests__/canonControls.spec.tsx#leaves the border to FIELD_BORDER, so an error can replace just that`            | covered |
+| The instruction every chat in a project gets is visible on the card                                                      | unit  | `client/src/components/Projects/__tests__/ProjectDetailView.spec.tsx#shows the instruction every chat in the project gets`               | covered |
+| A project without instructions says nothing about them                                                                   | unit  | `client/src/components/Projects/__tests__/ProjectDetailView.spec.tsx#says nothing about instructions when the project has none`          | covered |
+| Each project source says whether the chat can read it yet                                                                | unit  | `client/src/components/Projects/__tests__/ProjectDetailView.spec.tsx#says of each source whether the chat can read it yet`               | covered |
+| Prompts library: create and use a prompt                                                                                 | e2e   | `e2e/specs/mock/prompts.spec.ts`                                                                                                         | covered |
+| A prompt's variables are read and shown by kind                                                                          | unit  | `client/src/components/Prompts/display/__tests__/PromptVariables.spec.tsx`                                                               | covered |
+| Editing a prompt adds a version and the new one is what gets sent                                                        | e2e   | `e2e/specs/mock/prompts.spec.ts#editing a prompt adds a version and it is the new one that gets sent`                                    | covered |
+| A prompt shared with everyone reaches other people, an unshared one does not                                             | e2e   | `e2e/specs/permissions/sharing.spec.ts#what is shared with everyone reaches someone else, what is not stays put`                         | covered |
+| Sharing a prompt with one named person                                                                                   | e2e   | —                                                                                                                                        | gap     |
+| MCP server selection and ephemeral servers                                                                               | e2e   | `e2e/specs/mock/mcp.spec.ts`                                                                                                             | covered |
+| Creating an MCP server: On-Behalf-Of auth saves without a live connection, plain auth to the same kind of URL is refused | e2e   | `e2e/specs/permissions/mcp-server-creation.spec.ts`                                                                                      | covered |
+| Minting a remote-agent API key shows it once in full, and the listing can never hand it back                             | e2e   | `e2e/specs/permissions/remote-agent-keys.spec.ts#the key is shown once on creation, and the list can never hand it back`                 | covered |
+| Configured skills load read-only for every authenticated user (API)                                                      | e2e   | `e2e/specs/mock/deployment-skills.spec.ts#loads configured deployment skills for every authenticated user as read-only`                  | covered |
+| A model spec sees only the skills scoped to it (API)                                                                     | e2e   | `e2e/specs/mock/model-spec-skills.spec.ts#loads accessible configured skills and skips missing or inaccessible names`                    | covered |
+| A configured skill is listed, its file list is fetched on demand, and it offers no Edit                                  | e2e   | `e2e/specs/mock/skills.spec.ts#a configured skill is listed, its files open, and it stays read-only`                                     | covered |
+| A skill written in the interface offers its author an Edit, a configured one does not                                    | e2e   | `e2e/specs/mock/skills.spec.ts#a skill of my own is mine to edit`                                                                        | covered |
+| A skill is attached to an agent from the interface                                                                       | e2e   | `e2e/specs/mock/agent-skills.spec.ts#a skill picked in the builder is still on the agent after saving`                                   | covered |
+| A skill that is a database document stays on the agent too                                                               | e2e   | `e2e/specs/mock/agent-skills.spec.ts#a skill that is a database document is kept too`                                                    | covered |
 
 | An agent shared with everyone appears in the marketplace for other people | e2e | `e2e/specs/permissions/marketplace.spec.ts#an agent shared with everyone reaches the marketplace, an unshared one does not` | covered |
 | An unshared agent stays out of other people's marketplace | e2e | `e2e/specs/permissions/marketplace.spec.ts#expectNoMarketplaceHit(pageB, privateName)` | covered |
@@ -377,57 +380,57 @@ Covered by a flow, not just seeded: `PROMPTS.SHARE`/`SHARE_PUBLIC`, `AGENTS.SHAR
 
 ## 10. Settings, sharing, permissions
 
-| Behavior | Level | Owning test | Status |
-|---|---|---|---|
-| Theme switch (light/dark/system) persists | unit | `client/src/components/Nav/SettingsTabs/General/ThemeSelector.spec.tsx` | covered |
-| Language switch persists | unit | `client/src/components/Nav/SettingsTabs/General/LangSelector.spec.tsx` | covered |
-| Speech settings toggles | unit | `client/src/components/Nav/SettingsTabs/Speech/ConversationModeSwitch.spec.tsx` | covered |
-| Share a conversation by link | e2e | `e2e/specs/mock/shared-links.spec.ts` | covered |
-| Permission principals and details are enforced server-side | e2e | `e2e/specs/mock/permissions.spec.ts#keeps permission details and local principal writes in the authenticated context` | covered |
-| A permission switched off in the config takes its control out of the interface | e2e | `e2e/specs/permissions/gating.spec.ts#a permission switched off takes its control with it` | covered |
-| The permissions left on keep their controls on the same screen | e2e | `e2e/specs/permissions/gating.spec.ts#the permissions left on keep their controls` | covered |
-| The interface config block seeds the role exactly as written | e2e | `e2e/specs/permissions/gating.spec.ts#the config seeded the role exactly as written` | covered |
-| Usage/balance surfaces are correct | e2e | `e2e/specs/mock/usage.spec.ts` | covered |
-| Personal settings follow the account onto a new device | unit | `client/src/hooks/Preferences/__tests__/useApplyPreferences.spec.tsx` | covered |
-| A second employee on the same computer gets their own settings | unit | `client/src/hooks/Preferences/__tests__/useApplyPreferences.spec.tsx` | covered |
-| Settings saved only in this browser migrate up on first sign-in | unit | `client/src/hooks/Preferences/__tests__/useSyncPreferences.spec.tsx` | covered |
-| Changing a setting saves it to the account, and only what changed | unit | `client/src/hooks/Preferences/__tests__/preferencesRoundTrip.spec.tsx` | covered |
-| A failed or lost settings upload is retried, never silently dropped | unit | `client/src/hooks/Preferences/__tests__/useSyncPreferences.spec.tsx` | covered |
-| Only known settings, with values this build accepts, reach the account | unit | `packages/data-provider/src/preferences.spec.ts` | covered |
-| Two devices saving different settings do not overwrite each other | unit | `packages/data-schemas/src/methods/user.preferences.spec.ts` | covered |
-| Settings survive a full sign-in → change → sign-out → sign-in round trip | e2e | `e2e/specs/mock/settings-sync.spec.ts` | covered |
-| Bookmarks switch reveals the header icon, and only in a saved chat | e2e | `e2e/specs/mock/settings-sync.spec.ts` | covered |
-| A memory refused for personal data says so, instead of "storage full" | unit | `client/src/components/Chat/Messages/Content/__tests__/MemoryInfo.test.tsx` | covered |
-| A memory refused because the screening service is down says so | unit | `client/src/components/Chat/Messages/Content/__tests__/MemoryInfo.test.tsx` | covered |
-| A hand-written memory refused by the guard is explained in the user's language | unit | `client/src/utils/__tests__/memoryError.spec.ts` | covered |
+| Behavior                                                                       | Level | Owning test                                                                                                           | Status  |
+| ------------------------------------------------------------------------------ | ----- | --------------------------------------------------------------------------------------------------------------------- | ------- |
+| Theme switch (light/dark/system) persists                                      | unit  | `client/src/components/Nav/SettingsTabs/General/ThemeSelector.spec.tsx`                                               | covered |
+| Language switch persists                                                       | unit  | `client/src/components/Nav/SettingsTabs/General/LangSelector.spec.tsx`                                                | covered |
+| Speech settings toggles                                                        | unit  | `client/src/components/Nav/SettingsTabs/Speech/ConversationModeSwitch.spec.tsx`                                       | covered |
+| Share a conversation by link                                                   | e2e   | `e2e/specs/mock/shared-links.spec.ts`                                                                                 | covered |
+| Permission principals and details are enforced server-side                     | e2e   | `e2e/specs/mock/permissions.spec.ts#keeps permission details and local principal writes in the authenticated context` | covered |
+| A permission switched off in the config takes its control out of the interface | e2e   | `e2e/specs/permissions/gating.spec.ts#a permission switched off takes its control with it`                            | covered |
+| The permissions left on keep their controls on the same screen                 | e2e   | `e2e/specs/permissions/gating.spec.ts#the permissions left on keep their controls`                                    | covered |
+| The interface config block seeds the role exactly as written                   | e2e   | `e2e/specs/permissions/gating.spec.ts#the config seeded the role exactly as written`                                  | covered |
+| Usage/balance surfaces are correct                                             | e2e   | `e2e/specs/mock/usage.spec.ts`                                                                                        | covered |
+| Personal settings follow the account onto a new device                         | unit  | `client/src/hooks/Preferences/__tests__/useApplyPreferences.spec.tsx`                                                 | covered |
+| A second employee on the same computer gets their own settings                 | unit  | `client/src/hooks/Preferences/__tests__/useApplyPreferences.spec.tsx`                                                 | covered |
+| Settings saved only in this browser migrate up on first sign-in                | unit  | `client/src/hooks/Preferences/__tests__/useSyncPreferences.spec.tsx`                                                  | covered |
+| Changing a setting saves it to the account, and only what changed              | unit  | `client/src/hooks/Preferences/__tests__/preferencesRoundTrip.spec.tsx`                                                | covered |
+| A failed or lost settings upload is retried, never silently dropped            | unit  | `client/src/hooks/Preferences/__tests__/useSyncPreferences.spec.tsx`                                                  | covered |
+| Only known settings, with values this build accepts, reach the account         | unit  | `packages/data-provider/src/preferences.spec.ts`                                                                      | covered |
+| Two devices saving different settings do not overwrite each other              | unit  | `packages/data-schemas/src/methods/user.preferences.spec.ts`                                                          | covered |
+| Settings survive a full sign-in → change → sign-out → sign-in round trip       | e2e   | `e2e/specs/mock/settings-sync.spec.ts`                                                                                | covered |
+| Bookmarks switch reveals the header icon, and only in a saved chat             | e2e   | `e2e/specs/mock/settings-sync.spec.ts`                                                                                | covered |
+| A memory refused for personal data says so, instead of "storage full"          | unit  | `client/src/components/Chat/Messages/Content/__tests__/MemoryInfo.test.tsx`                                           | covered |
+| A memory refused because the screening service is down says so                 | unit  | `client/src/components/Chat/Messages/Content/__tests__/MemoryInfo.test.tsx`                                           | covered |
+| A hand-written memory refused by the guard is explained in the user's language | unit  | `client/src/utils/__tests__/memoryError.spec.ts`                                                                      | covered |
 
 ## 11. Accessibility
 
-| Behavior | Level | Owning test | Status |
-|---|---|---|---|
-| New chat screen passes axe (WCAG 2.1 A/AA) | a11y | `e2e/specs/mock/a11y.spec.ts#the new chat screen has no WCAG A/AA violations` | covered |
-| Icon-only buttons have accessible names, outside the sidebar | a11y | `e2e/specs/mock/a11y.spec.ts#const SIDEBAR = 'aside'` | covered |
-| Conversation screen passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#a conversation fails only on the two known sidebar defects` | fixme:Ф1 |
-| File library dialog passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the file library fails on the header contrast and on its own rows` | fixme:Ф1 |
-| Tab order reaches the composer from the top of the document | a11y | `e2e/specs/mock/a11y.spec.ts#the composer is reachable and operable from the keyboard alone` | covered |
-| Closing a dialog returns focus to what opened it | a11y | `e2e/specs/mock/a11y.spec.ts#closing the file panel hands focus back to what opened it` | covered |
-| Closing the settings dialog returns focus to the account button | a11y | `e2e/specs/mock/dialogs.spec.ts#the settings dialog keeps the other four, and drops focus to the body` | fixme:Ф1 |
-| Escape closes the top dialog and leaves the one behind it open | a11y | `e2e/specs/mock/a11y.spec.ts#Escape closes the preview and leaves the panel it came from open` | covered |
-| A modal locks the page behind it, and lets it scroll again after | a11y | `e2e/specs/mock/dialogs.spec.ts#the projects panel locks the page, holds focus, and hands it back` | covered |
-| Tab does not walk out of an open modal onto the page behind | a11y | `e2e/specs/mock/dialogs.spec.ts#tabEscapedTo` | covered |
-| A dialog holds focus against anything else claiming it | a11y | — | gap |
-| A menu popover follows the menu pattern, not the modal one | a11y | `e2e/specs/mock/menu-pattern.spec.ts#it is a menu of menu items, and it does not lock the page like a modal` | covered |
-| A menu answers the arrow keys and hands focus back on Escape | a11y | `e2e/specs/mock/menu-pattern.spec.ts#arrow keys walk its items and Escape gives focus back` | covered |
-| The settings dialog passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the settings dialog has no WCAG A/AA violations` | covered |
-| The projects panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the projects panel has no WCAG A/AA violations` | covered |
-| The agents panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the agents panel fails only on its category tab` | fixme:Ф1 |
-| The prompts panel passes axe | a11y | `e2e/specs/mock/a11y.spec.ts#the prompts panel fails only on the nested control` | fixme:Ф1 |
-| Data tables announce translated labels, not raw keys | a11y | `e2e/specs/mock/file-preview.spec.ts#labels the file table in words, not translation keys` | covered |
-| Every control the keyboard reaches shows that it has focus | a11y | `e2e/specs/mock/canon.spec.ts#every control the keyboard reaches on the chat screen shows it has focus` | covered |
-| Nothing is clickable by mouse but unreachable by keyboard | a11y | `e2e/specs/mock/canon.spec.ts#nothing is clickable by mouse but unreachable by keyboard` | covered |
-| Every hit area on a phone is at least 44px (WCAG 2.2, axe does not check it) | a11y | `e2e/specs/nightly/touch-targets.spec.ts#every control a finger can reach is at least 44px` | covered |
-| Shared components' translation keys are defined in this app | unit | `client/src/locales/keys.spec.ts` | covered |
-| File panel exposes tablist semantics | a11y | — | todo:Ф1 |
+| Behavior                                                                     | Level | Owning test                                                                                                  | Status   |
+| ---------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------ | -------- |
+| New chat screen passes axe (WCAG 2.1 A/AA)                                   | a11y  | `e2e/specs/mock/a11y.spec.ts#the new chat screen has no WCAG A/AA violations`                                | covered  |
+| Icon-only buttons have accessible names, outside the sidebar                 | a11y  | `e2e/specs/mock/a11y.spec.ts#const SIDEBAR = 'aside'`                                                        | covered  |
+| Conversation screen passes axe                                               | a11y  | `e2e/specs/mock/a11y.spec.ts#a conversation fails only on the two known sidebar defects`                     | fixme:Ф1 |
+| File library dialog passes axe                                               | a11y  | `e2e/specs/mock/a11y.spec.ts#the file library fails on the header contrast and on its own rows`              | fixme:Ф1 |
+| Tab order reaches the composer from the top of the document                  | a11y  | `e2e/specs/mock/a11y.spec.ts#the composer is reachable and operable from the keyboard alone`                 | covered  |
+| Closing a dialog returns focus to what opened it                             | a11y  | `e2e/specs/mock/a11y.spec.ts#closing the file panel hands focus back to what opened it`                      | covered  |
+| Closing the settings dialog returns focus to the account button              | a11y  | `e2e/specs/mock/dialogs.spec.ts#the settings dialog keeps the other four, and drops focus to the body`       | fixme:Ф1 |
+| Escape closes the top dialog and leaves the one behind it open               | a11y  | `e2e/specs/mock/a11y.spec.ts#Escape closes the preview and leaves the panel it came from open`               | covered  |
+| A modal locks the page behind it, and lets it scroll again after             | a11y  | `e2e/specs/mock/dialogs.spec.ts#the projects panel locks the page, holds focus, and hands it back`           | covered  |
+| Tab does not walk out of an open modal onto the page behind                  | a11y  | `e2e/specs/mock/dialogs.spec.ts#tabEscapedTo`                                                                | covered  |
+| A dialog holds focus against anything else claiming it                       | a11y  | —                                                                                                            | gap      |
+| A menu popover follows the menu pattern, not the modal one                   | a11y  | `e2e/specs/mock/menu-pattern.spec.ts#it is a menu of menu items, and it does not lock the page like a modal` | covered  |
+| A menu answers the arrow keys and hands focus back on Escape                 | a11y  | `e2e/specs/mock/menu-pattern.spec.ts#arrow keys walk its items and Escape gives focus back`                  | covered  |
+| The settings dialog passes axe                                               | a11y  | `e2e/specs/mock/a11y.spec.ts#the settings dialog has no WCAG A/AA violations`                                | covered  |
+| The projects panel passes axe                                                | a11y  | `e2e/specs/mock/a11y.spec.ts#the projects panel has no WCAG A/AA violations`                                 | covered  |
+| The agents panel passes axe                                                  | a11y  | `e2e/specs/mock/a11y.spec.ts#the agents panel fails only on its category tab`                                | fixme:Ф1 |
+| The prompts panel passes axe                                                 | a11y  | `e2e/specs/mock/a11y.spec.ts#the prompts panel fails only on the nested control`                             | fixme:Ф1 |
+| Data tables announce translated labels, not raw keys                         | a11y  | `e2e/specs/mock/file-preview.spec.ts#labels the file table in words, not translation keys`                   | covered  |
+| Every control the keyboard reaches shows that it has focus                   | a11y  | `e2e/specs/mock/canon.spec.ts#every control the keyboard reaches on the chat screen shows it has focus`      | covered  |
+| Nothing is clickable by mouse but unreachable by keyboard                    | a11y  | `e2e/specs/mock/canon.spec.ts#nothing is clickable by mouse but unreachable by keyboard`                     | covered  |
+| Every hit area on a phone is at least 44px (WCAG 2.2, axe does not check it) | a11y  | `e2e/specs/nightly/touch-targets.spec.ts#every control a finger can reach is at least 44px`                  | covered  |
+| Shared components' translation keys are defined in this app                  | unit  | `client/src/locales/keys.spec.ts`                                                                            | covered  |
+| File panel exposes tablist semantics                                         | a11y  | —                                                                                                            | todo:Ф1  |
 
 Four rows are `fixme:Ф1` because the screen has a real defect, each with a `test.fail` for the
 clean result and an ordinary sibling test pinning exactly what is wrong — `test.fail` is
@@ -466,16 +469,16 @@ of encoded.
 
 ## 12. Layout, theme, localisation
 
-| Behavior | Level | Owning test | Status |
-|---|---|---|---|
-| Panel and its layout host switch to the phone layout at the same width | unit | `client/src/components/Artifacts/__tests__/breakpoints.test.ts#switches the panel and its layout host at the same width` | covered |
-| Chat and file library work at phone, 800px and desktop widths | e2e | `e2e/specs/nightly/layout.spec.ts#the file library opens and does not scroll sideways` | covered |
-| No screen scrolls sideways at any of those widths | e2e | `e2e/specs/nightly/layout.spec.ts#expectNoSidewaysScroll` | covered |
-| Dark theme really applies, and its key screens pass axe | a11y | `e2e/specs/nightly/theme.spec.ts#a conversation gains no dark-only defect on top of the known two` | covered |
-| Russian build shows no untranslated keys on key screens | e2e | `e2e/specs/nightly/locale.spec.ts#with no untranslated keys left showing` | covered |
-| Russian locale renders key screens without overflow | e2e | `e2e/specs/nightly/layout.spec.ts#mainScrollWidth` | covered |
-| Artifacts panel open at a narrow desktop width | e2e | `e2e/specs/mock/artifacts.spec.ts#the panel opens at a narrow desktop width and leaves the chat usable` | covered |
-| The open panel gives chat and artifact their own card (radius, border, gap-as-handle), dropped for an overlay on the phone layout | e2e | `e2e/specs/mock/artifacts.spec.ts#the open panel gives the chat and the artifact their own card, and the gap between them is the handle` | covered |
+| Behavior                                                                                                                          | Level | Owning test                                                                                                                              | Status  |
+| --------------------------------------------------------------------------------------------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Panel and its layout host switch to the phone layout at the same width                                                            | unit  | `client/src/components/Artifacts/__tests__/breakpoints.test.ts#switches the panel and its layout host at the same width`                 | covered |
+| Chat and file library work at phone, 800px and desktop widths                                                                     | e2e   | `e2e/specs/nightly/layout.spec.ts#the file library opens and does not scroll sideways`                                                   | covered |
+| No screen scrolls sideways at any of those widths                                                                                 | e2e   | `e2e/specs/nightly/layout.spec.ts#expectNoSidewaysScroll`                                                                                | covered |
+| Dark theme really applies, and its key screens pass axe                                                                           | a11y  | `e2e/specs/nightly/theme.spec.ts#a conversation gains no dark-only defect on top of the known two`                                       | covered |
+| Russian build shows no untranslated keys on key screens                                                                           | e2e   | `e2e/specs/nightly/locale.spec.ts#with no untranslated keys left showing`                                                                | covered |
+| Russian locale renders key screens without overflow                                                                               | e2e   | `e2e/specs/nightly/layout.spec.ts#mainScrollWidth`                                                                                       | covered |
+| Artifacts panel open at a narrow desktop width                                                                                    | e2e   | `e2e/specs/mock/artifacts.spec.ts#the panel opens at a narrow desktop width and leaves the chat usable`                                  | covered |
+| The open panel gives chat and artifact their own card (radius, border, gap-as-handle), dropped for an overlay on the phone layout | e2e   | `e2e/specs/mock/artifacts.spec.ts#the open panel gives the chat and the artifact their own card, and the gap between them is the handle` | covered |
 
 | Every z-index on the chat screen comes from the canon scale | e2e | `e2e/specs/mock/canon.spec.ts#every z-index comes from the canon scale` | covered |
 | The file library dialog stacks on the canon dialog layer | e2e | `e2e/specs/mock/canon.spec.ts#the file library dialog is on the canon dialog layer` | covered |
@@ -559,7 +562,7 @@ Accessibility defects outside the sidebar, all in surfaces the redesign is rebui
 The **agents panel** has a critical `aria-valid-attr-value` on `#category-tab-all` — the tab
 itself names something that is not in the document. An earlier note here called it intermittent
 and blamed the grid; both were wrong. Measured three times: the tab is present and visible when
-the scan runs and the violation is still there. What varies is only *when* you scan — before the
+the scan runs and the violation is still there. What varies is only _when_ you scan — before the
 tabs render the panel is clean, because the element that carries the defect does not exist yet.
 Both agents tests therefore wait for the tabs, so the "clean" one cannot pass while the defect
 sits behind it.

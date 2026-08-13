@@ -1,3 +1,5 @@
+import type { TFile } from 'librechat-data-provider';
+
 export interface CodeBlock {
   id: string;
   language: string;
@@ -10,14 +12,14 @@ export interface CodeBlock {
  * it. The office preview buckets render server-generated HTML in the panel
  * while the real deliverable is this binary, so the panel's download control
  * needs the file rather than the preview it happens to be showing.
+ *
+ * Every field is optional because a shared conversation strips `user` and
+ * `source` on the way out, but the shape is a projection of `TFile` so
+ * `source` keeps its enum and a wrong value cannot typecheck.
  */
-export interface ArtifactSourceFile {
-  file_id?: string;
-  filename?: string;
-  filepath?: string;
-  source?: string;
-  user?: string;
-}
+export type ArtifactSourceFile = Partial<
+  Pick<TFile, 'file_id' | 'filename' | 'filepath' | 'source' | 'user'>
+>;
 
 export interface Artifact {
   id: string;

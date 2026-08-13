@@ -39,6 +39,22 @@ const isLocallyStoredSource = (source?: string): boolean => {
   ].includes(source as FileSources);
 };
 
+/**
+ * Whether the download route can actually serve this record's bytes. Callers
+ * that must decide BEFORE clicking — the artifacts panel picks between the
+ * stored original and the content it is rendering — have to ask the same
+ * question the handler answers, or they route work to a branch that cannot
+ * succeed: a shared conversation strips `user` and `source` while keeping
+ * `file_id`, and the leftover `filepath` is a storage path the server does
+ * not serve.
+ */
+export const canDownloadStoredFile = ({
+  file_id,
+  user,
+  source,
+}: Pick<AttachmentLinkOptions, 'file_id' | 'user' | 'source'>): boolean =>
+  isLocallyStoredSource(source) && !!file_id && !!user;
+
 export const useAttachmentLink = ({
   href,
   filename,
@@ -48,16 +64,21 @@ export const useAttachmentLink = ({
 }: AttachmentLinkOptions) => {
   const { showToast } = useToastContext();
 
-  const useLocalDownload = isLocallyStoredSource(source) && !!file_id && !!user;
+  const useLocalDownload = canDownloadStoredFile({ file_id, user, source });
   const { refetch: downloadFromApi } = useFileDownload(user, file_id, { source });
   const { refetch: downloadFromUrl } = useCodeOutputDownload(href);
 
-  const handleDownload = async (event: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>) => {
+  /** Resolves to whether bytes actually reached the browser. Callers that show
+   * a "saved" confirmation must gate it on this: every failure path below is
+   * handled in place and would otherwise read as success. */
+  const handleDownload = async (
+    event: React.MouseEvent<HTMLAnchorElement | HTMLButtonElement>,
+  ): Promise<boolean> => {
     event.preventDefault();
     try {
       if (!useLocalDownload && isHttpDownloadTarget(href)) {
         triggerDownload(href, filename);
-        return;
+        return true;
       }
 
       const stream = useLocalDownload ? await downloadFromApi() : await downloadFromUrl();
@@ -67,11 +88,17 @@ export const useAttachmentLink = ({
           status: 'error',
           message: 'Error downloading file',
         });
-        return;
+        return false;
       }
       triggerDownload(stream.data, filename);
+      return true;
     } catch (error) {
       console.error('Error downloading file:', error);
+      showToast({
+        status: 'error',
+        message: 'Error downloading file',
+      });
+      return false;
     }
   };
 

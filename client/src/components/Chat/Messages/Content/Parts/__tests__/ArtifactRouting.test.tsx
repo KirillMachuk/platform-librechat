@@ -349,6 +349,47 @@ describe('ToolArtifactCard click behaviour', () => {
     expect(snapshot.contentForDup).toBe('<h1>v2 (newer)</h1>');
   });
 
+  it('re-registers when only the stored file identity drifted', () => {
+    // The panel's download control reads `artifact.file` to fetch the stored
+    // original. The drift check compared content/type/title only, so a record
+    // re-registered at a new storage path — same extracted text, same name —
+    // left the panel holding a path that no longer resolves.
+    let storedPath: string | null = null;
+    const PathProbe = () => {
+      const artifacts = useRecoilValue(store.artifactsState);
+      React.useEffect(() => {
+        storedPath = artifacts?.['tool-artifact-moved']?.file?.filepath ?? null;
+      });
+      return null;
+    };
+    const at = (filepath: string) =>
+      baseAttachment({
+        file_id: 'moved',
+        filename: 'output.html',
+        filepath,
+        text: '<h1>same</h1>',
+      });
+    /* One card, re-rendered: the same instance keeps its claim and sees the
+     * already-registered entry, which is the only way the drift comparison is
+     * reached. Two separate cards would each write on first mount and pass
+     * whatever the comparison said. */
+    const { rerender } = render(
+      <RecoilRoot>
+        <PathProbe />
+        <AttachmentGroup attachments={[at('/uploads/user-1/moved__output.html')]} />
+      </RecoilRoot>,
+    );
+    expect(storedPath).toBe('/uploads/user-1/moved__output.html');
+
+    rerender(
+      <RecoilRoot>
+        <PathProbe />
+        <AttachmentGroup attachments={[at('/uploads/user-1/moved__output.v2.html')]} />
+      </RecoilRoot>,
+    );
+    expect(storedPath).toBe('/uploads/user-1/moved__output.v2.html');
+  });
+
   it('dedups cards for the same file_id across separate AttachmentGroups (latest mount wins)', () => {
     // Real scenario: each tool call renders its own AttachmentGroup; the
     // same file (same file_id) shows up in two of them. We expect only
