@@ -207,6 +207,7 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | Header copy and close act on the shown file | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
 | Download saves the shown file, edited buffer winning over stored content | unit | `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx#downloads what the user edited rather than the original content` | covered |
 | A downloaded artifact keeps the name the panel shows | unit | `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx#saves under the name the panel shows` | fixme:Ф1 |
+| Downloading an office artifact saves the stored file, not its HTML preview | unit | `client/src/components/Artifacts/__tests__/DownloadArtifact.test.tsx#saves the stored .pptx, not the HTML preview standing in for it` | covered |
 | Office and code files expose only their meaningful view | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
 | View switch is locked while a save is in flight | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx` | covered |
 | Editor keeps unsaved edits while the same file keeps streaming | unit | `client/src/components/Artifacts/__tests__/ArtifactTabs.test.tsx` | covered |

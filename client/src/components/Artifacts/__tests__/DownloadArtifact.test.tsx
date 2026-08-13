@@ -1,5 +1,7 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { dataService, FileSources } from 'librechat-data-provider';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { Artifact } from '~/common';
 import { EditorProvider, useCodeState } from '~/Providers/EditorContext';
 import { TOOL_ARTIFACT_TYPES } from '~/utils/artifacts';
@@ -11,6 +13,16 @@ jest.mock('~/hooks', () => ({
     (key: string): string =>
       key,
 }));
+
+jest.mock('librechat-data-provider', () => {
+  const actual = jest.requireActual('librechat-data-provider');
+  return {
+    ...actual,
+    dataService: { ...actual.dataService, getFileDownload: jest.fn() },
+  };
+});
+
+const getFileDownload = dataService.getFileDownload as jest.Mock;
 
 const buildArtifact = (overrides: Partial<Artifact> = {}): Artifact =>
   ({
@@ -42,16 +54,41 @@ let clickSpy: jest.SpyInstance;
 
 const renderDownload = (artifact: Artifact) =>
   render(
-    <EditorProvider>
-      <EditBuffer />
-      <DownloadArtifact artifact={artifact} />
-    </EditorProvider>,
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <EditorProvider>
+        <EditBuffer />
+        <DownloadArtifact artifact={artifact} />
+      </EditorProvider>
+    </QueryClientProvider>,
   );
+
+/** A .pptx the sandbox produced: the panel shows a generated HTML preview,
+ * the deliverable is the stored binary. */
+const presentationArtifact = (): Artifact =>
+  buildArtifact({
+    title: 'top5-ai-2026-v2.pptx',
+    type: TOOL_ARTIFACT_TYPES.PRESENTATION,
+    content: '<!doctype html><html><body>preview of slide 1</body></html>',
+    file: {
+      file_id: '17f4cc67-6bb2-4e52-a18f-c0596d51e85a',
+      filename: 'top5-ai-2026-v2.pptx',
+      filepath: '/uploads/user-1/17f4cc67__top5-ai-2026-v2.pptx',
+      source: FileSources.local,
+      user: 'user-1',
+    },
+  });
 
 describe('DownloadArtifact', () => {
   beforeEach(() => {
     downloadedContent = '';
     downloadedName = undefined;
+    getFileDownload.mockReset();
+    getFileDownload.mockResolvedValue({
+      data: new OriginalBlob(['pptx-bytes']),
+      headers: {},
+    });
     global.Blob = function BlobDouble(parts: string[], options?: BlobPropertyBag) {
       downloadedContent = (parts ?? []).join('');
       return new OriginalBlob(parts, options);
@@ -106,6 +143,29 @@ describe('DownloadArtifact', () => {
     fireEvent.click(screen.getByRole('button', { name: 'edit' }));
     fireEvent.click(screen.getByRole('button', { name: 'com_ui_download_artifact' }));
     expect(downloadedContent).toBe('content the user edited');
+  });
+
+  it('saves the stored .pptx, not the HTML preview standing in for it', async () => {
+    renderDownload(presentationArtifact());
+
+    fireEvent.click(screen.getByRole('button', { name: 'com_ui_download_artifact' }));
+
+    await waitFor(() => expect(getFileDownload).toHaveBeenCalledTimes(1));
+    expect(getFileDownload).toHaveBeenCalledWith('user-1', '17f4cc67-6bb2-4e52-a18f-c0596d51e85a');
+    await waitFor(() => expect(downloadedName).toBe('top5-ai-2026-v2.pptx'));
+    /* The preview markup must not be what lands in Downloads — that is the
+     * defect: an `index.html` page saved in place of the presentation. */
+    expect(downloadedContent).toBe('');
+  });
+
+  it('still saves the shown content for an artifact that has no stored file', async () => {
+    renderDownload(buildArtifact({ title: 'notes.md', content: 'plain notes' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'com_ui_download_artifact' }));
+
+    await waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
+    expect(getFileDownload).not.toHaveBeenCalled();
+    expect(downloadedContent).toBe('plain notes');
   });
 
   it('downloads nothing when there is no content at all', () => {
