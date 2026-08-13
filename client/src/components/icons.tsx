@@ -82,8 +82,10 @@ import {
   IconFilePlus,
   IconFileSearch,
   IconFileText,
+  IconFileTypePdf,
   IconFileUnknown,
   IconFileUpload,
+  IconFileZip,
   IconFiles,
   IconFilter,
   IconFilterX,
@@ -273,6 +275,7 @@ export const Eye: LucideIcon = canon(IconEye, 'Eye');
 export const EyeOff: LucideIcon = canon(IconEyeOff, 'EyeOff');
 export const Feather: LucideIcon = canon(IconFeather, 'Feather');
 export const File: LucideIcon = canon(IconFile, 'File');
+export const FileArchive: LucideIcon = canon(IconFileZip, 'FileArchive');
 export const FileCode: LucideIcon = canon(IconFileCode, 'FileCode');
 export const FileImage: LucideIcon = canon(IconPhoto, 'FileImage');
 export const FileImageIcon: LucideIcon = canon(IconPhoto, 'FileImageIcon');
@@ -285,8 +288,10 @@ export const FileSearchIcon: LucideIcon = canon(IconFileSearch, 'FileSearchIcon'
 export const FileSpreadsheet: LucideIcon = canon(IconTable, 'FileSpreadsheet');
 export const FileText: LucideIcon = canon(IconFileText, 'FileText');
 export const FileType2Icon: LucideIcon = canon(IconFileText, 'FileType2Icon');
+export const FileTypePdf: LucideIcon = canon(IconFileTypePdf, 'FileTypePdf');
 export const FileUp: LucideIcon = canon(IconFileUpload, 'FileUp');
 export const Files: LucideIcon = canon(IconFiles, 'Files');
+export const Film: LucideIcon = canon(IconMovie, 'Film');
 export const FilterX: LucideIcon = canon(IconFilterX, 'FilterX');
 export const FlaskConical: LucideIcon = canon(IconFlask2, 'FlaskConical');
 export const Flower2: LucideIcon = canon(IconFlower, 'Flower2');

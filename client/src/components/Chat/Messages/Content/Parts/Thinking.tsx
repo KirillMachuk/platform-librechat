@@ -30,10 +30,20 @@ export const ThinkingContent: FC<{
 
 /** The book's «Мысли» card (§6.13, `.think`): ONE hairline box, radius 12,
  *  panel fill, holding both the toggle header and the body. */
-export const ThinkingCard: FC<{ children: React.ReactNode }> = ({ children }) => (
-  /* 12.08, владелец: карточка БЕЛАЯ с волосяной рамкой (как «Новый чат»),
-     серой становится только под курсором. */
-  <div className="mb-2.5 overflow-hidden rounded-xl border border-border-light bg-surface-primary transition-colors [@media(hover:hover)]:hover:bg-surface-hover">
+export const ThinkingCard: FC<{ children: React.ReactNode; expanded?: boolean }> = ({
+  children,
+  expanded,
+}) => (
+  /* 12.08-2, владелец: закрытая карточка белая, под курсором серая, ОТКРЫТАЯ
+     остаётся серой до закрытия — у всей семьи разворачивашек. */
+  <div
+    className={cn(
+      'mb-2.5 overflow-hidden rounded-xl border border-border-light transition-colors',
+      expanded
+        ? 'bg-surface-hover'
+        : 'bg-surface-primary [@media(hover:hover)]:hover:bg-surface-hover',
+    )}
+  >
     {children}
   </div>
 );
@@ -122,7 +132,7 @@ const Thinking: React.ElementType = memo(({ children }: { children: React.ReactN
 
   return (
     <div ref={containerRef} className="group/thinking-container">
-      <ThinkingCard>
+      <ThinkingCard expanded={isExpanded}>
         <ThinkingButton
           isExpanded={isExpanded}
           onClick={handleClick}

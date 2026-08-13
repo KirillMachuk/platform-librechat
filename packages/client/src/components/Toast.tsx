@@ -5,17 +5,14 @@ import { useToast } from '~/hooks';
 
 export function Toast(): JSX.Element {
   const { toast, onOpenChange } = useToast();
+  /* 12.08-2, владелец: «оранжевое окно» тостов — последний реликт LibreChat.
+     Канон §6.6: чернильная плашка (как тултипы), обычный вес; серьёзность
+     несёт ЦВЕТ ИКОНКИ, а не вся плита. */
   const severityClassName = {
-    /* Going up by 100 units in terms of darkness (eg bg-green-500 to bg-green-600) for
-     * bg colors produces colors that are too visually dissimilar to LibreChat's standard color palette.
-     * These colors were derived by adjusting the values in the HSV color space using CCA
-     * until the 4.5:1 contrast ratio threshold was met against white text while maintaining
-     * a relatively recognizable color scheme for toasts without compromising accessibility.
-     * */
-    [NotificationSeverity.INFO]: 'border-gray-500 bg-gray-500',
-    [NotificationSeverity.SUCCESS]: 'border-[#02855E] bg-[#02855E]',
-    [NotificationSeverity.WARNING]: 'border-[#C75209] bg-[#C75209]',
-    [NotificationSeverity.ERROR]: 'border-[#E02F1F] bg-[#E02F1F]',
+    [NotificationSeverity.INFO]: 'text-[var(--c-ink-label)]/70',
+    [NotificationSeverity.SUCCESS]: 'text-green-400',
+    [NotificationSeverity.WARNING]: 'text-amber-400',
+    [NotificationSeverity.ERROR]: 'text-red-400',
   };
 
   return (
@@ -30,12 +27,10 @@ export function Toast(): JSX.Element {
     >
       <div className="w-full p-1 text-center md:w-auto md:text-justify">
         <div
-          className={`alert-root pointer-events-auto inline-flex flex-row gap-2 rounded-md border px-3 py-2 font-bold text-white ${
-            severityClassName[toast.severity]
-          }`}
+          className={`alert-root pointer-events-auto inline-flex flex-row items-center gap-2 rounded-xl bg-[var(--c-ink)] px-4 py-2.5 text-sm font-normal text-[var(--c-ink-label)] shadow-lg ${''}`}
         >
           {toast.showIcon && (
-            <div className="mt-1 flex-shrink-0 flex-grow-0">
+            <div className={`flex-shrink-0 flex-grow-0 ${severityClassName[toast.severity]}`}>
               <svg
                 stroke="currentColor"
                 fill="none"

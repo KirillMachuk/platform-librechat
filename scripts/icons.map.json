@@ -263,6 +263,10 @@
     "fit": "exact",
     "to": "file"
   },
+  "FileArchive": {
+    "fit": "close",
+    "to": "file-zip"
+  },
   "FileCode": {
     "fit": "exact",
     "to": "file-code"
@@ -311,6 +315,10 @@
     "fit": "close",
     "to": "file-text"
   },
+  "FileTypePdf": {
+    "fit": "exact",
+    "to": "file-type-pdf"
+  },
   "FileUp": {
     "fit": "close",
     "to": "file-upload"
@@ -318,6 +326,10 @@
   "Files": {
     "fit": "exact",
     "to": "files"
+  },
+  "Film": {
+    "fit": "close",
+    "to": "movie"
   },
   "FilterX": {
     "fit": "exact",

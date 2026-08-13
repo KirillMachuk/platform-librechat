@@ -234,7 +234,10 @@ function ExpandedPanel({
       {/* min-h-0 + overflow: on a short phone viewport THIS block gives way and
           scrolls, so the chats below keep their guaranteed minimum. On a
           desktop height nothing changes — the block fits and never scrolls. */}
-      <div className="flex min-h-0 flex-col overflow-y-auto overscroll-contain">
+      {/* 12.08-2, регрессия: внутри прокручиваемой колонки flex-дети по
+          умолчанию СЖИМАЕМЫ — на телефоне строки меню сплющило вместо того,
+          чтобы прокрутиться. Каждый ребёнок обязан держать свою высоту. */}
+      <div className="flex min-h-0 flex-col overflow-y-auto overscroll-contain [&>*]:shrink-0">
         <NewChatRow />
         <SearchChatsRow />
         {/* The open section is the one whose panel is on screen — the only notion
