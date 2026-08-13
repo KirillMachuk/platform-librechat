@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
-import { useToastContext, TooltipAnchor } from '@librechat/client';
+import { useToastContext } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
+import CardDownloadButton from '~/components/Chat/Input/Files/CardDownloadButton';
 import { useLocalize, useAuthContext } from '~/hooks';
 import { useFileDownload } from '~/data-provider';
-import { Download } from '~/components/icons';
 import { triggerDownload } from '~/utils';
 
 /** The chat file card's hover action (owner 12.08-2, ChatGPT's pattern):
@@ -34,19 +34,5 @@ export default function DownloadFileButton({ file }: { file: Partial<TFile> }) {
     [downloadFile, file.filename, localize, showToast],
   );
 
-  return (
-    <TooltipAnchor
-      description={localize('com_ui_download')}
-      render={
-        <button
-          type="button"
-          aria-label={localize('com_ui_download')}
-          onClick={handleDownload}
-          className="flex size-7 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-surface-active hover:text-text-primary focus-visible:outline-none"
-        >
-          <Download className="icon-sm" aria-hidden="true" />
-        </button>
-      }
-    />
-  );
+  return <CardDownloadButton onClick={handleDownload} name={file.filename ?? undefined} />;
 }

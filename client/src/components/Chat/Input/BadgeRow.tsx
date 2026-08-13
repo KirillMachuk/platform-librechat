@@ -352,7 +352,7 @@ function BadgeRow({
       toolLoopUnavailable={toolLoopUnavailable}
       activeModel={activeModel}
     >
-      <div ref={containerRef} className="relative flex flex-wrap items-center gap-2">
+      <div ref={containerRef} className="relative flex min-w-0 items-center gap-2">
         {/* The phone's «+»: the book's mobile composer has ONE entry point for
             uploads and tools, and no separate tools button below md. */}
         {plusSheet != null && (
@@ -366,64 +366,68 @@ function BadgeRow({
           />
         )}
         {showEphemeralBadges === true && <ToolsDropdown />}
-        {tempBadges.map((badge, index) => (
-          <React.Fragment key={badge.id}>
-            {dragState.draggedBadge && dragState.insertIndex === index && ghostBadge && (
-              <div className="badge-icon h-full">
-                <Badge
-                  id={ghostBadge.id}
-                  icon={ghostBadge.icon as LucideIcon}
-                  label={ghostBadge.label}
-                  isActive={dragState.draggedBadgeActive}
-                  isEditing={isEditing}
-                  isAvailable={ghostBadge.isAvailable}
-                  isInChat={isInChat}
-                />
-              </div>
-            )}
-            <BadgeWrapper
-              badge={badge}
-              isEditing={isEditing}
-              isInChat={isInChat}
-              onToggle={handleBadgeToggle}
-              onDelete={handleDelete}
-              onMouseDown={handleMouseDown}
-              badgeRefs={badgeRefs}
-            />
-          </React.Fragment>
-        ))}
-        {dragState.draggedBadge && dragState.insertIndex === tempBadges.length && ghostBadge && (
-          <div className="badge-icon h-full">
-            <Badge
-              id={ghostBadge.id}
-              icon={ghostBadge.icon as LucideIcon}
-              label={ghostBadge.label}
-              isActive={dragState.draggedBadgeActive}
-              isEditing={isEditing}
-              isAvailable={ghostBadge.isAvailable}
-              isInChat={isInChat}
-            />
-          </div>
-        )}
-        {showEphemeralBadges === true && (
-          <>
-            <FileMode />
-            {/* Hidden for a model that cannot run the tool loop — a reasoning
+        {/* 12.08-3: чипы НЕ переносятся на второй ряд — лента едет вбок на
+            всех ширинах; «+» и «Инструменты» слева не прокручиваются. */}
+        <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [&>*]:shrink-0">
+          {tempBadges.map((badge, index) => (
+            <React.Fragment key={badge.id}>
+              {dragState.draggedBadge && dragState.insertIndex === index && ghostBadge && (
+                <div className="badge-icon h-full">
+                  <Badge
+                    id={ghostBadge.id}
+                    icon={ghostBadge.icon as LucideIcon}
+                    label={ghostBadge.label}
+                    isActive={dragState.draggedBadgeActive}
+                    isEditing={isEditing}
+                    isAvailable={ghostBadge.isAvailable}
+                    isInChat={isInChat}
+                  />
+                </div>
+              )}
+              <BadgeWrapper
+                badge={badge}
+                isEditing={isEditing}
+                isInChat={isInChat}
+                onToggle={handleBadgeToggle}
+                onDelete={handleDelete}
+                onMouseDown={handleMouseDown}
+                badgeRefs={badgeRefs}
+              />
+            </React.Fragment>
+          ))}
+          {dragState.draggedBadge && dragState.insertIndex === tempBadges.length && ghostBadge && (
+            <div className="badge-icon h-full">
+              <Badge
+                id={ghostBadge.id}
+                icon={ghostBadge.icon as LucideIcon}
+                label={ghostBadge.label}
+                isActive={dragState.draggedBadgeActive}
+                isEditing={isEditing}
+                isAvailable={ghostBadge.isAvailable}
+                isInChat={isInChat}
+              />
+            </div>
+          )}
+          {showEphemeralBadges === true && (
+            <>
+              <FileMode />
+              {/* Hidden for a model that cannot run the tool loop — a reasoning
                 model, or one its gateway serves without `tools`. Deep Research
                 stays (it runs on its own lead and worker models from the
                 configuration), Artifacts is a rendering mode rather than a tool,
                 and Skills arms `skills_enabled` rather than a tool definition —
                 whether a chat-only model should still offer it is a question for
                 its own change, with its own evidence. */}
-            {!toolLoopUnavailable && <WebSearch />}
-            <DeepResearch />
-            {!toolLoopUnavailable && <CodeInterpreter />}
-            {!toolLoopUnavailable && <FileSearch />}
-            <Skills />
-            <Artifacts />
-            {!toolLoopUnavailable && <MCPSelect />}
-          </>
-        )}
+              {!toolLoopUnavailable && <WebSearch />}
+              <DeepResearch />
+              {!toolLoopUnavailable && <CodeInterpreter />}
+              {!toolLoopUnavailable && <FileSearch />}
+              <Skills />
+              <Artifacts />
+              {!toolLoopUnavailable && <MCPSelect />}
+            </>
+          )}
+        </div>
         {ghostBadge && (
           <div
             className="ghost-badge h-full"

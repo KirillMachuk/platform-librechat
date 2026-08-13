@@ -28,8 +28,37 @@ jest.mock('../LogLink', () => ({
 
 jest.mock('~/components/Chat/Input/Files/FileContainer', () => ({
   __esModule: true,
-  default: ({ file, displayName }: { file: { filename?: string }; displayName?: string }) => (
-    <div data-testid="file-container">{displayName ?? file.filename ?? ''}</div>
+  /* A faithful stub of the 12.08-3 shared card: the card is ONE button
+   * (click = open), `subtitle` rides inside it so the accessible name still
+   * carries the action label, and `trailing` (the download glyph) renders
+   * beside it exactly like the real component's slot. */
+  default: ({
+    file,
+    displayName,
+    subtitle,
+    onClick,
+    trailing,
+    pressed,
+  }: {
+    file: { filename?: string };
+    displayName?: string;
+    subtitle?: React.ReactNode;
+    onClick?: React.MouseEventHandler<HTMLButtonElement>;
+    trailing?: React.ReactNode;
+    pressed?: boolean;
+  }) => (
+    <div data-testid="file-container">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={pressed}
+        aria-label={displayName ?? file.filename ?? ''}
+      >
+        <span title={displayName ?? file.filename ?? ''}>{displayName ?? file.filename ?? ''}</span>
+        {subtitle}
+      </button>
+      {trailing}
+    </div>
   ),
 }));
 
@@ -293,7 +322,7 @@ describe('ToolArtifactCard click behaviour', () => {
       });
       const { container } = renderWith(<AttachmentGroup attachments={[dup, dup]} />);
       // Dedup atom keeps just one card visible.
-      expect(container.querySelectorAll('div[title="index.html"]')).toHaveLength(1);
+      expect(container.querySelectorAll('[title="index.html"]')).toHaveLength(1);
       // No "two children with the same key" warning fired.
       const keyWarning = errorSpy.mock.calls.find(
         (args) => typeof args[0] === 'string' && args[0].includes('same key'),
@@ -405,7 +434,7 @@ describe('ToolArtifactCard click behaviour', () => {
         <AttachmentGroup attachments={[dup]} />
       </>,
     );
-    const titles = container.querySelectorAll('div[title="index.html"]');
+    const titles = container.querySelectorAll('[title="index.html"]');
     expect(titles.length).toBe(1);
   });
 
@@ -680,7 +709,7 @@ describe('ToolArtifactCard click behaviour', () => {
     });
     const { getSnapshot } = renderWithProbe(<Attachment attachment={py} />);
     expect(getSnapshot().currentArtifactId).toBeNull();
-    const openButton = screen.getByRole('button', { name: /com_ui_artifact_click/i });
+    const openButton = screen.getByRole('button', { name: 'helper.py', pressed: false });
     act(() => {
       fireEvent.click(openButton);
     });
@@ -705,7 +734,7 @@ describe('ToolArtifactCard click behaviour', () => {
      * `aria-pressed`, but `getByRole('button', { pressed: false })`
      * relies on DOM order, which silently shifts if the chip's button
      * order changes. */
-    const openButton = screen.getByRole('button', { name: /com_ui_artifact_click/i });
+    const openButton = screen.getByRole('button', { name: 'previous.html', pressed: false });
     act(() => {
       fireEvent.click(openButton);
     });

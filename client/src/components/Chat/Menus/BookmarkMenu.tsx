@@ -3,17 +3,16 @@ import { useRecoilValue } from 'recoil';
 import * as Ariakit from '@ariakit/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Constants, QueryKeys } from 'librechat-data-provider';
-import { BookmarkFilledIcon, BookmarkIcon } from '@radix-ui/react-icons';
 import { DropdownPopup, TooltipAnchor, Spinner, useToastContext } from '@librechat/client';
 import type { TConversationTag } from 'librechat-data-provider';
 import type { FC } from 'react';
 import type * as t from '~/common';
 import { useConversationTagsQuery, useTagConversationMutation } from '~/data-provider';
+import { Bookmark, BookmarkFilled, BookmarkPlusIcon } from '~/components/icons';
 import { BookmarkContext } from '~/Providers/BookmarkContext';
 import { cn, isTemporaryConversation, logger } from '~/utils';
 import { BookmarkEditDialog } from '~/components/Bookmarks';
 import { useBookmarkSuccess, useLocalize } from '~/hooks';
-import { BookmarkPlusIcon } from '~/components/icons';
 import { NotificationSeverity } from '~/common';
 import store from '~/store';
 
@@ -129,9 +128,9 @@ const BookmarkMenu: FC = () => {
           label: tag.tag,
           hideOnClick: false,
           icon: isSelected ? (
-            <BookmarkFilledIcon className="size-4" />
+            <BookmarkFilled className="size-4" />
           ) : (
-            <BookmarkIcon className="size-4" />
+            <Bookmark className="size-4" />
           ),
           onClick: () => handleSubmit(tag.tag),
           disabled: mutation.isLoading,
@@ -156,9 +155,9 @@ const BookmarkMenu: FC = () => {
       return <Spinner aria-label={localize('com_ui_loading_indicator')} />;
     }
     if (hasBookmarks) {
-      return <BookmarkFilledIcon className="icon-md" aria-hidden="true" />;
+      return <BookmarkFilled className="icon-md" aria-hidden="true" />;
     }
-    return <BookmarkIcon className="icon-md" aria-hidden="true" />;
+    return <Bookmark className="icon-md" aria-hidden="true" />;
   };
 
   return (

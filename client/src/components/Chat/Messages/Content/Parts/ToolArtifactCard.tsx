@@ -8,13 +8,13 @@ import {
 } from 'recoil';
 import type { TAttachment, TFile, TAttachmentMetadata } from 'librechat-data-provider';
 import type { Artifact } from '~/common';
-import FilePreview from '~/components/Chat/Input/Files/FilePreview';
+import CardDownloadButton from '~/components/Chat/Input/Files/CardDownloadButton';
+import FileContainer from '~/components/Chat/Input/Files/FileContainer';
 import { isCodeOnlyArtifact } from '~/utils/artifacts';
 import { displayFilename } from './attachmentTypes';
-import { Download } from '~/components/icons';
 import { useAttachmentLink } from './LogLink';
-import { cn, getFileType } from '~/utils';
 import { useLocalize } from '~/hooks';
+import {} from '~/components/icons';
 import store from '~/store';
 
 interface ToolArtifactCardProps {
@@ -219,7 +219,6 @@ const ToolArtifactCard = memo(({ attachment, artifact }: ToolArtifactCardProps) 
     return null;
   }
 
-  const fileType = getFileType('artifact');
   const actionLabel = isSelected
     ? localize('com_ui_click_to_close')
     : localize('com_ui_artifact_click');
@@ -230,45 +229,19 @@ const ToolArtifactCard = memo(({ attachment, artifact }: ToolArtifactCardProps) 
   const visibleTitle = displayFilename(artifact.title);
 
   return (
-    <div className="group relative my-2 inline-flex max-w-fit items-stretch gap-px overflow-hidden rounded-xl text-sm text-text-primary shadow-sm">
-      <button
-        type="button"
-        onClick={handleOpen}
-        aria-pressed={isSelected}
-        className={cn(
-          'relative overflow-hidden rounded-l-xl transition-all duration-200 hover:bg-surface-hover active:scale-[0.99]',
-          {
-            'border-border-medium bg-surface-hover': isSelected,
-            'border-border-light bg-surface-tertiary': !isSelected,
-          },
-        )}
-      >
-        <div className="w-fit p-2">
-          <div className="flex flex-row items-center gap-2">
-            <FilePreview fileType={fileType} className="relative" />
-            <div className="overflow-hidden text-left">
-              <div className="truncate font-medium" title={visibleFilename}>
-                {visibleTitle}
-              </div>
-              <div className="truncate text-xs text-text-secondary">{actionLabel}</div>
-            </div>
-          </div>
-        </div>
-      </button>
-      <button
-        type="button"
-        onClick={handleDownload}
-        aria-label={`${localize('com_ui_download')} ${visibleFilename}`}
-        title={localize('com_ui_download')}
-        className={cn(
-          'flex shrink-0 items-center justify-center px-3 transition-colors duration-200',
-          'rounded-r-xl bg-surface-tertiary text-text-secondary hover:bg-surface-hover hover:text-text-primary',
-          'border-l border-border-light focus-visible:outline-none',
-        )}
-      >
-        <Download className="size-4" aria-hidden="true" />
-      </button>
-    </div>
+    /* 12.08-3: тот же рецепт карточки, что у файлов композера и чата; выбранная
+       (панель открыта) держит серый — правило «открытая разворачивашка». */
+    <FileContainer
+      file={{ filename: visibleFilename }}
+      overrideType={visibleFilename?.split('.').pop()}
+      displayName={visibleTitle}
+      subtitle={<div className="truncate text-xs text-text-secondary">{actionLabel}</div>}
+      containerClassName="my-2 max-w-fit"
+      buttonClassName={isSelected ? 'bg-surface-hover' : undefined}
+      pressed={isSelected}
+      onClick={handleOpen}
+      trailing={<CardDownloadButton onClick={handleDownload} name={visibleFilename} />}
+    />
   );
 });
 

@@ -16,7 +16,7 @@ const Image = ({
   source?: FileSources;
 }) => {
   return (
-    <div className="group relative inline-flex align-top text-sm leading-none">
+    <div className="group/card relative inline-flex align-top text-sm leading-none">
       {/* 12.08-2: рамка была прямоугольной и выше фото (линия строки inline-block
           плюс чужой радиус). Квадрат 56 — как сам предпросмотр, токены канона. */}
       <div className="relative size-14 overflow-hidden rounded-xl border border-border-light">

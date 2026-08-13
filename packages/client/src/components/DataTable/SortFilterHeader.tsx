@@ -1,9 +1,9 @@
 import { useId, useMemo, useState } from 'react';
 import * as Menu from '@ariakit/react/menu';
-import { ArrowDownIcon, ArrowUpIcon, CaretSortIcon } from '@radix-ui/react-icons';
 import type { Column } from '@tanstack/react-table';
 import type { TranslationKeys } from '../../hooks';
 import type { MenuItemProps } from '../../common';
+import { ArrowDown, ArrowUp, ChevronsUpDown } from '../icons';
 import { FilterX, ListFilter } from '~/components/icons';
 import DropdownPopup from '../DropdownPopup';
 import { TooltipAnchor } from '../Tooltip';
@@ -35,12 +35,12 @@ export function SortFilterHeader<TData, TValue>({
       {
         label: localize('com_ui_ascending'),
         onClick: () => column.toggleSorting(false),
-        icon: <ArrowUpIcon className="icon-sm text-text-secondary" />,
+        icon: <ArrowUp className="icon-sm text-text-secondary" />,
       },
       {
         label: localize('com_ui_descending'),
         onClick: () => column.toggleSorting(true),
-        icon: <ArrowDownIcon className="icon-sm text-text-secondary" />,
+        icon: <ArrowDown className="icon-sm text-text-secondary" />,
       },
     ];
 
@@ -85,13 +85,13 @@ export function SortFilterHeader<TData, TValue>({
 
   const sortState = column.getIsSorted();
   let ariaSort: 'ascending' | 'descending' | 'none' = 'none';
-  let SortIcon = CaretSortIcon;
+  let SortIcon = ChevronsUpDown;
   if (sortState === 'desc') {
     ariaSort = 'descending';
-    SortIcon = ArrowDownIcon;
+    SortIcon = ArrowDown;
   } else if (sortState === 'asc') {
     ariaSort = 'ascending';
-    SortIcon = ArrowUpIcon;
+    SortIcon = ArrowUp;
   }
 
   return (

@@ -1,15 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
+import { useMediaQuery } from '@librechat/client';
 import { PermissionTypes, Permissions, SettingsTabValues } from 'librechat-data-provider';
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react';
-import {
-  GearIcon,
-  DataIcon,
-  UserIcon,
-  SpeechIcon,
-  useMediaQuery,
-  PersonalizationIcon,
-} from '@librechat/client';
 import type { TDialogProps } from '~/common';
 import {
   General,
@@ -23,6 +16,7 @@ import {
   Account,
   About,
 } from './SettingsTabs';
+import { Settings as SettingsGlyph, Database, User, Mic, UserCog } from '~/components/icons';
 import { Brain, Command, DollarSign, Info, MessageSquare, X } from '~/components/icons';
 import usePersonalizationAccess from '~/hooks/usePersonalizationAccess';
 import { useLocalize, useHasAccess, TranslationKeys } from '~/hooks';
@@ -68,7 +62,7 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
   const settingsTabs: SettingsTab[] = [
     {
       value: SettingsTabValues.GENERAL,
-      icon: <GearIcon />,
+      icon: <SettingsGlyph />,
       label: 'com_nav_setting_general',
       content: <General />,
     },
@@ -86,7 +80,7 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
     },
     {
       value: SettingsTabValues.SPEECH,
-      icon: <SpeechIcon className="icon-sm" aria-hidden="true" />,
+      icon: <Mic className="icon-sm" aria-hidden="true" />,
       label: 'com_nav_setting_speech',
       content: <Speech />,
     },
@@ -94,7 +88,7 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
       ? [
           {
             value: SettingsTabValues.PERSONALIZATION,
-            icon: <PersonalizationIcon />,
+            icon: <UserCog />,
             label: 'com_nav_setting_personalization' as TranslationKeys,
             content: (
               <Personalization
@@ -117,7 +111,7 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
       : []),
     {
       value: SettingsTabValues.DATA,
-      icon: <DataIcon />,
+      icon: <Database />,
       label: 'com_nav_setting_data',
       content: <Data />,
     },
@@ -133,7 +127,7 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
       : ([] as SettingsTab[])),
     {
       value: SettingsTabValues.ACCOUNT,
-      icon: <UserIcon />,
+      icon: <User />,
       label: 'com_nav_setting_account',
       content: <Account />,
     },

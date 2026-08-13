@@ -389,7 +389,10 @@ test.describe('core chat loop', () => {
     };
     const filename = csvFixture.name;
     const reply = replyText('csv-attach');
-    const fileChip = messagesView(page).getByRole('button', { name: filename });
+    /* exact: the 12.08-3 card grew a second button whose accessible name
+     * CONTAINS the filename — «Скачать provider-upload.csv». The chip itself
+     * is the one whose name IS the filename. */
+    const fileChip = messagesView(page).getByRole('button', { name: filename, exact: true });
 
     await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
     await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
@@ -450,7 +453,9 @@ test.describe('core chat loop', () => {
     await expect(
       messagesView(page).getByText(`E2E provider file assertion passed: ${textFixture.name}`),
     ).toBeVisible();
-    await expect(messagesView(page).getByRole('button', { name: textFixture.name })).toBeVisible();
+    await expect(
+      messagesView(page).getByRole('button', { name: textFixture.name, exact: true }),
+    ).toBeVisible();
   });
 });
 

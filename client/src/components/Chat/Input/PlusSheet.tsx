@@ -393,7 +393,7 @@ function PlusSheet({
                       key={tile.key}
                       type="button"
                       onClick={tile.onClick}
-                      className="flex h-[98px] flex-col items-center justify-center gap-2.5 rounded-xl bg-surface-primary text-[15px] text-text-primary transition-colors duration-90 hover:bg-surface-hover"
+                      className="flex h-[98px] flex-col items-center justify-center gap-2.5 rounded-xl bg-surface-primary text-[15px] text-text-primary transition-colors duration-90 [@media(hover:hover)]:hover:bg-surface-hover"
                     >
                       {tile.icon}
                       <span>{tile.label}</span>

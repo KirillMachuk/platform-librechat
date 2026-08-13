@@ -1,8 +1,9 @@
 import React, { memo } from 'react';
-import { UserIcon, useAvatar } from '@librechat/client';
+import { useAvatar } from '@librechat/client';
 import type { IconProps } from '~/common';
 import MessageEndpointIcon from './MessageEndpointIcon';
 import { useAuthContext } from '~/hooks/AuthContext';
+import { User } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
@@ -90,7 +91,7 @@ const UserAvatar = memo(
             }}
             className="relative flex h-9 w-9 items-center justify-center rounded-sm p-1 text-white"
           >
-            <UserIcon />
+            <User aria-hidden="true" />
           </div>
         )}
       </div>

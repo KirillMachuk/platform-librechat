@@ -1,7 +1,8 @@
 import { useState, memo, useRef } from 'react';
 import * as Menu from '@ariakit/react/menu';
-import { LinkIcon, GearIcon, DropdownMenuSeparator, Avatar } from '@librechat/client';
+import { DropdownMenuSeparator, Avatar } from '@librechat/client';
 import { useGetStartupConfig, useGetUserBalance } from '~/data-provider';
+import { Link, Settings as SettingsGlyph } from '~/components/icons';
 import { useAuthContext } from '~/hooks/AuthContext';
 import { LogOut } from '~/components/icons';
 import { useLocalize } from '~/hooks';
@@ -67,12 +68,12 @@ function AccountSettings({ collapsed = false }: { collapsed?: boolean }) {
             onClick={() => window.open(startupConfig?.helpAndFaqURL, '_blank')}
             className="select-item text-sm"
           >
-            <LinkIcon aria-hidden="true" />
+            <Link aria-hidden="true" />
             {localize('com_nav_help_faq')}
           </Menu.MenuItem>
         )}
         <Menu.MenuItem onClick={() => setShowSettings(true)} className="select-item text-sm">
-          <GearIcon className="icon-md" aria-hidden="true" />
+          <SettingsGlyph className="icon-md" aria-hidden="true" />
           {localize('com_nav_settings')}
         </Menu.MenuItem>
         <DropdownMenuSeparator />

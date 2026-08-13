@@ -3,7 +3,7 @@ import { useToastContext } from '@librechat/client';
 import { EToolResources, dataService } from 'librechat-data-provider';
 import type { ExtendedFile } from '~/common';
 import { useDeleteFilesMutation } from '~/data-provider';
-import { logger, getCachedPreview } from '~/utils';
+import { logger, getCachedPreview, cn } from '~/utils';
 import { useFileDeletion } from '~/hooks/Files';
 import FileContainer from './FileContainer';
 import { useLocalize } from '~/hooks';
@@ -167,25 +167,15 @@ export default function FileRow({
   }
 
   const renderFiles = () => {
-    const rowStyle = isRTL
-      ? {
-          display: 'flex',
-          flexDirection: 'row-reverse',
-          flexWrap: 'wrap',
-          gap: '4px',
-          width: '100%',
-          maxWidth: '100%',
-        }
-      : {
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '4px',
-          width: '100%',
-          maxWidth: '100%',
-        };
-
+    /* 12.08-3, владелец: файлы НЕ переносятся на второй ряд — лента едет
+       вбок на всех ширинах; каждый чип держит свой размер. */
     return (
-      <div style={rowStyle as React.CSSProperties}>
+      <div
+        className={cn(
+          'no-scrollbar flex w-full max-w-full items-center gap-1 overflow-x-auto',
+          isRTL && 'flex-row-reverse',
+        )}
+      >
         {files
           .reduce(
             (acc, current) => {
@@ -213,14 +203,7 @@ export default function FileRow({
             const isImage = file.type?.startsWith('image') ?? false;
 
             return (
-              <div
-                key={index}
-                style={{
-                  flexBasis: '70px',
-                  flexGrow: 0,
-                  flexShrink: 0,
-                }}
-              >
+              <div key={index} className="shrink-0">
                 {isImage ? (
                   <Image
                     url={getCachedPreview(file.file_id) ?? file.preview ?? file.filepath}
