@@ -1,8 +1,7 @@
 import React from 'react';
 import * as Ariakit from '@ariakit/react';
-import { PinIcon } from '@librechat/client';
 import { ArtifactModes } from 'librechat-data-provider';
-import { ChevronRight, WandSparkles } from '~/components/icons';
+import { ChevronRight, Pin, PinOff, WandSparkles } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
@@ -80,7 +79,11 @@ const ArtifactsSubMenu = React.forwardRef<HTMLDivElement, ArtifactsSubMenuProps>
               aria-label={isArtifactsPinned ? 'Unpin' : 'Pin'}
             >
               <div className="h-4 w-4">
-                <PinIcon unpin={isArtifactsPinned} />
+                {isArtifactsPinned ? (
+                  <PinOff className="icon-sm" aria-hidden="true" />
+                ) : (
+                  <Pin className="icon-sm" aria-hidden="true" />
+                )}
               </div>
             </button>
           </Ariakit.MenuItem>

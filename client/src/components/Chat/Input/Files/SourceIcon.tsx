@@ -8,17 +8,20 @@ const sourceToEndpoint = {
   [FileSources.azure]: EModelEndpoint.azureOpenAI,
 };
 
+/* 12.08-3 (ревью): бейдж источника — чернильная плашка канона для ВСЕХ
+   источников; сырые синий/жёлтый/чёрный слои остались от LibreChat и
+   спорили с объединённой карточкой файла. Какой источник — говорит
+   ИКОНКА (терминал/текст/база), а не цвет. */
 const sourceToClassname = {
-  [FileSources.openai]: 'bg-white/75 dark:bg-black/65',
-  [FileSources.azure]: 'azure-bg-color',
-  [FileSources.azure_blob]: 'azure-bg-color',
-  [FileSources.execute_code]: 'bg-black text-white opacity-85',
-  [FileSources.text]: 'bg-blue-500 dark:bg-blue-900 opacity-85 text-white',
-  [FileSources.vectordb]: 'bg-yellow-700 dark:bg-yellow-900 opacity-85 text-white',
+  [FileSources.openai]: 'bg-[var(--c-ink)] text-[var(--c-ink-label)] opacity-85',
+  [FileSources.azure]: 'bg-[var(--c-ink)] text-[var(--c-ink-label)] opacity-85',
+  [FileSources.azure_blob]: 'bg-[var(--c-ink)] text-[var(--c-ink-label)] opacity-85',
+  [FileSources.execute_code]: 'bg-[var(--c-ink)] text-[var(--c-ink-label)] opacity-85',
+  [FileSources.text]: 'bg-[var(--c-ink)] text-[var(--c-ink-label)] opacity-85',
+  [FileSources.vectordb]: 'bg-[var(--c-ink)] text-[var(--c-ink-label)] opacity-85',
 };
 
-const defaultClassName =
-  'absolute right-0 bottom-0 rounded-full p-[0.15rem] text-gray-600 transition-colors';
+const defaultClassName = 'absolute right-0 bottom-0 rounded-full p-[0.15rem] transition-colors';
 
 export default function SourceIcon({
   source,

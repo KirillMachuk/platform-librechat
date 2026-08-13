@@ -376,7 +376,6 @@ const TextAttachment = memo(
             overrideType={extension}
             displayName={displayFilename(attachment.filename)}
             containerClassName="max-w-fit"
-            buttonClassName="bg-surface-secondary hover:cursor-pointer hover:bg-surface-hover active:bg-surface-secondary focus:bg-surface-hover hover:border-border-heavy active:border-border-heavy"
           />
         )}
         <div className="overflow-hidden rounded-lg bg-surface-secondary">

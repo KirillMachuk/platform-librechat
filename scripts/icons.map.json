@@ -855,6 +855,10 @@
     "fit": "exact",
     "to": "user-check"
   },
+  "UserCog": {
+    "fit": "exact",
+    "to": "user-cog"
+  },
   "UserX": {
     "fit": "exact",
     "to": "user-x"

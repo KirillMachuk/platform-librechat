@@ -184,6 +184,7 @@ import {
   IconUpload,
   IconUser,
   IconUserCheck,
+  IconUserCog,
   IconUserX,
   IconUsers,
   IconVariable,
@@ -423,6 +424,7 @@ export const UnlockIcon: LucideIcon = canon(IconLockOpen, 'UnlockIcon');
 export const Upload: LucideIcon = canon(IconUpload, 'Upload');
 export const User: LucideIcon = canon(IconUser, 'User');
 export const UserCheck: LucideIcon = canon(IconUserCheck, 'UserCheck');
+export const UserCog: LucideIcon = canon(IconUserCog, 'UserCog');
 export const UserX: LucideIcon = canon(IconUserX, 'UserX');
 export const Users: LucideIcon = canon(IconUsers, 'Users');
 export const Variable: LucideIcon = canon(IconVariable, 'Variable');

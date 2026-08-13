@@ -34,7 +34,7 @@ export default function MentionItem({
     >
       <div
         className={cn(
-          'text-token-text-primary bg-token-main-surface-secondary group flex min-h-[44px] items-center gap-2 rounded-lg px-2 text-sm font-medium hover:bg-surface-secondary active:bg-surface-active',
+          'group flex min-h-[44px] items-center gap-2 rounded-lg px-2 text-sm font-medium text-text-primary hover:bg-surface-hover active:bg-surface-active',
           isActive === true ? 'bg-surface-active' : 'bg-transparent',
         )}
       >
@@ -43,9 +43,7 @@ export default function MentionItem({
           <div className="truncate">
             <span className="font-medium">{name}</span>
             {description != null && description ? (
-              <span className="text-token-text-tertiary ml-2 text-sm font-light">
-                {description}
-              </span>
+              <span className="ml-2 text-sm font-light text-text-tertiary">{description}</span>
             ) : null}
           </div>
           <Clock4 size={16} className="ml-2 flex-shrink-0" />
