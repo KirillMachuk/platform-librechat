@@ -868,6 +868,8 @@ export function fileToArtifact(
         | 'textFormat'
         | 'updatedAt'
         | 'createdAt'
+        | 'source'
+        | 'user'
       >
   >,
   options?: FileToArtifactOptions,
@@ -920,6 +922,17 @@ export function fileToArtifact(
     language,
     messageId: attachment.messageId ?? undefined,
     lastUpdateTime: toLastUpdate(attachment),
+    /* Kept so the panel can offer the stored original. The preview buckets
+     * show generated HTML that cannot be turned back into the .docx/.xlsx/
+     * .pptx it stands for, so saving what is on screen would hand the user
+     * an HTML page under the wrong name. */
+    file: {
+      file_id: attachment.file_id,
+      filename: attachment.filename,
+      filepath: attachment.filepath,
+      source: attachment.source,
+      user: attachment.user,
+    },
   };
 }
 

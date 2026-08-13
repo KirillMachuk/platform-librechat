@@ -1,6 +1,7 @@
 import React from 'react';
 import { RecoilRoot, useRecoilValue } from 'recoil';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Artifact } from '~/common';
 import { EditorProvider } from '~/Providers/EditorContext';
 import { TOOL_ARTIFACT_TYPES } from '~/utils/artifacts';
@@ -95,19 +96,25 @@ function StateProbe() {
   return null;
 }
 
+/* The panel's download control fetches the stored original for the office
+ * preview buckets, so it needs the query client the app always provides. */
 const renderPanel = () =>
   render(
-    <RecoilRoot
-      initializeState={({ set }) => {
-        set(store.artifactsVisibility, true);
-        set(store.currentArtifactId, 'artifact-1');
-      }}
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <EditorProvider>
-        <StateProbe />
-        <ArtifactsPanel />
-      </EditorProvider>
-    </RecoilRoot>,
+      <RecoilRoot
+        initializeState={({ set }) => {
+          set(store.artifactsVisibility, true);
+          set(store.currentArtifactId, 'artifact-1');
+        }}
+      >
+        <EditorProvider>
+          <StateProbe />
+          <ArtifactsPanel />
+        </EditorProvider>
+      </RecoilRoot>
+    </QueryClientProvider>,
   );
 
 describe('Artifacts panel', () => {

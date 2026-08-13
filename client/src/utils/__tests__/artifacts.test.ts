@@ -1,3 +1,4 @@
+import { FileSources } from 'librechat-data-provider';
 import type { ToolArtifactType } from '../artifacts';
 import {
   buildSandpackOptions,
@@ -610,6 +611,31 @@ describe('fileToArtifact', () => {
     expect(artifact!.content).toBe('<h1>hi</h1>');
     expect(artifact!.messageId).toBe('msg-1');
     expect(artifact!.lastUpdateTime).toBe(new Date(baseFile.updatedAt).getTime());
+  });
+
+  /* The panel's download control only has the artifact. Without the stored
+   * file's identity it can offer nothing but the rendered preview, which for
+   * an office bucket is generated HTML rather than the .pptx it stands for. */
+  it('carries the stored file identity so the panel can offer the original', () => {
+    const artifact = fileToArtifact({
+      ...baseFile,
+      file_id: 'fid-9',
+      filename: 'deck.pptx',
+      filepath: '/uploads/user-1/fid-9__deck.pptx',
+      type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      textFormat: 'html',
+      source: FileSources.local,
+      user: 'user-1',
+    });
+
+    expect(artifact!.type).toBe(TOOL_ARTIFACT_TYPES.PRESENTATION);
+    expect(artifact!.file).toEqual({
+      file_id: 'fid-9',
+      filename: 'deck.pptx',
+      filepath: '/uploads/user-1/fid-9__deck.pptx',
+      source: FileSources.local,
+      user: 'user-1',
+    });
   });
 
   it('returns null for unsupported types so callers can fall through', () => {
