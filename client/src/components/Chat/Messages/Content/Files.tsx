@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback, memo } from 'react';
 import type { TFile, TMessage } from 'librechat-data-provider';
 import FileContainer from '~/components/Chat/Input/Files/FileContainer';
+import DownloadFileButton from './DownloadFileButton';
 import FilePreviewDialog from './FilePreviewDialog';
 import Image from './Image';
 
@@ -38,6 +39,7 @@ const Files = ({
             key={file.file_id}
             file={file as TFile}
             onClick={() => setSelectedFile(file)}
+            trailing={<DownloadFileButton file={file as TFile} />}
           />
         ))}
       {imageFiles.length > 0 &&

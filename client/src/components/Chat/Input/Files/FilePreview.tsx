@@ -1,18 +1,20 @@
-import { Spinner, FileIcon } from '@librechat/client';
+import { Spinner } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import type { ExtendedFile } from '~/common';
 import { TriangleAlert } from '~/components/icons';
+import { fileTypeMeta } from './typeMeta';
 import { useLocalize } from '~/hooks';
 import SourceIcon from './SourceIcon';
 import { cn } from '~/utils';
 
 const FilePreview = ({
   file,
-  fileType,
   className = '',
 }: {
   file?: Partial<ExtendedFile | TFile>;
-  fileType: {
+  /** Kept in the signature for the artifact chips that still pass it; the
+   *  drawing now comes from the file's own mime via typeMeta. */
+  fileType?: {
     paths: React.FC;
     fill: string;
     title: string;
@@ -29,12 +31,20 @@ const FilePreview = ({
   // never made it into the vector store, so search over it silently returns
   // nothing. Surface it instead of letting the file look ready.
   const indexFailed = embeddingStatus === 'failed';
+  /* Perplexity's approach (owner 12.08-2, second word): the TYPE is said by
+     the drawing, the colour is the text's own — no colour squares, no tinted
+     glyphs. `fileType` still supplies the subtitle at the call sites. */
+  const meta = fileTypeMeta((file?.type as string | undefined) ?? '');
+  const TypeGlyph = meta.Icon;
   return (
     <div
-      className={cn('relative size-10 shrink-0 overflow-hidden rounded-xl', className)}
+      className={cn(
+        'relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl',
+        className,
+      )}
       title={indexing ? localize('com_ui_indexing') : undefined}
     >
-      <FileIcon file={file} fileType={fileType} />
+      <TypeGlyph className="h-[22px] w-[22px] text-text-secondary" aria-hidden="true" />
       <SourceIcon source={file?.source} isCodeFile={!!file?.['metadata']?.fileIdentifier} />
       {(uploading || indexing) && (
         <Spinner

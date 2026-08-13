@@ -85,7 +85,7 @@ const Reasoning = memo(({ reasoning, isLast }: ReasoningProps) => {
   return (
     <div ref={containerRef} className="group/reasoning">
       <div className="group/thinking-container">
-        <ThinkingCard>
+        <ThinkingCard expanded={isExpanded}>
           <ThinkingButton
             isExpanded={isExpanded}
             onClick={handleClick}
