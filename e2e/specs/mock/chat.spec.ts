@@ -453,7 +453,9 @@ test.describe('core chat loop', () => {
     await expect(
       messagesView(page).getByText(`E2E provider file assertion passed: ${textFixture.name}`),
     ).toBeVisible();
-    await expect(messagesView(page).getByRole('button', { name: textFixture.name })).toBeVisible();
+    await expect(
+      messagesView(page).getByRole('button', { name: textFixture.name, exact: true }),
+    ).toBeVisible();
   });
 });
 

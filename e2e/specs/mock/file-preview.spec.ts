@@ -361,7 +361,7 @@ test.describe('file preview — the rest of the matrix', () => {
       timeout: 60000,
     });
 
-    await messagesView(page).getByRole('button', { name: fixture.name }).click();
+    await messagesView(page).getByRole('button', { name: fixture.name, exact: true }).click();
     const dialog = previewDialog(page, fixture.name);
     await expect(dialog).toHaveCount(1);
     await expect(dialog.locator('pre')).toContainText(MD_MARKER, { timeout: 30000 });
