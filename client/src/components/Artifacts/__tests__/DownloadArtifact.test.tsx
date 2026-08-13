@@ -46,9 +46,11 @@ function EditBuffer() {
 }
 
 /* jsdom's Blob does not expose its contents, so the constructor is wrapped to
- * record what the component actually put into the downloaded file. */
+ * record what the component actually put into the downloaded file. `null`
+ * distinguishes "never built a Blob" from "built an empty one" — the earlier
+ * `''` sentinel matched the reset value, so asserting on it proved nothing. */
 const OriginalBlob = global.Blob;
-let downloadedContent = '';
+let downloadedContent: string | null = null;
 let downloadedName: string | undefined;
 let clickSpy: jest.SpyInstance;
 
@@ -82,7 +84,7 @@ const presentationArtifact = (): Artifact =>
 
 describe('DownloadArtifact', () => {
   beforeEach(() => {
-    downloadedContent = '';
+    downloadedContent = null;
     downloadedName = undefined;
     getFileDownload.mockReset();
     getFileDownload.mockResolvedValue({
@@ -110,13 +112,25 @@ describe('DownloadArtifact', () => {
     global.Blob = OriginalBlob;
   });
 
-  it('saves the shown file and releases the object url', () => {
-    renderDownload(buildArtifact({ title: 'report.md' }));
+  /* The object URL is released, but not before the browser has had a chance to
+   * start reading it — revoking on the line after `click()` aborts the save on
+   * engines that read the blob asynchronously, which is why the shared
+   * `triggerDownload` helper defers it. */
+  it('saves the shown file and releases the object url once the save has started', () => {
+    jest.useFakeTimers();
+    try {
+      renderDownload(buildArtifact({ title: 'report.md' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'com_ui_download_artifact' }));
+      fireEvent.click(screen.getByRole('button', { name: 'com_ui_download_artifact' }));
 
-    expect(clickSpy).toHaveBeenCalledTimes(1);
-    expect(global.URL.revokeObjectURL).toHaveBeenCalledWith('blob:artifact');
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      expect(global.URL.revokeObjectURL).not.toHaveBeenCalled();
+
+      jest.advanceTimersByTime(1000);
+      expect(global.URL.revokeObjectURL).toHaveBeenCalledWith('blob:artifact');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   /**
@@ -155,7 +169,7 @@ describe('DownloadArtifact', () => {
     await waitFor(() => expect(downloadedName).toBe('top5-ai-2026-v2.pptx'));
     /* The preview markup must not be what lands in Downloads — that is the
      * defect: an `index.html` page saved in place of the presentation. */
-    expect(downloadedContent).toBe('');
+    expect(downloadedContent).toBeNull();
   });
 
   it('still saves the shown content for an artifact that has no stored file', async () => {
@@ -166,6 +180,105 @@ describe('DownloadArtifact', () => {
     await waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
     expect(getFileDownload).not.toHaveBeenCalled();
     expect(downloadedContent).toBe('plain notes');
+  });
+
+  /* An office file whose server-side HTML render did not run is downgraded to
+   * the plain-text bucket and shown as extracted text. Naming that text after
+   * the binary is the same "right name, wrong bytes" defect the control exists
+   * to avoid — Word would report a corrupt document. */
+  it('does not name extracted text after the binary it was extracted from', async () => {
+    renderDownload(
+      buildArtifact({
+        title: 'contract.docx',
+        type: TOOL_ARTIFACT_TYPES.PLAIN_TEXT,
+        content: 'extracted contract text',
+        file: {
+          file_id: 'fid-1',
+          filename: 'contract.docx',
+          filepath: '/uploads/user-1/fid-1__contract.docx',
+          source: FileSources.local,
+          user: 'user-1',
+        },
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'com_ui_download_artifact' }));
+
+    await waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
+    expect(getFileDownload).not.toHaveBeenCalled();
+    expect(downloadedContent).toBe('extracted contract text');
+    expect(downloadedName).not.toBe('contract.docx');
+  });
+
+  /* A shared conversation keeps `file_id` and `filepath` but strips `user` and
+   * `source`, so the download route cannot serve it. Routing there anyway hit a
+   * storage path the server does not serve and saved nothing at all. */
+  it('falls back to the shown content when the stored file cannot be fetched', async () => {
+    const shared = presentationArtifact();
+    renderDownload({ ...shared, file: { ...shared.file, source: undefined, user: undefined } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'com_ui_download_artifact' }));
+
+    await waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
+    expect(getFileDownload).not.toHaveBeenCalled();
+    expect(downloadedContent).toContain('preview of slide 1');
+  });
+
+  /* An office bucket can be reached by MIME alone, so a record may have no
+   * usable name. Saving real .pptx bytes as `index.html` would be the mirror
+   * image of the defect being fixed. */
+  it('does not fetch the original when the record has no name to save it under', async () => {
+    const anonymous = presentationArtifact();
+    renderDownload({ ...anonymous, file: { ...anonymous.file, filename: undefined } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'com_ui_download_artifact' }));
+
+    await waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
+    expect(getFileDownload).not.toHaveBeenCalled();
+    expect(downloadedName).toBe('index.html');
+  });
+
+  it('does not report success when the download failed', async () => {
+    getFileDownload.mockRejectedValue(new Error('file expired'));
+    renderDownload(presentationArtifact());
+
+    const button = screen.getByRole('button', { name: 'com_ui_download_artifact' });
+    fireEvent.click(button);
+
+    await waitFor(() => expect(getFileDownload).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(button).not.toBeDisabled());
+    expect(clickSpy).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('artifact-downloaded')).toBeNull();
+  });
+
+  it('reports success only after the stored file actually arrived', async () => {
+    renderDownload(presentationArtifact());
+
+    fireEvent.click(screen.getByRole('button', { name: 'com_ui_download_artifact' }));
+
+    await waitFor(() => expect(screen.getByTestId('artifact-downloaded')).toBeInTheDocument());
+  });
+
+  /* A second click cancels the in-flight fetch and resolves from the cache with
+   * an object URL already revoked, so the save silently produces nothing. */
+  it('ignores a second click while the first download is in flight', async () => {
+    let release: (value: unknown) => void = () => undefined;
+    getFileDownload.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    renderDownload(presentationArtifact());
+
+    const button = screen.getByRole('button', { name: 'com_ui_download_artifact' });
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toBeDisabled());
+    fireEvent.click(button);
+
+    release({ data: new OriginalBlob(['pptx-bytes']), headers: {} });
+    await waitFor(() => expect(button).not.toBeDisabled());
+    expect(getFileDownload).toHaveBeenCalledTimes(1);
   });
 
   it('downloads nothing when there is no content at all', () => {

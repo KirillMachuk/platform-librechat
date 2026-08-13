@@ -146,7 +146,9 @@ const ToolArtifactCard = memo(({ attachment, artifact }: ToolArtifactCardProps) 
       existingEntry != null &&
       existingEntry.content === artifact.content &&
       existingEntry.type === artifact.type &&
-      existingEntry.title === artifact.title
+      existingEntry.title === artifact.title &&
+      existingEntry.file?.file_id === artifact.file?.file_id &&
+      existingEntry.file?.filepath === artifact.file?.filepath
     ) {
       return;
     }
