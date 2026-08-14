@@ -57,6 +57,7 @@ export interface IConversation extends Document {
   files?: string[];
   project_id?: string;
   expiredAt?: Date;
+  lastReadAt?: Date;
   createdAt?: Date;
   updatedAt?: Date;
   tenantId?: string;

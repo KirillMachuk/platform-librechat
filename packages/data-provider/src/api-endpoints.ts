@@ -130,6 +130,8 @@ export const updateConversation = () => `${conversationsRoot}/update`;
 
 export const archiveConversation = () => `${conversationsRoot}/archive`;
 
+export const readConversation = () => `${conversationsRoot}/read`;
+
 export const deleteConversation = () => `${conversationsRoot}`;
 
 export const deleteAllConversation = () => `${conversationsRoot}/all`;

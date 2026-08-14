@@ -931,6 +931,9 @@ export const tConversationSchema = z.object({
   chatProjectId: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /** When this user last had the chat open — the unread dot compares it
+   *  against `updatedAt`; absent on legacy rows, which read as "read". */
+  lastReadAt: z.string().nullable().optional(),
   /* Files */
   resendFiles: z.boolean().optional(),
   file_ids: z.array(z.string()).optional(),

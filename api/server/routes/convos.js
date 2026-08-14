@@ -202,6 +202,30 @@ router.post('/archive', validateConvoAccess, async (req, res) => {
   }
 });
 
+/**
+ * Stamps the conversation as read for the unread dot, account-wide.
+ * Deliberately NOT `saveConvo`: that path bumps `updatedAt`, which would
+ * re-sort the list and re-light the dot on the user's other devices.
+ * @route POST /read
+ * @param {string} req.body.arg.conversationId - The conversation to stamp.
+ * @returns {object} 200 - { conversationId, lastReadAt }
+ */
+router.post('/read', validateConvoAccess, async (req, res) => {
+  const { conversationId } = req.body?.arg ?? {};
+
+  if (!conversationId) {
+    return res.status(400).json({ error: 'conversationId is required' });
+  }
+
+  try {
+    await db.markConvoRead(req.user.id, conversationId);
+    res.status(200).json({ conversationId, lastReadAt: new Date().toISOString() });
+  } catch (error) {
+    logger.error('Error marking conversation read', error);
+    res.status(500).send('Error marking conversation read');
+  }
+});
+
 /** Maximum allowed length for conversation titles */
 const MAX_CONVO_TITLE_LENGTH = 1024;
 
