@@ -62,7 +62,7 @@ const FileContainer = ({
   return (
     <div
       className={cn(
-        'group/card relative inline-block text-sm text-text-primary',
+        'group/card relative inline-block max-w-full text-sm text-text-primary',
         containerClassName,
       )}
     >
@@ -79,7 +79,10 @@ const FileContainer = ({
           buttonClassName,
         )}
       >
-        <div className="w-64 p-1.5">
+        {/* max-w-full: в зажатых панелях (открытые артефакты, боковые списки
+            агента) фиксированные 256px вылезали бы за край — карточка
+            ужимается, имя обрезается многоточием. */}
+        <div className="w-64 max-w-full p-1.5">
           {/* 14.08-4, владелец: у кнопки скачивания СВОЁ место — текст обязан
               обрезаться ДО зоны глифа, карточка длиннее (референс — второй
               скрин ChatGPT). pr-9 резервирует ровно зону trailing (32px глиф

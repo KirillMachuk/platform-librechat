@@ -3,6 +3,7 @@ import copy from 'copy-to-clipboard';
 import { useRecoilValue } from 'recoil';
 import { OGDialog, OGDialogContent, OGDialogTitle, OGDialogDescription } from '@librechat/client';
 import { logger, decodeBytes, sortPagesByRelevance, triggerDownload } from '~/utils';
+import { fileTypeMeta } from '~/components/Chat/Input/Files/typeMeta';
 import CopyButton from '~/components/Messages/Content/CopyButton';
 import { useFileDownload, useFilePreview } from '~/data-provider';
 import { useLocalize, TranslationKeys } from '~/hooks';
@@ -145,46 +146,23 @@ function formatBytes(bytes: number): string {
   return `${bytes} B`;
 }
 
-function getDisplayType(fileType?: string, fileName?: string): string {
+/**
+ * The dialog's meta line says what CLASS of file this is, in the user's
+ * language, from the same map the chip below it draws from. The old local
+ * matcher had the `includes('document')` substring bug (every OOXML mime
+ * contains "officedocument", so xlsx/pptx read "Document") and answered in
+ * hardcoded English. Extension wins over MIME so a `.tsv` mislabeled
+ * `text/plain` still reads as a spreadsheet (matches the office HTML
+ * dispatcher's precedence); an extension typeMeta does not know falls back
+ * to the bare uppercase extension.
+ */
+function displayTypeMeta(fileType?: string, fileName?: string): { labelKey: string; ext: string } {
   const ext = fileName ? getFileExtension(fileName) : '';
-  /* Extension-driven check runs before MIME so a `.tsv` mislabeled
-   * `text/plain` still renders as Spreadsheet (matches the office HTML
-   * dispatcher's extension-wins precedence). */
-  if (ext === 'csv' || ext === 'tsv') {
-    return 'Spreadsheet';
+  const byExt = ext ? fileTypeMeta(ext) : null;
+  if (byExt != null && byExt.labelKey !== 'com_ui_file_type_file') {
+    return { labelKey: byExt.labelKey, ext };
   }
-  if (fileType) {
-    if (fileType.includes('pdf')) {
-      return 'PDF';
-    }
-    if (fileType.includes('word') || fileType.includes('document')) {
-      return 'Document';
-    }
-    if (
-      fileType.includes('spreadsheet') ||
-      fileType.includes('excel') ||
-      fileType.includes('csv') ||
-      fileType.includes('tab-separated')
-    ) {
-      return 'Spreadsheet';
-    }
-    if (fileType.includes('presentation') || fileType.includes('powerpoint')) {
-      return 'Presentation';
-    }
-    if (fileType.includes('image')) {
-      return 'Image';
-    }
-    if (fileType.startsWith('text/')) {
-      return fileType.split('/')[1]?.toUpperCase() || 'Text';
-    }
-    if (fileType.includes('json')) {
-      return 'JSON';
-    }
-    if (fileType.includes('xml')) {
-      return 'XML';
-    }
-  }
-  return ext ? ext.toUpperCase() : 'File';
+  return { labelKey: fileTypeMeta(fileType ?? '').labelKey, ext };
 }
 
 export default function FilePreviewDialog({
@@ -361,7 +339,13 @@ export default function FilePreviewDialog({
     setTimeout(() => setIsCopied(false), 3000);
   }, [fileContent]);
 
-  const displayType = useMemo(() => getDisplayType(fileType, fileName), [fileType, fileName]);
+  const displayType = useMemo(() => {
+    const { labelKey, ext } = displayTypeMeta(fileType, fileName);
+    if (labelKey === 'com_ui_file_type_file' && ext) {
+      return ext.toUpperCase();
+    }
+    return localize(labelKey as TranslationKeys);
+  }, [fileType, fileName, localize]);
   const sortedPages = useMemo(
     () => (pages && pageRelevance ? sortPagesByRelevance(pages, pageRelevance) : pages),
     [pages, pageRelevance],

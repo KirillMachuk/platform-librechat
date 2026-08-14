@@ -15,6 +15,7 @@ import {
 import type { ValidSource, ImageResult } from 'librechat-data-provider';
 import { X, Globe, Newspaper, Image, ChevronDown, File, Download } from '~/components/icons';
 import { FaviconImage, getCleanDomain } from '~/components/Web/SourceHovercard';
+import { fileTypeMeta } from '~/components/Chat/Input/Files/typeMeta';
 import SourcesErrorBoundary from './SourcesErrorBoundary';
 import { useFileDownload } from '~/data-provider';
 import { useSearchContext } from '~/Providers';
@@ -266,17 +267,14 @@ const FileItem = React.memo(function FileItem({
   );
   const isLoading = false;
 
-  // Memoize file icon computation for performance
-  const fileIcon = useMemo(() => {
-    const fileType = file.type?.toLowerCase() || '';
-    if (fileType.includes('pdf')) return '📄';
-    if (fileType.includes('image')) return '🖼️';
-    if (fileType.includes('text')) return '📝';
-    if (fileType.includes('word') || fileType.includes('doc')) return '📄';
-    if (fileType.includes('excel') || fileType.includes('sheet')) return '📊';
-    if (fileType.includes('powerpoint') || fileType.includes('presentation')) return '📈';
-    return '📎';
-  }, [file.type]);
+  /* One Tabler map decides every file glyph (owner 14.08-2). The record's
+   * `type` here is the tool name (`file_search`), never a mime — so the old
+   * emoji classifier always fell through to 📎; the extension is the only
+   * honest signal, and typeMeta's extension path reads it. */
+  const FileGlyph = useMemo(() => {
+    const extension = file.filename?.split('.').pop()?.toLowerCase() ?? '';
+    return fileTypeMeta(extension).Icon;
+  }, [file.filename]);
 
   // Simple aria label
   const downloadAriaLabel = localize('com_sources_download_aria_label', {
@@ -297,7 +295,7 @@ const FileItem = React.memo(function FileItem({
         }
       >
         <div className="flex items-center gap-2">
-          <span className="text-base">{fileIcon}</span>
+          <FileGlyph className="size-4 shrink-0 text-text-secondary" aria-hidden="true" />
           <span className="truncate text-xs font-medium text-text-secondary">
             {localize('com_sources_agent_file')}
           </span>
@@ -336,7 +334,7 @@ const FileItem = React.memo(function FileItem({
       }
     >
       <div className="flex items-center gap-2">
-        <span className="text-base">{fileIcon}</span>
+        <FileGlyph className="size-4 shrink-0 text-text-secondary" aria-hidden="true" />
         <span className="truncate text-xs font-medium text-text-secondary">
           {localize('com_sources_agent_file')}
         </span>

@@ -69,6 +69,7 @@ const EXTENSION_KINDS: Record<string, FileTypeMeta> = {
   xls: spreadsheet,
   xlsx: spreadsheet,
   csv: spreadsheet,
+  tsv: spreadsheet,
   ods: spreadsheet,
   numbers: spreadsheet,
   ppt: document,
