@@ -175,12 +175,32 @@ export default function useAttachmentPreviewSync(
       };
       if (existingIndex >= 0) {
         const existing = messageAttachments[existingIndex] as Partial<TFile> & TAttachment;
+        const nextText = polled.text ?? existing.text ?? null;
+        const nextTextFormat = polled.textFormat ?? existing.textFormat ?? null;
+        /* Republishing an already-published resolution has to be a
+         * no-op, not an identical-but-fresh object. This effect's own
+         * `attachment` dependency is re-derived by the parent FROM this
+         * atom — `useAttachments` overlays live entries onto DB entries
+         * by `file_id` and mints a new object whenever the map changes
+         * — so a second write re-arms the effect that produced it and
+         * the two keep handing each other new identities until React
+         * tears the tree down (`Maximum update depth exceeded`, seen in
+         * production on every conversation holding a DB-frozen pending
+         * record). */
+        if (
+          existing.status === resolvedFields.status &&
+          existing.previewError === resolvedFields.previewError &&
+          existing.text === nextText &&
+          existing.textFormat === nextTextFormat
+        ) {
+          return prevMap;
+        }
         const merged = [...messageAttachments];
         merged[existingIndex] = {
           ...existing,
           ...resolvedFields,
-          text: polled.text ?? existing.text ?? null,
-          textFormat: polled.textFormat ?? existing.textFormat ?? null,
+          text: nextText,
+          textFormat: nextTextFormat,
         } as TAttachment;
         return { ...prevMap, [messageId]: merged };
       }

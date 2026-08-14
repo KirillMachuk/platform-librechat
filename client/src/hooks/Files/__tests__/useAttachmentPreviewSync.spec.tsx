@@ -16,10 +16,10 @@
  */
 
 import { useEffect } from 'react';
-import { renderHook } from '@testing-library/react';
+import { render, renderHook } from '@testing-library/react';
 import { RecoilRoot, useRecoilValue, useSetRecoilState } from 'recoil';
-import type { ReactNode } from 'react';
 import type { TAttachment, TFile, TFilePreview } from 'librechat-data-provider';
+import type { ReactNode } from 'react';
 
 type FullAttachment = TFile & { messageId: string; toolCallId: string };
 import store from '~/store';
@@ -28,7 +28,9 @@ const mockUseFilePreview = jest.fn();
 jest.mock('~/data-provider', () => ({
   useFilePreview: (...args: unknown[]) => mockUseFilePreview(...args),
 }));
+jest.mock('~/hooks/useLocalize', () => () => (key: string) => key);
 
+import useAttachments from '~/hooks/Messages/useAttachments';
 import useAttachmentPreviewSync from '../useAttachmentPreviewSync';
 
 const wrapper = ({ children }: { children: ReactNode }) => <RecoilRoot>{children}</RecoilRoot>;
@@ -439,6 +441,59 @@ describe('useAttachmentPreviewSync', () => {
         textFormat: 'html',
       });
       expect(ctx.justResolved).toBe(false);
+    });
+  });
+
+  describe('re-entry through the parent', () => {
+    /* Production crashed with React #185 ("Maximum update depth
+     * exceeded") on conversations holding a DB-frozen `status:
+     * 'pending'` attachment.
+     *
+     * The upsert effect lists `attachment` among its dependencies, and
+     * the parent re-derives precisely that prop from the atom this
+     * effect writes: `useAttachments` overlays live entries onto DB
+     * entries by `file_id`, minting a fresh object every time the map
+     * changes. So each write handed the effect a new dependency
+     * identity, and the effect wrote again — an unbounded loop that
+     * React tears the tree down for.
+     *
+     * Every case above holds the `attachment` prop constant, which is
+     * the one thing the renderer never does — which is why they stayed
+     * green through the crash. This one wires the REAL `useAttachments`
+     * in between, so the feedback edge exists exactly as it does in the
+     * app: publishing the same resolution twice must be a no-op. */
+    it('publishes a resolved preview once, though the parent re-derives the prop from the map it writes', () => {
+      mockUseFilePreview.mockReset();
+      mockUseFilePreview.mockReturnValue({
+        data: {
+          file_id: fileId,
+          status: 'ready',
+          text: '<table>resolved</table>',
+          textFormat: 'html',
+        },
+        isFetching: false,
+      });
+
+      const dbAttachments = [makeAttachment({ status: 'pending' })];
+      let renders = 0;
+      const Consumer = () => {
+        renders += 1;
+        const { attachments } = useAttachments({ messageId, attachments: dbAttachments });
+        useAttachmentPreviewSync(attachments[0]);
+        return null;
+      };
+
+      render(
+        <RecoilRoot>
+          <Consumer />
+        </RecoilRoot>,
+      );
+
+      /* The publish costs a render or two to settle; anything that keeps
+       * climbing is the loop. React's own ceiling is 50 nested updates,
+       * so a bound well under it fails on the defect and holds on the
+       * fix. */
+      expect(renders).toBeLessThan(10);
     });
   });
 });
