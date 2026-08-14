@@ -29,6 +29,14 @@ describe('excludedKeys', () => {
   it('does not exclude tenantId (plugin-level guard owns this)', () => {
     expect(excludedKeys.has('tenantId')).toBe(false);
   });
+
+  it('excludes lastReadAt so a message send cannot erase the read-stamp', () => {
+    /* BaseClient's $unset pass drops every conversation field absent from
+     * endpointOptions unless listed here. The read-stamp is written by its own
+     * route and is never in endpointOptions; erasing it makes the conversation
+     * read "seen" forever on every device. */
+    expect(excludedKeys.has('lastReadAt')).toBe(true);
+  });
 });
 
 describe('bedrockEndpointSchema', () => {

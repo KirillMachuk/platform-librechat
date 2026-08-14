@@ -3,7 +3,7 @@ import { useRecoilValue } from 'recoil';
 import { Tools } from 'librechat-data-provider';
 import { TooltipAnchor } from '@librechat/client';
 import type { TAttachment, TFile } from 'librechat-data-provider';
-import { FileText, FileSpreadsheet, FileCode, FileImage, File } from '~/components/icons';
+import { fileTypeMeta } from '~/components/Chat/Input/Files/typeMeta';
 import { useLocalize, useProgress, useExpandCollapse } from '~/hooks';
 import { ToolIcon, OutputRenderer, isError } from './ToolOutput';
 import FilePreviewDialog from './FilePreviewDialog';
@@ -238,29 +238,14 @@ function parseRetrievalOutput(raw: string): ParsedResult[] {
   return results;
 }
 
+/**
+ * One map decides every file glyph: typeMeta. This header used to keep its own
+ * `includes('xml')` matcher — the exact substring bug that drew every docx as
+ * code in the chips (openxmlformats contains "xml"), living on one surface
+ * over from where it was fixed.
+ */
 function getFileIcon(mimeType?: string): React.ComponentType<{ className?: string }> {
-  if (!mimeType) {
-    return FileText;
-  }
-  if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType.includes('csv')) {
-    return FileSpreadsheet;
-  }
-  if (mimeType.includes('image')) {
-    return FileImage;
-  }
-  if (
-    mimeType.includes('javascript') ||
-    mimeType.includes('typescript') ||
-    mimeType.includes('json') ||
-    mimeType.includes('xml') ||
-    mimeType.includes('html')
-  ) {
-    return FileCode;
-  }
-  if (mimeType.includes('pdf') || mimeType.includes('text') || mimeType.includes('word')) {
-    return FileText;
-  }
-  return File;
+  return fileTypeMeta(mimeType ?? '').Icon;
 }
 
 function FileHeader({

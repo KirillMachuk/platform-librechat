@@ -41,6 +41,32 @@ export const useUpdateConversationMutation = (
   );
 };
 
+/**
+ * Stamps "seen" on the server so every device of the account agrees on the
+ * unread dot. The cache patch keeps the local list honest without a refetch:
+ * without it, switching away from a chat would revive its dot from the stale
+ * `lastReadAt` still sitting in the sidebar cache.
+ */
+export const useReadConvoMutation = (): UseMutationResult<
+  t.TReadConversationResponse,
+  unknown,
+  t.TReadConversationRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    (payload: t.TReadConversationRequest) => dataService.readConversation(payload),
+    {
+      onSuccess: (data, vars) => {
+        updateConvoInAllQueries(queryClient, vars.conversationId, (c) => ({
+          ...c,
+          lastReadAt: data.lastReadAt,
+        }));
+      },
+    },
+  );
+};
+
 export const useTagConversationMutation = (
   conversationId: string,
   options?: t.updateTagsInConvoOptions,

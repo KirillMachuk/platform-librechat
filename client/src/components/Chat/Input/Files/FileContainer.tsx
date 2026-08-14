@@ -2,10 +2,10 @@ import type { TFile } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { ExtendedFile } from '~/common';
 import { fileTypeMeta, fileBadge } from './typeMeta';
-import { getFileType, cn } from '~/utils';
 import FilePreview from './FilePreview';
 import { useLocalize } from '~/hooks';
 import RemoveFile from './RemoveFile';
+import { cn } from '~/utils';
 
 const FileContainer = ({
   file,
@@ -48,7 +48,6 @@ const FileContainer = ({
   pressed?: boolean;
 }) => {
   const localize = useLocalize();
-  const fileType = getFileType(overrideType ?? file.type);
   const typeLabel = localize(fileTypeMeta(overrideType ?? file.type ?? '').labelKey);
   const visibleName = displayName ?? file.filename ?? '';
   /* 12.08-3, владелец: вторая строка — расширение + вес («DOCX 18.5 KB»);
@@ -63,7 +62,7 @@ const FileContainer = ({
   return (
     <div
       className={cn(
-        'group/card relative inline-block text-sm text-text-primary',
+        'group/card relative inline-block max-w-full text-sm text-text-primary',
         containerClassName,
       )}
     >
@@ -80,9 +79,16 @@ const FileContainer = ({
           buttonClassName,
         )}
       >
-        <div className="w-56 p-1.5">
-          <div className="flex flex-row items-center gap-2">
-            <FilePreview file={file} fileType={fileType} className="relative" />
+        {/* max-w-full: в зажатых панелях (открытые артефакты, боковые списки
+            агента) фиксированные 256px вылезали бы за край — карточка
+            ужимается, имя обрезается многоточием. */}
+        <div className="w-64 max-w-full p-1.5">
+          {/* 14.08-4, владелец: у кнопки скачивания СВОЁ место — текст обязан
+              обрезаться ДО зоны глифа, карточка длиннее (референс — второй
+              скрин ChatGPT). pr-9 резервирует ровно зону trailing (32px глиф
+              + зазор), поэтому наложение невозможно на любой ширине. */}
+          <div className={cn('flex flex-row items-center gap-2', trailing != null && 'pr-9')}>
+            <FilePreview file={file} overrideType={overrideType} className="relative" />
             <div className="overflow-hidden">
               <div className="truncate font-medium" title={visibleName}>
                 {visibleName}

@@ -1,11 +1,3 @@
-import {
-  TextPaths,
-  FilePaths,
-  CodePaths,
-  AudioPaths,
-  VideoPaths,
-  SheetPaths,
-} from '@librechat/client';
 /**
  * The bare i18next singleton, not `~/locales/i18n`: this module sits in the
  * `~/utils` barrel that half the app imports, and pulling the init module in
@@ -17,7 +9,6 @@ import {
   megabyte,
   QueryKeys,
   inferMimeType,
-  excelMimeTypes,
   EToolResources,
   documentParserMimeTypes,
   fileConfig as defaultFileConfig,
@@ -27,124 +18,9 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { ExtendedFile, FileError } from '~/common';
 import { resolveLocale } from './messages';
 
-export const partialTypes = ['text/x-'];
-
-const textDocument = {
-  paths: TextPaths,
-  fill: '#FF5588',
-  title: 'Document',
-};
-
-const spreadsheet = {
-  paths: SheetPaths,
-  fill: '#10A37F',
-  title: 'Spreadsheet',
-};
-
-const codeFile = {
-  paths: CodePaths,
-  fill: '#FF6E3C',
-  // TODO: make this dynamic to the language
-  title: 'Code',
-};
-
-const artifact = {
-  paths: CodePaths,
-  fill: '#2D305C',
-  title: 'Code',
-};
-
-const audioFile = {
-  paths: AudioPaths,
-  fill: '#FF6B35',
-  title: 'Audio',
-};
-
-const videoFile = {
-  paths: VideoPaths,
-  fill: '#8B5CF6',
-  title: 'Video',
-};
-
-export const fileTypes = {
-  /* Category matches */
-  file: {
-    paths: FilePaths,
-    fill: '#0000FF',
-    title: 'File',
-  },
-  text: textDocument,
-  txt: textDocument,
-  audio: audioFile,
-  video: videoFile,
-  // application:,
-
-  /* Partial matches */
-  csv: spreadsheet,
-  'application/pdf': textDocument,
-  pdf: textDocument,
-  'text/x-': codeFile,
-  artifact: artifact,
-
-  /* Exact matches */
-  // 'application/json':,
-  // 'text/html':,
-  // 'text/css':,
-  // image,
-};
-
-// export const getFileType = (type = '') => {
-//   let fileType = fileTypes.file;
-//   const exactMatch = fileTypes[type];
-//   const partialMatch = !exactMatch && partialTypes.find((type) => type.includes(type));
-//   const category = (!partialMatch && (type.split('/')[0] ?? 'text') || 'text');
-
-//   if (exactMatch) {
-//     fileType = exactMatch;
-//   } else if (partialMatch) {
-//     fileType = fileTypes[partialMatch];
-//   } else if (fileTypes[category]) {
-//     fileType = fileTypes[category];
-//   }
-
-//   if (!fileType) {
-//     fileType = fileTypes.file;
-//   }
-
-//   return fileType;
-// };
-
-export const getFileType = (
-  type = '',
-): {
-  paths: React.FC;
-  fill: string;
-  title: string;
-} => {
-  // Direct match check
-  if (fileTypes[type]) {
-    return fileTypes[type];
-  }
-
-  if (excelMimeTypes.test(type)) {
-    return spreadsheet;
-  }
-
-  // Partial match check
-  const partialMatch = partialTypes.find((partial) => type.includes(partial));
-  if (partialMatch && fileTypes[partialMatch]) {
-    return fileTypes[partialMatch];
-  }
-
-  // Category check
-  const category = type.split('/')[0] || 'text';
-  if (fileTypes[category]) {
-    return fileTypes[category];
-  }
-
-  // Default file type
-  return fileTypes.file;
-};
+/* The colour-plate icon map (`getFileType`/`fileTypes`, hand-drawn *Paths
+ * artwork) is gone — every file glyph now comes from ONE Tabler map:
+ * `Chat/Input/Files/typeMeta.tsx` (owner 14.08-2: replace ALL old icons). */
 
 /**
  * Format a date string for reading, in the language the user chose in the app —

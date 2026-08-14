@@ -5,9 +5,9 @@ import { Constants } from 'librechat-data-provider';
 import { useToastContext, useMediaQuery } from '@librechat/client';
 import type { TConversation } from 'librechat-data-provider';
 import { useNavigateToConvo, useLocalize, useShiftKey } from '~/hooks';
-import { isConversationUnread, useUnreadMarks } from '~/store/unread';
 import { useUpdateConversationMutation } from '~/data-provider';
 import { areConversationRenderPropsEqual } from './utils';
+import { isConversationUnread } from '~/store/unread';
 import { cn, logger, buildConvoPath } from '~/utils';
 import { NotificationSeverity } from '~/common';
 import { ConvoOptions } from './ConvoOptions';
@@ -68,11 +68,9 @@ function Conversation({
     }
   }, [currentConvoId, conversationId, activeConvos]);
 
-  const { marks } = useUnreadMarks();
   const isUnread = isConversationUnread(
-    marks,
-    conversationId,
     conversation.updatedAt,
+    conversation.lastReadAt,
     isActiveConvo,
   );
 

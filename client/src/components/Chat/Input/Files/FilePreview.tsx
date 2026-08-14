@@ -9,16 +9,17 @@ import { cn } from '~/utils';
 
 const FilePreview = ({
   file,
+  overrideType,
   className = '',
 }: {
   file?: Partial<ExtendedFile | TFile>;
-  /** Kept in the signature for the artifact chips that still pass it; the
-   *  drawing now comes from the file's own mime via typeMeta. */
-  fileType?: {
-    paths: React.FC;
-    fill: string;
-    title: string;
-  };
+  /**
+   * Resolved type when the record itself carries none — generated artifact
+   * cards hold only a filename, so the caller hands down the extension.
+   * Without it those cards drew the generic glyph while the same file in
+   * the composer drew its real type (owner 14.08-2).
+   */
+  overrideType?: string;
   className?: string;
 }) => {
   const localize = useLocalize();
@@ -33,8 +34,8 @@ const FilePreview = ({
   const indexFailed = embeddingStatus === 'failed';
   /* Perplexity's approach (owner 12.08-2, second word): the TYPE is said by
      the drawing, the colour is the text's own — no colour squares, no tinted
-     glyphs. `fileType` still supplies the subtitle at the call sites. */
-  const meta = fileTypeMeta((file?.type as string | undefined) ?? '');
+     glyphs. ONE map decides the drawing everywhere: typeMeta. */
+  const meta = fileTypeMeta(overrideType ?? (file?.type as string | undefined) ?? '');
   const TypeGlyph = meta.Icon;
   return (
     <div

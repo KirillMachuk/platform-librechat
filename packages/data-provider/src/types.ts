@@ -364,6 +364,15 @@ export type TArchiveConversationRequest = {
 
 export type TArchiveConversationResponse = TConversation;
 
+export type TReadConversationRequest = {
+  conversationId: string;
+};
+
+export type TReadConversationResponse = {
+  conversationId: string;
+  lastReadAt: string;
+};
+
 export type TSharedMessagesResponse = Omit<TSharedLink, 'messages'> & {
   messages: TMessage[];
 };

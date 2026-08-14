@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 import { EModelEndpoint, RetentionMode } from 'librechat-data-provider';
 import type { IChatProject, IConversation } from '../types';
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import { ConversationMethods, createConversationMethods } from './conversation';
 import { tenantStorage, runAsSystem } from '~/config/tenantContext';
 import { createModels } from '../models';
@@ -62,6 +62,8 @@ const getConvo = (...args: Parameters<ConversationMethods['getConvo']>) =>
   methods.getConvo(...args);
 const getConvoRetention = (...args: Parameters<ConversationMethods['getConvoRetention']>) =>
   methods.getConvoRetention(...args);
+const markConvoRead = (...args: Parameters<ConversationMethods['markConvoRead']>) =>
+  methods.markConvoRead(...args);
 const getConvoTitle = (...args: Parameters<ConversationMethods['getConvoTitle']>) =>
   methods.getConvoTitle(...args);
 const getConvoFiles = (...args: Parameters<ConversationMethods['getConvoFiles']>) =>
@@ -854,6 +856,46 @@ describe('Conversation Operations', () => {
     it('should return null if conversation not found', async () => {
       const result = await getConvo('user123', 'non-existent-id');
       expect(result).toBeNull();
+    });
+  });
+
+  describe('markConvoRead', () => {
+    it('stamps lastReadAt WITHOUT bumping updatedAt', async () => {
+      /* The list is sorted by updatedAt and the dot on every other device
+       * compares against it — a read-stamp that bumps updatedAt would jump
+       * old chats to the top and re-light dots account-wide. */
+      const conversationId = uuidv4();
+      await Conversation.create({
+        conversationId,
+        user: 'user123',
+        title: 'Read-stamp target',
+        endpoint: EModelEndpoint.openAI,
+      });
+      const before = await Conversation.findOne({ conversationId }).lean<IConversation>();
+
+      await markConvoRead('user123', conversationId);
+
+      const after = await Conversation.findOne({ conversationId }).lean<IConversation>();
+      expect(after!.lastReadAt).toBeInstanceOf(Date);
+      expect(new Date(after!.updatedAt!).getTime()).toBe(new Date(before!.updatedAt!).getTime());
+      expect(new Date(after!.lastReadAt!).getTime()).toBeGreaterThanOrEqual(
+        new Date(before!.updatedAt!).getTime(),
+      );
+    });
+
+    it("never stamps another user's conversation", async () => {
+      const conversationId = uuidv4();
+      await Conversation.create({
+        conversationId,
+        user: 'owner-user',
+        title: 'Foreign conversation',
+        endpoint: EModelEndpoint.openAI,
+      });
+
+      await markConvoRead('someone-else', conversationId);
+
+      const after = await Conversation.findOne({ conversationId }).lean<IConversation>();
+      expect(after!.lastReadAt).toBeUndefined();
     });
   });
 

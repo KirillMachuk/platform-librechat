@@ -49,6 +49,17 @@ const convoSchema: Schema<IConversation> = new Schema(
     expiredAt: {
       type: Date,
     },
+    /**
+     * When THIS user last had the conversation open — the unread dot compares
+     * it against `updatedAt` so all of the user's devices agree on what has
+     * been seen. Written with `timestamps: false`: marking a chat read must
+     * not bump `updatedAt`, or opening an old chat would re-sort the list
+     * and re-light the dot everywhere else. Absent (legacy rows) reads as
+     * "read" — the pre-server bootstrap semantic.
+     */
+    lastReadAt: {
+      type: Date,
+    },
     tenantId: {
       type: String,
       index: true,

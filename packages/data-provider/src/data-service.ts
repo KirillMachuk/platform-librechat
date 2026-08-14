@@ -811,6 +811,12 @@ export function archiveConversation(
   return request.post(endpoints.archiveConversation(), { arg: payload });
 }
 
+export function readConversation(
+  payload: t.TReadConversationRequest,
+): Promise<t.TReadConversationResponse> {
+  return request.post(endpoints.readConversation(), { arg: payload });
+}
+
 export function genTitle(payload: m.TGenTitleRequest): Promise<m.TGenTitleResponse> {
   return request.get(endpoints.genTitle(payload.conversationId));
 }

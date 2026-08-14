@@ -72,6 +72,11 @@ export const excludedKeys = new Set([
   // a page reload on an existing project conversation).
   'project_id',
   'chatProjectId',
+  // The unread dot's read-stamp. Written out-of-band by POST /convos/read and
+  // never present in endpointOptions, so without this entry EVERY message send
+  // would $unset it — and an absent stamp reads as "read", silently disabling
+  // the dot account-wide for that conversation.
+  'lastReadAt',
 ]);
 
 export enum SettingsViews {

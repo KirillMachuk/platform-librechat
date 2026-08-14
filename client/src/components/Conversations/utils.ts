@@ -32,7 +32,10 @@ export function areConversationListItemFieldsEqual(
     prevConversation.title === nextConversation.title &&
     prevConversation.chatProjectId === nextConversation.chatProjectId &&
     prevConversation.createdAt === nextConversation.createdAt &&
-    prevConversation.updatedAt === nextConversation.updatedAt
+    prevConversation.updatedAt === nextConversation.updatedAt &&
+    /* The unread dot derives from this pair; dropping lastReadAt here would
+     * freeze a memoized row on its stale dot after the read-stamp lands. */
+    prevConversation.lastReadAt === nextConversation.lastReadAt
   );
 }
 

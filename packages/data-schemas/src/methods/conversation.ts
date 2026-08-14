@@ -1,17 +1,17 @@
-import type { FilterQuery, Model, SortOrder } from 'mongoose';
 import { RetentionMode } from 'librechat-data-provider';
-import { isValidObjectIdString } from '~/utils/objectId';
-import { createTempChatExpirationDate } from '~/utils/tempChatRetention';
-import { buildRetentionVisibilityFilter, createFallbackRetentionDate } from '~/utils/retention';
-import { tenantSafeBulkWrite } from '~/utils/tenantBulkWrite';
-import logger from '~/config/winston';
+import type { FilterQuery, Model, SortOrder } from 'mongoose';
+import type { DeleteResult } from 'mongoose';
 import type { AppConfig, IChatProjectDocument, IConversation } from '~/types';
+import type { MessageMethods } from './message';
 import {
   refreshChatProjectStatsForUser,
   updateChatProjectLastConversationForUser,
 } from './chatProject';
-import type { MessageMethods } from './message';
-import type { DeleteResult } from 'mongoose';
+import { buildRetentionVisibilityFilter, createFallbackRetentionDate } from '~/utils/retention';
+import { createTempChatExpirationDate } from '~/utils/tempChatRetention';
+import { tenantSafeBulkWrite } from '~/utils/tenantBulkWrite';
+import { isValidObjectIdString } from '~/utils/objectId';
+import logger from '~/config/winston';
 
 export interface ConversationMethods {
   getConvoFiles(conversationId: string): Promise<string[]>;
@@ -55,6 +55,7 @@ export interface ConversationMethods {
     convoMap: Record<string, unknown>;
   }>;
   getConvo(user: string, conversationId: string): Promise<IConversation | null>;
+  markConvoRead(user: string, conversationId: string): Promise<void>;
   getConvoRetention(
     user: string,
     conversationId: string,
@@ -107,6 +108,30 @@ export function createConversationMethods(
     } catch (error) {
       logger.error('[getConvo] Error getting single conversation', error);
       throw new Error('Error getting single conversation');
+    }
+  }
+
+  /**
+   * Stamps "the user has seen this conversation" for the unread dot, which
+   * compares `updatedAt` against `lastReadAt` so every device of the account
+   * agrees on what has been read.
+   *
+   * `timestamps: false` is the load-bearing part: marking a chat read must
+   * not bump `updatedAt` — the conversation list is sorted by it, so opening
+   * an old chat would otherwise jump it to the top and re-light the dot on
+   * every other device.
+   */
+  async function markConvoRead(user: string, conversationId: string) {
+    try {
+      const Conversation = mongoose.models.Conversation as Model<IConversation>;
+      await Conversation.updateOne(
+        { user, conversationId },
+        { $set: { lastReadAt: new Date() } },
+        { timestamps: false },
+      );
+    } catch (error) {
+      logger.error('[markConvoRead] Error marking conversation read', error);
+      throw new Error('Error marking conversation read');
     }
   }
 
@@ -636,7 +661,7 @@ export function createConversationMethods(
 
       const convos = await Conversation.find(query)
         .select(
-          'conversationId endpoint title createdAt updatedAt user model agent_id assistant_id spec iconURL project_id',
+          'conversationId endpoint title createdAt updatedAt lastReadAt user model agent_id assistant_id spec iconURL project_id',
         )
         .sort(sortObj)
         .limit(limit + 1)
@@ -786,6 +811,7 @@ export function createConversationMethods(
     getConvosByCursor,
     getConvosQueried,
     getConvo,
+    markConvoRead,
     getConvoRetention,
     getConvoTitle,
     deleteConvos,

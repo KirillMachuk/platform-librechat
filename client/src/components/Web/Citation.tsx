@@ -5,7 +5,8 @@ import type { CitationProps } from './types';
 import { SourceHovercard, FaviconImage, getCleanDomain } from '~/components/Web/SourceHovercard';
 import FilePreviewDialog from '~/components/Chat/Messages/Content/FilePreviewDialog';
 import { CitationContext, useCitation, useCompositeCitations } from './Context';
-import { ChevronLeft, ChevronRight, FileText } from '~/components/icons';
+import { fileTypeMeta } from '~/components/Chat/Input/Files/typeMeta';
+import { ChevronLeft, ChevronRight } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 interface FileCitationMetadata {
@@ -105,6 +106,9 @@ export function CompositeCitation(props: CompositeCitationProps) {
   const currentSource = sources[currentPage] as FileCitationSource;
   const { isFileType, fileId, fileMeta, fileName, filePages, fileRelevance, filePageRelevance } =
     getFileCitationData(currentSource);
+  /* Same map as the chip the citation points at — a cited spreadsheet draws
+     the table glyph, not a generic document (14.08 review, находка 4). */
+  const FileGlyph = fileTypeMeta(fileMeta?.fileType ?? '').Icon;
 
   const handleFileClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -161,7 +165,7 @@ export function CompositeCitation(props: CompositeCitationProps) {
         {isFileType ? (
           <>
             <div className="flex items-center gap-2">
-              <FileText className="size-4 shrink-0 text-text-secondary" aria-hidden="true" />
+              <FileGlyph className="size-4 shrink-0 text-text-secondary" aria-hidden="true" />
               <button
                 onClick={handleFileClick}
                 className="min-w-0 truncate text-sm font-medium text-text-primary hover:underline"
