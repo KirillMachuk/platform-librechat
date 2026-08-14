@@ -495,5 +495,39 @@ describe('useAttachmentPreviewSync', () => {
        * fix. */
       expect(renders).toBeLessThan(10);
     });
+
+    it('publishes a FAILED preview once through the same parent loop', () => {
+      /* The crash was first reported on a pptx whose render errored: the
+       * `failed` terminal is the same write path, but with `text` null on
+       * both sides — a sloppy comparison (e.g. `??` collapsing null vs
+       * undefined differently per side) could pass `ready` yet loop on
+       * `failed`. Pin the branch on its founding case. */
+      mockUseFilePreview.mockReset();
+      mockUseFilePreview.mockReturnValue({
+        data: {
+          file_id: fileId,
+          status: 'failed',
+          previewError: 'render-timeout',
+        },
+        isFetching: false,
+      });
+
+      const dbAttachments = [makeAttachment({ status: 'pending' })];
+      let renders = 0;
+      const Consumer = () => {
+        renders += 1;
+        const { attachments } = useAttachments({ messageId, attachments: dbAttachments });
+        useAttachmentPreviewSync(attachments[0]);
+        return null;
+      };
+
+      render(
+        <RecoilRoot>
+          <Consumer />
+        </RecoilRoot>,
+      );
+
+      expect(renders).toBeLessThan(10);
+    });
   });
 });
