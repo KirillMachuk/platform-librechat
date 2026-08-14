@@ -18,16 +18,10 @@ jest.mock('~/utils', () => ({
   cn: (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(' '),
 }));
 
-const Paths: React.FC = () => null;
-const fileType = { paths: Paths, fill: '', title: '' };
-
 describe('FilePreview indexing tooltip', () => {
   it('shows an indexing tooltip while the document is still embedding', () => {
     const { container } = render(
-      <FilePreview
-        file={{ embeddingStatus: 'processing' } as Partial<TFile>}
-        fileType={fileType}
-      />,
+      <FilePreview file={{ embeddingStatus: 'processing' } as Partial<TFile>} />,
     );
     // The async-embed spinner alone reads as "stuck"; a hover tooltip tells the
     // user it is still indexing (e.g. a large scan can take minutes).
@@ -36,7 +30,7 @@ describe('FilePreview indexing tooltip', () => {
 
   it('shows no indexing tooltip once the document is ready', () => {
     const { container } = render(
-      <FilePreview file={{ embeddingStatus: 'ready' } as Partial<TFile>} fileType={fileType} />,
+      <FilePreview file={{ embeddingStatus: 'ready' } as Partial<TFile>} />,
     );
     expect(container.querySelector('[title]')).not.toBeInTheDocument();
   });

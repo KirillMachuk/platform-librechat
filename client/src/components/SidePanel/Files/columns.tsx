@@ -3,8 +3,8 @@ import { useMediaQuery } from '@librechat/client';
 import type { TableColumn } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import ImagePreview from '~/components/Chat/Input/Files/ImagePreview';
-import { formatDate, getFileType, buildDocumentCard } from '~/utils';
 import FilePreview from '~/components/Chat/Input/Files/FilePreview';
+import { formatDate, buildDocumentCard } from '~/utils';
 import { TranslationKeys, useLocalize } from '~/hooks';
 import { Paperclip } from '~/components/icons';
 
@@ -51,7 +51,6 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
         );
       }
 
-      const fileType = getFileType(file.type);
       /* What the document IS, under the name the person gave it — the answer a filename like
        * "Скан_2026_final(3).pdf" withholds. The name itself is never touched: people name files
        * the way they look for them. Nothing extracted, nothing shown. */
@@ -67,7 +66,7 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
          * text refuses to shrink and a long counterparty name runs past the panel edge
          * instead of ending in an ellipsis. */
         <div className="flex min-w-0 gap-2">
-          {fileType && <FilePreview fileType={fileType} className="relative size-7" file={file} />}
+          <FilePreview className="relative size-7" file={file} />
           <div className="flex min-w-0 flex-col justify-center">
             <span className="truncate">{file.filename}</span>
             {card && (
