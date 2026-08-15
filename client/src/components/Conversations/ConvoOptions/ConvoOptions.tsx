@@ -1,14 +1,10 @@
 import { useState, useId, useRef, memo, useCallback, useMemo } from 'react';
 import * as Ariakit from '@ariakit/react';
-import { QueryKeys } from 'librechat-data-provider';
-import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DropdownPopup, Spinner, useToastContext } from '@librechat/client';
-import type { TMessage } from 'librechat-data-provider';
 import type { MouseEvent } from 'react';
 import {
   useDuplicateConversationMutation,
-  useDeleteConversationMutation,
   useGetStartupConfig,
   useArchiveConvoMutation,
 } from '~/data-provider';
@@ -38,7 +34,6 @@ function ConvoOptions({
   isActiveConvo: boolean;
 }) {
   const localize = useLocalize();
-  const queryClient = useQueryClient();
   const { index } = useChatContext();
   const { data: startupConfig } = useGetStartupConfig();
   const { navigateToConvo } = useNavigateToConvo(index);
@@ -56,28 +51,6 @@ function ConvoOptions({
   const [announcement, setAnnouncement] = useState('');
 
   const archiveConvoMutation = useArchiveConvoMutation();
-
-  const deleteMutation = useDeleteConversationMutation({
-    onSuccess: () => {
-      if (currentConvoId === conversationId || currentConvoId === 'new') {
-        newConversation();
-        navigate('/c/new', { replace: true });
-      }
-      retainView();
-      showToast({
-        message: localize('com_ui_convo_delete_success'),
-        severity: NotificationSeverity.SUCCESS,
-        showIcon: true,
-      });
-    },
-    onError: () => {
-      showToast({
-        message: localize('com_ui_convo_delete_error'),
-        severity: NotificationSeverity.ERROR,
-        showIcon: true,
-      });
-    },
-  });
 
   const duplicateConversation = useDuplicateConversationMutation({
     onSuccess: (data) => {
@@ -104,7 +77,6 @@ function ConvoOptions({
 
   const isDuplicateLoading = duplicateConversation.isLoading;
   const isArchiveLoading = archiveConvoMutation.isLoading;
-  const isDeleteLoading = deleteMutation.isLoading;
 
   const shareHandler = useCallback(() => {
     setShowShareDialog(true);
@@ -113,21 +85,6 @@ function ConvoOptions({
   const deleteHandler = useCallback(() => {
     setShowDeleteDialog(true);
   }, []);
-
-  const handleInstantDelete = useCallback(
-    (e: MouseEvent) => {
-      e.stopPropagation();
-      const convoId = conversationId ?? '';
-      if (!convoId) {
-        return;
-      }
-      const messages = queryClient.getQueryData<TMessage[]>([QueryKeys.messages, convoId]);
-      const thread_id = messages?.[messages.length - 1]?.thread_id;
-      const endpoint = messages?.[messages.length - 1]?.endpoint;
-      deleteMutation.mutate({ conversationId: convoId, thread_id, endpoint, source: 'button' });
-    },
-    [conversationId, deleteMutation, queryClient],
-  );
 
   const handleArchiveClick = useCallback(
     async (e?: MouseEvent) => {
@@ -243,13 +200,6 @@ function ConvoOptions({
       handleArchiveClick,
       handleDuplicateClick,
     ],
-  );
-
-  const buttonClassName = cn(
-    'tap-target inline-flex h-7 w-7 items-center justify-center rounded-md border-none p-0 text-sm font-medium ring-ring-primary transition-all duration-200 ease-in-out focus-visible:outline-none disabled:opacity-50',
-    isActiveConvo === true || isPopoverActive
-      ? 'opacity-100'
-      : 'opacity-0 focus:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100 data-[open]:opacity-100',
   );
 
   return (

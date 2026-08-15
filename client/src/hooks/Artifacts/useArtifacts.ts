@@ -1,8 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
-import { Constants } from 'librechat-data-provider';
 import { useRecoilState, useRecoilValue, useResetRecoilState } from 'recoil';
-import { useArtifactsContext } from '~/Providers';
 import { isCodeOnlyArtifact } from '~/utils/artifacts';
+import { useArtifactsContext } from '~/Providers';
 import { logger } from '~/utils';
 import store from '~/store';
 
@@ -46,9 +45,16 @@ export default function useArtifacts() {
       hasEnclosedArtifactRef.current = false;
       hasAutoSwitchedToCodeRef.current = false;
     };
+    /* Сброс — про СМЕНУ разговора, а не про монтирование панели. Хук живёт
+       ВНУТРИ панели, а панель монтируется только когда что-то уже выбрано;
+       ветка «новый чат» срабатывала на каждом её монтировании (реф здесь
+       умирает вместе с панелью, так что prev всегда null) и стирала ровно то
+       состояние, которое панель и открыло. На пустом чате предпросмотр файла
+       из библиотеки закрывался в тот же кадр (15.08-3, поймано e2e; проба
+       этого не видела — она открывала файл в существующем диалоге).
+       Наследовать чужие артефакты неоткуда: атом не переживает перезагрузку,
+       а переход из разговора в «новый чат» закрывает первая ветка. */
     if (conversationId !== prevConversationIdRef.current && prevConversationIdRef.current != null) {
-      resetState();
-    } else if (conversationId === Constants.NEW_CONVO) {
       resetState();
     }
     prevConversationIdRef.current = conversationId;
