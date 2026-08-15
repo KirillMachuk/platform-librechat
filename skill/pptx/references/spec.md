@@ -128,7 +128,7 @@ Use `inputPath` plus `edits` for a targeted revision, or `templatePath` plus `te
 - `image`: `title`, `image`, optional `caption`, optional `source`.
 - `table`: `title`, `columns`, `rows`, required `source` for factual data.
 - `process`: `title`, `steps` containing `title` and `detail`, optional `source` when the sequence is sourced.
-- `sources`: `title`, `entries` containing `label` and `url`.
+- `sources`: `title`, `entries` containing `label` and `url`. Put the full address in `url` — the builder prints the site on the slide and parks the address in the speaker notes, so do not shorten it yourself. A web `url` must point at the page carrying the fact; a site's front page fails QA.
 
 ## Targeted edit
 

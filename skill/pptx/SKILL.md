@@ -24,6 +24,8 @@ Create the requested `.pptx`; do not substitute Markdown, HTML, or PDF. The edit
 - Use editable PowerPoint text, shapes, tables, and native charts. Use a bitmap only for a supplied photo or a visualization PowerPoint cannot represent.
 - Put a short visible source note on every factual claim, chart, table, and metric slide. Add a final sources slide when sources exist.
 - Do not invent facts, sources, dates, or numeric precision. Record necessary assumptions explicitly.
+- A source URL must be a page you actually opened in this conversation, pointing at the page that carries the fact. Never cite a site's front page (`https://www.statista.com/`), and never reconstruct an address from memory — a plausible-looking URL that 404s is worse than no URL. When you have the publication but not a checked link, give publisher and date and leave the URL out.
+- Compare numbers with a native `chart`, not with prose or a table. A table is for values the reader must read exactly; a deck whose only numeric slide is a table reads as a report, not a presentation.
 - Preserve a user's slide size, masters, layouts, theme, and placeholders. If the selected template layout lacks the required inherited placeholders, stop and request a compatible layout instead of drawing a new design over it.
 - For a targeted revision, change only the requested slide or text and save a new version.
 - Never reconstruct an attached presentation from extracted chat text. A revision requires the actual binary at `/mnt/data/<attached-name>.pptx`; if it is absent, say that the source file is unavailable instead of producing a look-alike deck.
