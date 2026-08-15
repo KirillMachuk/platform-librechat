@@ -165,6 +165,35 @@ export async function openPreview(page: Page, filename: string): Promise<Locator
   return surface;
 }
 
+/**
+ * Click a tab inside an office preview frame (spreadsheet sheets, deck slides).
+ *
+ * Measured, not guessed: the raw `frame.getByText(...).click()` switched sheets
+ * in 1 run of 3, while the identical sequence with two layout round-trips in
+ * between switched them in 3 of 3. The frame keeps re-laying out for a beat
+ * after its first paint — fonts land, table columns resolve — and a click
+ * dispatched into that window is delivered at coordinates the label has
+ * already vacated. Waiting for the label's box to stop moving is the sync
+ * point that race needs; it is not padding against flakiness.
+ */
+export async function clickPreviewTab(frame: FrameLocator, name: string): Promise<void> {
+  const tab = frame.getByText(name, { exact: true });
+  await tab.waitFor({ state: 'visible', timeout: 30000 });
+  let previous: string | null = null;
+  await expect
+    .poll(
+      async () => {
+        const box = JSON.stringify(await tab.boundingBox());
+        const settled = previous === box;
+        previous = box;
+        return settled;
+      },
+      { timeout: 15000, intervals: [100, 100, 200, 200, 400] },
+    )
+    .toBe(true);
+  await tab.click();
+}
+
 /** Upload the fixture and open its preview from the library. */
 export async function previewFixture(page: Page, file: string | FileFixture): Promise<Locator> {
   const fixture = typeof file === 'string' ? fileFixture(file) : file;

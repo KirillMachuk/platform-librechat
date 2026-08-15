@@ -15,6 +15,7 @@ import {
   largeTextFixture,
   openFilesPanel,
   previewSurface,
+  clickPreviewTab,
   previewFixture,
   previewFrame,
   previewFrameElement,
@@ -123,11 +124,11 @@ test.describe('file preview — office documents', () => {
     await expect(body).toContainText(SHEET_MARKER, { timeout: 60000, useInnerText: true });
     await expect(body).not.toContainText(SHEET_TWO_MARKER, { useInnerText: true });
 
-    await frame.getByText('Сводка', { exact: true }).click();
+    await clickPreviewTab(frame, 'Сводка');
     await expect(body).toContainText(SHEET_TWO_MARKER, { useInnerText: true });
     await expect(body).not.toContainText(SHEET_MARKER, { useInnerText: true });
 
-    await frame.getByText('Реестр договоров', { exact: true }).click();
+    await clickPreviewTab(frame, 'Реестр договоров');
     await expect(body).toContainText(SHEET_MARKER, { useInnerText: true });
   });
 
