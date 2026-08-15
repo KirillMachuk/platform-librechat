@@ -50,11 +50,6 @@ const ALLOWLIST = [
     reason: 'fallback render path without TooltipAnchor (ExternalTTS)',
   },
   {
-    file: 'client/src/components/Chat/Messages/Content/Parts/Attachment.tsx',
-    marker: "title={localize('com_ui_download')}",
-    reason: 'download button outside the SCR2R3 sweep scope; convert with the next tooltip pass',
-  },
-  {
     file: 'client/src/components/Prompts/fields/PromptName.tsx',
     marker: 'title={newName}',
     reason: 'truncated prompt name: title reveals the full text, not a control label',
