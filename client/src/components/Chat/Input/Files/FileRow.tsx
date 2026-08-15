@@ -172,7 +172,7 @@ export default function FileRow({
     return (
       <div
         className={cn(
-          'no-scrollbar flex w-full max-w-full items-center gap-1 overflow-x-auto',
+          'no-scrollbar pan-x flex w-full max-w-full items-center gap-1 overflow-x-auto',
           isRTL && 'flex-row-reverse',
         )}
       >

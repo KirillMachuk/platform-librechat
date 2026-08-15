@@ -419,7 +419,7 @@ Covered by a flow, not just seeded: `PROMPTS.SHARE`/`SHARE_PUBLIC`, `AGENTS.SHAR
 | Tab order reaches the composer from the top of the document                  | a11y  | `e2e/specs/mock/a11y.spec.ts#the composer is reachable and operable from the keyboard alone`                 | covered  |
 | Closing a dialog returns focus to what opened it                             | a11y  | `e2e/specs/mock/a11y.spec.ts#closing the file panel hands focus back to what opened it`                      | covered  |
 | Closing the settings dialog returns focus to the account button              | a11y  | `e2e/specs/mock/dialogs.spec.ts#the settings dialog keeps the other four, and drops focus to the body`       | fixme:Ф1 |
-| Escape closes the top dialog and leaves the one behind it open               | a11y  | `e2e/specs/mock/a11y.spec.ts#Escape closes the preview and leaves the panel it came from open`               | covered  |
+| Escape closes the file preview panel (library closes itself on row click)    | a11y  | `e2e/specs/mock/a11y.spec.ts#Escape closes the file preview panel`                                           | covered  |
 | A modal locks the page behind it, and lets it scroll again after             | a11y  | `e2e/specs/mock/dialogs.spec.ts#the projects panel locks the page, holds focus, and hands it back`           | covered  |
 | Tab does not walk out of an open modal onto the page behind                  | a11y  | `e2e/specs/mock/dialogs.spec.ts#tabEscapedTo`                                                                | covered  |
 | A dialog holds focus against anything else claiming it                       | a11y  | —                                                                                                            | gap      |
@@ -684,7 +684,7 @@ to twelve failures to 16 passes in about 45 seconds.
 
 The entry point is the sidebar's "Attach Files" panel
 (`client/src/components/SidePanel/Files/Panel.tsx`), reached through
-`useSideNavLinks`; its table opens `FilePreviewDialog` on a row click. That is
+`useSideNavLinks`; its table opens the right-panel file preview on a row click. That is
 one of the five preview entry points the canon lists, so covering it is not a
 detour. The transcript entry point has its own test as well — "opens a preview
 from a file attached to a sent message" — which this paragraph went on calling

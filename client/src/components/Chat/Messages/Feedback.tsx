@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import * as Ariakit from '@ariakit/react';
 import { TFeedback, TFeedbackTag, getTagsForRating } from 'librechat-data-provider';
-import { Button, OGDialog, OGDialogContent, OGDialogTitle } from '@librechat/client';
+import { Button, OGDialog, OGDialogContent, OGDialogTitle, TooltipAnchor } from '@librechat/client';
 import {
   AlertCircle,
   PenTool,
@@ -138,16 +138,21 @@ function FeedbackButtons({
       <Ariakit.PopoverAnchor
         store={upStore}
         render={
-          <button
-            className={buttonClasses(feedback?.rating === 'thumbsUp')}
-            onClick={handleThumbsUpClick}
-            type="button"
-            title={localize('com_ui_feedback_positive')}
-            aria-pressed={feedback?.rating === 'thumbsUp'}
-            aria-haspopup="menu"
-          >
-            <ThumbsUp size="19" />
-          </button>
+          <TooltipAnchor
+            description={localize('com_ui_feedback_positive')}
+            render={
+              <button
+                className={buttonClasses(feedback?.rating === 'thumbsUp')}
+                onClick={handleThumbsUpClick}
+                type="button"
+                aria-label={localize('com_ui_feedback_positive')}
+                aria-pressed={feedback?.rating === 'thumbsUp'}
+                aria-haspopup="menu"
+              >
+                <ThumbsUp size="19" />
+              </button>
+            }
+          />
         }
       />
       <Ariakit.Popover
@@ -172,16 +177,21 @@ function FeedbackButtons({
       <Ariakit.PopoverAnchor
         store={downStore}
         render={
-          <button
-            className={buttonClasses(feedback?.rating === 'thumbsDown')}
-            onClick={handleThumbsDownClick}
-            type="button"
-            title={localize('com_ui_feedback_negative')}
-            aria-pressed={feedback?.rating === 'thumbsDown'}
-            aria-haspopup="menu"
-          >
-            <ThumbsDown size="19" />
-          </button>
+          <TooltipAnchor
+            description={localize('com_ui_feedback_negative')}
+            render={
+              <button
+                className={buttonClasses(feedback?.rating === 'thumbsDown')}
+                onClick={handleThumbsDownClick}
+                type="button"
+                aria-label={localize('com_ui_feedback_negative')}
+                aria-pressed={feedback?.rating === 'thumbsDown'}
+                aria-haspopup="menu"
+              >
+                <ThumbsDown size="19" />
+              </button>
+            }
+          />
         }
       />
       <Ariakit.Popover
@@ -273,21 +283,26 @@ export default function Feedback({ handleFeedback, feedback: initialFeedback }: 
       ? localize('com_ui_feedback_positive')
       : localize('com_ui_feedback_negative');
     return (
-      <button
-        className={buttonClasses(true)}
-        onClick={() => {
-          if (isThumbsUp) {
-            handleButtonFeedback(undefined);
-          } else {
-            setOpenDialog(true);
-          }
-        }}
-        type="button"
-        title={label}
-        aria-pressed="true"
-      >
-        <Icon size="19" />
-      </button>
+      <TooltipAnchor
+        description={label}
+        render={
+          <button
+            className={buttonClasses(true)}
+            onClick={() => {
+              if (isThumbsUp) {
+                handleButtonFeedback(undefined);
+              } else {
+                setOpenDialog(true);
+              }
+            }}
+            type="button"
+            aria-label={label}
+            aria-pressed="true"
+          >
+            <Icon size="19" />
+          </button>
+        }
+      />
     );
   };
 

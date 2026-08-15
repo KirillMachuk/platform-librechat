@@ -28,6 +28,16 @@ jest.mock('~/hooks', () => ({
 
 jest.mock('@librechat/client', () => ({
   useToastContext: () => ({ showToast: jest.fn() }),
+  TooltipAnchor: ({
+    description,
+    render,
+  }: {
+    description?: React.ReactNode;
+    render?: React.ReactElement;
+  }) => {
+    void description;
+    return render ?? null;
+  },
 }));
 
 jest.mock('~/components/Share/MessageIcon', () => ({

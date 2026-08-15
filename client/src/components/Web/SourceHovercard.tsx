@@ -153,9 +153,6 @@ export function SourceHovercard({
                   className={cn(citationChipClass, 'cursor-pointer')}
                   onMouseEnter={onMouseEnter}
                   onMouseLeave={onMouseLeave}
-                  title={
-                    isLocalFile ? localize('com_sources_download_local_unavailable') : undefined
-                  }
                 >
                   <span className="truncate">{label}</span>
                 </button>
@@ -220,6 +217,11 @@ export function SourceHovercard({
                     )}
                   </>
                 ))}
+              {isLocalFile && (
+                <p className="mt-1.5 text-xs text-text-secondary">
+                  {localize('com_sources_download_local_unavailable')}
+                </p>
+              )}
             </div>
           </Ariakit.Hovercard>
         </span>

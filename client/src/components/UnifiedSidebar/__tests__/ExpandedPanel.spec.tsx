@@ -18,6 +18,8 @@ jest.mock('~/store', () => {
     default: {
       conversationByIndex: () =>
         atom({ key: `mock-conversationByIndex-${counter++}`, default: null }),
+      /* «Новый чат» на телефоне закрывает шторку (15.08-8) — читает этот атом. */
+      sidebarExpanded: atom({ key: `mock-sidebarExpanded-${counter++}`, default: true }),
     },
   };
 });

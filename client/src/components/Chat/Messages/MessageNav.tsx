@@ -1,6 +1,12 @@
 import { memo, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ContentTypes } from 'librechat-data-provider';
-import { HoverCard, HoverCardTrigger, HoverCardPortal, HoverCardContent } from '@librechat/client';
+import {
+  HoverCard,
+  TooltipAnchor,
+  HoverCardPortal,
+  HoverCardTrigger,
+  HoverCardContent,
+} from '@librechat/client';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
 import { useMessagesConversation, useMessagesSubmission } from '~/Providers';
 import { ChevronUp, ChevronDown } from '~/components/icons';
@@ -805,15 +811,20 @@ function MessageNav({ scrollableRef }: { scrollableRef: React.RefObject<HTMLDivE
         'focus-within:bg-black/5 focus-within:opacity-100 dark:focus-within:bg-white/5',
       )}
     >
-      <button
-        type="button"
-        onClick={jumpToPrevious}
-        disabled={!canGoUp}
-        className={chevronButtonClasses}
-        aria-label={localize('com_ui_message_nav_previous')}
-      >
-        <ChevronUp className="h-4 w-4" />
-      </button>
+      <TooltipAnchor
+        description={localize('com_ui_message_nav_previous')}
+        render={
+          <button
+            type="button"
+            onClick={jumpToPrevious}
+            disabled={!canGoUp}
+            className={chevronButtonClasses}
+            aria-label={localize('com_ui_message_nav_previous')}
+          >
+            <ChevronUp className="h-4 w-4" />
+          </button>
+        }
+      />
 
       <div
         ref={columnRef}
@@ -836,15 +847,20 @@ function MessageNav({ scrollableRef }: { scrollableRef: React.RefObject<HTMLDivE
         ))}
       </div>
 
-      <button
-        type="button"
-        onClick={jumpToNext}
-        disabled={!canGoDown}
-        className={chevronButtonClasses}
-        aria-label={localize('com_ui_message_nav_next')}
-      >
-        <ChevronDown className="h-4 w-4" />
-      </button>
+      <TooltipAnchor
+        description={localize('com_ui_message_nav_next')}
+        render={
+          <button
+            type="button"
+            onClick={jumpToNext}
+            disabled={!canGoDown}
+            className={chevronButtonClasses}
+            aria-label={localize('com_ui_message_nav_next')}
+          >
+            <ChevronDown className="h-4 w-4" />
+          </button>
+        }
+      />
     </nav>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clipboard, CheckMark } from '@librechat/client';
+import { Clipboard, CheckMark, TooltipAnchor } from '@librechat/client';
 import type { TMessage, SearchResultData } from 'librechat-data-provider';
 import { useLocalize, useCopyToClipboard } from '~/hooks';
 
@@ -20,20 +20,29 @@ export default function MinimalHoverButtons({ message, searchResults }: THoverBu
   return (
     <div className="visible mt-1 flex justify-center gap-1 self-end text-gray-400 lg:justify-start">
       {/* Канон §6.14: кнопки под ответом видны ВСЕГДА, не по наведению. */}
-      <button
-        className="ml-0 flex items-center gap-1.5 rounded-lg p-1.5 text-xs text-text-secondary-alt transition-colors duration-200 hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none"
-        onClick={() => copyToClipboard(setIsCopied)}
-        type="button"
-        title={
+      <TooltipAnchor
+        description={
           isCopied ? localize('com_ui_copied_to_clipboard') : localize('com_ui_copy_to_clipboard')
         }
-      >
-        {isCopied ? (
-          <CheckMark className="h-[19px] w-[19px]" />
-        ) : (
-          <Clipboard className="h-[19px] w-[19px]" />
-        )}
-      </button>
+        render={
+          <button
+            className="ml-0 flex items-center gap-1.5 rounded-lg p-1.5 text-xs text-text-secondary-alt transition-colors duration-200 hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none"
+            onClick={() => copyToClipboard(setIsCopied)}
+            type="button"
+            aria-label={
+              isCopied
+                ? localize('com_ui_copied_to_clipboard')
+                : localize('com_ui_copy_to_clipboard')
+            }
+          >
+            {isCopied ? (
+              <CheckMark className="h-[19px] w-[19px]" />
+            ) : (
+              <Clipboard className="h-[19px] w-[19px]" />
+            )}
+          </button>
+        }
+      />
     </div>
   );
 }

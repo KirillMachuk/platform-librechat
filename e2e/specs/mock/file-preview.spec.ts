@@ -14,7 +14,8 @@ import {
   fileFixture,
   largeTextFixture,
   openFilesPanel,
-  previewDialog,
+  previewSurface,
+  clickPreviewTab,
   previewFixture,
   previewFrame,
   previewFrameElement,
@@ -61,7 +62,7 @@ const DECK_SECTION_MARKER = 'Раздел 1';
 /** deck-many.pptx is built with this many slides — see e2e/fixtures/files/README.md. */
 const DECK_MANY_SLIDES = 60;
 const TEXT_TRUNCATED_NOTICE = 'Showing the beginning of a large file.';
-/** `TEXT_PREVIEW_MAX_BYTES` in `client/src/.../Content/FilePreviewDialog.tsx`. */
+/** `TEXT_PREVIEW_MAX_BYTES` in `client/src/components/Artifacts/FilePreviewBody.tsx`. */
 const TEXT_PREVIEW_MAX_BYTES = 512 * 1024;
 
 test.describe('file library panel', () => {
@@ -123,11 +124,11 @@ test.describe('file preview — office documents', () => {
     await expect(body).toContainText(SHEET_MARKER, { timeout: 60000, useInnerText: true });
     await expect(body).not.toContainText(SHEET_TWO_MARKER, { useInnerText: true });
 
-    await frame.getByText('Сводка', { exact: true }).click();
+    await clickPreviewTab(frame, 'Сводка');
     await expect(body).toContainText(SHEET_TWO_MARKER, { useInnerText: true });
     await expect(body).not.toContainText(SHEET_MARKER, { useInnerText: true });
 
-    await frame.getByText('Реестр договоров', { exact: true }).click();
+    await clickPreviewTab(frame, 'Реестр договоров');
     await expect(body).toContainText(SHEET_MARKER, { useInnerText: true });
   });
 
@@ -230,7 +231,7 @@ test.describe('file preview — plain formats', () => {
     await previewFixture(page, 'digital.pdf');
 
     await expect(previewFrameElement(page, 'digital.pdf')).toBeVisible({ timeout: 30000 });
-    await expect(previewDialog(page, 'digital.pdf').locator('pre')).toHaveCount(0);
+    await expect(previewSurface(page, 'digital.pdf').locator('pre')).toHaveCount(0);
   });
 });
 
@@ -278,10 +279,13 @@ test.describe('file preview — honest states', () => {
     page,
   }) => {
     test.setTimeout(180000);
-    const dialog = await previewFixture(page, 'locked.pdf');
+    await previewFixture(page, 'locked.pdf');
 
     await expect(previewFrameElement(page, 'locked.pdf')).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Download locked.pdf' })).toBeVisible();
+    /* 15.08-3: saving the file is the panel HEADER's job now (DownloadArtifact,
+       which for a stored file saves the original bytes) — the body carries a
+       download only on its honest-state plates, where there is no frame. */
+    await expect(page.getByRole('button', { name: 'Download Artifact' })).toBeVisible();
   });
 });
 
@@ -362,7 +366,7 @@ test.describe('file preview — the rest of the matrix', () => {
     });
 
     await messagesView(page).getByRole('button', { name: fixture.name, exact: true }).click();
-    const dialog = previewDialog(page, fixture.name);
+    const dialog = previewSurface(page, fixture.name);
     await expect(dialog).toHaveCount(1);
     await expect(dialog.locator('pre')).toContainText(MD_MARKER, { timeout: 30000 });
   });

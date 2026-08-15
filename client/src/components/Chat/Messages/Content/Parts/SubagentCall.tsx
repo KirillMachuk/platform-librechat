@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useId, useMemo, useReducer, useRef, useState } from 'react';
 import { useRecoilValue } from 'recoil';
 import { ContentTypes, EModelEndpoint } from 'librechat-data-provider';
-import { OGDialog, OGDialogContent, OGDialogTitle, OGDialogDescription } from '@librechat/client';
+import {
+  OGDialog,
+  OGDialogContent,
+  OGDialogTitle,
+  OGDialogDescription,
+  TooltipAnchor,
+} from '@librechat/client';
 import type { TAttachment, TMessage, TMessageContentParts } from 'librechat-data-provider';
 import type { PartWithIndex } from '~/components/Chat/Messages/Content/ParallelContent';
 import type { SubagentTickerLine } from '~/utils/subagentContent';
@@ -540,14 +546,19 @@ export default function SubagentCall({
 
           <div className="relative min-h-0 flex-1 border-t border-border-light bg-surface-primary">
             {!isAtBottom && (
-              <button
-                type="button"
-                onClick={scrollDialogToBottom}
-                aria-label={localize('com_ui_subagent_scroll_to_bottom')}
-                className="absolute bottom-3 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-border-light bg-surface-secondary text-text-secondary shadow-sm transition hover:bg-surface-tertiary hover:text-text-primary"
-              >
-                <ArrowDown size={16} aria-hidden="true" />
-              </button>
+              <TooltipAnchor
+                description={localize('com_ui_subagent_scroll_to_bottom')}
+                render={
+                  <button
+                    type="button"
+                    onClick={scrollDialogToBottom}
+                    aria-label={localize('com_ui_subagent_scroll_to_bottom')}
+                    className="absolute bottom-3 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-border-light bg-surface-secondary text-text-secondary shadow-sm transition hover:bg-surface-tertiary hover:text-text-primary"
+                  >
+                    <ArrowDown size={16} aria-hidden="true" />
+                  </button>
+                }
+              />
             )}
             <div
               ref={scrollRef}
@@ -634,22 +645,26 @@ function SubagentPrompt({
         <h3 id={headingId} className="text-sm font-medium text-text-primary">
           {localize('com_ui_prompt')}
         </h3>
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-controls={contentId}
-          aria-expanded={expanded}
-          aria-label={toggleLabel}
-          title={toggleLabel}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-text-secondary transition hover:bg-surface-tertiary hover:text-text-primary focus:outline-none"
-        >
-          {expanded ? (
-            <Minimize2 size={14} aria-hidden="true" />
-          ) : (
-            <Maximize2 size={14} aria-hidden="true" />
-          )}
-          <span className="hidden sm:inline">{toggleLabel}</span>
-        </button>
+        <TooltipAnchor
+          description={toggleLabel}
+          render={
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-controls={contentId}
+              aria-expanded={expanded}
+              aria-label={toggleLabel}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-text-secondary transition hover:bg-surface-tertiary hover:text-text-primary focus:outline-none"
+            >
+              {expanded ? (
+                <Minimize2 size={14} aria-hidden="true" />
+              ) : (
+                <Maximize2 size={14} aria-hidden="true" />
+              )}
+              <span className="hidden sm:inline">{toggleLabel}</span>
+            </button>
+          }
+        />
       </div>
       <div
         id={contentId}

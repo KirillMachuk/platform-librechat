@@ -12,6 +12,7 @@ import {
   Spinner,
   SecretInput,
   SettingRow,
+  TooltipAnchor,
   OGDialog,
   OGDialogClose,
   OGDialogTitle,
@@ -199,14 +200,19 @@ function KeyItem({
             </Button>
           </div>
         ) : (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setConfirmDelete(true)}
-            title={localize('com_ui_delete')}
-          >
-            <Trash2 className="h-4 w-4 text-text-secondary hover:text-red-500" />
-          </Button>
+          <TooltipAnchor
+            description={localize('com_ui_delete')}
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setConfirmDelete(true)}
+                aria-label={localize('com_ui_delete')}
+              >
+                <Trash2 className="h-4 w-4 text-text-secondary hover:text-red-500" />
+              </Button>
+            }
+          />
         )}
       </div>
     </div>

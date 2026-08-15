@@ -1485,6 +1485,45 @@ button {
   display: none;
 }
 
+/* Автозаполнение (владелец 14.08-10): состояние :-webkit-autofill несёт свои
+   UA-стили — жёлтую заливку и системный шрифт. Заливку убирает бесконечный
+   transition (закрасить фон автозаполнения напрямую браузер не даёт), шрифт и
+   цвет текста прибиты к нашим. Размер здесь НЕ трогаем — он выравнен самим
+   полем (16px на всех ширинах у витринных форм). */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--text-primary);
+  caret-color: var(--text-primary);
+  font-family: inherit;
+  transition: background-color 999999s ease-in-out 0s;
+}
+
+/* Полоса прокрутки, видимая только под курсором (владелец 14.08-6, поведение
+   ChatGPT): в покое дорожка и бегунок прозрачны, наведение на сам скроллер
+   проявляет бегунок. Chromium/Firefox идут через scrollbar-color (заданный
+   scrollbar-width переключает Chromium на новый механизм и глушит
+   ::-webkit-scrollbar); маковский Safari прячет overlay-полосы системно, а для
+   его режима «всегда показывать» продублировано webkit-псевдо. На касании
+   hover не существует — там полосы и так системно прячутся. */
+.scrollbar-hover {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.scrollbar-hover:hover {
+  scrollbar-color: var(--border-medium) transparent;
+}
+.scrollbar-hover::-webkit-scrollbar-thumb {
+  background-color: transparent;
+}
+.scrollbar-hover:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+.dark .scrollbar-hover:hover::-webkit-scrollbar-thumb {
+  background-color: hsla(0, 0%, 100%, 0.1);
+}
+
 /* Webkit scrollbar */
 ::-webkit-scrollbar {
   height: 0.1em;
@@ -1503,6 +1542,18 @@ button {
 ::-webkit-scrollbar-track {
   background-color: transparent;
   border-radius: 9999px;
+}
+
+/* Горизонтальная лента держит прокрутку ПРИ СЕБЕ (владелец 15.08-1: «в чате
+   дёргание осталось»). Докрутив блок кода, таблицу или ленту чипов до края,
+   палец на iOS продолжает тянуть РОДИТЕЛЯ — вертикальный скроллер ленты
+   сообщений, у которого overflow-x вычисляется в auto. Отсюда и боковое
+   дёргание, которого нет в сайдбаре: там нет ни кода, ни таблиц. У обёртки
+   таблиц это правило было с самого начала, у остальных лент — нет.
+   Сторож scripts/check-panx.mjs не даёт завести новую ленту без него. */
+.pan-x {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
 
 .markdown-table-wrapper {

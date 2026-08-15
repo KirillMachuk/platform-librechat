@@ -93,9 +93,12 @@ export async function openFilesPanel(page: Page): Promise<Locator> {
   return panel;
 }
 
-/** The preview dialog for one file — its title is the file name. */
-export const previewDialog = (page: Page, filename: string): Locator =>
-  page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: filename }) });
+/** The preview surface for one file — the artifacts panel's FILE_PREVIEW body
+ *  (14.08-3: every non-image file opens in the right panel; the filename is
+ *  the panel's single tab). Addressed by the body's aria-label so two files
+ *  can never be confused. */
+export const previewSurface = (page: Page, filename: string): Locator =>
+  page.locator(`[data-testid="file-preview-body"][aria-label="Preview: ${filename}"]`);
 
 /**
  * Office previews render into a sandboxed srcdoc iframe, so assertions about
@@ -145,17 +148,50 @@ export async function openPreview(page: Page, filename: string): Promise<Locator
   await expect(row).toBeVisible({ timeout: 30000 });
   await row.click();
 
-  /* A dialog locator that matches nothing makes every later negative
-   * assertion pass for free, so pin that exactly one is open. */
-  const dialog = previewDialog(page, filename);
-  await expect(dialog).toHaveCount(1);
+  /* The library popover closes itself on row click — otherwise it would sit
+   * as a modal lid on top of the panel it just opened. */
+  await expect(panel.getByRole('heading', { name: FILES_PANEL_TITLE })).toHaveCount(0);
+
+  /* A locator that matches nothing makes every later negative assertion pass
+   * for free, so pin that exactly one surface is open. */
+  const surface = previewSurface(page, filename);
+  await expect(surface).toHaveCount(1);
 
   const settled = previewFrameElement(page, filename)
-    .or(dialog.locator('pre'))
-    .or(dialog.getByText(PREVIEW_SETTLED));
+    .or(surface.locator('pre'))
+    .or(surface.getByText(PREVIEW_SETTLED));
   await expect(settled.first()).toBeVisible({ timeout: 120000 });
-  await expect(dialog.getByText(RENDERING_NOTICE)).toHaveCount(0);
-  return dialog;
+  await expect(surface.getByText(RENDERING_NOTICE)).toHaveCount(0);
+  return surface;
+}
+
+/**
+ * Click a tab inside an office preview frame (spreadsheet sheets, deck slides).
+ *
+ * Measured, not guessed: the raw `frame.getByText(...).click()` switched sheets
+ * in 1 run of 3, while the identical sequence with two layout round-trips in
+ * between switched them in 3 of 3. The frame keeps re-laying out for a beat
+ * after its first paint — fonts land, table columns resolve — and a click
+ * dispatched into that window is delivered at coordinates the label has
+ * already vacated. Waiting for the label's box to stop moving is the sync
+ * point that race needs; it is not padding against flakiness.
+ */
+export async function clickPreviewTab(frame: FrameLocator, name: string): Promise<void> {
+  const tab = frame.getByText(name, { exact: true });
+  await tab.waitFor({ state: 'visible', timeout: 30000 });
+  let previous: string | null = null;
+  await expect
+    .poll(
+      async () => {
+        const box = JSON.stringify(await tab.boundingBox());
+        const settled = previous === box;
+        previous = box;
+        return settled;
+      },
+      { timeout: 15000, intervals: [100, 100, 200, 200, 400] },
+    )
+    .toBe(true);
+  await tab.click();
 }
 
 /** Upload the fixture and open its preview from the library. */

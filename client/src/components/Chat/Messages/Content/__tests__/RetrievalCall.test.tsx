@@ -80,14 +80,13 @@ jest.mock('~/data-provider', () => ({
   useGetFiles: jest.fn(() => ({ data: [] })),
 }));
 
-jest.mock('../FilePreviewDialog', () => ({
+/* 14.08-3: клик по результату открывает ПРАВУЮ панель через useOpenFilePreview —
+ * тест утверждает сам роутинг (какой файл ушёл в панель), панель живёт в
+ * своём покрытии. */
+const mockOpenFilePreview = jest.fn();
+jest.mock('~/hooks/Artifacts/useOpenFilePreview', () => ({
   __esModule: true,
-  default: ({ open, fileId, fileName }: { open: boolean; fileId?: string; fileName: string }) =>
-    open ? (
-      <div data-testid="file-preview-dialog" data-file-id={fileId}>
-        {fileName}
-      </div>
-    ) : null,
+  default: () => mockOpenFilePreview,
 }));
 
 const defaultProps = {
@@ -107,6 +106,7 @@ const renderRetrievalCall = (
 const mockedUseGetFiles = jest.requireMock('~/data-provider').useGetFiles as jest.Mock;
 
 beforeEach(() => {
+  mockOpenFilePreview.mockClear();
   mockedUseGetFiles.mockReturnValue({ data: [] });
 });
 
@@ -258,7 +258,10 @@ describe('RetrievalCall - file preview resolution', () => {
     fireEvent.click(screen.getByTestId('progress-text'));
     fireEvent.click(screen.getByRole('button', { name: 'Preview: Tutorial Imazing.pdf' }));
 
-    expect(screen.getByTestId('file-preview-dialog')).toHaveAttribute('data-file-id', 'file-123');
+    expect(mockOpenFilePreview).toHaveBeenCalledWith(
+      expect.objectContaining({ file_id: 'file-123' }),
+      expect.anything(),
+    );
   });
 
   it('keeps multiple parsed results clickable when only one attachment source is available', () => {

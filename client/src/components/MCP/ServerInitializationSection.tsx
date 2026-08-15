@@ -75,7 +75,6 @@ export default function ServerInitializationSection({
             onClick={() => cancelOAuthFlow(serverName)}
             disabled={!canCancel}
             variant="outline"
-            title={!canCancel ? 'disabled' : undefined}
           >
             {localize('com_ui_cancel')}
           </Button>

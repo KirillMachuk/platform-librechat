@@ -56,15 +56,14 @@ const MinimalIcon: React.FC<IconProps> = (props) => {
     },
   };
 
-  let { icon, name } = endpointIcons[endpoint] ?? endpointIcons.default;
+  let { icon } = endpointIcons[endpoint] ?? endpointIcons.default;
   if (iconURL && endpointIcons[iconURL] != null) {
-    ({ icon, name } = endpointIcons[iconURL]);
+    ({ icon } = endpointIcons[iconURL]);
   }
 
   return (
     <div
       data-testid="convo-icon"
-      title={name}
       aria-hidden="true"
       style={{
         width: size,

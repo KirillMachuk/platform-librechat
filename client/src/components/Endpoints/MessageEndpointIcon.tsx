@@ -63,7 +63,6 @@ const MessageEndpointIcon: React.FC<IconProps> = (props) => {
     icon: iconURL ? (
       <div className="relative flex h-6 w-6 items-center justify-center">
         <div
-          title={assistantName}
           style={{
             width: size,
             height: size,
@@ -92,7 +91,6 @@ const MessageEndpointIcon: React.FC<IconProps> = (props) => {
     icon: iconURL ? (
       <div className="relative flex h-6 w-6 items-center justify-center">
         <div
-          title={agentName}
           style={{
             width: size,
             height: size,
@@ -169,13 +167,13 @@ const MessageEndpointIcon: React.FC<IconProps> = (props) => {
     },
   };
 
-  let { icon, bg, name } =
+  let { icon, bg } =
     endpoint != null && endpoint && endpointIcons[endpoint]
       ? (endpointIcons[endpoint] ?? {})
       : (endpointIcons.default as EndpointIcon);
 
   if (iconURL && endpointIcons[iconURL]) {
-    ({ icon, bg, name } = endpointIcons[iconURL]);
+    ({ icon, bg } = endpointIcons[iconURL]);
   }
 
   if (isAssistantsEndpoint(endpoint)) {
@@ -184,7 +182,6 @@ const MessageEndpointIcon: React.FC<IconProps> = (props) => {
 
   return (
     <div
-      title={name ?? ''}
       style={{
         background: bg != null ? bg || 'transparent' : 'transparent',
         width: size,

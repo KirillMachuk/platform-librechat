@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useToastContext } from '@librechat/client';
+import { TooltipAnchor, useToastContext } from '@librechat/client';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
 import MessageTimestamp from '~/components/Chat/Messages/ui/MessageTimestamp';
 import { useCopyToClipboard, useSiblingIdentity } from '~/hooks/Messages';
@@ -105,31 +105,39 @@ export default function SiblingHeader({
         <MessageTimestamp value={createdAt} />
       </div>
       <div className="flex flex-shrink-0 items-center gap-2">
-        <button
-          type="button"
-          onClick={() => copyToClipboard(setIsCopied)}
-          disabled={!parts?.length}
-          className={cn(ACTION, 'px-2.5')}
-          aria-label={localize('com_ui_copy_this_answer')}
-          title={localize('com_ui_copy_this_answer')}
-        >
-          {isCopied ? (
-            <Check className="icon-sm" aria-hidden="true" />
-          ) : (
-            <Copy className="icon-sm" aria-hidden="true" />
-          )}
-        </button>
+        <TooltipAnchor
+          description={localize('com_ui_copy_this_answer')}
+          render={
+            <button
+              type="button"
+              onClick={() => copyToClipboard(setIsCopied)}
+              disabled={!parts?.length}
+              className={cn(ACTION, 'px-2.5')}
+              aria-label={localize('com_ui_copy_this_answer')}
+            >
+              {isCopied ? (
+                <Check className="icon-sm" aria-hidden="true" />
+              ) : (
+                <Copy className="icon-sm" aria-hidden="true" />
+              )}
+            </button>
+          }
+        />
         {/* A word, not a branch glyph: this ends the comparison, and the audience
             is not technical — "create a branch" said nothing about that. */}
-        <button
-          type="button"
-          onClick={handleKeep}
-          disabled={!canKeep}
-          className={cn(ACTION, !messageId && !agentId && 'invisible')}
-          title={localize('com_ui_keep_this_answer_hint')}
-        >
-          {localize('com_ui_keep_this_answer')}
-        </button>
+        <TooltipAnchor
+          description={localize('com_ui_keep_this_answer_hint')}
+          render={
+            <button
+              type="button"
+              onClick={handleKeep}
+              disabled={!canKeep}
+              className={cn(ACTION, !messageId && !agentId && 'invisible')}
+            >
+              {localize('com_ui_keep_this_answer')}
+            </button>
+          }
+        />
       </div>
     </div>
   );

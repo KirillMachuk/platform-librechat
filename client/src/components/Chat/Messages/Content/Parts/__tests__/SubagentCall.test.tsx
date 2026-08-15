@@ -84,6 +84,16 @@ jest.mock('../Attachment', () => ({
 
 jest.mock('@librechat/client', () => ({
   __esModule: true,
+  TooltipAnchor: ({
+    description,
+    render,
+  }: {
+    description?: React.ReactNode;
+    render?: React.ReactElement;
+  }) => {
+    void description;
+    return render ?? null;
+  },
   OGDialog: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   OGDialogContent: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="dialog-content">{children}</div>

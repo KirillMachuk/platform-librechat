@@ -263,7 +263,6 @@ export default function ArchivedChatsTable({
                         isArchived: false,
                       })
                     }
-                    title={localize('com_ui_unarchive_conversation')}
                     aria-label={localize('com_ui_unarchive_conversation')}
                     disabled={unarchiveMutation.isLoading}
                   >
@@ -285,7 +284,6 @@ export default function ArchivedChatsTable({
                       setDeleteConversation(row.original);
                       setIsDeleteOpen(true);
                     }}
-                    title={localize('com_ui_delete_conversation_tooltip')}
                     aria-label={localize('com_ui_delete_conversation_tooltip')}
                   >
                     <TrashIcon className="size-4" />

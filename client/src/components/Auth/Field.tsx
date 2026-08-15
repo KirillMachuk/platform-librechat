@@ -8,6 +8,12 @@ import { cn } from '~/utils';
 export const authFieldClassName = (hasError?: boolean) =>
   cn(
     FIELD_BASE,
+    /* 16px на ВСЕХ ширинах (владелец 14.08-10): предпросмотр автозаполнения
+       Chrome рисуется дефолтными 16px браузера, и на десктопных 14px поле
+       «прыгало» шрифтом при выборе сохранённого логина. Одна величина в обоих
+       состояниях делает скачок невозможным; twMerge оставляет md:text-base
+       (спор с md:text-sm из FIELD_BASE решает порядок аргументов cn). */
+    'md:text-base',
     hasError
       ? 'border-border-destructive focus-visible:border-border-destructive focus-visible:ring-err-soft'
       : FIELD_BORDER,

@@ -13,6 +13,10 @@ jest.mock('~/utils', () => ({
 }));
 jest.mock('~/store', () => ({}));
 jest.mock('@librechat/client', () => ({
+  /* Пропускает свой render насквозь: подсказка — это ПЛАШКА над контролом,
+     сам контрол она не подменяет (канон §6.6). */
+  TooltipAnchor: ({ render }: { description?: React.ReactNode; render?: React.ReactElement }) =>
+    render ?? null,
   Progress: ({ value }: { value: number }) => <div data-testid="progress" data-value={value} />,
 }));
 jest.mock('~/components/icons', () => ({

@@ -372,7 +372,7 @@ function BadgeRow({
             (34px): у горизонтального скроллера overflow-y вычисляется в auto,
             и без запаса лента дёргалась бы ВВЕРХ-ВНИЗ под пальцем (14.08,
             находка 8 — зеркальный случай бокового дёргания). */}
-        <div className="no-scrollbar -my-1.5 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1.5 [&>*]:shrink-0">
+        <div className="no-scrollbar pan-x -my-1.5 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1.5 [&>*]:shrink-0">
           {tempBadges.map((badge, index) => (
             <React.Fragment key={badge.id}>
               {dragState.draggedBadge && dragState.insertIndex === index && ghostBadge && (

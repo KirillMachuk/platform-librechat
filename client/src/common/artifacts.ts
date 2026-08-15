@@ -32,6 +32,16 @@ export interface Artifact {
   title?: string;
   type?: string;
   file?: ArtifactSourceFile;
+  /** FILE_PREVIEW only: display meta the chips already computed (mime, size,
+   *  search relevance, matched pages). The panel body renders it in the meta
+   *  strip; every field optional so no other artifact type is touched. */
+  preview?: {
+    fileType?: string;
+    bytes?: number;
+    relevance?: number;
+    pages?: number[];
+    pageRelevance?: Record<number, number>;
+  };
 }
 
 export type ArtifactFiles =

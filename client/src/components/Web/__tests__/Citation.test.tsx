@@ -27,14 +27,11 @@ jest.mock('~/hooks', () => ({
   },
 }));
 
-jest.mock('~/components/Chat/Messages/Content/FilePreviewDialog', () => ({
+/* 14.08-3: цитата открывает ПРАВУЮ панель через useOpenFilePreview. */
+const mockOpenFilePreview = jest.fn();
+jest.mock('~/hooks/Artifacts/useOpenFilePreview', () => ({
   __esModule: true,
-  default: ({ open, fileId, fileName }: { open: boolean; fileId?: string; fileName: string }) =>
-    open ? (
-      <div data-testid="file-preview-dialog" data-file-id={fileId}>
-        {fileName}
-      </div>
-    ) : null,
+  default: () => mockOpenFilePreview,
 }));
 
 jest.mock('@librechat/client', () => ({
@@ -106,7 +103,10 @@ describe('Citation', () => {
 
     fireEvent.click(fileButton);
 
-    expect(screen.getByTestId('file-preview-dialog')).toHaveAttribute('data-file-id', 'file-123');
+    expect(mockOpenFilePreview).toHaveBeenCalledWith(
+      expect.objectContaining({ file_id: 'file-123' }),
+      expect.objectContaining({ relevance: 0.92 }),
+    );
   });
 
   it('keeps standalone web citations as links', () => {

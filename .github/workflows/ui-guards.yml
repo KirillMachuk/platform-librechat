@@ -21,6 +21,8 @@ on:
       - 'scripts/check-icons.mjs'
       - 'scripts/check-i18n.mjs'
       - 'scripts/check-layers.mjs'
+      - 'scripts/check-tooltips.mjs'
+      - 'scripts/check-panx.mjs'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/ui-guards.yml'
@@ -34,6 +36,8 @@ on:
       - 'scripts/check-icons.mjs'
       - 'scripts/check-i18n.mjs'
       - 'scripts/check-layers.mjs'
+      - 'scripts/check-tooltips.mjs'
+      - 'scripts/check-panx.mjs'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/ui-guards.yml'
@@ -140,3 +144,37 @@ jobs:
       # Reads files only — no dependencies, so no install step.
       - name: Check the artifact preview has no third party
         run: npm run check:artifacts-offline
+
+  tooltip_canon:
+    name: Tooltip canon
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24.16.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      # Reads files only — no dependencies, so no install step.
+      - name: Check controls use the ink plate, not the native title balloon
+        run: npm run check:tooltips
+
+  sideways_pan_canon:
+    name: Sideways-pan canon
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24.16.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      # Reads files only — no dependencies, so no install step.
+      - name: Check every horizontal scroller contains its overscroll
+        run: npm run check:panx

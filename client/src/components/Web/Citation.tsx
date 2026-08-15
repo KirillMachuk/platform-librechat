@@ -3,8 +3,8 @@ import { Button } from '@librechat/client';
 import type { SourceData } from '~/components/Web/SourceHovercard';
 import type { CitationProps } from './types';
 import { SourceHovercard, FaviconImage, getCleanDomain } from '~/components/Web/SourceHovercard';
-import FilePreviewDialog from '~/components/Chat/Messages/Content/FilePreviewDialog';
 import { CitationContext, useCitation, useCompositeCitations } from './Context';
+import useOpenFilePreview from '~/hooks/Artifacts/useOpenFilePreview';
 import { fileTypeMeta } from '~/components/Chat/Input/Files/typeMeta';
 import { ChevronLeft, ChevronRight } from '~/components/icons';
 import { useLocalize } from '~/hooks';
@@ -63,7 +63,7 @@ export function CompositeCitation(props: CompositeCitationProps) {
   const { citations, citationId } = props.node?.properties ?? ({} as CitationProps);
   const { setHoveredCitationId } = useContext(CitationContext);
   const [currentPage, setCurrentPage] = useState(0);
-  const [showPreview, setShowPreview] = useState(false);
+  const openFilePreview = useOpenFilePreview();
   const sources = useCompositeCitations(citations || []);
 
   if (!sources || sources.length === 0) {
@@ -114,7 +114,15 @@ export function CompositeCitation(props: CompositeCitationProps) {
     e.preventDefault();
     e.stopPropagation();
     if (isFileType && fileId) {
-      setShowPreview(true);
+      openFilePreview(
+        {
+          file_id: fileId,
+          filename: fileName || currentSource.title || '',
+          type: fileMeta?.fileType,
+          bytes: fileMeta?.fileBytes,
+        },
+        { relevance: fileRelevance, pages: filePages, pageRelevance: filePageRelevance },
+      );
     }
   };
 
@@ -217,19 +225,6 @@ export function CompositeCitation(props: CompositeCitationProps) {
           </>
         )}
       </SourceHovercard>
-      {isFileType && fileId && (
-        <FilePreviewDialog
-          open={showPreview}
-          onOpenChange={setShowPreview}
-          fileName={fileName || currentSource.title || ''}
-          fileId={fileId}
-          relevance={fileRelevance}
-          pages={filePages}
-          pageRelevance={filePageRelevance}
-          fileType={fileMeta?.fileType}
-          fileSize={fileMeta?.fileBytes}
-        />
-      )}
     </>
   );
 }
@@ -254,18 +249,36 @@ export function Citation(props: CitationComponentProps) {
 
   const { isFileType, fileId, fileMeta, fileName, filePages, fileRelevance, filePageRelevance } =
     getFileCitationData(refData);
-
-  const [showPreview, setShowPreview] = useState(false);
+  const openFilePreview = useOpenFilePreview();
 
   const handleFileClick = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       if (isFileType && fileId) {
-        setShowPreview(true);
+        openFilePreview(
+          {
+            file_id: fileId,
+            filename: fileName || refData?.title || '',
+            type: fileMeta?.fileType,
+            bytes: fileMeta?.fileBytes,
+          },
+          { relevance: fileRelevance, pages: filePages, pageRelevance: filePageRelevance },
+        );
       }
     },
-    [isFileType, fileId],
+    [
+      isFileType,
+      fileId,
+      fileName,
+      fileMeta?.fileType,
+      fileMeta?.fileBytes,
+      fileRelevance,
+      filePages,
+      filePageRelevance,
+      openFilePreview,
+      refData?.title,
+    ],
   );
 
   if (!refData) {
@@ -293,19 +306,6 @@ export function Citation(props: CitationComponentProps) {
         filePages={filePages}
         fileRelevance={fileRelevance}
       />
-      {isFileType && fileId && (
-        <FilePreviewDialog
-          open={showPreview}
-          onOpenChange={setShowPreview}
-          fileName={fileName || refData.title || ''}
-          fileId={fileId}
-          relevance={fileRelevance}
-          pages={filePages}
-          pageRelevance={filePageRelevance}
-          fileType={fileMeta?.fileType}
-          fileSize={fileMeta?.fileBytes}
-        />
-      )}
     </>
   );
 }

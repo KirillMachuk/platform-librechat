@@ -51,7 +51,7 @@ export default function Instructions() {
         >
           {localize('com_ui_instructions')}
         </label>
-        <div className="ml-auto" title={localize('com_ui_variables')}>
+        <div className="ml-auto">
           <DropdownPopup
             portal={true}
             mountByState={true}

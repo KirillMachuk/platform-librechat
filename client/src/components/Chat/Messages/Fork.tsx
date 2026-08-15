@@ -1,6 +1,6 @@
 import React from 'react';
-import { useToastContext } from '@librechat/client';
 import { ForkOptions } from 'librechat-data-provider';
+import { TooltipAnchor, useToastContext } from '@librechat/client';
 import { useLocalize, useNavigateToConvo } from '~/hooks';
 import { useForkConvoMutation } from '~/data-provider';
 import { GitFork } from '~/components/icons';
@@ -78,26 +78,30 @@ export default function Fork({
   }
 
   return (
-    <button
-      className={buttonStyle}
-      /** A second click while the first is in flight forks the conversation twice,
-       *  leaving a duplicate copy behind — cheap to hit now that one click forks. */
-      disabled={forkConvo.isLoading}
-      onClick={() =>
-        forkConvo.mutate({
-          messageId,
-          conversationId,
-          option: ForkOptions.DIRECT_PATH,
-          splitAtTarget: false,
-          latestMessageId,
-        })
+    <TooltipAnchor
+      description={localize('com_ui_fork_branch_here')}
+      render={
+        <button
+          className={buttonStyle}
+          /** A second click while the first is in flight forks the conversation twice,
+           *  leaving a duplicate copy behind — cheap to hit now that one click forks. */
+          disabled={forkConvo.isLoading}
+          onClick={() =>
+            forkConvo.mutate({
+              messageId,
+              conversationId,
+              option: ForkOptions.DIRECT_PATH,
+              splitAtTarget: false,
+              latestMessageId,
+            })
+          }
+          type="button"
+          data-testid="fork-button"
+          aria-label={localize('com_ui_fork_branch_here')}
+        >
+          <GitFork size="19" aria-hidden="true" />
+        </button>
       }
-      type="button"
-      data-testid="fork-button"
-      aria-label={localize('com_ui_fork_branch_here')}
-      title={localize('com_ui_fork_branch_here')}
-    >
-      <GitFork size="19" aria-hidden="true" />
-    </button>
+    />
   );
 }
