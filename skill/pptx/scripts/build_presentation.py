@@ -276,7 +276,7 @@ def _add_slide_title(slide, title: str, source: str = "") -> float:
     if line_count > 3:
         raise ValueError("Slide title exceeds three readable lines; shorten or split the slide")
     height = max(0.92, line_count * 0.52)
-    _add_text(
+    box = _add_text(
         slide,
         title,
         Inches(0.85),
@@ -287,6 +287,15 @@ def _add_slide_title(slide, title: str, source: str = "") -> float:
         bold=True,
         name="Slide title",
     )
+    # Content is placed below the height reserved here, and that height comes from
+    # a character count — which cannot be right for both "илти" (44 per line) and
+    # "ШЖЮМ" (28) at the same size. Where the two disagree the reservation is a
+    # guess, and when it guesses high the title wraps into the table underneath.
+    # Ask the renderer to shrink the title into the box it was promised, but only
+    # for those titles: where both counts agree the reservation holds whatever the
+    # glyph widths, and the title keeps the size it was designed at.
+    if _estimated_line_count(title, 28) > line_count:
+        box.text_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
     if source:
         _add_text(
             slide,
@@ -867,20 +876,28 @@ def _render_sources(prs: Presentation, item: dict[str, Any]):
     entries = list(item.get("entries", []))
     if len(entries) > 8:
         raise ValueError("Sources slide supports at most eight entries")
-    row_height = min(0.68, (6.72 - content_top) / max(len(entries), 1))
-    notes: list[str] = []
-    for idx, entry in enumerate(entries, 1):
+    # Rows take the height they actually have. A fixed 0.68 row with a 0.42 label
+    # box was sized for a one-line label; a real one ("Capital.com — ИИ-компании
+    # по капитализации") wraps onto the divider and the row below, on a slide
+    # that is two thirds empty.
+    available = 6.72 - content_top
+    row_height = max(0.68, min(1.30, available / max(len(entries), 1)))
+    label_height = row_height - 0.16
+    rows = []
+    for entry in entries:
         label = entry.get("label", "Source") if isinstance(entry, dict) else "Source"
         url = entry.get("url", "") if isinstance(entry, dict) else str(entry)
-        shown, full = _source_location(url)
+        rows.append((str(label), *_source_location(url)))
+    notes: list[str] = []
+    for idx, (label, shown, full) in enumerate(rows, 1):
         if full:
             notes.append(f"{idx:02d}. {label} — {full}")
         y = content_top + (idx - 1) * row_height
         _add_text(slide, f"{idx:02d}", Inches(0.88), Inches(y), Inches(0.48), Inches(0.3), size=16, color=ACCENT, bold=True, name="Source number")
-        _add_text(slide, str(label), Inches(1.55), Inches(y - 0.02), Inches(4.0), Inches(0.42), size=18, color=INK, bold=True, name="Source label")
-        _add_text(slide, shown, Inches(5.65), Inches(y - 0.01), Inches(6.35), Inches(0.42), size=16, color=MUTED, name="Source location")
+        _add_text(slide, str(label), Inches(1.55), Inches(y - 0.02), Inches(4.0), Inches(label_height), size=18, color=INK, bold=True, name="Source label")
+        _add_text(slide, shown, Inches(5.65), Inches(y - 0.01), Inches(6.35), Inches(label_height), size=16, color=MUTED, name="Source location")
         if idx < len(entries):
-            _add_line(slide, Inches(1.55), Inches(y + 0.5), Inches(10.45), name="Source divider")
+            _add_line(slide, Inches(1.55), Inches(y + row_height - 0.14), Inches(10.45), name="Source divider")
     if notes:
         slide.notes_slide.notes_text_frame.text = "\n".join(notes)
     return slide
@@ -1332,11 +1349,17 @@ def _check_structure(path: Path, spec: dict[str, Any]) -> tuple[list[dict[str, A
                 text = shape.text.strip()
                 if _text_exceeds_shape_capacity(shape):
                     overflow_risks += 1
+                    # Name the text, not just the shape. Two long labels on one
+                    # slide produced two identical messages, so the reader could
+                    # not tell which one to shorten and retried blindly until the
+                    # agent runtime cut the turn off.
+                    snippet = text if len(text) <= 60 else text[:57].rstrip() + "…"
                     issues.append(
                         _issue(
                             "text-overflow-risk",
                             "critical",
-                            f"Text is unlikely to fit inside '{shape.name}' at the configured font size",
+                            f"Text is unlikely to fit inside '{shape.name}' at the configured "
+                            f'font size: "{snippet}" — shorten it',
                             f"Slide {slide_index}",
                         )
                     )

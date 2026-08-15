@@ -349,6 +349,133 @@ class PresentationBuilderTests(unittest.TestCase):
             self.assertNotIn(url, shown)
             self.assertIn(url, slide.notes_slide.notes_text_frame.text)
 
+    def test_slide_title_shrinks_instead_of_growing_into_the_content(self):
+        """Content is placed below the height reserved for the title, and that
+        height comes from a character count that cannot be right for both narrow
+        and wide letters. The renderer must shrink the title to the box it was
+        promised rather than wrap into the table underneath."""
+        from pptx.enum.text import MSO_AUTO_SIZE
+
+        spec = _base_spec()
+        spec["slides"] = [
+            {
+                "layout": "bullets",
+                "title": "Знакомьтесь, виновники инфляции ваших нервов",
+                "bullets": ["Первое", "Второе"],
+            }
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "presentation.pptx"
+            deck = _save(spec, output)
+
+        title = next(
+            shape
+            for shape in deck.slides[0].shapes
+            if getattr(shape, "has_text_frame", False)
+            and shape.text_frame.text.startswith("Знакомьтесь")
+        )
+        self.assertEqual(title.text_frame.auto_size, MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE)
+
+    def test_sources_slide_fits_a_real_label_without_overflowing(self):
+        """The first live deck failed QA here: a 42-character label in a 4-inch
+        column wrapped onto the divider, and the model burned its whole turn
+        trying to satisfy a check the layout made unsatisfiable."""
+        spec = _base_spec()
+        spec["sources"] = [
+            {
+                "label": "Capital.com — ИИ-компании по капитализации",
+                "url": "https://capital.com/en-int/markets/shares/largest-ai-companies",
+            },
+            {
+                "label": "AlphaSense — крупнейшие компании по капитализации",
+                "url": "https://www.alpha-sense.com/largest-companies-by-market-cap/",
+            },
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "presentation.pptx"
+            _save(spec, output)
+            _checks, issues = BUILDER._check_structure(output, spec)
+
+        overflow = [
+            issue
+            for issue in issues
+            if issue["code"] == "text-overflow-risk" and "Source" in str(issue.get("message", ""))
+        ]
+        self.assertEqual(overflow, [])
+
+    def test_sources_rows_keep_the_divider_below_the_label(self):
+        spec = _base_spec()
+        spec["sources"] = [
+            {"label": "Довольно длинная подпись источника на две строки", "url": "https://example.com/a"},
+            {"label": "Вторая подпись", "url": "https://example.com/b"},
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "presentation.pptx"
+            deck = _save(spec, output)
+
+        slide = deck.slides[-1]
+        label = next(
+            shape for shape in slide.shapes if shape.name == "Source label"
+        )
+        divider = next(shape for shape in slide.shapes if shape.name == "Source divider")
+        self.assertGreaterEqual(
+            divider.top,
+            label.top + label.height,
+            "the divider is drawn through the label it should sit under",
+        )
+
+    def test_a_file_source_still_fits_its_own_location(self):
+        """A file location ("management-report.xlsx — июль 2026") is a sentence,
+        not a domain. Taller rows must not come at the cost of its width."""
+        spec = _base_spec()
+        spec["sources"] = [
+            {"label": "Управленческий отчёт", "url": "management-report.xlsx — июль 2026"},
+            {"label": "CRM-выгрузка", "url": "crm-export.csv — срез от 31.07.2026"},
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "presentation.pptx"
+            deck = _save(spec, output)
+            _checks, issues = BUILDER._check_structure(output, spec)
+
+        slide = deck.slides[-1]
+        location = next(shape for shape in slide.shapes if shape.name == "Source location")
+        divider = next(shape for shape in slide.shapes if shape.name == "Source divider")
+        self.assertGreaterEqual(divider.top, location.top + location.height)
+        self.assertEqual(
+            [issue for issue in issues if issue["code"] == "text-overflow-risk"], []
+        )
+
+    def test_sources_rows_stay_tall_enough_at_the_eight_entry_limit(self):
+        """Rows share the free height, but never shrink below what a two-line
+        label needs — at the maximum of eight entries the share alone would."""
+        spec = _base_spec()
+        spec["sources"] = [
+            {
+                "label": f"Источник {index} — довольно длинная подпись на две строки точно",
+                "url": f"https://example.com/page-{index}",
+            }
+            for index in range(1, 9)
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "presentation.pptx"
+            deck = _save(spec, output)
+            _checks, issues = BUILDER._check_structure(output, spec)
+
+        slide = deck.slides[-1]
+        labels = [shape for shape in slide.shapes if shape.name == "Source label"]
+        dividers = [shape for shape in slide.shapes if shape.name == "Source divider"]
+        self.assertEqual(len(labels), 8)
+        for label, divider in zip(labels, dividers):
+            self.assertGreaterEqual(divider.top, label.top + label.height)
+        self.assertEqual(
+            [issue for issue in issues if issue["code"] == "text-overflow-risk"], []
+        )
+        self.assertLess(
+            (labels[-1].top + labels[-1].height) / 914400,
+            7.03,
+            "the last label runs into the source note at the foot of the slide",
+        )
+
     def test_structural_qa_rejects_text_exceeding_shape_capacity(self):
         spec = _base_spec()
         spec["slides"] = [
@@ -368,6 +495,9 @@ class PresentationBuilderTests(unittest.TestCase):
         )
         self.assertEqual(overflow["severity"], "critical")
         self.assertEqual(overflow["target"], "Slide 1")
+        # Naming the shape alone gave two identical messages for two long labels
+        # on one slide; the reader could not tell which text to shorten.
+        self.assertIn("Очень длинный тезис", overflow["message"])
 
     def test_targeted_edit_preserves_unaffected_slide_xml(self):
         with tempfile.TemporaryDirectory() as folder:
