@@ -103,8 +103,13 @@ test.describe('the buttons under an answer', () => {
      *
      * These render on answers only, so two turns give two of each: `.first()`
      * is the older answer, `.last()` the newest. */
-    const likes = page.getByTitle('Love this');
-    const dislikes = page.getByTitle('Needs improvement');
+    /* By accessible name, not by `title`: the 15.08 tooltip sweep replaced the
+       OS balloon with the canon ink plate everywhere, so the name these
+       buttons carry is their `aria-label` now. A `getByTitle` locator would
+       silently resolve to zero and every assertion below it would pass for
+       free — which is how this one failed loudly instead. */
+    const likes = page.getByRole('button', { name: 'Love this' });
+    const dislikes = page.getByRole('button', { name: 'Needs improvement' });
     await expect.poll(() => likes.count(), { timeout: 30000 }).toBeGreaterThan(1);
 
     expect(
