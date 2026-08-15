@@ -42,6 +42,10 @@ jest.mock('@librechat/api', () => ({
   math: (...args) => mockMath(...args),
   isEnabled: (...args) => mockIsEnabled(...args),
   shouldUseSecureCookie: (...args) => mockShouldUseSecureCookie(...args),
+  /* Mirrors the real helper: the SSO session cookie is `__Host-` prefixed wherever
+     cookies are Secure, so a neighbouring subdomain cannot plant one. */
+  ssoSessionCookieName: (...args) =>
+    mockShouldUseSecureCookie(...args) ? '__Host-connect.sid' : 'connect.sid',
 }));
 jest.mock('@librechat/data-schemas', () => ({
   DEFAULT_SESSION_EXPIRY: 900000,
@@ -100,9 +104,14 @@ describe('configureSocialLogins OpenID session expiry', () => {
 
     expect(mockSession).toHaveBeenCalledWith(
       expect.objectContaining({
+        /* `__Host-` is refused by browsers unless the cookie is Secure and rooted
+           at `/`, so the name and these two attributes travel together — and the
+           name is what stops a neighbouring subdomain planting an SSO session. */
+        name: '__Host-connect.sid',
         cookie: {
           maxAge: 3600000,
           secure: true,
+          path: '/',
         },
       }),
     );

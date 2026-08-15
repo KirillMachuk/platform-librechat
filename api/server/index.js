@@ -18,6 +18,7 @@ const {
   memoryDiagnostics,
   performStartupChecks,
   handleJsonParseError,
+  hostLockedCookies,
   GenerationJobManager,
   QUERY_DEVTOOLS_HEADER,
   createStreamServices,
@@ -201,6 +202,11 @@ const startServer = async () => {
   });
 
   /* Middleware */
+  /* First, ahead of cookie-parser and of the handlers that read the raw Cookie
+     header themselves: auth cookies travel `__Host-` prefixed so a neighbouring
+     subdomain cannot plant one, and this is where the wire name and the name the
+     rest of the code uses are reconciled. Inert without HTTPS. */
+  app.use(hostLockedCookies);
   app.use(metricsMiddleware);
   app.use(noIndex);
   app.use(express.json({ limit: '3mb' }));
