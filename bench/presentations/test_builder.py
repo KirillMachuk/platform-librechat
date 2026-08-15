@@ -241,6 +241,74 @@ class PresentationBuilderTests(unittest.TestCase):
 
         self.assertTrue(any(issue["code"] == "missing-slide-source" and issue["severity"] == "critical" for issue in issues))
 
+    def test_structural_qa_rejects_a_source_that_names_only_a_site(self):
+        """A front-page link lets nobody check the fact it is attached to."""
+        spec = _base_spec()
+        spec["sources"] = [
+            {"label": "CNBC — 27.07.2026", "url": "https://www.cnbc.com/2026/07/27/apple.html"},
+            {"label": "Statista — 01.07.2026", "url": "https://www.statista.com/"},
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "presentation.pptx"
+            _save(spec, output)
+            checks, issues = BUILDER._check_structure(output, spec)
+
+        check = next(check for check in checks if check["name"] == "source-specificity")
+        self.assertEqual(check["status"], "failed")
+        self.assertIn("statista.com", check["message"])
+        self.assertNotIn("cnbc.com", check["message"])
+        self.assertTrue(
+            any(
+                issue["code"] == "unspecific-source" and issue["severity"] == "critical"
+                for issue in issues
+            )
+        )
+
+    def test_a_source_pointing_at_a_real_page_passes(self):
+        spec = _base_spec()
+        spec["sources"] = [
+            {"label": "CNBC — 27.07.2026", "url": "https://www.cnbc.com/2026/07/27/apple.html"},
+            # A query names a specific view of a site just as a path does; rejecting
+            # it would refuse legitimate sources such as a sorted ranking table.
+            {"label": "CompaniesMarketCap", "url": "https://companiesmarketcap.com/?sort=marketcap"},
+            {"label": "Финансовая модель", "url": "model.xlsx — лист «План»"},
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "presentation.pptx"
+            _save(spec, output)
+            checks, issues = BUILDER._check_structure(output, spec)
+
+        check = next(check for check in checks if check["name"] == "source-specificity")
+        self.assertEqual(check["status"], "passed")
+        self.assertFalse(any(issue["code"] == "unspecific-source" for issue in issues))
+
+    def test_sources_slide_shows_the_site_and_keeps_the_address_in_the_notes(self):
+        """A raw article URL printed on a slide is unreadable and unclickable from
+        a projector, so the slide carries the site and the notes carry the address."""
+        url = "https://www.cnbc.com/2026/07/27/apple-most-valuable-company-nvidia.html"
+        spec = _base_spec()
+        spec["sources"] = [
+            {"label": "CNBC — 27.07.2026", "url": url},
+            {"label": "Финансовая модель", "url": "model.xlsx — лист «План»"},
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "presentation.pptx"
+            deck = _save(spec, output)
+
+            sources_slide = deck.slides[-1]
+            shown = " | ".join(
+                shape.text_frame.text
+                for shape in sources_slide.shapes
+                if getattr(shape, "has_text_frame", False)
+            )
+            self.assertIn("cnbc.com", shown)
+            self.assertNotIn(url, shown)
+            self.assertIn("model.xlsx — лист «План»", shown)
+
+            notes = sources_slide.notes_slide.notes_text_frame.text
+            self.assertIn(url, notes)
+            self.assertNotIn("model.xlsx", notes)
+
     def test_structural_qa_rejects_text_exceeding_shape_capacity(self):
         spec = _base_spec()
         spec["slides"] = [

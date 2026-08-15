@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -817,6 +818,49 @@ def _render_summary(prs: Presentation, item: dict[str, Any]):
     return slide
 
 
+def _source_location(url: str) -> tuple[str, str | None]:
+    """What to print on the slide, and the full address to park in the notes.
+
+    A raw `https://www.cnbc.com/2026/07/27/apple-most-valuable-company-nvidia.html`
+    printed on a slide is unreadable and cannot be clicked from a projector, so the
+    slide carries the site and the notes carry the address the reader can copy.
+    Non-web locations ("financial-model.xlsx — sheet «Plan»") are already short and
+    are printed verbatim.
+    """
+    text = str(url).strip()
+    if not text.lower().startswith(("http://", "https://")):
+        return text, None
+    host = urllib.parse.urlsplit(text).netloc
+    if host.startswith("www."):
+        host = host[4:]
+    return host or text, text
+
+
+def _bare_domain_sources(spec: dict[str, Any]) -> list[str]:
+    """Web sources that name only a site, with no page carrying the claimed fact.
+
+    `https://www.statista.com/` is not a source: the reader cannot check anything
+    with it. The builder has no network and cannot tell a live page from a dead
+    one, but it can refuse the class of citation that is unverifiable by
+    construction.
+    """
+    entries = list(spec.get("sources", []))
+    for item in spec.get("slides", []):
+        if str(item.get("layout", "")).lower() == "sources":
+            entries.extend(item.get("entries", []))
+    bare = []
+    for entry in entries:
+        url = entry.get("url", "") if isinstance(entry, dict) else str(entry)
+        text = str(url).strip()
+        if not text.lower().startswith(("http://", "https://")):
+            continue
+        parsed = urllib.parse.urlsplit(text)
+        if parsed.path.strip("/") or parsed.query:
+            continue
+        bare.append(text)
+    return bare
+
+
 def _render_sources(prs: Presentation, item: dict[str, Any]):
     slide = prs.slides.add_slide(_template_layout(prs, item.get("templateLayout")))
     content_top = _add_slide_title(slide, item.get("title", "Sources"))
@@ -824,15 +868,21 @@ def _render_sources(prs: Presentation, item: dict[str, Any]):
     if len(entries) > 8:
         raise ValueError("Sources slide supports at most eight entries")
     row_height = min(0.68, (6.72 - content_top) / max(len(entries), 1))
+    notes: list[str] = []
     for idx, entry in enumerate(entries, 1):
         label = entry.get("label", "Source") if isinstance(entry, dict) else "Source"
         url = entry.get("url", "") if isinstance(entry, dict) else str(entry)
+        shown, full = _source_location(url)
+        if full:
+            notes.append(f"{idx:02d}. {label} — {full}")
         y = content_top + (idx - 1) * row_height
         _add_text(slide, f"{idx:02d}", Inches(0.88), Inches(y), Inches(0.48), Inches(0.3), size=16, color=ACCENT, bold=True, name="Source number")
         _add_text(slide, str(label), Inches(1.55), Inches(y - 0.02), Inches(4.0), Inches(0.42), size=18, color=INK, bold=True, name="Source label")
-        _add_text(slide, str(url), Inches(5.65), Inches(y - 0.01), Inches(6.35), Inches(0.42), size=16, color=MUTED, name="Source location")
+        _add_text(slide, shown, Inches(5.65), Inches(y - 0.01), Inches(6.35), Inches(0.42), size=16, color=MUTED, name="Source location")
         if idx < len(entries):
             _add_line(slide, Inches(1.55), Inches(y + 0.5), Inches(10.45), name="Source divider")
+    if notes:
+        slide.notes_slide.notes_text_frame.text = "\n".join(notes)
     return slide
 
 
@@ -1323,6 +1373,25 @@ def _check_structure(path: Path, spec: dict[str, Any]) -> tuple[list[dict[str, A
         checks.append({"name": "sources", "status": "passed" if present else "failed", "message": "Sources slide is present" if present else "Sources were supplied but no sources slide was found"})
         if not present:
             issues.append(_issue("missing-sources", "critical", "Supplied sources are not traceable in the deck"))
+        bare = _bare_domain_sources(spec)
+        checks.append(
+            {
+                "name": "source-specificity",
+                "status": "failed" if bare else "passed",
+                "message": "Every web source points at a specific page"
+                if not bare
+                else "Sources point at a site's front page, not the page carrying the fact: "
+                + ", ".join(bare),
+            }
+        )
+        if bare:
+            issues.append(
+                _issue(
+                    "unspecific-source",
+                    "critical",
+                    "A source that names only a site does not let the reader check the fact",
+                )
+            )
 
     fact_layouts = {"claim", "chart", "table", "metrics"}
     missing_slide_sources = [
