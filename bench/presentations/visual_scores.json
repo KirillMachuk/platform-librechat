@@ -13,9 +13,9 @@
   },
   "renderEvidence": {
     "algorithm": "sha256-json-v1",
-    "matrixDigest": "352a12138fbdebc78b8fadf22a82671187ad99812f74f2b6335207f968f0ffe6"
+    "matrixDigest": "81f643db37538531ec525e29e21aed9a1acb9481555ad66b6aa20e4fa8074ae6"
   },
-  "reviewer": "Claude review of the 22 slides the wrapping fix changed (taller source rows; titles auto-fitted where the character estimate is unreliable)",
+  "reviewer": "Claude review of the CI renders after the wrapping fix (taller source rows; titles auto-fitted where the character estimate is unreliable)",
   "reviewedAt": "2026-08-15",
   "cases": {
     "ru-board-notes": {
@@ -129,5 +129,5 @@
       "notes": "Russian and English business notation, currency, ratios, dates, native chart, and table render consistently."
     }
   },
-  "reviewNotes": "Re-reviewed at full size: ru-board-notes 5 and 8, ru-long-copy 2, ru-process-deck 5, ru-en-mixed-business 7 — covering both kinds of change across four cases. Titles that now auto-fit read tighter and no longer run into the content beneath them; source rows carry a wrapped label clear of the divider, and a file location keeps its single line. Slide content is unchanged, so the per-case dimensions from the 2026-08-11 review still hold; ru-template-fidelity renders byte-identically and was not re-reviewed."
+  "reviewNotes": "The digest is a raster hash and is therefore specific to the renderer that produced it: a macOS LibreOffice run yields a different one for identical bytes, so it must be recorded from the CI run that the gate scores. Reviewed the run-1 montages published by that run — ru-board-notes, ru-long-copy, ru-en-mixed-business, ru-source-traceability — covering both kinds of change. Titles that now auto-fit read tighter and no longer run into the content beneath them; source rows carry a wrapped label clear of the divider and a file location keeps its single line. Slide content is unchanged, so the per-case dimensions from the 2026-08-11 review still hold; ru-template-fidelity renders identically to before this change."
 }
