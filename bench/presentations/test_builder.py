@@ -309,6 +309,46 @@ class PresentationBuilderTests(unittest.TestCase):
             self.assertIn(url, notes)
             self.assertNotIn("model.xlsx", notes)
 
+    def test_template_sources_slide_also_keeps_the_address_in_the_notes(self):
+        """Template decks render through their own path; the first fix reached only
+        the builder-native one and left raw URLs on inherited layouts."""
+        url = "https://www.cnbc.com/2026/07/27/apple-most-valuable-company-nvidia.html"
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            template_path = root / "template.pptx"
+            template = Presentation()
+            layout = next(
+                item for item in template.slide_layouts if "title and content" in item.name.lower()
+            )
+            template.save(template_path)
+            entries = [{"label": "CNBC — 27.07.2026", "url": url}]
+            spec = {
+                "job": _job("output.pptx"),
+                "templatePath": str(template_path),
+                "slides": [
+                    {
+                        "layout": "sources",
+                        "templateLayout": layout.name,
+                        "title": "Источники",
+                        "entries": entries,
+                    }
+                ],
+                "sources": entries,
+            }
+            output = root / "output.pptx"
+            deck, _changes = BUILDER._build(spec, output)
+            deck.save(str(output))
+
+            slide = Presentation(str(output)).slides[-1]
+            shown = " | ".join(
+                shape.text_frame.text
+                for shape in slide.shapes
+                if getattr(shape, "has_text_frame", False)
+            )
+            self.assertIn("cnbc.com", shown)
+            self.assertNotIn(url, shown)
+            self.assertIn(url, slide.notes_slide.notes_text_frame.text)
+
     def test_structural_qa_rejects_text_exceeding_shape_capacity(self):
         spec = _base_spec()
         spec["slides"] = [
