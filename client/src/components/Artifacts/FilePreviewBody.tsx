@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import copy from 'copy-to-clipboard';
 import { useRecoilValue } from 'recoil';
 import type { Artifact } from '~/common';
-import { logger, decodeBytes, sortPagesByRelevance, triggerDownload } from '~/utils';
+import { cn, logger, decodeBytes, sortPagesByRelevance, triggerDownload } from '~/utils';
 import { fileTypeMeta } from '~/components/Chat/Input/Files/typeMeta';
 import CopyButton from '~/components/Messages/Content/CopyButton';
 import { useFileDownload, useFilePreview } from '~/data-provider';
@@ -292,6 +292,10 @@ export default function FilePreviewBody({ artifact }: { artifact: Artifact }) {
     setTimeout(() => setIsCopied(false), 3000);
   }, [fileContent]);
 
+  /** A PDF blob or a rendered office document — both render as a full-bleed
+   *  iframe that scrolls itself. */
+  const showsFrame = fileBlobUrl != null || officeHtml != null;
+
   const handleDownload = useCallback(async () => {
     if (!fileId) {
       return;
@@ -340,7 +344,16 @@ export default function FilePreviewBody({ artifact }: { artifact: Artifact }) {
       <div className="shrink-0 truncate px-4 pt-3 text-xs text-text-secondary" title={fileName}>
         {metaParts.join(' · ')}
       </div>
-      <div className="relative min-h-0 flex-1 overflow-y-auto p-4">
+      {/* Кадры (PDF, офис) занимают ВСЮ высоту панели и прокручиваются САМИ:
+          пока их прокручивала панель, кадр стоял частично за краем и клик по
+          вкладке листа внутри него не доезжал (e2e поймал переключение листов
+          xlsx). Текст, наоборот, прокручивается панелью. */}
+      <div
+        className={cn(
+          'relative min-h-0 flex-1',
+          showsFrame ? 'overflow-hidden' : 'overflow-y-auto p-4',
+        )}
+      >
         {(loading || officeLoading) && (
           <div className="flex h-60 items-center justify-center rounded-lg bg-surface-secondary">
             <span className="shimmer text-sm text-text-secondary">
@@ -370,7 +383,7 @@ export default function FilePreviewBody({ artifact }: { artifact: Artifact }) {
           <iframe
             src={fileBlobUrl}
             title={`${localize('com_ui_preview')}: ${fileName}`}
-            className="h-full min-h-[60vh] w-full rounded-lg border border-border-light"
+            className="h-full w-full border-0"
           />
         )}
         {officeHtml && (
@@ -378,7 +391,7 @@ export default function FilePreviewBody({ artifact }: { artifact: Artifact }) {
             srcDoc={officeHtml}
             sandbox="allow-scripts"
             title={`${localize('com_ui_preview')}: ${fileName}`}
-            className="h-full min-h-[60vh] w-full rounded-lg border border-border-light bg-white"
+            className="h-full w-full border-0 bg-white"
           />
         )}
         {fileContent && (

@@ -278,10 +278,13 @@ test.describe('file preview — honest states', () => {
     page,
   }) => {
     test.setTimeout(180000);
-    const dialog = await previewFixture(page, 'locked.pdf');
+    await previewFixture(page, 'locked.pdf');
 
     await expect(previewFrameElement(page, 'locked.pdf')).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Download locked.pdf' })).toBeVisible();
+    /* 15.08-3: saving the file is the panel HEADER's job now (DownloadArtifact,
+       which for a stored file saves the original bytes) — the body carries a
+       download only on its honest-state plates, where there is no frame. */
+    await expect(page.getByRole('button', { name: 'Download Artifact' })).toBeVisible();
   });
 });
 
