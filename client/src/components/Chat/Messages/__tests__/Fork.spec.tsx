@@ -26,6 +26,10 @@ jest.mock('~/hooks', () => ({
 }));
 
 jest.mock('@librechat/client', () => ({
+  /* Пропускает свой render насквозь: подсказка — это ПЛАШКА над контролом,
+     сам контрол она не подменяет (канон §6.6). */
+  TooltipAnchor: ({ render }: { description?: React.ReactNode; render?: React.ReactElement }) =>
+    render ?? null,
   useToastContext: () => ({ showToast: mockShowToast }),
 }));
 

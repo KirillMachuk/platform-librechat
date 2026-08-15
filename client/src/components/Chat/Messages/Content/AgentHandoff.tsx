@@ -89,7 +89,9 @@ const AgentHandoff: React.FC<AgentHandoffProps> = ({ name, args: _args = '' }) =
               <div className="mb-1 font-medium text-text-secondary">
                 {localize('com_ui_handoff_instructions')}:
               </div>
-              <pre className="overflow-x-auto whitespace-pre-wrap text-text-primary">{args}</pre>
+              <pre className="pan-x overflow-x-auto whitespace-pre-wrap text-text-primary">
+                {args}
+              </pre>
             </div>
           )}
         </div>

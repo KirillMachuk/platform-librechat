@@ -123,6 +123,7 @@
     "check:shadows": "node scripts/check-shadows.mjs",
     "check:focus": "node scripts/check-focus.mjs",
     "check:tooltips": "node scripts/check-tooltips.mjs",
+    "check:panx": "node scripts/check-panx.mjs",
     "check:artifacts-offline": "node scripts/check-artifacts-offline.mjs"
   },
   "repository": {

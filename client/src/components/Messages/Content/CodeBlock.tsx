@@ -117,7 +117,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
           allowExecution={allowExecution}
         />
       </div>
-      <div className={cn(classProp, 'overflow-x-auto overflow-y-auto bg-surface-code p-4')}>
+      <div className={cn(classProp, 'pan-x overflow-x-auto overflow-y-auto bg-surface-code p-4')}>
         <code
           ref={codeRef}
           className={cn(

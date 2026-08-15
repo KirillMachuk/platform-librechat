@@ -294,7 +294,10 @@ describe('Accessibility Improvements', () => {
       const clearButton = screen.getByRole('button', { name: 'Clear search' });
       expect(clearButton).toBeInTheDocument();
       expect(clearButton).toHaveAttribute('aria-label', 'Clear search');
-      expect(clearButton).toHaveAttribute('title', 'Clear search');
+      /* Канон §6.6 (владелец 15.08-5): имя контрола показывает ЧЕРНИЛЬНАЯ
+         ПЛАШКА, а не системный пузырёк title — он рисуется другим шрифтом и
+         другим цветом мимо всей системы. Доступное имя остаётся на кнопке. */
+      expect(clearButton).not.toHaveAttribute('title');
     });
 
     it('hides decorative icons from screen readers', () => {

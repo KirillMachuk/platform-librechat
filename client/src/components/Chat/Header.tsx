@@ -76,7 +76,7 @@ function Header() {
      чтобы селектор встал на одну ось с логотипом в сайдбаре. */
   return (
     <div className="absolute top-0 z-10 flex h-14 w-full items-center justify-between bg-presentation p-2 font-semibold text-text-primary md:h-[52px]">
-      <div className="hide-scrollbar flex w-full items-center justify-between gap-2 overflow-x-auto">
+      <div className="hide-scrollbar pan-x flex w-full items-center justify-between gap-2 overflow-x-auto">
         <div className="mx-1 flex items-center">
           {isSmallScreen ? <OpenSidebar /> : null}
           {!(navVisible && isSmallScreen) && (
