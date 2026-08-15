@@ -1038,13 +1038,20 @@ def _render_template_item(prs: Presentation, item: dict[str, Any]):
         )
     elif layout == "sources":
         entries = item.get("entries", [])
-        values = [
-            f"{index}. {entry.get('label', 'Source')} — {entry.get('url', '')}"
-            if isinstance(entry, dict)
-            else f"{index}. {entry}"
-            for index, entry in enumerate(entries, 1)
-        ]
+        values = []
+        notes = []
+        for index, entry in enumerate(entries, 1):
+            if not isinstance(entry, dict):
+                values.append(f"{index}. {entry}")
+                continue
+            label = entry.get("label", "Source")
+            shown, full = _source_location(entry.get("url", ""))
+            values.append(f"{index}. {label} — {shown}")
+            if full:
+                notes.append(f"{index:02d}. {label} — {full}")
         _set_template_text(_ensure_template_bodies(slide, prs, bodies)[0], bullets=values)
+        if notes:
+            slide.notes_slide.notes_text_frame.text = "\n".join(notes)
     elif layout == "chart":
         x, y, width, height = _template_content_box(slide, prs)
         chart_spec = item.get("chart", {})
