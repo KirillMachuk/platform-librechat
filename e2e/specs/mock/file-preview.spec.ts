@@ -14,7 +14,7 @@ import {
   fileFixture,
   largeTextFixture,
   openFilesPanel,
-  previewDialog,
+  previewSurface,
   previewFixture,
   previewFrame,
   previewFrameElement,
@@ -61,7 +61,7 @@ const DECK_SECTION_MARKER = 'Раздел 1';
 /** deck-many.pptx is built with this many slides — see e2e/fixtures/files/README.md. */
 const DECK_MANY_SLIDES = 60;
 const TEXT_TRUNCATED_NOTICE = 'Showing the beginning of a large file.';
-/** `TEXT_PREVIEW_MAX_BYTES` in `client/src/.../Content/FilePreviewDialog.tsx`. */
+/** `TEXT_PREVIEW_MAX_BYTES` in `client/src/components/Artifacts/FilePreviewBody.tsx`. */
 const TEXT_PREVIEW_MAX_BYTES = 512 * 1024;
 
 test.describe('file library panel', () => {
@@ -230,7 +230,7 @@ test.describe('file preview — plain formats', () => {
     await previewFixture(page, 'digital.pdf');
 
     await expect(previewFrameElement(page, 'digital.pdf')).toBeVisible({ timeout: 30000 });
-    await expect(previewDialog(page, 'digital.pdf').locator('pre')).toHaveCount(0);
+    await expect(previewSurface(page, 'digital.pdf').locator('pre')).toHaveCount(0);
   });
 });
 
@@ -362,7 +362,7 @@ test.describe('file preview — the rest of the matrix', () => {
     });
 
     await messagesView(page).getByRole('button', { name: fixture.name, exact: true }).click();
-    const dialog = previewDialog(page, fixture.name);
+    const dialog = previewSurface(page, fixture.name);
     await expect(dialog).toHaveCount(1);
     await expect(dialog.locator('pre')).toContainText(MD_MARKER, { timeout: 30000 });
   });

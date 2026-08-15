@@ -1,5 +1,5 @@
 import React from 'react';
-import { Spinner } from '@librechat/client';
+import { Spinner, TooltipAnchor } from '@librechat/client';
 import type { MCPServerStatus } from 'librechat-data-provider';
 import { PlugZap, SlidersHorizontal, X } from '~/components/icons';
 import { useLocalize } from '~/hooks';
@@ -142,18 +142,22 @@ function CompactStatusDot({ serverStatus, isInitializing }: CompactStatusDotProp
 function LoadingStatusIcon({ serverName, onCancel, canCancel }: InitializingStatusProps) {
   if (canCancel) {
     return (
-      <button
-        type="button"
-        onClick={onCancel}
-        className="group flex size-6 items-center justify-center rounded p-1 hover:bg-red-100 dark:hover:bg-red-900/20"
-        aria-label={localize('com_ui_cancel')}
-        title={localize('com_ui_cancel')}
-      >
-        <div className="relative size-4">
-          <Spinner className="size-4 text-text-primary group-hover:opacity-0" />
-          <X className="absolute inset-0 size-4 text-red-500 opacity-0 group-hover:opacity-100" />
-        </div>
-      </button>
+      <TooltipAnchor
+        description={localize('com_ui_cancel')}
+        render={
+          <button
+            type="button"
+            onClick={onCancel}
+            className="group flex size-6 items-center justify-center rounded p-1 hover:bg-red-100 dark:hover:bg-red-900/20"
+            aria-label={localize('com_ui_cancel')}
+          >
+            <div className="relative size-4">
+              <Spinner className="size-4 text-text-primary group-hover:opacity-0" />
+              <X className="absolute inset-0 size-4 text-red-500 opacity-0 group-hover:opacity-100" />
+            </div>
+          </button>
+        }
+      />
     );
   }
 

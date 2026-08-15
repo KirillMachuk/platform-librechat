@@ -1,6 +1,6 @@
 import { memo, useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
-import { useMediaQuery } from '@librechat/client';
+import { useMediaQuery, TooltipAnchor } from '@librechat/client';
 import { getConfigDefaults, PermissionTypes, Permissions } from 'librechat-data-provider';
 import { resolveIcon, resolveColor } from '~/components/Projects/iconOptions';
 import { useGetProjectQuery, useGetStartupConfig } from '~/data-provider';
@@ -33,14 +33,18 @@ function Header() {
     const iconHex = resolveColor(project.color);
     return (
       <>
-        <div
-          title={project.name}
-          aria-label={project.name}
-          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-border-light"
-          style={{ backgroundColor: `${iconHex}1a` }}
-        >
-          <Icon className="h-3.5 w-3.5" style={{ color: iconHex }} aria-hidden="true" />
-        </div>
+        <TooltipAnchor
+          description={project.name}
+          render={
+            <div
+              aria-label={project.name}
+              className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-border-light"
+              style={{ backgroundColor: `${iconHex}1a` }}
+            >
+              <Icon className="h-3.5 w-3.5" style={{ color: iconHex }} aria-hidden="true" />
+            </div>
+          }
+        />
         <ChevronRight className="h-4 w-4 flex-shrink-0 text-text-secondary" aria-hidden="true" />
       </>
     );

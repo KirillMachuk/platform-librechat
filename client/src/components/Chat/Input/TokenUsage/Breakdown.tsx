@@ -9,18 +9,24 @@ interface RowProps {
   max?: number;
 }
 
+/* Колоночная сетка (владелец 14.08-7, референс Claude Code): подпись тянется и
+ * обрезается, цифры и процент — свои колонки с выравниванием вправо и
+ * табличными цифрами, перенос строки невозможен по построению. */
 function Row({ label, value, max }: RowProps) {
   const percent = max != null && max > 0 ? Math.min((value / max) * 100, 100) : null;
   return (
-    <div className="flex items-center justify-between gap-4 text-sm">
-      <span className="text-text-secondary">{label}</span>
-      <span className="font-medium text-text-primary">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto_2.75rem] items-center gap-x-2 text-[13px] leading-5">
+      <span className="truncate text-text-secondary" title={label}>
+        {label}
+      </span>
+      <span className="whitespace-nowrap text-right font-medium tabular-nums text-text-primary">
         {formatTokens(value)}
-        {percent != null && (
-          <span className="ml-1 text-xs text-text-secondary" aria-hidden="true">
-            ({Math.round(percent)}%)
-          </span>
-        )}
+      </span>
+      <span
+        className="whitespace-nowrap text-right text-xs tabular-nums text-text-secondary"
+        aria-hidden="true"
+      >
+        {percent != null ? `${Math.round(percent)}%` : ''}
       </span>
     </div>
   );
@@ -66,12 +72,18 @@ export default function Breakdown({ view, showCost, currency }: BreakdownProps) 
         ] as const);
 
   return (
-    <div className="w-64 space-y-3" role="region" aria-label={localize('com_ui_context_usage')}>
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-text-primary">
+    /* Шире и мельче (14.08-7): при w-64 длинные русские подписи роняли цифры
+       на следующую строку; максимум по вьюпорту держит телефон. */
+    <div
+      className="w-80 max-w-[calc(100vw-2rem)] space-y-3"
+      role="region"
+      aria-label={localize('com_ui_context_usage')}
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[13px] font-medium text-text-primary">
           {localize('com_ui_context_window')}
         </span>
-        <span className="text-xs font-medium text-text-secondary">
+        <span className="whitespace-nowrap text-xs font-medium tabular-nums text-text-secondary">
           {maxTokens != null
             ? `${formatTokens(usedTokens)} / ${formatTokens(maxTokens)} (${Math.round(percent)}%)`
             : formatTokens(usedTokens)}
@@ -173,20 +185,22 @@ export default function Breakdown({ view, showCost, currency }: BreakdownProps) 
         <>
           <div className="border-t border-border-light" role="separator" />
           <div className="space-y-1.5" data-testid="token-usage-cost">
-            <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center justify-between text-[13px] leading-5">
               <span className="text-text-secondary">
                 {showTotal
                   ? localize('com_ui_context_cost_branch')
                   : localize('com_ui_context_cost')}
               </span>
-              <span className="font-medium text-text-primary">
+              <span className="font-medium tabular-nums text-text-primary">
                 {formatCost(view.branchCost, currency)}
               </span>
             </div>
             {showTotal && (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-text-secondary">{localize('com_ui_context_cost_total')}</span>
-                <span className="text-text-secondary">{formatCost(view.totalCost, currency)}</span>
+                <span className="tabular-nums text-text-secondary">
+                  {formatCost(view.totalCost, currency)}
+                </span>
               </div>
             )}
           </div>

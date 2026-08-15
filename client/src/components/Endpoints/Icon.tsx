@@ -60,44 +60,41 @@ type UserAvatarProps = {
   className?: string;
 };
 
-const UserAvatar = memo(
-  ({ size, avatar, avatarSrc, userId, username, className }: UserAvatarProps) => {
-    const [resolved, setResolved] = React.useState(() => resolveAvatar(userId, avatar, avatarSrc));
+const UserAvatar = memo(({ size, avatar, avatarSrc, userId, className }: UserAvatarProps) => {
+  const [resolved, setResolved] = React.useState(() => resolveAvatar(userId, avatar, avatarSrc));
 
-    React.useEffect(() => {
-      setResolved(resolveAvatar(userId, avatar, avatarSrc));
-    }, [userId, avatar, avatarSrc]);
+  React.useEffect(() => {
+    setResolved(resolveAvatar(userId, avatar, avatarSrc));
+  }, [userId, avatar, avatarSrc]);
 
-    return (
-      <div
-        title={username}
-        style={{ width: size, height: size }}
-        className={cn('relative flex items-center justify-center', className ?? '')}
-      >
-        {resolved.type === 'image' ? (
-          <img
-            className="rounded-full"
-            src={resolved.src}
-            alt="avatar"
-            onError={() => setResolved(markAvatarFailed(userId, resolved.src))}
-          />
-        ) : (
-          <div
-            style={{
-              backgroundColor: 'rgb(121, 137, 255)',
-              width: '20px',
-              height: '20px',
-              boxShadow: 'rgba(240, 246, 252, 0.1) 0px 0px 0px 1px',
-            }}
-            className="relative flex h-9 w-9 items-center justify-center rounded-sm p-1 text-white"
-          >
-            <User aria-hidden="true" />
-          </div>
-        )}
-      </div>
-    );
-  },
-);
+  return (
+    <div
+      style={{ width: size, height: size }}
+      className={cn('relative flex items-center justify-center', className ?? '')}
+    >
+      {resolved.type === 'image' ? (
+        <img
+          className="rounded-full"
+          src={resolved.src}
+          alt="avatar"
+          onError={() => setResolved(markAvatarFailed(userId, resolved.src))}
+        />
+      ) : (
+        <div
+          style={{
+            backgroundColor: 'rgb(121, 137, 255)',
+            width: '20px',
+            height: '20px',
+            boxShadow: 'rgba(240, 246, 252, 0.1) 0px 0px 0px 1px',
+          }}
+          className="relative flex h-9 w-9 items-center justify-center rounded-sm p-1 text-white"
+        >
+          <User aria-hidden="true" />
+        </div>
+      )}
+    </div>
+  );
+});
 
 UserAvatar.displayName = 'UserAvatar';
 

@@ -2,6 +2,14 @@
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  /* hover:-утилиты работают только там, где есть НАСТОЯЩИЙ курсор
+     (@media (hover:hover) and (pointer:fine)). Корень «липкого серого» на
+     iOS/планшетах (владелец 14.08-9): касание эмулирует hover, и кнопка
+     оставалась серой после тапа. Точечные [@media(hover:hover)]-гейты
+     прошлых раундов этим флагом обобщены на весь проект. */
+  future: {
+    hoverOnlyWhenSupported: true,
+  },
   content: [
     './src/**/*.{js,jsx,ts,tsx}',
     // Include component library files

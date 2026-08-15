@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import copy from 'copy-to-clipboard';
 import { useRecoilValue } from 'recoil';
-import { OGDialog, OGDialogContent, OGDialogTitle, OGDialogDescription } from '@librechat/client';
+import type { Artifact } from '~/common';
 import { logger, decodeBytes, sortPagesByRelevance, triggerDownload } from '~/utils';
 import { fileTypeMeta } from '~/components/Chat/Input/Files/typeMeta';
 import CopyButton from '~/components/Messages/Content/CopyButton';
@@ -25,7 +25,7 @@ const OFFICE_EXTS = new Set(['docx', 'xlsx', 'xls', 'ods', 'pptx', 'csv', 'tsv']
  * match .odt/.odp which the backend rejects) and use `ms-excel` /
  * `wordprocessingml` etc. for the modern OOXML/spreadsheet families.
  * `tab-separated` covers `text/tab-separated-values` (TSV) which the
- * backend now routes through the CSV producer. */
+ * backend routes through the CSV producer. */
 const OFFICE_MIME_HINTS = [
   'wordprocessingml',
   'spreadsheetml',
@@ -35,14 +35,6 @@ const OFFICE_MIME_HINTS = [
   'csv',
   'tab-separated',
 ];
-
-/* The first time a Radix dialog opens after page load it initializes global
- * machinery (focus scope, scroll-lock styles) and can emit a spurious
- * `onOpenChange(false)` in the same tick as opening — the dialog flashes open
- * then closes, and only a second click "sticks". Swallowing a close that
- * arrives within this window neutralizes that race without affecting real user
- * closes (overlay click / Escape / close button all happen far later). */
-const SPURIOUS_CLOSE_MS = 200;
 
 /* Cap for inline text preview. Rendering a multi-MB text/log/json file into a
  * single <pre> freezes the tab, so we only decode the first slice and flag the
@@ -58,18 +50,6 @@ const PREVIEW_ERROR_MESSAGES: Record<string, TranslationKeys> = {
   empty: 'com_ui_preview_render_failed',
   orphaned: 'com_ui_preview_render_failed',
 };
-
-interface FilePreviewDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  fileName: string;
-  fileId?: string;
-  relevance?: number;
-  pages?: number[];
-  pageRelevance?: Record<number, number>;
-  fileType?: string;
-  fileSize?: number;
-}
 
 function getFileExtension(filename: string): string {
   const dot = filename.lastIndexOf('.');
@@ -147,14 +127,11 @@ function formatBytes(bytes: number): string {
 }
 
 /**
- * The dialog's meta line says what CLASS of file this is, in the user's
- * language, from the same map the chip below it draws from. The old local
- * matcher had the `includes('document')` substring bug (every OOXML mime
- * contains "officedocument", so xlsx/pptx read "Document") and answered in
- * hardcoded English. Extension wins over MIME so a `.tsv` mislabeled
- * `text/plain` still reads as a spreadsheet (matches the office HTML
- * dispatcher's precedence); an extension typeMeta does not know falls back
- * to the bare uppercase extension.
+ * The meta line says what CLASS of file this is, in the user's language, from
+ * the same map the chip the user clicked draws from. Extension wins over MIME
+ * so a `.tsv` mislabeled `text/plain` still reads as a spreadsheet (matches
+ * the office HTML dispatcher's precedence); an extension typeMeta does not
+ * know falls back to the bare uppercase extension.
  */
 function displayTypeMeta(fileType?: string, fileName?: string): { labelKey: string; ext: string } {
   const ext = fileName ? getFileExtension(fileName) : '';
@@ -165,19 +142,23 @@ function displayTypeMeta(fileType?: string, fileName?: string): { labelKey: stri
   return { labelKey: fileTypeMeta(fileType ?? '').labelKey, ext };
 }
 
-export default function FilePreviewDialog({
-  open,
-  onOpenChange,
-  fileName,
-  fileId,
-  relevance,
-  pages,
-  pageRelevance,
-  fileType,
-  fileSize,
-}: FilePreviewDialogProps) {
+/**
+ * Panel body for FILE_PREVIEW artifacts — the routing target for every
+ * non-image stored file (owner 14.08-3). Fetches by `file.file_id`: office
+ * formats poll the server-rendered HTML, text decodes a bounded slice, pdf
+ * shows the browser viewer over a typed blob. Content lives in react-query /
+ * local state, never in recoil.
+ */
+export default function FilePreviewBody({ artifact }: { artifact: Artifact }) {
   const localize = useLocalize();
   const user = useRecoilValue(store.user);
+  const fileId = artifact.file?.file_id;
+  const fileName = artifact.file?.filename ?? artifact.title ?? '';
+  const fileType = artifact.preview?.fileType;
+  const fileSize = artifact.preview?.bytes;
+  const relevance = artifact.preview?.relevance;
+  const pages = artifact.preview?.pages;
+  const pageRelevance = artifact.preview?.pageRelevance;
   const { refetch: downloadFile } = useFileDownload(user?.id ?? '', fileId, { direct: false });
 
   const [fileContent, setFileContent] = useState<string | null>(null);
@@ -187,22 +168,12 @@ export default function FilePreviewDialog({
   const [previewTruncated, setPreviewTruncated] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const loadingRef = useRef(false);
-  const openedAtRef = useRef(0);
-
-  const handleOpenChange = useCallback(
-    (next: boolean) => {
-      if (!next && Date.now() - openedAtRef.current < SPURIOUS_CLOSE_MS) {
-        return;
-      }
-      onOpenChange(next);
-    },
-    [onOpenChange],
-  );
+  const cancelledRef = useRef(false);
 
   const previewKind: PreviewKind = canPreviewByMime(fileType) || canPreviewByExt(fileName);
 
   const officePreviewQuery = useFilePreview(fileId, {
-    enabled: open && previewKind === 'office' && !!fileId,
+    enabled: previewKind === 'office' && !!fileId,
   });
 
   const officeHtml = useMemo(() => {
@@ -238,8 +209,6 @@ export default function FilePreviewDialog({
       officePreviewQuery.data?.status === 'failed' ||
       !!officePreviewQuery.data?.previewError ||
       (officePreviewQuery.data?.status === 'ready' && officeHtml == null));
-
-  const cancelledRef = useRef(false);
 
   const loadPreview = useCallback(async () => {
     if (!fileId || !previewKind || previewKind === 'office' || loadingRef.current) {
@@ -287,6 +256,42 @@ export default function FilePreviewDialog({
     }
   }, [fileId, previewKind, downloadFile]);
 
+  useEffect(() => {
+    if (previewKind && previewKind !== 'office' && !fileContent && !fileBlobUrl) {
+      loadPreview();
+    }
+  }, [previewKind, fileContent, fileBlobUrl, loadPreview]);
+
+  /* The panel swaps artifacts without unmounting (version pager, another chip
+   * click) — reset per-file state and revoke the blob on every id change, and
+   * once more on unmount. */
+  useEffect(() => {
+    return () => {
+      cancelledRef.current = true;
+      setFileContent(null);
+      setFileBlobUrl((url) => {
+        if (url) {
+          URL.revokeObjectURL(url);
+        }
+        return null;
+      });
+      setPreviewError(false);
+      setPreviewTruncated(false);
+      setLoading(false);
+      setIsCopied(false);
+      loadingRef.current = false;
+    };
+  }, [artifact.id]);
+
+  const handleCopy = useCallback(() => {
+    if (!fileContent) {
+      return;
+    }
+    copy(fileContent, { format: 'text/plain' });
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 3000);
+  }, [fileContent]);
+
   const handleDownload = useCallback(async () => {
     if (!fileId) {
       return;
@@ -298,46 +303,9 @@ export default function FilePreviewDialog({
       }
       triggerDownload(result.data, fileName);
     } catch (err) {
-      logger.error('[FilePreviewDialog] Download failed:', err);
+      logger.error('[FilePreviewBody] Download failed:', err);
     }
   }, [downloadFile, fileId, fileName]);
-
-  useEffect(() => {
-    if (open && previewKind && previewKind !== 'office' && !fileContent && !fileBlobUrl) {
-      loadPreview();
-    }
-  }, [open, previewKind, fileContent, fileBlobUrl, loadPreview]);
-
-  useEffect(() => {
-    return () => {
-      if (fileBlobUrl) {
-        URL.revokeObjectURL(fileBlobUrl);
-      }
-    };
-  }, [fileBlobUrl]);
-
-  useEffect(() => {
-    if (open) {
-      openedAtRef.current = Date.now();
-      return;
-    }
-    cancelledRef.current = true;
-    setFileContent(null);
-    setFileBlobUrl(null);
-    setPreviewError(false);
-    setPreviewTruncated(false);
-    setLoading(false);
-    setIsCopied(false);
-  }, [open]);
-
-  const handleCopy = useCallback(() => {
-    if (!fileContent) {
-      return;
-    }
-    copy(fileContent, { format: 'text/plain' });
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 3000);
-  }, [fileContent]);
 
   const displayType = useMemo(() => {
     const { labelKey, ext } = displayTypeMeta(fileType, fileName);
@@ -346,6 +314,7 @@ export default function FilePreviewDialog({
     }
     return localize(labelKey as TranslationKeys);
   }, [fileType, fileName, localize]);
+
   const sortedPages = useMemo(
     () => (pages && pageRelevance ? sortPagesByRelevance(pages, pageRelevance) : pages),
     [pages, pageRelevance],
@@ -363,22 +332,32 @@ export default function FilePreviewDialog({
   }
 
   return (
-    <OGDialog open={open} onOpenChange={handleOpenChange}>
-      <OGDialogContent
-        className="flex w-full max-w-4xl flex-col !overflow-hidden p-0"
-        showCloseButton={true}
-      >
-        <div className="shrink-0 px-6 pr-12 pt-6">
-          <OGDialogTitle className="truncate text-base">{fileName}</OGDialogTitle>
-          <div className="mt-0.5 flex items-center gap-3">
-            <OGDialogDescription className="min-w-0 truncate">
-              {metaParts.join(' · ')}
-            </OGDialogDescription>
+    <div
+      className="flex h-full min-h-0 flex-col"
+      data-testid="file-preview-body"
+      aria-label={`${localize('com_ui_preview')}: ${fileName}`}
+    >
+      <div className="shrink-0 truncate px-4 pt-3 text-xs text-text-secondary" title={fileName}>
+        {metaParts.join(' · ')}
+      </div>
+      <div className="relative min-h-0 flex-1 overflow-y-auto p-4">
+        {(loading || officeLoading) && (
+          <div className="flex h-60 items-center justify-center rounded-lg bg-surface-secondary">
+            <span className="shimmer text-sm text-text-secondary">
+              {officeLoading ? localize('com_ui_preview_rendering') : localize('com_ui_loading')}
+            </span>
+          </div>
+        )}
+        {(previewError || officeError) && !officeLoading && (
+          <div className="flex h-32 flex-col items-center justify-center gap-2 rounded-lg bg-surface-secondary">
+            <span className="text-sm text-text-secondary">
+              {previewError ? localize('com_ui_preview_unavailable') : localize(officeErrorKey)}
+            </span>
             {fileId && (
               <button
                 type="button"
                 onClick={handleDownload}
-                className="inline-flex shrink-0 items-center gap-1 text-xs text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-none"
+                className="inline-flex items-center gap-1 text-xs text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-none"
                 aria-label={`${localize('com_ui_download')} ${fileName}`}
               >
                 <Download className="size-3" aria-hidden="true" />
@@ -386,71 +365,65 @@ export default function FilePreviewDialog({
               </button>
             )}
           </div>
-        </div>
-
-        <div className="relative min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-4">
-          {(loading || officeLoading) && (
-            <div className="flex h-60 items-center justify-center rounded-lg bg-surface-secondary">
-              <span className="shimmer text-sm text-text-secondary">
-                {officeLoading ? localize('com_ui_preview_rendering') : localize('com_ui_loading')}
-              </span>
+        )}
+        {fileBlobUrl && (
+          <iframe
+            src={fileBlobUrl}
+            title={`${localize('com_ui_preview')}: ${fileName}`}
+            className="h-full min-h-[60vh] w-full rounded-lg border border-border-light"
+          />
+        )}
+        {officeHtml && (
+          <iframe
+            srcDoc={officeHtml}
+            sandbox="allow-scripts"
+            title={`${localize('com_ui_preview')}: ${fileName}`}
+            className="h-full min-h-[60vh] w-full rounded-lg border border-border-light bg-white"
+          />
+        )}
+        {fileContent && (
+          <>
+            <div className="pointer-events-none sticky top-0 z-10 flex justify-end pr-1">
+              <CopyButton
+                isCopied={isCopied}
+                onClick={handleCopy}
+                iconOnly
+                label={localize('com_ui_copy')}
+                className="pointer-events-auto rounded-lg bg-surface-secondary"
+              />
             </div>
-          )}
-          {(previewError || officeError) && !officeLoading && (
-            <div className="flex h-32 items-center justify-center rounded-lg bg-surface-secondary">
-              <span className="text-sm text-text-secondary">
-                {previewError ? localize('com_ui_preview_unavailable') : localize(officeErrorKey)}
-              </span>
+            <div className="-mt-8 rounded-lg bg-surface-secondary p-4">
+              {/* Inter, not mono — document text, canon §6.15. */}
+              <pre className="whitespace-pre-wrap break-words pr-8 font-sans text-sm leading-6 text-text-primary">
+                {fileContent}
+              </pre>
             </div>
-          )}
-          {fileBlobUrl && (
-            <iframe
-              src={fileBlobUrl}
-              title={`${localize('com_ui_preview')}: ${fileName}`}
-              className="h-[70vh] w-full rounded-lg border border-border-light"
-            />
-          )}
-          {officeHtml && (
-            <iframe
-              srcDoc={officeHtml}
-              sandbox="allow-scripts"
-              title={`${localize('com_ui_preview')}: ${fileName}`}
-              className="h-[70vh] w-full rounded-lg border border-border-light bg-white"
-            />
-          )}
-          {fileContent && (
-            <>
-              <div className="pointer-events-none sticky top-0 z-10 flex justify-end pr-1">
-                <CopyButton
-                  isCopied={isCopied}
-                  onClick={handleCopy}
-                  iconOnly
-                  label={localize('com_ui_copy')}
-                  className="pointer-events-auto rounded-lg bg-surface-secondary"
-                />
+            {previewTruncated && (
+              <div className="mt-2 rounded-lg bg-surface-secondary px-4 py-2 text-center text-xs text-text-secondary">
+                {localize('com_ui_preview_truncated')}
               </div>
-              <div className="-mt-8 rounded-lg bg-surface-secondary p-4">
-                {/* Inter, not mono — document text, canon §6.15. */}
-                <pre className="whitespace-pre-wrap break-words pr-8 font-sans text-sm leading-6 text-text-primary">
-                  {fileContent}
-                </pre>
-              </div>
-              {previewTruncated && (
-                <div className="mt-2 rounded-lg bg-surface-secondary px-4 py-2 text-center text-xs text-text-secondary">
-                  {localize('com_ui_preview_truncated')}
-                </div>
-              )}
-            </>
-          )}
-          {!previewKind && !loading && (
-            <div className="flex h-32 items-center justify-center rounded-lg bg-surface-secondary">
-              <span className="text-sm text-text-secondary">
-                {localize('com_ui_preview_unavailable')}
-              </span>
-            </div>
-          )}
-        </div>
-      </OGDialogContent>
-    </OGDialog>
+            )}
+          </>
+        )}
+        {!previewKind && !loading && (
+          <div className="flex h-32 flex-col items-center justify-center gap-2 rounded-lg bg-surface-secondary">
+            <span className="text-sm text-text-secondary">
+              {localize('com_ui_preview_unavailable')}
+            </span>
+            {fileId && (
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="inline-flex items-center gap-1 text-xs text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-none"
+                aria-label={`${localize('com_ui_download')} ${fileName}`}
+              >
+                <Download className="size-3" aria-hidden="true" />
+                {localize('com_ui_download')}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useFormState } from 'react-hook-form';
-import { useToastContext, Button } from '@librechat/client';
+import { useToastContext, Button, TooltipAnchor } from '@librechat/client';
 import { useAgentPanelContext } from '~/Providers/AgentPanelContext';
 import { useDuplicateAgentMutation } from '~/data-provider';
 import { CopyPlus } from '~/components/icons';
@@ -51,19 +51,23 @@ export default function DuplicateAgent({ agent_id }: { agent_id: string }) {
   };
 
   return (
-    <Button
-      size="sm"
-      variant="outline"
-      aria-label={localize('com_ui_duplicate_agent')}
-      title={localize('com_ui_duplicate_agent')}
-      type="button"
-      /** Each tap creates a real agent; without this a double tap creates two. */
-      disabled={duplicateAgent.isLoading}
-      onClick={handleDuplicate}
-    >
-      <div className="flex w-full items-center justify-center gap-2 text-primary">
-        <CopyPlus className="size-4" />
-      </div>
-    </Button>
+    <TooltipAnchor
+      description={localize('com_ui_duplicate_agent')}
+      render={
+        <Button
+          size="sm"
+          variant="outline"
+          aria-label={localize('com_ui_duplicate_agent')}
+          type="button"
+          /** Each tap creates a real agent; without this a double tap creates two. */
+          disabled={duplicateAgent.isLoading}
+          onClick={handleDuplicate}
+        >
+          <div className="flex w-full items-center justify-center gap-2 text-primary">
+            <CopyPlus className="size-4" />
+          </div>
+        </Button>
+      }
+    />
   );
 }

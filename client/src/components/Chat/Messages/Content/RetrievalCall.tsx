@@ -5,8 +5,8 @@ import { TooltipAnchor } from '@librechat/client';
 import type { TAttachment, TFile } from 'librechat-data-provider';
 import { fileTypeMeta } from '~/components/Chat/Input/Files/typeMeta';
 import { useLocalize, useProgress, useExpandCollapse } from '~/hooks';
+import useOpenFilePreview from '~/hooks/Artifacts/useOpenFilePreview';
 import { ToolIcon, OutputRenderer, isError } from './ToolOutput';
-import FilePreviewDialog from './FilePreviewDialog';
 import { sortPagesByRelevance, cn } from '~/utils';
 import { useGetFiles } from '~/data-provider';
 import ProgressText from './ProgressText';
@@ -349,37 +349,25 @@ export default function RetrievalCall({
 
   const hasResults = displayResults.length > 0;
 
-  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const openFilePreview = useOpenFilePreview();
 
-  const openPreview = useCallback((index: number) => {
-    setPreviewIndex(index);
-  }, []);
-
-  const closePreview = useCallback((open: boolean) => {
-    if (!open) {
-      setPreviewIndex(null);
-    }
-  }, []);
-
-  const previewData = useMemo(() => {
-    if (previewIndex === null) {
-      return null;
-    }
-
-    const result = displayResults[previewIndex];
-    if (!result?.fileId) {
-      return null;
-    }
-
-    return {
-      fileName: result.fileName,
-      fileId: result.fileId,
-      relevance: result.relevance,
-      pages: result.pages,
-      pageRelevance: result.pageRelevance,
-      fileType: result.fileType,
-    };
-  }, [displayResults, previewIndex]);
+  const openPreview = useCallback(
+    (index: number) => {
+      const result = displayResults[index];
+      if (!result?.fileId) {
+        return;
+      }
+      openFilePreview(
+        { file_id: result.fileId, filename: result.fileName, type: result.fileType },
+        {
+          relevance: result.relevance,
+          pages: result.pages,
+          pageRelevance: result.pageRelevance,
+        },
+      );
+    },
+    [displayResults, openFilePreview],
+  );
 
   useEffect(() => {
     if (autoExpand && hasOutput) {
@@ -461,17 +449,6 @@ export default function RetrievalCall({
           )}
         </div>
       </div>
-
-      <FilePreviewDialog
-        open={previewData !== null}
-        onOpenChange={closePreview}
-        fileName={previewData?.fileName ?? ''}
-        fileId={previewData?.fileId}
-        relevance={previewData?.relevance}
-        pages={previewData?.pages}
-        pageRelevance={previewData?.pageRelevance}
-        fileType={previewData?.fileType}
-      />
     </div>
   );
 }

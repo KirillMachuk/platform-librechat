@@ -1,5 +1,6 @@
 import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Tools } from 'librechat-data-provider';
+import { TooltipAnchor } from '@librechat/client';
 import type { TAttachment, TFile, TAttachmentMetadata } from 'librechat-data-provider';
 import type { ToolArtifactType } from '~/utils/artifacts';
 import {
@@ -19,11 +20,11 @@ import {
   ChevronDown,
   Files as FilesIcon,
 } from '~/components/icons';
-import FilePreviewDialog from '~/components/Chat/Messages/Content/FilePreviewDialog';
 import { useLocalize, useAttachmentPreviewSync, useExpandCollapse } from '~/hooks';
 import CardDownloadButton from '~/components/Chat/Input/Files/CardDownloadButton';
 import FileContainer from '~/components/Chat/Input/Files/FileContainer';
 import { fileToArtifact, TOOL_ARTIFACT_TYPES } from '~/utils/artifacts';
+import useOpenFilePreview from '~/hooks/Artifacts/useOpenFilePreview';
 import Image from '~/components/Chat/Messages/Content/Image';
 import ToolMermaidArtifact from './ToolMermaidArtifact';
 import ToolArtifactCard from './ToolArtifactCard';
@@ -103,7 +104,7 @@ PreviewPlaceholderCard.displayName = 'PreviewPlaceholderCard';
 
 const FileAttachment = memo(({ attachment }: { attachment: Partial<TAttachment> }) => {
   const [isVisible, setIsVisible] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
+  const openFilePreview = useOpenFilePreview();
   const file = attachment as TFile & TAttachmentMetadata;
   const { handleDownload } = useAttachmentLink({
     href: attachment.filepath ?? '',
@@ -174,7 +175,9 @@ const FileAttachment = memo(({ attachment }: { attachment: Partial<TAttachment> 
           карточки убраны: рецепт один на композер и чат. */}
       <FileContainer
         file={attachment}
-        onClick={() => setShowPreview(true)}
+        /* 14.08-3: клик открывает ПРАВУЮ панель — как у сгенерированных
+           карточек; модалка осталась только у картинок. */
+        onClick={() => openFilePreview(file)}
         overrideType={extension}
         displayName={displayFilename(attachment.filename)}
         containerClassName="max-w-fit"
@@ -185,18 +188,6 @@ const FileAttachment = memo(({ attachment }: { attachment: Partial<TAttachment> 
           />
         }
       />
-      {/* Смонтирован только после клика: закрытый диалог не должен тащить
-          свои хуки и запросы в каждую карточку ленты. */}
-      {showPreview && (
-        <FilePreviewDialog
-          open={showPreview}
-          onOpenChange={setShowPreview}
-          fileName={attachment.filename ?? ''}
-          fileId={file.file_id}
-          fileType={file.type ?? undefined}
-          fileSize={file.bytes}
-        />
-      )}
     </div>
   );
 });
@@ -385,15 +376,19 @@ const TextAttachment = memo(
                 {visibleFilename}
               </span>
               {attachment.filepath && (
-                <button
-                  type="button"
-                  onClick={handleDownload}
-                  aria-label={`${localize('com_ui_download')} ${visibleFilename}`}
-                  title={localize('com_ui_download')}
-                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none"
-                >
-                  <Download className="size-4" aria-hidden="true" />
-                </button>
+                <TooltipAnchor
+                  description={localize('com_ui_download')}
+                  render={
+                    <button
+                      type="button"
+                      onClick={handleDownload}
+                      aria-label={`${localize('com_ui_download')} ${visibleFilename}`}
+                      className="flex size-7 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none"
+                    >
+                      <Download className="size-4" aria-hidden="true" />
+                    </button>
+                  }
+                />
               )}
             </div>
           )}

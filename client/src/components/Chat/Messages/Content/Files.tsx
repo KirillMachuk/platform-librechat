@@ -1,8 +1,8 @@
-import { useMemo, useState, useCallback, memo } from 'react';
+import { useMemo, memo } from 'react';
 import type { TFile, TMessage } from 'librechat-data-provider';
 import FileContainer from '~/components/Chat/Input/Files/FileContainer';
+import useOpenFilePreview from '~/hooks/Artifacts/useOpenFilePreview';
 import DownloadFileButton from './DownloadFileButton';
-import FilePreviewDialog from './FilePreviewDialog';
 import Image from './Image';
 
 const Files = ({
@@ -12,6 +12,7 @@ const Files = ({
   message?: TMessage;
   nonImageOnly?: boolean;
 }) => {
+  const openFilePreview = useOpenFilePreview();
   const imageFiles = useMemo(() => {
     if (nonImageOnly) {
       return [];
@@ -23,14 +24,6 @@ const Files = ({
     return message?.files?.filter((file) => !file.type?.startsWith('image/')) || [];
   }, [message?.files]);
 
-  const [selectedFile, setSelectedFile] = useState<Partial<TFile> | null>(null);
-
-  const handleClose = useCallback((open: boolean) => {
-    if (!open) {
-      setSelectedFile(null);
-    }
-  }, []);
-
   return (
     <>
       {otherFiles.length > 0 &&
@@ -38,7 +31,9 @@ const Files = ({
           <FileContainer
             key={file.file_id}
             file={file as TFile}
-            onClick={() => setSelectedFile(file)}
+            /* 14.08-3: любой файл, кроме картинок, открывается в ПРАВОЙ панели;
+               модалка по центру остаётся только у фото (Image ниже). */
+            onClick={() => openFilePreview(file as TFile)}
             trailing={<DownloadFileButton file={file as TFile} />}
           />
         ))}
@@ -52,14 +47,6 @@ const Files = ({
             altText={file.filename ?? 'Uploaded Image'}
           />
         ))}
-      <FilePreviewDialog
-        open={selectedFile !== null}
-        onOpenChange={handleClose}
-        fileName={selectedFile?.filename ?? ''}
-        fileId={selectedFile?.file_id}
-        fileType={selectedFile?.type ?? undefined}
-        fileSize={(selectedFile as TFile)?.bytes}
-      />
     </>
   );
 };

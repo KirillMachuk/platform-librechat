@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Input } from '@librechat/client';
+import { Input, TooltipAnchor } from '@librechat/client';
 import { useDebounce, useLocalize } from '~/hooks';
 import { Search, X } from '~/components/icons';
 
@@ -89,18 +89,22 @@ const SearchBar: React.FC<SearchBarProps> = ({ value, onSearch, className = '' }
       </div>
       {/* Show clear button only when search has value - Google style */}
       {searchTerm && (
-        <button
-          type="button"
-          onClick={handleClear}
-          className="group absolute right-4 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-full transition-colors duration-200 focus:outline-none"
-          aria-label={localize('com_agents_clear_search')}
-          title={localize('com_agents_clear_search')}
-        >
-          <X
-            className="size-5 text-text-secondary transition-colors duration-200 group-hover:text-text-primary"
-            aria-hidden="true"
-          />
-        </button>
+        <TooltipAnchor
+          description={localize('com_agents_clear_search')}
+          render={
+            <button
+              type="button"
+              onClick={handleClear}
+              className="group absolute right-4 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-full transition-colors duration-200 focus:outline-none"
+              aria-label={localize('com_agents_clear_search')}
+            >
+              <X
+                className="size-5 text-text-secondary transition-colors duration-200 group-hover:text-text-primary"
+                aria-hidden="true"
+              />
+            </button>
+          }
+        />
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 import { memo, useId, useLayoutEffect } from 'react';
 import { useRecoilState } from 'recoil';
+import { TooltipAnchor } from '@librechat/client';
 import type { TAttachment, TFile, TAttachmentMetadata } from 'librechat-data-provider';
 import Mermaid from '~/components/Messages/Content/Mermaid/Mermaid';
 import { toolArtifactKey } from '~/utils/artifacts';
@@ -65,20 +66,24 @@ const ToolMermaidArtifact = memo(({ attachment, text }: ToolMermaidArtifactProps
             </div>
           )}
           {attachment.filepath && (
-            <button
-              type="button"
-              onClick={handleDownload}
-              aria-label={`${localize('com_ui_download')} ${visibleFilename}`}
-              title={localize('com_ui_download')}
-              className={cn(
-                'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs',
-                'text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary',
-                'focus-visible:outline-none',
-              )}
-            >
-              <Download className="size-3" aria-hidden="true" />
-              {localize('com_ui_download')}
-            </button>
+            <TooltipAnchor
+              description={localize('com_ui_download')}
+              render={
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  aria-label={`${localize('com_ui_download')} ${visibleFilename}`}
+                  className={cn(
+                    'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs',
+                    'text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary',
+                    'focus-visible:outline-none',
+                  )}
+                >
+                  <Download className="size-3" aria-hidden="true" />
+                  {localize('com_ui_download')}
+                </button>
+              }
+            />
           )}
         </div>
       )}

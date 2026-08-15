@@ -4,14 +4,19 @@ import * as Tabs from '@radix-ui/react-tabs';
 import { useSetRecoilState, useResetRecoilState } from 'recoil';
 import { Button, Spinner, useMediaQuery, Radio } from '@librechat/client';
 import type { SandpackPreviewRef } from '@codesandbox/sandpack-react';
+import {
+  isCodeOnlyArtifact,
+  isFilePreviewArtifact,
+  isPreviewOnlyArtifact,
+} from '~/utils/artifacts';
 import { displayFilename } from '~/components/Chat/Messages/Content/Parts/attachmentTypes';
-import { isCodeOnlyArtifact, isPreviewOnlyArtifact } from '~/utils/artifacts';
 import CopyButton from '~/components/Messages/Content/CopyButton';
 import { useShareContext, useMutationState } from '~/Providers';
 import { Code, Play, Reload, X } from '~/components/icons';
 import useArtifacts from '~/hooks/Artifacts/useArtifacts';
 import DownloadArtifact from './DownloadArtifact';
 import ArtifactVersion from './ArtifactVersion';
+import FilePreviewBody from './FilePreviewBody';
 import ArtifactTabs from './ArtifactTabs';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -99,8 +104,9 @@ export default function Artifacts() {
    * "Code" / "Preview" choices. */
   const isPreviewOnly = isPreviewOnlyArtifact(currentArtifact?.type);
   const isCodeOnly = isCodeOnlyArtifact(currentArtifact?.type);
+  const isFilePreview = isFilePreviewArtifact(currentArtifact?.type);
   let constrainedTab: 'preview' | 'code' | null = null;
-  if (isPreviewOnly) {
+  if (isPreviewOnly || isFilePreview) {
     constrainedTab = 'preview';
   } else if (isCodeOnly) {
     constrainedTab = 'code';
@@ -173,6 +179,21 @@ export default function Artifacts() {
     }
   };
 
+  const closeArtifactsRef = useRef<(() => void) | null>(null);
+  /* Модалка закрывалась по Escape — панель обязана уметь то же (14.08-3,
+     паритет доступности). Диалоги поверх гасят своё Escape через
+     preventDefault — их закрытие панель не трогает. */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) {
+        return;
+      }
+      closeArtifactsRef.current?.();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   if (!currentArtifact || !isMounted) {
     return null;
   }
@@ -200,6 +221,7 @@ export default function Artifacts() {
       setArtifactsVisible(false);
     }
   };
+  closeArtifactsRef.current = closeArtifacts;
 
   const backdropOpacity =
     blurAmount > 0
@@ -293,7 +315,7 @@ export default function Artifacts() {
                 isVisible && !isClosing ? 'translate-x-0 opacity-100' : 'translate-x-2 opacity-0',
               )}
             >
-              {displayedTab === 'preview' && (
+              {displayedTab === 'preview' && !isFilePreview && (
                 <Button
                   size="icon"
                   variant="ghost"
@@ -328,7 +350,9 @@ export default function Artifacts() {
                   }}
                 />
               )}
-              <CopyButton isCopied={isCopied} iconOnly onClick={handleCopyArtifact} />
+              {!isFilePreview && (
+                <CopyButton isCopied={isCopied} iconOnly onClick={handleCopyArtifact} />
+              )}
               <DownloadArtifact artifact={currentArtifact} />
               <Button
                 size="icon"
@@ -344,11 +368,15 @@ export default function Artifacts() {
 
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-primary">
             <div className="absolute inset-0 flex flex-col">
-              <ArtifactTabs
-                artifact={currentArtifact}
-                previewRef={previewRef as React.MutableRefObject<SandpackPreviewRef>}
-                isSharedConvo={isSharedConvo}
-              />
+              {isFilePreview ? (
+                <FilePreviewBody artifact={currentArtifact} />
+              ) : (
+                <ArtifactTabs
+                  artifact={currentArtifact}
+                  previewRef={previewRef as React.MutableRefObject<SandpackPreviewRef>}
+                  isSharedConvo={isSharedConvo}
+                />
+              )}
             </div>
 
             <div

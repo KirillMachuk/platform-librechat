@@ -1,4 +1,4 @@
-import { Progress } from '@librechat/client';
+import { Progress, TooltipAnchor } from '@librechat/client';
 import type { TDeepResearchProgress } from '~/store';
 import type { TranslationKeys } from '~/hooks';
 import { Check, Square, Loader2, WifiOff } from '~/components/icons';
@@ -113,16 +113,21 @@ export default function ProgressCard({ data }: { data: TDeepResearchProgress }) 
           aria-label={localize('com_ui_deep_research')}
           className="h-1.5 flex-1"
         />
-        <button
-          type="button"
-          onClick={stopGenerating}
-          aria-label={localize('com_ui_stop')}
-          className="group -m-1.5 flex size-10 shrink-0 items-center justify-center"
-        >
-          <span className="flex size-7 items-center justify-center rounded-full border border-border-medium text-text-secondary transition-colors group-hover:bg-surface-hover">
-            <Square className="size-3 fill-current" />
-          </span>
-        </button>
+        <TooltipAnchor
+          description={localize('com_ui_stop')}
+          render={
+            <button
+              type="button"
+              onClick={stopGenerating}
+              aria-label={localize('com_ui_stop')}
+              className="group -m-1.5 flex size-10 shrink-0 items-center justify-center"
+            >
+              <span className="flex size-7 items-center justify-center rounded-full border border-border-medium text-text-secondary transition-colors group-hover:bg-surface-hover">
+                <Square className="size-3 fill-current" />
+              </span>
+            </button>
+          }
+        />
       </div>
     </div>
   );

@@ -1,8 +1,8 @@
 import { memo, useCallback, useState, lazy, Suspense } from 'react';
-import { useRecoilValue } from 'recoil';
 import { QueryKeys } from 'librechat-data-provider';
 import { useQueryClient } from '@tanstack/react-query';
-import { Skeleton, Button, TooltipAnchor } from '@librechat/client';
+import { useRecoilValue, useSetRecoilState } from 'recoil';
+import { Skeleton, Button, TooltipAnchor, useMediaQuery } from '@librechat/client';
 /* Phosphor's SidebarSimple (exported as PanelLeftOpen) — the book's panel
    glyph; the lucide `Sidebar` from @librechat/client predated the icon
    migration and was the «старая иконка» the owner flagged on 11.08. */
@@ -33,6 +33,8 @@ const NewChatRow = memo(function NewChatRow() {
   const queryClient = useQueryClient();
   const { newConversation } = useNewConvo();
   const conversation = useRecoilValue(store.conversationByIndex(0));
+  const isSmallScreen = useMediaQuery('(max-width: 768px)');
+  const setSidebarExpanded = useSetRecoilState(store.sidebarExpanded);
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLAnchorElement>) => {
@@ -41,9 +43,14 @@ const NewChatRow = memo(function NewChatRow() {
         clearMessagesCache(queryClient, conversation?.conversationId);
         queryClient.invalidateQueries([QueryKeys.messages]);
         newConversation();
+        /* На телефоне шторка закрывается, как при выборе чата (владелец
+           14.08-8): человек перешёл в новый чат — список ему больше не нужен. */
+        if (isSmallScreen) {
+          setSidebarExpanded(false);
+        }
       }
     },
-    [queryClient, conversation?.conversationId, newConversation],
+    [queryClient, conversation?.conversationId, newConversation, isSmallScreen, setSidebarExpanded],
   );
 
   return (
@@ -237,7 +244,7 @@ function ExpandedPanel({
       {/* 12.08-2, регрессия: внутри прокручиваемой колонки flex-дети по
           умолчанию СЖИМАЕМЫ — на телефоне строки меню сплющило вместо того,
           чтобы прокрутиться. Каждый ребёнок обязан держать свою высоту. */}
-      <div className="flex min-h-0 flex-col overflow-y-auto overscroll-contain [&>*]:shrink-0">
+      <div className="scrollbar-hover flex min-h-0 flex-col overflow-y-auto overscroll-contain [&>*]:shrink-0">
         <NewChatRow />
         <SearchChatsRow />
         {/* The open section is the one whose panel is on screen — the only notion

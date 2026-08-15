@@ -4,7 +4,7 @@ import { Spinner, Button, DataTable } from '@librechat/client';
 import type { DataTableConfig } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import { useAttachFileToChat, useDeleteFilesFromTable, useLibraryUpload } from '~/hooks/Files';
-import FilePreviewDialog from '~/components/Chat/Messages/Content/FilePreviewDialog';
+import useOpenFilePreview from '~/hooks/Artifacts/useOpenFilePreview';
 import { buildColumns, filenameContextMap } from './columns';
 import { Upload, Trash2 } from '~/components/icons';
 import { useGetFiles } from '~/data-provider';
@@ -39,7 +39,7 @@ const TABLE_CONFIG: DataTableConfig = {
 export default function FilesPanel({ onClose }: { onClose?: () => void }) {
   const localize = useLocalize();
   const [isDeleting, setIsDeleting] = useState(false);
-  const [previewFile, setPreviewFile] = useState<TFile | null>(null);
+  const openFilePreview = useOpenFilePreview();
   const setSelectedFiles = useSetRecoilState(store.filesByIndex(0));
   const { deleteFiles } = useDeleteFilesFromTable(() => setIsDeleting(false));
   const { openFilePicker, isUploading, uploadStatusLabel, dropHandlers, isDragActive } =
@@ -52,12 +52,15 @@ export default function FilesPanel({ onClose }: { onClose?: () => void }) {
     [filesList],
   );
 
-  const handlePreview = useCallback((file: TFile) => setPreviewFile(file), []);
-  const handlePreviewClose = useCallback((nextOpen: boolean) => {
-    if (!nextOpen) {
-      setPreviewFile(null);
-    }
-  }, []);
+  /* 14.08-3: предпросмотр из библиотеки — в правой панели; поповер библиотеки
+     закрывается, иначе он остаётся модальной крышкой ПОВЕРХ открытой панели. */
+  const handlePreview = useCallback(
+    (file: TFile) => {
+      openFilePreview(file);
+      onClose?.();
+    },
+    [openFilePreview, onClose],
+  );
 
   const attachFile = useAttachFileToChat(onClose);
   const columns = useMemo(() => buildColumns({ onAttach: attachFile }), [attachFile]);
@@ -128,14 +131,6 @@ export default function FilesPanel({ onClose }: { onClose?: () => void }) {
             </Button>
           </>
         )}
-      />
-      <FilePreviewDialog
-        open={previewFile !== null}
-        onOpenChange={handlePreviewClose}
-        fileName={previewFile?.filename ?? ''}
-        fileId={previewFile?.file_id}
-        fileType={previewFile?.type ?? undefined}
-        fileSize={previewFile?.bytes}
       />
     </div>
   );

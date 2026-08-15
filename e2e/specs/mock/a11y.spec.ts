@@ -172,37 +172,26 @@ test.describe('keyboard', () => {
     await expect(trigger).toBeFocused();
   });
 
-  /**
-   * Dialogs are addressed through the DOM rather than by role here: the preview
-   * marks everything behind it `aria-hidden`, so a role query stops seeing the
-   * panel the moment it is no longer the top dialog — which is correct, and is
-   * exactly the state these tests need to inspect.
-   */
   const openPanels = (page: Page) => page.locator(FILE_PANEL);
 
   /**
-   * The preview swallows any close arriving within `SPURIOUS_CLOSE_MS` (200ms)
-   * of opening — Radix emits one spuriously on the first dialog of a page load,
-   * and without the guard the dialog would flash open and shut. So the wait is
-   * not padding against flakiness: it is the difference between testing what a
-   * person does and testing a keypress no human could make. Measured: Escape at
-   * 0ms leaves both dialogs open, at 400ms and 1500ms it closes the preview.
+   * 14.08-3: the preview is the right-side artifacts panel now, not a dialog.
+   * The library popover closes itself on row click (a modal lid on top of the
+   * panel would be worse than either alone), and Escape closes the panel —
+   * dialog parity for the keyboard user. The old 200ms spurious-close guard
+   * died with the dialog; there is nothing to wait out.
    */
-  const PAST_THE_SPURIOUS_CLOSE_GUARD = 400;
-
-  test('Escape closes the preview and leaves the panel it came from open', async ({ page }) => {
+  test('Escape closes the file preview panel', async ({ page }) => {
     test.setTimeout(120000);
     const fixture = fileFixture('notes.md');
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
     await attachFixture(page, fixture);
     const preview = await openPreview(page, fixture.name);
-    await expect(openPanels(page)).toHaveCount(2);
-    await page.waitForTimeout(PAST_THE_SPURIOUS_CLOSE_GUARD);
+    /* The library closed on row click — no dialog remains above the panel. */
+    await expect(openPanels(page)).toHaveCount(0);
 
     await page.keyboard.press('Escape');
     await expect(preview).toHaveCount(0);
-    /* Closing the top dialog is not a request to close everything behind it. */
-    await expect(openPanels(page)).toHaveCount(1);
   });
 });
 

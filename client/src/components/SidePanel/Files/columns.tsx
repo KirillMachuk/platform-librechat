@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/rules-of-hooks */
-import { useMediaQuery } from '@librechat/client';
+import { TooltipAnchor, useMediaQuery } from '@librechat/client';
 import type { TableColumn } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import ImagePreview from '~/components/Chat/Input/Files/ImagePreview';
@@ -176,18 +176,22 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
       const label = `${localize('com_ui_attach_to_chat')}: ${row.original.filename}`;
       return (
         <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              ctx.onAttach(row.original);
-            }}
-            aria-label={label}
-            title={localize('com_ui_attach_to_chat')}
-            className="tap-target flex size-8 items-center justify-center rounded-lg text-text-tertiary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none"
-          >
-            <Paperclip className="icon-sm" aria-hidden="true" />
-          </button>
+          <TooltipAnchor
+            description={localize('com_ui_attach_to_chat')}
+            render={
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  ctx.onAttach(row.original);
+                }}
+                aria-label={label}
+                className="tap-target flex size-8 items-center justify-center rounded-lg text-text-tertiary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none"
+              >
+                <Paperclip className="icon-sm" aria-hidden="true" />
+              </button>
+            }
+          />
         </div>
       );
     },

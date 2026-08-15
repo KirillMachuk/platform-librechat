@@ -6,6 +6,7 @@ import {
   Button,
   OGDialog,
   TrashIcon,
+  TooltipAnchor,
   useToastContext,
   OGDialogTrigger,
   OGDialogTemplate,
@@ -85,17 +86,21 @@ function DeleteButton({
   return (
     <OGDialog>
       <OGDialogTrigger asChild>
-        <Button
-          size="sm"
-          variant="outline"
-          aria-label={localize('com_ui_delete_agent')}
-          title={localize('com_ui_delete_agent')}
-          type="button"
-        >
-          <div className="flex w-full items-center justify-center gap-2 text-red-500">
-            <TrashIcon />
-          </div>
-        </Button>
+        <TooltipAnchor
+          description={localize('com_ui_delete_agent')}
+          render={
+            <Button
+              size="sm"
+              variant="outline"
+              aria-label={localize('com_ui_delete_agent')}
+              type="button"
+            >
+              <div className="flex w-full items-center justify-center gap-2 text-red-500">
+                <TrashIcon />
+              </div>
+            </Button>
+          }
+        />
       </OGDialogTrigger>
       <OGDialogTemplate
         title={localize('com_ui_delete_agent')}

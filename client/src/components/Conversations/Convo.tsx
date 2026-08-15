@@ -4,8 +4,8 @@ import { useParams } from 'react-router-dom';
 import { Constants } from 'librechat-data-provider';
 import { useToastContext, useMediaQuery } from '@librechat/client';
 import type { TConversation } from 'librechat-data-provider';
-import { useNavigateToConvo, useLocalize, useShiftKey } from '~/hooks';
 import { useUpdateConversationMutation } from '~/data-provider';
+import { useNavigateToConvo, useLocalize } from '~/hooks';
 import { areConversationRenderPropsEqual } from './utils';
 import { isConversationUnread } from '~/store/unread';
 import { cn, logger, buildConvoPath } from '~/utils';
@@ -36,7 +36,6 @@ function Conversation({
   const updateConvoMutation = useUpdateConversationMutation(currentConvoId ?? '');
   const activeConvos = useRecoilValue(store.allConversationsSelector);
   const isSmallScreen = useMediaQuery('(max-width: 768px)');
-  const isShiftHeld = useShiftKey();
   const { conversationId, title = '' } = conversation;
 
   const [titleInput, setTitleInput] = useState(title || '');
@@ -182,7 +181,6 @@ function Conversation({
     chatProjectId: conversation.chatProjectId,
     isPopoverActive,
     setIsPopoverActive: handlePopoverOpenChange,
-    isShiftHeld: isActiveConvo ? isShiftHeld : false,
   };
 
   const generatingSpinner = (
@@ -209,12 +207,7 @@ function Conversation({
     actionVisibilityClassName = 'pointer-events-auto scale-x-100 opacity-100';
   }
 
-  let actionWidthClassName = '';
-  if (!isGenerating && !isPopoverActive && isActiveConvo && isShiftHeld) {
-    actionWidthClassName = 'max-w-[60px]';
-  } else if (!isGenerating) {
-    actionWidthClassName = 'max-w-[28px]';
-  }
+  const actionWidthClassName = isGenerating ? '' : 'max-w-[28px]';
 
   const showConvoOptions = !renaming && (hasInteracted || isActiveConvo);
   const actionContent = isGenerating

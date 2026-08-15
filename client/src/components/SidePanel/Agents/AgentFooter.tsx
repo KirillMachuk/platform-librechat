@@ -1,4 +1,4 @@
-import { Spinner } from '@librechat/client';
+import { Spinner, TooltipAnchor } from '@librechat/client';
 import { useWatch, useFormContext } from 'react-hook-form';
 import {
   SystemRoles,
@@ -129,13 +129,18 @@ export default function AgentFooter({
               resourceName={agent?.name ?? ''}
               resourceType={ResourceType.REMOTE_AGENT}
             >
-              <button
-                type="button"
-                className="btn btn-neutral border-token-border-light h-9 px-3"
-                title={localize('com_ui_remote_access')}
-              >
-                <Globe className="h-4 w-4" aria-hidden="true" />
-              </button>
+              <TooltipAnchor
+                description={localize('com_ui_remote_access')}
+                render={
+                  <button
+                    type="button"
+                    className="btn btn-neutral border-token-border-light h-9 px-3"
+                    aria-label={localize('com_ui_remote_access')}
+                  >
+                    <Globe className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                }
+              />
             </GenericGrantAccessDialog>
           )}
         {(agent?.author === user?.id || canEditThisAgent) && !permissionsLoading && (
@@ -147,6 +152,7 @@ export default function AgentFooter({
           type="submit"
           disabled={isSaving || isIncomplete}
           aria-busy={isSaving}
+          /* Native title stays: it is the only tooltip that fires on a disabled control. */
           title={isIncomplete ? incompleteMessage : undefined}
         >
           {renderSaveButton()}

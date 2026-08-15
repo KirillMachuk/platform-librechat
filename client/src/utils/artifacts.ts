@@ -318,6 +318,12 @@ export const TOOL_ARTIFACT_TYPES = {
   DOCX: 'application/vnd.librechat.docx-preview',
   SPREADSHEET: 'application/vnd.librechat.spreadsheet-preview',
   PRESENTATION: 'application/vnd.librechat.presentation-preview',
+  /* Thin-pointer preview of a STORED file (uploaded, cited, library): the
+   * artifact carries no content — the panel body fetches by `file.file_id`
+   * (office HTML poll / text slice / pdf blob). One routing decision for the
+   * whole product (owner 14.08-3): images open the centered lightbox,
+   * everything else opens HERE. */
+  FILE_PREVIEW: 'application/vnd.librechat.file-preview',
 } as const;
 
 export type ToolArtifactType = (typeof TOOL_ARTIFACT_TYPES)[keyof typeof TOOL_ARTIFACT_TYPES];
@@ -361,6 +367,12 @@ export function isPreviewOnlyArtifact(type: string | null | undefined): boolean 
  */
 export function isCodeOnlyArtifact(type: string | null | undefined): boolean {
   return type === TOOL_ARTIFACT_TYPES.CODE;
+}
+
+/** Stored-file preview: single "preview" tab labeled with the filename, no
+ *  code editor, no sandpack — the body fetches by file_id. */
+export function isFilePreviewArtifact(type: string | null | undefined): boolean {
+  return type === TOOL_ARTIFACT_TYPES.FILE_PREVIEW;
 }
 
 /**
@@ -932,6 +944,54 @@ export function fileToArtifact(
       filepath: attachment.filepath,
       source: attachment.source,
       user: attachment.user,
+    },
+  };
+}
+
+/**
+ * Thin-pointer artifact for previewing a STORED file (uploaded to a message,
+ * cited by search, or sitting in the library). Carries NO content — the panel
+ * body fetches by `file.file_id`, so multi-MB previews never enter recoil.
+ * Same `toolArtifactKey` id as a tool-produced card for the same file: opening
+ * either focuses one panel entry (callers guard against overwriting a
+ * content-bearing artifact with this pointer).
+ */
+export function filePreviewArtifact(
+  file: Partial<
+    Pick<
+      TFile,
+      | 'file_id'
+      | 'filename'
+      | 'filepath'
+      | 'source'
+      | 'user'
+      | 'type'
+      | 'bytes'
+      | 'updatedAt'
+      | 'createdAt'
+    >
+  >,
+  meta?: { relevance?: number; pages?: number[]; pageRelevance?: Record<number, number> },
+): Artifact {
+  return {
+    id: toolArtifactKey(file),
+    type: TOOL_ARTIFACT_TYPES.FILE_PREVIEW,
+    title: file.filename ?? 'file',
+    content: '',
+    lastUpdateTime: toLastUpdate(file),
+    file: {
+      file_id: file.file_id,
+      filename: file.filename,
+      filepath: file.filepath,
+      source: file.source,
+      user: file.user,
+    },
+    preview: {
+      fileType: file.type,
+      bytes: file.bytes,
+      relevance: meta?.relevance,
+      pages: meta?.pages,
+      pageRelevance: meta?.pageRelevance,
     },
   };
 }

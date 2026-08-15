@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { TooltipAnchor } from '@librechat/client';
 import { FilePlus, FolderPlus, Upload } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
@@ -17,33 +18,45 @@ function TreeToolbar({ onNewFile, onNewFolder, onUpload }: TreeToolbarProps) {
       role="toolbar"
       aria-label={localize('com_ui_skill_content')}
     >
-      <button
-        type="button"
-        className="rounded-md bg-transparent p-1 text-text-tertiary transition-colors duration-100 hover:bg-surface-hover hover:text-text-secondary"
-        onClick={onNewFile}
-        aria-label={localize('com_ui_skill_new_file')}
-        title={localize('com_ui_skill_new_file')}
-      >
-        <FilePlus className="size-3.5" aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="rounded-md bg-transparent p-1 text-text-tertiary transition-colors duration-100 hover:bg-surface-hover hover:text-text-secondary"
-        onClick={onNewFolder}
-        aria-label={localize('com_ui_skill_new_folder')}
-        title={localize('com_ui_skill_new_folder')}
-      >
-        <FolderPlus className="size-3.5" aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="rounded-md bg-transparent p-1 text-text-tertiary transition-colors duration-100 hover:bg-surface-hover hover:text-text-secondary"
-        onClick={onUpload}
-        aria-label={localize('com_ui_skill_upload_file')}
-        title={localize('com_ui_skill_upload_file')}
-      >
-        <Upload className="size-3.5" aria-hidden="true" />
-      </button>
+      <TooltipAnchor
+        description={localize('com_ui_skill_new_file')}
+        render={
+          <button
+            type="button"
+            className="rounded-md bg-transparent p-1 text-text-tertiary transition-colors duration-100 hover:bg-surface-hover hover:text-text-secondary"
+            onClick={onNewFile}
+            aria-label={localize('com_ui_skill_new_file')}
+          >
+            <FilePlus className="size-3.5" aria-hidden="true" />
+          </button>
+        }
+      />
+      <TooltipAnchor
+        description={localize('com_ui_skill_new_folder')}
+        render={
+          <button
+            type="button"
+            className="rounded-md bg-transparent p-1 text-text-tertiary transition-colors duration-100 hover:bg-surface-hover hover:text-text-secondary"
+            onClick={onNewFolder}
+            aria-label={localize('com_ui_skill_new_folder')}
+          >
+            <FolderPlus className="size-3.5" aria-hidden="true" />
+          </button>
+        }
+      />
+      <TooltipAnchor
+        description={localize('com_ui_skill_upload_file')}
+        render={
+          <button
+            type="button"
+            className="rounded-md bg-transparent p-1 text-text-tertiary transition-colors duration-100 hover:bg-surface-hover hover:text-text-secondary"
+            onClick={onUpload}
+            aria-label={localize('com_ui_skill_upload_file')}
+          >
+            <Upload className="size-3.5" aria-hidden="true" />
+          </button>
+        }
+      />
     </div>
   );
 }

@@ -161,9 +161,14 @@ function ChatView({ index = 0 }: { index?: number }) {
                     )}
                   >
                     <ChatForm index={index} />
-                    {isLandingPage ? <ConversationStarters /> : <Footer />}
+                    {isLandingPage && <ConversationStarters />}
                   </div>
                 </div>
+                {/* Дисклеймер живёт ТОЛЬКО на пустом «Новом чате» (владелец
+                    14.08-4): первое же сообщение снимает лендинг — и надпись с
+                    ним; в диалогах её больше нет. На телефоне как и раньше
+                    скрыт (hidden sm:flex внутри Footer). Прижат к низу экрана
+                    absolute-позицией от этого relative-контейнера. */}
                 {isLandingPage && <Footer />}
               </>
             </div>

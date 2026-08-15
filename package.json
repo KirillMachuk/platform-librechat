@@ -122,6 +122,7 @@
     "check:layers": "node scripts/check-layers.mjs",
     "check:shadows": "node scripts/check-shadows.mjs",
     "check:focus": "node scripts/check-focus.mjs",
+    "check:tooltips": "node scripts/check-tooltips.mjs",
     "check:artifacts-offline": "node scripts/check-artifacts-offline.mjs"
   },
   "repository": {

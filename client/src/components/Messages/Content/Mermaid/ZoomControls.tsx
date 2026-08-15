@@ -1,6 +1,6 @@
 import React, { memo, useState, useCallback, useRef, useEffect } from 'react';
 import copy from 'copy-to-clipboard';
-import { Clipboard, CheckMark } from '@librechat/client';
+import { Clipboard, CheckMark, TooltipAnchor } from '@librechat/client';
 import { ZoomIn, ZoomOut, RotateCcw } from '~/components/icons';
 import { MIN_ZOOM, MAX_ZOOM } from './useMermaidZoom';
 import { useLocalize } from '~/hooks';
@@ -55,47 +55,67 @@ const ZoomControls: React.FC<ZoomControlsProps> = memo(
           className,
         )}
       >
-        <button
-          type="button"
-          onClick={stop(onZoomOut)}
-          disabled={zoom <= MIN_ZOOM}
-          className={btnClass}
-          title={localize('com_ui_zoom_out')}
-        >
-          <ZoomOut className="h-4 w-4" />
-        </button>
+        <TooltipAnchor
+          description={localize('com_ui_zoom_out')}
+          render={
+            <button
+              type="button"
+              onClick={stop(onZoomOut)}
+              disabled={zoom <= MIN_ZOOM}
+              className={btnClass}
+              aria-label={localize('com_ui_zoom_out')}
+            >
+              <ZoomOut className="h-4 w-4" />
+            </button>
+          }
+        />
         <span className="min-w-[3rem] text-center text-xs text-text-secondary">
           {Math.round(zoom * 100)}%
         </span>
-        <button
-          type="button"
-          onClick={stop(onZoomIn)}
-          disabled={zoom >= MAX_ZOOM}
-          className={btnClass}
-          title={localize('com_ui_zoom_in')}
-        >
-          <ZoomIn className="h-4 w-4" />
-        </button>
+        <TooltipAnchor
+          description={localize('com_ui_zoom_in')}
+          render={
+            <button
+              type="button"
+              onClick={stop(onZoomIn)}
+              disabled={zoom >= MAX_ZOOM}
+              className={btnClass}
+              aria-label={localize('com_ui_zoom_in')}
+            >
+              <ZoomIn className="h-4 w-4" />
+            </button>
+          }
+        />
         <div className="mx-1 h-4 w-px bg-border-medium" />
-        <button
-          type="button"
-          onClick={stop(onReset)}
-          disabled={zoom === 1 && pan.x === 0 && pan.y === 0}
-          className={btnClass}
-          title={localize('com_ui_reset_zoom')}
-        >
-          <RotateCcw className="h-4 w-4" />
-        </button>
+        <TooltipAnchor
+          description={localize('com_ui_reset_zoom')}
+          render={
+            <button
+              type="button"
+              onClick={stop(onReset)}
+              disabled={zoom === 1 && pan.x === 0 && pan.y === 0}
+              className={btnClass}
+              aria-label={localize('com_ui_reset_zoom')}
+            >
+              <RotateCcw className="h-4 w-4" />
+            </button>
+          }
+        />
         <div className="mx-1 h-4 w-px bg-border-medium" />
-        <button
-          ref={copyRef}
-          type="button"
-          onClick={stop(handleCopy)}
-          className="rounded p-1.5 text-text-secondary hover:bg-surface-hover"
-          title={localize('com_ui_copy_code')}
-        >
-          {isCopied ? <CheckMark className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
-        </button>
+        <TooltipAnchor
+          description={localize('com_ui_copy_code')}
+          render={
+            <button
+              ref={copyRef}
+              type="button"
+              onClick={stop(handleCopy)}
+              className="rounded p-1.5 text-text-secondary hover:bg-surface-hover"
+              aria-label={localize('com_ui_copy_code')}
+            >
+              {isCopied ? <CheckMark className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
+            </button>
+          }
+        />
       </div>
     );
   },

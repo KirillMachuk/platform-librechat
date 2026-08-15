@@ -5,9 +5,9 @@ import {
   canDownloadStoredFile,
   useAttachmentLink,
 } from '~/components/Chat/Messages/Content/Parts/LogLink';
+import { isFilePreviewArtifact, isPreviewOnlyArtifact } from '~/utils/artifacts';
 import useArtifactProps from '~/hooks/Artifacts/useArtifactProps';
 import { Download, CircleCheckBig } from '~/components/icons';
-import { isPreviewOnlyArtifact } from '~/utils/artifacts';
 import { useCodeState } from '~/Providers/EditorContext';
 import { triggerDownload } from '~/utils';
 import { useLocalize } from '~/hooks';
@@ -34,7 +34,7 @@ const DownloadArtifact = ({ artifact }: { artifact: Artifact }) => {
    * mirror image of the defect this control exists to fix.
    */
   const savesTheOriginal =
-    isPreviewOnlyArtifact(artifact.type) &&
+    (isPreviewOnlyArtifact(artifact.type) || isFilePreviewArtifact(artifact.type)) &&
     canDownloadStoredFile(sourceFile ?? {}) &&
     !!sourceFile?.filename;
   /**

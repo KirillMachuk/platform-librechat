@@ -28,7 +28,6 @@ function ConvoOptions({
   isPopoverActive,
   setIsPopoverActive,
   isActiveConvo,
-  isShiftHeld = false,
 }: {
   conversationId: string | null;
   title: string | null;
@@ -37,7 +36,6 @@ function ConvoOptions({
   isPopoverActive: boolean;
   setIsPopoverActive: (open: boolean) => void;
   isActiveConvo: boolean;
-  isShiftHeld?: boolean;
 }) {
   const localize = useLocalize();
   const queryClient = useQueryClient();
@@ -254,37 +252,6 @@ function ConvoOptions({
       : 'opacity-0 focus:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100 data-[open]:opacity-100',
   );
 
-  if (isShiftHeld && isActiveConvo && !isPopoverActive && !showShareDialog && !showDeleteDialog) {
-    return (
-      <div className="flex items-center gap-0.5">
-        <button
-          aria-label={localize('com_ui_archive')}
-          className={cn(buttonClassName, 'hover:bg-surface-hover')}
-          onClick={handleArchiveClick}
-          disabled={isArchiveLoading}
-        >
-          {isArchiveLoading ? (
-            <Spinner className="size-4" />
-          ) : (
-            <Archive className="icon-md text-text-secondary" aria-hidden={true} />
-          )}
-        </button>
-        <button
-          aria-label={localize('com_ui_delete')}
-          className={cn(buttonClassName, 'hover:bg-surface-hover')}
-          onClick={handleInstantDelete}
-          disabled={isDeleteLoading}
-        >
-          {isDeleteLoading ? (
-            <Spinner className="size-4" />
-          ) : (
-            <Trash className="icon-md text-text-secondary" aria-hidden={true} />
-          )}
-        </button>
-      </div>
-    );
-  }
-
   return (
     <>
       <span className="sr-only" aria-live="polite" aria-atomic="true">
@@ -351,7 +318,6 @@ export default memo(ConvoOptions, (prevProps, nextProps) => {
     prevProps.conversationId === nextProps.conversationId &&
     prevProps.title === nextProps.title &&
     prevProps.isPopoverActive === nextProps.isPopoverActive &&
-    prevProps.isActiveConvo === nextProps.isActiveConvo &&
-    prevProps.isShiftHeld === nextProps.isShiftHeld
+    prevProps.isActiveConvo === nextProps.isActiveConvo
   );
 });
