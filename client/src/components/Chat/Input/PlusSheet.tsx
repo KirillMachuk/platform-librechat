@@ -327,7 +327,14 @@ function PlusSheet({
         data-testid="plus-sheet-trigger"
         disabled={disableInputs}
         onClick={() => setOpen(true)}
-        className="tap-target flex size-[38px] items-center justify-center rounded-full text-text-secondary transition-colors duration-90 hover:bg-surface-hover md:hidden"
+        /* Канон §4: кнопка-иконка телефона САМА 44×44 — растягивать зону
+           невидимым ::after по горизонтали нельзя, абсолютный выступ кормит
+           прокрутку предков (боковое дёргание, 14.08). Отрицательные поля -3
+           возвращают СЛЕДУ кнопки прежние 38, чтобы плюс не уехал от края, а
+           ряд не стал выше: по горизонтали выступ съедает отступ ряда ps-1.5,
+           по вертикали его обрезает composer-shell (overflow-hidden).
+           Кнопка живёт только ниже md, поэтому размер безусловный. */
+        className="tap-target -my-[3px] -ms-[3px] flex size-11 items-center justify-center rounded-full text-text-secondary transition-colors duration-90 hover:bg-surface-hover md:hidden"
       >
         <Plus className="h-5 w-5" aria-hidden="true" />
       </button>

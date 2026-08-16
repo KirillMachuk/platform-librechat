@@ -48,6 +48,17 @@ export const sidebarRowActiveIconClassName = 'text-text-primary group-hover:text
 export const sidebarNewChatClassName =
   'mb-2.5 mt-1.5 flex h-12 w-full items-center gap-2.5 rounded-xl border border-border-light bg-surface-primary px-3 text-[15px] font-medium text-text-primary transition-colors duration-90 hover:bg-surface-hover md:h-[42px]';
 
-/** Кнопка-иконка сайдбара (§6.2): 32×32, радиус 8, иконка 18, зона нажатия 44. */
+/**
+ * Кнопка-иконка сайдбара (§6.2): 32×32 на десктопе, радиус 8, иконка 18.
+ *
+ * На телефоне бокс САМ 44×44 (канон §4), как у кнопки-иконки шапки в
+ * OpenSidebar. Прежние 32 добирали до 44 невидимым `::after`, но горизонтальный
+ * рост абсолютной зоны выкинули 14.08: выступ попадал в прокручиваемое
+ * переполнение предков и возвращал шторке боковое дёргание. Поэтому ширину
+ * даёт сам бокс, а `.tap-target` остаётся только ради высоты.
+ *
+ * `h-11 w-11`, а НЕ `size-11`: tailwind-merge 1.14 группы `size-*` не знает и не
+ * вытеснил бы `size-10` из варианта `icon` у Button.
+ */
 export const sidebarIconButtonClassName =
-  'tap-target flex h-8 w-8 flex-none items-center justify-center rounded-lg text-text-secondary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary';
+  'tap-target flex h-11 w-11 flex-none items-center justify-center rounded-lg text-text-secondary transition-colors duration-90 hover:bg-surface-hover hover:text-text-primary md:h-8 md:w-8';

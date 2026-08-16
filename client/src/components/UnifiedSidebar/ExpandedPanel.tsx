@@ -229,7 +229,11 @@ function ExpandedPanel({
               variant="ghost"
               aria-label={localize(toggleLabel)}
               aria-expanded={true}
-              className={sidebarIconButtonClassName}
+              /* Бокс телефона вырос с 32 до канонных 44 и, стоя последним в
+                 ряду, увёл бы глиф на 6px от края. -me-1.5 возвращает его на
+                 прежний пиксель; выступ съедают поля шапки (px-1) и панели
+                 (px-2.5), за границу панели ничего не выходит. */
+              className={cn(sidebarIconButtonClassName, '-me-1.5 md:me-0')}
               onClick={toggleClick}
             >
               <SidebarIcon aria-hidden="true" className="icon-md" />
