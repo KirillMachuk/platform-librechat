@@ -658,16 +658,23 @@ blind spot that took a measurement to find:
   hang off `:focus-visible`, which programmatic focus does not switch on;
 - the appearance is sampled from the element **and three ancestors**, because composite controls
   draw the ring on a wrapper;
-- a touch target is the **hit area, not the box**: `.tap-target` grows a 32px control to 44 with
-  an invisible `::after`, and measuring the box calls that control broken while it obeys the rule;
+- a touch target is the **hit area, not the box**: `.tap-target` grows a 38px-tall control to 44
+  with an invisible `::after`, and measuring the box calls that control broken while it obeys the
+  rule. The helper grows the hit area **vertically only** — its horizontal overhang was removed on
+  14.08 because an absolutely positioned box lands in the scrollable overflow of every ancestor,
+  which is what made the phone jitter sideways. Width therefore has to come from the control's own
+  box;
 - `cursor: pointer` **inherits**, so "clickable but not focusable" has to exclude anything inside
   a focusable or role-bearing ancestor, or every icon inside every button is a finding.
 
 Touch targets run **nightly and phone-only**. The 44px rule is about fingers, and the helper that
 satisfies it lives inside `@media (max-width: 767.98px)` — the same scan at 1280px reports sixteen
-violations of a rule that does not apply there. Three real ones remain on the phone chat header
-(the model selector, "compare with another model", "temporary chat"), all 36px; they belong to the
-redesign, so they are pinned rather than fixed.
+violations of a rule that does not apply there. The scan reports zero on the phone: the chat
+header's three (the model selector, "compare with another model", "temporary chat") were fixed by
+the redesign in #263, and the last three — the drawer's sidebar toggle, the composer's «+» and the
+send button — got real 44px boxes once the helper stopped growing hit areas sideways. Their visual
+footprint is unchanged: a negative margin of 3px keeps each glyph on the pixel it sat on, absorbed
+by padding the row already had.
 
 ## 13. Notes on the preview matrix
 

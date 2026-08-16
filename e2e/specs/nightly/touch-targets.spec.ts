@@ -53,21 +53,27 @@ test.describe('canon — touch targets on a phone', () => {
   });
 
   /**
-   * The measurement that makes the two above trustworthy. The sidebar toggle
-   * draws at 32×32 and is **not** a violation: `.tap-target` grows its hit area
-   * to 44 with an invisible `::after`, which is exactly the canon's own escape
-   * hatch. Measuring the bounding box instead of the hit area would call this
-   * control broken while it is obeying the rule — and the same mistake would
-   * bury the three real findings above in a list of sixteen.
+   * The measurement that makes the two above trustworthy. The model selector
+   * draws 38px tall and is **not** a violation: `.tap-target` grows its hit
+   * area to 44 with an invisible `::after`, which is exactly the canon's own
+   * escape hatch. Measuring the bounding box instead of the hit area would call
+   * this control broken while it is obeying the rule — and the same mistake
+   * would bury the real findings above in a list of sixteen.
+   *
+   * The subject used to be the sidebar toggle, back when it drew 32×32 and
+   * leaned on the same helper horizontally. That helper stopped growing hit
+   * areas sideways on 14.08 (the overhang fed the scroll of its ancestors and
+   * the phone jittered), so the toggle now carries a real 44×44 box and no
+   * longer demonstrates anything. The selector does: 38 tall, 44 to a finger.
    */
   test('a control whose hit area is grown by ::after does not count as small', async ({ page }) => {
     test.setTimeout(90000);
     const found = await scan(page);
 
-    const toggle = page.getByTestId('close-sidebar-button');
-    const box = await toggle.boundingBox();
-    expect(box?.width).toBeLessThan(44);
-    expect(found.targets.map(identify)).not.toContain('close-sidebar-button');
+    const selector = page.getByTestId('model-selector-trigger');
+    const box = await selector.boundingBox();
+    expect(box?.height).toBeLessThan(44);
+    expect(found.targets.map(identify)).not.toContain('model-selector-trigger');
   });
 
   /**
