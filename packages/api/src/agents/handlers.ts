@@ -1220,6 +1220,7 @@ async function handleSandboxFileFallback(
   filePath: string,
   options: ToolExecuteOptions,
   req?: ServerRequest,
+  runSandboxContext?: SandboxSessionContext,
 ): Promise<ToolExecuteResult> {
   const ext = lowercaseExtension(filePath);
   if (BINARY_EXTENSIONS_NEVER_READABLE.has(ext)) {
@@ -1241,7 +1242,12 @@ async function handleSandboxFileFallback(
     };
   }
 
-  const ctx = tc.codeSessionContext as SandboxSessionContext | undefined;
+  /* The SDK seeds `codeSessionContext` for `read_file`, but only from the
+   * sessions it tracks for `execute_code` / `bash_tool`. A file written by
+   * `create_file` lives in the session this conversation learned separately,
+   * so fall back to that — otherwise the read goes to an empty sandbox and
+   * comes back "No such file or directory". */
+  const ctx = resolveSandboxContextForCall(tc, runSandboxContext);
   try {
     const result = await readSandboxFile({
       file_path: filePath,
@@ -1361,6 +1367,108 @@ function mergeSandboxSessionArtifact(
   if (files.length > 0) {
     context.files = files;
   }
+}
+
+/**
+ * Sandbox sessions have to outlive a single ON_TOOL_EXECUTE batch.
+ *
+ * codeapi returns a `session_id` for every `/exec` call and only reuses that
+ * sandbox when the id (or a file ref carrying its `storage_session_id`) comes
+ * back on the next call; with neither, it hands out a fresh, empty sandbox.
+ * The graph raises one ON_TOOL_EXECUTE per agent step, so a session held in
+ * handler scope dies between steps — a file written in step N is then missing
+ * in step N+1 and the model loops until `recursionLimit`.
+ *
+ * Keyed per user + conversation so two chats, and two users, can never be
+ * handed each other's sandbox. Bounded and LRU-evicted: this map lives for
+ * the life of the process.
+ */
+const RUN_SANDBOX_CONTEXT_LIMIT = 500;
+const runSandboxContexts = new Map<string, SandboxSessionContext>();
+
+function getRunSandboxKey(
+  mergedConfigurable: Record<string, unknown> | undefined,
+  metadata: ToolEndCallbackMetadata | undefined,
+): string | undefined {
+  const threadId = metadata?.thread_id;
+  if (typeof threadId !== 'string' || threadId.length === 0) {
+    return undefined;
+  }
+  const req = mergedConfigurable?.req as ServerRequest | undefined;
+  const userId = req?.user?.id;
+  if (typeof userId !== 'string' || userId.length === 0) {
+    return undefined;
+  }
+  return `${userId}:${threadId}`;
+}
+
+function getRunSandboxContext(key: string): SandboxSessionContext {
+  const existing = runSandboxContexts.get(key);
+  if (existing) {
+    /* Re-insert so the eviction order below stays least-recently-used. */
+    runSandboxContexts.delete(key);
+    runSandboxContexts.set(key, existing);
+    return existing;
+  }
+  const created: SandboxSessionContext = {};
+  runSandboxContexts.set(key, created);
+  while (runSandboxContexts.size > RUN_SANDBOX_CONTEXT_LIMIT) {
+    const oldest = runSandboxContexts.keys().next().value;
+    if (oldest === undefined) {
+      break;
+    }
+    runSandboxContexts.delete(oldest);
+  }
+  return created;
+}
+
+/**
+ * Adopts the session the agents SDK already tracks for `execute_code` /
+ * `bash_tool` so host-side file authoring lands in that same sandbox instead
+ * of opening a second one beside it. Only fills gaps — a session this run
+ * already established always wins.
+ */
+function adoptCodeSessionContext(
+  context: SandboxSessionContext,
+  tc: ToolCallRequest,
+): SandboxSessionContext {
+  const incoming = tc.codeSessionContext as SandboxSessionContext | undefined;
+  if (!incoming) {
+    return context;
+  }
+  if (!context.session_id && incoming.session_id) {
+    context.session_id = incoming.session_id;
+  }
+  if ((context.files == null || context.files.length === 0) && incoming.files?.length) {
+    context.files = incoming.files.map((file) => ({ ...file }));
+  }
+  return context;
+}
+
+/** Non-empty means it can actually steer codeapi to an existing sandbox. */
+function hasSandboxSession(context: SandboxSessionContext | undefined): boolean {
+  return (
+    context != null &&
+    ((typeof context.session_id === 'string' && context.session_id.length > 0) ||
+      (context.files != null && context.files.length > 0))
+  );
+}
+
+/**
+ * The session context a tool call should travel with: what the SDK seeded for
+ * this call when it has one, otherwise what this conversation learned from an
+ * earlier step (which is the only source for host file-authoring tools — the
+ * SDK does not seed those).
+ */
+function resolveSandboxContextForCall(
+  tc: ToolCallRequest,
+  runContext: SandboxSessionContext | undefined,
+): SandboxSessionContext | undefined {
+  const seeded = tc.codeSessionContext as SandboxSessionContext | undefined;
+  if (hasSandboxSession(seeded)) {
+    return seeded;
+  }
+  return hasSandboxSession(runContext) ? runContext : seeded;
 }
 
 function isSandboxMissingFileError(error: unknown): boolean {
@@ -2508,6 +2616,7 @@ async function handleReadFileCall(
   mergedConfigurable: Record<string, unknown>,
   options: ToolExecuteOptions,
   req?: ServerRequest,
+  runSandboxContext?: SandboxSessionContext,
 ): Promise<ToolExecuteResult> {
   const { getSkillByName, getSkillFileByPath, getStrategyFunctions, updateSkillFileContent } =
     options;
@@ -2531,7 +2640,7 @@ async function handleReadFileCall(
    */
   if (args.file_path.startsWith('/mnt/data/')) {
     if (codeEnvAvailable) {
-      return handleSandboxFileFallback(tc, args.file_path, options, req);
+      return handleSandboxFileFallback(tc, args.file_path, options, req, runSandboxContext);
     }
     return {
       toolCallId: tc.id,
@@ -2560,7 +2669,7 @@ async function handleReadFileCall(
     const slashIdx = args.file_path.indexOf('/');
     if (slashIdx < 1) {
       if (codeEnvAvailable) {
-        return handleSandboxFileFallback(tc, args.file_path, options, req);
+        return handleSandboxFileFallback(tc, args.file_path, options, req, runSandboxContext);
       }
       return {
         toolCallId: tc.id,
@@ -2580,7 +2689,7 @@ async function handleReadFileCall(
        * dead-ending with a skill-centric error message.
        */
       if (codeEnvAvailable) {
-        return handleSandboxFileFallback(tc, args.file_path, options, req);
+        return handleSandboxFileFallback(tc, args.file_path, options, req, runSandboxContext);
       }
       return {
         toolCallId: tc.id,
@@ -2642,7 +2751,7 @@ async function handleReadFileCall(
    */
   if (!skillsEffectivelyEnabled) {
     if (codeEnvAvailable && !explicitSkillNamespace) {
-      return handleSandboxFileFallback(tc, args.file_path, options, req);
+      return handleSandboxFileFallback(tc, args.file_path, options, req, runSandboxContext);
     }
     return {
       toolCallId: tc.id,
@@ -2681,7 +2790,7 @@ async function handleReadFileCall(
     const recovered = await recoverAuthorSkill();
     if (!recovered) {
       if (codeEnvAvailable && !explicitSkillNamespace) {
-        return handleSandboxFileFallback(tc, args.file_path, options, req);
+        return handleSandboxFileFallback(tc, args.file_path, options, req, runSandboxContext);
       }
       return {
         toolCallId: tc.id,
@@ -3119,6 +3228,8 @@ async function handleSkillToolCall(
   };
 }
 
+const SANDBOX_AUTHORING_QUEUE_KEY = 'sandbox:';
+
 function getFileAuthoringQueueKey(
   tc: ToolCallRequest,
   mergedConfigurable: Record<string, unknown>,
@@ -3131,7 +3242,12 @@ function getFileAuthoringQueueKey(
     return undefined;
   }
   if (!args.file_path.startsWith(SKILL_FILE_PREFIX)) {
-    return `sandbox:${args.file_path}`;
+    /* One queue for every sandbox path in the batch, not one per path.
+     * Sandbox authoring calls share a single session: run them in parallel
+     * and the first two both start with no session, so codeapi opens two
+     * sandboxes and one of the files is written into the one nobody reads
+     * from afterwards. */
+    return SANDBOX_AUTHORING_QUEUE_KEY;
   }
   const parsed = parseSkillAuthoringPath(args.file_path);
   if (typeof parsed === 'string') {
@@ -3187,6 +3303,12 @@ export function createToolExecuteHandler(options: ToolExecuteOptions): EventHand
             );
             const authoringQueues = new Map<string, Promise<void>>();
             const sandboxAuthoringContexts = new Map<string, SandboxSessionContext>();
+            /* Survives across batches; `undefined` only when the batch carries
+             * no conversation/user to key on, in which case the per-batch map
+             * above keeps the previous behaviour. */
+            const runSandboxKey = getRunSandboxKey(mergedConfigurable, metadata);
+            const runSandboxContext =
+              runSandboxKey != null ? getRunSandboxContext(runSandboxKey) : undefined;
 
             const results: ToolExecuteResult[] = await Promise.all(
               toolCalls.map(async (tc: ToolCallRequest) => {
@@ -3222,6 +3344,7 @@ export function createToolExecuteHandler(options: ToolExecuteOptions): EventHand
                           mergedConfigurable,
                           options,
                           req,
+                          runSandboxContext,
                         );
                       } else if (tc.name === CREATE_FILE_TOOL_NAME && isFileAuthoringCall) {
                         handlerResult = await handleCreateFileCall(
@@ -3311,17 +3434,22 @@ export function createToolExecuteHandler(options: ToolExecuteOptions): EventHand
                       turn: tc.turn,
                     };
 
+                    /* Prefer what the SDK seeded for this call; fall back to the
+                     * session this conversation established through host file
+                     * authoring, so `execute_code` can see a file `create_file`
+                     * wrote in an earlier step. */
+                    const callSessionContext = resolveSandboxContextForCall(tc, runSandboxContext);
                     if (
-                      tc.codeSessionContext &&
+                      callSessionContext &&
                       isCodeSessionAwareToolCall(tc.name, mergedConfigurable)
                     ) {
-                      toolCallConfig.session_id = tc.codeSessionContext.session_id;
-                      if (tc.codeSessionContext.files && tc.codeSessionContext.files.length > 0) {
-                        toolCallConfig._injected_files = tc.codeSessionContext.files;
+                      toolCallConfig.session_id = callSessionContext.session_id;
+                      if (callSessionContext.files && callSessionContext.files.length > 0) {
+                        toolCallConfig._injected_files = callSessionContext.files;
                         /* Last LC-controlled point before the wire. Mirrors
                          * codeapi's validator context so the two log sides
                          * correlate on a single grep. */
-                        const refs = tc.codeSessionContext.files as Array<{
+                        const refs = callSessionContext.files as Array<{
                           id?: unknown;
                           resource_id?: unknown;
                           storage_session_id?: unknown;
@@ -3375,9 +3503,9 @@ export function createToolExecuteHandler(options: ToolExecuteOptions): EventHand
                           `[code-env:inject] tool=${tc.name} _injected_files=0 — sandbox will see no input files`,
                           {
                             tool: tc.name,
-                            session_id: tc.codeSessionContext.session_id,
-                            codeSessionContextHasFiles: tc.codeSessionContext.files !== undefined,
-                            codeSessionContextFileCount: tc.codeSessionContext.files?.length ?? 0,
+                            session_id: callSessionContext.session_id,
+                            codeSessionContextHasFiles: callSessionContext.files !== undefined,
+                            codeSessionContextFileCount: callSessionContext.files?.length ?? 0,
                           },
                         );
                       }
@@ -3413,6 +3541,19 @@ export function createToolExecuteHandler(options: ToolExecuteOptions): EventHand
                       configurable: mergedConfigurable,
                       metadata,
                     } as Record<string, unknown>);
+
+                    /* Remember which sandbox this call landed in. Without it a
+                     * later `read_file` / `create_file` step in the same chat
+                     * would open a fresh one and miss the files. */
+                    if (
+                      runSandboxContext != null &&
+                      isCodeSessionAwareToolCall(tc.name, mergedConfigurable)
+                    ) {
+                      mergeSandboxSessionArtifact(
+                        runSandboxContext,
+                        result.artifact as ToolExecuteResult['artifact'],
+                      );
+                    }
 
                     // Code-execution tools emit per-call boilerplate
                     // ("Note: ..." paragraphs and `| <annotation>` per-file
@@ -3476,11 +3617,15 @@ export function createToolExecuteHandler(options: ToolExecuteOptions): EventHand
                   return reportResult(await execute());
                 }
                 let sandboxContext: SandboxSessionContext | undefined;
-                if (queueKey.startsWith('sandbox:')) {
-                  sandboxContext =
-                    sandboxAuthoringContexts.get(queueKey) ??
-                    cloneSandboxSessionContext(sandboxSessionContext(tc));
-                  sandboxAuthoringContexts.set(queueKey, sandboxContext);
+                if (queueKey === SANDBOX_AUTHORING_QUEUE_KEY) {
+                  if (runSandboxContext != null) {
+                    sandboxContext = adoptCodeSessionContext(runSandboxContext, tc);
+                  } else {
+                    sandboxContext =
+                      sandboxAuthoringContexts.get(queueKey) ??
+                      cloneSandboxSessionContext(sandboxSessionContext(tc));
+                    sandboxAuthoringContexts.set(queueKey, sandboxContext);
+                  }
                 }
                 const previous = authoringQueues.get(queueKey) ?? Promise.resolve();
                 const resultPromise = previous.then(
