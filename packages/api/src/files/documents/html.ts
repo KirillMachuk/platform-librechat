@@ -1307,15 +1307,14 @@ ${PPTX_SLIDE_LIST_CSS}
          * everything past slide 1 — the panel showed one slide and empty
          * space (owner report 17.08). Let the host grow to its content
          * before measuring. A build that emits slides as direct children is
-         * unaffected: a slide's own scrollHeight is its content height. */
+         * unaffected: a slide's own height is its content height. */
         slide.style.height = 'auto';
-        slide.style.overflow = 'visible';
         /* Cache the slides actual rendered size BEFORE applying any
          * transform — measurements after a CSS scale no longer reflect
          * native pixels and would feed back into wrong sizing on
          * resize. */
         var nativeW = slide.offsetWidth || SLIDE_W;
-        var nativeH = slide.scrollHeight || slide.offsetHeight || SLIDE_H;
+        var nativeH = slide.offsetHeight || SLIDE_H;
         if (slide.dataset) {
           slide.dataset.lcNativeW = String(nativeW);
           slide.dataset.lcNativeH = String(nativeH);
