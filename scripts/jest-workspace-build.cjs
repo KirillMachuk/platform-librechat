@@ -97,11 +97,11 @@ function resolvePackageRoot(name) {
   return null;
 }
 
-function inspect() {
+function inspect(packages = PACKAGES) {
   const problems = [];
   let inspected = 0;
 
-  for (const [name, [localDir, command]] of Object.entries(PACKAGES)) {
+  for (const [name, [localDir, command]] of Object.entries(packages)) {
     const mine = path.join(REPO, localDir);
     const loaded = resolvePackageRoot(name);
     if (!loaded || !fs.existsSync(path.join(mine, 'src'))) {

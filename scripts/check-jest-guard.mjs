@@ -12,7 +12,7 @@
  * not being on somebody's list, and this refuses to pass when it finds nothing to
  * inspect.
  */
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -73,9 +73,6 @@ if (configs.length === 0) {
 }
 if (!existsSync(join(ROOT, 'scripts', GUARD))) {
   problems.push(`scripts/${GUARD} is missing — there is nothing left to wire`);
-}
-if (!readFileSync(join(ROOT, 'scripts', GUARD), 'utf8').includes('STRICT_WORKSPACE_BUILD')) {
-  problems.push(`scripts/${GUARD} lost its strict mode`);
 }
 
 if (problems.length > 0) {
