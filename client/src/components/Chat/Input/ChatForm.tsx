@@ -248,13 +248,11 @@ const ChatForm = memo(function ChatForm({
            box padding is 12px 10px 8px 16px (d02, measured), so the text
            starts 16 from the left, 12 from the top, 10 from the right. */
         'm-0 w-full resize-none pt-3 pb-1.5 text-base leading-[1.6] placeholder:text-text-tertiary bg-transparent',
-        /* Resting height (owner 11.08-3, Kimi as the yardstick — its box is
-           ~768×130): the desktop text zone holds min 76, which with the rest
-           of the shell (button row 46, border 2, the 6px of header slack —
-           measured live 11.08) lands the box at 130 exactly. The phone keeps
-           the single 44 row. Collapse wins: an unconditional min would hold
-           the collapsed box open. */
-        isCollapsed ? 'max-h-[52px]' : 'min-h-[76px] max-h-[45vh] md:max-h-[55vh]',
+        /* Resting height: single row again on every width (owner 17.08-3
+           reverted the 11.08-3 «Kimi 130» experiment — the tall box read as
+           too big). The box grows with the text up to the vh caps; collapse
+           wins over growth. */
+        isCollapsed ? 'max-h-[52px]' : 'max-h-[45vh] md:max-h-[55vh]',
         isMoreThanThreeRows ? 'ps-3.5 md:ps-4' : 'ps-3.5 pe-2 md:ps-4 md:pe-2.5',
       ),
     [isCollapsed, isMoreThanThreeRows],
@@ -310,10 +308,14 @@ const ChatForm = memo(function ChatForm({
               // Keyboard focus is shown by the caret alone; the global focus
               // canon already exempts textareas from the outline.
               'relative flex w-full flex-grow flex-col overflow-hidden rounded-3xl border shadow-sm transition-colors duration-90',
-              'text-text-primary',
-              isTemporary
-                ? 'border-violet-800/60 bg-violet-950/10'
-                : 'border-border-light bg-surface-chat',
+              'bg-surface-chat text-text-primary',
+              /* Temporary chat inverts the composer into the INK palette
+                 (owner 17.08-3, ChatGPT as the reference: the pill flips to
+                 the opposite scheme). No violet: .composer-temporary remaps
+                 the local theme tokens to ink/ink-label, so every child —
+                 text, placeholder, icons, hovers — follows without per-site
+                 edits. */
+              isTemporary ? 'composer-temporary border-transparent' : 'border-border-light',
             )}
           >
             <TextareaHeader addedConvo={addedConvo} setAddedConvo={setAddedConvo} />

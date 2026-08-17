@@ -1,4 +1,5 @@
 import { useMemo, useCallback, useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useRecoilValue } from 'recoil';
 import {
   getModelSpec,
   createConfigHtmlSanitizer,
@@ -8,6 +9,7 @@ import {
 import { useGetStartupConfig } from '~/data-provider';
 import { useLocalize, useAuthContext } from '~/hooks';
 import { useChatContext } from '~/Providers';
+import store from '~/store';
 
 /** Canon §3: the empty-chat greeting is 22/500 on a phone and 21/500 on the
  *  desktop scale. Long agent names still step down rather than wrap into a
@@ -64,7 +66,14 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
    *  variants and the appended name are gone — the line is a product string,
    *  and `customWelcome` in the config still overrides it if the client ever
    *  wants a different one. */
+  const isTemporary = useRecoilValue(store.isTemporary);
   const greetingText = useMemo(() => {
+    /* Временный чат называет себя сам (владелец 17.08-3, референс ChatGPT):
+       заголовок меняется на «Временный чат», под ним — одна честная строка
+       о том, что чат не попадёт в историю. */
+    if (isTemporary) {
+      return localize('com_ui_temporary');
+    }
     const customWelcome = startupConfig?.interface?.customWelcome;
     if (typeof customWelcome === 'string' && customWelcome.trim() !== '') {
       return user?.name != null && customWelcome.includes('{{user.name}}')
@@ -72,7 +81,7 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
         : customWelcome;
     }
     return localize('com_ui_landing_greeting');
-  }, [localize, startupConfig?.interface?.customWelcome, user?.name]);
+  }, [isTemporary, localize, startupConfig?.interface?.customWelcome, user?.name]);
 
   const handleLineCountChange = useCallback((count: number) => {
     setTextHasMultipleLines(count > 1);
@@ -143,7 +152,13 @@ export default function Landing({ centerFormOnLanding }: { centerFormOnLanding: 
         >
           <span ref={greetingRef}>{greetingText}</span>
         </h1>
-        {description &&
+        {isTemporary && (
+          <div className="mt-1.5 max-w-md text-center text-[15px] font-normal text-text-tertiary md:mt-2">
+            {localize('com_ui_temporary_chat_note')}
+          </div>
+        )}
+        {!isTemporary &&
+          description &&
           (descriptionIsHTML ? (
             <div
               className="mt-1.5 flex max-w-md items-center justify-center gap-2 text-center text-[15px] font-normal text-text-tertiary md:mt-2 [&_img]:inline-block [&_img]:h-4 [&_img]:w-4"

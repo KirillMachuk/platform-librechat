@@ -48,12 +48,26 @@ test.describe('scroll-to-bottom button', () => {
       })
       .toBeGreaterThan(120);
 
-    await scroller.evaluate((el) => {
-      el.scrollTop = 0;
-    });
-
+    /* Positive readiness with self-healing: a late reflow of the final reply
+     * can re-pin the list to the bottom right after a single programmatic
+     * scroll (auto-follow still considers the viewer "at the bottom" until a
+     * scroll event lands), hiding the button again — seen as a
+     * one-in-two-repeats flake. Re-assert scrollTop=0 on every poll tick
+     * until the button actually reports visible. */
     const button = page.getByRole('button', { name: 'Scroll to bottom' });
-    await expect(button).toBeVisible({ timeout: 10000 });
+    await expect
+      .poll(
+        async () => {
+          await scroller.evaluate((el) => {
+            if (el.scrollTop !== 0) {
+              el.scrollTop = 0;
+            }
+          });
+          return button.isVisible();
+        },
+        { timeout: 15000 },
+      )
+      .toBe(true);
 
     const buttonBox = await button.boundingBox();
     const scrollerBox = await scroller.boundingBox();
