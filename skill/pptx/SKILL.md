@@ -36,13 +36,13 @@ Create the requested `.pptx`; do not substitute Markdown, HTML, or PDF. The edit
 2. Draft a short story outline. Typical business flow: context → implication → evidence → decision → next steps. Do not create filler slides.
 3. Read `references/spec.md`, then write one JSON spec. Always include the complete `ArtifactJob` and acceptance criteria. Do not read the builder source during normal authoring.
 4. For a revision, inspect the mounted binary with `python-pptx`, confirm the actual slide number and exact source text, and use that file as `inputPath`.
-5. In one `execute_code` call, write the spec to `/tmp/<stem>-spec.json` and immediately run the builder. `/tmp` is same-call scratch and is not available to a later tool call:
+5. Write the spec to `/tmp/<stem>-spec.json` and run the builder against it in the same `execute_code` call — `/tmp` is scratch for one call and is empty by the next one:
 
    ```bash
    python3 /mnt/data/pptx/scripts/build_presentation.py /tmp/<stem>-spec.json /mnt/data/<clear-name>.pptx
    ```
 
-   If repair must cross tool calls, keep the spec under `/mnt/data/.pptx-work/`, reuse it, and delete it after the final build. Never place final artifacts inside `/mnt/data/pptx`, `/mnt/data/out`, or another subdirectory.
+   Later calls keep whatever they need, so a repair spanning several calls simply writes the spec again in the call that rebuilds. Never place final artifacts inside `/mnt/data/pptx`, `/mnt/data/out`, or another subdirectory.
 6. Read `/mnt/data/<clear-name>.pptx.artifact-report.json`. The builder reopens the file, checks structure and editability, renders every slide through LibreOffice, raster-checks the result, verifies immutable inputs, and confirms that a targeted revision changed no unrequested package parts.
 7. Inspect the derived PDF when the environment exposes visual file inspection. Review every slide, not only a contact sheet: clipping, wrapping, contrast, hierarchy, whitespace, alignment, factual sources, and consistency with the template.
 8. If a defect remains, revise the JSON and rerun. Allow at most two repair iterations and set `repairIterations` to the actual count.
