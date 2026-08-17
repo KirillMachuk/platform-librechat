@@ -95,6 +95,31 @@ async function slideGeometry(page: import('@playwright/test').Page) {
   });
 }
 
+/**
+ * Scrolls to a slide and asks the page what is painted at its centre. Layout
+ * alone cannot answer this: the defect left slides 2..N laid out at the right
+ * coordinates and clipped by an ancestor's `overflow: hidden`, so every
+ * position-based assertion passed while the user saw nothing.
+ */
+async function slideIsPainted(page: import('@playwright/test').Page, index: number) {
+  return page.evaluate((slideIndex) => {
+    const slide = document.querySelectorAll('.pptx-preview-slide-wrapper')[slideIndex];
+    if (!slide) {
+      return { scrolledIntoView: false, painted: false };
+    }
+    const first = slide.getBoundingClientRect();
+    window.scrollTo(0, first.top + window.scrollY - 40);
+    const box = slide.getBoundingClientRect();
+    const x = box.left + box.width / 2;
+    const y = Math.min(box.top + box.height / 2, window.innerHeight - 4);
+    const hit = document.elementFromPoint(x, y);
+    return {
+      scrolledIntoView: box.top < window.innerHeight && box.bottom > 0,
+      painted: !!hit && (hit === slide || slide.contains(hit)),
+    };
+  }, index);
+}
+
 test.describe('bundled PPTX preview', () => {
   for (const { label, width } of [
     { label: 'panel width', width: 700 },
@@ -105,10 +130,6 @@ test.describe('bundled PPTX preview', () => {
       const { documentHeight, horizontalOverflow, boxes } = await slideGeometry(page);
 
       expect(boxes).toHaveLength(SLIDE_COUNT);
-      /* The defect: the wrap was sized from the host's own 540px box, so slides
-         2..N were clipped by its `overflow: hidden` — painted, sized, and
-         invisible. Height alone is therefore not enough; each slide has to sit
-         below the previous one inside a document tall enough to reach it. */
       const scale = boxes[0].width / NATIVE_W;
       const expectedStride = (NATIVE_H + SLIDE_GAP) * scale;
       boxes.forEach((box, index) => {
@@ -118,6 +139,13 @@ test.describe('bundled PPTX preview', () => {
         }
       });
       expect(documentHeight).toBeGreaterThan(boxes[SLIDE_COUNT - 1].top);
+      /* The one assertion the defect could not pass: every slide has to be
+         reachable by scrolling AND actually painted there. */
+      for (let index = 0; index < SLIDE_COUNT; index++) {
+        const slide = await slideIsPainted(page, index);
+        expect(slide.scrolledIntoView, `slide ${index + 1} scrolls into view`).toBe(true);
+        expect(slide.painted, `slide ${index + 1} is painted, not clipped`).toBe(true);
+      }
       /* Scaling is width-driven: the deck fits the panel across, never spills. */
       expect(horizontalOverflow).toBe(false);
       expect(boxes[0].width).toBeLessThanOrEqual(width);
