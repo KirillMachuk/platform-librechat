@@ -13,9 +13,9 @@
   },
   "renderEvidence": {
     "algorithm": "sha256-json-v1",
-    "matrixDigest": "81f643db37538531ec525e29e21aed9a1acb9481555ad66b6aa20e4fa8074ae6"
+    "matrixDigest": "2d7db778a5762d0f218f2a8d0d37416da13973f07912036f51d37d5d691e953a"
   },
-  "reviewer": "Claude review of the CI renders after the wrapping fix (taller source rows; titles auto-fitted where the character estimate is unreliable)",
+  "reviewer": "Claude review of the CI renders after the claim-marker and title-gap fixes",
   "reviewedAt": "2026-08-15",
   "cases": {
     "ru-board-notes": {
@@ -129,5 +129,5 @@
       "notes": "Russian and English business notation, currency, ratios, dates, native chart, and table render consistently."
     }
   },
-  "reviewNotes": "The digest is a raster hash and is therefore specific to the renderer that produced it: a macOS LibreOffice run yields a different one for identical bytes, so it must be recorded from the CI run that the gate scores. Reviewed the run-1 montages published by that run — ru-board-notes, ru-long-copy, ru-en-mixed-business, ru-source-traceability — covering both kinds of change. Titles that now auto-fit read tighter and no longer run into the content beneath them; source rows carry a wrapped label clear of the divider and a file location keeps its single line. Slide content is unchanged, so the per-case dimensions from the 2026-08-11 review still hold; ru-template-fidelity renders identically to before this change."
+  "reviewNotes": "The digest is a raster hash and belongs to the renderer that made it, so it is taken from the CI run that scores the gate, not from a local one. Reviewed the run-1 montages that run published for ru-long-copy and ru-board-notes, the two cases carrying a claim slide: the accent marker now sits on the centre line of the claim it marks instead of an inch above it, and every title has a clear break before its content, including the three-line one that used to sit on its own bullets. Slide content is unchanged, so the per-case dimensions from the 2026-08-11 review still hold."
 }
