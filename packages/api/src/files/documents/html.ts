@@ -1301,12 +1301,21 @@ ${PPTX_SLIDE_LIST_CSS}
         if (!slide.classList || slide.classList.contains('lc-slide-wrap') || slide.classList.contains('lc-pptx-loading')) {
           continue;
         }
+        /* pptx-preview 1.0.7 paints EVERY slide into one host div sized to
+         * the init box (960x540) with its own overflow:auto, so a six-slide
+         * deck scrolled inside a one-slide window and the wrap below clipped
+         * everything past slide 1 — the panel showed one slide and empty
+         * space (owner report 17.08). Let the host grow to its content
+         * before measuring. A build that emits slides as direct children is
+         * unaffected: a slide's own scrollHeight is its content height. */
+        slide.style.height = 'auto';
+        slide.style.overflow = 'visible';
         /* Cache the slides actual rendered size BEFORE applying any
          * transform — measurements after a CSS scale no longer reflect
          * native pixels and would feed back into wrong sizing on
          * resize. */
         var nativeW = slide.offsetWidth || SLIDE_W;
-        var nativeH = slide.offsetHeight || SLIDE_H;
+        var nativeH = slide.scrollHeight || slide.offsetHeight || SLIDE_H;
         if (slide.dataset) {
           slide.dataset.lcNativeW = String(nativeW);
           slide.dataset.lcNativeH = String(nativeH);
