@@ -118,7 +118,7 @@ export default function PdfPreview({ url, title }: { url: string; title: string 
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 overflow-auto bg-surface-secondary"
+      className="pan-x absolute inset-0 overflow-auto bg-surface-secondary"
       aria-label={title}
       data-testid="pdf-preview"
     >
