@@ -649,7 +649,7 @@ function DataTable<TData extends RowWithId, TValue>({
       )}
       <div
         ref={tableContainerRef}
-        className="overflow-anchor-none relative min-h-0 flex-1 overflow-auto will-change-scroll"
+        className="pan-x overflow-anchor-none relative min-h-0 flex-1 overflow-auto will-change-scroll"
         style={
           {
             WebkitOverflowScrolling: 'touch',

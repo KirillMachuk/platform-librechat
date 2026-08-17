@@ -1,5 +1,5 @@
-import { renderHook, act } from '@testing-library/react';
 import { Constants } from 'librechat-data-provider';
+import { renderHook, act } from '@testing-library/react';
 import type { Artifact } from '~/common';
 
 /** Mock dependencies */
@@ -325,7 +325,7 @@ describe('useArtifacts', () => {
       expect(mockResetCurrentArtifactId).not.toHaveBeenCalled();
     });
 
-    it('should reset when transitioning from null to NEW_CONVO', () => {
+    it('treats null → NEW_CONVO as a first observation, not a switch', () => {
       (useRecoilValue as jest.Mock).mockReturnValue({});
 
       /** Start with null conversationId */
@@ -346,9 +346,14 @@ describe('useArtifacts', () => {
 
       rerender();
 
-      /** Should reset because we're now on NEW_CONVO */
-      expect(mockResetArtifacts).toHaveBeenCalled();
-      expect(mockResetCurrentArtifactId).toHaveBeenCalled();
+      /* 17.08: раньше здесь ждали сброс — его давал cleanup эффекта, бежавший
+       * на КАЖДОЙ смене id (и заодно стиравший панель на переходе new→uuid).
+       * Сброс при смене живёт в основной ветке (prev != null), сброс при
+       * уходе — в размонтировании панели; загрузочный флик null→new не трогает
+       * то, что пользователь успел открыть. Семантика едина с
+       * useResetArtifactsOnConversationChange. */
+      expect(mockResetArtifacts).not.toHaveBeenCalled();
+      expect(mockResetCurrentArtifactId).not.toHaveBeenCalled();
     });
 
     it('should reset state flags when message ID changes', () => {

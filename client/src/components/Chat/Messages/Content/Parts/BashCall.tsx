@@ -2,13 +2,13 @@ import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import copy from 'copy-to-clipboard';
 import type { TAttachment } from 'librechat-data-provider';
 import ProgressText from '~/components/Chat/Messages/Content/ProgressText';
+import parseJsonField, { areToolCallArgsComplete } from './parseJsonField';
 import CopyButton from '~/components/Messages/Content/CopyButton';
 import LangIcon from '~/components/Messages/Content/LangIcon';
 import useToolCallState from './useToolCallState';
 import useLazyHighlight from './useLazyHighlight';
 import { ERROR_PATTERNS } from './ExecuteCode';
 import { AttachmentGroup } from './Attachment';
-import parseJsonField, { areToolCallArgsComplete } from './parseJsonField';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
@@ -85,7 +85,7 @@ export default function BashCall({
         <div className="overflow-hidden" ref={expandRef}>
           <div className="my-2 overflow-hidden rounded-lg border border-border-light">
             {command && (
-              <div className="relative max-h-[300px] overflow-auto bg-surface-tertiary dark:bg-gray-950">
+              <div className="pan-x relative max-h-[300px] overflow-auto bg-surface-tertiary dark:bg-gray-950">
                 <CopyButton
                   iconOnly
                   isCopied={isCopied}

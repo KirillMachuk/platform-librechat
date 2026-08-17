@@ -401,7 +401,7 @@ const TextAttachment = memo(
                  for code). The <pre> stays for whitespace fidelity only. */
               className={cn(
                 'whitespace-pre-wrap break-words font-sans text-sm leading-6 text-text-primary',
-                isClamped ? 'overflow-hidden' : 'overflow-auto',
+                isClamped ? 'overflow-hidden' : 'pan-x overflow-auto',
               )}
               style={isClamped ? { maxHeight: COLLAPSED_MAX_HEIGHT } : undefined}
             >

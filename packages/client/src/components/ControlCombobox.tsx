@@ -174,7 +174,7 @@ function ControlCombobox({
             />
           </div>
         </div>
-        <div className="max-h-[300px] overflow-auto">
+        <div className="pan-x max-h-[300px] overflow-auto">
           <Ariakit.ComboboxList store={combobox}>
             <SelectRenderer store={select} items={matches} itemSize={ROW_HEIGHT} overscan={5}>
               {({ value, icon, label, ...item }) => (

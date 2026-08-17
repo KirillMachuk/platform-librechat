@@ -32,7 +32,15 @@ const SKIP = /__tests__|\.(spec|test)\.[tj]sx?$/;
 /** Scrollers that legitimately do not need the class. */
 const ALLOWLIST = [];
 
-const SCROLLER = /overflow-x-(auto|scroll)/;
+const SCROLLER = /overflow-x-(auto|scroll)|\boverflow-auto\b/;
+
+/**
+ * A both-axes `overflow-auto` whose content WRAPS can only scroll vertically —
+ * no sideways chaining exists to contain. `whitespace-pre-wrap` (with
+ * break-words) in the same class string is that proof; anything else must
+ * carry pan-x or an allowlist entry.
+ */
+const WRAPPING = /whitespace-pre-wrap/;
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -83,7 +91,15 @@ for (const rootDir of ROOTS) {
     const rel = relative(ROOT, file).split('\\').join('/');
     for (const match of source.matchAll(new RegExp(SCROLLER, 'g'))) {
       const className = classNameAround(source, match.index);
-      if (/\bpan-x\b/.test(className)) {
+      if (!/overflow-x-/.test(className) && WRAPPING.test(className)) {
+        continue;
+      }
+      /* Token-exact: `touch-pan-x` also matches \bpan-x\b (`-` is a word
+       * boundary), and it is the natural WRONG fix — Tailwind autocompletes
+       * it, and it compiles to touch-action:pan-x, which blocks vertical
+       * page scroll from a finger that lands on the ribbon. Only the bare
+       * utility class counts. */
+      if (className.split(/\s+/).includes('pan-x')) {
         continue;
       }
       const allowed = ALLOWLIST.find(

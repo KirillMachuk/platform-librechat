@@ -63,7 +63,7 @@ export default function SkillFilePreview({ skillId, nodeId, fileName }: SkillFil
       </div>
       <div
         className={cn(
-          'flex flex-1 items-center justify-center overflow-auto p-8',
+          'pan-x flex flex-1 items-center justify-center overflow-auto p-8',
           isImage &&
             'bg-[repeating-conic-gradient(var(--surface-tertiary)_0%_25%,transparent_0%_50%)] bg-[length:16px_16px]',
         )}

@@ -1,9 +1,9 @@
 import React from 'react';
 import { act, render } from '@testing-library/react';
 import { RecoilRoot, useRecoilCallback, useSetRecoilState } from 'recoil';
+import type { TConversation } from 'librechat-data-provider';
 import type { MutableSnapshot } from 'recoil';
 import type { Artifact } from '~/common';
-import type { TConversation } from 'librechat-data-provider';
 import useResetArtifactsOnConversationChange from '../useResetArtifactsOnConversationChange';
 import store from '~/store';
 
@@ -112,6 +112,21 @@ describe('useResetArtifactsOnConversationChange', () => {
     act(() => handle.setConversation('conv-B'));
     expect(handle.readArtifacts()).toBeNull();
     expect(handle.readCurrentId()).toBeNull();
+  });
+
+  it('keeps the panel through the new→real-id rename of the SAME conversation', () => {
+    /* 17.08 review: a library file opened on an empty chat died the moment
+     * the first message was sent — the server assigns the conversation its
+     * uuid, the atom flips 'new'→uuid, and this hook read that as a switch.
+     * The subagent cleanup already special-cases exactly this transition. */
+    const handle = renderHarness({
+      conversationId: 'new',
+      artifacts: { 'file-preview': buildArtifact('file-preview') },
+      currentId: 'file-preview',
+    });
+    act(() => handle.setConversation('c0ffee00-0000-4000-8000-000000000001'));
+    expect(handle.readArtifacts()).toEqual({ 'file-preview': buildArtifact('file-preview') });
+    expect(handle.readCurrentId()).toBe('file-preview');
   });
 
   it('treats an initial null → defined transition as a first observation, not a switch', () => {

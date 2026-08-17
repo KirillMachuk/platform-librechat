@@ -117,7 +117,7 @@ function SkillCard({
             'flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-lg transition-colors',
             isFavorite
               ? 'text-yellow-500 hover:bg-yellow-500/10'
-              : 'text-text-tertiary opacity-0 hover:bg-surface-hover hover:text-text-primary group-hover:opacity-100 group-focus-visible:opacity-100',
+              : 'text-text-tertiary opacity-0 hover:bg-surface-hover hover:text-text-primary group-hover:opacity-100 group-focus-visible:opacity-100 [@media(hover:none)]:opacity-100',
           )}
           aria-label={isFavorite ? localize('com_ui_unfavorite') : localize('com_ui_favorite')}
           aria-pressed={isFavorite}

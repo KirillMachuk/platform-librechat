@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useRecoilValue } from 'recoil';
 import { Button } from '@librechat/client';
+import { FileSources } from 'librechat-data-provider';
 import type { Artifact } from '~/common';
 import {
   canDownloadStoredFile,
@@ -11,6 +13,7 @@ import { Download, CircleCheckBig } from '~/components/icons';
 import { useCodeState } from '~/Providers/EditorContext';
 import { triggerDownload } from '~/utils';
 import { useLocalize } from '~/hooks';
+import store from '~/store';
 
 const DownloadArtifact = ({ artifact }: { artifact: Artifact }) => {
   const localize = useLocalize();
@@ -33,10 +36,18 @@ const DownloadArtifact = ({ artifact }: { artifact: Artifact }) => {
    * MIME alone, and saving real .pptx bytes under the sandpack key would be the
    * mirror image of the defect this control exists to fix.
    */
+  /* FILE_PREVIEW: указатель из цитаты/«Поиска файлов» несёт только file_id и
+     имя — без user/source. Скачивание в панели всегда идёт от имени ТЕКУЩЕГО
+     пользователя по file_id (ровно как тело панели), поэтому владелец берётся
+     из store.user, а не из указателя; blob-ветка для этого типа недостижима —
+     content пуст by design, и сохранять там нечего (а с чужим currentCode
+     сохранялся бы старый код под именем index.html). */
+  const isFilePreview = isFilePreviewArtifact(artifact.type);
   const savesTheOriginal =
-    (isPreviewOnlyArtifact(artifact.type) || isFilePreviewArtifact(artifact.type)) &&
-    canDownloadStoredFile(sourceFile ?? {}) &&
-    !!sourceFile?.filename;
+    (isPreviewOnlyArtifact(artifact.type) &&
+      canDownloadStoredFile(sourceFile ?? {}) &&
+      !!sourceFile?.filename) ||
+    (isFilePreview && !!sourceFile?.file_id && !!sourceFile?.filename);
   /**
    * The name must describe the bytes, not the artifact. Naming the rendered
    * text after the binary produces a `report.docx` full of plain text — the
@@ -45,12 +56,13 @@ const DownloadArtifact = ({ artifact }: { artifact: Artifact }) => {
    * plain-text bucket and renders as extracted text.
    */
   const fileName = savesTheOriginal ? (sourceFile?.filename as string) : fileKey;
+  const currentUser = useRecoilValue(store.user);
   const { handleDownload: downloadOriginal } = useAttachmentLink({
     href: sourceFile?.filepath ?? '',
     filename: fileName,
     file_id: sourceFile?.file_id,
-    user: sourceFile?.user,
-    source: sourceFile?.source,
+    user: sourceFile?.user ?? (isFilePreview ? currentUser?.id : undefined),
+    source: sourceFile?.source ?? (isFilePreview ? FileSources.local : undefined),
   });
 
   const confirmTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -74,7 +86,7 @@ const DownloadArtifact = ({ artifact }: { artifact: Artifact }) => {
       return;
     }
     try {
-      const content = currentCode ?? artifact.content ?? '';
+      const content = isFilePreview ? '' : (currentCode ?? artifact.content ?? '');
       if (!content) {
         return;
       }

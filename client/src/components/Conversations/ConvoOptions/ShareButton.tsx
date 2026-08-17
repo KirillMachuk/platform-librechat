@@ -78,7 +78,7 @@ export default function ShareButton({
                   : localize('com_ui_share_create_message');
               })()}
             </div>
-            <div className="relative items-center overflow-auto rounded-lg p-2">
+            <div className="pan-x relative items-center overflow-auto rounded-lg p-2">
               {showQR && (
                 <div className="mb-4 flex flex-col items-center">
                   <QRCodeSVG

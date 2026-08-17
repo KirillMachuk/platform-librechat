@@ -139,7 +139,7 @@ export default function MultiSelect<T extends string>({
           finalFocus={selectRef}
           className={cn(
             'animate-popover z-popover flex max-h-[300px]',
-            'flex-col overflow-auto overscroll-contain rounded-xl',
+            'pan-x flex-col overflow-auto overscroll-contain rounded-xl',
             'bg-surface-secondary px-1.5 py-1 text-text-primary shadow-lg',
             'border border-border-light',
             'outline-none',

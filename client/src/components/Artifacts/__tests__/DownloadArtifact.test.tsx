@@ -1,4 +1,5 @@
 import React from 'react';
+import { RecoilRoot } from 'recoil';
 import { dataService, FileSources } from 'librechat-data-provider';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -6,6 +7,7 @@ import type { Artifact } from '~/common';
 import { EditorProvider, useCodeState } from '~/Providers/EditorContext';
 import { TOOL_ARTIFACT_TYPES } from '~/utils/artifacts';
 import DownloadArtifact from '../DownloadArtifact';
+import store from '~/store';
 
 jest.mock('~/hooks', () => ({
   useLocalize:
@@ -56,14 +58,16 @@ let clickSpy: jest.SpyInstance;
 
 const renderDownload = (artifact: Artifact) =>
   render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
-      <EditorProvider>
-        <EditBuffer />
-        <DownloadArtifact artifact={artifact} />
-      </EditorProvider>
-    </QueryClientProvider>,
+    <RecoilRoot initializeState={(snap) => snap.set(store.user, { id: 'current-user' } as never)}>
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <EditorProvider>
+          <EditBuffer />
+          <DownloadArtifact artifact={artifact} />
+        </EditorProvider>
+      </QueryClientProvider>
+    </RecoilRoot>,
   );
 
 /** A .pptx the sandbox produced: the panel shows a generated HTML preview,
@@ -279,6 +283,31 @@ describe('DownloadArtifact', () => {
     release({ data: new OriginalBlob(['pptx-bytes']), headers: {} });
     await waitFor(() => expect(button).not.toBeDisabled());
     expect(getFileDownload).toHaveBeenCalledTimes(1);
+  });
+
+  it('saves the stored original for a citation-opened file preview and never the edit buffer', async () => {
+    /* 17.08 review: the FILE_PREVIEW pointer from a citation carries only
+     * file_id+filename — no user, no source. The header download must fetch
+     * the original AS THE CURRENT USER (the body already does), and the blob
+     * branch must be unreachable: with a leftover edit buffer it used to save
+     * the OLD edited code of another artifact under index.html. */
+    fireEvent.click(
+      renderDownload(
+        buildArtifact({
+          title: 'digital.pdf',
+          type: TOOL_ARTIFACT_TYPES.FILE_PREVIEW,
+          content: '',
+          file: { file_id: 'fid-9', filename: 'digital.pdf' },
+        }),
+      ).getByLabelText(EDIT_LABEL),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'com_ui_download_artifact' }));
+
+    await waitFor(() => expect(getFileDownload).toHaveBeenCalled());
+    expect(getFileDownload.mock.calls[0][0]).toBe('current-user');
+    expect(getFileDownload.mock.calls[0][1]).toBe('fid-9');
+    await waitFor(() => expect(downloadedName).toBe('digital.pdf'));
+    expect(downloadedContent).not.toBe(EDITED_TEXT);
   });
 
   it('downloads nothing when there is no content at all', () => {

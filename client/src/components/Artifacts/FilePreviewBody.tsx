@@ -168,7 +168,14 @@ export default function FilePreviewBody({ artifact }: { artifact: Artifact }) {
   const [previewTruncated, setPreviewTruncated] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const loadingRef = useRef(false);
-  const cancelledRef = useRef(false);
+  /* Отмена ПО-ЗАПРОСНО (17.08, ревью): общий cancelledRef переживал смену
+     artifact.id, и поздний ответ файла A рисовался под именем файла B. Каждая
+     загрузка получает свой номер; смена id и размонтирование его инвалидируют. */
+  const requestIdRef = useRef(0);
+  /* Отзыв blob через ref, не через setState: setState в cleanup
+     РАЗМОНТИРУЕМОГО компонента React 18 отбрасывает — URL жил бы до перезагрузки
+     вкладки на каждый просмотренный PDF. */
+  const blobUrlRef = useRef<string | null>(null);
 
   const previewKind: PreviewKind = canPreviewByMime(fileType) || canPreviewByExt(fileName);
 
@@ -215,42 +222,50 @@ export default function FilePreviewBody({ artifact }: { artifact: Artifact }) {
       return;
     }
     loadingRef.current = true;
-    cancelledRef.current = false;
+    const requestId = ++requestIdRef.current;
+    const isStale = () => requestIdRef.current !== requestId;
     setLoading(true);
     setPreviewError(false);
 
     try {
       const result = await downloadFile();
-      if (cancelledRef.current || !result.data) {
-        if (!cancelledRef.current) {
-          setPreviewError(true);
-        }
+      if (isStale()) {
+        return;
+      }
+      if (!result.data) {
+        setPreviewError(true);
         return;
       }
 
       const resp = await fetch(result.data);
       const blob = await resp.blob();
 
-      if (cancelledRef.current) {
+      if (isStale()) {
         return;
       }
 
       if (previewKind === 'text') {
         const isOversized = blob.size > TEXT_PREVIEW_MAX_BYTES;
         const slice = isOversized ? blob.slice(0, TEXT_PREVIEW_MAX_BYTES) : blob;
-        setFileContent(decodeBytes(await slice.arrayBuffer()));
+        const text = decodeBytes(await slice.arrayBuffer());
+        if (isStale()) {
+          return;
+        }
+        setFileContent(text);
         setPreviewTruncated(isOversized);
       } else {
         const typed = new Blob([blob], { type: 'application/pdf' });
-        setFileBlobUrl(URL.createObjectURL(typed));
+        const url = URL.createObjectURL(typed);
+        blobUrlRef.current = url;
+        setFileBlobUrl(url);
       }
     } catch {
-      if (!cancelledRef.current) {
+      if (!isStale()) {
         setPreviewError(true);
       }
     } finally {
-      loadingRef.current = false;
-      if (!cancelledRef.current) {
+      if (!isStale()) {
+        loadingRef.current = false;
         setLoading(false);
       }
     }
@@ -263,25 +278,38 @@ export default function FilePreviewBody({ artifact }: { artifact: Artifact }) {
   }, [previewKind, fileContent, fileBlobUrl, loadPreview]);
 
   /* The panel swaps artifacts without unmounting (version pager, another chip
-   * click) — reset per-file state and revoke the blob on every id change, and
-   * once more on unmount. */
+   * click) — reset per-file state and revoke the blob on every id change. The
+   * revoke goes through the REF: the state updater would also work here, but
+   * not in the unmount cleanup below, and one mechanism is easier to trust. */
   useEffect(() => {
     return () => {
-      cancelledRef.current = true;
+      requestIdRef.current += 1;
+      loadingRef.current = false;
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
       setFileContent(null);
-      setFileBlobUrl((url) => {
-        if (url) {
-          URL.revokeObjectURL(url);
-        }
-        return null;
-      });
+      setFileBlobUrl(null);
       setPreviewError(false);
       setPreviewTruncated(false);
       setLoading(false);
       setIsCopied(false);
-      loadingRef.current = false;
     };
   }, [artifact.id]);
+
+  /* Final unmount (panel closed, Escape, conversation switch): React 18 drops
+   * setState on an unmounting component, so the id-change cleanup above never
+   * revokes the LAST file's blob — this ref-only cleanup does. */
+  useEffect(() => {
+    return () => {
+      requestIdRef.current += 1;
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+    };
+  }, []);
 
   const handleCopy = useCallback(() => {
     if (!fileContent) {

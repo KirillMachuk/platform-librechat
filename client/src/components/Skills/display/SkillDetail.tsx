@@ -178,7 +178,7 @@ export default function SkillDetail({ skill, onEdit, onDelete }: SkillDetailProp
       )}
 
       {/* Content — fills remaining space, no card wrapper */}
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="pan-x min-h-0 flex-1 overflow-auto">
         {viewMode === 'rendered' ? (
           <SkillMarkdownRenderer content={cleanBody} />
         ) : (

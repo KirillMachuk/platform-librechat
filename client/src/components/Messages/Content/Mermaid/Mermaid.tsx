@@ -187,7 +187,7 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
               {localize('com_ui_retry')}
             </button>
           </div>
-          <pre className="overflow-auto text-xs text-red-600 dark:text-red-300">
+          <pre className="pan-x overflow-auto text-xs text-red-600 dark:text-red-300">
             {error.message}
           </pre>
           {showCode && (

@@ -180,19 +180,27 @@ export default function Artifacts() {
   };
 
   const closeArtifactsRef = useRef<(() => void) | null>(null);
-  /* Модалка закрывалась по Escape — панель обязана уметь то же (14.08-3,
-     паритет доступности). Диалоги поверх гасят своё Escape через
-     preventDefault — их закрытие панель не трогает. */
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  /* Escape закрывает панель, когда фокус ВНУТРИ неё (17.08, ревью): слушатель
+     на document закрывал панель ПОД любым открытым слоем — порядок bubble-
+     слушателей ставил панель раньше Radix-preventDefault, Ariakit и попапы
+     композера preventDefault не зовут вовсе. Слушатель на корне панели
+     срабатывает только когда событие всплывает из неё самой: слои и поля ввода
+     снаружи его не будят по построению, а не по договорённости. */
+  const handlePanelKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing) {
+      return;
+    }
+    closeArtifactsRef.current?.();
+  };
+  /* Файл открыт кликом снаружи — фокус переезжает в панель, чтобы Escape и
+     стрелки работали сразу (паритет с прежней модалкой). Только для
+     FILE_PREVIEW: стриминговые артефакты не должны красть фокус у композера. */
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) {
-        return;
-      }
-      closeArtifactsRef.current?.();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, []);
+    if (isFilePreview && currentArtifact?.id != null) {
+      panelRef.current?.focus();
+    }
+  }, [isFilePreview, currentArtifact?.id]);
 
   if (!currentArtifact || !isMounted) {
     return null;
@@ -251,8 +259,12 @@ export default function Artifacts() {
           />
         )}
         <div
+          ref={panelRef}
+          tabIndex={-1}
+          onKeyDown={handlePanelKeyDown}
           className={cn(
-            'flex w-full flex-col bg-surface-primary text-xl text-text-primary',
+            'flex w-full flex-col outline-none',
+            'bg-surface-primary text-xl text-text-primary',
             isMobile
               ? cn(
                   'fixed inset-x-0 bottom-0 z-drawer rounded-t-[20px] shadow-lg',
