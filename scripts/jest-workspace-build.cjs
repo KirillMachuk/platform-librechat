@@ -196,14 +196,19 @@ function report(problems) {
  * would be worthless in both directions. Anyone who knowingly wants to run
  * against a borrowed checkout can say so, and then owns the caveat.
  */
-module.exports = async function assertWorkspaceBuild() {
+module.exports = async function assertWorkspaceBuild(_globalConfig, projectConfig) {
+  /* Jest hands over the project it is about to run. Leaning on `process.cwd()`
+   * instead would disarm the guard whenever someone runs jest from the repo root
+   * with an explicit --config, because the root manifest declares none of these
+   * packages and nothing would be judged. */
+  const workspace = projectConfig?.rootDir ?? process.cwd();
   /* Only the real runner is exempt. A bare `CI=1` gets set by devcontainers and
    * wrappers too — this repo's own pre-commit hook already works around that —
    * and disarming on it would leave exactly the machines this protects. */
   if (process.env.GITHUB_ACTIONS === 'true') {
     return;
   }
-  const problems = inspect();
+  const problems = inspect(packagesFor(workspace));
   if (problems.length === 0) {
     return;
   }
