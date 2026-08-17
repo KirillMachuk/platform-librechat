@@ -490,9 +490,22 @@ type ExistingSkillFile =
 
 type LoadedSandboxText = LoadedSkillText;
 
+type SandboxFileRef = {
+  id: string;
+  name: string;
+  session_id?: string;
+  storage_session_id?: string;
+  /* codeapi hands these back on every file and its request validator reads
+   * them; dropping them on the way in makes the platform warn that the next
+   * call will be rejected. Carry the ref through unchanged instead. */
+  resource_id?: string;
+  kind?: string;
+  version?: number;
+};
+
 type SandboxSessionContext = {
   session_id?: string;
-  files?: Array<{ id: string; name: string; session_id?: string; storage_session_id?: string }>;
+  files?: SandboxFileRef[];
 };
 
 const MIME_MAP: Readonly<Record<string, string>> = Object.freeze({
@@ -1351,6 +1364,9 @@ function mergeSandboxSessionArtifact(
       name?: unknown;
       session_id?: unknown;
       storage_session_id?: unknown;
+      resource_id?: unknown;
+      kind?: unknown;
+      version?: unknown;
     };
     if (typeof ref.id !== 'string' || typeof ref.name !== 'string') {
       continue;
@@ -1362,6 +1378,9 @@ function mergeSandboxSessionArtifact(
       ...(typeof ref.storage_session_id === 'string'
         ? { storage_session_id: ref.storage_session_id }
         : {}),
+      ...(typeof ref.resource_id === 'string' ? { resource_id: ref.resource_id } : {}),
+      ...(typeof ref.kind === 'string' ? { kind: ref.kind } : {}),
+      ...(typeof ref.version === 'number' ? { version: ref.version } : {}),
     });
   }
   if (files.length > 0) {
@@ -1420,29 +1439,6 @@ function getRunSandboxContext(key: string): SandboxSessionContext {
     runSandboxContexts.delete(oldest);
   }
   return created;
-}
-
-/**
- * Adopts the session the agents SDK already tracks for `execute_code` /
- * `bash_tool` so host-side file authoring lands in that same sandbox instead
- * of opening a second one beside it. Only fills gaps — a session this run
- * already established always wins.
- */
-function adoptCodeSessionContext(
-  context: SandboxSessionContext,
-  tc: ToolCallRequest,
-): SandboxSessionContext {
-  const incoming = tc.codeSessionContext as SandboxSessionContext | undefined;
-  if (!incoming) {
-    return context;
-  }
-  if (!context.session_id && incoming.session_id) {
-    context.session_id = incoming.session_id;
-  }
-  if ((context.files == null || context.files.length === 0) && incoming.files?.length) {
-    context.files = incoming.files.map((file) => ({ ...file }));
-  }
-  return context;
 }
 
 /** Non-empty means it can actually steer codeapi to an existing sandbox. */
@@ -3230,6 +3226,30 @@ async function handleSkillToolCall(
 
 const SANDBOX_AUTHORING_QUEUE_KEY = 'sandbox:';
 
+/**
+ * Puts a code-execution call on the sandbox queue for as long as this
+ * conversation has no sandbox yet.
+ *
+ * A turn that both writes a file and runs code — "compute this and save the
+ * result" — emits both calls at once. With no session established, each one
+ * asks codeapi with nothing to go on and gets its own fresh sandbox, so one
+ * of the two files is stranded where nothing reads it again. Queueing until
+ * the first call comes back with a session removes the race; afterwards every
+ * call already shares that session, so they run in parallel as before.
+ */
+function sandboxWarmupQueueKey(
+  tc: ToolCallRequest,
+  mergedConfigurable: Record<string, unknown>,
+  runSandboxContext: SandboxSessionContext | undefined,
+): string | undefined {
+  if (runSandboxContext == null || hasSandboxSession(runSandboxContext)) {
+    return undefined;
+  }
+  return isCodeSessionAwareToolCall(tc.name, mergedConfigurable)
+    ? SANDBOX_AUTHORING_QUEUE_KEY
+    : undefined;
+}
+
 function getFileAuthoringQueueKey(
   tc: ToolCallRequest,
   mergedConfigurable: Record<string, unknown>,
@@ -3612,14 +3632,16 @@ export function createToolExecuteHandler(options: ToolExecuteOptions): EventHand
                   }
                 };
 
-                const queueKey = getFileAuthoringQueueKey(tc, mergedConfigurable);
+                const queueKey =
+                  getFileAuthoringQueueKey(tc, mergedConfigurable) ??
+                  sandboxWarmupQueueKey(tc, mergedConfigurable, runSandboxContext);
                 if (!queueKey) {
                   return reportResult(await execute());
                 }
                 let sandboxContext: SandboxSessionContext | undefined;
                 if (queueKey === SANDBOX_AUTHORING_QUEUE_KEY) {
                   if (runSandboxContext != null) {
-                    sandboxContext = adoptCodeSessionContext(runSandboxContext, tc);
+                    sandboxContext = runSandboxContext;
                   } else {
                     sandboxContext =
                       sandboxAuthoringContexts.get(queueKey) ??
