@@ -31,6 +31,10 @@ module.exports = {
     '~/data/auth.json': '<rootDir>/__mocks__/auth.mock.json',
     '^openid-client/passport$': '<rootDir>/test/__mocks__/openid-client-passport.js',
     '^openid-client$': '<rootDir>/test/__mocks__/openid-client.js',
+    /** Source, not `dist` — see packages/api/jest.config.mjs for why, and
+     *  `scripts/check-shared-source.mjs` for the guard that keeps it that way.
+     *  `config/jest.config.js` derives its mapper from this one. */
+    '^librechat-data-provider$': '<rootDir>/../packages/data-provider/src/index.ts',
   },
   transform: {
     '\\.[jt]sx?$': [

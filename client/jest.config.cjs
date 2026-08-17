@@ -29,8 +29,16 @@ module.exports = {
       'jest-file-loader',
     '^test/(.*)$': '<rootDir>/test/$1',
     '^~/(.*)$': '<rootDir>/src/$1',
+    /**
+     * Source, not `dist` — see packages/api/jest.config.mjs for why, and
+     * `scripts/check-shared-source.mjs` for the guard that keeps it that way.
+     * Reached by relative path rather than through `node_modules`, whose symlink
+     * resolves to the primary checkout: a worktree was reading whichever branch
+     * that checkout happened to be on.
+     */
     '^librechat-data-provider/react-query$':
-      '<rootDir>/../node_modules/librechat-data-provider/src/react-query',
+      '<rootDir>/../packages/data-provider/src/react-query',
+    '^librechat-data-provider$': '<rootDir>/../packages/data-provider/src/index.ts',
   },
   maxWorkers: '50%',
   /**

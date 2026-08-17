@@ -7,6 +7,9 @@ export default {
     '^@src/(.*)$': '<rootDir>/src/$1',
     '^~/(.*)$': '<rootDir>/src/$1',
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+    /** Source, not `dist` — see packages/api/jest.config.mjs for why, and
+     *  `scripts/check-shared-source.mjs` for the guard that keeps it that way. */
+    '^librechat-data-provider$': '<rootDir>/../data-provider/src/index.ts',
   },
   // coverageThreshold: {
   //   global: {
