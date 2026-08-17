@@ -261,9 +261,11 @@ merge PR to platform-librechat/main
   `require('librechat-data-provider')` resolves into whichever checkout the symlink points
   at. That is how three orchestrator tests came out red on one machine and green in CI for
   the same commit: the donor was parked on a branch where `AutoModes` did not exist yet.
-  Jest now prints an unmissable banner in that situation (`scripts/jest-workspace-build.cjs`);
-  set `STRICT_WORKSPACE_BUILD=1` to make it refuse to run instead. The cure is an install
-  and a build of your own — a borrowed green is worth nothing.
+  Jest refuses to start in that situation (`scripts/jest-workspace-build.cjs`); the cure is an
+  install and a build of your own. `WORKSPACE_BUILD_WARN_ONLY=1` downgrades it to a banner if
+  you knowingly want to run on a borrowed checkout — the weakening is the opt-in half on
+  purpose, because a run is judged by its exit code and a banner mid-output gets scrolled past
+  while "13 passed" travels on into a report. A borrowed green is worth nothing.
 - Run tests from their workspace directory: `cd api && npx jest <pattern>`, `cd packages/api && npx jest <pattern>`, etc.
 - Frontend tests: `__tests__` directories alongside components; use `test/layout-test-utils` for rendering.
 - Cover loading, success, and error states for UI/data flows.

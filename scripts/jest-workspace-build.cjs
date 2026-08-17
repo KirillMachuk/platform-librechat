@@ -151,14 +151,17 @@ function report(problems) {
 }
 
 /**
- * Warns by default and fails only under `STRICT_WORKSPACE_BUILD=1`.
+ * Stops the run by default; `WORKSPACE_BUILD_WARN_ONLY=1` downgrades it to a banner.
  *
- * Borrowing `node_modules` between checkouts is the established way to avoid a
- * multi-gigabyte install per worktree here, and several worktrees rely on it
- * right now. Turning that into a hard stop is a decision for whoever owns those
- * worktrees, not a side effect of this file — so the default is a banner nobody
- * can miss in the scrollback, and the strict mode is there for CI-like runs and
- * for anyone who wants the stop.
+ * The weakening is deliberately the opt-in half. A run is judged by its exit
+ * code — that is how every automated caller here reads it — so a warning printed
+ * mid-output is a warning that gets scrolled past while "13 passed" travels on
+ * into a report. That is precisely the false green this guard exists to prevent,
+ * so warning-only would have reproduced the disease it treats.
+ *
+ * Failing here does not interrupt valid work: it fires exactly when the results
+ * would be worthless in both directions. Anyone who knowingly wants to run
+ * against a borrowed checkout can say so, and then owns the caveat.
  */
 module.exports = async function assertWorkspaceBuild() {
   if (process.env.CI) {
@@ -169,8 +172,10 @@ module.exports = async function assertWorkspaceBuild() {
     return;
   }
   const message = report(problems);
-  if (process.env.STRICT_WORKSPACE_BUILD === '1') {
-    throw new Error(message);
+  if (process.env.WORKSPACE_BUILD_WARN_ONLY !== '1') {
+    throw new Error(
+      `${message}\nTo run anyway and own the caveat: WORKSPACE_BUILD_WARN_ONLY=1\n`,
+    );
   }
   const rule = '='.repeat(72);
   process.stderr.write(`\n${rule}\n  RESULTS FROM THIS RUN ARE NOT TRUSTWORTHY${message}${rule}\n\n`);
