@@ -44,6 +44,7 @@ const ArtifactsPanel = memo(function ArtifactsPanel({
         <ResizableHandleAlt withHandle className="w-2 bg-transparent text-text-secondary" />
       )}
       <ResizablePanel
+        style={{ overflowX: 'hidden' }}
         defaultSize="50"
         maxSize="70"
         collapsedSize="0"

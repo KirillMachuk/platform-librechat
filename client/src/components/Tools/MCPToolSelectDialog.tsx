@@ -250,7 +250,7 @@ function MCPToolSelectDialog({
       <div className="fixed inset-0 bg-scrim transition-opacity" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
         <DialogPanel
-          className="relative max-h-[90vh] w-full transform overflow-hidden overflow-y-auto rounded-lg bg-surface-secondary text-left shadow-lg transition-all max-sm:h-full sm:mx-7 sm:my-8 sm:max-w-2xl lg:max-w-5xl xl:max-w-7xl"
+          className="relative max-h-[90vh] w-full transform overflow-hidden overflow-y-auto overflow-x-hidden rounded-lg bg-surface-secondary text-left shadow-lg transition-all max-sm:h-full sm:mx-7 sm:my-8 sm:max-w-2xl lg:max-w-5xl xl:max-w-7xl"
           style={{ minHeight: '610px' }}
         >
           <div className="flex items-center justify-between border-b-[1px] border-border-medium px-4 pb-4 pt-5 sm:p-6">

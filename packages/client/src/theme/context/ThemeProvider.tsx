@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import { JSX } from 'react/jsx-runtime';
 import { writeStoredValue } from '../../utils/storage';
+import syncSafariChrome from '../utils/safariChrome';
 import applyTheme from '../utils/applyTheme';
 import { IThemeRGB } from '../types';
 
@@ -194,6 +195,9 @@ export function ThemeProvider({
 
     root.classList.remove(darkMode ? 'light' : 'dark');
     root.classList.add(darkMode ? 'dark' : 'light');
+    /* Safari red the OS-keyed meta while the app theme diverged — the runtime
+       meta follows the class we just applied (see safariChrome.ts). */
+    syncSafariChrome();
   }, []);
 
   // Apply theme mode whenever theme changes

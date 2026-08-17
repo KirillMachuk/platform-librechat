@@ -136,7 +136,7 @@ export default function ComboboxComponent({
                   className="relative flex h-5 w-5 items-center justify-end text-gray-500 transition-colors duration-300 dark:group-focus-within:text-gray-300 dark:group-hover:text-gray-300"
                 />
               </div>
-              <ComboboxList className="overflow-y-auto p-1 py-2">
+              <ComboboxList className="overflow-y-auto overflow-x-hidden p-1 py-2">
                 {matches.map(({ label, value, icon }) => (
                   <RadixSelect.Item key={value} value={`${value ?? ''}`} asChild>
                     <ComboboxItem

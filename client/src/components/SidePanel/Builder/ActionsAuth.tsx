@@ -182,7 +182,7 @@ const ApiKey = () => {
   const authorization_type = watch('authorization_type');
   const type = watch('type');
   const inputClasses = cn(
-    'mb-2 h-9 w-full resize-none overflow-y-auto rounded-lg border px-3 py-2 text-sm',
+    'overflow-x-hidden overflow-x-hidden mb-2 h-9 w-full resize-none overflow-y-auto rounded-lg border px-3 py-2 text-sm',
     'border-border-medium bg-surface-primary outline-none',
     '',
   );
@@ -267,7 +267,7 @@ const ApiKey = () => {
           </label>
           <input
             className={cn(
-              'mb-2 h-9 w-full resize-none overflow-y-auto rounded-lg border px-3 py-2 text-sm',
+              'mb-2 h-9 w-full resize-none overflow-y-auto overflow-x-hidden rounded-lg border px-3 py-2 text-sm',
               'border-border-medium bg-surface-primary outline-none',
               '',
             )}
@@ -301,7 +301,7 @@ const OAuth = () => {
   const type = watch('type');
 
   const inputClasses = cn(
-    'mb-2 h-9 w-full resize-none overflow-y-auto rounded-lg border px-3 py-2 text-sm',
+    'overflow-x-hidden mb-2 h-9 w-full resize-none overflow-y-auto rounded-lg border px-3 py-2 text-sm',
     'border-border-medium bg-surface-primary outline-none',
     '',
   );

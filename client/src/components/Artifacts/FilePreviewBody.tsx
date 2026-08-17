@@ -379,7 +379,7 @@ export default function FilePreviewBody({ artifact }: { artifact: Artifact }) {
       <div
         className={cn(
           'relative min-h-0 flex-1',
-          showsFrame ? 'overflow-hidden' : 'overflow-y-auto p-4',
+          showsFrame ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden p-4',
         )}
       >
         {(loading || officeLoading) && (

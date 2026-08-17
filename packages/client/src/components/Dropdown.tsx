@@ -108,7 +108,7 @@ const Dropdown: React.FC<DropdownProps> = ({
           // Слой идёт ПОСЛЕ className намеренно: раньше он стоял первым, и
           // вызывающие перебивали его своим z-50 — из-за чего списки «Темы» и
           // «Языка» уезжали под диалог настроек и не открывались вовсе.
-          'z-popover max-h-[80vh] overflow-y-auto',
+          'z-popover max-h-[80vh] overflow-y-auto overflow-x-hidden',
           '[pointer-events:auto]', // Override body's pointer-events:none when in modal
         )}
       >

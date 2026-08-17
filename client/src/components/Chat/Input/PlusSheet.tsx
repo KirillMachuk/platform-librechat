@@ -30,7 +30,12 @@ import {
   useAgentToolPermissions,
   useFileHandlingNoChatContext,
 } from '~/hooks';
-import { buildAttachItems, acceptForFileType, DOCUMENTS_ONLY_ACCEPT } from './Files/attachItems';
+import {
+  buildAttachItems,
+  acceptForFileType,
+  isApplePlatform,
+  DOCUMENTS_ONLY_ACCEPT,
+} from './Files/attachItems';
 import useAttachConfig from './Files/useAttachConfig';
 import { ephemeralAgentByConvoId } from '~/store';
 import { useBadgeRowContext } from '~/Providers';
@@ -226,32 +231,46 @@ function PlusSheet({
     [setEphemeralAgent],
   );
 
-  const tiles =
-    attachMode == null
-      ? []
-      : [
-          {
-            key: 'camera',
-            label: localize('com_ui_camera'),
-            icon: <Camera className="icon-lg" aria-hidden="true" />,
-            onClick: () => openPicker({ accept: 'image/*', capture: 'environment' }),
-          },
-          {
-            key: 'photo',
-            label: localize('com_ui_photo'),
-            icon: <ImageIcon className="icon-lg" aria-hidden="true" />,
-            onClick: () => openPicker({ accept: 'image/*,.heif,.heic' }),
-          },
-          {
-            key: 'files',
-            label: localize('com_ui_files'),
-            icon: <Folder className="icon-lg" aria-hidden="true" />,
-            /* Docs-only accept: with image/video types present iOS inserts its
-               own chooser sheet; without them it opens the Files browser
-               directly. Photos and the camera are the two rows above. */
-            onClick: () => openPicker({ accept: DOCUMENTS_ONLY_ACCEPT }),
-          },
-        ];
+  /* Один пункт на iPhone/iPad (владелец 17.08-3): «Фото» всё равно открывал
+     системный лист Safari с теми же тремя путями — три плитки лишь дублировали
+     его; широкий accept держит и медиатеку, и документы в «Выбрать файлы». */
+  const appleTiles = [
+    /* Один пункт на iPhone/iPad (владелец 17.08-3): «Фото» всё равно
+               открывал системный лист Safari с теми же тремя путями — три наших
+               плитки лишь дублировали его. Широкий accept держит все три опции
+               листа рабочими, включая документы в «Выбрать файлы». */
+    {
+      key: 'attach',
+      label: localize('com_ui_photo_or_file'),
+      icon: <ImageIcon className="icon-lg" aria-hidden="true" />,
+      onClick: () => openPicker({ accept: `image/*,.heif,.heic,${DOCUMENTS_ONLY_ACCEPT}` }),
+    },
+  ];
+  const defaultTiles = [
+    {
+      key: 'camera',
+      label: localize('com_ui_camera'),
+      icon: <Camera className="icon-lg" aria-hidden="true" />,
+      onClick: () => openPicker({ accept: 'image/*', capture: 'environment' }),
+    },
+    {
+      key: 'photo',
+      label: localize('com_ui_photo'),
+      icon: <ImageIcon className="icon-lg" aria-hidden="true" />,
+      onClick: () => openPicker({ accept: 'image/*,.heif,.heic' }),
+    },
+    {
+      key: 'files',
+      label: localize('com_ui_files'),
+      icon: <Folder className="icon-lg" aria-hidden="true" />,
+      /* Docs-only accept: with image/video types present iOS inserts its
+                 own chooser sheet; without them it opens the Files browser
+                 directly. Photos and the camera are the two rows above. */
+      onClick: () => openPicker({ accept: DOCUMENTS_ONLY_ACCEPT }),
+    },
+  ];
+  const platformTiles = isApplePlatform() ? appleTiles : defaultTiles;
+  const tiles = attachMode == null ? [] : platformTiles;
 
   const showTools = showEphemeralBadges && context != null;
   /** The book's order for the sheet: search, research, code, file search,
@@ -372,7 +391,7 @@ function PlusSheet({
           >
             <DialogPanel
               className={cn(
-                'fixed inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-2xl',
+                'fixed inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto overflow-x-hidden rounded-t-2xl',
                 'bg-surface-secondary shadow-lg',
                 'px-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))]',
               )}

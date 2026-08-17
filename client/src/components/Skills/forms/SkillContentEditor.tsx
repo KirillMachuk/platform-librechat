@@ -100,7 +100,7 @@ const SkillContentEditor: React.FC<SkillContentEditorProps> = ({
                 {...field}
                 // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
-                className="w-full resize-none overflow-y-auto bg-transparent font-mono text-sm leading-relaxed text-text-primary placeholder:text-text-secondary focus:outline-none sm:text-base"
+                className="w-full resize-none overflow-y-auto overflow-x-hidden bg-transparent font-mono text-sm leading-relaxed text-text-primary placeholder:text-text-secondary focus:outline-none sm:text-base"
                 minRows={4}
                 maxRows={16}
                 onKeyDown={(e) => {
@@ -114,7 +114,7 @@ const SkillContentEditor: React.FC<SkillContentEditorProps> = ({
               />
             ) : (
               <div
-                className="group/preview relative min-h-[6rem] overflow-y-auto text-sm sm:text-base"
+                className="group/preview relative min-h-[6rem] overflow-y-auto overflow-x-hidden text-sm sm:text-base"
                 style={{ maxHeight: '24rem' }}
               >
                 {!field.value ? (

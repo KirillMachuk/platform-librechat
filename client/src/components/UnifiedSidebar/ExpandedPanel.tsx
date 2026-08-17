@@ -248,7 +248,7 @@ function ExpandedPanel({
       {/* 12.08-2, регрессия: внутри прокручиваемой колонки flex-дети по
           умолчанию СЖИМАЕМЫ — на телефоне строки меню сплющило вместо того,
           чтобы прокрутиться. Каждый ребёнок обязан держать свою высоту. */}
-      <div className="scrollbar-hover flex min-h-0 flex-col overflow-y-auto overscroll-contain [&>*]:shrink-0">
+      <div className="scrollbar-hover flex min-h-0 flex-col overflow-y-auto overflow-x-hidden overscroll-contain [&>*]:shrink-0">
         <NewChatRow />
         <SearchChatsRow />
         {/* The open section is the one whose panel is on screen — the only notion

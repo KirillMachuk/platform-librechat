@@ -57,7 +57,7 @@ export function DataTableColumnVisibility<TData>({
       }
       items={dropdownItems}
       menuId={menuId}
-      className="z-popover max-h-[300px] overflow-y-auto"
+      className="z-popover max-h-[300px] overflow-y-auto overflow-x-hidden"
     />
   );
 }

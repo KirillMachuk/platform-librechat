@@ -76,7 +76,7 @@ export default function SkillsView() {
 
 function CreateView() {
   return (
-    <div className="flex h-full w-full flex-col overflow-y-auto bg-presentation">
+    <div className="flex h-full w-full flex-col overflow-y-auto overflow-x-hidden bg-presentation">
       <MobileSidebarToggle />
       <CreateSkillForm />
     </div>
@@ -137,7 +137,7 @@ function DetailView({ skillId }: { skillId: string }) {
 /** Edit form — reached via the Edit button or `/skills/:id/edit` URL. */
 function EditView({ skillId }: { skillId: string }) {
   return (
-    <div className="flex h-full w-full flex-col overflow-y-auto bg-presentation">
+    <div className="flex h-full w-full flex-col overflow-y-auto overflow-x-hidden bg-presentation">
       <MobileSidebarToggle />
       <SkillForm skillId={skillId} />
     </div>

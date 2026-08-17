@@ -111,7 +111,7 @@ function MCPSelectContent() {
             'scale-95 data-[leave]:scale-95 data-[leave]:opacity-0',
           )}
         >
-          <div className="flex max-h-[320px] flex-col gap-1 overflow-y-auto">
+          <div className="flex max-h-[320px] flex-col gap-1 overflow-y-auto overflow-x-hidden">
             {selectableServers.map((server) => (
               <MCPServerMenuItem
                 key={server.serverName}

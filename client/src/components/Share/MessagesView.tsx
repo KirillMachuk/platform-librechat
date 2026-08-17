@@ -19,6 +19,7 @@ export default function MessagesView({
           style={{
             height: '100%',
             overflowY: 'auto',
+            overflowX: 'hidden',
             width: '100%',
           }}
         >

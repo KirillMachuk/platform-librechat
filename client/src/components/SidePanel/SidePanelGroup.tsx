@@ -39,7 +39,15 @@ const SidePanelGroup = memo(({ artifacts, children }: SidePanelProps) => {
         onLayoutChanged={onLayoutChanged}
         className={cn('relative flex-1', split ? 'bg-transparent' : 'bg-presentation')}
       >
-        <ResizablePanel defaultSize="50" minSize={minSizeMain} id="messages-view">
+        <ResizablePanel
+          defaultSize="50"
+          minSize={minSizeMain}
+          id="messages-view"
+          /* 17.08-1: библиотека даёт вложенному контейнеру overflow:auto — на
+             мак-трекпаде это упругий боковой ход всей рабочей области даже без
+             переполнения. Поперечная ось вертикальной панели прибита. */
+          style={{ overflowX: 'hidden' }}
+        >
           {split ? <div className={cardClassName}>{children}</div> : children}
         </ResizablePanel>
 

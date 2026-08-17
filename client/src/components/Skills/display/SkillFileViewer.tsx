@@ -134,7 +134,7 @@ function SkillFileViewer({ skillId, relativePath }: SkillFileViewerProps) {
       </div>
 
       {/* Content — fills remaining space */}
-      <div className="flex-1 overflow-y-auto px-5 py-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4">
         {isLoading && (
           <div className="flex items-center justify-center py-12">
             <Spinner className="size-6 text-text-secondary" />

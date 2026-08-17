@@ -94,6 +94,12 @@ const openSheet = async () => {
   await waitFor(() => expect(screen.getByTestId('plus-sheet')).toBeInTheDocument());
 };
 
+let mockApple = false;
+jest.mock('~/components/Chat/Input/Files/attachItems', () => ({
+  ...jest.requireActual('~/components/Chat/Input/Files/attachItems'),
+  isApplePlatform: () => mockApple,
+}));
+
 describe('the plus sheet', () => {
   beforeEach(() => jest.clearAllMocks());
 
@@ -113,6 +119,35 @@ describe('the plus sheet', () => {
       'artifacts',
     ]) {
       expect(screen.getByTestId(`plus-sheet-${row}`)).toBeInTheDocument();
+    }
+  });
+
+  it('merges the three tiles into one on Apple touch devices, with a union accept', async () => {
+    /* 17.08-3: «Фото» на iOS всё равно открывает системный лист Safari с теми
+     * же тремя путями — на iPhone/iPad наши плитки схлопываются в одну, а
+     * широкий accept держит и медиатеку, и документы в «Выбрать файлы». */
+    mockApple = true;
+    try {
+      const { container } = renderSheet();
+      await openSheet();
+      expect(screen.getByText('com_ui_photo_or_file')).toBeInTheDocument();
+      expect(screen.queryByText('com_ui_camera')).not.toBeInTheDocument();
+      expect(screen.queryByText('com_ui_photo')).not.toBeInTheDocument();
+      expect(screen.queryByText('com_ui_files')).not.toBeInTheDocument();
+
+      const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+      const click = jest.spyOn(input, 'click').mockImplementation(() => {
+        /* toMatch, не литерал image(слэш)звёздочка: узкий срез комментариев в
+         * check-coverage-map спарил бы этот слэш-звёздочку со следующим
+         * звёздочка-слэш и съел заголовок соседнего теста. */
+        expect(input.accept).toMatch(/image\/\*/);
+        expect(input.accept).toContain('.pdf');
+        expect(input.getAttribute('capture')).toBeNull();
+      });
+      fireEvent.click(screen.getByText('com_ui_photo_or_file'));
+      expect(click).toHaveBeenCalledTimes(1);
+    } finally {
+      mockApple = false;
     }
   });
 

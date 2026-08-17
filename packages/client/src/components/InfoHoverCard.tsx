@@ -25,7 +25,7 @@ const InfoHoverCard = ({ side, text }: InfoHoverCardProps): JSX.Element => {
       </HoverCardTrigger>
       <HoverCardPortal>
         <HoverCardContent side={side} className="z-popover w-80">
-          <div className="max-h-[80vh] space-y-2 overflow-y-auto">
+          <div className="max-h-[80vh] space-y-2 overflow-y-auto overflow-x-hidden">
             <span className="text-sm text-text-secondary">{text}</span>
           </div>
         </HoverCardContent>

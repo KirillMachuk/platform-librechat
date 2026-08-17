@@ -100,7 +100,7 @@ const MCPSubMenu = React.forwardRef<HTMLDivElement, MCPSubMenuProps>(
               'border border-border-light bg-presentation p-1.5 shadow-lg',
             )}
           >
-            <div className="flex max-h-[320px] flex-col gap-1 overflow-y-auto">
+            <div className="flex max-h-[320px] flex-col gap-1 overflow-y-auto overflow-x-hidden">
               {selectableServers.map((server) => (
                 <MCPServerMenuItem
                   key={server.serverName}
