@@ -238,7 +238,7 @@ export default function WebSearch({
         {hasSourceData && (
           <div style={sourceExpandStyle}>
             <div className="overflow-hidden" ref={sourceExpandRef}>
-              <div className="my-2 max-h-[280px] overflow-y-auto rounded-lg border border-border-light">
+              <div className="my-2 max-h-[280px] overflow-y-auto overflow-x-hidden rounded-lg border border-border-light">
                 {allSources.map((source, i) => {
                   const domain = getCleanDomain(source.link);
                   return (

@@ -64,7 +64,7 @@ export default function ShareButton({
         showCloseButton={true}
         showCancelButton={false}
         title={localize('com_ui_share_link_to_chat')}
-        className="max-h-[90vh] max-w-[550px] overflow-y-auto"
+        className="max-h-[90vh] max-w-[550px] overflow-y-auto overflow-x-hidden"
         main={
           <div id="share-conversation-dialog">
             <div className="h-full py-2 text-text-primary">

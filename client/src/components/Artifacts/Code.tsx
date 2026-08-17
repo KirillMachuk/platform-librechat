@@ -76,7 +76,7 @@ export const CodeMarkdown = memo(
     }, [content, isSubmitting, userScrolled]);
 
     return (
-      <div ref={scrollRef} className="max-h-full overflow-y-auto">
+      <div ref={scrollRef} className="max-h-full overflow-y-auto overflow-x-hidden">
         <ReactMarkdown
           /* @ts-expect-error — rehypePlugins type mismatch between react-markdown and unified PluggableList */
           rehypePlugins={rehypePlugins}

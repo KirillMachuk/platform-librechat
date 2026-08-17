@@ -168,13 +168,13 @@ export default function ReportCard({
               <summary className="cursor-pointer py-1 text-sm font-medium text-text-secondary">
                 {localize('com_ui_deep_research_contents')}
               </summary>
-              <div className="max-h-48 overflow-y-auto pb-1 pt-1">{tocList}</div>
+              <div className="max-h-48 overflow-y-auto overflow-x-hidden pb-1 pt-1">{tocList}</div>
             </details>
           )}
           <div className="flex min-h-0 flex-1">
             {toc.length > 1 && (
               <nav
-                className="hidden w-60 shrink-0 overflow-y-auto border-r border-border-light p-3 md:block"
+                className="hidden w-60 shrink-0 overflow-y-auto overflow-x-hidden border-r border-border-light p-3 md:block"
                 aria-label={localize('com_ui_deep_research_contents')}
               >
                 {tocList}
@@ -185,7 +185,7 @@ export default function ReportCard({
               tabIndex={0}
               role="region"
               aria-label={displayTitle}
-              className="focus-inset min-h-0 flex-1 overflow-y-auto px-4 py-4 focus-visible:outline-none sm:px-8"
+              className="focus-inset min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 focus-visible:outline-none sm:px-8"
             >
               {children}
             </div>

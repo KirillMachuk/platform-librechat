@@ -91,7 +91,7 @@ export default function SkillsSidePanel({ className }: SkillsSidePanelProps) {
       </div>
 
       {/* Skill list */}
-      <div className="flex-1 overflow-y-auto px-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4">
         <SkillListPanel
           skills={skills as unknown as import('librechat-data-provider').TSkill[]}
           isLoading={listQuery.isLoading}

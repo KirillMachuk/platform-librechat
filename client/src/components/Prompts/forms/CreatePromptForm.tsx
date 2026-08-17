@@ -185,7 +185,7 @@ const CreatePromptForm = ({
                   <div>
                     <TextareaAutosize
                       {...field}
-                      className="w-full resize-none overflow-y-auto bg-transparent font-mono text-sm leading-relaxed text-text-primary placeholder:text-text-tertiary focus:outline-none sm:text-base"
+                      className="w-full resize-none overflow-y-auto overflow-x-hidden bg-transparent font-mono text-sm leading-relaxed text-text-primary placeholder:text-text-tertiary focus:outline-none sm:text-base"
                       minRows={4}
                       maxRows={16}
                       tabIndex={0}

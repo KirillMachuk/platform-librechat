@@ -238,7 +238,7 @@ function ApiKeysContent({ isOpen }: { isOpen: boolean }) {
         {canCreateKeys && <CreateKeyDialog />}
       </div>
 
-      <div className="max-h-[400px] space-y-2 overflow-y-auto">
+      <div className="max-h-[400px] space-y-2 overflow-y-auto overflow-x-hidden">
         {isLoading && (
           <div className="flex items-center justify-center py-8">
             <Spinner className="h-6 w-6" />

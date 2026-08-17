@@ -432,7 +432,7 @@ const SourcesGroup = React.memo(function SourcesGroup({
               <X className="size-4" aria-hidden="true" />
             </OGDialogClose>
           </div>
-          <div className="flex-1 overflow-y-auto px-3 py-2">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2">
             <div className="flex flex-col gap-2">
               {[...visibleSources, ...remainingSources].map((source, i) => (
                 <a
@@ -528,7 +528,7 @@ function FilesGroup({ files, messageId, conversationId, limit = 3 }: FilesGroupP
               <X className="size-4" aria-hidden="true" />
             </OGDialogClose>
           </div>
-          <div className="flex-1 overflow-y-auto px-3 py-2">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2">
             <div className="flex flex-col gap-2">
               {[...visibleFiles, ...remainingFiles].map((file, i) => (
                 <FileItem

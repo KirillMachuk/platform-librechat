@@ -104,7 +104,7 @@ const VersionsPanel = React.memo(
             </Button>
           </div>
         )}
-        <div className="flex-1 overflow-y-auto px-4 py-2">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-2">
           {isLoadingPrompts &&
             Array.from({ length: 6 }).map((_, index: number) => (
               <div key={index} className="my-2">

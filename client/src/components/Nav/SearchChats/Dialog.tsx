@@ -133,7 +133,10 @@ const SearchChatsDialog = memo(function SearchChatsDialog() {
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div
+          ref={scrollRef}
+          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain"
+        >
           {text.trim().length === 0 ? (
             <button
               type="button"

@@ -1268,6 +1268,7 @@ pre[class*='language-'] {
 pre[class*='language-'] {
   border-radius: 0.3em;
   overflow: auto;
+  overscroll-behavior-x: contain;
 }
 :not(pre) > code.hljs,
 :not(pre) > code[class*='language-'] {
@@ -1609,6 +1610,12 @@ html {
 
    Размер ставится на `body`, а НЕ на `html`: отступы Tailwind считаются в rem
    от корня, и правка корня молча ужала бы весь воздух в приложении на 12,5%. */
+html {
+  /* Низ Safari сэмплирует фон СТРАНИЦЫ у края (механизм из виджета msg8):
+     html — защитный слой под body, оба из одного токена. */
+  background-color: var(--c-panel);
+}
+
 body {
   font-size: 15px;
   line-height: 1.6;
@@ -2603,6 +2610,9 @@ html {
 
 .message-content pre {
   font-size: var(--markdown-font-size, var(--font-size-base));
+  /* Ленты кода — осознанные горизонтальные скроллеры; своё удержание не даёт
+     докрученной до края ленте тянуть родителя (та же семья, что .pan-x). */
+  overscroll-behavior-x: contain;
 }
 
 .code-analyze-block pre code,

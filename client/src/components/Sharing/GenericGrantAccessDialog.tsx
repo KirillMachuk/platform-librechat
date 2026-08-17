@@ -257,7 +257,7 @@ export default function GenericGrantAccessDialog({
   return (
     <OGDialog open={isModalOpen} onOpenChange={setIsModalOpen} modal>
       <OGDialogTrigger asChild>{TriggerComponent}</OGDialogTrigger>
-      <OGDialogContent className="max-h-[90vh] w-11/12 overflow-y-auto md:max-w-3xl">
+      <OGDialogContent className="max-h-[90vh] w-11/12 overflow-y-auto overflow-x-hidden md:max-w-3xl">
         <OGDialogTitle>
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5" aria-hidden="true" />

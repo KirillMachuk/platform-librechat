@@ -384,7 +384,7 @@ export default function DialogImage({
             }`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="h-full overflow-y-auto p-6">
+            <div className="h-full overflow-y-auto overflow-x-hidden p-6">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-text-primary">
                   {localize('com_ui_image_details')}

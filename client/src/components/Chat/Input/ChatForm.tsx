@@ -364,7 +364,7 @@ const ChatForm = memo(function ChatForm({
                     onFocus={handleFocusOrClick}
                     aria-label={localize('com_ui_message_input')}
                     onClick={handleFocusOrClick}
-                    style={{ height: 44, overflowY: 'auto' }}
+                    style={{ height: 44, overflowY: 'auto', overflowX: 'hidden' }}
                     className={cn(
                       baseClasses,
                       removeFocusRings,

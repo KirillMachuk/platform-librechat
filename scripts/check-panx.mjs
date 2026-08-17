@@ -35,6 +35,17 @@ const ALLOWLIST = [];
 const SCROLLER = /overflow-x-(auto|scroll)|\boverflow-auto\b/;
 
 /**
+ * Vertical scrollers: `overflow-y-auto` computes overflow-x:auto, and macOS
+ * trackpads elastically pan that axis even with zero overflow (Safari bounce),
+ * while iOS chains sideways gestures through it. The horizontal axis must be
+ * pinned explicitly: overflow-x-hidden/clip (vertical-only lists), an explicit
+ * overflow-x-auto (a real both-axes scroller, which the first rule then
+ * requires to carry pan-x), or pan-x itself.
+ */
+const VERTICAL_SCROLLER = /overflow-y-(auto|scroll)/;
+const X_PINNED = /overflow-x-(hidden|clip|auto|scroll)/;
+
+/**
  * A both-axes `overflow-auto` whose content WRAPS can only scroll vertically —
  * no sideways chaining exists to contain. `whitespace-pre-wrap` (with
  * break-words) in the same class string is that proof; anything else must
@@ -89,6 +100,20 @@ for (const rootDir of ROOTS) {
   for (const file of walk(join(ROOT, rootDir))) {
     const source = withoutBlockComments(readFileSync(file, 'utf8'));
     const rel = relative(ROOT, file).split('\\').join('/');
+    for (const match of source.matchAll(new RegExp(VERTICAL_SCROLLER, 'g'))) {
+      const className = classNameAround(source, match.index);
+      if (X_PINNED.test(className) || className.split(/\s+/).includes('pan-x')) {
+        continue;
+      }
+      const allowed = ALLOWLIST.find(
+        (entry) => entry.file === rel && className.includes(entry.marker),
+      );
+      if (allowed) {
+        usedAllowlist.add(`${allowed.file}|${allowed.marker}`);
+        continue;
+      }
+      offenders.push({ file: rel, className: className.trim().slice(0, 120) });
+    }
     for (const match of source.matchAll(new RegExp(SCROLLER, 'g'))) {
       const className = classNameAround(source, match.index);
       if (!/overflow-x-/.test(className) && WRAPPING.test(className)) {

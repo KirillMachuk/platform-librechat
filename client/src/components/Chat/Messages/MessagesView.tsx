@@ -40,7 +40,7 @@ function MessagesViewContent({
 
   return (
     <>
-      <div className="relative flex-1 overflow-hidden overflow-y-auto">
+      <div className="relative flex-1 overflow-hidden overflow-y-auto overflow-x-hidden">
         <div className="relative h-full">
           <div
             className="scrollbar-gutter-stable"
@@ -49,6 +49,9 @@ function MessagesViewContent({
             style={{
               height: '100%',
               overflowY: 'auto',
+              /* 17.08-1: без прибитой поперечной оси мак-трекпад упруго возил
+                 ВСЮ ленту вбок (bounce по вычисленному overflow-x:auto). */
+              overflowX: 'hidden',
               width: '100%',
             }}
           >

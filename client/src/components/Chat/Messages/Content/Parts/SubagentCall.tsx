@@ -568,7 +568,7 @@ export default function SubagentCall({
                *  subagent output instead of reserving fixed dialog space.
                *  Part-specific wrappers (`Container`, `Reasoning`,
                *  `ToolCallGroup`) handle their own widths and spacing. */
-              className="h-full overflow-y-auto px-3 py-3"
+              className="h-full overflow-y-auto overflow-x-hidden px-3 py-3"
             >
               <div ref={contentRef} className="flex max-w-full flex-grow flex-col gap-0">
                 {prompt ? (
