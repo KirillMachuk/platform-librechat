@@ -197,19 +197,23 @@ export default function SharedLinks() {
           const { title, shareId } = row.original;
           return (
             <div className="flex items-center gap-2">
-              <Link
-                to={`/share/${shareId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group flex items-center gap-1 truncate rounded-sm text-blue-600 underline decoration-1 underline-offset-2 hover:decoration-2 focus:outline-none"
-                title={title}
-              >
-                <span className="truncate">{title}</span>
-                <ExternalLink
-                  className="size-3 flex-shrink-0 opacity-70 group-hover:opacity-100"
-                  aria-hidden="true"
-                />
-              </Link>
+              <TooltipAnchor
+                description={title}
+                render={
+                  <Link
+                    to={`/share/${shareId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-center gap-1 truncate rounded-sm text-blue-600 underline decoration-1 underline-offset-2 hover:decoration-2 focus:outline-none"
+                  >
+                    <span className="truncate">{title}</span>
+                    <ExternalLink
+                      className="size-3 flex-shrink-0 opacity-70 group-hover:opacity-100"
+                      aria-hidden="true"
+                    />
+                  </Link>
+                }
+              />
             </div>
           );
         },

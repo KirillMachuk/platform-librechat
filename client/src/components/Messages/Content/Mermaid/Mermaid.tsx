@@ -187,7 +187,7 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
               {localize('com_ui_retry')}
             </button>
           </div>
-          <pre className="pan-x overflow-auto text-xs text-red-600 dark:text-red-300">
+          <pre className="pan-x overflow-x-auto overflow-y-clip text-xs text-red-600 dark:text-red-300">
             {error.message}
           </pre>
           {showCode && (
@@ -195,7 +195,7 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
               <div className="mb-2 text-xs text-text-secondary">
                 {localize('com_ui_mermaid_source')}
               </div>
-              <pre className="overflow-auto whitespace-pre-wrap text-xs text-text-secondary">
+              <pre className="pan-x overflow-x-auto overflow-y-clip whitespace-pre-wrap text-xs text-text-secondary">
                 {children}
               </pre>
             </div>
@@ -235,7 +235,7 @@ const Mermaid: React.FC<MermaidProps> = memo(({ children, id, theme }) => {
         />
         {showCode && (
           <div className="border-b border-border-light bg-surface-secondary p-4">
-            <pre className="overflow-auto whitespace-pre-wrap text-xs text-text-secondary">
+            <pre className="pan-x overflow-x-auto overflow-y-clip whitespace-pre-wrap text-xs text-text-secondary">
               {children}
             </pre>
           </div>

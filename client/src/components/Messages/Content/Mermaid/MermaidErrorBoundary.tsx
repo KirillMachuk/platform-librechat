@@ -39,7 +39,7 @@ class MermaidErrorBoundary extends React.Component<
           <div className="rounded-t-md bg-surface-secondary px-4 py-2 font-sans text-xs text-text-secondary">
             {'mermaid'}
           </div>
-          <pre className="overflow-auto whitespace-pre-wrap rounded-b-md bg-surface-primary-alt p-4 font-mono text-xs text-text-secondary">
+          <pre className="pan-x overflow-x-auto overflow-y-clip whitespace-pre-wrap rounded-b-md bg-surface-primary-alt p-4 font-mono text-xs text-text-secondary">
             {this.props.code}
           </pre>
         </div>

@@ -34,7 +34,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const ROOTS = ['client/src/components', 'packages/client/src/components'];
+const ROOTS = ['client/src', 'packages/client/src'];
 const EXTENSIONS = /\.(tsx|jsx)$/;
 const SKIP = /__tests__|\.(spec|test)\.[tj]sx?$/;
 
@@ -113,10 +113,14 @@ function readOpeningTag(text, start) {
   return null;
 }
 
-/* Every lowercase (native) tag. Uppercase JSX components are fine: a `title`
- * prop there is an ordinary prop (dialog headings etc.), not the DOM attribute.
+/* Every lowercase (native) tag, PLUS the capitalized components known to
+ * forward rest props onto a native tag: react-router's Link/NavLink render an
+ * <a>, Radix/`@librechat/client` Label renders a <label> — `title` on them
+ * reaches the DOM and draws the OS balloon (three such sites survived the
+ * first all-tags sweep in Settings tables and prompt cards). Other uppercase
+ * components are fine: their `title` is an ordinary prop (dialog headings).
  * `iframe` is skipped structurally — see the header comment. */
-const TAG_START = /<([a-z][a-z0-9]*)\b/g;
+const TAG_START = /<([a-z][a-z0-9]*|Link|NavLink|Label)\b/g;
 const SKIP_TAGS = new Set(['iframe']);
 const TITLE_ATTR = /\stitle\s*=/;
 
@@ -151,6 +155,8 @@ function selfCheck() {
     '<span\n  className="truncate text-xs"\n  title={card}\n>x</span>',
     '<time dateTime={iso} title={absolute}>x</time>',
     '<article title="any native tag counts">x</article>',
+    '<Link to="/c/x" target="_blank" title={title}>x</Link>',
+    '<Label id={titleId} className="truncate" title={name}>x</Label>',
   ];
   const mustPass = [
     '<button aria-label="x" onClick={() => setTitle("title=")}>x</button>',

@@ -74,13 +74,16 @@ const ArtifactButton = ({ artifact }: { artifact: Artifact | null }) => {
            (owner 11.08-4, Kimi as the reference — «тень неуместная»): open =
            card + hairline, closed = flat panel fill that darkens on hover.
            No shadows, no scale — a chip in the text is not a floating card.
-           17.08-2: the open restyle is hover-capable-only — on touch the
-           panel is a bottom sheet over a scrim, and the swap read as a stuck
-           tap state. */
+           17.08-2 (rev. after review): the open restyle is gated by WIDTH
+           (md:), not hover — the bottom-sheet-over-scrim layout that makes
+           the state useless exists only under 768px; an iPad opens the panel
+           as a split and must still show which chip is open. max-w-full sits
+           on the BUTTON: measured 274px in a 200px pane without it — a child
+           max-w-full measures against the button, not the pane. */
         const buttonClass = cn(
-          'relative overflow-hidden rounded-xl border transition-colors duration-90',
+          'relative max-w-full overflow-hidden rounded-xl border transition-colors duration-90',
           isSelected
-            ? 'border-transparent bg-surface-primary-alt [@media(hover:hover)]:border-border-light [@media(hover:hover)]:bg-surface-primary'
+            ? 'border-transparent bg-surface-primary-alt md:border-border-light md:bg-surface-primary'
             : 'border-transparent bg-surface-primary-alt hover:bg-surface-active',
         );
 

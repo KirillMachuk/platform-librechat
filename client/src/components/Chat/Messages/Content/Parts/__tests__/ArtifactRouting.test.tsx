@@ -217,8 +217,11 @@ describe('Attachment routing for tool artifacts', () => {
     });
     renderWith(<Attachment attachment={mmd} />);
     expect(screen.getByTestId('mermaid-render')).toHaveTextContent('graph TD');
-    // The card-style trigger should NOT be rendered for mermaid
-    expect(screen.queryByText('com_ui_artifact_click')).not.toBeInTheDocument();
+    /* The card-style trigger should NOT be rendered for mermaid. Anchored to
+     * the card BUTTON (aria-label = the file name), not to a caption string:
+     * the round-12 static-label change removed the old caption from the card
+     * entirely, which made a text-based absence check pass vacuously. */
+    expect(screen.queryByRole('button', { name: 'flow.mmd' })).not.toBeInTheDocument();
   });
 
   it('falls through to the inline <pre> for unsupported text types (JSON)', () => {

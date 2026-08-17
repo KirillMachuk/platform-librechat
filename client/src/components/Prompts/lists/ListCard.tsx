@@ -1,5 +1,5 @@
 import React, { useId } from 'react';
-import { Label } from '@librechat/client';
+import { Label, TooltipAnchor } from '@librechat/client';
 import CategoryIcon from '../utils/CategoryIcon';
 import { useLocalize } from '~/hooks';
 
@@ -41,13 +41,17 @@ export default function ListCard({
       <div className="flex w-full justify-between gap-2">
         <div className="flex min-w-0 flex-1 flex-row items-center gap-2 overflow-hidden">
           <CategoryIcon category={category} className="icon-md shrink-0" aria-hidden="true" />
-          <Label
-            id={titleId}
-            className="min-w-0 select-none truncate text-sm font-semibold text-text-primary"
-            title={name}
-          >
-            {name}
-          </Label>
+          <TooltipAnchor
+            description={name}
+            render={
+              <Label
+                id={titleId}
+                className="min-w-0 select-none truncate text-sm font-semibold text-text-primary"
+              >
+                {name}
+              </Label>
+            }
+          />
           {icon}
         </div>
         <div className="relative z-10">{children}</div>

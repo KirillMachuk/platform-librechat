@@ -179,20 +179,24 @@ export default function ArchivedChatsTable({
                 isCreatedByUser={false}
                 iconClassName="size-4"
               />
-              <Link
-                to={`/c/${conversationId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group flex items-center gap-1 truncate rounded-sm text-blue-600 underline decoration-1 underline-offset-2 hover:decoration-2 focus:outline-none"
-                title={title}
-                aria-label={localize('com_ui_open_archived_chat_new_tab_title', { title })}
-              >
-                <span className="truncate">{title}</span>
-                <ExternalLink
-                  className="size-3 flex-shrink-0 opacity-70 group-hover:opacity-100"
-                  aria-hidden="true"
-                />
-              </Link>
+              <TooltipAnchor
+                description={title}
+                render={
+                  <Link
+                    to={`/c/${conversationId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-center gap-1 truncate rounded-sm text-blue-600 underline decoration-1 underline-offset-2 hover:decoration-2 focus:outline-none"
+                    aria-label={localize('com_ui_open_archived_chat_new_tab_title', { title })}
+                  >
+                    <span className="truncate">{title}</span>
+                    <ExternalLink
+                      className="size-3 flex-shrink-0 opacity-70 group-hover:opacity-100"
+                      aria-hidden="true"
+                    />
+                  </Link>
+                }
+              />
             </div>
           );
         },

@@ -29,8 +29,57 @@ const ROOTS = ['client/src', 'packages/client/src'];
 const EXTENSIONS = /\.(tsx|jsx)$/;
 const SKIP = /__tests__|\.(spec|test)\.[tj]sx?$/;
 
-/** Scrollers that legitimately do not need the class. */
-const ALLOWLIST = [];
+/** Scrollers that legitimately do not need the class, and INTENTIONAL
+ * vertical scrollers whose height bound lives in layout or inline styles
+ * where the token heuristic cannot see it. A pan landing on an intentional
+ * scroller scrolls it — that is desired, not the trap. */
+const ALLOWLIST = [
+  {
+    file: 'client/src/components/Chat/Menus/Endpoints/CustomMenu.tsx',
+    marker: 'w-[var(--menu-width,auto)] min-w-[300px] flex-col overflow-auto',
+    reason: 'model menu list scrolls vertically; height bounded by --popover-available-height inline style',
+  },
+  {
+    file: 'client/src/components/Chat/Messages/Content/Parts/Attachment.tsx',
+    marker: 'pan-x overflow-auto',
+    reason: 'TextAttachment body: maxHeight is the COLLAPSED_MAX_HEIGHT inline style, expand/collapse driven',
+  },
+  {
+    file: 'client/src/components/Nav/Settings.tsx',
+    marker: 'flex-col flex-nowrap overflow-auto',
+    reason: 'settings tab rail scrolls vertically on short windows; bounded by the dialog layout',
+  },
+  {
+    file: 'client/src/components/Nav/Settings.tsx',
+    marker: 'pan-x overflow-auto sm:w-full sm:max-w-none',
+    reason: 'settings content pane; bounded by the dialog layout',
+  },
+  {
+    file: 'client/src/components/Prompts/editor/PromptEditor.tsx',
+    marker: 'relative w-full flex-1 overflow-auto rounded-xl border',
+    reason: 'editor pane scrolls vertically; flex layout bounds it (no min-h-0 token to see)',
+  },
+  {
+    file: 'client/src/components/Skills/forms/SkillContentEditor.tsx',
+    marker: 'relative w-full flex-1 overflow-auto rounded-xl border',
+    reason: 'editor pane scrolls vertically; flex layout bounds it',
+  },
+  {
+    file: 'client/src/components/Skills/tree/SkillFilePreview.tsx',
+    marker: 'flex flex-1 items-center justify-center overflow-auto p-8',
+    reason: 'preview pane; bounded by the side panel layout',
+  },
+  {
+    file: 'packages/client/src/components/MultiSelect.tsx',
+    marker: 'flex-col overflow-auto overscroll-contain rounded-xl',
+    reason: 'dropdown list scrolls vertically; bounded by popover max-height inline style',
+  },
+  {
+    file: 'packages/client/src/components/Table.tsx',
+    marker: 'relative w-full overflow-auto',
+    reason: 'shared table wrapper scrolls both axes; bounded by its dialog/panel parents',
+  },
+];
 
 const SCROLLER = /overflow-x-(auto|scroll)|\boverflow-auto\b/;
 
@@ -66,7 +115,24 @@ const WRAPPING = /whitespace-pre-wrap/;
  */
 const Y_PINNED = /overflow-y-(clip|hidden)/;
 const Y_EXPLICIT = /overflow-y-(auto|scroll)/;
-const HEIGHT_BOUNDED = /\bmax-h-|\bh-\[|\bh-\d/;
+
+/**
+ * Height-bound check works on TOKENS, not substrings: the first regex version
+ * counted `min-h-0` (matches `\bh-\d` — `-` is a word boundary), `sm:h-10`
+ * (bound only from sm) and `max-h-full` (bound only when the parent is) as
+ * bounds. A bound is: an own max-height (`max-h-*` except none), an own fixed
+ * height (`h-[..]`, `h-<n>`, `h-px`, `h-full`, `h-screen`), or the flex pane
+ * pair `flex-1` + `min-h-0` (the layout bounds it). Variant-prefixed tokens
+ * (`sm:h-10`) deliberately do not count.
+ */
+function isHeightBounded(className) {
+  const tokens = className.split(/\s+/);
+  const has = (re) => tokens.some((token) => re.test(token));
+  if (has(/^max-h-(?!none$)/)) return true;
+  if (has(/^h-(\[|\d|px$|full$|screen$)/)) return true;
+  if (has(/^flex-1$/) && has(/^min-h-0$/)) return true;
+  return false;
+}
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -151,12 +217,16 @@ for (const rootDir of ROOTS) {
       }
       offenders.push({ file: rel, className: className.trim().slice(0, 120) });
     }
-    for (const match of source.matchAll(/overflow-x-(auto|scroll)/g)) {
+    /* The shorthand `overflow-auto` IS an explicit y-auto too — Mermaid's
+     * failure <pre> sat in exactly the CodeBlock bug shape through the first
+     * version of this rule, which only matched the x-specific utilities. */
+    for (const match of source.matchAll(/overflow-x-(auto|scroll)|\boverflow-auto\b/g)) {
       const className = classNameAround(source, match.index);
       if (Y_PINNED.test(className)) {
         continue;
       }
-      if (Y_EXPLICIT.test(className) && HEIGHT_BOUNDED.test(className)) {
+      if ((Y_EXPLICIT.test(className) || /\boverflow-auto\b/.test(className)) &&
+        isHeightBounded(className)) {
         continue;
       }
       const allowed = ALLOWLIST.find(
