@@ -151,11 +151,11 @@ function SkillCard({
               <span
                 className="inline-flex items-center gap-1 rounded-full bg-surface-tertiary px-1.5 py-0.5 text-text-tertiary"
                 aria-label={skill.authorName}
-              />
+              >
+                <User className="size-2.5" aria-hidden="true" />
+              </span>
             }
-          >
-            <User className="size-2.5" aria-hidden="true" />
-          </TooltipAnchor>
+          />
         )}
         {isPublic && (
           <TooltipAnchor
@@ -165,11 +165,11 @@ function SkillCard({
               <span
                 className="inline-flex items-center gap-1 rounded-full bg-surface-tertiary px-1.5 py-0.5 text-text-tertiary"
                 aria-label={localize('com_ui_sr_public_skill')}
-              />
+              >
+                <EarthIcon className="size-2.5" aria-hidden="true" />
+              </span>
             }
-          >
-            <EarthIcon className="size-2.5" aria-hidden="true" />
-          </TooltipAnchor>
+          />
         )}
         <span
           className={cn(

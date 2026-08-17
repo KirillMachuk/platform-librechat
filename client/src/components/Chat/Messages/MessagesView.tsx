@@ -96,21 +96,25 @@ function MessagesViewContent({
                 ref={messagesEndRef}
               />
             </div>
-          </div>
 
-          <CSSTransition
-            in={showScrollButton && scrollButtonPreference}
-            timeout={{
-              enter: 300,
-              exit: 250,
-            }}
-            classNames="scroll-animation"
-            unmountOnExit={true}
-            appear={true}
-            nodeRef={scrollToBottomRef}
-          >
-            <ScrollToBottom ref={scrollToBottomRef} scrollHandler={handleSmoothToRef} />
-          </CSSTransition>
+            {/* Inside the scroller on purpose: as an absolute SIBLING the
+                button was a dead zone for touch — a swipe starting on it had
+                no scrollable ancestor and moved nothing (17.08-2). Sticky
+                keeps it pinned 20px above the scrollport bottom. */}
+            <CSSTransition
+              in={showScrollButton && scrollButtonPreference}
+              timeout={{
+                enter: 300,
+                exit: 250,
+              }}
+              classNames="scroll-animation"
+              unmountOnExit={true}
+              appear={true}
+              nodeRef={scrollToBottomRef}
+            >
+              <ScrollToBottom ref={scrollToBottomRef} scrollHandler={handleSmoothToRef} />
+            </CSSTransition>
+          </div>
 
           <MessageNav scrollableRef={scrollableRef} />
         </div>

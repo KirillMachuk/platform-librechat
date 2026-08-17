@@ -73,10 +73,8 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
               <TooltipAnchor
                 description={card}
                 className="cursor-default"
-                render={<span className="truncate text-xs text-text-secondary" />}
-              >
-                {card}
-              </TooltipAnchor>
+                render={<span className="truncate text-xs text-text-secondary">{card}</span>}
+              />
             )}
           </div>
         </div>

@@ -82,11 +82,11 @@ export function BrowserTTS({
               onClickCapture={handleClick}
               type="button"
               aria-label={title}
-            />
+            >
+              {renderIcon()}
+            </button>
           }
-        >
-          {renderIcon()}
-        </TooltipAnchor>
+        />
       )}
       <audio
         ref={audioRef}
@@ -189,11 +189,11 @@ export function ExternalTTS({
               aria-label={
                 isSpeaking === true ? localize('com_ui_stop') : localize('com_ui_read_aloud')
               }
-            />
+            >
+              {renderIcon()}
+            </button>
           }
-        >
-          {renderIcon()}
-        </TooltipAnchor>
+        />
       )}
       <audio
         ref={audioRef}

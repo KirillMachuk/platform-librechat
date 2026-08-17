@@ -373,10 +373,12 @@ export default function FilePreviewBody({ artifact }: { artifact: Artifact }) {
       <TooltipAnchor
         description={fileName}
         className="cursor-default"
-        render={<div className="shrink-0 truncate px-4 pt-3 text-xs text-text-secondary" />}
-      >
-        {metaParts.join(' · ')}
-      </TooltipAnchor>
+        render={
+          <div className="shrink-0 truncate px-4 pt-3 text-xs text-text-secondary">
+            {metaParts.join(' · ')}
+          </div>
+        }
+      />
       {/* Кадры (PDF, офис) занимают ВСЮ высоту панели и прокручиваются САМИ:
           пока их прокручивала панель, кадр стоял частично за краем и клик по
           вкладке листа внутри него не доезжал (e2e поймал переключение листов

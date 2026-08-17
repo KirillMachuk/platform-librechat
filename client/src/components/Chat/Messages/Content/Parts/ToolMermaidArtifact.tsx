@@ -62,11 +62,11 @@ const ToolMermaidArtifact = memo(({ attachment, text }: ToolMermaidArtifactProps
               description={visibleFilename}
               className="cursor-default"
               render={
-                <div className="truncate text-[10px] font-medium uppercase tracking-wide text-text-secondary" />
+                <div className="truncate text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+                  {visibleFilename}
+                </div>
               }
-            >
-              {visibleFilename}
-            </TooltipAnchor>
+            />
           )}
           {attachment.filepath && (
             <TooltipAnchor

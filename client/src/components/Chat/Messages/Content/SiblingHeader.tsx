@@ -101,10 +101,10 @@ export default function SiblingHeader({
           <TooltipAnchor
             description={displayName}
             className="cursor-default"
-            render={<span className="truncate text-sm font-medium text-text-primary" />}
-          >
-            {displayName}
-          </TooltipAnchor>
+            render={
+              <span className="truncate text-sm font-medium text-text-primary">{displayName}</span>
+            }
+          />
         )}
         <MessageTimestamp value={createdAt} />
       </div>

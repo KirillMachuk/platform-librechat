@@ -62,11 +62,11 @@ const FilePreview = ({
               role="img"
               aria-label={localize('com_ui_index_failed')}
               className="absolute inset-0 flex items-center justify-center bg-black/40"
-            />
+            >
+              <TriangleAlert className="size-5 text-amber-400" aria-hidden={true} />
+            </span>
           }
-        >
-          <TriangleAlert className="size-5 text-amber-400" aria-hidden={true} />
-        </TooltipAnchor>
+        />
       )}
     </div>
   );

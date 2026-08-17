@@ -492,10 +492,12 @@ export default function SubagentCall({
           {subagentNameLabel ? (
             <TooltipAnchor
               description={subagentNameLabel}
-              render={<span className="min-w-0 flex-1 truncate font-normal text-text-secondary" />}
-            >
-              {subagentNameLabel}
-            </TooltipAnchor>
+              render={
+                <span className="min-w-0 flex-1 truncate font-normal text-text-secondary">
+                  {subagentNameLabel}
+                </span>
+              }
+            />
           ) : (
             <span className="flex-1" />
           )}

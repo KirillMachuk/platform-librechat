@@ -339,7 +339,7 @@ html {
   --c-row-h: 40px;
   --c-btn-h: 36px;
   --c-btn-h-sm: 30px;
-  --c-side-w: 240px;
+  --c-side-w: 264px;
   --c-rail-w: 56px;
   /* радиусы (§4) */
   --c-r-ctl: 8px;
@@ -955,6 +955,10 @@ pre {
   line-height: 1.4;
   margin: 0;
   overflow-x: auto;
+  /* Next to overflow-x:auto, the default `visible` computes to auto — a
+     vertical scroll trap for touch pans (17.08-2 H1, same fix as
+     pre[class*='language-'] above). No max-height here → clip the axis. */
+  overflow-y: clip;
   padding: 0;
 }
 .prose :where(pre code):not(:where([class~='not-prose'] *)) {
@@ -1267,7 +1271,14 @@ pre[class*='language-'] {
 }
 pre[class*='language-'] {
   border-radius: 0.3em;
-  overflow: auto;
+  /* x-only on purpose: the shorthand `overflow: auto` made every highlighted
+     pre a VERTICAL scroll container too (no max-height → never intentional),
+     and iOS latched touch pans onto it whenever rounding left it 1-2px of
+     range — every other swipe through the chat died there (17.08-2 H1).
+     `clip` removes the y-axis from scroll chaining; `contain` on x keeps the
+     round-10 rule (horizontal ribbons swallow their own overscroll). */
+  overflow-x: auto;
+  overflow-y: clip;
   overscroll-behavior-x: contain;
 }
 :not(pre) > code.hljs,

@@ -13,8 +13,6 @@ import FileContainer from '~/components/Chat/Input/Files/FileContainer';
 import { isCodeOnlyArtifact } from '~/utils/artifacts';
 import { displayFilename } from './attachmentTypes';
 import { useAttachmentLink } from './LogLink';
-import { useLocalize } from '~/hooks';
-import {} from '~/components/icons';
 import store from '~/store';
 
 interface ToolArtifactCardProps {
@@ -68,7 +66,6 @@ interface ToolArtifactCardProps {
  *     of context.
  */
 const ToolArtifactCard = memo(({ attachment, artifact }: ToolArtifactCardProps) => {
-  const localize = useLocalize();
   const claimKey = useId();
   const file = attachment as TFile & TAttachmentMetadata;
   const fileId = file.file_id;
@@ -219,9 +216,6 @@ const ToolArtifactCard = memo(({ attachment, artifact }: ToolArtifactCardProps) 
     return null;
   }
 
-  const actionLabel = isSelected
-    ? localize('com_ui_click_to_close')
-    : localize('com_ui_artifact_click');
   const visibleFilename = displayFilename(attachment.filename);
   // The artifact's stored `title` mirrors the on-disk `filename` for
   // tool artifacts, so re-derive the user-facing label rather than
@@ -230,14 +224,20 @@ const ToolArtifactCard = memo(({ attachment, artifact }: ToolArtifactCardProps) 
 
   return (
     /* 12.08-3: тот же рецепт карточки, что у файлов композера и чата; выбранная
-       (панель открыта) держит серый — правило «открытая разворачивашка». */
+       (панель открыта) держит серый — правило «открытая разворачивашка».
+       17.08-2: подпись СТАТИЧНАЯ — бейдж типа/размера, как у всех карточек
+       файлов (референсы ChatGPT/Claude не переключают «открыть/закрыть», а
+       смена текста дёргала ширину). Серый выбранной — только на устройствах с
+       hover: на таче панель — нижний лист поверх скрима, а державшийся серый
+       читался как залипший hover. max-w-fit убран: twMerge ронял базовый
+       max-w-full карточки, и в зажатой панели она вылезала за край (замер
+       258px в контейнере 200px). */
     <FileContainer
-      file={{ filename: visibleFilename }}
+      file={attachment}
       overrideType={visibleFilename?.split('.').pop()}
       displayName={visibleTitle}
-      subtitle={<div className="truncate text-xs text-text-secondary">{actionLabel}</div>}
-      containerClassName="my-2 max-w-fit"
-      buttonClassName={isSelected ? 'bg-surface-hover' : undefined}
+      containerClassName="my-2"
+      buttonClassName={isSelected ? '[@media(hover:hover)]:bg-surface-hover' : undefined}
       pressed={isSelected}
       onClick={handleOpen}
       trailing={<CardDownloadButton onClick={handleDownload} name={visibleFilename} />}

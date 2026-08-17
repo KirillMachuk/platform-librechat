@@ -75,19 +75,19 @@ export default function StackedMCPIcons({
                 index > 0 && sizes.overlap,
               )}
               style={{ zIndex: icons.length - index }}
-            />
+            >
+              {icon.iconPath ? (
+                <img
+                  src={icon.iconPath}
+                  alt={icon.displayName}
+                  className={cn('rounded-full object-cover', sizes.icon)}
+                />
+              ) : (
+                <MCPIcon className={cn('text-text-primary', sizes.icon)} />
+              )}
+            </div>
           }
-        >
-          {icon.iconPath ? (
-            <img
-              src={icon.iconPath}
-              alt={icon.displayName}
-              className={cn('rounded-full object-cover', sizes.icon)}
-            />
-          ) : (
-            <MCPIcon className={cn('text-text-primary', sizes.icon)} />
-          )}
-        </TooltipAnchor>
+        />
       ))}
       {overflowCount > 0 && (
         <div

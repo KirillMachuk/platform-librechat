@@ -20,10 +20,8 @@ function Row({ label, value, max }: RowProps) {
       <TooltipAnchor
         description={label}
         className="cursor-default"
-        render={<span className="truncate text-text-secondary" />}
-      >
-        {label}
-      </TooltipAnchor>
+        render={<span className="truncate text-text-secondary">{label}</span>}
+      />
       <span className="whitespace-nowrap text-right font-medium tabular-nums text-text-primary">
         {formatTokens(value)}
       </span>

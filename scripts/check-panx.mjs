@@ -53,6 +53,21 @@ const X_PINNED = /overflow-x-(hidden|clip|auto|scroll)/;
  */
 const WRAPPING = /whitespace-pre-wrap/;
 
+/**
+ * The mirror of the vertical rule (added 17.08, owner: chat swipes died
+ * «через раз»): a HORIZONTAL ribbon must pin its VERTICAL axis. Next to
+ * `overflow-x: auto` the y default computes to auto, so every code ribbon and
+ * chip row silently becomes a vertical scroll container as well; iOS latches
+ * the touch pan onto the first container that can scroll in that axis, and a
+ * 1-2px rounding leftover is enough to eat the whole swipe. A ribbon pins y
+ * with `overflow-y-clip` (or hidden); a REAL two-axis pane must say so with
+ * an explicit `overflow-y-auto` AND a `max-h-*` bound (unbounded height means
+ * vertical scrolling can never be intentional — that was CodeBlock's bug).
+ */
+const Y_PINNED = /overflow-y-(clip|hidden)/;
+const Y_EXPLICIT = /overflow-y-(auto|scroll)/;
+const HEIGHT_BOUNDED = /\bmax-h-|\bh-\[|\bh-\d/;
+
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
@@ -135,6 +150,26 @@ for (const rootDir of ROOTS) {
         continue;
       }
       offenders.push({ file: rel, className: className.trim().slice(0, 120) });
+    }
+    for (const match of source.matchAll(/overflow-x-(auto|scroll)/g)) {
+      const className = classNameAround(source, match.index);
+      if (Y_PINNED.test(className)) {
+        continue;
+      }
+      if (Y_EXPLICIT.test(className) && HEIGHT_BOUNDED.test(className)) {
+        continue;
+      }
+      const allowed = ALLOWLIST.find(
+        (entry) => entry.file === rel && className.includes(entry.marker),
+      );
+      if (allowed) {
+        usedAllowlist.add(`${allowed.file}|${allowed.marker}`);
+        continue;
+      }
+      offenders.push({
+        file: rel,
+        className: `[y-axis unpinned] ${className.trim().slice(0, 100)}`,
+      });
     }
   }
 }

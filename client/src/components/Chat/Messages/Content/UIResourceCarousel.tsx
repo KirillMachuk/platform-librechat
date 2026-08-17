@@ -95,7 +95,7 @@ const UIResourceCarousel: React.FC<UIResourceCarouselProps> = React.memo(({ uiRe
 
       <div
         ref={scrollContainerRef}
-        className="hide-scrollbar pan-x flex gap-4 overflow-x-auto scroll-smooth"
+        className="hide-scrollbar pan-x flex gap-4 overflow-x-auto overflow-y-clip scroll-smooth"
       >
         {uiResources.map((uiResource, index) => {
           const height = 360;

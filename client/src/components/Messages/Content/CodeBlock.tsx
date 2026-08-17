@@ -117,7 +117,14 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
           allowExecution={allowExecution}
         />
       </div>
-      <div className={cn(classProp, 'pan-x overflow-x-auto overflow-y-auto bg-surface-code p-4')}>
+      {/* overflow-y-CLIP, not auto: the block has no max-height, so vertical
+          scrolling here is never intentional — but `auto` (or `visible`, which
+          computes to auto next to overflow-x) made every code block a vertical
+          scroll container that latched the touch pan on iOS whenever rounding
+          left it 1-2px of range, eating every other swipe through the chat
+          (17.08-2 «заедает», hypothesis H1). Clip removes the axis from
+          scroll chaining entirely. */}
+      <div className={cn(classProp, 'pan-x overflow-x-auto overflow-y-clip bg-surface-code p-4')}>
         <code
           ref={codeRef}
           className={cn(

@@ -95,10 +95,8 @@ const FileContainer = ({
                   `title` outright — it repeated the visible text verbatim. */}
               <TooltipAnchor
                 description={visibleName}
-                render={<div className="truncate font-medium" />}
-              >
-                {visibleName}
-              </TooltipAnchor>
+                render={<div className="truncate font-medium">{visibleName}</div>}
+              />
               {subtitle != null ? (
                 subtitle
               ) : (

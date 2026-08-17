@@ -473,10 +473,12 @@ export default function AgentConfig() {
                         <TooltipAnchor
                           description={skillId}
                           className="cursor-default"
-                          render={<span className="truncate italic text-text-secondary" />}
-                        >
-                          {localize('com_ui_skill_unavailable')}
-                        </TooltipAnchor>
+                          render={
+                            <span className="truncate italic text-text-secondary">
+                              {localize('com_ui_skill_unavailable')}
+                            </span>
+                          }
+                        />
                       ) : (
                         <span className="truncate text-text-primary">{skillName}</span>
                       )}

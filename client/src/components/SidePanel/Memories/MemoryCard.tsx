@@ -41,10 +41,10 @@ export default function MemoryCard({ memory, hasUpdateAccess }: MemoryCardProps)
         <TooltipAnchor
           description={memory.value}
           className="cursor-default"
-          render={<p className="min-w-0 flex-1 truncate text-sm text-text-primary" />}
-        >
-          {memory.value}
-        </TooltipAnchor>
+          render={
+            <p className="min-w-0 flex-1 truncate text-sm text-text-primary">{memory.value}</p>
+          }
+        />
         <span className="shrink-0 text-xs text-text-secondary">
           {formatDate(memory.updated_at)}
         </span>

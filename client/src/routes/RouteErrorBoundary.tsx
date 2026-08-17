@@ -171,7 +171,7 @@ export default function RouteErrorBoundary() {
                 </Button>
               </div>
             </summary>
-            <div className="pan-x overflow-x-auto rounded-lg bg-black/5 p-4 dark:bg-white/5">
+            <div className="pan-x overflow-x-auto overflow-y-clip rounded-lg bg-black/5 p-4 dark:bg-white/5">
               {formatStackTrace(errorDetails.stack).map(({ number, content }) => (
                 <div key={number} className="flex">
                   <span className="select-none pr-4 font-mono text-xs text-text-secondary">
