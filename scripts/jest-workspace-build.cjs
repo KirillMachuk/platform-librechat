@@ -223,4 +223,5 @@ module.exports = async function assertWorkspaceBuild(_globalConfig, projectConfi
 };
 
 module.exports.inspect = inspect;
+module.exports.fingerprint = fingerprint;
 module.exports.report = report;
