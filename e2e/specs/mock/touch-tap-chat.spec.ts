@@ -13,7 +13,18 @@ import { applyRuntimeEnv } from '../../setup/runtimeEnv';
  * makes that media query match in chromium) and pins both halves: the tap
  * NAVIGATES, and no tooltip ever mounts.
  */
-test.use({ ...devices['iPhone 13'] });
+/* Emulation fields ONLY — spreading the whole descriptor also carries
+ * defaultBrowserType: 'webkit', which explodes against the CI project's
+ * chromium channel («Unsupported webkit channel "chrome"»). isMobile is what
+ * makes chromium's media emulation report (hover: none). */
+const iphone = devices['iPhone 13'];
+test.use({
+  viewport: iphone.viewport,
+  userAgent: iphone.userAgent,
+  deviceScaleFactor: iphone.deviceScaleFactor,
+  hasTouch: true,
+  isMobile: true,
+});
 
 test.describe('touch tap on a sidebar chat', () => {
   test('opens the chat and never summons the tooltip', async ({ page }) => {
