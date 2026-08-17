@@ -87,7 +87,7 @@ stays green, so flakes accumulate where nobody looks.
 | Safari bars follow the APP theme, not the OS scheme (runtime theme-color meta) | unit  | `packages/client/src/theme/utils/__tests__/safariChrome.spec.ts#inserts a runtime meta FIRST in head with the token color` | covered |
 | MCP pill is a tool chip: shared recipe, neutral "on" fill with servers selected (owner 11.08-3)   | unit  | `client/src/components/Chat/Input/__tests__/MCPSelect.spec.tsx#wears the shared chip recipe`       | covered |
 | Empty chat: greeting sits entirely above the composer, in both landing modes and on a phone       | e2e   | `e2e/specs/mock/canon.spec.ts#the greeting clears the composer`                                    | covered |
-| Desktop composer rests at ~130 tall (owner 11.08-3, Kimi yardstick)                               | e2e   | `e2e/specs/mock/canon.spec.ts#the composer stands ~130 tall`                                       | covered |
+| Desktop composer rests as a single growing row (owner 17.08-3 reverted the 11.08 Kimi-130 box)    | e2e   | `e2e/specs/mock/canon.spec.ts#the composer rests as a single row`                                  | covered |
 
 ## 3. Message rendering
 
