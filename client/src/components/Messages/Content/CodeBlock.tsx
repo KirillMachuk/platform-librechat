@@ -122,8 +122,10 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
           computes to auto next to overflow-x) made every code block a vertical
           scroll container that latched the touch pan on iOS whenever rounding
           left it 1-2px of range, eating every other swipe through the chat
-          (17.08-2 «заедает», hypothesis H1). Clip removes the axis from
-          scroll chaining entirely. */}
+          (17.08-2 «заедает», hypothesis H1). Next to overflow-x:auto, `clip`
+          COMPUTES to hidden (CSS Overflow 3 visible/clip pair rule): the box
+          stays a scroll container for scripts, but the axis takes no user
+          pan/wheel, so the gesture chains to the chat. */}
       <div className={cn(classProp, 'pan-x overflow-x-auto overflow-y-clip bg-surface-code p-4')}>
         <code
           ref={codeRef}

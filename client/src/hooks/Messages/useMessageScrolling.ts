@@ -62,15 +62,18 @@ export default function useMessageScrolling(messagesTree?: TMessage[] | null) {
     };
   }, [messagesEndRef, scrollableRef, debouncedSetShowScrollButton]);
 
-  /* The mount effect above owns THE IntersectionObserver. This used to build
-     a NEW observer on every scroll event and return a cleanup nobody calls
-     (onScroll discards return values) — hundreds piled up while swiping a
-     long history and every threshold crossing fired them all, dropping frames
-     on the phone (17.08-2 «заедает», hypothesis H4). */
+  /* The mount effect above owns THE IntersectionObserver — and the BUTTON.
+     This used to build a NEW observer on every scroll event and return a
+     cleanup nobody calls (onScroll discards return values) — hundreds piled
+     up while swiping a long history and every threshold crossing fired them
+     all, dropping frames on the phone (17.08-2 «заедает», hypothesis H4).
+     The handler refreshes only the follow-threshold ref: writing the button
+     here too made two writers with different thresholds (120px follow vs the
+     observer's crossing) race on every flick and flicker the button — the
+     round-12 review caught the non-monotonic hand-off. */
   const debouncedHandleScroll = useCallback(() => {
     isNearBottomRef.current = getIsNearBottom();
-    debouncedSetShowScrollButton(!isNearBottomRef.current);
-  }, [debouncedSetShowScrollButton, getIsNearBottom]);
+  }, [getIsNearBottom]);
 
   const scrollCallback = () => {
     reconcileMessageContentLayout(scrollableRef.current);

@@ -91,6 +91,13 @@ const DialogContent: React.ForwardRefExoticComponent<
       children,
       style,
       onEscapeKeyDown: propsOnEscapeKeyDown,
+      /* Swallowed on purpose, never spread onto the DOM: several call sites
+         pass `title` as if it were a heading prop, Radix forwards unknown
+         props onto its Content <div>, and a `title` ATTRIBUTE there draws the
+         OS balloon over the whole dialog — banned by the tooltip canon
+         (DESIGN_SYSTEM §6.6). Dialog headings are DialogTitle elements. */
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      title: _title,
       ...props
     },
     ref,
