@@ -227,9 +227,10 @@ const ToolArtifactCard = memo(({ attachment, artifact }: ToolArtifactCardProps) 
        (панель открыта) держит серый — правило «открытая разворачивашка».
        17.08-2: подпись СТАТИЧНАЯ — бейдж типа/размера, как у всех карточек
        файлов (референсы ChatGPT/Claude не переключают «открыть/закрыть», а
-       смена текста дёргала ширину). Серый выбранной — только на устройствах с
-       hover: на таче панель — нижний лист поверх скрима, а державшийся серый
-       читался как залипший hover. max-w-fit убран: twMerge ронял базовый
+       смена текста дёргала ширину). Серый выбранной гейтится ШИРИНОЙ (md:),
+       не hover: нижний лист поверх скрима существует только <768px, а iPad
+       открывает панель сплитом и обязан показывать, какая карточка открыта.
+       max-w-fit убран: twMerge ронял базовый
        max-w-full карточки, и в зажатой панели она вылезала за край (замер
        258px в контейнере 200px). */
     <FileContainer
@@ -237,7 +238,7 @@ const ToolArtifactCard = memo(({ attachment, artifact }: ToolArtifactCardProps) 
       overrideType={visibleFilename?.split('.').pop()}
       displayName={visibleTitle}
       containerClassName="my-2"
-      buttonClassName={isSelected ? '[@media(hover:hover)]:bg-surface-hover' : undefined}
+      buttonClassName={isSelected ? 'md:bg-surface-hover' : undefined}
       pressed={isSelected}
       onClick={handleOpen}
       trailing={<CardDownloadButton onClick={handleDownload} name={visibleFilename} />}
