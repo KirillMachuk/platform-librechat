@@ -1,4 +1,5 @@
 import React from 'react';
+import { TooltipAnchor } from '@librechat/client';
 import { cn } from '~/utils';
 
 interface ConvoLinkProps {
@@ -24,14 +25,21 @@ const ConvoLink: React.FC<ConvoLinkProps> = ({
   children,
 }) => {
   return (
-    <div
-      className={cn(
-        'flex min-w-0 grow items-center gap-2 overflow-hidden rounded-xl px-2.5',
-        isActiveConvo || isPopoverActive ? 'bg-surface-active' : '',
-      )}
-      title={title ?? undefined}
-      aria-current={isActiveConvo ? 'page' : undefined}
-      style={{ width: '100%' }}
+    /* The narrow sidebar clips most titles, so the row keeps its full-text
+       hint — but as the canon ink plate (§6.6), not the OS balloon the native
+       `title` attribute drew (owner 17.08: one tooltip design everywhere). */
+    <TooltipAnchor
+      description={title || localize('com_ui_untitled')}
+      render={
+        <div
+          className={cn(
+            'flex min-w-0 grow items-center gap-2 overflow-hidden rounded-xl px-2.5',
+            isActiveConvo || isPopoverActive ? 'bg-surface-active' : '',
+          )}
+          aria-current={isActiveConvo ? 'page' : undefined}
+          style={{ width: '100%' }}
+        />
+      }
     >
       {children}
       <div
@@ -69,7 +77,7 @@ const ConvoLink: React.FC<ConvoLinkProps> = ({
           aria-label={localize('com_ui_unread')}
         />
       )}
-    </div>
+    </TooltipAnchor>
   );
 };
 

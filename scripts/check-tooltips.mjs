@@ -1,21 +1,27 @@
 /**
- * Guards the tooltip canon (DESIGN_SYSTEM §6.6): interactive controls get the
- * TooltipAnchor ink plate, not the browser's native `title` balloon.
+ * Guards the tooltip canon (DESIGN_SYSTEM §6.6): EVERY hover hint is the
+ * TooltipAnchor ink plate, never the browser's native `title` balloon.
  *
- * The house pattern (see Chat/Messages/HoverButtons.tsx) wraps the control in
+ * The house pattern (see Chat/Messages/HoverButtons.tsx) wraps the element in
  * `<TooltipAnchor description={...} render={<button aria-label={...} .../>} />`.
- * A native `title=` on a `<button>` or `<a>` draws the OS balloon instead —
- * a second, differently-styled tooltip the redesign already removed once.
+ * A native `title=` on ANY rendered element — a button, but also a truncated
+ * span, a chat row div, a timestamp — draws the OS balloon instead: a second,
+ * differently-styled tooltip. The first sweep (round 10) only covered
+ * `<button>`/`<a>` and the owner immediately met an OS balloon on a sidebar
+ * chat row (17.08), so the rule now covers every native tag.
  *
  * Run with `npm run check:tooltips`.
  *
- * What is deliberately allowed (ALLOWLIST below):
+ * What is deliberately allowed:
+ *   - `<iframe title=...>` (skipped structurally) — there `title` is the
+ *     frame's accessible NAME (a WCAG requirement), and no balloon ever shows
+ *     over the frame's content area because the pointer is inside the child
+ *     document;
  *   - `title` on a DISABLED control — disabled elements swallow pointer events,
  *     so the ariakit plate never fires there; the native balloon is the only
  *     tooltip a disabled control can show (AgentFooter's incomplete-submit);
- *   - the TTS fallback buttons — upstream render path kept verbatim;
- *   - sites outside this sweep's scope, listed explicitly so the next sweep
- *     finds them here instead of rediscovering them.
+ *   - markdown-authored `<img title>` — the chat author wrote the title in
+ *     their own markdown (`![alt](src "title")`); it is content, not chrome.
  *
  * Matching is by file + a `marker` substring of the offending opening tag, not
  * by line number: line numbers drift with every edit above the site and a
@@ -40,19 +46,9 @@ const ALLOWLIST = [
     reason: 'disabled submit: native title is the only tooltip firing on disabled controls',
   },
   {
-    file: 'client/src/components/Audio/TTS.tsx',
+    file: 'client/src/components/Chat/Messages/Content/MarkdownComponents.tsx',
     marker: 'title={title}',
-    reason: 'fallback render path without TooltipAnchor (BrowserTTS)',
-  },
-  {
-    file: 'client/src/components/Audio/TTS.tsx',
-    marker: "title={isSpeaking === true ? localize('com_ui_stop')",
-    reason: 'fallback render path without TooltipAnchor (ExternalTTS)',
-  },
-  {
-    file: 'client/src/components/Prompts/fields/PromptName.tsx',
-    marker: 'title={newName}',
-    reason: 'truncated prompt name: title reveals the full text, not a control label',
+    reason: 'markdown-authored image title (![alt](src "title")) — author content, not UI chrome',
   },
 ];
 
@@ -73,7 +69,7 @@ function walk(dir, out = []) {
 }
 
 /**
- * From a `<button` / `<a` start, find the end of the OPENING tag. A plain
+ * From a native tag start, find the end of the OPENING tag. A plain
  * "first `>`" scan fails on JSX — `onClick={() => ...}` closes the tag two
  * attributes early — so this walks with brace depth and quote state: the tag
  * ends at the first `>` that sits at depth 0 outside any string. Returns the
@@ -117,7 +113,11 @@ function readOpeningTag(text, start) {
   return null;
 }
 
-const TAG_START = /<(button|a)\b/g;
+/* Every lowercase (native) tag. Uppercase JSX components are fine: a `title`
+ * prop there is an ordinary prop (dialog headings etc.), not the DOM attribute.
+ * `iframe` is skipped structurally — see the header comment. */
+const TAG_START = /<([a-z][a-z0-9]*)\b/g;
+const SKIP_TAGS = new Set(['iframe']);
 const TITLE_ATTR = /\stitle\s*=/;
 
 /** All native-title offenders in one file's source text. */
@@ -127,6 +127,7 @@ function findOffenders(text) {
   TAG_START.lastIndex = 0;
   let match;
   while ((match = TAG_START.exec(stripped))) {
+    if (SKIP_TAGS.has(match[1])) continue;
     const tag = readOpeningTag(stripped, match.index);
     if (!tag || !TITLE_ATTR.test(tag.top)) continue;
     offenders.push({
@@ -146,10 +147,16 @@ function selfCheck() {
     '<button title="x">go</button>',
     '<button type="button"\n  onClick={() => go(a > b)}\n  title={localize(\'com_ui_x\')}\n>',
     '<a href="/x" title={name}>x</a>',
+    '<div className="truncate" title={fullName}>x</div>',
+    '<span\n  className="truncate text-xs"\n  title={card}\n>x</span>',
+    '<time dateTime={iso} title={absolute}>x</time>',
+    '<article title="any native tag counts">x</article>',
   ];
   const mustPass = [
     '<button aria-label="x" onClick={() => setTitle("title=")}>x</button>',
-    '<article title="not a control">x</article>',
+    '<OGDialogTemplate title={localize(\'com_ui_terms\')} main={x} />',
+    '<TooltipAnchor description={name} render={<div className="truncate" />}>x</TooltipAnchor>',
+    '<iframe title="Preview: report.pdf" src={url} />',
     '/* <button title="commented out"> */\n<button aria-label="x">x</button>',
   ];
   const missed = mustCatch.filter((probe) => findOffenders(probe).length === 0);
@@ -193,18 +200,20 @@ for (const entry of ALLOWLIST) {
 
 if (problems.length) {
   console.error(
-    `\nDESIGN_SYSTEM §6.6: controls use the TooltipAnchor ink plate, not the native\n` +
-      `title balloon. These ${problems.length} drift:\n`,
+    `\nDESIGN_SYSTEM §6.6: every hover hint is the TooltipAnchor ink plate — the\n` +
+      `native title balloon is banned on ALL native tags, not only controls\n` +
+      `(truncated text included). These ${problems.length} drift:\n`,
   );
   for (const problem of problems) console.error(`  ${problem}`);
   console.error(
-    `\nWrap the control: <TooltipAnchor description={text} render={<button ...\n` +
-      `aria-label={text}>...</button>} /> (TooltipAnchor from '@librechat/client';\n` +
-      `see Chat/Messages/HoverButtons.tsx) and drop the title attribute. A title\n` +
-      `that must stay (disabled control, out-of-scope site) goes into ALLOWLIST\n` +
-      `in this script with its reason.\n`,
+    `\nWrap the element: <TooltipAnchor description={text} render={<div ... />}>\n` +
+      `...</TooltipAnchor> (TooltipAnchor from '@librechat/client'; see\n` +
+      `Conversations/ConvoLink.tsx for a text row, Chat/Messages/HoverButtons.tsx\n` +
+      `for a control) and drop the title attribute. Pass className="cursor-default"\n` +
+      `on non-clickable text. A title that must stay (disabled control, markdown\n` +
+      `author content) goes into ALLOWLIST in this script with its reason.\n`,
   );
   process.exit(1);
 }
 
-console.log('Tooltip canon: ink plates only, no native title balloons on controls.');
+console.log('Tooltip canon: ink plates only, no native title balloons on any tag.');

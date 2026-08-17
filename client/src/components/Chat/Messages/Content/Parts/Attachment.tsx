@@ -87,12 +87,17 @@ const PreviewPlaceholderCard = memo(
             ) : (
               <AlertCircle className="h-3 w-3 shrink-0" aria-hidden="true" />
             )}
-            <span
-              className="truncate"
-              title={status === 'failed' ? (previewError ?? undefined) : undefined}
-            >
-              {subtitleText}
-            </span>
+            {status === 'failed' && previewError ? (
+              <TooltipAnchor
+                description={previewError}
+                className="cursor-default"
+                render={<span className="truncate" />}
+              >
+                {subtitleText}
+              </TooltipAnchor>
+            ) : (
+              <span className="truncate">{subtitleText}</span>
+            )}
           </div>
         }
         trailing={<CardDownloadButton onClick={handleDownload} name={visibleFilename} />}
@@ -262,10 +267,13 @@ const FileAttachmentGroup = memo(({ attachments }: { attachments: TAttachment[] 
         <FilesIcon className="size-4 shrink-0" aria-hidden="true" />
         <span className="shrink-0 font-medium">{fileCount}</span>
         {summary.length > 0 && (
-          <span className="min-w-0 truncate text-left text-xs font-normal" title={summary}>
+          <TooltipAnchor
+            description={summary}
+            render={<span className="min-w-0 truncate text-left text-xs font-normal" />}
+          >
             {'— '}
             {summary}
-          </span>
+          </TooltipAnchor>
         )}
         <ChevronDown
           className={cn(
@@ -372,9 +380,13 @@ const TextAttachment = memo(
         <div className="overflow-hidden rounded-lg bg-surface-secondary">
           {!showFileChip && (
             <div className="flex items-center justify-between gap-2 border-b border-border-light px-3 py-2">
-              <span className="min-w-0 truncate text-sm font-medium" title={visibleFilename}>
+              <TooltipAnchor
+                description={visibleFilename}
+                className="cursor-default"
+                render={<span className="min-w-0 truncate text-sm font-medium" />}
+              >
                 {visibleFilename}
-              </span>
+              </TooltipAnchor>
               {attachment.filepath && (
                 <TooltipAnchor
                   description={localize('com_ui_download')}

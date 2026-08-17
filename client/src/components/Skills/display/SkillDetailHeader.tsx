@@ -33,9 +33,11 @@ const SkillDetailHeader = ({ skill, showActions = true }: SkillDetailHeaderProps
     <div className="flex flex-col gap-3 py-2 sm:flex-row sm:items-center sm:gap-4">
       <div className="min-w-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 items-center gap-2">
-          <h2 className="truncate text-xl font-bold text-text-primary" title={skill.name}>
-            {skill.name}
-          </h2>
+          <TooltipAnchor
+            description={skill.name}
+            className="cursor-default"
+            render={<h2 className="truncate text-xl font-bold text-text-primary">{skill.name}</h2>}
+          />
           {isPublic && (
             <TooltipAnchor
               description={localize('com_ui_sr_public_skill')}

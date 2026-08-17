@@ -1,3 +1,4 @@
+import { TooltipAnchor } from '@librechat/client';
 import type { TokenUsageView } from '~/hooks/Chat/useTokenUsage';
 import type { CurrencyConfig } from '~/utils';
 import { groupToolTokens, formatTokens, formatCost } from '~/utils';
@@ -16,9 +17,13 @@ function Row({ label, value, max }: RowProps) {
   const percent = max != null && max > 0 ? Math.min((value / max) * 100, 100) : null;
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto_2.75rem] items-center gap-x-2 text-[13px] leading-5">
-      <span className="truncate text-text-secondary" title={label}>
+      <TooltipAnchor
+        description={label}
+        className="cursor-default"
+        render={<span className="truncate text-text-secondary" />}
+      >
         {label}
-      </span>
+      </TooltipAnchor>
       <span className="whitespace-nowrap text-right font-medium tabular-nums text-text-primary">
         {formatTokens(value)}
       </span>

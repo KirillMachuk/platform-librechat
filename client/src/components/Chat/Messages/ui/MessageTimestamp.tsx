@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { TooltipAnchor } from '@librechat/client';
 import useTimeTick from '~/hooks/useTimeTick';
 import { getMessageTimestamp } from '~/utils';
 
@@ -19,13 +20,23 @@ export default function MessageTimestamp({ value }: { value?: string | null }) {
     return null;
   }
 
-  return (
+  const timeElement = (
     <time
       dateTime={timestamp.iso}
-      title={timestamp.isRecent ? timestamp.absolute : undefined}
       className="ml-2 text-xs font-normal text-text-secondary transition-opacity duration-200 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:hover)]:opacity-0"
     >
       {timestamp.isRecent ? timestamp.relative : timestamp.absolute}
     </time>
   );
+
+  if (timestamp.isRecent) {
+    return (
+      <TooltipAnchor
+        description={timestamp.absolute}
+        className="cursor-default"
+        render={timeElement}
+      />
+    );
+  }
+  return timeElement;
 }

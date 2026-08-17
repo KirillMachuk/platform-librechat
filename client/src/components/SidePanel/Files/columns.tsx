@@ -70,9 +70,13 @@ export const buildColumns = (ctx: FileColumnsContext): TableColumn<TFileRow, unk
           <div className="flex min-w-0 flex-col justify-center">
             <span className="truncate">{file.filename}</span>
             {card && (
-              <span className="truncate text-xs text-text-secondary" title={card}>
+              <TooltipAnchor
+                description={card}
+                className="cursor-default"
+                render={<span className="truncate text-xs text-text-secondary" />}
+              >
                 {card}
-              </span>
+              </TooltipAnchor>
             )}
           </div>
         </div>

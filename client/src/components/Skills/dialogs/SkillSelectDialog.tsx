@@ -1,8 +1,14 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFormContext, useFormState, useWatch } from 'react-hook-form';
-import { Label, OGDialog, OGDialogContent, OGDialogTemplate } from '@librechat/client';
 import { PermissionTypes, Permissions, SystemCategories } from 'librechat-data-provider';
+import {
+  Label,
+  OGDialog,
+  OGDialogContent,
+  OGDialogTemplate,
+  TooltipAnchor,
+} from '@librechat/client';
 import type { TSkillSummary } from 'librechat-data-provider';
 import type { AgentForm } from '~/common';
 import {
@@ -138,22 +144,32 @@ function SkillCard({
           </span>
         )}
         {isShared && (
-          <span
-            className="inline-flex items-center gap-1 rounded-full bg-surface-tertiary px-1.5 py-0.5 text-text-tertiary"
-            title={skill.authorName}
-            aria-label={skill.authorName}
+          <TooltipAnchor
+            description={skill.authorName ?? ''}
+            className="cursor-default"
+            render={
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-surface-tertiary px-1.5 py-0.5 text-text-tertiary"
+                aria-label={skill.authorName}
+              />
+            }
           >
             <User className="size-2.5" aria-hidden="true" />
-          </span>
+          </TooltipAnchor>
         )}
         {isPublic && (
-          <span
-            className="inline-flex items-center gap-1 rounded-full bg-surface-tertiary px-1.5 py-0.5 text-text-tertiary"
-            title={localize('com_ui_sr_public_skill')}
-            aria-label={localize('com_ui_sr_public_skill')}
+          <TooltipAnchor
+            description={localize('com_ui_sr_public_skill')}
+            className="cursor-default"
+            render={
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-surface-tertiary px-1.5 py-0.5 text-text-tertiary"
+                aria-label={localize('com_ui_sr_public_skill')}
+              />
+            }
           >
             <EarthIcon className="size-2.5" aria-hidden="true" />
-          </span>
+          </TooltipAnchor>
         )}
         <span
           className={cn(

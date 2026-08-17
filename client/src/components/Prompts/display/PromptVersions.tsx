@@ -139,13 +139,12 @@ const VersionCard = ({
           </div>
         </div>
 
-        <time
-          className="mt-1 text-xs text-text-secondary"
-          dateTime={prompt.createdAt}
-          title={formatTimestamp(prompt.createdAt)}
+        <TooltipAnchor
+          description={formatTimestamp(prompt.createdAt)}
+          render={<time className="mt-1 text-xs text-text-secondary" dateTime={prompt.createdAt} />}
         >
           {formatDistanceToNow(new Date(prompt.createdAt), { addSuffix: true })}
-        </time>
+        </TooltipAnchor>
       </button>
     </li>
   );

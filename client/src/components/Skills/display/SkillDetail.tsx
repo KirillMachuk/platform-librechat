@@ -98,9 +98,13 @@ export default function SkillDetail({ skill, onEdit, onDelete }: SkillDetailProp
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-center gap-2">
-                <h2 className="truncate text-xl font-bold text-text-primary" title={skill.name}>
-                  {skill.name}
-                </h2>
+                <TooltipAnchor
+                  description={skill.name}
+                  className="cursor-default"
+                  render={
+                    <h2 className="truncate text-xl font-bold text-text-primary">{skill.name}</h2>
+                  }
+                />
                 {isPublic && (
                   <TooltipAnchor
                     description={localize('com_ui_skill_sr_public')}
