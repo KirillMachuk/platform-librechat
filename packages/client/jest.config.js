@@ -4,10 +4,10 @@ export default {
   coverageReporters: ['text', 'cobertura'],
   testResultsProcessor: 'jest-junit',
   /**
-   * Fails loudly when the workspace packages jest is about to load are not the
-   * ones in this checkout — a worktree borrowing `node_modules` from another
-   * checkout tests that checkout's branch. Warns by default, stops under
-   * `STRICT_WORKSPACE_BUILD=1`, silent in CI, which builds its own.
+   * Refuses to start when the workspace packages jest would load are not this
+   * checkout's — a worktree borrowing `node_modules` from another checkout tests
+   * that checkout's branch. `WORKSPACE_BUILD_WARN_ONLY=1` downgrades it to a
+   * banner; exempt only under GitHub Actions, which builds its own every run.
    */
   globalSetup: '<rootDir>/../../scripts/jest-workspace-build.cjs',
   moduleNameMapper: {

@@ -32,6 +32,9 @@ const PACKAGES = {
 };
 
 const SKIP_DIRS = new Set(['node_modules', '.git', '.turbo', 'coverage']);
+/* Only real sources count. A `.DS_Store` that Finder drops while someone opens
+ * the folder would otherwise read as "a different branch". */
+const SOURCE_FILE = /\.([cm]?[jt]sx?|json|css|svg)$/;
 
 function walk(dir) {
   const files = [];
@@ -52,7 +55,9 @@ function walk(dir) {
         }
         continue;
       }
-      files.push(full);
+      if (!entry.name.startsWith('.') && SOURCE_FILE.test(entry.name)) {
+        files.push(full);
+      }
     }
   }
   return files;
@@ -97,17 +102,44 @@ function resolvePackageRoot(name) {
   return null;
 }
 
-function inspect(packages = PACKAGES) {
+/**
+ * The packages this workspace declares. Judging a React package by the state of
+ * a backend one blocks the run for a reason that workspace could not hit.
+ */
+function packagesFor(cwd) {
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(cwd, 'package.json'), 'utf8'));
+    const declared = new Set([
+      ...Object.keys(manifest.dependencies ?? {}),
+      ...Object.keys(manifest.devDependencies ?? {}),
+      ...Object.keys(manifest.peerDependencies ?? {}),
+    ]);
+    /* An empty result is a real answer — `data-provider` depends on none of them
+     * and has nothing to be lied to about. Only an unreadable manifest falls back
+     * to judging everything. */
+    return Object.fromEntries(Object.entries(PACKAGES).filter(([name]) => declared.has(name)));
+  } catch {
+    return PACKAGES;
+  }
+}
+
+function inspect(packages = packagesFor(process.cwd())) {
   const problems = [];
   let inspected = 0;
 
   for (const [name, [localDir, command]] of Object.entries(packages)) {
     const mine = path.join(REPO, localDir);
-    const loaded = resolvePackageRoot(name);
-    if (!loaded || !fs.existsSync(path.join(mine, 'src'))) {
+    if (!fs.existsSync(path.join(mine, 'src'))) {
       continue;
     }
     inspected++;
+    const loaded = resolvePackageRoot(name);
+    if (!loaded) {
+      /* Every one of these packages points its `main` into `dist`, so failing to
+       * resolve means it is unbuilt or uninstalled rather than merely missing. */
+      problems.push(`${name}: cannot be resolved — it is not built or not installed\n      fix: ${command}`);
+      continue;
+    }
 
     if (path.resolve(loaded) !== path.resolve(mine)) {
       const loadedSrc = path.join(loaded, 'src');
@@ -122,17 +154,14 @@ function inspect(packages = PACKAGES) {
     }
 
     const dist = path.join(loaded, 'dist');
-    if (!fs.existsSync(dist)) {
-      problems.push(`${name}: has no build at all\n      fix: ${command}`);
-      continue;
-    }
     if (newestMtime(path.join(loaded, 'src')) > newestMtime(dist)) {
       problems.push(`${name}: its build predates its source\n      fix: ${command}`);
     }
   }
 
-  /** A check that inspected nothing passes everything. */
-  if (inspected === 0) {
+  /** A check that inspected nothing passes everything — unless there was
+   *  genuinely nothing in scope for this workspace. */
+  if (inspected === 0 && Object.keys(packages).length > 0) {
     problems.push(
       'resolved none of the workspace packages — this check is not looking where it thinks it is',
     );
@@ -145,8 +174,12 @@ function report(problems) {
     `\nThe workspace packages under test are not this checkout's:\n\n  - ${problems.join(
       '\n\n  - ',
     )}\n\nCI builds its own packages every run, so this machine and CI would disagree\n` +
-    `about the same commit. Give this checkout its own build, or point it at one\n` +
-    `made from the same source.\n`
+    `about the same commit.\n\n` +
+    `Rebuilding inside this checkout does NOT help while its node_modules is a\n` +
+    `symlink to another checkout — the package symlink inside it still resolves\n` +
+    `there. The cure is an install of this checkout's own (npm ci at its root,\n` +
+    `then npm run build:packages), or re-pointing node_modules/<package> at this\n` +
+    `checkout's copy.\n`
   );
 }
 
@@ -164,7 +197,10 @@ function report(problems) {
  * against a borrowed checkout can say so, and then owns the caveat.
  */
 module.exports = async function assertWorkspaceBuild() {
-  if (process.env.CI) {
+  /* Only the real runner is exempt. A bare `CI=1` gets set by devcontainers and
+   * wrappers too — this repo's own pre-commit hook already works around that —
+   * and disarming on it would leave exactly the machines this protects. */
+  if (process.env.GITHUB_ACTIONS === 'true') {
     return;
   }
   const problems = inspect();
