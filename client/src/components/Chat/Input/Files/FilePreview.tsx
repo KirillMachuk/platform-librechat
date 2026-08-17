@@ -57,6 +57,7 @@ const FilePreview = ({
       {indexFailed && !uploading && (
         <TooltipAnchor
           description={localize('com_ui_index_failed')}
+          className="cursor-default"
           render={
             <span
               role="img"
@@ -71,7 +72,13 @@ const FilePreview = ({
     </div>
   );
   if (indexing) {
-    return <TooltipAnchor description={localize('com_ui_indexing')} render={preview} />;
+    return (
+      <TooltipAnchor
+        description={localize('com_ui_indexing')}
+        className="cursor-default"
+        render={preview}
+      />
+    );
   }
   return preview;
 };

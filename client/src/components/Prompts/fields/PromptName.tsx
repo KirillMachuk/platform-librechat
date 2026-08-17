@@ -113,10 +113,11 @@ const PromptName: React.FC<Props> = ({ name, isLoading = false, isError = false,
           aria-label={localize('com_ui_name')}
         />
       ) : (
-        <TooltipAnchor
-          description={newName ?? ''}
-          className="cursor-text"
-          render={
+        /* Wrapped only while a name EXISTS: description='' still mounts the
+           plate, and hovering the wide name button while the prompt is still
+           loading drew an empty 4x8px ink pill (round-12 review). */
+        (() => {
+          const nameButton = (
             <button
               type="button"
               onClick={() => {
@@ -129,8 +130,14 @@ const PromptName: React.FC<Props> = ({ name, isLoading = false, isError = false,
             >
               {newName}
             </button>
+          );
+          if (!newName) {
+            return nameButton;
           }
-        />
+          return (
+            <TooltipAnchor description={newName} className="cursor-text" render={nameButton} />
+          );
+        })()
       )}
       <div className="ml-1.5 flex shrink-0 items-center justify-center">
         {saveStatus === 'saving' && (

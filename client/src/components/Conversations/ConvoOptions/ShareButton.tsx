@@ -80,14 +80,16 @@ export default function ShareButton({
             </div>
             <div className="pan-x relative items-center overflow-x-auto overflow-y-clip rounded-lg p-2">
               {showQR && (
-                <div className="mb-4 flex flex-col items-center">
-                  <QRCodeSVG
-                    value={sharedLink}
-                    size={200}
-                    marginSize={2}
-                    className="rounded-2xl"
-                    title={localize('com_ui_share_qr_code_description')}
-                  />
+                /* Accessible name lives on the wrapper, NOT on QRCodeSVG's
+                   `title` prop — qrcode.react renders that as an SVG <title>
+                   child, which browsers show as the OS balloon on hover
+                   (banned by §6.6; the guard cannot see component props). */
+                <div
+                  className="mb-4 flex flex-col items-center"
+                  role="img"
+                  aria-label={localize('com_ui_share_qr_code_description')}
+                >
+                  <QRCodeSVG value={sharedLink} size={200} marginSize={2} className="rounded-2xl" />
                 </div>
               )}
 

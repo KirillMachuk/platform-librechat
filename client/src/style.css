@@ -957,7 +957,8 @@ pre {
   overflow-x: auto;
   /* Next to overflow-x:auto, the default `visible` computes to auto — a
      vertical scroll trap for touch pans (17.08-2 H1, same fix as
-     pre[class*='language-'] above). No max-height here → clip the axis. */
+     pre[class*='language-'] above; `clip` computes to hidden there — no
+     user scrolling on the axis). No max-height here → clip the axis. */
   overflow-y: clip;
   padding: 0;
 }
@@ -1275,7 +1276,8 @@ pre[class*='language-'] {
      pre a VERTICAL scroll container too (no max-height → never intentional),
      and iOS latched touch pans onto it whenever rounding left it 1-2px of
      range — every other swipe through the chat died there (17.08-2 H1).
-     `clip` removes the y-axis from scroll chaining; `contain` on x keeps the
+     Next to overflow-x:auto, `clip` computes to hidden: the axis takes no
+     user pan, so the gesture chains to the chat; `contain` on x keeps the
      round-10 rule (horizontal ribbons swallow their own overscroll). */
   overflow-x: auto;
   overflow-y: clip;
