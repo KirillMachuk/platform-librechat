@@ -23,22 +23,21 @@ module.exports = {
   //     branches: 12,
   //   },
   // },
+  /**
+   * Fails loudly when the workspace packages jest is about to load are not the
+   * ones in this checkout — a worktree borrowing `node_modules` from another
+   * checkout tests that checkout's branch. Warns by default, stops under
+   * `STRICT_WORKSPACE_BUILD=1`, silent in CI, which builds its own.
+   */
+  globalSetup: '<rootDir>/../scripts/jest-workspace-build.cjs',
   moduleNameMapper: {
     '\\.(css)$': 'identity-obj-proxy',
     '\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$':
       'jest-file-loader',
     '^test/(.*)$': '<rootDir>/test/$1',
     '^~/(.*)$': '<rootDir>/src/$1',
-    /**
-     * Source, not `dist` — see packages/api/jest.config.mjs for why, and
-     * `scripts/check-shared-source.mjs` for the guard that keeps it that way.
-     * Reached by relative path rather than through `node_modules`, whose symlink
-     * resolves to the primary checkout: a worktree was reading whichever branch
-     * that checkout happened to be on.
-     */
     '^librechat-data-provider/react-query$':
-      '<rootDir>/../packages/data-provider/src/react-query',
-    '^librechat-data-provider$': '<rootDir>/../packages/data-provider/src/index.ts',
+      '<rootDir>/../node_modules/librechat-data-provider/src/react-query',
   },
   maxWorkers: '50%',
   /**

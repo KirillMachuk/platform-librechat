@@ -3,13 +3,17 @@ export default {
   coveragePathIgnorePatterns: ['/node_modules/', '/dist/'],
   coverageReporters: ['text', 'cobertura'],
   testResultsProcessor: 'jest-junit',
+  /**
+   * Fails loudly when the workspace packages jest is about to load are not the
+   * ones in this checkout — a worktree borrowing `node_modules` from another
+   * checkout tests that checkout's branch. Warns by default, stops under
+   * `STRICT_WORKSPACE_BUILD=1`, silent in CI, which builds its own.
+   */
+  globalSetup: '<rootDir>/../../scripts/jest-workspace-build.cjs',
   moduleNameMapper: {
     '^@src/(.*)$': '<rootDir>/src/$1',
     '^~/(.*)$': '<rootDir>/src/$1',
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
-    /** Source, not `dist` — see packages/api/jest.config.mjs for why, and
-     *  `scripts/check-shared-source.mjs` for the guard that keeps it that way. */
-    '^librechat-data-provider$': '<rootDir>/../data-provider/src/index.ts',
   },
   // coverageThreshold: {
   //   global: {

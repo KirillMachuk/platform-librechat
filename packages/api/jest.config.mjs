@@ -31,26 +31,16 @@ export default {
     ],
   },
   transformIgnorePatterns: [`/node_modules/(?!(${esModules})/).*/`],
+  /**
+   * Fails loudly when the workspace packages jest is about to load are not the
+   * ones in this checkout — a worktree borrowing `node_modules` from another
+   * checkout tests that checkout's branch. Warns by default, stops under
+   * `STRICT_WORKSPACE_BUILD=1`, silent in CI, which builds its own.
+   */
+  globalSetup: '<rootDir>/../../scripts/jest-workspace-build.cjs',
   moduleNameMapper: {
     '^@src/(.*)$': '<rootDir>/src/$1',
     '~/(.*)': '<rootDir>/src/$1',
-    /**
-     * Read the shared package's SOURCE, never `packages/data-provider/dist`.
-     *
-     * That dist is gitignored and only CI and the Docker build regenerate it, so
-     * on a developer machine it rots: measured 2026-08-17, the local copy was 12
-     * days behind the source and missing 23 of the 24 exports added in that
-     * window. `AutoModes` was one of them, which is why `resolveAutoMode` threw
-     * here while CI stayed green. The quieter half is worse — a test whose
-     * subject tolerates a falsy import passes having checked nothing.
-     *
-     * The path is relative rather than through `node_modules`: that symlink
-     * resolves to the primary checkout, so a worktree would test whichever
-     * branch that checkout happens to be on instead of its own.
-     *
-     * `scripts/check-shared-source.mjs` keeps every workspace on this rule.
-     */
-    '^librechat-data-provider$': '<rootDir>/../data-provider/src/index.ts',
   },
   // coverageThreshold: {
   //   global: {

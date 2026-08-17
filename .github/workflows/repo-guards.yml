@@ -17,7 +17,8 @@ on:
       - 'client/**'
       - 'packages/**'
       - 'config/**'
-      - 'scripts/check-shared-source.mjs'
+      - 'scripts/check-jest-guard.mjs'
+      - 'scripts/jest-workspace-build.cjs'
       - 'package.json'
       - '.github/workflows/repo-guards.yml'
   push:
@@ -28,7 +29,8 @@ on:
       - 'client/**'
       - 'packages/**'
       - 'config/**'
-      - 'scripts/check-shared-source.mjs'
+      - 'scripts/check-jest-guard.mjs'
+      - 'scripts/jest-workspace-build.cjs'
       - 'package.json'
       - '.github/workflows/repo-guards.yml'
 
@@ -36,8 +38,8 @@ permissions:
   contents: read
 
 jobs:
-  shared_package_source:
-    name: Shared package source
+  jest_guard:
+    name: Jest workspace-build guard
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -50,5 +52,5 @@ jobs:
           node-version: '24.16.0'
 
       # Reads jest configs only — no dependencies, so no install step.
-      - name: Check tests read the shared package's source
-        run: npm run check:shared-source
+      - name: Check every workspace wires the guard
+        run: npm run check:jest-guard

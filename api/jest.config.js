@@ -26,15 +26,18 @@ module.exports = {
   workerIdleMemoryLimit: '1000MB',
   testTimeout: 30000, // 30 seconds timeout for all tests
   setupFiles: ['./test/jestSetup.js', './test/__mocks__/logger.js'],
+  /**
+   * Fails loudly when the workspace packages jest is about to load are not the
+   * ones in this checkout — a worktree borrowing `node_modules` from another
+   * checkout tests that checkout's branch. Warns by default, stops under
+   * `STRICT_WORKSPACE_BUILD=1`, silent in CI, which builds its own.
+   */
+  globalSetup: '<rootDir>/../scripts/jest-workspace-build.cjs',
   moduleNameMapper: {
     '~/(.*)': '<rootDir>/$1',
     '~/data/auth.json': '<rootDir>/__mocks__/auth.mock.json',
     '^openid-client/passport$': '<rootDir>/test/__mocks__/openid-client-passport.js',
     '^openid-client$': '<rootDir>/test/__mocks__/openid-client.js',
-    /** Source, not `dist` — see packages/api/jest.config.mjs for why, and
-     *  `scripts/check-shared-source.mjs` for the guard that keeps it that way.
-     *  `config/jest.config.js` derives its mapper from this one. */
-    '^librechat-data-provider$': '<rootDir>/../packages/data-provider/src/index.ts',
   },
   transform: {
     '\\.[jt]sx?$': [

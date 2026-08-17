@@ -125,7 +125,7 @@
     "check:tooltips": "node scripts/check-tooltips.mjs",
     "check:panx": "node scripts/check-panx.mjs",
     "check:artifacts-offline": "node scripts/check-artifacts-offline.mjs",
-    "check:shared-source": "node scripts/check-shared-source.mjs"
+    "check:jest-guard": "node scripts/check-jest-guard.mjs"
   },
   "repository": {
     "type": "git",
