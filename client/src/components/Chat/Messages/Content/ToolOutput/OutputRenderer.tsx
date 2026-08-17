@@ -125,7 +125,7 @@ export default function OutputRenderer({ text, variant = 'auto' }: OutputRendere
   return (
     <div className="relative">
       {isJson ? (
-        <pre className="max-h-[300px] overflow-auto rounded text-[12.5px] leading-5">
+        <pre className="pan-x max-h-[300px] overflow-auto rounded text-[12.5px] leading-5">
           <code className="hljs language-json !whitespace-pre-wrap !break-words">
             {visibleText}
           </code>

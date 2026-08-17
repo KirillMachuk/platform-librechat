@@ -188,7 +188,7 @@ export default function FileAuthoringCall({
           {!!preview && (
             <div className="my-2 overflow-hidden rounded-lg border border-border-light bg-surface-hover">
               <CodeWindowHeader language={previewIsDiff ? 'diff' : fileName} code={preview} />
-              <pre className="max-h-[300px] overflow-auto bg-surface-chat p-4 font-mono text-xs dark:bg-surface-primary-alt">
+              <pre className="pan-x max-h-[300px] overflow-auto bg-surface-chat p-4 font-mono text-xs dark:bg-surface-primary-alt">
                 <code className={`hljs language-${previewLang} !whitespace-pre`}>
                   {highlighted ?? preview}
                 </code>
@@ -196,7 +196,7 @@ export default function FileAuthoringCall({
               {showOutputSection && (
                 <pre
                   className={cn(
-                    'max-h-[300px] overflow-auto whitespace-pre-wrap break-words border-t border-border-light px-3 py-2.5 font-mono text-xs',
+                    'pan-x max-h-[300px] overflow-auto whitespace-pre-wrap break-words border-t border-border-light px-3 py-2.5 font-mono text-xs',
                     hasError ? 'text-red-600 dark:text-red-400' : 'text-text-primary',
                   )}
                 >

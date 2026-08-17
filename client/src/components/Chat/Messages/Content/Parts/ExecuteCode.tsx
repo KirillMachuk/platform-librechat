@@ -106,7 +106,7 @@ export default function ExecuteCode({
           <div className="my-2 overflow-hidden rounded-lg border border-border-light bg-surface-hover">
             {code && <CodeWindowHeader language={lang} code={code} />}
             {code && (
-              <pre className="max-h-[300px] overflow-auto bg-surface-chat p-4 font-mono text-xs dark:bg-surface-primary-alt">
+              <pre className="pan-x max-h-[300px] overflow-auto bg-surface-chat p-4 font-mono text-xs dark:bg-surface-primary-alt">
                 <code className={`hljs language-${lang} !whitespace-pre`}>{highlighted}</code>
               </pre>
             )}
@@ -122,7 +122,7 @@ export default function ExecuteCode({
                 </div>
                 <div
                   className={cn(
-                    'max-h-[200px] overflow-auto',
+                    'pan-x max-h-[200px] overflow-auto',
                     outputHasError ? 'text-red-600 dark:text-red-400' : 'text-text-primary',
                   )}
                 >

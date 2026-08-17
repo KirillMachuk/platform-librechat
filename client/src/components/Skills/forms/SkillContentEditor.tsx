@@ -60,7 +60,7 @@ const SkillContentEditor: React.FC<SkillContentEditorProps> = ({
       <h2 className="sr-only">{localize('com_ui_skill_content')}</h2>
       <div
         className={cn(
-          'relative w-full flex-1 overflow-auto rounded-xl border border-border-medium p-3 text-left transition-all duration-200 sm:p-4',
+          'pan-x relative w-full flex-1 overflow-auto rounded-xl border border-border-medium p-3 text-left transition-all duration-200 sm:p-4',
           isEditing ? '' : 'cursor-pointer hover:bg-surface-tertiary',
         )}
       >

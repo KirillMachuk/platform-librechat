@@ -67,7 +67,7 @@ export default function SkillCall({
                 <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-text-secondary">
                   {localize('com_ui_output')}
                 </div>
-                <div className="max-h-[200px] overflow-auto text-text-primary">
+                <div className="pan-x max-h-[200px] overflow-auto text-text-primary">
                   <Stdout output={output} />
                 </div>
               </div>

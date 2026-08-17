@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
+import { Constants } from 'librechat-data-provider';
 import { useRecoilState, useRecoilValue, useResetRecoilState } from 'recoil';
-import { isCodeOnlyArtifact } from '~/utils/artifacts';
+import { isFilePreviewArtifact, isCodeOnlyArtifact } from '~/utils/artifacts';
 import { useArtifactsContext } from '~/Providers';
 import { logger } from '~/utils';
 import store from '~/store';
@@ -54,16 +55,36 @@ export default function useArtifacts() {
        этого не видела — она открывала файл в существующем диалоге).
        Наследовать чужие артефакты неоткуда: атом не переживает перезагрузку,
        а переход из разговора в «новый чат» закрывает первая ветка. */
-    if (conversationId !== prevConversationIdRef.current && prevConversationIdRef.current != null) {
+    /* «new» -> реальный uuid — это ТОТ ЖЕ разговор, получивший id при первой
+       отправке (17.08, ревью; прецедент — cleanup.ts для субагентов). Без
+       гейта документ, открытый из библиотеки на пустом чате, закрывался ровно
+       в момент отправки первого сообщения. Сброс при размонтировании живёт в
+       ОТДЕЛЬНОМ эффекте без зависимостей: cleanup здесь бежит и на смене
+       conversationId — со старым замыканием он стирал бы состояние на том же
+       переходе, который этот гейт существует пропустить. */
+    const isNewToReal =
+      prevConversationIdRef.current === Constants.NEW_CONVO &&
+      conversationId != null &&
+      conversationId !== Constants.NEW_CONVO;
+    if (
+      conversationId !== prevConversationIdRef.current &&
+      prevConversationIdRef.current != null &&
+      !isNewToReal
+    ) {
       resetState();
     }
     prevConversationIdRef.current = conversationId;
-    /** Resets artifacts when unmounting */
+  }, [conversationId, resetArtifacts, resetCurrentArtifactId]);
+
+  /** Resets artifacts when the PANEL unmounts (close, navigation away). */
+  useEffect(() => {
     return () => {
       logger.log('artifacts_visibility', 'Unmounting artifacts');
-      resetState();
+      resetArtifacts();
+      resetCurrentArtifactId();
     };
-  }, [conversationId, resetArtifacts, resetCurrentArtifactId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Read currentArtifactId in effects without subscribing as a dependency.
@@ -111,6 +132,13 @@ export default function useArtifacts() {
     }
     lastContentRef.current = latestArtifact?.content ?? null;
     if (isCodeOnlyArtifact(latestArtifact?.type)) {
+      return;
+    }
+    /* Открытый ПРЕДПРОСМОТР ФАЙЛА пользователь выбрал сам — стриминговый
+       артефакт не должен вырывать его из-под чтения (17.08, ревью): человек
+       открывает источник из цитаты именно ВО ВРЕМЯ генерации ответа по нему. */
+    const selectedId = currentArtifactIdRef.current;
+    if (selectedId != null && isFilePreviewArtifact(artifacts?.[selectedId]?.type)) {
       return;
     }
 

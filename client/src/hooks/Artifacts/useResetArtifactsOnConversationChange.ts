@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { Constants } from 'librechat-data-provider';
 import { useRecoilValue, useResetRecoilState } from 'recoil';
 import store from '~/store';
 
@@ -22,6 +23,12 @@ export default function useResetArtifactsOnConversationChange(): void {
     const next = conversationId ?? null;
     prevConversationIdRef.current = next;
     if (prev == null || prev === next) {
+      return;
+    }
+    /* «new» -> реальный uuid — тот же разговор, получивший id при первой
+       отправке (17.08, ревью): стирание здесь закрывало предпросмотр из
+       библиотеки ровно в момент отправки первого сообщения. */
+    if (prev === Constants.NEW_CONVO && next != null) {
       return;
     }
     resetArtifacts();

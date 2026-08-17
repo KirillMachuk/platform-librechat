@@ -216,7 +216,7 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
                   <span className="sr-only">{localize('com_ui_close_settings')}</span>
                 </button>
               </DialogTitle>
-              <div className="h-[600px] max-h-[calc(90vh-120px)] overflow-auto px-6 md:w-[840px]">
+              <div className="pan-x h-[600px] max-h-[calc(90vh-120px)] overflow-auto px-6 md:w-[840px]">
                 <Tabs.Root
                   value={activeTab}
                   onValueChange={handleTabChange}
@@ -226,7 +226,7 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
                   <Tabs.List
                     aria-label={localize('com_ui_settings_sections')}
                     className={cn(
-                      'min-w-auto max-w-auto relative -ml-[8px] flex flex-shrink-0 flex-col flex-nowrap overflow-auto sm:max-w-none',
+                      'pan-x min-w-auto max-w-auto relative -ml-[8px] flex flex-shrink-0 flex-col flex-nowrap overflow-auto sm:max-w-none',
                       isSmallScreen
                         ? 'flex-row rounded-xl bg-surface-secondary'
                         : 'sticky top-0 h-full',
@@ -265,7 +265,7 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
                       </Tabs.Trigger>
                     ))}
                   </Tabs.List>
-                  <div className="overflow-auto sm:w-full sm:max-w-none md:pr-0.5 md:pt-0.5">
+                  <div className="pan-x overflow-auto sm:w-full sm:max-w-none md:pr-0.5 md:pt-0.5">
                     {settingsTabs.map(({ value, content }) => (
                       <Tabs.Content key={value} value={value} tabIndex={-1}>
                         {content}

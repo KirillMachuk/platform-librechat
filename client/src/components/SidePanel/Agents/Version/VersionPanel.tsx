@@ -117,7 +117,7 @@ export default function VersionPanel() {
   );
 
   return (
-    <div className="scrollbar-gutter-stable h-full min-h-[40vh] overflow-auto pb-12 text-sm">
+    <div className="pan-x scrollbar-gutter-stable h-full min-h-[40vh] overflow-auto pb-12 text-sm">
       <div className="version-panel relative flex flex-col items-center px-16 py-4 text-center">
         <div className="absolute left-0 top-4">
           <button

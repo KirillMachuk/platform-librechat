@@ -37,7 +37,7 @@ export default function ArtifactTabs({
       <Tabs.Content
         value="code"
         id="artifacts-code"
-        className="h-full w-full flex-grow overflow-auto"
+        className="pan-x h-full w-full flex-grow overflow-auto"
         tabIndex={-1}
       >
         <ArtifactCodeEditor artifact={artifact} monacoRef={monacoRef} readOnly={isSharedConvo} />

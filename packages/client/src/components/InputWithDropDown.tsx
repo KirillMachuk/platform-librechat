@@ -121,7 +121,7 @@ const InputWithDropdown: React.ForwardRefExoticComponent<
           <ul
             id="dropdown-list"
             role="listbox"
-            className="focus-inset absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border-medium bg-surface-secondary shadow-lg"
+            className="pan-x focus-inset absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border-medium bg-surface-secondary shadow-lg"
           >
             {options.map((option, index) => (
               <li

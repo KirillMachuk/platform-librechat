@@ -79,7 +79,7 @@ export const InputCombobox: React.FC<ComboboxProps> = ({
         open={isOpen}
         onClose={() => setIsOpen(false)}
         className={cn(
-          'z-popover max-h-60 w-full overflow-auto rounded-md bg-surface-primary p-1 shadow-lg',
+          'pan-x z-popover max-h-60 w-full overflow-auto rounded-md bg-surface-primary p-1 shadow-lg',
           'animate-in fade-in-0 zoom-in-95',
         )}
       >

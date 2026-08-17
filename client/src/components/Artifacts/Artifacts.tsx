@@ -180,12 +180,29 @@ export default function Artifacts() {
   };
 
   const closeArtifactsRef = useRef<(() => void) | null>(null);
-  /* Модалка закрывалась по Escape — панель обязана уметь то же (14.08-3,
-     паритет доступности). Диалоги поверх гасят своё Escape через
-     preventDefault — их закрытие панель не трогает. */
+  /* Escape закрывает панель, только когда над ней НЕТ ни одного видимого
+     слоя (17.08, ревью + e2e): порядок слушателей не годится (Radix
+     регистрируется позже и его preventDefault опаздывает, Ariakit его не
+     зовёт вовсе), фокус не годится (Radix возвращает его триггеру ПОЗЖЕ
+     любого нашего focus()). Проверка «есть ли слой» — по самому DOM в момент
+     нажатия: открытый слой ещё смонтирован, когда наш bubble-слушатель
+     срабатывает первым. Поля ввода и IME-набор не трогаем. */
   useEffect(() => {
+    const LAYER_SELECTOR =
+      '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [data-radix-popper-content-wrapper], [aria-modal="true"]';
+    const hasVisibleLayer = () =>
+      Array.from(document.querySelectorAll(LAYER_SELECTOR)).some(
+        (el) => (el as HTMLElement).getClientRects().length > 0,
+      );
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, [contenteditable="true"]')) {
+        return;
+      }
+      if (hasVisibleLayer()) {
         return;
       }
       closeArtifactsRef.current?.();

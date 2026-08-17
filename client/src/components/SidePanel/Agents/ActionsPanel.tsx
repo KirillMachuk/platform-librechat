@@ -85,7 +85,7 @@ export default function ActionsPanel() {
   return (
     <FormProvider {...methods}>
       <form className="h-full grow overflow-hidden">
-        <div className="h-full overflow-auto px-2 text-sm">
+        <div className="pan-x h-full overflow-auto px-2 text-sm">
           <div className="flex min-h-full flex-col pb-3">
             <div>
               <div className="relative flex flex-col items-center px-16 pt-2 text-center">

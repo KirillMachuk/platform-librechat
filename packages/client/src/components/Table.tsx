@@ -16,7 +16,7 @@ const Table: React.ForwardRefExoticComponent<TableProps & React.RefAttributes<HT
         return tableElement;
       }
 
-      return <div className="relative w-full overflow-auto">{tableElement}</div>;
+      return <div className="pan-x relative w-full overflow-auto">{tableElement}</div>;
     },
   );
 Table.displayName = 'Table';

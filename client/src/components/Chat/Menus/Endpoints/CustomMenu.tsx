@@ -71,7 +71,7 @@ export const CustomMenu = React.forwardRef<HTMLDivElement, CustomMenuProps>(func
         className={cn(
           parent ? 'animate-popover-left ml-3' : 'animate-popover',
           'outline-none! z-popover flex max-h-[min(450px,var(--popover-available-height))] w-full',
-          'w-[var(--menu-width,auto)] min-w-[300px] flex-col overflow-auto rounded-xl border border-border-light',
+          'pan-x w-[var(--menu-width,auto)] min-w-[300px] flex-col overflow-auto rounded-xl border border-border-light',
           /* card, not presentation: the book's selector menu is the card
              surface (#FFF / #232323); presentation is the page behind it —
              in dark that read as a second, wrong grey (review 11.08). */
