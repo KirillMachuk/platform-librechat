@@ -95,15 +95,28 @@ for (const configPath of configs) {
   inspected++;
   const where = relative(ROOT, configPath);
   const mapper = (await loadConfig(configPath)).moduleNameMapper ?? {};
-  const targets = Object.entries(mapper)
-    .filter(([pattern]) => pattern.includes(PACKAGE))
-    .flatMap(([, target]) => (Array.isArray(target) ? target : [target]));
+  const entries = Object.entries(mapper).filter(([pattern]) => pattern.includes(PACKAGE));
+  const targets = entries.flatMap(([, target]) => (Array.isArray(target) ? target : [target]));
 
-  if (targets.length === 0) {
+  /**
+   * The bare import has to be covered, not merely some subpath of it. Asking
+   * whether the pattern actually matches the package name catches the case a
+   * looser "is there any entry mentioning it" check waves through: mapping only
+   * `…/react-query` while every `from 'librechat-data-provider'` in the
+   * workspace still resolves to the stale build.
+   */
+  const coversBareImport = entries.some(([pattern]) => {
+    try {
+      return new RegExp(pattern).test(PACKAGE);
+    } catch {
+      return false;
+    }
+  });
+
+  if (!coversBareImport) {
     problems.push(
-      `${where}: no moduleNameMapper entry for "${PACKAGE}" — its tests read the stale build`,
+      `${where}: no moduleNameMapper entry matching "${PACKAGE}" itself — those imports read the stale build`,
     );
-    continue;
   }
 
   for (const target of targets) {
