@@ -78,7 +78,7 @@ const PreviewPlaceholderCard = memo(
         file={attachment}
         overrideType={attachment.filename?.split('.').pop()}
         displayName={visibleFilename}
-        containerClassName="my-2 max-w-fit"
+        containerClassName="my-2"
         buttonClassName="cursor-default"
         subtitle={
           <div className="flex items-center gap-1.5 truncate text-xs text-text-secondary">
@@ -87,12 +87,15 @@ const PreviewPlaceholderCard = memo(
             ) : (
               <AlertCircle className="h-3 w-3 shrink-0" aria-hidden="true" />
             )}
-            <span
-              className="truncate"
-              title={status === 'failed' ? (previewError ?? undefined) : undefined}
-            >
-              {subtitleText}
-            </span>
+            {status === 'failed' && previewError ? (
+              <TooltipAnchor
+                description={previewError}
+                className="cursor-default"
+                render={<span className="truncate">{subtitleText}</span>}
+              />
+            ) : (
+              <span className="truncate">{subtitleText}</span>
+            )}
           </div>
         }
         trailing={<CardDownloadButton onClick={handleDownload} name={visibleFilename} />}
@@ -180,7 +183,6 @@ const FileAttachment = memo(({ attachment }: { attachment: Partial<TAttachment> 
         onClick={() => openFilePreview(file)}
         overrideType={extension}
         displayName={displayFilename(attachment.filename)}
-        containerClassName="max-w-fit"
         trailing={
           <CardDownloadButton
             onClick={handleDownload}
@@ -262,10 +264,15 @@ const FileAttachmentGroup = memo(({ attachments }: { attachments: TAttachment[] 
         <FilesIcon className="size-4 shrink-0" aria-hidden="true" />
         <span className="shrink-0 font-medium">{fileCount}</span>
         {summary.length > 0 && (
-          <span className="min-w-0 truncate text-left text-xs font-normal" title={summary}>
-            {'— '}
-            {summary}
-          </span>
+          <TooltipAnchor
+            description={summary}
+            render={
+              <span className="min-w-0 truncate text-left text-xs font-normal">
+                {'— '}
+                {summary}
+              </span>
+            }
+          />
         )}
         <ChevronDown
           className={cn(
@@ -366,15 +373,18 @@ const TextAttachment = memo(
             onClick={handleDownload}
             overrideType={extension}
             displayName={displayFilename(attachment.filename)}
-            containerClassName="max-w-fit"
           />
         )}
         <div className="overflow-hidden rounded-lg bg-surface-secondary">
           {!showFileChip && (
             <div className="flex items-center justify-between gap-2 border-b border-border-light px-3 py-2">
-              <span className="min-w-0 truncate text-sm font-medium" title={visibleFilename}>
-                {visibleFilename}
-              </span>
+              <TooltipAnchor
+                description={visibleFilename}
+                className="cursor-default"
+                render={
+                  <span className="min-w-0 truncate text-sm font-medium">{visibleFilename}</span>
+                }
+              />
               {attachment.filepath && (
                 <TooltipAnchor
                   description={localize('com_ui_download')}

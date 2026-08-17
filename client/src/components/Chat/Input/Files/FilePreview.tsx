@@ -1,4 +1,4 @@
-import { Spinner } from '@librechat/client';
+import { Spinner, TooltipAnchor } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import type { ExtendedFile } from '~/common';
 import { TriangleAlert } from '~/components/icons';
@@ -37,13 +37,12 @@ const FilePreview = ({
      glyphs. ONE map decides the drawing everywhere: typeMeta. */
   const meta = fileTypeMeta(overrideType ?? (file?.type as string | undefined) ?? '');
   const TypeGlyph = meta.Icon;
-  return (
+  const preview = (
     <div
       className={cn(
         'relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl',
         className,
       )}
-      title={indexing ? localize('com_ui_indexing') : undefined}
     >
       <TypeGlyph className="h-[22px] w-[22px] text-text-secondary" aria-hidden="true" />
       <SourceIcon source={file?.source} isCodeFile={!!file?.['metadata']?.fileIdentifier} />
@@ -56,17 +55,25 @@ const FilePreview = ({
         />
       )}
       {indexFailed && !uploading && (
-        <span
-          role="img"
-          title={localize('com_ui_index_failed')}
-          aria-label={localize('com_ui_index_failed')}
-          className="absolute inset-0 flex items-center justify-center bg-black/40"
-        >
-          <TriangleAlert className="size-5 text-amber-400" aria-hidden={true} />
-        </span>
+        <TooltipAnchor
+          description={localize('com_ui_index_failed')}
+          render={
+            <span
+              role="img"
+              aria-label={localize('com_ui_index_failed')}
+              className="absolute inset-0 flex items-center justify-center bg-black/40"
+            >
+              <TriangleAlert className="size-5 text-amber-400" aria-hidden={true} />
+            </span>
+          }
+        />
       )}
     </div>
   );
+  if (indexing) {
+    return <TooltipAnchor description={localize('com_ui_indexing')} render={preview} />;
+  }
+  return preview;
 };
 
 export default FilePreview;

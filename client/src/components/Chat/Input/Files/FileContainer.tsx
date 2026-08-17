@@ -1,3 +1,4 @@
+import { TooltipAnchor } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { ExtendedFile } from '~/common';
@@ -90,15 +91,16 @@ const FileContainer = ({
           <div className={cn('flex flex-row items-center gap-2', trailing != null && 'pr-9')}>
             <FilePreview file={file} overrideType={overrideType} className="relative" />
             <div className="overflow-hidden">
-              <div className="truncate font-medium" title={visibleName}>
-                {visibleName}
-              </div>
+              {/* Full-name hint as the canon ink plate; the badge line lost its
+                  `title` outright — it repeated the visible text verbatim. */}
+              <TooltipAnchor
+                description={visibleName}
+                render={<div className="truncate font-medium">{visibleName}</div>}
+              />
               {subtitle != null ? (
                 subtitle
               ) : (
-                <div className="truncate text-text-secondary" title={badge || typeLabel}>
-                  {badge || typeLabel}
-                </div>
+                <div className="truncate text-text-secondary">{badge || typeLabel}</div>
               )}
             </div>
           </div>

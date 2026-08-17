@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import copy from 'copy-to-clipboard';
 import { useRecoilValue } from 'recoil';
+import { TooltipAnchor } from '@librechat/client';
 import type { Artifact } from '~/common';
 import { cn, logger, decodeBytes, sortPagesByRelevance, triggerDownload } from '~/utils';
 import { fileTypeMeta } from '~/components/Chat/Input/Files/typeMeta';
@@ -369,9 +370,15 @@ export default function FilePreviewBody({ artifact }: { artifact: Artifact }) {
       data-testid="file-preview-body"
       aria-label={`${localize('com_ui_preview')}: ${fileName}`}
     >
-      <div className="shrink-0 truncate px-4 pt-3 text-xs text-text-secondary" title={fileName}>
-        {metaParts.join(' · ')}
-      </div>
+      <TooltipAnchor
+        description={fileName}
+        className="cursor-default"
+        render={
+          <div className="shrink-0 truncate px-4 pt-3 text-xs text-text-secondary">
+            {metaParts.join(' · ')}
+          </div>
+        }
+      />
       {/* Кадры (PDF, офис) занимают ВСЮ высоту панели и прокручиваются САМИ:
           пока их прокручивала панель, кадр стоял частично за краем и клик по
           вкладке листа внутри него не доезжал (e2e поймал переключение листов

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useQueries } from '@tanstack/react-query';
-import { Switch, useToastContext } from '@librechat/client';
 import { Controller, useWatch, useFormContext } from 'react-hook-form';
+import { Switch, TooltipAnchor, useToastContext } from '@librechat/client';
 import {
   EModelEndpoint,
   PermissionTypes,
@@ -469,16 +469,19 @@ export default function AgentConfig() {
                       key={skillId}
                       className="mb-1 flex items-center justify-between rounded-md border border-border-light px-3 py-2 text-sm"
                     >
-                      <span
-                        className={
-                          isUnavailable
-                            ? 'truncate italic text-text-secondary'
-                            : 'truncate text-text-primary'
-                        }
-                        title={isUnavailable ? skillId : undefined}
-                      >
-                        {skillName ?? localize('com_ui_skill_unavailable')}
-                      </span>
+                      {isUnavailable ? (
+                        <TooltipAnchor
+                          description={skillId}
+                          className="cursor-default"
+                          render={
+                            <span className="truncate italic text-text-secondary">
+                              {localize('com_ui_skill_unavailable')}
+                            </span>
+                          }
+                        />
+                      ) : (
+                        <span className="truncate text-text-primary">{skillName}</span>
+                      )}
                       <button
                         type="button"
                         onClick={() => {

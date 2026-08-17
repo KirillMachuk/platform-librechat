@@ -58,12 +58,15 @@ const ToolMermaidArtifact = memo(({ attachment, text }: ToolMermaidArtifactProps
       {(attachment.filename || attachment.filepath) && (
         <div className="flex items-center justify-between gap-2">
           {attachment.filename && (
-            <div
-              className="truncate text-[10px] font-medium uppercase tracking-wide text-text-secondary"
-              title={visibleFilename}
-            >
-              {visibleFilename}
-            </div>
+            <TooltipAnchor
+              description={visibleFilename}
+              className="cursor-default"
+              render={
+                <div className="truncate text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+                  {visibleFilename}
+                </div>
+              }
+            />
           )}
           {attachment.filepath && (
             <TooltipAnchor

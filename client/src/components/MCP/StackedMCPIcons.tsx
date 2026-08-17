@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { MCPIcon } from '@librechat/client';
+import { MCPIcon, TooltipAnchor } from '@librechat/client';
 import type { MCPServerDefinition } from '~/hooks/MCP/useMCPServerManager';
 import { getSelectedServerIcons } from './mcpServerUtils';
 import { cn } from '~/utils';
@@ -61,28 +61,33 @@ export default function StackedMCPIcons({
   return (
     <div className="flex items-center" aria-hidden="true">
       {icons.map((icon, index) => (
-        <div
+        <TooltipAnchor
           key={icon.key}
-          title={icon.displayName}
-          className={cn(
-            'relative flex items-center justify-center rounded-full border',
-            colors.border,
-            colors.bg,
-            sizes.container,
-            index > 0 && sizes.overlap,
-          )}
-          style={{ zIndex: icons.length - index }}
-        >
-          {icon.iconPath ? (
-            <img
-              src={icon.iconPath}
-              alt={icon.displayName}
-              className={cn('rounded-full object-cover', sizes.icon)}
-            />
-          ) : (
-            <MCPIcon className={cn('text-text-primary', sizes.icon)} />
-          )}
-        </div>
+          description={icon.displayName}
+          className="cursor-default"
+          render={
+            <div
+              className={cn(
+                'relative flex items-center justify-center rounded-full border',
+                colors.border,
+                colors.bg,
+                sizes.container,
+                index > 0 && sizes.overlap,
+              )}
+              style={{ zIndex: icons.length - index }}
+            >
+              {icon.iconPath ? (
+                <img
+                  src={icon.iconPath}
+                  alt={icon.displayName}
+                  className={cn('rounded-full object-cover', sizes.icon)}
+                />
+              ) : (
+                <MCPIcon className={cn('text-text-primary', sizes.icon)} />
+              )}
+            </div>
+          }
+        />
       ))}
       {overflowCount > 0 && (
         <div

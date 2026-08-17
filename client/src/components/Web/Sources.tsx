@@ -403,7 +403,7 @@ const SourcesGroup = React.memo(function SourcesGroup({
   }, [sources, limit]);
 
   return (
-    <div className="scrollbar-none pan-x grid w-full grid-cols-4 gap-2 overflow-x-auto">
+    <div className="scrollbar-none pan-x grid w-full grid-cols-4 gap-2 overflow-x-auto overflow-y-clip">
       <OGDialog>
         {visibleSources.map((source, i) => (
           <div key={`source-${i}`} className="w-full min-w-[120px]">
@@ -495,7 +495,7 @@ function FilesGroup({ files, messageId, conversationId, limit = 3 }: FilesGroupP
   const hasMoreFiles = remainingFiles.length > 0;
 
   return (
-    <div className="scrollbar-none pan-x grid w-full grid-cols-4 gap-2 overflow-x-auto">
+    <div className="scrollbar-none pan-x grid w-full grid-cols-4 gap-2 overflow-x-auto overflow-y-clip">
       <OGDialog>
         {visibleFiles.map((file, i) => (
           <div key={`file-${i}`} className="w-full min-w-[120px]">
@@ -719,8 +719,8 @@ function SourcesComponent({ messageId, conversationId }: SourcesProps = {}) {
       <AnimatedTabs
         tabs={tabs}
         containerClassName="flex min-w-full mb-4"
-        tabListClassName="flex items-center mb-2 border-b border-border-light pan-x overflow-x-auto"
-        tabPanelClassName="w-full pan-x overflow-x-auto scrollbar-none md:mx-0 md:px-0"
+        tabListClassName="flex items-center mb-2 border-b border-border-light pan-x overflow-x-auto overflow-y-clip"
+        tabPanelClassName="w-full pan-x overflow-x-auto overflow-y-clip scrollbar-none md:mx-0 md:px-0"
         tabClassName="flex items-center whitespace-nowrap text-xs font-medium text-token-text-secondary px-1 pt-2 pb-1 border-b-2 border-transparent data-[state=active]:text-text-primary outline-none"
       />
     </div>

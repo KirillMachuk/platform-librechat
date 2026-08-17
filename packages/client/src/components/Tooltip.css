@@ -5,7 +5,13 @@
  * is why there is no .dark override here. */
 .tooltip {
   z-index: var(--c-z-popover);
-  pointer-events: auto;
+  /* The plate is read-only chrome, never a click target: with truncation hints
+   * now on dense list rows (sidebar chats), an interactive plate hanging 4px
+   * above its anchor would swallow clicks on the row above (the #318 class of
+   * bug), and ariakit would hold it open while the pointer sits on it. No
+   * tooltip in this app carries links (enableHTML has zero call sites), so the
+   * pointer passes straight through. */
+  pointer-events: none;
   border-radius: 8px;
   background-color: var(--c-ink);
   color: var(--c-ink-label);

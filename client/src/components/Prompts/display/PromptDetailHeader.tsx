@@ -27,9 +27,11 @@ const PromptDetailHeader = ({ group }: PromptDetailHeaderProps) => {
 
       <div className="min-w-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 items-center gap-2">
-          <h2 className="truncate text-xl font-bold text-text-primary" title={group.name}>
-            {group.name}
-          </h2>
+          <TooltipAnchor
+            description={group.name}
+            className="cursor-default"
+            render={<h2 className="truncate text-xl font-bold text-text-primary">{group.name}</h2>}
+          />
           {isGlobalGroup && (
             <TooltipAnchor
               description={localize('com_ui_sr_global_prompt')}

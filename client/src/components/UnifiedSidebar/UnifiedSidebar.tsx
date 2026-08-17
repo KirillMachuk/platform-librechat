@@ -12,9 +12,12 @@ import Sidebar from './Sidebar';
 import { cn } from '~/utils';
 import store from '~/store';
 
-/** Канон §4: сайдбар 240, свёрнутая рельса 56. */
+/* Canon §4 rev. 17.08-2: expanded sidebar 264 (was the book's 240; the owner
+   widened it +10% — chat titles were unreadable in 240), collapsed rail 56.
+   Keep in lockstep with --c-side-w (style.css) and DESIGN_SYSTEM.md §4 /
+   Appendix A — this constant is the real source, the token is the canon copy. */
 const COLLAPSED_WIDTH = 56;
-const EXPANDED_WIDTH = 240;
+const EXPANDED_WIDTH = 264;
 const TRANSITION_MS = 300;
 const EASING = 'cubic-bezier(0.2, 0, 0, 1)';
 

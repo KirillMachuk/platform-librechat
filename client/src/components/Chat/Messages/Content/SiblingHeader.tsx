@@ -98,9 +98,13 @@ export default function SiblingHeader({
           />
         </div>
         {!nameInSwitcher && (
-          <span className="truncate text-sm font-medium text-text-primary" title={displayName}>
-            {displayName}
-          </span>
+          <TooltipAnchor
+            description={displayName}
+            className="cursor-default"
+            render={
+              <span className="truncate text-sm font-medium text-text-primary">{displayName}</span>
+            }
+          />
         )}
         <MessageTimestamp value={createdAt} />
       </div>

@@ -1,3 +1,4 @@
+import { TooltipAnchor } from '@librechat/client';
 import type { TUserMemory } from 'librechat-data-provider';
 import MemoryCardActions from './MemoryCardActions';
 import { cn, formatDate } from '~/utils';
@@ -37,9 +38,13 @@ export default function MemoryCard({ memory, hasUpdateAccess }: MemoryCardProps)
 
       {/* Row 2: Value + Date */}
       <div className="mt-1 flex items-baseline gap-2">
-        <p className="min-w-0 flex-1 truncate text-sm text-text-primary" title={memory.value}>
-          {memory.value}
-        </p>
+        <TooltipAnchor
+          description={memory.value}
+          className="cursor-default"
+          render={
+            <p className="min-w-0 flex-1 truncate text-sm text-text-primary">{memory.value}</p>
+          }
+        />
         <span className="shrink-0 text-xs text-text-secondary">
           {formatDate(memory.updated_at)}
         </span>

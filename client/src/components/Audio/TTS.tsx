@@ -1,7 +1,7 @@
 /* eslint-disable jsx-a11y/media-has-caption */
 import { useEffect } from 'react';
 import { useRecoilValue } from 'recoil';
-import { Spinner } from '@librechat/client';
+import { Spinner, TooltipAnchor } from '@librechat/client';
 import type { TMessageAudio } from '~/common';
 import { useLocalize, useTTSBrowser, useTTSExternal } from '~/hooks';
 import { Volume2, VolumeOff } from '~/components/icons';
@@ -74,9 +74,19 @@ export function BrowserTTS({
           className,
         })
       ) : (
-        <button className={className} onClickCapture={handleClick} type="button" title={title}>
-          {renderIcon()}
-        </button>
+        <TooltipAnchor
+          description={title}
+          render={
+            <button
+              className={className}
+              onClickCapture={handleClick}
+              type="button"
+              aria-label={title}
+            >
+              {renderIcon()}
+            </button>
+          }
+        />
       )}
       <audio
         ref={audioRef}
@@ -163,18 +173,27 @@ export function ExternalTTS({
           className,
         })
       ) : (
-        <button
-          onClickCapture={() => {
-            if (audioRef.current) {
-              audioRef.current.muted = false;
-            }
-            toggleSpeech();
-          }}
-          type="button"
-          title={isSpeaking === true ? localize('com_ui_stop') : localize('com_ui_read_aloud')}
-        >
-          {renderIcon()}
-        </button>
+        <TooltipAnchor
+          description={
+            isSpeaking === true ? localize('com_ui_stop') : localize('com_ui_read_aloud')
+          }
+          render={
+            <button
+              onClickCapture={() => {
+                if (audioRef.current) {
+                  audioRef.current.muted = false;
+                }
+                toggleSpeech();
+              }}
+              type="button"
+              aria-label={
+                isSpeaking === true ? localize('com_ui_stop') : localize('com_ui_read_aloud')
+              }
+            >
+              {renderIcon()}
+            </button>
+          }
+        />
       )}
       <audio
         ref={audioRef}

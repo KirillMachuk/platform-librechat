@@ -102,9 +102,16 @@ test.describe('artifacts', () => {
      * is mounted but hidden. Its own toolbar is not. */
     await expect(page.getByRole('button', { name: 'Refresh' })).toBeVisible({ timeout: 30000 });
 
-    /* The card knows it too, and says so — the same click seen from the other
-     * side. */
-    await expect(card).toContainText('Click to close');
+    /* The card knows it too — the same click seen from the other side. Since
+     * round 12 the caption is STATIC («Click to open» stays; the open/close
+     * swap resized the content-sized chip on every tap), so the open state
+     * reads from the selected restyle instead: the transparent border becomes
+     * the hairline on hover-capable screens (on touch the panel is a bottom
+     * sheet over a scrim and the card deliberately shows nothing). */
+    await expect(card).toContainText('Click to open');
+    await expect
+      .poll(() => card.evaluate((el) => getComputedStyle(el).borderTopColor), { timeout: 5000 })
+      .not.toBe('rgba(0, 0, 0, 0)');
 
     /* And the half a person still needs: the composer is not squeezed away, and
      * it still takes what they type. Without this the assertion above is happy

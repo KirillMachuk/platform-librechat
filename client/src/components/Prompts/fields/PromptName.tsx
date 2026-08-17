@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { TooltipAnchor } from '@librechat/client';
 import { Pencil, Check, Loader2, X } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
@@ -112,19 +113,24 @@ const PromptName: React.FC<Props> = ({ name, isLoading = false, isError = false,
           aria-label={localize('com_ui_name')}
         />
       ) : (
-        <button
-          type="button"
-          onClick={() => {
-            if (!isLoading && saveStatus !== 'saving') {
-              setIsEditing(true);
-            }
-          }}
-          className="h-8 min-w-0 flex-1 cursor-text truncate pl-2 text-left text-base font-semibold text-text-primary transition-colors hover:text-text-secondary focus:outline-none"
-          title={newName}
-          aria-label={localize('com_ui_edit') + ': ' + (newName ?? '')}
-        >
-          {newName}
-        </button>
+        <TooltipAnchor
+          description={newName ?? ''}
+          className="cursor-text"
+          render={
+            <button
+              type="button"
+              onClick={() => {
+                if (!isLoading && saveStatus !== 'saving') {
+                  setIsEditing(true);
+                }
+              }}
+              className="h-8 min-w-0 flex-1 cursor-text truncate pl-2 text-left text-base font-semibold text-text-primary transition-colors hover:text-text-secondary focus:outline-none"
+              aria-label={localize('com_ui_edit') + ': ' + (newName ?? '')}
+            >
+              {newName}
+            </button>
+          }
+        />
       )}
       <div className="ml-1.5 flex shrink-0 items-center justify-center">
         {saveStatus === 'saving' && (

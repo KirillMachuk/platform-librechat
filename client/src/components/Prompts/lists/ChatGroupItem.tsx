@@ -163,9 +163,14 @@ function ChatGroupItem({
           />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <span className="truncate text-sm font-semibold text-text-primary" title={group.name}>
-                {group.name}
-              </span>
+              <TooltipAnchor
+                description={group.name}
+                render={
+                  <span className="truncate text-sm font-semibold text-text-primary">
+                    {group.name}
+                  </span>
+                }
+              />
               {isSharedPrompt && (
                 <TooltipAnchor
                   description={localize('com_ui_by_author', { 0: group.authorName })}
