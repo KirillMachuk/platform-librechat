@@ -110,6 +110,14 @@ export const previewFrame = (page: Page, filename: string): FrameLocator =>
 export const previewFrameElement = (page: Page, filename: string): Locator =>
   page.locator(`iframe[title="Preview: ${filename}"]`);
 
+/**
+ * A page rendered by our own PDF viewer. The browser's viewer stays mounted as
+ * a fallback under the same title, so PDF assertions go through the canvas the
+ * renderer paints rather than through the frame.
+ */
+export const pdfPage = (page: Page): Locator =>
+  page.locator('[data-testid="pdf-preview"] .page canvas');
+
 const RENDERING_NOTICE = 'Rendering document, this may take a moment…';
 
 /** Every terminal surface the dialog can settle on, whatever the file turns out to be. */

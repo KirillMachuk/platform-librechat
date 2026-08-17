@@ -19,6 +19,7 @@ import {
   previewFixture,
   previewFrame,
   previewFrameElement,
+  pdfPage,
 } from './files.helpers';
 
 /**
@@ -230,8 +231,40 @@ test.describe('file preview — plain formats', () => {
     test.setTimeout(90000);
     await previewFixture(page, 'digital.pdf');
 
-    await expect(previewFrameElement(page, 'digital.pdf')).toBeVisible({ timeout: 30000 });
+    /* The pages, not an iframe: the browser's own viewer is still mounted as a
+       fallback with the same title, so asserting on the frame would go green
+       even if our renderer never ran. */
+    await expect(pdfPage(page).first()).toBeVisible({ timeout: 30000 });
     await expect(previewSurface(page, 'digital.pdf').locator('pre')).toHaveCount(0);
+  });
+
+  /**
+   * iOS Safari paints page one of an iframed PDF at its native width and
+   * refuses to scroll, so a phone reader could not reach page two (owner
+   * report 17.08). The fix is to render the pages ourselves and fit them
+   * across; this pins both halves at phone width.
+   */
+  test('fits a PDF across a phone screen and scrolls down through it', async ({ page }) => {
+    test.setTimeout(90000);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await previewFixture(page, 'digital.pdf');
+    const viewer = page.getByTestId('pdf-preview');
+    await expect(pdfPage(page).first()).toBeVisible({ timeout: 30000 });
+
+    const fit = await viewer.evaluate((element) => {
+      const page1 = element.querySelector('.page') as HTMLElement | null;
+      return {
+        pageWidth: page1?.getBoundingClientRect().width ?? 0,
+        viewerWidth: element.clientWidth,
+        scrollable: element.scrollHeight > element.clientHeight + 20,
+        sideways: element.scrollWidth > element.clientWidth + 2,
+      };
+    });
+
+    expect(fit.pageWidth).toBeGreaterThan(fit.viewerWidth * 0.8);
+    expect(fit.pageWidth).toBeLessThanOrEqual(fit.viewerWidth);
+    expect(fit.scrollable, 'the reader can scroll to the next page').toBe(true);
+    expect(fit.sideways, 'nothing is reachable only by scrolling sideways').toBe(false);
   });
 });
 
@@ -307,7 +340,7 @@ test.describe('file preview — the rest of the matrix', () => {
     test.setTimeout(120000);
     const dialog = await previewFixture(page, 'scan.pdf');
 
-    await expect(previewFrameElement(page, 'scan.pdf')).toBeVisible({ timeout: 30000 });
+    await expect(pdfPage(page).first()).toBeVisible({ timeout: 30000 });
     await expect(dialog.locator('pre')).toHaveCount(0);
   });
 
