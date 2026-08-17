@@ -256,6 +256,14 @@ merge PR to platform-librechat/main
 ## Testing
 
 - Framework: **Jest**, run per-workspace; **Playwright** for e2e (`e2e/`, mock profile).
+- **A worktree that borrows `node_modules` from another checkout tests that checkout's
+  branch.** The workspace packages are consumed through their gitignored `dist`, so
+  `require('librechat-data-provider')` resolves into whichever checkout the symlink points
+  at. That is how three orchestrator tests came out red on one machine and green in CI for
+  the same commit: the donor was parked on a branch where `AutoModes` did not exist yet.
+  Jest now prints an unmissable banner in that situation (`scripts/jest-workspace-build.cjs`);
+  set `STRICT_WORKSPACE_BUILD=1` to make it refuse to run instead. The cure is an install
+  and a build of your own — a borrowed green is worth nothing.
 - Run tests from their workspace directory: `cd api && npx jest <pattern>`, `cd packages/api && npx jest <pattern>`, etc.
 - Frontend tests: `__tests__` directories alongside components; use `test/layout-test-utils` for rendering.
 - Cover loading, success, and error states for UI/data flows.
