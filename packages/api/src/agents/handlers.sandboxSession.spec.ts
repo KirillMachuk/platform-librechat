@@ -43,6 +43,8 @@ class FakeSandbox {
   writeTargets: string[] = [];
   /** Session each code execution actually landed in, in call order. */
   execTargets: string[] = [];
+  /** File refs handed to each write, in call order. */
+  writeFiles: Array<FileRef[] | undefined> = [];
 
   private resolve(
     session_id?: string,
@@ -156,6 +158,7 @@ class FakeSandbox {
       files?: FileRef[];
     }) => {
       this.writeSessions.push(session_id);
+      this.writeFiles.push(files);
       const { sid, fs } = this.resolve(session_id, files);
       this.writeTargets.push(sid);
       fs.set(FakeSandbox.basename(file_path), content);
@@ -175,16 +178,16 @@ class FakeSandbox {
  * request body. A fake that honoured `session_id` would pass for a reason
  * production does not have.
  */
-function makeExecTool(sandbox: FakeSandbox, delayMs = 0) {
+function makeExecTool(sandbox: FakeSandbox, lagTicks = 0) {
   return {
     name: 'execute_code',
     invoke: async (args: { code?: string }, config: Record<string, unknown>) => {
       const { _injected_files } = (config.toolCall ?? {}) as { _injected_files?: FileRef[] };
-      if (delayMs > 0) {
-        await new Promise<void>((resolve) => {
-          /* unref so a stray timer can never hold the jest worker open */
-          setTimeout(resolve, delayMs).unref?.();
-        });
+      /* Deterministic stand-in for network latency: yield the macrotask queue
+       * a fixed number of times. A real timer made the suite slow and left the
+       * jest worker holding a handle; the ordering this exposes is the same. */
+      for (let i = 0; i < lagTicks; i++) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
       }
       const result = sandbox.exec({ code: args.code ?? '', files: _injected_files });
       return {
@@ -367,7 +370,7 @@ describe('sandbox session continuity', () => {
     const sandbox = new FakeSandbox();
     /* The code call is slowed down so the two land out of order. Without the
      * delay the write happens to finish first and the race hides itself. */
-    const handler = makeHandler(sandbox, { tools: [makeExecTool(sandbox, 30)] });
+    const handler = makeHandler(sandbox, { tools: [makeExecTool(sandbox, 8)] });
     const lastThread = freshThread();
 
     const results = await step(
@@ -437,5 +440,34 @@ describe('sandbox session continuity', () => {
     );
 
     expect(read.status).toBe('error');
+  });
+  it('hands codeapi back the same file refs it gave us, not a trimmed copy', async () => {
+    const sandbox = new FakeSandbox();
+    const handler = makeHandler(sandbox);
+    const thread = freshThread();
+
+    await step(handler, [createNumbers], thread);
+    await step(
+      handler,
+      [
+        {
+          id: 'call_edit_refs',
+          name: 'edit_file',
+          args: { file_path: '/mnt/data/numbers.txt', old_text: '1', new_text: '9' },
+        } as ToolCallRequest,
+      ],
+      thread,
+    );
+
+    /* codeapi's own request validator reads resource_id/kind/version; the
+     * platform logs "codeapi will reject with 400" when they go missing, so
+     * the refs must survive the trip through the session context intact. */
+    const forwarded = sandbox.writeFiles[1];
+    expect(forwarded && forwarded.length).toBeGreaterThan(0);
+    for (const ref of forwarded ?? []) {
+      expect(typeof ref.resource_id).toBe('string');
+      expect(typeof ref.kind).toBe('string');
+      expect(typeof ref.version).toBe('number');
+    }
   });
 });
