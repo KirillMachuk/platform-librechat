@@ -2076,5 +2076,6 @@
   "com_ui_xhigh": "Очень высокое",
   "com_ui_you": "Вы",
   "com_ui_your_api_key": "Ваш API-ключ",
-  "com_ui_your_projects": "Ваши проекты"
+  "com_ui_your_projects": "Ваши проекты",
+  "com_ui_temporary_chat_note": "Этот чат не появится в истории."
 }

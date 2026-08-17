@@ -87,7 +87,7 @@ stays green, so flakes accumulate where nobody looks.
 | Safari bars follow the APP theme, not the OS scheme (runtime theme-color meta) | unit  | `packages/client/src/theme/utils/__tests__/safariChrome.spec.ts#inserts a runtime meta FIRST in head with the token color` | covered |
 | MCP pill is a tool chip: shared recipe, neutral "on" fill with servers selected (owner 11.08-3)   | unit  | `client/src/components/Chat/Input/__tests__/MCPSelect.spec.tsx#wears the shared chip recipe`       | covered |
 | Empty chat: greeting sits entirely above the composer, in both landing modes and on a phone       | e2e   | `e2e/specs/mock/canon.spec.ts#the greeting clears the composer`                                    | covered |
-| Desktop composer rests at ~130 tall (owner 11.08-3, Kimi yardstick)                               | e2e   | `e2e/specs/mock/canon.spec.ts#the composer stands ~130 tall`                                       | covered |
+| Desktop composer rests as a single growing row (owner 17.08-3 reverted the 11.08 Kimi-130 box)    | e2e   | `e2e/specs/mock/canon.spec.ts#the composer rests as a single row`                                  | covered |
 
 ## 3. Message rendering
 
@@ -247,6 +247,7 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | Hovering a chat row shows the full title as the ink plate; the plate never swallows clicks on the row above | e2e   | `e2e/specs/mock/sidebar.spec.ts#hovering a chat row shows the full-title ink plate and clicks pass through it`            | covered |
 | Expanded sidebar is 264px (owner 17.08-2: +10% over the book's 240) — guarded against silent revert | e2e   | `e2e/specs/mock/sidebar.spec.ts#the expanded sidebar is 264px wide`                                                       | covered |
 | Scroll-to-bottom button hangs centered and fully visible above the scrollport bottom, and returns the list to the bottom | e2e   | `e2e/specs/mock/scroll-button.spec.ts#appears centered and fully visible above the scrollport bottom`                     | covered |
+| A touch tap on a sidebar chat opens it — no tooltip mounts on hover-less devices | e2e   | `e2e/specs/mock/touch-tap-chat.spec.ts#opens the chat and never summons the tooltip`                                      | covered |
 | Arriving at a new chat does not take the cursor out of a menu the person just opened | unit  | `client/src/hooks/Chat/__tests__/useFocusChatEffect.spec.tsx#leaves the cursor alone when an open menu owns the keyboard` | covered |
 | First click after the sidebar mounts is sometimes swallowed                          | e2e   | —                                                                                                                         | gap     |
 | Open a conversation from the list                                                    | e2e   | `e2e/specs/mock/conversation-management.spec.ts`                                                                          | covered |

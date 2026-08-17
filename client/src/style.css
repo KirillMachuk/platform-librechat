@@ -1565,6 +1565,33 @@ input:-webkit-autofill:active {
    дёргание, которого нет в сайдбаре: там нет ни кода, ни таблиц. У обёртки
    таблиц это правило было с самого начала, у остальных лент — нет.
    Сторож scripts/check-panx.mjs не даёт завести новую ленту без него. */
+/* Temporary chat: the composer flips into the INK palette (owner 17.08-3,
+   ChatGPT reference — its pill inverts scheme). Implemented as a LOCAL token
+   remap so every descendant (text, placeholder, icon buttons, hovers,
+   hairlines) follows automatically; ink/ink-label already swap with the app
+   theme, so dark mode gets the light pill for free. color-mix derives the
+   secondary inks from ink-label instead of inventing new colors. */
+.composer-temporary {
+  --surface-chat: var(--c-ink);
+  --text-primary: var(--c-ink-label);
+  --text-secondary: color-mix(in srgb, var(--c-ink-label) 72%, transparent);
+  --text-tertiary: color-mix(in srgb, var(--c-ink-label) 55%, transparent);
+  --surface-hover: color-mix(in srgb, var(--c-ink-label) 12%, transparent);
+  --border-light: color-mix(in srgb, var(--c-ink-label) 16%, transparent);
+  --border-medium: color-mix(in srgb, var(--c-ink-label) 24%, transparent);
+}
+
+/* The thread dissolves as it slides under the composer edge (owner 17.08-3;
+   mechanism from the msg8 widget's message-scroller: a mask-image gradient on
+   the SCROLL ELEMENT). 20px, not more: the sticky scroll-to-bottom button
+   lives inside this scroller with its bottom 20px above the edge, and the
+   content's own pb-9 (36px) keeps real text out of the faded strip when the
+   list rests at the bottom. */
+.chat-scroll-fade {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 20px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 20px), transparent 100%);
+}
+
 .pan-x {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;

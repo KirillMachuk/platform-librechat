@@ -1,8 +1,11 @@
 import {
   memo,
   forwardRef,
+  cloneElement,
+  isValidElement,
   useCallback,
   useMemo,
+  useSyncExternalStore,
   RefAttributes,
   ForwardRefExoticComponent,
 } from 'react';
@@ -114,12 +117,32 @@ const TooltipPopup = memo(function TooltipPopup({
   );
 });
 
+/* Touch devices get NO tooltip machinery at all (owner 17.08-3): iOS Safari
+ * treats an element whose mouseover reveals content as hover-first — the
+ * FIRST tap on a sidebar chat opened the plate instead of the chat, and the
+ * plate then stuck because touch never delivers mouseleave. `(hover: none)`
+ * is the boundary (the same one the Tailwind hover gate uses); on such
+ * devices the anchor renders inert, so a tap is just a tap everywhere. */
+const subscribeHoverNone = (onChange: () => void) => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return () => undefined;
+  }
+  const query = window.matchMedia('(hover: none)');
+  query.addEventListener?.('change', onChange);
+  return () => query.removeEventListener?.('change', onChange);
+};
+const readHoverNone = () =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(hover: none)').matches;
+
 export const TooltipAnchor: ForwardRefExoticComponent<
   Omit<TooltipAnchorProps, 'ref'> & RefAttributes<HTMLDivElement>
 > = forwardRef<HTMLDivElement, TooltipAnchorProps>(function TooltipAnchor(
   { description, side = 'top', className, role, enableHTML = false, ...props },
   ref,
 ) {
+  const hoverNone = useSyncExternalStore(subscribeHoverNone, readHoverNone, () => false);
   const tooltip = Ariakit.useTooltipStore({ placement: side });
 
   const handleKeyDown = useCallback(
@@ -133,6 +156,31 @@ export const TooltipAnchor: ForwardRefExoticComponent<
     },
     [role],
   );
+
+  if (hoverNone) {
+    const { render: renderProp, children: anchorChildren, ...anchorProps } = props;
+    if (isValidElement(renderProp)) {
+      const renderElementProps = renderProp.props as {
+        className?: string;
+        children?: React.ReactNode;
+      };
+      return cloneElement(
+        renderProp as React.ReactElement,
+        {
+          ...anchorProps,
+          ref,
+          role,
+          className: cn(className, renderElementProps.className),
+          children: renderElementProps.children ?? anchorChildren,
+        } as React.HTMLAttributes<HTMLElement>,
+      );
+    }
+    return (
+      <div {...anchorProps} ref={ref} role={role} className={cn(className)}>
+        {anchorChildren}
+      </div>
+    );
+  }
 
   return (
     /* Canon §6.6: the plate waits 300ms — a cursor passing through a row of
