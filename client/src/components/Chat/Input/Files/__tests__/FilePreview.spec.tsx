@@ -1,6 +1,6 @@
 import React from 'react';
 import userEvent from '@testing-library/user-event';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { TFile } from 'librechat-data-provider';
 import FilePreview from '../FilePreview';
 
@@ -30,6 +30,21 @@ describe('FilePreview indexing tooltip', () => {
     jest.useRealTimers();
   });
 
+  /* Ariakit only opens hover tooltips while its GLOBAL mouse-moving tracker is
+   * armed, and the tracker demands a real movement delta: `movementX/Y` or a
+   * `screenX/screenY` change between mousemoves (@ariakit/react-core,
+   * hasMouseMovement). Under NODE_ENV=test the guard short-circuits — which is
+   * why a bare user.hover() passed locally — but CI runs the suite with
+   * NODE_ENV=development, where it is live: this spec was green on CI only
+   * while a lucky worker neighbour left the tracker armed. Two mousemoves
+   * with screen deltas arm it deterministically in every environment. */
+  const armAriakitMouseTracker = () => {
+    act(() => {
+      fireEvent.mouseMove(document.body, { screenX: 5, screenY: 5 });
+      fireEvent.mouseMove(document.body, { screenX: 12, screenY: 17 });
+    });
+  };
+
   it('shows the ink indexing tooltip while the document is still embedding', async () => {
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
     const { container } = render(
@@ -37,6 +52,7 @@ describe('FilePreview indexing tooltip', () => {
     );
     // The async-embed spinner alone reads as "stuck"; a hover tooltip tells the
     // user it is still indexing (e.g. a large scan can take minutes).
+    armAriakitMouseTracker();
     await user.hover(container.firstElementChild as Element);
     act(() => {
       jest.advanceTimersByTime(400);
@@ -53,6 +69,7 @@ describe('FilePreview indexing tooltip', () => {
     );
     // Same hover + same wait as the positive case, so "nothing appeared" is a
     // measured outcome, not a missing sync point.
+    armAriakitMouseTracker();
     await user.hover(container.firstElementChild as Element);
     act(() => {
       jest.advanceTimersByTime(400);
