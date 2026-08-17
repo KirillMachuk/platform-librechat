@@ -24,6 +24,16 @@ from pptx.enum.text import PP_ALIGN, MSO_ANCHOR, MSO_AUTO_SIZE
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
+TITLE_LINE_HEIGHT = 0.52
+"""Space below a slide title, as a share of its own line height.
+
+Typographic practice puts the break after a heading at half to three quarters of
+the heading's line height: less and the heading reads as part of the text under
+it. The builder had 0.22in against a 0.52in line — 0.42 — and a three-line title
+sat right on top of its bullets.
+"""
+TITLE_GAP = round(TITLE_LINE_HEIGHT * 0.65, 2)
+
 SKILL_VERSION = "3.1.0"
 MAX_REPAIR_ITERATIONS = 2
 WIDE_WIDTH = Inches(13.333)
@@ -275,7 +285,7 @@ def _add_slide_title(slide, title: str, source: str = "") -> float:
     line_count = _estimated_line_count(title, 44)
     if line_count > 3:
         raise ValueError("Slide title exceeds three readable lines; shorten or split the slide")
-    height = max(0.92, line_count * 0.52)
+    height = max(0.92, line_count * TITLE_LINE_HEIGHT)
     box = _add_text(
         slide,
         title,
@@ -308,7 +318,7 @@ def _add_slide_title(slide, title: str, source: str = "") -> float:
             color=MUTED,
             name="Source note",
         )
-    return 0.48 + height + 0.22
+    return 0.48 + height + TITLE_GAP
 
 
 def _add_bullets(frame, bullets: list[Any], size: float = 20, color: RGBColor = INK) -> None:
@@ -427,10 +437,14 @@ def _render_claim(prs: Presentation, item: dict[str, Any]):
     )
     claim_top = max(1.52, content_top + 0.02)
     divider_top = min(claim_top + 2.72, 4.78)
+    claim_height = divider_top - claim_top - 0.12
+    # The claim is centred inside its box, so a marker pinned near the top of that
+    # box floats away from the words it marks — by a full inch on a two-line claim.
+    # Share the centre line the text is anchored to.
     _add_ellipse(
         slide,
         Inches(0.88),
-        Inches(claim_top + 0.2),
+        Inches(claim_top + (claim_height - 0.2) / 2),
         Inches(0.2),
         Inches(0.2),
         ACCENT,
@@ -441,7 +455,7 @@ def _render_claim(prs: Presentation, item: dict[str, Any]):
         Inches(1.28),
         Inches(claim_top),
         Inches(10.6),
-        Inches(divider_top - claim_top - 0.12),
+        Inches(claim_height),
         size=40,
         color=NAVY,
         bold=True,

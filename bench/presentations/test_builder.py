@@ -476,6 +476,78 @@ class PresentationBuilderTests(unittest.TestCase):
             "the last label runs into the source note at the foot of the slide",
         )
 
+    def test_claim_marker_shares_the_centre_line_of_the_claim_it_marks(self):
+        """The claim is centred in its box; a marker pinned near the top of that box
+        drifts away from the words — by an inch on a two-line claim."""
+        spec = _base_spec()
+        spec["slides"] = [
+            {
+                "layout": "claim",
+                "title": "Ключевое ограничение находится не в продажах",
+                "claim": "Рост зависит от первых четырёх недель работы клиента",
+                "support": "Поэтому ресурсы нужно перенести в раннее внедрение.",
+                "source": "Источник: управленческий отчёт",
+            }
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "presentation.pptx"
+            deck = _save(spec, output)
+
+        slide = deck.slides[0]
+        # The slide's background is an auto shape too; the marker is the small one.
+        marker = next(
+            shape
+            for shape in slide.shapes
+            if shape.shape_type == MSO_SHAPE_TYPE.AUTO_SHAPE and shape.width == Inches(0.2)
+        )
+        claim = next(
+            shape
+            for shape in slide.shapes
+            if getattr(shape, "has_text_frame", False) and "Рост зависит" in shape.text_frame.text
+        )
+        marker_centre = marker.top + marker.height / 2
+        claim_centre = claim.top + claim.height / 2
+        self.assertLess(
+            abs(marker_centre - claim_centre),
+            Inches(0.02),
+            "the marker must sit on the centre line the claim text is anchored to",
+        )
+
+    def test_a_title_keeps_a_readable_break_above_its_content(self):
+        """Below half the title's own line height the heading reads as part of the
+        text under it; the builder had 0.42 of it and a three-line title sat on its
+        own bullets."""
+        gap = BUILDER.TITLE_GAP / BUILDER.TITLE_LINE_HEIGHT
+        self.assertGreaterEqual(gap, 0.5)
+        self.assertLessEqual(gap, 0.75)
+
+        content_top = {}
+        for title in ("Короткий заголовок", "Перераспределение ответственности сокращает путь от подписания договора до первой ценности"):
+            spec = _base_spec()
+            spec["slides"] = [{"layout": "bullets", "title": title, "bullets": ["Пункт"]}]
+            with tempfile.TemporaryDirectory() as folder:
+                output = Path(folder) / "presentation.pptx"
+                deck = _save(spec, output)
+            slide = deck.slides[0]
+            heading = next(
+                shape
+                for shape in slide.shapes
+                if getattr(shape, "has_text_frame", False) and title in shape.text_frame.text
+            )
+            body = next(
+                shape
+                for shape in slide.shapes
+                if getattr(shape, "has_text_frame", False) and "Пункт" in shape.text_frame.text
+            )
+            content_top[title] = body.top - (heading.top + heading.height)
+
+        for title, measured in content_top.items():
+            self.assertGreaterEqual(
+                measured,
+                Inches(BUILDER.TITLE_LINE_HEIGHT * 0.5),
+                f"content sits too close under the title: {title[:40]}",
+            )
+
     def test_structural_qa_rejects_text_exceeding_shape_capacity(self):
         spec = _base_spec()
         spec["slides"] = [
