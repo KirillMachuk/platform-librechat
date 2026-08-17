@@ -316,7 +316,8 @@ test.describe('canon — layers, keyboard reach, layout shift', () => {
  *    the greeting in a zero-height container and overflows it around a line,
  *    so a padding change meant for the full-height branch shoved the text
  *    under the composer without any test noticing.
- *  - the resting desktop composer is ~130 tall (Kimi as the yardstick).
+ *  - the resting desktop composer is a SINGLE growing row again (owner
+ *    17.08-3 reverted the 11.08 «Kimi 130» tall box).
  *
  * Both branches of the landing layout are asserted: the default centred one,
  * and the "form at bottom" setting, whose container really is full-height.
@@ -334,14 +335,21 @@ test.describe('canon — empty chat geometry', () => {
     return { greetingBox, composerBox };
   };
 
-  test('the greeting clears the composer and the composer stands ~130 tall', async ({ page }) => {
+  test('the greeting clears the composer and the composer rests as a single row', async ({
+    page,
+  }) => {
     test.setTimeout(90000);
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
     const { greetingBox, composerBox } = await boxes(page);
 
     expect(greetingBox.y + greetingBox.height).toBeLessThanOrEqual(composerBox.y);
-    expect(composerBox.height).toBeGreaterThanOrEqual(126);
-    expect(composerBox.height).toBeLessThanOrEqual(140);
+    /* Owner 17.08-3 reverted the 11.08 «Kimi 130» experiment: no min-height,
+     * the box is the single text row plus the button row and grows only with
+     * the text. The band (not one pixel) absorbs font metrics; the ceiling is
+     * what actually guards the decision — a re-introduced min-h would push
+     * the resting box past 110 and fail here. */
+    expect(composerBox.height).toBeGreaterThanOrEqual(80);
+    expect(composerBox.height).toBeLessThanOrEqual(110);
   });
 
   test('the greeting clears the composer with the form parked at the bottom', async ({ page }) => {
