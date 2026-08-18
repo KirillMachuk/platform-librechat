@@ -487,7 +487,10 @@ describe('GET /files/:file_id/preview', () => {
     it('re-renders a stored preview that an older renderer produced', async () => {
       staleDeck('fid-stale-deck');
       mockGetDownloadStream.mockResolvedValueOnce(Readable.from(Buffer.from([1, 2, 3])));
-      renderOfficePreview.mockResolvedValueOnce({ html: '<html>all slides</html>', bucket: 'pptx' });
+      renderOfficePreview.mockResolvedValueOnce({
+        html: '<html>all slides</html>',
+        bucket: 'pptx',
+      });
 
       const res = await request(buildApp()).get('/files/fid-stale-deck/preview');
 

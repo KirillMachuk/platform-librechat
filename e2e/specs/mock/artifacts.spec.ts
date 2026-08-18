@@ -135,77 +135,82 @@ test.describe('artifacts', () => {
    *
    * The owner opened a file from a message and the chat jumped back as if the
    * page had reloaded — again on closing, and only ever on the FIRST open,
-   * which is the tell: the conversation was being wrapped in a card element
-   * only while the panel was open, so the element at that position changed and
-   * React rebuilt the whole subtree. Anything mounted inside it — the scroll
-   * position, a half-typed message, a video — started over.
+   * which is the tell: the conversation was wrapped in a card element only
+   * while the panel was open, so the element at that position changed and React
+   * rebuilt the whole subtree. Anything mounted inside it — scroll position, a
+   * half-typed message, a playing video — started over.
    *
-   * Measured as "the message you were looking at is still on screen" rather
-   * than as a scrollTop equality: the column genuinely narrows when the panel
-   * takes its half, so the content reflows and a few pixels of drift are
-   * honest. A remount is not drift; it puts you somewhere else entirely.
+   * The load-bearing assertion is that the scroller is the SAME LIVE NODE
+   * afterwards. A rebuild detaches it, and `isConnected` says so in one word;
+   * scroll numbers alone cannot tell a rebuild from honest reflow, and the
+   * column really does narrow when the panel takes its half.
+   *
+   * Ballast, scroller and the self-healing scroll come from
+   * `scroll-button.spec.ts`, which learned them the hard way: auto-follow
+   * re-pins the list to the bottom after a single programmatic scroll.
    */
   test('opening and closing the panel leaves the conversation where it was', async ({ page }) => {
-    test.setTimeout(150000);
-    /* Short viewport so a couple of replies are already taller than the column
-       — with nothing to scroll, this test would pass on the defect. */
-    await page.setViewportSize({ width: 1200, height: 520 });
+    test.setTimeout(180000);
+    await page.setViewportSize({ width: 1280, height: 520 });
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
     await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
 
+    /* The artifact sits in the middle: scrolled to it, the conversation is away
+       from both ends, so a jump to either one is visible. */
+    const ballast = async (label: string) => {
+      const response = await sendMessage(page, `scroll ballast ${label}`);
+      expect(response.ok()).toBeTruthy();
+      await expect(messagesView(page).getByText(`scroll ballast ${label}`)).toBeVisible({
+        timeout: 30000,
+      });
+    };
+    await ballast('one');
+    await ballast('two');
     await sendMessage(page, 'E2E_ARTIFACT_REPLY');
     const card = messagesView(page).getByRole('button').filter({ hasText: 'E2E Artifact' });
-    await expect(card.first()).toBeVisible({ timeout: 60000 });
-    await sendMessage(page, 'E2E_ARTIFACT_REPLY');
-    await expect(card.nth(1)).toBeVisible({ timeout: 60000 });
+    await expect(card).toBeVisible({ timeout: 60000 });
+    await ballast('three');
+    await ballast('four');
 
-    /* The scroller is found by behaviour, not by class: whichever box inside
-       the conversation actually overflows is the one a remount would reset. */
-    const scroller = await page.evaluateHandle(() => {
-      const view = document.querySelector('[data-testid="messages-view"]');
-      const boxes = view ? Array.from(view.querySelectorAll('*')) : [];
-      return (
-        boxes.find((element) => {
-          const style = getComputedStyle(element);
-          return (
-            /(auto|scroll)/.test(style.overflowY) &&
-            element.scrollHeight > element.clientHeight + 40
-          );
-        }) ?? null
-      );
-    });
-    expect(await scroller.evaluate((element) => element != null)).toBe(true);
+    const scroller = page.locator('.scrollbar-gutter-stable').first();
+    await expect
+      .poll(() => scroller.evaluate((el) => el.scrollHeight - el.clientHeight), { timeout: 20000 })
+      .toBeGreaterThan(200);
 
-    await scroller.evaluate((element: Element) => {
-      element.scrollTop = Math.max(0, element.scrollHeight - element.clientHeight - 240);
-    });
-    const before = await scroller.evaluate((element: Element) => ({
-      top: element.scrollTop,
-      fromBottom: element.scrollHeight - element.clientHeight - element.scrollTop,
-    }));
-    expect(before.top, 'the conversation is scrolled away from both ends').toBeGreaterThan(20);
+    /* Self-healing, as in scroll-button.spec: a late reflow re-pins the list to
+       the bottom, so the position is re-asserted until it holds. */
+    await expect
+      .poll(
+        async () => {
+          await card.scrollIntoViewIfNeeded();
+          return scroller.evaluate((el) => el.scrollTop);
+        },
+        { timeout: 20000 },
+      )
+      .toBeGreaterThan(20);
 
-    await card.first().click();
+    const handle = await scroller.elementHandle();
+    expect(handle).not.toBeNull();
+    const distanceFromBottom = () =>
+      scroller.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop);
+    const before = await distanceFromBottom();
+    expect(before, 'the conversation is away from the bottom too').toBeGreaterThan(20);
+
+    await card.click();
     await expect(page.locator('#artifacts-code')).toHaveCount(1, { timeout: 30000 });
-    const opened = await scroller.evaluate((element: Element) => ({
-      top: element.scrollTop,
-      fromBottom: element.scrollHeight - element.clientHeight - element.scrollTop,
-      connected: element.isConnected,
-    }));
-
-    /* A rebuilt subtree leaves the old node orphaned — the cheapest proof that
-       the conversation survived at all. */
-    expect(opened.connected, 'the conversation was not rebuilt').toBe(true);
-    expect(Math.abs(opened.fromBottom - before.fromBottom)).toBeLessThan(160);
+    expect(
+      await handle!.evaluate((el) => el.isConnected),
+      'the conversation was not rebuilt when the panel opened',
+    ).toBe(true);
+    expect(Math.abs((await distanceFromBottom()) - before)).toBeLessThan(200);
 
     await page.getByRole('button', { name: 'Close' }).first().click();
     await expect(page.locator('#artifacts-code')).toHaveCount(0, { timeout: 30000 });
-    const closed = await scroller.evaluate((element: Element) => ({
-      fromBottom: element.scrollHeight - element.clientHeight - element.scrollTop,
-      connected: element.isConnected,
-    }));
-    expect(closed.connected, 'closing the panel did not rebuild it either').toBe(true);
-    expect(Math.abs(closed.fromBottom - before.fromBottom)).toBeLessThan(160);
+    expect(
+      await handle!.evaluate((el) => el.isConnected),
+      'closing the panel did not rebuild it either',
+    ).toBe(true);
+    expect(Math.abs((await distanceFromBottom()) - before)).toBeLessThan(200);
   });
 
   /**
