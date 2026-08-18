@@ -26,6 +26,13 @@ module.exports = {
   workerIdleMemoryLimit: '1000MB',
   testTimeout: 30000, // 30 seconds timeout for all tests
   setupFiles: ['./test/jestSetup.js', './test/__mocks__/logger.js'],
+  /**
+   * Refuses to start when the workspace packages jest would load are not this
+   * checkout's — a worktree borrowing `node_modules` from another checkout tests
+   * that checkout's branch. `WORKSPACE_BUILD_WARN_ONLY=1` downgrades it to a
+   * banner; exempt only under GitHub Actions, which builds its own every run.
+   */
+  globalSetup: '<rootDir>/../scripts/jest-workspace-build.cjs',
   moduleNameMapper: {
     '~/(.*)': '<rootDir>/$1',
     '~/data/auth.json': '<rootDir>/__mocks__/auth.mock.json',

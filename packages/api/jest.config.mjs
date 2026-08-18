@@ -31,6 +31,13 @@ export default {
     ],
   },
   transformIgnorePatterns: [`/node_modules/(?!(${esModules})/).*/`],
+  /**
+   * Refuses to start when the workspace packages jest would load are not this
+   * checkout's — a worktree borrowing `node_modules` from another checkout tests
+   * that checkout's branch. `WORKSPACE_BUILD_WARN_ONLY=1` downgrades it to a
+   * banner; exempt only under GitHub Actions, which builds its own every run.
+   */
+  globalSetup: '<rootDir>/../../scripts/jest-workspace-build.cjs',
   moduleNameMapper: {
     '^@src/(.*)$': '<rootDir>/src/$1',
     '~/(.*)': '<rootDir>/src/$1',

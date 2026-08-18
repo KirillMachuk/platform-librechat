@@ -1,0 +1,56 @@
+name: Repo Guards
+
+# Cheap file-reading guards over how the repository is wired, as opposed to
+# `ui-guards.yml`, which guards the interface. Its own workflow because its
+# trigger paths differ: `config/**` and its own script have to be in them —
+# a guard a pull request can edit without re-running is not a guard.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+      - dev-staging
+      - release/*
+    paths:
+      - 'api/**'
+      - 'client/**'
+      - 'packages/**'
+      - 'config/**'
+      - 'scripts/check-jest-guard.mjs'
+      - 'scripts/jest-workspace-build.cjs'
+      - 'package.json'
+      - '.github/workflows/repo-guards.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'api/**'
+      - 'client/**'
+      - 'packages/**'
+      - 'config/**'
+      - 'scripts/check-jest-guard.mjs'
+      - 'scripts/jest-workspace-build.cjs'
+      - 'package.json'
+      - '.github/workflows/repo-guards.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  jest_guard:
+    name: Jest workspace-build guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24.16.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      # Reads jest configs only — no dependencies, so no install step.
+      - name: Check every workspace wires the guard
+        run: npm run check:jest-guard

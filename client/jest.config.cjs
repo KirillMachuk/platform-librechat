@@ -23,6 +23,13 @@ module.exports = {
   //     branches: 12,
   //   },
   // },
+  /**
+   * Refuses to start when the workspace packages jest would load are not this
+   * checkout's — a worktree borrowing `node_modules` from another checkout tests
+   * that checkout's branch. `WORKSPACE_BUILD_WARN_ONLY=1` downgrades it to a
+   * banner; exempt only under GitHub Actions, which builds its own every run.
+   */
+  globalSetup: '<rootDir>/../scripts/jest-workspace-build.cjs',
   moduleNameMapper: {
     '\\.(css)$': 'identity-obj-proxy',
     '\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$':
