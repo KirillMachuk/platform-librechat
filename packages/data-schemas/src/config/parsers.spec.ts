@@ -107,6 +107,26 @@ describe('redactFormat', () => {
     expect(metadata.nested.url).toBe('https://example.test/?key=secretvalue&next=true');
   });
 
+  it('redacts prompt, body and headers metadata wholesale (A5: prompts and PII never reach logs)', () => {
+    const metadata = {
+      prompt: 'система: весь системный промпт с ПДн',
+      body: { text: 'сырое тело запроса ДО анонимайзера' },
+      headers: { cookie: 'session=abc' },
+      bodyPreview: 'named escape hatch stays visible',
+    };
+    const info = runRedactFormat({
+      level: 'info',
+      message: 'visible',
+      [SPLAT_SYMBOL]: [metadata],
+    });
+    const splat = info[SPLAT_SYMBOL] as Array<typeof metadata>;
+
+    expect(splat[0].prompt).toBe('[REDACTED]');
+    expect(splat[0].body).toBe('[REDACTED]');
+    expect(splat[0].headers).toBe('[REDACTED]');
+    expect(splat[0].bodyPreview).toBe('named escape hatch stays visible');
+  });
+
   it('redacts values under sensitive splat metadata keys', () => {
     const metadata = {
       apiKey: 'secretvalue',

@@ -393,4 +393,24 @@ export default [
       ],
     },
   },
+
+  {
+    // **A5 — reserved log-field names are banned at the call site**
+    // The winston redaction (api/config/parsers.js + its TS mirror) blanks
+    // these keys at runtime; this rule stops them from being WRITTEN, across
+    // the JS backend (which tsc never checks) and the TS packages alike.
+    files: ['./api/**/*.js', './config/**/*.js', './packages/api/**/*.ts', './packages/data-schemas/**/*.ts'],
+    ignores: ['**/*.spec.ts', '**/*.test.ts', '**/*.spec.js', '**/*.test.js', '**/__tests__/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.object.name='logger'][callee.property.name=/^(info|warn|error|debug|verbose)$/] ObjectExpression > Property[key.name=/^(prompt|body|headers|token|secret|password|apiKey|api_key|authorization|accessToken|access_token|refreshToken|refresh_token)$/]",
+          message:
+            'Never log this field: prompts and pre-anonymizer payloads must not reach the journals (A5). The winston redaction already blanks these keys at runtime — logging them is dead weight at best, a leak on any bypass. For deliberate debug output use a NAME that says what it carries (bodyPreview, headerNames), so the exception is visible in review.',
+        },
+      ],
+    },
+  },
 ];

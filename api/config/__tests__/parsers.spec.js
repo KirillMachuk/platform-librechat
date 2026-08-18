@@ -323,12 +323,19 @@ describe('redactFormat', () => {
     expect(serialized).not.toContain('eyJhbGciOi.leakedTokenValue');
     expect(serialized).not.toContain('sk-leakedApiKey123');
     expect(serialized).not.toContain('sk-anotherLeak456');
-    expect(redacted.config.headers.Authorization).toBe('[REDACTED]');
-    expect(redacted.config.headers['x-api-key']).toBe('[REDACTED]');
-    // Non-sensitive diagnostic fields survive.
+    /* Contract CHANGED by A5 (18.08): `headers` is now redacted WHOLESALE at
+     * the parent key — the bag can smuggle cookies and non-standard auth past
+     * any known-key list, so drilling in per field is not enough. The old
+     * assertion here (Authorization redacted, content-type surviving inside
+     * headers) documented the per-field era. Diagnostic header output goes
+     * under a different name (`headerNames`) by the escape-hatch convention.
+     * Inside `data`, the reserved `prompt` key is blanked while the rest
+     * stays diagnostic. */
+    expect(redacted.config.headers).toBe('[REDACTED]');
+    expect(redacted.config.data).toEqual({ model: 'gpt-4', prompt: '[REDACTED]' });
+    // Non-sensitive diagnostic fields outside the banned keys survive.
     expect(redacted.config.url).toBe('https://api.example.test/v1/chat');
     expect(redacted.config.method).toBe('post');
-    expect(redacted.config.headers['content-type']).toBe('application/json');
     expect(redacted.response.status).toBe(401);
     // Returned copy is a distinct Error; original is untouched.
     expect(redacted).toBeInstanceOf(Error);
