@@ -718,7 +718,7 @@ const DEFAULT_CONVO_TITLE = 'New Chat';
  */
 
 /** Builds a `BaseChatModel` for `model` routed under endpoint `1ma` (anonymizer baseURL). */
-async function buildNodeModel({ req, db, endpoint, model, passthroughHeaders }) {
+async function buildNodeModel({ req, db, endpoint, model, passthroughHeaders, providerRouting }) {
   const { llmConfig, configOptions, provider } = await initializeCustom({
     req,
     endpoint,
@@ -754,6 +754,25 @@ async function buildNodeModel({ req, db, endpoint, model, passthroughHeaders }) 
     user: createSafeUser(req?.user),
     body: req?.body,
   });
+  /**
+   * OpenRouter provider routing for this tier (`deepResearch.modes.<tier>.provider`).
+   *
+   * Deep Research builds its own clients and never saw the model spec's `addParams`, so
+   * every DR call has always gone out UNPINNED — OpenRouter picked the platform. That was
+   * harmless while the tier ran a slug served cheaply and identically everywhere; it stopped
+   * being harmless once balanced moved to `deepseek-v4-pro-0813`, whose nine platforms differ
+   * 2x in price and one of which serves it fp8-quantised. Measured on the stand: the first
+   * live call landed on the quantised one.
+   *
+   * `provider` is not an OpenAI parameter, so it travels in `modelKwargs`, which LangChain
+   * spreads into the request body — the same route the "Авто" card's own pin already takes.
+   * Merged UNDER the tier's value so an endpoint/spec-level pin that reached `llmConfig`
+   * cannot override the tier's explicit choice, and omitted entirely when unset, which
+   * leaves the pre-existing unpinned behaviour byte-identical.
+   */
+  const modelKwargs = providerRouting
+    ? { ...(clientOptions.modelKwargs ?? {}), provider: providerRouting }
+    : clientOptions.modelKwargs;
   const ModelClass = getChatModelClass(resolvedProvider);
   /**
    * Non-streaming on purpose. Every DR node calls `model.invoke()` and consumes the whole
@@ -768,7 +787,12 @@ async function buildNodeModel({ req, db, endpoint, model, passthroughHeaders }) 
    * client is still listening. The non-streaming branch reads the provider's real `usage`
    * instead, so this is also the more accurate path.
    */
-  return new ModelClass({ ...clientOptions, streaming: false, configuration: finalConfig });
+  return new ModelClass({
+    ...clientOptions,
+    ...(modelKwargs ? { modelKwargs } : {}),
+    streaming: false,
+    configuration: finalConfig,
+  });
 }
 
 /**
@@ -975,7 +999,14 @@ async function runNewDeepResearch(params) {
   const buildModel = (model) => {
     let pending = modelCache.get(model);
     if (!pending) {
-      pending = buildNodeModel({ req, db, endpoint, model, passthroughHeaders });
+      pending = buildNodeModel({
+        req,
+        db,
+        endpoint,
+        model,
+        passthroughHeaders,
+        providerRouting: tier.provider,
+      });
       modelCache.set(model, pending);
     }
     return pending;

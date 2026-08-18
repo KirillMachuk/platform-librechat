@@ -1626,6 +1626,27 @@ export const deepResearchModeSchema = z.object({
   leadModel: z.string().optional(),
   workerModel: z.string().optional(),
   writerModel: z.string().optional(),
+  /**
+   * OpenRouter provider routing for this tier's model calls, sent as the request's
+   * `provider` field. Belongs to the TIER, not to the endpoint: endpoint-level
+   * `addParams` reaches every model on the endpoint, so a list naming DeepSeek first
+   * would ride along on every Anthropic request through the same endpoint
+   * (see `resolveAddParams` in endpoints/custom/initialize.ts).
+   *
+   * Deep Research needs it because the same slug is served by many platforms at
+   * different prices and different quantisations, and unpinned traffic lands wherever
+   * OpenRouter chooses — measured on the stand: the first live call to
+   * `deepseek-v4-pro-0813` was served fp8-quantised.
+   *
+   * `allow_fallbacks: false` restricts routing to `order` and fails otherwise; a single
+   * name plus `false` can starve on an upstream rate limit, so list several.
+   */
+  provider: z
+    .object({
+      order: z.array(z.string().min(1)).min(1),
+      allow_fallbacks: z.boolean().default(true),
+    })
+    .optional(),
 });
 
 /**
