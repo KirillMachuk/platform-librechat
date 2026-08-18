@@ -9,9 +9,10 @@
  * two diverge (dark OS + light app) the OS-keyed meta painted a dark,
  * translucent murk over a light page. This runtime meta is inserted FIRST in
  * <head> — per the HTML spec the first matching meta wins — and carries the
- * ACTIVE theme's own canvas color, read from the `--c-panel` token after the
+ * ACTIVE theme's CHAT color, read from the `--c-card` token (owner 17.08-4:
+ * the bars follow the conversation surface like ChatGPT's, not the sidebar) after the
  * theme class flips, so there is exactly one source of truth for the color.
- * The bottom pill needs no JS at all: html/body backgrounds are var(--c-panel)
+ * The bottom pill needs no JS at all: html/body backgrounds are var(--c-card)
  * in the stylesheet and flip with the class.
  */
 const RUNTIME_META_ATTR = 'data-app-theme-color';
@@ -24,7 +25,7 @@ export default function syncSafariChrome(): void {
   if (!head) {
     return;
   }
-  const color = getComputedStyle(document.documentElement).getPropertyValue('--c-panel').trim();
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--c-card').trim();
   if (!color) {
     return;
   }
