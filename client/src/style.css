@@ -1611,8 +1611,6 @@ input:-webkit-autofill::first-line {
      enforces the pairing. */
   --surface-primary: color-mix(in srgb, var(--c-ink-flip) 16%, transparent);
   --surface-primary-alt: color-mix(in srgb, var(--c-ink-flip) 10%, transparent);
-  --surface-tertiary-alt: color-mix(in srgb, var(--c-ink-flip) 12%, transparent);
-  --surface-active-alt: color-mix(in srgb, var(--c-ink-flip) 22%, transparent);
   --border-light: color-mix(in srgb, var(--c-ink-flip) 16%, transparent);
   --border-medium: color-mix(in srgb, var(--c-ink-flip) 24%, transparent);
   /* The ink pair flips INSIDE the pill (literal-based, see --c-ink-flip):

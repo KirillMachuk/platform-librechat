@@ -43,13 +43,14 @@ const SKIP = /__tests__|\.(spec|test)\.tsx$/;
 
 /** Portal or out-of-scope files: their DOM mounts outside the
  *  `.composer-temporary` element, so the remap never reaches them — and must
- *  not be forced to. Staleness: a listed file that no longer exists fails the
- *  run. */
+ *  not be forced to. Files whose TRIGGER lives in the shell while only the
+ *  menu/popover portals out (MCPSelect, TokenUsage) are deliberately NOT
+ *  listed: scanning their portal-content tokens is a harmless superset,
+ *  skipping their trigger classes was a real blind spot (review, 18.08).
+ *  Staleness: a listed file that no longer exists fails the run. */
 const FILE_ALLOWLIST = [
   { file: 'client/src/components/Chat/Input/PlusSheet.tsx', reason: 'Headless UI Dialog — sheet portals to body' },
-  { file: 'client/src/components/Chat/Input/TokenUsage/index.tsx', reason: 'Ariakit popover with `portal`' },
   { file: 'client/src/components/Chat/Input/Files/DragDropModal.tsx', reason: 'OGDialog (Radix portal)' },
-  { file: 'client/src/components/Chat/Input/MCPSelect.tsx', reason: 'Ariakit.Menu portal={true}; the in-shell trigger uses CHIP_* recipes covered via CheckboxButton.tsx' },
   { file: 'client/src/components/Chat/Input/Mention.tsx', reason: 'renders as a sibling ABOVE the composer shell (ChatForm), outside the scope' },
   { file: 'client/src/components/Chat/Input/PromptsCommand.tsx', reason: 'sibling above the shell, outside the scope' },
   { file: 'client/src/components/Chat/Input/SkillsCommand.tsx', reason: 'sibling above the shell, outside the scope' },
@@ -63,15 +64,25 @@ const TOKEN_EXEMPT = new Map([
   ['border-control', 'control accent (checkbox/switch) unchanged by the inversion'],
 ]);
 
-/** class color-name -> custom property behind it (tailwind.config.cjs). */
+/** class color-name -> custom property behind it (tailwind.config.cjs). Names
+ *  whose var differs from `--<name>` must be listed explicitly — a wrong guess
+ *  fails in the false-positive direction (safe but confusing). */
 function tokenToVar(name) {
   if (name === 'ink') return '--c-ink';
   if (name === 'ink-label') return '--c-ink-label';
+  if (name === 'text-accent') return '--c-acc';
+  if (name === 'surface-code') return '--c-code-bg';
   return `--${name}`;
 }
 
 const FAMILY_RE =
   /(?:^|[\s:'"`([\]!])(?:bg|text|border|divide|placeholder|caret|fill|stroke|outline|ring|decoration|accent)-((?:surface|text|border)(?:-[a-z0-9]+)+|ink(?:-label)?)(?![a-z0-9-])/g;
+
+/** Arbitrary-value classes paint straight from a custom property and slip past
+ *  FAMILY_RE — e.g. `bg-[var(--c-ink)]` in RemoveFile/SourceIcon. Matched vars
+ *  are checked against the remap directly (review finding, 18.08). */
+const ARBITRARY_VAR_RE =
+  /(?:bg|text|border|divide|placeholder|caret|fill|stroke|outline|ring|decoration|accent|shadow)-\[var\((--[a-z0-9-]+)\)\]/g;
 
 function extractRemappedVars(cssText) {
   const m = cssText.match(/\.composer-temporary\s*\{([^}]*)\}/);
@@ -91,6 +102,21 @@ function extractUsedTokens(fileText) {
   return tokens;
 }
 
+function extractArbitraryVars(fileText) {
+  const vars = new Set();
+  for (const m of fileText.matchAll(ARBITRARY_VAR_RE)) {
+    vars.add(m[1]);
+  }
+  return vars;
+}
+
+/** Vars that arbitrary-value classes may use without a remap entry. */
+const VAR_EXEMPT = new Map([
+  ['--border-focus', 'focus accent is the same in both schemes by design'],
+  ['--border-control', 'control accent unchanged by the inversion'],
+  ['--c-acc', 'the accent is theme-stable by design — same value on light and dark grounds (context gauge)'],
+]);
+
 function findViolations(remappedVars, files) {
   const violations = [];
   for (const { path, text } of files) {
@@ -99,6 +125,12 @@ function findViolations(remappedVars, files) {
       const varName = tokenToVar(token);
       if (!remappedVars.has(varName)) {
         violations.push({ path, token, varName });
+      }
+    }
+    for (const varName of extractArbitraryVars(text)) {
+      if (VAR_EXEMPT.has(varName)) continue;
+      if (!remappedVars.has(varName)) {
+        violations.push({ path, token: `[var(${varName})]`, varName });
       }
     }
   }
@@ -121,6 +153,12 @@ function selfCheck() {
   const exempt = [{ path: 'fixture.tsx', text: `'focus-visible:outline-border-focus'` }];
   if (findViolations(holedSet, exempt).length !== 0) {
     console.error('[check-temporary] SELF-CHECK FAILED: token exemption did not apply.');
+    return false;
+  }
+  const arbitrary = [{ path: 'fixture.tsx', text: `className="bg-[var(--surface-dialog)] text-[var(--text-primary)]"` }];
+  const arbCatch = findViolations(new Set(['--text-primary']), arbitrary);
+  if (arbCatch.length !== 1 || arbCatch[0].varName !== '--surface-dialog') {
+    console.error('[check-temporary] SELF-CHECK FAILED: arbitrary [var(--...)] class was not caught.');
     return false;
   }
   return true;
