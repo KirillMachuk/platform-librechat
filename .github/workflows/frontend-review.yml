@@ -308,3 +308,24 @@ jobs:
 
       - name: Build client
         run: cd client && npm run build:ci
+
+  aggregate:
+    name: Frontend review green
+    # GitHub counts a SKIPPED required check as passed; this job runs on
+    # always() and fails on any failed/cancelled/skipped need, so ONE required
+    # check can cover the whole workflow. scripts/check-workflow-guards.mjs
+    # keeps the needs list equal to the job list (inline form on purpose —
+    # the dependency-free guard parser reads only the inline form).
+    if: always()
+    needs: [build, typecheck, test-ubuntu, test-packages-client, test-windows, build-verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Fail on any failed, cancelled or skipped job
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          printf '%s\n' "$NEEDS_JSON"
+          if printf '%s' "$NEEDS_JSON" | grep -qE '"result": ?"(failure|cancelled|skipped)"'; then
+            exit 1
+          fi

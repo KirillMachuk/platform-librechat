@@ -18,6 +18,8 @@ on:
       - 'packages/**'
       - 'config/**'
       - 'scripts/check-jest-guard.mjs'
+      - 'scripts/check-workflow-guards.mjs'
+      - '.github/workflows/**'
       - 'scripts/jest-workspace-build.cjs'
       - 'package.json'
       - '.github/workflows/repo-guards.yml'
@@ -30,6 +32,8 @@ on:
       - 'packages/**'
       - 'config/**'
       - 'scripts/check-jest-guard.mjs'
+      - 'scripts/check-workflow-guards.mjs'
+      - '.github/workflows/**'
       - 'scripts/jest-workspace-build.cjs'
       - 'package.json'
       - '.github/workflows/repo-guards.yml'
@@ -54,3 +58,20 @@ jobs:
       # Reads jest configs only — no dependencies, so no install step.
       - name: Check every workspace wires the guard
         run: npm run check:jest-guard
+
+  workflow_guards:
+    name: Workflow anti-false-green guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24.16.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      # Reads files only — no dependencies, so no install step.
+      - name: Aggregates complete, npm scripts exist, the no-tests escape hatch banned
+        run: npm run check:workflows
