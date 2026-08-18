@@ -131,6 +131,84 @@ test.describe('artifacts', () => {
   });
 
   /**
+   * Opening the panel must not move the conversation.
+   *
+   * The owner opened a file from a message and the chat jumped back as if the
+   * page had reloaded — again on closing, and only ever on the FIRST open,
+   * which is the tell: the conversation was being wrapped in a card element
+   * only while the panel was open, so the element at that position changed and
+   * React rebuilt the whole subtree. Anything mounted inside it — the scroll
+   * position, a half-typed message, a video — started over.
+   *
+   * Measured as "the message you were looking at is still on screen" rather
+   * than as a scrollTop equality: the column genuinely narrows when the panel
+   * takes its half, so the content reflows and a few pixels of drift are
+   * honest. A remount is not drift; it puts you somewhere else entirely.
+   */
+  test('opening and closing the panel leaves the conversation where it was', async ({ page }) => {
+    test.setTimeout(150000);
+    /* Short viewport so a couple of replies are already taller than the column
+       — with nothing to scroll, this test would pass on the defect. */
+    await page.setViewportSize({ width: 1200, height: 520 });
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
+
+    await sendMessage(page, 'E2E_ARTIFACT_REPLY');
+    const card = messagesView(page).getByRole('button').filter({ hasText: 'E2E Artifact' });
+    await expect(card.first()).toBeVisible({ timeout: 60000 });
+    await sendMessage(page, 'E2E_ARTIFACT_REPLY');
+    await expect(card.nth(1)).toBeVisible({ timeout: 60000 });
+
+    /* The scroller is found by behaviour, not by class: whichever box inside
+       the conversation actually overflows is the one a remount would reset. */
+    const scroller = await page.evaluateHandle(() => {
+      const view = document.querySelector('[data-testid="messages-view"]');
+      const boxes = view ? Array.from(view.querySelectorAll('*')) : [];
+      return (
+        boxes.find((element) => {
+          const style = getComputedStyle(element);
+          return (
+            /(auto|scroll)/.test(style.overflowY) &&
+            element.scrollHeight > element.clientHeight + 40
+          );
+        }) ?? null
+      );
+    });
+    expect(await scroller.evaluate((element) => element != null)).toBe(true);
+
+    await scroller.evaluate((element: Element) => {
+      element.scrollTop = Math.max(0, element.scrollHeight - element.clientHeight - 240);
+    });
+    const before = await scroller.evaluate((element: Element) => ({
+      top: element.scrollTop,
+      fromBottom: element.scrollHeight - element.clientHeight - element.scrollTop,
+    }));
+    expect(before.top, 'the conversation is scrolled away from both ends').toBeGreaterThan(20);
+
+    await card.first().click();
+    await expect(page.locator('#artifacts-code')).toHaveCount(1, { timeout: 30000 });
+    const opened = await scroller.evaluate((element: Element) => ({
+      top: element.scrollTop,
+      fromBottom: element.scrollHeight - element.clientHeight - element.scrollTop,
+      connected: element.isConnected,
+    }));
+
+    /* A rebuilt subtree leaves the old node orphaned — the cheapest proof that
+       the conversation survived at all. */
+    expect(opened.connected, 'the conversation was not rebuilt').toBe(true);
+    expect(Math.abs(opened.fromBottom - before.fromBottom)).toBeLessThan(160);
+
+    await page.getByRole('button', { name: 'Close' }).first().click();
+    await expect(page.locator('#artifacts-code')).toHaveCount(0, { timeout: 30000 });
+    const closed = await scroller.evaluate((element: Element) => ({
+      fromBottom: element.scrollHeight - element.clientHeight - element.scrollTop,
+      connected: element.isConnected,
+    }));
+    expect(closed.connected, 'closing the panel did not rebuild it either').toBe(true);
+    expect(Math.abs(closed.fromBottom - before.fromBottom)).toBeLessThan(160);
+  });
+
+  /**
    * The canon decision behind PR #265, silently reverted once already by an
    * unrelated PR that merged from a stale base and restored in PR #309 — see
    * `feedback_unguarded_canon_decision_gets_reverted` in project memory. That
