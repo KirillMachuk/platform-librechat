@@ -7,13 +7,13 @@ import {
   bufferToOfficeHtml,
   csvToHtml,
   excelSheetToHtml,
-  isCurrentOfficePreview,
   officeHtmlBucket,
   pptxToHtml,
   pptxToSlideListHtml,
   sanitizeOfficeHtml,
   wordDocToHtml,
 } from './html';
+import { isCurrentOfficePreview, OFFICE_PREVIEW_VERSION } from './version';
 import { ZipBombError } from './zipSafety';
 
 const fixturesDir = __dirname;
@@ -1040,9 +1040,14 @@ describe('Office HTML producers', () => {
      * A preview is stored on the file record and served from there for as long
      * as the file exists, so a document rendered by an older build survives
      * every fix that followed. The serve path re-renders anything that does not
-     * carry the current stamp — which only works if every document we generate
-     * carries it. This test is here so a fourth document shape cannot be added
-     * without one.
+     * carry the current stamp — which only works if EVERY document we generate
+     * carries it.
+     *
+     * The first version of this test listed three producers by hand and called
+     * itself a guard against a fourth. There were already five: the LibreOffice
+     * embed and the oversized-file banner had no stamp, so those documents would
+     * have re-rendered on every single request, forever. Counting the sources
+     * instead of the calls is the only version of this test worth having.
      */
     test('every generated preview document carries it', async () => {
       const documents = [
@@ -1056,8 +1061,41 @@ describe('Office HTML producers', () => {
       }
     });
 
+    test('no document shape in the source is left unstamped', () => {
+      const sources = [
+        path.join(__dirname, 'html.ts'),
+        path.join(__dirname, 'libreoffice.ts'),
+        path.join(__dirname, '../code/extract.ts'),
+      ];
+
+      const unstamped: string[] = [];
+      for (const source of sources) {
+        const text = fs.readFileSync(source, 'utf-8');
+        const heads = text.split('<!DOCTYPE html>').slice(1);
+        heads.forEach((head, index) => {
+          /* The stamp belongs in the head; a document is the text up to the
+             end of it, and 600 characters covers every head we write. */
+          if (!head.slice(0, 600).includes('${PREVIEW_VERSION_TAG}')) {
+            unstamped.push(`${path.basename(source)} document #${index + 1}`);
+          }
+        });
+      }
+
+      expect(unstamped).toEqual([]);
+    });
+
     test('rejects a document from an older renderer', () => {
       expect(isCurrentOfficePreview('<html><head></head><body>old</body></html>')).toBe(false);
+    });
+
+    test('reads its own stamp back whatever the attribute spacing', () => {
+      /* Exact-substring matching would stop recognising our own fresh documents
+         on a whitespace change, and the price of that mistake is a document
+         that re-renders on every request forever. */
+      const spaced = `<html><head><meta   name='lc-office-preview'   content='${OFFICE_PREVIEW_VERSION}' /></head></html>`;
+      expect(isCurrentOfficePreview(spaced)).toBe(true);
+      /* A document from version 1 is not current. */
+      expect(isCurrentOfficePreview('<meta name="lc-office-preview" content="1">')).toBe(false);
     });
   });
 });

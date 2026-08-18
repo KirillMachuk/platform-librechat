@@ -1,4 +1,5 @@
 import yauzl from 'yauzl';
+import { PREVIEW_VERSION_TAG } from './version';
 import { excelMimeTypes, megabyte } from 'librechat-data-provider';
 import { tryLibreOfficePreview } from './libreoffice';
 import { assertSafeZipSize } from './zipSafety';
@@ -151,27 +152,6 @@ export async function sanitizeOfficeHtml(html: string): Promise<string> {
  * the iframe inherits dark/light from its parent (Sandpack iframes inherit
  * the prefers-color-scheme media query from the host document).
  */
-/**
- * Stamp carried by every preview document we generate.
- *
- * A rendered preview outlives the build that produced it: it is stored on the
- * file record at upload time and served from there forever, so a fix in the
- * renderer never reaches a document somebody already has. Bump this whenever
- * the output changes in a way an older document gets wrong, and the serve path
- * re-renders anything that does not carry the current stamp.
- *
- * 2 — 18.08: the pptx wrap-and-scale pass measured the renderer's host box and
- *     clipped every slide after the first.
- */
-export const OFFICE_PREVIEW_VERSION = '2';
-
-const PREVIEW_VERSION_TAG = `<meta name="lc-office-preview" content="${OFFICE_PREVIEW_VERSION}">`;
-
-/** True when `html` was produced by the current renderer. */
-export function isCurrentOfficePreview(html: string): boolean {
-  return html.includes(PREVIEW_VERSION_TAG);
-}
-
 function wrapAsDocument(bodyHtml: string, extraHeadHtml = ''): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1166,13 +1146,16 @@ ${PREVIEW_VERSION_TAG}
 @media (prefers-color-scheme: dark) { :root { --bg: #1a1a2e; --fg: #e5e7eb; --muted: #9ca3af; } }
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
 #lc-render { padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 16px; }
-/* Each rendered slide is wrapped post-hoc by the bootstrap script in
- * an .lc-slide-wrap div with explicit width/height set inline. The
- * inner slide keeps its native pixel size and gets transformed via
- * a CSS scale so it fits the iframe width without horizontal
- * scrolling. Without this, pptx-preview emits slides at whatever
- * resolution it computed against (typically 960×540) and overflows
- * narrow panels — manual e2e feedback on PR #12934. */
+/* What the bootstrap script wraps in an .lc-slide-wrap div — with width
+ * and height set inline — is whatever pptx-preview put in the container.
+ * On 1.0.7 that is ONE host holding the whole deck, not a slide each, so
+ * a deck reads as a single sheet with the renderer's own 10px gaps
+ * between slides rather than as separate cards; the styling below is
+ * written for either shape. The inner element keeps its native pixel
+ * size and is scaled with a CSS transform so it fits the iframe width
+ * without horizontal scrolling. Without this, pptx-preview emits slides
+ * at whatever resolution it computed against (typically 960×540) and
+ * overflows narrow panels — manual e2e feedback on PR #12934. */
 .lc-slide-wrap {
   position: relative;
   margin: 0 auto;
@@ -1329,10 +1312,17 @@ ${PPTX_SLIDE_LIST_CSS}
          * the init box (960x540) with its own overflow:auto, so a six-slide
          * deck scrolled inside a one-slide window and the wrap below clipped
          * everything past slide 1 — the panel showed one slide and empty
-         * space (owner report 17.08). Let the host grow to its content
-         * before measuring. A build that emits slides as direct children is
-         * unaffected: a slide's own height is its content height. */
-        slide.style.height = 'auto';
+         * space (owner report 17.08). Let a box that clips its own content
+         * grow to it before measuring.
+         *
+         * The condition is the load-bearing half. A slide of that renderer is
+         * a fixed box with absolutely positioned content: height:auto on it
+         * measures 0, the SLIDE_H fallback then quietly supplies 540, and the
+         * slide is left zero-height behind its own overflow:hidden — an empty
+         * panel. So only a box whose content does not fit is touched. */
+        if (slide.scrollHeight > slide.offsetHeight + 1) {
+          slide.style.height = 'auto';
+        }
         /* Cache the slides actual rendered size BEFORE applying any
          * transform — measurements after a CSS scale no longer reflect
          * native pixels and would feed back into wrong sizing on
@@ -1364,8 +1354,13 @@ ${PPTX_SLIDE_LIST_CSS}
         var wrap = wraps[i];
         var inner = wrap.firstElementChild;
         if (!inner || !inner.dataset) { continue; }
-        var nativeW = parseFloat(inner.dataset.lcNativeW) || SLIDE_W;
-        var nativeH = parseFloat(inner.dataset.lcNativeH) || SLIDE_H;
+        /* Live size first, cache second. offsetWidth/offsetHeight ignore the
+         * CSS transform, so they still report native pixels — and they keep up
+         * with a renderer that is still painting: the 8s safety net below can
+         * wrap a deck mid-render, and a wrap frozen at the height of the
+         * slides that existed back then would clip the rest forever. */
+        var nativeW = inner.offsetWidth || parseFloat(inner.dataset.lcNativeW) || SLIDE_W;
+        var nativeH = inner.offsetHeight || parseFloat(inner.dataset.lcNativeH) || SLIDE_H;
         var scale = scaleFor(nativeW);
         wrap.style.width = (nativeW * scale) + 'px';
         wrap.style.height = (nativeH * scale) + 'px';
@@ -1399,7 +1394,14 @@ ${PPTX_SLIDE_LIST_CSS}
       /* Resize observer set up AFTER the wrap so it doesnt fire
        * during the wrap pass. */
       if (typeof ResizeObserver !== 'undefined') {
-        new ResizeObserver(refit).observe(document.body);
+        var observer = new ResizeObserver(refit);
+        observer.observe(document.body);
+        /* The deck itself is watched too, not only the viewport: slides that
+         * land after the 8s safety net grow the host, and nothing else would
+         * tell us to re-fit. Layout size is unaffected by the transform we
+         * apply, so this cannot feed itself. */
+        var wrapped = container.querySelector('.lc-slide-wrap > *');
+        if (wrapped) { observer.observe(wrapped); }
       } else {
         window.addEventListener('resize', refit);
       }

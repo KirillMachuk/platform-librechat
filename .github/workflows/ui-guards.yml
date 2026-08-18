@@ -147,6 +147,24 @@ jobs:
       - name: Check the artifact preview has no third party
         run: npm run check:artifacts-offline
 
+  pdfjs_assets:
+    name: PDF decoders are vendored
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24.16.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      # Presence is checked without an install; the byte comparison against the
+      # installed package needs one, and the backend suite already does it.
+      - name: Check the vendored pdf.js decoders
+        run: npm run check:pdfjs-assets
+
   tooltip_canon:
     name: Tooltip canon
     runs-on: ubuntu-latest

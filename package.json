@@ -125,6 +125,7 @@
     "check:tooltips": "node scripts/check-tooltips.mjs",
     "check:panx": "node scripts/check-panx.mjs",
     "check:artifacts-offline": "node scripts/check-artifacts-offline.mjs",
+    "check:pdfjs-assets": "node scripts/check-pdfjs-assets.mjs",
     "check:jest-guard": "node scripts/check-jest-guard.mjs",
     "check:temporary": "node scripts/check-temporary-tokens.mjs",
     "check:workflows": "node scripts/check-workflow-guards.mjs"

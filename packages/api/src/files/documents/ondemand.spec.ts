@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import {
   MAX_OFFICE_PREVIEW_BYTES,
   OFFICE_PREVIEW_TIMEOUT_MS,
+  isCurrentOfficePreview,
   isOfficeHtmlPreviewable,
   renderOfficePreview,
 } from './ondemand';
@@ -84,5 +85,19 @@ describe('isOfficeHtmlPreviewable', () => {
     ['plain.txt', 'text/plain'],
   ])('returns false for non-office filename %s', (filename, mime) => {
     expect(isOfficeHtmlPreviewable(filename, mime)).toBe(false);
+  });
+});
+
+describe('what the route imports', () => {
+  /**
+   * The JS route reaches this module through the package barrel, and nothing
+   * else did: removing the re-export line below would leave
+   * `isCurrentOfficePreview` undefined in `files.js` and turn every office
+   * preview into a 500, while the unit tests that import it directly stayed
+   * green. This is that missing check.
+   */
+  test('re-exports the staleness check the preview route calls', () => {
+    expect(typeof isCurrentOfficePreview).toBe('function');
+    expect(isCurrentOfficePreview('<meta name="lc-office-preview" content="0">')).toBe(false);
   });
 });

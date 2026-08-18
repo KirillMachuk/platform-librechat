@@ -1,4 +1,5 @@
 import * as os from 'os';
+import { PREVIEW_VERSION_TAG } from '../documents/version';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { randomUUID } from 'crypto';
@@ -172,7 +173,7 @@ const extractDocument = async (
  * construction.
  */
 const OVERSIZED_HTML_BANNER = `<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Preview</title>
+<html lang="en"><head><meta charset="UTF-8">${PREVIEW_VERSION_TAG}<title>Preview</title>
 <style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#6b7280;padding:16px;font-size:14px;line-height:1.5}@media(prefers-color-scheme:dark){body{color:#9ca3af;background:#1a1a2e}}</style>
 </head><body>Preview exceeds the size limit. Download the file to view the full contents.</body></html>`;
 
