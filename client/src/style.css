@@ -1522,15 +1522,18 @@ input:-webkit-autofill:active {
 }
 
 /* The autofilled TEXT itself is painted through the input's ::first-line —
-   the only styling hook Chromium exposes for it; the font-family pinned on
-   the element above never reaches that text. Without this rule a saved login
-   renders with the browser's default face/size while typed text uses the
-   field's (owner 18.08-2: large default vs small saved-account fill on the
-   login page). `inherit` resolves against the input's own computed font, so
-   the 16px auth fields and the 14px desktop fields each keep their size. */
-input:-webkit-autofill::first-line {
-  font-family: inherit;
-  font-size: inherit;
+   the only styling hook Chromium exposes for it; the font pinned on the
+   element above never reaches that text. Round 15 tried `inherit` here and
+   the owner still saw the jump (18.08, round 16): on INPUT autofill painting
+   `inherit` does not take (a probe showed it resolves fine on block
+   elements — the input's internal editor is the special case), and every
+   documented working recipe uses EXPLICIT values. So: explicit face and the
+   auth fields' own 16px, scoped by the .auth-field marker (non-auth desktop
+   fields are 14px and almost never autofilled — a global 1rem would create
+   the opposite jump there). */
+input.auth-field:-webkit-autofill::first-line {
+  font-family: 'Inter Variable', 'Inter', sans-serif;
+  font-size: 1rem;
 }
 
 /* Полоса прокрутки, видимая только под курсором (владелец 14.08-6, поведение

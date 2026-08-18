@@ -14,6 +14,10 @@ export const authFieldClassName = (hasError?: boolean) =>
        состояниях делает скачок невозможным; twMerge оставляет md:text-base
        (спор с md:text-sm из FIELD_BASE решает порядок аргументов cn). */
     'md:text-base',
+    /* auth-field: якорь для правила автозаполнения в style.css — текст
+       автозаполнения красится через ::first-line инпута и требует ЯВНЫХ
+       font-size/family (inherit там не срабатывает: владелец 18.08-2/р16). */
+    'auth-field',
     hasError
       ? 'border-border-destructive focus-visible:border-border-destructive focus-visible:ring-err-soft'
       : FIELD_BORDER,
