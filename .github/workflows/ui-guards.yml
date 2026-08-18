@@ -23,6 +23,7 @@ on:
       - 'scripts/check-layers.mjs'
       - 'scripts/check-tooltips.mjs'
       - 'scripts/check-panx.mjs'
+      - 'scripts/check-temporary-tokens.mjs'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/ui-guards.yml'
@@ -38,6 +39,7 @@ on:
       - 'scripts/check-layers.mjs'
       - 'scripts/check-tooltips.mjs'
       - 'scripts/check-panx.mjs'
+      - 'scripts/check-temporary-tokens.mjs'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/ui-guards.yml'
@@ -178,3 +180,20 @@ jobs:
       # Reads files only — no dependencies, so no install step.
       - name: Check every horizontal scroller contains its overscroll
         run: npm run check:panx
+
+  temporary_inversion:
+    name: Temporary-chat inversion
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24.16.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      # Reads files only — no dependencies, so no install step.
+      - name: Check every composer token is remapped for the temporary chat
+        run: npm run check:temporary

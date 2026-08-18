@@ -30,12 +30,7 @@ import {
   useAgentToolPermissions,
   useFileHandlingNoChatContext,
 } from '~/hooks';
-import {
-  buildAttachItems,
-  acceptForFileType,
-  isApplePlatform,
-  DOCUMENTS_ONLY_ACCEPT,
-} from './Files/attachItems';
+import { buildAttachItems, acceptForFileType, DOCUMENTS_ONLY_ACCEPT } from './Files/attachItems';
 import useAttachConfig from './Files/useAttachConfig';
 import { ephemeralAgentByConvoId } from '~/store';
 import { useBadgeRowContext } from '~/Providers';
@@ -231,21 +226,10 @@ function PlusSheet({
     [setEphemeralAgent],
   );
 
-  /* Один пункт на iPhone/iPad (владелец 17.08-3): «Фото» всё равно открывал
-     системный лист Safari с теми же тремя путями — три плитки лишь дублировали
-     его; широкий accept держит и медиатеку, и документы в «Выбрать файлы». */
-  const appleTiles = [
-    /* Один пункт на iPhone/iPad (владелец 17.08-3): «Фото» всё равно
-               открывал системный лист Safari с теми же тремя путями — три наших
-               плитки лишь дублировали его. Широкий accept держит все три опции
-               листа рабочими, включая документы в «Выбрать файлы». */
-    {
-      key: 'attach',
-      label: localize('com_ui_photo_or_file'),
-      icon: <ImageIcon className="icon-lg" aria-hidden="true" />,
-      onClick: () => openPicker({ accept: `image/*,.heif,.heic,${DOCUMENTS_ONLY_ACCEPT}` }),
-    },
-  ];
+  /* Three tiles on EVERY platform (owner 18.08-1, reversing 17.08-3): on iOS
+     «Фото» still opens Safari's own centered sheet — that is accepted as the
+     ChatGPT-like behavior, and the three direct tiles come back. Canon: the
+     sheet and the desktop menu build from the one attachItems list. */
   const defaultTiles = [
     {
       key: 'camera',
@@ -269,8 +253,7 @@ function PlusSheet({
       onClick: () => openPicker({ accept: DOCUMENTS_ONLY_ACCEPT }),
     },
   ];
-  const platformTiles = isApplePlatform() ? appleTiles : defaultTiles;
-  const tiles = attachMode == null ? [] : platformTiles;
+  const tiles = attachMode == null ? [] : defaultTiles;
 
   const showTools = showEphemeralBadges && context != null;
   /** The book's order for the sheet: search, research, code, file search,

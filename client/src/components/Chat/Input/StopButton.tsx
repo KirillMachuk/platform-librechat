@@ -28,7 +28,10 @@ export default memo(function StopButton({
             stop(e);
           }}
         >
-          <PlayerStop className="icon-lg text-surface-primary" aria-hidden="true" />
+          {/* ink-label, not surface-primary: the icon must stay the "label on
+              ink" color inside .composer-temporary, where surface-primary is
+              remapped to a translucent chip fill (same recipe as SendButton). */}
+          <PlayerStop className="icon-lg text-ink-label" aria-hidden="true" />
         </button>
       }
     ></TooltipAnchor>

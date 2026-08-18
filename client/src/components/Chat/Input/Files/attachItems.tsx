@@ -53,23 +53,6 @@ interface BuildAttachItemsArgs {
  *  DIRECTLY (owner, 12.08: the double chooser on the phone). Photos keep
  *  image/*: the web has no API to jump straight into the photo library, that
  *  step is Safari's own. */
-/**
- * Apple touch devices (iPhone / iPad, incl. iPadOS desktop-mode: MacIntel with
- * touch points). Safari there shows its OWN «Медиатека / Снять / Выбрать
- * файлы» sheet for any image-bearing accept — the web cannot open the photo
- * library directly, so separate Photo/Camera/Files rows only duplicate that
- * sheet one tap earlier (owner 17.08-3: merge them into one row there).
- */
-export const isApplePlatform = (): boolean => {
-  if (typeof navigator === 'undefined') {
-    return false;
-  }
-  return (
-    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-  );
-};
-
 export const DOCUMENTS_ONLY_ACCEPT =
   '.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.md,.rtf,.json,.xml,.html,.odt,.ods,.odp,.epub';
 
