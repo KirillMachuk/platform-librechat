@@ -203,6 +203,20 @@ describe('DataTableComponents', () => {
       expect(mockParentKeyDown).not.toHaveBeenCalled();
     });
 
+    it('should let keys it does not act on reach the dialog above it', () => {
+      const mockParentKeyDown = jest.fn();
+
+      render(
+        <div onKeyDown={mockParentKeyDown}>
+          <SelectionCheckbox checked={false} onChange={jest.fn()} ariaLabel="Select row" />
+        </div>,
+      );
+
+      fireEvent.keyDown(screen.getByRole('button'), { key: 'Escape' });
+
+      expect(mockParentKeyDown).toHaveBeenCalled();
+    });
+
     it('should have tabIndex 0 for keyboard accessibility', () => {
       render(<SelectionCheckbox checked={false} onChange={jest.fn()} ariaLabel="Select row" />);
 

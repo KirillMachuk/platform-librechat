@@ -32,11 +32,15 @@ export const SelectionCheckbox: React.MemoExoticComponent<
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onChange(!checked);
+        /* Only the keys this control acts on are swallowed. Stopping every key
+           here also stopped Escape, and the file library then refused to close
+           from a focused row — the dialog reads Escape as it bubbles. */
+        if (e.key !== 'Enter' && e.key !== ' ') {
+          return;
         }
+        e.preventDefault();
         e.stopPropagation();
+        onChange(!checked);
       }}
       className="flex h-full w-8 items-center justify-center"
       onClick={(e) => {
@@ -87,10 +91,7 @@ const TableRowComponent = <TData extends Record<string, unknown>>(
       ref={ref}
       data-state={selected ? 'selected' : undefined}
       data-index={virtualIndex}
-      className={cn(
-        'border-none hover:bg-surface-secondary',
-        clickable && 'cursor-pointer',
-      )}
+      className={cn('border-none hover:bg-surface-secondary', clickable && 'cursor-pointer')}
       style={style}
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}

@@ -246,10 +246,16 @@ test.describe('file preview — plain formats', () => {
    */
   test('fits a PDF across a phone screen and scrolls down through it', async ({ page }) => {
     test.setTimeout(90000);
-    await page.setViewportSize({ width: 375, height: 812 });
+    /* Attached at desktop width on purpose: the phone composer keeps its attach
+       control behind a menu, and this test is about the reading view, not about
+       how a file gets in. The narrowing then also exercises the re-fit. */
     await previewFixture(page, 'digital.pdf');
     const viewer = page.getByTestId('pdf-preview');
     await expect(pdfPage(page).first()).toBeVisible({ timeout: 30000 });
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expect
+      .poll(async () => (await pdfPage(page).first().boundingBox())?.width ?? 0, { timeout: 15000 })
+      .toBeLessThanOrEqual(375);
 
     const fit = await viewer.evaluate((element) => {
       const page1 = element.querySelector('.page') as HTMLElement | null;
