@@ -19,8 +19,8 @@ describe('marker literals (R6 pin)', () => {
     // imported from there). A drift silently breaks card↔runner routing, so BOTH packages
     // pin the literals; change them together or the twin spec goes red.
     expect(PLAN_MARKER).toBe('**План исследования:**');
-    expect(START_MARKER).toBe('▶ Начать исследование');
-    expect(CANCEL_MARKER).toBe('✕ Отменить исследование');
+    expect(START_MARKER).toBe('Начать исследование');
+    expect(CANCEL_MARKER).toBe('Отменить исследование');
     expect(CANCELLED_MESSAGE).toBe('Исследование отменено.');
   });
 });
@@ -167,6 +167,13 @@ describe('isStartCommand / isCancelCommand', () => {
     expect(isStartCommand('начать')).toBe(false);
     expect(isStartCommand(CANCEL_MARKER)).toBe(false);
     expect(isCancelCommand(START_MARKER)).toBe(false);
+  });
+
+  it('accepts the pre-18.08 pictograph markers from old conversations', () => {
+    expect(isStartCommand('▶ Начать исследование')).toBe(true);
+    expect(isCancelCommand('✕ Отменить исследование')).toBe(true);
+    expect(isStartCommand('✕ Отменить исследование')).toBe(false);
+    expect(isCancelCommand('▶ Начать исследование')).toBe(false);
     expect(isCancelCommand('')).toBe(false);
   });
 });

@@ -1,5 +1,4 @@
 import { memo, useRef, useMemo, useEffect, useState, useCallback } from 'react';
-import { useWatch } from 'react-hook-form';
 import { TextareaAutosize } from '@librechat/client';
 import { useRecoilState, useRecoilValue } from 'recoil';
 import {
@@ -36,7 +35,6 @@ import TextareaHeader from './TextareaHeader';
 import PromptsCommand from './PromptsCommand';
 import SkillsCommand from './SkillsCommand';
 import AudioRecorder from './AudioRecorder';
-import CollapseChat from './CollapseChat';
 import StreamAudio from './StreamAudio';
 import TokenUsage from './TokenUsage';
 import StopButton from './StopButton';
@@ -77,9 +75,7 @@ const ChatForm = memo(function ChatForm({
   useFocusChatEffect(textAreaRef);
   const localize = useLocalize();
 
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [, setIsScrollable] = useState(false);
-  const [visualRowCount, setVisualRowCount] = useState(1);
   const [backupBadges, setBackupBadges] = useState<Pick<BadgeItem, 'id'>[]>([]);
 
   const SpeechToText = useRecoilValue(store.speechToText);
@@ -161,12 +157,6 @@ const ChatForm = memo(function ChatForm({
     textAreaRef.current?.focus();
   }, []);
 
-  const handleFocusOrClick = useCallback(() => {
-    if (isCollapsed) {
-      setIsCollapsed(false);
-    }
-  }, [isCollapsed]);
-
   useAutoSave({
     files,
     setFiles,
@@ -206,16 +196,6 @@ const ChatForm = memo(function ChatForm({
     ),
   });
 
-  const textValue = useWatch({ control: methods.control, name: 'text' });
-
-  useEffect(() => {
-    if (textAreaRef.current) {
-      const style = window.getComputedStyle(textAreaRef.current);
-      const lineHeight = parseFloat(style.lineHeight);
-      setVisualRowCount(Math.floor(textAreaRef.current.scrollHeight / lineHeight));
-    }
-  }, [textValue]);
-
   useEffect(() => {
     if (isEditingBadges && backupBadges.length === 0) {
       setBackupBadges([...badges]);
@@ -235,8 +215,6 @@ const ChatForm = memo(function ChatForm({
     setBackupBadges([]);
   }, [backupBadges, setBadges, setIsEditingBadges]);
 
-  const isMoreThanThreeRows = visualRowCount > 3;
-
   const baseClasses = useMemo(
     () =>
       cn(
@@ -248,14 +226,14 @@ const ChatForm = memo(function ChatForm({
            box padding is 12px 10px 8px 16px (d02, measured), so the text
            starts 16 from the left, 12 from the top, 10 from the right. */
         'm-0 w-full resize-none pt-3 pb-1.5 text-base leading-[1.6] placeholder:text-text-tertiary bg-transparent',
-        /* Resting height: single row again on every width (owner 17.08-3
-           reverted the 11.08-3 «Kimi 130» experiment — the tall box read as
-           too big). The box grows with the text up to the vh caps; collapse
-           wins over growth. */
-        isCollapsed ? 'max-h-[52px]' : 'max-h-[45vh] md:max-h-[55vh]',
-        isMoreThanThreeRows ? 'ps-3.5 md:ps-4' : 'ps-3.5 pe-2 md:ps-4 md:pe-2.5',
+        /* Resting height: single row on every width (owner 17.08-3). Growth
+           caps at 240/288px — enough for ~9 lines, and the chat stays visible
+           behind the box; past the cap the textarea scrolls inside. The
+           collapse control is GONE (owner 18.08-4): the cap replaces it. */
+        'max-h-60 md:max-h-72',
+        'ps-3.5 pe-2 md:ps-4 md:pe-2.5',
       ),
-    [isCollapsed, isMoreThanThreeRows],
+    [],
   );
 
   return (
@@ -335,17 +313,7 @@ const ChatForm = memo(function ChatForm({
             />
             {endpoint && (
               <div className={cn('flex', isRTL ? 'flex-row-reverse' : 'flex-row')}>
-                <div
-                  className="relative flex-1"
-                  style={
-                    isCollapsed
-                      ? {
-                          WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 90%)',
-                          maskImage: 'linear-gradient(to bottom, black 60%, transparent 90%)',
-                        }
-                      : undefined
-                  }
-                >
+                <div className="relative flex-1">
                   <TextareaAutosize
                     {...registerProps}
                     ref={(e) => {
@@ -363,22 +331,13 @@ const ChatForm = memo(function ChatForm({
                     tabIndex={0}
                     data-testid="text-input"
                     rows={1}
-                    onFocus={handleFocusOrClick}
                     aria-label={localize('com_ui_message_input')}
-                    onClick={handleFocusOrClick}
                     style={{ height: 44, overflowY: 'auto', overflowX: 'hidden' }}
                     className={cn(
                       baseClasses,
                       removeFocusRings,
                       'scrollbar-hover transition-[max-height] duration-200 disabled:cursor-not-allowed',
                     )}
-                  />
-                </div>
-                <div className="flex flex-col items-start justify-start pr-2.5 pt-1.5">
-                  <CollapseChat
-                    isCollapsed={isCollapsed}
-                    isScrollable={isMoreThanThreeRows}
-                    setIsCollapsed={setIsCollapsed}
                   />
                 </div>
               </div>

@@ -28,11 +28,18 @@ export const DR_PLAN_MARKER = '**План исследования:**';
  *  Used only to recognise a DR assistant turn when detecting the report that follows it. */
 export const DR_CLARIFY_MARKER = '**Уточните, пожалуйста, детали исследования:**';
 
-/** Exact text the "Начать" button / autostart sends as the user's turn-2 message. */
-export const DR_START_MARKER = '▶ Начать исследование';
+/** Exact text the "Начать" button / autostart sends as the user's turn-2 message.
+ *  Plain text on purpose: the old `▶` prefix rendered as an emoji-styled glyph on
+ *  iOS and a plain triangle on desktop (owner 18.08-2); pictographs belong to the
+ *  icon set, not to message text. */
+export const DR_START_MARKER = 'Начать исследование';
 
 /** Exact text the "Отменить" button sends as the user's turn-2 message. */
-export const DR_CANCEL_MARKER = '✕ Отменить исследование';
+export const DR_CANCEL_MARKER = 'Отменить исследование';
+
+/** Markers clients sent before 18.08 — old conversations still contain them. */
+export const DR_LEGACY_START_MARKER = '▶ Начать исследование';
+export const DR_LEGACY_CANCEL_MARKER = '✕ Отменить исследование';
 
 /** Terminal assistant message after a cancel — carries NO DR marker. */
 export const DR_CANCELLED_MESSAGE = 'Исследование отменено.';
@@ -52,14 +59,24 @@ export function isDrAssistantTurn(text: string): boolean {
   return head.startsWith(DR_PLAN_MARKER) || head.startsWith(DR_CLARIFY_MARKER);
 }
 
-/** True if a message is the exact "start research" command (button/autostart). */
+/** True if a message is the exact "start research" command (button/autostart).
+ *  Accepts the pre-18.08 pictograph form so old conversations keep rendering
+ *  (and re-submitting) as commands. */
 export function isDrStartCommand(text: string): boolean {
-  return typeof text === 'string' && text.trim() === DR_START_MARKER;
+  if (typeof text !== 'string') {
+    return false;
+  }
+  const t = text.trim();
+  return t === DR_START_MARKER || t === DR_LEGACY_START_MARKER;
 }
 
 /** True if a message is the exact "cancel research" command. */
 export function isDrCancelCommand(text: string): boolean {
-  return typeof text === 'string' && text.trim() === DR_CANCEL_MARKER;
+  if (typeof text !== 'string') {
+    return false;
+  }
+  const t = text.trim();
+  return t === DR_CANCEL_MARKER || t === DR_LEGACY_CANCEL_MARKER;
 }
 
 /** Parses the numbered step list out of a formatted plan message (for the card checklist). */

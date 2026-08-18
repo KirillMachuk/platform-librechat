@@ -34,8 +34,8 @@ jest.mock('@librechat/client', () => ({
   useToastContext: () => ({ showToast: mockShowToast }),
 }));
 jest.mock('librechat-data-provider', () => ({
-  DR_START_MARKER: '▶ Начать исследование',
-  DR_CANCEL_MARKER: '✕ Отменить исследование',
+  DR_START_MARKER: 'Начать исследование',
+  DR_CANCEL_MARKER: 'Отменить исследование',
   parseDrPlanMessage: (text: string) => {
     const lines = String(text ?? '').split('\n');
     const title = (lines[0] ?? '').replace('**План исследования:**', '').trim();
@@ -81,7 +81,7 @@ describe('PlanCard', () => {
     fireEvent.click(startBtn);
     fireEvent.click(startBtn);
     expect(mockSubmit).toHaveBeenCalledTimes(1);
-    expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+    expect(mockSubmit).toHaveBeenCalledWith({ text: 'Начать исследование' });
   });
 
   it('Отменить sends the CANCEL marker', () => {
@@ -89,7 +89,7 @@ describe('PlanCard', () => {
       <PlanCard message={planMessage()} awaitingAction autoStartSec={0} />,
     );
     fireEvent.click(getByText('com_ui_cancel'));
-    expect(mockSubmit).toHaveBeenCalledWith({ text: '✕ Отменить исследование' });
+    expect(mockSubmit).toHaveBeenCalledWith({ text: 'Отменить исследование' });
   });
 
   it('autostarts after the countdown elapses', () => {
@@ -105,7 +105,7 @@ describe('PlanCard', () => {
         jest.advanceTimersByTime(1000);
       });
     }
-    expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+    expect(mockSubmit).toHaveBeenCalledWith({ text: 'Начать исследование' });
   });
 
   it('arms the countdown when awaitingAction flips true AFTER mount (follow-up card, no deadlock)', () => {
@@ -129,7 +129,7 @@ describe('PlanCard', () => {
         jest.advanceTimersByTime(1000);
       });
     }
-    expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+    expect(mockSubmit).toHaveBeenCalledWith({ text: 'Начать исследование' });
   });
 
   it('ticks down from the MOUNT time when the live message has no createdAt (prod bug)', () => {
@@ -142,7 +142,7 @@ describe('PlanCard', () => {
         jest.advanceTimersByTime(1000);
       });
     }
-    expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+    expect(mockSubmit).toHaveBeenCalledWith({ text: 'Начать исследование' });
   });
 
   it('keeps counting while the composer is merely FOCUSED but empty (prod bug)', () => {
@@ -165,7 +165,7 @@ describe('PlanCard', () => {
         });
       }
       // The composer keeps focus after sending a message — focus alone must not cancel.
-      expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+      expect(mockSubmit).toHaveBeenCalledWith({ text: 'Начать исследование' });
     } finally {
       textarea.remove();
     }
@@ -180,7 +180,7 @@ describe('PlanCard', () => {
         jest.advanceTimersByTime(1000);
       });
     }
-    expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+    expect(mockSubmit).toHaveBeenCalledWith({ text: 'Начать исследование' });
   });
 
   it('does NOT autostart while the user is composing in the main textarea (R3)', () => {
@@ -231,7 +231,7 @@ describe('PlanCard', () => {
         jest.advanceTimersByTime(1000);
       });
     }
-    expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+    expect(mockSubmit).toHaveBeenCalledWith({ text: 'Начать исследование' });
   });
 
   it('Редактировать shows the edit hint (not "press Start"), keeps the buttons, marks the mode', () => {
@@ -257,7 +257,7 @@ describe('PlanCard', () => {
     }
     expect(mockSubmit).not.toHaveBeenCalled();
     fireEvent.click(getByText('com_ui_deep_research_start'));
-    expect(mockSubmit).toHaveBeenCalledWith({ text: '▶ Начать исследование' });
+    expect(mockSubmit).toHaveBeenCalledWith({ text: 'Начать исследование' });
   });
 
   it('a REFUSED Начать keeps the buttons — the card never goes blank on a busy chat', () => {
@@ -283,7 +283,7 @@ describe('PlanCard', () => {
     mockSubmit.mockReturnValue(undefined);
     fireEvent.click(getByText('com_ui_deep_research_start'));
     expect(mockSubmit).toHaveBeenCalledTimes(2);
-    expect(mockSubmit).toHaveBeenLastCalledWith({ text: '▶ Начать исследование' });
+    expect(mockSubmit).toHaveBeenLastCalledWith({ text: 'Начать исследование' });
   });
 
   it('a REFUSED autostart stops retrying instead of firing every second', () => {

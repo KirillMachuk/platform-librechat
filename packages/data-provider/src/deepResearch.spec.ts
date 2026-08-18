@@ -19,8 +19,8 @@ describe('deepResearch shared plan-gate primitives', () => {
     // breaks routing between the card and the runner, so both packages pin the literals;
     // change them TOGETHER.
     expect(DR_PLAN_MARKER).toBe('**План исследования:**');
-    expect(DR_START_MARKER).toBe('▶ Начать исследование');
-    expect(DR_CANCEL_MARKER).toBe('✕ Отменить исследование');
+    expect(DR_START_MARKER).toBe('Начать исследование');
+    expect(DR_CANCEL_MARKER).toBe('Отменить исследование');
     expect(DR_CLARIFY_MARKER).toBe('**Уточните, пожалуйста, детали исследования:**');
   });
 
@@ -49,6 +49,13 @@ describe('deepResearch shared plan-gate primitives', () => {
     expect(isDrStartCommand(DR_START_MARKER)).toBe(true);
     expect(isDrStartCommand(`  ${DR_START_MARKER} `)).toBe(true);
     expect(isDrStartCommand('начать')).toBe(false);
+  });
+
+  it('accepts the pre-18.08 pictograph markers from old conversations', () => {
+    expect(isDrStartCommand('▶ Начать исследование')).toBe(true);
+    expect(isDrCancelCommand('✕ Отменить исследование')).toBe(true);
+    expect(isDrStartCommand('✕ Отменить исследование')).toBe(false);
+    expect(isDrCancelCommand('▶ Начать исследование')).toBe(false);
     expect(isDrCancelCommand(DR_CANCEL_MARKER)).toBe(true);
     expect(isDrCancelCommand(DR_START_MARKER)).toBe(false);
   });
