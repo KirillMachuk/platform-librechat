@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { SelectionCheckbox, SkeletonRows } from './DataTableComponents';
 import type { TableColumn } from './DataTable.types';
+import { SelectionCheckbox, SkeletonRows } from './DataTableComponents';
 
 // Mock the cn utility
 jest.mock('~/utils', () => ({

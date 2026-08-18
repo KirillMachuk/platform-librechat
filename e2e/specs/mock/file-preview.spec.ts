@@ -240,37 +240,48 @@ test.describe('file preview — plain formats', () => {
 
   /**
    * iOS Safari paints page one of an iframed PDF at its native width and
-   * refuses to scroll, so a phone reader could not reach page two (owner
-   * report 17.08). The fix is to render the pages ourselves and fit them
-   * across; this pins both halves at phone width.
+   * refuses to scroll, so the reader could neither read page one without
+   * panning sideways nor reach page two (owner report 17.08). What replaced it
+   * has to hold the opposite: the page fits the width it is given, the reader
+   * scrolls down, and nothing hides to the right.
+   *
+   * Measured at panel widths, not at 375: below the app's mobile breakpoint the
+   * navigation takes the screen and covers the preview, so a viewport that
+   * narrow tests the drawer rather than the reading view. The fit rule itself is
+   * width-independent, and the narrowing below also exercises the re-fit.
    */
-  test('fits a PDF across a phone screen and scrolls down through it', async ({ page }) => {
+  test('fits a PDF across the panel and scrolls down through it', async ({ page }) => {
     test.setTimeout(90000);
-    /* Attached at desktop width on purpose: the phone composer keeps its attach
-       control behind a menu, and this test is about the reading view, not about
-       how a file gets in. The narrowing then also exercises the re-fit. */
     await previewFixture(page, 'digital.pdf');
     const viewer = page.getByTestId('pdf-preview');
     await expect(pdfPage(page).first()).toBeVisible({ timeout: 30000 });
-    await page.setViewportSize({ width: 375, height: 812 });
+
+    const readingView = () =>
+      viewer.evaluate((element) => {
+        const first = element.querySelector('.page') as HTMLElement | null;
+        return {
+          pageWidth: first?.getBoundingClientRect().width ?? 0,
+          viewerWidth: element.clientWidth,
+          scrollable: element.scrollHeight > element.clientHeight + 20,
+          sideways: element.scrollWidth > element.clientWidth + 2,
+        };
+      });
+
+    const wide = await readingView();
+    expect(wide.pageWidth).toBeGreaterThan(wide.viewerWidth * 0.8);
+    expect(wide.pageWidth).toBeLessThanOrEqual(wide.viewerWidth);
+    expect(wide.scrollable, 'the reader can scroll to the next page').toBe(true);
+    expect(wide.sideways, 'nothing is reachable only by scrolling sideways').toBe(false);
+
+    /* Still above the mobile breakpoint: this narrows the panel, not the app. */
+    await page.setViewportSize({ width: 900, height: 800 });
     await expect
-      .poll(async () => (await pdfPage(page).first().boundingBox())?.width ?? 0, { timeout: 15000 })
-      .toBeLessThanOrEqual(375);
+      .poll(async () => (await readingView()).pageWidth, { timeout: 15000 })
+      .toBeLessThan(wide.pageWidth);
 
-    const fit = await viewer.evaluate((element) => {
-      const page1 = element.querySelector('.page') as HTMLElement | null;
-      return {
-        pageWidth: page1?.getBoundingClientRect().width ?? 0,
-        viewerWidth: element.clientWidth,
-        scrollable: element.scrollHeight > element.clientHeight + 20,
-        sideways: element.scrollWidth > element.clientWidth + 2,
-      };
-    });
-
-    expect(fit.pageWidth).toBeGreaterThan(fit.viewerWidth * 0.8);
-    expect(fit.pageWidth).toBeLessThanOrEqual(fit.viewerWidth);
-    expect(fit.scrollable, 'the reader can scroll to the next page').toBe(true);
-    expect(fit.sideways, 'nothing is reachable only by scrolling sideways').toBe(false);
+    const narrow = await readingView();
+    expect(narrow.pageWidth).toBeLessThanOrEqual(narrow.viewerWidth);
+    expect(narrow.sideways, 'a narrower panel still needs no sideways scrolling').toBe(false);
   });
 });
 
