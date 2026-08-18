@@ -1736,3 +1736,67 @@ describe('runNewDeepResearch — OpenRouter provider pin reaches the model', () 
     }
   });
 });
+
+/**
+ * The run must SAY which models it resolved and where their calls are routed.
+ *
+ * This line exists because of a live incident: a tier's `leadModel` in librechat.yaml is
+ * only the seed — the live value is the admin override in the config collection — and the
+ * two diverged silently. A yaml edit that looked deployed (the file was right inside the
+ * container) changed nothing, and the only way to discover that was to read billing rows
+ * after the fact and notice which model had been charged. Asserting the line exists is not
+ * cosmetic: without it the next divergence is invisible again.
+ */
+describe('runNewDeepResearch — logs the models it actually resolved', () => {
+  const { logger } = require('@librechat/data-schemas');
+  const { resolveDeepResearchTier } = require('@librechat/api');
+  const BASE_TIER = { name: 'balanced', wallClockMinutes: 10 };
+
+  const modelLine = () =>
+    logger.info.mock.calls.map((c) => String(c[0])).find((l) => l.includes('] models: lead='));
+
+  /**
+   * `jest.clearAllMocks()` in the shared beforeEach clears CALLS, not implementations, so a
+   * `mockReturnValue` set here would leak into every later test in this file. Restore the
+   * defaults these mocks were declared with.
+   */
+  afterEach(() => {
+    resolveDeepResearchTier.mockReturnValue(BASE_TIER);
+    mockLeadModelFor.mockReturnValue('lead-model');
+    mockWorkerModelFor.mockReturnValue('worker-model');
+  });
+
+  it('names every resolved model, so a stale admin override is visible during the run', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockLeadModelFor.mockReturnValue('vendor/lead-x');
+    mockWorkerModelFor.mockReturnValue('vendor/worker-y');
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const line = modelLine();
+    expect(line).toBeDefined();
+    expect(line).toContain('lead=vendor/lead-x');
+    expect(line).toContain('worker=vendor/worker-y');
+  });
+
+  it('reports the provider pin and that it is strict', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    resolveDeepResearchTier.mockReturnValue({
+      ...BASE_TIER,
+      provider: { order: ['DeepInfra', 'Fireworks'], allow_fallbacks: false },
+    });
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(modelLine()).toContain('providers=DeepInfra>Fireworks (strict)');
+  });
+
+  it('says "unpinned" rather than staying silent when no pin is configured', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    resolveDeepResearchTier.mockReturnValue(BASE_TIER);
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(modelLine()).toContain('providers=unpinned');
+  });
+});
