@@ -166,6 +166,9 @@ export async function openPreview(page: Page, filename: string): Promise<Locator
   await expect(surface).toHaveCount(1);
 
   const settled = previewFrameElement(page, filename)
+    /* A PDF renders into our own viewer now, not into a frame — its first
+       painted page is the settle signal there. */
+    .or(pdfPage(page))
     .or(surface.locator('pre'))
     .or(surface.getByText(PREVIEW_SETTLED));
   await expect(settled.first()).toBeVisible({ timeout: 120000 });
