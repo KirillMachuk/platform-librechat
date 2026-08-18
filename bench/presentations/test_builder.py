@@ -725,7 +725,7 @@ class PresentationBuilderTests(unittest.TestCase):
 
         self.assertIn("Treat the builder as an executable", instructions)
         self.assertIn("Never reconstruct an attached presentation", instructions)
-        self.assertIn("same-call scratch", instructions)
+        self.assertIn("scratch for one call", instructions)
         self.assertIn("Final user files must be direct children of `/mnt/data`", instructions)
         self.assertIn("Do not deliver or mention the JSON spec", instructions)
 
