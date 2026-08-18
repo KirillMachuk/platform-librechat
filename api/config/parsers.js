@@ -37,9 +37,13 @@ const MAX_REDACTION_BUFFER_BYTES = MAX_REDACTION_STRING_LENGTH;
  * Shared, verbatim, with the reference implementation in
  * `packages/data-schemas/src/config/parsers.ts` so both loggers scrub the
  * same set of sensitive keys.
+ * `prompt`, `body`, `headers` (A5, 18.08): prompts and pre-anonymizer request
+ * payloads must never reach logs wholesale. Deliberate debug output goes
+ * under a DIFFERENT name that says what it is (`bodyPreview`,
+ * `headerNames`), so the bypass is visible in review instead of silent.
  */
 const sensitiveMetadataKey =
-  /^(authorization|proxy-authorization|x-api-key|api[-_]?key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|secret|password)$/i;
+  /^(authorization|proxy-authorization|x-api-key|api[-_]?key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|secret|password|prompt|body|headers)$/i;
 const errorStringProperties = new Set(['name', 'message', 'stack']);
 
 /**

@@ -29,8 +29,13 @@ const sensitiveKeys: RegExp[] = [
   /\b(key=)[^\s"'&]+/g, // URL query param: sensitive key pattern
 ];
 
+/** `prompt`, `body`, `headers` (A5, 18.08): prompts and pre-anonymizer request
+ *  payloads must never reach logs wholesale. Deliberate debug output goes
+ *  under a DIFFERENT name that says what it is (`bodyPreview`, `headerNames`),
+ *  so the bypass is visible in review instead of silent. Mirrored verbatim in
+ *  api/config/parsers.js. */
 const sensitiveMetadataKey =
-  /^(authorization|proxy-authorization|x-api-key|api[-_]?key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|secret|password)$/i;
+  /^(authorization|proxy-authorization|x-api-key|api[-_]?key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|secret|password|prompt|body|headers)$/i;
 const errorStringProperties = new Set(['name', 'message', 'stack']);
 
 /**
