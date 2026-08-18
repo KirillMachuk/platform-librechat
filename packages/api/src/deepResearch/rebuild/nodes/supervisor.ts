@@ -39,6 +39,24 @@ export interface SupervisorNodeDeps {
  * report instead of the run being killed mid-flight and falling back. `now`/
  * `softDeadlineMs` unset → time arm off; `tokenBudget <= 0` → token arm off
  * (rounds always apply).
+ *
+ * The time arm asks "would ANOTHER round finish before the reserve?", not "are we
+ * past the reserve?" — a round already dispatched cannot be interrupted, so the
+ * point-in-time check leaked: on the stand a round was dispatched 3 SECONDS before
+ * the reserve, ran 4 minutes, and the hard watchdog killed the run with no report at
+ * all (findings=3, 27% of the token budget spent, twelve minutes of the user's time
+ * for nothing). Raising the wall clock does not fix that — it moves the same leak
+ * later, because the check never knew what a round costs.
+ *
+ * The estimate is the mean round duration OF THIS RUN — `(now - runStartedMs) / round`,
+ * where `round` counts COMPLETED rounds — so it needs no new state channel and adapts
+ * to a slow topic or a slow model instead of a guessed constant. Before the first round
+ * there is nothing to measure: the estimate is 0 and the first round always runs, which
+ * is also what keeps a short wall clock from refusing to research at all. The remaining
+ * reserve absorbs a round that overruns the mean; a round that overruns it grossly is
+ * the hard watchdog's business, not this gate's.
+ *
+ * `runStartedMs` unset → estimate 0 → byte-identical to the old point check.
  */
 export function budgetGateReason(args: {
   tokenUsed: number;
@@ -48,9 +66,16 @@ export function budgetGateReason(args: {
   maxRounds: number;
   now?: number;
   softDeadlineMs?: number;
+  runStartedMs?: number;
 }): 'budget' | 'rounds' | 'time' | null {
-  if (args.softDeadlineMs != null && args.now != null && args.now >= args.softDeadlineMs) {
-    return 'time';
+  if (args.softDeadlineMs != null && args.now != null) {
+    const nextRoundMs =
+      args.runStartedMs != null && args.round > 0
+        ? Math.max(0, args.now - args.runStartedMs) / args.round
+        : 0;
+    if (args.now + nextRoundMs >= args.softDeadlineMs) {
+      return 'time';
+    }
   }
   if (args.tokenBudget > 0 && args.tokenUsed >= args.tokenBudget * args.budgetGateRatio) {
     return 'budget';
@@ -121,6 +146,7 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
       maxRounds: deps.tier.maxOrchestratorCycles,
       now: (deps.clock ?? Date.now)(),
       softDeadlineMs: configurable?.softDeadlineMs,
+      runStartedMs: configurable?.runStartedMs,
     });
     if (gate) {
       return { concludeReason: gate };
