@@ -21,6 +21,7 @@ jest.mock('@librechat/api', () => ({
   resolveUploadErrorMessage: jest.fn(),
   verifyAgentUploadPermission: jest.fn(),
   isOfficeHtmlPreviewable: jest.fn(() => false),
+  isCurrentOfficePreview: jest.fn(() => true),
   renderOfficePreview: jest.fn(),
   MAX_OFFICE_PREVIEW_BYTES: 25 * 1024 * 1024,
 }));
@@ -406,13 +407,19 @@ describe('GET /files/:file_id/preview', () => {
      * polls of the same file MUST be deduplicated to a single render
      * — otherwise the 2.5s frontend poll cadence would multiply CPU
      * cost on slow renders. */
-    const { isOfficeHtmlPreviewable, renderOfficePreview } = require('@librechat/api');
+    const {
+      isOfficeHtmlPreviewable,
+      isCurrentOfficePreview,
+      renderOfficePreview,
+    } = require('@librechat/api');
     const { getStrategyFunctions } = require('~/server/services/Files/strategies');
     const { Readable } = require('stream');
 
     const mockGetDownloadStream = jest.fn();
     beforeEach(() => {
       isOfficeHtmlPreviewable.mockReset();
+      isCurrentOfficePreview.mockReset();
+      isCurrentOfficePreview.mockReturnValue(true);
       renderOfficePreview.mockReset();
       mockGetDownloadStream.mockReset();
       getStrategyFunctions.mockImplementation(() => ({
@@ -449,6 +456,84 @@ describe('GET /files/:file_id/preview', () => {
         textFormat: 'html',
       });
       expect(renderOfficePreview).toHaveBeenCalledTimes(1);
+    });
+
+    /* A rendered preview is stored on the file record and served from there
+     * forever, so a fix in the renderer never reaches a document somebody
+     * already has: the owner kept seeing one slide of a six-slide deck for a
+     * day after the fix shipped. The document carries the renderer's stamp and
+     * a document without the current one is rendered again. */
+    const staleDeck = (fileId) => {
+      mockGetFiles.mockResolvedValueOnce([
+        {
+          file_id: fileId,
+          user: OWNER_USER_ID,
+          filename: 'deck.pptx',
+          type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          status: 'ready',
+          source: 'local',
+          filepath: '/tmp/deck.pptx',
+          updatedAt: new Date('2026-05-21T12:00:00Z'),
+        },
+      ]);
+      mockFindFileById.mockResolvedValueOnce({
+        file_id: fileId,
+        previewText: '<html>rendered by yesterday</html>',
+      });
+      isOfficeHtmlPreviewable.mockReturnValue(true);
+      isCurrentOfficePreview.mockReturnValue(false);
+    };
+
+    it('re-renders a stored preview that an older renderer produced', async () => {
+      staleDeck('fid-stale-deck');
+      mockGetDownloadStream.mockResolvedValueOnce(Readable.from(Buffer.from([1, 2, 3])));
+      renderOfficePreview.mockResolvedValueOnce({
+        html: '<html>all slides</html>',
+        bucket: 'pptx',
+      });
+
+      const res = await request(buildApp()).get('/files/fid-stale-deck/preview');
+
+      expect(res.body.text).toBe('<html>all slides</html>');
+      expect(renderOfficePreview).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps serving the stored preview when the re-render cannot run', async () => {
+      staleDeck('fid-stale-unrenderable');
+      mockGetDownloadStream.mockResolvedValueOnce(Readable.from(Buffer.from([1, 2, 3])));
+      renderOfficePreview.mockResolvedValueOnce({ error: 'render-failed' });
+
+      const res = await request(buildApp()).get('/files/fid-stale-unrenderable/preview');
+
+      /* Yesterday's document beats a plate saying the preview failed. */
+      expect(res.body.text).toBe('<html>rendered by yesterday</html>');
+      expect(res.body.textFormat).toBe('html');
+      expect(res.body.previewError).toBeUndefined();
+    });
+
+    it('serves a stored preview untouched when it carries the current stamp', async () => {
+      mockGetFiles.mockResolvedValueOnce([
+        {
+          file_id: 'fid-current-deck',
+          user: OWNER_USER_ID,
+          filename: 'deck.pptx',
+          type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          status: 'ready',
+          source: 'local',
+          filepath: '/tmp/deck.pptx',
+          updatedAt: new Date('2026-05-21T13:00:00Z'),
+        },
+      ]);
+      mockFindFileById.mockResolvedValueOnce({
+        file_id: 'fid-current-deck',
+        previewText: '<html>current</html>',
+      });
+      isOfficeHtmlPreviewable.mockReturnValue(true);
+
+      const res = await request(buildApp()).get('/files/fid-current-deck/preview');
+
+      expect(res.body.text).toBe('<html>current</html>');
+      expect(renderOfficePreview).not.toHaveBeenCalled();
     });
 
     it('surfaces previewError when on-demand render returns an error', async () => {

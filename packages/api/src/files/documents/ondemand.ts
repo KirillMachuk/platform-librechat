@@ -1,6 +1,11 @@
-import { withTimeout } from '../../utils/promise';
-import { bufferToOfficeHtml, officeHtmlBucket } from './html';
 import type { OfficeHtmlBucket } from './html';
+import { bufferToOfficeHtml, officeHtmlBucket } from './html';
+import { withTimeout } from '../../utils/promise';
+
+/* Re-exported through this module for the same reason as the bucket gate above:
+ * the JS route layer needs the staleness check, and `./html` is not on the
+ * barrel. Neither symbol leaks an internal type. */
+export { isCurrentOfficePreview, OFFICE_PREVIEW_VERSION } from './html';
 
 export const MAX_OFFICE_PREVIEW_BYTES: number = 25 * 1024 * 1024;
 export const OFFICE_PREVIEW_TIMEOUT_MS: number = 30 * 1000;

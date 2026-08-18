@@ -164,6 +164,7 @@ for why that matters.
 | csv renders as a sheet                                      | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
 | PDF (digital) opens in a viewer, not as raw text            | e2e   | `e2e/specs/mock/file-preview.spec.ts#renders a PDF in a viewer rather than as raw text`                        | covered |
 | PDF fits the panel across and scrolls down through it       | e2e   | `e2e/specs/mock/file-preview.spec.ts#fits a PDF across the panel and scrolls down through it`                  | covered |
+| Opening or closing the side panel leaves the conversation where it was | e2e | `e2e/specs/mock/artifacts.spec.ts#opening and closing the panel leaves the conversation where it was` | covered |
 | PDF (scan) opens in the viewer despite having no text layer | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
 | PDF (scan) carries a recognition note                       | e2e   | —                                                                                                             | todo:Ф1 |
 | Text preview truncates at the byte cap with a notice        | e2e   | `e2e/specs/mock/file-preview.spec.ts#TEXT_PREVIEW_MAX_BYTES`                                                  | covered |

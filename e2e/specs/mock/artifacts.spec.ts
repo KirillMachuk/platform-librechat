@@ -131,6 +131,94 @@ test.describe('artifacts', () => {
   });
 
   /**
+   * Opening the panel must not move the conversation.
+   *
+   * The owner opened a file from a message and the chat jumped back as if the
+   * page had reloaded — again on closing, and only ever on the FIRST open,
+   * which is the tell: the conversation was wrapped in a card element only
+   * while the panel was open, so the element at that position changed and React
+   * rebuilt the whole subtree. Anything mounted inside it — scroll position, a
+   * half-typed message, a playing video — started over.
+   *
+   * The load-bearing assertion is that the scroller is the SAME LIVE NODE
+   * afterwards. A rebuild detaches it, and `isConnected` says so in one word;
+   * scroll numbers alone cannot tell a rebuild from honest reflow, and the
+   * column really does narrow when the panel takes its half.
+   *
+   * Ballast, scroller and the self-healing scroll come from
+   * `scroll-button.spec.ts`, which learned them the hard way: auto-follow
+   * re-pins the list to the bottom after a single programmatic scroll.
+   */
+  test('opening and closing the panel leaves the conversation where it was', async ({ page }) => {
+    test.setTimeout(180000);
+    await page.setViewportSize({ width: 1280, height: 520 });
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
+
+    /* The artifact sits in the middle: scrolled to it, the conversation is away
+       from both ends, so a jump to either one is visible. */
+    const ballast = async (label: string) => {
+      const response = await sendMessage(page, `scroll ballast ${label}`);
+      expect(response.ok()).toBeTruthy();
+      await expect(messagesView(page).getByText(`scroll ballast ${label}`)).toBeVisible({
+        timeout: 30000,
+      });
+    };
+    await ballast('one');
+    await ballast('two');
+    await sendMessage(page, 'E2E_ARTIFACT_REPLY');
+    const card = messagesView(page).getByRole('button').filter({ hasText: 'E2E Artifact' });
+    await expect(card).toBeVisible({ timeout: 60000 });
+    await ballast('three');
+    await ballast('four');
+
+    const scroller = page.locator('.scrollbar-gutter-stable').first();
+    await expect
+      .poll(() => scroller.evaluate((el) => el.scrollHeight - el.clientHeight), { timeout: 20000 })
+      .toBeGreaterThan(200);
+
+    /* Self-healing, as in scroll-button.spec: a late reflow re-pins the list to
+       the bottom, so the position is re-asserted until it holds. */
+    await expect
+      .poll(
+        async () => {
+          await card.scrollIntoViewIfNeeded();
+          return scroller.evaluate((el) => el.scrollTop);
+        },
+        { timeout: 20000 },
+      )
+      .toBeGreaterThan(20);
+
+    const handle = await scroller.elementHandle();
+    expect(handle).not.toBeNull();
+    const distanceFromBottom = () =>
+      scroller.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop);
+    const before = await distanceFromBottom();
+    expect(before, 'the conversation is away from the bottom too').toBeGreaterThan(20);
+
+    await card.click();
+    await expect(page.locator('#artifacts-code')).toHaveCount(1, { timeout: 30000 });
+    expect(
+      await handle!.evaluate((el) => el.isConnected),
+      'the conversation was not rebuilt when the panel opened',
+    ).toBe(true);
+    expect(Math.abs((await distanceFromBottom()) - before)).toBeLessThan(200);
+
+    /* Scoped to the panel that holds the artifact: an unscoped `Close` picks
+       the first one in the document, which is somebody else's. */
+    const artifactPanel = page
+      .locator('[data-panel]')
+      .filter({ has: page.locator('#artifacts-code') });
+    await artifactPanel.getByRole('button', { name: 'Close' }).click();
+    await expect(page.locator('#artifacts-code')).toHaveCount(0, { timeout: 30000 });
+    expect(
+      await handle!.evaluate((el) => el.isConnected),
+      'closing the panel did not rebuild it either',
+    ).toBe(true);
+    expect(Math.abs((await distanceFromBottom()) - before)).toBeLessThan(200);
+  });
+
+  /**
    * The canon decision behind PR #265, silently reverted once already by an
    * unrelated PR that merged from a stale base and restored in PR #309 — see
    * `feedback_unguarded_canon_decision_gets_reverted` in project memory. That
