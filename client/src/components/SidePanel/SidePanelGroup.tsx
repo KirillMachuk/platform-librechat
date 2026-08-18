@@ -48,13 +48,7 @@ const SidePanelGroup = memo(({ artifacts, children }: SidePanelProps) => {
              переполнения. Поперечная ось вертикальной панели прибита. */
           style={{ overflowX: 'hidden' }}
         >
-          {/* One wrapper, always. Wrapping the conversation only in split mode
-              changed the element at this position the moment the panel opened,
-              so React threw the whole chat away and built it again — the
-              scroll jumped back on the first open and again on the close, and
-              looked like a page reload (owner report 18.08). The card is a
-              class now, not a level in the tree. */}
-          <div className={cn('h-full', split && cardClassName)}>{children}</div>
+          {split ? <div className={cardClassName}>{children}</div> : children}
         </ResizablePanel>
 
         {!isSmallScreen && (
