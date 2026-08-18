@@ -156,6 +156,7 @@ for why that matters.
 | pptx 16:9 renders slides                                    | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
 | pptx 4:3 renders slides                                     | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
 | pptx with many slides renders every slide                   | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
+| pptx in the bundled renderer shows every slide, not just the first | e2e | `e2e/specs/mock/office-preview-slides.spec.ts#shows every slide of the deck, not just the first one` | covered |
 | md opens as readable text                                   | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
 | md offers rendered and source views                         | e2e   | —                                                                                                             | todo:Ф1 |
 | Source code file opens as text                              | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
