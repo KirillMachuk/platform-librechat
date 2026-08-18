@@ -7,6 +7,7 @@ import {
   bufferToOfficeHtml,
   csvToHtml,
   excelSheetToHtml,
+  isCurrentOfficePreview,
   officeHtmlBucket,
   pptxToHtml,
   pptxToSlideListHtml,
@@ -1031,6 +1032,32 @@ describe('Office HTML producers', () => {
       const out = await sanitizeOfficeHtml('<p>x</p><iframe src="https://evil.test"></iframe>');
       expect(out).not.toMatch(/<iframe\b/i);
       expect(out).not.toContain('evil.test');
+    });
+  });
+
+  describe('renderer stamp', () => {
+    /**
+     * A preview is stored on the file record and served from there for as long
+     * as the file exists, so a document rendered by an older build survives
+     * every fix that followed. The serve path re-renders anything that does not
+     * carry the current stamp — which only works if every document we generate
+     * carries it. This test is here so a fourth document shape cannot be added
+     * without one.
+     */
+    test('every generated preview document carries it', async () => {
+      const documents = [
+        await csvToHtml(Buffer.from('a,b\n1,2\n')),
+        await excelSheetToHtml(fs.readFileSync(path.join(__dirname, 'sample.xlsx'))),
+        await wordDocToHtml(fs.readFileSync(path.join(__dirname, 'sample.docx'))),
+      ];
+
+      for (const document of documents) {
+        expect(isCurrentOfficePreview(document)).toBe(true);
+      }
+    });
+
+    test('rejects a document from an older renderer', () => {
+      expect(isCurrentOfficePreview('<html><head></head><body>old</body></html>')).toBe(false);
     });
   });
 });

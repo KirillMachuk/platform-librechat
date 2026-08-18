@@ -6,6 +6,7 @@ const {
   refreshS3FileUrls,
   renderOfficePreview,
   isOfficeHtmlPreviewable,
+  isCurrentOfficePreview,
   resolveUploadErrorMessage,
   verifyAgentUploadPermission,
   MAX_OFFICE_PREVIEW_BYTES,
@@ -553,13 +554,27 @@ router.get('/:file_id/preview', fileAccess, async (req, res) => {
         !checkOpenAIStorage(file.source) &&
         file.source !== FileSources.text &&
         isOfficeHtmlPreviewable(file.filename, file.type);
-      if (withText?.previewText != null) {
+      /* A stored preview outlives the build that rendered it, so a fix in the
+       * renderer would never reach a document somebody already has — the owner
+       * kept seeing one slide of a six-slide deck after the fix shipped. A
+       * document without the current stamp is re-rendered below; the stored
+       * copy stays the fallback if that render cannot run. */
+      const storedHtml =
+        withText?.previewText ??
+        (withText?.textFormat === 'html' ? (withText?.text ?? null) : null);
+      const staleStoredHtml =
+        officeEligible && storedHtml != null && !isCurrentOfficePreview(storedHtml);
+      if (withText?.previewText != null && !staleStoredHtml) {
         /* Office file taken down the full-text `context` path: its sanitized
          * HTML was rendered (deferred) at upload from the ORIGINAL bytes —
          * every office format (csv/tsv/docx/xlsx/xls/ods/pptx). */
         payload.text = withText.previewText;
         payload.textFormat = 'html';
-      } else if (withText?.text != null && (withText.textFormat === 'html' || !officeEligible)) {
+      } else if (
+        withText?.text != null &&
+        (withText.textFormat === 'html' || !officeEligible) &&
+        !staleStoredHtml
+      ) {
         /* Serve stored inline text: already-rendered office HTML (code-exec
          * deferred preview, textFormat==='html') or plain text for non-office
          * files. An office file whose stored text is a plain extract
@@ -578,7 +593,14 @@ router.get('/:file_id/preview', fileAccess, async (req, res) => {
           try {
             const rendered = await getOrStartOfficePreview(req, file, cacheKey);
             if (rendered.error) {
-              payload.previewError = rendered.error;
+              /* An older document still reads better than a plate saying the
+                 preview failed — only the stamp was out of date. */
+              if (storedHtml != null) {
+                payload.text = storedHtml;
+                payload.textFormat = 'html';
+              } else {
+                payload.previewError = rendered.error;
+              }
             } else {
               payload.text = rendered.html;
               payload.textFormat = 'html';
@@ -588,7 +610,12 @@ router.get('/:file_id/preview', fileAccess, async (req, res) => {
               `[/files/:file_id/preview] On-demand office render failed for ${file_id}:`,
               renderErr,
             );
-            payload.previewError = 'render-failed';
+            if (storedHtml != null) {
+              payload.text = storedHtml;
+              payload.textFormat = 'html';
+            } else {
+              payload.previewError = 'render-failed';
+            }
           }
         }
       }

@@ -151,12 +151,34 @@ export async function sanitizeOfficeHtml(html: string): Promise<string> {
  * the iframe inherits dark/light from its parent (Sandpack iframes inherit
  * the prefers-color-scheme media query from the host document).
  */
+/**
+ * Stamp carried by every preview document we generate.
+ *
+ * A rendered preview outlives the build that produced it: it is stored on the
+ * file record at upload time and served from there forever, so a fix in the
+ * renderer never reaches a document somebody already has. Bump this whenever
+ * the output changes in a way an older document gets wrong, and the serve path
+ * re-renders anything that does not carry the current stamp.
+ *
+ * 2 — 18.08: the pptx wrap-and-scale pass measured the renderer's host box and
+ *     clipped every slide after the first.
+ */
+export const OFFICE_PREVIEW_VERSION = '2';
+
+const PREVIEW_VERSION_TAG = `<meta name="lc-office-preview" content="${OFFICE_PREVIEW_VERSION}">`;
+
+/** True when `html` was produced by the current renderer. */
+export function isCurrentOfficePreview(html: string): boolean {
+  return html.includes(PREVIEW_VERSION_TAG);
+}
+
 function wrapAsDocument(bodyHtml: string, extraHeadHtml = ''): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+${PREVIEW_VERSION_TAG}
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:">
 <title>Preview</title>
 <style>
@@ -415,6 +437,7 @@ function buildDocxCdnDocument(base64: string, mammothFallbackHtml: string): stri
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+${PREVIEW_VERSION_TAG}
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <title>Preview</title>
 <style>
@@ -1135,6 +1158,7 @@ function buildPptxCdnDocument(base64: string, slideListFallbackBody: string): st
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+${PREVIEW_VERSION_TAG}
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <title>Preview</title>
 <style>
