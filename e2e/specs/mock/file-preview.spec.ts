@@ -19,6 +19,7 @@ import {
   previewFixture,
   previewFrame,
   previewFrameElement,
+  pdfPage,
 } from './files.helpers';
 
 /**
@@ -230,8 +231,57 @@ test.describe('file preview — plain formats', () => {
     test.setTimeout(90000);
     await previewFixture(page, 'digital.pdf');
 
-    await expect(previewFrameElement(page, 'digital.pdf')).toBeVisible({ timeout: 30000 });
+    /* The pages, not an iframe: the browser's own viewer is still mounted as a
+       fallback with the same title, so asserting on the frame would go green
+       even if our renderer never ran. */
+    await expect(pdfPage(page).first()).toBeVisible({ timeout: 30000 });
     await expect(previewSurface(page, 'digital.pdf').locator('pre')).toHaveCount(0);
+  });
+
+  /**
+   * iOS Safari paints page one of an iframed PDF at its native width and
+   * refuses to scroll, so the reader could neither read page one without
+   * panning sideways nor reach page two (owner report 17.08). What replaced it
+   * has to hold the opposite: the page fits the width it is given, the reader
+   * scrolls down, and nothing hides to the right.
+   *
+   * Measured at panel widths, not at 375: below the app's mobile breakpoint the
+   * navigation takes the screen and covers the preview, so a viewport that
+   * narrow tests the drawer rather than the reading view. The fit rule itself is
+   * width-independent, and the narrowing below also exercises the re-fit.
+   */
+  test('fits a PDF across the panel and scrolls down through it', async ({ page }) => {
+    test.setTimeout(90000);
+    await previewFixture(page, 'digital.pdf');
+    const viewer = page.getByTestId('pdf-preview');
+    await expect(pdfPage(page).first()).toBeVisible({ timeout: 30000 });
+
+    const readingView = () =>
+      viewer.evaluate((element) => {
+        const first = element.querySelector('.page') as HTMLElement | null;
+        return {
+          pageWidth: first?.getBoundingClientRect().width ?? 0,
+          viewerWidth: element.clientWidth,
+          scrollable: element.scrollHeight > element.clientHeight + 20,
+          sideways: element.scrollWidth > element.clientWidth + 2,
+        };
+      });
+
+    const wide = await readingView();
+    expect(wide.pageWidth).toBeGreaterThan(wide.viewerWidth * 0.8);
+    expect(wide.pageWidth).toBeLessThanOrEqual(wide.viewerWidth);
+    expect(wide.scrollable, 'the reader can scroll to the next page').toBe(true);
+    expect(wide.sideways, 'nothing is reachable only by scrolling sideways').toBe(false);
+
+    /* Still above the mobile breakpoint: this narrows the panel, not the app. */
+    await page.setViewportSize({ width: 900, height: 800 });
+    await expect
+      .poll(async () => (await readingView()).pageWidth, { timeout: 15000 })
+      .toBeLessThan(wide.pageWidth);
+
+    const narrow = await readingView();
+    expect(narrow.pageWidth).toBeLessThanOrEqual(narrow.viewerWidth);
+    expect(narrow.sideways, 'a narrower panel still needs no sideways scrolling').toBe(false);
   });
 });
 
@@ -307,7 +357,7 @@ test.describe('file preview — the rest of the matrix', () => {
     test.setTimeout(120000);
     const dialog = await previewFixture(page, 'scan.pdf');
 
-    await expect(previewFrameElement(page, 'scan.pdf')).toBeVisible({ timeout: 30000 });
+    await expect(pdfPage(page).first()).toBeVisible({ timeout: 30000 });
     await expect(dialog.locator('pre')).toHaveCount(0);
   });
 

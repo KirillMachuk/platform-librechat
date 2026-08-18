@@ -9,6 +9,7 @@ import CopyButton from '~/components/Messages/Content/CopyButton';
 import { useFileDownload, useFilePreview } from '~/data-provider';
 import { useLocalize, TranslationKeys } from '~/hooks';
 import { Download } from '~/components/icons';
+import PdfPreview from './PdfPreview';
 import store from '~/store';
 
 type PreviewKind = 'pdf' | 'text' | 'office' | false;
@@ -415,11 +416,7 @@ export default function FilePreviewBody({ artifact }: { artifact: Artifact }) {
           </div>
         )}
         {fileBlobUrl && (
-          <iframe
-            src={fileBlobUrl}
-            title={`${localize('com_ui_preview')}: ${fileName}`}
-            className="h-full w-full border-0"
-          />
+          <PdfPreview url={fileBlobUrl} title={`${localize('com_ui_preview')}: ${fileName}`} />
         )}
         {officeHtml && (
           <iframe
