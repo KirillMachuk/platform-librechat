@@ -3,10 +3,6 @@ import 'pdfjs-dist/web/pdf_viewer.css';
 import { useLocalize } from '~/hooks';
 import { logger } from '~/utils';
 
-/* The browser's own viewer stays as the safety net. It is the only thing that
-   can ask for a password on a protected file, and it is what a reader gets if
-   pdf.js cannot parse something we render ourselves. */
-
 /**
  * Reads a PDF inside the panel instead of handing it to the browser's own
  * viewer. Chrome's viewer is good on a laptop and unusable on iOS: Safari
@@ -111,10 +107,9 @@ export default function PdfPreview({ url, title }: { url: string; title: string 
     };
   }, [url]);
 
-  if (failed) {
-    return <iframe src={url} title={title} className="h-full w-full border-0" />;
-  }
-
+  /* Both hosts stay mounted whatever happens. Swapping the container out on
+     failure would leave the effect with nothing to attach to, and the next
+     file opened in the same panel would inherit the fallback it never earned. */
   return (
     <div
       ref={containerRef}
@@ -122,8 +117,13 @@ export default function PdfPreview({ url, title }: { url: string; title: string 
       aria-label={title}
       data-testid="pdf-preview"
     >
-      <div ref={viewerRef} className="pdfViewer" />
-      {!ready && (
+      <div ref={viewerRef} className="pdfViewer" hidden={failed} />
+      {failed && (
+        /* The browser's own viewer as the safety net: it is the only one that
+           can ask for a password, so a protected file still opens. */
+        <iframe src={url} title={title} className="absolute inset-0 h-full w-full border-0" />
+      )}
+      {!failed && !ready && (
         <div className="flex h-40 items-center justify-center">
           <span className="shimmer text-sm text-text-secondary">
             {localize('com_ui_preview_rendering')}
