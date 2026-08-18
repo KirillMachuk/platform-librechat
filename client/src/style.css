@@ -413,6 +413,11 @@ html {
   /* чернильная кнопка */
   --c-ink: #171717;
   --c-ink-label: #ffffff;
+  /* Literal copies for the temporary-chat flip: a var() here would
+     resolve against the REMAPPED values on .composer-temporary and
+     cycle, so the opposite pair is spelled out per theme. */
+  --c-ink-flip: #ffffff;
+  --c-ink-flip-label: #171717;
   /* акцент */
   --c-acc: #0f6a88;
   --c-acc-ink: #ffffff;
@@ -452,6 +457,8 @@ html {
   --c-side-ink: rgba(255, 255, 255, 0.84);
   --c-ink: #f0f0f0;
   --c-ink-label: #171717;
+  --c-ink-flip: #171717;
+  --c-ink-flip-label: #f0f0f0;
   --c-acc: #5cc0dd;
   --c-acc-ink: #08222c;
   --c-acc-hov: #7acde5;
@@ -1572,13 +1579,25 @@ input:-webkit-autofill:active {
    theme, so dark mode gets the light pill for free. color-mix derives the
    secondary inks from ink-label instead of inventing new colors. */
 .composer-temporary {
-  --surface-chat: var(--c-ink);
-  --text-primary: var(--c-ink-label);
-  --text-secondary: color-mix(in srgb, var(--c-ink-label) 72%, transparent);
-  --text-tertiary: color-mix(in srgb, var(--c-ink-label) 55%, transparent);
-  --surface-hover: color-mix(in srgb, var(--c-ink-label) 12%, transparent);
-  --border-light: color-mix(in srgb, var(--c-ink-label) 16%, transparent);
-  --border-medium: color-mix(in srgb, var(--c-ink-label) 24%, transparent);
+  /* The pill background anchors to the ORIGINAL ink literal: var(--c-ink)
+     here would resolve against the flipped pair below. */
+  --surface-chat: var(--c-ink-flip-label);
+  --text-primary: var(--c-ink-flip);
+  --text-secondary: color-mix(in srgb, var(--c-ink-flip) 72%, transparent);
+  --text-tertiary: color-mix(in srgb, var(--c-ink-flip) 55%, transparent);
+  --surface-hover: color-mix(in srgb, var(--c-ink-flip) 12%, transparent);
+  --surface-active: color-mix(in srgb, var(--c-ink-flip) 18%, transparent);
+  --surface-secondary: color-mix(in srgb, var(--c-ink-flip) 10%, transparent);
+  --surface-secondary-alt: color-mix(in srgb, var(--c-ink-flip) 14%, transparent);
+  --surface-tertiary: color-mix(in srgb, var(--c-ink-flip) 10%, transparent);
+  --border-light: color-mix(in srgb, var(--c-ink-flip) 16%, transparent);
+  --border-medium: color-mix(in srgb, var(--c-ink-flip) 24%, transparent);
+  /* The ink pair flips INSIDE the pill (literal-based, see --c-ink-flip):
+     the send circle is bg-text-primary + text-ink-label, chips reuse the
+     checked-ink recipe - without the flip the arrow painted light-on-light
+     and active chips stayed the light theme's pills (owner 17.08-4). */
+  --c-ink: var(--c-ink-flip);
+  --c-ink-label: var(--c-ink-flip-label);
 }
 
 /* The thread dissolves as it slides under the composer edge (owner 17.08-3;
@@ -1652,17 +1671,20 @@ html {
    от корня, и правка корня молча ужала бы весь воздух в приложении на 12,5%. */
 html {
   /* Низ Safari сэмплирует фон СТРАНИЦЫ у края (механизм из виджета msg8):
-     html — защитный слой под body, оба из одного токена. */
-  background-color: var(--c-panel);
+     html — защитный слой под body, оба из одного токена. Токен = ЧАТ
+     (--c-card), не панель: владелец 17.08-4 — бары красятся в цвет переписки,
+     как у ChatGPT, а не в цвет сайдбара. */
+  background-color: var(--c-card);
 }
 
 body {
   font-size: 15px;
   line-height: 1.6;
   color: var(--c-t1);
-  /* The page ground = the app canvas (--c-panel): white body showed through
-     Safari's overscroll and its bottom bar picked it up (owner, 12.08). */
-  background-color: var(--c-panel);
+  /* The page ground follows the CHAT surface (--c-card), not the panel:
+     Safari's bars must continue the conversation color like ChatGPT's
+     (owner 17.08-4 revised the 12.08 canvas choice). */
+  background-color: var(--c-card);
 }
 
 @media (min-width: 768px) {
@@ -1673,9 +1695,9 @@ body {
 
 .dark body,
 .dark html {
-  /* Same canvas token as the light theme's body — Safari's bars and the
-     overscroll must continue the app ground in both themes. */
-  background-color: var(--c-panel);
+  /* Same CHAT token as the light theme's body — Safari's bars and the
+     overscroll continue the conversation surface in both themes. */
+  background-color: var(--c-card);
 }
 
 #__next,
