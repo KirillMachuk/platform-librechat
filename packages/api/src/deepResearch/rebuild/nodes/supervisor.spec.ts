@@ -43,6 +43,61 @@ function configWith(tokenBudget = 800_000, budgetGateRatio = 0.75): RunnableConf
 }
 
 describe('budgetGateReason', () => {
+  /**
+   * The reserve gate must refuse a round it cannot AFFORD, not merely a round that
+   * starts too late. Numbers below are the stand incident of 2026-08-18 (balanced tier:
+   * 12 min wall clock, timeGateRatio 0.68 → reserve at 8 min 09 s):
+   * two rounds had completed in 8 min 04 s when the supervisor was asked again. The old
+   * point check passed with 5 SECONDS to spare, dispatched a third round of the same
+   * ~4 minutes, and the hard watchdog killed the run at 12 min with NO report —
+   * findings=3, 27% of the token budget spent, twelve minutes of the user's time lost.
+   */
+  const INCIDENT = {
+    tokenUsed: 106_247,
+    tokenBudget: 400_000,
+    budgetGateRatio: 0.72,
+    maxRounds: 6,
+    runStartedMs: 1_000_000,
+    softDeadlineMs: 1_000_000 + 489_600, // 12 min × 0.68
+    now: 1_000_000 + 484_000, // 8 min 04 s in, two rounds done
+    round: 2,
+  };
+
+  it('stops gathering when another round would not finish before the reserve', () => {
+    // Mean round = 484 s / 2 = 242 s; 484 + 242 = 726 s, past the 489.6 s reserve.
+    expect(budgetGateReason(INCIDENT)).toBe('time');
+  });
+
+  it('FAILS ON PRE-FIX CODE: the old point check let this exact round through', () => {
+    // Same instant, estimate suppressed — this is literally the old behaviour, and it
+    // must still say "keep going". If this ever returns 'time', the test above stopped
+    // proving anything (it would pass for a gate that simply always stops).
+    expect(budgetGateReason({ ...INCIDENT, runStartedMs: undefined })).toBeNull();
+  });
+
+  it('still allows a round that fits inside the reserve', () => {
+    // Two fast rounds: mean 60 s, now 120 s in, reserve at 489.6 s → 180 s < 489.6 s.
+    expect(budgetGateReason({ ...INCIDENT, now: 1_000_000 + 120_000, tokenUsed: 0 })).toBeNull();
+  });
+
+  it('always allows the FIRST round — nothing has been measured yet', () => {
+    // Otherwise a short wall clock would refuse to research at all: with no completed
+    // round there is no duration to estimate, so the estimate is 0 by construction.
+    expect(
+      budgetGateReason({ ...INCIDENT, round: 0, tokenUsed: 0, now: 1_000_000 + 1 }),
+    ).toBeNull();
+  });
+
+  it('still stops once the reserve itself is reached, estimate or not', () => {
+    expect(budgetGateReason({ ...INCIDENT, now: 1_000_000 + 489_600, tokenUsed: 0 })).toBe('time');
+  });
+
+  it('does not let a backwards clock produce a negative estimate', () => {
+    // now < runStartedMs would otherwise subtract from the elapsed time and let a
+    // round through that the gate should refuse.
+    expect(budgetGateReason({ ...INCIDENT, now: 1_000_000 - 5_000, tokenUsed: 0 })).toBeNull();
+  });
+
   it('flags budget when usage reaches the reserve threshold', () => {
     expect(
       budgetGateReason({

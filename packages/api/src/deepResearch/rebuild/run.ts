@@ -124,9 +124,12 @@ export async function runDeepResearch(
   // report in time instead of the hard watchdog killing the run into a fallback.
   // Off (undefined) unless the ratio is strictly in (0, 1).
   const timeGateRatio = configurable.budget?.timeGateRatio ?? 0;
+  // ONE clock reading for both: the supervisor derives round duration as
+  // (now - runStartedMs) / rounds, and two separate readings would skew it.
+  const runStartedMs = Date.now();
   const softDeadlineMs =
     wallClockMs > 0 && timeGateRatio > 0 && timeGateRatio < 1
-      ? Date.now() + Math.floor(wallClockMs * timeGateRatio)
+      ? runStartedMs + Math.floor(wallClockMs * timeGateRatio)
       : undefined;
 
   const streamMode: ('values' | 'updates' | 'messages')[] = ['values'];
@@ -138,7 +141,7 @@ export async function runDeepResearch(
   }
 
   const config = {
-    configurable: { ...configurable, thread_id: configurable.runId, softDeadlineMs },
+    configurable: { ...configurable, thread_id: configurable.runId, softDeadlineMs, runStartedMs },
     signal: combinedSignal,
     recursionLimit: params.recursionLimit ?? DEFAULT_RECURSION_LIMIT,
     streamMode,

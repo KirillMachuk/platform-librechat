@@ -97,6 +97,14 @@ export interface DeepResearchConfigurable {
    * time gate is off (only the hard watchdog applies).
    */
   softDeadlineMs?: number;
+  /**
+   * Wall-clock start of the run (ms epoch), stamped by the run wrapper from the SAME
+   * reading that produced `softDeadlineMs`. SUPERVISOR needs it to estimate how long a
+   * round takes in THIS run: the reserve gate has to answer "would another round finish
+   * before the reserve?", and that is unanswerable from `now` alone. Undefined → the
+   * estimate is 0 and the gate degrades to the old point-in-time check.
+   */
+  runStartedMs?: number;
 }
 
 export interface DeepResearchRunBudget {
