@@ -19,4 +19,9 @@ export interface ResolvedDeepResearchMode {
   workerModel?: string;
   /** Optional dedicated writer model; reserved for later phases. */
   writerModel?: string;
+  /**
+   * OpenRouter provider routing for this tier's model calls. Undefined = unpinned,
+   * which is what every tier did before this existed.
+   */
+  provider?: { order: string[]; allow_fallbacks?: boolean };
 }

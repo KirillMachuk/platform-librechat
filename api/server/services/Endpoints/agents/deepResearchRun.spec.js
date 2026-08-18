@@ -1672,3 +1672,67 @@ describe('runNewDeepResearch — a research chat stays in its Project', () => {
     expect(fields).not.toHaveProperty('project_id');
   });
 });
+
+/**
+ * Provider routing (`deepResearch.modes.<tier>.provider`) must reach the WIRE.
+ *
+ * Deep Research builds its own model clients and never saw the model spec's `addParams`,
+ * so every DR call went out unpinned and OpenRouter picked the platform — measured on the
+ * stand, the first live call to `deepseek-v4-pro-0813` was served fp8-quantised. The
+ * resolver's own contract is covered in packages/api/.../modes.spec.ts; what only this
+ * test can prove is that the resolved value lands in the model constructor's `modelKwargs`,
+ * which is what LangChain spreads into the request body. Asserting on the config object
+ * alone would pass with the wiring cut.
+ */
+describe('runNewDeepResearch — OpenRouter provider pin reaches the model', () => {
+  const { resolveDeepResearchTier } = require('@librechat/api');
+  const BASE_TIER = { name: 'balanced', wallClockMinutes: 10 };
+  const PIN = { order: ['DeepInfra', 'Fireworks', 'Together'], allow_fallbacks: false };
+
+  afterEach(() => {
+    resolveDeepResearchTier.mockReturnValue(BASE_TIER);
+  });
+
+  it("sends the tier's pin as modelKwargs.provider on EVERY graph model", async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    resolveDeepResearchTier.mockReturnValue({ ...BASE_TIER, provider: PIN });
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    // Lead, worker, compress and report are built through the same factory; a pin that
+    // only reached some of them would still leak the others onto an arbitrary platform.
+    expect(mockModelCtorArgs.length).toBeGreaterThan(0);
+    for (const args of mockModelCtorArgs) {
+      expect(args.modelKwargs?.provider).toEqual(PIN);
+    }
+  });
+
+  it('sends NO provider key when the tier is unpinned — the pre-existing behaviour', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    resolveDeepResearchTier.mockReturnValue(BASE_TIER);
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(mockModelCtorArgs.length).toBeGreaterThan(0);
+    for (const args of mockModelCtorArgs) {
+      expect(args.modelKwargs?.provider).toBeUndefined();
+    }
+  });
+
+  it('keeps other modelKwargs the endpoint set, rather than replacing them', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    resolveDeepResearchTier.mockReturnValue({ ...BASE_TIER, provider: PIN });
+    // An endpoint/spec-level addParams arrives already folded into llmConfig.
+    mockInitializeCustom.mockImplementation(async () => ({
+      llmConfig: { apiKey: 'k', modelKwargs: { models: ['a/b'] } },
+      configOptions: { baseURL: 'http://anonymizer:8000/v1' },
+      provider: 'openAI',
+    }));
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    for (const args of mockModelCtorArgs) {
+      expect(args.modelKwargs).toEqual({ models: ['a/b'], provider: PIN });
+    }
+  });
+});

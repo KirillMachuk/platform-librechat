@@ -52,6 +52,32 @@ export function resolveDeepResearchModel(
 }
 
 /**
+ * Normalises a tier's `provider` override into the shape sent on the wire.
+ *
+ * Config arrives through zod but also through the admin override path, where a
+ * half-written value (an empty `order`) is possible. An empty order would be sent as
+ * `{"order": []}`, which OpenRouter reads as "no preference" while the config reads as
+ * "pinned" — so a tier that looks pinned would silently route anywhere. Treat it as
+ * unpinned instead, which is at least what it actually does.
+ */
+function normalizeProviderRouting(
+  /** Deliberately looser than the resolved shape: config reaches here through
+   *  `DeepPartial`, so `order` itself and every entry in it may be missing. */
+  value: { order?: Array<string | undefined>; allow_fallbacks?: boolean } | undefined,
+): ResolvedDeepResearchMode['provider'] | undefined {
+  const order = value?.order?.filter(
+    (entry): entry is string => typeof entry === 'string' && entry.trim() !== '',
+  );
+  if (!order?.length) {
+    return undefined;
+  }
+  return {
+    order,
+    allow_fallbacks: value?.allow_fallbacks ?? true,
+  };
+}
+
+/**
  * Resolves the active Deep Research mode from tenant config, merged over defaults.
  *
  * An unknown tier falls back to `balanced`, not `deep`: the retired `economy` value can
@@ -75,5 +101,6 @@ export function resolveDeepResearchMode(config?: TDeepResearchConfig): ResolvedD
     leadModel: override.leadModel ?? base.leadModel,
     workerModel: override.workerModel ?? base.workerModel,
     writerModel: override.writerModel ?? base.writerModel,
+    provider: normalizeProviderRouting(override.provider) ?? base.provider,
   };
 }
