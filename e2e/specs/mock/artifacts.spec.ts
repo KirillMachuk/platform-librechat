@@ -204,7 +204,12 @@ test.describe('artifacts', () => {
     ).toBe(true);
     expect(Math.abs((await distanceFromBottom()) - before)).toBeLessThan(200);
 
-    await page.getByRole('button', { name: 'Close' }).first().click();
+    /* Scoped to the panel that holds the artifact: an unscoped `Close` picks
+       the first one in the document, which is somebody else's. */
+    const artifactPanel = page
+      .locator('[data-panel]')
+      .filter({ has: page.locator('#artifacts-code') });
+    await artifactPanel.getByRole('button', { name: 'Close' }).click();
     await expect(page.locator('#artifacts-code')).toHaveCount(0, { timeout: 30000 });
     expect(
       await handle!.evaluate((el) => el.isConnected),
