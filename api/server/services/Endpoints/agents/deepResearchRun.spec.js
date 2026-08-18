@@ -199,8 +199,12 @@ jest.mock('@librechat/api', () => ({
       .join('\n')}`,
   isPlanMessage: (text) =>
     typeof text === 'string' && text.trimStart().startsWith('**План исследования:**'),
-  isStartCommand: (text) => typeof text === 'string' && text.trim() === '▶ Начать исследование',
-  isCancelCommand: (text) => typeof text === 'string' && text.trim() === '✕ Отменить исследование',
+  isStartCommand: (text) =>
+    typeof text === 'string' &&
+    ['Начать исследование', 'Начать исследование'].includes(text.trim()),
+  isCancelCommand: (text) =>
+    typeof text === 'string' &&
+    ['Отменить исследование', 'Отменить исследование'].includes(text.trim()),
   extractPlanSteps: (planMessage) => {
     const steps = [];
     for (const line of String(planMessage ?? '').split(/\r?\n/)) {
@@ -1099,13 +1103,13 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
       },
     ]);
 
-    await runNewDeepResearch(planParams('▶ Начать исследование'));
+    await runNewDeepResearch(planParams('Начать исследование'));
 
     expect(mockRunDeepResearch).toHaveBeenCalledTimes(1);
     // The graph researches the approved dialogue (original request survives), not the marker.
     const graphInput = mockRunDeepResearch.mock.calls[0][0].input.messages[0].content;
     expect(graphInput).toContain('изучи CRM рынок');
-    expect(graphInput).not.toContain('▶ Начать исследование');
+    expect(graphInput).not.toContain('Начать исследование');
     // Review r2: the START command message is stamped and persisted at admission.
     const userMsg = mockSavedMessages.find((m) => m.messageId === 'um1');
     expect(userMsg.drKind).toBe('start');
@@ -1124,7 +1128,7 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
       },
     ]);
 
-    const result = await runNewDeepResearch(planParams('✕ Отменить исследование'));
+    const result = await runNewDeepResearch(planParams('Отменить исследование'));
 
     expect(result.finalizeReason).toBe('cancelled');
     expect(mockRunDeepResearch).not.toHaveBeenCalled();
@@ -1188,7 +1192,7 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
         isCreatedByUser: true,
         parentMessageId: 'plan1',
         drKind: 'start',
-        text: '▶ Начать исследование',
+        text: 'Начать исследование',
       },
       {
         messageId: 'ab1',
@@ -1299,7 +1303,7 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
       };
     });
 
-    await runNewDeepResearch(planParams('▶ Начать исследование'));
+    await runNewDeepResearch(planParams('Начать исследование'));
 
     const drEvents = mockEmitChunk.mock.calls.filter((c) => c[1]?.event === 'dr_progress');
     expect(drEvents.length).toBe(3);
@@ -1435,12 +1439,12 @@ describe('runNewDeepResearch — review r2 hardening', () => {
           isCreatedByUser: true,
           parentMessageId: 'p1',
           drKind: 'start',
-          text: '▶ Начать исследование',
+          text: 'Начать исследование',
         },
       ]),
     );
 
-    const result = await runNewDeepResearch(planParams('▶ Начать исследование'));
+    const result = await runNewDeepResearch(planParams('Начать исследование'));
 
     expect(result.finalizeReason).toBe('limit');
     expect(mockRunDeepResearch).not.toHaveBeenCalled();
@@ -1459,12 +1463,12 @@ describe('runNewDeepResearch — review r2 hardening', () => {
           isCreatedByUser: true,
           parentMessageId: 'p1',
           drKind: 'start',
-          text: '▶ Начать исследование',
+          text: 'Начать исследование',
         },
       ]),
     );
 
-    const result = await runNewDeepResearch(planParams('▶ Начать исследование'));
+    const result = await runNewDeepResearch(planParams('Начать исследование'));
 
     expect(result.finalizeReason).toBe('limit');
     const msg = mockSavedMessages.find((m) => m.messageId === 'r1');
@@ -1483,12 +1487,12 @@ describe('runNewDeepResearch — review r2 hardening', () => {
           isCreatedByUser: true,
           parentMessageId: 'p1',
           drKind: 'start',
-          text: '▶ Начать исследование',
+          text: 'Начать исследование',
         },
       ]),
     );
 
-    await runNewDeepResearch(planParams('▶ Начать исследование'));
+    await runNewDeepResearch(planParams('Начать исследование'));
 
     expect(mockRunDeepResearch).toHaveBeenCalledTimes(1);
   });
@@ -1496,19 +1500,19 @@ describe('runNewDeepResearch — review r2 hardening', () => {
   it('ROLLBACK safety: planGate OFF still honors START on a plan parent (researches the dialogue, not the marker)', async () => {
     mockStartSovereignSession.mockResolvedValue(null);
     models.getMessages.mockResolvedValueOnce(planChain());
-    const p = baseParams('▶ Начать исследование'); // no planGate, clarify:false
+    const p = baseParams('Начать исследование'); // no planGate, clarify:false
 
     await runNewDeepResearch(p);
 
     expect(mockRunDeepResearch).toHaveBeenCalledTimes(1);
     const graphInput = mockRunDeepResearch.mock.calls[0][0].input.messages[0].content;
     expect(graphInput).toContain('изучи CRM рынок');
-    expect(graphInput).not.toContain('▶ Начать исследование');
+    expect(graphInput).not.toContain('Начать исследование');
   });
 
   it('ROLLBACK safety: planGate OFF still honors CANCEL on a plan parent (terminal, free)', async () => {
     models.getMessages.mockResolvedValueOnce(planChain());
-    const p = baseParams('✕ Отменить исследование');
+    const p = baseParams('Отменить исследование');
 
     const result = await runNewDeepResearch(p);
 
@@ -1554,7 +1558,7 @@ describe('runNewDeepResearch — review r2 hardening', () => {
     models.getConvo.mockResolvedValueOnce({ conversationId: 'c1', title: 'Рынок CRM в СНГ' });
     models.getMessages.mockResolvedValueOnce(planChain());
 
-    await runNewDeepResearch(planParams('▶ Начать исследование'));
+    await runNewDeepResearch(planParams('Начать исследование'));
 
     // START skips the decision; with the title reused, NO model.invoke happens at all.
     expect(mockInvokeArgs).toHaveLength(0);
@@ -1571,7 +1575,7 @@ describe('runNewDeepResearch — review r2 hardening', () => {
 
     mockSavedMessages.length = 0;
     models.getMessages.mockResolvedValueOnce(planChain());
-    await runNewDeepResearch(planParams('▶ Начать исследование'));
+    await runNewDeepResearch(planParams('Начать исследование'));
     const reportMsg = mockSavedMessages.find((m) => m.messageId === 'r1');
     expect(reportMsg.drKind).toBe('report');
   });

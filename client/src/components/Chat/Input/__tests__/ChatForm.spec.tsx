@@ -67,7 +67,6 @@ jest.mock('../PromptsCommand', () => () => null);
 jest.mock('../SkillsCommand', () => () => null);
 jest.mock('../PendingManualSkillsChips', () => () => null);
 jest.mock('../AudioRecorder', () => () => null);
-jest.mock('../CollapseChat', () => () => null);
 jest.mock('../StreamAudio', () => () => null);
 jest.mock('../TokenUsage', () => () => null);
 jest.mock('../StopButton', () => () => null);

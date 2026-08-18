@@ -32,11 +32,17 @@ import { tolerantJsonParse } from './shared';
 /** Fixed first line of a PLAN card message — how turn 2 detects a plan parent. */
 export const PLAN_MARKER = '**План исследования:**';
 
-/** Exact text the "Начать" button / autostart sends as the user's turn-2 message. */
-export const START_MARKER = '▶ Начать исследование';
+/** Exact text the "Начать" button / autostart sends as the user's turn-2 message.
+ *  Plain text on purpose: the old `▶` prefix rendered as an emoji-styled glyph on
+ *  iOS and a plain triangle on desktop (owner 18.08-2). */
+export const START_MARKER = 'Начать исследование';
 
 /** Exact text the "Отменить" button sends as the user's turn-2 message. */
-export const CANCEL_MARKER = '✕ Отменить исследование';
+export const CANCEL_MARKER = 'Отменить исследование';
+
+/** Markers clients sent before 18.08 — old conversations still contain them. */
+export const LEGACY_START_MARKER = '▶ Начать исследование';
+export const LEGACY_CANCEL_MARKER = '✕ Отменить исследование';
 
 /** Terminal assistant message after a cancel — carries NO DR marker, so the next
  *  user message routes to normal chat (closes the §7.1 routing hole). */
@@ -168,12 +174,20 @@ export function isPlanMessage(text: string): boolean {
 
 /** True if a message is the exact "start research" command (button/autostart). */
 export function isStartCommand(text: string): boolean {
-  return typeof text === 'string' && text.trim() === START_MARKER;
+  if (typeof text !== 'string') {
+    return false;
+  }
+  const t = text.trim();
+  return t === START_MARKER || t === LEGACY_START_MARKER;
 }
 
 /** True if a message is the exact "cancel research" command. */
 export function isCancelCommand(text: string): boolean {
-  return typeof text === 'string' && text.trim() === CANCEL_MARKER;
+  if (typeof text !== 'string') {
+    return false;
+  }
+  const t = text.trim();
+  return t === CANCEL_MARKER || t === LEGACY_CANCEL_MARKER;
 }
 
 /**

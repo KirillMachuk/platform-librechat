@@ -81,19 +81,31 @@ test.describe('scroll-to-bottom button', () => {
      * is clipped by the top either. */
     expect(buttonBox.y).toBeGreaterThan(scrollerBox.y);
     expect(buttonBox.y + buttonBox.height).toBeLessThan(scrollerBox.y + scrollerBox.height - 8);
-    /* Centered over the chat column — measured against the COMPOSER's axis,
-     * not the scroller box: the thread carries scrollbar-gutter: stable while
-     * the composer does not (the accepted ~4px deviation, ChatView.tsx), and
-     * the button shares the composer's column chain, so THAT is the axis a
-     * person sees it aligned to. */
-    const composerBox = await page.getByRole('textbox', { name: 'Message input' }).boundingBox();
+    /* Centered on its OWN axis: the button lives in a sticky rail INSIDE the
+     * scroller, so it centers on the scroller's CONTENT box — the area left
+     * of the scrollbar gutter (scrollbar-gutter: stable, ChatView.tsx). The
+     * composer shell centers on the full column, so the two axes differ by
+     * exactly half the platform's classic scrollbar (≈4px on this mac's 8px,
+     * ≈7px on CI's 15px) — the deviation the owner accepted in round 12.
+     * History of the proxy: until round 17 this test measured the TEXTAREA,
+     * which the collapse-arrow column happened to squeeze onto the button's
+     * axis; round 17 removed that column, the textarea re-centered onto the
+     * shell, and the accidental 0px match became the honest gutter/2. */
+    const scrollerAxis = await scroller.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return { contentCenterX: r.x + el.clientWidth / 2, gutter: r.width - el.clientWidth };
+    });
+    const composerBox = await page.getByTestId('composer-shell').boundingBox();
     expect(composerBox).toBeTruthy();
     if (!composerBox) {
       return;
     }
     const buttonCenterX = buttonBox.x + buttonBox.width / 2;
+    expect(Math.abs(buttonCenterX - scrollerAxis.contentCenterX)).toBeLessThanOrEqual(2);
     const composerCenterX = composerBox.x + composerBox.width / 2;
-    expect(Math.abs(buttonCenterX - composerCenterX)).toBeLessThanOrEqual(2);
+    expect(Math.abs(buttonCenterX - composerCenterX)).toBeLessThanOrEqual(
+      scrollerAxis.gutter / 2 + 2,
+    );
 
     /* And it does its job: click returns the list to the bottom and the
      * button leaves. */
