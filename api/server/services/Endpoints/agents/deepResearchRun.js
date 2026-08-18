@@ -1281,6 +1281,29 @@ async function runNewDeepResearch(params) {
         buildWebSearchTool({ req, userId }),
       ]);
       const tools = [fileSearchTool, webSearchTool].filter(Boolean);
+      /**
+       * Which models this run ACTUALLY resolved, and where their calls are routed.
+       *
+       * Nothing logged this before, and the gap cost a live investigation: a tier's
+       * `leadModel` in librechat.yaml is only the SEED — the live value is the admin
+       * override in the config collection (see packages/api/src/admin/deepResearch.ts),
+       * and the two silently diverge. A yaml edit that looks deployed — the file is
+       * right inside the container — can therefore change nothing, and the only way to
+       * find out was to read the billing rows afterwards and see which model was
+       * charged. One line here answers it while the run is still going.
+       *
+       * The provider pin is on the same line for the same reason: it decides which
+       * platform serves the call, platforms differ in price and quantisation, and it
+       * is otherwise invisible outside the OpenRouter response we do not log.
+       */
+      const pin = tier.provider;
+      logger.info(
+        `[deepResearchRun] models: lead=${leadModelSlug} worker=${workerModelSlug} ` +
+          `compress=${compressModelSlug} report=${reportModelSlug} · providers=` +
+          (pin
+            ? `${pin.order.join('>')}${pin.allow_fallbacks === false ? ' (strict)' : ' (soft)'}`
+            : 'unpinned'),
+      );
       // The single most diagnostic line for a "gathered nothing" run: researchers
       // without web_search can only produce empty findings (→ nodata).
       logger.info(
