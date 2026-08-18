@@ -1521,6 +1521,18 @@ input:-webkit-autofill:active {
   transition: background-color 999999s ease-in-out 0s;
 }
 
+/* The autofilled TEXT itself is painted through the input's ::first-line —
+   the only styling hook Chromium exposes for it; the font-family pinned on
+   the element above never reaches that text. Without this rule a saved login
+   renders with the browser's default face/size while typed text uses the
+   field's (owner 18.08-2: large default vs small saved-account fill on the
+   login page). `inherit` resolves against the input's own computed font, so
+   the 16px auth fields and the 14px desktop fields each keep their size. */
+input:-webkit-autofill::first-line {
+  font-family: inherit;
+  font-size: inherit;
+}
+
 /* Полоса прокрутки, видимая только под курсором (владелец 14.08-6, поведение
    ChatGPT): в покое дорожка и бегунок прозрачны, наведение на сам скроллер
    проявляет бегунок. Chromium/Firefox идут через scrollbar-color (заданный
@@ -1590,6 +1602,15 @@ input:-webkit-autofill:active {
   --surface-secondary: color-mix(in srgb, var(--c-ink-flip) 10%, transparent);
   --surface-secondary-alt: color-mix(in srgb, var(--c-ink-flip) 14%, transparent);
   --surface-tertiary: color-mix(in srgb, var(--c-ink-flip) 10%, transparent);
+  /* The §6.3 chips do NOT paint with surface-active/chat: the passive chip is
+     bg-surface-primary-alt, the checked chip is bg-surface-primary (see
+     CHIP_BASE/CHIP_CHECKED in CheckboxButton.tsx). Round 14 missed these two,
+     so the chips stayed the light theme's white pills with flipped (white)
+     text — invisible labels (owner 18.08-3). Every surface token used by the
+     composer subtree must be remapped here; scripts/check-temporary-tokens.mjs
+     enforces the pairing. */
+  --surface-primary: color-mix(in srgb, var(--c-ink-flip) 16%, transparent);
+  --surface-primary-alt: color-mix(in srgb, var(--c-ink-flip) 10%, transparent);
   --border-light: color-mix(in srgb, var(--c-ink-flip) 16%, transparent);
   --border-medium: color-mix(in srgb, var(--c-ink-flip) 24%, transparent);
   /* The ink pair flips INSIDE the pill (literal-based, see --c-ink-flip):
