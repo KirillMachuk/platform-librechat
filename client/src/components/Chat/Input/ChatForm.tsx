@@ -250,7 +250,7 @@ const ChatForm = memo(function ChatForm({
           : 'sm:mb-10',
       )}
     >
-      <div className="relative flex h-full flex-1 items-stretch md:flex-col">
+      <div className="relative flex h-full min-w-0 flex-1 items-stretch md:flex-col">
         <div className={cn('flex w-full items-center', isRTL && 'flex-row-reverse')}>
           <Mention
             index={index}
@@ -285,7 +285,11 @@ const ChatForm = memo(function ChatForm({
               // The only thing that answers input is the send button's icon.
               // Keyboard focus is shown by the caret alone; the global focus
               // canon already exempts textareas from the outline.
-              'relative flex w-full flex-grow flex-col overflow-hidden rounded-3xl border shadow-sm transition-colors duration-90',
+              /* min-w-0 on BOTH flex links (this shell and the column div above):
+                 a flex item's min-width:auto lets the file ribbon's min-content
+                 blow the shell past the 800px form (owner 18.08-1: five cards
+                 pushed the composer to 1322px and the ribbon never scrolled). */
+              'relative flex w-full min-w-0 flex-grow flex-col overflow-hidden rounded-3xl border shadow-sm transition-colors duration-90',
               'bg-surface-chat text-text-primary',
               /* Temporary chat inverts the composer into the INK palette
                  (owner 17.08-3, ChatGPT as the reference: the pill flips to

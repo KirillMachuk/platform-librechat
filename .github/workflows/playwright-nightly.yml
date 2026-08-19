@@ -136,7 +136,15 @@ jobs:
         # cryptic browser crash inside a test instead of here.
         timeout-minutes: 12
         run: |
-          google-chrome --version
+          # The runner image ships a working Chrome; when it runs, its shared
+          # libraries are already installed and the apt round-trip below is a
+          # no-op that merely EXPOSES us to mirror outages (19.08: three shards
+          # hung 12 minutes each on dead apt mirrors with Chrome sitting right
+          # there). apt remains the fallback for images without Chrome.
+          if google-chrome --version; then
+            echo "Chrome present on the runner — skipping apt install-deps"
+            exit 0
+          fi
           for attempt in 1 2 3; do
             if npx playwright install-deps chrome; then
               exit 0

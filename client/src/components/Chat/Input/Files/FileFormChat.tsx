@@ -36,7 +36,12 @@ function FileFormChat({
         abortUpload={abortUpload}
         setFilesLoading={setFilesLoading}
         isRTL={isRTL}
-        Wrapper={({ children }) => <div className="mx-2 mt-2 flex flex-wrap gap-2">{children}</div>}
+        Wrapper={({ children }) => (
+          /* Plain min-w-0 block: FileRow renders its own sideways ribbon
+             (12.08-3 — no second row), and a flex wrapper here re-adds the
+             min-width:auto link that let the ribbon widen the composer. */
+          <div className="mx-2 mt-2 min-w-0">{children}</div>
+        )}
       />
     </>
   );
