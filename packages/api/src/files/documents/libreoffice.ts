@@ -1,8 +1,8 @@
 import { tmpdir } from 'os';
-import { PREVIEW_VERSION_TAG } from './version';
 import { join } from 'path';
 import { spawn } from 'child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
+import { PREVIEW_VERSION_TAG } from './version';
 
 /**
  * LibreOffice-backed office preview pipeline.

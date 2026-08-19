@@ -1,6 +1,6 @@
 import type { OfficeHtmlBucket } from './html';
-import { bufferToOfficeHtml, officeHtmlBucket } from './html';
 import { createConcurrencyLimiter, withTimeout } from '../../utils/promise';
+import { bufferToOfficeHtml, officeHtmlBucket } from './html';
 
 /* Re-exported through this module for the same reason as the bucket gate above:
  * the JS route layer needs the staleness check, and `./html` is not on the

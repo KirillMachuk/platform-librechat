@@ -224,7 +224,7 @@ jobs:
     # keeps the needs list equal to the job list (inline form on purpose —
     # the dependency-free guard parser reads only the inline form).
     if: always()
-    needs: [icon_canon, interface_strings, layer_canon, shadow_canon, focus_canon, artifacts_offline, tooltip_canon, sideways_pan_canon, temporary_inversion]
+    needs: [icon_canon, interface_strings, layer_canon, shadow_canon, focus_canon, artifacts_offline, pdfjs_assets, tooltip_canon, sideways_pan_canon, temporary_inversion]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
