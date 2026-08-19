@@ -102,6 +102,10 @@ describe('GET /files/:file_id/preview', () => {
     mockFindFileById.mockReset();
     mockGetFiles.mockReset();
     mockUpdateFile.mockReset();
+    /* The real one is async and the route awaits it: a bare jest.fn() returns
+       undefined, the route trips over it, and the failure surfaces as the
+       fallback quietly serving yesterday's document. */
+    mockUpdateFile.mockResolvedValue(null);
     mockGetAgents.mockReset();
     mockGetAgents.mockResolvedValue([]);
   });
@@ -496,6 +500,26 @@ describe('GET /files/:file_id/preview', () => {
 
       expect(res.body.text).toBe('<html>all slides</html>');
       expect(renderOfficePreview).toHaveBeenCalledTimes(1);
+      /* And it is kept. Without this the in-process cache is the only memory of
+         the re-render, so it dies with the container and the next open pays for
+         it again — for the life of the file. */
+      expect(mockUpdateFile).toHaveBeenCalledWith({
+        file_id: 'fid-stale-deck',
+        previewText: '<html>all slides</html>',
+      });
+    });
+
+    it('never writes the refreshed document into the field the model reads', async () => {
+      staleDeck('fid-stale-model-safe');
+      mockGetDownloadStream.mockResolvedValueOnce(Readable.from(Buffer.from([1, 2, 3])));
+      renderOfficePreview.mockResolvedValueOnce({ html: '<html>fresh</html>', bucket: 'pptx' });
+
+      await request(buildApp()).get('/files/fid-stale-model-safe/preview');
+
+      /* The office `text` of a code-execution artifact is what the model reads. */
+      for (const [update] of mockUpdateFile.mock.calls) {
+        expect(update.text).toBeUndefined();
+      }
     });
 
     it('keeps serving the stored preview when the re-render cannot run', async () => {
