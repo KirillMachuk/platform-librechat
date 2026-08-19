@@ -4,7 +4,6 @@ import { useRecoilValue } from 'recoil';
 import { TooltipAnchor } from '@librechat/client';
 import type { Artifact } from '~/common';
 import { cn, logger, decodeBytes, sortPagesByRelevance, triggerDownload } from '~/utils';
-import { fileTypeMeta } from '~/components/Chat/Input/Files/typeMeta';
 import CopyButton from '~/components/Messages/Content/CopyButton';
 import { useFileDownload, useFilePreview } from '~/data-provider';
 import { useLocalize, TranslationKeys } from '~/hooks';
@@ -117,33 +116,6 @@ function canPreviewByExt(filename: string): PreviewKind {
   return textExts.has(ext) ? 'text' : false;
 }
 
-/** Formats bytes with unit suffix (differs from ~/utils/formatBytes which returns a raw number). */
-function formatBytes(bytes: number): string {
-  if (bytes >= 1048576) {
-    return `${(bytes / 1048576).toFixed(1)} MB`;
-  }
-  if (bytes >= 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-  return `${bytes} B`;
-}
-
-/**
- * The meta line says what CLASS of file this is, in the user's language, from
- * the same map the chip the user clicked draws from. Extension wins over MIME
- * so a `.tsv` mislabeled `text/plain` still reads as a spreadsheet (matches
- * the office HTML dispatcher's precedence); an extension typeMeta does not
- * know falls back to the bare uppercase extension.
- */
-function displayTypeMeta(fileType?: string, fileName?: string): { labelKey: string; ext: string } {
-  const ext = fileName ? getFileExtension(fileName) : '';
-  const byExt = ext ? fileTypeMeta(ext) : null;
-  if (byExt != null && byExt.labelKey !== 'com_ui_file_type_file') {
-    return { labelKey: byExt.labelKey, ext };
-  }
-  return { labelKey: fileTypeMeta(fileType ?? '').labelKey, ext };
-}
-
 /**
  * Panel body for FILE_PREVIEW artifacts — the routing target for every
  * non-image stored file (owner 14.08-3). Fetches by `file.file_id`: office
@@ -157,7 +129,6 @@ export default function FilePreviewBody({ artifact }: { artifact: Artifact }) {
   const fileId = artifact.file?.file_id;
   const fileName = artifact.file?.filename ?? artifact.title ?? '';
   const fileType = artifact.preview?.fileType;
-  const fileSize = artifact.preview?.bytes;
   const relevance = artifact.preview?.relevance;
   const pages = artifact.preview?.pages;
   const pageRelevance = artifact.preview?.pageRelevance;
@@ -341,25 +312,21 @@ export default function FilePreviewBody({ artifact }: { artifact: Artifact }) {
     }
   }, [downloadFile, fileId, fileName]);
 
-  const displayType = useMemo(() => {
-    const { labelKey, ext } = displayTypeMeta(fileType, fileName);
-    if (labelKey === 'com_ui_file_type_file' && ext) {
-      return ext.toUpperCase();
-    }
-    return localize(labelKey as TranslationKeys);
-  }, [fileType, fileName, localize]);
-
   const sortedPages = useMemo(
     () => (pages && pageRelevance ? sortPagesByRelevance(pages, pageRelevance) : pages),
     [pages, pageRelevance],
   );
 
-  const metaParts: string[] = [displayType];
+  /* Only what the document on screen cannot say for itself. Its type and its
+     size were the first two things in this strip and the two the reader already
+     knows: the name is in the panel header, the type is visible the moment it
+     renders, and the byte count answers no question anyone asked while reading
+     (owner, 19.08). What stays is the search context — why this file came up
+     and which pages matched — which is nowhere else once the result card
+     scrolls away. */
+  const metaParts: string[] = [];
   if (relevance != null && relevance > 0) {
     metaParts.push(`${localize('com_ui_relevance')}: ${Math.round(relevance * 100)}%`);
-  }
-  if (fileSize != null && fileSize > 0) {
-    metaParts.push(formatBytes(fileSize));
   }
   if (sortedPages && sortedPages.length > 0) {
     metaParts.push(localize('com_file_pages', { pages: sortedPages.join(', ') }));
@@ -371,15 +338,20 @@ export default function FilePreviewBody({ artifact }: { artifact: Artifact }) {
       data-testid="file-preview-body"
       aria-label={`${localize('com_ui_preview')}: ${fileName}`}
     >
-      <TooltipAnchor
-        description={fileName}
-        className="cursor-default"
-        render={
-          <div className="shrink-0 truncate px-4 pt-3 text-xs text-text-secondary">
-            {metaParts.join(' · ')}
-          </div>
-        }
-      />
+      {metaParts.length > 0 && (
+        <TooltipAnchor
+          description={fileName}
+          className="cursor-default"
+          render={
+            <div
+              className="shrink-0 truncate px-4 pt-3 text-xs text-text-secondary"
+              data-testid="file-preview-meta"
+            >
+              {metaParts.join(' · ')}
+            </div>
+          }
+        />
+      )}
       {/* Кадры (PDF, офис) занимают ВСЮ высоту панели и прокручиваются САМИ:
           пока их прокручивала панель, кадр стоял частично за краем и клик по
           вкладке листа внутри него не доезжал (e2e поймал переключение листов
