@@ -21,6 +21,21 @@ export type ArtifactSourceFile = Partial<
   Pick<TFile, 'file_id' | 'filename' | 'filepath' | 'source' | 'user'>
 >;
 
+export type GoogleWorkspaceKind = 'document' | 'spreadsheet';
+
+export type GoogleWorkspaceMimeType =
+  | 'application/vnd.google-apps.document'
+  | 'application/vnd.google-apps.spreadsheet';
+
+export interface GoogleWorkspaceFile {
+  provider: 'google_drive';
+  fileId: string;
+  name: string;
+  mimeType: GoogleWorkspaceMimeType;
+  viewUrl: string;
+  kind: GoogleWorkspaceKind;
+}
+
 export interface Artifact {
   id: string;
   lastUpdateTime: number;
@@ -32,6 +47,8 @@ export interface Artifact {
   title?: string;
   type?: string;
   file?: ArtifactSourceFile;
+  /** Google Workspace preview only: a validated pointer to the remote file. */
+  googleWorkspace?: GoogleWorkspaceFile;
   /** FILE_PREVIEW only: display meta the chips already computed (mime, size,
    *  search relevance, matched pages). The panel body renders it in the meta
    *  strip; every field optional so no other artifact type is touched. */

@@ -991,6 +991,15 @@ describe('interfaceSchema', () => {
     expect(result.retentionMode).toBe(RetentionMode.ALL);
     expect(result.retainAgentFiles).toBe(true);
   });
+
+  it('accepts the Google Workspace preview feature flag', () => {
+    expect(interfaceSchema.parse({ googleWorkspacePreview: true }).googleWorkspacePreview).toBe(
+      true,
+    );
+    expect(interfaceSchema.parse({ googleWorkspacePreview: false }).googleWorkspacePreview).toBe(
+      false,
+    );
+  });
 });
 
 describe('summarizationTriggerSchema', () => {

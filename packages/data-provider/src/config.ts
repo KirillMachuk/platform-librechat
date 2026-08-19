@@ -1254,6 +1254,11 @@ export const interfaceSchema = z
      */
     fileSearchDefault: z.boolean().optional(),
     fileCitations: z.boolean().optional(),
+    /**
+     * Experimental Google Docs/Sheets iframe preview. Disabled unless an
+     * operator explicitly enables it for a deployment.
+     */
+    googleWorkspacePreview: z.boolean().optional(),
     buildInfo: z.boolean().optional(),
     remoteAgents: z
       .object({

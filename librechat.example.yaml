@@ -193,6 +193,9 @@ interface:
   marketplace:
     use: false
   fileCitations: true
+  # Experimental: open Google Docs and Sheets links in the artifacts panel.
+  # This does not grant the assistant access to Google Drive.
+  # googleWorkspacePreview: false
   # Remote Agents configuration
   # Controls user permissions for remote agents with external API support
   # remoteAgents:

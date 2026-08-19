@@ -1,13 +1,15 @@
 import React, { memo, useMemo, useRef, useEffect } from 'react';
 import { useRecoilValue } from 'recoil';
 import { useToastContext } from '@librechat/client';
-import { PermissionTypes, Permissions, apiBaseUrl } from 'librechat-data-provider';
+import { PermissionTypes, Permissions, SystemRoles, apiBaseUrl } from 'librechat-data-provider';
+import useOpenGoogleWorkspacePreview from '~/hooks/Artifacts/useOpenGoogleWorkspacePreview';
 import Mermaid, { MermaidErrorBoundary } from '~/components/Messages/Content/Mermaid';
+import { useFileDownload, useGetStartupConfig } from '~/data-provider';
 import CodeBlock from '~/components/Messages/Content/CodeBlock';
-import useHasAccess from '~/hooks/Roles/useHasAccess';
-import { useFileDownload } from '~/data-provider';
-import { useCodeBlockContext } from '~/Providers';
 import { handleDoubleClick, triggerDownload } from '~/utils';
+import { parseGoogleWorkspaceUrl } from '~/utils/google';
+import useHasAccess from '~/hooks/Roles/useHasAccess';
+import { useCodeBlockContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
 import store from '~/store';
 
@@ -109,6 +111,15 @@ export const a: React.ElementType = memo(function MarkdownAnchor({ href, childre
   const user = useRecoilValue(store.user);
   const { showToast } = useToastContext();
   const localize = useLocalize();
+  const { data: startupConfig } = useGetStartupConfig();
+  const openGoogleWorkspacePreview = useOpenGoogleWorkspacePreview();
+  const googleWorkspaceFile = useMemo(
+    () =>
+      startupConfig?.interface?.googleWorkspacePreview === true && user?.role === SystemRoles.ADMIN
+        ? parseGoogleWorkspaceUrl(href)
+        : null,
+    [href, startupConfig?.interface?.googleWorkspacePreview, user?.role],
+  );
 
   const {
     file_id = '',
@@ -128,7 +139,41 @@ export const a: React.ElementType = memo(function MarkdownAnchor({ href, childre
   }, [user?.id, href]);
 
   const { refetch: downloadFile } = useFileDownload(user?.id ?? '', file_id, { direct: false });
-  const props: { target?: string; onClick?: React.MouseEventHandler } = { target: '_blank' };
+  const props: { target?: string; rel?: string; onClick?: React.MouseEventHandler } = {
+    target: '_blank',
+  };
+
+  if (googleWorkspaceFile) {
+    const fallbackName =
+      googleWorkspaceFile.kind === 'document'
+        ? localize('com_ui_google_document')
+        : localize('com_ui_google_spreadsheet');
+    const name = typeof children === 'string' && children.trim() ? children.trim() : fallbackName;
+
+    return (
+      <a
+        href={googleWorkspaceFile.viewUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(event) => {
+          if (
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return;
+          }
+          if (openGoogleWorkspacePreview(googleWorkspaceFile.viewUrl, name)) {
+            event.preventDefault();
+          }
+        }}
+      >
+        {children}
+      </a>
+    );
+  }
 
   if (!file_id || !filename) {
     return (
