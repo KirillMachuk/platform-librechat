@@ -1,10 +1,70 @@
 const cookies = require('cookie');
 const jwt = require('jsonwebtoken');
-const { logger } = require('@librechat/data-schemas');
+const { PermissionBits, ResourceType } = require('librechat-data-provider');
+const { logger, runAsSystem, tenantStorage } = require('@librechat/data-schemas');
 const { isEnabled, getBasePath } = require('@librechat/api');
+const { findUser, getAgents } = require('~/models');
+const { getResourcePermissionsMap } = require('~/server/services/PermissionService');
+const { canManageResourceType } = require('~/server/middleware/roles/capabilities');
 
 const OBJECT_ID_LENGTH = 24;
 const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
+
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Checks VIEW access to a local agent avatar owned by another user.
+ * The database reference is authoritative: duplicated agents may legitimately share one avatar,
+ * while an old or orphaned file must not stay readable merely because its filename is known.
+ * @param {string} userId - Authenticated user ID from the signed refresh cookie
+ * @param {string} avatarPath - Local avatar path without deployment base path or query string
+ * @returns {Promise<boolean>}
+ */
+async function canAccessAgentAvatar(userId, avatarPath) {
+  try {
+    const user = await runAsSystem(() => findUser({ _id: userId }, 'role tenantId disabled'));
+    if (!user || user.disabled) {
+      return false;
+    }
+
+    const checkAccess = async () => {
+      const capabilityUser = {
+        id: userId,
+        role: user.role ?? '',
+        tenantId: user.tenantId,
+      };
+      if (await canManageResourceType(capabilityUser, ResourceType.AGENT)) {
+        return true;
+      }
+
+      const agents = await getAgents({
+        'avatar.filepath': new RegExp(`^${escapeRegex(avatarPath)}(?:\\?.*)?$`),
+      });
+      if (agents.length === 0) {
+        return false;
+      }
+
+      const permissions = await getResourcePermissionsMap({
+        userId,
+        role: user.role,
+        resourceType: ResourceType.AGENT,
+        resourceIds: agents.map((agent) => agent._id),
+      });
+      return agents.some((agent) => {
+        const bits = permissions.get(agent._id.toString()) ?? 0;
+        return (bits & PermissionBits.VIEW) === PermissionBits.VIEW;
+      });
+    };
+
+    if (user.tenantId) {
+      return await tenantStorage.run({ tenantId: user.tenantId, userId }, checkAccess);
+    }
+    return await runAsSystem(checkAccess);
+  } catch (error) {
+    logger.warn(`[validateImageRequest] Agent avatar access check failed: ${error.message}`);
+    return false;
+  }
+}
 
 /**
  * Validates if a string is a valid MongoDB ObjectId
@@ -132,26 +192,28 @@ function createValidateImageRequest(secureImageLinks) {
       const basePath = getBasePath();
       const imagesPath = `${basePath}/images`;
 
-      const agentAvatarPattern = new RegExp(
-        `^${imagesPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/[a-f0-9]{24}/agent-[^/]*$`,
-      );
-      if (agentAvatarPattern.test(fullPath)) {
+      const escapedImagesPath = escapeRegex(imagesPath);
+      const escapedUserId = escapeRegex(userIdForPath);
+      const pathPattern = new RegExp(`^${escapedImagesPath}/${escapedUserId}/[^/]+$`);
+
+      if (pathPattern.test(fullPath)) {
         logger.debug('[validateImageRequest] Image request validated');
         return next();
       }
 
-      const escapedUserId = userIdForPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const pathPattern = new RegExp(
-        `^${imagesPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/${escapedUserId}/[^/]+$`,
-      );
+      const requestPath = fullPath.split(/[?#]/, 1)[0];
+      const agentAvatarPattern = new RegExp(`^${escapedImagesPath}/[a-f0-9]{24}/agent-[^/]+$`);
+      const isAuthorizedAgentAvatar =
+        agentAvatarPattern.test(requestPath) &&
+        (await canAccessAgentAvatar(userIdForPath, requestPath.slice(basePath.length)));
 
-      if (pathPattern.test(fullPath)) {
+      if (isAuthorizedAgentAvatar) {
         logger.debug('[validateImageRequest] Image request validated');
-        next();
-      } else {
-        logger.warn('[validateImageRequest] Invalid image path');
-        res.status(403).send('Access Denied');
+        return next();
       }
+
+      logger.warn('[validateImageRequest] Invalid image path');
+      return res.status(403).send('Access Denied');
     } catch (error) {
       logger.error('[validateImageRequest] Error:', error);
       res.status(500).send('Internal Server Error');

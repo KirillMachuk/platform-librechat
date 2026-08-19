@@ -1,6 +1,17 @@
 const jwt = require('jsonwebtoken');
 const createValidateImageRequest = require('~/server/middleware/validateImageRequest');
 
+jest.mock('~/models', () => ({
+  findUser: jest.fn(),
+  getAgents: jest.fn(),
+}));
+jest.mock('~/server/services/PermissionService', () => ({
+  getResourcePermissionsMap: jest.fn(),
+}));
+jest.mock('~/server/middleware/roles/capabilities', () => ({
+  canManageResourceType: jest.fn(),
+}));
+
 // Mock only isEnabled, keep getBasePath real so it reads process.env.DOMAIN_CLIENT
 jest.mock('@librechat/api', () => ({
   ...jest.requireActual('@librechat/api'),
@@ -8,6 +19,9 @@ jest.mock('@librechat/api', () => ({
 }));
 
 const { isEnabled } = require('@librechat/api');
+const { findUser, getAgents } = require('~/models');
+const { getResourcePermissionsMap } = require('~/server/services/PermissionService');
+const { canManageResourceType } = require('~/server/middleware/roles/capabilities');
 
 describe('validateImageRequest middleware', () => {
   let req, res, next, validateImageRequest;
@@ -30,6 +44,10 @@ describe('validateImageRequest middleware', () => {
 
     // Default: OpenID token reuse disabled
     isEnabled.mockReturnValue(false);
+    findUser.mockResolvedValue({ role: 'USER', tenantId: 'tenant-a', disabled: false });
+    getAgents.mockResolvedValue([]);
+    getResourcePermissionsMap.mockResolvedValue(new Map());
+    canManageResourceType.mockResolvedValue(false);
   });
 
   afterEach(() => {
@@ -104,15 +122,66 @@ describe('validateImageRequest middleware', () => {
       expect(res.send).toHaveBeenCalledWith('Access Denied');
     });
 
-    test('should allow agent avatar pattern for any valid ObjectId', async () => {
+    test("should deny another user's unshared agent avatar", async () => {
       const validToken = jwt.sign(
         { id: validObjectId, exp: Math.floor(Date.now() / 1000) + 3600 },
         process.env.JWT_REFRESH_SECRET,
       );
+      const agentObjectId = '65cfb246f7ecadb8b1e80370';
+      getAgents.mockResolvedValue([{ _id: agentObjectId }]);
       req.headers.cookie = `refreshToken=${validToken}`;
-      req.originalUrl = '/images/65cfb246f7ecadb8b1e8036c/agent-avatar-12345.png';
+      req.originalUrl =
+        '/images/65cfb246f7ecadb8b1e8036c/agent-agent_test-avatar-12345.png?manual=false';
       await validateImageRequest(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(next).not.toHaveBeenCalled();
+      expect(getResourcePermissionsMap).toHaveBeenCalled();
+    });
+
+    test("should allow a shared duplicate that references another agent's avatar", async () => {
+      const validToken = jwt.sign(
+        { id: validObjectId, exp: Math.floor(Date.now() / 1000) + 3600 },
+        process.env.JWT_REFRESH_SECRET,
+      );
+      const originalAgentObjectId = '65cfb246f7ecadb8b1e80370';
+      const sharedDuplicateObjectId = '65cfb246f7ecadb8b1e80371';
+      findUser.mockResolvedValue({ role: 'USER', tenantId: 'tenant-a', disabled: false });
+      getAgents.mockResolvedValue([
+        { _id: originalAgentObjectId },
+        { _id: sharedDuplicateObjectId },
+      ]);
+      getResourcePermissionsMap.mockResolvedValue(new Map([[sharedDuplicateObjectId, 1]]));
+      req.headers.cookie = `refreshToken=${validToken}`;
+      req.originalUrl =
+        '/images/65cfb246f7ecadb8b1e8036c/agent-agent_test-avatar-12345.png?manual=false';
+
+      await validateImageRequest(req, res, next);
+
       expect(next).toHaveBeenCalled();
+      expect(res.status).not.toHaveBeenCalled();
+      expect(getResourcePermissionsMap).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: validObjectId,
+          resourceIds: [originalAgentObjectId, sharedDuplicateObjectId],
+        }),
+      );
+    });
+
+    test("should allow an agent manager to view another user's agent avatar", async () => {
+      const validToken = jwt.sign(
+        { id: validObjectId, exp: Math.floor(Date.now() / 1000) + 3600 },
+        process.env.JWT_REFRESH_SECRET,
+      );
+      canManageResourceType.mockResolvedValue(true);
+      req.headers.cookie = `refreshToken=${validToken}`;
+      req.originalUrl =
+        '/images/65cfb246f7ecadb8b1e8036c/agent-agent_test-avatar-12345.png?manual=false';
+
+      await validateImageRequest(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(res.status).not.toHaveBeenCalled();
+      expect(canManageResourceType).toHaveBeenCalled();
     });
 
     test('should prevent file traversal attempts', async () => {
@@ -211,15 +280,17 @@ describe('validateImageRequest middleware', () => {
       expect(res.send).toHaveBeenCalledWith('Access Denied');
     });
 
-    test('should allow agent avatars in OpenID flow', async () => {
+    test('should deny unshared agent avatars in OpenID flow', async () => {
       const signedUserId = jwt.sign(
         { id: validObjectId, exp: Math.floor(Date.now() / 1000) + 3600 },
         process.env.JWT_REFRESH_SECRET,
       );
       req.headers.cookie = `refreshToken=dummy-token; token_provider=openid; openid_user_id=${signedUserId}`;
-      req.originalUrl = '/images/65cfb246f7ecadb8b1e8036c/agent-avatar-12345.png';
+      req.originalUrl =
+        '/images/65cfb246f7ecadb8b1e8036c/agent-agent_test-avatar-12345.png?manual=false';
       await validateImageRequest(req, res, next);
-      expect(next).toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(next).not.toHaveBeenCalled();
     });
   });
 
