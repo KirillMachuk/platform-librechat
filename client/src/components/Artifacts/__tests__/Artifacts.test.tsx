@@ -290,6 +290,38 @@ describe('Artifacts panel', () => {
       renderPanel();
       expect(screen.getAllByRole('radio')[0]).toBeEnabled();
     });
+
+    it('keeps only the safe external action for a Google document preview', () => {
+      setPanelState({
+        currentArtifact: buildArtifact({
+          id: 'google-workspace:document:doc_123',
+          title: 'Quarterly plan',
+          type: TOOL_ARTIFACT_TYPES.GOOGLE_WORKSPACE,
+          content: '',
+          googleWorkspace: {
+            provider: 'google_drive',
+            fileId: 'doc_123',
+            name: 'Quarterly plan',
+            mimeType: 'application/vnd.google-apps.document',
+            viewUrl: 'https://docs.google.com/document/d/doc_123/edit',
+            kind: 'document',
+          },
+        }),
+      });
+      renderPanel();
+
+      expect(screen.getByText('Quarterly plan')).toBeInTheDocument();
+      expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'com_ui_refresh' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'com_ui_copy' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'com_ui_download_artifact' }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'com_ui_open_in_google_docs' })).toHaveAttribute(
+        'href',
+        'https://docs.google.com/document/d/doc_123/edit',
+      );
+    });
   });
 
   /* Phone and desktop differ in where the view switch lives: the desktop keeps
@@ -312,6 +344,36 @@ describe('Artifacts panel', () => {
 
       expect(screen.getByRole('radiogroup')).toHaveClass('flex');
       expect(screen.getAllByRole('radio')[0]).toHaveClass('flex-1');
+    });
+
+    it('uses a non-draggable full-screen surface for Google files on a phone', () => {
+      setViewportWidth(390);
+      setPanelState({
+        currentArtifact: buildArtifact({
+          id: 'google-workspace:spreadsheet:sheet_123',
+          title: 'Budget',
+          type: TOOL_ARTIFACT_TYPES.GOOGLE_WORKSPACE,
+          content: '',
+          googleWorkspace: {
+            provider: 'google_drive',
+            fileId: 'sheet_123',
+            name: 'Budget',
+            mimeType: 'application/vnd.google-apps.spreadsheet',
+            viewUrl: 'https://docs.google.com/spreadsheets/d/sheet_123/edit',
+            kind: 'spreadsheet',
+          },
+        }),
+      });
+      renderPanel();
+
+      const frame = screen.getByTitle('Budget');
+      const surface = frame.closest('.fixed');
+      expect(surface).toHaveStyle({ height: '100vh' });
+      expect(surface).not.toHaveClass('rounded-t-[20px]');
+      expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('link', { name: 'com_ui_open_in_google_sheets' }),
+      ).toBeInTheDocument();
     });
   });
 });

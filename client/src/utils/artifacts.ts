@@ -5,7 +5,7 @@ import type {
   SandpackPredefinedTemplate,
 } from '@codesandbox/sandpack-react';
 import type { TStartupConfig, TAttachment, TFile } from 'librechat-data-provider';
-import type { Artifact } from '~/common';
+import type { Artifact, GoogleWorkspaceFile } from '~/common';
 
 const artifactFilename = {
   'application/vnd.react': 'App.tsx',
@@ -324,6 +324,8 @@ export const TOOL_ARTIFACT_TYPES = {
    * whole product (owner 14.08-3): images open the centered lightbox,
    * everything else opens HERE. */
   FILE_PREVIEW: 'application/vnd.librechat.file-preview',
+  /** Feature-flagged pointer to a Google-hosted Docs/Sheets iframe. */
+  GOOGLE_WORKSPACE: 'application/vnd.1ma.google-workspace-preview',
 } as const;
 
 export type ToolArtifactType = (typeof TOOL_ARTIFACT_TYPES)[keyof typeof TOOL_ARTIFACT_TYPES];
@@ -373,6 +375,10 @@ export function isCodeOnlyArtifact(type: string | null | undefined): boolean {
  *  code editor, no sandpack — the body fetches by file_id. */
 export function isFilePreviewArtifact(type: string | null | undefined): boolean {
   return type === TOOL_ARTIFACT_TYPES.FILE_PREVIEW;
+}
+
+export function isGoogleWorkspacePreviewArtifact(type: string | null | undefined): boolean {
+  return type === TOOL_ARTIFACT_TYPES.GOOGLE_WORKSPACE;
 }
 
 /**
@@ -993,6 +999,17 @@ export function filePreviewArtifact(
       pages: meta?.pages,
       pageRelevance: meta?.pageRelevance,
     },
+  };
+}
+
+export function googleWorkspaceArtifact(file: GoogleWorkspaceFile): Artifact {
+  return {
+    id: `google-workspace:${file.kind}:${file.fileId}`,
+    type: TOOL_ARTIFACT_TYPES.GOOGLE_WORKSPACE,
+    title: file.name,
+    content: '',
+    lastUpdateTime: Date.now(),
+    googleWorkspace: file,
   };
 }
 

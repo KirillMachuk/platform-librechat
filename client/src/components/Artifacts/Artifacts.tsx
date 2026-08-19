@@ -7,12 +7,15 @@ import type { SandpackPreviewRef } from '@codesandbox/sandpack-react';
 import {
   isCodeOnlyArtifact,
   isFilePreviewArtifact,
+  isGoogleWorkspacePreviewArtifact,
   isPreviewOnlyArtifact,
 } from '~/utils/artifacts';
 import { displayFilename } from '~/components/Chat/Messages/Content/Parts/attachmentTypes';
+import { Code, ExternalLink, Play, Reload, X } from '~/components/icons';
 import CopyButton from '~/components/Messages/Content/CopyButton';
 import { useShareContext, useMutationState } from '~/Providers';
-import { Code, Play, Reload, X } from '~/components/icons';
+import GoogleWorkspacePreview from './GoogleWorkspacePreview';
+import { validateGoogleWorkspaceFile } from '~/utils/google';
 import useArtifacts from '~/hooks/Artifacts/useArtifacts';
 import DownloadArtifact from './DownloadArtifact';
 import ArtifactVersion from './ArtifactVersion';
@@ -105,8 +108,11 @@ export default function Artifacts() {
   const isPreviewOnly = isPreviewOnlyArtifact(currentArtifact?.type);
   const isCodeOnly = isCodeOnlyArtifact(currentArtifact?.type);
   const isFilePreview = isFilePreviewArtifact(currentArtifact?.type);
+  const isGoogleWorkspacePreview = isGoogleWorkspacePreviewArtifact(currentArtifact?.type);
+  const googleWorkspaceFile = currentArtifact?.googleWorkspace;
+  const validatedGoogleWorkspace = validateGoogleWorkspaceFile(googleWorkspaceFile);
   let constrainedTab: 'preview' | 'code' | null = null;
-  if (isPreviewOnly || isFilePreview) {
+  if (isPreviewOnly || isFilePreview || isGoogleWorkspacePreview) {
     constrainedTab = 'preview';
   } else if (isCodeOnly) {
     constrainedTab = 'code';
@@ -244,6 +250,21 @@ export default function Artifacts() {
     blurAmount > 0
       ? (Math.min(blurAmount, MAX_BLUR_AMOUNT) / MAX_BLUR_AMOUNT) * MAX_BACKDROP_OPACITY
       : 0;
+  const mobileHeaderAlignment = isGoogleWorkspacePreview ? 'justify-between' : 'justify-center';
+  let previewBody: React.ReactNode;
+  if (isFilePreview) {
+    previewBody = <FilePreviewBody artifact={currentArtifact} />;
+  } else if (isGoogleWorkspacePreview) {
+    previewBody = <GoogleWorkspacePreview artifact={currentArtifact} />;
+  } else {
+    previewBody = (
+      <ArtifactTabs
+        artifact={currentArtifact}
+        previewRef={previewRef as React.MutableRefObject<SandpackPreviewRef>}
+        isSharedConvo={isSharedConvo}
+      />
+    );
+  }
 
   return (
     <Tabs.Root value={displayedTab} onValueChange={setActiveTab} asChild>
@@ -272,7 +293,8 @@ export default function Artifacts() {
             'flex w-full flex-col bg-surface-primary text-xl text-text-primary',
             isMobile
               ? cn(
-                  'fixed inset-x-0 bottom-0 z-drawer rounded-t-[20px] shadow-lg',
+                  'fixed inset-x-0 bottom-0 z-drawer shadow-lg',
+                  isGoogleWorkspacePreview ? 'rounded-none' : 'rounded-t-[20px]',
                   isVisible && !isClosing
                     ? 'translate-y-0 opacity-100'
                     : 'duration-250 translate-y-full opacity-0 transition-all',
@@ -285,9 +307,13 @@ export default function Artifacts() {
                     : 'translate-x-5 opacity-0 transition-all duration-300',
                 ),
           )}
-          style={isMobile ? { height: `${height}vh` } : { overflow: 'hidden' }}
+          style={
+            isMobile
+              ? { height: isGoogleWorkspacePreview ? '100vh' : `${height}vh` }
+              : { overflow: 'hidden' }
+          }
         >
-          {isMobile && (
+          {isMobile && !isGoogleWorkspacePreview && (
             <div
               className="flex flex-shrink-0 cursor-grab items-center justify-center bg-surface-primary-alt pb-1.5 pt-2.5 active:cursor-grabbing"
               onPointerDown={handleDragStart}
@@ -303,10 +329,10 @@ export default function Artifacts() {
           <div
             className={cn(
               'flex h-[52px] flex-shrink-0 items-center justify-between gap-2 border-b border-border-light bg-surface-primary-alt p-2 transition-all duration-300',
-              isMobile ? 'justify-center' : 'overflow-hidden',
+              isMobile ? mobileHeaderAlignment : 'overflow-hidden',
             )}
           >
-            {!isMobile && (
+            {!isMobile && !isGoogleWorkspacePreview && (
               <div
                 className={cn(
                   'flex items-center transition-all duration-500',
@@ -325,6 +351,12 @@ export default function Artifacts() {
               </div>
             )}
 
+            {isGoogleWorkspacePreview && (
+              <div className="min-w-0 flex-1 truncate px-2 text-sm font-medium">
+                {displayFilename(currentArtifact.title)}
+              </div>
+            )}
+
             <div
               className={cn(
                 'flex items-center gap-2 transition-all duration-500',
@@ -332,7 +364,7 @@ export default function Artifacts() {
                 isVisible && !isClosing ? 'translate-x-0 opacity-100' : 'translate-x-2 opacity-0',
               )}
             >
-              {displayedTab === 'preview' && !isFilePreview && (
+              {displayedTab === 'preview' && !isFilePreview && !isGoogleWorkspacePreview && (
                 <Button
                   size="icon"
                   variant="ghost"
@@ -367,10 +399,38 @@ export default function Artifacts() {
                   }}
                 />
               )}
-              {!isFilePreview && (
+              {!isFilePreview && !isGoogleWorkspacePreview && (
                 <CopyButton isCopied={isCopied} iconOnly onClick={handleCopyArtifact} />
               )}
-              <DownloadArtifact artifact={currentArtifact} />
+              {!isGoogleWorkspacePreview && <DownloadArtifact artifact={currentArtifact} />}
+              {isGoogleWorkspacePreview && validatedGoogleWorkspace && googleWorkspaceFile && (
+                <Button
+                  size={isMobile ? 'icon' : 'sm'}
+                  variant="ghost"
+                  className={cn('h-9', isMobile ? 'w-9' : 'gap-1.5 px-2')}
+                  asChild
+                >
+                  <a
+                    href={validatedGoogleWorkspace.viewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={
+                      googleWorkspaceFile.kind === 'document'
+                        ? localize('com_ui_open_in_google_docs')
+                        : localize('com_ui_open_in_google_sheets')
+                    }
+                  >
+                    <ExternalLink size={16} aria-hidden="true" />
+                    {!isMobile && (
+                      <span>
+                        {googleWorkspaceFile.kind === 'document'
+                          ? localize('com_ui_open_in_google_docs')
+                          : localize('com_ui_open_in_google_sheets')}
+                      </span>
+                    )}
+                  </a>
+                </Button>
+              )}
               <Button
                 size="icon"
                 variant="ghost"
@@ -384,17 +444,7 @@ export default function Artifacts() {
           </div>
 
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-primary">
-            <div className="absolute inset-0 flex flex-col">
-              {isFilePreview ? (
-                <FilePreviewBody artifact={currentArtifact} />
-              ) : (
-                <ArtifactTabs
-                  artifact={currentArtifact}
-                  previewRef={previewRef as React.MutableRefObject<SandpackPreviewRef>}
-                  isSharedConvo={isSharedConvo}
-                />
-              )}
-            </div>
+            <div className="absolute inset-0 flex flex-col">{previewBody}</div>
 
             <div
               className={cn(
@@ -415,7 +465,7 @@ export default function Artifacts() {
             </div>
           </div>
 
-          {isMobile && (
+          {isMobile && !isGoogleWorkspacePreview && (
             <div className="flex-shrink-0 border-t border-border-light bg-surface-primary-alt p-2">
               <Radio
                 fullWidth

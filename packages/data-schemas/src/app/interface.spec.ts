@@ -96,6 +96,21 @@ describe('loadDefaultInterface', () => {
     expect(interfaceConfig?.fileSearchDefault).toBe(true);
   });
 
+  it('forwards the Google Workspace preview feature flag to the client', async () => {
+    const config: Partial<TCustomConfig> = {
+      interface: {
+        googleWorkspacePreview: true,
+      },
+    };
+
+    const interfaceConfig = await loadDefaultInterface({
+      config,
+      configDefaults: getConfigDefaults(),
+    });
+
+    expect(interfaceConfig?.googleWorkspacePreview).toBe(true);
+  });
+
   it('disables context cost by default', async () => {
     const interfaceConfig = await loadDefaultInterface({
       config: {},
