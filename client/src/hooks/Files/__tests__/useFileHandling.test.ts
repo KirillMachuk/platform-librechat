@@ -527,4 +527,30 @@ describe('useFileHandling', () => {
       expect(warned()).toBe(true);
     });
   });
+
+  describe('initial chip record (owner 19.08-2)', () => {
+    /* The chip renders from this record from the very first frame. Without
+     * `filename` the card spent the whole upload as a bare size line and the
+     * name popped in only with the server response. */
+    it('carries the filename before any server response', async () => {
+      mockConversation = { conversationId: 'convo-1', endpoint: 'openAI' };
+
+      const useFileHandling = await loadHook();
+      const { result } = renderHook(() => useFileHandling());
+
+      const sqlFile = new File(['select 1;'], 'schema.sql', { type: '' });
+      await act(async () => {
+        await result.current.handleFiles([sqlFile]);
+      });
+
+      const updateFilesMock = jest.requireMock('../useUpdateFiles').default;
+      const addFileCalls = updateFilesMock.mock.results.flatMap(
+        (result: { value: { addFile: jest.Mock } }) => result.value.addFile.mock.calls,
+      );
+      expect(addFileCalls.length).toBeGreaterThan(0);
+      expect(addFileCalls[0][0]).toEqual(
+        expect.objectContaining({ filename: 'schema.sql', progress: 0.1 }),
+      );
+    });
+  });
 });

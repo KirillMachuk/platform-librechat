@@ -2,7 +2,7 @@ import { TooltipAnchor } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { ExtendedFile } from '~/common';
-import { fileTypeMeta, fileBadge } from './typeMeta';
+import { fileTypeMeta, fileBadge, chipType } from './typeMeta';
 import FilePreview from './FilePreview';
 import { useLocalize } from '~/hooks';
 import RemoveFile from './RemoveFile';
@@ -49,7 +49,9 @@ const FileContainer = ({
   pressed?: boolean;
 }) => {
   const localize = useLocalize();
-  const typeLabel = localize(fileTypeMeta(overrideType ?? file.type ?? '').labelKey);
+  const typeLabel = localize(
+    fileTypeMeta(overrideType ?? chipType(file.type, file.filename)).labelKey,
+  );
   const visibleName = displayName ?? file.filename ?? '';
   /* 12.08-3, владелец: вторая строка — расширение + вес («DOCX 18.5 KB»);
      когда ни того ни другого не знаем, остаётся имя типа. bytes лежит в
@@ -87,8 +89,17 @@ const FileContainer = ({
           {/* 14.08-4, владелец: у кнопки скачивания СВОЁ место — текст обязан
               обрезаться ДО зоны глифа, карточка длиннее (референс — второй
               скрин ChatGPT). pr-9 резервирует ровно зону trailing (32px глиф
-              + зазор), поэтому наложение невозможно на любой ширине. */}
-          <div className={cn('flex flex-row items-center gap-2', trailing != null && 'pr-9')}>
+              + зазор), поэтому наложение невозможно на любой ширине.
+              19.08-1: у крестика удаления — тоже своё место: pr-7 покрывает
+              его 20px на right-1/top-1 плюс зазор (замерено наложение 17px
+              на длинном имени, крестик сидит на строке имени). */}
+          <div
+            className={cn(
+              'flex flex-row items-center gap-2',
+              trailing != null && 'pr-9',
+              trailing == null && onDelete != null && 'pr-7',
+            )}
+          >
             <FilePreview file={file} overrideType={overrideType} className="relative" />
             <div className="overflow-hidden">
               {/* Full-name hint as the canon ink plate; the badge line lost its

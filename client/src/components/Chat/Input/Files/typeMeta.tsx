@@ -169,6 +169,27 @@ export function fileTypeMeta(mime = ''): FileTypeMeta {
 
 const EXTENSION_PATTERN = /\.([a-z0-9]{1,8})$/i;
 
+/** Bare lowercase extension of a filename, or null. */
+export function fileExtension(filename?: string | null): string | null {
+  const match = filename != null ? EXTENSION_PATTERN.exec(filename) : null;
+  return match ? match[1].toLowerCase() : null;
+}
+
+const GENERIC_MIME = 'application/octet-stream';
+
+/** The type string a chip should judge. The record's own MIME wins unless it
+ *  is empty or the browser's generic fallback — both say nothing about the
+ *  format, while the extension does: browsers hand '' for .sql/.toml and
+ *  friends, so during upload the chip drew the generic glyph and swapped it
+ *  once the server resolved the real type (owner 19.08-3). */
+export function chipType(type?: string | null, filename?: string | null): string {
+  const mime = (type ?? '').toLowerCase();
+  if (mime && mime !== GENERIC_MIME) {
+    return mime;
+  }
+  return fileExtension(filename) ?? mime;
+}
+
 /** «DOCX 18 КБ» — the composer/chat card's second line (owner 12.08-3):
  *  the extension people recognize plus the weight; images keep their square
  *  preview and never reach this. Returns null parts when unknown so the
@@ -177,8 +198,7 @@ export function fileBadge(
   filename?: string | null,
   bytes?: number | null,
 ): { extension: string | null; size: string | null } {
-  const match = filename != null ? EXTENSION_PATTERN.exec(filename) : null;
-  const extension = match ? match[1].toUpperCase() : null;
+  const extension = fileExtension(filename)?.toUpperCase() ?? null;
   if (bytes == null || Number.isNaN(bytes) || bytes <= 0) {
     return { extension, size: null };
   }

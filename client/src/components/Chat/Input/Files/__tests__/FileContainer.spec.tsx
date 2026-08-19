@@ -81,3 +81,30 @@ describe('FileContainer trailing slot reservation (owner 14.08-4)', () => {
     expect(wrapper?.className ?? '').toContain('max-w-full');
   });
 });
+
+describe('FileContainer remove-control zone (owner 19.08-1)', () => {
+  /* The remove × is an absolutely positioned 20px control at right-1/top-1 —
+   * on the filename's own line. The founding case: a measured 17px overlap of
+   * the × over a long truncated name in the composer. Same cure as the
+   * trailing slot: the content row reserves the corner. */
+  it('reserves the corner zone when the card is deletable', () => {
+    const { container } = render(<FileContainer file={baseFile()} onDelete={() => undefined} />);
+    const row = container.querySelector('.flex.flex-row.items-center');
+    expect(row?.className).toContain('pr-7');
+  });
+
+  it('keeps the full width when the card is not deletable', () => {
+    const { container } = render(<FileContainer file={baseFile()} />);
+    const row = container.querySelector('.flex.flex-row.items-center');
+    expect(row?.className).not.toContain('pr-7');
+  });
+
+  it('the wider trailing reservation wins when both controls exist', () => {
+    const { container } = render(
+      <FileContainer file={baseFile()} onDelete={() => undefined} trailing={<span />} />,
+    );
+    const row = container.querySelector('.flex.flex-row.items-center');
+    expect(row?.className).toContain('pr-9');
+    expect(row?.className).not.toContain('pr-7');
+  });
+});

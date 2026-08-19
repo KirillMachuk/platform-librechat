@@ -1,4 +1,4 @@
-import { fileTypeMeta, fileBadge } from '../typeMeta';
+import { fileTypeMeta, fileBadge, fileExtension, chipType } from '../typeMeta';
 
 /* 12.08-3, владелец: docx рисовался КОДОМ — прежняя маска /xml/ ловила
  * подстроку внутри application/vnd.openxmlformats-…. Этот файл держит
@@ -79,5 +79,47 @@ describe('fileBadge', () => {
   it('degrades to nulls the caller can replace with the type name', () => {
     expect(fileBadge('noextension', undefined)).toEqual({ extension: null, size: null });
     expect(fileBadge(undefined, 0)).toEqual({ extension: null, size: null });
+  });
+});
+
+describe('fileExtension', () => {
+  it('extracts the bare lowercase extension', () => {
+    expect(fileExtension('Приложение + Акт Freepik.DOCX')).toBe('docx');
+    expect(fileExtension('archive.tar.gz')).toBe('gz');
+  });
+
+  it('returns null when there is nothing to extract', () => {
+    expect(fileExtension('noextension')).toBeNull();
+    expect(fileExtension(undefined)).toBeNull();
+    expect(fileExtension(null)).toBeNull();
+  });
+});
+
+/* 19.08-3, владелец: пока файл грузится, запись живёт с браузерным MIME —
+ * а для .sql/.toml и друзей браузер отдаёт '' или generic octet-stream, и
+ * чип рисовал НЕ ТОТ глиф, меняя его после ответа сервера. chipType — общий
+ * судья типа для глифа и подписи: бессодержательный MIME проигрывает
+ * расширению имени. */
+describe('chipType', () => {
+  it('falls back to the extension when the MIME says nothing', () => {
+    expect(chipType('', 'schema.sql')).toBe('sql');
+    expect(chipType(undefined, 'notes.toml')).toBe('toml');
+    expect(chipType('application/octet-stream', 'Отчёт за август.docx')).toBe('docx');
+  });
+
+  it('lets a real MIME win over the extension', () => {
+    expect(chipType('application/pdf', 'misnamed.sql')).toBe('application/pdf');
+  });
+
+  it('degrades to the original mime when the name has no extension', () => {
+    expect(chipType('', 'noextension')).toBe('');
+    expect(chipType('application/octet-stream', 'noextension')).toBe('application/octet-stream');
+  });
+
+  it('lands the fallback on the same glyph the resolved type draws', () => {
+    expect(fileTypeMeta(chipType('', 'schema.sql'))).toBe(fileTypeMeta('application/sql'));
+    expect(fileTypeMeta(chipType('application/octet-stream', 'deck.pptx'))).toBe(
+      fileTypeMeta('application/vnd.openxmlformats-officedocument.presentationml.presentation'),
+    );
   });
 });

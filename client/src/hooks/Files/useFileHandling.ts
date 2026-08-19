@@ -430,6 +430,10 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
         const initialExtendedFile: ExtendedFile = {
           file_id,
           file: originalFile,
+          /* The chip renders from this record from the very first frame; without
+           * `filename` the card spent the whole upload as a bare size line and
+           * the name popped in only with the server response (owner 19.08-2). */
+          filename: originalFile.name,
           type: originalFile.type,
           preview: initialPreview,
           progress: 0.1, // Show as processing
