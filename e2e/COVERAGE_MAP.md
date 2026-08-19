@@ -157,15 +157,15 @@ for why that matters.
 | pptx 16:9 renders slides                                    | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
 | pptx 4:3 renders slides                                     | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
 | pptx with many slides renders every slide                   | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
-| pptx in the bundled renderer shows every slide, not just the first | e2e | `e2e/specs/mock/office-preview-slides.spec.ts#shows every slide of the deck, not just the first one` | covered |
+| pptx: our wrap-and-scale pass shows every slide, not just the first (vendor renderer stood in for) | e2e | `e2e/specs/mock/office-preview-slides.spec.ts#shows every slide of the deck, not just the first one` | covered |
 | md opens as readable text                                   | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
 | md offers rendered and source views                         | e2e   | —                                                                                                             | todo:Ф1 |
 | Source code file opens as text                              | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
 | Source code file renders with syntax view                   | e2e   | —                                                                                                             | todo:Ф1 |
 | csv renders as a sheet                                      | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
 | PDF (digital) opens in a viewer, not as raw text            | e2e   | `e2e/specs/mock/file-preview.spec.ts#renders a PDF in a viewer rather than as raw text`                        | covered |
-| PDF fits the panel across and scrolls down through it       | e2e   | `e2e/specs/mock/file-preview.spec.ts#fits a PDF across the panel and scrolls down through it`                  | covered |
-| Opening or closing the side panel leaves the conversation where it was | e2e | `e2e/specs/mock/artifacts.spec.ts#opening and closing the panel leaves the conversation where it was` | covered |
+| PDF fits the panel across and re-fits when it narrows        | e2e   | `e2e/specs/mock/file-preview.spec.ts#fits a PDF across the panel and scrolls down through it`                  | covered |
+| PDF page two is reachable and pages are painted, not blank  | e2e   | `e2e/specs/mock/file-preview.spec.ts#renders a PDF in a viewer rather than as raw text`                        | covered |
 | PDF (scan) opens in the viewer despite having no text layer | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
 | PDF (scan) carries a recognition note                       | e2e   | —                                                                                                             | todo:Ф1 |
 | Text preview truncates at the byte cap with a notice        | e2e   | `e2e/specs/mock/file-preview.spec.ts#TEXT_PREVIEW_MAX_BYTES`                                                  | covered |
@@ -492,6 +492,7 @@ of encoded.
 | Russian build shows no untranslated keys on key screens                                                                           | e2e   | `e2e/specs/nightly/locale.spec.ts#with no untranslated keys left showing`                                                                | covered |
 | Russian locale renders key screens without overflow                                                                               | e2e   | `e2e/specs/nightly/layout.spec.ts#mainScrollWidth`                                                                                       | covered |
 | Artifacts panel open at a narrow desktop width                                                                                    | e2e   | `e2e/specs/mock/artifacts.spec.ts#the panel opens at a narrow desktop width and leaves the chat usable`                                  | covered |
+| Opening or closing the side panel leaves the conversation where it was | e2e | `e2e/specs/mock/artifacts.spec.ts#opening and closing the panel leaves the conversation where it was` | covered |
 | The open panel gives chat and artifact their own card (radius, border, gap-as-handle), dropped for an overlay on the phone layout | e2e   | `e2e/specs/mock/artifacts.spec.ts#the open panel gives the chat and the artifact their own card, and the gap between them is the handle` | covered |
 
 | Every z-index on the chat screen comes from the canon scale | e2e | `e2e/specs/mock/canon.spec.ts#every z-index comes from the canon scale` | covered |

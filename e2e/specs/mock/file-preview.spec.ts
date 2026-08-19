@@ -231,11 +231,42 @@ test.describe('file preview — plain formats', () => {
     test.setTimeout(90000);
     await previewFixture(page, 'digital.pdf');
 
-    /* The pages, not an iframe: the browser's own viewer is still mounted as a
-       fallback with the same title, so asserting on the frame would go green
-       even if our renderer never ran. */
+    /* The pages, not an iframe: the browser's own viewer stays mounted as a
+       fallback, so asserting on a frame would go green even if our renderer
+       never ran. It carries its own testid for exactly this reason. */
     await expect(pdfPage(page).first()).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId('pdf-preview-fallback')).toHaveCount(0);
     await expect(previewSurface(page, 'digital.pdf').locator('pre')).toHaveCount(0);
+
+    /* A canvas is sized before it is drawn, so a visible one proves nothing —
+       and a scanned document whose decoder is missing comes out as exactly
+       that: correctly sized, blank. Sample the pixels. */
+    const painted = await pdfPage(page)
+      .first()
+      .evaluate((canvas: HTMLCanvasElement) => {
+        const context = canvas.getContext('2d');
+        if (!context) {
+          return 0;
+        }
+        const { data } = context.getImageData(0, 0, canvas.width, Math.min(canvas.height, 400));
+        let ink = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i] < 200 || data[i + 1] < 200 || data[i + 2] < 200) {
+            ink += 1;
+          }
+        }
+        return ink;
+      });
+    expect(painted, 'the first page has ink on it, not just a sized canvas').toBeGreaterThan(500);
+
+    /* And the complaint that started this: page two has to be reachable.
+       `digital.pdf` is five pages (e2e/fixtures/files/README.md). */
+    const pages = pdfPage(page);
+    await expect
+      .poll(async () => await pages.count(), { timeout: 30000 })
+      .toBeGreaterThan(1);
+    await pages.nth(1).scrollIntoViewIfNeeded();
+    await expect(pages.nth(1)).toBeVisible();
   });
 
   /**
