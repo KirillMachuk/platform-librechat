@@ -74,7 +74,11 @@ function UnifiedSidebar() {
         <div
           data-testid="sidebar-drawer"
           className={cn(
-            'fixed left-0 top-0 z-drawer flex h-full bg-surface-primary-alt',
+            /* overscroll-contain: the drawer is a gesture fence — a swipe that
+               exhausts an inner scroller must DIE here, not chain into the
+               chat behind the scrim (owner 19.08: «скроллится платформа, а не
+               сайдбар», and the platform's momentum then locks the list out). */
+            'fixed left-0 top-0 z-drawer flex h-full overscroll-contain bg-surface-primary-alt',
             expanded ? 'translate-x-0' : '-translate-x-full',
           )}
           style={{
@@ -99,7 +103,9 @@ function UnifiedSidebar() {
           role="presentation"
         >
           <button
-            className="h-full w-full"
+            /* touch-none: a swipe on the dimmed area must not scroll the chat
+               behind it — the scrim swallows gestures, a tap still closes. */
+            className="h-full w-full touch-none"
             onClick={handleCollapse}
             aria-label={localize('com_nav_close_sidebar')}
             tabIndex={expanded ? 0 : -1}

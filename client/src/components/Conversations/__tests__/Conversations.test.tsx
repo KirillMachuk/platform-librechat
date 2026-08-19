@@ -19,6 +19,7 @@ jest.mock('react-virtualized', () => {
       rowRenderer,
       rowCount,
       deferredMeasurementCache,
+      className,
     }: {
       rowRenderer: (opts: {
         index: number;
@@ -28,11 +29,12 @@ jest.mock('react-virtualized', () => {
       }) => React.ReactNode;
       rowCount: number;
       deferredMeasurementCache: CellMeasurerCache;
+      className?: string;
       [key: string]: unknown;
     }) => {
       mockCapturedCache = deferredMeasurementCache;
       return (
-        <div data-testid="virtual-list" data-row-count={rowCount}>
+        <div data-testid="virtual-list" data-row-count={rowCount} className={className}>
           {Array.from({ length: Math.min(rowCount, 10) }, (_, i) =>
             rowRenderer({ index: i, key: `row-${i}`, style: {}, parent: {} }),
           )}
@@ -189,5 +191,32 @@ describe('Conversations – favorites CellMeasurerCache key invalidation', () =>
 
     expect(cache.has(0, 0)).toBe(true);
     expect(cache.getHeight(0, 0)).toBe(88);
+  });
+});
+
+describe('Conversations list overscroll containment (owner 19.08)', () => {
+  const containerRef = createRef<List>();
+
+  /* The virtualized list is the one scroller the r11 class sweep could not
+   * annotate (react-virtualized renders it). Without containment a swipe at
+   * its top edge chains into the page behind the phone drawer — the platform
+   * steals the gesture. */
+  it('passes overscroll-contain to the virtualized scroller', () => {
+    const { getByTestId } = render(
+      <RecoilRoot>
+        <Conversations
+          conversations={[]}
+          moveToTop={jest.fn()}
+          toggleNav={jest.fn()}
+          containerRef={containerRef}
+          loadMoreConversations={jest.fn()}
+          isLoading={false}
+          isSearchLoading={false}
+          isChatsExpanded={true}
+          setIsChatsExpanded={jest.fn()}
+        />
+      </RecoilRoot>,
+    );
+    expect(getByTestId('virtual-list').className).toContain('overscroll-contain');
   });
 });

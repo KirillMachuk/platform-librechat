@@ -344,7 +344,11 @@ const Conversations: FC<ConversationsProps> = ({
             rowRenderer={rowRenderer}
             overscanRowCount={10}
             aria-readonly={false}
-            className="scrollbar-hover outline-none"
+            /* overscroll-contain: the ONE scroller the r11 sweep could not
+               class-annotate (react-virtualized renders it) — without it a
+               swipe at the list's top edge chains to the page behind the
+               phone drawer and the platform steals the gesture (owner 19.08). */
+            className="scrollbar-hover overscroll-contain outline-none"
             aria-label={localize('com_ui_chats')}
             onRowsRendered={handleRowsRendered}
             tabIndex={-1}
