@@ -34,32 +34,48 @@ const NATIVE_W = 960;
 const HOST_H = 540;
 /** pptx-preview separates slides with this bottom margin. */
 const SLIDE_GAP = 10;
-/** Deck aspects: 16:9 fills the host exactly, 4:3 overflows it by a third. */
-const ASPECTS = [
-  { label: '16:9 deck', slideHeight: 540 },
-  { label: '4:3 deck', slideHeight: 720 },
+/**
+ * What the vendor can hand us. 1.0.7 puts every slide inside one host sized to
+ * the init box — 16:9 fills it, 4:3 overflows it by a third, which is the case
+ * that clips. `siblings` is the other shape a renderer could use, and it is in
+ * here because the fix has to leave it alone: those slides are fixed boxes with
+ * absolutely positioned content, so growing them to their content measures zero
+ * and the panel comes out empty.
+ */
+const SHAPES = [
+  { label: '16:9 deck in one host', slideHeight: 540, host: true },
+  { label: '4:3 deck in one host', slideHeight: 720, host: true },
+  { label: 'slides as siblings', slideHeight: 540, host: false },
 ];
 
 /** Stand-in for the vendor UMD bundle — see the note above. */
-const fakeVendorBundle = (slideHeight: number) => `
+const fakeVendorBundle = (slideHeight: number, host: boolean) => `
 window.pptxPreview = {
   init: function (container, options) {
     return {
       preview: function () {
-        var host = document.createElement('div');
-        host.className = 'pptx-preview-wrapper';
-        host.style.cssText = 'position:relative;overflow:auto;background:#000;margin:0 auto;' +
-          'width:' + options.width + 'px;height:' + options.height + 'px;';
+        var host = null;
+        if (${host}) {
+          host = document.createElement('div');
+          host.className = 'pptx-preview-wrapper';
+          host.style.cssText = 'position:relative;overflow:auto;background:#000;margin:0 auto;' +
+            'width:' + options.width + 'px;height:' + options.height + 'px;';
+          container.appendChild(host);
+        }
         for (var i = 0; i < ${SLIDE_COUNT}; i++) {
           var slide = document.createElement('div');
           slide.className = 'pptx-preview-slide-wrapper pptx-preview-slide-wrapper-' + i;
           slide.style.cssText = 'position:relative;overflow:hidden;background:#fff;' +
             'width:' + options.width + 'px;height:${slideHeight}px;' +
             'margin:0 auto ${SLIDE_GAP}px;';
-          slide.textContent = 'Slide ' + (i + 1);
-          host.appendChild(slide);
+          var inner = document.createElement('div');
+          /* Absolutely positioned content, as the renderer draws it: the reason
+             a slide measures zero the moment its height is set to auto. */
+          inner.style.cssText = 'position:absolute;inset:0;';
+          inner.textContent = 'Slide ' + (i + 1);
+          slide.appendChild(inner);
+          (host || container).appendChild(slide);
         }
-        container.appendChild(host);
         return Promise.resolve({ slides: new Array(${SLIDE_COUNT}) });
       },
     };
@@ -71,16 +87,24 @@ async function openRenderedDeck(
   page: import('@playwright/test').Page,
   width: number,
   slideHeight: number,
+  host: boolean,
 ) {
   await page.setViewportSize({ width, height: 800 });
   /* Integrity is computed over the real bundle; a stand-in would be rejected by
      SRI before it ever runs, so the attribute goes with it. */
   const html = (await buildDocument()).replace(/\s(?:integrity|crossorigin)="[^"]*"/g, '');
   await page.route(VENDOR_URL, (route) =>
-    route.fulfill({ contentType: 'application/javascript', body: fakeVendorBundle(slideHeight) }),
+    route.fulfill({
+      contentType: 'application/javascript',
+      body: fakeVendorBundle(slideHeight, host),
+    }),
   );
   await page.setContent(html, { waitUntil: 'load' });
-  await expect(page.locator('.lc-slide-wrap')).toHaveCount(1, { timeout: 15000 });
+  /* One wrap around the host, or one per slide when the renderer emits them as
+     siblings — the pass wraps whatever it is given. */
+  await expect(page.locator('.lc-slide-wrap')).toHaveCount(host ? 1 : SLIDE_COUNT, {
+    timeout: 15000,
+  });
 }
 
 async function buildDocument() {
@@ -140,15 +164,15 @@ async function slideIsPainted(page: import('@playwright/test').Page, index: numb
 }
 
 test.describe('bundled PPTX preview', () => {
-  for (const { label: aspect, slideHeight } of ASPECTS) {
+  for (const { label: shape, slideHeight, host } of SHAPES) {
     for (const { label, width } of [
       { label: 'panel width', width: 700 },
       { label: 'phone width', width: 375 },
     ]) {
-      test(`shows every slide of the deck, not just the first one — ${aspect}, ${label}`, async ({
+      test(`shows every slide of the deck, not just the first one — ${shape}, ${label}`, async ({
         page,
       }) => {
-        await openRenderedDeck(page, width, slideHeight);
+        await openRenderedDeck(page, width, slideHeight, host);
         const { documentHeight, horizontalOverflow, boxes } = await slideGeometry(page);
 
         expect(boxes).toHaveLength(SLIDE_COUNT);
@@ -171,9 +195,11 @@ test.describe('bundled PPTX preview', () => {
         /* Scaling is width-driven: the deck fits the panel across, never spills. */
         expect(horizontalOverflow).toBe(false);
         expect(boxes[0].width).toBeLessThanOrEqual(width);
-        /* And the deck is taller than the host the renderer sized for itself —
-           without that, a 16:9 deck could pass while nothing was neutralised. */
-        expect(documentHeight).toBeGreaterThan(HOST_H * scale);
+        if (host) {
+          /* Taller than the host the renderer sized for itself — without this a
+             16:9 deck could pass while nothing had been neutralised. */
+          expect(documentHeight).toBeGreaterThan(HOST_H * scale);
+        }
       });
     }
   }
