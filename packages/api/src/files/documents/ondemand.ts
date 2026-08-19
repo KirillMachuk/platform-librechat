@@ -1,13 +1,23 @@
 import type { OfficeHtmlBucket } from './html';
+import { createConcurrencyLimiter, withTimeout } from '../../utils/promise';
 import { bufferToOfficeHtml, officeHtmlBucket } from './html';
-import { withTimeout } from '../../utils/promise';
 
 /* Re-exported through this module for the same reason as the bucket gate above:
  * the JS route layer needs the staleness check, and `./html` is not on the
  * barrel. Neither symbol leaks an internal type. */
-export { isCurrentOfficePreview, OFFICE_PREVIEW_VERSION } from './html';
+export { isCurrentOfficePreview } from './version';
 
 export const MAX_OFFICE_PREVIEW_BYTES: number = 25 * 1024 * 1024;
+
+/**
+ * Rendering an office document is CPU-bound and synchronous, and this path now
+ * carries a whole class of files that used to be served straight from the
+ * record (anything stored by an older renderer). The upload path has held a
+ * limit of 2 since it was written, for the same reason and against the same
+ * event loop; a preview opened from the panel is no different. Tasks queue,
+ * none are dropped.
+ */
+const officeRenderLimit = createConcurrencyLimiter(2);
 export const OFFICE_PREVIEW_TIMEOUT_MS: number = 30 * 1000;
 
 /**
@@ -72,10 +82,12 @@ export async function renderOfficePreview(
     return { error: 'unsupported' };
   }
   try {
-    const html = await withTimeout(
-      bufferToOfficeHtml(buffer, filename, mimeType),
-      OFFICE_PREVIEW_TIMEOUT_MS,
-      `Office preview render timed out after ${OFFICE_PREVIEW_TIMEOUT_MS}ms for ${filename}`,
+    const html = await officeRenderLimit(() =>
+      withTimeout(
+        bufferToOfficeHtml(buffer, filename, mimeType),
+        OFFICE_PREVIEW_TIMEOUT_MS,
+        `Office preview render timed out after ${OFFICE_PREVIEW_TIMEOUT_MS}ms for ${filename}`,
+      ),
     );
     if (html == null) {
       return { error: 'unsupported' };

@@ -594,8 +594,16 @@ router.get('/:file_id/preview', fileAccess, async (req, res) => {
             const rendered = await getOrStartOfficePreview(req, file, cacheKey);
             if (rendered.error) {
               /* An older document still reads better than a plate saying the
-                 preview failed — only the stamp was out of date. */
+                 preview failed — only the stamp was out of date. Cached under
+                 the same key so a record whose re-render can never succeed
+                 (original bytes gone, file too large) stops pulling the file
+                 out of storage on every poll, and said out loud once: a render
+                 that fails forever used to be invisible in the logs. */
               if (storedHtml != null) {
+                logger.warn(
+                  `[/files/:file_id/preview] Serving the stored preview for ${file_id}; re-render failed: ${rendered.error}`,
+                );
+                officePreviewCacheSet(cacheKey, storedHtml);
                 payload.text = storedHtml;
                 payload.textFormat = 'html';
               } else {
@@ -604,6 +612,22 @@ router.get('/:file_id/preview', fileAccess, async (req, res) => {
             } else {
               payload.text = rendered.html;
               payload.textFormat = 'html';
+              if (staleStoredHtml) {
+                /* Write the refreshed document back, or every open of this file
+                   would render it again — the in-process cache dies with the
+                   container, and bumping the renderer's version would then cost
+                   a render per request forever instead of one per file.
+                   `previewText`, never `text`: the office `text` of a
+                   code-execution artifact is what the model reads. */
+                await db
+                  .updateFile({ file_id, previewText: rendered.html })
+                  .catch((updateErr) =>
+                    logger.warn(
+                      `[/files/:file_id/preview] Could not store the refreshed preview for ${file_id}:`,
+                      updateErr,
+                    ),
+                  );
+              }
             }
           } catch (renderErr) {
             logger.warn(

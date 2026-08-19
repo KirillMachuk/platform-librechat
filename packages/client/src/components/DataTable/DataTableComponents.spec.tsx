@@ -217,6 +217,25 @@ describe('DataTableComponents', () => {
       expect(mockParentKeyDown).toHaveBeenCalled();
     });
 
+    it('should let Escape reach a window listener, which is what closes the dialog', () => {
+      /* The dialog library does not listen in React's tree: it binds Escape on
+         `window`, bubbling. A React-only assertion stays green while a native
+         `stopImmediatePropagation` on the same control puts the bug back, and
+         that bug is exactly what left the file library unclosable from a
+         focused row. So the check goes where the real listener is. */
+      const onWindowKeyDown = jest.fn();
+      window.addEventListener('keydown', onWindowKeyDown);
+
+      try {
+        render(<SelectionCheckbox checked={false} onChange={jest.fn()} ariaLabel="Select row" />);
+        fireEvent.keyDown(screen.getByRole('button'), { key: 'Escape' });
+
+        expect(onWindowKeyDown).toHaveBeenCalled();
+      } finally {
+        window.removeEventListener('keydown', onWindowKeyDown);
+      }
+    });
+
     it('should have tabIndex 0 for keyboard accessibility', () => {
       render(<SelectionCheckbox checked={false} onChange={jest.fn()} ariaLabel="Select row" />);
 

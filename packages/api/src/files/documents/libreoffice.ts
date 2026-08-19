@@ -2,6 +2,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { spawn } from 'child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
+import { PREVIEW_VERSION_TAG } from './version';
 
 /**
  * LibreOffice-backed office preview pipeline.
@@ -384,6 +385,7 @@ export function buildPdfEmbedDocument(pdfBase64: string): string {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+${PREVIEW_VERSION_TAG}
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <title>Preview</title>
 <style>

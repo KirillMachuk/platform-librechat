@@ -150,7 +150,7 @@ test.describe('artifacts', () => {
    * re-pins the list to the bottom after a single programmatic scroll.
    */
   test('opening and closing the panel leaves the conversation where it was', async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(240000);
     await page.setViewportSize({ width: 1280, height: 520 });
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
     await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
@@ -169,13 +169,18 @@ test.describe('artifacts', () => {
     await sendMessage(page, 'E2E_ARTIFACT_REPLY');
     const card = messagesView(page).getByRole('button').filter({ hasText: 'E2E Artifact' });
     await expect(card).toBeVisible({ timeout: 60000 });
+    /* Four exchanges AFTER the artifact, so scrolling back to it leaves the
+       conversation deep enough that a jump to either end cannot hide inside the
+       tolerance the assertions allow for honest reflow. */
     await ballast('three');
     await ballast('four');
+    await ballast('five');
+    await ballast('six');
 
     const scroller = page.locator('.scrollbar-gutter-stable').first();
     await expect
-      .poll(() => scroller.evaluate((el) => el.scrollHeight - el.clientHeight), { timeout: 20000 })
-      .toBeGreaterThan(200);
+      .poll(() => scroller.evaluate((el) => el.scrollHeight - el.clientHeight), { timeout: 30000 })
+      .toBeGreaterThan(900);
 
     /* Self-healing, as in scroll-button.spec: a late reflow re-pins the list to
        the bottom, so the position is re-asserted until it holds. */
@@ -194,7 +199,9 @@ test.describe('artifacts', () => {
     const distanceFromBottom = () =>
       scroller.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop);
     const before = await distanceFromBottom();
-    expect(before, 'the conversation is away from the bottom too').toBeGreaterThan(20);
+    /* Deep enough that a jump cannot hide inside the tolerance below: with the
+       old bound of 20 a full jump to the end would have passed as "stayed". */
+    expect(before, 'the conversation is well away from the bottom').toBeGreaterThan(400);
 
     await card.click();
     await expect(page.locator('#artifacts-code')).toHaveCount(1, { timeout: 30000 });
@@ -202,7 +209,7 @@ test.describe('artifacts', () => {
       await handle!.evaluate((el) => el.isConnected),
       'the conversation was not rebuilt when the panel opened',
     ).toBe(true);
-    expect(Math.abs((await distanceFromBottom()) - before)).toBeLessThan(200);
+    expect(Math.abs((await distanceFromBottom()) - before)).toBeLessThan(before / 3);
 
     /* Scoped to the panel that holds the artifact: an unscoped `Close` picks
        the first one in the document, which is somebody else's. */
@@ -215,7 +222,7 @@ test.describe('artifacts', () => {
       await handle!.evaluate((el) => el.isConnected),
       'closing the panel did not rebuild it either',
     ).toBe(true);
-    expect(Math.abs((await distanceFromBottom()) - before)).toBeLessThan(200);
+    expect(Math.abs((await distanceFromBottom()) - before)).toBeLessThan(before / 3);
   });
 
   /**

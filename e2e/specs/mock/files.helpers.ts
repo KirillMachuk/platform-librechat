@@ -167,8 +167,12 @@ export async function openPreview(page: Page, filename: string): Promise<Locator
 
   const settled = previewFrameElement(page, filename)
     /* A PDF renders into our own viewer now, not into a frame — its first
-       painted page is the settle signal there. */
+       painted page is the settle signal there, and the browser's viewer taking
+       over is the other terminal state (a protected file goes straight to it,
+       which is the point of keeping it). Both count as settled; they are told
+       apart by name so a test can still say which one it means. */
     .or(pdfPage(page))
+    .or(page.getByTestId('pdf-preview-fallback'))
     .or(surface.locator('pre'))
     .or(surface.getByText(PREVIEW_SETTLED));
   await expect(settled.first()).toBeVisible({ timeout: 120000 });

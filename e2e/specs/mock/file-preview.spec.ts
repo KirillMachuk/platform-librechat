@@ -231,11 +231,40 @@ test.describe('file preview — plain formats', () => {
     test.setTimeout(90000);
     await previewFixture(page, 'digital.pdf');
 
-    /* The pages, not an iframe: the browser's own viewer is still mounted as a
-       fallback with the same title, so asserting on the frame would go green
-       even if our renderer never ran. */
+    /* The pages, not an iframe: the browser's own viewer stays mounted as a
+       fallback, so asserting on a frame would go green even if our renderer
+       never ran. It carries its own testid for exactly this reason. */
     await expect(pdfPage(page).first()).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId('pdf-preview-fallback')).toHaveCount(0);
     await expect(previewSurface(page, 'digital.pdf').locator('pre')).toHaveCount(0);
+
+    /* A canvas is sized before it is drawn, so a visible one proves nothing —
+       and a scanned document whose decoder is missing comes out as exactly
+       that: correctly sized, blank. Sample the pixels. */
+    const painted = await pdfPage(page)
+      .first()
+      .evaluate((canvas: HTMLCanvasElement) => {
+        const context = canvas.getContext('2d');
+        if (!context) {
+          return 0;
+        }
+        const { data } = context.getImageData(0, 0, canvas.width, Math.min(canvas.height, 400));
+        let ink = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i] < 200 || data[i + 1] < 200 || data[i + 2] < 200) {
+            ink += 1;
+          }
+        }
+        return ink;
+      });
+    expect(painted, 'the first page has ink on it, not just a sized canvas').toBeGreaterThan(500);
+
+    /* And the complaint that started this: page two has to be reachable.
+       `digital.pdf` is five pages (e2e/fixtures/files/README.md). */
+    const pages = pdfPage(page);
+    await expect.poll(async () => await pages.count(), { timeout: 30000 }).toBeGreaterThan(1);
+    await pages.nth(1).scrollIntoViewIfNeeded();
+    await expect(pages.nth(1)).toBeVisible();
   });
 
   /**
@@ -331,7 +360,11 @@ test.describe('file preview — honest states', () => {
     test.setTimeout(180000);
     await previewFixture(page, 'locked.pdf');
 
-    await expect(previewFrameElement(page, 'locked.pdf')).toBeVisible();
+    /* The browser's viewer, reached as the fallback — it carries its own testid
+       and its own title now, so this cannot pass on a document our renderer
+       drew. Which is the point: only that viewer can ask for a password. */
+    await expect(page.getByTestId('pdf-preview-fallback')).toBeVisible({ timeout: 60000 });
+    await expect(pdfPage(page)).toHaveCount(0);
     /* 15.08-3: saving the file is the panel HEADER's job now (DownloadArtifact,
        which for a stored file saves the original bytes) — the body carries a
        download only on its honest-state plates, where there is no frame. */
@@ -390,8 +423,16 @@ test.describe('file preview — the rest of the matrix', () => {
 
     /* The message is the synchronisation point. Asserting "no upload happened"
      * straight after the click would be true before anything could have been
-     * sent, and would pass even if the file were accepted. */
-    await expect(page.getByText(/cannot be attached here/)).toBeVisible({ timeout: 30000 });
+     * sent, and would pass even if the file were accepted.
+     *
+     * Scoped to the notification region the reader actually sees: the toast
+     * library also mounts a short-lived screen-reader announcement carrying the
+     * same words, and an unscoped locator matched both — the test then failed on
+     * strict mode or not, depending on which side of that announcement's life it
+     * landed. `.first()` would have hidden the race rather than named it. */
+    await expect(
+      page.getByRole('region', { name: /Notifications/i }).getByText(/cannot be attached here/),
+    ).toBeVisible({ timeout: 30000 });
     expect(uploads).toEqual([]);
   });
 
