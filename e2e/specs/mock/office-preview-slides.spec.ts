@@ -43,13 +43,18 @@ const SLIDE_GAP = 10;
  * and the panel comes out empty.
  */
 const SHAPES = [
-  { label: '16:9 deck in one host', slideHeight: 540, host: true },
-  { label: '4:3 deck in one host', slideHeight: 720, host: true },
-  { label: 'slides as siblings', slideHeight: 540, host: false },
+  { label: '16:9 deck in one host', slideHeight: 540, host: true, late: 0 },
+  { label: '4:3 deck in one host', slideHeight: 720, host: true, late: 0 },
+  { label: 'slides as siblings', slideHeight: 540, host: false, late: 0 },
+  /* The renderer is not always finished when it says it is, and the bootstrap
+     has an 8s safety net that wraps whatever exists by then. A deck that keeps
+     painting afterwards has to grow the wrap with it — otherwise the tail is
+     clipped for good, which is the same defect on a slower machine. */
+  { label: 'deck that finishes painting late', slideHeight: 540, host: true, late: 4 },
 ];
 
 /** Stand-in for the vendor UMD bundle — see the note above. */
-const fakeVendorBundle = (slideHeight: number, host: boolean) => `
+const fakeVendorBundle = (slideHeight: number, host: boolean, late: number) => `
 window.pptxPreview = {
   init: function (container, options) {
     return {
@@ -62,7 +67,7 @@ window.pptxPreview = {
             'width:' + options.width + 'px;height:' + options.height + 'px;';
           container.appendChild(host);
         }
-        for (var i = 0; i < ${SLIDE_COUNT}; i++) {
+        var addSlide = function (i) {
           var slide = document.createElement('div');
           slide.className = 'pptx-preview-slide-wrapper pptx-preview-slide-wrapper-' + i;
           slide.style.cssText = 'position:relative;overflow:hidden;background:#fff;' +
@@ -75,6 +80,17 @@ window.pptxPreview = {
           inner.textContent = 'Slide ' + (i + 1);
           slide.appendChild(inner);
           (host || container).appendChild(slide);
+        };
+        var upfront = ${SLIDE_COUNT} - ${late};
+        for (var i = 0; i < upfront; i++) {
+          addSlide(i);
+        }
+        if (${late} > 0) {
+          setTimeout(function () {
+            for (var j = upfront; j < ${SLIDE_COUNT}; j++) {
+              addSlide(j);
+            }
+          }, 150);
         }
         return Promise.resolve({ slides: new Array(${SLIDE_COUNT}) });
       },
@@ -88,6 +104,7 @@ async function openRenderedDeck(
   width: number,
   slideHeight: number,
   host: boolean,
+  late: number,
 ) {
   await page.setViewportSize({ width, height: 800 });
   /* Integrity is computed over the real bundle; a stand-in would be rejected by
@@ -96,13 +113,18 @@ async function openRenderedDeck(
   await page.route(VENDOR_URL, (route) =>
     route.fulfill({
       contentType: 'application/javascript',
-      body: fakeVendorBundle(slideHeight, host),
+      body: fakeVendorBundle(slideHeight, host, late),
     }),
   );
   await page.setContent(html, { waitUntil: 'load' });
   /* One wrap around the host, or one per slide when the renderer emits them as
      siblings — the pass wraps whatever it is given. */
   await expect(page.locator('.lc-slide-wrap')).toHaveCount(host ? 1 : SLIDE_COUNT, {
+    timeout: 15000,
+  });
+  /* Slides that land after the wrap must be waited for — the point of the case
+     is what the wrap does once they do. */
+  await expect(page.locator('.pptx-preview-slide-wrapper')).toHaveCount(SLIDE_COUNT, {
     timeout: 15000,
   });
 }
@@ -164,7 +186,7 @@ async function slideIsPainted(page: import('@playwright/test').Page, index: numb
 }
 
 test.describe('bundled PPTX preview', () => {
-  for (const { label: shape, slideHeight, host } of SHAPES) {
+  for (const { label: shape, slideHeight, host, late } of SHAPES) {
     for (const { label, width } of [
       { label: 'panel width', width: 700 },
       { label: 'phone width', width: 375 },
@@ -172,7 +194,7 @@ test.describe('bundled PPTX preview', () => {
       test(`shows every slide of the deck, not just the first one — ${shape}, ${label}`, async ({
         page,
       }) => {
-        await openRenderedDeck(page, width, slideHeight, host);
+        await openRenderedDeck(page, width, slideHeight, host, late);
         const { documentHeight, horizontalOverflow, boxes } = await slideGeometry(page);
 
         expect(boxes).toHaveLength(SLIDE_COUNT);
