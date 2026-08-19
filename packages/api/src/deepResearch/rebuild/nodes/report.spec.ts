@@ -1,6 +1,7 @@
 import { FakeListChatModel } from '@langchain/core/utils/testing';
 import { AIMessage, HumanMessage } from '@langchain/core/messages';
 import type { RunnableConfig } from '@langchain/core/runnables';
+import type { BaseMessage } from '@langchain/core/messages';
 import type { DeepResearchState, DeepResearchFinding } from '../state';
 import {
   composeReport,
