@@ -68,14 +68,16 @@ test('attached files scroll sideways inside the composer instead of widening it'
 
 /**
  * Round 19 (owner 19.08, п.1–2): the chip must be COMPLETE from the first
- * frame — name and «DOCX …» badge come from the local record, not from the
+ * frame — name and «MD …» badge come from the local record, not from the
  * server response (the card used to spend the whole upload as a bare size
  * line) — and the hover remove × has its own reserved corner: measured 17px
  * of × over the truncated name before the pr-7 reservation.
  *
  * The upload response is held behind a gate (not a timer) so the pre-response
  * state is a deterministic assertion window, released only after the frame-one
- * checks pass.
+ * checks pass. The fixture mirrors the green r18 shape (long .md name, its
+ * real text/markdown MIME): a mislabeled MIME never reaches the chip — upload
+ * validation infers or rejects it first (file-preview.spec pins the reject).
  */
 test('the chip is complete from the first frame and the × never covers the name', async ({
   page,
@@ -93,16 +95,13 @@ test('the chip is complete from the first frame and the × never covers the name
     await route.continue();
   });
 
-  const name = 'Отчёт_по_продажам_за_август_2026_года.docx';
-  const fixture = largeTextFixture(name, 19000);
-  /* The browser-real worst case: a generic MIME that says nothing about the
-   * format — the glyph and badge must still be right from frame one. */
-  await chooseFixture(page, { ...fixture, name, mimeType: 'application/octet-stream' });
+  const name = 'Отчёт_по_продажам_за_август_2026_финальная_версия_согласованная.md';
+  await chooseFixture(page, largeTextFixture(name, 19000));
 
   const shell = page.locator('[data-testid="composer-shell"]');
   const card = shell.getByRole('button', { name });
   await expect(card).toBeVisible();
-  await expect(card).toContainText('DOCX');
+  await expect(card).toContainText('MD');
 
   const geometry = await card.evaluate((button) => {
     const nameEl = button.querySelector('.truncate.font-medium') as HTMLElement;

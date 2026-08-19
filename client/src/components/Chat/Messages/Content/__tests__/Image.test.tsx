@@ -26,6 +26,8 @@ jest.mock('../DialogImage', () => ({
     isOpen ? <div data-testid="dialog-image" data-src={src} /> : null,
 }));
 
+jest.mock('~/hooks', () => ({ useLocalize: () => (key: string) => key }));
+
 describe('Image', () => {
   const defaultProps = {
     imagePath: '/images/test.png',
@@ -174,6 +176,55 @@ describe('Image', () => {
       render(<Image {...defaultProps} imagePath="/other/path.png" />);
       const img = screen.getByRole('img');
       expect(img).toHaveAttribute('src', '/other/path.png');
+    });
+  });
+
+  describe('thumbnail attachments (owner 19.08)', () => {
+    it('caps the box at the file-card column instead of max-w-lg', () => {
+      render(<Image {...defaultProps} thumbnail width={1200} height={800} />);
+      const button = screen.getByRole('button');
+      expect(button.className).toContain('max-w-64');
+      expect(button.className).not.toContain('max-w-lg');
+      expect(button.getAttribute('style')).toContain('256px');
+      expect(button.getAttribute('style')).not.toContain('45vh');
+    });
+
+    it('keeps the large presentation for non-thumbnail (generated) images', () => {
+      render(<Image {...defaultProps} width={1200} height={800} />);
+      const button = screen.getByRole('button');
+      expect(button.className).toContain('max-w-lg');
+      expect(button.getAttribute('style')).toContain('45vh');
+    });
+
+    it('caps a dimensionless thumbnail with max-h-64 instead of 45vh', () => {
+      render(<Image {...defaultProps} thumbnail />);
+      const img = screen.getByRole('img');
+      expect(img.className).toContain('max-h-64');
+      expect(img.className).not.toContain('max-h-[45vh]');
+    });
+  });
+
+  describe('failed load (owner 19.08: broken photo)', () => {
+    /* Pre-fix state: no onError handler at all — a dead image kept its
+     * reserved 45vh box with a permanently shimmering skeleton. The failed
+     * state must drop the reserved frame entirely and degrade to a
+     * file-card-sized plate naming the file. */
+    it('replaces the reserved frame with a compact unavailable plate', () => {
+      render(<Image {...defaultProps} thumbnail width={1200} height={800} />);
+      fireEvent.error(screen.getByRole('img'));
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('skeleton')).not.toBeInTheDocument();
+      expect(screen.getByText('com_ui_image_unavailable')).toBeInTheDocument();
+      expect(screen.getByText('Test image')).toBeInTheDocument();
+    });
+
+    it('recovers when the source changes', () => {
+      const { rerender } = render(<Image {...defaultProps} />);
+      fireEvent.error(screen.getByRole('img'));
+      expect(screen.queryByRole('img')).not.toBeInTheDocument();
+      rerender(<Image {...defaultProps} imagePath="/images/other.png" />);
+      expect(screen.getByRole('img')).toBeInTheDocument();
+      expect(screen.queryByText('com_ui_image_unavailable')).not.toBeInTheDocument();
     });
   });
 });

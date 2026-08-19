@@ -178,10 +178,11 @@ export function fileExtension(filename?: string | null): string | null {
 const GENERIC_MIME = 'application/octet-stream';
 
 /** The type string a chip should judge. The record's own MIME wins unless it
- *  is empty or the browser's generic fallback — both say nothing about the
- *  format, while the extension does: browsers hand '' for .sql/.toml and
- *  friends, so during upload the chip drew the generic glyph and swapped it
- *  once the server resolved the real type (owner 19.08-3). */
+ *  is empty or the generic octet-stream — both say nothing about the format,
+ *  while the extension does. The composer's own uploads never produce such a
+ *  record (validation infers or rejects a nameless MIME first); this guards
+ *  the OTHER chip sources — stored/legacy records and server-side artifacts
+ *  whose `type` arrives empty or generic (owner 19.08-3 audit). */
 export function chipType(type?: string | null, filename?: string | null): string {
   const mime = (type ?? '').toLowerCase();
   if (mime && mime !== GENERIC_MIME) {

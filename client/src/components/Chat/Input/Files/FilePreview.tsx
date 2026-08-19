@@ -35,8 +35,8 @@ const FilePreview = ({
   /* Perplexity's approach (owner 12.08-2, second word): the TYPE is said by
      the drawing, the colour is the text's own — no colour squares, no tinted
      glyphs. ONE map decides the drawing everywhere: typeMeta; `chipType`
-     falls back to the filename's extension when the MIME says nothing, so
-     the glyph is right from the first frame (owner 19.08-3). */
+     falls back to the filename's extension for records whose stored MIME is
+     empty or generic (owner 19.08-3 audit). */
   const meta = fileTypeMeta(
     overrideType ?? chipType(file?.type as string | undefined, file?.filename),
   );

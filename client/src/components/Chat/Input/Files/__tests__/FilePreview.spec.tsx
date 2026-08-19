@@ -80,11 +80,10 @@ describe('FilePreview indexing tooltip', () => {
 });
 
 describe('FilePreview glyph fallback (owner 19.08-3)', () => {
-  /* During upload the record carries the browser MIME, which is '' for
-   * .sql/.toml and friends — the glyph must come from the extension instead
-   * of drawing generic and swapping on the server response. Asserted
-   * relatively (same path data as the resolved-type glyph) so the icon set
-   * can change without rewriting this spec. */
+  /* Stored/legacy records and server-side artifacts can carry an empty or
+   * generic MIME — the glyph must come from the extension instead of drawing
+   * generic. Asserted relatively (same path data as the resolved-type glyph)
+   * so the icon set can change without rewriting this spec. */
   const glyphPath = (container: HTMLElement) =>
     container.querySelector('svg path')?.getAttribute('d');
 
