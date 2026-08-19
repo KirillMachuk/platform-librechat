@@ -182,22 +182,41 @@ test.describe('artifacts', () => {
       .poll(() => scroller.evaluate((el) => el.scrollHeight - el.clientHeight), { timeout: 30000 })
       .toBeGreaterThan(900);
 
-    /* Self-healing, as in scroll-button.spec: a late reflow re-pins the list to
-       the bottom, so the position is re-asserted until it holds. */
+    const distanceFromBottom = () =>
+      scroller.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop);
+
+    /* Wait for the conversation to stop growing before scrolling into it. The
+       list follows its own tail while the last reply is still settling, so a
+       scroll issued during that window is undone a moment later — measured: the
+       position held long enough to satisfy a poll and was back at the bottom by
+       the time the next line read it. Two equal heights half a second apart is
+       the sync point that race needs. */
+    await expect
+      .poll(
+        async () => {
+          const first = await scroller.evaluate((el) => el.scrollHeight);
+          await page.waitForTimeout(500);
+          const second = await scroller.evaluate((el) => el.scrollHeight);
+          return first === second ? second : -1;
+        },
+        { timeout: 30000 },
+      )
+      .toBeGreaterThan(0);
+
+    /* Then scroll, and keep re-asserting the DISTANCE the test depends on — not
+       a proxy for it — until it holds. */
     await expect
       .poll(
         async () => {
           await card.scrollIntoViewIfNeeded();
-          return scroller.evaluate((el) => el.scrollTop);
+          return distanceFromBottom();
         },
         { timeout: 20000 },
       )
-      .toBeGreaterThan(20);
+      .toBeGreaterThan(400);
 
     const handle = await scroller.elementHandle();
     expect(handle).not.toBeNull();
-    const distanceFromBottom = () =>
-      scroller.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop);
     const before = await distanceFromBottom();
     /* Deep enough that a jump cannot hide inside the tolerance below: with the
        old bound of 20 a full jump to the end would have passed as "stayed". */

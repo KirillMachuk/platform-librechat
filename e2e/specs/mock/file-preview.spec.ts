@@ -237,6 +237,10 @@ test.describe('file preview — plain formats', () => {
     await expect(pdfPage(page).first()).toBeVisible({ timeout: 30000 });
     await expect(page.getByTestId('pdf-preview-fallback')).toHaveCount(0);
     await expect(previewSurface(page, 'digital.pdf').locator('pre')).toHaveCount(0);
+    /* Nothing above the document but the document: the strip that used to open
+       with its type and size is gone, and a file opened on its own has no search
+       context to put there (owner, 19.08). */
+    await expect(page.getByTestId('file-preview-meta')).toHaveCount(0);
 
     /* A canvas is sized before it is drawn, so a visible one proves nothing —
        and a scanned document whose decoder is missing comes out as exactly
