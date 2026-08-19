@@ -1,4 +1,4 @@
-import { SystemMessage } from '@langchain/core/messages';
+import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type {
@@ -14,7 +14,7 @@ import {
   tolerantJsonParse,
   usageFromExchange,
 } from '../shared';
-import { buildSupervisorPrompt } from '../prompts';
+import { buildSupervisorInput, buildSupervisorPrompt } from '../prompts';
 
 export interface SupervisorNodeDeps {
   model: BaseChatModel;
@@ -153,16 +153,26 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
     }
 
     try {
+      // System = rules, Human = the material to decide on — the shape every other node in
+      // this graph already uses. A system-only call left the model with nothing to answer
+      // and it returned EMPTY on 7 of 28 measured calls; an empty answer parses to no
+      // sub-questions and the fallback below researches the whole brief as ONE question,
+      // silently costing the round its parallel fan-out.
       const prompt = [
         new SystemMessage(
           buildSupervisorPrompt({
             now: deps.now,
-            brief: state.researchBrief,
             jurisdiction: state.jurisdiction,
+            maxConcurrent: deps.tier.maxConcurrentResearchers,
+            nonce: deps.nonce,
+          }),
+        ),
+        new HumanMessage(
+          buildSupervisorInput({
+            brief: state.researchBrief,
             findings: state.findings,
             round: state.round,
             maxRounds: deps.tier.maxOrchestratorCycles,
-            maxConcurrent: deps.tier.maxConcurrentResearchers,
             nonce: deps.nonce,
           }),
         ),

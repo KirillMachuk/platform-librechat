@@ -28,42 +28,27 @@ export function buildScopePrompt({ now }: { now: string }): string {
 {"jurisdiction": "RU|RB|KZ|UNSPECIFIED", "brief": "<бриф на русском>"}`;
 }
 
-/** SUPERVISOR: reflect on gathered findings; pick the next batch of sub-questions or conclude. */
+/**
+ * SUPERVISOR rules — the SYSTEM half of the call. Carries the role, the decision and the
+ * output contract, and nothing else: the brief and the gathered digests moved to
+ * `buildSupervisorInput` (the HUMAN half), which is where the rest of this graph puts the
+ * material a node reasons over. See that function for the measurement that forced it.
+ */
 export function buildSupervisorPrompt({
   now,
-  brief,
   jurisdiction,
-  findings,
-  round,
-  maxRounds,
   maxConcurrent,
   nonce,
 }: {
   now: string;
-  brief: string;
   jurisdiction: string;
-  findings: DeepResearchFinding[];
-  round: number;
-  maxRounds: number;
   maxConcurrent: number;
   nonce: string;
 }): string {
-  const gathered = findings.length
-    ? fenceUntrusted(
-        findings.map((f, i) => `${i + 1}. [${f.subQuestion}] ${f.digest.slice(0, 300)}`).join('\n'),
-        nonce,
-      )
-    : '(пока ничего не собрано)';
   return `Ты — СУПЕРВАЙЗЕР (оркестратор) системы глубокого исследования для рынка СНГ.
 Дата: ${now}. Юрисдикция: ${jurisdiction || 'не определена'}.
 
-Исследовательский бриф:
-${brief}
-
 ${untrustedDirective(nonce)}
-
-Уже собрано (выполнено раундов: ${round} из ${maxRounds}):
-${gathered}
 
 Реши следующий шаг:
 - Если для качественного ответа на бриф нужно собрать ещё информацию — верни action "RESEARCH" и от 1 до ${maxConcurrent} НЕЗАВИСИМЫХ под-вопросов (subQuestions). Они исследуются ПАРАЛЛЕЛЬНО, поэтому каждый должен покрывать отдельную грань темы (свой аспект/вендор/критерий) и НЕ зависеть от ответа на другой.
@@ -73,6 +58,54 @@ ${gathered}
 
 Ответь СТРОГО одним JSON-объектом, без markdown и пояснений вне JSON:
 {"action": "RESEARCH|COMPLETE", "subQuestions": ["<под-вопрос 1>", "<под-вопрос 2>"], "reasoning": "<кратко почему>"}`;
+}
+
+/**
+ * SUPERVISOR input — the material the decision is made ON, as a HUMAN message.
+ *
+ * Every other node in this graph sends System (instructions) + Human (material):
+ * scope, researcher, compress and report all do. SUPERVISOR was the only one sending a
+ * system message and NOTHING else, and it was the only one that came back EMPTY: measured
+ * on the stand's own lead model over the 14 real DR briefs, 7 of 28 supervisor calls
+ * returned zero characters (finish_reason "stop", no reasoning tokens — the model simply
+ * had nothing to answer). An empty answer parses to no sub-questions, and the node then
+ * degrades to researching the whole brief as ONE question — which is exactly the
+ * "findings=1 per round" seen in production, i.e. the parallel fan-out silently lost.
+ *
+ * Splitting the call the way the rest of the graph already does it: 0 of 27 empty on the
+ * same corpus, every dispatch a full batch of 3 (Fisher exact p = 0.010).
+ *
+ * The brief and the gathered digests belong here on their own merit too — the digests are
+ * UNTRUSTED third-party text, and the system message's own security directive says the
+ * task and format are set "ИСКЛЮЧИТЕЛЬНО этим системным сообщением". Keeping foreign text
+ * out of the message that claims that authority is what makes the claim true.
+ */
+export function buildSupervisorInput({
+  brief,
+  findings,
+  round,
+  maxRounds,
+  nonce,
+}: {
+  brief: string;
+  findings: DeepResearchFinding[];
+  round: number;
+  maxRounds: number;
+  nonce: string;
+}): string {
+  const gathered = findings.length
+    ? fenceUntrusted(
+        findings.map((f, i) => `${i + 1}. [${f.subQuestion}] ${f.digest.slice(0, 300)}`).join('\n'),
+        nonce,
+      )
+    : '(пока ничего не собрано)';
+  return `Исследовательский бриф:
+${brief}
+
+Уже собрано (выполнено раундов: ${round} из ${maxRounds}):
+${gathered}
+
+Реши следующий шаг и верни решение.`;
 }
 
 /** RESEARCHER: drive the tool loop to gather material for one sub-question. */

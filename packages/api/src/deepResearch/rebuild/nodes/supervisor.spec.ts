@@ -1,5 +1,8 @@
 import { FakeListChatModel } from '@langchain/core/utils/testing';
+import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { RunnableConfig } from '@langchain/core/runnables';
+import type { BaseMessage } from '@langchain/core/messages';
 import type { DeepResearchState, DeepResearchNodeError, DeepResearchConfigurable } from '../state';
 import {
   budgetGateReason,
@@ -215,6 +218,47 @@ describe('createSupervisorNode', () => {
     expect(update.round).toBe(1);
     expect(update.researcherCount).toBe(1);
     expect(update.concludeReason ?? null).toBeNull();
+  });
+
+  it('sends System RULES + Human MATERIAL, like every other node in this graph', async () => {
+    /**
+     * The fix this pins: SUPERVISOR used to invoke the model with a system message and
+     * NOTHING else — the only node in the graph shaped that way, and the only one that
+     * came back empty. Measured on the stand's lead model over the 14 real DR briefs,
+     * 7 of 28 system-only calls returned zero characters; an empty answer parses to no
+     * sub-questions and the node falls back to researching the whole brief as ONE
+     * question, silently costing the round its parallel fan-out. Split system/human:
+     * 0 of 27 empty (Fisher exact p = 0.010).
+     *
+     * Asserting the ROLES, not just the text: putting both halves in one system message
+     * would still contain every string below and would reintroduce the defect.
+     */
+    const seen: BaseMessage[][] = [];
+    const model = {
+      invoke: async (messages: BaseMessage[]) => {
+        seen.push(messages);
+        return new AIMessage('{"action":"RESEARCH","subQuestions":["a","b","c"]}');
+      },
+    } as unknown as BaseChatModel;
+
+    await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(
+      stateWith({}),
+      configWith(),
+    );
+
+    expect(seen).toHaveLength(1);
+    const [system, human] = seen[0];
+    expect(seen[0]).toHaveLength(2);
+    expect(system).toBeInstanceOf(SystemMessage);
+    expect(human).toBeInstanceOf(HumanMessage);
+    // Rules in the system half...
+    expect(String(system.content)).toMatch(/СУПЕРВАЙЗЕР/);
+    expect(String(system.content)).toMatch(/ПАРАЛЛЕЛЬНО/);
+    // ...material in the human half, and NOT in the system one: the security directive
+    // claims the task and format are set by the system message alone, and that claim is
+    // only true while foreign gathered text does not share it.
+    expect(String(human.content)).toContain('Исследовательский бриф');
+    expect(String(system.content)).not.toContain('Исследовательский бриф');
   });
 
   it('dispatches a BATCH of independent sub-questions to run in parallel (A2)', async () => {
