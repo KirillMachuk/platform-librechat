@@ -138,6 +138,59 @@ describe('composeReport', () => {
     expect(result.text).toContain('Не удалось сформировать отчёт');
   });
 
+  it('RETRIES an empty answer with a smaller digest cap, then succeeds', async () => {
+    /**
+     * An empty answer used to skip the retry loop entirely — the one failure the
+     * machinery above was built for and then not used on. Measured on the stand: a run
+     * that had gathered 7 findings and spent 355k tokens returned an empty report, and
+     * the whole research was thrown away on a single silent non-answer.
+     *
+     * The prompt must also SHRINK between attempts: retrying with the identical prompt
+     * would just ask the same question again, and an oversized prompt is the likeliest
+     * reason a model returns nothing without raising a context error.
+     */
+    const promptSizes: number[] = [];
+    let calls = 0;
+    const emptyThenGood: ReportModel = {
+      invoke: async (messages: BaseMessage[]) => {
+        calls += 1;
+        promptSizes.push(String(messages[1]?.content ?? '').length);
+        return calls === 1 ? new AIMessage('   ') : new AIMessage('# Записка со второй попытки');
+      },
+    };
+    // The digest must be LONGER than the cap, or halving the cap changes nothing and the
+    // assertion below would pass on a fixture that never exercised the setting.
+    const long = (q: string): DeepResearchFinding => ({ ...finding(q), digest: 'д'.repeat(3000) });
+    const result = await composeReport({
+      ...base,
+      digestCap: 2000,
+      findings: [long('Q1'), long('Q2')],
+      reportModel: emptyThenGood,
+    });
+    expect(calls).toBe(2);
+    expect(result.fellBack).toBe(false);
+    expect(result.text).toContain('со второй попытки');
+    expect(promptSizes[1]).toBeLessThan(promptSizes[0]);
+  });
+
+  it('falls back only after EVERY attempt came back empty, and still counts what they burnt', async () => {
+    let calls = 0;
+    const alwaysEmpty: ReportModel = {
+      invoke: async () => {
+        calls += 1;
+        const msg = new AIMessage('');
+        // Each discarded attempt was billed; usage must not vanish with the answer.
+        msg.usage_metadata = { input_tokens: 100, output_tokens: 0, total_tokens: 100 };
+        return msg;
+      },
+    };
+    const result = await composeReport({ ...base, reportModel: alwaysEmpty, maxRetries: 2 });
+    expect(calls).toBe(3); // attempt 0, 1, 2
+    expect(result.fellBack).toBe(true);
+    expect(result.text).toContain('пустой ответ модели');
+    expect(result.usage?.input).toBe(300);
+  });
+
   it('re-throws on a real abort', async () => {
     const controller = new AbortController();
     controller.abort();

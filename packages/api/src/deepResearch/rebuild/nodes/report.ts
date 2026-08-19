@@ -13,6 +13,7 @@ import type { DeepResearchNode } from '../graph';
 import {
   extractText,
   lastHumanText,
+  mergeUsage,
   toErrorMessage,
   fenceUntrusted,
   usageFromExchange,
@@ -119,6 +120,8 @@ export async function composeReport(params: {
   const { reportModel, request, brief, jurisdiction, findings, digestCap, now, nonce, signal } =
     params;
   const maxRetries = params.maxRetries ?? DEFAULT_MAX_RETRIES;
+  /** Tokens burnt by attempts that returned nothing — billed, so they must be reported. */
+  let spentOnEmpty: DeepResearchTokenUsage = { input: 0, output: 0, total: 0 };
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const perDigestCap = Math.floor(digestCap / 2 ** attempt);
@@ -132,9 +135,28 @@ export async function composeReport(params: {
       if (text) {
         return { text, usage: usageFromExchange(prompt, response), fellBack: false };
       }
+      /**
+       * An EMPTY answer used to skip the retry loop and hand the user a fallback notice —
+       * the one case where the machinery right above was built and then not used. The
+       * whole run's material was thrown away on a single silent non-answer.
+       *
+       * It is the same shape of failure the loop already handles: measured on the stand,
+       * a run that gathered 7 findings and 355k tokens got an empty report and the user
+       * saw "пустой ответ модели" with nothing else. Halving the digest cap is exactly
+       * the right response — an oversized prompt is the likeliest reason a model returns
+       * nothing without raising a context error — and even when the emptiness is the
+       * provider's own intermittent one, a second attempt costs one call against losing
+       * the entire research.
+       *
+       * Usage from the discarded attempt is still counted: the call was billed.
+       */
+      spentOnEmpty = mergeUsage(spentOnEmpty, usageFromExchange(prompt, response));
+      if (attempt < maxRetries) {
+        continue;
+      }
       return {
         text: buildFallbackReport({ reason: 'пустой ответ модели' }),
-        usage: usageFromExchange(prompt, response),
+        usage: spentOnEmpty,
         fellBack: true,
       };
     } catch (error) {
