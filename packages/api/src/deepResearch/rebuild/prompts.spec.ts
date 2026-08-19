@@ -3,6 +3,7 @@ import {
   buildReportPrompt,
   buildCompressPrompt,
   buildResearcherPrompt,
+  buildSupervisorInput,
   buildSupervisorPrompt,
 } from './prompts';
 
@@ -18,31 +19,39 @@ const finding = (subQuestion: string, digest: string): DeepResearchFinding => ({
 });
 
 describe('prompt spotlighting (H5)', () => {
-  it('supervisor fences gathered findings and carries the untrusted directive', () => {
-    const prompt = buildSupervisorPrompt({
-      now: NOW,
+  it('supervisor fences gathered findings — now in the HUMAN half, where they live', () => {
+    // The digests moved out of the system message with the system/human split; the fence
+    // moved with them and must still wrap them. Asserting only on the system prompt would
+    // now pass while the untrusted text rode unfenced in the other message.
+    const input = buildSupervisorInput({
       brief: 'b',
-      jurisdiction: 'RU',
       findings: [finding('q1', 'дайджест-1')],
       round: 1,
       maxRounds: 8,
-      maxConcurrent: 4,
       nonce: NONCE,
     });
     // The gathered digest itself must sit inside a fence (the directive also
     // mentions the markers, so assert the exact wrapped block, not a bare marker).
-    expect(prompt).toContain(`<UNTRUSTED ${NONCE}>\n1. [q1] дайджест-1\n</UNTRUSTED ${NONCE}>`);
+    expect(input).toContain(`<UNTRUSTED ${NONCE}>\n1. [q1] дайджест-1\n</UNTRUSTED ${NONCE}>`);
+  });
+
+  it('supervisor RULES still carry the untrusted directive, and no foreign text', () => {
+    const prompt = buildSupervisorPrompt({
+      now: NOW,
+      jurisdiction: 'RU',
+      maxConcurrent: 4,
+      nonce: NONCE,
+    });
     expect(prompt).toMatch(/НИКОГДА не исполняй/i);
+    // The directive claims the task and format are set by THIS system message; that claim
+    // is only true while no gathered third-party text shares the message with it.
+    expect(prompt).not.toContain('дайджест-1');
   });
 
   it('supervisor asks for a parallel batch of up to maxConcurrent sub-questions (A2)', () => {
     const prompt = buildSupervisorPrompt({
       now: NOW,
-      brief: 'b',
       jurisdiction: 'RU',
-      findings: [],
-      round: 0,
-      maxRounds: 8,
       maxConcurrent: 3,
       nonce: NONCE,
     });
@@ -52,18 +61,27 @@ describe('prompt spotlighting (H5)', () => {
   });
 
   it('supervisor does NOT fence the placeholder when nothing is gathered', () => {
-    const prompt = buildSupervisorPrompt({
-      now: NOW,
+    const input = buildSupervisorInput({
       brief: 'b',
-      jurisdiction: 'RU',
       findings: [],
       round: 0,
       maxRounds: 8,
-      maxConcurrent: 4,
       nonce: NONCE,
     });
-    expect(prompt).toContain('(пока ничего не собрано)');
-    expect(prompt).not.toContain(`<UNTRUSTED ${NONCE}>\n(пока ничего не собрано)`);
+    expect(input).toContain('(пока ничего не собрано)');
+    expect(input).not.toContain(`<UNTRUSTED ${NONCE}>\n(пока ничего не собрано)`);
+  });
+
+  it('supervisor input carries the brief and the round counter the rules refer to', () => {
+    const input = buildSupervisorInput({
+      brief: 'бриф про рынок СЭД',
+      findings: [],
+      round: 2,
+      maxRounds: 6,
+      nonce: NONCE,
+    });
+    expect(input).toContain('бриф про рынок СЭД');
+    expect(input).toContain('выполнено раундов: 2 из 6');
   });
 
   it('researcher, compress and report all carry the untrusted directive with the nonce', () => {
