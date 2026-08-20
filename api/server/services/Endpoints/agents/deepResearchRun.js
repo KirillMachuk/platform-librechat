@@ -817,6 +817,27 @@ async function resolveAnonymizerConnection({ req, db, endpoint, model }) {
 }
 
 /**
+ * The endpoint's own per-model price table, resolved from the SAME initializeCustom the
+ * models are built from. Returns undefined when the endpoint declares none, which is
+ * exactly the pre-existing behaviour (family-wide fallback). Never throws: a pricing
+ * lookup must not be able to fail a research run.
+ */
+async function resolveEndpointPricing({ req, db, endpoint, model }) {
+  try {
+    const { endpointTokenConfig } = await initializeCustom({
+      req,
+      endpoint,
+      model_parameters: { model },
+      db,
+    });
+    return endpointTokenConfig;
+  } catch (error) {
+    logger.warn('[deepResearchRun] endpoint pricing unavailable; billing falls back', error);
+    return undefined;
+  }
+}
+
+/**
  * file_search scoped to ONLY the conversation's embedded files (bug ② fix) AND
  * authorized PER FILE through the same guard the standard agent path uses (C1).
  * `conversationId` arrives from the client (it is the streamId) and `getConvoFiles`
@@ -886,8 +907,24 @@ async function buildWebSearchTool({ req, userId }) {
  * never enters the job's collectedUsage, so the /abort middleware bills a different
  * (empty) source and there is no double-spend. Mirrors the deps of
  * abortMiddleware.spendCollectedUsage. Failures are logged, never thrown.
+ *
+ * `endpointTokenConfig` is the endpoint's own price table (librechat.yaml
+ * `endpoints.custom[].tokenConfig`). Without it `getMultiplier` falls back to the
+ * FAMILY-WIDE table in data-schemas — 0.28/0.42 for every `deepseek`, 0.8/2.4 for every
+ * `claude-` — which is wrong for every model this tier actually runs. Measured on the
+ * stand 2026-08-20: a run on `deepseek-v4-pro-0813` (real 1.32/3.96) was recorded at
+ * 0.28/0.42, understating it ~3x; the deep tier's Opus 5 (real 5/25) was understated
+ * 6-10x. The chat path has passed this config all along; DR simply never did, so the
+ * table in the config looked applied and silently was not.
  */
-async function billDeepResearchUsage({ userId, conversationId, messageId, model, usage }) {
+async function billDeepResearchUsage({
+  userId,
+  conversationId,
+  messageId,
+  model,
+  usage,
+  endpointTokenConfig,
+}) {
   if (!usage || usage.total <= 0) {
     return;
   }
@@ -906,6 +943,7 @@ async function billDeepResearchUsage({ userId, conversationId, messageId, model,
         model,
         context: 'deep_research',
         collectedUsage: [{ model, input_tokens: usage.input, output_tokens: usage.output }],
+        endpointTokenConfig,
       },
     );
   } catch (error) {
@@ -1617,6 +1655,12 @@ async function runNewDeepResearch(params) {
     messageId: responseMessageId,
     model: leadModelSlug,
     usage: result.usage,
+    endpointTokenConfig: await resolveEndpointPricing({
+      req,
+      db,
+      endpoint,
+      model: leadModelSlug,
+    }),
   });
 
   // A user Stop finalizes through here like every other outcome. It used to return early,

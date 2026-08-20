@@ -1688,6 +1688,50 @@ describe('runNewDeepResearch — a research chat stays in its Project', () => {
  * which is what LangChain spreads into the request body. Asserting on the config object
  * alone would pass with the wiring cut.
  */
+describe("runNewDeepResearch — the run is billed at the ENDPOINT's rates", () => {
+  /**
+   * Without the endpoint's own price table, `getMultiplier` falls back to the family-wide
+   * one in data-schemas: 0.28/0.42 for every `deepseek`, 0.8/2.4 for every `claude-`.
+   * Measured on the stand, that understated a v4-pro-0813 run ~3x and the deep tier's
+   * Opus 5 by 6-10x. The chat path had passed this config all along; DR never did, so a
+   * price table written in librechat.yaml looked applied and silently was not.
+   */
+  const { recordCollectedUsage } = require('@librechat/api');
+
+  it("hands recordCollectedUsage the endpoint's tokenConfig", async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockInitializeCustom.mockImplementation(async () => ({
+      llmConfig: { apiKey: 'k' },
+      configOptions: { baseURL: 'http://anonymizer:8000/v1' },
+      provider: 'openAI',
+      endpointTokenConfig: { 'vendor/lead-x': { prompt: 1.32, completion: 3.96 } },
+    }));
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const billed = recordCollectedUsage.mock.calls.find((c) => c[1]?.context === 'deep_research');
+    expect(billed).toBeDefined();
+    expect(billed[1].endpointTokenConfig).toEqual({
+      'vendor/lead-x': { prompt: 1.32, completion: 3.96 },
+    });
+  });
+
+  it('bills anyway when the endpoint declares no prices — the old fallback stands', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockInitializeCustom.mockImplementation(async () => ({
+      llmConfig: { apiKey: 'k' },
+      configOptions: { baseURL: 'http://anonymizer:8000/v1' },
+      provider: 'openAI',
+    }));
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const billed = recordCollectedUsage.mock.calls.find((c) => c[1]?.context === 'deep_research');
+    expect(billed).toBeDefined();
+    expect(billed[1].endpointTokenConfig).toBeUndefined();
+  });
+});
+
 describe('runNewDeepResearch — OpenRouter provider pin reaches the model', () => {
   const { resolveDeepResearchTier } = require('@librechat/api');
   const BASE_TIER = { name: 'balanced', wallClockMinutes: 10 };
