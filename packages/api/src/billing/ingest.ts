@@ -68,6 +68,14 @@ export function createBillingIngestHandlers(deps: BillingIngestDeps): {
         return res.status(400).json({ error: 'costUsd must be a non-negative number' });
       }
       if (costUsd > MAX_SINGLE_COST_USD) {
+        /* Refusing is right for a corrupted report — but a refusal is also how a
+         * LEGITIMATE spend would disappear, and the ledger is the money. Say what was
+         * dropped, or the amount is gone with nothing to reconstruct it from. */
+        logger.error(
+          `[billingIngest] REFUSED a spend report above the sanity limit — money NOT ledgered: ` +
+            `$${costUsd} (limit $${MAX_SINGLE_COST_USD}) model=${cleanString(body.model) ?? '-'} ` +
+            `source=${cleanString(body.sourceId) ?? '-'}. Either a corrupted report, or the limit is now too low.`,
+        );
         return res
           .status(400)
           .json({ error: `costUsd exceeds sanity limit (${MAX_SINGLE_COST_USD})` });

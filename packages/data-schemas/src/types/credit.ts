@@ -24,6 +24,8 @@ export interface ICreditMonth extends Document {
   notified80At?: Date | null;
   /** Set once when the «pool + packages exhausted» notification is sent; reset on package add. */
   notifiedExhaustedAt?: Date | null;
+  /** Set once per period when the OpenRouter comparison alerted. */
+  notifiedReconcileAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }

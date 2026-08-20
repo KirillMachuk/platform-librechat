@@ -99,6 +99,15 @@ export interface BillingReconcilerDeps {
   }) => Promise<{ microUsd: number; count: number }>;
   /** When metering first recorded anything — guards the comparison in its first month. */
   getFirstCreditSpendAt: (params?: { tenantId?: string }) => Promise<Date | null>;
+  /**
+   * Claims the once-per-period right to send an alert. Optional so a caller that has not
+   * wired it keeps the old (every-run) behaviour rather than losing alerts entirely.
+   */
+  markCreditMonthNotified?: (params: {
+    month: string;
+    kind: '80' | 'exhausted' | 'reconcile';
+    tenantId?: string;
+  }) => Promise<boolean>;
   poolMicroUsd: number;
   tenantId?: string;
   /** Service-period anchor day (1–31; defaults to 1). */
@@ -377,7 +386,30 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
         `[billingReconcile] UTC-month ledger $${ledgerUsd.toFixed(6)} (${report.ledgerCredits} Cr, ${utcMonthJournal.count} rows) vs OpenRouter usage_monthly $${openrouterUsd.toFixed(6)} → diff ${diffPercent}% ($${diffUsd.toFixed(6)}); alert=${shouldAlert} (needs >${threshold * 100}% AND >$${minAbsUsd}${partialLedger ? ', HELD — ' + report.reason : ''}). Period ${status.month}: journal=${internal.journalMicroUsd}µ$ counter=${status.spentMicroUsd}µ$ drift=${internalDriftMicroUsd}µ$`,
       );
 
-      if (shouldAlert) {
+      /* Once per period, not once per run.
+       *
+       * The difference this reports does not clear on its own: a key can be spent
+       * OUTSIDE the proxy — every `tools/` bench does exactly that — and such spend can
+       * never reach the ledger, so the gap it opens stays for the rest of the UTC month.
+       * Measured 20.08.2026: OpenRouter $4.388 against a ledger of $3.228 for the same
+       * window, 26%, while the SAME day matched to $0.000003 of $0.2587. Alerting every
+       * run would mail that difference daily until the month rolls over, and an alert
+       * that arrives every day is an alert nobody opens — the failure mode this check
+       * exists to prevent. */
+      const alertClaimed =
+        shouldAlert &&
+        (deps.markCreditMonthNotified == null ||
+          (await deps.markCreditMonthNotified({
+            month: status.month,
+            kind: 'reconcile',
+            tenantId: deps.tenantId,
+          })));
+      report.alerted = alertClaimed;
+      if (shouldAlert && !alertClaimed) {
+        report.reason = 'already alerted for this period';
+      }
+
+      if (alertClaimed) {
         deps.recordAudit({
           action: 'billing.reconcile_alert',
           targetType: 'billing',
@@ -396,6 +428,12 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
           openrouterUsd,
           diffPercent: diffPercent ?? 0,
         });
+        logger.error(
+          `[billingReconcile] ledger $${ledgerUsd.toFixed(6)} vs OpenRouter $${openrouterUsd.toFixed(6)} (${diffPercent}%). ` +
+            'Either spend reported to the ledger was lost, or the key was used OUTSIDE the proxy — ' +
+            'benches in tools/ call OpenRouter directly and can never appear in the ledger. ' +
+            'Compare a single quiet day first: those windows match exactly when only proxy traffic ran.',
+        );
       }
 
       return report;

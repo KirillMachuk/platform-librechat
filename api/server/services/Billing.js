@@ -72,6 +72,7 @@ function getBillingWiring() {
   const reconciler = createBillingReconciler({
     openrouter,
     getCreditBillingStatus: db.getCreditBillingStatus,
+    markCreditMonthNotified: db.markCreditMonthNotified,
     sumCreditSpendJournal: db.sumCreditSpendJournal,
     sumCreditSpendJournalRange: db.sumCreditSpendJournalRange,
     getFirstCreditSpendAt: db.getFirstCreditSpendAt,
