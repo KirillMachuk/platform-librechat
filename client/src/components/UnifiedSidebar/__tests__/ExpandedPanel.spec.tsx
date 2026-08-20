@@ -229,10 +229,16 @@ describe('ExpandedPanel', () => {
      * left dead zones — a swipe from the «Чаты» header or the profile strip
      * chained to the platform behind the phone drawer. The whole panel now
      * scrolls as ONE element; the header and profile strips swallow touches. */
-    it('the expanded panel has exactly one vertical scroller', () => {
+    it('the chats section rides INSIDE the single panel scroller', () => {
+      /* The one-scroller claim is structural: the conversations section must
+       * be a DESCENDANT of the overflow-y-auto element (pre-r21 it was a
+       * sibling block with its own inner scroller — a bare scroller count
+       * stays green there because the section is mocked). */
       const { container } = renderPanel({ expanded: true });
-      const scrollers = container.querySelectorAll('[class*="overflow-y-auto"]');
-      expect(scrollers.length).toBe(1);
+      const scroller = container.querySelector('[class*="overflow-y-auto"]');
+      expect(scroller).not.toBeNull();
+      expect(scroller?.querySelector('[data-testid="conversations-section"]')).not.toBeNull();
+      expect(container.querySelectorAll('[class*="overflow-y-auto"]').length).toBe(1);
     });
 
     it('the header and profile strips swallow touch gestures', () => {
