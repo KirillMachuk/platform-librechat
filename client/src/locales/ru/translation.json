@@ -1735,6 +1735,7 @@
   "com_ui_hide": "Скрыть",
   "com_ui_hide_n_files": "Скрыть файлов: {{0}}",
   "com_ui_image_gen_failed": "Не удалось сгенерировать изображение",
+  "com_ui_image_unavailable": "Изображение недоступно",
   "com_ui_invocation_auto": "Авто",
   "com_ui_invocation_auto_info": "Навык применяется агентом автоматически, когда он уместен в диалоге",
   "com_ui_invocation_both": "Оба",

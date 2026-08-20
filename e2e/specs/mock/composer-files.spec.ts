@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { attachFixture, fileFixture, largeTextFixture } from './files.helpers';
+import { attachFixture, chooseFixture, fileFixture, largeTextFixture } from './files.helpers';
 import { NEW_CHAT_PATH } from './helpers';
 
 /**
@@ -64,4 +64,83 @@ test('attached files scroll sideways inside the composer instead of widening it'
     .getByRole('button', { name: 'contract-long.docx' });
   await expect(firstCard).toBeVisible();
   await expect(firstCard).toContainText('DOCX');
+});
+
+/**
+ * Round 19 (owner 19.08, п.1–2): the chip must be COMPLETE from the first
+ * frame — name and «MD …» badge come from the local record, not from the
+ * server response (the card used to spend the whole upload as a bare size
+ * line) — and the hover remove × has its own reserved corner: measured 17px
+ * of × over the truncated name before the pr-7 reservation.
+ *
+ * The upload response is held behind a gate (not a timer) so the pre-response
+ * state is a deterministic assertion window, released only after the frame-one
+ * checks pass. The fixture mirrors the green r18 shape (long .md name, its
+ * real text/markdown MIME): a mislabeled MIME never reaches the chip — upload
+ * validation infers or rejects it first (file-preview.spec pins the reject).
+ */
+test('the chip is complete from the first frame and the × never covers the name', async ({
+  page,
+}) => {
+  await page.goto(NEW_CHAT_PATH);
+
+  let releaseUpload = () => {};
+  const uploadGate = new Promise<void>((resolve) => {
+    releaseUpload = resolve;
+  });
+  await page.route('**/api/files', async (route) => {
+    if (route.request().method() === 'POST') {
+      await uploadGate;
+    }
+    await route.continue();
+  });
+
+  const name = 'Отчёт_по_продажам_за_август_2026_финальная_версия_согласованная.md';
+  await chooseFixture(page, largeTextFixture(name, 19000));
+
+  const shell = page.locator('[data-testid="composer-shell"]');
+  const card = shell.getByRole('button', { name });
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('MD');
+
+  const geometry = await card.evaluate((button) => {
+    const nameEl = button.querySelector('.truncate.font-medium') as HTMLElement;
+    const removeEl = button.parentElement?.querySelector(
+      'button[class*="absolute"][class*="right-1"][class*="top-1"]',
+    ) as HTMLElement | null;
+    if (!nameEl || !removeEl) {
+      return null;
+    }
+    const nameRect = nameEl.getBoundingClientRect();
+    const removeRect = removeEl.getBoundingClientRect();
+    return {
+      nameRight: nameRect.right,
+      nameTop: nameRect.top,
+      nameBottom: nameRect.bottom,
+      removeLeft: removeRect.left,
+      removeTop: removeRect.top,
+      removeBottom: removeRect.bottom,
+    };
+  });
+  expect(geometry).not.toBeNull();
+  const onNameLine =
+    geometry!.removeBottom > geometry!.nameTop && geometry!.removeTop < geometry!.nameBottom;
+  expect(onNameLine).toBe(true);
+  expect(geometry!.removeLeft).toBeGreaterThanOrEqual(geometry!.nameRight);
+
+  const frameOne = {
+    name: await card.locator('.truncate.font-medium').textContent(),
+    badge: await card.locator('.truncate.text-text-secondary').textContent(),
+  };
+
+  releaseUpload();
+  const uploaded = await page.waitForResponse(
+    (response) => response.url().includes('/api/files') && response.request().method() === 'POST',
+    { timeout: 60000 },
+  );
+  expect(uploaded.ok()).toBeTruthy();
+
+  /* No jump: the settled card shows exactly what frame one showed. */
+  await expect(card.locator('.truncate.font-medium')).toHaveText(frameOne.name ?? '');
+  await expect(card.locator('.truncate.text-text-secondary')).toHaveText(frameOne.badge ?? '');
 });

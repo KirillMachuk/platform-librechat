@@ -204,43 +204,40 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
           queryClient.refetchQueries([QueryKeys.agent, agent_id]);
           return;
         }
+        /* 19.08 (round 19): the completion used to land in TWO steps — progress
+         * 0.9, then a 300ms setTimeout to progress 1 with the real fields. That
+         * cosmetic pause kept `filesLoading` true for 300ms AFTER the server
+         * said done, and the send guard silently swallowed an Enter pressed in
+         * that window. While the chip only got its filename with this late
+         * update, nothing could hit the window; the frame-one chip removed that
+         * accidental cover, so the artificial window goes too: one immediate
+         * update, ready means ready. */
+        const cachedBlob = getCachedPreview(data.temp_file_id);
+        if (cachedBlob && data.file_id !== data.temp_file_id) {
+          cachePreview(data.file_id, cachedBlob);
+          removePreviewEntry(data.temp_file_id);
+        }
         updateFileById(
           data.temp_file_id,
           {
-            progress: 0.9,
+            progress: 1,
+            file_id: data.file_id,
+            temp_file_id: data.temp_file_id,
             filepath: data.filepath,
+            type: data.type,
+            height: data.height,
+            width: data.width,
+            filename: data.filename,
+            source: data.source,
+            embedded: data.embedded,
+            embeddingStatus: data.embeddingStatus,
+            // Distinguishes a library-only (full-text) embed from a real
+            // search embed — without it the mode chip shows "search" for
+            // documents that were inlined whole (see autoModeDisplayFromFile).
+            embeddingScope: data.embeddingScope,
           },
           assistant_id ? true : false,
         );
-
-        setTimeout(() => {
-          const cachedBlob = getCachedPreview(data.temp_file_id);
-          if (cachedBlob && data.file_id !== data.temp_file_id) {
-            cachePreview(data.file_id, cachedBlob);
-            removePreviewEntry(data.temp_file_id);
-          }
-          updateFileById(
-            data.temp_file_id,
-            {
-              progress: 1,
-              file_id: data.file_id,
-              temp_file_id: data.temp_file_id,
-              filepath: data.filepath,
-              type: data.type,
-              height: data.height,
-              width: data.width,
-              filename: data.filename,
-              source: data.source,
-              embedded: data.embedded,
-              embeddingStatus: data.embeddingStatus,
-              // Distinguishes a library-only (full-text) embed from a real
-              // search embed — without it the mode chip shows "search" for
-              // documents that were inlined whole (see autoModeDisplayFromFile).
-              embeddingScope: data.embeddingScope,
-            },
-            assistant_id ? true : false,
-          );
-        }, 300);
       },
       onError: (_error, body) => {
         const error = _error as TError | undefined;
@@ -430,6 +427,10 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
         const initialExtendedFile: ExtendedFile = {
           file_id,
           file: originalFile,
+          /* The chip renders from this record from the very first frame; without
+           * `filename` the card spent the whole upload as a bare size line and
+           * the name popped in only with the server response (owner 19.08-2). */
+          filename: originalFile.name,
           type: originalFile.type,
           preview: initialPreview,
           progress: 0.1, // Show as processing

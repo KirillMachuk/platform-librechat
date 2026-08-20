@@ -1,8 +1,8 @@
 import { Spinner, TooltipAnchor } from '@librechat/client';
 import type { TFile } from 'librechat-data-provider';
 import type { ExtendedFile } from '~/common';
+import { fileTypeMeta, chipType } from './typeMeta';
 import { TriangleAlert } from '~/components/icons';
-import { fileTypeMeta } from './typeMeta';
 import { useLocalize } from '~/hooks';
 import SourceIcon from './SourceIcon';
 import { cn } from '~/utils';
@@ -34,8 +34,12 @@ const FilePreview = ({
   const indexFailed = embeddingStatus === 'failed';
   /* Perplexity's approach (owner 12.08-2, second word): the TYPE is said by
      the drawing, the colour is the text's own — no colour squares, no tinted
-     glyphs. ONE map decides the drawing everywhere: typeMeta. */
-  const meta = fileTypeMeta(overrideType ?? (file?.type as string | undefined) ?? '');
+     glyphs. ONE map decides the drawing everywhere: typeMeta; `chipType`
+     falls back to the filename's extension for records whose stored MIME is
+     empty or generic (owner 19.08-3 audit). */
+  const meta = fileTypeMeta(
+    overrideType ?? chipType(file?.type as string | undefined, file?.filename),
+  );
   const TypeGlyph = meta.Icon;
   const preview = (
     <div

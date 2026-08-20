@@ -78,3 +78,22 @@ describe('FilePreview indexing tooltip', () => {
     expect(container.querySelector('[title]')).not.toBeInTheDocument();
   });
 });
+
+describe('FilePreview glyph fallback (owner 19.08-3)', () => {
+  /* Stored/legacy records and server-side artifacts can carry an empty or
+   * generic MIME — the glyph must come from the extension instead of drawing
+   * generic. Asserted relatively (same path data as the resolved-type glyph)
+   * so the icon set can change without rewriting this spec. */
+  const glyphPath = (container: HTMLElement) =>
+    container.querySelector('svg path')?.getAttribute('d');
+
+  it('draws the extension glyph when the record type is empty', () => {
+    const byName = render(<FilePreview file={{ filename: 'schema.sql', type: '' } as TFile} />);
+    const byType = render(
+      <FilePreview file={{ filename: 'x', type: 'application/sql' } as TFile} />,
+    );
+    const generic = render(<FilePreview file={{ filename: 'noextension', type: '' } as TFile} />);
+    expect(glyphPath(byName.container)).toBe(glyphPath(byType.container));
+    expect(glyphPath(byName.container)).not.toBe(glyphPath(generic.container));
+  });
+});

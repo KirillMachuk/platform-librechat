@@ -42,9 +42,13 @@ const Files = ({
           <Image
             key={file.file_id}
             imagePath={file.preview ?? file.filepath ?? ''}
-            height={file.height ?? 1920}
-            width={file.width ?? 1080}
+            /* No made-up fallback dims: the old `?? 1920/1080` portrait guess
+               reserved up to 45vh of empty frame for records without stored
+               sizes (owner 19.08). Unknown dims now just size naturally. */
+            height={file.height}
+            width={file.width}
             altText={file.filename ?? 'Uploaded Image'}
+            thumbnail
           />
         ))}
     </>

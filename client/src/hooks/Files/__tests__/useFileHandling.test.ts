@@ -527,4 +527,67 @@ describe('useFileHandling', () => {
       expect(warned()).toBe(true);
     });
   });
+
+  describe('upload completion (owner 19.08, the 300ms swallow window)', () => {
+    /* The completion used to land in two steps: progress 0.9, then a 300ms
+     * setTimeout to progress 1 — and the send guard silently swallowed an
+     * Enter pressed inside that window. Ready must mean ready: the FULL
+     * record lands synchronously in onSuccess, no timer. This case is red on
+     * the two-step code (the progress-1 update only exists after a timer
+     * advance) and green on the immediate one. */
+    it('applies the full completion record immediately, no timer needed', async () => {
+      mockConversation = { conversationId: 'convo-1', endpoint: 'openAI' };
+
+      const useFileHandling = await loadHook();
+      renderHook(() => useFileHandling());
+      expect(uploadCallbacks.onSuccess).toBeDefined();
+
+      uploadCallbacks.onSuccess?.({
+        temp_file_id: 'temp-1',
+        file_id: 'real-1',
+        filepath: '/uploads/report.csv',
+        filename: 'report.csv',
+        type: 'text/csv',
+      });
+
+      const updateFilesMock = jest.requireMock('../useUpdateFiles').default;
+      const updateCalls = updateFilesMock.mock.results.flatMap(
+        (result: { value: { updateFileById: jest.Mock } }) =>
+          result.value.updateFileById.mock.calls,
+      );
+      const completion = updateCalls.find(
+        ([, update]: [string, { progress?: number }]) => update?.progress === 1,
+      );
+      expect(completion).toBeDefined();
+      expect(completion?.[1]).toEqual(
+        expect.objectContaining({ filename: 'report.csv', file_id: 'real-1' }),
+      );
+    });
+  });
+
+  describe('initial chip record (owner 19.08-2)', () => {
+    /* The chip renders from this record from the very first frame. Without
+     * `filename` the card spent the whole upload as a bare size line and the
+     * name popped in only with the server response. */
+    it('carries the filename before any server response', async () => {
+      mockConversation = { conversationId: 'convo-1', endpoint: 'openAI' };
+
+      const useFileHandling = await loadHook();
+      const { result } = renderHook(() => useFileHandling());
+
+      const sqlFile = new File(['select 1;'], 'schema.sql', { type: '' });
+      await act(async () => {
+        await result.current.handleFiles([sqlFile]);
+      });
+
+      const updateFilesMock = jest.requireMock('../useUpdateFiles').default;
+      const addFileCalls = updateFilesMock.mock.results.flatMap(
+        (result: { value: { addFile: jest.Mock } }) => result.value.addFile.mock.calls,
+      );
+      expect(addFileCalls.length).toBeGreaterThan(0);
+      expect(addFileCalls[0][0]).toEqual(
+        expect.objectContaining({ filename: 'schema.sql', progress: 0.1 }),
+      );
+    });
+  });
 });
