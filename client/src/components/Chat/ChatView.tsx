@@ -24,7 +24,6 @@ import { useLocalize } from '~/hooks';
 import Landing from './Landing';
 import Header from './Header';
 import Footer from './Footer';
-import { cn } from '~/utils';
 import store from '~/store';
 
 function LoadingSpinner() {

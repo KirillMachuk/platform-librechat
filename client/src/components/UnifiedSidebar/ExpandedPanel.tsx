@@ -256,6 +256,7 @@ function ExpandedPanel({
           внутри прокручиваемой колонки flex-дети обязаны держать высоту. */}
       <div
         ref={setPanelScroller}
+        data-testid="sidebar-scroller"
         className="scrollbar-hover flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain [&>*]:shrink-0"
       >
         <NewChatRow />
