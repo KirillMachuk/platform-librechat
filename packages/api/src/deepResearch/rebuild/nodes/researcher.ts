@@ -11,7 +11,7 @@ import type {
 import type { DeepResearchTier } from '../config';
 import type { DeepResearchNode } from '../graph';
 import {
-  extractText,
+  readAnswer,
   mergeUsage,
   toErrorMessage,
   fenceUntrusted,
@@ -144,6 +144,12 @@ export async function runResearchLoop(params: {
     usage = mergeUsage(usage, usageFromExchange(messages, response));
     messages.push(response);
     const toolCalls = response.tool_calls ?? [];
+    // A researcher that answers nothing AND asks for no tool simply stops below, keeping
+    // whatever it had — often nothing. Worth a line: it is indistinguishable in the logs
+    // from a researcher that finished its work.
+    if (toolCalls.length === 0) {
+      readAnswer('researcher', response);
+    }
     if (toolCalls.length === 0 || usage.total >= tokenCap) {
       break;
     }
@@ -200,8 +206,15 @@ export async function compressResearch(params: {
     new HumanMessage(fenceUntrusted(gathered, nonce)),
   ];
   const response = await compressModel.invoke(prompt, { signal });
+  /**
+   * An empty digest still becomes a FINDING: it counts towards `findings.length`, reaches
+   * REPORT, and contributes nothing — which is how a run can report N findings and read
+   * like one. Nothing is decided here (a caller filtering findings would change the run's
+   * shape); the degradation is simply no longer silent.
+   */
+  const answer = readAnswer('compress', response);
   return {
-    digest: extractText(response).trim().slice(0, digestCap),
+    digest: answer.text.slice(0, digestCap),
     usage: usageFromExchange(prompt, response),
   };
 }

@@ -174,6 +174,46 @@ describe('composeReport', () => {
     expect(promptSizes[1]).toBeLessThan(promptSizes[0]);
   });
 
+  it('RETRIES a CUT answer instead of shipping it as a finished report', async () => {
+    /**
+     * The defect this pins, seen by the owner on 2026-08-20: the report model stopped at
+     * the output ceiling, the node asked only "is there text?", and 1013 characters
+     * ending mid-word were saved and shown as a completed report — no error, no marker.
+     */
+    let calls = 0;
+    const cutThenGood: ReportModel = {
+      invoke: async () => {
+        calls += 1;
+        if (calls === 1) {
+          return new AIMessage({
+            content: 'оптимальным по соотношению «цена — соответствие» выгля',
+            response_metadata: { finish_reason: 'length' },
+          });
+        }
+        return new AIMessage({
+          content: '# Полный отчёт',
+          response_metadata: { finish_reason: 'stop' },
+        });
+      },
+    };
+    const result = await composeReport({ ...base, reportModel: cutThenGood });
+    expect(calls).toBe(2);
+    expect(result.fellBack).toBe(false);
+    expect(result.text).toBe('# Полный отчёт');
+  });
+
+  it('falls back with the CUT reason when every attempt is truncated', async () => {
+    const alwaysCut: ReportModel = {
+      invoke: async () =>
+        new AIMessage({ content: 'обрыв', response_metadata: { finish_reason: 'length' } }),
+    };
+    const result = await composeReport({ ...base, reportModel: alwaysCut, maxRetries: 1 });
+    expect(result.fellBack).toBe(true);
+    expect(result.text).toContain('оборван');
+    // The half-written text must NOT reach the user dressed as a report.
+    expect(result.text).not.toContain('обрыв');
+  });
+
   it('falls back only after EVERY attempt came back empty, and still counts what they burnt', async () => {
     let calls = 0;
     const alwaysEmpty: ReportModel = {

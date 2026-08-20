@@ -8,8 +8,8 @@ import type {
 } from '../state';
 import type { DeepResearchTier } from '../config';
 import {
-  extractText,
   lastHumanText,
+  readAnswer,
   toErrorMessage,
   tolerantJsonParse,
   usageFromExchange,
@@ -179,7 +179,7 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
       ];
       const response = await deps.model.invoke(prompt, { signal: config.signal });
       const { completeRequested, subQuestions } = parseSupervisorOutput(
-        extractText(response),
+        readAnswer('supervisor', response).text,
         deps.tier.maxConcurrentResearchers,
       );
       const tokenUsage = usageFromExchange(prompt, response);
