@@ -4,6 +4,7 @@ import { useMediaQuery } from '@librechat/client';
 import type { InfiniteQueryObserverResult } from '@tanstack/react-query';
 import type { ConversationListResponse } from 'librechat-data-provider';
 import type { List } from 'react-virtualized';
+import type { NavLinkComponentProps } from '~/common';
 import {
   useLocalize,
   useAuthContext,
@@ -21,7 +22,13 @@ import store from '~/store';
 
 const BookmarkNav = lazy(() => import('~/components/Nav/Bookmarks/BookmarkNav'));
 
-const ConversationsSection = memo(() => {
+type ConversationsSectionProps = NavLinkComponentProps & {
+  /** Единый скролл сайдбара (р21-4); в PanelDialog «История чатов» секция
+   *  живёт без него и список держит собственную высоту. */
+  scrollElement?: HTMLElement | null;
+};
+
+const ConversationsSection = memo(({ scrollElement }: ConversationsSectionProps) => {
   const localize = useLocalize();
   const isSmallScreen = useMediaQuery('(max-width: 768px)');
   const setSidebarExpanded = useSetRecoilState(store.sidebarExpanded);
@@ -114,13 +121,25 @@ const ConversationsSection = memo(() => {
   }, [isFetchingNextPage, computedHasNextPage, fetchNextPage]);
 
   return (
+    /* Р21-4: в едином скролле панели секция — обычный блок (высоту списку даёт
+       WindowScroller); в диалоге «История чатов» (без scrollElement) — прежний
+       собственный скролл с зажатой высотой. */
     <div
-      className="flex h-full min-h-0 flex-col overflow-hidden pb-3 pt-2"
+      className={
+        scrollElement
+          ? 'flex flex-col pb-3 pt-2'
+          : 'flex h-full min-h-0 flex-col overflow-hidden pb-3 pt-2'
+      }
       role="region"
       aria-label={localize('com_ui_chat_history')}
     >
-      <div className="flex min-h-0 flex-grow flex-col overflow-hidden">
+      <div
+        className={
+          scrollElement ? 'flex flex-col' : 'flex min-h-0 flex-grow flex-col overflow-hidden'
+        }
+      >
         <Conversations
+          scrollElement={scrollElement}
           conversations={conversations}
           moveToTop={moveToTop}
           toggleNav={toggleNav}

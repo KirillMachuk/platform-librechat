@@ -2,7 +2,7 @@ import { useMemo, memo, type FC, useCallback, useEffect, useRef } from 'react';
 import throttle from 'lodash/throttle';
 import { useRecoilValue } from 'recoil';
 import { Spinner, useMediaQuery } from '@librechat/client';
-import { List, CellMeasurer, CellMeasurerCache } from 'react-virtualized';
+import { List, CellMeasurer, CellMeasurerCache, WindowScroller } from 'react-virtualized';
 import type { TConversation } from 'librechat-data-provider';
 import { useLocalize, useFavorites, useShowMarketplace, useElementSize } from '~/hooks';
 import FavoritesList from '~/components/Nav/Favorites/FavoritesList';
@@ -34,6 +34,10 @@ interface ConversationsProps {
   setIsChatsExpanded: (expanded: boolean) => void;
   showFavorites?: boolean;
   headerActions?: React.ReactNode;
+  /** Р21-4: внешний скроллер (единый скролл сайдбара). Задан — список едет
+   *  внутри него через WindowScroller (autoHeight); нет — прежний режим с
+   *  собственной высотой. */
+  scrollElement?: HTMLElement | null;
 }
 
 interface MeasuredRowProps {
@@ -131,6 +135,7 @@ const Conversations: FC<ConversationsProps> = ({
   setIsChatsExpanded,
   showFavorites = true,
   headerActions,
+  scrollElement,
 }) => {
   const localize = useLocalize();
   const search = useRecoilValue(store.search);
@@ -333,28 +338,68 @@ const Conversations: FC<ConversationsProps> = ({
           <span className="ml-2 text-text-primary">{localize('com_ui_loading')}</span>
         </div>
       ) : (
-        <div ref={listContainerRef} className="min-h-0 flex-1 overflow-hidden">
-          <List
-            ref={containerRef}
-            width={listWidth}
-            height={listHeight}
-            deferredMeasurementCache={cache}
-            rowCount={flattenedItems.length}
-            rowHeight={getRowHeight}
-            rowRenderer={rowRenderer}
-            overscanRowCount={10}
-            aria-readonly={false}
-            /* overscroll-contain: the ONE scroller the r11 sweep could not
-               class-annotate (react-virtualized renders it) — without it a
-               swipe at the list's top edge chains to the page behind the
-               phone drawer and the platform steals the gesture (owner 19.08). */
-            className="scrollbar-hover overscroll-contain outline-none"
-            aria-label={localize('com_ui_chats')}
-            onRowsRendered={handleRowsRendered}
-            tabIndex={-1}
-            style={{ outline: 'none' }}
-            containerRole="rowgroup"
-          />
+        <div
+          ref={listContainerRef}
+          className={scrollElement ? 'min-w-0' : 'min-h-0 flex-1 overflow-hidden'}
+        >
+          {scrollElement ? (
+            /* Р21-4: единый скролл сайдбара — высоту и позицию листу диктует
+               внешний скроллер, у списка нет собственной полосы. Прежний
+               overscroll-забор (р19) переехал на сам скроллер панели. */
+            <WindowScroller scrollElement={scrollElement}>
+              {({ height, isScrolling, registerChild, onChildScroll, scrollTop }) => (
+                <div
+                  /* RV типизирует registerChild как ReactNode-колбэк — по
+                     факту он принимает DOM-узел; одиночное сужение типа. */
+                  ref={(node) => (registerChild as (el: Element | null) => void)(node)}
+                >
+                  <List
+                    autoHeight
+                    ref={containerRef}
+                    width={listWidth}
+                    height={height || 0}
+                    isScrolling={isScrolling}
+                    onScroll={onChildScroll}
+                    scrollTop={scrollTop}
+                    deferredMeasurementCache={cache}
+                    rowCount={flattenedItems.length}
+                    rowHeight={getRowHeight}
+                    rowRenderer={rowRenderer}
+                    overscanRowCount={10}
+                    aria-readonly={false}
+                    className="outline-none"
+                    aria-label={localize('com_ui_chats')}
+                    onRowsRendered={handleRowsRendered}
+                    tabIndex={-1}
+                    style={{ outline: 'none' }}
+                    containerRole="rowgroup"
+                  />
+                </div>
+              )}
+            </WindowScroller>
+          ) : (
+            <List
+              ref={containerRef}
+              width={listWidth}
+              height={listHeight}
+              deferredMeasurementCache={cache}
+              rowCount={flattenedItems.length}
+              rowHeight={getRowHeight}
+              rowRenderer={rowRenderer}
+              overscanRowCount={10}
+              aria-readonly={false}
+              /* overscroll-contain: the ONE scroller the r11 sweep could not
+                 class-annotate (react-virtualized renders it) — without it a
+                 swipe at the list's top edge chains to the page behind the
+                 phone drawer and the platform steals the gesture (owner 19.08). */
+              className="scrollbar-hover overscroll-contain outline-none"
+              aria-label={localize('com_ui_chats')}
+              onRowsRendered={handleRowsRendered}
+              tabIndex={-1}
+              style={{ outline: 'none' }}
+              containerRole="rowgroup"
+            />
+          )}
         </div>
       )}
     </div>

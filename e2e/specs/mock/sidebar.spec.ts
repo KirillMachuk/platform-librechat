@@ -8,11 +8,14 @@ import { applyRuntimeEnv } from '../../setup/runtimeEnv';
 /** Five past the server's page of 25, so the last one can only be on page two. */
 const SEEDED_CONVERSATIONS = 30;
 
-/** Size of the virtualized chat list grid vs. its measured container. */
+/** Size of the virtualized chat list grid vs. its measured container, plus the
+ *  panel scroller's viewport (р21: ONE sidebar scroll — the grid is autoHeight
+ *  content inside it, so the SCROLLER is what tracks the window height). */
 const sizes = (page: Page) =>
   page.evaluate(() => {
     const grid = document.querySelector<HTMLElement>('aside .ReactVirtualized__Grid');
     const wrap = grid?.parentElement ?? null;
+    const scroller = document.querySelector<HTMLElement>('[data-testid="sidebar-scroller"]');
     const gridRect = grid?.getBoundingClientRect();
     const wrapRect = wrap?.getBoundingClientRect();
     return {
@@ -20,6 +23,7 @@ const sizes = (page: Page) =>
       wrap: wrapRect ? wrapRect.width : -1,
       gridH: gridRect ? gridRect.height : -1,
       wrapH: wrapRect ? wrapRect.height : -1,
+      scrollerH: scroller ? scroller.clientHeight : -1,
     };
   });
 
@@ -33,9 +37,11 @@ const settledSizes = async (page: Page) => {
   for (let attempt = 0; attempt < 40; attempt++) {
     await page.waitForTimeout(350);
     const next = await sizes(page);
+    /* Р21: грид autoHeight — у пустого списка высоты законно нулевые, высоту
+     * окна держит панельный скроллер; требуем живой скроллер вместо wrapH>0. */
     const tracked =
       next.wrap > 0 &&
-      next.wrapH > 0 &&
+      next.scrollerH > 0 &&
       Math.abs(next.grid - next.wrap) <= 1 &&
       Math.abs(next.gridH - next.wrapH) <= 1;
     const stable = Math.abs(next.grid - prev.grid) <= 1 && Math.abs(next.gridH - prev.gridH) <= 1;
@@ -68,10 +74,12 @@ test.describe('sidebar chat list', () => {
     const reopened = await settledSizes(page);
     expect(Math.abs(reopened.grid - initial.grid)).toBeLessThanOrEqual(1);
 
-    // A shorter viewport shrinks the list height while it keeps tracking its container.
+    // A shorter viewport shrinks the PANEL SCROLLER (р21: the grid itself is
+    // autoHeight content inside the single sidebar scroll — its height is the
+    // content's, not the window's).
     await page.setViewportSize({ width: 1280, height: 540 });
     const shrunken = await settledSizes(page);
-    expect(shrunken.gridH).toBeLessThan(initial.gridH);
+    expect(shrunken.scrollerH).toBeLessThan(initial.scrollerH);
   });
 
   test('the collapsed rail still reaches settings and sign-out', async ({ page }) => {
@@ -189,11 +197,9 @@ test.describe('sidebar chat list', () => {
        * version wheeled at fixed coordinates that missed the list, scrollTop
        * stayed 0 through fifteen turns, and it read exactly like an app that
        * refuses to paginate. */
-      const scrollTop = () =>
-        page
-          .locator('.ReactVirtualized__List')
-          .first()
-          .evaluate((el) => el.scrollTop);
+      /* Р21: единый скролл сайдбара — крутится ПАНЕЛЬНЫЙ скроллер, лист внутри
+       * него autoHeight и собственного scrollTop не имеет. */
+      const scrollTop = () => page.getByTestId('sidebar-scroller').evaluate((el) => el.scrollTop);
       expect(await scrollTop()).toBe(0);
 
       const secondPage = page.waitForResponse(

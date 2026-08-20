@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { useRecoilValue } from 'recoil';
 import { useForm } from 'react-hook-form';
 import { useParams } from 'react-router-dom';
@@ -24,7 +24,6 @@ import { useLocalize } from '~/hooks';
 import Landing from './Landing';
 import Header from './Header';
 import Footer from './Footer';
-import { cn } from '~/utils';
 import store from '~/store';
 
 function LoadingSpinner() {
@@ -116,6 +115,41 @@ function ChatView({ index = 0 }: { index?: number }) {
     (conversationId === Constants.NEW_CONVO || !conversationId);
   const isNavigating = (!messagesTree || messagesTree.length === 0) && conversationId != null;
 
+  const chatAreaRef = useRef<HTMLDivElement>(null);
+  const composerIslandRef = useRef<HTMLDivElement>(null);
+  /* Р21-1: живая высота островка композера (растёт с текстом и файлами) —
+     в --composer-h на области чата; от неё считаются нижний отступ ленты и
+     позиция кнопки «вниз». */
+  useEffect(() => {
+    const area = chatAreaRef.current;
+    const island = composerIslandRef.current;
+    if (!area || !island) {
+      return;
+    }
+    const apply = () => {
+      area.style.setProperty('--composer-h', `${island.offsetHeight}px`);
+      /* Лента резервирует жёлоб скроллбара (scrollbar-gutter-stable) и
+         центрирует колонку в оставшейся ширине; островок живёт ВНЕ ленты и
+         без того же отступа съезжал на полжёлоба вправо (те самые 4px из
+         старого комментария про scrollbar-gutter-mirror). */
+      const scroller = area.querySelector<HTMLElement>('[data-chat-scroller]');
+      const gutter = scroller ? scroller.offsetWidth - scroller.clientWidth : 0;
+      island.style.paddingRight = `${gutter}px`;
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(island);
+    const scroller = area.querySelector<HTMLElement>('[data-chat-scroller]');
+    if (scroller) {
+      observer.observe(scroller);
+    }
+    return () => observer.disconnect();
+    /* isLoading/conversationId в зависимостях: скроллер пересоздаётся через
+     * LoadingSpinner при каждой смене диалога и при холодном открытии по URL —
+     * без повторного запуска эффект мерил жёлоб нулём и переставал наблюдать
+     * (находка ревью р21). */
+  }, [isLandingPage, isLoading, isNavigating, conversationId]);
+
   if (messagesFailed && !isLandingPage) {
     content = <MessagesLoadError onRetry={() => void refetchMessages()} />;
   } else if (isLoading && conversationId !== Constants.NEW_CONVO) {
@@ -133,37 +167,49 @@ function ChatView({ index = 0 }: { index?: number }) {
       <ChatContext.Provider value={chatHelpers}>
         <AddedChatContext.Provider value={addedChatHelpers}>
           <Presentation>
-            <div className="relative flex h-full w-full flex-col">
+            <div className="relative flex h-full w-full flex-col" ref={chatAreaRef}>
               <Header />
               <>
-                <div
-                  className={cn(
-                    'flex flex-col',
-                    isLandingPage
-                      ? 'flex-1 items-center justify-end sm:justify-center'
-                      : 'h-full overflow-y-auto overflow-x-hidden',
-                  )}
-                >
-                  {content}
-                  <div
-                    /* Здесь стоял `scrollbar-gutter-mirror` — `overflow-y: auto`
-                       ради того, чтобы композер зарезервировал такую же полосу
-                       прокрутки, как лента, и не уезжал на 4px. Он это делал —
-                       и заодно превращал обёртку в контейнер прокрутки, который
-                       ОБРЕЗАЛ всплывающий выбор модели: кнопка «сравнить с
-                       другой моделью» открывала меню, которого не видно. Резерв
-                       полосы без контейнера прокрутки средствами CSS не
-                       выражается, поэтому 4px возвращаются до отдельного
-                       решения — меню важнее. */
-                    className={cn(
-                      'w-full',
-                      isLandingPage && 'max-w-3xl transition-all duration-200 xl:max-w-4xl',
-                    )}
-                  >
-                    <ChatForm index={index} />
-                    {isLandingPage && <ConversationStarters />}
+                {isLandingPage ? (
+                  <div className="flex flex-1 flex-col items-center justify-end sm:justify-center">
+                    {content}
+                    <div
+                      /* Здесь стоял `scrollbar-gutter-mirror` — история в
+                         git: он превращал обёртку в контейнер прокрутки,
+                         обрезавший всплывающий выбор модели. */
+                      className="w-full max-w-3xl transition-all duration-200 xl:max-w-4xl"
+                    >
+                      <ChatForm index={index} />
+                      <ConversationStarters />
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  /* Р21-1 (референс ChatGPT): композер — ОСТРОВОК. Лента
+                     прокрутки занимает всю высоту до низа окна, карточка
+                     композера плавает поверх неё; текст читается вплотную к
+                     скруглённому периметру карточки, а полоса ПОД ней
+                     полупрозрачно гасит то, что уезжает под низ. Высоту
+                     островка меряет ResizeObserver → --composer-h, от неё
+                     живут нижний отступ ленты и кнопка «вниз». */
+                  <div className="relative min-h-0 flex-1">
+                    {/* flex-обёртка ОБЯЗАТЕЛЬНА: корень MessagesView берёт высоту из
+                       flex-1, в block-родителе цепочка высот рвётся и скроллится весь
+                       main (находка ревью р21). */}
+                    <div className="flex h-full min-h-0 flex-col">{content}</div>
+                    <div
+                      ref={composerIslandRef}
+                      className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col"
+                    >
+                      <div
+                        aria-hidden="true"
+                        className="composer-under-strip absolute inset-x-0 bottom-0 h-10"
+                      />
+                      <div className="pointer-events-auto relative w-full">
+                        <ChatForm index={index} />
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {/* Дисклеймер живёт ТОЛЬКО на пустом «Новом чате» (владелец
                     14.08-4): первое же сообщение снимает лендинг — и надпись с
                     ним; в диалогах её больше нет. На телефоне как и раньше
