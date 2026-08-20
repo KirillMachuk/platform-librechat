@@ -520,3 +520,110 @@ describe('sumCreditSpendJournalRange (external reconcile window, by createdAt)',
     expect(past.microUsd).toBe(0);
   });
 });
+
+describe('aggregateCreditSpendByUser (per-employee actual spend)', () => {
+  const alice = new mongoose.Types.ObjectId();
+  const bob = new mongoose.Types.ObjectId();
+
+  async function seedUsers() {
+    await mongoose.models.User.create([
+      { _id: alice, email: 'alice@example.com', name: 'Alice' },
+      { _id: bob, email: 'bob@example.com', name: 'Bob' },
+    ]);
+  }
+
+  function userSpend(
+    userId: mongoose.Types.ObjectId | undefined,
+    credits: number,
+    sourceId: string,
+  ) {
+    return methods.recordCreditSpend({
+      microUsd: creditsToMicroUsd(credits),
+      poolMicroUsd: POOL,
+      userId: userId ? userId.toString() : undefined,
+      sourceId,
+    });
+  }
+
+  function window() {
+    const now = Date.now();
+    return { start: new Date(now - 60 * 60 * 1000), end: new Date(now + 60 * 60 * 1000) };
+  }
+
+  test('sums actual cost per user and resolves name/email', async () => {
+    await seedUsers();
+    await userSpend(alice, 30, 'a1');
+    await userSpend(alice, 12, 'a2');
+    await userSpend(bob, 5, 'b1');
+
+    const result = await methods.aggregateCreditSpendByUser(window());
+
+    expect(result.rows).toEqual([
+      {
+        userId: alice.toString(),
+        email: 'alice@example.com',
+        name: 'Alice',
+        microUsd: creditsToMicroUsd(42),
+        requests: 2,
+      },
+      {
+        userId: bob.toString(),
+        email: 'bob@example.com',
+        name: 'Bob',
+        microUsd: creditsToMicroUsd(5),
+        requests: 1,
+      },
+    ]);
+    expect(result.unattributedMicroUsd).toBe(0);
+    expect(result.unattributedRequests).toBe(0);
+  });
+
+  test('keeps spend with no user in a separate bucket instead of dropping it', async () => {
+    await seedUsers();
+    await userSpend(alice, 10, 'a1');
+    await userSpend(undefined, 7, 'x1');
+    await userSpend(undefined, 3, 'x2');
+
+    const result = await methods.aggregateCreditSpendByUser(window());
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].microUsd).toBe(creditsToMicroUsd(10));
+    expect(result.unattributedMicroUsd).toBe(creditsToMicroUsd(10));
+    expect(result.unattributedRequests).toBe(2);
+    /** Attributed + unattributed must reconcile with the period counter the
+     *  «Расходы» header shows — a hidden bucket is what makes the screen lie. */
+    const journal = await methods.sumCreditSpendJournal({ month: servicePeriodKey(new Date(), 1) });
+    const rowsTotal = result.rows.reduce((sum, row) => sum + row.microUsd, 0);
+    expect(rowsTotal + result.unattributedMicroUsd).toBe(journal.microUsd);
+  });
+
+  test('excludes rows outside the window', async () => {
+    await seedUsers();
+    await userSpend(alice, 10, 'a1');
+
+    const now = Date.now();
+    const past = await methods.aggregateCreditSpendByUser({
+      start: new Date(now - 48 * 60 * 60 * 1000),
+      end: new Date(now - 24 * 60 * 60 * 1000),
+    });
+
+    expect(past.rows).toEqual([]);
+    expect(past.unattributedMicroUsd).toBe(0);
+  });
+
+  test('survives a user row that no longer exists', async () => {
+    await userSpend(alice, 4, 'a1');
+
+    const result = await methods.aggregateCreditSpendByUser(window());
+
+    expect(result.rows).toEqual([
+      {
+        userId: alice.toString(),
+        email: undefined,
+        name: undefined,
+        microUsd: creditsToMicroUsd(4),
+        requests: 1,
+      },
+    ]);
+  });
+});

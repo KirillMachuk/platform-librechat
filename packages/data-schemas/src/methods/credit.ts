@@ -4,6 +4,8 @@ import type {
   AddCreditPackageResult,
   CreditBillingStatus,
   CreditPackageWithRemaining,
+  CreditSpendByUser,
+  CreditSpendUserRow,
   ICreditMonth,
   ICreditPackage,
   ICreditSpend,
@@ -237,6 +239,18 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     to: Date;
     tenantId?: string;
   }) => Promise<{ microUsd: number; count: number }>;
+  /**
+   * Actual ledger spend split by employee over a `[start, end)` window.
+   * This is the money source for the admin «Расходы» screen: the journal rows are
+   * OpenRouter's own per-request cost, so the figure never depends on a local rate
+   * table and cannot go stale when a provider changes its price or the request
+   * lands on a different platform.
+   */
+  aggregateCreditSpendByUser: (params: {
+    start: Date;
+    end: Date;
+    tenantId?: string;
+  }) => Promise<CreditSpendByUser>;
   /** Instant of the earliest journal row, or null when nothing was ever metered. */
   getFirstCreditSpendAt: (params?: { tenantId?: string }) => Promise<Date | null>;
 } {
@@ -625,6 +639,68 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
   }
 
   /**
+   * Groups the spend journal by user over `[start, end)` (by `createdAt`, served by
+   * the `createdAt` TTL index) and resolves each id to a name/email in the same
+   * pipeline.
+   *
+   * Rows with no `userId` are NOT dropped, but they are also not explained: all the
+   * data says is that the call reached the proxy without `x-librechat-user-id`.
+   * Usually that means an admin model test or an offline bench — measured on the
+   * stand 20.08.2026, 32% of the month's cost was one day of bench traffic. It can
+   * equally mean a broken path: Deep Research once sent the literal
+   * `{{LIBRECHAT_USER_ID}}` and put whole runs against nobody (fixed 17.07.2026), and
+   * a caller reading that bucket as «our own test traffic» would have written off a
+   * real employee's spend. So it is reported as its own number, unlabelled, rather
+   * than dropped or explained away: dropping it recreates the mismatch this screen
+   * exists to remove, and naming a cause the data does not carry is how the screen
+   * would lie next.
+   */
+  async function aggregateCreditSpendByUser(params: {
+    start: Date;
+    end: Date;
+    tenantId?: string;
+  }): Promise<CreditSpendByUser> {
+    const grouped = await CreditSpend().aggregate<{
+      _id: unknown;
+      microUsd: number;
+      requests: number;
+      user?: { email?: string; name?: string };
+    }>([
+      {
+        $match: {
+          ...tenantFilter(params.tenantId),
+          createdAt: { $gte: params.start, $lt: params.end },
+        },
+      },
+      {
+        $group: { _id: '$userId', microUsd: { $sum: '$microUsd' }, requests: { $sum: 1 } },
+      },
+      { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
+      { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
+    ]);
+
+    const rows: CreditSpendUserRow[] = [];
+    let unattributedMicroUsd = 0;
+    let unattributedRequests = 0;
+    for (const row of grouped) {
+      if (row._id == null) {
+        unattributedMicroUsd += row.microUsd;
+        unattributedRequests += row.requests;
+        continue;
+      }
+      rows.push({
+        userId: String(row._id),
+        email: row.user?.email,
+        name: row.user?.name,
+        microUsd: row.microUsd,
+        requests: row.requests,
+      });
+    }
+    rows.sort((a, b) => b.microUsd - a.microUsd);
+    return { rows, unattributedMicroUsd, unattributedRequests };
+  }
+
+  /**
    * When metering first recorded anything, or null on an empty journal. The external
    * reconciliation needs it to tell «we are losing spend» from «the key was already
    * spending before we started counting it» — the two look identical in a month-to-date
@@ -649,6 +725,7 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     getCreditMonth,
     sumCreditSpendJournal,
     sumCreditSpendJournalRange,
+    aggregateCreditSpendByUser,
     getFirstCreditSpendAt,
   };
 }

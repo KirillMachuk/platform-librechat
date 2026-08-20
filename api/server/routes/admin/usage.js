@@ -12,6 +12,7 @@ const requireReadUsers = requireCapability(SystemCapabilities.READ_USERS);
 
 const handlers = createAdminUsageHandlers({
   aggregateUsageByUser: db.aggregateUsageByUser,
+  aggregateCreditSpendByUser: db.aggregateCreditSpendByUser,
 });
 
 router.use(requireJwtAuth, requireAdminAccess);

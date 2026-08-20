@@ -74,6 +74,29 @@ export interface ICreditSpend extends Omit<Document, 'model'> {
   createdAt?: Date;
 }
 
+/** One employee's actual spend over a window, read from the ledger journal. */
+export interface CreditSpendUserRow {
+  userId: string;
+  email?: string;
+  name?: string;
+  /** Actual OpenRouter cost attributed to this user over the window (µ$). */
+  microUsd: number;
+  requests: number;
+}
+
+/**
+ * Ledger spend split by employee over a window. Rows carry only spend that the
+ * anonymizer could attribute to a user; everything else (admin model tests,
+ * offline benches that call the proxy directly) lands in `unattributed*` instead
+ * of being dropped, so the per-employee column still reconciles with the tenant
+ * total on the «Расходы» screen.
+ */
+export interface CreditSpendByUser {
+  rows: CreditSpendUserRow[];
+  unattributedMicroUsd: number;
+  unattributedRequests: number;
+}
+
 export interface RecordCreditSpendInput {
   /** Cost of one request in µ$ (already rounded to integer). */
   microUsd: number;
