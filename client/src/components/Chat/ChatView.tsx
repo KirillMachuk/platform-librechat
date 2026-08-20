@@ -145,7 +145,11 @@ function ChatView({ index = 0 }: { index?: number }) {
       observer.observe(scroller);
     }
     return () => observer.disconnect();
-  }, [isLandingPage]);
+    /* isLoading/conversationId в зависимостях: скроллер пересоздаётся через
+     * LoadingSpinner при каждой смене диалога и при холодном открытии по URL —
+     * без повторного запуска эффект мерил жёлоб нулём и переставал наблюдать
+     * (находка ревью р21). */
+  }, [isLandingPage, isLoading, isNavigating, conversationId]);
 
   if (messagesFailed && !isLandingPage) {
     content = <MessagesLoadError onRetry={() => void refetchMessages()} />;
@@ -189,7 +193,10 @@ function ChatView({ index = 0 }: { index?: number }) {
                      островка меряет ResizeObserver → --composer-h, от неё
                      живут нижний отступ ленты и кнопка «вниз». */
                   <div className="relative min-h-0 flex-1">
-                    <div className="h-full">{content}</div>
+                    {/* flex-обёртка ОБЯЗАТЕЛЬНА: корень MessagesView берёт высоту из
+                       flex-1, в block-родителе цепочка высот рвётся и скроллится весь
+                       main (находка ревью р21). */}
+                    <div className="flex h-full min-h-0 flex-col">{content}</div>
                     <div
                       ref={composerIslandRef}
                       className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col"

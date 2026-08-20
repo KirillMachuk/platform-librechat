@@ -40,7 +40,7 @@ const ScrollToBottom = forwardRef<HTMLDivElement, Props>(({ scrollHandler }, ref
       /* Р21-1: скроллпорт теперь кончается за островком композера — прежние
          фиксированные bottom-20px утонули бы под карточкой. Кнопка висит от
          живой высоты островка (--composer-h ставит ChatView). */
-      style={{ bottom: 'calc(var(--composer-h, 110px) + 12px)' }}
+      style={{ bottom: 'calc(var(--composer-h, 12px) + 12px)' }}
     >
       <button
         onClick={scrollHandler}

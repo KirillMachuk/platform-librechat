@@ -73,7 +73,7 @@ function MessagesViewContent({
                  нижний отступ контента равен живой высоте островка (ChatView
                  меряет её ResizeObserver'ом в --composer-h) плюс воздух, чтобы
                  покоящаяся лента не пряталась под карточкой. */
-              style={{ paddingBottom: 'calc(var(--composer-h, 110px) + 24px)' }}
+              style={{ paddingBottom: 'calc(var(--composer-h, 12px) + 24px)' }}
             >
               {(_messagesTree && _messagesTree.length == 0) || _messagesTree === null ? (
                 <div

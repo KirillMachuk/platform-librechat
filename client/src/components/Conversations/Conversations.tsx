@@ -348,7 +348,11 @@ const Conversations: FC<ConversationsProps> = ({
                overscroll-забор (р19) переехал на сам скроллер панели. */
             <WindowScroller scrollElement={scrollElement}>
               {({ height, isScrolling, registerChild, onChildScroll, scrollTop }) => (
-                <div ref={registerChild as unknown as React.Ref<HTMLDivElement>}>
+                <div
+                  /* RV типизирует registerChild как ReactNode-колбэк — по
+                     факту он принимает DOM-узел; одиночное сужение типа. */
+                  ref={(node) => (registerChild as (el: Element | null) => void)(node)}
+                >
                   <List
                     autoHeight
                     ref={containerRef}
