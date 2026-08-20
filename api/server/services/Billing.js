@@ -72,6 +72,7 @@ function getBillingWiring() {
   const reconciler = createBillingReconciler({
     openrouter,
     getCreditBillingStatus: db.getCreditBillingStatus,
+    markCreditMonthNotified: db.markCreditMonthNotified,
     sumCreditSpendJournal: db.sumCreditSpendJournal,
     sumCreditSpendJournalRange: db.sumCreditSpendJournalRange,
     getFirstCreditSpendAt: db.getFirstCreditSpendAt,
@@ -91,6 +92,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const FIRST_RECONCILE_DELAY_MS = 10 * 60 * 1000;
 /** Index self-heal cadence — independent of reconciliation, so it runs even without OpenRouter mgmt. */
 const INDEX_RESYNC_MS = 6 * 60 * 60 * 1000;
+/** Journal-vs-counter cadence — likewise independent of OpenRouter mgmt. */
+const DRIFT_CHECK_MS = 6 * 60 * 60 * 1000;
+/** First drift check shortly after boot, once Mongo is certainly up. */
+const FIRST_DRIFT_CHECK_DELAY_MS = 2 * 60 * 1000;
 
 /**
  * Ledger index health. The unique indexes back idempotency (`creditpackages`) and
@@ -104,6 +109,37 @@ const creditIndexHealth = { degraded: false, error: null, lastAttempt: null };
 /** Live snapshot for the admin summary (read through a getter so retries are visible). */
 function getCreditIndexHealth() {
   return creditIndexHealth;
+}
+
+/**
+ * Ledger self-consistency: the period counter against the per-request journal.
+ *
+ * This lives here rather than inside the daily reconciliation because that one only
+ * runs when the OpenRouter management API is configured — and on this stand it is not,
+ * so the invariant was never evaluated at all. It needs nothing but the database, and
+ * it guards the «Расходы» screen directly: the header reads the counter, the
+ * per-employee rows read the journal, and drift makes them disagree silently.
+ */
+const creditDriftHealth = { drifted: false, driftMicroUsd: 0, month: null, lastCheck: null };
+
+function getCreditDriftHealth() {
+  return creditDriftHealth;
+}
+
+/** Runs the journal-vs-counter check and records the verdict. Never throws. */
+async function checkCreditDrift() {
+  try {
+    const { reconciler } = getBillingWiring();
+    const report = await reconciler.checkInternalDrift();
+    creditDriftHealth.drifted = report.drifted;
+    creditDriftHealth.driftMicroUsd = report.driftMicroUsd;
+    creditDriftHealth.month = report.month;
+    creditDriftHealth.lastCheck = report.checkedAt;
+  } catch (err) {
+    /* A failed check is not a clean bill of health, but it is also not evidence of
+     * drift — leave the last verdict standing and say the check itself broke. */
+    logger.error('[billing] ledger drift check failed (previous verdict kept):', err);
+  }
 }
 
 /** (Re)builds the ledger's unique indexes; updates {@link creditIndexHealth}. Never throws. */
@@ -182,10 +218,42 @@ function startBillingSchedule() {
     if (typeof indexTimer.unref === 'function') {
       indexTimer.unref();
     }
+
+    // Same reasoning for the journal-vs-counter check: it needs only Mongo, and the
+    // money screen depends on the two halves agreeing, so it must not be hostage to
+    // whether the OpenRouter management API happens to be configured.
+    const firstDrift = setTimeout(() => {
+      void checkCreditDrift();
+    }, FIRST_DRIFT_CHECK_DELAY_MS);
+    if (typeof firstDrift.unref === 'function') {
+      firstDrift.unref();
+    }
+    const driftTimer = setInterval(() => {
+      void checkCreditDrift();
+    }, DRIFT_CHECK_MS);
+    if (typeof driftTimer.unref === 'function') {
+      driftTimer.unref();
+    }
   }
 
-  if (!billing.openrouter.isConfigured) {
+  if (!billing.openrouter.canReadUsage) {
+    /* Say it plainly rather than returning in silence: with no key at all there is no
+     * comparison against what OpenRouter itself billed, so a spend report that never
+     * arrives is lost for good. The internal check above still runs. */
+    logger.warn(
+      '[billing] no OpenRouter key available to read usage — no daily comparison against what the key itself was ' +
+        'billed. A lost spend report will not be detected; the ledger is only checked against itself.',
+    );
     return null;
+  }
+  if (!billing.openrouter.isConfigured) {
+    /* Reading usage is enough to compare; moving the key's limit is not possible without
+     * provisioning credentials. Worth saying, because that limit is the hard fuse under
+     * the soft block — and on this stand it does not refill. */
+    logger.warn(
+      '[billing] OpenRouter provisioning is not configured (OPENROUTER_MANAGEMENT_KEY / OPENROUTER_KEY_HASH) — ' +
+        'the daily comparison runs on the contour key, but the key spend limit is not maintained by us.',
+    );
   }
 
   const tick = () => {
@@ -203,4 +271,10 @@ function startBillingSchedule() {
   return timer;
 }
 
-module.exports = { getBillingWiring, startBillingSchedule, getCreditIndexHealth };
+module.exports = {
+  getBillingWiring,
+  startBillingSchedule,
+  getCreditIndexHealth,
+  getCreditDriftHealth,
+  checkCreditDrift,
+};

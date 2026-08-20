@@ -221,7 +221,7 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
   }) => Promise<{ packages: CreditPackageWithRemaining[]; packageSpentMicroUsd: number }>;
   markCreditMonthNotified: (params: {
     month: string;
-    kind: '80' | 'exhausted';
+    kind: '80' | 'exhausted' | 'reconcile';
     tenantId?: string;
   }) => Promise<boolean>;
   getCreditMonth: (params: { month: string; tenantId?: string }) => Promise<ICreditMonth | null>;
@@ -580,10 +580,15 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
    */
   async function markCreditMonthNotified(params: {
     month: string;
-    kind: '80' | 'exhausted';
+    kind: '80' | 'exhausted' | 'reconcile';
     tenantId?: string;
   }): Promise<boolean> {
-    const field = params.kind === '80' ? 'notified80At' : 'notifiedExhaustedAt';
+    const NOTIFY_FIELD = {
+      '80': 'notified80At',
+      exhausted: 'notifiedExhaustedAt',
+      reconcile: 'notifiedReconcileAt',
+    } as const;
+    const field = NOTIFY_FIELD[params.kind];
     const updated = await CreditMonth()
       .findOneAndUpdate(
         { ...tenantFilter<ICreditMonth>(params.tenantId), month: params.month, [field]: null },

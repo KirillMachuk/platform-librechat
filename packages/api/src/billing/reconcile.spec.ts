@@ -32,13 +32,20 @@ function openrouterOf(
   usageMonthlyUsd: number | null,
   configured = true,
   limitUsd: number | null = 300,
+  /** Read-only access — the contour key can do this without provisioning. */
+  canReadUsage = configured,
+  limitRemainingUsd: number | null = 250,
+  limitReset: string | null = 'monthly',
 ): OpenRouterManagement {
   return {
     isConfigured: configured,
+    canReadUsage,
     getKey: jest.fn().mockResolvedValue({
       limitUsd,
       usageUsd: 500,
       usageMonthlyUsd,
+      limitRemainingUsd,
+      limitReset,
       disabled: false,
       raw: {},
     }),
@@ -279,6 +286,7 @@ describe('createBillingReconciler', () => {
   it('never throws when OpenRouter errors', async () => {
     const openrouter: OpenRouterManagement = {
       isConfigured: true,
+      canReadUsage: true,
       getKey: jest.fn().mockRejectedValue(new Error('502')),
       updateLimit: jest.fn(),
     };
@@ -287,5 +295,261 @@ describe('createBillingReconciler', () => {
     expect(report.configured).toBe(true);
     expect(report.alerted).toBe(false);
     expect(report.reason).toBeDefined();
+  });
+});
+
+describe('checkInternalDrift', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  /**
+   * The whole point of splitting it out: the OpenRouter comparison needs a management
+   * key, and on the stand there is none — so folding the journal↔counter invariant into
+   * `run` meant it was never evaluated. It must stand on its own.
+   */
+  it('runs with the OpenRouter management API switched off', async () => {
+    const deps = createDeps({
+      openrouter: openrouterOf(null, false),
+      getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf(100_000_000)),
+      sumCreditSpendJournal: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 7 }),
+    });
+    const reconciler = createBillingReconciler(deps);
+
+    /** `run` refuses, as designed… */
+    await expect(reconciler.run(NOW)).resolves.toMatchObject({ configured: false });
+    /** …while the invariant that guards the «Расходы» screen is still checked. */
+    const report = await reconciler.checkInternalDrift(NOW);
+
+    expect(report).toMatchObject({
+      month: '2026-07-01',
+      journalMicroUsd: 100_000_000,
+      counterMicroUsd: 100_000_000,
+      rows: 7,
+      driftMicroUsd: 0,
+      drifted: false,
+    });
+    expect(deps.openrouter.getKey).not.toHaveBeenCalled();
+  });
+
+  it('flags a lost counter increment and records it in the audit trail', async () => {
+    const recordAudit = jest.fn();
+    const deps = createDeps({
+      openrouter: openrouterOf(null, false),
+      getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf(90_000_000)),
+      sumCreditSpendJournal: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 9 }),
+      recordAudit,
+    });
+
+    const report = await createBillingReconciler(deps).checkInternalDrift(NOW);
+
+    expect(report.drifted).toBe(true);
+    expect(report.driftMicroUsd).toBe(10_000_000);
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('INTERNAL drift'));
+    expect(recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'billing.internal_drift' }),
+    );
+  });
+
+  it('treats sub-dollar drift as an in-flight request, not a defect', async () => {
+    const recordAudit = jest.fn();
+    const deps = createDeps({
+      openrouter: openrouterOf(null, false),
+      getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf(100_000_000)),
+      /** One request landed in the journal between the two reads. */
+      sumCreditSpendJournal: jest
+        .fn()
+        .mockResolvedValue({ microUsd: 100_500_000 - 500_000, count: 2 }),
+      recordAudit,
+    });
+
+    const report = await createBillingReconciler(deps).checkInternalDrift(NOW);
+
+    expect(report.drifted).toBe(false);
+    expect(recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('is not re-read by run(): the status is fetched exactly once per pass', async () => {
+    const getCreditBillingStatus = jest.fn().mockResolvedValue(statusOf(100_000_000));
+    const deps = createDeps({ getCreditBillingStatus });
+
+    await createBillingReconciler(deps).run(NOW);
+
+    expect(getCreditBillingStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses a status the caller already has instead of reading it again', async () => {
+    const getCreditBillingStatus = jest.fn().mockResolvedValue(statusOf(100_000_000));
+    const deps = createDeps({ openrouter: openrouterOf(null, false), getCreditBillingStatus });
+
+    await createBillingReconciler(deps).checkInternalDrift(NOW, statusOf(100_000_000));
+
+    expect(getCreditBillingStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe('OpenRouter key budget', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  /**
+   * The stand's key carries a LIFETIME cap (`limit_reset: null`): $50, of which $18 was
+   * already gone when this was written. When it runs out OpenRouter disables the key and
+   * every model in the contour stops at once — for everybody, mid-period. Nothing else
+   * watches it.
+   */
+  it('warns when a non-refilling key has only months of headroom left', async () => {
+    /** $10 left of $50, burning $4.4 a month → ~2.3 months. */
+    const deps = createDeps({ openrouter: openrouterOf(4.4, false, 50, true, 10, null) });
+
+    await createBillingReconciler(deps).run(NOW);
+
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('OpenRouter key budget is running out'),
+    );
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('does NOT refill'));
+  });
+
+  /**
+   * Isolates the burn-rate projection: a quarter of the limit is still left (100 of 300,
+   * so the «low share» rule stays silent) and only the months-of-headroom test can fire.
+   * Without it the guard was green for the wrong reason — dropping the projection
+   * entirely left every test passing.
+   */
+  it('warns on burn rate alone, while a quarter of the limit is still left', async () => {
+    const deps = createDeps({ openrouter: openrouterOf(40, false, 300, true, 100, null) });
+
+    await createBillingReconciler(deps).run(NOW);
+
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('OpenRouter key budget is running out'),
+    );
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('2.5 month(s)'));
+  });
+
+  /** The same numbers on a REFILLING limit must stay silent — it cannot run out. */
+  it('ignores burn rate when the limit refills', async () => {
+    const deps = createDeps({ openrouter: openrouterOf(40, false, 300, true, 100, 'monthly') });
+
+    await createBillingReconciler(deps).run(NOW);
+
+    expect(logger.error).not.toHaveBeenCalledWith(expect.stringContaining('OpenRouter key budget'));
+  });
+
+  /**
+   * The stand as measured on 20.08.2026: $31.76 left of a $50 lifetime cap, burning
+   * $4.39 this UTC month — about 7 months. Not yet worth shouting about, and the guard
+   * must not cry wolf, or the day it does shout nobody will look.
+   */
+  it('stays quiet at the headroom the stand actually has today', async () => {
+    const deps = createDeps({ openrouter: openrouterOf(4.39, false, 50, true, 31.76, null) });
+
+    await createBillingReconciler(deps).run(NOW);
+
+    expect(logger.error).not.toHaveBeenCalledWith(expect.stringContaining('OpenRouter key budget'));
+  });
+
+  it('stays quiet about a refilling limit that is merely being used', async () => {
+    const deps = createDeps({ openrouter: openrouterOf(100, false, 300, true, 200, 'monthly') });
+
+    await createBillingReconciler(deps).run(NOW);
+
+    expect(logger.error).not.toHaveBeenCalledWith(expect.stringContaining('OpenRouter key budget'));
+  });
+
+  it('warns about a refilling limit once the window is nearly spent', async () => {
+    const deps = createDeps({ openrouter: openrouterOf(100, false, 300, true, 20, 'monthly') });
+
+    await createBillingReconciler(deps).run(NOW);
+
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('OpenRouter key budget is running out'),
+    );
+  });
+
+  /** Reading usage needs no provisioning — that gate is what left the stand blind. */
+  it('reconciles on the contour key alone, without touching the limit', async () => {
+    const openrouter = openrouterOf(3.3, false, 50, true, 31.7, null);
+    const deps = createDeps({ openrouter });
+
+    const report = await createBillingReconciler(deps).run(NOW);
+
+    expect(report.configured).toBe(true);
+    expect(openrouter.getKey).toHaveBeenCalled();
+    expect(openrouter.updateLimit).not.toHaveBeenCalled();
+  });
+
+  it('refuses to compare when there is no key at all', async () => {
+    const deps = createDeps({ openrouter: openrouterOf(null, false, null, false) });
+
+    const report = await createBillingReconciler(deps).run(NOW);
+
+    expect(report).toMatchObject({ configured: false });
+  });
+});
+
+describe('reconcile alert cadence', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  /**
+   * The gap this reports does not clear on its own: spend made with the key OUTSIDE the
+   * proxy (every `tools/` bench does that) can never reach the ledger, so it stands for
+   * the rest of the UTC month. Alerting on every run would mail it daily — and a daily
+   * alert is one nobody opens.
+   */
+  it('claims the alert once per period and stays quiet afterwards', async () => {
+    const markCreditMonthNotified = jest
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    const sendAlert = jest.fn().mockResolvedValue(undefined);
+    const deps = createDeps({
+      openrouter: openrouterOf(200),
+      sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 1 }),
+      markCreditMonthNotified,
+      sendAlert,
+    });
+    const reconciler = createBillingReconciler(deps);
+
+    const first = await reconciler.run(NOW);
+    const second = await reconciler.run(NOW);
+
+    expect(first.alerted).toBe(true);
+    expect(second.alerted).toBe(false);
+    expect(second.reason).toBe('already alerted for this period');
+    expect(sendAlert).toHaveBeenCalledTimes(1);
+    expect(markCreditMonthNotified).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'reconcile', month: '2026-07-01' }),
+    );
+  });
+
+  it('still alerts when no claim function is wired', async () => {
+    const sendAlert = jest.fn().mockResolvedValue(undefined);
+    const deps = createDeps({
+      openrouter: openrouterOf(200),
+      sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 1 }),
+      markCreditMonthNotified: undefined,
+      sendAlert,
+    });
+
+    const report = await createBillingReconciler(deps).run(NOW);
+
+    expect(report.alerted).toBe(true);
+    expect(sendAlert).toHaveBeenCalledTimes(1);
+  });
+
+  /** The message must name the cause an operator can actually act on. */
+  it('names spend made outside the proxy as a possible cause', async () => {
+    const deps = createDeps({
+      openrouter: openrouterOf(200),
+      sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 1 }),
+    });
+
+    await createBillingReconciler(deps).run(NOW);
+
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('OUTSIDE the proxy'));
   });
 });

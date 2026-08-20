@@ -27,6 +27,9 @@ export const creditMonthSchema: Schema<t.ICreditMonth> = new Schema<t.ICreditMon
     periodEnd: { type: Date, default: null },
     notified80At: { type: Date, default: null },
     notifiedExhaustedAt: { type: Date, default: null },
+    /** Set once per period when the OpenRouter comparison alerted — the drift it reports
+     *  persists for the rest of the period, so without this the alert repeats daily. */
+    notifiedReconcileAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

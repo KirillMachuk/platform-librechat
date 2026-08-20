@@ -72,6 +72,15 @@ export interface AdminBillingSummary {
    * Surfaced so the operator screen can warn instead of trusting the numbers silently.
    */
   degraded: boolean;
+  /**
+   * Whether the ledger's two halves currently disagree: the period counter (which this
+   * summary's `spentCredits` comes from) against the per-request journal (which the
+   * per-employee breakdown below it comes from). They are written from the same value,
+   * so drift means a lost counter increment — and it makes one screen contradict itself,
+   * which is precisely what the ledger-sourced breakdown was built to stop. Surfaced so
+   * the screen says so instead of quietly showing two different totals.
+   */
+  ledgerDrifted: boolean;
 }
 
 export interface AdminBillingDeps {
@@ -92,6 +101,8 @@ export interface AdminBillingDeps {
   metering: boolean;
   /** Live getter for ledger index health — true when unique indexes failed to build. */
   getDegraded?: () => boolean;
+  /** Latest journal-vs-counter verdict; absent when the check has not run yet. */
+  getLedgerDrifted?: () => boolean;
   /** Lowercased operator allowlist (env-driven — outside client-admin control). */
   operatorEmails: string[];
   /** OpenRouter limit headroom over the allowed volume (e.g. 0.1 = +10%). */
@@ -175,6 +186,7 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
       isOperator,
       metering: deps.metering,
       degraded: deps.getDegraded ? deps.getDegraded() : false,
+      ledgerDrifted: deps.getLedgerDrifted ? deps.getLedgerDrifted() : false,
     };
   }
 

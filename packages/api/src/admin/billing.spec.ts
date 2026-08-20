@@ -94,6 +94,29 @@ function createDeps(overrides: Partial<AdminBillingDeps> = {}): AdminBillingDeps
 
 describe('createAdminBillingHandlers', () => {
   describe('getSummary', () => {
+    /**
+     * The screen reads its header from the period counter and its per-employee rows
+     * from the journal. When those two disagree the screen contradicts itself, which is
+     * exactly the defect the ledger-sourced breakdown removed — so it has to say so.
+     */
+    it('reports when the ledger disagrees with itself', async () => {
+      const handlers = createAdminBillingHandlers(createDeps({ getLedgerDrifted: () => true }));
+      const { req, res, json } = createReqRes();
+
+      await handlers.getSummary(req, res);
+
+      expect(json.mock.calls[0][0].ledgerDrifted).toBe(true);
+    });
+
+    it('reports no drift when the two halves agree', async () => {
+      const handlers = createAdminBillingHandlers(createDeps({ getLedgerDrifted: () => false }));
+      const { req, res, json } = createReqRes();
+
+      await handlers.getSummary(req, res);
+
+      expect(json.mock.calls[0][0].ledgerDrifted).toBe(false);
+    });
+
     it('returns Credits-only display math (no $ fields anywhere)', async () => {
       const deps = createDeps({
         getCreditBillingStatus: jest.fn().mockResolvedValue(
@@ -238,7 +261,12 @@ describe('createAdminBillingHandlers', () => {
       const updateLimit = jest.fn().mockResolvedValue(undefined);
       const deps = createDeps({
         getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf()),
-        openrouter: { isConfigured: true, getKey: keyOf(605, 400), updateLimit },
+        openrouter: {
+          isConfigured: true,
+          canReadUsage: true,
+          getKey: keyOf(605, 400),
+          updateLimit,
+        },
       });
       const handlers = createAdminBillingHandlers(deps);
       const { req, res, json } = createReqRes({
@@ -362,7 +390,7 @@ describe('createAdminBillingHandlers', () => {
         getCreditBillingStatus: jest
           .fn()
           .mockResolvedValue(statusOf({ packageRemainingMicroUsd: 50_000_000 })),
-        openrouter: { isConfigured: true, getKey: keyOf(100, 10), updateLimit },
+        openrouter: { isConfigured: true, canReadUsage: true, getKey: keyOf(100, 10), updateLimit },
       });
       const handlers = createAdminBillingHandlers(deps);
       const { req, res, json } = createReqRes({ email: 'op@1ma.ai', body: validBody });
@@ -380,6 +408,7 @@ describe('createAdminBillingHandlers', () => {
       const deps = createDeps({
         openrouter: {
           isConfigured: true,
+          canReadUsage: true,
           getKey: jest.fn(),
           updateLimit: jest.fn().mockRejectedValue(new Error('502')),
         },
@@ -399,7 +428,12 @@ describe('createAdminBillingHandlers', () => {
           created: false,
           package: { _id: new Types.ObjectId() },
         } as AddCreditPackageResult),
-        openrouter: { isConfigured: true, getKey: jest.fn(), updateLimit: jest.fn() },
+        openrouter: {
+          isConfigured: true,
+          canReadUsage: true,
+          getKey: jest.fn(),
+          updateLimit: jest.fn(),
+        },
       });
       const handlers = createAdminBillingHandlers(deps);
       const { req, res, status, json } = createReqRes({ email: 'op@1ma.ai', body: validBody });
