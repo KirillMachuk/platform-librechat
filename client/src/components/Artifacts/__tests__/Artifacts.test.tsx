@@ -322,6 +322,45 @@ describe('Artifacts panel', () => {
         'https://docs.google.com/document/d/doc_123/edit',
       );
     });
+
+    it.each([
+      [
+        'presentation',
+        'application/vnd.google-apps.presentation',
+        'https://docs.google.com/presentation/d/slides_456/edit',
+        'com_ui_open_in_google_slides',
+      ],
+      [
+        'drive_file',
+        'application/octet-stream',
+        'https://drive.google.com/file/d/file_789/view',
+        'com_ui_open_in_google_drive',
+      ],
+    ] as const)(
+      'shows the matching safe external action for a %s preview',
+      (kind, mimeType, viewUrl, accessibleName) => {
+        const fileId = kind === 'presentation' ? 'slides_456' : 'file_789';
+        setPanelState({
+          currentArtifact: buildArtifact({
+            id: `google-workspace:${kind}:${fileId}`,
+            title: 'Shared file',
+            type: TOOL_ARTIFACT_TYPES.GOOGLE_WORKSPACE,
+            content: '',
+            googleWorkspace: {
+              provider: 'google_drive',
+              fileId,
+              name: 'Shared file',
+              mimeType,
+              viewUrl,
+              kind,
+            },
+          }),
+        });
+        renderPanel();
+
+        expect(screen.getByRole('link', { name: accessibleName })).toHaveAttribute('href', viewUrl);
+      },
+    );
   });
 
   /* Phone and desktop differ in where the view switch lives: the desktop keeps

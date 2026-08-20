@@ -10,12 +10,12 @@ import {
   isGoogleWorkspacePreviewArtifact,
   isPreviewOnlyArtifact,
 } from '~/utils/artifacts';
+import { GOOGLE_FILE_LOCALIZATION_KEYS, validateGoogleWorkspaceFile } from '~/utils/google';
 import { displayFilename } from '~/components/Chat/Messages/Content/Parts/attachmentTypes';
 import { Code, ExternalLink, Play, Reload, X } from '~/components/icons';
 import CopyButton from '~/components/Messages/Content/CopyButton';
 import { useShareContext, useMutationState } from '~/Providers';
 import GoogleWorkspacePreview from './GoogleWorkspacePreview';
-import { validateGoogleWorkspaceFile } from '~/utils/google';
 import useArtifacts from '~/hooks/Artifacts/useArtifacts';
 import DownloadArtifact from './DownloadArtifact';
 import ArtifactVersion from './ArtifactVersion';
@@ -412,18 +412,16 @@ export default function Artifacts() {
                     href={validatedGoogleWorkspace.viewUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label={
-                      googleWorkspaceFile.kind === 'document'
-                        ? localize('com_ui_open_in_google_docs')
-                        : localize('com_ui_open_in_google_sheets')
-                    }
+                    aria-label={localize(
+                      GOOGLE_FILE_LOCALIZATION_KEYS[googleWorkspaceFile.kind].openAction,
+                    )}
                   >
                     <ExternalLink size={16} aria-hidden="true" />
                     {!isMobile && (
                       <span>
-                        {googleWorkspaceFile.kind === 'document'
-                          ? localize('com_ui_open_in_google_docs')
-                          : localize('com_ui_open_in_google_sheets')}
+                        {localize(
+                          GOOGLE_FILE_LOCALIZATION_KEYS[googleWorkspaceFile.kind].openAction,
+                        )}
                       </span>
                     )}
                   </a>
