@@ -11,7 +11,6 @@ import type {
 import type { DeepResearchTier } from '../config';
 import type { DeepResearchNode } from '../graph';
 import {
-  extractText,
   readAnswer,
   lastHumanText,
   mergeUsage,
