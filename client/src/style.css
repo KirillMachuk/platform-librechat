@@ -1624,24 +1624,26 @@ input.auth-field:-webkit-autofill::first-line {
   --c-ink-label: var(--c-ink-flip-label);
 }
 
-/* The thread dissolves as it slides under the composer edge (owner 17.08-3;
-   mechanism from the msg8 widget's message-scroller: a mask-image gradient on
-   the SCROLL ELEMENT). 20px, not more: the sticky scroll-to-bottom button
-   lives inside this scroller with its bottom 20px above the edge, and the
-   content's own pb-9 (36px) keeps real text out of the faded strip when the
-   list rests at the bottom. */
-.chat-scroll-fade {
-  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 20px), transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 20px), transparent 100%);
+/* Owner 20.08 (р21-1, референс ChatGPT): the fade mask that dissolved the
+   thread near the composer is GONE — the composer is an opaque island floating
+   over a full-height scroller, text stays fully readable up to the island's
+   rounded perimeter, and only the strip BELOW the island dims what slides
+   under it. The strip mixes from the working area's own bg so it reads as the
+   same surface at partial opacity, never as a tinted band. */
+.composer-under-strip {
+  background: color-mix(in srgb, var(--presentation) 65%, transparent);
 }
 
+/* -webkit-overflow-scrolling:touch УДАЛЕНО (р21-3): свойство мертво с iOS 13
+   (нативная инерция и так есть) и несёт классический баг — сброс scrollLeft
+   в ноль, когда содержимое перерисовывается посреди инерции. Ровно это владелец
+   видел на ленте файлов: докрутка в конец при догружающихся карточках дёргала
+   ленту в начало. */
 .pan-x {
-  -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
 }
 
 .markdown-table-wrapper {
-  -webkit-overflow-scrolling: touch;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   padding-bottom: 0.25rem;

@@ -149,6 +149,9 @@ function ExpandedPanel({
   const { data: startupConfig } = useGetStartupConfig();
   const [activeLink, setActiveLink] = useState<NavLink | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  /* Р21-4: единственный скроллер панели; элемент нужен ЗНАЧЕНИЕМ (state, не
+     ref) — WindowScroller списка чатов подписывается на него при появлении. */
+  const [panelScroller, setPanelScroller] = useState<HTMLDivElement | null>(null);
 
   const toggleLabel = expanded ? 'com_nav_close_sidebar' : 'com_nav_open_sidebar';
   const toggleClick = expanded ? onCollapse : onExpand;
@@ -209,8 +212,10 @@ function ExpandedPanel({
     <div className="flex h-full w-full flex-shrink-0 flex-col px-2.5 pb-2 pt-2.5">
       {/* Шапка сайдбара — 50px против 52px у шапки рабочей области: с отступом
           карточки (8) и её рамкой логотип и селектор модели встают на одну ось
-          (канон §4). Число проверено замером прототипа, не подобрано на глаз. */}
-      <div className="flex h-[50px] flex-none items-center justify-between gap-2 px-1">
+          (канон §4). Число проверено замером прототипа, не подобрано на глаз.
+          mb-2 (владелец 20.08-р21-2): шапка отделена от контента — «Новый чат»
+          потерял собственные поля, и без этого зазора логотип прилипал к нему. */}
+      <div className="mb-2 flex h-[50px] flex-none touch-none items-center justify-between gap-2 px-1">
         <img
           src="assets/logo.svg"
           className="h-[18px] w-auto object-contain dark:invert"
@@ -242,13 +247,17 @@ function ExpandedPanel({
         />
       </div>
 
-      {/* min-h-0 + overflow: on a short phone viewport THIS block gives way and
-          scrolls, so the chats below keep their guaranteed minimum. On a
-          desktop height nothing changes — the block fits and never scrolls. */}
-      {/* 12.08-2, регрессия: внутри прокручиваемой колонки flex-дети по
-          умолчанию СЖИМАЕМЫ — на телефоне строки меню сплющило вместо того,
-          чтобы прокрутиться. Каждый ребёнок обязан держать свою высоту. */}
-      <div className="scrollbar-hover flex min-h-0 flex-col overflow-y-auto overflow-x-hidden overscroll-contain [&>*]:shrink-0">
+      {/* Р21-4 (владелец): у сайдбара ОДИН скролл — навигация и чаты едут
+          вместе, как у ChatGPT. Прежние два скроллера (навигация min-h-0 +
+          чаты с гарантированными 240px) давали мёртвые зоны: свайп с
+          заголовка «Чаты» не попадал ни в один скроллер и утекал платформе.
+          Виртуализация списка чатов при этом жива — List работает через
+          WindowScroller от ЭТОГО скроллера. [&>*]:shrink-0 — прежнее правило:
+          внутри прокручиваемой колонки flex-дети обязаны держать высоту. */}
+      <div
+        ref={setPanelScroller}
+        className="scrollbar-hover flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain [&>*]:shrink-0"
+      >
         <NewChatRow />
         <SearchChatsRow />
         {/* The open section is the one whose panel is on screen — the only notion
@@ -261,17 +270,14 @@ function ExpandedPanel({
             onSelect={handleSelect}
           />
         ))}
+        <div className="mt-3">
+          <ConversationsSection scrollElement={panelScroller} />
+        </div>
       </div>
 
-      {/* 12.08, владелец (айфон): секции выше зажимали список чатов в ноль —
-          «Чаты» открывались, а строк не было и скролла не было. Списку
-          гарантирован минимум пяти строк; при нехватке высоты сжимается и
-          прокручивается НАВИГАЦИЯ выше, а не чаты. */}
-      <div className={cn('mt-3 min-h-[240px] flex-1 overflow-hidden')}>
-        <ConversationsSection />
-      </div>
-
-      <div className="mt-auto flex-none border-t border-border-light px-1.5 pb-1.5 pt-2.5">
+      {/* touch-none (р21-4): профиль — не скроллер; свайп с него глотается,
+          тап работает. Симметрично шапке выше. */}
+      <div className="mt-auto flex-none touch-none border-t border-border-light px-1.5 pb-1.5 pt-2.5">
         <Suspense fallback={<Skeleton className="h-9 w-full rounded-xl" />}>
           <AccountSettings />
         </Suspense>

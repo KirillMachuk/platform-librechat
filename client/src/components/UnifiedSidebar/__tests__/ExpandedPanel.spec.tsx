@@ -224,6 +224,24 @@ describe('ExpandedPanel', () => {
     });
   });
 
+  describe('one scroller, fenced edges (owner р21-4)', () => {
+    /* The two-scroller layout (nav min-h-0 + chats with a guaranteed 240px)
+     * left dead zones — a swipe from the «Чаты» header or the profile strip
+     * chained to the platform behind the phone drawer. The whole panel now
+     * scrolls as ONE element; the header and profile strips swallow touches. */
+    it('the expanded panel has exactly one vertical scroller', () => {
+      const { container } = renderPanel({ expanded: true });
+      const scrollers = container.querySelectorAll('[class*="overflow-y-auto"]');
+      expect(scrollers.length).toBe(1);
+    });
+
+    it('the header and profile strips swallow touch gestures', () => {
+      const { container } = renderPanel({ expanded: true });
+      const touchFences = container.querySelectorAll('.touch-none');
+      expect(touchFences.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
   describe('menu item opens PanelDialog', () => {
     it('opens the dialog with the link title when a menu item is clicked', () => {
       renderPanel({ expanded: true });

@@ -43,7 +43,8 @@ function MessagesViewContent({
       <div className="relative flex-1 overflow-hidden overflow-y-auto overflow-x-hidden">
         <div className="relative h-full">
           <div
-            className="scrollbar-gutter-stable chat-scroll-fade"
+            className="scrollbar-gutter-stable"
+            data-chat-scroller
             onScroll={debouncedHandleScroll}
             ref={scrollableRef}
             style={{
@@ -67,7 +68,12 @@ function MessagesViewContent({
               aria-live="polite"
               aria-relevant="additions"
               aria-label={localize('com_ui_conversation_log')}
-              className="flex flex-col pb-9 pt-14 dark:bg-transparent"
+              className="flex flex-col pt-14 dark:bg-transparent"
+              /* Р21-1: скроллер тянется ПОД островок композера до низа окна —
+                 нижний отступ контента равен живой высоте островка (ChatView
+                 меряет её ResizeObserver'ом в --composer-h) плюс воздух, чтобы
+                 покоящаяся лента не пряталась под карточкой. */
+              style={{ paddingBottom: 'calc(var(--composer-h, 110px) + 24px)' }}
             >
               {(_messagesTree && _messagesTree.length == 0) || _messagesTree === null ? (
                 <div
