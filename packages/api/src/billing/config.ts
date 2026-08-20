@@ -25,6 +25,8 @@ export interface BillingConfig {
   openrouter: {
     managementKey?: string;
     keyHash?: string;
+    /** The contour's own key — enough to READ its usage for the external comparison. */
+    apiKey?: string;
     baseUrl: string;
     headroom: number;
   };
@@ -88,6 +90,9 @@ export function readBillingConfig(env: NodeJS.ProcessEnv = process.env): Billing
     openrouter: {
       managementKey: env.OPENROUTER_MANAGEMENT_KEY || undefined,
       keyHash: env.OPENROUTER_KEY_HASH || undefined,
+      /* Same variable the anonymizer forwards with — the contour key. Read-only here:
+       * `GET /api/v1/key` reports the calling key's own usage and nothing else. */
+      apiKey: env.OPENROUTER_KEY || env.OPENROUTER_API_KEY || undefined,
       baseUrl: env.OPENROUTER_MANAGEMENT_BASE_URL || 'https://openrouter.ai/api/v1',
       headroom: Number.isFinite(headroom) && headroom >= 0 ? headroom : DEFAULT_LIMIT_HEADROOM,
     },

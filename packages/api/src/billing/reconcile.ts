@@ -15,6 +15,10 @@ const DEFAULT_MIN_ABS_USD = 1;
  * beyond it (a genuine lost increment building up) is actionable.
  */
 const INTERNAL_DRIFT_TOLERANCE_MICRO_USD = MICRO_USD_PER_USD; // $1
+/** Shout about the key's own budget once fewer than this many months of headroom remain. */
+const KEY_BUDGET_WARN_MONTHS = 3;
+/** …or once this little of the limit is left, whichever comes first. */
+const KEY_BUDGET_WARN_RATIO = 0.25;
 /** Skip the OpenRouter comparison during the first hours of a fresh UTC month. */
 const EARLY_MONTH_SKIP_HOURS = 6;
 
@@ -235,9 +239,47 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
     };
   }
 
+  /**
+   * The key's own limit is a cliff, not a curve: when usage reaches it OpenRouter
+   * disables the key and every model in the contour stops at once, mid-month, for
+   * everybody. On the stand that limit does not refill (`limit_reset: null`) — it is a
+   * LIFETIME cap — so it creeps up on you: at the observed burn it is months away and
+   * then it is not. Nothing else watches it, so say it out loud while there is still
+   * time to raise it.
+   */
+  function warnIfKeyBudgetIsRunningOut(key: OpenRouterKeyInfo): void {
+    const remaining = key.limitRemainingUsd;
+    if (remaining == null || key.limitUsd == null) {
+      return;
+    }
+    const monthly = key.usageMonthlyUsd ?? 0;
+    /* A limit that refills cannot «run out in N months» — only the current window can
+     * be nearly spent. A limit that never refills is the one that creeps up on you, so
+     * only there does the burn-rate projection mean anything. */
+    const refills = key.limitReset != null;
+    const monthsLeft = !refills && monthly > 0 ? remaining / monthly : Infinity;
+    const lowShare = remaining <= key.limitUsd * KEY_BUDGET_WARN_RATIO;
+    if (monthsLeft > KEY_BUDGET_WARN_MONTHS && !lowShare) {
+      return;
+    }
+    const refill = key.limitReset ? `refills ${key.limitReset}` : 'does NOT refill (lifetime cap)';
+    logger.error(
+      `[billingReconcile] OpenRouter key budget is running out: $${remaining.toFixed(2)} left of $${key.limitUsd} (${refill}), ` +
+        `burning $${monthly.toFixed(2)} this UTC month` +
+        (Number.isFinite(monthsLeft)
+          ? ` → about ${monthsLeft.toFixed(1)} month(s) of headroom`
+          : '') +
+        '. When it runs out OpenRouter disables the key and EVERY model stops contour-wide, mid-period. Raise it before then.',
+    );
+  }
+
   async function run(now: Date = new Date()): Promise<ReconcileReport> {
-    if (!deps.openrouter.isConfigured) {
-      return { configured: false, reason: 'management key / key hash not configured' };
+    /* Reading the key's usage is all the external comparison needs, and the contour key
+     * can read its own. Requiring provisioning here is what left the stand with no
+     * external check at all: it is the ONLY thing that can see spend which never
+     * reached the ledger, and it was switched off by a credential nobody had set. */
+    if (!deps.openrouter.canReadUsage) {
+      return { configured: false, reason: 'no OpenRouter key available to read usage' };
     }
     if (isEarlyUtcMonth(now)) {
       return {
@@ -260,7 +302,12 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
         deps.getFirstCreditSpendAt({ tenantId: deps.tenantId }),
       ]);
 
-      await syncKeyLimit(status, key);
+      /* Changing the fuse needs provisioning credentials; reading usage does not. With
+       * only the contour key we still compare, we just cannot move the limit. */
+      if (deps.openrouter.isConfigured) {
+        await syncKeyLimit(status, key);
+      }
+      warnIfKeyBudgetIsRunningOut(key);
 
       /* Same invariant as the standalone check — reused so the two callers can never
        * drift apart in what they consider drift. `status` is already in hand, so this

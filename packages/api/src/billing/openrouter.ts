@@ -16,6 +16,10 @@ export interface OpenRouterKeyInfo {
   limitUsd: number | null;
   /** Lifetime usage in USD. */
   usageUsd: number | null;
+  /** Budget left before the key's own limit stops every model (USD); null when unlimited. */
+  limitRemainingUsd: number | null;
+  /** How the limit refills (`monthly`, …); null means it never does — a LIFETIME cap. */
+  limitReset: string | null;
   /**
    * Usage in the current UTC CALENDAR month. OpenRouter's monthly window resets at
    * 00:00 UTC on the 1st (per its Provisioning API docs — daily=midnight UTC,
@@ -28,15 +32,27 @@ export interface OpenRouterKeyInfo {
 }
 
 export interface OpenRouterManagement {
+  /** Provisioning credentials present — the only way to CHANGE the key's limit. */
   isConfigured: boolean;
+  /**
+   * Whether the key's own usage can be read at all. True with provisioning
+   * credentials, and also with just the contour key: `GET /api/v1/key` returns the
+   * CALLING key's usage without any management credential. That matters, because the
+   * whole external comparison — the only check that can see spend which never reached
+   * the ledger — used to be gated behind provisioning nobody had configured, leaving
+   * the stand with no external safety net at all.
+   */
+  canReadUsage: boolean;
   getKey: () => Promise<OpenRouterKeyInfo>;
-  /** Sets the key's limit (USD) with monthly reset. */
+  /** Sets the key's limit (USD) with monthly reset. Requires provisioning. */
   updateLimit: (limitUsd: number) => Promise<void>;
 }
 
 export interface OpenRouterManagementOptions {
   managementKey?: string;
   keyHash?: string;
+  /** The contour's own OpenRouter key — enough to READ its usage, never to change it. */
+  apiKey?: string;
   baseUrl?: string;
   fetchImpl?: typeof fetch;
 }
@@ -117,10 +133,11 @@ export function createOpenRouterManagement(
   const baseUrl = (options.baseUrl ?? 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
   const fetchImpl = options.fetchImpl ?? fetch;
   const isConfigured = Boolean(options.managementKey && options.keyHash);
+  const canReadUsage = isConfigured || Boolean(options.apiKey);
 
-  function headers(): Record<string, string> {
+  function headers(token?: string): Record<string, string> {
     return {
-      Authorization: `Bearer ${options.managementKey}`,
+      Authorization: `Bearer ${token ?? options.managementKey}`,
       'Content-Type': 'application/json',
     };
   }
@@ -133,9 +150,22 @@ export function createOpenRouterManagement(
     }
   }
 
+  /**
+   * Reads the key's usage. Prefers the provisioning endpoint when configured (it can
+   * address the key by hash), and otherwise asks the contour key about itself. Both
+   * return the same `{ data: … }` shape with `usage`/`usage_monthly`/`limit`, so the
+   * comparison downstream does not care which one answered.
+   */
   async function getKey(): Promise<OpenRouterKeyInfo> {
-    requireConfigured();
-    const res = await fetchImpl(`${baseUrl}/keys/${options.keyHash}`, { headers: headers() });
+    if (!canReadUsage) {
+      throw new Error(
+        '[openrouter] cannot read key usage: neither OPENROUTER_MANAGEMENT_KEY/OPENROUTER_KEY_HASH nor the contour key are configured',
+      );
+    }
+    const url = isConfigured ? `${baseUrl}/keys/${options.keyHash}` : `${baseUrl}/key`;
+    const res = await fetchImpl(url, {
+      headers: headers(isConfigured ? undefined : options.apiKey),
+    });
     if (!res.ok) {
       throw new Error(`[openrouter] GET key failed: ${res.status}`);
     }
@@ -144,6 +174,8 @@ export function createOpenRouterManagement(
       limitUsd: toNumberOrNull(data.limit),
       usageUsd: toNumberOrNull(data.usage),
       usageMonthlyUsd: toNumberOrNull(data.usage_monthly),
+      limitRemainingUsd: toNumberOrNull(data.limit_remaining),
+      limitReset: typeof data.limit_reset === 'string' ? data.limit_reset : null,
       disabled: data.disabled === true,
       raw: data,
     };
@@ -165,5 +197,5 @@ export function createOpenRouterManagement(
     logger.info(`[openrouter] key limit updated to $${limitUsd}/month`);
   }
 
-  return { isConfigured, getKey, updateLimit };
+  return { isConfigured, canReadUsage, getKey, updateLimit };
 }

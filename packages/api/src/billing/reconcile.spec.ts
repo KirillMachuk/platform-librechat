@@ -32,13 +32,20 @@ function openrouterOf(
   usageMonthlyUsd: number | null,
   configured = true,
   limitUsd: number | null = 300,
+  /** Read-only access — the contour key can do this without provisioning. */
+  canReadUsage = configured,
+  limitRemainingUsd: number | null = 250,
+  limitReset: string | null = 'monthly',
 ): OpenRouterManagement {
   return {
     isConfigured: configured,
+    canReadUsage,
     getKey: jest.fn().mockResolvedValue({
       limitUsd,
       usageUsd: 500,
       usageMonthlyUsd,
+      limitRemainingUsd,
+      limitReset,
       disabled: false,
       raw: {},
     }),
@@ -279,6 +286,7 @@ describe('createBillingReconciler', () => {
   it('never throws when OpenRouter errors', async () => {
     const openrouter: OpenRouterManagement = {
       isConfigured: true,
+      canReadUsage: true,
       getKey: jest.fn().mockRejectedValue(new Error('502')),
       updateLimit: jest.fn(),
     };
@@ -291,6 +299,10 @@ describe('createBillingReconciler', () => {
 });
 
 describe('checkInternalDrift', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   /**
    * The whole point of splitting it out: the OpenRouter comparison needs a management
    * key, and on the stand there is none — so folding the journal↔counter invariant into
@@ -364,5 +376,80 @@ describe('checkInternalDrift', () => {
     await createBillingReconciler(deps).checkInternalDrift(NOW, statusOf(100_000_000));
 
     expect(getCreditBillingStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe('OpenRouter key budget', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  /**
+   * The stand's key carries a LIFETIME cap (`limit_reset: null`): $50, of which $18 was
+   * already gone when this was written. When it runs out OpenRouter disables the key and
+   * every model in the contour stops at once — for everybody, mid-period. Nothing else
+   * watches it.
+   */
+  it('warns when a non-refilling key has only months of headroom left', async () => {
+    /** $10 left of $50, burning $4.4 a month → ~2.3 months. */
+    const deps = createDeps({ openrouter: openrouterOf(4.4, false, 50, true, 10, null) });
+
+    await createBillingReconciler(deps).run(NOW);
+
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('OpenRouter key budget is running out'),
+    );
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('does NOT refill'));
+  });
+
+  /**
+   * The stand as measured on 20.08.2026: $31.76 left of a $50 lifetime cap, burning
+   * $4.39 this UTC month — about 7 months. Not yet worth shouting about, and the guard
+   * must not cry wolf, or the day it does shout nobody will look.
+   */
+  it('stays quiet at the headroom the stand actually has today', async () => {
+    const deps = createDeps({ openrouter: openrouterOf(4.39, false, 50, true, 31.76, null) });
+
+    await createBillingReconciler(deps).run(NOW);
+
+    expect(logger.error).not.toHaveBeenCalledWith(expect.stringContaining('OpenRouter key budget'));
+  });
+
+  it('stays quiet about a refilling limit that is merely being used', async () => {
+    const deps = createDeps({ openrouter: openrouterOf(100, false, 300, true, 200, 'monthly') });
+
+    await createBillingReconciler(deps).run(NOW);
+
+    expect(logger.error).not.toHaveBeenCalledWith(expect.stringContaining('OpenRouter key budget'));
+  });
+
+  it('warns about a refilling limit once the window is nearly spent', async () => {
+    const deps = createDeps({ openrouter: openrouterOf(100, false, 300, true, 20, 'monthly') });
+
+    await createBillingReconciler(deps).run(NOW);
+
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('OpenRouter key budget is running out'),
+    );
+  });
+
+  /** Reading usage needs no provisioning — that gate is what left the stand blind. */
+  it('reconciles on the contour key alone, without touching the limit', async () => {
+    const openrouter = openrouterOf(3.3, false, 50, true, 31.7, null);
+    const deps = createDeps({ openrouter });
+
+    const report = await createBillingReconciler(deps).run(NOW);
+
+    expect(report.configured).toBe(true);
+    expect(openrouter.getKey).toHaveBeenCalled();
+    expect(openrouter.updateLimit).not.toHaveBeenCalled();
+  });
+
+  it('refuses to compare when there is no key at all', async () => {
+    const deps = createDeps({ openrouter: openrouterOf(null, false, null, false) });
+
+    const report = await createBillingReconciler(deps).run(NOW);
+
+    expect(report).toMatchObject({ configured: false });
   });
 });

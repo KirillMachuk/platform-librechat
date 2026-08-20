@@ -261,7 +261,12 @@ describe('createAdminBillingHandlers', () => {
       const updateLimit = jest.fn().mockResolvedValue(undefined);
       const deps = createDeps({
         getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf()),
-        openrouter: { isConfigured: true, getKey: keyOf(605, 400), updateLimit },
+        openrouter: {
+          isConfigured: true,
+          canReadUsage: true,
+          getKey: keyOf(605, 400),
+          updateLimit,
+        },
       });
       const handlers = createAdminBillingHandlers(deps);
       const { req, res, json } = createReqRes({
@@ -385,7 +390,7 @@ describe('createAdminBillingHandlers', () => {
         getCreditBillingStatus: jest
           .fn()
           .mockResolvedValue(statusOf({ packageRemainingMicroUsd: 50_000_000 })),
-        openrouter: { isConfigured: true, getKey: keyOf(100, 10), updateLimit },
+        openrouter: { isConfigured: true, canReadUsage: true, getKey: keyOf(100, 10), updateLimit },
       });
       const handlers = createAdminBillingHandlers(deps);
       const { req, res, json } = createReqRes({ email: 'op@1ma.ai', body: validBody });
@@ -403,6 +408,7 @@ describe('createAdminBillingHandlers', () => {
       const deps = createDeps({
         openrouter: {
           isConfigured: true,
+          canReadUsage: true,
           getKey: jest.fn(),
           updateLimit: jest.fn().mockRejectedValue(new Error('502')),
         },
@@ -422,7 +428,12 @@ describe('createAdminBillingHandlers', () => {
           created: false,
           package: { _id: new Types.ObjectId() },
         } as AddCreditPackageResult),
-        openrouter: { isConfigured: true, getKey: jest.fn(), updateLimit: jest.fn() },
+        openrouter: {
+          isConfigured: true,
+          canReadUsage: true,
+          getKey: jest.fn(),
+          updateLimit: jest.fn(),
+        },
       });
       const handlers = createAdminBillingHandlers(deps);
       const { req, res, status, json } = createReqRes({ email: 'op@1ma.ai', body: validBody });

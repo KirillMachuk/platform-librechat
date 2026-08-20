@@ -235,17 +235,24 @@ function startBillingSchedule() {
     }
   }
 
-  if (!billing.openrouter.isConfigured) {
-    /* Say it plainly rather than returning in silence: without the management API there
-     * is no comparison against what OpenRouter itself billed, so a spend report that
-     * never arrives is lost for good, and the key's monthly limit — the hard fuse under
-     * the soft block — is nobody's job. The internal check above still runs. */
+  if (!billing.openrouter.canReadUsage) {
+    /* Say it plainly rather than returning in silence: with no key at all there is no
+     * comparison against what OpenRouter itself billed, so a spend report that never
+     * arrives is lost for good. The internal check above still runs. */
     logger.warn(
-      '[billing] OpenRouter management API is not configured (OPENROUTER_MANAGEMENT_KEY / OPENROUTER_KEY_HASH) — ' +
-        "no daily comparison against the key's own usage, and the key spend limit is not maintained. " +
-        'A lost spend report will not be detected; the ledger is only checked against itself.',
+      '[billing] no OpenRouter key available to read usage — no daily comparison against what the key itself was ' +
+        'billed. A lost spend report will not be detected; the ledger is only checked against itself.',
     );
     return null;
+  }
+  if (!billing.openrouter.isConfigured) {
+    /* Reading usage is enough to compare; moving the key's limit is not possible without
+     * provisioning credentials. Worth saying, because that limit is the hard fuse under
+     * the soft block — and on this stand it does not refill. */
+    logger.warn(
+      '[billing] OpenRouter provisioning is not configured (OPENROUTER_MANAGEMENT_KEY / OPENROUTER_KEY_HASH) — ' +
+        'the daily comparison runs on the contour key, but the key spend limit is not maintained by us.',
+    );
   }
 
   const tick = () => {
