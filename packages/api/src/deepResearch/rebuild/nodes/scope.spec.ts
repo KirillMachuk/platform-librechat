@@ -76,6 +76,17 @@ describe('createScopeNode', () => {
     expect(update.researchBrief).toBe('я не знаю');
   });
 
+  it("an EMPTY answer yields the USER'S REQUEST as the brief, never a blank one", async () => {
+    /**
+     * `parseScopeOutput` falls back to the raw text, and when the model returns nothing the
+     * raw text is nothing — the run then reasoned over a BLANK brief all the way to REPORT.
+     * The user's own request is always a usable brief; blankness never is.
+     */
+    const update = await scopeWith('')(stateWith([new HumanMessage('изучи рынок ЭДО в Беларуси')]));
+    expect(update.researchBrief).toBe('изучи рынок ЭДО в Беларуси');
+    expect(update.jurisdiction).toBe('UNSPECIFIED');
+  });
+
   it('forwards the abort signal to the model call (H1)', async () => {
     const model = new FakeListChatModel({ responses: ['{"jurisdiction":"RU","brief":"b"}'] });
     const spy = jest.spyOn(model, 'invoke');

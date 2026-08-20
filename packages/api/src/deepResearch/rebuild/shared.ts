@@ -1,5 +1,54 @@
+import { logger } from '@librechat/data-schemas';
 import type { AIMessage, AIMessageChunk, BaseMessage } from '@langchain/core/messages';
 import type { DeepResearchTokenUsage } from './state';
+
+/** What a model call actually returned — beyond "there is some text". */
+export interface ModelAnswer {
+  /** The text, already trimmed. */
+  text: string;
+  /** Nothing usable came back. */
+  empty: boolean;
+  /** The provider stopped at the output ceiling: the text is CUT, not finished. */
+  truncated: boolean;
+}
+
+/**
+ * Reads a model answer and SAYS SO when it is degraded.
+ *
+ * Every node in this graph used to ask only "did I get text?", and a degraded answer
+ * therefore travelled on as if it were a good one — each time surfacing later as a
+ * different mystery. All of these were found one production run at a time:
+ *   - SCOPE returning nothing produced an EMPTY research brief, and the run researched
+ *     nothing in particular;
+ *   - SUPERVISOR returning nothing fell back to researching the whole brief as one
+ *     question, silently costing the round its parallel fan-out (7 of 28 calls, measured);
+ *   - COMPRESS returning nothing produced a finding with an EMPTY digest that still
+ *     counted towards `findings.length`;
+ *   - REPORT returning a CUT answer shipped it to the user as a finished report — on
+ *     2026-08-20 that was 1013 characters ending mid-word, with no error anywhere.
+ *
+ * Truncation is readable: `response_metadata.finish_reason === 'length'` (verified live
+ * against the stand's own provider through the anonymizer — the non-streaming path does
+ * expose it, unlike `usage`). A cut answer can also be EMPTY: with a small ceiling a
+ * reasoning model spends the whole budget thinking and returns zero characters.
+ *
+ * The log line is the point. Callers keep deciding what to do — but a degradation can no
+ * longer pass in silence, which is what made each of these cost a live investigation.
+ */
+export function readAnswer(node: string, response: BaseMessage): ModelAnswer {
+  const text = extractText(response).trim();
+  const finishReason = (response.response_metadata as { finish_reason?: unknown } | undefined)
+    ?.finish_reason;
+  const truncated = finishReason === 'length';
+  const empty = text.length === 0;
+  if (empty || truncated) {
+    logger.warn(
+      `[deepResearch:${node}] degraded answer: ${empty ? 'EMPTY' : `cut at ${text.length} chars`}` +
+        ` (finish_reason=${String(finishReason ?? 'unset')})`,
+    );
+  }
+  return { text, empty, truncated };
+}
 
 /** Plain-text content of a message, flattening complex content blocks. */
 export function extractText(message: BaseMessage): string {

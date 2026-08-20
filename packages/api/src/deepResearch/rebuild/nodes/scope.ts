@@ -4,7 +4,7 @@ import type { RunnableConfig } from '@langchain/core/runnables';
 import type { DeepResearchState, DeepResearchStateUpdate } from '../state';
 import {
   lastHumanText,
-  extractText,
+  readAnswer,
   usageFromExchange,
   toErrorMessage,
   tolerantJsonParse,
@@ -56,10 +56,16 @@ export function createScopeNode(deps: ScopeNodeDeps) {
         new HumanMessage(request),
       ];
       const response = await deps.model.invoke(prompt, { signal: config?.signal });
-      const { jurisdiction, brief } = parseScopeOutput(extractText(response));
+      const answer = readAnswer('scope', response);
+      const { jurisdiction, brief } = parseScopeOutput(answer.text);
       return {
         jurisdiction,
-        researchBrief: brief,
+        /**
+         * An empty answer used to yield an EMPTY brief — `parseScopeOutput` falls back to
+         * the raw text, and the raw text was nothing. Every later node then reasoned over
+         * a blank brief. The user's own request is always a usable brief; blankness never is.
+         */
+        researchBrief: brief || request,
         tokenUsage: usageFromExchange(prompt, response),
       };
     } catch (error) {

@@ -12,6 +12,7 @@ import type { DeepResearchTier } from '../config';
 import type { DeepResearchNode } from '../graph';
 import {
   extractText,
+  readAnswer,
   lastHumanText,
   mergeUsage,
   toErrorMessage,
@@ -131,22 +132,27 @@ export async function composeReport(params: {
         new HumanMessage(fenceUntrusted(formatFindings(findings, perDigestCap), nonce)),
       ];
       const response = await reportModel.invoke(prompt, { signal });
-      const text = extractText(response).trim();
-      if (text) {
-        return { text, usage: usageFromExchange(prompt, response), fellBack: false };
+      const answer = readAnswer('report', response);
+      /**
+       * A CUT answer is not a report. It used to be returned as one: on 2026-08-20 the
+       * user received 1013 characters ending mid-word, with no error and no marker —
+       * the node only asked whether there was text. Truncation takes the same path as an
+       * empty answer, and for the same reason: halving the digest cap frees output budget,
+       * which is exactly what a run that hit the ceiling needs.
+       */
+      if (!answer.empty && !answer.truncated) {
+        return { text: answer.text, usage: usageFromExchange(prompt, response), fellBack: false };
       }
       /**
-       * An EMPTY answer used to skip the retry loop and hand the user a fallback notice —
-       * the one case where the machinery right above was built and then not used. The
-       * whole run's material was thrown away on a single silent non-answer.
-       *
-       * It is the same shape of failure the loop already handles: measured on the stand,
-       * a run that gathered 7 findings and 355k tokens got an empty report and the user
-       * saw "пустой ответ модели" with nothing else. Halving the digest cap is exactly
-       * the right response — an oversized prompt is the likeliest reason a model returns
-       * nothing without raising a context error — and even when the emptiness is the
-       * provider's own intermittent one, a second attempt costs one call against losing
-       * the entire research.
+       * Both degradations take the SAME path, and both were found the expensive way:
+       *   - EMPTY skipped the retry loop entirely and handed the user a fallback notice —
+       *     a run that had gathered 7 findings and 355k tokens was thrown away on one
+       *     silent non-answer;
+       *   - CUT was returned as a finished report — 1013 characters ending mid-word.
+       * Halving the digest cap answers both: an oversized prompt is the likeliest reason a
+       * model returns nothing without raising a context error, and it is by definition the
+       * reason it runs out of output budget. Even when the emptiness is the provider's own
+       * intermittent one, a second attempt costs one call against losing the research.
        *
        * Usage from the discarded attempt is still counted: the call was billed.
        */
@@ -155,7 +161,9 @@ export async function composeReport(params: {
         continue;
       }
       return {
-        text: buildFallbackReport({ reason: 'пустой ответ модели' }),
+        text: buildFallbackReport({
+          reason: answer.truncated ? 'ответ модели оборван' : 'пустой ответ модели',
+        }),
         usage: spentOnEmpty,
         fellBack: true,
       };
