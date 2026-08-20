@@ -368,7 +368,7 @@ describe('Artifacts panel', () => {
 
       const frame = screen.getByTitle('Budget');
       const surface = frame.closest('.fixed');
-      expect(surface).toHaveStyle({ height: '100vh' });
+      expect(surface).toHaveStyle({ height: '100dvh' });
       expect(surface).not.toHaveClass('rounded-t-[20px]');
       expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
       expect(

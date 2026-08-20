@@ -251,6 +251,8 @@ export default function Artifacts() {
       ? (Math.min(blurAmount, MAX_BLUR_AMOUNT) / MAX_BLUR_AMOUNT) * MAX_BACKDROP_OPACITY
       : 0;
   const mobileHeaderAlignment = isGoogleWorkspacePreview ? 'justify-between' : 'justify-center';
+  // `vh` includes Safari's retractable browser chrome and can push a full-screen header off-screen.
+  const mobilePanelHeight = isGoogleWorkspacePreview ? '100dvh' : `${height}vh`;
   let previewBody: React.ReactNode;
   if (isFilePreview) {
     previewBody = <FilePreviewBody artifact={currentArtifact} />;
@@ -307,11 +309,7 @@ export default function Artifacts() {
                     : 'translate-x-5 opacity-0 transition-all duration-300',
                 ),
           )}
-          style={
-            isMobile
-              ? { height: isGoogleWorkspacePreview ? '100vh' : `${height}vh` }
-              : { overflow: 'hidden' }
-          }
+          style={isMobile ? { height: mobilePanelHeight } : { overflow: 'hidden' }}
         >
           {isMobile && !isGoogleWorkspacePreview && (
             <div
