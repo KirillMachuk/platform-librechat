@@ -166,6 +166,15 @@ export type AdminUsageReport = {
   from: string;
   to: string;
   rows: AdminUsageRow[];
+  /**
+   * Actual cost the ledger could not attribute to any employee over the window,
+   * in the same unit as `totalCredits` (1 000 000 = $1): admin model tests and
+   * offline benches call the proxy without a user header. Reported so the employee
+   * column plus this remainder reconciles with the tenant total.
+   */
+  unattributedCredits: number;
+  unattributedUsd: number;
+  unattributedRequests: number;
 };
 
 /** A single audit-log entry as returned by the admin audit endpoint. */
