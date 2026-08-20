@@ -212,6 +212,16 @@ describe('ExpandedPanel', () => {
       fireEvent.click(link);
       expect(mockNewConversation).toHaveBeenCalledTimes(1);
     });
+
+    /* Owner 20.08-2: the card look (hairline + card bg) is the whole
+     * distinction — the prototype's extra mb-2.5/mt-1.5 made its spacing
+     * differ from every other row and was removed. An unguarded look
+     * decision gets silently reverted (#265) — this pins the removal. */
+    it('carries no margins of its own — row spacing is uniform', () => {
+      renderPanel({ expanded: true });
+      const link = screen.getByTestId('new-chat-button');
+      expect(link.className).not.toMatch(/(^|\s)-?m[bty]?-/);
+    });
   });
 
   describe('menu item opens PanelDialog', () => {
