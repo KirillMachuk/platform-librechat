@@ -4,7 +4,11 @@ const { SystemCapabilities } = require('@librechat/data-schemas');
 const { requireCapability } = require('~/server/middleware/roles/capabilities');
 const { requireJwtAuth } = require('~/server/middleware');
 const { recordAudit } = require('~/server/services/Audit');
-const { getBillingWiring, getCreditIndexHealth } = require('~/server/services/Billing');
+const {
+  getBillingWiring,
+  getCreditIndexHealth,
+  getCreditDriftHealth,
+} = require('~/server/services/Billing');
 
 /**
  * Admin billing («Кредиты»):
@@ -34,6 +38,7 @@ function getHandlers() {
     anchorDay: config.anchorDay,
     metering: config.enabled,
     getDegraded: () => getCreditIndexHealth().degraded,
+    getLedgerDrifted: () => getCreditDriftHealth().drifted,
     operatorEmails: config.operatorEmails,
     limitHeadroom: config.openrouter.headroom,
     openrouter,

@@ -1,9 +1,4 @@
-import {
-  logger,
-  microUsdToCredits,
-  servicePeriodKey,
-  MICRO_USD_PER_USD,
-} from '@librechat/data-schemas';
+import { logger, microUsdToCredits, MICRO_USD_PER_USD } from '@librechat/data-schemas';
 import type { AuditLogInput, CreditBillingStatus } from '@librechat/data-schemas';
 import type { OpenRouterManagement, OpenRouterKeyInfo } from './openrouter';
 import type { BillingAlert } from './types';
@@ -35,6 +30,30 @@ function isEarlyUtcMonth(at: Date): boolean {
 /** First instant of the UTC calendar month containing `at`. */
 function startOfUtcMonth(at: Date): Date {
   return new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), 1, 0, 0, 0));
+}
+
+/**
+ * The ledger's own consistency: the period's per-request journal sum against the
+ * period counter. They are written from the same rounded µ$ value, so they must be
+ * equal; persistent drift means a counter increment was lost (a crash between the
+ * journal write and the `$inc`).
+ *
+ * It matters more than it looks: the admin «Расходы» screen reads its header from the
+ * COUNTER and the per-employee breakdown from the JOURNAL. Drift makes that one screen
+ * contradict itself again — the exact defect the ledger-sourced breakdown was built to
+ * remove — and nothing else would notice.
+ */
+export interface InternalDriftReport {
+  /** Billing-period key (`YYYY-MM-DD`). */
+  month: string;
+  journalMicroUsd: number;
+  counterMicroUsd: number;
+  rows: number;
+  /** journal − counter; positive means the counter under-counts. */
+  driftMicroUsd: number;
+  /** Beyond the in-flight tolerance — actionable. */
+  drifted: boolean;
+  checkedAt: Date;
 }
 
 export interface ReconcileReport {
@@ -101,6 +120,7 @@ export interface BillingReconcilerDeps {
  */
 export function createBillingReconciler(deps: BillingReconcilerDeps): {
   run: (now?: Date) => Promise<ReconcileReport>;
+  checkInternalDrift: (now?: Date, known?: CreditBillingStatus) => Promise<InternalDriftReport>;
 } {
   const threshold = deps.thresholdRatio ?? DEFAULT_THRESHOLD_RATIO;
   const minAbsUsd = deps.minAbsUsd ?? DEFAULT_MIN_ABS_USD;
@@ -153,6 +173,68 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
     }
   }
 
+  /**
+   * The internal half, on its own — it needs nothing but the database.
+   *
+   * Kept callable without {@link run} on purpose: the OpenRouter comparison requires a
+   * management key, and on this stand there is none, so folding this check into `run`
+   * meant the cheap invariant that guards the «Расходы» screen was never evaluated
+   * either. A check that only runs when an unrelated integration is configured is a
+   * check that does not run.
+   *
+   * `known` lets a caller that already fetched the status reuse it; standalone callers
+   * omit it and pay one extra read.
+   */
+  async function checkInternalDrift(
+    now: Date = new Date(),
+    known?: CreditBillingStatus,
+  ): Promise<InternalDriftReport> {
+    const status =
+      known ??
+      (await deps.getCreditBillingStatus({
+        poolMicroUsd: deps.poolMicroUsd,
+        tenantId: deps.tenantId,
+        anchorDay: deps.anchorDay,
+        at: now,
+      }));
+    const journal = await deps.sumCreditSpendJournal({
+      month: status.month,
+      tenantId: deps.tenantId,
+    });
+    const driftMicroUsd = journal.microUsd - status.spentMicroUsd;
+    const drifted = Math.abs(driftMicroUsd) > INTERNAL_DRIFT_TOLERANCE_MICRO_USD;
+    if (drifted) {
+      logger.error(
+        `[billingReconcile] INTERNAL drift for period ${status.month}: journal=${journal.microUsd}µ$ (${journal.count} rows) vs period counter=${status.spentMicroUsd}µ$ (Δ=${driftMicroUsd}µ$). ` +
+          'Likely a lost counter increment (crash between the journal write and the $inc). ' +
+          'The «Расходы» screen reads its header from the counter and its per-employee rows from the journal, so it now disagrees with itself. ' +
+          'If it clears next run it was an in-flight request; if it persists, investigate — this check never auto-fixes.',
+      );
+      deps.recordAudit({
+        actorRole: 'RECONCILER',
+        action: 'billing.internal_drift',
+        targetType: 'billing',
+        targetId: status.month,
+        metadata: {
+          month: status.month,
+          journalMicroUsd: journal.microUsd,
+          counterMicroUsd: status.spentMicroUsd,
+          driftMicroUsd,
+          rows: journal.count,
+        },
+      });
+    }
+    return {
+      month: status.month,
+      journalMicroUsd: journal.microUsd,
+      counterMicroUsd: status.spentMicroUsd,
+      rows: journal.count,
+      driftMicroUsd,
+      drifted,
+      checkedAt: now,
+    };
+  }
+
   async function run(now: Date = new Date()): Promise<ReconcileReport> {
     if (!deps.openrouter.isConfigured) {
       return { configured: false, reason: 'management key / key hash not configured' };
@@ -165,9 +247,8 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
       };
     }
     try {
-      const periodKey = servicePeriodKey(now, deps.anchorDay);
       const utcMonthStart = startOfUtcMonth(now);
-      const [status, key, periodJournal, utcMonthJournal, firstSpendAt] = await Promise.all([
+      const [status, key, utcMonthJournal, firstSpendAt] = await Promise.all([
         deps.getCreditBillingStatus({
           poolMicroUsd: deps.poolMicroUsd,
           tenantId: deps.tenantId,
@@ -175,25 +256,17 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
           at: now,
         }),
         deps.openrouter.getKey(),
-        deps.sumCreditSpendJournal({ month: periodKey, tenantId: deps.tenantId }),
         deps.sumCreditSpendJournalRange({ from: utcMonthStart, to: now, tenantId: deps.tenantId }),
         deps.getFirstCreditSpendAt({ tenantId: deps.tenantId }),
       ]);
 
       await syncKeyLimit(status, key);
 
-      /* Internal consistency: the current period's per-request journal sum must equal
-       * the period counter — both are written from the same rounded µ$ value. Persistent
-       * drift means a lost counter increment (a crash between the journal write and the
-       * $inc). We surface it in logs and the report, but never auto-fix it. */
-      const internalDriftMicroUsd = periodJournal.microUsd - status.spentMicroUsd;
-      if (Math.abs(internalDriftMicroUsd) > INTERNAL_DRIFT_TOLERANCE_MICRO_USD) {
-        logger.error(
-          `[billingReconcile] INTERNAL drift for period ${status.month}: journal=${periodJournal.microUsd}µ$ (${periodJournal.count} rows) vs period counter=${status.spentMicroUsd}µ$ (Δ=${internalDriftMicroUsd}µ$). ` +
-            'Likely a lost counter increment (crash between the journal write and the $inc). ' +
-            'If it clears next run it was an in-flight request; if it persists, investigate — reconcile does not auto-fix.',
-        );
-      }
+      /* Same invariant as the standalone check — reused so the two callers can never
+       * drift apart in what they consider drift. `status` is already in hand, so this
+       * costs one extra read at most. */
+      const internal = await checkInternalDrift(now, status);
+      const internalDriftMicroUsd = internal.driftMicroUsd;
 
       /* External: the journal over THIS UTC calendar month (matching OpenRouter's
        * usage_monthly window) vs the key's usage. Independent of the billing period. */
@@ -205,7 +278,7 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
           month: status.month,
           ledgerUsd,
           ledgerCredits: microUsdToCredits(utcMonthJournal.microUsd),
-          journalMicroUsd: periodJournal.microUsd,
+          journalMicroUsd: internal.journalMicroUsd,
           internalDriftMicroUsd,
           diffPercent: null,
           alerted: false,
@@ -238,7 +311,7 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
         openrouterCredits: Math.round(openrouterUsd * 100),
         ledgerUsd,
         openrouterUsd,
-        journalMicroUsd: periodJournal.microUsd,
+        journalMicroUsd: internal.journalMicroUsd,
         internalDriftMicroUsd,
         diffPercent,
         alerted: shouldAlert,
@@ -254,7 +327,7 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
        * trusted as «леджер сходится с ключом». This one line is how an operator
        * verifies that Credits track the real OpenRouter key spend. */
       logger.info(
-        `[billingReconcile] UTC-month ledger $${ledgerUsd.toFixed(6)} (${report.ledgerCredits} Cr, ${utcMonthJournal.count} rows) vs OpenRouter usage_monthly $${openrouterUsd.toFixed(6)} → diff ${diffPercent}% ($${diffUsd.toFixed(6)}); alert=${shouldAlert} (needs >${threshold * 100}% AND >$${minAbsUsd}${partialLedger ? ', HELD — ' + report.reason : ''}). Period ${status.month}: journal=${periodJournal.microUsd}µ$ counter=${status.spentMicroUsd}µ$ drift=${internalDriftMicroUsd}µ$`,
+        `[billingReconcile] UTC-month ledger $${ledgerUsd.toFixed(6)} (${report.ledgerCredits} Cr, ${utcMonthJournal.count} rows) vs OpenRouter usage_monthly $${openrouterUsd.toFixed(6)} → diff ${diffPercent}% ($${diffUsd.toFixed(6)}); alert=${shouldAlert} (needs >${threshold * 100}% AND >$${minAbsUsd}${partialLedger ? ', HELD — ' + report.reason : ''}). Period ${status.month}: journal=${internal.journalMicroUsd}µ$ counter=${status.spentMicroUsd}µ$ drift=${internalDriftMicroUsd}µ$`,
       );
 
       if (shouldAlert) {
@@ -285,5 +358,5 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
     }
   }
 
-  return { run };
+  return { run, checkInternalDrift };
 }

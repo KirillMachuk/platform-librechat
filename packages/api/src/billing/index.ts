@@ -6,6 +6,6 @@ export { readBillingConfig, DEFAULT_POOL_CREDITS, DEFAULT_LIMIT_HEADROOM } from 
 export type { BillingIngestDeps } from './ingest';
 export type { BillingNotifierDeps } from './notify';
 export type { OpenRouterManagement, OpenRouterKeyInfo } from './openrouter';
-export type { BillingReconcilerDeps, ReconcileReport } from './reconcile';
+export type { BillingReconcilerDeps, ReconcileReport, InternalDriftReport } from './reconcile';
 export type { BillingConfig } from './config';
 export type { BillingAlert, BillingAlertKind } from './types';

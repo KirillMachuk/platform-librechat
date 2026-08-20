@@ -41,6 +41,7 @@ export type AuditAction =
   | 'billing.threshold_80'
   | 'billing.exhausted'
   | 'billing.reconcile_alert'
+  | 'billing.internal_drift'
   | 'billing.limit_updated';
 
 /**

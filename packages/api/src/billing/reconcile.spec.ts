@@ -289,3 +289,80 @@ describe('createBillingReconciler', () => {
     expect(report.reason).toBeDefined();
   });
 });
+
+describe('checkInternalDrift', () => {
+  /**
+   * The whole point of splitting it out: the OpenRouter comparison needs a management
+   * key, and on the stand there is none — so folding the journal↔counter invariant into
+   * `run` meant it was never evaluated. It must stand on its own.
+   */
+  it('runs with the OpenRouter management API switched off', async () => {
+    const deps = createDeps({
+      openrouter: openrouterOf(null, false),
+      getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf(100_000_000)),
+      sumCreditSpendJournal: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 7 }),
+    });
+    const reconciler = createBillingReconciler(deps);
+
+    /** `run` refuses, as designed… */
+    await expect(reconciler.run(NOW)).resolves.toMatchObject({ configured: false });
+    /** …while the invariant that guards the «Расходы» screen is still checked. */
+    const report = await reconciler.checkInternalDrift(NOW);
+
+    expect(report).toMatchObject({
+      month: '2026-07-01',
+      journalMicroUsd: 100_000_000,
+      counterMicroUsd: 100_000_000,
+      rows: 7,
+      driftMicroUsd: 0,
+      drifted: false,
+    });
+    expect(deps.openrouter.getKey).not.toHaveBeenCalled();
+  });
+
+  it('flags a lost counter increment and records it in the audit trail', async () => {
+    const recordAudit = jest.fn();
+    const deps = createDeps({
+      openrouter: openrouterOf(null, false),
+      getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf(90_000_000)),
+      sumCreditSpendJournal: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 9 }),
+      recordAudit,
+    });
+
+    const report = await createBillingReconciler(deps).checkInternalDrift(NOW);
+
+    expect(report.drifted).toBe(true);
+    expect(report.driftMicroUsd).toBe(10_000_000);
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('INTERNAL drift'));
+    expect(recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'billing.internal_drift' }),
+    );
+  });
+
+  it('treats sub-dollar drift as an in-flight request, not a defect', async () => {
+    const recordAudit = jest.fn();
+    const deps = createDeps({
+      openrouter: openrouterOf(null, false),
+      getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf(100_000_000)),
+      /** One request landed in the journal between the two reads. */
+      sumCreditSpendJournal: jest
+        .fn()
+        .mockResolvedValue({ microUsd: 100_500_000 - 500_000, count: 2 }),
+      recordAudit,
+    });
+
+    const report = await createBillingReconciler(deps).checkInternalDrift(NOW);
+
+    expect(report.drifted).toBe(false);
+    expect(recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('reuses a status the caller already has instead of reading it again', async () => {
+    const getCreditBillingStatus = jest.fn().mockResolvedValue(statusOf(100_000_000));
+    const deps = createDeps({ openrouter: openrouterOf(null, false), getCreditBillingStatus });
+
+    await createBillingReconciler(deps).checkInternalDrift(NOW, statusOf(100_000_000));
+
+    expect(getCreditBillingStatus).not.toHaveBeenCalled();
+  });
+});

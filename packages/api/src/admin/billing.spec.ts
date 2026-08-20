@@ -94,6 +94,29 @@ function createDeps(overrides: Partial<AdminBillingDeps> = {}): AdminBillingDeps
 
 describe('createAdminBillingHandlers', () => {
   describe('getSummary', () => {
+    /**
+     * The screen reads its header from the period counter and its per-employee rows
+     * from the journal. When those two disagree the screen contradicts itself, which is
+     * exactly the defect the ledger-sourced breakdown removed — so it has to say so.
+     */
+    it('reports when the ledger disagrees with itself', async () => {
+      const handlers = createAdminBillingHandlers(createDeps({ getLedgerDrifted: () => true }));
+      const { req, res, json } = createReqRes();
+
+      await handlers.getSummary(req, res);
+
+      expect(json.mock.calls[0][0].ledgerDrifted).toBe(true);
+    });
+
+    it('reports no drift when the two halves agree', async () => {
+      const handlers = createAdminBillingHandlers(createDeps({ getLedgerDrifted: () => false }));
+      const { req, res, json } = createReqRes();
+
+      await handlers.getSummary(req, res);
+
+      expect(json.mock.calls[0][0].ledgerDrifted).toBe(false);
+    });
+
     it('returns Credits-only display math (no $ fields anywhere)', async () => {
       const deps = createDeps({
         getCreditBillingStatus: jest.fn().mockResolvedValue(
