@@ -38,15 +38,19 @@ export const sidebarRowActiveIconClassName = 'text-text-primary group-hover:text
 
 /**
  * «Новый чат» — единственная строка-карточка: рамка hairline, фон `card`,
- * вес 500. На 2px выше обычной строки (42 против 40) — так в прототипе:
- * главное действие сайдбара отделено от списка разделов.
+ * вес 500. На 2px выше обычной строки (42 против 40) — так в прототипе.
+ *
+ * БЕЗ собственных полей (владелец 20.08-2): прототип отделял главное действие
+ * лишним отступом (mb-2.5/mt-1.5), но карточка и так выделена рамкой и фоном —
+ * расстояние у всех строк сайдбара одинаковое. Не возвращать поля сюда: спад
+ * этого решения ловит спек ExpandedPanel («new chat row carries no margins»).
  *
  * The prototype's `.dside .nnew` override touches height and margin only, so
  * the 15px of the base `.nnew` stays 15px on a desktop — unlike a section row,
  * which the same override does drop to 14.
  */
 export const sidebarNewChatClassName =
-  'mb-2.5 mt-1.5 flex h-12 w-full items-center gap-2.5 rounded-xl border border-border-light bg-surface-primary px-3 text-[15px] font-medium text-text-primary transition-colors duration-90 hover:bg-surface-hover md:h-[42px]';
+  'flex h-12 w-full items-center gap-2.5 rounded-xl border border-border-light bg-surface-primary px-3 text-[15px] font-medium text-text-primary transition-colors duration-90 hover:bg-surface-hover md:h-[42px]';
 
 /**
  * Кнопка-иконка сайдбара (§6.2): 32×32 на десктопе, радиус 8, иконка 18.
