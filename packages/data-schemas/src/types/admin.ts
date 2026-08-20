@@ -167,10 +167,12 @@ export type AdminUsageReport = {
   to: string;
   rows: AdminUsageRow[];
   /**
-   * Actual cost the ledger could not attribute to any employee over the window,
-   * in the same unit as `totalCredits` (1 000 000 = $1): admin model tests and
-   * offline benches call the proxy without a user header. Reported so the employee
-   * column plus this remainder reconciles with the tenant total.
+   * Actual cost the ledger could not attribute to any employee over the window, in
+   * the same unit as `totalCredits` (1 000 000 = $1) — calls that reached the proxy
+   * without a user header. Usually admin model tests and offline benches; the number
+   * states that fact and nothing more, because a path that loses the user id lands
+   * here too. Reported so the employee column plus this remainder reconciles with the
+   * tenant total.
    */
   unattributedCredits: number;
   unattributedUsd: number;

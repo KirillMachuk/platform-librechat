@@ -643,14 +643,17 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
    * the `createdAt` TTL index) and resolves each id to a name/email in the same
    * pipeline.
    *
-   * Rows with no `userId` are NOT dropped: the anonymizer only stamps a user when the
-   * caller sent `x-librechat-user-id`, so admin model tests and offline benches that
-   * hit the proxy directly legitimately have none. Reported separately so the sum of
-   * the employee column plus the unattributed remainder equals the tenant total —
-   * silently dropping them would recreate the very mismatch this screen exists to
-   * show. Measured on the stand 20.08.2026: 32% of the month's cost was unattributed
-   * (a one-day offline bench), which a hidden bucket would have turned into a
-   * baffling gap.
+   * Rows with no `userId` are NOT dropped, but they are also not explained: all the
+   * data says is that the call reached the proxy without `x-librechat-user-id`.
+   * Usually that means an admin model test or an offline bench — measured on the
+   * stand 20.08.2026, 32% of the month's cost was one day of bench traffic. It can
+   * equally mean a broken path: Deep Research once sent the literal
+   * `{{LIBRECHAT_USER_ID}}` and put whole runs against nobody (fixed 17.07.2026), and
+   * a caller reading that bucket as «our own test traffic» would have written off a
+   * real employee's spend. So it is reported as its own number, unlabelled, rather
+   * than dropped or explained away: dropping it recreates the mismatch this screen
+   * exists to remove, and naming a cause the data does not carry is how the screen
+   * would lie next.
    */
   async function aggregateCreditSpendByUser(params: {
     start: Date;
