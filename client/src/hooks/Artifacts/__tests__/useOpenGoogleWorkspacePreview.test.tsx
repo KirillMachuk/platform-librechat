@@ -41,6 +41,29 @@ describe('useOpenGoogleWorkspacePreview', () => {
     expect(screen.getByTestId('visibility')).toHaveTextContent('true');
   });
 
+  it.each([
+    [
+      'https://docs.google.com/presentation/d/slides_456/edit?usp=sharing',
+      'google-workspace:presentation:slides_456',
+    ],
+    [
+      'https://drive.google.com/file/d/file_789/view?usp=sharing',
+      'google-workspace:drive_file:file_789',
+    ],
+  ])('registers another supported Google file type', (url, expectedId) => {
+    render(
+      <RecoilRoot initializeState={({ set }) => set(store.artifactsVisibility, false)}>
+        <Harness url={url} />
+      </RecoilRoot>,
+    );
+
+    fireEvent.click(screen.getByTestId('open-preview'));
+
+    expect(screen.getByTestId('artifact-count')).toHaveTextContent('1');
+    expect(screen.getByTestId('artifact-id')).toHaveTextContent(expectedId);
+    expect(screen.getByTestId('visibility')).toHaveTextContent('true');
+  });
+
   it('does not change panel state for an untrusted URL', () => {
     render(
       <RecoilRoot initializeState={({ set }) => set(store.artifactsVisibility, false)}>

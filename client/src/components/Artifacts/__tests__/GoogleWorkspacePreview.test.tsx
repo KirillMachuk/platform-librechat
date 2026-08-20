@@ -38,6 +38,33 @@ describe('GoogleWorkspacePreview', () => {
     expect(frame).toHaveAttribute('referrerpolicy', 'no-referrer');
   });
 
+  it('renders a normalized Google Drive viewer URL with the same iframe policy', () => {
+    render(
+      <GoogleWorkspacePreview
+        artifact={buildArtifact({
+          id: 'google-workspace:drive_file:file_789',
+          title: 'Shared PDF',
+          googleWorkspace: {
+            provider: 'google_drive',
+            fileId: 'file_789',
+            name: 'Shared PDF',
+            mimeType: 'application/octet-stream',
+            viewUrl: 'https://drive.google.com/file/d/file_789/view?unsafe=discarded',
+            kind: 'drive_file',
+          },
+        })}
+      />,
+    );
+
+    const frame = screen.getByTitle('Shared PDF');
+    expect(frame).toHaveAttribute('src', 'https://drive.google.com/file/d/file_789/view');
+    expect(frame).toHaveAttribute(
+      'sandbox',
+      'allow-downloads allow-forms allow-modals allow-popups allow-same-origin allow-scripts',
+    );
+    expect(frame).toHaveAttribute('referrerpolicy', 'no-referrer');
+  });
+
   it('refuses a stored URL whose identity does not match the artifact', () => {
     render(
       <GoogleWorkspacePreview

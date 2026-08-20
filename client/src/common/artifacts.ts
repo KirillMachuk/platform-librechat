@@ -21,11 +21,13 @@ export type ArtifactSourceFile = Partial<
   Pick<TFile, 'file_id' | 'filename' | 'filepath' | 'source' | 'user'>
 >;
 
-export type GoogleWorkspaceKind = 'document' | 'spreadsheet';
+export type GoogleWorkspaceKind = 'document' | 'spreadsheet' | 'presentation' | 'drive_file';
 
 export type GoogleWorkspaceMimeType =
   | 'application/vnd.google-apps.document'
-  | 'application/vnd.google-apps.spreadsheet';
+  | 'application/vnd.google-apps.spreadsheet'
+  | 'application/vnd.google-apps.presentation'
+  | 'application/octet-stream';
 
 export interface GoogleWorkspaceFile {
   provider: 'google_drive';

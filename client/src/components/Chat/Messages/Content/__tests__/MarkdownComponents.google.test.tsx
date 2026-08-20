@@ -57,6 +57,28 @@ describe('Markdown Google Workspace links', () => {
     );
   });
 
+  it.each([
+    [
+      'https://docs.google.com/presentation/d/slides_456/edit?usp=sharing',
+      'https://docs.google.com/presentation/d/slides_456/edit',
+    ],
+    [
+      'https://drive.google.com/file/d/file_789/view?usp=sharing',
+      'https://drive.google.com/file/d/file_789/view',
+    ],
+  ])('opens another supported Google file type in the panel', (href, normalizedHref) => {
+    mockUseGetStartupConfig.mockReturnValue({
+      data: { interface: { googleWorkspacePreview: true } },
+    });
+    renderLink(href, 'Shared file');
+
+    const link = screen.getByRole('link', { name: 'Shared file' });
+    expect(link).toHaveAttribute('href', normalizedHref);
+    fireEvent.click(link);
+
+    expect(mockOpenGoogleWorkspacePreview).toHaveBeenCalledWith(normalizedHref, 'Shared file');
+  });
+
   it('leaves the link as ordinary external navigation when the flag is disabled', () => {
     mockUseGetStartupConfig.mockReturnValue({
       data: { interface: { googleWorkspacePreview: false } },

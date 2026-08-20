@@ -1,22 +1,54 @@
 import type { GoogleWorkspaceFile, GoogleWorkspaceKind, GoogleWorkspaceMimeType } from '~/common';
 
 const GOOGLE_WORKSPACE_HOST = 'docs.google.com';
+const GOOGLE_DRIVE_HOST = 'drive.google.com';
 const GOOGLE_FILE_ID = /^[A-Za-z0-9_-]+$/;
 
 const MIME_BY_KIND: Record<GoogleWorkspaceKind, GoogleWorkspaceMimeType> = {
   document: 'application/vnd.google-apps.document',
   spreadsheet: 'application/vnd.google-apps.spreadsheet',
+  presentation: 'application/vnd.google-apps.presentation',
+  drive_file: 'application/octet-stream',
 };
 
-const PATH_BY_KIND: Record<GoogleWorkspaceKind, 'document' | 'spreadsheets'> = {
+const PATH_BY_KIND: Record<
+  Exclude<GoogleWorkspaceKind, 'drive_file'>,
+  'document' | 'spreadsheets' | 'presentation'
+> = {
   document: 'document',
   spreadsheet: 'spreadsheets',
+  presentation: 'presentation',
 };
+
+const KIND_BY_PATH = {
+  document: 'document',
+  spreadsheets: 'spreadsheet',
+  presentation: 'presentation',
+} as const satisfies Record<string, Exclude<GoogleWorkspaceKind, 'drive_file'>>;
 
 export type ParsedGoogleWorkspaceUrl = Omit<GoogleWorkspaceFile, 'name' | 'provider'>;
 
+export const GOOGLE_FILE_LOCALIZATION_KEYS = {
+  document: {
+    fallbackName: 'com_ui_google_document',
+    openAction: 'com_ui_open_in_google_docs',
+  },
+  spreadsheet: {
+    fallbackName: 'com_ui_google_spreadsheet',
+    openAction: 'com_ui_open_in_google_sheets',
+  },
+  presentation: {
+    fallbackName: 'com_ui_google_presentation',
+    openAction: 'com_ui_open_in_google_slides',
+  },
+  drive_file: {
+    fallbackName: 'com_ui_google_drive_file',
+    openAction: 'com_ui_open_in_google_drive',
+  },
+} as const satisfies Record<GoogleWorkspaceKind, { fallbackName: string; openAction: string }>;
+
 /**
- * Accept only canonical Google Docs and Sheets file URLs and discard every
+ * Accept only canonical Google Workspace and Drive file URLs and discard every
  * caller-controlled suffix, query parameter, and fragment. This is the trust
  * boundary before a remote URL may enter the preview iframe.
  */
@@ -30,7 +62,7 @@ export function parseGoogleWorkspaceUrl(rawUrl: string): ParsedGoogleWorkspaceUr
 
   if (
     url.protocol !== 'https:' ||
-    url.hostname !== GOOGLE_WORKSPACE_HOST ||
+    (url.hostname !== GOOGLE_WORKSPACE_HOST && url.hostname !== GOOGLE_DRIVE_HOST) ||
     url.port !== '' ||
     url.username !== '' ||
     url.password !== ''
@@ -38,12 +70,27 @@ export function parseGoogleWorkspaceUrl(rawUrl: string): ParsedGoogleWorkspaceUr
     return null;
   }
 
-  const match = /^\/(document|spreadsheets)\/d\/([^/]+)(?:\/.*)?$/.exec(url.pathname);
+  if (url.hostname === GOOGLE_DRIVE_HOST) {
+    const match = /^\/file\/d\/([^/]+)(?:\/.*)?$/.exec(url.pathname);
+    if (!match || !GOOGLE_FILE_ID.test(match[1])) {
+      return null;
+    }
+
+    const fileId = match[1];
+    return {
+      fileId,
+      kind: 'drive_file',
+      mimeType: MIME_BY_KIND.drive_file,
+      viewUrl: `https://${GOOGLE_DRIVE_HOST}/file/d/${fileId}/view`,
+    };
+  }
+
+  const match = /^\/(document|spreadsheets|presentation)\/d\/([^/]+)(?:\/.*)?$/.exec(url.pathname);
   if (!match) {
     return null;
   }
 
-  const kind: GoogleWorkspaceKind = match[1] === 'document' ? 'document' : 'spreadsheet';
+  const kind = KIND_BY_PATH[match[1] as keyof typeof KIND_BY_PATH];
   const fileId = match[2];
   if (!GOOGLE_FILE_ID.test(fileId)) {
     return null;

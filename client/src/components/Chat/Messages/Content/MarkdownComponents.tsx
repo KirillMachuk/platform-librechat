@@ -3,11 +3,11 @@ import { useRecoilValue } from 'recoil';
 import { useToastContext } from '@librechat/client';
 import { PermissionTypes, Permissions, SystemRoles, apiBaseUrl } from 'librechat-data-provider';
 import useOpenGoogleWorkspacePreview from '~/hooks/Artifacts/useOpenGoogleWorkspacePreview';
+import { GOOGLE_FILE_LOCALIZATION_KEYS, parseGoogleWorkspaceUrl } from '~/utils/google';
 import Mermaid, { MermaidErrorBoundary } from '~/components/Messages/Content/Mermaid';
 import { useFileDownload, useGetStartupConfig } from '~/data-provider';
 import CodeBlock from '~/components/Messages/Content/CodeBlock';
 import { handleDoubleClick, triggerDownload } from '~/utils';
-import { parseGoogleWorkspaceUrl } from '~/utils/google';
 import useHasAccess from '~/hooks/Roles/useHasAccess';
 import { useCodeBlockContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
@@ -144,10 +144,9 @@ export const a: React.ElementType = memo(function MarkdownAnchor({ href, childre
   };
 
   if (googleWorkspaceFile) {
-    const fallbackName =
-      googleWorkspaceFile.kind === 'document'
-        ? localize('com_ui_google_document')
-        : localize('com_ui_google_spreadsheet');
+    const fallbackName = localize(
+      GOOGLE_FILE_LOCALIZATION_KEYS[googleWorkspaceFile.kind].fallbackName,
+    );
     const name = typeof children === 'string' && children.trim() ? children.trim() : fallbackName;
 
     return (

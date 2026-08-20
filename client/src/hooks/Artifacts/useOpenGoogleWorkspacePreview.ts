@@ -4,7 +4,7 @@ import { parseGoogleWorkspaceUrl } from '~/utils/google';
 import store from '~/store';
 
 /**
- * Opens a strictly validated Google Docs/Sheets URL in the artifacts panel.
+ * Opens a strictly validated Google Workspace or Drive file URL in the artifacts panel.
  * Returning false lets callers fall back to ordinary external navigation.
  */
 export default function useOpenGoogleWorkspacePreview() {
