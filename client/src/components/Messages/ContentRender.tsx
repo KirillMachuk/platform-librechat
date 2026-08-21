@@ -1,6 +1,5 @@
-import { useCallback, useMemo, memo, Suspense } from 'react';
+import { useCallback, useMemo, memo } from 'react';
 import { useRecoilValue } from 'recoil';
-import { DelayedRender } from '@librechat/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { QueryKeys, isDrStartCommand, isDrCancelCommand } from 'librechat-data-provider';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
@@ -15,7 +14,6 @@ import {
 } from '~/components/Chat/Messages/DeepResearch';
 import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import { useAttachments, useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
-import { UnfinishedMessage } from '~/components/Chat/Messages/Content/MessageContent';
 import ContentParts from '~/components/Chat/Messages/Content/ContentParts';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
 import { USER_BUBBLE_CLASS } from '~/components/Chat/Messages/ui/turn';
@@ -24,9 +22,6 @@ import HoverButtons from '~/components/Chat/Messages/HoverButtons';
 import Files from '~/components/Chat/Messages/Content/Files';
 import SubRow from '~/components/Chat/Messages/SubRow';
 import store from '~/store';
-
-/** Matches MessageContent's own delay, so the two paths behave identically. */
-const UNFINISHED_DELAY = 250;
 
 type ContentRenderProps = {
   message?: TMessage;
@@ -190,16 +185,25 @@ const ContentRender = memo(function ContentRender({
       msg.unfinished === true &&
       msg.drKind === 'report' &&
       msg.isCreatedByUser !== true ? (
-        // Delayed exactly as MessageContent does it: `isSubmitting` flips a beat before the
-        // finalised message lands, and without the delay the notice flashes on every run that
-        // is not truncated at all.
-        <Suspense>
-          <DelayedRender delay={UNFINISHED_DELAY}>
-            <UnfinishedMessage message={msg} />
-          </DelayedRender>
-        </Suspense>
+        /**
+         * A plain note, NOT `UnfinishedMessage`.
+         *
+         * That component wraps the same sentence in `ErrorMessage`, which renders an
+         * `role="alert"` red box and prefixes the text with `com_error_generic_prefix` —
+         * "Не удалось выполнить запрос. Сообщение об ошибке: …". Under a Deep Research report
+         * that is simply false: the report is a real synthesis that was written from less
+         * material than intended, and announcing it as a failed request is worse than saying
+         * nothing at all. The wording itself (`com_ui_unfinished_message`) is right; only the
+         * error framing around it was wrong.
+         */
+        <div
+          className="mt-2 border-l-2 border-border-medium py-0.5 pl-3 text-sm text-text-secondary"
+          data-testid="dr-unfinished-notice"
+        >
+          {localize('com_ui_unfinished_message')}
+        </div>
       ) : null,
-    [isSubmitting, msg],
+    [isSubmitting, localize, msg],
   );
 
   if (!msg) {

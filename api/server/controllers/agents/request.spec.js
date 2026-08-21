@@ -19,7 +19,11 @@ jest.mock('~/models', () => ({
   getRoleByName: (...args) => mockGetRoleByName(...args),
 }));
 
-const { getPreliminaryUserMessage, shouldRunNewDeepResearch } = require('./request');
+const {
+  getPreliminaryUserMessage,
+  shouldRunNewDeepResearch,
+  drConversationModel,
+} = require('./request');
 
 describe('getPreliminaryUserMessage (DR turn shape)', () => {
   const conversationId = 'convo-1';
@@ -149,5 +153,43 @@ describe('shouldRunNewDeepResearch — routing + RBAC', () => {
     ).resolves.toBe(false);
     expect(mockIsDrFollowUp).not.toHaveBeenCalled();
     expect(roleLookup).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The consumer end of a hop that crosses three files: initialize.js captures the
+ * conversation's model before overwriting the agent with the tier's lead, carries it on the
+ * client options, and this is where the Deep Research runner reads it. The producer half had
+ * a test; this half did not, and deleting the line that reads it left the entire backend
+ * suite green.
+ */
+describe('drConversationModel', () => {
+  it('prefers the captured conversation model over the overwritten agent model', () => {
+    const client = {
+      options: {
+        deepResearchConversationModel: 'gpt-4',
+        agent: { model: 'lead-x' },
+      },
+    };
+    expect(drConversationModel(client, { model_parameters: { model: 'body-model' } })).toBe(
+      'gpt-4',
+    );
+  });
+
+  it('falls back to the agent model when nothing was captured', () => {
+    const client = { options: { agent: { model: 'lead-x' } } };
+    expect(drConversationModel(client, { model_parameters: { model: 'body-model' } })).toBe(
+      'lead-x',
+    );
+  });
+
+  it('falls back to the request body when there is no client at all', () => {
+    expect(drConversationModel(undefined, { model_parameters: { model: 'body-model' } })).toBe(
+      'body-model',
+    );
+  });
+
+  it('returns undefined rather than throwing when nothing is available', () => {
+    expect(drConversationModel(undefined, undefined)).toBeUndefined();
   });
 });
