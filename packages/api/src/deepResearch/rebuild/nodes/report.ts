@@ -1,3 +1,4 @@
+import { logger } from '@librechat/data-schemas';
 import { SystemMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { BaseMessage, AIMessageChunk } from '@langchain/core/messages';
@@ -161,6 +162,16 @@ export async function composeReport(params: {
        * which is exactly what a run that hit the ceiling needs.
        */
       if (!answer.empty && !answer.truncated) {
+        /**
+         * WHICH model actually wrote the report. The tier names a lead model, but the request
+         * can still carry an OpenRouter fallback list inherited from the chat's model card,
+         * and OpenRouter may answer from it — so "the slug the run intended" and "the slug
+         * that answered" are two different facts, and only the first was ever recorded. That
+         * makes "why is this report weaker than usual?" unanswerable after the fact.
+         */
+        const answeredBy = (response.response_metadata as { model_name?: unknown } | undefined)
+          ?.model_name;
+        logger.info(`[deepResearch:report] written by ${String(answeredBy ?? 'unknown')}`);
         return { text: answer.text, usage: usageFromExchange(prompt, response), fellBack: false };
       }
       /**

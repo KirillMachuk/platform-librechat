@@ -492,8 +492,13 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
           streamId,
           signal: job.abortController.signal,
           endpoint: client?.options?.agent?.endpoint ?? endpointOption.endpoint,
+          // The conversation's own model, NOT `agent.model` — that one has already been
+          // overwritten with the tier's lead model, which would make every unconfigured
+          // worker/compress node fall back to the most expensive model in the run.
           conversationModel:
-            client?.options?.agent?.model ?? endpointOption.model_parameters?.model,
+            client?.options?.deepResearchConversationModel ??
+            client?.options?.agent?.model ??
+            endpointOption.model_parameters?.model,
           userId,
           conversationId,
           parentMessageId,

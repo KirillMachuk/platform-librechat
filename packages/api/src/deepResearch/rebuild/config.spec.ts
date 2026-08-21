@@ -67,6 +67,19 @@ describe('per-node model resolution', () => {
     expect(compressModelFor(tier)).toBe('worker-y');
   });
 
+  it('honours writerModel for the report, leaving the lead to orchestrate', () => {
+    // The field was declared, merged, typed and returned by the admin API — and read by
+    // nothing. An admin who set it got a platform that accepted the value and ignored it.
+    const withWriter = resolveDeepResearchTier({
+      activeMode: 'balanced',
+      modes: {
+        balanced: { leadModel: 'lead-x', workerModel: 'worker-y', writerModel: 'writer-z' },
+      },
+    } as TDeepResearchConfig);
+    expect(reportModelFor(withWriter)).toBe('writer-z');
+    expect(leadModelFor(withWriter)).toBe('lead-x');
+  });
+
   it('skips a reasoning conversation model that would 400 on tool loops', () => {
     const noWorker = resolveDeepResearchTier({
       activeMode: 'balanced',

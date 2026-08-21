@@ -1175,6 +1175,31 @@ async function runNewDeepResearch(params) {
         `inputChars=${researchInput.length}`,
     );
 
+    // The concurrency caps run AFTER turn classification but skip the model-free terminal
+    // turns handled just below — a plan-cancel and a duplicate START run no graph, so a cap
+    // would only swap their own terminal message (dismiss / "already running") for a busy
+    // notice and, for the global arm, waste a store scan. A cancel especially must always
+    // succeed, or the plan stays the branch tip and follow-ups keep routing into DR. The
+    // per-user cap is checked first (its message is the more actionable one); only a start
+    // that clears it pays for the global scan.
+    //
+    // They also run BEFORE the admission stamp below, and that order is the fix for a dead
+    // end: a refused start used to be stamped drKind='start' and saved first, so the plan
+    // card lost its action buttons and the user's retry was classified as a duplicate START
+    // and answered "already running, wait for the report" — for a run that was refused and
+    // never existed. A run that is not admitted must leave no trace that it was.
+    const isModelFreeTerminal =
+      turn.kind === 'plan-cancel' || (turn.kind === 'plan-start' && turn.duplicateStart === true);
+    if (!isModelFreeTerminal) {
+      if (otherActiveJobs >= MAX_CONCURRENT_DR) {
+        throw new DeepResearchCapError('user');
+      }
+      otherActiveDrJobs = await countOtherActiveDrJobs(streamId);
+      if (otherActiveDrJobs >= MAX_GLOBAL_DR) {
+        throw new DeepResearchCapError('global');
+      }
+    }
+
     // Provenance + admission persistence (review r2): stamp drKind on the user's command
     // messages and persist the question NOW — the finalize-tail save (an upsert on the
     // same messageId) merely refreshes it. Early persistence is what makes a duplicate
@@ -1188,25 +1213,6 @@ async function runNewDeepResearch(params) {
       await saveMessage(reqCtx, requestMessage, {
         context: 'deepResearchRun - user message (admission)',
       });
-    }
-
-    // The concurrency caps run AFTER turn classification but skip the model-free terminal
-    // turns handled just below — a plan-cancel and a duplicate START run no graph, so a cap
-    // would only swap their own terminal message (dismiss / "already running") for a busy
-    // notice and, for the global arm, waste a store scan. A cancel especially must always
-    // succeed, or the plan stays the branch tip and follow-ups keep routing into DR. The
-    // per-user cap is checked first (its message is the more actionable one); only a start
-    // that clears it pays for the global scan.
-    const isModelFreeTerminal =
-      turn.kind === 'plan-cancel' || (turn.kind === 'plan-start' && turn.duplicateStart === true);
-    if (!isModelFreeTerminal) {
-      if (otherActiveJobs >= MAX_CONCURRENT_DR) {
-        throw new DeepResearchCapError('user');
-      }
-      otherActiveDrJobs = await countOtherActiveDrJobs(streamId);
-      if (otherActiveDrJobs >= MAX_GLOBAL_DR) {
-        throw new DeepResearchCapError('global');
-      }
     }
 
     // Model-free short-circuits (review r2) — resolved BEFORE the anonymizer session, so a
@@ -1740,6 +1746,11 @@ async function runNewDeepResearch(params) {
           endpoint,
           model: leadModelSlug,
           title: deepResearchTitle,
+          /** The chat's model card. DR persisted four fields and not this one, so a chat
+           *  STARTED by a research run had no spec at all — and continuing it as an ordinary
+           *  chat afterwards silently lost the card's own routing (its provider pin and
+           *  fallback list) for every later turn. */
+          ...(req?.body?.spec ? { spec: req.body.spec } : {}),
           /** A DR run bypasses AgentClient, so it also bypasses the getSaveOptions hop that
            *  files a chat under its Project — without this, research started inside a project
            *  lands outside it and stays outside after a reload. */

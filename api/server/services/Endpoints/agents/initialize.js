@@ -1215,6 +1215,12 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
     artifactPromises,
     primeInvokedSkills: handlePrimeInvokedSkills,
     agent: primaryConfig,
+    /** The conversation's OWN model, captured above BEFORE the lead-model override.
+     *  `primaryAgent.model` is the LEAD by the time the client is built, so a Deep Research
+     *  run reading the model off the agent got the lead — and the documented promise that
+     *  researchers fall back to the conversation model "never the expensive lead model" was
+     *  inverted exactly when it mattered: when no workerModel is configured. */
+    deepResearchConversationModel,
     spec: endpointOption.spec,
     iconURL: endpointOption.iconURL,
     chatProjectId: endpointOption.chatProjectId,

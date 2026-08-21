@@ -1930,3 +1930,62 @@ describe('runNewDeepResearch — the title call must not reason', () => {
     expect(saved).not.toBe('Сравнение CRM-систем');
   });
 });
+
+/**
+ * A run that is not admitted must leave no trace that it was.
+ *
+ * The admission stamp used to be written and saved BEFORE the concurrency caps were checked,
+ * so a refused start still marked the user's message drKind='start'. The plan card lost its
+ * action buttons, and the retry the refusal message asks for was then classified as a
+ * duplicate START and answered "already running, wait for the report" — for a run that had
+ * been refused and never existed.
+ */
+describe('runNewDeepResearch — a refused run leaves no admission stamp', () => {
+  const api = require('@librechat/api');
+  const planStart = () => {
+    const params = baseParams('▶ Начать исследование');
+    params.turn = { kind: 'plan-start', dialogue: 'изучи рынок CRM', duplicateStart: false };
+    return params;
+  };
+
+  it('does not stamp the user message when the per-user cap refuses the run', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    api.GenerationJobManager.getActiveJobIdsForUser.mockResolvedValueOnce(['a', 'b', 'c']);
+
+    await runNewDeepResearch(planStart());
+
+    const userMsg = mockSavedMessages.find((m) => m.messageId === 'um1');
+    expect(userMsg?.drKind).toBeUndefined();
+  });
+
+  it('still stamps a start that IS admitted (the control)', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+
+    await runNewDeepResearch(planStart());
+
+    const userMsg = mockSavedMessages.find((m) => m.messageId === 'um1');
+    expect(userMsg?.drKind).toBe('start');
+  });
+});
+
+describe('runNewDeepResearch — a conversation the run creates keeps its model card', () => {
+  const models = require('~/models');
+
+  it('persists spec, so continuing the chat normally keeps the card routing', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    const params = baseParams('изучи рынок CRM');
+    params.req.body.spec = 'auto';
+
+    await runNewDeepResearch(params);
+
+    expect(models.saveConvo.mock.calls[0][1].spec).toBe('auto');
+  });
+
+  it('writes no spec key when the chat has no card', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(models.saveConvo.mock.calls[0][1]).not.toHaveProperty('spec');
+  });
+});
