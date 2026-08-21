@@ -6,6 +6,7 @@ import type {
   DeepResearchFinding,
   DeepResearchNodeError,
   DeepResearchTokenUsage,
+  DeepResearchUsageByModel,
   DeepResearchConfigurable,
 } from './state';
 import type { CompiledDeepResearchGraph } from './graph';
@@ -45,6 +46,12 @@ export interface RunDeepResearchResult {
   errors: DeepResearchNodeError[];
   finalizeReason: FinalizeReason;
   usage: DeepResearchTokenUsage;
+  /**
+   * `usage`, split by the model that ANSWERED each call. The runner bills from this so a
+   * run stops being priced entirely at the lead model's rate; empty only for a run that
+   * made no model call at all, in which case there is nothing to bill either.
+   */
+  usageByModel: DeepResearchUsageByModel;
   findings: DeepResearchFinding[];
 }
 
@@ -61,6 +68,7 @@ function resultFrom(
       ? (values.finalizeReason ?? finalizeReason)
       : finalizeReason,
     usage: values?.tokenUsage ?? ZERO_USAGE,
+    usageByModel: values?.usageByModel ?? {},
     findings: values?.findings ?? [],
     errors: values?.errors ?? [],
   };

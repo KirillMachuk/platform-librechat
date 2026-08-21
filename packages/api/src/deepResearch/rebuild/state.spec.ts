@@ -70,3 +70,50 @@ describe('DeepResearchStateAnnotation', () => {
     expect(result.finalizeReason).toBeNull();
   });
 });
+
+describe('usageByModel channel', () => {
+  /**
+   * The channel carries the per-model split from the nodes to billing. A last-value-wins
+   * reducer here would bill only the LAST node's models — which is the same class of
+   * silent under-reporting the split exists to end. Driven through a real graph, like the
+   * other channel tests, so it proves the WIRING and not a helper in isolation.
+   */
+  it("accumulates every node's models across supersteps instead of overwriting", async () => {
+    const scope = (): DeepResearchStateUpdate => ({
+      usageByModel: { lead: { input: 100, output: 10, total: 110, estimated: 0 } },
+    });
+    const researcher = (): DeepResearchStateUpdate => ({
+      usageByModel: {
+        lead: { input: 5, output: 1, total: 6, estimated: 0 },
+        worker: { input: 900, output: 90, total: 990, estimated: 40 },
+      },
+    });
+
+    const graph = new StateGraph(DeepResearchStateAnnotation)
+      .addNode('scope', scope)
+      .addNode('researcher', researcher)
+      .addEdge(START, 'scope')
+      .addEdge('scope', 'researcher')
+      .addEdge('researcher', END)
+      .compile();
+
+    const result: DeepResearchState = await graph.invoke({ messages: [] });
+
+    expect(result.usageByModel).toEqual({
+      lead: { input: 105, output: 11, total: 116, estimated: 0 },
+      worker: { input: 900, output: 90, total: 990, estimated: 40 },
+    });
+  });
+
+  it('defaults to empty, so a run that made no model call bills nothing', async () => {
+    const graph = new StateGraph(DeepResearchStateAnnotation)
+      .addNode('noop', (): DeepResearchStateUpdate => ({}))
+      .addEdge(START, 'noop')
+      .addEdge('noop', END)
+      .compile();
+
+    const result: DeepResearchState = await graph.invoke({ messages: [] });
+
+    expect(result.usageByModel).toEqual({});
+  });
+});

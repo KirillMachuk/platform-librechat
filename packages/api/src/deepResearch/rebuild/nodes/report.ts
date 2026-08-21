@@ -6,6 +6,7 @@ import type {
   FinalizeReason,
   DeepResearchFinding,
   DeepResearchTokenUsage,
+  DeepResearchUsageByModel,
   DeepResearchStateUpdate,
   SupervisorConcludeReason,
 } from '../state';
@@ -18,6 +19,10 @@ import {
   toErrorMessage,
   fenceUntrusted,
   usageFromExchange,
+  usageByModelFromExchange,
+  mergeUsageByModel,
+  answeringModelName,
+  configuredModelName,
   sanitizeErrorForUser,
 } from '../shared';
 import { MAX_SOURCES, hasResearchMaterial } from './researcher';
@@ -137,12 +142,19 @@ export async function composeReport(params: {
   nonce: string;
   signal?: AbortSignal;
   maxRetries?: number;
-}): Promise<{ text: string; usage: Partial<DeepResearchTokenUsage>; fellBack: boolean }> {
+}): Promise<{
+  text: string;
+  usage: Partial<DeepResearchTokenUsage>;
+  usageByModel: DeepResearchUsageByModel;
+  fellBack: boolean;
+}> {
   const { reportModel, request, brief, jurisdiction, findings, digestCap, now, nonce, signal } =
     params;
   const maxRetries = params.maxRetries ?? DEFAULT_MAX_RETRIES;
   /** Tokens burnt by attempts that returned nothing — billed, so they must be reported. */
   let spentOnEmpty: DeepResearchTokenUsage = { input: 0, output: 0, total: 0 };
+  /** Same tokens as `spentOnEmpty`, attributed to whichever model burnt them. */
+  let spentOnEmptyByModel: DeepResearchUsageByModel = {};
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const perDigestCap = Math.floor(digestCap / 2 ** attempt);
@@ -184,10 +196,18 @@ export async function composeReport(params: {
          * that answered" are two different facts, and only the first was ever recorded. That
          * makes "why is this report weaker than usual?" unanswerable after the fact.
          */
-        const answeredBy = (response.response_metadata as { model_name?: unknown } | undefined)
-          ?.model_name;
-        logger.info(`[deepResearch:report] written by ${String(answeredBy ?? 'unknown')}`);
-        return { text: answer.text, usage: usageFromExchange(prompt, response), fellBack: false };
+        const configured = configuredModelName(reportModel);
+        const answeredBy = answeringModelName(response, configured);
+        logger.info(`[deepResearch:report] written by ${answeredBy}`);
+        return {
+          text: answer.text,
+          usage: usageFromExchange(prompt, response),
+          usageByModel: mergeUsageByModel(
+            spentOnEmptyByModel,
+            usageByModelFromExchange(prompt, response, configured),
+          ),
+          fellBack: false,
+        };
       }
       /**
        * Both degradations take the SAME path, and both were found the expensive way:
@@ -203,6 +223,10 @@ export async function composeReport(params: {
        * Usage from the discarded attempt is still counted: the call was billed.
        */
       spentOnEmpty = mergeUsage(spentOnEmpty, usageFromExchange(prompt, response));
+      spentOnEmptyByModel = mergeUsageByModel(
+        spentOnEmptyByModel,
+        usageByModelFromExchange(prompt, response, configuredModelName(reportModel)),
+      );
       if (attempt < maxRetries) {
         continue;
       }
@@ -211,6 +235,7 @@ export async function composeReport(params: {
           reason: answer.truncated ? 'ответ модели оборван' : 'пустой ответ модели',
         }),
         usage: spentOnEmpty,
+        usageByModel: spentOnEmptyByModel,
         fellBack: true,
       };
     } catch (error) {
@@ -220,7 +245,8 @@ export async function composeReport(params: {
       if (!isContextLimitError(error) || attempt === maxRetries) {
         return {
           text: buildFallbackReport({ reason: sanitizeErrorForUser(error) }),
-          usage: {},
+          usage: spentOnEmpty,
+          usageByModel: spentOnEmptyByModel,
           fellBack: true,
         };
       }
@@ -228,7 +254,8 @@ export async function composeReport(params: {
   }
   return {
     text: buildFallbackReport({ reason: 'превышены лимиты контекста' }),
-    usage: {},
+    usage: spentOnEmpty,
+    usageByModel: spentOnEmptyByModel,
     fellBack: true,
   };
 }
@@ -341,7 +368,7 @@ export function createReportNode(deps: ReportNodeDeps): DeepResearchNode {
         messages: [new AIMessage(text)],
       };
     }
-    const { text, usage, fellBack } = await composeReport({
+    const { text, usage, usageByModel, fellBack } = await composeReport({
       reportModel: deps.reportModel,
       request,
       brief: state.researchBrief,
@@ -359,6 +386,7 @@ export function createReportNode(deps: ReportNodeDeps): DeepResearchNode {
       finalizeReason: fellBack ? 'error' : finalizeReason,
       messages: [new AIMessage(text)],
       tokenUsage: usage,
+      usageByModel,
     };
   };
 }

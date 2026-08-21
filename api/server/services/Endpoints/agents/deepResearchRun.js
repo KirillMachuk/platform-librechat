@@ -34,6 +34,8 @@ const {
   getStorageMetadata,
   getProviderConfig,
   usageFromExchange,
+  usageByModelFromExchange,
+  mergeUsageByModel,
   disableTitleReasoning,
   leadModelFor,
   workerModelFor,
@@ -172,7 +174,7 @@ async function resolveDeepResearchTitle({
 }) {
   const source = (topicText ?? '').trim();
   if (!source) {
-    return { title: buildDeepResearchTitle(fallbackText), usage: null };
+    return { title: buildDeepResearchTitle(fallbackText), usage: null, usageByModel: {} };
   }
   try {
     const titleConfig = resolveTitleConfig(req, endpoint);
@@ -183,7 +185,7 @@ async function resolveDeepResearchTitle({
      * never degrades to "New Chat".
      */
     if (titleConfig?.titleConvo === false) {
-      return { title: buildDeepResearchTitle(fallbackText), usage: null };
+      return { title: buildDeepResearchTitle(fallbackText), usage: null, usageByModel: {} };
     }
     const configuredModel = titleConfig?.titleModel;
     const modelSlug =
@@ -199,10 +201,11 @@ async function resolveDeepResearchTitle({
     return {
       title: cleaned ? capitalizeAndTruncateTitle(cleaned) : buildDeepResearchTitle(fallbackText),
       usage: usageFromExchange(prompt, response),
+      usageByModel: usageByModelFromExchange(prompt, response, modelSlug),
     };
   } catch (error) {
     logger.warn('[deepResearchRun] title generation failed; using heuristic fallback', error);
-    return { title: buildDeepResearchTitle(fallbackText), usage: null };
+    return { title: buildDeepResearchTitle(fallbackText), usage: null, usageByModel: {} };
   }
 }
 
@@ -616,10 +619,11 @@ async function runClarifyCheck({ buildModel, leadModelSlug, question, now, signa
     return {
       ...parseClarifyOutput(extractMessageText(response?.content)),
       usage: usageFromExchange(prompt, response),
+      usageByModel: usageByModelFromExchange(prompt, response, leadModelSlug),
     };
   } catch (error) {
     if (signal?.aborted) {
-      return { action: 'ABORTED', questions: [], usage: null };
+      return { action: 'ABORTED', questions: [], usage: null, usageByModel: {} };
     }
     logger.warn('[deepResearchRun] clarify check failed; proceeding to research', error);
     return { action: 'PROCEED', questions: [], usage: null };
@@ -656,10 +660,18 @@ async function runPlanDecision({
     return {
       ...parsePlanDecision(extractMessageText(response?.content), { allowClarify }),
       usage: usageFromExchange(prompt, response),
+      usageByModel: usageByModelFromExchange(prompt, response, leadModelSlug),
     };
   } catch (error) {
     if (signal?.aborted) {
-      return { action: 'ABORTED', questions: [], title: '', steps: [], usage: null };
+      return {
+        action: 'ABORTED',
+        questions: [],
+        title: '',
+        steps: [],
+        usage: null,
+        usageByModel: {},
+      };
     }
     logger.warn('[deepResearchRun] plan decision failed; failing CLOSED to a plan card', error);
     return { action: 'PLAN', questions: [], title: '', steps: [], usage: null };
@@ -932,11 +944,78 @@ async function buildWebSearchTool({ req, userId }) {
 }
 
 /**
- * Bills a completed or partial DR run (H4). The engine returns ONE aggregate usage
- * (summed across the lead/worker/compress/report models); v1 prices it under the
- * lead model — a deliberate approximation until per-model usage is tracked. DR usage
- * never enters the job's collectedUsage, so the /abort middleware bills a different
- * (empty) source and there is no double-spend. Mirrors the deps of
+ * Splits a run's usage into one billable entry per model that ANSWERED.
+ *
+ * The engine used to hand billing ONE aggregate figure, priced under the lead model's slug.
+ * On the balanced tier that charges every worker and COMPRESS token at the lead's rate —
+ * the tier runs `deepseek-v4-pro-0813` as lead and `deepseek-v4-flash-0731` as worker, and
+ * the bulk of a run's tokens are the worker's. The journal is not the money the client pays
+ * (that comes from the credit ledger, priced by OpenRouter itself), but it IS the only
+ * record that knows WHICH CHAT spent what, so a per-chat cost view built on it would
+ * inherit the distortion.
+ *
+ * The aggregate stays the authority on the TOTAL. If the split does not add up to it, the
+ * split is wrong — a node that forgot to report its model — and billing falls back to the
+ * single-entry behaviour instead of charging a number the run never measured. The
+ * discrepancy is logged rather than swallowed.
+ *
+ * Keys are the models that ANSWERED, not the ones configured: the "Авто" card's fallback
+ * list travels to the proxy, so OpenRouter may serve a busy slug from the next one on it.
+ *
+ * Pure and exported so a test can assert the split without a database.
+ *
+ * @returns {{entries: Array<{model: string, input_tokens: number, output_tokens: number}>,
+ *            note: string}}
+ */
+function buildDeepResearchCollectedUsage({ model, usage, usageByModel }) {
+  const single = [{ model, input_tokens: usage.input, output_tokens: usage.output }];
+  const perModel = Object.entries(usageByModel ?? {});
+  if (perModel.length === 0) {
+    return { entries: single, note: `no per-model usage reported; billed under ${model}` };
+  }
+  const sum = perModel.reduce(
+    (acc, [, u]) => ({
+      input: acc.input + (u.input ?? 0),
+      output: acc.output + (u.output ?? 0),
+      estimated: acc.estimated + (u.estimated ?? 0),
+    }),
+    { input: 0, output: 0, estimated: 0 },
+  );
+  if (sum.input !== usage.input || sum.output !== usage.output) {
+    return {
+      entries: single,
+      note:
+        `per-model split does not add up (split ${sum.input}/${sum.output} vs run ` +
+        `${usage.input}/${usage.output}) — billed under ${model} instead`,
+    };
+  }
+  /**
+   * `usageFromExchange` falls back to a length proxy when the provider reports no
+   * `usage_metadata`. Those tokens are billed exactly like reported ones — that is what the
+   * fallback is for — but anyone reconciling the journal against the OpenRouter invoice
+   * needs to know which of the two figures they are arguing with.
+   */
+  const estimatedNote =
+    sum.estimated > 0
+      ? `; ${sum.estimated} of those tokens are a LENGTH ESTIMATE (provider reported no usage)`
+      : '';
+  return {
+    entries: perModel.map(([name, u]) => ({
+      model: name,
+      input_tokens: u.input,
+      output_tokens: u.output,
+    })),
+    note:
+      `split across ${perModel.length} model(s): ` +
+      perModel.map(([name, u]) => `${name} ${u.input}+${u.output}`).join(', ') +
+      estimatedNote,
+  };
+}
+
+/**
+ * Bills a completed or partial DR run (H4), one journal entry per answering model. DR usage
+ * never enters the job's collectedUsage, so the /abort middleware bills a different (empty)
+ * source and there is no double-spend. Mirrors the deps of
  * abortMiddleware.spendCollectedUsage. Failures are logged, never thrown.
  *
  * `endpointTokenConfig` is the endpoint's own price table (librechat.yaml
@@ -954,11 +1033,14 @@ async function billDeepResearchUsage({
   messageId,
   model,
   usage,
+  usageByModel,
   endpointTokenConfig,
 }) {
   if (!usage || usage.total <= 0) {
     return;
   }
+  const { entries, note } = buildDeepResearchCollectedUsage({ model, usage, usageByModel });
+  logger.info(`[deepResearchRun] billing DR usage — ${note}`);
   try {
     await recordCollectedUsage(
       {
@@ -973,7 +1055,7 @@ async function billDeepResearchUsage({
         messageId,
         model,
         context: 'deep_research',
-        collectedUsage: [{ model, input_tokens: usage.input, output_tokens: usage.output }],
+        collectedUsage: entries,
         endpointTokenConfig,
       },
     );
@@ -1115,6 +1197,14 @@ async function runNewDeepResearch(params) {
   // run for EVERY outcome, so billing covers each call.
   let clarifyUsage = null;
   let planUsage = null;
+  /**
+   * The same three calls' tokens, by model. They ride ALONGSIDE `result.usage`, never
+   * instead of it: `buildDeepResearchCollectedUsage` reconciles the split against the
+   * aggregate, so a call folded into one and not the other would make every run with a
+   * clarify, plan or title step fall back to lead-rate billing — silently undoing the split.
+   */
+  let clarifyUsageByModel = null;
+  let planUsageByModel = null;
   // The classified turn (task #21) — declared out here so the finalize tail can use
   // `turn.originalRequest` for the title fallback (the raw request, not a START marker).
   let turn = { kind: 'fresh', dialogue: null, originalRequest: text ?? '', parentText: '' };
@@ -1292,6 +1382,7 @@ async function runNewDeepResearch(params) {
         isRefinement: turn.kind === 'plan-edit',
       });
       planUsage = decision.usage;
+      planUsageByModel = decision.usageByModel;
       if (decision.action === 'ABORTED') {
         logger.info('[deepResearchRun] stopped during the plan decision; saving a STOPPED anchor');
         result = STOPPED_RESULT();
@@ -1329,6 +1420,7 @@ async function runNewDeepResearch(params) {
         signal,
       });
       clarifyUsage = decision.usage;
+      clarifyUsageByModel = decision.usageByModel;
       if (decision.action === 'ABORTED') {
         logger.info('[deepResearchRun] stopped during the clarify check; saving a STOPPED anchor');
         result = STOPPED_RESULT();
@@ -1520,9 +1612,11 @@ async function runNewDeepResearch(params) {
   // short-circuits carry zero usage of their own; the PROCEED path's graph usage is separate).
   if (clarifyUsage) {
     result.usage = sumUsage(result.usage, clarifyUsage);
+    result.usageByModel = mergeUsageByModel(result.usageByModel ?? {}, clarifyUsageByModel ?? {});
   }
   if (planUsage) {
     result.usage = sumUsage(result.usage, planUsage);
+    result.usageByModel = mergeUsageByModel(result.usageByModel ?? {}, planUsageByModel ?? {});
   }
 
   // Ops summary: one line telling exactly HOW the run ended and how much material it
@@ -1585,7 +1679,11 @@ async function runNewDeepResearch(params) {
     existingTitle != null ||
     result.finalizeReason === 'aborted' ||
     result.finalizeReason === 'cancelled';
-  const { title: deepResearchTitle, usage: titleUsage } = skipModelTitle
+  const {
+    title: deepResearchTitle,
+    usage: titleUsage,
+    usageByModel: titleUsageByModel,
+  } = skipModelTitle
     ? { title: existingTitle ?? buildDeepResearchTitle(titleFallbackText), usage: null }
     : await resolveDeepResearchTitle({
         req,
@@ -1599,6 +1697,7 @@ async function runNewDeepResearch(params) {
   // The title is a real lead-model call too — include it before the usage is billed below.
   if (titleUsage) {
     result.usage = sumUsage(result.usage, titleUsage);
+    result.usageByModel = mergeUsageByModel(result.usageByModel ?? {}, titleUsageByModel ?? {});
   }
 
   // Parity with the standard title pipeline (answers the gen_title 404): the frontend
@@ -1720,6 +1819,7 @@ async function runNewDeepResearch(params) {
     messageId: responseMessageId,
     model: leadModelSlug,
     usage: result.usage,
+    usageByModel: result.usageByModel,
     endpointTokenConfig: await resolveEndpointPricing({
       req,
       db,
@@ -1808,4 +1908,10 @@ async function runNewDeepResearch(params) {
   return result;
 }
 
-module.exports = { runNewDeepResearch, buildDeepResearchTitle, isDrFollowUp, buildDrTurnContext };
+module.exports = {
+  runNewDeepResearch,
+  buildDeepResearchTitle,
+  isDrFollowUp,
+  buildDrTurnContext,
+  buildDeepResearchCollectedUsage,
+};

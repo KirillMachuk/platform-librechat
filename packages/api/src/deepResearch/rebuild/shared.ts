@@ -1,6 +1,10 @@
 import { logger } from '@librechat/data-schemas';
 import type { AIMessage, AIMessageChunk, BaseMessage } from '@langchain/core/messages';
-import type { DeepResearchTokenUsage } from './state';
+import type {
+  DeepResearchModelUsage,
+  DeepResearchTokenUsage,
+  DeepResearchUsageByModel,
+} from './state';
 
 /** What a model call actually returned — beyond "there is some text". */
 export interface ModelAnswer {
@@ -119,13 +123,83 @@ export function usageFromExchange(
   prompt: BaseMessage[],
   response: BaseMessage,
 ): Partial<DeepResearchTokenUsage> {
+  // `estimated` is deliberately dropped: this figure feeds the aggregate `tokenUsage`
+  // channel, whose shape the budget gate and every existing caller rely on.
+  const { input, output, total } = measureExchange(prompt, response);
+  return { input, output, total };
+}
+
+/**
+ * One exchange's tokens, marked with whether the provider reported them.
+ *
+ * Shared by `usageFromExchange` (which discards the mark) and the per-model split (which
+ * keeps it), so the two can never disagree about the number itself.
+ */
+function measureExchange(prompt: BaseMessage[], response: BaseMessage): DeepResearchModelUsage {
   const reported = usageFromMessage(response);
   if (reported.total) {
-    return reported;
+    return {
+      input: reported.input ?? 0,
+      output: reported.output ?? 0,
+      total: reported.total,
+      estimated: 0,
+    };
   }
   const input = estimateTokens(prompt.map(extractText).join('\n'));
   const output = estimateTokens(extractText(response));
-  return { input, output, total: input + output };
+  return { input, output, total: input + output, estimated: input + output };
+}
+
+/**
+ * The model that actually ANSWERED, not the one we asked for.
+ *
+ * The "Авто" card ships `fallbackModels` to the proxy as `modelKwargs.models`, so a busy
+ * or failing slug is silently served by the next one on the list — a safety net the owner
+ * decided on 21.08.2026 to keep. Attributing tokens to the CONFIGURED slug would therefore
+ * rebuild the very lie this split exists to remove, one level down. OpenRouter answers with
+ * the slug it actually ran; the configured name is only the last resort.
+ */
+export function answeringModelName(response: BaseMessage, fallback: string): string {
+  const reported = (response.response_metadata as { model_name?: unknown } | undefined)?.model_name;
+  return typeof reported === 'string' && reported.trim() ? reported.trim() : fallback;
+}
+
+/** One exchange as a per-model usage map, keyed by the model that answered. */
+export function usageByModelFromExchange(
+  prompt: BaseMessage[],
+  response: BaseMessage,
+  fallbackModel: string,
+): DeepResearchUsageByModel {
+  return { [answeringModelName(response, fallbackModel)]: measureExchange(prompt, response) };
+}
+
+/** Merges per-model usage maps (the state reducer's shape, reusable inside a node). */
+export function mergeUsageByModel(
+  acc: DeepResearchUsageByModel,
+  delta: DeepResearchUsageByModel,
+): DeepResearchUsageByModel {
+  const merged: DeepResearchUsageByModel = { ...acc };
+  for (const [model, usage] of Object.entries(delta)) {
+    const prev = merged[model] ?? { input: 0, output: 0, total: 0, estimated: 0 };
+    merged[model] = {
+      input: prev.input + usage.input,
+      output: prev.output + usage.output,
+      total: prev.total + usage.total,
+      estimated: prev.estimated + usage.estimated,
+    };
+  }
+  return merged;
+}
+
+/**
+ * The slug a model instance was BUILT with — the fallback for `answeringModelName` when a
+ * provider answers without naming itself. `BaseChatModel` does not declare it; every client
+ * this graph uses (ChatOpenAI and friends) carries one of these two fields.
+ */
+export function configuredModelName(model: unknown): string {
+  const named = model as { model?: unknown; modelName?: unknown } | null;
+  const value = named?.model ?? named?.modelName;
+  return typeof value === 'string' && value.trim() ? value.trim() : 'unknown';
 }
 
 /** Safe error → string. Nodes never throw; they record this on the errors channel. */

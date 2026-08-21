@@ -147,6 +147,29 @@ jest.mock('@librechat/api', () => ({
     const output = Math.ceil(responseText.length / 4);
     return { input, output, total: input + output };
   },
+  // Same arithmetic as the mock above — the runner reconciles the split against the
+  // aggregate, so two mocks that disagreed would fail every run for a reason of their own.
+  usageByModelFromExchange: (prompt, response, fallback) => {
+    const promptText = prompt.map((m) => String(m.content ?? '')).join(' ');
+    const responseText = typeof response?.content === 'string' ? response.content : '';
+    const input = Math.ceil(promptText.length / 4);
+    const output = Math.ceil(responseText.length / 4);
+    const name = response?.response_metadata?.model_name || fallback;
+    return { [name]: { input, output, total: input + output, estimated: input + output } };
+  },
+  mergeUsageByModel: (acc, delta) => {
+    const merged = { ...acc };
+    for (const [model, usage] of Object.entries(delta)) {
+      const prev = merged[model] ?? { input: 0, output: 0, total: 0, estimated: 0 };
+      merged[model] = {
+        input: prev.input + usage.input,
+        output: prev.output + usage.output,
+        total: prev.total + usage.total,
+        estimated: prev.estimated + usage.estimated,
+      };
+    }
+    return merged;
+  },
   // D2 clarify helpers — faithful mirrors of the real clarify.ts (unit-tested there); the
   // system prompt carries the 'модуль УТОЧНЕНИЯ' marker the fake model branches on.
   buildClarifyPrompt: ({ now }) => `Ты — модуль УТОЧНЕНИЯ. ${now}`,
@@ -278,7 +301,12 @@ jest.mock('~/models', () => ({
   bulkInsertTransactions: jest.fn(),
 }));
 
-const { runNewDeepResearch, buildDeepResearchTitle, isDrFollowUp } = require('./deepResearchRun');
+const {
+  runNewDeepResearch,
+  buildDeepResearchTitle,
+  isDrFollowUp,
+  buildDeepResearchCollectedUsage,
+} = require('./deepResearchRun');
 
 function baseParams(text) {
   return {
@@ -329,6 +357,9 @@ beforeEach(() => {
     finalReport: REPORT,
     finalizeReason: 'completed',
     usage: { input: 10, output: 20, total: 30 },
+    // The real engine reports the same tokens split by answering model; a worker slug here
+    // (not the lead) is what makes lead-rate billing visible when it happens.
+    usageByModel: { 'vendor/worker-x': { input: 10, output: 20, total: 30, estimated: 0 } },
     findings: [],
   });
 });
@@ -1726,6 +1757,55 @@ describe("runNewDeepResearch — the run is billed at the ENDPOINT's rates", () 
     });
   });
 
+  /**
+   * The title (and clarify, and plan) are real lead-model calls made OUTSIDE the graph, and
+   * their tokens are added to the run's aggregate. Adding them there but not to the split
+   * makes the two disagree — at which point `buildDeepResearchCollectedUsage` rightly
+   * discards the split and bills everything at the lead's rate again, silently undoing the
+   * whole change. Found exactly that way; this keeps it found.
+   */
+  it('bills the graph and the out-of-graph calls under their own models, not all under the lead', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+
+    // Clarify is the deterministic out-of-graph lead call in this harness (the title one
+    // depends on whether the conversation already has a title).
+    const params = baseParams('изучи рынок CRM');
+    params.req.config.deepResearch.clarify = true;
+    mockClarifyContent = '{"action":"PROCEED","questions":[]}';
+
+    await runNewDeepResearch(params);
+
+    const billed = recordCollectedUsage.mock.calls.find((c) => c[1]?.context === 'deep_research');
+    const models = billed[1].collectedUsage.map((e) => e.model).sort();
+    expect(models).toEqual(['lead-model', 'vendor/worker-x']);
+    // The worker's tokens stay the worker's — they are not folded into the lead's entry.
+    const worker = billed[1].collectedUsage.find((e) => e.model === 'vendor/worker-x');
+    expect(worker).toEqual({ model: 'vendor/worker-x', input_tokens: 10, output_tokens: 20 });
+  });
+
+  /**
+   * The opposite direction: when the split does NOT account for everything the run spent,
+   * billing must charge the run's own total under the lead rather than the short split.
+   * Under-billing silently is the failure mode that would never surface.
+   */
+  it('falls back to the aggregate when the engine reports a split that misses tokens', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockResolvedValue({
+      finalReport: REPORT,
+      finalizeReason: 'completed',
+      usage: { input: 1000, output: 2000, total: 3000 },
+      usageByModel: { 'vendor/worker-x': { input: 10, output: 20, total: 30, estimated: 0 } },
+      findings: [],
+    });
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const billed = recordCollectedUsage.mock.calls.find((c) => c[1]?.context === 'deep_research');
+    expect(billed[1].collectedUsage).toHaveLength(1);
+    expect(billed[1].collectedUsage[0].model).toBe('lead-model');
+    expect(billed[1].collectedUsage[0].input_tokens).toBeGreaterThanOrEqual(1000);
+  });
+
   it('bills anyway when the endpoint declares no prices — the old fallback stands', async () => {
     mockStartSovereignSession.mockResolvedValue(null);
     mockInitializeCustom.mockImplementation(async () => ({
@@ -2047,5 +2127,106 @@ describe('runNewDeepResearch — a conversation the run creates keeps its model 
     await runNewDeepResearch(baseParams('изучи рынок CRM'));
 
     expect(models.saveConvo.mock.calls[0][1]).not.toHaveProperty('spec');
+  });
+});
+
+describe('buildDeepResearchCollectedUsage — a run is billed per ANSWERING model', () => {
+  /**
+   * The balanced tier runs the lead at 1.32/3.96 and the worker at a fraction of that, and
+   * the worker does most of the talking. Billing the aggregate under the lead's slug is what
+   * made the journal's DR figure wrong by multiples.
+   */
+  it('splits the run into one entry per model instead of one entry at the lead rate', () => {
+    const { entries } = buildDeepResearchCollectedUsage({
+      model: 'deepseek/deepseek-v4-pro-0813',
+      usage: { input: 110_000, output: 12_000, total: 122_000 },
+      usageByModel: {
+        'deepseek/deepseek-v4-pro-0813': {
+          input: 10_000,
+          output: 2_000,
+          total: 12_000,
+          estimated: 0,
+        },
+        'deepseek/deepseek-v4-flash-0731': {
+          input: 100_000,
+          output: 10_000,
+          total: 110_000,
+          estimated: 0,
+        },
+      },
+    });
+
+    expect(entries).toEqual([
+      { model: 'deepseek/deepseek-v4-pro-0813', input_tokens: 10_000, output_tokens: 2_000 },
+      { model: 'deepseek/deepseek-v4-flash-0731', input_tokens: 100_000, output_tokens: 10_000 },
+    ]);
+    // The lead must NOT carry the worker's tokens — that is the whole defect.
+    const lead = entries.find((e) => e.model === 'deepseek/deepseek-v4-pro-0813');
+    expect(lead.input_tokens).toBe(10_000);
+  });
+
+  it('bills the same total the run measured, never more', () => {
+    const usage = { input: 110_000, output: 12_000, total: 122_000 };
+    const { entries } = buildDeepResearchCollectedUsage({
+      model: 'lead',
+      usage,
+      usageByModel: {
+        lead: { input: 10_000, output: 2_000, total: 12_000, estimated: 0 },
+        worker: { input: 100_000, output: 10_000, total: 110_000, estimated: 0 },
+      },
+    });
+
+    expect(entries.reduce((n, e) => n + e.input_tokens, 0)).toBe(usage.input);
+    expect(entries.reduce((n, e) => n + e.output_tokens, 0)).toBe(usage.output);
+  });
+
+  /**
+   * A node that forgets to report its model would silently bill LESS than the run spent.
+   * The aggregate is the authority: on disagreement the split is discarded, loudly.
+   */
+  it('falls back to the aggregate — and says so — when the split does not add up', () => {
+    const { entries, note } = buildDeepResearchCollectedUsage({
+      model: 'lead',
+      usage: { input: 110_000, output: 12_000, total: 122_000 },
+      usageByModel: { worker: { input: 100_000, output: 10_000, total: 110_000, estimated: 0 } },
+    });
+
+    expect(entries).toEqual([{ model: 'lead', input_tokens: 110_000, output_tokens: 12_000 }]);
+    expect(note).toMatch(/does not add up/);
+  });
+
+  it('keeps the old single-entry behaviour when no per-model usage was reported', () => {
+    const { entries, note } = buildDeepResearchCollectedUsage({
+      model: 'lead',
+      usage: { input: 5, output: 6, total: 11 },
+      usageByModel: {},
+    });
+
+    expect(entries).toEqual([{ model: 'lead', input_tokens: 5, output_tokens: 6 }]);
+    expect(note).toMatch(/no per-model usage/);
+  });
+
+  /**
+   * Estimated tokens are billed like reported ones, but a reconciliation against the
+   * OpenRouter invoice has to be able to tell which figure it is arguing with.
+   */
+  it('names estimated tokens so a later reconciliation is not chasing arithmetic', () => {
+    const { note } = buildDeepResearchCollectedUsage({
+      model: 'lead',
+      usage: { input: 100, output: 20, total: 120 },
+      usageByModel: { lead: { input: 100, output: 20, total: 120, estimated: 120 } },
+    });
+
+    expect(note).toMatch(/120 of those tokens are a LENGTH ESTIMATE/);
+  });
+
+  it('says nothing about estimates when every token was reported by the provider', () => {
+    const { note } = buildDeepResearchCollectedUsage({
+      model: 'lead',
+      usage: { input: 100, output: 20, total: 120 },
+      usageByModel: { lead: { input: 100, output: 20, total: 120, estimated: 0 } },
+    });
+
+    expect(note).not.toMatch(/ESTIMATE/);
   });
 });

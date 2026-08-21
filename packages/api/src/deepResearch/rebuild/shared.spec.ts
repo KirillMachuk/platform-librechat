@@ -7,6 +7,10 @@ import {
   fenceUntrusted,
   usageFromMessage,
   usageFromExchange,
+  answeringModelName,
+  usageByModelFromExchange,
+  configuredModelName,
+  mergeUsageByModel,
   untrustedDirective,
   sanitizeErrorForUser,
   stripCitationControlChars,
@@ -138,5 +142,102 @@ describe('sanitizeErrorForUser', () => {
     );
     const safe = sanitizeErrorForUser(leaky);
     expect(safe).not.toMatch(/https?:|:\d{2,5}|anon-proxy|10\.0\.0\.5/);
+  });
+});
+
+describe('answeringModelName — the model that ANSWERED, not the one we asked for', () => {
+  /**
+   * The "Авто" card ships a fallback list to the proxy, so a busy slug is served by the next
+   * one on it. Attributing tokens to the configured slug rebuilds the same lie one level down.
+   */
+  it('prefers the slug the provider reported over the one we configured', () => {
+    const response = new AIMessage({
+      content: 'ответ',
+      response_metadata: { model_name: 'deepseek/deepseek-v4-flash-0731' },
+    });
+
+    expect(answeringModelName(response, 'deepseek/deepseek-v4-pro-0813')).toBe(
+      'deepseek/deepseek-v4-flash-0731',
+    );
+  });
+
+  it('falls back to the configured slug when the provider names nothing', () => {
+    expect(answeringModelName(new AIMessage({ content: 'ответ' }), 'configured')).toBe(
+      'configured',
+    );
+  });
+
+  it('treats a blank model_name as no answer at all', () => {
+    const response = new AIMessage({ content: 'ответ', response_metadata: { model_name: '   ' } });
+
+    expect(answeringModelName(response, 'configured')).toBe('configured');
+  });
+});
+
+describe('usageByModelFromExchange', () => {
+  it('keys reported usage by the answering model and marks nothing as estimated', () => {
+    const response = new AIMessage({
+      content: 'ответ',
+      response_metadata: { model_name: 'served/model' },
+      usage_metadata: { input_tokens: 1000, output_tokens: 200, total_tokens: 1200 },
+    });
+
+    expect(usageByModelFromExchange([new HumanMessage('вопрос')], response, 'asked/model')).toEqual(
+      { 'served/model': { input: 1000, output: 200, total: 1200, estimated: 0 } },
+    );
+  });
+
+  /**
+   * `usageFromExchange` falls back to a length proxy behind a usage-stripping proxy. Those
+   * tokens are billed like reported ones, so the only way to tell them apart later is to
+   * carry the fact.
+   */
+  it('marks the whole figure as estimated when the provider reported no usage', () => {
+    const response = new AIMessage({ content: 'ответ' });
+    const split = usageByModelFromExchange([new HumanMessage('вопрос')], response, 'asked/model');
+    const usage = split['asked/model'];
+
+    expect(usage.estimated).toBe(usage.total);
+    expect(usage.total).toBeGreaterThan(0);
+  });
+
+  it('agrees with usageFromExchange about the number itself', () => {
+    const prompt = [new HumanMessage('вопрос подлиннее, чтобы оценка была не нулевой')];
+    const response = new AIMessage({ content: 'ответ модели' });
+    const [split] = Object.values(usageByModelFromExchange(prompt, response, 'm'));
+
+    expect({ input: split.input, output: split.output, total: split.total }).toEqual(
+      usageFromExchange(prompt, response),
+    );
+  });
+});
+
+describe('mergeUsageByModel', () => {
+  it('accumulates per model and keeps models apart', () => {
+    const merged = mergeUsageByModel(
+      { a: { input: 1, output: 2, total: 3, estimated: 0 } },
+      {
+        a: { input: 10, output: 20, total: 30, estimated: 30 },
+        b: { input: 5, output: 5, total: 10, estimated: 0 },
+      },
+    );
+
+    expect(merged).toEqual({
+      a: { input: 11, output: 22, total: 33, estimated: 30 },
+      b: { input: 5, output: 5, total: 10, estimated: 0 },
+    });
+  });
+});
+
+describe('configuredModelName', () => {
+  it('reads either field a chat client may carry', () => {
+    expect(configuredModelName({ model: 'a' })).toBe('a');
+    expect(configuredModelName({ modelName: 'b' })).toBe('b');
+  });
+
+  it('never returns an empty key — an unnamed model would collapse into one bucket', () => {
+    expect(configuredModelName({})).toBe('unknown');
+    expect(configuredModelName(null)).toBe('unknown');
+    expect(configuredModelName({ model: '  ' })).toBe('unknown');
   });
 });

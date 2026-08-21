@@ -7,6 +7,7 @@ import type {
   DeepResearchFinding,
   DeepResearchNodeError,
   DeepResearchTokenUsage,
+  DeepResearchUsageByModel,
   DeepResearchConfigurable,
 } from '../state';
 import type { DeepResearchTier } from '../config';
@@ -17,6 +18,9 @@ import {
   toErrorMessage,
   fenceUntrusted,
   usageFromExchange,
+  usageByModelFromExchange,
+  mergeUsageByModel,
+  configuredModelName,
   sanitizeErrorForUser,
   stripCitationControlChars,
 } from '../shared';
@@ -75,6 +79,13 @@ export interface ResearcherNodeDeps {
 export interface ResearchLoopResult {
   toolOutputs: string[];
   usage: DeepResearchTokenUsage;
+  /**
+   * The loop's tokens by ANSWERING model. Kept separate from COMPRESS's own figure rather
+   * than merged at the node boundary: the tool loop runs on the worker model and COMPRESS
+   * on `compressModel`, which the tier happens to set to the same slug today. Merging here
+   * would make a future split of those two silently mis-attribute.
+   */
+  usageByModel: DeepResearchUsageByModel;
 }
 
 /**
@@ -178,6 +189,13 @@ export async function runResearchLoop(params: {
    *  synthesis window. Reads the injected clock; unset (either) → time arm off (A1). */
   deadlineMs?: number;
   clock?: () => number;
+  /**
+   * Slug of the model behind `caller`, for exchanges where the provider does not name
+   * itself. It has to be passed in: `caller` is what `bindTools()` returned — a
+   * RunnableBinding wrapping the model, which carries none of the model's own fields, so
+   * reading the name off it yields 'unknown' for every worker turn.
+   */
+  callerModel?: string;
 }): Promise<ResearchLoopResult> {
   const { caller, tools, system, question, maxTurns, tokenCap, nonce, signal, deadlineMs, clock } =
     params;
@@ -185,6 +203,8 @@ export async function runResearchLoop(params: {
   const messages: BaseMessage[] = [new SystemMessage(system), new HumanMessage(question)];
   const toolOutputs: string[] = [];
   let usage = ZERO_USAGE;
+  let usageByModel: DeepResearchUsageByModel = {};
+  const callerModel = params.callerModel ?? configuredModelName(caller);
 
   for (let turn = 0; turn < Math.max(1, maxTurns); turn++) {
     // Time gate (A1): once the gather deadline has passed, stop starting new turns so the
@@ -195,6 +215,10 @@ export async function runResearchLoop(params: {
     }
     const response = await caller.invoke(messages, { signal });
     usage = mergeUsage(usage, usageFromExchange(messages, response));
+    usageByModel = mergeUsageByModel(
+      usageByModel,
+      usageByModelFromExchange(messages, response, callerModel),
+    );
     messages.push(response);
     const toolCalls = response.tool_calls ?? [];
     // A researcher that answers nothing AND asks for no tool simply stops below, keeping
@@ -258,7 +282,7 @@ export async function runResearchLoop(params: {
       );
     }
   }
-  return { toolOutputs, usage };
+  return { toolOutputs, usage, usageByModel };
 }
 
 /** Joins raw tool outputs into the single bounded block COMPRESS sees — also the
@@ -286,11 +310,15 @@ export async function compressResearch(params: {
   now: string;
   nonce: string;
   signal?: AbortSignal;
-}): Promise<{ digest: string; usage: Partial<DeepResearchTokenUsage> }> {
+}): Promise<{
+  digest: string;
+  usage: Partial<DeepResearchTokenUsage>;
+  usageByModel: DeepResearchUsageByModel;
+}> {
   const { compressModel, subQuestion, jurisdiction, gathered, digestCap, now, nonce, signal } =
     params;
   if (!gathered) {
-    return { digest: '', usage: {} };
+    return { digest: '', usage: {}, usageByModel: {} };
   }
   const prompt = [
     new SystemMessage(buildCompressPrompt({ subQuestion, jurisdiction, digestCap, now, nonce })),
@@ -307,6 +335,7 @@ export async function compressResearch(params: {
   return {
     digest: answer.text.slice(0, digestCap),
     usage: usageFromExchange(prompt, response),
+    usageByModel: usageByModelFromExchange(prompt, response, configuredModelName(compressModel)),
   };
 }
 
@@ -354,6 +383,8 @@ export function hasResearchMaterial(finding: DeepResearchFinding): boolean {
 export interface ResearchOneResult {
   finding: DeepResearchFinding;
   usage: DeepResearchTokenUsage;
+  /** The same tokens, keyed by the model that answered (loop and COMPRESS kept apart). */
+  usageByModel: DeepResearchUsageByModel;
   /** Set on a non-fatal data/tool failure (recorded on the errors channel); abort re-throws. */
   error?: DeepResearchNodeError;
 }
@@ -376,7 +407,11 @@ export async function researchOne(params: {
 }): Promise<ResearchOneResult> {
   const { caller, deps, subQuestion, round, jurisdiction, tokenCap, signal, deadlineMs } = params;
   try {
-    const { toolOutputs, usage: loopUsage } = await runResearchLoop({
+    const {
+      toolOutputs,
+      usage: loopUsage,
+      usageByModel: loopUsageByModel,
+    } = await runResearchLoop({
       caller,
       tools: deps.tools,
       system: buildResearcherPrompt({
@@ -387,6 +422,7 @@ export async function researchOne(params: {
         nonce: deps.nonce,
       }),
       question: subQuestion,
+      callerModel: configuredModelName(deps.model),
       maxTurns: deps.tier.maxSearcherTurns,
       tokenCap,
       nonce: deps.nonce,
@@ -397,7 +433,11 @@ export async function researchOne(params: {
       clock: deps.clock ?? Date.now,
     });
     const gathered = boundToolOutputs(toolOutputs);
-    const { digest, usage: compressUsage } = await compressResearch({
+    const {
+      digest,
+      usage: compressUsage,
+      usageByModel: compressUsageByModel,
+    } = await compressResearch({
       compressModel: deps.compressModel,
       subQuestion,
       jurisdiction,
@@ -417,6 +457,7 @@ export async function researchOne(params: {
         tokens: usage.total,
       },
       usage,
+      usageByModel: mergeUsageByModel(loopUsageByModel, compressUsageByModel),
     };
   } catch (error) {
     if (signal?.aborted) {
@@ -431,6 +472,7 @@ export async function researchOne(params: {
         tokens: 0,
       },
       usage: ZERO_USAGE,
+      usageByModel: {},
       error: { node: 'researcher', message: toErrorMessage(error), at: deps.now },
     };
   }
@@ -510,11 +552,15 @@ export function createResearcherNode(deps: ResearcherNodeDeps): DeepResearchNode
       .map((o) => o.value);
     const findings = results.map((r) => r.finding);
     const usage = results.reduce((acc, r) => mergeUsage(acc, r.usage), ZERO_USAGE);
+    const usageByModel = results.reduce<DeepResearchUsageByModel>(
+      (acc, r) => mergeUsageByModel(acc, r.usageByModel),
+      {},
+    );
     const errors = results
       .map((r) => r.error)
       .filter((error): error is DeepResearchNodeError => Boolean(error));
     return errors.length > 0
-      ? { findings, tokenUsage: usage, errors }
-      : { findings, tokenUsage: usage };
+      ? { findings, tokenUsage: usage, usageByModel, errors }
+      : { findings, tokenUsage: usage, usageByModel };
   };
 }
