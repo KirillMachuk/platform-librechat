@@ -1,3 +1,4 @@
+import { logger } from '@librechat/data-schemas';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { RunnableConfig } from '@langchain/core/runnables';
@@ -178,10 +179,26 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
         ),
       ];
       const response = await deps.model.invoke(prompt, { signal: config.signal });
+      const answer = readAnswer('supervisor', response);
       const { completeRequested, subQuestions } = parseSupervisorOutput(
-        readAnswer('supervisor', response).text,
+        answer.text,
         deps.tier.maxConcurrentResearchers,
       );
+      /**
+       * `readAnswer` reports EMPTY and CUT answers. A third degradation looks perfectly
+       * healthy to it: a full, non-empty answer that simply is not the JSON this node asked
+       * for — prose, an apology, an unclosed code fence. It parses to no batch and no
+       * 'complete', so the fallback below researches the whole brief as ONE question and the
+       * round silently loses its parallel fan-out. Same cost as the empty answer fixed before
+       * it, and the same invisibility — which is what made that one cost a live investigation.
+       */
+      if (!completeRequested && subQuestions.length === 0 && !answer.empty) {
+        logger.warn(
+          `[deepResearch:supervisor] unparseable answer (${answer.text.length} chars): ` +
+            'no sub-questions and no complete — falling back to the brief as ONE question, ' +
+            "losing this round's fan-out",
+        );
+      }
       const tokenUsage = usageFromExchange(prompt, response);
       // COMPLETE before ANY research ran (round 0) is always wrong — there is nothing
       // to report from. Malformed output (no valid batch, no explicit complete) must

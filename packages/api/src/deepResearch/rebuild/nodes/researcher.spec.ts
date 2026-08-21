@@ -31,6 +31,23 @@ function scriptedCaller(responses: AIMessageChunk[]): ToolCaller {
   return { invoke: async () => responses[Math.min(i++, responses.length - 1)] };
 }
 
+/** Like `scriptedCaller`, but records what the model was actually shown each turn — the only
+ *  way to assert that a failure still reaches the model while staying out of the material. */
+function recordingCaller(sink: BaseMessage[][], responses: AIMessageChunk[]): ToolCaller {
+  let i = 0;
+  return {
+    invoke: async (messages: BaseMessage[]) => {
+      sink.push([...messages]);
+      return responses[Math.min(i++, responses.length - 1)];
+    },
+  };
+}
+
+const shownToModel = (messages: BaseMessage[]): string =>
+  messages
+    .map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
+    .join('\n');
+
 const okTool = tool(
   async ({ query }: { query: string }) => `данные по ${query}: https://cbr.ru/key-rate`,
   {
@@ -83,9 +100,10 @@ describe('runResearchLoop', () => {
     expect(result.toolOutputs[0]).toContain('cbr.ru');
   });
 
-  it('returns an error string (never throws) for an unknown tool', async () => {
+  it('shows an unknown tool to the model without counting it as material', async () => {
+    const seen: BaseMessage[][] = [];
     const result = await runResearchLoop({
-      caller: scriptedCaller([toolCallChunk('nonexistent', {}, 'c1'), finalChunk('x')]),
+      caller: recordingCaller(seen, [toolCallChunk('nonexistent', {}, 'c1'), finalChunk('x')]),
       tools: [okTool],
       system: 's',
       question: 'q',
@@ -93,12 +111,19 @@ describe('runResearchLoop', () => {
       tokenCap: Infinity,
       maxTurns: 5,
     });
-    expect(result.toolOutputs[0]).toContain('недоступен');
+    // Never throws, and the model is told — so it can try another angle.
+    expect(shownToModel(seen[seen.length - 1])).toContain('недоступен');
+    // …but a failure notice is not research material.
+    expect(result.toolOutputs).toEqual([]);
   });
 
-  it('returns an error string (never throws) when a tool throws', async () => {
+  it('shows a thrown tool error to the model without counting it as material', async () => {
+    const seen: BaseMessage[][] = [];
     const result = await runResearchLoop({
-      caller: scriptedCaller([toolCallChunk('file_search', { query: 'q' }, 'c1'), finalChunk('x')]),
+      caller: recordingCaller(seen, [
+        toolCallChunk('file_search', { query: 'q' }, 'c1'),
+        finalChunk('x'),
+      ]),
       tools: [throwingTool],
       system: 's',
       question: 'q',
@@ -106,7 +131,8 @@ describe('runResearchLoop', () => {
       tokenCap: Infinity,
       maxTurns: 5,
     });
-    expect(result.toolOutputs[0]).toContain('Ошибка инструмента');
+    expect(shownToModel(seen[seen.length - 1])).toContain('Ошибка инструмента');
+    expect(result.toolOutputs).toEqual([]);
   });
 
   it('stops at maxTurns when the model never concludes', async () => {

@@ -1,3 +1,4 @@
+import { logger } from '@librechat/data-schemas';
 import { SystemMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import type { AIMessage, AIMessageChunk, BaseMessage, ToolCall } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
@@ -30,6 +31,8 @@ const MAX_TOOL_OUTPUT_CHARS = 8_000;
 const MAX_TOOL_CALLS_PER_TURN = 5;
 /** Per-tool-call wall-clock cap (ms) — a hung fetch/RAG query can't stall the run. */
 const TOOL_TIMEOUT_MS = 60_000;
+/** Floor for the deadline-shortened timeout, so a call starting marginally late still sends. */
+const MIN_TOOL_TIMEOUT_MS = 5_000;
 const MAX_SOURCES = 50;
 const SOURCE_URL = /https?:\/\/[^\s)"'<>\]]+/g;
 /** Asset/media/font/style/script extensions — never article content (C1). */
@@ -72,34 +75,79 @@ export interface ResearchLoopResult {
   usage: DeepResearchTokenUsage;
 }
 
+/**
+ * One tool call's outcome. `ok: false` marks text the model must still SEE — it has to know
+ * the search failed so it can try another angle — but which is NOT research material.
+ *
+ * The distinction was missing, and it cost the run its honesty. A failure string went into
+ * `toolOutputs` beside real results, COMPRESS summarised it into a digest, and
+ * `hasResearchMaterial` — which only recognises the two placeholder digests — let it through.
+ * So a dead search key did not produce the "could not gather material" notice this filter
+ * exists for: it produced a confident report, with a comparison table, marked 'completed',
+ * with a PDF, whose entire evidence base was the sentence "Ошибка инструмента web_search: …".
+ */
+interface ToolCallOutcome {
+  /** What the model sees as this call's result — real data, or the failure text. */
+  text: string;
+  /** True only when the tool actually returned data. */
+  ok: boolean;
+}
+
+/**
+ * Per-call timeout, never longer than the time left before the gather deadline.
+ *
+ * The turn gate below refuses to START a turn past the deadline, but a turn already started
+ * runs to its end: up to `MAX_TOOL_CALLS_PER_TURN` sequential calls of `TOOL_TIMEOUT_MS`
+ * each — 300 s past a synthesis reserve that is 270 s on the deep tier. That is the same
+ * point-in-time leak the supervisor's gate had (see `budgetGateReason`), one level down, and
+ * it ends the same way: the hard watchdog kills the run and the user gets no report at all.
+ *
+ * Bounding the CALLS is preferred over predicting the turn's length: a run with time to
+ * spare keeps the full timeout and loses no research depth, which a predictive gate would
+ * cost it. The floor keeps a call that starts marginally late from being aborted before it
+ * can even send.
+ */
+export function toolTimeoutMs(budgetMs?: number): number {
+  if (budgetMs == null || !Number.isFinite(budgetMs)) {
+    return TOOL_TIMEOUT_MS;
+  }
+  return Math.max(MIN_TOOL_TIMEOUT_MS, Math.min(TOOL_TIMEOUT_MS, budgetMs));
+}
+
 async function executeToolCall(
   tool: StructuredToolInterface | undefined,
   call: ToolCall,
   signal?: AbortSignal,
-): Promise<string> {
+  /** Wall-clock left before the gather deadline (ms); unset → full `TOOL_TIMEOUT_MS`. */
+  budgetMs?: number,
+): Promise<ToolCallOutcome> {
   if (!tool) {
-    return `Инструмент "${call.name}" недоступен.`;
+    return { text: `Инструмент "${call.name}" недоступен.`, ok: false };
   }
   const cap = (text: string): string =>
     stripCitationControlChars(text).slice(0, MAX_TOOL_OUTPUT_CHARS);
-  const timeout = AbortSignal.timeout(TOOL_TIMEOUT_MS);
+  const timeout = AbortSignal.timeout(toolTimeoutMs(budgetMs));
   const toolSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
   try {
     const result: unknown = await tool.invoke(call, { signal: toolSignal });
     if (typeof result === 'string') {
-      return cap(result);
+      return { text: cap(result), ok: true };
     }
     if (result instanceof ToolMessage) {
       const content =
         typeof result.content === 'string' ? result.content : JSON.stringify(result.content);
-      return cap(content);
+      return { text: cap(content), ok: true };
     }
-    return cap(JSON.stringify(result));
+    return { text: cap(JSON.stringify(result)), ok: true };
   } catch (error) {
     if (signal?.aborted) {
       throw error; // external abort/timeout — propagate so the run finalizes a partial report
     }
-    return `Ошибка инструмента ${call.name}: ${toErrorMessage(error)}`; // tool failure or per-call timeout
+    // tool failure or per-call timeout — the model sees it, the digest must not
+    return {
+      text: `Ошибка инструмента ${call.name}: ${toErrorMessage(error)}`,
+      ok: false,
+    };
   }
 }
 
@@ -149,8 +197,20 @@ export async function runResearchLoop(params: {
     // from a researcher that finished its work.
     if (toolCalls.length === 0) {
       readAnswer('researcher', response);
+      break;
     }
-    if (toolCalls.length === 0 || usage.total >= tokenCap) {
+    if (usage.total >= tokenCap) {
+      /**
+       * The model call above is BILLED and its tool calls will now never run, so this turn
+       * bought nothing. Downstream that is indistinguishable from a search that found
+       * nothing, and the user was told "источники не открылись или поиск был недоступен" —
+       * sent to an administrator to debug a search that works fine. REPORT now words that
+       * notice from the run's conclude reason; this line is the server-side half.
+       */
+      logger.warn(
+        `[deepResearch:researcher] token cap reached (${usage.total}/${Math.round(tokenCap)}) with ` +
+          `${toolCalls.length} tool call(s) unexecuted — this turn produced no material`,
+      );
       break;
     }
     for (let i = 0; i < toolCalls.length; i++) {
@@ -164,11 +224,26 @@ export async function runResearchLoop(params: {
         );
         continue;
       }
-      const content = await executeToolCall(toolsByName.get(call.name), call, signal);
-      toolOutputs.push(content);
+      const outcome = await executeToolCall(
+        toolsByName.get(call.name),
+        call,
+        signal,
+        deadlineMs != null && clock != null ? Math.max(0, deadlineMs - clock()) : undefined,
+      );
+      // Only real data becomes research material. A failure is still shown to the model (it
+      // must know, to try another angle) and logged — but it is never compressed into a
+      // digest that then reads like evidence.
+      if (outcome.ok) {
+        toolOutputs.push(outcome.text);
+      } else {
+        logger.warn(
+          `[deepResearch:researcher] tool "${call.name}" returned no data: ` +
+            outcome.text.slice(0, 200),
+        );
+      }
       messages.push(
         new ToolMessage({
-          content: fenceUntrusted(content, nonce),
+          content: fenceUntrusted(outcome.text, nonce),
           tool_call_id: call.id ?? '',
           name: call.name,
         }),
@@ -182,7 +257,15 @@ export async function runResearchLoop(params: {
  *  exact text source URLs are pulled from, so citations match the compressed
  *  material rather than trailing material beyond the cap (L6). */
 export function boundToolOutputs(toolOutputs: string[]): string {
-  return toolOutputs.join('\n\n---\n\n').slice(0, COMPRESS_INPUT_CHAR_CAP);
+  /**
+   * Empty outputs are dropped BEFORE the join: `['', '']` joined to `'\n\n---\n\n'` — a
+   * TRUTHY string — so `compressResearch`'s "empty input → empty digest" shortcut never
+   * fired and the compress model was invoked, and billed, on nothing but separators.
+   */
+  return toolOutputs
+    .filter((output) => output.trim().length > 0)
+    .join('\n\n---\n\n')
+    .slice(0, COMPRESS_INPUT_CHAR_CAP);
 }
 
 /** Compresses the bounded gathered material into a digest. Empty input → empty digest. */

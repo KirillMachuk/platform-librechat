@@ -23,6 +23,11 @@ import { hasResearchMaterial } from './researcher';
 import { buildReportPrompt } from '../prompts';
 
 const DEFAULT_MAX_RETRIES = 3;
+/**
+ * Sources listed per finding on the FIRST attempt — matches the researcher's own extraction
+ * cap, so attempt 0 is byte-identical to before and no healthy run loses a citation.
+ */
+const SOURCES_PER_FINDING = 50;
 
 /** Minimal invoke surface satisfied by a real chat model and by test fakes. */
 export interface ReportModel {
@@ -67,15 +72,28 @@ function isContextLimitError(error: unknown): boolean {
   return /context|token|length|maximum|too long|413|payload too large/i.test(toErrorMessage(error));
 }
 
-function formatFindings(findings: DeepResearchFinding[], perDigestCap: number): string {
+/**
+ * Renders the findings REPORT synthesises from, shrunk to `perDigestCap` / `perFindingSources`.
+ *
+ * BOTH halves shrink on a retry. Only the digest used to: a run with many findings could enter
+ * the third attempt at an eighth of its evidence while carrying its full source lists — so the
+ * model saw the URLs of facts whose text had been cut away, and wrote the report from what was
+ * left. It was still returned as a normal 'completed' report, with nothing to say it had been
+ * written from a fraction of the material.
+ */
+function formatFindings(
+  findings: DeepResearchFinding[],
+  perDigestCap: number,
+  perFindingSources: number,
+): string {
   if (findings.length === 0) {
     return '(материал не собран)';
   }
   return findings
     .map((finding, i) => {
       const digest = finding.digest.slice(0, Math.max(1, perDigestCap));
-      const sources =
-        finding.sources.length > 0 ? `\nИсточники: ${finding.sources.join(', ')}` : '';
+      const shown = finding.sources.slice(0, Math.max(1, perFindingSources));
+      const sources = shown.length > 0 ? `\nИсточники: ${shown.join(', ')}` : '';
       return `### Находка ${i + 1}: ${finding.subQuestion}\n${digest}${sources}`;
     })
     .join('\n\n');
@@ -125,10 +143,13 @@ export async function composeReport(params: {
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const perDigestCap = Math.floor(digestCap / 2 ** attempt);
+    const perFindingSources = Math.max(1, Math.ceil(SOURCES_PER_FINDING / 2 ** attempt));
     try {
       const prompt = [
         new SystemMessage(buildReportPrompt({ request, brief, jurisdiction, now, nonce })),
-        new HumanMessage(fenceUntrusted(formatFindings(findings, perDigestCap), nonce)),
+        new HumanMessage(
+          fenceUntrusted(formatFindings(findings, perDigestCap, perFindingSources), nonce),
+        ),
       ];
       const response = await reportModel.invoke(prompt, { signal });
       const answer = readAnswer('report', response);
@@ -195,9 +216,14 @@ export async function composeReport(params: {
  *  "request" is the whole dialogue transcript — echoing it verbatim is unreadable. */
 const NO_DATA_REQUEST_CAP = 160;
 
+/** Stop reasons that mean "the run's allowance ran out", not "the search failed". */
+const EXHAUSTED_REASONS: readonly SupervisorConcludeReason[] = ['budget', 'rounds', 'time'];
+
 export function buildNoDataReport(params: {
   request: string;
   findings: DeepResearchFinding[];
+  /** Why the gather loop stopped — decides which cause the notice names. */
+  reason?: SupervisorConcludeReason | null;
 }): string {
   const attempted = params.findings
     .map((finding) => `- ${finding.subQuestion}`)
@@ -207,13 +233,27 @@ export function buildNoDataReport(params: {
   const chars = [...flat];
   const shownRequest =
     chars.length > NO_DATA_REQUEST_CAP ? `${chars.slice(0, NO_DATA_REQUEST_CAP).join('')}…` : flat;
+  /**
+   * The cause has to be named correctly, because the notice tells the user what to DO next.
+   * A run that simply ran out of its time/token/round allowance before gathering anything was
+   * told the web search had failed, and sent to an administrator to debug a search that works
+   * — while the one action that would actually help, narrowing the query, went unmentioned.
+   */
+  const exhausted = params.reason != null && EXHAUSTED_REASONS.includes(params.reason);
+  const cause = exhausted
+    ? `исследование не успело собрать материал: закончился отведённый на прогон лимит ` +
+      `(время, бюджет или число кругов поиска)`
+    : `веб-поиск не вернул пригодного материала: источники не открылись или поиск был недоступен`;
+  const next = exhausted
+    ? `Что можно сделать: сузьте запрос — конкретнее по теме, региону или периоду. ` +
+      `Более узкий вопрос укладывается в лимит прогона.`
+    : `Что можно сделать: повторите исследование чуть позже или переформулируйте запрос. ` +
+      `Если ошибка повторяется — сообщите администратору (похоже на сбой веб-поиска).`;
   return (
     `## Не удалось собрать материал\n\n` +
-    `По запросу «${shownRequest}» веб-поиск не вернул пригодного материала: ` +
-    `источники не открылись или поиск был недоступен. Отчёт без фактической базы не составлен.\n\n` +
+    `По запросу «${shownRequest}» ${cause}. Отчёт без фактической базы не составлен.\n\n` +
     (attempted ? `Что исследовалось:\n${attempted}\n\n` : '') +
-    `Что можно сделать: повторите исследование чуть позже или переформулируйте запрос. ` +
-    `Если ошибка повторяется — сообщите администратору (похоже на сбой веб-поиска).`
+    next
   );
 }
 
@@ -232,7 +272,7 @@ export function createReportNode(deps: ReportNodeDeps): DeepResearchNode {
       const supervisorFailed = state.concludeReason === 'error';
       const text = supervisorFailed
         ? buildFallbackReport({ reason: 'внутренняя ошибка оркестратора' })
-        : buildNoDataReport({ request, findings: state.findings });
+        : buildNoDataReport({ request, findings: state.findings, reason: state.concludeReason });
       return {
         finalReport: text,
         finalizeReason: supervisorFailed ? 'error' : 'nodata',
