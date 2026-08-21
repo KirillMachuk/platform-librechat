@@ -39,9 +39,15 @@ jest.mock('@librechat/api', () => ({
   })),
 }));
 
-jest.mock('~/models', () => ({}), { virtual: true });
-jest.mock('~/server/services/Audit', () => ({ recordAudit: jest.fn() }), { virtual: true });
-jest.mock('~/server/utils', () => ({ sendEmail: jest.fn() }), { virtual: true });
+/* Plain mocks, like every other spec in `api/server`. These three modules EXIST, and
+ * `virtual: true` means the opposite — it tells Jest not to resolve the path because
+ * nothing is there. It happened to intercept on macOS and the suite was green; on the
+ * Linux runner the same three tests failed with the verdict never recorded, i.e.
+ * `checkCreditDrift` threw and its own catch swallowed it. Whatever the resolution
+ * difference is, `virtual` was wrong here by definition, and the house convention is not. */
+jest.mock('~/models', () => ({}));
+jest.mock('~/server/services/Audit', () => ({ recordAudit: jest.fn() }));
+jest.mock('~/server/utils', () => ({ sendEmail: jest.fn() }));
 
 const { logger } = require('@librechat/data-schemas');
 const { checkCreditDrift, getCreditDriftHealth } = require('./Billing');
@@ -64,6 +70,12 @@ describe('checkCreditDrift', () => {
 
     await checkCreditDrift();
 
+    /* `checkCreditDrift` catches everything, so a broken wiring reads exactly like a
+     * clean ledger: the verdict simply stays at its initial value. Assert on what the
+     * catch logged BEFORE asserting the verdict — otherwise the only thing CI ever says
+     * is «month: null», and the actual error never leaves the process. That is how these
+     * three tests failed on the runner for a day without naming a cause. */
+    expect(logger.error.mock.calls.map((call) => call.map(String).join(' '))).toEqual([]);
     expect(getCreditDriftHealth()).toMatchObject({
       drifted: false,
       driftMicroUsd: 0,
