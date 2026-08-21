@@ -15,6 +15,14 @@ import ContentRender from '~/components/Messages/ContentRender';
  * A truncated report therefore looked exactly as finished as a complete one, and the only
  * trace of the truncation stayed in the database.
  */
+// The notice is wrapped in DelayedRender (250 ms) for parity with MessageContent. These tests
+// are about the PREDICATE — which messages get a notice at all — so the delay is passed
+// through; the delay itself is a cosmetic behaviour shared with the component it copies.
+jest.mock('@librechat/client', () => ({
+  ...jest.requireActual('@librechat/client'),
+  DelayedRender: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+}));
+
 jest.mock('~/components/Chat/Messages/Content/MessageContent', () => ({
   __esModule: true,
   default: () => <div />,

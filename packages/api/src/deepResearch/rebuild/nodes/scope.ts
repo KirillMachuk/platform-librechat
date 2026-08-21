@@ -73,8 +73,12 @@ export function createScopeNode(deps: ScopeNodeDeps) {
        * text, and for a truncated answer the raw text is `{"jurisdiction":"RU","brief":"…` —
        * which then became the brief every later node reasoned over, with the jurisdiction lost
        * as well, since a fragment does not parse. The EMPTY case was already handled below;
-       * truncation reached the same damage by a different road. Prose that merely is not JSON
-       * stays a usable brief — only the cut-mid-JSON case falls back to the user's request.
+       * truncation reached the same damage by a different road.
+       *
+       * The condition is "cut AND not parsed", so it also catches CUT PROSE — an answer that
+       * was never JSON and stopped mid-sentence. That is deliberate: a half-sentence is not a
+       * better brief than the user's own question. Prose that is merely not JSON and came back
+       * WHOLE still becomes the brief, which is the case worth keeping.
        */
       const cutFragment = answer.truncated && !fromJson;
       return {

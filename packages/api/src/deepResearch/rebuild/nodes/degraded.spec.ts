@@ -324,17 +324,33 @@ describe('the no-data notice states what it knows and no more', () => {
     expect(text).not.toContain('источники не открылись');
   });
 
-  it('offers BOTH next steps, whatever the stop reason', () => {
-    for (const reason of ['budget', 'time', 'rounds', 'complete'] as const) {
+  /**
+   * Ordering advice by a fact the run knows is not the same as asserting a cause. An earlier
+   * revision offered "narrow the query, it will fit the limit" for EVERY outcome — including
+   * one where no limit was reached, which made the notice contradict its own opening line and
+   * pointed a user whose search had broken off at a second twenty-minute run that could not
+   * have helped.
+   */
+  it('tells a run that ran out of its allowance to narrow the query', () => {
+    for (const reason of ['budget', 'time', 'rounds'] as const) {
       const text = buildNoDataReport({ request: 'з', findings: [], reason });
       expect(text).toContain('сузьте запрос');
       expect(text).toContain('администратору');
     }
   });
 
-  it('still works when the run stopped for no recorded reason', () => {
+  it('tells a run that hit NO limit to retry, never to narrow for a limit it never hit', () => {
+    const text = buildNoDataReport({ request: 'з', findings: [], reason: 'complete' });
+    expect(text).toContain('повторите исследование');
+    expect(text).toContain('администратору');
+    expect(text).not.toContain('уложиться в лимит');
+    expect(text).not.toContain('сузьте запрос');
+  });
+
+  it('names nothing rather than inventing a phrase when no reason was recorded', () => {
     const text = buildNoDataReport({ request: 'з', findings: [] });
-    expect(text).toContain('остановился');
-    expect(text).toContain('сузьте запрос');
+    // No tautological "material was not gathered: gathering stopped".
+    expect(text).toContain('не собрано пригодного материала.');
+    expect(text).toContain('повторите исследование');
   });
 });

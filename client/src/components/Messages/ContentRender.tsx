@@ -1,5 +1,6 @@
-import { useCallback, useMemo, memo } from 'react';
+import { useCallback, useMemo, memo, Suspense } from 'react';
 import { useRecoilValue } from 'recoil';
+import { DelayedRender } from '@librechat/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { QueryKeys, isDrStartCommand, isDrCancelCommand } from 'librechat-data-provider';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
@@ -23,6 +24,9 @@ import HoverButtons from '~/components/Chat/Messages/HoverButtons';
 import Files from '~/components/Chat/Messages/Content/Files';
 import SubRow from '~/components/Chat/Messages/SubRow';
 import store from '~/store';
+
+/** Matches MessageContent's own delay, so the two paths behave identically. */
+const UNFINISHED_DELAY = 250;
 
 type ContentRenderProps = {
   message?: TMessage;
@@ -186,7 +190,14 @@ const ContentRender = memo(function ContentRender({
       msg.unfinished === true &&
       msg.drKind === 'report' &&
       msg.isCreatedByUser !== true ? (
-        <UnfinishedMessage message={msg} />
+        // Delayed exactly as MessageContent does it: `isSubmitting` flips a beat before the
+        // finalised message lands, and without the delay the notice flashes on every run that
+        // is not truncated at all.
+        <Suspense>
+          <DelayedRender delay={UNFINISHED_DELAY}>
+            <UnfinishedMessage message={msg} />
+          </DelayedRender>
+        </Suspense>
       ) : null,
     [isSubmitting, msg],
   );
