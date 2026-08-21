@@ -1619,8 +1619,9 @@ export type DeepResearchMode = (typeof DeepResearchModes)[number];
 
 /**
  * Per-mode budget + model mapping for Deep Research. Numbers are safe starting
- * defaults; tune per tenant. `leadModel`/`workerModel`/`writerModel` fall back to
- * the conversation's selected model when omitted.
+ * defaults; tune per tenant. `leadModel` and `workerModel` fall back to the conversation's
+ * selected model when omitted; `writerModel` falls back to the LEAD model, because synthesis
+ * is the one step where the strong model is the quality lever.
  */
 export const deepResearchModeSchema = z.object({
   maxConcurrentResearchers: z.number().int().min(1).max(8).default(3),

@@ -112,37 +112,48 @@ function renderMessage(msg: TMessage, isSubmitting = false) {
   );
 }
 
-describe('ContentRender — an incomplete answer says so', () => {
+const drReport = (partial: Partial<TMessage> = {}) =>
+  messageWith({ drKind: 'report', ...partial } as Partial<TMessage>);
+
+describe('ContentRender — an incomplete Deep Research report says so', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockResolveDrReport.mockReturnValue(null);
-  });
-
-  it('shows the hint for a finished message the server marked unfinished', () => {
-    renderMessage(messageWith({ unfinished: true }));
-    expect(screen.getByTestId('unfinished-hint')).toBeInTheDocument();
-  });
-
-  it('shows it on a Deep Research report card too — the path that never did', () => {
     mockResolveDrReport.mockReturnValue({ title: 'Отчёт' });
-    renderMessage(messageWith({ unfinished: true, drKind: 'report' } as Partial<TMessage>));
+  });
+
+  it('shows the hint on a report whose gathering was cut short', () => {
+    renderMessage(drReport({ unfinished: true }));
     expect(screen.getByTestId('report-card')).toBeInTheDocument();
     expect(screen.getByTestId('unfinished-hint')).toBeInTheDocument();
   });
 
-  it('stays quiet for a complete message', () => {
-    renderMessage(messageWith({}));
+  it('stays quiet on a complete report', () => {
+    renderMessage(drReport());
     expect(screen.queryByTestId('unfinished-hint')).not.toBeInTheDocument();
   });
 
-  it('stays quiet while the message is still streaming', () => {
+  it('stays quiet while the report is still streaming', () => {
     // A message in flight is legitimately incomplete; the hint would fire on every run.
-    renderMessage(messageWith({ unfinished: true }), true);
+    renderMessage(drReport({ unfinished: true }), true);
+    expect(screen.queryByTestId('unfinished-hint')).not.toBeInTheDocument();
+  });
+
+  /**
+   * The regression this component must NOT cause.
+   *
+   * `unfinished` is also set — and persisted — on an ordinary chat answer the user stopped.
+   * This component renders those too, so an unqualified check would put a red alert box under
+   * every answer anyone ever pressed Stop on: a platform-wide change to one of the commonest
+   * actions there is, arriving as a side effect of a Deep Research fix.
+   */
+  it('stays quiet on an ordinary answer the user stopped', () => {
+    mockResolveDrReport.mockReturnValue(null);
+    renderMessage(messageWith({ unfinished: true }));
     expect(screen.queryByTestId('unfinished-hint')).not.toBeInTheDocument();
   });
 
   it('stays quiet on a user message', () => {
-    renderMessage(messageWith({ unfinished: true, isCreatedByUser: true }));
+    renderMessage(drReport({ unfinished: true, isCreatedByUser: true }));
     expect(screen.queryByTestId('unfinished-hint')).not.toBeInTheDocument();
   });
 });

@@ -33,7 +33,9 @@ const MAX_TOOL_CALLS_PER_TURN = 5;
 const TOOL_TIMEOUT_MS = 60_000;
 /** Floor for the deadline-shortened timeout, so a call starting marginally late still sends. */
 const MIN_TOOL_TIMEOUT_MS = 5_000;
-const MAX_SOURCES = 50;
+/** Cap on source URLs extracted per finding. Exported: REPORT starts its first synthesis
+ *  attempt at exactly this width, so the two must not drift apart silently. */
+export const MAX_SOURCES = 50;
 const SOURCE_URL = /https?:\/\/[^\s)"'<>\]]+/g;
 /** Asset/media/font/style/script extensions — never article content (C1). */
 const NON_CONTENT_EXT =
@@ -102,9 +104,12 @@ interface ToolCallOutcome {
  * point-in-time leak the supervisor's gate had (see `budgetGateReason`), one level down, and
  * it ends the same way: the hard watchdog kills the run and the user gets no report at all.
  *
- * Bounding the CALLS is preferred over predicting the turn's length: a run with time to
- * spare keeps the full timeout and loses no research depth, which a predictive gate would
- * cost it. The floor keeps a call that starts marginally late from being aborted before it
+ * Bounding the CALLS is preferred over predicting the turn's length: while more than
+ * `TOOL_TIMEOUT_MS` still remains — the whole run bar its last minute — every call keeps its
+ * full timeout, where a predictive gate would already have been refusing whole turns. Inside
+ * that last minute calls ARE shortened, and one that would have run past the deadline is cut
+ * short; that is the intended trade, since the alternative is the watchdog killing the run
+ * outright. The floor keeps a call that starts marginally late from being aborted before it
  * can even send.
  */
 export function toolTimeoutMs(budgetMs?: number): number {
@@ -236,9 +241,12 @@ export async function runResearchLoop(params: {
       if (outcome.ok) {
         toolOutputs.push(outcome.text);
       } else {
+        // The failure TEXT is deliberately not logged: on the legacy (non-sovereign) path it
+        // can echo the user's raw query back, and this runner takes care elsewhere never to
+        // put research content in the logs.
         logger.warn(
-          `[deepResearch:researcher] tool "${call.name}" returned no data: ` +
-            outcome.text.slice(0, 200),
+          `[deepResearch:researcher] tool "${call.name}" returned no data ` +
+            `(${outcome.text.length} chars of failure text, not logged)`,
         );
       }
       messages.push(

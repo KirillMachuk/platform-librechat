@@ -20,15 +20,17 @@ import {
   usageFromExchange,
   sanitizeErrorForUser,
 } from '../shared';
-import { hasResearchMaterial } from './researcher';
+import { MAX_SOURCES, hasResearchMaterial } from './researcher';
 import { buildReportPrompt } from '../prompts';
 
 const DEFAULT_MAX_RETRIES = 3;
 /**
- * Sources listed per finding on the FIRST attempt — matches the researcher's own extraction
- * cap, so attempt 0 is byte-identical to before and no healthy run loses a citation.
+ * Sources listed per finding on the FIRST attempt. Taken FROM the researcher's own extraction
+ * cap rather than repeated as a literal: attempt 0 is byte-identical to the old behaviour only
+ * while the two agree, and a copied 50 would have started silently dropping citations the day
+ * someone raised the extraction cap — with the comment still promising it had not.
  */
-const SOURCES_PER_FINDING = 50;
+const SOURCES_PER_FINDING = MAX_SOURCES;
 
 /** Minimal invoke surface satisfied by a real chat model and by test fakes. */
 export interface ReportModel {
@@ -227,8 +229,23 @@ export async function composeReport(params: {
  *  "request" is the whole dialogue transcript — echoing it verbatim is unreadable. */
 const NO_DATA_REQUEST_CAP = 160;
 
-/** Stop reasons that mean "the run's allowance ran out", not "the search failed". */
-const EXHAUSTED_REASONS: readonly SupervisorConcludeReason[] = ['budget', 'rounds', 'time'];
+/**
+ * How the gather loop stopped, in the user's words. This is a FACT the run knows.
+ *
+ * What the run does NOT know is why no material came back — an exhausted allowance and a
+ * dead web search look identical from here, and a dead search usually presents AS an
+ * exhausted allowance, because the rounds still run and still burn time. So the notice
+ * names the stop reason and offers both next steps, and asserts neither cause. Claiming
+ * "the search was unavailable" was wrong for a run that simply ran out of budget; claiming
+ * "you asked too broadly" would be exactly as wrong in the other direction.
+ */
+const STOP_REASON_TEXT: Record<SupervisorConcludeReason, string> = {
+  budget: 'прогон исчерпал отведённый бюджет токенов',
+  time: 'прогон исчерпал отведённое время',
+  rounds: 'прогон исчерпал отведённое число кругов поиска',
+  complete: 'поиск не вернул пригодных источников',
+  error: 'сбор прервался внутренней ошибкой',
+};
 
 export function buildNoDataReport(params: {
   request: string;
@@ -244,27 +261,17 @@ export function buildNoDataReport(params: {
   const chars = [...flat];
   const shownRequest =
     chars.length > NO_DATA_REQUEST_CAP ? `${chars.slice(0, NO_DATA_REQUEST_CAP).join('')}…` : flat;
-  /**
-   * The cause has to be named correctly, because the notice tells the user what to DO next.
-   * A run that simply ran out of its time/token/round allowance before gathering anything was
-   * told the web search had failed, and sent to an administrator to debug a search that works
-   * — while the one action that would actually help, narrowing the query, went unmentioned.
-   */
-  const exhausted = params.reason != null && EXHAUSTED_REASONS.includes(params.reason);
-  const cause = exhausted
-    ? `исследование не успело собрать материал: закончился отведённый на прогон лимит ` +
-      `(время, бюджет или число кругов поиска)`
-    : `веб-поиск не вернул пригодного материала: источники не открылись или поиск был недоступен`;
-  const next = exhausted
-    ? `Что можно сделать: сузьте запрос — конкретнее по теме, региону или периоду. ` +
-      `Более узкий вопрос укладывается в лимит прогона.`
-    : `Что можно сделать: повторите исследование чуть позже или переформулируйте запрос. ` +
-      `Если ошибка повторяется — сообщите администратору (похоже на сбой веб-поиска).`;
+  const stopped =
+    params.reason != null ? STOP_REASON_TEXT[params.reason] : 'сбор материала остановился';
   return (
     `## Не удалось собрать материал\n\n` +
-    `По запросу «${shownRequest}» ${cause}. Отчёт без фактической базы не составлен.\n\n` +
+    `По запросу «${shownRequest}» не собрано пригодного материала: ${stopped}. ` +
+    `Отчёт без фактической базы не составлен.\n\n` +
     (attempted ? `Что исследовалось:\n${attempted}\n\n` : '') +
-    next
+    `Что можно сделать: сузьте запрос — конкретнее по теме, региону или периоду; ` +
+    `более узкий вопрос укладывается в лимит прогона. ` +
+    `Если материал не собирается и на узком запросе — сообщите администратору: ` +
+    `возможен сбой веб-поиска.`
   );
 }
 

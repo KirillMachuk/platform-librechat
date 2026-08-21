@@ -11,6 +11,7 @@ import {
   researchOne,
   toolTimeoutMs,
   EMPTY_DIGEST,
+  runResearchLoop,
   boundToolOutputs,
   hasResearchMaterial,
   type ToolCaller,
@@ -140,6 +141,61 @@ describe('toolTimeoutMs — a started turn cannot run 300 s past the gather dead
   });
 });
 
+describe('the deadline budget actually reaches the tool call', () => {
+  /**
+   * The arithmetic above is only worth anything if the loop passes the budget IN. It did not
+   * have to: reverting just the wiring — passing `undefined` where the remaining time goes —
+   * left every other test in this repo green, which is precisely how a fix rots.
+   *
+   * So this one measures the effect. The clock reads BEFORE the deadline once (the turn gate
+   * lets the turn start) and far past it afterwards (the tool call gets a zero budget, and
+   * therefore the floor). A hanging tool must then come back in about the floor. Without the
+   * wiring it waits the full TOOL_TIMEOUT_MS of 60 s and this test times out instead.
+   */
+  it('a call starting past the deadline is cut at the floor, not at 60 s', async () => {
+    const hangingTool = tool(
+      async (_input: { query: string }, config?: { signal?: AbortSignal }) =>
+        new Promise<string>((_resolve, reject) => {
+          config?.signal?.addEventListener('abort', () => reject(new Error('aborted')), {
+            once: true,
+          });
+        }),
+      { name: 'web_search', description: 'поиск', schema: z.object({ query: z.string() }) },
+    );
+    let reads = 0;
+    // First read: the turn gate, before the deadline. Every later read: long past it.
+    const clock = () => (reads++ === 0 ? 0 : 1_000_000);
+    const responses = [
+      new AIMessageChunk({
+        content: '',
+        tool_calls: [{ name: 'web_search', args: { query: 'q' }, id: 'c1', type: 'tool_call' }],
+      }),
+      new AIMessageChunk({ content: 'готово' }),
+    ];
+    let i = 0;
+    const caller: ToolCaller = {
+      invoke: async () => responses[Math.min(i++, responses.length - 1)],
+    };
+
+    const startedAt = Date.now();
+    const result = await runResearchLoop({
+      caller,
+      tools: [hangingTool],
+      system: 's',
+      question: 'q',
+      maxTurns: 1,
+      tokenCap: Number.POSITIVE_INFINITY,
+      nonce: NONCE,
+      deadlineMs: 500_000,
+      clock,
+    });
+
+    expect(Date.now() - startedAt).toBeLessThan(20_000);
+    // The cut call yielded nothing, and nothing is what it contributes.
+    expect(result.toolOutputs).toEqual([]);
+  }, 30_000);
+});
+
 describe('SCOPE — a cut answer is a JSON fragment, not a brief', () => {
   const request = 'Сравни CRM для среднего бизнеса';
 
@@ -175,6 +231,22 @@ describe('SUPERVISOR — an answer that is not JSON collapses the fan-out, and s
     // The fallback itself is deliberate — losing it in silence was not.
     expect(update.currentSubQuestions).toEqual(['бриф']);
     expect(warnings()).toContain('unparseable answer');
+  });
+
+  it('says nothing when the model legitimately concludes after a round', async () => {
+    const node = createSupervisorNode({
+      model: modelSaying('{"action":"complete"}'),
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+      clock: () => 0,
+    });
+    const update = await node(
+      stateWith({ researchBrief: 'бриф', round: 1, findings: [] }),
+      {} as RunnableConfig,
+    );
+    expect(update.concludeReason).toBe('complete');
+    expect(warnings()).not.toContain('unparseable answer');
   });
 
   it('says nothing when the answer parses', async () => {
@@ -227,17 +299,42 @@ describe('REPORT — a retry shrinks the evidence and the citations together', (
   });
 });
 
-describe('the no-data notice names the cause the user can act on', () => {
-  it('an exhausted allowance is not reported as a broken search', () => {
-    const text = buildNoDataReport({ request: 'з', findings: [], reason: 'budget' });
-    expect(text).toContain('лимит');
-    expect(text).toContain('сузьте запрос');
-    expect(text).not.toContain('поиск был недоступен');
+describe('the no-data notice states what it knows and no more', () => {
+  /**
+   * It used to assert a cause outright: "источники не открылись или поиск был недоступен".
+   * That was wrong for a run that had merely exhausted its allowance — and simply inverting
+   * it would be just as wrong, because a dead search PRESENTS as an exhausted allowance:
+   * the rounds still run and still burn the clock. The stop reason is a fact the run knows;
+   * the cause of the emptiness is not.
+   */
+  it('names the stop reason as the fact it is', () => {
+    expect(buildNoDataReport({ request: 'з', findings: [], reason: 'budget' })).toContain(
+      'бюджет токенов',
+    );
+    expect(buildNoDataReport({ request: 'з', findings: [], reason: 'time' })).toContain('время');
+    expect(buildNoDataReport({ request: 'з', findings: [], reason: 'rounds' })).toContain('кругов');
+    expect(buildNoDataReport({ request: 'з', findings: [], reason: 'complete' })).toContain(
+      'не вернул пригодных источников',
+    );
   });
 
-  it('a genuinely dead search still says so', () => {
-    const text = buildNoDataReport({ request: 'з', findings: [], reason: 'complete' });
-    expect(text).toContain('поиск был недоступен');
-    expect(text).toContain('администратору');
+  it('never claims the search was unavailable for a run that ran out of its allowance', () => {
+    const text = buildNoDataReport({ request: 'з', findings: [], reason: 'budget' });
+    expect(text).not.toContain('поиск был недоступен');
+    expect(text).not.toContain('источники не открылись');
+  });
+
+  it('offers BOTH next steps, whatever the stop reason', () => {
+    for (const reason of ['budget', 'time', 'rounds', 'complete'] as const) {
+      const text = buildNoDataReport({ request: 'з', findings: [], reason });
+      expect(text).toContain('сузьте запрос');
+      expect(text).toContain('администратору');
+    }
+  });
+
+  it('still works when the run stopped for no recorded reason', () => {
+    const text = buildNoDataReport({ request: 'з', findings: [] });
+    expect(text).toContain('остановился');
+    expect(text).toContain('сузьте запрос');
   });
 });
