@@ -14,6 +14,7 @@ import {
 } from '~/components/Chat/Messages/DeepResearch';
 import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import { useAttachments, useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
+import { UnfinishedMessage } from '~/components/Chat/Messages/Content/MessageContent';
 import ContentParts from '~/components/Chat/Messages/Content/ContentParts';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
 import { USER_BUBBLE_CLASS } from '~/components/Chat/Messages/ui/turn';
@@ -154,6 +155,42 @@ const ContentRender = memo(function ContentRender({
     return resolveDrReport(msg);
   }, [msg, isSubmitting]);
 
+  /**
+   * "The answer may be incomplete" — for a Deep Research report whose GATHERING was cut
+   * short by its token budget or its round cap.
+   *
+   * The flag was set and never shown here. It is rendered by exactly one component,
+   * MessageContent, which serves LEGACY plain-text messages; every message carrying
+   * structured `content` parts renders through this one instead — and that includes every
+   * DR report. So a report built from a fraction of the intended research looked exactly as
+   * finished as a complete one, and the only trace stayed in the database. The memo
+   * comparator above has been comparing `unfinished` all along: it watched a value nothing
+   * displayed.
+   *
+   * Deliberately narrowed to `drKind === 'report'`, and that narrowing is load-bearing.
+   * `unfinished` is ALSO set on an ordinary chat answer the user stopped
+   * (`request.js` sets it from `signal.aborted` and persists it), and this component renders
+   * ordinary messages too. Showing the hint for every message would put a red alert box
+   * under every answer anyone ever stopped — a platform-wide change, on one of the most
+   * common actions there is, arriving as a side effect of a Deep Research fix. The runner
+   * only ever sets `unfinished` for the 'budget'/'rounds' outcomes, and both of those are
+   * stamped `drKind: 'report'`, so this predicate loses no case it was meant to catch.
+   *
+   * Suppressed while the message is still streaming: a message in flight is legitimately
+   * incomplete, and the hint would otherwise fire on every run.
+   */
+  const unfinishedNotice = useMemo(
+    () =>
+      msg &&
+      !isSubmitting &&
+      msg.unfinished === true &&
+      msg.drKind === 'report' &&
+      msg.isCreatedByUser !== true ? (
+        <UnfinishedMessage message={msg} />
+      ) : null,
+    [isSubmitting, msg],
+  );
+
   if (!msg) {
     return null;
   }
@@ -265,6 +302,7 @@ const ContentRender = memo(function ContentRender({
                   </>
                 ))}
             </div>
+            {unfinishedNotice}
             {/* Assistant-side file artifacts (e.g. the Deep Research report PDF):
                 Container renders message.files for USER messages only, so without this
                 the assistant's attached files never appear. Images excluded — generated

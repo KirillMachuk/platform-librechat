@@ -29,14 +29,24 @@ function normalizeJurisdiction(value: unknown): Jurisdiction {
   return VALID_JURISDICTIONS.includes(candidate) ? (candidate as Jurisdiction) : 'UNSPECIFIED';
 }
 
-/** Parses SCOPE output; falls back to UNSPECIFIED + raw text as the brief. */
-export function parseScopeOutput(text: string): { jurisdiction: Jurisdiction; brief: string } {
+/**
+ * Parses SCOPE output; falls back to UNSPECIFIED + raw text as the brief.
+ *
+ * `fromJson` reports WHICH of the two produced `brief`. The caller needs that to tell a model
+ * that answered in prose (whose raw text is a perfectly usable brief) from one that was cut
+ * off mid-JSON (whose raw text is a fragment).
+ */
+export function parseScopeOutput(text: string): {
+  jurisdiction: Jurisdiction;
+  brief: string;
+  fromJson: boolean;
+} {
   const parsed = tolerantJsonParse(text);
   const jurisdiction = normalizeJurisdiction(parsed?.jurisdiction);
   const briefValue = parsed?.brief;
-  const brief =
-    typeof briefValue === 'string' && briefValue.trim() ? briefValue.trim() : text.trim();
-  return { jurisdiction, brief };
+  const fromJson = typeof briefValue === 'string' && briefValue.trim().length > 0;
+  const brief = fromJson ? (briefValue as string).trim() : text.trim();
+  return { jurisdiction, brief, fromJson };
 }
 
 /**
@@ -57,7 +67,16 @@ export function createScopeNode(deps: ScopeNodeDeps) {
       ];
       const response = await deps.model.invoke(prompt, { signal: config?.signal });
       const answer = readAnswer('scope', response);
-      const { jurisdiction, brief } = parseScopeOutput(answer.text);
+      const { jurisdiction, brief, fromJson } = parseScopeOutput(answer.text);
+      /**
+       * A CUT answer is a JSON FRAGMENT, not a brief. `parseScopeOutput` falls back to the raw
+       * text, and for a truncated answer the raw text is `{"jurisdiction":"RU","brief":"…` —
+       * which then became the brief every later node reasoned over, with the jurisdiction lost
+       * as well, since a fragment does not parse. The EMPTY case was already handled below;
+       * truncation reached the same damage by a different road. Prose that merely is not JSON
+       * stays a usable brief — only the cut-mid-JSON case falls back to the user's request.
+       */
+      const cutFragment = answer.truncated && !fromJson;
       return {
         jurisdiction,
         /**
@@ -65,7 +84,7 @@ export function createScopeNode(deps: ScopeNodeDeps) {
          * the raw text, and the raw text was nothing. Every later node then reasoned over
          * a blank brief. The user's own request is always a usable brief; blankness never is.
          */
-        researchBrief: brief || request,
+        researchBrief: cutFragment ? request : brief || request,
         tokenUsage: usageFromExchange(prompt, response),
       };
     } catch (error) {

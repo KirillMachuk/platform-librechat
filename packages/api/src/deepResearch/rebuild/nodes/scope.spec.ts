@@ -32,6 +32,7 @@ describe('parseScopeOutput', () => {
     expect(parseScopeOutput('{"jurisdiction":"RU","brief":"Рынок CRM."}')).toEqual({
       jurisdiction: 'RU',
       brief: 'Рынок CRM.',
+      fromJson: true,
     });
   });
 
@@ -39,6 +40,7 @@ describe('parseScopeOutput', () => {
     expect(parseScopeOutput('```json\n{"jurisdiction":"KZ","brief":"y"}\n```')).toEqual({
       jurisdiction: 'KZ',
       brief: 'y',
+      fromJson: true,
     });
   });
 
@@ -47,13 +49,18 @@ describe('parseScopeOutput', () => {
   });
 
   it('treats missing jurisdiction as UNSPECIFIED', () => {
-    expect(parseScopeOutput('{"brief":"z"}')).toEqual({ jurisdiction: 'UNSPECIFIED', brief: 'z' });
+    expect(parseScopeOutput('{"brief":"z"}')).toEqual({
+      jurisdiction: 'UNSPECIFIED',
+      brief: 'z',
+      fromJson: true,
+    });
   });
 
   it('falls back to raw text as the brief when not JSON', () => {
     expect(parseScopeOutput('просто текст')).toEqual({
       jurisdiction: 'UNSPECIFIED',
       brief: 'просто текст',
+      fromJson: false,
     });
   });
 });

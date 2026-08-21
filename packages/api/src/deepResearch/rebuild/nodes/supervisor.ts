@@ -1,3 +1,4 @@
+import { logger } from '@librechat/data-schemas';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { RunnableConfig } from '@langchain/core/runnables';
@@ -178,8 +179,9 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
         ),
       ];
       const response = await deps.model.invoke(prompt, { signal: config.signal });
+      const answer = readAnswer('supervisor', response);
       const { completeRequested, subQuestions } = parseSupervisorOutput(
-        readAnswer('supervisor', response).text,
+        answer.text,
         deps.tier.maxConcurrentResearchers,
       );
       const tokenUsage = usageFromExchange(prompt, response);
@@ -189,6 +191,25 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
       // the deterministic gate above bounds how often this fallback can fire.
       if (completeRequested && state.round > 0) {
         return { concludeReason: 'complete', tokenUsage };
+      }
+      /**
+       * Everything past this point takes the one-question fallback, and it used to take it in
+       * silence.
+       *
+       * `readAnswer` reports EMPTY and CUT answers. A third degradation looks perfectly
+       * healthy to it: a full, non-empty answer that simply is not the JSON this node asked
+       * for — prose, an apology, an unclosed code fence. It parses to no batch, so the round
+       * researches the whole brief as ONE question and loses its parallel fan-out. Same cost
+       * as the empty answer fixed before it, and the same invisibility — which is what made
+       * that one cost a live investigation. A 'complete' on round 0 lands here too, and is
+       * just as wrong, so it belongs in the same line rather than a second one.
+       */
+      if (subQuestions.length === 0 && !answer.empty) {
+        logger.warn(
+          `[deepResearch:supervisor] unparseable answer (${answer.text.length} chars): ` +
+            'no usable sub-questions — falling back to the brief as ONE question, ' +
+            "losing this round's fan-out",
+        );
       }
       const fallbackQuestion = state.researchBrief.trim() || lastHumanText(state.messages);
       const batch = subQuestions.length > 0 ? subQuestions : [fallbackQuestion];

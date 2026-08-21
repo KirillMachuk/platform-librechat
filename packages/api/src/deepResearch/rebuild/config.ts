@@ -87,10 +87,17 @@ export function compressModelFor(
   return resolveDeepResearchModel(tier.compressModel, tier.workerModel, conversationModel);
 }
 
-/** Report model — synthesis runs on the lead model (§4: strong model is the quality lever). */
+/**
+ * Report model — the tier's `writerModel` when set, else the lead model (§4: the strong model
+ * is the quality lever).
+ *
+ * `writerModel` had been declared in the config schema, merged by the mode resolver, typed,
+ * and returned by the admin API — and read by nothing at all. An admin who set it got a
+ * platform that accepted the value, echoed it back, and kept writing reports on the lead.
+ */
 export function reportModelFor(
   tier: DeepResearchTier,
   conversationModel?: string,
 ): string | undefined {
-  return leadModelFor(tier, conversationModel);
+  return resolveDeepResearchModel(tier.writerModel, leadModelFor(tier, conversationModel));
 }

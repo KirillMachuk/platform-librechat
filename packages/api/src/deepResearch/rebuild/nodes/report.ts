@@ -1,3 +1,4 @@
+import { logger } from '@librechat/data-schemas';
 import { SystemMessage, HumanMessage, AIMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { BaseMessage, AIMessageChunk } from '@langchain/core/messages';
@@ -19,10 +20,17 @@ import {
   usageFromExchange,
   sanitizeErrorForUser,
 } from '../shared';
-import { hasResearchMaterial } from './researcher';
+import { MAX_SOURCES, hasResearchMaterial } from './researcher';
 import { buildReportPrompt } from '../prompts';
 
 const DEFAULT_MAX_RETRIES = 3;
+/**
+ * Sources listed per finding on the FIRST attempt. Taken FROM the researcher's own extraction
+ * cap rather than repeated as a literal: attempt 0 is byte-identical to the old behaviour only
+ * while the two agree, and a copied 50 would have started silently dropping citations the day
+ * someone raised the extraction cap — with the comment still promising it had not.
+ */
+const SOURCES_PER_FINDING = MAX_SOURCES;
 
 /** Minimal invoke surface satisfied by a real chat model and by test fakes. */
 export interface ReportModel {
@@ -67,15 +75,28 @@ function isContextLimitError(error: unknown): boolean {
   return /context|token|length|maximum|too long|413|payload too large/i.test(toErrorMessage(error));
 }
 
-function formatFindings(findings: DeepResearchFinding[], perDigestCap: number): string {
+/**
+ * Renders the findings REPORT synthesises from, shrunk to `perDigestCap` / `perFindingSources`.
+ *
+ * BOTH halves shrink on a retry. Only the digest used to: a run with many findings could enter
+ * the third attempt at an eighth of its evidence while carrying its full source lists — so the
+ * model saw the URLs of facts whose text had been cut away, and wrote the report from what was
+ * left. It was still returned as a normal 'completed' report, with nothing to say it had been
+ * written from a fraction of the material.
+ */
+function formatFindings(
+  findings: DeepResearchFinding[],
+  perDigestCap: number,
+  perFindingSources: number,
+): string {
   if (findings.length === 0) {
     return '(материал не собран)';
   }
   return findings
     .map((finding, i) => {
       const digest = finding.digest.slice(0, Math.max(1, perDigestCap));
-      const sources =
-        finding.sources.length > 0 ? `\nИсточники: ${finding.sources.join(', ')}` : '';
+      const shown = finding.sources.slice(0, Math.max(1, perFindingSources));
+      const sources = shown.length > 0 ? `\nИсточники: ${shown.join(', ')}` : '';
       return `### Находка ${i + 1}: ${finding.subQuestion}\n${digest}${sources}`;
     })
     .join('\n\n');
@@ -125,10 +146,13 @@ export async function composeReport(params: {
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const perDigestCap = Math.floor(digestCap / 2 ** attempt);
+    const perFindingSources = Math.max(1, Math.ceil(SOURCES_PER_FINDING / 2 ** attempt));
     try {
       const prompt = [
         new SystemMessage(buildReportPrompt({ request, brief, jurisdiction, now, nonce })),
-        new HumanMessage(fenceUntrusted(formatFindings(findings, perDigestCap), nonce)),
+        new HumanMessage(
+          fenceUntrusted(formatFindings(findings, perDigestCap, perFindingSources), nonce),
+        ),
       ];
       const response = await reportModel.invoke(prompt, { signal });
       const answer = readAnswer('report', response);
@@ -140,6 +164,16 @@ export async function composeReport(params: {
        * which is exactly what a run that hit the ceiling needs.
        */
       if (!answer.empty && !answer.truncated) {
+        /**
+         * WHICH model actually wrote the report. The tier names a lead model, but the request
+         * can still carry an OpenRouter fallback list inherited from the chat's model card,
+         * and OpenRouter may answer from it — so "the slug the run intended" and "the slug
+         * that answered" are two different facts, and only the first was ever recorded. That
+         * makes "why is this report weaker than usual?" unanswerable after the fact.
+         */
+        const answeredBy = (response.response_metadata as { model_name?: unknown } | undefined)
+          ?.model_name;
+        logger.info(`[deepResearch:report] written by ${String(answeredBy ?? 'unknown')}`);
         return { text: answer.text, usage: usageFromExchange(prompt, response), fellBack: false };
       }
       /**
@@ -195,9 +229,29 @@ export async function composeReport(params: {
  *  "request" is the whole dialogue transcript — echoing it verbatim is unreadable. */
 const NO_DATA_REQUEST_CAP = 160;
 
+/**
+ * How the gather loop stopped, in the user's words. This is a FACT the run knows.
+ *
+ * What the run does NOT know is why no material came back — an exhausted allowance and a
+ * dead web search look identical from here, and a dead search usually presents AS an
+ * exhausted allowance, because the rounds still run and still burn time. So the notice
+ * names the stop reason and offers both next steps, and asserts neither cause. Claiming
+ * "the search was unavailable" was wrong for a run that simply ran out of budget; claiming
+ * "you asked too broadly" would be exactly as wrong in the other direction.
+ */
+const STOP_REASON_TEXT: Record<SupervisorConcludeReason, string> = {
+  budget: 'прогон исчерпал отведённый бюджет токенов',
+  time: 'прогон исчерпал отведённое время',
+  rounds: 'прогон исчерпал отведённое число кругов поиска',
+  complete: 'поиск не вернул пригодных источников',
+  error: 'сбор прервался внутренней ошибкой',
+};
+
 export function buildNoDataReport(params: {
   request: string;
   findings: DeepResearchFinding[];
+  /** Why the gather loop stopped — decides which cause the notice names. */
+  reason?: SupervisorConcludeReason | null;
 }): string {
   const attempted = params.findings
     .map((finding) => `- ${finding.subQuestion}`)
@@ -207,13 +261,17 @@ export function buildNoDataReport(params: {
   const chars = [...flat];
   const shownRequest =
     chars.length > NO_DATA_REQUEST_CAP ? `${chars.slice(0, NO_DATA_REQUEST_CAP).join('')}…` : flat;
+  const stopped =
+    params.reason != null ? STOP_REASON_TEXT[params.reason] : 'сбор материала остановился';
   return (
     `## Не удалось собрать материал\n\n` +
-    `По запросу «${shownRequest}» веб-поиск не вернул пригодного материала: ` +
-    `источники не открылись или поиск был недоступен. Отчёт без фактической базы не составлен.\n\n` +
+    `По запросу «${shownRequest}» не собрано пригодного материала: ${stopped}. ` +
+    `Отчёт без фактической базы не составлен.\n\n` +
     (attempted ? `Что исследовалось:\n${attempted}\n\n` : '') +
-    `Что можно сделать: повторите исследование чуть позже или переформулируйте запрос. ` +
-    `Если ошибка повторяется — сообщите администратору (похоже на сбой веб-поиска).`
+    `Что можно сделать: сузьте запрос — конкретнее по теме, региону или периоду; ` +
+    `более узкий вопрос укладывается в лимит прогона. ` +
+    `Если материал не собирается и на узком запросе — сообщите администратору: ` +
+    `возможен сбой веб-поиска.`
   );
 }
 
@@ -232,7 +290,7 @@ export function createReportNode(deps: ReportNodeDeps): DeepResearchNode {
       const supervisorFailed = state.concludeReason === 'error';
       const text = supervisorFailed
         ? buildFallbackReport({ reason: 'внутренняя ошибка оркестратора' })
-        : buildNoDataReport({ request, findings: state.findings });
+        : buildNoDataReport({ request, findings: state.findings, reason: state.concludeReason });
       return {
         finalReport: text,
         finalizeReason: supervisorFailed ? 'error' : 'nodata',
