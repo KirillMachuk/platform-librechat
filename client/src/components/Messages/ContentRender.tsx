@@ -14,6 +14,7 @@ import {
 } from '~/components/Chat/Messages/DeepResearch';
 import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import { useAttachments, useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
+import { UnfinishedMessage } from '~/components/Chat/Messages/Content/MessageContent';
 import ContentParts from '~/components/Chat/Messages/Content/ContentParts';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
 import { USER_BUBBLE_CLASS } from '~/components/Chat/Messages/ui/turn';
@@ -154,6 +155,28 @@ const ContentRender = memo(function ContentRender({
     return resolveDrReport(msg);
   }, [msg, isSubmitting]);
 
+  /**
+   * "The answer may be incomplete" — for a message the server marked `unfinished`.
+   *
+   * The flag was set and never shown here. It is rendered by exactly one component,
+   * MessageContent, which serves LEGACY plain-text messages; every message carrying
+   * structured `content` parts renders through this one instead — and that includes every
+   * Deep Research report. So a run whose gathering was cut short by its token budget or its
+   * round cap shipped a report that looked exactly as finished as any other, with the only
+   * trace of the truncation sitting in the database. The memo comparator above has been
+   * comparing `unfinished` all along: it watched a value nothing displayed.
+   *
+   * Suppressed while the message is still streaming: a message in flight is legitimately
+   * incomplete, and the hint would otherwise fire on every run.
+   */
+  const unfinishedNotice = useMemo(
+    () =>
+      msg && !isSubmitting && msg.unfinished === true && msg.isCreatedByUser !== true ? (
+        <UnfinishedMessage message={msg} />
+      ) : null,
+    [isSubmitting, msg],
+  );
+
   if (!msg) {
     return null;
   }
@@ -265,6 +288,7 @@ const ContentRender = memo(function ContentRender({
                   </>
                 ))}
             </div>
+            {unfinishedNotice}
             {/* Assistant-side file artifacts (e.g. the Deep Research report PDF):
                 Container renders message.files for USER messages only, so without this
                 the assistant's attached files never appear. Images excluded — generated
