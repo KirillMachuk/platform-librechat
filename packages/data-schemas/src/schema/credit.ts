@@ -30,6 +30,10 @@ export const creditMonthSchema: Schema<t.ICreditMonth> = new Schema<t.ICreditMon
     /** Set once per period when the OpenRouter comparison alerted — the drift it reports
      *  persists for the rest of the period, so without this the alert repeats daily. */
     notifiedReconcileAt: { type: Date, default: null },
+    /** WHICH UTC month that alert was about (`YYYY-MM`). The comparison window is the UTC
+     *  calendar month while this document is keyed by the billing period; without naming
+     *  the window, a period that spans two UTC months silently swallows the second one. */
+    notifiedReconcileUtcMonth: { type: String, default: null },
   },
   { timestamps: true },
 );

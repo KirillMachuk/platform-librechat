@@ -120,7 +120,18 @@ function getCreditIndexHealth() {
  * it guards the «Расходы» screen directly: the header reads the counter, the
  * per-employee rows read the journal, and drift makes them disagree silently.
  */
-const creditDriftHealth = { drifted: false, driftMicroUsd: 0, month: null, lastCheck: null };
+const creditDriftHealth = {
+  drifted: false,
+  driftMicroUsd: 0,
+  month: null,
+  lastCheck: null,
+  /** Has the check ever COMPLETED? `drifted: false` on its own cannot say «reconciles» —
+   *  it is also what a check that has never run leaves behind, and a check failing on
+   *  every tick would report a clean ledger forever. */
+  everChecked: false,
+  /** The most recent attempt failed — the verdict below is stale, not fresh. */
+  failing: false,
+};
 
 function getCreditDriftHealth() {
   return creditDriftHealth;
@@ -135,9 +146,13 @@ async function checkCreditDrift() {
     creditDriftHealth.driftMicroUsd = report.driftMicroUsd;
     creditDriftHealth.month = report.month;
     creditDriftHealth.lastCheck = report.checkedAt;
+    creditDriftHealth.everChecked = true;
+    creditDriftHealth.failing = false;
   } catch (err) {
     /* A failed check is not a clean bill of health, but it is also not evidence of
-     * drift — leave the last verdict standing and say the check itself broke. */
+     * drift — leave the last verdict standing, and record that it is now stale so the
+     * screen can say «not checked» instead of implying «checked, clean». */
+    creditDriftHealth.failing = true;
     logger.error('[billing] ledger drift check failed (previous verdict kept):', err);
   }
 }

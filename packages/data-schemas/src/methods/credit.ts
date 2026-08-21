@@ -222,6 +222,8 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
   markCreditMonthNotified: (params: {
     month: string;
     kind: '80' | 'exhausted' | 'reconcile';
+    /** `reconcile` only: the UTC month the comparison covered — the claim is per window. */
+    utcMonth?: string;
     tenantId?: string;
   }) => Promise<boolean>;
   getCreditMonth: (params: { month: string; tenantId?: string }) => Promise<ICreditMonth | null>;
@@ -581,8 +583,32 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
   async function markCreditMonthNotified(params: {
     month: string;
     kind: '80' | 'exhausted' | 'reconcile';
+    /**
+     * For `reconcile` only: the UTC month (`YYYY-MM`) the comparison was about. The
+     * claim is per WINDOW, not per period — the comparison measures a UTC calendar month
+     * while this document is keyed by the billing period, and with any anchor other than
+     * the 1st one period spans two UTC months. Claiming per period then swallows the
+     * second month's alert entirely: on the stand's own anchor the overlap is the three
+     * hours of 21:00–24:00 UTC on the last day, and the daily tick fires at a fixed time,
+     * so landing in them would silence a whole month, every month.
+     */
+    utcMonth?: string;
     tenantId?: string;
   }): Promise<boolean> {
+    if (params.kind === 'reconcile' && params.utcMonth) {
+      const updated = await CreditMonth()
+        .findOneAndUpdate(
+          {
+            ...tenantFilter<ICreditMonth>(params.tenantId),
+            month: params.month,
+            notifiedReconcileUtcMonth: { $ne: params.utcMonth },
+          },
+          { $set: { notifiedReconcileUtcMonth: params.utcMonth, notifiedReconcileAt: new Date() } },
+          { new: true },
+        )
+        .lean<ICreditMonth>();
+      return updated != null;
+    }
     const NOTIFY_FIELD = {
       '80': 'notified80At',
       exhausted: 'notifiedExhaustedAt',

@@ -81,6 +81,13 @@ export interface AdminBillingSummary {
    * the screen says so instead of quietly showing two different totals.
    */
   ledgerDrifted: boolean;
+  /**
+   * The drift check is not currently answering: it has never completed, or its latest
+   * attempt threw. `ledgerDrifted: false` cannot express that — it is also what a check
+   * that never ran leaves behind — so a permanently broken check would otherwise read as
+   * a reconciling ledger. Operator-facing; the client's screen shows neither.
+   */
+  ledgerCheckFailing: boolean;
 }
 
 export interface AdminBillingDeps {
@@ -103,6 +110,8 @@ export interface AdminBillingDeps {
   getDegraded?: () => boolean;
   /** Latest journal-vs-counter verdict; absent when the check has not run yet. */
   getLedgerDrifted?: () => boolean;
+  /** Whether that verdict is stale (check never completed, or last attempt threw). */
+  getLedgerCheckFailing?: () => boolean;
   /** Lowercased operator allowlist (env-driven — outside client-admin control). */
   operatorEmails: string[];
   /** OpenRouter limit headroom over the allowed volume (e.g. 0.1 = +10%). */
@@ -187,6 +196,7 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
       metering: deps.metering,
       degraded: deps.getDegraded ? deps.getDegraded() : false,
       ledgerDrifted: deps.getLedgerDrifted ? deps.getLedgerDrifted() : false,
+      ledgerCheckFailing: deps.getLedgerCheckFailing ? deps.getLedgerCheckFailing() : false,
     };
   }
 

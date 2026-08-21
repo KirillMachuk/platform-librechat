@@ -26,6 +26,8 @@ export interface ICreditMonth extends Document {
   notifiedExhaustedAt?: Date | null;
   /** Set once per period when the OpenRouter comparison alerted. */
   notifiedReconcileAt?: Date | null;
+  /** The UTC month (`YYYY-MM`) that alert was about — the comparison's own window. */
+  notifiedReconcileUtcMonth?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
