@@ -129,6 +129,16 @@ jest.mock('@librechat/api', () => ({
   getProviderConfig: ({ provider, appConfig }) => ({
     customEndpointConfig: appConfig?.endpoints?.custom?.find?.((e) => e?.name === provider),
   }),
+  // Faithful mirror of the real disableTitleReasoning (packages/api/src/agents/client.ts,
+  // unit-tested there). Mirrored rather than spied so these tests assert the OUTCOME on the
+  // built model, not merely that a function was called.
+  disableTitleReasoning: (clientOptions) => {
+    if (clientOptions.include_reasoning !== true) {
+      return;
+    }
+    clientOptions.include_reasoning = false;
+    clientOptions.modelKwargs = { ...clientOptions.modelKwargs, reasoning: { enabled: false } };
+  },
   // Faithful mirror of the real length-estimate fallback (no usage_metadata on fakes).
   usageFromExchange: (prompt, response) => {
     const promptText = prompt.map((m) => String(m.content ?? '')).join(' ');
@@ -1846,5 +1856,77 @@ describe('runNewDeepResearch — logs the models it actually resolved', () => {
     await runNewDeepResearch(baseParams('изучи рынок CRM'));
 
     expect(modelLine()).toContain('providers=unpinned');
+  });
+});
+
+/**
+ * The title call is the tail of every run, and it was reasoning.
+ *
+ * `1ma` is declared as an OpenRouter endpoint, so `getOpenAILLMConfig` sets
+ * `include_reasoning` on every non-Anthropic model. The normal chat path strips it for the
+ * title call; DR read `titleModel` and `titlePrompt` from the same config and never this.
+ * librechat.yaml records the measurement that made it a requirement: 728 hidden billed
+ * tokens, median 8.3 s instead of 0.9 s — on EVERY run.
+ */
+describe('runNewDeepResearch — the title call must not reason', () => {
+  const models = require('~/models');
+  const reasoningEndpoint = () => {
+    mockInitializeCustom.mockImplementation(async ({ model_parameters }) => ({
+      llmConfig: {
+        apiKey: 'sk-client',
+        include_reasoning: true,
+        model: model_parameters?.model,
+      },
+      configOptions: { baseURL: 'http://anon.internal:8000/v1' },
+      provider: 'openAI',
+    }));
+  };
+
+  it('disables reasoning on the title model — and on nothing else', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    reasoningEndpoint();
+    const params = baseParams('изучи рынок CRM');
+    params.req.config.endpoints = { custom: [{ name: '1ma', titleModel: 'title-model' }] };
+
+    await runNewDeepResearch(params);
+
+    const silent = mockModelCtorArgs.filter((a) => a.include_reasoning === false);
+    expect(silent).toHaveLength(1);
+    expect(silent[0].model).toBe('title-model');
+    expect(silent[0].modelKwargs?.reasoning).toEqual({ enabled: false });
+    // The graph's own models must keep reasoning: this fix is about the title, and a
+    // researcher quietly losing its reasoning would be a far more expensive regression.
+    expect(mockModelCtorArgs.filter((a) => a.include_reasoning === true).length).toBeGreaterThan(0);
+  });
+
+  it('does not silence a graph model that happens to share the title slug', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    reasoningEndpoint();
+    const params = baseParams('изучи рынок CRM');
+    // The stand's real configuration: titleModel IS the flash slug the researchers run on.
+    params.req.config.endpoints = { custom: [{ name: '1ma', titleModel: 'worker-model' }] };
+
+    await runNewDeepResearch(params);
+
+    const workers = mockModelCtorArgs.filter((a) => a.model === 'worker-model');
+    // Two instances of one slug: the researcher's, reasoning; the title's, silent. A cache
+    // keyed on the slug alone would have returned one shared model and silenced both.
+    expect(workers.filter((a) => a.include_reasoning === true)).toHaveLength(1);
+    expect(workers.filter((a) => a.include_reasoning === false)).toHaveLength(1);
+  });
+
+  it('honours titleConvo: false — no model call is spent naming the chat', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    reasoningEndpoint();
+    const params = baseParams('изучи рынок CRM');
+    params.req.config.endpoints = { custom: [{ name: '1ma', titleConvo: false }] };
+
+    await runNewDeepResearch(params);
+
+    expect(mockModelCtorArgs.filter((a) => a.include_reasoning === false)).toHaveLength(0);
+    // The chat is still named, deterministically — a DR run never degrades to "New Chat".
+    const saved = models.saveConvo.mock.calls[0][1].title;
+    expect(saved).toBeTruthy();
+    expect(saved).not.toBe('Сравнение CRM-систем');
   });
 });

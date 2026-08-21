@@ -34,6 +34,7 @@ const {
   getStorageMetadata,
   getProviderConfig,
   usageFromExchange,
+  disableTitleReasoning,
   leadModelFor,
   workerModelFor,
   reportModelFor,
@@ -175,6 +176,15 @@ async function resolveDeepResearchTitle({
   }
   try {
     const titleConfig = resolveTitleConfig(req, endpoint);
+    /**
+     * `titleConvo: false` means "do not spend a model call naming chats". DR honoured every
+     * other title setting and ignored this one, so turning titles off platform-wide still
+     * left DR generating them. The deterministic heuristic still names the chat, so a DR run
+     * never degrades to "New Chat".
+     */
+    if (titleConfig?.titleConvo === false) {
+      return { title: buildDeepResearchTitle(fallbackText), usage: null };
+    }
     const configuredModel = titleConfig?.titleModel;
     const modelSlug =
       configuredModel && configuredModel !== 'current_model' ? configuredModel : leadModelSlug;
@@ -718,7 +728,15 @@ const DEFAULT_CONVO_TITLE = 'New Chat';
  */
 
 /** Builds a `BaseChatModel` for `model` routed under endpoint `1ma` (anonymizer baseURL). */
-async function buildNodeModel({ req, db, endpoint, model, passthroughHeaders, providerRouting }) {
+async function buildNodeModel({
+  req,
+  db,
+  endpoint,
+  model,
+  passthroughHeaders,
+  providerRouting,
+  disableReasoning,
+}) {
   const { llmConfig, configOptions, provider } = await initializeCustom({
     req,
     endpoint,
@@ -729,6 +747,19 @@ async function buildNodeModel({ req, db, endpoint, model, passthroughHeaders, pr
   // initializeCustom returns no explicit provider. Confirm vs librechat.yaml `1ma`.
   const resolvedProvider = provider ?? llmConfig.provider ?? Providers.OPENAI;
   const { provider: _omit, ...clientOptions } = llmConfig;
+  /**
+   * Title calls must not reason. The `1ma` endpoint is declared as OpenRouter, so
+   * `getOpenAILLMConfig` sets `include_reasoning` on every non-Anthropic model; the normal
+   * chat path strips it for the title call and DR never did. This repo's own config records
+   * the measurement that made it a requirement: 728 hidden billed tokens and a median 8.3 s
+   * instead of 0.9 s — paid on the tail of every single run.
+   *
+   * Applied BEFORE `modelKwargs` is assembled below, so the `reasoning: { enabled: false }`
+   * it writes is carried through with the provider pin rather than overwritten by it.
+   */
+  if (disableReasoning) {
+    disableTitleReasoning(clientOptions);
+  }
   // Track B: passthrough headers tell the anonymizer NOT to mask this model call, so public
   // web/derivatives stay intact — user PII is masked at the source (question + file_search).
   // Merged into defaultHeaders so EVERY graph model call carries them. null → legacy masking.
@@ -1046,6 +1077,29 @@ async function runNewDeepResearch(params) {
         providerRouting: tier.provider,
       });
       modelCache.set(model, pending);
+    }
+    return pending;
+  };
+  /**
+   * The title model is built separately, under its OWN cache key, and that separation is the
+   * point: `buildModel` caches by slug alone, and the configured `titleModel` is the very
+   * flash slug the researchers run on. Reusing it would disable reasoning for every
+   * researcher in the run as a side effect of fixing the title call.
+   */
+  const buildTitleModel = (model) => {
+    const key = `title:${model}`;
+    let pending = modelCache.get(key);
+    if (!pending) {
+      pending = buildNodeModel({
+        req,
+        db,
+        endpoint,
+        model,
+        passthroughHeaders,
+        providerRouting: tier.provider,
+        disableReasoning: true,
+      });
+      modelCache.set(key, pending);
     }
     return pending;
   };
@@ -1530,7 +1584,7 @@ async function runNewDeepResearch(params) {
     : await resolveDeepResearchTitle({
         req,
         endpoint,
-        buildModel,
+        buildModel: buildTitleModel,
         leadModelSlug,
         topicText: sovereign ? sovereign.maskedQuestion : titleFallbackText,
         fallbackText: titleFallbackText,
