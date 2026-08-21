@@ -1870,6 +1870,15 @@ describe('runNewDeepResearch — logs the models it actually resolved', () => {
  */
 describe('runNewDeepResearch — the title call must not reason', () => {
   const models = require('~/models');
+  const { resolveDeepResearchTier } = require('@librechat/api');
+  const TIER = { name: 'balanced', wallClockMinutes: 10 };
+  const PIN = { order: ['DeepInfra', 'Fireworks'], allow_fallbacks: false };
+
+  // Set explicitly rather than inherited: a neighbouring describe restores its own tier in
+  // afterEach, and depending on that is how the provider-pin gap below went unnoticed.
+  beforeEach(() => resolveDeepResearchTier.mockReturnValue(TIER));
+  afterEach(() => resolveDeepResearchTier.mockReturnValue(TIER));
+
   const reasoningEndpoint = () => {
     mockInitializeCustom.mockImplementation(async ({ model_parameters }) => ({
       llmConfig: {
@@ -1915,6 +1924,29 @@ describe('runNewDeepResearch — the title call must not reason', () => {
     expect(workers.filter((a) => a.include_reasoning === false)).toHaveLength(1);
   });
 
+  /**
+   * The ORDER matters, and only a pinned tier can see it.
+   *
+   * `disableTitleReasoning` writes `reasoning: { enabled: false }` into `clientOptions
+   * .modelKwargs`, and the provider pin is folded into `modelKwargs` a few lines later. Move
+   * the call after that fold and the reasoning flag is silently dropped — but ONLY when a pin
+   * exists, because without one `modelKwargs` is taken from `clientOptions` by reference.
+   * Both live tiers are pinned, so this is the configuration that actually ships.
+   */
+  it('keeps reasoning disabled AND the provider pin on the title model', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    resolveDeepResearchTier.mockReturnValue({ ...TIER, provider: PIN });
+    reasoningEndpoint();
+    const params = baseParams('изучи рынок CRM');
+    params.req.config.endpoints = { custom: [{ name: '1ma', titleModel: 'title-model' }] };
+
+    await runNewDeepResearch(params);
+
+    const silent = mockModelCtorArgs.filter((a) => a.include_reasoning === false);
+    expect(silent).toHaveLength(1);
+    expect(silent[0].modelKwargs).toEqual({ provider: PIN, reasoning: { enabled: false } });
+  });
+
   it('honours titleConvo: false — no model call is spent naming the chat', async () => {
     mockStartSovereignSession.mockResolvedValue(null);
     reasoningEndpoint();
@@ -1955,7 +1987,12 @@ describe('runNewDeepResearch — a refused run leaves no admission stamp', () =>
     await runNewDeepResearch(planStart());
 
     const userMsg = mockSavedMessages.find((m) => m.messageId === 'um1');
-    expect(userMsg?.drKind).toBeUndefined();
+    // The message IS still persisted — the finalize tail saves it for every outcome. What a
+    // refused run must not leave behind is the 'start' PROVENANCE, which is what makes the
+    // retry look like a duplicate. Without this line the assertion below would also pass if
+    // the message stopped being saved at all.
+    expect(userMsg).toBeDefined();
+    expect(userMsg.drKind).toBeUndefined();
   });
 
   it('still stamps a start that IS admitted (the control)', async () => {
@@ -1965,6 +2002,29 @@ describe('runNewDeepResearch — a refused run leaves no admission stamp', () =>
 
     const userMsg = mockSavedMessages.find((m) => m.messageId === 'um1');
     expect(userMsg?.drKind).toBe('start');
+  });
+});
+
+/**
+ * Each node must be built from the slug ITS resolver returned. `reportModelFor` was a live
+ * function returning a dead value for years — nothing downstream had to use it — so the
+ * resolver having a test is not the same as the runner asking it.
+ */
+describe('runNewDeepResearch — every node is built from its own resolver', () => {
+  it('builds lead, worker, compress and report from their resolved slugs', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockInitializeCustom.mockImplementation(async ({ model_parameters }) => ({
+      llmConfig: { apiKey: 'sk-client', model: model_parameters?.model },
+      configOptions: { baseURL: 'http://anon.internal:8000/v1' },
+      provider: 'openAI',
+    }));
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const built = mockModelCtorArgs.map((a) => a.model);
+    for (const slug of ['lead-model', 'worker-model', 'compress-model', 'report-model']) {
+      expect(built).toContain(slug);
+    }
   });
 });
 

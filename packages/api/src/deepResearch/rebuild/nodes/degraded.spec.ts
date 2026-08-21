@@ -11,6 +11,7 @@ import {
   researchOne,
   toolTimeoutMs,
   EMPTY_DIGEST,
+  MAX_SOURCES,
   runResearchLoop,
   boundToolOutputs,
   hasResearchMaterial,
@@ -109,6 +110,50 @@ describe('a tool failure is not research material', () => {
   });
 });
 
+describe('the loop stops paying for turns it does not need', () => {
+  it('does not call the model again after a turn that asks for no tools', async () => {
+    let calls = 0;
+    const caller: ToolCaller = {
+      invoke: async () => {
+        calls += 1;
+        return new AIMessageChunk({ content: 'готово' });
+      },
+    };
+    await runResearchLoop({
+      caller,
+      tools: [],
+      system: 's',
+      question: 'q',
+      maxTurns: 5,
+      tokenCap: Number.POSITIVE_INFINITY,
+      nonce: NONCE,
+    });
+    // Without the break the researcher keeps looping to maxTurns, and every extra turn is a
+    // BILLED model call that can add nothing — there are no tools left to run.
+    expect(calls).toBe(1);
+  });
+
+  it('says so when the token cap stops a turn whose tool calls never ran', async () => {
+    const caller: ToolCaller = {
+      invoke: async () =>
+        new AIMessageChunk({
+          content: '',
+          tool_calls: [{ name: 'web_search', args: { query: 'q' }, id: 'c1', type: 'tool_call' }],
+        }),
+    };
+    await runResearchLoop({
+      caller,
+      tools: [],
+      system: 'с'.repeat(400),
+      question: 'q',
+      maxTurns: 3,
+      tokenCap: 1,
+      nonce: NONCE,
+    });
+    expect(warnings()).toContain('token cap reached');
+  });
+});
+
 describe('boundToolOutputs', () => {
   it('empty outputs do not become a truthy separator string', () => {
     // Joining ['', ''] produced '\n\n---\n\n', which is truthy, so COMPRESS was invoked —
@@ -190,9 +235,11 @@ describe('the deadline budget actually reaches the tool call', () => {
       clock,
     });
 
+    // A revert makes this call wait the full TOOL_TIMEOUT_MS of 60 s, which overruns the
+    // budget below and fails the test. Asserting `toolOutputs` here would be vacuous — that
+    // is held by the tool-failure fix, not by this one.
     expect(Date.now() - startedAt).toBeLessThan(20_000);
-    // The cut call yielded nothing, and nothing is what it contributes.
-    expect(result.toolOutputs).toEqual([]);
+    void result;
   }, 30_000);
 });
 
@@ -206,6 +253,25 @@ describe('SCOPE — a cut answer is a JSON fragment, not a brief', () => {
     });
     const update = await node(stateWith({ messages: [new HumanMessage(request)] }));
     expect(update.researchBrief).toBe(request);
+  });
+
+  /**
+   * The `!fromJson` half of the condition, which is the whole reason `fromJson` exists.
+   * `tolerantJsonParse` scans to the LAST `}`, so an answer that closed its JSON and was then
+   * cut mid-prose still parses — and its brief is a real brief. Dropping the check would
+   * throw it away and research the raw request instead.
+   */
+  it('keeps a brief whose JSON closed before the answer was cut', async () => {
+    const node = createScopeNode({
+      model: modelSaying(
+        '{"jurisdiction":"KZ","brief":"Рынок CRM в Казахстане"} Дополнительно поясняю, что об',
+        'length',
+      ),
+      now: NOW,
+    });
+    const update = await node(stateWith({ messages: [new HumanMessage(request)] }));
+    expect(update.researchBrief).toBe('Рынок CRM в Казахстане');
+    expect(update.jurisdiction).toBe('KZ');
   });
 
   it('still accepts prose that simply is not JSON', async () => {
@@ -229,6 +295,22 @@ describe('SUPERVISOR — an answer that is not JSON collapses the fan-out, and s
       {} as RunnableConfig,
     );
     // The fallback itself is deliberate — losing it in silence was not.
+    expect(update.currentSubQuestions).toEqual(['бриф']);
+    expect(warnings()).toContain('unparseable answer');
+  });
+
+  it('warns when the model says complete before any research ran', async () => {
+    const node = createSupervisorNode({
+      model: modelSaying('{"action":"complete"}'),
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+      clock: () => 0,
+    });
+    const update = await node(stateWith({ researchBrief: 'бриф', round: 0 }), {} as RunnableConfig);
+    // Round 0 'complete' cannot be honoured — there is nothing to report from — so it takes
+    // the same one-question fallback, and used to take it just as silently.
+    expect(update.concludeReason).toBeUndefined();
     expect(update.currentSubQuestions).toEqual(['бриф']);
     expect(warnings()).toContain('unparseable answer');
   });
@@ -265,7 +347,7 @@ describe('SUPERVISOR — an answer that is not JSON collapses the fan-out, and s
 
 describe('REPORT — a retry shrinks the evidence and the citations together', () => {
   it('halves the source list alongside the digest', async () => {
-    const sources = Array.from({ length: 50 }, (_, i) => `https://example.com/doc-${i}`);
+    const sources = Array.from({ length: MAX_SOURCES }, (_, i) => `https://example.com/doc-${i}`);
     const findings: DeepResearchFinding[] = [
       { round: 0, subQuestion: 'в', digest: 'ц'.repeat(2000), sources, tokens: 10 },
     ];
@@ -292,10 +374,15 @@ describe('REPORT — a retry shrinks the evidence and the citations together', (
     });
     const urls = (messages: BaseMessage[]): number =>
       (String(messages[1].content).match(/https:\/\//g) ?? []).length;
-    expect(urls(prompts[0])).toBe(50);
+    expect(urls(prompts[0])).toBe(MAX_SOURCES);
+    // The run must record WHICH model answered: the tier names one, the request can carry an
+    // OpenRouter fallback list, and only the intended slug was ever written down.
+    expect((logger.info as jest.Mock).mock.calls.flat().map(String).join('\n')).toContain(
+      'written by',
+    );
     // Before: the digest was cut to half while all 50 URLs stayed — the model saw the
     // citations of facts whose text had been taken away, and wrote the report anyway.
-    expect(urls(prompts[1])).toBe(25);
+    expect(urls(prompts[1])).toBe(Math.ceil(MAX_SOURCES / 2));
   });
 });
 
@@ -324,17 +411,33 @@ describe('the no-data notice states what it knows and no more', () => {
     expect(text).not.toContain('источники не открылись');
   });
 
-  it('offers BOTH next steps, whatever the stop reason', () => {
-    for (const reason of ['budget', 'time', 'rounds', 'complete'] as const) {
+  /**
+   * Ordering advice by a fact the run knows is not the same as asserting a cause. An earlier
+   * revision offered "narrow the query, it will fit the limit" for EVERY outcome — including
+   * one where no limit was reached, which made the notice contradict its own opening line and
+   * pointed a user whose search had broken off at a second twenty-minute run that could not
+   * have helped.
+   */
+  it('tells a run that ran out of its allowance to narrow the query', () => {
+    for (const reason of ['budget', 'time', 'rounds'] as const) {
       const text = buildNoDataReport({ request: 'з', findings: [], reason });
       expect(text).toContain('сузьте запрос');
       expect(text).toContain('администратору');
     }
   });
 
-  it('still works when the run stopped for no recorded reason', () => {
+  it('tells a run that hit NO limit to retry, never to narrow for a limit it never hit', () => {
+    const text = buildNoDataReport({ request: 'з', findings: [], reason: 'complete' });
+    expect(text).toContain('повторите исследование');
+    expect(text).toContain('администратору');
+    expect(text).not.toContain('уложиться в лимит');
+    expect(text).not.toContain('сузьте запрос');
+  });
+
+  it('names nothing rather than inventing a phrase when no reason was recorded', () => {
     const text = buildNoDataReport({ request: 'з', findings: [] });
-    expect(text).toContain('остановился');
-    expect(text).toContain('сузьте запрос');
+    // No tautological "material was not gathered: gathering stopped".
+    expect(text).toContain('не собрано пригодного материала.');
+    expect(text).toContain('повторите исследование');
   });
 });

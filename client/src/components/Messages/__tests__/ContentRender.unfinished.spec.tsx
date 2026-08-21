@@ -15,11 +15,9 @@ import ContentRender from '~/components/Messages/ContentRender';
  * A truncated report therefore looked exactly as finished as a complete one, and the only
  * trace of the truncation stayed in the database.
  */
-jest.mock('~/components/Chat/Messages/Content/MessageContent', () => ({
-  __esModule: true,
-  default: () => <div />,
-  UnfinishedMessage: () => <div data-testid="unfinished-hint" />,
-}));
+/** The real ru string for `com_ui_unfinished_message`, so the tests assert what is SEEN. */
+const UNFINISHED_TEXT =
+  'Этот ответ может быть неполным — он ещё обрабатывался, был остановлен или достиг лимита.';
 
 const mockResolveDrReport = jest.fn(() => null as { title: string } | null);
 jest.mock('~/components/Chat/Messages/DeepResearch', () => ({
@@ -59,7 +57,7 @@ jest.mock('~/components/Chat/Messages/Content/Files', () => ({
 }));
 
 jest.mock('~/hooks', () => ({
-  useLocalize: () => (key: string) => key,
+  useLocalize: () => (key: string) => (key === 'com_ui_unfinished_message' ? UNFINISHED_TEXT : key),
   useAttachments: () => ({ attachments: undefined, searchResults: undefined }),
   useContentMetadata: () => ({ hasParallelContent: false }),
   useMessageActions: () => ({
@@ -123,19 +121,33 @@ describe('ContentRender — an incomplete Deep Research report says so', () => {
 
   it('shows the hint on a report whose gathering was cut short', () => {
     renderMessage(drReport({ unfinished: true }));
-    expect(screen.getByTestId('report-card')).toBeInTheDocument();
-    expect(screen.getByTestId('unfinished-hint')).toBeInTheDocument();
+    expect(screen.getByText(UNFINISHED_TEXT)).toBeInTheDocument();
+  });
+
+  /**
+   * The notice must not be an ERROR.
+   *
+   * The obvious way to render it — reusing `UnfinishedMessage` — wraps this same sentence in
+   * `ErrorMessage`, which produces a red `role="alert"` box prefixed with «Не удалось
+   * выполнить запрос. Сообщение об ошибке: …». Under a report that was successfully written,
+   * merely from less material, that is a false statement and worse than showing nothing.
+   */
+  it('presents it as a note, not as a failed request', () => {
+    renderMessage(drReport({ unfinished: true }));
+    expect(screen.getByTestId('dr-unfinished-notice')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Не удалось выполнить запрос/)).not.toBeInTheDocument();
   });
 
   it('stays quiet on a complete report', () => {
     renderMessage(drReport());
-    expect(screen.queryByTestId('unfinished-hint')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('dr-unfinished-notice')).not.toBeInTheDocument();
   });
 
   it('stays quiet while the report is still streaming', () => {
     // A message in flight is legitimately incomplete; the hint would fire on every run.
     renderMessage(drReport({ unfinished: true }), true);
-    expect(screen.queryByTestId('unfinished-hint')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('dr-unfinished-notice')).not.toBeInTheDocument();
   });
 
   /**
@@ -149,11 +161,11 @@ describe('ContentRender — an incomplete Deep Research report says so', () => {
   it('stays quiet on an ordinary answer the user stopped', () => {
     mockResolveDrReport.mockReturnValue(null);
     renderMessage(messageWith({ unfinished: true }));
-    expect(screen.queryByTestId('unfinished-hint')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('dr-unfinished-notice')).not.toBeInTheDocument();
   });
 
   it('stays quiet on a user message', () => {
     renderMessage(drReport({ unfinished: true, isCreatedByUser: true }));
-    expect(screen.queryByTestId('unfinished-hint')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('dr-unfinished-notice')).not.toBeInTheDocument();
   });
 });

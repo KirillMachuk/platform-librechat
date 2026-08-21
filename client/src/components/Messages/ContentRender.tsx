@@ -14,7 +14,6 @@ import {
 } from '~/components/Chat/Messages/DeepResearch';
 import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import { useAttachments, useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
-import { UnfinishedMessage } from '~/components/Chat/Messages/Content/MessageContent';
 import ContentParts from '~/components/Chat/Messages/Content/ContentParts';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
 import { USER_BUBBLE_CLASS } from '~/components/Chat/Messages/ui/turn';
@@ -186,9 +185,25 @@ const ContentRender = memo(function ContentRender({
       msg.unfinished === true &&
       msg.drKind === 'report' &&
       msg.isCreatedByUser !== true ? (
-        <UnfinishedMessage message={msg} />
+        /**
+         * A plain note, NOT `UnfinishedMessage`.
+         *
+         * That component wraps the same sentence in `ErrorMessage`, which renders an
+         * `role="alert"` red box and prefixes the text with `com_error_generic_prefix` —
+         * "Не удалось выполнить запрос. Сообщение об ошибке: …". Under a Deep Research report
+         * that is simply false: the report is a real synthesis that was written from less
+         * material than intended, and announcing it as a failed request is worse than saying
+         * nothing at all. The wording itself (`com_ui_unfinished_message`) is right; only the
+         * error framing around it was wrong.
+         */
+        <div
+          className="mt-2 border-l-2 border-border-medium py-0.5 pl-3 text-sm text-text-secondary"
+          data-testid="dr-unfinished-notice"
+        >
+          {localize('com_ui_unfinished_message')}
+        </div>
       ) : null,
-    [isSubmitting, msg],
+    [isSubmitting, localize, msg],
   );
 
   if (!msg) {

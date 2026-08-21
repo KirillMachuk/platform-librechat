@@ -164,6 +164,19 @@ export async function composeReport(params: {
        * which is exactly what a run that hit the ceiling needs.
        */
       if (!answer.empty && !answer.truncated) {
+        if (attempt > 0) {
+          /**
+           * This report was written from REDUCED evidence: each retry halves both the digest
+           * cap and the source list, so attempt 3 synthesises an eighth of what was gathered.
+           * The run still finalises as a normal report, because it IS a real model synthesis
+           * — but nothing else records that it was written from a fraction, and that has to
+           * be answerable later without guessing.
+           */
+          logger.warn(
+            `[deepResearch:report] written on retry ${attempt}: digests and sources reduced ` +
+              `to 1/${2 ** attempt} of what was gathered`,
+          );
+        }
         /**
          * WHICH model actually wrote the report. The tier names a lead model, but the request
          * can still carry an OpenRouter fallback list inherited from the chat's model card,
@@ -244,7 +257,38 @@ const STOP_REASON_TEXT: Record<SupervisorConcludeReason, string> = {
   time: 'прогон исчерпал отведённое время',
   rounds: 'прогон исчерпал отведённое число кругов поиска',
   complete: 'поиск не вернул пригодных источников',
+  // Unreachable through the node — `createReportNode` intercepts 'error' and ships the
+  // fallback notice instead. Kept so the record stays exhaustive for the exported function.
   error: 'сбор прервался внутренней ошибкой',
+};
+
+/** Retry later — for a run that stopped WITHOUT hitting any of its limits. */
+const RETRY_FIRST =
+  'Что можно сделать: повторите исследование чуть позже или переформулируйте запрос. ' +
+  'Если повторяется — сообщите администратору: возможен сбой веб-поиска.';
+
+/** Narrow the query — for a run that stopped because it ran out of its allowance. */
+const NARROW_FIRST =
+  'Что можно сделать: сузьте запрос — конкретнее по теме, региону или периоду: ' +
+  'более узкий вопрос успевает уложиться в лимит прогона. ' +
+  'Если и на узком запросе материал не собирается — сообщите администратору: ' +
+  'возможен сбой веб-поиска.';
+
+/**
+ * What to try FIRST, ordered by the stop reason.
+ *
+ * Ordering advice by a fact the run knows is not the same as asserting a cause. The previous
+ * revision offered "narrow the query, it will fit the limit" for every outcome — including
+ * one where no limit was reached, which made the notice contradict its own opening line and
+ * sent a user whose web search had simply broken off to burn a second twenty-minute run on a
+ * narrower question that could not have helped.
+ */
+const NEXT_STEP_TEXT: Record<SupervisorConcludeReason, string> = {
+  budget: NARROW_FIRST,
+  time: NARROW_FIRST,
+  rounds: NARROW_FIRST,
+  complete: RETRY_FIRST,
+  error: RETRY_FIRST,
 };
 
 export function buildNoDataReport(params: {
@@ -261,17 +305,17 @@ export function buildNoDataReport(params: {
   const chars = [...flat];
   const shownRequest =
     chars.length > NO_DATA_REQUEST_CAP ? `${chars.slice(0, NO_DATA_REQUEST_CAP).join('')}…` : flat;
-  const stopped =
-    params.reason != null ? STOP_REASON_TEXT[params.reason] : 'сбор материала остановился';
+  // An unrecognised reason names nothing rather than inventing a phrase, and the neutral
+  // "retry later" advice applies — it is the one step that is never actively wrong.
+  const stopped = params.reason != null ? STOP_REASON_TEXT[params.reason] : undefined;
+  const next = (params.reason != null ? NEXT_STEP_TEXT[params.reason] : undefined) ?? RETRY_FIRST;
   return (
     `## Не удалось собрать материал\n\n` +
-    `По запросу «${shownRequest}» не собрано пригодного материала: ${stopped}. ` +
-    `Отчёт без фактической базы не составлен.\n\n` +
+    `По запросу «${shownRequest}» не собрано пригодного материала` +
+    (stopped ? `: ${stopped}` : '') +
+    `. Отчёт без фактической базы не составлен.\n\n` +
     (attempted ? `Что исследовалось:\n${attempted}\n\n` : '') +
-    `Что можно сделать: сузьте запрос — конкретнее по теме, региону или периоду; ` +
-    `более узкий вопрос укладывается в лимит прогона. ` +
-    `Если материал не собирается и на узком запросе — сообщите администратору: ` +
-    `возможен сбой веб-поиска.`
+    next
   );
 }
 

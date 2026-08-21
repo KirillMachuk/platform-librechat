@@ -1668,7 +1668,10 @@ async function runNewDeepResearch(params) {
   // the race where a follow-up arrives before the response is persisted). The user
   // message was saved at admission for a run that was ADMITTED, and this upsert refreshes
   // it; for a run refused by a cap the admission save never happened, so this is its first
-  // and only write — which is the point: a refused run leaves no 'start' provenance. The response
+  // and only write — which is the point: a refused run leaves no 'start' provenance, so the
+  // retry the refusal message asks for is not mistaken for a duplicate START. It does still
+  // become a CHILD of the plan message, so the plan card's own buttons go inert either way;
+  // the user retypes the request rather than clicking «Начать». The response
   // is saved for EVERY outcome, including a Stop that collected nothing: the frontend
   // already threads the next message onto this responseMessageId (from the abort final
   // event), so it must exist in the DB (drKind='aborted') or the follow-up dangles on a

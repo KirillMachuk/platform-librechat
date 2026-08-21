@@ -492,13 +492,7 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
           streamId,
           signal: job.abortController.signal,
           endpoint: client?.options?.agent?.endpoint ?? endpointOption.endpoint,
-          // The conversation's own model, NOT `agent.model` — that one has already been
-          // overwritten with the tier's lead model, which would make every unconfigured
-          // worker/compress node fall back to the most expensive model in the run.
-          conversationModel:
-            client?.options?.deepResearchConversationModel ??
-            client?.options?.agent?.model ??
-            endpointOption.model_parameters?.model,
+          conversationModel: drConversationModel(client, endpointOption),
           userId,
           conversationId,
           parentMessageId,
@@ -1304,9 +1298,32 @@ const _LegacyAgentController = async (req, res, next, initializeClient, addTitle
   }
 };
 
+/**
+ * The conversation's OWN model for a Deep Research run — never `agent.model`.
+ *
+ * By the time the client exists, `agent.model` holds the tier's LEAD model: `initialize.js`
+ * captures the conversation's model and then overwrites the agent with the lead. Reading the
+ * agent here therefore handed the lead to every node that had no model of its own, inverting
+ * the documented promise that workers fall back to the conversation's model "never the
+ * expensive lead model" — and doing so precisely when it mattered, i.e. when `workerModel`
+ * was left unset.
+ *
+ * A named function rather than an inline chain because it is the consumer end of a hop that
+ * crosses three files, and an inline expression here had no way to be tested.
+ */
+function drConversationModel(client, endpointOption) {
+  return (
+    client?.options?.deepResearchConversationModel ??
+    client?.options?.agent?.model ??
+    endpointOption?.model_parameters?.model
+  );
+}
+
 module.exports = AgentController;
 /** Test-only export: the regenerate/user-message shape has live-bug history (see JSDoc). */
 module.exports.getPreliminaryUserMessage = getPreliminaryUserMessage;
 /** Test-only export: this is the gate that decides whether a turn becomes a research
  *  run, so it is worth asserting directly rather than through the whole controller. */
 module.exports.shouldRunNewDeepResearch = shouldRunNewDeepResearch;
+/** Test-only export: the consumer end of the conversation-model hop (see JSDoc). */
+module.exports.drConversationModel = drConversationModel;
