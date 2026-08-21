@@ -27,7 +27,7 @@ const buildArtifact = (overrides: Partial<Artifact> = {}): Artifact => ({
 
 describe('GoogleWorkspacePreview', () => {
   it('renders only the normalized Google URL with the restricted iframe policy', () => {
-    render(<GoogleWorkspacePreview artifact={buildArtifact()} />);
+    render(<GoogleWorkspacePreview artifact={buildArtifact()} isMobile={false} />);
 
     const frame = screen.getByTitle('Planning document');
     expect(frame).toHaveAttribute('src', 'https://docs.google.com/document/d/doc_123/edit');
@@ -41,6 +41,7 @@ describe('GoogleWorkspacePreview', () => {
   it('renders a normalized Google Drive viewer URL with the same iframe policy', () => {
     render(
       <GoogleWorkspacePreview
+        isMobile={false}
         artifact={buildArtifact({
           id: 'google-workspace:drive_file:file_789',
           title: 'Shared PDF',
@@ -57,7 +58,7 @@ describe('GoogleWorkspacePreview', () => {
     );
 
     const frame = screen.getByTitle('Shared PDF');
-    expect(frame).toHaveAttribute('src', 'https://drive.google.com/file/d/file_789/view');
+    expect(frame).toHaveAttribute('src', 'https://drive.google.com/file/d/file_789/preview');
     expect(frame).toHaveAttribute(
       'sandbox',
       'allow-downloads allow-forms allow-modals allow-popups allow-same-origin allow-scripts',
@@ -65,9 +66,35 @@ describe('GoogleWorkspacePreview', () => {
     expect(frame).toHaveAttribute('referrerpolicy', 'no-referrer');
   });
 
+  it('uses the stable HTML viewer for spreadsheets on mobile', () => {
+    render(
+      <GoogleWorkspacePreview
+        isMobile={true}
+        artifact={buildArtifact({
+          id: 'google-workspace:spreadsheet:sheet_987',
+          title: 'Market analysis',
+          googleWorkspace: {
+            provider: 'google_drive',
+            fileId: 'sheet_987',
+            name: 'Market analysis',
+            mimeType: 'application/vnd.google-apps.spreadsheet',
+            viewUrl: 'https://docs.google.com/spreadsheets/d/sheet_987/edit?unsafe=discarded',
+            kind: 'spreadsheet',
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByTitle('Market analysis')).toHaveAttribute(
+      'src',
+      'https://docs.google.com/spreadsheets/d/sheet_987/htmlview?widget=true&headers=true&chrome=false',
+    );
+  });
+
   it('refuses a stored URL whose identity does not match the artifact', () => {
     render(
       <GoogleWorkspacePreview
+        isMobile={false}
         artifact={buildArtifact({
           googleWorkspace: {
             ...buildArtifact().googleWorkspace!,
@@ -84,6 +111,7 @@ describe('GoogleWorkspacePreview', () => {
   it('refuses a non-Google URL even if it was placed into artifact state', () => {
     render(
       <GoogleWorkspacePreview
+        isMobile={false}
         artifact={buildArtifact({
           googleWorkspace: {
             ...buildArtifact().googleWorkspace!,

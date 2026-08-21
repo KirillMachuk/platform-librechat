@@ -1,11 +1,17 @@
 import type { Artifact } from '~/common';
-import { validateGoogleWorkspaceFile } from '~/utils/google';
+import { getGoogleWorkspaceEmbedUrl, validateGoogleWorkspaceFile } from '~/utils/google';
 import { useLocalize } from '~/hooks';
 
 const GOOGLE_IFRAME_SANDBOX =
   'allow-downloads allow-forms allow-modals allow-popups allow-same-origin allow-scripts';
 
-export default function GoogleWorkspacePreview({ artifact }: { artifact: Artifact }) {
+export default function GoogleWorkspacePreview({
+  artifact,
+  isMobile,
+}: {
+  artifact: Artifact;
+  isMobile: boolean;
+}) {
   const localize = useLocalize();
   const file = artifact.googleWorkspace;
   const parsed = validateGoogleWorkspaceFile(file);
@@ -21,7 +27,7 @@ export default function GoogleWorkspacePreview({ artifact }: { artifact: Artifac
   return (
     <iframe
       title={file.name}
-      src={parsed.viewUrl}
+      src={getGoogleWorkspaceEmbedUrl(parsed, isMobile)}
       sandbox={GOOGLE_IFRAME_SANDBOX}
       referrerPolicy="no-referrer"
       className="h-full w-full border-0 bg-white"

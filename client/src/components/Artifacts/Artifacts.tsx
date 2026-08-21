@@ -257,7 +257,7 @@ export default function Artifacts() {
   if (isFilePreview) {
     previewBody = <FilePreviewBody artifact={currentArtifact} />;
   } else if (isGoogleWorkspacePreview) {
-    previewBody = <GoogleWorkspacePreview artifact={currentArtifact} />;
+    previewBody = <GoogleWorkspacePreview artifact={currentArtifact} isMobile={isMobile} />;
   } else {
     previewBody = (
       <ArtifactTabs
