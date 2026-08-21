@@ -1,4 +1,4 @@
-import { parseGoogleWorkspaceUrl } from '../google';
+import { getGoogleWorkspaceEmbedUrl, parseGoogleWorkspaceUrl } from '../google';
 
 describe('parseGoogleWorkspaceUrl', () => {
   it.each([
@@ -62,5 +62,39 @@ describe('parseGoogleWorkspaceUrl', () => {
     'not a URL',
   ])('rejects an unsafe or unsupported URL: %s', (input) => {
     expect(parseGoogleWorkspaceUrl(input)).toBeNull();
+  });
+
+  it.each([
+    [
+      'https://drive.google.com/file/d/file_789/view?usp=sharing',
+      false,
+      'https://drive.google.com/file/d/file_789/preview',
+    ],
+    [
+      'https://drive.google.com/file/d/file_789/view?usp=sharing',
+      true,
+      'https://drive.google.com/file/d/file_789/preview',
+    ],
+    [
+      'https://docs.google.com/spreadsheets/d/sheet_987/edit?usp=sharing',
+      false,
+      'https://docs.google.com/spreadsheets/d/sheet_987/edit',
+    ],
+    [
+      'https://docs.google.com/spreadsheets/d/sheet_987/edit?usp=sharing',
+      true,
+      'https://docs.google.com/spreadsheets/d/sheet_987/htmlview?widget=true&headers=true&chrome=false',
+    ],
+    [
+      'https://docs.google.com/document/d/doc_123/edit?usp=sharing',
+      true,
+      'https://docs.google.com/document/d/doc_123/edit',
+    ],
+  ])('derives the safe embed URL for the current viewport', (input, isMobile, expected) => {
+    const parsed = parseGoogleWorkspaceUrl(input);
+    if (!parsed) {
+      throw new Error(`Expected a supported Google URL: ${input}`);
+    }
+    expect(getGoogleWorkspaceEmbedUrl(parsed, isMobile)).toBe(expected);
   });
 });

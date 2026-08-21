@@ -104,6 +104,21 @@ export function parseGoogleWorkspaceUrl(rawUrl: string): ParsedGoogleWorkspaceUr
   };
 }
 
+export function getGoogleWorkspaceEmbedUrl(
+  file: ParsedGoogleWorkspaceUrl,
+  isMobile: boolean,
+): string {
+  if (file.kind === 'drive_file') {
+    return `https://${GOOGLE_DRIVE_HOST}/file/d/${file.fileId}/preview`;
+  }
+
+  if (file.kind === 'spreadsheet' && isMobile) {
+    return `https://${GOOGLE_WORKSPACE_HOST}/spreadsheets/d/${file.fileId}/htmlview?widget=true&headers=true&chrome=false`;
+  }
+
+  return file.viewUrl;
+}
+
 /** Re-check a stored artifact at render time before using its remote URL. */
 export function validateGoogleWorkspaceFile(
   file: GoogleWorkspaceFile | undefined,
