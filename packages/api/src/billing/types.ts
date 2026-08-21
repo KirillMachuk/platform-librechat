@@ -3,7 +3,8 @@ export type BillingAlertKind = 'pool80' | 'exhausted' | 'reconcile';
 
 export interface BillingAlert {
   kind: BillingAlertKind;
-  /** Europe/Minsk month key, e.g. `2026-07`. */
+  /** Europe/Minsk billing-period key — the period START DATE, e.g. `2026-08-15`
+   *  (`YYYY-MM-01` when the anchor is the 1st). Printed in the alert's subject line. */
   month: string;
   /** Whole display Credits (never $ — the client UI must stay dollar-free). */
   spentCredits?: number;

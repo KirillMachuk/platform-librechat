@@ -627,3 +627,51 @@ describe('aggregateCreditSpendByUser (per-employee actual spend)', () => {
     ]);
   });
 });
+
+describe('markCreditMonthNotified: reconcile claims a WINDOW, not a period', () => {
+  /**
+   * The comparison measures a UTC calendar month; this document is keyed by the billing
+   * period. With any anchor other than the 1st one period spans two UTC months, so a
+   * per-period claim swallows the second month's alert entirely. Even on anchor 1 the
+   * two calendars overlap for the three hours of 21:00–24:00 UTC on the last day, and
+   * the daily tick fires at a fixed time — landing in them would silence a whole month.
+   */
+  test('a second UTC month inside the same period can still alert', async () => {
+    const period = servicePeriodKey(new Date('2026-08-20T10:00:00Z'), 15);
+    await spend({ credits: 1, at: new Date('2026-08-20T10:00:00Z'), anchorDay: 15, sourceId: 's' });
+
+    const august = await methods.markCreditMonthNotified({
+      month: period,
+      kind: 'reconcile',
+      utcMonth: '2026-08',
+    });
+    const augustAgain = await methods.markCreditMonthNotified({
+      month: period,
+      kind: 'reconcile',
+      utcMonth: '2026-08',
+    });
+    const september = await methods.markCreditMonthNotified({
+      month: period,
+      kind: 'reconcile',
+      utcMonth: '2026-09',
+    });
+
+    expect(august).toBe(true);
+    expect(augustAgain).toBe(false);
+    expect(september).toBe(true);
+
+    const doc = await methods.getCreditMonth({ month: period });
+    expect(doc?.notifiedReconcileUtcMonth).toBe('2026-09');
+    expect(doc?.notifiedReconcileAt).toBeTruthy();
+  });
+
+  test('the other two kinds still claim once per period', async () => {
+    const period = servicePeriodKey(new Date('2026-08-20T10:00:00Z'), 1);
+    await spend({ credits: 1, at: new Date('2026-08-20T10:00:00Z'), sourceId: 's2' });
+
+    expect(await methods.markCreditMonthNotified({ month: period, kind: '80' })).toBe(true);
+    expect(await methods.markCreditMonthNotified({ month: period, kind: '80' })).toBe(false);
+    expect(await methods.markCreditMonthNotified({ month: period, kind: 'exhausted' })).toBe(true);
+    expect(await methods.markCreditMonthNotified({ month: period, kind: 'exhausted' })).toBe(false);
+  });
+});

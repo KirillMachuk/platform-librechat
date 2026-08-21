@@ -2,7 +2,7 @@ import { logger } from '@librechat/data-schemas';
 import type { CreditBillingStatus } from '@librechat/data-schemas';
 import type { OpenRouterManagement } from './openrouter';
 import type { BillingReconcilerDeps } from './reconcile';
-import { createBillingReconciler } from './reconcile';
+import { createBillingReconciler, projectToFullMonth, toleranceFor } from './reconcile';
 
 jest.mock('@librechat/data-schemas', () => ({
   ...jest.requireActual('@librechat/data-schemas'),
@@ -425,7 +425,9 @@ describe('OpenRouter key budget', () => {
     expect(logger.error).toHaveBeenCalledWith(
       expect.stringContaining('OpenRouter key budget is running out'),
     );
-    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('2.5 month(s)'));
+    /* 40 USD over 14.5 days of a 31-day month projects to ~85/month, so 100 left is
+     * ~1.2 months — the projection is what fires here, not the low-share rule. */
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('1.2 month(s)'));
   });
 
   /** The same numbers on a REFILLING limit must stay silent — it cannot run out. */
@@ -551,5 +553,117 @@ describe('reconcile alert cadence', () => {
     await createBillingReconciler(deps).run(NOW);
 
     expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('OUTSIDE the proxy'));
+  });
+});
+
+describe("tolerances sized in the contour's own money", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  /**
+   * Measured on the stand: August was 3 228 238µ$ over 864 requests — 3 736µ$ each. A
+   * flat $1 tolerance was therefore 268 lost requests, 31% of the month's spend, while
+   * the noise it absorbs (the counter and the journal are two sequential reads) is one
+   * or two requests. A tolerance 140x wider than what it tolerates catches nothing.
+   */
+  it('scales with what a request here actually costs', () => {
+    expect(toleranceFor({ microUsd: 3_228_238, count: 864 }, 3, 1_000_000)).toBeCloseTo(11_209, 0);
+  });
+
+  it('never tightens below a floor, and never exceeds the documented cap', () => {
+    /** A contour of free-model calls must not get a zero tolerance. */
+    expect(toleranceFor({ microUsd: 30, count: 100 }, 3, 1_000_000)).toBe(10_000);
+    /** An expensive contour must not get a tolerance wider than the old flat default. */
+    expect(toleranceFor({ microUsd: 90_000_000, count: 10 }, 3, 1_000_000)).toBe(1_000_000);
+    /** No history at all — fall back to the cap rather than inventing a bound. */
+    expect(toleranceFor({ microUsd: 0, count: 0 }, 3, 1_000_000)).toBe(1_000_000);
+  });
+
+  it('catches a lost counter increment the flat dollar would have ignored', async () => {
+    /** One typical request's worth of drift — under $1, over three requests' worth. */
+    const deps = createDeps({
+      openrouter: openrouterOf(null, false),
+      getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf(3_200_000)),
+      sumCreditSpendJournal: jest.fn().mockResolvedValue({ microUsd: 3_228_238, count: 864 }),
+    });
+
+    const report = await createBillingReconciler(deps).checkInternalDrift(NOW);
+
+    expect(report.driftMicroUsd).toBe(28_238);
+    expect(report.drifted).toBe(true);
+  });
+
+  it('still calls a single in-flight request noise', async () => {
+    const deps = createDeps({
+      openrouter: openrouterOf(null, false),
+      getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf(3_224_502)),
+      sumCreditSpendJournal: jest.fn().mockResolvedValue({ microUsd: 3_228_238, count: 864 }),
+    });
+
+    const report = await createBillingReconciler(deps).checkInternalDrift(NOW);
+
+    expect(report.driftMicroUsd).toBe(3_736);
+    expect(report.drifted).toBe(false);
+  });
+});
+
+describe('the alert says which way the money went', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  /** Ledger above the key is the only direction that costs the CLIENT, and the only
+   *  automatic detector of it — it must not read like the other one. */
+  it('names an overcharge as an overcharge', async () => {
+    const deps = createDeps({
+      openrouter: openrouterOf(100),
+      sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 200_000_000, count: 5 }),
+    });
+
+    await createBillingReconciler(deps).run(NOW);
+
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('LEDGER IS HIGHER'));
+  });
+
+  it('names the other direction as spend we failed to record', async () => {
+    const deps = createDeps({
+      openrouter: openrouterOf(200),
+      sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 5 }),
+    });
+
+    await createBillingReconciler(deps).run(NOW);
+
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('ledger is LOWER'));
+  });
+});
+
+describe('key burn rate on a partial month', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  /** `usage_monthly` restarts on the 1st. Read as a full month it overstates headroom
+   *  by ~15x on the 2nd, so the EARLY warning would arrive last. */
+  it('projects a month-to-date figure to a whole month', () => {
+    const secondOfMonth = new Date('2026-08-02T12:00:00Z');
+    /** $2 over 1.5 days of a 31-day month ≈ $41 a month. */
+    expect(projectToFullMonth(2, secondOfMonth)).toBeCloseTo(41.3, 1);
+    /** Mid-month it barely moves. */
+    expect(projectToFullMonth(10, new Date('2026-08-16T00:00:00Z'))).toBeCloseTo(20.7, 1);
+    /** The first hours are not a rate — report what is known. */
+    expect(projectToFullMonth(0.3, new Date('2026-08-01T02:00:00Z'))).toBe(0.3);
+  });
+
+  it('warns early in the month, where the flat reading stayed silent', async () => {
+    /** $2 burned in the first day and a half of a $50 lifetime cap with $20 left:
+     *  unprojected that is 10 months of headroom, projected it is under 6 months. */
+    const deps = createDeps({ openrouter: openrouterOf(2, false, 50, true, 20, null) });
+
+    await createBillingReconciler(deps).run(new Date('2026-08-02T12:00:00Z'));
+
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('OpenRouter key budget is running out'),
+    );
   });
 });

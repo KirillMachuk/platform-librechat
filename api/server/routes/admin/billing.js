@@ -39,6 +39,10 @@ function getHandlers() {
     metering: config.enabled,
     getDegraded: () => getCreditIndexHealth().degraded,
     getLedgerDrifted: () => getCreditDriftHealth().drifted,
+    getLedgerCheckFailing: () => {
+      const health = getCreditDriftHealth();
+      return health.failing || !health.everChecked;
+    },
     operatorEmails: config.operatorEmails,
     limitHeadroom: config.openrouter.headroom,
     openrouter,

@@ -6,15 +6,30 @@ import { computeKeyLimitUsd, shouldApplyKeyLimit } from './openrouter';
 
 /** Alert when internal ledger vs OpenRouter drift exceeds ~3%… */
 const DEFAULT_THRESHOLD_RATIO = 0.03;
-/** …and at least this many dollars (early-month percentages are pure noise). */
+/** …and at least this much money (early-month percentages are pure noise). Sized from
+ *  the contour's own average request when one can be computed — see
+ *  {@link EXTERNAL_MIN_ABS_REQUESTS}; this is the ceiling for a contour with no history. */
 const DEFAULT_MIN_ABS_USD = 1;
 /**
- * Internal journal↔counter drift below this is noise: the month-counter snapshot
- * and the journal aggregation are not one atomic read, so an in-flight spend can
- * show up as sub-dollar drift. $1 mirrors the external floor — only accumulation
- * beyond it (a genuine lost increment building up) is actionable.
+ * Floor under both tolerances, for a contour so quiet that an average request cannot
+ * be computed yet. Everything above it scales with what a request here actually costs.
  */
-const INTERNAL_DRIFT_TOLERANCE_MICRO_USD = MICRO_USD_PER_USD; // $1
+const MIN_TOLERANCE_MICRO_USD = 10_000; // $0.01
+/**
+ * Internal journal↔counter drift is noise only up to a few requests' worth: the
+ * counter snapshot and the journal sum are two sequential reads, so at most an
+ * in-flight spend or two can sit between them.
+ *
+ * This used to be a flat $1, chosen to mirror the external floor — which on this
+ * contour meant blindness to 268 lost requests, 31% of the month's spend, while the
+ * noise it was absorbing is one or two requests (~$0.007). A tolerance 140x wider than
+ * the thing it tolerates is not a tolerance, it is a blindfold: the very lost-increment
+ * it exists to catch would never have reached it.
+ */
+const INTERNAL_DRIFT_TOLERANCE_REQUESTS = 3;
+/** Same reasoning for the external floor, with more room: that comparison has real
+ *  structural noise (spend made outside the proxy, OpenRouter's own accounting lag). */
+const EXTERNAL_MIN_ABS_REQUESTS = 10;
 /** Shout about the key's own budget once fewer than this many months of headroom remain. */
 const KEY_BUDGET_WARN_MONTHS = 3;
 /** …or once this little of the limit is left, whichever comes first. */
@@ -29,6 +44,42 @@ const EARLY_MONTH_SKIP_HOURS = 6;
  */
 function isEarlyUtcMonth(at: Date): boolean {
   return at.getUTCDate() === 1 && at.getUTCHours() < EARLY_MONTH_SKIP_HOURS;
+}
+
+/**
+ * Scales a month-to-date figure to a whole month. `usage_monthly` restarts on the 1st,
+ * so early in the month it is a fraction of the eventual total; dividing by the fraction
+ * of the month elapsed turns it into a rate. Guards the first hours, where the fraction
+ * approaches zero and the projection would explode.
+ */
+export function projectToFullMonth(monthToDateUsd: number, now: Date): number {
+  const daysInMonth = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  const elapsedDays =
+    now.getUTCDate() - 1 + (now.getUTCHours() * 60 + now.getUTCMinutes()) / (24 * 60);
+  /** Under half a day of history is not a rate — report what is known, unscaled. */
+  if (elapsedDays < 0.5) {
+    return monthToDateUsd;
+  }
+  return (monthToDateUsd / elapsedDays) * daysInMonth;
+}
+
+/**
+ * A tolerance in this contour's own money: `requests` average requests, floored at
+ * {@link MIN_TOLERANCE_MICRO_USD} and capped at `capMicroUsd` so a contour with no
+ * history never gets a tighter bound than the documented default.
+ */
+export function toleranceFor(
+  journal: { microUsd: number; count: number },
+  requests: number,
+  capMicroUsd: number,
+): number {
+  if (journal.count <= 0 || journal.microUsd <= 0) {
+    return capMicroUsd;
+  }
+  const perRequest = journal.microUsd / journal.count;
+  return Math.min(capMicroUsd, Math.max(MIN_TOLERANCE_MICRO_USD, perRequest * requests));
 }
 
 /** First instant of the UTC calendar month containing `at`. */
@@ -106,6 +157,7 @@ export interface BillingReconcilerDeps {
   markCreditMonthNotified?: (params: {
     month: string;
     kind: '80' | 'exhausted' | 'reconcile';
+    utcMonth?: string;
     tenantId?: string;
   }) => Promise<boolean>;
   poolMicroUsd: number;
@@ -215,10 +267,11 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
       tenantId: deps.tenantId,
     });
     const driftMicroUsd = journal.microUsd - status.spentMicroUsd;
-    const drifted = Math.abs(driftMicroUsd) > INTERNAL_DRIFT_TOLERANCE_MICRO_USD;
+    const tolerance = toleranceFor(journal, INTERNAL_DRIFT_TOLERANCE_REQUESTS, MICRO_USD_PER_USD);
+    const drifted = Math.abs(driftMicroUsd) > tolerance;
     if (drifted) {
       logger.error(
-        `[billingReconcile] INTERNAL drift for period ${status.month}: journal=${journal.microUsd}µ$ (${journal.count} rows) vs period counter=${status.spentMicroUsd}µ$ (Δ=${driftMicroUsd}µ$). ` +
+        `[billingReconcile] INTERNAL drift for period ${status.month}: journal=${journal.microUsd}µ$ (${journal.count} rows) vs period counter=${status.spentMicroUsd}µ$ (Δ=${driftMicroUsd}µ$, tolerance ${Math.round(tolerance)}µ$). ` +
           'Likely a lost counter increment (crash between the journal write and the $inc). ' +
           'The «Расходы» screen reads its header from the counter and its per-employee rows from the journal, so it now disagrees with itself. ' +
           'If it clears next run it was an in-flight request; if it persists, investigate — this check never auto-fixes.',
@@ -256,12 +309,15 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
    * then it is not. Nothing else watches it, so say it out loud while there is still
    * time to raise it.
    */
-  function warnIfKeyBudgetIsRunningOut(key: OpenRouterKeyInfo): void {
+  function warnIfKeyBudgetIsRunningOut(key: OpenRouterKeyInfo, now: Date): void {
     const remaining = key.limitRemainingUsd;
     if (remaining == null || key.limitUsd == null) {
       return;
     }
-    const monthly = key.usageMonthlyUsd ?? 0;
+    /* `usage_monthly` counts from the 1st, so on the 2nd it is two days of spend. Read
+     * as a full month it overstates the headroom by ~15x early on, and the warning that
+     * is supposed to arrive EARLY would arrive last. Project it to a whole month. */
+    const monthly = projectToFullMonth(key.usageMonthlyUsd ?? 0, now);
     /* A limit that refills cannot «run out in N months» — only the current window can
      * be nearly spent. A limit that never refills is the one that creeps up on you, so
      * only there does the burn-rate projection mean anything. */
@@ -274,7 +330,7 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
     const refill = key.limitReset ? `refills ${key.limitReset}` : 'does NOT refill (lifetime cap)';
     logger.error(
       `[billingReconcile] OpenRouter key budget is running out: $${remaining.toFixed(2)} left of $${key.limitUsd} (${refill}), ` +
-        `burning $${monthly.toFixed(2)} this UTC month` +
+        `burning $${monthly.toFixed(2)} a month at this UTC month's rate` +
         (Number.isFinite(monthsLeft)
           ? ` → about ${monthsLeft.toFixed(1)} month(s) of headroom`
           : '') +
@@ -316,7 +372,7 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
       if (deps.openrouter.isConfigured) {
         await syncKeyLimit(status, key);
       }
-      warnIfKeyBudgetIsRunningOut(key);
+      warnIfKeyBudgetIsRunningOut(key, now);
 
       /* Same invariant as the standalone check — reused so the two callers can never
        * drift apart in what they consider drift. `status` is already in hand, so this
@@ -358,7 +414,13 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
       const meteringStartedThisMonth = firstSpendAt != null && firstSpendAt >= utcMonthStart;
       const partialLedger =
         meteringStartedThisMonth || (firstSpendAt == null && openrouterUsd <= minAbsUsd);
-      const shouldAlert = !partialLedger && ratio > threshold && Math.abs(diffUsd) > minAbsUsd;
+      /* The floor scales with what a request costs here, capped at the documented $1:
+       * a flat dollar on this contour meant ignoring 268 requests' worth of difference. */
+      const minAbsForContour =
+        toleranceFor(utcMonthJournal, EXTERNAL_MIN_ABS_REQUESTS, minAbsUsd * MICRO_USD_PER_USD) /
+        MICRO_USD_PER_USD;
+      const shouldAlert =
+        !partialLedger && ratio > threshold && Math.abs(diffUsd) > minAbsForContour;
 
       const report: ReconcileReport = {
         configured: true,
@@ -402,6 +464,9 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
           (await deps.markCreditMonthNotified({
             month: status.month,
             kind: 'reconcile',
+            /* The claim names the window that was compared, not the period the document
+             * is keyed by — those are different calendars and drift apart every month. */
+            utcMonth: utcMonthStart.toISOString().slice(0, 7),
             tenantId: deps.tenantId,
           })));
       report.alerted = alertClaimed;
@@ -428,11 +493,20 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
           openrouterUsd,
           diffPercent: diffPercent ?? 0,
         });
+        /* Direction is the whole meaning of this number, and the comparison is symmetric.
+         * Ledger BELOW the key = spend we did not record (we absorb it). Ledger ABOVE the
+         * key = we charged the client for money OpenRouter never took — the one direction
+         * that costs the CLIENT, and the only automatic detector of it. Saying merely
+         * «расхождение N%» leaves the reader to guess which of the two they are looking at. */
+        const overcharge = ledgerUsd > openrouterUsd;
         logger.error(
           `[billingReconcile] ledger $${ledgerUsd.toFixed(6)} vs OpenRouter $${openrouterUsd.toFixed(6)} (${diffPercent}%). ` +
-            'Either spend reported to the ledger was lost, or the key was used OUTSIDE the proxy — ' +
-            'benches in tools/ call OpenRouter directly and can never appear in the ledger. ' +
-            'Compare a single quiet day first: those windows match exactly when only proxy traffic ran.',
+            (overcharge
+              ? 'The LEDGER IS HIGHER: the contour has been charged for money OpenRouter never took. ' +
+                'Check for a double-counted report (a spend with no dedupe key) or a wrong unit conversion.'
+              : 'The ledger is LOWER: either spend reported to the ledger was lost, or the key was used ' +
+                'OUTSIDE the proxy — benches in tools/ call OpenRouter directly and can never appear in it. ' +
+                'Compare a single quiet day first: those windows match exactly when only proxy traffic ran.'),
         );
       }
 

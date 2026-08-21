@@ -127,6 +127,51 @@ describe('checkCreditDrift', () => {
     );
   });
 
+  /**
+   * `drifted: false` is also what a check that has NEVER run leaves behind. Reporting
+   * only that boolean means a check failing on every tick shows the screen a reconciling
+   * ledger forever — the exact «green for the wrong reason» this check exists to prevent,
+   * reproduced one level up.
+   */
+  it('says the verdict is stale before the check has ever completed', () => {
+    /* Fresh registry on purpose: the health snapshot lives in module scope, so an
+     * earlier test in this file would have already flipped it. */
+    jest.isolateModules(() => {
+      const fresh = require('./Billing');
+      expect(fresh.getCreditDriftHealth()).toMatchObject({ everChecked: false, drifted: false });
+    });
+  });
+
+  it('marks the verdict stale when the latest attempt threw, and fresh again after', async () => {
+    mockCheckInternalDrift.mockResolvedValue({
+      month: '2026-08-01',
+      journalMicroUsd: 1,
+      counterMicroUsd: 1,
+      rows: 1,
+      driftMicroUsd: 0,
+      drifted: false,
+      checkedAt: new Date('2026-08-20T10:00:00Z'),
+    });
+    await checkCreditDrift();
+    expect(getCreditDriftHealth()).toMatchObject({ everChecked: true, failing: false });
+
+    mockCheckInternalDrift.mockRejectedValue(new Error('mongo down'));
+    await checkCreditDrift();
+    expect(getCreditDriftHealth().failing).toBe(true);
+
+    mockCheckInternalDrift.mockResolvedValue({
+      month: '2026-08-01',
+      journalMicroUsd: 1,
+      counterMicroUsd: 1,
+      rows: 1,
+      driftMicroUsd: 0,
+      drifted: false,
+      checkedAt: new Date('2026-08-20T16:00:00Z'),
+    });
+    await checkCreditDrift();
+    expect(getCreditDriftHealth().failing).toBe(false);
+  });
+
   it('never throws — a failed check must not take the caller down', async () => {
     mockCheckInternalDrift.mockRejectedValue(new Error('boom'));
 
