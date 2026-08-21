@@ -1033,6 +1033,32 @@ describe('initializeClient — Deep Research RBAC gate', () => {
       },
     });
 
+  /**
+   * `workerModel` unset is documented to fall back to the CONVERSATION's model, "never the
+   * expensive lead model". The capture was correct and the delivery was not: `primaryAgent`
+   * is overwritten with the lead right after, and the new engine reads the conversation model
+   * off the agent — so the promise inverted exactly when it mattered.
+   */
+  it('keeps the conversation model on the client after the lead-model override', async () => {
+    setDeepResearchPermission(true);
+    const req = makeReq();
+    req.config.deepResearch = {
+      activeMode: 'balanced',
+      modes: { balanced: { leadModel: 'lead-x' } },
+    };
+
+    await run(req);
+
+    const graphCall = mockBuildDeepResearchGraph.mock.calls[0][0];
+    // The override really happened — without this control the assertion below would pass for
+    // the wrong reason, on a run where the agent's model was never touched at all.
+    expect(graphCall.primaryAgent.model).toBe('lead-x');
+    // The LEGACY engine was always handed the conversation's own model...
+    expect(graphCall.conversationModel).toBe('gpt-4');
+    // ...and now the new engine can reach it too, instead of reading the lead off the agent.
+    expect(agentClientArgs.deepResearchConversationModel).toBe('gpt-4');
+  });
+
   it('assembles the research graph when the role carries the Deep Research permission', async () => {
     setDeepResearchPermission(true);
 
