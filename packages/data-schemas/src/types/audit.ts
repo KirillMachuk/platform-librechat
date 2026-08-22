@@ -106,6 +106,11 @@ export interface AuditLogFilter {
   tenantId?: string;
   actorId?: string;
   action?: string;
+  /**
+   * Actions the CALLER may not see. Applied on top of `action`, so asking for an excluded
+   * action returns nothing rather than bypassing the exclusion.
+   */
+  excludeActions?: string[];
   conversationId?: string;
   from?: Date;
   to?: Date;

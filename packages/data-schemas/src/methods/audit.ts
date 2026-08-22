@@ -56,7 +56,16 @@ export function createAuditMethods(mongoose: typeof import('mongoose')): AuditMe
     if (filter.actorId) {
       query.actorId = filter.actorId;
     }
-    if (filter.action) {
+    /**
+     * `excludeActions` must survive an explicit `action` filter: a caller who is not
+     * allowed to see an action must get NOTHING when asking for it by name, not a
+     * bypass. `$in` of the single requested action plus `$nin` gives exactly that.
+     */
+    if (filter.excludeActions?.length) {
+      query.action = filter.action
+        ? { $in: [filter.action], $nin: filter.excludeActions }
+        : { $nin: filter.excludeActions };
+    } else if (filter.action) {
       query.action = filter.action;
     }
     if (filter.conversationId) {

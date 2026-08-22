@@ -164,7 +164,14 @@ export interface BillingReconcilerDeps {
   tenantId?: string;
   /** Service-period anchor day (1–31; defaults to 1). */
   anchorDay?: number;
-  sendAlert: (alert: BillingAlert) => Promise<void>;
+  /** Sends the alert and answers how many recipients it reached; never throws. */
+  sendAlert: (alert: BillingAlert) => Promise<number | void>;
+  /** Gives back a claim whose alert reached nobody, so a later run can try again. */
+  releaseCreditMonthNotified?: (params: {
+    month: string;
+    utcMonth: string;
+    tenantId?: string;
+  }) => Promise<boolean>;
   recordAudit: (event: AuditLogInput) => void;
   /** OpenRouter key-limit headroom over the allowed volume (e.g. 0.1 = +10%). */
   headroom?: number;
@@ -486,13 +493,37 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
             diffPercent: diffPercent ?? 0,
           },
         });
-        await deps.sendAlert({
+        /**
+         * The claim above was taken BEFORE this send — that is what stops a structural
+         * drift from mailing every day. So a send that reaches NOBODY (no recipients
+         * configured, mail server down) must give the claim back: otherwise the only
+         * automatic detector of "money left the key without reaching the ledger" goes
+         * quiet for the rest of the UTC month, having sent nothing at all.
+         *
+         * `sendAlert` never throws, and an older wiring returns void — treat only an
+         * explicit zero as "reached nobody".
+         */
+        const delivered = await deps.sendAlert({
           kind: 'reconcile',
           month: status.month,
           ledgerUsd,
           openrouterUsd,
           diffPercent: diffPercent ?? 0,
         });
+        if (delivered === 0) {
+          const released =
+            deps.releaseCreditMonthNotified != null &&
+            (await deps.releaseCreditMonthNotified({
+              month: status.month,
+              utcMonth: utcMonthStart.toISOString().slice(0, 7),
+              tenantId: deps.tenantId,
+            }));
+          report.alerted = false;
+          report.reason = released
+            ? 'alert reached nobody; claim released for a later retry'
+            : 'alert reached nobody and the claim could not be released';
+          logger.error(`[billingReconcile] ${report.reason}`);
+        }
         /* Direction is the whole meaning of this number, and the comparison is symmetric.
          * Ledger BELOW the key = spend we did not record (we absorb it). Ledger ABOVE the
          * key = we charged the client for money OpenRouter never took — the one direction

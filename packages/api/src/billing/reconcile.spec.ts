@@ -528,6 +528,73 @@ describe('reconcile alert cadence', () => {
     );
   });
 
+  /**
+   * The claim is taken BEFORE the mail — that is what stops a structural drift mailing
+   * daily. But `sendAlert` does not throw when it reaches nobody: an empty
+   * BILLING_OPERATOR_EMAILS is a warning, a dead mail server is a logged per-address
+   * error. On the stand that list WAS empty until 20.08.2026, so a burnt claim would have
+   * silenced the only automatic detector of "money left the key without reaching the
+   * ledger" for the rest of the month, with nothing sent and nothing to notice.
+   */
+  it('gives the claim back when the alert reached nobody, and alerts again next run', async () => {
+    const markCreditMonthNotified = jest.fn().mockResolvedValue(true);
+    const releaseCreditMonthNotified = jest.fn().mockResolvedValue(true);
+    const sendAlert = jest.fn().mockResolvedValue(0);
+    const deps = createDeps({
+      openrouter: openrouterOf(200),
+      sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 1 }),
+      markCreditMonthNotified,
+      releaseCreditMonthNotified,
+      sendAlert,
+    });
+    const reconciler = createBillingReconciler(deps);
+
+    const first = await reconciler.run(NOW);
+    const second = await reconciler.run(NOW);
+
+    expect(first.alerted).toBe(false);
+    expect(first.reason).toMatch(/reached nobody/);
+    expect(releaseCreditMonthNotified).toHaveBeenCalledWith(
+      expect.objectContaining({ month: '2026-07-01', utcMonth: '2026-07' }),
+    );
+    // The point of releasing: the next run tries again instead of going quiet.
+    expect(sendAlert).toHaveBeenCalledTimes(2);
+    expect(second.alerted).toBe(false);
+  });
+
+  it('keeps the claim when the alert was delivered', async () => {
+    const releaseCreditMonthNotified = jest.fn().mockResolvedValue(true);
+    const deps = createDeps({
+      openrouter: openrouterOf(200),
+      sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 1 }),
+      markCreditMonthNotified: jest.fn().mockResolvedValue(true),
+      releaseCreditMonthNotified,
+      sendAlert: jest.fn().mockResolvedValue(2),
+    });
+
+    const report = await createBillingReconciler(deps).run(NOW);
+
+    expect(report.alerted).toBe(true);
+    expect(releaseCreditMonthNotified).not.toHaveBeenCalled();
+  });
+
+  /** An older wiring returns void; only an explicit zero means "reached nobody". */
+  it('does not release on a sender that reports nothing at all', async () => {
+    const releaseCreditMonthNotified = jest.fn().mockResolvedValue(true);
+    const deps = createDeps({
+      openrouter: openrouterOf(200),
+      sumCreditSpendJournalRange: jest.fn().mockResolvedValue({ microUsd: 100_000_000, count: 1 }),
+      markCreditMonthNotified: jest.fn().mockResolvedValue(true),
+      releaseCreditMonthNotified,
+      sendAlert: jest.fn().mockResolvedValue(undefined),
+    });
+
+    const report = await createBillingReconciler(deps).run(NOW);
+
+    expect(report.alerted).toBe(true);
+    expect(releaseCreditMonthNotified).not.toHaveBeenCalled();
+  });
+
   it('still alerts when no claim function is wired', async () => {
     const sendAlert = jest.fn().mockResolvedValue(undefined);
     const deps = createDeps({

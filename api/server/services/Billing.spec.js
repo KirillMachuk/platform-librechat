@@ -178,3 +178,163 @@ describe('checkCreditDrift', () => {
     await expect(checkCreditDrift()).resolves.toBeUndefined();
   });
 });
+
+/**
+ * The reconciler takes its once-per-window alert claim BEFORE calling `sendAlert` — that
+ * is what stops a structural drift mailing daily. So `sendAlert` has to SAY whether the
+ * mail actually reached anyone: a send that reached nobody must give the claim back, or
+ * the only automatic detector of "money left the key without reaching the ledger" goes
+ * quiet for the rest of the month having sent nothing. On this stand the recipient list
+ * WAS empty until 20.08.2026, so this is the measured case, not a hypothetical one.
+ */
+describe('sendAlert reports what it delivered', () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it('returns 0 when no recipients are configured', async () => {
+    /* `resetModules` re-runs the jest.mock factory, so the `readBillingConfig` captured at
+     * file scope is not the one `Billing.js` will call. Configure the fresh one. */
+    const { readBillingConfig: freshConfig } = require('@librechat/api');
+    freshConfig.mockReturnValue({
+      enabled: true,
+      internalToken: 'token',
+      poolCredits: 25_000,
+      poolMicroUsd: 250_000_000,
+      serviceStartDate: null,
+      anchorDay: 1,
+      operatorEmails: [],
+      notifyEmails: [],
+      openrouter: { baseUrl: 'https://openrouter.ai/api/v1', headroom: 0.1 },
+    });
+    /* After `resetModules` the registry is NEW: the `sendEmail` captured at file scope is
+     * a different function object than the one `Billing.js` will now require. Take the
+     * mock from the same registry the code under test uses, or the assertions describe a
+     * module nobody called. */
+    const { sendEmail: freshSendEmail } = require('~/server/utils');
+    const { getBillingWiring: freshWiring } = require('./Billing');
+
+    const delivered = await freshWiring().sendAlert({
+      kind: 'reconcile',
+      month: '2026-08-01',
+      ledgerUsd: 3.2,
+      openrouterUsd: 4.4,
+      diffPercent: 26,
+    });
+
+    expect(delivered).toBe(0);
+    expect(freshSendEmail).not.toHaveBeenCalled();
+  });
+
+  it('counts only the addresses the mail actually reached', async () => {
+    const { readBillingConfig: freshConfig } = require('@librechat/api');
+    freshConfig.mockReturnValue({
+      enabled: true,
+      internalToken: 'token',
+      poolCredits: 25_000,
+      poolMicroUsd: 250_000_000,
+      serviceStartDate: null,
+      anchorDay: 1,
+      operatorEmails: ['a@1ma.ai', 'b@1ma.ai'],
+      notifyEmails: ['a@1ma.ai', 'b@1ma.ai'],
+      openrouter: { baseUrl: 'https://openrouter.ai/api/v1', headroom: 0.1 },
+    });
+    const { sendEmail: freshSendEmail } = require('~/server/utils');
+    freshSendEmail
+      .mockRejectedValueOnce(new Error('smtp down'))
+      .mockResolvedValueOnce({ accepted: ['b@1ma.ai'] });
+    const { getBillingWiring: freshWiring } = require('./Billing');
+
+    const delivered = await freshWiring().sendAlert({
+      kind: 'reconcile',
+      month: '2026-08-01',
+      ledgerUsd: 3.2,
+      openrouterUsd: 4.4,
+      diffPercent: 26,
+    });
+
+    expect(delivered).toBe(1);
+    /* The count only means something if a failed send actually surfaces: with
+     * `throwError: false` the mailer logs and returns, the catch below never runs, and
+     * every failure would be counted as a delivery. */
+    expect(freshSendEmail).toHaveBeenCalledWith(expect.objectContaining({ throwError: true }));
+  });
+});
+
+/**
+ * The whole point of the ledger-drift work: the journal-vs-counter check needs nothing but
+ * Mongo, and it used to live INSIDE the OpenRouter-gated branch — so on a stand without a
+ * management key it was never scheduled, and never ran, for months. Silence there is
+ * indistinguishable from "checked and fine".
+ *
+ * Nothing asserted that until now: `startBillingSchedule` was never called by this spec,
+ * so moving the drift timers back under `canReadUsage` would have left every test green.
+ */
+describe('startBillingSchedule — the internal check is not hostage to OpenRouter', () => {
+  const CONFIG = {
+    enabled: true,
+    internalToken: 'token',
+    poolCredits: 25_000,
+    poolMicroUsd: 250_000_000,
+    serviceStartDate: null,
+    anchorDay: 1,
+    operatorEmails: [],
+    notifyEmails: [],
+    openrouter: { baseUrl: 'https://openrouter.ai/api/v1', headroom: 0.1 },
+  };
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  /** Schedules with no key at all: the daily OpenRouter comparison cannot run. */
+  function startWithoutOpenRouterKey() {
+    const api = require('@librechat/api');
+    api.readBillingConfig.mockReturnValue(CONFIG);
+    api.createOpenRouterManagement.mockReturnValue({
+      isConfigured: false,
+      canReadUsage: false,
+      getKey: jest.fn(),
+      updateLimit: jest.fn(),
+    });
+    const { startBillingSchedule } = require('./Billing');
+    return { returned: startBillingSchedule(), api };
+  }
+
+  it('still runs the journal-vs-counter check when OpenRouter cannot be read', async () => {
+    const { returned, api } = startWithoutOpenRouterKey();
+    const checkInternalDrift = api.createBillingReconciler.mock.results[0].value.checkInternalDrift;
+    checkInternalDrift.mockResolvedValue({ drifted: false });
+
+    // No daily reconciliation is scheduled — that part IS hostage to the key, correctly.
+    expect(returned).toBeNull();
+
+    expect(checkInternalDrift).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(2 * 60 * 1000);
+    await Promise.resolve();
+    expect(checkInternalDrift).toHaveBeenCalledTimes(1);
+
+    // …and keeps running on its own cadence afterwards.
+    jest.advanceTimersByTime(6 * 60 * 60 * 1000);
+    await Promise.resolve();
+    expect(checkInternalDrift).toHaveBeenCalledTimes(2);
+  });
+
+  it('says out loud that no comparison against the key itself will happen', () => {
+    startWithoutOpenRouterKey();
+    /* `resetModules` re-runs the jest.mock factory, so the file-scope `logger` is not the
+     * one `Billing.js` wrote to. Read the fresh registry's. */
+    const { logger: freshLogger } = require('@librechat/data-schemas');
+    const warnings = freshLogger.warn.mock.calls.map((call) => call.map(String).join(' '));
+    expect(warnings.some((line) => /no OpenRouter key available to read usage/.test(line))).toBe(
+      true,
+    );
+  });
+});
