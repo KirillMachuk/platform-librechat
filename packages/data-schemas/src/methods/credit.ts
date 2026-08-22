@@ -219,6 +219,11 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
   listCreditPackages: (params?: {
     tenantId?: string;
   }) => Promise<{ packages: CreditPackageWithRemaining[]; packageSpentMicroUsd: number }>;
+  releaseCreditMonthNotified: (params: {
+    month: string;
+    utcMonth: string;
+    tenantId?: string;
+  }) => Promise<boolean>;
   markCreditMonthNotified: (params: {
     month: string;
     kind: '80' | 'exhausted' | 'reconcile';
@@ -625,6 +630,38 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     return updated != null;
   }
 
+  /**
+   * Gives back a reconcile alert claim that bought nothing.
+   *
+   * The claim is taken BEFORE the mail goes out, which is what stops a structural drift
+   * from mailing every single day. But `sendAlert` does not throw when it delivers to
+   * nobody — an empty recipient list is a warning, and a dead mail server is a logged
+   * per-address error — so a burnt claim could silence the ONLY automatic detector of
+   * "money left the key without reaching the ledger" for the rest of the UTC month, with
+   * nothing sent and nothing to notice.
+   *
+   * Guarded by the claimed window: a caller can only release the claim it just took, so a
+   * late release cannot cancel a NEWER claim made by a concurrent run.
+   */
+  async function releaseCreditMonthNotified(params: {
+    month: string;
+    utcMonth: string;
+    tenantId?: string;
+  }): Promise<boolean> {
+    const updated = await CreditMonth()
+      .findOneAndUpdate(
+        {
+          ...tenantFilter<ICreditMonth>(params.tenantId),
+          month: params.month,
+          notifiedReconcileUtcMonth: params.utcMonth,
+        },
+        { $unset: { notifiedReconcileUtcMonth: '', notifiedReconcileAt: '' } },
+        { new: true },
+      )
+      .lean<ICreditMonth>();
+    return updated != null;
+  }
+
   async function getCreditMonth(params: {
     month: string;
     tenantId?: string;
@@ -753,6 +790,7 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     addCreditPackage,
     listCreditPackages,
     markCreditMonthNotified,
+    releaseCreditMonthNotified,
     getCreditMonth,
     sumCreditSpendJournal,
     sumCreditSpendJournalRange,

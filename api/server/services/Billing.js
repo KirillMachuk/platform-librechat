@@ -38,13 +38,25 @@ function getBillingWiring() {
   const openrouter = createOpenRouterManagement(config.openrouter);
 
   /** Delivers one alert to every operator address; a mail failure only logs. */
+  /**
+   * Sends an alert and SAYS HOW MANY landed. Never throws — a mail problem must not fail
+   * the reconciliation that found the drift.
+   *
+   * The count is not decoration: the reconciler takes its once-per-window claim BEFORE
+   * calling this (that is what stops a structural drift mailing daily), so a send that
+   * reaches nobody — empty recipient list, dead mail server — would otherwise burn the
+   * claim and silence the check for the rest of the month with nothing sent.
+   *
+   * @returns {Promise<number>} how many recipients the mail actually went to.
+   */
   async function sendAlert(alert) {
     if (!config.notifyEmails.length) {
       logger.warn(
         `[billing] alert "${alert.kind}" not emailed — BILLING_NOTIFY_EMAILS/BILLING_OPERATOR_EMAILS empty`,
       );
-      return;
+      return 0;
     }
+    let delivered = 0;
     for (const email of config.notifyEmails) {
       try {
         await sendEmail({
@@ -52,12 +64,19 @@ function getBillingWiring() {
           subject: SUBJECTS[alert.kind](alert),
           payload: { name: email, ...alert },
           template: TEMPLATES[alert.kind],
-          throwError: false,
+          throwError: true,
         });
+        delivered += 1;
       } catch (error) {
         logger.error(`[billing] failed to email alert "${alert.kind}" to ${email}:`, error);
       }
     }
+    if (delivered === 0) {
+      logger.error(
+        `[billing] alert "${alert.kind}" reached NONE of ${config.notifyEmails.length} recipient(s)`,
+      );
+    }
+    return delivered;
   }
 
   const notifier = createBillingNotifier({
@@ -73,6 +92,7 @@ function getBillingWiring() {
     openrouter,
     getCreditBillingStatus: db.getCreditBillingStatus,
     markCreditMonthNotified: db.markCreditMonthNotified,
+    releaseCreditMonthNotified: db.releaseCreditMonthNotified,
     sumCreditSpendJournal: db.sumCreditSpendJournal,
     sumCreditSpendJournalRange: db.sumCreditSpendJournalRange,
     getFirstCreditSpendAt: db.getFirstCreditSpendAt,

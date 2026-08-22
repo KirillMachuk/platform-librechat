@@ -4,7 +4,25 @@ import type { Response } from 'express';
 import type { ServerRequest } from '~/types/http';
 import { parsePagination } from './pagination';
 
+/**
+ * Journal entries that belong to 1ma's own accounting, not to the client's.
+ *
+ * They are written by the reconciler, and their metadata carries the internals the client
+ * contractually never sees: DOLLAR limits on the external key, the ledger-vs-OpenRouter
+ * comparison, the journal-vs-counter drift in micro-dollars. The «Расходы» screen was
+ * already careful about this; the «Аудит» screen renders every entry it is given, with
+ * unknown metadata keys printed under their raw names — so the gate has to live here,
+ * where the entries are fetched, and not in the UI that draws them.
+ */
+export const OPERATOR_ONLY_AUDIT_ACTIONS = [
+  'billing.reconcile_alert',
+  'billing.internal_drift',
+  'billing.limit_updated',
+] as const;
+
 export interface AdminAuditDeps {
+  /** Emails that may see 1ma's own accounting entries; everyone else gets them filtered out. */
+  operatorEmails?: string[];
   getAuditLogs: (
     filter: AuditLogFilter,
     options: { limit: number; offset: number },
@@ -66,6 +84,7 @@ export function createAdminAuditHandlers(deps: AdminAuditDeps): {
 } {
   const { getAuditLogs, countAuditLogs, backfillAuditFromTransactions, backfillAgentInvokes } =
     deps;
+  const operatorEmails = (deps.operatorEmails ?? []).map((email) => email.toLowerCase());
 
   async function listAuditHandler(req: ServerRequest, res: Response) {
     try {
@@ -84,6 +103,11 @@ export function createAdminAuditHandlers(deps: AdminAuditDeps): {
       const action = firstString(req.query.action);
       if (action) {
         filter.action = action;
+      }
+
+      const email = req.user?.email?.toLowerCase();
+      if (!email || !operatorEmails.includes(email)) {
+        filter.excludeActions = [...OPERATOR_ONLY_AUDIT_ACTIONS];
       }
 
       const conversationId = firstString(req.query.conversationId);

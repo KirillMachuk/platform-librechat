@@ -3,7 +3,7 @@ import type { IAuditLog } from '@librechat/data-schemas';
 import type { Response } from 'express';
 import type { ServerRequest } from '~/types/http';
 import type { AdminAuditDeps } from './audit';
-import { createAdminAuditHandlers } from './audit';
+import { createAdminAuditHandlers, OPERATOR_ONLY_AUDIT_ACTIONS } from './audit';
 
 jest.mock('@librechat/data-schemas', () => ({
   ...jest.requireActual('@librechat/data-schemas'),
@@ -25,12 +25,12 @@ function mockEntry(overrides: Partial<IAuditLog> = {}): IAuditLog {
   } as IAuditLog;
 }
 
-function createReqRes(query: Record<string, string | string[]> = {}) {
+function createReqRes(query: Record<string, string | string[]> = {}, email?: string) {
   const req = {
     params: {},
     query,
     body: {},
-    user: { _id: new Types.ObjectId(), role: 'admin' },
+    user: { _id: new Types.ObjectId(), role: 'admin', email },
   } as unknown as ServerRequest;
 
   const json = jest.fn();
@@ -195,5 +195,71 @@ describe('createAdminAuditHandlers', () => {
 
       expect(status).toHaveBeenCalledWith(500);
     });
+  });
+});
+
+describe("listAudit — 1ma's own accounting entries stay off the client's journal", () => {
+  /**
+   * The reconciler writes three entries whose metadata is 1ma-internal: DOLLAR limits on
+   * the external key, the ledger-vs-OpenRouter comparison, the journal-vs-counter drift.
+   * The «Расходы» screen was built to show the client Credits and percentages only, but
+   * the «Аудит» screen renders whatever it is handed and prints unknown metadata keys
+   * raw — so the gate has to be here, at the fetch.
+   */
+  it('excludes them for an admin who is not a billing operator', async () => {
+    const getAuditLogs = jest.fn().mockResolvedValue([]);
+    const countAuditLogs = jest.fn().mockResolvedValue(0);
+    const handlers = createAdminAuditHandlers(
+      createDeps({ getAuditLogs, countAuditLogs, operatorEmails: ['ops@1ma.ai'] }),
+    );
+    const { req, res } = createReqRes({}, 'client-admin@qsr.example');
+
+    await handlers.listAudit(req, res);
+
+    expect(getAuditLogs.mock.calls[0][0].excludeActions).toEqual([...OPERATOR_ONLY_AUDIT_ACTIONS]);
+    // The count must use the SAME filter, or the client sees a page short of its own total.
+    expect(countAuditLogs.mock.calls[0][0].excludeActions).toEqual([
+      ...OPERATOR_ONLY_AUDIT_ACTIONS,
+    ]);
+  });
+
+  it('shows them to a billing operator', async () => {
+    const getAuditLogs = jest.fn().mockResolvedValue([]);
+    const handlers = createAdminAuditHandlers(
+      createDeps({ getAuditLogs, operatorEmails: ['Ops@1ma.ai'] }),
+    );
+    const { req, res } = createReqRes({}, 'ops@1ma.ai');
+
+    await handlers.listAudit(req, res);
+
+    expect(getAuditLogs.mock.calls[0][0].excludeActions).toBeUndefined();
+  });
+
+  /**
+   * Asking for an excluded action BY NAME must return nothing, not bypass the gate —
+   * the screen offers a per-action filter and the API takes the parameter directly.
+   */
+  it('keeps the exclusion when the caller names an excluded action', async () => {
+    const getAuditLogs = jest.fn().mockResolvedValue([]);
+    const handlers = createAdminAuditHandlers(
+      createDeps({ getAuditLogs, operatorEmails: ['ops@1ma.ai'] }),
+    );
+    const { req, res } = createReqRes({ action: 'billing.reconcile_alert' }, 'client@qsr.example');
+
+    await handlers.listAudit(req, res);
+
+    const filter = getAuditLogs.mock.calls[0][0];
+    expect(filter.action).toBe('billing.reconcile_alert');
+    expect(filter.excludeActions).toContain('billing.reconcile_alert');
+  });
+
+  it('excludes them when no operator allowlist is configured at all', async () => {
+    const getAuditLogs = jest.fn().mockResolvedValue([]);
+    const handlers = createAdminAuditHandlers(createDeps({ getAuditLogs }));
+    const { req, res } = createReqRes({}, 'anyone@example.com');
+
+    await handlers.listAudit(req, res);
+
+    expect(getAuditLogs.mock.calls[0][0].excludeActions).toEqual([...OPERATOR_ONLY_AUDIT_ACTIONS]);
   });
 });
