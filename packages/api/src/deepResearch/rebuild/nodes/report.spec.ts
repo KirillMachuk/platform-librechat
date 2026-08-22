@@ -35,6 +35,7 @@ function stateWith(partial: Partial<DeepResearchState>): DeepResearchState {
     round: 0,
     researcherCount: 0,
     tokenUsage: { input: 0, output: 0, total: 0 },
+    usageByModel: {},
     errors: [],
     finalReport: '',
     finalizeReason: null,
@@ -200,6 +201,46 @@ describe('composeReport', () => {
     expect(calls).toBe(2);
     expect(result.fellBack).toBe(false);
     expect(result.text).toBe('# Полный отчёт');
+  });
+
+  /**
+   * A discarded attempt is a BILLED call. When a later attempt succeeds, its tokens used to
+   * vanish from the run's aggregate while still appearing in the per-model split — and a
+   * split that exceeds the aggregate is discarded by billing, which then prices the whole
+   * run at the lead model's rate. So the same omission both lost tokens and quietly undid
+   * the split. REPORT carries the largest prompt of the run (every finding), so the loss is
+   * the biggest one available.
+   */
+  it('counts a discarded attempt in BOTH the aggregate and the split when a retry succeeds', async () => {
+    let calls = 0;
+    const emptyThenGood: ReportModel = {
+      invoke: async () => {
+        calls += 1;
+        return calls === 1
+          ? new AIMessage({
+              content: '',
+              response_metadata: { model_name: 'report/model' },
+              usage_metadata: { input_tokens: 500, output_tokens: 0, total_tokens: 500 },
+            })
+          : new AIMessage({
+              content: '# Полный отчёт',
+              response_metadata: { model_name: 'report/model' },
+              usage_metadata: { input_tokens: 300, output_tokens: 200, total_tokens: 500 },
+            });
+      },
+    };
+
+    const result = await composeReport({ ...base, reportModel: emptyThenGood });
+
+    expect(calls).toBe(2);
+    expect(result.fellBack).toBe(false);
+    expect(result.usage).toEqual({ input: 800, output: 200, total: 1000 });
+    // The split must agree with the aggregate, or billing throws it away.
+    const split = Object.values(result.usageByModel).reduce(
+      (acc, u) => ({ input: acc.input + u.input, output: acc.output + u.output }),
+      { input: 0, output: 0 },
+    );
+    expect(split).toEqual({ input: result.usage.input, output: result.usage.output });
   });
 
   it('falls back with the CUT reason when every attempt is truncated', async () => {

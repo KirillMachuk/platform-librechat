@@ -1,6 +1,7 @@
 import { Annotation, messagesStateReducer } from '@langchain/langgraph';
 import type { DeepResearchMode } from 'librechat-data-provider';
 import type { BaseMessage } from '@langchain/core/messages';
+import { mergeUsageByModel } from './shared';
 
 /**
  * Deep Research graph state (custom StateGraph rebuild).
@@ -79,6 +80,22 @@ export interface DeepResearchTokenUsage {
 }
 
 /**
+ * One model's share of a run's tokens.
+ *
+ * `estimated` is the part of `total` that no provider ever reported: `usageFromExchange`
+ * falls back to a length proxy when `usage_metadata` is missing, and those tokens are
+ * arithmetic, not measurement. Billing prices them exactly like reported ones — that is
+ * the point of the fallback — but a reconciliation against the OpenRouter invoice needs
+ * to know which figure it is arguing with, so the number travels instead of being lost.
+ */
+export interface DeepResearchModelUsage extends DeepResearchTokenUsage {
+  estimated: number;
+}
+
+/** Per-run token usage keyed by the model that actually answered. */
+export type DeepResearchUsageByModel = Record<string, DeepResearchModelUsage>;
+
+/**
  * Per-run values carried on `config.configurable` (NOT in graph state).
  * The AbortSignal rides on `config.signal`, not here.
  */
@@ -130,6 +147,16 @@ export interface DeepResearchRunBudget {
 
 const lastWins = <T>(_current: T, incoming: T): T => incoming;
 const concat = <T>(current: T[], incoming: T[] | undefined): T[] => current.concat(incoming ?? []);
+/**
+ * Accumulates per-model usage across supersteps — a node contributes only the models IT
+ * called. The merge itself is `mergeUsageByModel`, the same function the nodes use to merge
+ * within a step: two copies of this arithmetic would be two places to drift.
+ */
+const sumUsageByModel = (
+  current: DeepResearchUsageByModel,
+  incoming: DeepResearchUsageByModel | undefined,
+): DeepResearchUsageByModel => (incoming ? mergeUsageByModel(current, incoming) : current);
+
 const sumUsage = (
   current: DeepResearchTokenUsage,
   incoming: Partial<DeepResearchTokenUsage> | undefined,
@@ -174,6 +201,20 @@ export const DeepResearchStateAnnotation = Annotation.Root({
   tokenUsage: Annotation<DeepResearchTokenUsage, Partial<DeepResearchTokenUsage>>({
     reducer: sumUsage,
     default: () => ({ input: 0, output: 0, total: 0 }),
+  }),
+  /**
+   * The same tokens as `tokenUsage`, split by the model that ANSWERED.
+   *
+   * Billing used to price a whole run under the lead model's slug, so on the balanced
+   * tier every worker token was charged at the lead's rate. The split is kept beside the
+   * aggregate rather than replacing it: the budget gate reads the aggregate on a hot path
+   * every superstep, and this channel is written by more places than that gate should
+   * depend on. `billDeepResearchUsage` reconciles the two and falls back to the aggregate
+   * if they ever disagree.
+   */
+  usageByModel: Annotation<DeepResearchUsageByModel, DeepResearchUsageByModel | undefined>({
+    reducer: sumUsageByModel,
+    default: () => ({}),
   }),
   /** Accumulated non-fatal node errors (sentinel channel). */
   errors: Annotation<DeepResearchNodeError[]>({ reducer: concat, default: () => [] }),

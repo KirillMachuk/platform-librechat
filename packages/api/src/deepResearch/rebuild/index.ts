@@ -8,7 +8,12 @@ export { createDeepResearchGraph } from './graph';
 export { runDeepResearch } from './run';
 export { selectChatFileSearchInputs } from './files';
 export { buildFallbackReport } from './nodes/report';
-export { sanitizeErrorForUser, usageFromExchange } from './shared';
+export {
+  sanitizeErrorForUser,
+  usageFromExchange,
+  usageByModelFromExchange,
+  mergeUsageByModel,
+} from './shared';
 export { startSovereignSession, sovereignPassthroughHeaders } from './sovereign';
 export { reportToPdfBuffer } from './pdf';
 export {

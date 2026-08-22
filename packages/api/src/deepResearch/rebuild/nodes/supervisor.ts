@@ -14,6 +14,8 @@ import {
   toErrorMessage,
   tolerantJsonParse,
   usageFromExchange,
+  usageByModelFromExchange,
+  configuredModelName,
 } from '../shared';
 import { buildSupervisorInput, buildSupervisorPrompt } from '../prompts';
 
@@ -185,12 +187,17 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
         deps.tier.maxConcurrentResearchers,
       );
       const tokenUsage = usageFromExchange(prompt, response);
+      const usageByModel = usageByModelFromExchange(
+        prompt,
+        response,
+        configuredModelName(deps.model),
+      );
       // COMPLETE before ANY research ran (round 0) is always wrong — there is nothing
       // to report from. Malformed output (no valid batch, no explicit complete) must
       // not silently end the run either. Both degrade to researching the brief itself;
       // the deterministic gate above bounds how often this fallback can fire.
       if (completeRequested && state.round > 0) {
-        return { concludeReason: 'complete', tokenUsage };
+        return { concludeReason: 'complete', tokenUsage, usageByModel };
       }
       /**
        * Everything past this point takes the one-question fallback, and it used to take it in
@@ -219,6 +226,7 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
         round: state.round + 1,
         researcherCount: state.researcherCount + batch.length,
         tokenUsage,
+        usageByModel,
       };
     } catch (error) {
       // A supervisor model failure is an ERROR partial (banner tells the user), never a

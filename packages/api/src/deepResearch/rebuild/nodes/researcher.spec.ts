@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { tool } from '@langchain/core/tools';
 import { AIMessageChunk } from '@langchain/core/messages';
 import { FakeListChatModel } from '@langchain/core/utils/testing';
+import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { BaseMessage } from '@langchain/core/messages';
 import type { DeepResearchState, DeepResearchFinding } from '../state';
@@ -74,6 +75,7 @@ function stateWith(partial: Partial<DeepResearchState>): DeepResearchState {
     round: 0,
     researcherCount: 0,
     tokenUsage: { input: 0, output: 0, total: 0 },
+    usageByModel: {},
     errors: [],
     finalReport: '',
     finalizeReason: null,
@@ -491,5 +493,121 @@ describe('hasResearchMaterial (the honest-report gate)', () => {
     expect(hasResearchMaterial(withDigest('   '))).toBe(false);
     expect(hasResearchMaterial(withDigest(EMPTY_DIGEST))).toBe(false);
     expect(hasResearchMaterial(withDigest('(ошибка исследования: сервис недоступен)'))).toBe(false);
+  });
+});
+
+describe('researchOne — the tool loop and COMPRESS are attributed separately', () => {
+  /**
+   * `researchOne` merges the loop's usage with COMPRESS's into ONE figure, and the tier
+   * currently sets `compressModel` to the same slug as the worker — so a split done only at
+   * the node boundary looks correct today and starts lying the moment those two differ.
+   * The seam therefore has to be INSIDE researchOne, and this asserts it there.
+   */
+  it('keeps worker and compress tokens under their own models', async () => {
+    const workerAnswer = new AIMessageChunk({
+      content: 'материал собран',
+      response_metadata: { model_name: 'worker/model' },
+      usage_metadata: { input_tokens: 900, output_tokens: 100, total_tokens: 1000 },
+    });
+    const compressModel = {
+      invoke: async () =>
+        new AIMessageChunk({
+          content: 'дайджест',
+          response_metadata: { model_name: 'compress/model' },
+          usage_metadata: { input_tokens: 40, output_tokens: 10, total_tokens: 50 },
+        }),
+    } as unknown as BaseChatModel;
+
+    const { usage, usageByModel } = await researchOne({
+      caller: scriptedCaller([
+        new AIMessageChunk({
+          content: '',
+          tool_calls: [
+            { name: 'web_search', args: { query: 'рынок CRM' }, id: 'c1', type: 'tool_call' },
+          ],
+          response_metadata: { model_name: 'worker/model' },
+          usage_metadata: { input_tokens: 100, output_tokens: 20, total_tokens: 120 },
+        }),
+        workerAnswer,
+      ]),
+      deps: {
+        model: { model: 'worker/model' } as unknown as BaseChatModel,
+        compressModel,
+        tools: [okTool],
+        tier: TIER,
+        now: NOW,
+        nonce: NONCE,
+      },
+      subQuestion: 'вопрос',
+      round: 1,
+      jurisdiction: 'RU',
+      tokenCap: 100_000,
+    });
+
+    expect(usageByModel).toEqual({
+      'worker/model': { input: 1000, output: 120, total: 1120, estimated: 0 },
+      'compress/model': { input: 40, output: 10, total: 50, estimated: 0 },
+    });
+    // And the split still adds up to the aggregate the budget gate reads.
+    const summed = Object.values(usageByModel).reduce(
+      (acc, u) => ({ input: acc.input + u.input, output: acc.output + u.output }),
+      { input: 0, output: 0 },
+    );
+    expect(summed).toEqual({ input: usage.input, output: usage.output });
+  });
+
+  /**
+   * `caller` is what `bindTools()` returned — a RunnableBinding that carries none of the
+   * model's own fields. When the provider does not name itself (any proxy that strips
+   * `model_name`), reading the slug off that wrapper puts EVERY worker token under
+   * 'unknown', which is a different way of losing the same attribution.
+   */
+  it('names the worker from the model itself when the provider names nothing', async () => {
+    const { usageByModel } = await researchOne({
+      caller: scriptedCaller([
+        new AIMessageChunk({
+          content: 'материал собран',
+          usage_metadata: { input_tokens: 900, output_tokens: 100, total_tokens: 1000 },
+        }),
+      ]),
+      deps: {
+        model: { model: 'worker/model' } as unknown as BaseChatModel,
+        compressModel: new FakeListChatModel({ responses: ['unused'] }),
+        tools: [okTool],
+        tier: TIER,
+        now: NOW,
+        nonce: NONCE,
+      },
+      subQuestion: 'вопрос',
+      round: 1,
+      jurisdiction: 'RU',
+      tokenCap: 100_000,
+    });
+
+    expect(Object.keys(usageByModel)).toEqual(['worker/model']);
+  });
+
+  it('reports no per-model usage for a researcher that failed before any model answered', async () => {
+    const { usageByModel } = await researchOne({
+      caller: {
+        invoke: async () => {
+          throw new Error('поиск недоступен');
+        },
+      },
+      deps: {
+        model: {} as unknown as BaseChatModel,
+        compressModel: new FakeListChatModel({ responses: ['unused'] }),
+        tools: [],
+        tier: TIER,
+        now: NOW,
+        nonce: NONCE,
+      },
+      subQuestion: 'вопрос',
+      round: 1,
+      jurisdiction: 'RU',
+      tokenCap: 100_000,
+    });
+
+    expect(usageByModel).toEqual({});
   });
 });

@@ -6,6 +6,8 @@ import {
   lastHumanText,
   readAnswer,
   usageFromExchange,
+  usageByModelFromExchange,
+  configuredModelName,
   toErrorMessage,
   tolerantJsonParse,
 } from '../shared';
@@ -90,6 +92,7 @@ export function createScopeNode(deps: ScopeNodeDeps) {
          */
         researchBrief: cutFragment ? request : brief || request,
         tokenUsage: usageFromExchange(prompt, response),
+        usageByModel: usageByModelFromExchange(prompt, response, configuredModelName(deps.model)),
       };
     } catch (error) {
       return {
