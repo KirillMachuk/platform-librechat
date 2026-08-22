@@ -626,7 +626,7 @@ async function runClarifyCheck({ buildModel, leadModelSlug, question, now, signa
       return { action: 'ABORTED', questions: [], usage: null, usageByModel: {} };
     }
     logger.warn('[deepResearchRun] clarify check failed; proceeding to research', error);
-    return { action: 'PROCEED', questions: [], usage: null };
+    return { action: 'PROCEED', questions: [], usage: null, usageByModel: {} };
   }
 }
 
@@ -674,7 +674,7 @@ async function runPlanDecision({
       };
     }
     logger.warn('[deepResearchRun] plan decision failed; failing CLOSED to a plan card', error);
-    return { action: 'PLAN', questions: [], title: '', steps: [], usage: null };
+    return { action: 'PLAN', questions: [], title: '', steps: [], usage: null, usageByModel: {} };
   }
 }
 
@@ -1684,7 +1684,11 @@ async function runNewDeepResearch(params) {
     usage: titleUsage,
     usageByModel: titleUsageByModel,
   } = skipModelTitle
-    ? { title: existingTitle ?? buildDeepResearchTitle(titleFallbackText), usage: null }
+    ? {
+        title: existingTitle ?? buildDeepResearchTitle(titleFallbackText),
+        usage: null,
+        usageByModel: {},
+      }
     : await resolveDeepResearchTitle({
         req,
         endpoint,

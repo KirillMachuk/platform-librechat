@@ -201,7 +201,15 @@ export async function composeReport(params: {
         logger.info(`[deepResearch:report] written by ${answeredBy}`);
         return {
           text: answer.text,
-          usage: usageFromExchange(prompt, response),
+          /**
+           * Attempts that returned nothing were BILLED, so they belong here even when a
+           * later attempt succeeds — the two fallback returns below already say so. Missing
+           * it here cost twice: those tokens went unbilled, and the per-model split (which
+           * did count them) then exceeded the aggregate, so the reconciliation in
+           * `buildDeepResearchCollectedUsage` discarded the split and priced the whole run
+           * at the lead's rate again.
+           */
+          usage: mergeUsage(spentOnEmpty, usageFromExchange(prompt, response)),
           usageByModel: mergeUsageByModel(
             spentOnEmptyByModel,
             usageByModelFromExchange(prompt, response, configured),
