@@ -138,31 +138,53 @@ describe('validateImageRequest middleware', () => {
       expect(getResourcePermissionsMap).toHaveBeenCalled();
     });
 
+    test("should deny a forged agent reference to another user's avatar", async () => {
+      const validToken = jwt.sign(
+        { id: validObjectId, exp: Math.floor(Date.now() / 1000) + 3600 },
+        process.env.JWT_REFRESH_SECRET,
+      );
+      const avatarOwnerId = '65cfb246f7ecadb8b1e8036c';
+      const forgedAgentObjectId = '65cfb246f7ecadb8b1e80372';
+      getAgents.mockImplementation((query) =>
+        query.author === avatarOwnerId ? [] : [{ _id: forgedAgentObjectId, author: validObjectId }],
+      );
+      getResourcePermissionsMap.mockResolvedValue(new Map([[forgedAgentObjectId, 1]]));
+      req.headers.cookie = `refreshToken=${validToken}`;
+      req.originalUrl = `/images/${avatarOwnerId}/agent-agent_test-avatar-12345.png?manual=false`;
+
+      await validateImageRequest(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(next).not.toHaveBeenCalled();
+      expect(getAgents).toHaveBeenCalledWith(expect.objectContaining({ author: avatarOwnerId }));
+    });
+
     test("should allow a shared duplicate that references another agent's avatar", async () => {
       const validToken = jwt.sign(
         { id: validObjectId, exp: Math.floor(Date.now() / 1000) + 3600 },
         process.env.JWT_REFRESH_SECRET,
       );
+      const avatarOwnerId = '65cfb246f7ecadb8b1e8036c';
       const originalAgentObjectId = '65cfb246f7ecadb8b1e80370';
-      const sharedDuplicateObjectId = '65cfb246f7ecadb8b1e80371';
       findUser.mockResolvedValue({ role: 'USER', tenantId: 'tenant-a', disabled: false });
-      getAgents.mockResolvedValue([
-        { _id: originalAgentObjectId },
-        { _id: sharedDuplicateObjectId },
-      ]);
-      getResourcePermissionsMap.mockResolvedValue(new Map([[sharedDuplicateObjectId, 1]]));
+      getAgents.mockImplementation((query) =>
+        query.author === avatarOwnerId
+          ? [{ _id: originalAgentObjectId, author: avatarOwnerId }]
+          : [],
+      );
+      getResourcePermissionsMap.mockResolvedValue(new Map([[originalAgentObjectId, 1]]));
       req.headers.cookie = `refreshToken=${validToken}`;
-      req.originalUrl =
-        '/images/65cfb246f7ecadb8b1e8036c/agent-agent_test-avatar-12345.png?manual=false';
+      req.originalUrl = `/images/${avatarOwnerId}/agent-agent_test-avatar-12345.png?manual=false`;
 
       await validateImageRequest(req, res, next);
 
       expect(next).toHaveBeenCalled();
       expect(res.status).not.toHaveBeenCalled();
+      expect(getAgents).toHaveBeenCalledWith(expect.objectContaining({ author: avatarOwnerId }));
       expect(getResourcePermissionsMap).toHaveBeenCalledWith(
         expect.objectContaining({
           userId: validObjectId,
-          resourceIds: [originalAgentObjectId, sharedDuplicateObjectId],
+          resourceIds: [originalAgentObjectId],
         }),
       );
     });
