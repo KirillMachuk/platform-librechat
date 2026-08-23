@@ -23,6 +23,7 @@ import { PENDING_STALE_MS, normalizeExpiresAt } from '~/flow/manager';
 import { preProcessGraphTokens } from '~/utils/graph';
 import { withTimeout } from '~/utils/promise';
 import { MCPConnection } from './connection';
+import { filterMCPTools } from './allowlist';
 import { processMCPEnv } from '~/utils';
 import { mcpConfig } from './mcpConfig';
 
@@ -200,7 +201,7 @@ export class MCPConnectionFactory {
       );
 
       if (await connection.isConnected()) {
-        const tools = await connection.fetchTools();
+        const tools = filterMCPTools(await connection.fetchTools(), this.serverConfig);
         connection.removeListener('oauthRequired', oauthHandler);
         return { tools, connection, oauthRequired: false, oauthUrl: null };
       }
@@ -212,7 +213,10 @@ export class MCPConnectionFactory {
     }
 
     try {
-      const tools = await this.attemptUnauthenticatedToolListing();
+      const tools = filterMCPTools(
+        await this.attemptUnauthenticatedToolListing(),
+        this.serverConfig,
+      );
       connection.removeListener('oauthRequired', oauthHandler);
       if (tools && tools.length > 0) {
         logger.info(

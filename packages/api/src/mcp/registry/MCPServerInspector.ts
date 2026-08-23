@@ -13,6 +13,7 @@ import { isMCPDomainAllowed, extractMCPServerDomain } from '~/auth/domain';
 import { MCPConnectionFactory } from '~/mcp/MCPConnectionFactory';
 import { MCPDomainNotAllowedError } from '~/mcp/errors';
 import { detectOAuthRequirement } from '~/mcp/oauth';
+import { filterMCPTools } from '~/mcp/allowlist';
 import { isEnabled } from '~/utils';
 
 /**
@@ -151,13 +152,17 @@ export class MCPServerInspector {
     const capabilities = this.connection!.client.getServerCapabilities();
     this.config.capabilities = JSON.stringify(capabilities);
     const tools = await this.connection!.client.listTools();
-    this.config.tools = tools.tools.map((tool) => tool.name).join(', ');
+    this.config.tools =
+      filterMCPTools(tools.tools, this.config)
+        ?.map((tool) => tool.name)
+        .join(', ') ?? '';
   }
 
   private async fetchToolFunctions(): Promise<void> {
     this.config.toolFunctions = await MCPServerInspector.getToolFunctions(
       this.serverName,
       this.connection!,
+      this.config,
     );
   }
 
@@ -170,11 +175,12 @@ export class MCPServerInspector {
   public static async getToolFunctions(
     serverName: string,
     connection: MCPConnection,
+    config?: Pick<t.ParsedServerConfig, 'allowedTools'>,
   ): Promise<t.LCAvailableTools> {
     const { tools }: t.MCPToolListResponse = await connection.client.listTools();
 
     const toolFunctions: t.LCAvailableTools = {};
-    tools.forEach((tool) => {
+    filterMCPTools(tools, config)?.forEach((tool) => {
       const name = `${tool.name}${Constants.mcp_delimiter}${serverName}`;
       toolFunctions[name] = {
         type: 'function',

@@ -380,6 +380,11 @@ actions:
 #   everything:
 #     # type: sse # type can optionally be omitted
 #     url: http://localhost:3001/sse
+#     # Optional server-side allowlist. Discovery hides every other tool and direct
+#     # calls outside this list are rejected. An empty list denies every tool.
+#     allowedTools:
+#       - search
+#       - read
 #     # proxy: "${MCP_PROXY_URL}"  # optional outbound proxy (http/https/socks/socks5)
 #     timeout: 60000  # 1 minute timeout for this server, this is the default timeout for MCP servers.
 #   puppeteer:

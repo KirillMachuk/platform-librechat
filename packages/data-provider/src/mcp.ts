@@ -183,6 +183,8 @@ const BaseOptionsSchema = z.object({
    * - string: Use custom instructions (overrides server-provided)
    */
   serverInstructions: z.union([z.boolean(), z.string()]).optional(),
+  /** Restricts the MCP tools exposed and callable for this server. An empty list denies all tools. */
+  allowedTools: z.array(z.string().min(1)).optional(),
   /**
    * Whether this server requires OAuth authentication
    * If not specified, will be auto-detected during construction
@@ -386,6 +388,7 @@ const omitServerManagedFields = <T extends z.ZodObject<z.ZodRawShape>>(schema: T
     initTimeout: true,
     chatMenu: true,
     serverInstructions: true,
+    allowedTools: true,
     requiresOAuth: true,
     customUserVars: true,
     oauth_headers: true,

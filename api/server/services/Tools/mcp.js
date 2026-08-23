@@ -1,5 +1,9 @@
 const { logger } = require('@librechat/data-schemas');
-const { getMissingCustomUserVars, requiresEphemeralUserConnection } = require('@librechat/api');
+const {
+  filterMCPTools,
+  getMissingCustomUserVars,
+  requiresEphemeralUserConnection,
+} = require('@librechat/api');
 const { CacheKeys, Constants } = require('librechat-data-provider');
 const { getMCPManager, getMCPServersRegistry, getFlowStateManager } = require('~/config');
 const { findToken, createToken, updateToken, deleteTokens } = require('~/models');
@@ -213,6 +217,8 @@ async function reinitMCPServer({
     if (connection && !oauthRequired) {
       tools = await connection.fetchTools();
     }
+
+    tools = filterMCPTools(tools, serverConfig);
 
     if (tools && tools.length > 0) {
       availableTools = await updateMCPServerTools({

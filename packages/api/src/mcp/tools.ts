@@ -2,6 +2,7 @@ import { logger } from '@librechat/data-schemas';
 import { Constants } from 'librechat-data-provider';
 import type { JsonSchemaType } from '@librechat/agents';
 import type { LCAvailableTools, LCFunctionTool, ParsedServerConfig } from './types';
+import { filterMCPToolFunctions, filterMCPTools } from './allowlist';
 import { requiresEphemeralUserConnection } from './utils';
 
 export interface MCPToolInput {
@@ -78,10 +79,11 @@ export function createMCPToolCacheService(deps: MCPToolCacheDeps): MCPToolCacheS
     tools: MCPToolInput[] | null;
     serverConfig?: ParsedServerConfig;
   }): Promise<LCAvailableTools> {
-    const { userId, serverName, tools, serverConfig } = params;
+    const { userId, serverName, serverConfig } = params;
     try {
       const serverTools: LCAvailableTools = {};
       const mcpDelimiter = Constants.mcp_delimiter;
+      const tools = filterMCPTools(params.tools, serverConfig);
 
       if (tools == null || tools.length === 0) {
         logger.debug(`[MCP Cache] No tools to update for server ${serverName} (user: ${userId})`);
@@ -144,8 +146,9 @@ export function createMCPToolCacheService(deps: MCPToolCacheDeps): MCPToolCacheS
     serverTools: LCAvailableTools;
     serverConfig?: ParsedServerConfig;
   }): Promise<void> {
-    const { userId, serverName, serverTools, serverConfig } = params;
+    const { userId, serverName, serverConfig } = params;
     try {
+      const serverTools = filterMCPToolFunctions(serverName, params.serverTools, serverConfig);
       const count = Object.keys(serverTools).length;
       if (!count) {
         return;
@@ -173,7 +176,12 @@ export function createMCPToolCacheService(deps: MCPToolCacheDeps): MCPToolCacheS
       return null;
     }
     try {
-      return (await getCachedTools({ userId, serverName })) ?? null;
+      const cachedTools = await getCachedTools({ userId, serverName });
+      if (cachedTools == null) {
+        return null;
+      }
+      const config = serverConfig ?? (await getServerConfig(serverName, userId));
+      return filterMCPToolFunctions(serverName, cachedTools, config);
     } catch (error) {
       logger.error(`[getMCPServerTools] Error fetching cached tools for ${serverName}:`, error);
       return null;

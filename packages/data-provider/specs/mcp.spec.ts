@@ -7,6 +7,31 @@ import {
 } from '../src/mcp';
 
 describe('MCPOptionsSchema', () => {
+  describe('tool allowlist', () => {
+    it('accepts an operator-managed allowedTools list', () => {
+      const result = MCPOptionsSchema.safeParse({
+        type: 'streamable-http',
+        url: 'https://mcp-server.com/http',
+        allowedTools: ['search_files', 'read_file_content'],
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.allowedTools).toEqual(['search_files', 'read_file_content']);
+      }
+    });
+
+    it('accepts an empty deny-all list', () => {
+      const result = MCPOptionsSchema.safeParse({
+        type: 'streamable-http',
+        url: 'https://mcp-server.com/http',
+        allowedTools: [],
+      });
+
+      expect(result.success).toBe(true);
+    });
+  });
+
   describe('OBO transport support', () => {
     it('should accept obo on SSE transport', () => {
       const result = MCPOptionsSchema.safeParse({
@@ -726,6 +751,7 @@ describe('MCP_USER_INPUT_FIELDS', () => {
     expect(MCP_USER_INPUT_FIELDS.has('startup')).toBe(false);
     expect(MCP_USER_INPUT_FIELDS.has('timeout')).toBe(false);
     expect(MCP_USER_INPUT_FIELDS.has('chatMenu')).toBe(false);
+    expect(MCP_USER_INPUT_FIELDS.has('allowedTools')).toBe(false);
     expect(MCP_USER_INPUT_FIELDS.has('requiresOAuth')).toBe(false);
     expect(MCP_USER_INPUT_FIELDS.has('customUserVars')).toBe(false);
     expect(MCP_USER_INPUT_FIELDS.has('oauth_headers')).toBe(false);
