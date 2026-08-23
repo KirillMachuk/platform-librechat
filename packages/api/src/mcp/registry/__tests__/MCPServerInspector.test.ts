@@ -524,5 +524,28 @@ describe('MCPServerInspector', () => {
 
       expect(result).toEqual({});
     });
+
+    it('should expose only tools listed by the operator', async () => {
+      mockConnection.client.listTools = jest.fn().mockResolvedValue({
+        tools: [
+          {
+            name: 'search_files',
+            description: 'Search Drive',
+            inputSchema: { type: 'object', properties: {} },
+          },
+          {
+            name: 'create_file',
+            description: 'Create a Drive file',
+            inputSchema: { type: 'object', properties: {} },
+          },
+        ],
+      });
+
+      const result = await MCPServerInspector.getToolFunctions('google-drive', mockConnection, {
+        allowedTools: ['search_files'],
+      });
+
+      expect(Object.keys(result)).toEqual(['search_files_mcp_google-drive']);
+    });
   });
 });

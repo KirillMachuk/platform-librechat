@@ -502,6 +502,34 @@ describe('MCPManager', () => {
       (MCPConnectionFactory.create as jest.Mock).mockResolvedValue(mockConnection);
     });
 
+    it('should reject a direct call to a tool outside the server allowlist', async () => {
+      const serverConfig = {
+        ...createServerConfigWithGraphPlaceholder(),
+        allowedTools: ['search_files'],
+      } as t.ParsedServerConfig;
+      const getConnection = jest.fn().mockResolvedValue(mockConnection);
+
+      mockAppConnections({ get: getConnection });
+      (mockRegistryInstance.getServerConfig as jest.Mock).mockResolvedValue(serverConfig);
+
+      const manager = await MCPManager.createInstance(newMCPServersConfig());
+
+      await expect(
+        manager.callTool({
+          user: mockUser as IUser,
+          serverName,
+          toolName: 'create_file',
+          provider: 'openai',
+          flowManager: mockFlowManager as unknown as Parameters<
+            typeof manager.callTool
+          >[0]['flowManager'],
+        }),
+      ).rejects.toThrow('Tool "create_file" is not allowed');
+
+      expect(getConnection).not.toHaveBeenCalled();
+      expect(mockConnection.client.request).not.toHaveBeenCalled();
+    });
+
     it('should call preProcessGraphTokens with graphTokenResolver when provided', async () => {
       const serverConfig = createServerConfigWithGraphPlaceholder();
 

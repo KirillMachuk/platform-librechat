@@ -17,6 +17,7 @@ const {
   buildMCPAuthRunStepEvent,
   buildMCPAuthRunStepDeltaEvent,
   buildMCPAuthRunStepEndDeltaEvent,
+  isMCPToolAllowed,
   isUserSourced,
   checkAccessWithRequestCache,
   requiresEphemeralUserConnection,
@@ -681,6 +682,10 @@ async function createMCPTool({
 
   const serverConfig =
     config ?? (await getMCPServersRegistry().getServerConfig(serverName, user?.id, configServers));
+  if (!isMCPToolAllowed(serverConfig, toolName)) {
+    logger.warn(`[MCP][${serverName}][${toolName}] Tool blocked by server allowlist.`);
+    return undefined;
+  }
   const requestScopedTools = serverConfig ? requiresEphemeralUserConnection(serverConfig) : false;
   const useMissingToolCache = !requestScopedTools;
 

@@ -111,6 +111,53 @@ describe('MCPOAuthHandler - Configurable OAuth Metadata', () => {
       client_secret: 'test-client-secret',
     };
 
+    it('should preserve provider-specific authorization endpoint parameters', async () => {
+      const config = {
+        ...baseConfig,
+        authorization_url:
+          'https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&prompt=consent&include_granted_scopes=true',
+      };
+
+      await MCPOAuthHandler.initiateOAuthFlow(
+        mockServerName,
+        mockServerUrl,
+        mockUserId,
+        {},
+        config,
+      );
+
+      expect(mockStartAuthorization).toHaveBeenCalledWith(
+        mockServerUrl,
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            authorization_endpoint: config.authorization_url,
+          }),
+        }),
+      );
+    });
+
+    it('should derive the server-specific callback from DOMAIN_SERVER', async () => {
+      process.env.DOMAIN_SERVER = 'https://qsr.1ma.ai';
+
+      await MCPOAuthHandler.initiateOAuthFlow(
+        'google-drive',
+        'https://drivemcp.googleapis.com/mcp/v1',
+        mockUserId,
+        {},
+        baseConfig,
+      );
+
+      expect(mockStartAuthorization).toHaveBeenCalledWith(
+        'https://drivemcp.googleapis.com/mcp/v1',
+        expect.objectContaining({
+          redirectUrl: 'https://qsr.1ma.ai/api/mcp/google-drive/oauth/callback',
+          clientInformation: expect.objectContaining({
+            redirect_uris: ['https://qsr.1ma.ai/api/mcp/google-drive/oauth/callback'],
+          }),
+        }),
+      );
+    });
+
     it('should use default values when OAuth metadata fields are not configured', async () => {
       await MCPOAuthHandler.initiateOAuthFlow(
         mockServerName,

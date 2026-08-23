@@ -70,6 +70,29 @@ describe('createMCPToolCacheService', () => {
       });
     });
 
+    it('does not expose or cache tools outside the server allowlist', async () => {
+      const deps = createMockDeps();
+      const { updateMCPServerTools } = createMCPToolCacheService(deps);
+      const tools: MCPToolInput[] = [{ name: 'search_files' }, { name: 'create_file' }];
+      const serverConfig: ParsedServerConfig = {
+        ...cacheableConfig,
+        allowedTools: ['search_files'],
+      };
+
+      const result = await updateMCPServerTools({
+        userId: 'u1',
+        serverName: 'google-drive',
+        tools,
+        serverConfig,
+      });
+
+      expect(Object.keys(result)).toEqual(['search_files_mcp_google-drive']);
+      expect(deps.setCachedTools).toHaveBeenCalledWith(result, {
+        userId: 'u1',
+        serverName: 'google-drive',
+      });
+    });
+
     it('builds tool names without caching when the resolved config is request-scoped', async () => {
       const deps = createMockDeps({
         getServerConfig: jest.fn().mockResolvedValue(requestScopedConfig),
@@ -334,6 +357,35 @@ describe('createMCPToolCacheService', () => {
       const result = await getMCPServerTools('u1', 'brave');
 
       expect(result).toBeNull();
+    });
+
+    it('filters stale cached definitions through the current server allowlist', async () => {
+      const suffix = `${Constants.mcp_delimiter}google-drive`;
+      const cachedTools: LCAvailableTools = Object.fromEntries(
+        ['search_files', 'create_file'].map((name) => [
+          `${name}${suffix}`,
+          {
+            type: 'function',
+            function: {
+              name: `${name}${suffix}`,
+              description: name,
+              parameters: { type: 'object', properties: {} },
+            },
+          },
+        ]),
+      );
+      const serverConfig: ParsedServerConfig = {
+        ...cacheableConfig,
+        allowedTools: ['search_files'],
+      };
+      const deps = createMockDeps({
+        getCachedTools: jest.fn().mockResolvedValue(cachedTools),
+      });
+      const { getMCPServerTools } = createMCPToolCacheService(deps);
+
+      const result = await getMCPServerTools('u1', 'google-drive', serverConfig);
+
+      expect(Object.keys(result ?? {})).toEqual([`search_files${suffix}`]);
     });
 
     it('returns null instead of throwing when the cache read fails', async () => {

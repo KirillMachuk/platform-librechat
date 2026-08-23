@@ -18,6 +18,7 @@ import {
   requiresOAuthMachinery,
   requiresUserScopedConnection,
 } from './utils';
+import { filterMCPToolFunctions, filterMCPTools, isMCPToolAllowed } from './allowlist';
 import { MCPServersInitializer } from './registry/MCPServersInitializer';
 import { OboTokenResolutionError, resolveOboToken } from '~/mcp/oauth';
 import { MCPServerInspector } from './registry/MCPServerInspector';
@@ -123,17 +124,6 @@ export class MCPManager extends UserConnectionManager {
   public async discoverServerTools(args: t.ToolDiscoveryOptions): Promise<t.ToolDiscoveryResult> {
     const { serverName, user } = args;
     const logPrefix = user?.id ? `[MCP][User: ${user.id}][${serverName}]` : `[MCP][${serverName}]`;
-
-    try {
-      const existingAppConnection = await this.appConnections?.get(serverName);
-      if (existingAppConnection && (await existingAppConnection.isConnected())) {
-        const tools = await existingAppConnection.fetchTools();
-        return { tools, oauthRequired: false, oauthUrl: null };
-      }
-    } catch {
-      logger.debug(`${logPrefix} [Discovery] App connection not available, trying discovery mode`);
-    }
-
     const serverConfig = await MCPServersRegistry.getInstance().getServerConfig(
       serverName,
       user?.id,
@@ -143,6 +133,16 @@ export class MCPManager extends UserConnectionManager {
     if (!serverConfig) {
       logger.warn(`${logPrefix} [Discovery] Server config not found`);
       return { tools: null, oauthRequired: false, oauthUrl: null };
+    }
+
+    try {
+      const existingAppConnection = await this.appConnections?.get(serverName);
+      if (existingAppConnection && (await existingAppConnection.isConnected())) {
+        const tools = filterMCPTools(await existingAppConnection.fetchTools(), serverConfig);
+        return { tools, oauthRequired: false, oauthUrl: null };
+      }
+    } catch {
+      logger.debug(`${logPrefix} [Discovery] App connection not available, trying discovery mode`);
     }
 
     const missingBodyFields = getMissingRuntimeBodyPlaceholderFields(
@@ -237,9 +237,12 @@ export class MCPManager extends UserConnectionManager {
   public async getAppToolFunctions(): Promise<t.LCAvailableTools> {
     const toolFunctions: t.LCAvailableTools = {};
     const configs = await MCPServersRegistry.getInstance().getAllServerConfigs();
-    for (const config of Object.values(configs)) {
+    for (const [serverName, config] of Object.entries(configs)) {
       if (config.toolFunctions != null) {
-        Object.assign(toolFunctions, config.toolFunctions);
+        Object.assign(
+          toolFunctions,
+          filterMCPToolFunctions(serverName, config.toolFunctions, config),
+        );
       }
     }
     return toolFunctions;
@@ -254,7 +257,8 @@ export class MCPManager extends UserConnectionManager {
       //try get the appConnection (if the config is not in the app level anymore any existing connection will disconnect and get will return null)
       const existingAppConnection = await this.appConnections?.get(serverName);
       if (existingAppConnection) {
-        return MCPServerInspector.getToolFunctions(serverName, existingAppConnection);
+        const config = await MCPServersRegistry.getInstance().getServerConfig(serverName, userId);
+        return MCPServerInspector.getToolFunctions(serverName, existingAppConnection, config);
       }
 
       const userConnections = this.getUserConnections(userId);
@@ -265,7 +269,12 @@ export class MCPManager extends UserConnectionManager {
         return null;
       }
 
-      return MCPServerInspector.getToolFunctions(serverName, userConnections.get(serverName)!);
+      const config = await MCPServersRegistry.getInstance().getServerConfig(serverName, userId);
+      return MCPServerInspector.getToolFunctions(
+        serverName,
+        userConnections.get(serverName)!,
+        config,
+      );
     } catch (error) {
       logger.warn(
         `[getServerToolFunctions] Error getting tool functions for server ${serverName}`,
@@ -386,6 +395,21 @@ Please follow these instructions when using tools from the respective MCP server
     const logPrefix = userId ? `[MCP][User: ${userId}][${serverName}]` : `[MCP][${serverName}]`;
 
     try {
+      const registry = MCPServersRegistry.getInstance();
+      const rawConfig = providedConfig ?? (await registry.getServerConfig(serverName, userId));
+      if (!rawConfig) {
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          `${logPrefix} Configuration for server "${serverName}" not found.`,
+        );
+      }
+      if (!isMCPToolAllowed(rawConfig, toolName)) {
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          `${logPrefix} Tool "${toolName}" is not allowed for server "${serverName}".`,
+        );
+      }
+
       if (userId && user) this.updateUserLastActivity(userId);
 
       connection = await this.getConnection({
@@ -402,7 +426,7 @@ Please follow these instructions when using tools from the respective MCP server
         customUserVars,
         requestBody,
         requestScopedConnections,
-        serverConfig: providedConfig,
+        serverConfig: rawConfig,
       });
 
       if (!(await connection.isConnected())) {
@@ -413,14 +437,6 @@ Please follow these instructions when using tools from the respective MCP server
         );
       }
 
-      const registry = MCPServersRegistry.getInstance();
-      const rawConfig = providedConfig ?? (await registry.getServerConfig(serverName, userId));
-      if (!rawConfig) {
-        throw new McpError(
-          ErrorCode.InvalidRequest,
-          `${logPrefix} Configuration for server "${serverName}" not found.`,
-        );
-      }
       const isDbSourced = isUserSourced(rawConfig);
       disconnectAfterCall =
         !!userId && requiresEphemeralUserConnection(rawConfig) && !requestScopedConnections;
