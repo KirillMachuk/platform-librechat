@@ -9,22 +9,29 @@ const { getAssistant } = require('~/models');
  * @param {object} params.req.body - The request payload.
  * @param {string} params.overrideEndpoint - The override endpoint
  * @param {string} params.overrideAssistantId - The override assistant ID
+ * @param {boolean} params.requireOwnership - Require ownership even when assistants are shared
  * @param {OpenAIClient} params.openai - OpenAI API Client
  * @returns {Promise<void>}
  */
-const validateAuthor = async ({ req, openai, overrideEndpoint, overrideAssistantId }) => {
-  const endpoint = overrideEndpoint ?? req.body.endpoint ?? req.query.endpoint;
+const validateAuthor = async ({
+  req,
+  openai,
+  overrideEndpoint,
+  overrideAssistantId,
+  requireOwnership = false,
+}) => {
+  const endpoint = overrideEndpoint ?? req.body?.endpoint ?? req.query?.endpoint;
   const assistant_id =
-    overrideAssistantId ?? req.params.id ?? req.body.assistant_id ?? req.query.assistant_id;
+    overrideAssistantId ??
+    req.params?.id ??
+    req.params?.assistant_id ??
+    req.body?.assistant_id ??
+    req.query?.assistant_id;
 
   const appConfig = req.config;
   /** @type {Partial<TAssistantEndpoint>} */
-  const assistantsConfig = appConfig.endpoints?.[endpoint];
-  if (!assistantsConfig) {
-    return;
-  }
-
-  if (!assistantsConfig.privateAssistants) {
+  const assistantsConfig = appConfig?.endpoints?.[endpoint];
+  if (!requireOwnership && !assistantsConfig?.privateAssistants) {
     return;
   }
 
@@ -38,6 +45,10 @@ const validateAuthor = async ({ req, openai, overrideEndpoint, overrideAssistant
   if (canManageAssistants) {
     logger.debug(`[validateAuthor] MANAGE_ASSISTANTS bypass for user ${req.user.id}`);
     return;
+  }
+
+  if (!assistant_id) {
+    throw new Error('Assistant ID is required for ownership validation.');
   }
 
   const assistantDoc = await getAssistant({ assistant_id, user: req.user.id });

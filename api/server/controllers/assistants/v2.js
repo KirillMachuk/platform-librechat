@@ -101,7 +101,7 @@ const createAssistant = async (req, res) => {
  * @returns {Promise<Assistant>} The updated assistant.
  */
 const updateAssistant = async ({ req, openai, assistant_id, updateData }) => {
-  await validateAuthor({ req, openai });
+  await validateAuthor({ req, openai, requireOwnership: true });
   const tools = [];
   let conversation_starters = null;
 
