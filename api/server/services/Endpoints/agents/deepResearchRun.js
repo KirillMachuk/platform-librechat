@@ -1352,6 +1352,7 @@ async function runNewDeepResearch(params) {
       sovereign = await startSovereignSession({
         connection,
         runId,
+        userId,
         passthroughToken: process.env.ANON_PASSTHROUGH_TOKEN || '',
         question: researchInput,
         signal,

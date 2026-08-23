@@ -5,6 +5,7 @@ interface RecordedCall {
   url: string;
   body: unknown;
   authorization: string | null;
+  userId: string | null;
   signal: AbortSignal | null | undefined;
 }
 
@@ -19,6 +20,7 @@ function makeFetch(
       url,
       body: init?.body ? JSON.parse(init.body as string) : undefined,
       authorization: headers.Authorization ?? null,
+      userId: headers['X-User-Id'] ?? null,
       signal: init?.signal,
     };
     calls.push(call);
@@ -38,6 +40,7 @@ const CONNECTION: AnonymizerConnection = {
   apiKey: 'sk-client',
 };
 const TOKEN = 'passthrough-secret';
+const USER_ID = 'user-test';
 
 describe('sovereignPassthroughHeaders', () => {
   it('asks the anonymizer to pass the model call through unmasked', () => {
@@ -54,6 +57,7 @@ describe('startSovereignSession — feature gate (→ legacy full-masking when n
     const session = await startSovereignSession({
       connection: CONNECTION,
       runId: 'run1',
+      userId: USER_ID,
       passthroughToken: '',
       question: 'q',
       fetchImpl: fn,
@@ -73,6 +77,7 @@ describe('startSovereignSession — feature gate (→ legacy full-masking when n
       const session = await startSovereignSession({
         connection,
         runId: 'run1',
+        userId: USER_ID,
         passthroughToken: TOKEN,
         question: 'q',
         fetchImpl: fn,
@@ -86,11 +91,26 @@ describe('startSovereignSession — feature gate (→ legacy full-masking when n
     const session = await startSovereignSession({
       connection: CONNECTION,
       runId: '',
+      userId: USER_ID,
       passthroughToken: TOKEN,
       question: 'q',
       fetchImpl: fn,
     });
     expect(session).toBeNull();
+  });
+
+  it('returns null when userId is empty', async () => {
+    const { fn, calls } = makeFetch(() => ({ body: { masked: 'x' } }));
+    const session = await startSovereignSession({
+      connection: CONNECTION,
+      runId: 'run1',
+      userId: '',
+      passthroughToken: TOKEN,
+      question: 'q',
+      fetchImpl: fn,
+    });
+    expect(session).toBeNull();
+    expect(calls).toHaveLength(0);
   });
 });
 
@@ -103,6 +123,7 @@ describe('startSovereignSession — question masking', () => {
     const session = await startSovereignSession({
       connection: CONNECTION,
       runId: 'run-42',
+      userId: 'user-42',
       passthroughToken: TOKEN,
       question: 'Проверь клиента Иванова Ивана',
       fetchImpl: fn,
@@ -116,6 +137,7 @@ describe('startSovereignSession — question masking', () => {
     expect(calls[0].url).toBe('http://anon.internal:8000/v1/detect');
     expect(calls[0].body).toEqual({ run_id: 'run-42', text: 'Проверь клиента Иванова Ивана' });
     expect(calls[0].authorization).toBe('Bearer sk-client');
+    expect(calls[0].userId).toBe('user-42');
     expect(calls[0].signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -124,6 +146,7 @@ describe('startSovereignSession — question masking', () => {
     await startSovereignSession({
       connection: { baseURL: 'http://anon.internal:8000/v1/', apiKey: 'k' },
       runId: 'r',
+      userId: USER_ID,
       passthroughToken: TOKEN,
       question: 'q',
       fetchImpl: fn,
@@ -137,6 +160,7 @@ describe('startSovereignSession — question masking', () => {
     const session = await startSovereignSession({
       connection: CONNECTION,
       runId: 'r',
+      userId: USER_ID,
       passthroughToken: TOKEN,
       question: 'q',
       fetchImpl: fn,
@@ -151,6 +175,7 @@ describe('startSovereignSession — question masking', () => {
     const session = await startSovereignSession({
       connection: CONNECTION,
       runId: 'r',
+      userId: USER_ID,
       passthroughToken: TOKEN,
       question: 'q',
       fetchImpl: fn,
@@ -166,6 +191,7 @@ describe('SovereignSession.maskContent (file_search — user documents)', () => 
     const session = await startSovereignSession({
       connection: CONNECTION,
       runId: 'run-9',
+      userId: USER_ID,
       passthroughToken: TOKEN,
       question: 'q',
       fetchImpl: fn,
@@ -189,6 +215,7 @@ describe('SovereignSession.maskContent (file_search — user documents)', () => 
     const session = await startSovereignSession({
       connection: CONNECTION,
       runId: 'r',
+      userId: USER_ID,
       passthroughToken: TOKEN,
       question: 'q',
       fetchImpl: fn,
@@ -208,6 +235,7 @@ describe('SovereignSession.restore (final report)', () => {
     const session = await startSovereignSession({
       connection: CONNECTION,
       runId: 'run-r',
+      userId: USER_ID,
       passthroughToken: TOKEN,
       question: 'q',
       fetchImpl: fn,
@@ -231,6 +259,7 @@ describe('SovereignSession.restore (final report)', () => {
     const session = await startSovereignSession({
       connection: CONNECTION,
       runId: 'r',
+      userId: USER_ID,
       passthroughToken: TOKEN,
       question: 'q',
       fetchImpl: fn,
@@ -252,6 +281,7 @@ describe('SovereignSession.restore (final report)', () => {
     const session = await startSovereignSession({
       connection: CONNECTION,
       runId: 'r',
+      userId: USER_ID,
       passthroughToken: TOKEN,
       question: 'q',
       signal: controller.signal,
@@ -276,6 +306,7 @@ describe('SovereignSession.drop (free the server-side map)', () => {
     const session = await startSovereignSession({
       connection: CONNECTION,
       runId: 'run-drop',
+      userId: USER_ID,
       passthroughToken: TOKEN,
       question: 'q',
       fetchImpl: fn,
@@ -298,6 +329,7 @@ describe('SovereignSession.drop (free the server-side map)', () => {
     const session = await startSovereignSession({
       connection: CONNECTION,
       runId: 'r',
+      userId: USER_ID,
       passthroughToken: TOKEN,
       question: 'q',
       fetchImpl: fn,
