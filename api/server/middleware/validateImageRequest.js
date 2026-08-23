@@ -14,13 +14,14 @@ const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Checks VIEW access to a local agent avatar owned by another user.
- * The database reference is authoritative: duplicated agents may legitimately share one avatar,
- * while an old or orphaned file must not stay readable merely because its filename is known.
+ * A database reference owned by the image-directory owner is authoritative: duplicated agents
+ * may legitimately share one avatar, while a caller-created pointer cannot manufacture access.
  * @param {string} userId - Authenticated user ID from the signed refresh cookie
  * @param {string} avatarPath - Local avatar path without deployment base path or query string
+ * @param {string} avatarOwnerId - Owner encoded in the local image directory
  * @returns {Promise<boolean>}
  */
-async function canAccessAgentAvatar(userId, avatarPath) {
+async function canAccessAgentAvatar(userId, avatarPath, avatarOwnerId) {
   try {
     const user = await runAsSystem(() => findUser({ _id: userId }, 'role tenantId disabled'));
     if (!user || user.disabled) {
@@ -38,6 +39,7 @@ async function canAccessAgentAvatar(userId, avatarPath) {
       }
 
       const agents = await getAgents({
+        author: avatarOwnerId,
         'avatar.filepath': new RegExp(`^${escapeRegex(avatarPath)}(?:\\?.*)?$`),
       });
       if (agents.length === 0) {
@@ -202,10 +204,15 @@ function createValidateImageRequest(secureImageLinks) {
       }
 
       const requestPath = fullPath.split(/[?#]/, 1)[0];
-      const agentAvatarPattern = new RegExp(`^${escapedImagesPath}/[a-f0-9]{24}/agent-[^/]+$`);
+      const agentAvatarPattern = new RegExp(`^${escapedImagesPath}/([a-f0-9]{24})/agent-[^/]+$`);
+      const agentAvatarMatch = requestPath.match(agentAvatarPattern);
       const isAuthorizedAgentAvatar =
-        agentAvatarPattern.test(requestPath) &&
-        (await canAccessAgentAvatar(userIdForPath, requestPath.slice(basePath.length)));
+        agentAvatarMatch != null &&
+        (await canAccessAgentAvatar(
+          userIdForPath,
+          requestPath.slice(basePath.length),
+          agentAvatarMatch[1],
+        ));
 
       if (isAuthorizedAgentAvatar) {
         logger.debug('[validateImageRequest] Image request validated');
