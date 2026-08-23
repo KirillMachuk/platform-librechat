@@ -382,6 +382,7 @@ describe('runNewDeepResearch — sovereign wiring (Track B)', () => {
     expect(mockStartSovereignSession).toHaveBeenCalledTimes(1);
     const startArg = mockStartSovereignSession.mock.calls[0][0];
     expect(startArg.runId).toBe('stream-1');
+    expect(startArg.userId).toBe('u1');
     expect(startArg.question).toBe('Проверь Иванова Ивана');
 
     // (2) the graph receives the MASKED question, keyed by the same runId

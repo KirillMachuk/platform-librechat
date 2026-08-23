@@ -66,6 +66,8 @@ export interface StartSovereignSessionParams {
   connection: AnonymizerConnection | null | undefined;
   /** Стабильный id прогона (streamId ?? responseMessageId) — ключ серверной карты. */
   runId: string;
+  /** Current LibreChat user, used as the second component of the server-side map key. */
+  userId: string;
   /** Общий секрет passthrough (env `ANON_PASSTHROUGH_TOKEN`); пусто → фича выключена. */
   passthroughToken: string | null | undefined;
   /** Исходный вопрос пользователя (его и маскируем на старте). */
@@ -106,12 +108,17 @@ async function anonPost(
   fetchImpl: FetchLike,
   url: string,
   apiKey: string,
+  userId: string,
   body: unknown,
   signal: AbortSignal,
 ): Promise<unknown> {
   const response = await fetchImpl(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+      'X-User-Id': userId,
+    },
     body: JSON.stringify(body),
     signal,
   });
@@ -126,6 +133,7 @@ async function detect(
   fetchImpl: FetchLike,
   connection: AnonymizerConnection,
   runId: string,
+  userId: string,
   text: string,
   signal?: AbortSignal,
 ): Promise<string> {
@@ -133,6 +141,7 @@ async function detect(
     fetchImpl,
     anonUrl(connection.baseURL, 'detect'),
     connection.apiKey,
+    userId,
     { run_id: runId, text },
     withTimeout(DETECT_TIMEOUT_MS, signal),
   )) as { masked?: unknown };
@@ -147,6 +156,7 @@ async function restore(
   fetchImpl: FetchLike,
   connection: AnonymizerConnection,
   runId: string,
+  userId: string,
   text: string,
   logger?: MinimalLogger,
 ): Promise<string> {
@@ -155,6 +165,7 @@ async function restore(
       fetchImpl,
       anonUrl(connection.baseURL, 'restore'),
       connection.apiKey,
+      userId,
       { run_id: runId, text },
       withTimeout(RESTORE_TIMEOUT_MS),
     )) as { restored?: unknown };
@@ -173,6 +184,7 @@ async function drop(
   fetchImpl: FetchLike,
   connection: AnonymizerConnection,
   runId: string,
+  userId: string,
   logger?: MinimalLogger,
 ): Promise<void> {
   try {
@@ -180,6 +192,7 @@ async function drop(
       fetchImpl,
       anonUrl(connection.baseURL, 'run/drop'),
       connection.apiKey,
+      userId,
       { run_id: runId },
       withTimeout(DROP_TIMEOUT_MS),
     );
@@ -197,16 +210,16 @@ async function drop(
 export async function startSovereignSession(
   params: StartSovereignSessionParams,
 ): Promise<SovereignSession | null> {
-  const { connection, runId, passthroughToken, question, signal, logger } = params;
+  const { connection, runId, userId, passthroughToken, question, signal, logger } = params;
   const fetchImpl = params.fetchImpl ?? fetch;
 
-  if (!passthroughToken || !connection?.baseURL || !connection.apiKey || !runId) {
+  if (!passthroughToken || !connection?.baseURL || !connection.apiKey || !runId || !userId) {
     return null;
   }
 
   let maskedQuestion: string;
   try {
-    maskedQuestion = await detect(fetchImpl, connection, runId, question, signal);
+    maskedQuestion = await detect(fetchImpl, connection, runId, userId, question, signal);
   } catch (error) {
     logger?.warn(
       '[deepResearch:sovereign] question masking failed; running this DR under legacy full-masking',
@@ -218,8 +231,8 @@ export async function startSovereignSession(
   return {
     maskedQuestion,
     passthroughHeaders: sovereignPassthroughHeaders(passthroughToken),
-    maskContent: (text: string) => detect(fetchImpl, connection, runId, text, signal),
-    restore: (text: string) => restore(fetchImpl, connection, runId, text, logger),
-    drop: () => drop(fetchImpl, connection, runId, logger),
+    maskContent: (text: string) => detect(fetchImpl, connection, runId, userId, text, signal),
+    restore: (text: string) => restore(fetchImpl, connection, runId, userId, text, logger),
+    drop: () => drop(fetchImpl, connection, runId, userId, logger),
   };
 }
