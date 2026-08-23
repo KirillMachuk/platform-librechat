@@ -104,6 +104,7 @@ const retrieveAssistant = async (req, res) => {
   try {
     /* NOTE: not actually being used right now */
     const { openai } = await getOpenAIClient({ req, res });
+    await validateAuthor({ req, openai });
     const assistant_id = req.params.id;
     const assistant = await openai.beta.assistants.retrieve(assistant_id);
     res.json(assistant);
@@ -125,7 +126,7 @@ const retrieveAssistant = async (req, res) => {
 const patchAssistant = async (req, res) => {
   try {
     const { openai } = await getOpenAIClient({ req, res });
-    await validateAuthor({ req, openai });
+    await validateAuthor({ req, openai, requireOwnership: true });
 
     const assistant_id = req.params.id;
     const {
@@ -193,7 +194,7 @@ const patchAssistant = async (req, res) => {
 const deleteAssistant = async (req, res) => {
   try {
     const { openai } = await getOpenAIClient({ req, res });
-    await validateAuthor({ req, openai });
+    await validateAuthor({ req, openai, requireOwnership: true });
 
     const assistant_id = req.params.id;
     const deletionStatus = await openai.beta.assistants.delete(assistant_id);
@@ -304,7 +305,7 @@ const uploadAssistantAvatar = async (req, res) => {
     }
 
     const { openai } = await getOpenAIClient({ req, res });
-    await validateAuthor({ req, openai });
+    await validateAuthor({ req, openai, requireOwnership: true });
 
     const buffer = await fs.readFile(req.file.path);
     const image = await uploadImageBuffer({

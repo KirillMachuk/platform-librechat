@@ -8,6 +8,7 @@ const {
   encryptMetadata,
   domainParser,
 } = require('~/server/services/ActionService');
+const validateAuthor = require('~/server/middleware/assistants/validateAuthor');
 const { getOpenAIClient } = require('~/server/controllers/assistants/helpers');
 const db = require('~/models');
 
@@ -33,6 +34,14 @@ router.post('/:assistant_id', async (req, res) => {
       return res.status(400).json({ message: 'No functions provided' });
     }
 
+    const { openai } = await getOpenAIClient({ req, res });
+    await validateAuthor({
+      req,
+      openai,
+      overrideAssistantId: assistant_id,
+      requireOwnership: true,
+    });
+
     let metadata = await encryptMetadata(removeNullishValues(_metadata, true));
     const isDomainAllowed = await isActionDomainAllowed(
       metadata.domain,
@@ -53,8 +62,6 @@ router.post('/:assistant_id', async (req, res) => {
 
     const action_id = _action_id ?? nanoid();
     const initialPromises = [];
-
-    const { openai } = await getOpenAIClient({ req, res });
 
     initialPromises.push(db.getAssistant({ assistant_id }));
     initialPromises.push(openai.beta.assistants.retrieve(assistant_id));
@@ -175,6 +182,12 @@ router.delete('/:assistant_id/:action_id/:model', async (req, res) => {
     req.body = req.body || {}; // Express 5: ensure req.body exists
     req.body.model = model;
     const { openai } = await getOpenAIClient({ req, res });
+    await validateAuthor({
+      req,
+      openai,
+      overrideAssistantId: assistant_id,
+      requireOwnership: true,
+    });
 
     const initialPromises = [];
     initialPromises.push(db.getAssistant({ assistant_id }));
