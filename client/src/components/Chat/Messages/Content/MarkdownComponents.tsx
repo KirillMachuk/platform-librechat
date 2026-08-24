@@ -1,7 +1,7 @@
 import React, { memo, useMemo, useRef, useEffect } from 'react';
 import { useRecoilValue } from 'recoil';
 import { useToastContext } from '@librechat/client';
-import { PermissionTypes, Permissions, SystemRoles, apiBaseUrl } from 'librechat-data-provider';
+import { PermissionTypes, Permissions, apiBaseUrl } from 'librechat-data-provider';
 import useOpenGoogleWorkspacePreview from '~/hooks/Artifacts/useOpenGoogleWorkspacePreview';
 import { GOOGLE_FILE_LOCALIZATION_KEYS, parseGoogleWorkspaceUrl } from '~/utils/google';
 import Mermaid, { MermaidErrorBoundary } from '~/components/Messages/Content/Mermaid';
@@ -115,10 +115,10 @@ export const a: React.ElementType = memo(function MarkdownAnchor({ href, childre
   const openGoogleWorkspacePreview = useOpenGoogleWorkspacePreview();
   const googleWorkspaceFile = useMemo(
     () =>
-      startupConfig?.interface?.googleWorkspacePreview === true && user?.role === SystemRoles.ADMIN
+      startupConfig?.interface?.googleWorkspacePreview === true
         ? parseGoogleWorkspaceUrl(href)
         : null,
-    [href, startupConfig?.interface?.googleWorkspacePreview, user?.role],
+    [href, startupConfig?.interface?.googleWorkspacePreview],
   );
 
   const {

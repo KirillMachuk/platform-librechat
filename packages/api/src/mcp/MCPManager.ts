@@ -5,6 +5,7 @@ import { CallToolResultSchema, ErrorCode, McpError } from '@modelcontextprotocol
 import type { RequestOptions } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import type { TokenMethods, IUser } from '@librechat/data-schemas';
 import type { OboTokenResolver, OboTrustChecker } from '~/mcp/oauth/obo';
+import type { GoogleDriveFileMetadata } from './google';
 import type { GraphTokenResolver } from '~/utils/graph';
 import type { FlowStateManager } from '~/flow/manager';
 import type { MCPOAuthTokens } from './oauth';
@@ -18,6 +19,13 @@ import {
   requiresOAuthMachinery,
   requiresUserScopedConnection,
 } from './utils';
+import {
+  GOOGLE_DRIVE_SYSTEM_INSTRUCTIONS,
+  isOfficialGoogleDriveServer,
+  isSupportedGoogleDriveFile,
+  normalizeGoogleDriveToolResult,
+  parseGoogleDriveMetadata,
+} from './google';
 import { filterMCPToolFunctions, filterMCPTools, isMCPToolAllowed } from './allowlist';
 import { MCPServersInitializer } from './registry/MCPServersInitializer';
 import { OboTokenResolutionError, resolveOboToken } from '~/mcp/oauth';
@@ -299,8 +307,19 @@ export class MCPManager extends UserConnectionManager {
       configServers,
     );
     for (const [serverName, config] of Object.entries(configs)) {
-      if (config.serverInstructions != null) {
-        instructions[serverName] = config.serverInstructions as string;
+      const configuredInstructions =
+        typeof config.serverInstructions === 'string' && config.serverInstructions.trim().length > 0
+          ? config.serverInstructions.trim()
+          : null;
+      const rawUrl = 'url' in config && typeof config.url === 'string' ? config.url : undefined;
+      const enforcedInstructions = isOfficialGoogleDriveServer(serverName, rawUrl)
+        ? GOOGLE_DRIVE_SYSTEM_INSTRUCTIONS
+        : null;
+
+      if (configuredInstructions || enforcedInstructions) {
+        instructions[serverName] = [configuredInstructions, enforcedInstructions]
+          .filter((value): value is string => value != null)
+          .join('\n\n');
       }
     }
     if (!serverNames) return instructions;
@@ -528,6 +547,50 @@ Please follow these instructions when using tools from the respective MCP server
 
       connection.setRequestHeaders(resolvedHeaders);
 
+      const googleDriveServer = isOfficialGoogleDriveServer(
+        serverName,
+        'url' in rawConfig && typeof rawConfig.url === 'string' ? rawConfig.url : undefined,
+      );
+      let googleDriveMetadata: GoogleDriveFileMetadata | undefined;
+      if (googleDriveServer && toolName === 'read_file_content') {
+        const fileId = toolArguments?.fileId;
+        if (typeof fileId !== 'string' || fileId.length === 0) {
+          throw new McpError(
+            ErrorCode.InvalidParams,
+            `${logPrefix} A valid fileId is required to read a Google Drive file.`,
+          );
+        }
+        if (!isMCPToolAllowed(rawConfig, 'get_file_metadata')) {
+          throw new McpError(
+            ErrorCode.InvalidRequest,
+            `${logPrefix} get_file_metadata must be allowed before read_file_content can run.`,
+          );
+        }
+
+        const metadataResult = await connection.client.request(
+          {
+            method: 'tools/call',
+            params: {
+              name: 'get_file_metadata',
+              arguments: { fileId },
+            },
+          },
+          CallToolResultSchema,
+          {
+            timeout: connection.timeout,
+            resetTimeoutOnProgress: true,
+            ...options,
+          },
+        );
+        googleDriveMetadata = parseGoogleDriveMetadata(metadataResult as t.MCPToolCallResponse);
+        if (!isSupportedGoogleDriveFile(googleDriveMetadata)) {
+          throw new McpError(
+            ErrorCode.InvalidRequest,
+            `${logPrefix} Reading is limited to native Google Docs and Sheets.`,
+          );
+        }
+      }
+
       const result = await connection.client.request(
         {
           method: 'tools/call',
@@ -547,7 +610,14 @@ Please follow these instructions when using tools from the respective MCP server
         this.updateUserLastActivity(userId);
       }
       this.checkIdleConnections();
-      return formatToolContent(result as t.MCPToolCallResponse, provider);
+      const normalizedResult = googleDriveServer
+        ? normalizeGoogleDriveToolResult({
+            toolName,
+            result: result as t.MCPToolCallResponse,
+            metadata: googleDriveMetadata,
+          })
+        : (result as t.MCPToolCallResponse);
+      return formatToolContent(normalizedResult, provider);
     } catch (error) {
       // Log with context and re-throw or handle as needed
       logger.error(`${logPrefix}[${toolName}] Tool call failed`, error);
