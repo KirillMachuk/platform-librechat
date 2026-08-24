@@ -31,7 +31,7 @@ import {
   getDefaultModelSpec,
   getDefaultEndpoint,
   getModelSpecPreset,
-  hasModelSelection,
+  shouldApplyDefaultModelSpec,
   buildDefaultConvo,
   resolveAppTitle,
   logger,
@@ -330,13 +330,11 @@ const useNewConvo = (index = 0) => {
       let preset = _preset;
       const result = getDefaultModelSpec(startupConfig, endpointsConfig);
       const defaultModelSpec = result?.default ?? result?.last ?? result?.softDefault;
-      const shouldApplyModelSpec =
-        result?.softDefault != null
-          ? !hasModelSelection(_template)
-          : startupConfig?.modelSpecs?.prioritize === true ||
-            (startupConfig?.interface?.modelSelect ?? true) !== true ||
-            (result?.last != null &&
-              Object.keys(_template).filter((key) => key !== 'chatProjectId').length === 0);
+      const shouldApplyModelSpec = shouldApplyDefaultModelSpec({
+        result,
+        startupConfig,
+        template: _template,
+      });
       if (!preset && startupConfig && shouldApplyModelSpec && defaultModelSpec) {
         preset = getModelSpecPreset(defaultModelSpec);
       }
