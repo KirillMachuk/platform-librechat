@@ -200,9 +200,15 @@ function ChatView({ index = 0 }: { index?: number }) {
                       ref={composerIslandRef}
                       className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col"
                     >
+                      {/* The strip must reach above the card's bottom corner arcs
+                          (rounded-3xl = 24px), or chat text shows in the corner
+                          notches: height = card-to-viewport gap + radius. Desktop
+                          gap = sm:mb-10 (40px) -> 64px; phone gap = 14px + safe
+                          area -> 38px + safe area. The card itself is opaque and
+                          painted after the strip, so the overlap is invisible. */}
                       <div
                         aria-hidden="true"
-                        className="composer-under-strip absolute inset-x-0 bottom-0 h-10"
+                        className="composer-under-strip absolute inset-x-0 bottom-0 h-[calc(38px+env(safe-area-inset-bottom,0px))] sm:h-16"
                       />
                       <div className="pointer-events-auto relative w-full">
                         <ChatForm index={index} />

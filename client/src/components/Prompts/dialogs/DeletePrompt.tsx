@@ -46,7 +46,7 @@ const DeleteConfirmDialog = ({
       <OGDialogTemplate
         showCloseButton={false}
         title={localize('com_ui_delete_prompt')}
-        className="max-w-[450px]"
+        className="sm:max-w-[450px]"
         main={
           <div className="flex w-full flex-col items-center gap-2">
             <div className="grid w-full items-center gap-2">

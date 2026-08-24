@@ -434,7 +434,7 @@ const ContentParts = memo(function ContentParts({
       {renderPendingSkills()}
       {showEmptyCursor && (
         <Container>
-          <EmptyText />
+          <EmptyText conversationId={conversationId} />
         </Container>
       )}
       {groupedParts.map((group) => {

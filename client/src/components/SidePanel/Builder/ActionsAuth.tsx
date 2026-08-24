@@ -69,7 +69,7 @@ export default function ActionsAuth({ disableOAuth }: { disableOAuth?: boolean }
           </div>
         </div>
       </OGDialogTrigger>
-      <OGDialogContent className="w-full max-w-md border-none bg-surface-primary text-text-primary">
+      <OGDialogContent className="w-full border-none bg-surface-primary text-text-primary sm:max-w-md">
         <OGDialogHeader className="border-b border-border-light sm:p-3">
           <OGDialogTitle>{localize('com_ui_authentication')}</OGDialogTitle>
         </OGDialogHeader>

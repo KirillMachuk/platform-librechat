@@ -22,10 +22,10 @@ import type { TDialogProps } from '~/common';
 import { useUserKey, useLocalize } from '~/hooks';
 import { NotificationSeverity } from '~/common';
 import CustomConfig from './CustomEndpoint';
+import BedrockConfig from './BedrockConfig';
 import GoogleConfig from './GoogleConfig';
 import OpenAIConfig from './OpenAIConfig';
 import OtherConfig from './OtherConfig';
-import BedrockConfig from './BedrockConfig';
 import HelpText from './HelpText';
 import { logger } from '~/utils';
 
@@ -119,7 +119,7 @@ const RevokeKeysButton = ({
             {localize('com_ui_revoke')}
           </Button>
         </OGDialogTrigger>
-        <OGDialogContent className="max-w-[450px]">
+        <OGDialogContent className="sm:max-w-[450px]">
           <OGDialogHeader>
             <OGDialogTitle>{localize('com_ui_revoke_key_endpoint', { 0: endpoint })}</OGDialogTitle>
           </OGDialogHeader>

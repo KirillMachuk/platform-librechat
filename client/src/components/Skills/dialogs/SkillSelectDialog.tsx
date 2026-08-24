@@ -408,7 +408,7 @@ function SkillSelectDialog({ isOpen, setIsOpen }: SkillSelectDialogProps) {
         <OGDialog open={confirmLeaveOpen} onOpenChange={setConfirmLeaveOpen}>
           <OGDialogTemplate
             title={localize('com_ui_create_skill')}
-            className="max-w-[450px]"
+            className="sm:max-w-[450px]"
             main={
               <Label className="text-left text-sm font-medium">
                 {localize('com_ui_agent_leave_unsaved')}

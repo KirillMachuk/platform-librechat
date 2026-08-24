@@ -243,7 +243,7 @@ export default function SharedLinkButton({
           triggerRef={deleteButtonRef}
           onOpenChange={setShowDeleteDialog}
         >
-          <OGDialogContent className="max-w-[450px]" showCloseButton={false}>
+          <OGDialogContent className="sm:max-w-[450px]" showCloseButton={false}>
             <OGDialogHeader>
               <OGDialogTitle>{localize('com_ui_delete_shared_link_heading')}</OGDialogTitle>
             </OGDialogHeader>

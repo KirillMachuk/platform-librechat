@@ -1007,6 +1007,8 @@
   "com_ui_deep_research_edit_hint": "Опишите, что изменить в плане, — и он пересоберётся",
   "com_ui_deep_research_offline": "Нет соединения — ожидание сети…",
   "com_ui_deep_research_phase_report": "Формирование отчёта",
+  "com_ui_dr_phase_prepare": "Готовлю агента…",
+  "com_ui_dr_phase_plan": "Думаю над планом…",
   "com_ui_deep_research_phase_research": "Исследование источников",
   "com_ui_deep_research_phase_scope": "Определение области исследования",
   "com_ui_deep_research_start": "Начать",

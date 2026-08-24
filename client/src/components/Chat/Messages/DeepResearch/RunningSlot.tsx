@@ -11,7 +11,9 @@ import store from '~/store';
  */
 export default function RunningSlot({ conversationId }: { conversationId?: string | null }) {
   const drProgress = useRecoilValue(store.drProgressByConvoId(conversationId ?? ''));
-  if (drProgress == null) {
+  if (drProgress == null || drProgress.phase === 'prepare' || drProgress.phase === 'plan') {
+    // Pre-plan phases render as the ThinkingIndicator's label swap — one
+    // waiting label on screen, never a premature checklist card (round 23).
     return null;
   }
   return <ProgressCard data={drProgress} />;

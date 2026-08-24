@@ -1,8 +1,8 @@
 import { useRef, useEffect, useCallback, useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
 import { useForm } from 'react-hook-form';
-import { TextareaAutosize } from '@librechat/client';
 import { ContentTypes } from 'librechat-data-provider';
+import { Button, TextareaAutosize } from '@librechat/client';
 import { useUpdateMessageContentMutation } from 'librechat-data-provider/react-query';
 import type { Agents } from 'librechat-data-provider';
 import type { TEditProps } from '~/common';
@@ -166,7 +166,7 @@ const EditTextPart = ({
           </span>
         </div>
       )}
-      <div className="bg-token-main-surface-primary relative flex w-full flex-grow flex-col overflow-hidden rounded-2xl border border-border-medium text-text-primary [&:has(textarea:focus)]:border-border-heavy [&:has(textarea:focus)]:shadow-sm">
+      <div className="relative flex w-full flex-grow flex-col overflow-hidden rounded-xl border border-border-light bg-surface-primary text-text-primary shadow-sm [&:has(textarea:focus)]:border-border-focus">
         <TextareaAutosize
           {...registerProps}
           ref={(e) => {
@@ -187,24 +187,26 @@ const EditTextPart = ({
           dir={isRTL ? 'rtl' : 'ltr'}
         />
       </div>
-      <div className="mt-2 flex w-full justify-center text-center">
-        <button
-          className="btn btn-primary relative mr-2"
-          disabled={isSubmitting}
-          onClick={handleSubmit(resubmitMessage)}
-        >
-          {localize('com_ui_save_submit')}
-        </button>
-        <button
-          className="btn btn-secondary relative mr-2"
+      <div className="mt-2 flex w-full justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={() => enterEdit(true)}>
+          {localize('com_ui_cancel')}
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
           disabled={isSubmitting}
           onClick={handleSubmit(updateMessage)}
         >
           {localize('com_ui_save')}
-        </button>
-        <button className="btn btn-neutral relative" onClick={() => enterEdit(true)}>
-          {localize('com_ui_cancel')}
-        </button>
+        </Button>
+        <Button
+          variant="submit"
+          size="sm"
+          disabled={isSubmitting}
+          onClick={handleSubmit(resubmitMessage)}
+        >
+          {localize('com_ui_save_submit')}
+        </Button>
       </div>
     </Container>
   );

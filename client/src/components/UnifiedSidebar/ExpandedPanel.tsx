@@ -253,11 +253,16 @@ function ExpandedPanel({
           заголовка «Чаты» не попадал ни в один скроллер и утекал платформе.
           Виртуализация списка чатов при этом жива — List работает через
           WindowScroller от ЭТОГО скроллера. [&>*]:shrink-0 — прежнее правило:
-          внутри прокручиваемой колонки flex-дети обязаны держать высоту. */}
+          внутри прокручиваемой колонки flex-дети обязаны держать высоту.
+          -mr-2.5 pr-2.5 — жёлоб для полосы прокрутки (р23-2, референс Kimi):
+          бокс скроллера расширен в правый отступ панели (px-2.5 обёртки), а
+          паддинг возвращает контент на место — строки не сдвигаются, и любой
+          индикатор (родной на таче, кастомный на курсоре) рисуется в пустой
+          10px-полосе у разделителя, а не под кнопками строк. */}
       <div
         ref={setPanelScroller}
         data-testid="sidebar-scroller"
-        className="scrollbar-hover flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain [&>*]:shrink-0"
+        className="scrollbar-hover -mr-2.5 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain pr-2.5 [&>*]:shrink-0"
       >
         <NewChatRow />
         <SearchChatsRow />
