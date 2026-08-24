@@ -2,6 +2,7 @@ import React, { memo, useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
 import { getRemarkPlugins, getRehypePlugins, getMarkdownComponents } from './markdownConfig';
 import MarkdownErrorBoundary from './MarkdownErrorBoundary';
+import ThinkingIndicator from './ThinkingIndicator';
 import MarkdownBlocks from './MarkdownBlocks';
 import { preprocessLaTeX } from '~/utils';
 import store from '~/store';
@@ -25,9 +26,7 @@ const Markdown = memo(function Markdown({ content = '', isLatestMessage }: TCont
   if (isInitializing) {
     return (
       <div className="absolute">
-        <p className="relative">
-          <span className={isLatestMessage ? 'result-thinking' : ''} />
-        </p>
+        <p className="relative">{isLatestMessage && <ThinkingIndicator />}</p>
       </div>
     );
   }

@@ -202,13 +202,23 @@ describe('MarkdownBlocks DOM equivalence (non-code blocks)', () => {
 });
 
 describe('MarkdownBlocks rendering smoke', () => {
-  it('renders an empty cursor placeholder while initializing', () => {
+  it('renders the thinking indicator while initializing the latest message', () => {
     const { container } = render(
       <RecoilRoot>
         <Markdown content="" isLatestMessage={true} />
       </RecoilRoot>,
     );
-    expect(container.querySelector('.result-thinking')).not.toBeNull();
+    expect(container.querySelector('.thinking-shimmer')).not.toBeNull();
+    expect(container.querySelector('.thinking-shimmer')?.textContent).not.toBe('');
+  });
+
+  it('renders no indicator for an initializing non-latest message', () => {
+    const { container } = render(
+      <RecoilRoot>
+        <Markdown content="" isLatestMessage={false} />
+      </RecoilRoot>,
+    );
+    expect(container.querySelector('.thinking-shimmer')).toBeNull();
   });
 
   it('renders executable code blocks for a multi-code message', () => {
