@@ -525,6 +525,48 @@ export function getDefaultModelSpec(
   return { last: lastSpec };
 }
 
+/**
+ * Whether `newConversation` should seed the conversation with the resolved
+ * default model spec when the caller supplied no preset.
+ *
+ * A soft default yields to any explicit model selection in the template. For
+ * the hard branches: spec prioritization and a disabled model selector always
+ * apply the spec, and a blank template (a fresh "New chat" — nothing but an
+ * optional chatProjectId) applies the hard admin default (`spec.default`) or
+ * the last-used spec. The hard default MUST participate here: the cold-load
+ * path in ChatRoute already applies it (`result.default ?? result.last`), and
+ * before this predicate included it, an in-session "New chat" skipped the spec
+ * effects entirely — the restored endpoint/model still pointed at the spec's
+ * preset, so the selection read as the spec being active, while the
+ * specName-less context switch wiped the spec's tool toggles; they only came
+ * back when the first submission re-merged the spec's tools.
+ *
+ * `chatProjectId` and `project_id` are context bindings, not model choices, so
+ * a template carrying only them is still a blank new chat (a "New chat" inside
+ * a project must seed the default spec exactly like the global one).
+ */
+export function shouldApplyDefaultModelSpec({
+  result,
+  startupConfig,
+  template,
+}: {
+  result: ReturnType<typeof getDefaultModelSpec>;
+  startupConfig?: t.TStartupConfig;
+  template: Partial<t.TConversation>;
+}): boolean {
+  if (result?.softDefault != null) {
+    return !hasModelSelection(template);
+  }
+  const contextOnlyKeys = new Set(['chatProjectId', 'project_id']);
+  const templateIsBlank =
+    Object.keys(template).filter((key) => !contextOnlyKeys.has(key)).length === 0;
+  return (
+    startupConfig?.modelSpecs?.prioritize === true ||
+    (startupConfig?.interface?.modelSelect ?? true) !== true ||
+    ((result?.default ?? result?.last) != null && templateIsBlank)
+  );
+}
+
 export function getModelSpecPreset(modelSpec?: t.TModelSpec) {
   if (!modelSpec) {
     return;

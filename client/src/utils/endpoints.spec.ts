@@ -6,6 +6,7 @@ import {
   filterDroppedParams,
   modelReportsNoTools,
   getAvailableEndpoints,
+  shouldApplyDefaultModelSpec,
 } from './endpoints';
 
 const asSettings = (...keys: string[]): SettingDefinition[] =>
@@ -157,5 +158,120 @@ describe('modelReportsNoTools', () => {
     expect(modelReportsNoTools(undefined, 'gateway', 'vendor/no-tools')).toBe(false);
     expect(modelReportsNoTools(config, undefined, 'vendor/no-tools')).toBe(false);
     expect(modelReportsNoTools(config, 'gateway', undefined)).toBe(false);
+  });
+});
+
+describe('shouldApplyDefaultModelSpec', () => {
+  const spec = (name: string) =>
+    ({ name, label: name, preset: { endpoint: 'gateway', model: 'm' } }) as never;
+  const config = (overrides: {
+    prioritize?: boolean;
+    modelSelect?: boolean;
+  }): import('librechat-data-provider').TStartupConfig =>
+    ({
+      modelSpecs: { list: [spec('auto')], prioritize: overrides.prioritize ?? false },
+      interface: { modelSelect: overrides.modelSelect ?? true },
+    }) as never;
+
+  it('applies a hard admin default on a blank new chat (spec.default, no prioritize)', () => {
+    // The founding case: prioritize=false, modelSelect=true, an admin default
+    // configured, and an in-session "New chat" (empty template). Before the fix
+    // the predicate only honored `last`, the spec effects were skipped, and the
+    // context switch wiped the tool toggles while the restored endpoint/model
+    // still pointed at the spec's preset — the selection read as spec-active.
+    expect(
+      shouldApplyDefaultModelSpec({
+        result: { default: spec('auto') },
+        startupConfig: config({}),
+        template: {},
+      }),
+    ).toBe(true);
+  });
+
+  it('does not apply the default when the template carries a model selection', () => {
+    expect(
+      shouldApplyDefaultModelSpec({
+        result: { default: spec('auto') },
+        startupConfig: config({}),
+        template: { endpoint: EModelEndpoint.custom, model: 'other' },
+      }),
+    ).toBe(false);
+  });
+
+  it('still applies the last-used spec on a blank template', () => {
+    expect(
+      shouldApplyDefaultModelSpec({
+        result: { last: spec('picked') },
+        startupConfig: config({}),
+        template: {},
+      }),
+    ).toBe(true);
+  });
+
+  it('a lone chatProjectId still counts as a blank template', () => {
+    expect(
+      shouldApplyDefaultModelSpec({
+        result: { default: spec('auto') },
+        startupConfig: config({}),
+        template: { chatProjectId: 'p1' } as never,
+      }),
+    ).toBe(true);
+  });
+
+  it('a lone project_id still counts as a blank template (New chat inside a project)', () => {
+    expect(
+      shouldApplyDefaultModelSpec({
+        result: { default: spec('auto') },
+        startupConfig: config({}),
+        template: { project_id: 'p1' } as never,
+      }),
+    ).toBe(true);
+  });
+
+  it('prioritize=true applies regardless of the template', () => {
+    expect(
+      shouldApplyDefaultModelSpec({
+        result: { default: spec('auto') },
+        startupConfig: config({ prioritize: true }),
+        template: { endpoint: EModelEndpoint.custom, model: 'other' },
+      }),
+    ).toBe(true);
+  });
+
+  it('a disabled model selector applies regardless of the template', () => {
+    expect(
+      shouldApplyDefaultModelSpec({
+        result: { default: spec('auto') },
+        startupConfig: config({ modelSelect: false }),
+        template: { endpoint: EModelEndpoint.custom, model: 'other' },
+      }),
+    ).toBe(true);
+  });
+
+  it('a soft default yields to an explicit model selection', () => {
+    expect(
+      shouldApplyDefaultModelSpec({
+        result: { softDefault: spec('soft') },
+        startupConfig: config({}),
+        template: { endpoint: EModelEndpoint.custom, model: 'other' },
+      }),
+    ).toBe(false);
+    expect(
+      shouldApplyDefaultModelSpec({
+        result: { softDefault: spec('soft') },
+        startupConfig: config({}),
+        template: {},
+      }),
+    ).toBe(true);
+  });
+
+  it('no resolved spec and a blank template does not apply', () => {
+    expect(
+      shouldApplyDefaultModelSpec({
+        result: undefined,
+        startupConfig: config({}),
+        template: {},
+      }),
+    ).toBe(false);
   });
 });
