@@ -47,8 +47,7 @@ function unguardedScrollbarRules(rawSource: string): string[] {
     if (/scrollbar-width|scrollbar-color|::-webkit-scrollbar/.test(line)) {
       const guarded = mediaStack.some((m) => /hover:\s*hover/.test(m.query));
       const isHider = HIDER_SELECTOR.test(currentSelector) || HIDER_SELECTOR.test(line);
-      const isGutterReservation = /scrollbar-gutter/.test(line);
-      if (!guarded && !isHider && !isGutterReservation) {
+      if (!guarded && !isHider) {
         offenders.push(`${idx + 1}: ${line.trim()}`);
       }
     }
