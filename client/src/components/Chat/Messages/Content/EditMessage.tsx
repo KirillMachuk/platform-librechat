@@ -177,7 +177,7 @@ const EditMessage = ({
           dir={isRTL ? 'rtl' : 'ltr'}
         />
       </div>
-      <div className="mt-2 flex w-full justify-end gap-2">
+      <div className="mt-2 flex w-full flex-wrap justify-end gap-2">
         <TooltipAnchor
           description="Esc"
           render={

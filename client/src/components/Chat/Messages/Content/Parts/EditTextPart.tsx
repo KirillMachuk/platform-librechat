@@ -187,7 +187,7 @@ const EditTextPart = ({
           dir={isRTL ? 'rtl' : 'ltr'}
         />
       </div>
-      <div className="mt-2 flex w-full justify-end gap-2">
+      <div className="mt-2 flex w-full flex-wrap justify-end gap-2">
         <Button variant="outline" size="sm" onClick={() => enterEdit(true)}>
           {localize('com_ui_cancel')}
         </Button>

@@ -241,6 +241,18 @@ describe('ExpandedPanel', () => {
       expect(container.querySelectorAll('[class*="overflow-y-auto"]').length).toBe(1);
     });
 
+    it('the scroller reserves the scrollbar gutter (owner р23-2, Kimi pattern)', () => {
+      /* The scroller box extends into the panel's right inset (-mr-2.5) while
+       * pr-2.5 pads content back, so any scroll indicator — native overlay on
+       * touch, custom webkit bar on cursor devices — draws in an empty 10px
+       * strip at the divider, never under row buttons. */
+      const { container } = renderPanel({ expanded: true });
+      const scroller = container.querySelector('[data-testid="sidebar-scroller"]');
+      const classes = (scroller?.className ?? '').split(/\s+/);
+      expect(classes).toContain('-mr-2.5');
+      expect(classes).toContain('pr-2.5');
+    });
+
     it('the header and profile strips swallow touch gestures', () => {
       const { container } = renderPanel({ expanded: true });
       const touchFences = container.querySelectorAll('.touch-none');
