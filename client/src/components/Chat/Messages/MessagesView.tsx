@@ -68,7 +68,7 @@ function MessagesViewContent({
               aria-live="polite"
               aria-relevant="additions"
               aria-label={localize('com_ui_conversation_log')}
-              className="flex flex-col pt-14 dark:bg-transparent"
+              className="flex flex-col pt-3 dark:bg-transparent"
               /* Р21-1: скроллер тянется ПОД островок композера до низа окна —
                  нижний отступ контента равен живой высоте островка (ChatView
                  меряет её ResizeObserver'ом в --composer-h) плюс воздух, чтобы

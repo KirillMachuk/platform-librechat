@@ -191,7 +191,7 @@ function ChatView({ index = 0 }: { index?: number }) {
                      полупрозрачно гасит то, что уезжает под низ. Высоту
                      островка меряет ResizeObserver → --composer-h, от неё
                      живут нижний отступ ленты и кнопка «вниз». */
-                  <div className="relative min-h-0 flex-1">
+                  <div className="relative min-h-0 flex-1 pt-14 md:pt-[52px]">
                     {/* flex-обёртка ОБЯЗАТЕЛЬНА: корень MessagesView берёт высоту из
                        flex-1, в block-родителе цепочка высот рвётся и скроллится весь
                        main (находка ревью р21). */}

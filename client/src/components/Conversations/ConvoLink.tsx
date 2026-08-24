@@ -30,6 +30,7 @@ const ConvoLink: React.FC<ConvoLinkProps> = ({
        `title` attribute drew (owner 17.08: one tooltip design everywhere). */
     <TooltipAnchor
       description={title || localize('com_ui_untitled')}
+      onlyWhenTruncated
       render={
         <div
           className={cn(
@@ -41,6 +42,7 @@ const ConvoLink: React.FC<ConvoLinkProps> = ({
         >
           {children}
           <div
+            data-truncated-label
             className="relative flex-1 grow overflow-hidden whitespace-nowrap"
             style={{ textOverflow: 'clip' }}
             onDoubleClick={(e) => {
