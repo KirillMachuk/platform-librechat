@@ -93,7 +93,7 @@ describe('Markdown Google Workspace links', () => {
     expect(mockOpenGoogleWorkspacePreview).not.toHaveBeenCalled();
   });
 
-  it('keeps the Stage A experiment unavailable to non-admin users', () => {
+  it('opens enabled previews for users who can use the connector', () => {
     mockUseGetStartupConfig.mockReturnValue({
       data: { interface: { googleWorkspacePreview: true } },
     });
@@ -101,7 +101,7 @@ describe('Markdown Google Workspace links', () => {
     renderLink(href, 'Quarterly plan', 'USER');
 
     fireEvent.click(screen.getByRole('link', { name: 'Quarterly plan' }));
-    expect(mockOpenGoogleWorkspacePreview).not.toHaveBeenCalled();
+    expect(mockOpenGoogleWorkspacePreview).toHaveBeenCalledWith(href, 'Quarterly plan');
   });
 
   it('never intercepts a Google lookalike domain', () => {

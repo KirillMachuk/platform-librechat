@@ -948,6 +948,147 @@ describe('MCPManager', () => {
     });
   });
 
+  describe('callTool - official Google Drive normalization', () => {
+    const googleDriveServer = 'google-drive';
+    const mockUser = {
+      id: 'user-123',
+      provider: 'openid',
+      openidId: 'oidc-sub-456',
+    } as IUser;
+    const mockFlowManager = {
+      getState: jest.fn(),
+      setState: jest.fn(),
+      clearState: jest.fn(),
+    } as unknown as Parameters<MCPManager['callTool']>[0]['flowManager'];
+    const serverConfig = {
+      type: 'streamable-http',
+      url: 'https://drivemcp.googleapis.com/mcp/v1',
+      allowedTools: ['search_files', 'get_file_metadata', 'read_file_content'],
+    } as t.ParsedServerConfig;
+
+    const createConnection = (request: jest.Mock) =>
+      ({
+        isConnected: jest.fn().mockResolvedValue(true),
+        setRequestHeaders: jest.fn(),
+        timeout: 30000,
+        client: { request },
+      }) as unknown as MCPConnection;
+
+    const createManager = async (connection: MCPConnection) => {
+      mockAppConnections({ get: jest.fn().mockResolvedValue(connection) });
+      (mockRegistryInstance.getServerConfig as jest.Mock).mockResolvedValue(serverConfig);
+      return MCPManager.createInstance(newMCPServersConfig(googleDriveServer));
+    };
+
+    it('strips search snippets before returning the result to the model', async () => {
+      const request = jest.fn().mockResolvedValue({
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              files: [
+                {
+                  id: 'doc_123',
+                  title: 'Strategy',
+                  mimeType: 'application/vnd.google-apps.document',
+                  contentSnippet: 'secret text',
+                  modifiedTime: '2026-08-24T08:30:00.000Z',
+                },
+              ],
+            }),
+          },
+        ],
+      });
+      const manager = await createManager(createConnection(request));
+
+      const [output] = await manager.callTool({
+        user: mockUser,
+        serverName: googleDriveServer,
+        serverConfig,
+        toolName: 'search_files',
+        toolArguments: { query: "title contains 'Strategy'" },
+        provider: 'openai',
+        flowManager: mockFlowManager,
+      });
+
+      expect(output).toContain('https://docs.google.com/document/d/doc_123/edit');
+      expect(output).not.toContain('secret text');
+      expect(request).toHaveBeenCalledTimes(1);
+    });
+
+    it('fetches version metadata before a read and returns a bounded snapshot', async () => {
+      const request = jest
+        .fn()
+        .mockResolvedValueOnce({
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                id: 'sheet_123',
+                title: 'Budget',
+                mimeType: 'application/vnd.google-apps.spreadsheet',
+                modifiedTime: '2026-08-24T10:00:00.000Z',
+                contentSnippet: 'must be removed',
+              }),
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          content: [{ type: 'text', text: JSON.stringify({ fileContent: 'row 1\nrow 2' }) }],
+        });
+      const manager = await createManager(createConnection(request));
+
+      const [output] = await manager.callTool({
+        user: mockUser,
+        serverName: googleDriveServer,
+        serverConfig,
+        toolName: 'read_file_content',
+        toolArguments: { fileId: 'sheet_123' },
+        provider: 'openai',
+        flowManager: mockFlowManager,
+      });
+
+      expect(request.mock.calls.map(([call]) => call.params.name)).toEqual([
+        'get_file_metadata',
+        'read_file_content',
+      ]);
+      expect(output).toContain('2026-08-24T10:00:00.000Z');
+      expect(output).toContain('row 1\\nrow 2');
+      expect(output).not.toContain('must be removed');
+    });
+
+    it('blocks reading non-MVP file types before their content is requested', async () => {
+      const request = jest.fn().mockResolvedValue({
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              id: 'pdf_123',
+              title: 'Invoice',
+              mimeType: 'application/pdf',
+              modifiedTime: '2026-08-24T11:00:00.000Z',
+            }),
+          },
+        ],
+      });
+      const manager = await createManager(createConnection(request));
+
+      await expect(
+        manager.callTool({
+          user: mockUser,
+          serverName: googleDriveServer,
+          serverConfig,
+          toolName: 'read_file_content',
+          toolArguments: { fileId: 'pdf_123' },
+          provider: 'openai',
+          flowManager: mockFlowManager,
+        }),
+      ).rejects.toThrow('Reading is limited to native Google Docs and Sheets');
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(request.mock.calls[0][0].params.name).toBe('get_file_metadata');
+    });
+  });
+
   describe('callTool - OBO Integration', () => {
     const mockUser: Partial<IUser> = {
       id: 'user-123',
