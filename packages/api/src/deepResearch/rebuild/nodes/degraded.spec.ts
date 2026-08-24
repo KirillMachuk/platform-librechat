@@ -111,6 +111,85 @@ describe('a tool failure is not research material', () => {
   });
 });
 
+const infos = (): string => (logger.info as jest.Mock).mock.calls.flat().map(String).join('\n');
+
+describe('a turn the budget cannot pay for is never started', () => {
+  /**
+   * The cap used to be checked only AFTER the model call, so a researcher already at its cap
+   * still made the call, was billed for it, and had its tool calls discarded — the turn bought
+   * nothing. Measured on the stand 24.08: 7 times across 9 runs. And the waste compounds:
+   * `perResearcherCap` is the run's REMAINING budget divided by the batch, so tokens burned on
+   * a dead turn are taken from every later round's researchers too.
+   */
+  const costlyTool = tool(async () => 'данные: https://example.com/a', {
+    name: 'web_search',
+    description: 'поиск',
+    schema: z.object({ query: z.string() }),
+  });
+
+  /** Every turn asks for one tool and reports exactly `cost` tokens. */
+  const callerCosting = (cost: number, sink: { calls: number }): ToolCaller => ({
+    invoke: async () => {
+      sink.calls += 1;
+      return new AIMessageChunk({
+        content: '',
+        tool_calls: [{ name: 'web_search', args: { query: 'q' }, id: 'c1', type: 'tool_call' }],
+        usage_metadata: { input_tokens: cost, output_tokens: 0, total_tokens: cost },
+      });
+    },
+  });
+
+  it('stops one turn EARLY rather than paying for a turn it must discard', async () => {
+    const sink = { calls: 0 };
+    await runResearchLoop({
+      caller: callerCosting(100, sink),
+      tools: [costlyTool],
+      system: 's',
+      question: 'q',
+      maxTurns: 10,
+      tokenCap: 250,
+      nonce: NONCE,
+    });
+    // 100 + 100 = 200 fits; a third turn would reach 300 and be thrown away, so it is not
+    // started. Before the fix the third call was made, billed, and its tool calls discarded.
+    expect(sink.calls).toBe(2);
+    expect(infos()).toContain('not starting turn 3');
+    // The backstop must NOT have fired: nothing was billed and discarded.
+    expect(warnings()).not.toContain('token cap reached');
+  });
+
+  it('always runs the first turn, however small the cap', async () => {
+    const sink = { calls: 0 };
+    await runResearchLoop({
+      caller: callerCosting(10_000, sink),
+      tools: [costlyTool],
+      system: 's',
+      question: 'q',
+      maxTurns: 5,
+      tokenCap: 1,
+      nonce: NONCE,
+    });
+    // Nothing is known about a turn's cost before one has run; refusing here would mean a
+    // tight cap researches nothing at all.
+    expect(sink.calls).toBe(1);
+  });
+
+  it('does not gate at all when the cap is infinite', async () => {
+    const sink = { calls: 0 };
+    await runResearchLoop({
+      caller: callerCosting(100, sink),
+      tools: [costlyTool],
+      system: 's',
+      question: 'q',
+      maxTurns: 3,
+      tokenCap: Number.POSITIVE_INFINITY,
+      nonce: NONCE,
+    });
+    expect(sink.calls).toBe(3);
+    expect(infos()).not.toContain('not starting turn');
+  });
+});
+
 describe('the loop stops paying for turns it does not need', () => {
   it('does not call the model again after a turn that asks for no tools', async () => {
     let calls = 0;
