@@ -21,6 +21,9 @@ const { logAxiosError, generateShortLivedToken } = require('@librechat/api');
  */
 const mayHaveVectors = (file) => file?.embedded === true || file?.embeddingStatus != null;
 
+/** Ceiling for the delete call, same as the background purge carries. */
+const DELETE_TIMEOUT_MS = 60_000;
+
 /**
  * Deletes a file from the vector database. This function takes a file object, constructs the full path, and
  * verifies the path's validity before deleting the file. If the path is invalid, an error is thrown.
@@ -41,7 +44,7 @@ const deleteVectors = async (req, file) => {
     /* Say it out loud rather than counting the file as fully deleted: without a vector store
      * configured there is nothing to ask, but the chunks of a file that WAS embedded do not
      * disappear because the URL did. Refusing the delete would strand every file on a contour
-     * that never had RAG, so this stays a warning the orphan sweep can be pointed at. */
+     * that never had RAG, so this stays a warning naming the file instead. */
     logger.warn(
       `Vector cleanup skipped for ${file.file_id}: RAG_API_URL is not set, any embeddings it owns stay behind`,
     );
@@ -57,20 +60,26 @@ const deleteVectors = async (req, file) => {
         accept: 'application/json',
       },
       data: [file.file_id],
+      /* A hung vector store must not hang the user's delete forever. Mirrors the
+       * background purge, which has always carried a ceiling. */
+      timeout: DELETE_TIMEOUT_MS,
     });
   } catch (error) {
     logAxiosError({
       error,
       message: 'Error deleting vectors',
     });
-    if (
-      error.response &&
-      error.response.status !== 404 &&
-      (error.response.status < 200 || error.response.status >= 300)
-    ) {
-      logger.warn('Error deleting vectors, file will not be deleted');
-      throw new Error(error.message || 'An error occurred during file deletion.');
+    if (error.response?.status === 404) {
+      return;
     }
+    /* Everything else keeps the file: a refused connection, a timeout or a DNS
+     * failure carries no `error.response` at all, and reading that as success is
+     * how the text of a deleted document ends up in the index with no record left
+     * to link it to its owner. While the record lives the delete can be retried. */
+    logger.warn(
+      `Error deleting vectors for ${file.file_id}, its file record will be kept so the delete can be retried`,
+    );
+    throw new Error(error.message || 'An error occurred during file deletion.');
   }
 };
 

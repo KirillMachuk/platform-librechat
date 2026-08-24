@@ -89,7 +89,11 @@ async function claimNext() {
 async function purgeLeftoverVectors(file, reason) {
   try {
     await purgeStoredVectors({ file });
-    logger.info(`[embedWorker] ${file.file_id}: purged leftover vectors (${reason})`);
+    /* `purgeStoredVectors` counts a 404 as done, so this says what we asked for, not what was
+     * there — most files that reach here never committed a chunk. */
+    logger.info(
+      `[embedWorker] ${file.file_id}: asked the vector store to drop leftovers (${reason})`,
+    );
   } catch (error) {
     logAxiosError({
       error,

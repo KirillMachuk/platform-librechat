@@ -431,8 +431,9 @@ describe('идемпотентность ретрая: дубли векторо
     expect(after.embeddingStatus).toBe('failed');
     // 5 попыток = 5 эмбеддингов, каждый, кроме первого, начинался с очистки → копия одна.
     expect(embedStoredFile).toHaveBeenCalledTimes(5);
-    // ...и её снимает шестая очистка — на терминальном 'failed' ретрая, который бы её снял,
-    // уже не будет, а таймаут на нашей стороне не доказал, что шлюз ничего не записал.
+    // ...and the fifth purge takes it: a terminal 'failed' never retries, so the purge that
+    // would have removed it is never going to run, and our timeout never proved the gateway
+    // committed nothing.
     expect(purgeStoredVectors).toHaveBeenCalledTimes(5);
     expect(purgeStoredVectors.mock.invocationCallOrder[4]).toBeGreaterThan(
       embedStoredFile.mock.invocationCallOrder[4],
@@ -488,8 +489,10 @@ describe('the record disappears while the claim is in flight', () => {
     await processClaimed(claimed, APP_CONFIG);
 
     expect(embedStoredFile).toHaveBeenCalledTimes(1);
+    /* `purgeStoredVectors` builds its token from `file.user`; asserting only the id would stay
+     * green if the record stopped being passed whole. */
     expect(purgeStoredVectors).toHaveBeenCalledWith({
-      file: expect.objectContaining({ file_id: 'deleted-mid-embed' }),
+      file: expect.objectContaining({ file_id: 'deleted-mid-embed', user: expect.anything() }),
     });
     expect(purgeStoredVectors.mock.invocationCallOrder[0]).toBeGreaterThan(
       embedStoredFile.mock.invocationCallOrder[0],
@@ -508,7 +511,24 @@ describe('the record disappears while the claim is in flight', () => {
     await processClaimed(claimed, APP_CONFIG);
 
     expect(purgeStoredVectors).toHaveBeenCalledWith({
-      file: expect.objectContaining({ file_id: 'deleted-mid-failure' }),
+      file: expect.objectContaining({ file_id: 'deleted-mid-failure', user: expect.anything() }),
+    });
+  });
+
+  /* Terminal failure and a vanished record at once: the branch that gives up embedding runs its
+   * purge whether or not the record was still there to mark 'failed'. */
+  it('purges when the last attempt fails and the record is already gone', async () => {
+    await seedPending('deleted-mid-last-attempt');
+    const claimed = await claimNext();
+    embedStoredFile.mockRejectedValue(
+      Object.assign(new Error('nope'), { response: { status: 415 } }),
+    );
+    await File.deleteOne({ file_id: 'deleted-mid-last-attempt' });
+
+    await processClaimed(claimed, APP_CONFIG);
+
+    expect(purgeStoredVectors).toHaveBeenCalledWith({
+      file: expect.objectContaining({ file_id: 'deleted-mid-last-attempt' }),
     });
   });
 });
