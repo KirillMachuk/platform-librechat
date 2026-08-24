@@ -355,9 +355,10 @@ const getDeleteMethod = ({ source, deletionMethods }) => {
 };
 
 const createDeleteFileWithSecondaryStorage = ({ source, deleteFile, deletionMethods }) => {
+  const { mayHaveVectors } = require('./VectorDB/crud');
   return async (req, file, openai) => {
     const secondaryDeleteMethods = [];
-    if (file.embedded === true && source !== FileSources.vectordb) {
+    if (mayHaveVectors(file) && source !== FileSources.vectordb) {
       secondaryDeleteMethods.push(
         getDeleteMethod({ source: FileSources.vectordb, deletionMethods }),
       );
@@ -643,9 +644,9 @@ const purgeFilesWithVectors = async ({ req, files, reason = 'user_request' }) =>
     return;
   }
 
-  const { deleteVectors } = require('./VectorDB/crud');
+  const { deleteVectors, mayHaveVectors } = require('./VectorDB/crud');
   const vectorDeletions = files
-    .filter((file) => file.embedded)
+    .filter(mayHaveVectors)
     .map((file) =>
       deleteVectors(req, file).catch((error) =>
         logger.error('[purgeFilesWithVectors] Vector cleanup failed', error),

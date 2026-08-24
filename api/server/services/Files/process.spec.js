@@ -167,6 +167,10 @@ jest.mock('~/server/services/Files/strategies', () => ({
 }));
 
 jest.mock('./VectorDB/crud', () => ({
+  /* Only the two functions that talk HTTP are stubbed. `mayHaveVectors` decides whether a
+   * delete asks the vector store at all, so a copy of it written into this mock would assert
+   * the copy and nothing else. */
+  ...jest.requireActual('./VectorDB/crud'),
   uploadVectors: jest.fn().mockResolvedValue({
     bytes: 42,
     filename: 'upload.bin',
@@ -2165,6 +2169,64 @@ describe('processDeleteRequest', () => {
     expect(vectorDelete).toHaveBeenCalledWith(req, file);
     expect(db.deleteFiles).toHaveBeenCalledWith(['embedded-file']);
     expect(result).toEqual({ deletedFileIds: ['embedded-file'], failedFileIds: [] });
+  });
+
+  /* A file deleted between embed attempts still reads `embedded: false`, yet an attempt that
+   * timed out on our side may already have committed its chunks. Skipping the vector store here
+   * strands the document's text in the index with no record left to link it to its owner. */
+  it('deletes vector storage for a file whose embed never finished', async () => {
+    const primaryDelete = jest.fn().mockResolvedValue(undefined);
+    const vectorDelete = jest.fn().mockResolvedValue(undefined);
+    getStrategyFunctions.mockImplementation((source) =>
+      source === FileSources.vectordb
+        ? { deleteFile: vectorDelete }
+        : { deleteFile: primaryDelete },
+    );
+    db.deleteFiles.mockResolvedValue({ deletedCount: 1 });
+    const req = {
+      body: {},
+      config: {},
+      user: { id: 'user-123', tenantId: 'tenant-a' },
+    };
+    const file = {
+      file_id: 'pending-file',
+      filepath: '/uploads/pending.pdf',
+      source: FileSources.local,
+      embedded: false,
+      embeddingStatus: 'pending',
+    };
+
+    const result = await processDeleteRequest({ req, files: [file] });
+
+    expect(vectorDelete).toHaveBeenCalledWith(req, file);
+    expect(result).toEqual({ deletedFileIds: ['pending-file'], failedFileIds: [] });
+  });
+
+  it('does not ask the vector store about a file that never entered the embed lifecycle', async () => {
+    const primaryDelete = jest.fn().mockResolvedValue(undefined);
+    const vectorDelete = jest.fn().mockResolvedValue(undefined);
+    getStrategyFunctions.mockImplementation((source) =>
+      source === FileSources.vectordb
+        ? { deleteFile: vectorDelete }
+        : { deleteFile: primaryDelete },
+    );
+    db.deleteFiles.mockResolvedValue({ deletedCount: 1 });
+    const req = {
+      body: {},
+      config: {},
+      user: { id: 'user-123', tenantId: 'tenant-a' },
+    };
+    const file = {
+      file_id: 'image-file',
+      filepath: '/images/user-123/photo.png',
+      source: FileSources.local,
+      embedded: false,
+    };
+
+    await processDeleteRequest({ req, files: [file] });
+
+    expect(primaryDelete).toHaveBeenCalledWith(req, file, undefined);
+    expect(vectorDelete).not.toHaveBeenCalled();
   });
 
   it('keeps embedded file metadata when vector deletion fails', async () => {

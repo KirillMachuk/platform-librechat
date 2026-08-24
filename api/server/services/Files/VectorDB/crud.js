@@ -6,6 +6,22 @@ const { FileSources } = require('librechat-data-provider');
 const { logAxiosError, generateShortLivedToken } = require('@librechat/api');
 
 /**
+ * Whether the file could own chunks in the vector store.
+ *
+ * `embedded: true` is the committed case, but not the only one. Under
+ * `RAG_ASYNC_EMBED` the record is written before the embed runs, and an attempt
+ * that timed out on our side never proved the doc-gateway committed nothing —
+ * which is why a retry purges before re-embedding (see the embed worker). So a
+ * record still sitting at 'pending', 'processing' or 'failed' can own chunks it
+ * was never credited for, and deleting it without asking the vector store
+ * leaves the document's text behind with nothing left to link it to its owner.
+ *
+ * @param {MongoFile} file
+ * @returns {boolean}
+ */
+const mayHaveVectors = (file) => file?.embedded === true || file?.embeddingStatus != null;
+
+/**
  * Deletes a file from the vector database. This function takes a file object, constructs the full path, and
  * verifies the path's validity before deleting the file. If the path is invalid, an error is thrown.
  *
@@ -18,7 +34,7 @@ const { logAxiosError, generateShortLivedToken } = require('@librechat/api');
  *          file path is invalid or if there is an error in deletion.
  */
 const deleteVectors = async (req, file) => {
-  if (!file.embedded || !process.env.RAG_API_URL) {
+  if (!mayHaveVectors(file) || !process.env.RAG_API_URL) {
     return;
   }
   try {
@@ -120,6 +136,7 @@ async function uploadVectors({ req, file, file_id, entity_id, storageMetadata })
 }
 
 module.exports = {
+  mayHaveVectors,
   deleteVectors,
   uploadVectors,
 };
