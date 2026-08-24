@@ -53,6 +53,12 @@ describe('expired file sweep helpers', () => {
         user: { id: 'user-123', tenantId: 'tenant-a' },
       }),
       files: [expect.objectContaining({ file_id: 'expired-openai-file' })],
+      /** The sweep writes its own `file.delete` entries — including for expired
+       * files it never hands over, such as one with no owner — so it tells
+       * processDeleteRequest to stay out of the journal. Asserted here rather
+       * than left implicit: drop the flag and every swept file is recorded
+       * twice, which nothing else would notice. */
+      skipAudit: true,
     });
     expect(result).toEqual({ scanned: 1, deleted: 1, failed: 0 });
     expect(recordAudit).toHaveBeenCalledWith({
