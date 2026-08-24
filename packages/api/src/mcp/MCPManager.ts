@@ -20,6 +20,7 @@ import {
   requiresUserScopedConnection,
 } from './utils';
 import {
+  GOOGLE_DRIVE_SYSTEM_INSTRUCTIONS,
   isOfficialGoogleDriveServer,
   isSupportedGoogleDriveFile,
   normalizeGoogleDriveToolResult,
@@ -306,8 +307,19 @@ export class MCPManager extends UserConnectionManager {
       configServers,
     );
     for (const [serverName, config] of Object.entries(configs)) {
-      if (config.serverInstructions != null) {
-        instructions[serverName] = config.serverInstructions as string;
+      const configuredInstructions =
+        typeof config.serverInstructions === 'string' && config.serverInstructions.trim().length > 0
+          ? config.serverInstructions.trim()
+          : null;
+      const rawUrl = 'url' in config && typeof config.url === 'string' ? config.url : undefined;
+      const enforcedInstructions = isOfficialGoogleDriveServer(serverName, rawUrl)
+        ? GOOGLE_DRIVE_SYSTEM_INSTRUCTIONS
+        : null;
+
+      if (configuredInstructions || enforcedInstructions) {
+        instructions[serverName] = [configuredInstructions, enforcedInstructions]
+          .filter((value): value is string => value != null)
+          .join('\n\n');
       }
     }
     if (!serverNames) return instructions;
