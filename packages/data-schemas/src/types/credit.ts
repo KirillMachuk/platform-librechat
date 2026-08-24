@@ -3,7 +3,7 @@ import type { Document, Types } from 'mongoose';
 /**
  * Tenant credit ledger types (billing «Кредиты»).
  * Money model & unit converters live in `~/common/credit`:
- *   1 Credit = $0.01 of actual OpenRouter cost; storage unit = integer micro-USD.
+ *   1 Credit = $0.01 of commercial spend; storage unit = integer micro-USD.
  */
 
 /** One document per billing period (rolling «month of service», Europe/Minsk) per tenant. */
@@ -13,7 +13,9 @@ export interface ICreditMonth extends Document {
   month: string;
   /** Pool size snapshot taken when the period document is created (µ$). */
   poolMicroUsd: number;
-  /** Actual OpenRouter cost attributed to this period (µ$), pool + package overflow. */
+  /** Landed-cost factor snapshot. Missing on legacy periods and read as 1. */
+  landedCostMultiplier?: number;
+  /** Commercial spend attributed to this period (µ$), pool + package overflow. */
   spentMicroUsd: number;
   requestCount: number;
   /** Period start instant (inclusive) — captured at creation, for display. */
@@ -68,7 +70,12 @@ export interface ICreditSpend extends Omit<Document, 'model'> {
   tenantId?: string;
   /** Month key the spend was attributed to (Europe/Minsk). */
   month: string;
+  /** Actual OpenRouter cost reported by the gateway (µ$). */
   microUsd: number;
+  /** Commercial spend after the period's landed-cost factor (µ$). Missing on legacy rows. */
+  billableMicroUsd?: number;
+  /** Factor used to derive `billableMicroUsd`. Missing on legacy rows and read as 1. */
+  landedCostMultiplier?: number;
   model?: string;
   userId?: Types.ObjectId;
   /** Upstream response id (OpenRouter generation id) — dedupes reporter retries. */
@@ -78,12 +85,12 @@ export interface ICreditSpend extends Omit<Document, 'model'> {
   createdAt?: Date;
 }
 
-/** One employee's actual spend over a window, read from the ledger journal. */
+/** One employee's commercial Credit spend over a window, read from the ledger journal. */
 export interface CreditSpendUserRow {
   userId: string;
   email?: string;
   name?: string;
-  /** Actual OpenRouter cost attributed to this user over the window (µ$). */
+  /** Commercial spend attributed to this user over the window (µ$). */
   microUsd: number;
   requests: number;
 }
@@ -106,6 +113,8 @@ export interface RecordCreditSpendInput {
   microUsd: number;
   /** Pool size to snapshot if this spend creates the period document (µ$). */
   poolMicroUsd: number;
+  /** Landed-cost factor to snapshot if this spend creates the period document. */
+  landedCostMultiplier?: number;
   tenantId?: string;
   model?: string;
   userId?: string;
@@ -137,6 +146,8 @@ export interface CreditBillingStatus {
   /** Period key = the Minsk period-start date `YYYY-MM-DD`. */
   month: string;
   poolMicroUsd: number;
+  /** Landed-cost factor fixed for this period. */
+  landedCostMultiplier: number;
   spentMicroUsd: number;
   requestCount: number;
   purchasedMicroUsd: number;

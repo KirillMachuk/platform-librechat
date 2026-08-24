@@ -83,6 +83,7 @@ function getBillingWiring() {
     getCreditBillingStatus: db.getCreditBillingStatus,
     markCreditMonthNotified: db.markCreditMonthNotified,
     poolMicroUsd: config.poolMicroUsd,
+    landedCostMultiplier: config.landedCostMultiplier,
     anchorDay: config.anchorDay,
     sendAlert,
     recordAudit,
@@ -97,6 +98,7 @@ function getBillingWiring() {
     sumCreditSpendJournalRange: db.sumCreditSpendJournalRange,
     getFirstCreditSpendAt: db.getFirstCreditSpendAt,
     poolMicroUsd: config.poolMicroUsd,
+    landedCostMultiplier: config.landedCostMultiplier,
     anchorDay: config.anchorDay,
     headroom: config.openrouter.headroom,
     sendAlert,
@@ -231,7 +233,7 @@ function startBillingSchedule() {
         ? 'calendar month'
         : `rolling «month of service», anchor day ${config.anchorDay}${config.serviceStartDate ? ` (start ${config.serviceStartDate})` : ''}`;
     logger.info(
-      `[billing] enabled: pool=${config.poolCredits} credits/period, cycle=${cycle}, operators=${config.operatorEmails.length}, openrouter mgmt=${billing.openrouter.isConfigured ? 'on' : 'off'}`,
+      `[billing] enabled: pool=${config.poolCredits} credits/period, landed-cost multiplier=${config.landedCostMultiplier}, cycle=${cycle}, operators=${config.operatorEmails.length}, openrouter mgmt=${billing.openrouter.isConfigured ? 'on' : 'off'}`,
     );
     // Loudly flag a set-but-unparseable service start date: it silently fell back to the
     // calendar month (anchor 1), which the operator likely did NOT intend.

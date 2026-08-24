@@ -24,10 +24,13 @@ export interface BillingIngestDeps {
    */
   getCreditGateStatus: (params: {
     poolMicroUsd: number;
+    landedCostMultiplier?: number;
     tenantId?: string;
     anchorDay?: number;
   }) => Promise<CreditBillingStatus>;
   poolMicroUsd: number;
+  /** Payment/FX uplift, fixed by the ledger when a period starts. */
+  landedCostMultiplier: number;
   tenantId?: string;
   /** Service-period anchor day (1–31; defaults to 1 = calendar month). */
   anchorDay?: number;
@@ -85,6 +88,7 @@ export function createBillingIngestHandlers(deps: BillingIngestDeps): {
       const result = await deps.recordCreditSpend({
         microUsd: usdToMicroUsd(costUsd),
         poolMicroUsd: deps.poolMicroUsd,
+        landedCostMultiplier: deps.landedCostMultiplier,
         tenantId: deps.tenantId,
         anchorDay: deps.anchorDay,
         model: cleanString(body.model),
@@ -120,6 +124,7 @@ export function createBillingIngestHandlers(deps: BillingIngestDeps): {
     try {
       const status = await deps.getCreditGateStatus({
         poolMicroUsd: deps.poolMicroUsd,
+        landedCostMultiplier: deps.landedCostMultiplier,
         tenantId: deps.tenantId,
         anchorDay: deps.anchorDay,
       });

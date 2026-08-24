@@ -20,6 +20,7 @@ function statusOf(overrides: Partial<CreditBillingStatus> = {}): CreditBillingSt
   return {
     month: '2026-07',
     poolMicroUsd: POOL,
+    landedCostMultiplier: 1,
     spentMicroUsd: 0,
     requestCount: 0,
     purchasedMicroUsd: 0,
@@ -84,6 +85,7 @@ function createDeps(overrides: Partial<AdminBillingDeps> = {}): AdminBillingDeps
       .mockResolvedValue({ packages: [] as CreditPackageWithRemaining[], packageSpentMicroUsd: 0 }),
     addCreditPackage: jest.fn().mockResolvedValue(addResult),
     poolMicroUsd: POOL,
+    landedCostMultiplier: 1.25,
     metering: true,
     operatorEmails: ['op@1ma.ai'],
     limitHeadroom: 0.1,
@@ -356,9 +358,12 @@ describe('createAdminBillingHandlers', () => {
 
     it('adds the lot, audits billing.package_added and reports manual limit mode', async () => {
       const deps = createDeps({
-        getCreditBillingStatus: jest
-          .fn()
-          .mockResolvedValue(statusOf({ packageRemainingMicroUsd: 50_000_000 })),
+        getCreditBillingStatus: jest.fn().mockResolvedValue(
+          statusOf({
+            packageRemainingMicroUsd: 50_000_000,
+            landedCostMultiplier: 1.25,
+          }),
+        ),
       });
       const handlers = createAdminBillingHandlers(deps);
       const { req, res, status, json } = createReqRes({ email: 'op@1ma.ai', body: validBody });
@@ -380,8 +385,8 @@ describe('createAdminBillingHandlers', () => {
         }),
       );
       const body = json.mock.calls[0][0];
-      // allowed = $250 pool + $50 packages → ×1.1 = $330.
-      expect(body.limitUpdate).toMatchObject({ mode: 'manual', recommendedLimitUsd: 330 });
+      // Commercial allowance = $300; raw fuse = $300 / 1.25 × 1.1 = $264.
+      expect(body.limitUpdate).toMatchObject({ mode: 'manual', recommendedLimitUsd: 264 });
     });
 
     it('updates the OpenRouter limit automatically when management API is configured', async () => {

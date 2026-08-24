@@ -40,6 +40,7 @@ function createDeps(overrides: Partial<BillingIngestDeps> = {}): BillingIngestDe
     getCreditGateStatus: jest.fn().mockResolvedValue({
       month: '2026-07-01',
       poolMicroUsd: POOL,
+      landedCostMultiplier: 1,
       spentMicroUsd: 0,
       requestCount: 0,
       purchasedMicroUsd: 0,
@@ -48,6 +49,7 @@ function createDeps(overrides: Partial<BillingIngestDeps> = {}): BillingIngestDe
       blocked: false,
     }),
     poolMicroUsd: POOL,
+    landedCostMultiplier: 1.25,
     ...overrides,
   };
 }
@@ -70,6 +72,7 @@ describe('createBillingIngestHandlers', () => {
         expect.objectContaining({
           microUsd: 12_346, // 0.0123456 * 1e6 rounded
           poolMicroUsd: POOL,
+          landedCostMultiplier: 1.25,
           model: 'anthropic/claude-sonnet-4.6',
           sourceId: 'gen-1',
         }),
@@ -186,6 +189,7 @@ describe('createBillingIngestHandlers', () => {
         getCreditGateStatus: jest.fn().mockResolvedValue({
           month: '2026-07-01',
           poolMicroUsd: POOL,
+          landedCostMultiplier: 1,
           spentMicroUsd: POOL + 5,
           requestCount: 10,
           purchasedMicroUsd: 0,

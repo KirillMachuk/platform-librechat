@@ -2,7 +2,7 @@ import { Schema } from 'mongoose';
 import type * as t from '~/types';
 
 /**
- * Tenant credit ledger (billing «Кредиты», 1 Credit = $0.01 of actual OpenRouter cost).
+ * Tenant credit ledger (billing «Кредиты», 1 Credit = $0.01 of commercial spend).
  * All money fields are integer micro-USD (1e-6 USD) — see `types/credit.ts`.
  *
  * Three collections:
@@ -20,6 +20,8 @@ export const creditMonthSchema: Schema<t.ICreditMonth> = new Schema<t.ICreditMon
     month: { type: String, required: true },
     /** Pool size snapshot at period creation — a mid-period config change does not rewrite history. */
     poolMicroUsd: { type: Number, required: true },
+    /** Payment/FX uplift snapshot. Legacy documents omit it and are read as 1. */
+    landedCostMultiplier: { type: Number, default: 1 },
     spentMicroUsd: { type: Number, default: 0 },
     requestCount: { type: Number, default: 0 },
     /** Period bounds `[start, end)` (instants) captured at creation — for display only. */
@@ -63,7 +65,11 @@ export const creditSpendSchema: Schema<t.ICreditSpend> = new Schema<t.ICreditSpe
   {
     tenantId: { type: String, index: true },
     month: { type: String, required: true },
+    /** Raw OpenRouter cost — never uplifted, used for provider reconciliation. */
     microUsd: { type: Number, required: true },
+    /** Client-facing commercial spend. Legacy rows omit it and are read as raw cost. */
+    billableMicroUsd: { type: Number },
+    landedCostMultiplier: { type: Number },
     model: { type: String },
     userId: { type: Schema.Types.ObjectId, ref: 'User' },
     /** Upstream response id — unique so reporter retries can never double-count. */

@@ -4,6 +4,15 @@ import { creditsToMicroUsd, normalizeAnchorDay } from '@librechat/data-schemas';
 export const DEFAULT_POOL_CREDITS = 25_000;
 /** OpenRouter key limit headroom over the internally allowed volume (~10%). */
 export const DEFAULT_LIMIT_HEADROOM = 0.1;
+/** Backward-compatible default: raw OpenRouter cost equals commercial spend. */
+export const DEFAULT_LANDED_COST_MULTIPLIER = 1;
+
+/** Invalid or under-cost multipliers fail safe to the legacy 1:1 behaviour. */
+export function normalizeLandedCostMultiplier(value: number | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 1
+    ? value
+    : DEFAULT_LANDED_COST_MULTIPLIER;
+}
 
 export interface BillingConfig {
   /** Ingest/status endpoints refuse to work without the shared secret. */
@@ -11,6 +20,8 @@ export interface BillingConfig {
   internalToken: string;
   poolCredits: number;
   poolMicroUsd: number;
+  /** Payment, FX and safety uplift, snapshotted when a billing period starts. */
+  landedCostMultiplier: number;
   /** Contour service start date `YYYY-MM-DD` (go-live), or null (→ calendar-month billing). */
   serviceStartDate: string | null;
   /**
@@ -77,12 +88,14 @@ export function readBillingConfig(env: NodeJS.ProcessEnv = process.env): Billing
   const operatorEmails = csv(env.BILLING_OPERATOR_EMAILS);
   const notifyEmails = csv(env.BILLING_NOTIFY_EMAILS);
   const headroom = Number.parseFloat(env.BILLING_OPENROUTER_LIMIT_HEADROOM ?? '');
+  const landedCostMultiplier = Number(env.BILLING_LANDED_COST_MULTIPLIER ?? '');
   const serviceStartDate = (env.BILLING_SERVICE_START_DATE ?? '').trim() || null;
   return {
     enabled: Boolean(env.BILLING_INTERNAL_TOKEN),
     internalToken: env.BILLING_INTERNAL_TOKEN ?? '',
     poolCredits: resolvedPool,
     poolMicroUsd: creditsToMicroUsd(resolvedPool),
+    landedCostMultiplier: normalizeLandedCostMultiplier(landedCostMultiplier),
     serviceStartDate,
     anchorDay: parseServiceAnchorDay(serviceStartDate),
     operatorEmails,

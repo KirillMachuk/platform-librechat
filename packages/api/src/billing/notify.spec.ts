@@ -28,6 +28,7 @@ function statusOf(overrides: Partial<CreditBillingStatus> = {}): CreditBillingSt
   return {
     month: '2026-07',
     poolMicroUsd: POOL,
+    landedCostMultiplier: 1,
     spentMicroUsd: 0,
     requestCount: 0,
     purchasedMicroUsd: 0,
@@ -45,6 +46,7 @@ function createDeps(overrides: Partial<BillingNotifierDeps> = {}): BillingNotifi
     getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf()),
     markCreditMonthNotified: jest.fn().mockResolvedValue(true),
     poolMicroUsd: POOL,
+    landedCostMultiplier: 1,
     sendAlert: jest.fn().mockResolvedValue(undefined),
     recordAudit: jest.fn(),
     ...overrides,
