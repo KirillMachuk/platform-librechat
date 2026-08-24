@@ -525,6 +525,43 @@ export function getDefaultModelSpec(
   return { last: lastSpec };
 }
 
+/**
+ * Whether `newConversation` should seed the conversation with the resolved
+ * default model spec when the caller supplied no preset.
+ *
+ * A soft default yields to any explicit model selection in the template. For
+ * the hard branches: spec prioritization and a disabled model selector always
+ * apply the spec, and a blank template (a fresh "New chat" — nothing but an
+ * optional chatProjectId) applies the hard admin default (`spec.default`) or
+ * the last-used spec. The hard default MUST participate here: the cold-load
+ * path in ChatRoute already applies it (`result.default ?? result.last`), and
+ * before this predicate included it, an in-session "New chat" skipped the spec
+ * effects while the conversation restored the spec name from localStorage —
+ * the header showed the spec as active, but its tool toggles had just been
+ * wiped by the specName-less context switch, and they only came back when the
+ * first submission re-merged the spec's tools.
+ */
+export function shouldApplyDefaultModelSpec({
+  result,
+  startupConfig,
+  template,
+}: {
+  result: ReturnType<typeof getDefaultModelSpec>;
+  startupConfig?: t.TStartupConfig;
+  template: Partial<t.TConversation>;
+}): boolean {
+  if (result?.softDefault != null) {
+    return !hasModelSelection(template);
+  }
+  const templateIsBlank =
+    Object.keys(template).filter((key) => key !== 'chatProjectId').length === 0;
+  return (
+    startupConfig?.modelSpecs?.prioritize === true ||
+    (startupConfig?.interface?.modelSelect ?? true) !== true ||
+    ((result?.default ?? result?.last) != null && templateIsBlank)
+  );
+}
+
 export function getModelSpecPreset(modelSpec?: t.TModelSpec) {
   if (!modelSpec) {
     return;
