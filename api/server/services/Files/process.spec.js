@@ -188,6 +188,11 @@ jest.mock('~/server/services/Files/Audio/STTService', () => ({
   STTService: { getInstance: jest.fn() },
 }));
 
+jest.mock('~/server/services/Audit', () => ({
+  recordAudit: jest.fn(),
+  auditRequestContext: jest.fn(() => ({ ip: '203.0.113.7', userAgent: 'jest' })),
+}));
+
 const {
   getRetentionExpiry,
   getAgentFileRetentionExpiry,
@@ -2472,5 +2477,138 @@ describe('resolveExtractedTextRouting (non-PDF content-size routing)', () => {
     });
     await uploadDocxWithText(BIG_TEXT);
     expect(uploadVectors).not.toHaveBeenCalled();
+  });
+});
+
+describe('processDeleteRequest — the audit trail for deletions', () => {
+  const { recordAudit } = require('~/server/services/Audit');
+
+  /**
+   * The journal on the client contour held 575 `file.upload` events and not one
+   * delete: auditing was mounted per route and the file-delete route never got a
+   * hook, so "who removed this document" had no answer at all. These assert the
+   * entry exists, says the truth about the outcome, and stays silent about files
+   * nothing happened to.
+   */
+  const req = {
+    body: {},
+    config: {},
+    user: { _id: 'oid-1', id: 'user-123', email: 'anna@qsr.by', role: 'USER', tenantId: 'qsr' },
+  };
+  const makeFile = (overrides = {}) => ({
+    file_id: 'doc-1',
+    filepath: '/uploads/user/lease.pdf',
+    filename: 'Договор аренды.pdf',
+    source: FileSources.local,
+    user: 'user-123',
+    ...overrides,
+  });
+
+  const useDeleteMethod = (deleteFile) => {
+    getStrategyFunctions.mockImplementation(() => ({ deleteFile }));
+  };
+
+  beforeEach(() => {
+    recordAudit.mockClear();
+    db.deleteFiles.mockReset().mockResolvedValue({ deletedCount: 1 });
+    db.removeAgentResourceFilesFromAllAgents.mockReset().mockResolvedValue({});
+  });
+
+  it('records who deleted which document, and says it succeeded', async () => {
+    useDeleteMethod(jest.fn().mockResolvedValue(undefined));
+
+    await processDeleteRequest({ req, files: [makeFile()] });
+
+    expect(recordAudit).toHaveBeenCalledTimes(1);
+    expect(recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'file.delete',
+        targetType: 'file',
+        targetId: 'doc-1',
+        outcome: 'success',
+        actorEmail: 'anna@qsr.by',
+        tenantId: 'qsr',
+        ip: '203.0.113.7',
+        metadata: expect.objectContaining({
+          reason: 'user_request',
+          filename: 'Договор аренды.pdf',
+          ownerId: 'user-123',
+        }),
+      }),
+    );
+  });
+
+  it('says failure when the delete failed, instead of reporting a deletion that did not happen', async () => {
+    useDeleteMethod(jest.fn().mockRejectedValue(new Error('storage unavailable')));
+
+    await processDeleteRequest({ req, files: [makeFile()] });
+
+    expect(recordAudit).toHaveBeenCalledTimes(1);
+    expect(recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ targetId: 'doc-1', outcome: 'failure' }),
+    );
+    expect(db.deleteFiles).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The risk this guards is the batch verdict. `DELETE /api/files` takes a list,
+   * awaits this function WITHOUT reading its result, and answers "Files deleted
+   * successfully" either way — so an entry written at the route would record a
+   * success for every file in a request where only some of them died. One entry
+   * per file, each with its own outcome, is the whole point of recording here.
+   */
+  it('gives each file in a batch its own verdict, not the batch verdict', async () => {
+    getStrategyFunctions.mockImplementation((source) =>
+      source === FileSources.execute_code
+        ? { deleteFile: jest.fn().mockRejectedValue(new Error('sandbox gone')) }
+        : { deleteFile: jest.fn().mockResolvedValue(undefined) },
+    );
+    const good = makeFile({ file_id: 'doc-good' });
+    const bad = makeFile({ file_id: 'doc-bad', source: FileSources.execute_code });
+
+    await processDeleteRequest({ req, files: [good, bad] });
+
+    const byId = Object.fromEntries(recordAudit.mock.calls.map(([e]) => [e.targetId, e.outcome]));
+    expect(byId).toEqual({ 'doc-good': 'success', 'doc-bad': 'failure' });
+  });
+
+  /**
+   * Storage gone, database write failed: the bytes are destroyed and the record
+   * survives. That is the state most worth having in the journal, and an entry
+   * written only on the happy path would omit it entirely.
+   */
+  it('records before rethrowing when the metadata delete blows up', async () => {
+    useDeleteMethod(jest.fn().mockResolvedValue(undefined));
+    db.deleteFiles.mockRejectedValue(new Error('mongo unavailable'));
+
+    await expect(processDeleteRequest({ req, files: [makeFile()] })).rejects.toThrow(
+      'mongo unavailable',
+    );
+
+    expect(recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ targetId: 'doc-1', outcome: 'failure' }),
+    );
+  });
+
+  it('carries the reason the caller gave, so the entry says why', async () => {
+    useDeleteMethod(jest.fn().mockResolvedValue(undefined));
+
+    await processDeleteRequest({ req, files: [makeFile()], reason: 'account_deleted' });
+
+    expect(recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ reason: 'account_deleted' }),
+      }),
+    );
+  });
+
+  /** The retention sweep journals its own deletions, including files it never
+   * hands over; both recording would double every swept file. */
+  it('leaves the entry to the retention sweep when asked to', async () => {
+    useDeleteMethod(jest.fn().mockResolvedValue(undefined));
+
+    await processDeleteRequest({ req, files: [makeFile()], skipAudit: true });
+
+    expect(recordAudit).not.toHaveBeenCalled();
   });
 });

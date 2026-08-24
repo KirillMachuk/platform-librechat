@@ -399,7 +399,18 @@ const createDeleteFileWithSecondaryStorage = ({ source, deleteFile, deletionMeth
  * @returns {Promise<{ deletedFileIds: string[], failedFileIds: string[] }>}
  * @throws {Error} When storage deletion cannot be scheduled or file metadata cleanup fails.
  */
-const processDeleteRequest = async ({ req, files }) => {
+const processDeleteRequest = async ({
+  req,
+  files,
+  reason = 'user_request',
+  /** The retention sweep keeps its own accounting: it records a `file.delete`
+   * even for files it never attempts (an expired file with no owner), which this
+   * function never sees because it is not called for them. Left to both, every
+   * swept file would be journalled twice. Deliberately opt-OUT rather than
+   * opt-in — a new caller that forgets gets an entry, not silence, and silence is
+   * the failure this whole change exists to fix. */
+  skipAudit = false,
+}) => {
   const appConfig = req.config;
   const resolvedFileIds = new Set();
   const failedFileIds = new Set();
@@ -501,6 +512,13 @@ const processDeleteRequest = async ({ req, files }) => {
       logger.error('Error deleting file metadata after storage deletion', error);
       deletedFileIds.forEach((fileId) => failedFileIds.add(fileId));
       metadataDeletedFileIds = [];
+      /** Recorded before rethrowing. This branch is the storage-succeeded,
+       * database-failed case: the bytes are gone and the record survives, which
+       * is the state most worth having in the journal — and the one an entry
+       * written only on the happy path would omit entirely. */
+      if (!skipAudit) {
+        recordFileDeletions({ req, files, deletedFileIds: [], failedFileIds, reason });
+      }
       throw error;
     }
     if (metadataDeletedFileIds.length > 0) {
@@ -512,10 +530,97 @@ const processDeleteRequest = async ({ req, files }) => {
     }
   }
 
+  if (!skipAudit) {
+    recordFileDeletions({
+      req,
+      files,
+      deletedFileIds: metadataDeletedFileIds,
+      failedFileIds,
+      reason,
+    });
+  }
+
   return {
     deletedFileIds: metadataDeletedFileIds,
     failedFileIds: [...failedFileIds],
   };
+};
+
+/**
+ * Writes one `file.delete` audit entry per file, with the outcome the delete
+ * actually had.
+ *
+ * WHY HERE, and not on the route. Until now the only path that recorded a
+ * deletion was the retention sweep, so `db.auditlogs` on the client contour held
+ * 575 `file.upload` events and not one delete — the journal could say who put a
+ * document in and never who took it out, which is the half that matters when a
+ * client asks what happened to their contract. The gap existed because auditing
+ * was mounted per route (`auditFileUpload`, `auditProject`) and the file-delete
+ * route simply never got a hook.
+ *
+ * `processDeleteRequest` is the one place every deletion passes through — the
+ * four branches of `DELETE /api/files`, account deletion, both project routes and
+ * the sweep — so recording here cannot be forgotten by the next caller, which is
+ * exactly how the hole appeared. It is also the only place that knows the TRUTH:
+ * the route awaits this function without reading its result and answers "Files
+ * deleted successfully" either way, so an entry written there would claim success
+ * for files that failed.
+ *
+ * Fire-and-forget, like every other audit call: `recordAudit` swallows its own
+ * failures, and a journal problem must never turn into a failed deletion.
+ *
+ * @param {object} params
+ * @param {ServerRequest} params.req
+ * @param {MongoFile[]} params.files - the files this request set out to delete
+ * @param {string[]} params.deletedFileIds - those whose metadata is really gone
+ * @param {Set<string>} params.failedFileIds
+ * @param {string} params.reason - why they were deleted, for the entry's metadata
+ */
+const recordFileDeletions = ({ req, files, deletedFileIds, failedFileIds, reason }) => {
+  /** Lazy, like the vector require below: this module is loaded during startup
+   * wiring, and pulling the audit service in at the top adds a cycle through
+   * `~/models`. */
+  const { recordAudit, auditRequestContext } = require('~/server/services/Audit');
+  const deleted = new Set(deletedFileIds);
+  for (const file of files) {
+    const fileId = file?.file_id;
+    if (!fileId) {
+      continue;
+    }
+    /** Only files whose fate is settled. Today every file handed to this
+     * function lands in one set or the other, so this skips nothing — it is here
+     * so that a future branch which leaves a file unresolved produces no entry
+     * rather than a false one, in the record that must not contain guesses. */
+    let outcome = null;
+    if (deleted.has(fileId)) {
+      outcome = 'success';
+    } else if (failedFileIds.has(fileId)) {
+      outcome = 'failure';
+    }
+    if (!outcome) {
+      continue;
+    }
+    recordAudit({
+      action: 'file.delete',
+      actorId: req?.user?._id,
+      actorEmail: req?.user?.email,
+      actorRole: req?.user?.role,
+      tenantId: file.tenantId ?? req?.user?.tenantId,
+      targetType: 'file',
+      targetId: fileId,
+      outcome,
+      metadata: {
+        reason,
+        source: file.source ?? FileSources.local,
+        /** Recorded because `file.upload` records it: without the name, the
+         * journal can say a file id vanished but not which document, and the
+         * pair of entries stops being readable as one story. */
+        filename: typeof file.filename === 'string' ? file.filename : '',
+        ...(file.user ? { ownerId: file.user.toString?.() ?? String(file.user) } : {}),
+      },
+      ...(typeof auditRequestContext === 'function' ? auditRequestContext(req) : {}),
+    });
+  }
 };
 
 /**
@@ -533,7 +638,7 @@ const processDeleteRequest = async ({ req, files }) => {
  * @param {MongoFile[]} params.files
  * @returns {Promise<void>}
  */
-const purgeFilesWithVectors = async ({ req, files }) => {
+const purgeFilesWithVectors = async ({ req, files, reason = 'user_request' }) => {
   if (!files || files.length === 0) {
     return;
   }
@@ -550,7 +655,7 @@ const purgeFilesWithVectors = async ({ req, files }) => {
     await Promise.allSettled(vectorDeletions);
   }
 
-  await processDeleteRequest({ req, files });
+  await processDeleteRequest({ req, files, reason });
 };
 
 /**

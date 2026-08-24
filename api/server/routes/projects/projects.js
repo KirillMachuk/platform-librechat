@@ -133,7 +133,7 @@ router.delete('/:projectId', auditProject, async (req, res) => {
     // DELETE carries no body; give processDeleteRequest an object to read.
     req.body = req.body ?? {};
     try {
-      await purgeFilesWithVectors({ req, files });
+      await purgeFilesWithVectors({ req, files, reason: 'project_deleted' });
     } catch (cascadeError) {
       // The project doc is already gone — report success and leave the
       // stragglers to the retention sweep rather than faking a failed delete.
