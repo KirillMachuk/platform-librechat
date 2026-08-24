@@ -284,6 +284,7 @@ test.describe('sidebar chat list', () => {
     const stamp = Date.now();
     const longTail = 'with a deliberately long tail the sidebar cannot fit on one line';
     const title = (index: number) => `E2E Ink Plate ${index} ${longTail} ${stamp}`;
+    const shortTitle = `Акт ${stamp}`;
 
     applyRuntimeEnv();
     if (!process.env.MONGO_URI) {
@@ -311,8 +312,8 @@ test.describe('sidebar chat list', () => {
       await client
         .db()
         .collection('conversations')
-        .insertMany(
-          Array.from({ length: 2 }, (_, index) => ({
+        .insertMany([
+          ...Array.from({ length: 2 }, (_, index) => ({
             conversationId: conversationIds[index],
             user: userId,
             title: title(index),
@@ -323,11 +324,24 @@ test.describe('sidebar chat list', () => {
             createdAt: new Date(stamp - index * 1000),
             updatedAt: new Date(stamp - index * 1000),
           })),
-        );
+          /* Р22-4: контр-случай — заголовок, влезающий целиком; плашка над ним
+           * обязана МОЛЧАТЬ (она дублировала бы видимый текст). */
+          {
+            conversationId: randomUUID(),
+            user: userId,
+            title: shortTitle,
+            endpoint: 'Mock Provider A',
+            model: 'mock-model-a',
+            isArchived: false,
+            isTemporary: false,
+            createdAt: new Date(stamp - 5000),
+            updatedAt: new Date(stamp - 5000),
+          },
+        ]);
 
       await page.reload({ timeout: 20000 });
       const rows = page.getByTestId('convo-item');
-      await expect(rows).toHaveCount(2, { timeout: 20000 });
+      await expect(rows).toHaveCount(3, { timeout: 20000 });
 
       /* Rows are addressed by TITLE and ordered by MEASURED Y, never by
        * nth(): react-virtualized mounts cells in recycling order, so DOM
@@ -422,6 +436,13 @@ test.describe('sidebar chat list', () => {
         new RegExp(`/c/(${conversationIds.join('|')})`),
         { timeout: 10000 },
       );
+
+      /* Негативная половина обещания (р22-4): у ПОМЕЩАЮЩЕГОСЯ заголовка
+       * плашки нет. Точка синхронизации — позитивный случай выше: механика
+       * плашек доказанно работает в этом же прогоне, то же ожидание. */
+      await rows.filter({ hasText: shortTitle }).hover();
+      await page.waitForTimeout(600);
+      await expect(page.getByRole('tooltip')).toHaveCount(0);
     } finally {
       await client
         .db()

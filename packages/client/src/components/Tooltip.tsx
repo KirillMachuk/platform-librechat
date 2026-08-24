@@ -5,6 +5,7 @@ import {
   isValidElement,
   useCallback,
   useMemo,
+  useState,
   useSyncExternalStore,
   RefAttributes,
   ForwardRefExoticComponent,
@@ -21,6 +22,12 @@ interface TooltipAnchorProps extends Ariakit.TooltipAnchorProps {
   description: string;
   enableHTML?: boolean;
   side?: 'top' | 'bottom' | 'left' | 'right';
+  /** Full-text plates over truncatable labels only (owner р22-4): the plate
+   *  shows ONLY when the label is actually cut. Measured at hover/focus time
+   *  on the anchor's first `.truncate` descendant (or the anchor itself), so
+   *  renames and resizes are honored; with no truncatable element the plate
+   *  falls open — icon/action tooltips must never opt in. */
+  onlyWhenTruncated?: boolean;
 }
 
 /**
@@ -139,11 +146,51 @@ const readHoverNone = () =>
 export const TooltipAnchor: ForwardRefExoticComponent<
   Omit<TooltipAnchorProps, 'ref'> & RefAttributes<HTMLDivElement>
 > = forwardRef<HTMLDivElement, TooltipAnchorProps>(function TooltipAnchor(
-  { description, side = 'top', className, role, enableHTML = false, ...props },
+  {
+    description,
+    side = 'top',
+    className,
+    role,
+    enableHTML = false,
+    onlyWhenTruncated = false,
+    onMouseEnter,
+    onFocus,
+    ...props
+  },
   ref,
 ) {
   const hoverNone = useSyncExternalStore(subscribeHoverNone, readHoverNone, () => false);
   const tooltip = Ariakit.useTooltipStore({ placement: side });
+  const [labelFits, setLabelFits] = useState(false);
+
+  const measureTruncation = useCallback(
+    (event: React.SyntheticEvent<HTMLDivElement>) => {
+      if (!onlyWhenTruncated) {
+        return;
+      }
+      const anchor = event.currentTarget;
+      const label = (anchor.querySelector('[data-truncated-label], .truncate') ??
+        anchor) as HTMLElement;
+      setLabelFits(label.scrollWidth <= label.clientWidth);
+    },
+    [onlyWhenTruncated],
+  );
+
+  const handleMouseEnter = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      measureTruncation(event);
+      onMouseEnter?.(event);
+    },
+    [measureTruncation, onMouseEnter],
+  );
+
+  const handleFocus = useCallback(
+    (event: React.FocusEvent<HTMLDivElement>) => {
+      measureTruncation(event);
+      onFocus?.(event);
+    },
+    [measureTruncation, onFocus],
+  );
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -182,6 +229,8 @@ export const TooltipAnchor: ForwardRefExoticComponent<
     );
   }
 
+  const suppressed = onlyWhenTruncated && labelFits;
+
   return (
     /* Canon §6.6: the plate waits 300ms — a cursor passing through a row of
        icon buttons must not fire a chain of tooltips. */
@@ -191,9 +240,13 @@ export const TooltipAnchor: ForwardRefExoticComponent<
         ref={ref}
         role={role}
         onKeyDown={handleKeyDown}
+        onMouseEnter={handleMouseEnter}
+        onFocus={handleFocus}
         className={cn('cursor-pointer', className)}
       />
-      <TooltipPopup store={tooltip} description={description} enableHTML={enableHTML} />
+      {!suppressed && (
+        <TooltipPopup store={tooltip} description={description} enableHTML={enableHTML} />
+      )}
     </Ariakit.TooltipProvider>
   );
 });

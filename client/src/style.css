@@ -1543,41 +1543,48 @@ input.auth-field:-webkit-autofill::first-line {
    ::-webkit-scrollbar); маковский Safari прячет overlay-полосы системно, а для
    его режима «всегда показывать» продублировано webkit-псевдо. На касании
    hover не существует — там полосы и так системно прячутся. */
-.scrollbar-hover {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-.scrollbar-hover:hover {
-  scrollbar-color: var(--border-medium) transparent;
-}
-.scrollbar-hover::-webkit-scrollbar-thumb {
-  background-color: transparent;
-}
-.scrollbar-hover:hover::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.1);
-}
-.dark .scrollbar-hover:hover::-webkit-scrollbar-thumb {
-  background-color: hsla(0, 0%, 100%, 0.1);
-}
+/* Р22-2 (владелец, скрин с айфона): КАСТОМНЫЕ скроллбары — только там, где
+   есть курсор. Стилизованный ::-webkit-scrollbar рисуется в слое контента и
+   проигрывает позиционированным потомкам (кнопки строк перекрывали полосу,
+   она «обрывалась»); родной оверлей-индикатор тача всегда рисуется ПОВЕРХ
+   всего. Правило корневое: на hover:none вся кастомизация выключена. */
+@media (hover: hover) {
+  .scrollbar-hover {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .scrollbar-hover:hover {
+    scrollbar-color: var(--border-medium) transparent;
+  }
+  .scrollbar-hover::-webkit-scrollbar-thumb {
+    background-color: transparent;
+  }
+  .scrollbar-hover:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+  .dark .scrollbar-hover:hover::-webkit-scrollbar-thumb {
+    background-color: hsla(0, 0%, 100%, 0.1);
+  }
 
-/* Webkit scrollbar */
-::-webkit-scrollbar {
-  height: 0.1em;
-  width: 0.5rem;
-}
+  /* Webkit scrollbar */
+  ::-webkit-scrollbar {
+    height: 0.1em;
+    width: 0.5rem;
+  }
 
-::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.1);
-  border-radius: 9999px;
-}
+  ::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 9999px;
+  }
 
-.dark ::-webkit-scrollbar-thumb {
-  background-color: hsla(0, 0%, 100%, 0.1);
-}
+  .dark ::-webkit-scrollbar-thumb {
+    background-color: hsla(0, 0%, 100%, 0.1);
+  }
 
-::-webkit-scrollbar-track {
-  background-color: transparent;
-  border-radius: 9999px;
+  ::-webkit-scrollbar-track {
+    background-color: transparent;
+    border-radius: 9999px;
+  }
 }
 
 /* Горизонтальная лента держит прокрутку ПРИ СЕБЕ (владелец 15.08-1: «в чате
@@ -1630,8 +1637,19 @@ input.auth-field:-webkit-autofill::first-line {
    rounded perimeter, and only the strip BELOW the island dims what slides
    under it. The strip mixes from the working area's own bg so it reads as the
    same surface at partial opacity, never as a tinted band. */
+/* Р22-1 (владелец): полоса под островком НЕПРОЗРАЧНАЯ — текст исчезает под
+   верхним краем карточки и снизу не просвечивает; полупрозрачный вариант
+   опробован и снят как лишний эффект. */
 .composer-under-strip {
-  background: color-mix(in srgb, var(--presentation) 65%, transparent);
+  background: var(--presentation);
+}
+
+/* Р22-3 (владелец: «потянул шапку — весь экран едет и чат заедает»): резинка
+   страницы выключена НА КОРНЮ — жест, не попавший в скроллер, не тянет
+   документ и не забирает владение жестом у последующих свайпов. */
+html,
+body {
+  overscroll-behavior-y: none;
 }
 
 /* -webkit-overflow-scrolling:touch УДАЛЕНО (р21-3): свойство мертво с iOS 13
