@@ -20,6 +20,14 @@ const textResult = (payload: object) => ({
   isError: false,
 });
 
+function parseNormalizedPayload<T>(result: ReturnType<typeof normalizeGoogleDriveToolResult>): T {
+  const content = result?.content?.find((item) => item.type === 'text');
+  if (!content || content.type !== 'text') {
+    throw new Error('Expected a normalized text result');
+  }
+  return JSON.parse(content.text) as T;
+}
+
 describe('Google Drive MCP result normalization', () => {
   it('activates only for the operator-managed official Google endpoint', () => {
     expect(
@@ -41,7 +49,16 @@ describe('Google Drive MCP result normalization', () => {
       toolName: 'get_file_metadata',
       result: textResult(sheetMetadata),
     });
-    const payload = JSON.parse(normalized.content?.[0]?.text ?? '{}');
+    const payload = parseNormalizedPayload<{
+      file: {
+        provider: string;
+        fileId: string;
+        name: string;
+        mimeType: string;
+        viewUrl: string;
+        modifiedTime: string;
+      };
+    }>(normalized);
 
     expect(payload.file).toEqual({
       provider: 'google_drive',
@@ -79,7 +96,11 @@ describe('Google Drive MCP result normalization', () => {
         nextPageToken: 'next-page',
       }),
     });
-    const payload = JSON.parse(normalized.content?.[0]?.text ?? '{}');
+    const payload = parseNormalizedPayload<{
+      files: Array<{ viewUrl: string }>;
+      unsupportedFileCount: number;
+      hasMore: boolean;
+    }>(normalized);
 
     expect(payload.files).toHaveLength(2);
     expect(payload.files[1].viewUrl).toBe('https://docs.google.com/document/d/doc_456/edit');
@@ -96,7 +117,16 @@ describe('Google Drive MCP result normalization', () => {
       result: textResult({ fileContent: content }),
       metadata: parseGoogleDriveMetadata(textResult(sheetMetadata)),
     });
-    const payload = JSON.parse(normalized.content?.[0]?.text ?? '{}');
+    const payload = parseNormalizedPayload<{
+      file: { modifiedTime: string };
+      snapshot: {
+        text: string;
+        characterCount: number;
+        originalCharacterCount: number;
+        truncated: boolean;
+      };
+      securityNotice: string;
+    }>(normalized);
 
     expect(payload.file.modifiedTime).toBe('2026-08-24T08:30:00.000Z');
     expect(payload.snapshot.text).toBe(content.slice(0, GOOGLE_DRIVE_SNAPSHOT_LIMIT));
