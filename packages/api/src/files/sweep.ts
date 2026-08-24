@@ -50,6 +50,9 @@ type SweepDependencies = {
   processDeleteRequest: (params: {
     req: SweepRequest;
     files: ExpiredFile[];
+    /** Tells the delete path not to journal these — this function writes its own
+     * `file.delete` entries, including for expired files it never hands over. */
+    skipAudit?: boolean;
   }) => Promise<{ deletedFileIds: string[]; failedFileIds: string[] }>;
   recordAudit: (event: AuditLogInput) => void;
   logger: SweepLogger;

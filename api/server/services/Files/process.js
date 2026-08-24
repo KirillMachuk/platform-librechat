@@ -591,7 +591,12 @@ const recordFileDeletions = ({ req, files, deletedFileIds, failedFileIds, reason
      * function lands in one set or the other, so this skips nothing — it is here
      * so that a future branch which leaves a file unresolved produces no entry
      * rather than a false one, in the record that must not contain guesses. */
-    const outcome = deleted.has(fileId) ? 'success' : failedFileIds.has(fileId) ? 'failure' : null;
+    let outcome = null;
+    if (deleted.has(fileId)) {
+      outcome = 'success';
+    } else if (failedFileIds.has(fileId)) {
+      outcome = 'failure';
+    }
     if (!outcome) {
       continue;
     }

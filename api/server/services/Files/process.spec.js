@@ -2480,7 +2480,6 @@ describe('resolveExtractedTextRouting (non-PDF content-size routing)', () => {
   });
 });
 
-
 describe('processDeleteRequest — the audit trail for deletions', () => {
   const { recordAudit } = require('~/server/services/Audit');
 
@@ -2569,9 +2568,7 @@ describe('processDeleteRequest — the audit trail for deletions', () => {
 
     await processDeleteRequest({ req, files: [good, bad] });
 
-    const byId = Object.fromEntries(
-      recordAudit.mock.calls.map(([e]) => [e.targetId, e.outcome]),
-    );
+    const byId = Object.fromEntries(recordAudit.mock.calls.map(([e]) => [e.targetId, e.outcome]));
     expect(byId).toEqual({ 'doc-good': 'success', 'doc-bad': 'failure' });
   });
 
