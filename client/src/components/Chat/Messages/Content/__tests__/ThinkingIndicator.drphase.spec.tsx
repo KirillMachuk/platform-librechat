@@ -1,6 +1,6 @@
 import { RecoilRoot } from 'recoil';
-import type { MutableSnapshot } from 'recoil';
 import { render, screen } from '@testing-library/react';
+import type { MutableSnapshot } from 'recoil';
 import RunningSlot from '../../DeepResearch/RunningSlot';
 import ThinkingIndicator from '../ThinkingIndicator';
 import store from '~/store';

@@ -15,7 +15,14 @@ const CSS_FILES = ['../style.css', '../mobile.css'];
 
 const HIDER_SELECTOR = /\.(no-scrollbar|hide-scrollbar)/;
 
-function unguardedScrollbarRules(source: string): string[] {
+function stripComments(source: string): string {
+  /* Blank out comment bodies while preserving line numbers, so rule text in
+   * comments (including this guard's own documentation) never trips the scan. */
+  return source.replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '));
+}
+
+function unguardedScrollbarRules(rawSource: string): string[] {
+  const source = stripComments(rawSource);
   const offenders: string[] = [];
   const lines = source.split('\n');
   let depth = 0;
@@ -37,10 +44,7 @@ function unguardedScrollbarRules(source: string): string[] {
         currentSelector = token.trim();
       }
     }
-    if (
-      /scrollbar-width|scrollbar-color|::-webkit-scrollbar/.test(line) &&
-      !/^\s*(\/\*|\*)/.test(line)
-    ) {
+    if (/scrollbar-width|scrollbar-color|::-webkit-scrollbar/.test(line)) {
       const guarded = mediaStack.some((m) => /hover:\s*hover/.test(m.query));
       const isHider = HIDER_SELECTOR.test(currentSelector) || HIDER_SELECTOR.test(line);
       const isGutterReservation = /scrollbar-gutter/.test(line);
