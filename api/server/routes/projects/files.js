@@ -101,7 +101,7 @@ router.delete('/:file_id', auditProject, async (req, res) => {
 
     // Project sources are dual-stored (storage + pgvector); purge both, including
     // the vector embeddings the local delete strategy would otherwise orphan.
-    await purgeFilesWithVectors({ req, files });
+    await purgeFilesWithVectors({ req, files, reason: 'project_file_removed' });
     await invalidateProjectContext(req.user.id, req.params.projectId);
     res.status(204).end();
   } catch (error) {

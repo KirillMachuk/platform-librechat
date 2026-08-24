@@ -247,7 +247,15 @@ export async function sweepExpiredFiles(
         loadAppConfig,
       });
       const req = createExpiredFileSweepRequest({ appConfig: resolvedAppConfig, file, userId });
-      const { deletedFileIds, failedFileIds } = await processDeleteRequest({ req, files: [file] });
+      const { deletedFileIds, failedFileIds } = await processDeleteRequest({
+        req,
+        files: [file],
+        /** This function writes its own `file.delete` entries (auditDeletion
+         * above) and covers cases processDeleteRequest never sees — an expired
+         * file with no owner is journalled without ever being handed over. Both
+         * recording would journal every swept file twice. */
+        skipAudit: true,
+      });
       if (failedFileIds.includes(file.file_id)) {
         failed++;
         auditDeletion(file, userId, 'failure');

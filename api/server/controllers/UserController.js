@@ -119,6 +119,7 @@ const deleteUserFiles = async (req) => {
     await processDeleteRequest({
       req,
       files: userFiles,
+      reason: 'account_deleted',
     });
   } catch (error) {
     logger.error('[deleteUserFiles]', error);
