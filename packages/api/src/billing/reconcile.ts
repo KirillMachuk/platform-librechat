@@ -133,6 +133,7 @@ export interface BillingReconcilerDeps {
   openrouter: OpenRouterManagement;
   getCreditBillingStatus: (params: {
     poolMicroUsd: number;
+    landedCostMultiplier?: number;
     tenantId?: string;
     anchorDay?: number;
     at?: Date;
@@ -161,6 +162,8 @@ export interface BillingReconcilerDeps {
     tenantId?: string;
   }) => Promise<boolean>;
   poolMicroUsd: number;
+  /** Payment/FX uplift to snapshot for a newly created period. */
+  landedCostMultiplier: number;
   tenantId?: string;
   /** Service-period anchor day (1–31; defaults to 1). */
   anchorDay?: number;
@@ -215,6 +218,7 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
     const desiredLimitUsd = computeKeyLimitUsd({
       poolMicroUsd: deps.poolMicroUsd,
       packageRemainingMicroUsd: status.packageRemainingMicroUsd,
+      landedCostMultiplier: status.landedCostMultiplier,
       anchorDay: deps.anchorDay,
       headroom: deps.headroom,
     });
@@ -265,6 +269,7 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
       known ??
       (await deps.getCreditBillingStatus({
         poolMicroUsd: deps.poolMicroUsd,
+        landedCostMultiplier: deps.landedCostMultiplier,
         tenantId: deps.tenantId,
         anchorDay: deps.anchorDay,
         at: now,
@@ -365,6 +370,7 @@ export function createBillingReconciler(deps: BillingReconcilerDeps): {
       const [status, key, utcMonthJournal, firstSpendAt] = await Promise.all([
         deps.getCreditBillingStatus({
           poolMicroUsd: deps.poolMicroUsd,
+          landedCostMultiplier: deps.landedCostMultiplier,
           tenantId: deps.tenantId,
           anchorDay: deps.anchorDay,
           at: now,

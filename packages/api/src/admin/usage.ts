@@ -22,7 +22,7 @@ export interface AdminUsageDeps {
     end: Date;
     tenantId?: string;
   }) => Promise<UserUsageAggregate[]>;
-  /** Actual per-request cost from the credit ledger — the money source. */
+  /** Commercial Credit spend from actual OpenRouter cost plus the fixed period uplift. */
   aggregateCreditSpendByUser: (params: {
     start: Date;
     end: Date;
@@ -73,9 +73,10 @@ function buildRows(spend: CreditSpendByUser, tokens: UserUsageAggregate[]): Admi
 /**
  * Admin «Расходы» → «Кто сколько потратил».
  *
- * Money comes from the credit ledger (`creditspends`), i.e. the cost OpenRouter
- * actually charged for each request, reported by the anonymizer — the same source
- * as the tenant total shown above the table. It is NOT derived from the token
+ * Money comes from the credit ledger (`creditspends`): OpenRouter's actual charge for
+ * each request, reported by the anonymizer, multiplied by the period's fixed landed-
+ * cost factor. It is the same commercial value as the tenant total above the table
+ * and is NOT derived from the token
  * journal: `transactions.tokenValue` is tokens × a rate table baked into the image,
  * which is wrong by construction — one slug costs different money on different
  * platforms (measured 20.08.2026: two calls to the same model minutes apart cost

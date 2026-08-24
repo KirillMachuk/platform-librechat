@@ -45,3 +45,23 @@ describe('readBillingConfig — service period anchor', () => {
     expect(anchorFor('2026-04-30')).toBe(30);
   });
 });
+
+describe('readBillingConfig — landed cost', () => {
+  const base = { BILLING_INTERNAL_TOKEN: 'secret' } as NodeJS.ProcessEnv;
+
+  test('defaults to legacy 1:1 accounting', () => {
+    expect(readBillingConfig(base).landedCostMultiplier).toBe(1);
+  });
+
+  test('accepts a payment and FX uplift', () => {
+    expect(
+      readBillingConfig({ ...base, BILLING_LANDED_COST_MULTIPLIER: '1.25' }).landedCostMultiplier,
+    ).toBe(1.25);
+  });
+
+  test.each(['0.99', '0', '-1', 'invalid', '1.25oops'])('fails safe to 1 for %s', (value) => {
+    expect(
+      readBillingConfig({ ...base, BILLING_LANDED_COST_MULTIPLIER: value }).landedCostMultiplier,
+    ).toBe(1);
+  });
+});

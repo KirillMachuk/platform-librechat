@@ -2,7 +2,12 @@ export { createBillingIngestHandlers } from './ingest';
 export { createBillingNotifier } from './notify';
 export { createOpenRouterManagement, computeKeyLimitUsd, shouldApplyKeyLimit } from './openrouter';
 export { createBillingReconciler } from './reconcile';
-export { readBillingConfig, DEFAULT_POOL_CREDITS, DEFAULT_LIMIT_HEADROOM } from './config';
+export {
+  readBillingConfig,
+  DEFAULT_POOL_CREDITS,
+  DEFAULT_LIMIT_HEADROOM,
+  DEFAULT_LANDED_COST_MULTIPLIER,
+} from './config';
 export type { BillingIngestDeps } from './ingest';
 export type { BillingNotifierDeps } from './notify';
 export type { OpenRouterManagement, OpenRouterKeyInfo } from './openrouter';

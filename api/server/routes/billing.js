@@ -32,6 +32,7 @@ function getHandlers() {
     recordCreditSpend: db.recordCreditSpend,
     getCreditGateStatus: db.getCreditGateStatus,
     poolMicroUsd: config.poolMicroUsd,
+    landedCostMultiplier: config.landedCostMultiplier,
     anchorDay: config.anchorDay,
     onSpendRecorded: (result) => {
       notifier.handleSpendResult(result).catch((err) => {

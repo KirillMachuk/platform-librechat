@@ -17,6 +17,7 @@ function statusOf(spentMicroUsd: number): CreditBillingStatus {
   return {
     month: '2026-07-01',
     poolMicroUsd: 250_000_000,
+    landedCostMultiplier: 1,
     spentMicroUsd,
     requestCount: 1,
     purchasedMicroUsd: 0,
@@ -64,6 +65,7 @@ function createDeps(overrides: Partial<BillingReconcilerDeps> = {}): BillingReco
     /** Metering has been running since well before this UTC month → honest comparison. */
     getFirstCreditSpendAt: jest.fn().mockResolvedValue(new Date('2026-05-01T00:00:00Z')),
     poolMicroUsd: 250_000_000,
+    landedCostMultiplier: 1,
     sendAlert: jest.fn().mockResolvedValue(undefined),
     recordAudit: jest.fn(),
     ...overrides,

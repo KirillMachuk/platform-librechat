@@ -1,5 +1,5 @@
 import { logger, normalizeAnchorDay, MICRO_USD_PER_USD } from '@librechat/data-schemas';
-import { DEFAULT_LIMIT_HEADROOM } from './config';
+import { DEFAULT_LIMIT_HEADROOM, normalizeLandedCostMultiplier } from './config';
 
 /**
  * Minimal OpenRouter key-management client (Provisioning/Management API).
@@ -98,14 +98,17 @@ export function shouldApplyKeyLimit(
 export function computeKeyLimitUsd(params: {
   poolMicroUsd: number;
   packageRemainingMicroUsd?: number;
+  /** Converts the commercial allowance back to raw provider spend. */
+  landedCostMultiplier?: number;
   anchorDay?: number;
   headroom?: number;
 }): number {
   const poolsPerKeyWindow = normalizeAnchorDay(params.anchorDay) === 1 ? 1 : 2;
   const packageRemaining = Math.max(0, params.packageRemainingMicroUsd ?? 0);
   const worstCaseMicroUsd = params.poolMicroUsd * poolsPerKeyWindow + packageRemaining;
+  const landedCostMultiplier = normalizeLandedCostMultiplier(params.landedCostMultiplier);
   const headroom = params.headroom ?? DEFAULT_LIMIT_HEADROOM;
-  return Math.ceil((worstCaseMicroUsd / MICRO_USD_PER_USD) * (1 + headroom));
+  return Math.ceil((worstCaseMicroUsd * (1 + headroom)) / landedCostMultiplier / MICRO_USD_PER_USD);
 }
 
 /**

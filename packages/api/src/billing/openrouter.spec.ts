@@ -120,6 +120,17 @@ describe('computeKeyLimitUsd', () => {
     ).toBe(660);
   });
 
+  it('converts the commercial allowance back to raw OpenRouter spend', () => {
+    expect(
+      computeKeyLimitUsd({
+        poolMicroUsd,
+        landedCostMultiplier: 1.25,
+        anchorDay: 1,
+        headroom: 0.1,
+      }),
+    ).toBe(220);
+  });
+
   it('ignores a negative package balance (boundary overrun must not lower the fuse)', () => {
     expect(
       computeKeyLimitUsd({

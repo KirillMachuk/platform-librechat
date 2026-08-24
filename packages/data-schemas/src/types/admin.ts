@@ -152,7 +152,7 @@ export type UserUsageAggregate = {
   name?: string;
   /** Absolute token count spent (sum of debit transactions). */
   totalTokens: number;
-  /** Absolute credits spent (1,000,000 credits = $1). */
+  /** Commercial spend in the platform's micro-USD storage unit (1,000,000 = $1). */
   totalCredits: number;
 };
 
@@ -167,7 +167,7 @@ export type AdminUsageReport = {
   to: string;
   rows: AdminUsageRow[];
   /**
-   * Actual cost the ledger could not attribute to any employee over the window, in
+   * Commercial spend the ledger could not attribute to any employee over the window, in
    * the same unit as `totalCredits` (1 000 000 = $1) — calls that reached the proxy
    * without a user header. Usually admin model tests and offline benches; the number
    * states that fact and nothing more, because a path that loses the user id lands

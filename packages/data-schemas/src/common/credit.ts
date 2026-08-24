@@ -1,6 +1,8 @@
 /**
  * Money model of the billing «Кредиты»:
- *   1 Credit = $0.01 of actual OpenRouter cost (100 Credits = $1).
+ *   1 Credit = $0.01 of commercial spend (100 Credits = $1).
+ * Commercial spend is the actual OpenRouter cost multiplied by the period's
+ * landed-cost factor (payment fees, FX and a small safety margin).
  * Internally everything is accounted in integer micro-USD (1e-6 USD) so that
  * per-request rounding never accumulates; only *displayed* totals are rounded
  * to whole Credits.
@@ -10,7 +12,12 @@ export const MICRO_USD_PER_USD = 1_000_000;
 export const MICRO_USD_PER_CREDIT = 10_000;
 export const CREDITS_PER_USD = 100;
 
-/** Converts a USD float (OpenRouter `usage.cost`) to integer micro-USD. */
+/** Invalid or under-cost multipliers fail safe to the legacy 1:1 behaviour. */
+export function normalizeLandedCostMultiplier(value: number | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 1 ? value : 1;
+}
+
+/** Converts a USD float to integer micro-USD. */
 export function usdToMicroUsd(usd: number): number {
   return Math.round(usd * MICRO_USD_PER_USD);
 }

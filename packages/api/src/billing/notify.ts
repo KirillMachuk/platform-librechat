@@ -9,6 +9,7 @@ import type { BillingAlert } from './types';
 export interface BillingNotifierDeps {
   getCreditBillingStatus: (params: {
     poolMicroUsd: number;
+    landedCostMultiplier?: number;
     tenantId?: string;
     anchorDay?: number;
   }) => Promise<CreditBillingStatus>;
@@ -18,6 +19,7 @@ export interface BillingNotifierDeps {
     tenantId?: string;
   }) => Promise<boolean>;
   poolMicroUsd: number;
+  landedCostMultiplier: number;
   tenantId?: string;
   /** Service-period anchor day (1–31; defaults to 1). */
   anchorDay?: number;
@@ -69,6 +71,7 @@ export function createBillingNotifier(deps: BillingNotifierDeps): {
     // The pool is spent — whether we are truly exhausted depends on packages.
     const status = await deps.getCreditBillingStatus({
       poolMicroUsd: deps.poolMicroUsd,
+      landedCostMultiplier: deps.landedCostMultiplier,
       tenantId: deps.tenantId,
       anchorDay: deps.anchorDay,
     });

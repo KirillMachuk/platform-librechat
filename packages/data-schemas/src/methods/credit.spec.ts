@@ -24,6 +24,7 @@ function spend(params: {
   sourceId?: string;
   model?: string;
   anchorDay?: number;
+  landedCostMultiplier?: number;
 }) {
   return methods.recordCreditSpend({
     microUsd: params.microUsd ?? creditsToMicroUsd(params.credits ?? 0),
@@ -32,6 +33,7 @@ function spend(params: {
     sourceId: params.sourceId,
     model: params.model,
     anchorDay: params.anchorDay,
+    landedCostMultiplier: params.landedCostMultiplier,
   });
 }
 
@@ -112,6 +114,86 @@ describe('servicePeriodKey (rolling «month of service»)', () => {
 });
 
 describe('recordCreditSpend / monthly pool', () => {
+  test('keeps raw OpenRouter cost separate from commercial Credit spend', async () => {
+    const at = new Date('2026-07-10T12:00:00Z');
+
+    const result = await spend({
+      microUsd: 800_000,
+      at,
+      landedCostMultiplier: 1.25,
+    });
+
+    expect(result.spentAfterMicroUsd).toBe(1_000_000);
+    const status = await methods.getCreditBillingStatus({ poolMicroUsd: POOL, at });
+    expect(status.landedCostMultiplier).toBe(1.25);
+    expect(status.blocked).toBe(true);
+
+    const row = await mongoose.models.CreditSpend.findOne().lean();
+    expect(row).toMatchObject({
+      microUsd: 800_000,
+      billableMicroUsd: 1_000_000,
+      landedCostMultiplier: 1.25,
+    });
+    expect((await methods.sumCreditSpendJournal({ month: '2026-07-01' })).microUsd).toBe(1_000_000);
+    expect(
+      (
+        await methods.sumCreditSpendJournalRange({
+          from: new Date('2026-01-01T00:00:00Z'),
+          to: new Date('2027-01-01T00:00:00Z'),
+        })
+      ).microUsd,
+    ).toBe(800_000);
+    expect(
+      (
+        await methods.aggregateCreditSpendByUser({
+          start: new Date('2026-01-01T00:00:00Z'),
+          end: new Date('2027-01-01T00:00:00Z'),
+        })
+      ).unattributedMicroUsd,
+    ).toBe(1_000_000);
+  });
+
+  test('keeps one landed-cost factor for the whole period', async () => {
+    const july = new Date('2026-07-10T12:00:00Z');
+    const august = new Date('2026-08-10T12:00:00Z');
+
+    await spend({ microUsd: 100_000, at: july, landedCostMultiplier: 1.25 });
+    await spend({ microUsd: 100_000, at: july, landedCostMultiplier: 1.5 });
+    await spend({ microUsd: 100_000, at: august, landedCostMultiplier: 1.5 });
+
+    const julyStatus = await methods.getCreditBillingStatus({ poolMicroUsd: POOL, at: july });
+    const augustStatus = await methods.getCreditBillingStatus({ poolMicroUsd: POOL, at: august });
+    expect(julyStatus.landedCostMultiplier).toBe(1.25);
+    expect(julyStatus.spentMicroUsd).toBe(250_000);
+    expect(augustStatus.landedCostMultiplier).toBe(1.5);
+    expect(augustStatus.spentMicroUsd).toBe(150_000);
+  });
+
+  test('treats a legacy period without a factor as 1:1 until the next period', async () => {
+    const at = new Date('2026-07-10T12:00:00Z');
+    await mongoose.connection.collection('creditmonths').insertOne({
+      month: '2026-07-01',
+      poolMicroUsd: POOL,
+      spentMicroUsd: 0,
+      requestCount: 0,
+    });
+
+    await spend({ microUsd: 100_000, at, landedCostMultiplier: 1.25 });
+
+    const status = await methods.getCreditBillingStatus({
+      poolMicroUsd: POOL,
+      landedCostMultiplier: 1.25,
+      at,
+    });
+    expect(status.landedCostMultiplier).toBe(1);
+    expect(status.spentMicroUsd).toBe(100_000);
+    expect(await mongoose.models.CreditSpend.findOne().lean()).toMatchObject({
+      microUsd: 100_000,
+      billableMicroUsd: 100_000,
+      landedCostMultiplier: 1,
+    });
+  });
+
   test('accumulates spend and reports pool/threshold crossings exactly once', async () => {
     const at = new Date('2026-07-10T12:00:00Z');
 

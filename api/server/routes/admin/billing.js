@@ -35,6 +35,7 @@ function getHandlers() {
     listCreditPackages: db.listCreditPackages,
     addCreditPackage: db.addCreditPackage,
     poolMicroUsd: config.poolMicroUsd,
+    landedCostMultiplier: config.landedCostMultiplier,
     anchorDay: config.anchorDay,
     metering: config.enabled,
     getDegraded: () => getCreditIndexHealth().degraded,

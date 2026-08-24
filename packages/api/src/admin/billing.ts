@@ -93,6 +93,7 @@ export interface AdminBillingSummary {
 export interface AdminBillingDeps {
   getCreditBillingStatus: (params: {
     poolMicroUsd: number;
+    landedCostMultiplier?: number;
     tenantId?: string;
     anchorDay?: number;
   }) => Promise<CreditBillingStatus>;
@@ -101,6 +102,8 @@ export interface AdminBillingDeps {
   }) => Promise<{ packages: CreditPackageWithRemaining[]; packageSpentMicroUsd: number }>;
   addCreditPackage: (input: AddCreditPackageInput) => Promise<AddCreditPackageResult>;
   poolMicroUsd: number;
+  /** Payment/FX uplift to snapshot for a newly created period. */
+  landedCostMultiplier: number;
   tenantId?: string;
   /** Service-period anchor day (1–31; defaults to 1 = calendar month). */
   anchorDay?: number;
@@ -164,6 +167,7 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
     const [status, lots] = await Promise.all([
       deps.getCreditBillingStatus({
         poolMicroUsd: deps.poolMicroUsd,
+        landedCostMultiplier: deps.landedCostMultiplier,
         tenantId: deps.tenantId,
         anchorDay: deps.anchorDay,
       }),
@@ -222,12 +226,14 @@ export function createAdminBillingHandlers(deps: AdminBillingDeps): {
   }> {
     const status = await deps.getCreditBillingStatus({
       poolMicroUsd: deps.poolMicroUsd,
+      landedCostMultiplier: deps.landedCostMultiplier,
       tenantId: deps.tenantId,
       anchorDay: deps.anchorDay,
     });
     const recommendedLimitUsd = computeKeyLimitUsd({
       poolMicroUsd: deps.poolMicroUsd,
       packageRemainingMicroUsd: status.packageRemainingMicroUsd,
+      landedCostMultiplier: status.landedCostMultiplier,
       anchorDay: deps.anchorDay,
       headroom: deps.limitHeadroom,
     });

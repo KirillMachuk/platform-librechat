@@ -12,7 +12,7 @@ import type {
   RecordCreditSpendInput,
   RecordCreditSpendResult,
 } from '~/types';
-import { creditsToMicroUsd } from '~/common/credit';
+import { creditsToMicroUsd, normalizeLandedCostMultiplier } from '~/common/credit';
 import logger from '~/config/winston';
 
 const DUP_KEY_CODE = 11000;
@@ -176,9 +176,20 @@ function periodInsertFields(
   at: Date,
   anchorDay: number,
   poolMicroUsd: number,
-): { poolMicroUsd: number; periodStart: Date; periodEnd: Date } {
+  landedCostMultiplier: number = 1,
+): {
+  poolMicroUsd: number;
+  landedCostMultiplier: number;
+  periodStart: Date;
+  periodEnd: Date;
+} {
   const { start, end } = servicePeriodBounds(at, anchorDay);
-  return { poolMicroUsd: Math.round(poolMicroUsd), periodStart: start, periodEnd: end };
+  return {
+    poolMicroUsd: Math.round(poolMicroUsd),
+    landedCostMultiplier: normalizeLandedCostMultiplier(landedCostMultiplier),
+    periodStart: start,
+    periodEnd: end,
+  };
 }
 
 function isDupKeyError(error: unknown): boolean {
@@ -199,6 +210,7 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
   recordCreditSpend: (input: RecordCreditSpendInput) => Promise<RecordCreditSpendResult>;
   getCreditBillingStatus: (params: {
     poolMicroUsd: number;
+    landedCostMultiplier?: number;
     tenantId?: string;
     anchorDay?: number;
     at?: Date;
@@ -211,6 +223,7 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
    */
   getCreditGateStatus: (params: {
     poolMicroUsd: number;
+    landedCostMultiplier?: number;
     tenantId?: string;
     anchorDay?: number;
     at?: Date;
@@ -247,11 +260,9 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     tenantId?: string;
   }) => Promise<{ microUsd: number; count: number }>;
   /**
-   * Actual ledger spend split by employee over a `[start, end)` window.
-   * This is the money source for the admin «Расходы» screen: the journal rows are
-   * OpenRouter's own per-request cost, so the figure never depends on a local rate
-   * table and cannot go stale when a provider changes its price or the request
-   * lands on a different platform.
+   * Commercial Credit spend split by employee over a `[start, end)` window.
+   * It is derived from OpenRouter's own per-request cost and the period's fixed
+   * landed-cost factor, never from a local model-price table.
    */
   aggregateCreditSpendByUser: (params: {
     start: Date;
@@ -319,12 +330,20 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     const anchorDay = normalizeAnchorDay(input.anchorDay);
     const month = servicePeriodKey(at, anchorDay);
     const microUsd = Math.round(input.microUsd);
+    const monthFilter = { ...tenantFilter<ICreditMonth>(input.tenantId), month };
+    const existingMonth = await CreditMonth().findOne(monthFilter).lean<ICreditMonth>();
+    const landedCostMultiplier = existingMonth
+      ? normalizeLandedCostMultiplier(existingMonth.landedCostMultiplier)
+      : normalizeLandedCostMultiplier(input.landedCostMultiplier);
+    const billableMicroUsd = Math.round(microUsd * landedCostMultiplier);
 
     try {
       await CreditSpend().create({
         ...(input.tenantId ? { tenantId: input.tenantId } : {}),
         month,
         microUsd,
+        billableMicroUsd,
+        landedCostMultiplier,
         model: input.model,
         userId: input.userId,
         sourceId: input.sourceId,
@@ -333,9 +352,7 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     } catch (error) {
       if (input.sourceId && isDupKeyError(error)) {
         // Reporter retry of an already-journaled response: do NOT re-increment the month.
-        const existing = await CreditMonth()
-          .findOne({ ...tenantFilter<ICreditMonth>(input.tenantId), month })
-          .lean<ICreditMonth>();
+        const existing = await CreditMonth().findOne(monthFilter).lean<ICreditMonth>();
         const spent = existing?.spentMicroUsd ?? 0;
         return {
           duplicate: true,
@@ -352,17 +369,14 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
       throw error;
     }
 
-    const after = await upsertMonth(
-      { ...tenantFilter<ICreditMonth>(input.tenantId), month },
-      {
-        $inc: { spentMicroUsd: microUsd, requestCount: 1 },
-        $setOnInsert: periodInsertFields(at, anchorDay, input.poolMicroUsd),
-      },
-    );
+    const after = await upsertMonth(monthFilter, {
+      $inc: { spentMicroUsd: billableMicroUsd, requestCount: 1 },
+      $setOnInsert: periodInsertFields(at, anchorDay, input.poolMicroUsd, landedCostMultiplier),
+    });
 
     const pool = after.poolMicroUsd;
     const spentAfter = after.spentMicroUsd;
-    const spentBefore = spentAfter - microUsd;
+    const spentBefore = spentAfter - billableMicroUsd;
     const threshold80 = pool * POOL_NOTIFY_RATIO;
 
     return {
@@ -414,6 +428,7 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
    */
   async function getCreditBillingStatus(params: {
     poolMicroUsd: number;
+    landedCostMultiplier?: number;
     tenantId?: string;
     anchorDay?: number;
     at?: Date;
@@ -423,13 +438,21 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     const month = servicePeriodKey(at, anchorDay);
     const doc = await upsertMonth(
       { ...tenantFilter<ICreditMonth>(params.tenantId), month },
-      { $setOnInsert: periodInsertFields(at, anchorDay, params.poolMicroUsd) },
+      {
+        $setOnInsert: periodInsertFields(
+          at,
+          anchorDay,
+          params.poolMicroUsd,
+          params.landedCostMultiplier,
+        ),
+      },
     );
     const { purchasedMicroUsd, packageSpentMicroUsd } = await getPackageTotals(params.tenantId);
     const packageRemainingMicroUsd = purchasedMicroUsd - packageSpentMicroUsd;
     return {
       month,
       poolMicroUsd: doc.poolMicroUsd,
+      landedCostMultiplier: normalizeLandedCostMultiplier(doc.landedCostMultiplier),
       spentMicroUsd: doc.spentMicroUsd,
       requestCount: doc.requestCount,
       purchasedMicroUsd,
@@ -452,6 +475,7 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
    */
   async function getCreditGateStatus(params: {
     poolMicroUsd: number;
+    landedCostMultiplier?: number;
     tenantId?: string;
     anchorDay?: number;
     at?: Date;
@@ -470,6 +494,9 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     return {
       month,
       poolMicroUsd,
+      landedCostMultiplier: doc
+        ? normalizeLandedCostMultiplier(doc.landedCostMultiplier)
+        : normalizeLandedCostMultiplier(params.landedCostMultiplier),
       spentMicroUsd,
       requestCount: doc?.requestCount ?? 0,
       purchasedMicroUsd,
@@ -671,20 +698,26 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
       .lean<ICreditMonth>();
   }
 
-  /** Journal sum for a period — must equal the period counter (rounding-convergence check). */
+  /** Commercial journal sum for a period — must equal the period counter. */
   async function sumCreditSpendJournal(params: {
     month: string;
     tenantId?: string;
   }): Promise<{ microUsd: number; count: number }> {
     const [row] = await CreditSpend().aggregate<{ microUsd: number; count: number }>([
       { $match: { ...tenantFilter(params.tenantId), month: params.month } },
-      { $group: { _id: null, microUsd: { $sum: '$microUsd' }, count: { $sum: 1 } } },
+      {
+        $group: {
+          _id: null,
+          microUsd: { $sum: { $ifNull: ['$billableMicroUsd', '$microUsd'] } },
+          count: { $sum: 1 },
+        },
+      },
     ]);
     return { microUsd: row?.microUsd ?? 0, count: row?.count ?? 0 };
   }
 
   /**
-   * Journal sum over a wall-clock instant range (by `createdAt`, `[from, to)`).
+   * Raw OpenRouter journal sum over a wall-clock instant range (by `createdAt`, `[from, to)`).
    * Independent of the billing-period key — the external OpenRouter reconciliation
    * compares against `usage_monthly`, whose window is a UTC calendar month. The
    * `createdAt` TTL index serves this range scan.
@@ -741,7 +774,11 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
         },
       },
       {
-        $group: { _id: '$userId', microUsd: { $sum: '$microUsd' }, requests: { $sum: 1 } },
+        $group: {
+          _id: '$userId',
+          microUsd: { $sum: { $ifNull: ['$billableMicroUsd', '$microUsd'] } },
+          requests: { $sum: 1 },
+        },
       },
       { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
       { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
