@@ -5,7 +5,11 @@ jest.mock('@librechat/api', () => ({
   logAxiosError: jest.fn(),
   generateShortLivedToken: jest.fn(() => 'token'),
 }));
+jest.mock('@librechat/data-schemas', () => ({
+  logger: { warn: jest.fn(), debug: jest.fn(), error: jest.fn(), info: jest.fn() },
+}));
 
+const { logger } = require('@librechat/data-schemas');
 const { deleteVectors, mayHaveVectors } = require('./crud');
 
 const req = { user: { id: 'user-123' } };
@@ -49,12 +53,13 @@ describe('deleteVectors — which files are worth asking the vector store about'
     expect(axios.delete).not.toHaveBeenCalled();
   });
 
-  it('stays silent when no vector store is configured', async () => {
+  it('warns instead of staying silent when no vector store is configured', async () => {
     delete process.env.RAG_API_URL;
 
     await deleteVectors(req, { file_id: 'ready', embedded: true });
 
     expect(axios.delete).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('ready'));
   });
 
   it('reports a file as possibly holding vectors only on those two grounds', () => {

@@ -34,7 +34,17 @@ const mayHaveVectors = (file) => file?.embedded === true || file?.embeddingStatu
  *          file path is invalid or if there is an error in deletion.
  */
 const deleteVectors = async (req, file) => {
-  if (!mayHaveVectors(file) || !process.env.RAG_API_URL) {
+  if (!mayHaveVectors(file)) {
+    return;
+  }
+  if (!process.env.RAG_API_URL) {
+    /* Say it out loud rather than counting the file as fully deleted: without a vector store
+     * configured there is nothing to ask, but the chunks of a file that WAS embedded do not
+     * disappear because the URL did. Refusing the delete would strand every file on a contour
+     * that never had RAG, so this stays a warning the orphan sweep can be pointed at. */
+    logger.warn(
+      `Vector cleanup skipped for ${file.file_id}: RAG_API_URL is not set, any embeddings it owns stay behind`,
+    );
     return;
   }
   try {
