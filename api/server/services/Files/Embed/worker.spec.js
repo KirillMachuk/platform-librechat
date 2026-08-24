@@ -429,8 +429,86 @@ describe('идемпотентность ретрая: дубли векторо
     }
     const after = await File.findOne({ file_id: 'exhaust' });
     expect(after.embeddingStatus).toBe('failed');
-    // 5 попыток = 5 эмбеддингов, но каждая, кроме первой, начиналась с очистки → копия одна.
+    // 5 попыток = 5 эмбеддингов, каждый, кроме первого, начинался с очистки → копия одна.
     expect(embedStoredFile).toHaveBeenCalledTimes(5);
-    expect(purgeStoredVectors).toHaveBeenCalledTimes(4);
+    // ...и её снимает шестая очистка — на терминальном 'failed' ретрая, который бы её снял,
+    // уже не будет, а таймаут на нашей стороне не доказал, что шлюз ничего не записал.
+    expect(purgeStoredVectors).toHaveBeenCalledTimes(5);
+    expect(purgeStoredVectors.mock.invocationCallOrder[4]).toBeGreaterThan(
+      embedStoredFile.mock.invocationCallOrder[4],
+    );
+  });
+});
+
+describe('the record disappears while the claim is in flight', () => {
+  let mongoServer;
+  let File;
+
+  beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+    await mongoose.connect(mongoServer.getUri());
+    File = mongoose.models.File || mongoose.model('File', fileSchema);
+  }, 30000);
+
+  afterAll(async () => {
+    await mongoose.disconnect();
+    await mongoServer.stop();
+  });
+
+  beforeEach(async () => {
+    await File.deleteMany({});
+    jest.clearAllMocks();
+  });
+
+  const seedPending = (file_id) =>
+    File.create({
+      user: new mongoose.Types.ObjectId(),
+      file_id,
+      filename: 'contract.pdf',
+      filepath: '/uploads/u1/contract.pdf',
+      source: 'local',
+      type: 'application/pdf',
+      bytes: 1024,
+      embedded: false,
+      embeddingStatus: 'pending',
+      embedNextAt: new Date(Date.now() - 1000),
+      embedAttempts: 0,
+    });
+
+  /* The user deletes an attachment while it is still being parsed and embedded.
+   * At that moment the record still reads `embedded: false`, so the delete path
+   * has nothing to remove from pgvector — and then this claim commits the
+   * vectors of a document that no longer exists. Nobody else can clean them:
+   * no record means no retry, no re-claim and no second delete. */
+  it('purges the vectors it just wrote when the record was deleted mid-embed', async () => {
+    await seedPending('deleted-mid-embed');
+    const claimed = await claimNext();
+    await File.deleteOne({ file_id: 'deleted-mid-embed' });
+
+    await processClaimed(claimed, APP_CONFIG);
+
+    expect(embedStoredFile).toHaveBeenCalledTimes(1);
+    expect(purgeStoredVectors).toHaveBeenCalledWith({
+      file: expect.objectContaining({ file_id: 'deleted-mid-embed' }),
+    });
+    expect(purgeStoredVectors.mock.invocationCallOrder[0]).toBeGreaterThan(
+      embedStoredFile.mock.invocationCallOrder[0],
+    );
+  });
+
+  /* Same race, failing attempt: a timeout on our side does not prove the
+   * doc-gateway committed nothing (see `purgeStoredVectors`). Normally the next
+   * attempt purges first — but with the record gone there is no next attempt. */
+  it('purges after a failed attempt when the record was deleted mid-embed', async () => {
+    await seedPending('deleted-mid-failure');
+    const claimed = await claimNext();
+    embedStoredFile.mockRejectedValueOnce(new Error('timeout'));
+    await File.deleteOne({ file_id: 'deleted-mid-failure' });
+
+    await processClaimed(claimed, APP_CONFIG);
+
+    expect(purgeStoredVectors).toHaveBeenCalledWith({
+      file: expect.objectContaining({ file_id: 'deleted-mid-failure' }),
+    });
   });
 });
