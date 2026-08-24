@@ -1,4 +1,5 @@
 import { RecoilRoot } from 'recoil';
+import type { MutableSnapshot } from 'recoil';
 import { render, screen } from '@testing-library/react';
 import RunningSlot from '../../DeepResearch/RunningSlot';
 import ThinkingIndicator from '../ThinkingIndicator';
@@ -11,7 +12,7 @@ jest.mock('../../DeepResearch/ProgressCard', () => ({
 
 const seed =
   (convoId: string, phase: string) =>
-  ({ set }: { set: (atom: unknown, value: unknown) => void }) =>
+  ({ set }: MutableSnapshot) =>
     set(store.drProgressByConvoId(convoId), {
       phase,
       steps: [],
