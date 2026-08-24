@@ -158,7 +158,7 @@ describe('a turn the budget cannot pay for is never started', () => {
     expect(warnings()).not.toContain('token cap reached');
   });
 
-  it('always runs the first turn, however small the cap', async () => {
+  it('always runs the first turn, even with the budget already exhausted', async () => {
     const sink = { calls: 0 };
     await runResearchLoop({
       caller: callerCosting(10_000, sink),
@@ -166,12 +166,53 @@ describe('a turn the budget cannot pay for is never started', () => {
       system: 's',
       question: 'q',
       maxTurns: 5,
-      tokenCap: 1,
+      // ZERO, not a small number: `perResearcherCap` is max(0, remaining)/batch, so a run
+      // whose budget is already spent hands its researchers exactly this. Nothing is known
+      // about a turn's cost before one has run, and refusing at zero would mean such a
+      // researcher returns no material at all rather than one turn's worth.
+      tokenCap: 0,
       nonce: NONCE,
     });
-    // Nothing is known about a turn's cost before one has run; refusing here would mean a
-    // tight cap researches nothing at all.
     expect(sink.calls).toBe(1);
+  });
+
+  /**
+   * Why the estimate is the LAST turn and not the mean.
+   *
+   * Turn cost GROWS — each turn re-sends the whole conversation — so the mean lags behind and
+   * under-estimates what the next turn will cost. Under-estimating is exactly the failure this
+   * gate exists to prevent: it lets a doomed turn start, which is then billed and discarded.
+   * Costs here are 100, 100, 200, 300: after four turns the mean is 175 while the last turn
+   * cost 300, and the remaining headroom is 200 — between the two.
+   */
+  it('uses the last turn, not the mean, so a growing cost cannot sneak a doomed turn in', async () => {
+    const costs = [100, 100, 200, 300, 300];
+    const sink = { calls: 0 };
+    const caller: ToolCaller = {
+      invoke: async () => {
+        const cost = costs[Math.min(sink.calls, costs.length - 1)];
+        sink.calls += 1;
+        return new AIMessageChunk({
+          content: '',
+          tool_calls: [{ name: 'web_search', args: { query: 'q' }, id: 'c1', type: 'tool_call' }],
+          usage_metadata: { input_tokens: cost, output_tokens: 0, total_tokens: cost },
+        });
+      },
+    };
+    await runResearchLoop({
+      caller,
+      tools: [costlyTool],
+      system: 's',
+      question: 'q',
+      maxTurns: 10,
+      tokenCap: 900,
+      nonce: NONCE,
+    });
+    // 700 spent, last turn cost 300 → a fifth turn cannot finish and is not started.
+    expect(sink.calls).toBe(4);
+    // The mean (175) would have fitted under the 200 of headroom, started the turn anyway,
+    // and the backstop would have caught it AFTER the model was billed.
+    expect(warnings()).not.toContain('token cap reached');
   });
 
   it('does not gate at all when the cap is infinite', async () => {
