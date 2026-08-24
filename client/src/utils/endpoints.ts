@@ -536,10 +536,14 @@ export function getDefaultModelSpec(
  * the last-used spec. The hard default MUST participate here: the cold-load
  * path in ChatRoute already applies it (`result.default ?? result.last`), and
  * before this predicate included it, an in-session "New chat" skipped the spec
- * effects while the conversation restored the spec name from localStorage —
- * the header showed the spec as active, but its tool toggles had just been
- * wiped by the specName-less context switch, and they only came back when the
- * first submission re-merged the spec's tools.
+ * effects entirely — the restored endpoint/model still pointed at the spec's
+ * preset, so the selection read as the spec being active, while the
+ * specName-less context switch wiped the spec's tool toggles; they only came
+ * back when the first submission re-merged the spec's tools.
+ *
+ * `chatProjectId` and `project_id` are context bindings, not model choices, so
+ * a template carrying only them is still a blank new chat (a "New chat" inside
+ * a project must seed the default spec exactly like the global one).
  */
 export function shouldApplyDefaultModelSpec({
   result,
@@ -553,8 +557,9 @@ export function shouldApplyDefaultModelSpec({
   if (result?.softDefault != null) {
     return !hasModelSelection(template);
   }
+  const contextOnlyKeys = new Set(['chatProjectId', 'project_id']);
   const templateIsBlank =
-    Object.keys(template).filter((key) => key !== 'chatProjectId').length === 0;
+    Object.keys(template).filter((key) => !contextOnlyKeys.has(key)).length === 0;
   return (
     startupConfig?.modelSpecs?.prioritize === true ||
     (startupConfig?.interface?.modelSelect ?? true) !== true ||

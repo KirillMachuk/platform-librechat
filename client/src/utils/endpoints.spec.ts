@@ -177,7 +177,8 @@ describe('shouldApplyDefaultModelSpec', () => {
     // The founding case: prioritize=false, modelSelect=true, an admin default
     // configured, and an in-session "New chat" (empty template). Before the fix
     // the predicate only honored `last`, the spec effects were skipped, and the
-    // context switch wiped the tool toggles while the header still showed the spec.
+    // context switch wiped the tool toggles while the restored endpoint/model
+    // still pointed at the spec's preset — the selection read as spec-active.
     expect(
       shouldApplyDefaultModelSpec({
         result: { default: spec('auto') },
@@ -213,6 +214,16 @@ describe('shouldApplyDefaultModelSpec', () => {
         result: { default: spec('auto') },
         startupConfig: config({}),
         template: { chatProjectId: 'p1' } as never,
+      }),
+    ).toBe(true);
+  });
+
+  it('a lone project_id still counts as a blank template (New chat inside a project)', () => {
+    expect(
+      shouldApplyDefaultModelSpec({
+        result: { default: spec('auto') },
+        startupConfig: config({}),
+        template: { project_id: 'p1' } as never,
       }),
     ).toBe(true);
   });
