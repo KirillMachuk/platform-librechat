@@ -76,6 +76,7 @@ jest.mock('@librechat/api', () => ({
 
 jest.mock('~/server/services/Files/process', () => ({
   processDeleteRequest: jest.fn().mockResolvedValue({ deletedFileIds: [], failedFileIds: [] }),
+  purgeFilesWithVectors: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('~/server/services/Config', () => ({

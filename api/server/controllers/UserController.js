@@ -21,7 +21,7 @@ const { verifyOTPOrBackupCode } = require('~/server/services/twoFactorService');
 const { verifyEmail, resendVerificationEmail } = require('~/server/services/AuthService');
 const { getMCPManager, getFlowStateManager, getMCPServersRegistry } = require('~/config');
 const { invalidateCachedTools } = require('~/server/services/Config/getCachedTools');
-const { processDeleteRequest } = require('~/server/services/Files/process');
+const { purgeFilesWithVectors } = require('~/server/services/Files/process');
 const { getAppConfig } = require('~/server/services/Config');
 const { getLogStores } = require('~/cache');
 const db = require('~/models');
@@ -113,10 +113,21 @@ const acceptTermsController = async (req, res) => {
   }
 };
 
+/**
+ * Removes every file a departing account owns.
+ *
+ * Goes through {@link purgeFilesWithVectors} rather than `processDeleteRequest`
+ * so the vector store is asked first and on its own: the caller finishes with a
+ * blanket `deleteFiles(null, user.id)` that wipes whatever survived, including
+ * the records a failed vector cleanup deliberately kept. Once those records are
+ * gone the chunks carry the account's documents with nothing left to link them
+ * to an owner, and the account itself is already deleted by then — nobody will
+ * ever come back to retry. One extra attempt costs a request per file.
+ */
 const deleteUserFiles = async (req) => {
   try {
     const userFiles = await db.getFiles({ user: req.user.id });
-    await processDeleteRequest({
+    await purgeFilesWithVectors({
       req,
       files: userFiles,
       reason: 'account_deleted',

@@ -57,6 +57,7 @@ const { recordAudit } = require('~/server/services/Audit');
 const { LB_QueueAsyncCall } = require('~/server/utils/queue');
 const { getRetentionExpiry, getAgentFileRetentionExpiry } = require('./retention');
 const { getStrategyFunctions } = require('./strategies');
+const { mayHaveVectors } = require('./VectorDB/crud');
 const { determineFileType } = require('~/server/utils');
 const { STTService } = require('./Audio/STTService');
 const db = require('~/models');
@@ -357,7 +358,7 @@ const getDeleteMethod = ({ source, deletionMethods }) => {
 const createDeleteFileWithSecondaryStorage = ({ source, deleteFile, deletionMethods }) => {
   return async (req, file, openai) => {
     const secondaryDeleteMethods = [];
-    if (file.embedded === true && source !== FileSources.vectordb) {
+    if (mayHaveVectors(file) && source !== FileSources.vectordb) {
       secondaryDeleteMethods.push(
         getDeleteMethod({ source: FileSources.vectordb, deletionMethods }),
       );
@@ -645,7 +646,7 @@ const purgeFilesWithVectors = async ({ req, files, reason = 'user_request' }) =>
 
   const { deleteVectors } = require('./VectorDB/crud');
   const vectorDeletions = files
-    .filter((file) => file.embedded)
+    .filter(mayHaveVectors)
     .map((file) =>
       deleteVectors(req, file).catch((error) =>
         logger.error('[purgeFilesWithVectors] Vector cleanup failed', error),

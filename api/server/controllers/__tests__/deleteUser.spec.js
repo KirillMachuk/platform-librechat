@@ -15,6 +15,7 @@ const mockFindToken = jest.fn();
 const mockVerifyOTPOrBackupCode = jest.fn();
 const mockDeleteUserPluginAuth = jest.fn();
 const mockProcessDeleteRequest = jest.fn();
+const mockPurgeFilesWithVectors = jest.fn();
 const mockDeleteToolCalls = jest.fn();
 const mockDeleteUserAgents = jest.fn();
 const mockDeleteUserPrompts = jest.fn();
@@ -99,6 +100,7 @@ jest.mock('~/server/services/Config/getCachedTools', () => ({
 
 jest.mock('~/server/services/Files/process', () => ({
   processDeleteRequest: (...args) => mockProcessDeleteRequest(...args),
+  purgeFilesWithVectors: (...args) => mockPurgeFilesWithVectors(...args),
 }));
 
 jest.mock('~/server/services/Config', () => ({
@@ -131,6 +133,7 @@ function stubDeletionMocks() {
   mockDeleteAllSharedLinksWithCleanup.mockResolvedValue({ deletedCount: 0 });
   mockGetFiles.mockResolvedValue([]);
   mockProcessDeleteRequest.mockResolvedValue({ deletedFileIds: [], failedFileIds: [] });
+  mockPurgeFilesWithVectors.mockResolvedValue(undefined);
   mockDeleteFiles.mockResolvedValue();
   mockDeleteToolCalls.mockResolvedValue();
   mockDeleteUserAgents.mockResolvedValue();
@@ -239,6 +242,29 @@ describe('deleteUserController - 2FA enforcement', () => {
     });
     expect(res.status).toHaveBeenCalledWith(401);
     expect(mockDeleteMessages).not.toHaveBeenCalled();
+  });
+
+  /* The cascade finishes with a blanket `deleteFiles(null, user.id)` that wipes every record the
+   * file delete kept back, including the ones a failed vector cleanup deliberately preserved. By
+   * then the account is gone and nobody will retry, so the vector store has to be asked before
+   * that wipe — otherwise the departing account's documents stay in the index unowned. */
+  it('asks the vector store about the account files before wiping their records', async () => {
+    const files = [
+      { file_id: 'f1', embedded: true },
+      { file_id: 'f2', embedded: false, embeddingStatus: 'pending' },
+    ];
+    mockGetFiles.mockResolvedValue(files);
+    mockGetUserById.mockResolvedValue({ _id: 'user1', twoFactorEnabled: false });
+    const req = { user: { id: 'user1', _id: 'user1', email: 'a@b.com' }, body: {} };
+
+    await deleteUserController(req, createRes());
+
+    expect(mockPurgeFilesWithVectors).toHaveBeenCalledWith(
+      expect.objectContaining({ files, reason: 'account_deleted' }),
+    );
+    expect(mockPurgeFilesWithVectors.mock.invocationCallOrder[0]).toBeLessThan(
+      mockDeleteFiles.mock.invocationCallOrder[0],
+    );
   });
 
   it('deletes account when valid TOTP token provided with 2FA enabled', async () => {

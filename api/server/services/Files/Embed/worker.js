@@ -72,6 +72,36 @@ async function claimNext() {
   return claimNextEmbedFile(LEASE_MS());
 }
 
+/**
+ * Drops whatever this claim left in the vector store once no later attempt can.
+ *
+ * Two dead ends reach it. A file deleted while its embed was in flight reads
+ * `embedded: false` at delete time, so the delete path finds nothing to remove
+ * and this claim then commits the vectors of a document that no longer exists —
+ * with the record gone there is no retry, no re-claim and no second delete to
+ * reach them. A file that exhausts its attempts stops retrying, and a timeout on
+ * our side never proved the doc-gateway committed nothing. Either way the chunks
+ * carry the document's text with nothing left to answer for it.
+ *
+ * Best-effort by design: both callers have already reached a terminal state, so
+ * a failure here is only worth reporting loudly.
+ */
+async function purgeLeftoverVectors(file, reason) {
+  try {
+    await purgeStoredVectors({ file });
+    /* `purgeStoredVectors` counts a 404 as done, so this says what we asked for, not what was
+     * there — most files that reach here never committed a chunk. */
+    logger.info(
+      `[embedWorker] ${file.file_id}: asked the vector store to drop leftovers (${reason})`,
+    );
+  } catch (error) {
+    logAxiosError({
+      error,
+      message: `[embedWorker] ${file.file_id}: could not purge leftover vectors (${reason}) — its text stays in the vector store`,
+    });
+  }
+}
+
 /** Embeds one claimed record and commits the resulting state transition. */
 async function processClaimed(file, appConfig) {
   const startedAt = Date.now();
@@ -110,6 +140,7 @@ async function processClaimed(file, appConfig) {
     });
     if (!updated) {
       logger.debug(`[embedWorker] ${file.file_id}: record gone after embed (deleted mid-flight)`);
+      await purgeLeftoverVectors(file, 'deleted mid-embed');
       return;
     }
     // A project source only enters getProjectContext's fileIds once embedded=true.
@@ -128,19 +159,26 @@ async function processClaimed(file, appConfig) {
     const permanent = isPermanentFailure(error);
     const exhausted = attempt >= MAX_ATTEMPTS();
     if (permanent || exhausted) {
-      await updateFile({
+      const failed = await updateFile({
         file_id: file.file_id,
         embeddingStatus: 'failed',
         embedError: permanent ? `http-${error?.response?.status ?? 'unsupported'}` : 'max-retries',
       });
+      /* Terminal either way: a 'failed' record never retries, and a missing one was
+       * deleted mid-flight. The retry purge above will not run again, so this is the
+       * last chance to drop what the attempts left behind. */
+      await purgeLeftoverVectors(file, failed ? 'gave up embedding' : 'deleted mid-embed');
       return;
     }
-    await updateFile({
+    const rescheduled = await updateFile({
       file_id: file.file_id,
       embeddingStatus: 'pending',
       embedNextAt: new Date(Date.now() + backoffMs(attempt)),
       embedError: null,
     });
+    if (!rescheduled) {
+      await purgeLeftoverVectors(file, 'deleted mid-embed');
+    }
   }
 }
 
