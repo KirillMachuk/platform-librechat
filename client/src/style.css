@@ -1558,6 +1558,9 @@ input.auth-field:-webkit-autofill::first-line {
   }
   .scrollbar-hover::-webkit-scrollbar-thumb {
     background-color: transparent;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    border-radius: 9999px;
   }
   .scrollbar-hover:hover::-webkit-scrollbar-thumb {
     background-color: rgba(0, 0, 0, 0.1);
@@ -1665,40 +1668,29 @@ body {
   overflow-x: auto;
   overscroll-behavior-x: contain;
   padding-bottom: 0.25rem;
-  scrollbar-color: var(--border-medium) transparent;
-  scrollbar-width: thin;
 }
 
-.markdown-table-wrapper::-webkit-scrollbar {
-  height: 0.5rem;
-}
+/* Styled bars only where a cursor exists — same root as Р22-2: any
+   scrollbar-width/scrollbar-color or ::-webkit-scrollbar rule switches the
+   browser to a CSS-drawn in-layer bar, which loses to positioned children;
+   touch keeps the native overlay indicator. */
+@media (hover: hover) {
+  .markdown-table-wrapper {
+    scrollbar-color: var(--border-medium) transparent;
+    scrollbar-width: thin;
+  }
 
-.markdown-table-wrapper::-webkit-scrollbar-thumb {
-  background-color: var(--border-medium);
-}
+  .markdown-table-wrapper::-webkit-scrollbar {
+    height: 0.5rem;
+  }
 
-.markdown-table-wrapper::-webkit-scrollbar-thumb:hover {
-  background-color: var(--border-heavy);
-}
+  .markdown-table-wrapper::-webkit-scrollbar-thumb {
+    background-color: var(--border-medium);
+  }
 
-/* Show scrollbar only on hover */
-.scrollbar-hover {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-
-.scrollbar-hover:hover {
-  scrollbar-color: var(--border-medium) transparent;
-}
-
-.scrollbar-hover::-webkit-scrollbar-thumb {
-  background-color: transparent;
-  transition: background-color 0.3s ease 0.5s;
-}
-
-.scrollbar-hover:hover::-webkit-scrollbar-thumb {
-  background-color: var(--border-medium);
-  transition-delay: 0s;
+  .markdown-table-wrapper::-webkit-scrollbar-thumb:hover {
+    background-color: var(--border-heavy);
+  }
 }
 
 body,

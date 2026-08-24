@@ -1134,6 +1134,29 @@ async function runNewDeepResearch(params) {
     });
   }
 
+  /** Pre-plan phase snapshot (round 23, item 3): between `created` and the first
+   * graph/plan event the server used to be silent for the whole preparation —
+   * the client showed only the generic waiting label (DR_REPAIR_Plan §1). These
+   * one-line snapshots ride the existing `dr_progress` channel (buffered for
+   * late subscribers by GenerationJobManager.earlyEventBuffer), so the client
+   * can label the wait («Готовлю агента» → «Думаю над планом»). Fire-and-forget,
+   * mirroring onProgress: a slow emit must never block the run. */
+  const emitDrPhase = (phase) => {
+    /* Same contract as onProgress (:'emits NO dr_progress when the plan gate is
+     * off'): legacy gate-off runs stay silent. planGateEnabled is derived later
+     * from the same config value, so read it directly here. */
+    if (!streamId || req.config?.deepResearch?.planGate !== true) {
+      return;
+    }
+    Promise.resolve(
+      GenerationJobManager.emitChunk(streamId, {
+        event: 'dr_progress',
+        data: { phase, steps: [], action: '', searches: 0, progress: 0 },
+      }),
+    ).catch(() => {});
+  };
+  emitDrPhase('prepare');
+
   const db = { getFiles, getConvoFiles, getConvo };
   const tier = resolveDeepResearchTier(req.config?.deepResearch);
   const leadModelSlug = leadModelFor(tier, conversationModel);
@@ -1371,6 +1394,7 @@ async function runNewDeepResearch(params) {
     if (result == null && planGateEnabled && turn.kind !== 'plan-start') {
       // fresh | clarify-answer | plan-edit → run the unified decision. Never ask questions
       // twice: allowClarify only on a fresh, clarify-enabled turn.
+      emitDrPhase('plan');
       const decision = await runPlanDecision({
         buildModel,
         leadModelSlug,

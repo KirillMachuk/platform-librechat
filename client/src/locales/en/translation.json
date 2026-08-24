@@ -1130,6 +1130,8 @@
   "com_ui_deep_research_edit_hint": "Describe what to change in the plan — it will be rebuilt",
   "com_ui_deep_research_offline": "No connection — waiting for network…",
   "com_ui_deep_research_phase_report": "Compiling the report",
+  "com_ui_dr_phase_prepare": "Preparing the agent…",
+  "com_ui_dr_phase_plan": "Thinking about the plan…",
   "com_ui_deep_research_phase_research": "Researching sources",
   "com_ui_deep_research_phase_scope": "Defining the research scope",
   "com_ui_deep_research_start": "Start",

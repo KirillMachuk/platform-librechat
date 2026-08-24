@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { useRecoilValue } from 'recoil';
 import { useForm } from 'react-hook-form';
-import { TextareaAutosize, TooltipAnchor } from '@librechat/client';
+import { Button, TextareaAutosize, TooltipAnchor } from '@librechat/client';
 import { useUpdateMessageMutation } from 'librechat-data-provider/react-query';
 import type { TEditProps } from '~/common';
 import { useMessagesOperations, useMessagesConversation } from '~/Providers';
@@ -156,7 +156,7 @@ const EditMessage = ({
 
   return (
     <Container message={message}>
-      <div className="bg-token-main-surface-primary relative mt-2 flex w-full flex-grow flex-col overflow-hidden rounded-2xl border border-border-medium text-text-primary [&:has(textarea:focus)]:border-border-heavy [&:has(textarea:focus)]:shadow-sm">
+      <div className="relative mt-2 flex w-full flex-grow flex-col overflow-hidden rounded-xl border border-border-light bg-surface-primary text-text-primary shadow-sm [&:has(textarea:focus)]:border-border-focus">
         <TextareaAutosize
           {...registerProps}
           ref={(e) => {
@@ -177,39 +177,41 @@ const EditMessage = ({
           dir={isRTL ? 'rtl' : 'ltr'}
         />
       </div>
-      <div className="mt-2 flex w-full justify-center text-center">
+      <div className="mt-2 flex w-full flex-wrap justify-end gap-2">
         <TooltipAnchor
-          description="Ctrl + Enter / ⌘ + Enter"
+          description="Esc"
           render={
-            <button
-              ref={submitButtonRef}
-              className="btn btn-primary relative mr-2"
-              disabled={isSubmitting}
-              onClick={handleSubmit(resubmitMessage)}
-            >
-              {localize('com_ui_save_submit')}
-            </button>
+            <Button variant="outline" size="sm" onClick={() => enterEdit(true)}>
+              {localize('com_ui_cancel')}
+            </Button>
           }
         />
         <TooltipAnchor
-          description="Shift + Enter"
+          description="Ctrl + S / ⌘ + S"
           render={
-            <button
+            <Button
               ref={saveButtonRef}
-              className="btn btn-secondary relative mr-2"
+              variant="secondary"
+              size="sm"
               disabled={isSubmitting}
               onClick={handleSubmit(updateMessage)}
             >
               {localize('com_ui_save')}
-            </button>
+            </Button>
           }
         />
         <TooltipAnchor
-          description="Esc"
+          description="Ctrl + Enter / ⌘ + Enter"
           render={
-            <button className="btn btn-neutral relative" onClick={() => enterEdit(true)}>
-              {localize('com_ui_cancel')}
-            </button>
+            <Button
+              ref={submitButtonRef}
+              variant="submit"
+              size="sm"
+              disabled={isSubmitting}
+              onClick={handleSubmit(resubmitMessage)}
+            >
+              {localize('com_ui_save_submit')}
+            </Button>
           }
         />
       </div>

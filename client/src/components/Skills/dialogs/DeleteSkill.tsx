@@ -73,7 +73,7 @@ function DeleteSkill({ skillId, skillName, disabled, onDelete }: DeleteSkillProp
       <OGDialogTemplate
         showCloseButton={false}
         title={localize('com_ui_delete')}
-        className="max-w-[450px]"
+        className="sm:max-w-[450px]"
         main={
           <p className="text-left text-sm text-text-primary">
             {localize('com_ui_skill_delete_confirm', { 0: skillName })}

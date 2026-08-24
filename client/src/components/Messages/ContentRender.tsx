@@ -227,8 +227,9 @@ const ContentRender = memo(function ContentRender({
   // a normal-chat answer that merely starts with the plan-marker prose can never grow live
   // buttons or an autostart fuse. The one text-assisted case is the OPTIMISTIC command
   // message (no drKind until the server save lands): the command text counts only under a
-  // drKind-verified plan/clarify parent from the cache. The running slot alone subscribes
-  // to dr_progress and renders only during a run (isSubmitting gates it off terminally).
+  // drKind-verified plan/clarify parent from the cache. The running slot subscribes to
+  // dr_progress (ThinkingIndicator also reads it for the pre-plan label) and
+  // renders only during a run (isSubmitting gates it off terminally).
   const msgText = msg.text ?? '';
   const isDrCommandKind = msg.drKind === 'start' || msg.drKind === 'cancel';
   const isDrCommandText = isDrStartCommand(msgText) || isDrCancelCommand(msgText);

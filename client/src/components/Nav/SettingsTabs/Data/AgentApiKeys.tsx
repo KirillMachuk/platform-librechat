@@ -70,7 +70,7 @@ function CreateKeyDialog({ onKeyCreated }: { onKeyCreated?: () => void }) {
           {localize('com_ui_create_api_key')}
         </Button>
       </OGDialogTrigger>
-      <OGDialogContent className="max-w-md">
+      <OGDialogContent className="sm:max-w-md">
         <OGDialogTitle>{localize('com_ui_create_api_key')}</OGDialogTitle>
         <div className="space-y-4 py-4">
           {!newKey ? (

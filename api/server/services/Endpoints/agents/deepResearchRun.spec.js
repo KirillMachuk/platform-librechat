@@ -1348,13 +1348,36 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     await runNewDeepResearch(planParams('Начать исследование'));
 
     const drEvents = mockEmitChunk.mock.calls.filter((c) => c[1]?.event === 'dr_progress');
-    expect(drEvents.length).toBe(3);
+    // 1 pre-graph 'prepare' snapshot (round 23) + the 3 graph events
+    expect(drEvents.length).toBe(4);
+    expect(drEvents[0][1].data.phase).toBe('prepare');
     const research = drEvents.find((c) => c[1].data.phase === 'research');
     expect(research[1].data.action).toContain('конкуренты 1ma в СНГ');
     expect(research[1].data.steps).toEqual(['Собрать вендоров', 'Сравнить цены']);
     expect(research[1].data.searches).toBe(1);
     expect(research[1].data.progress).toBeGreaterThan(0);
     expect(research[1].data.progress).toBeLessThanOrEqual(1);
+  });
+
+  it('labels the pre-plan silence: prepare right after created, plan before the decision (round 23)', async () => {
+    // A fresh gated turn that ends at the plan card: the graph never runs, yet the
+    // client must see the wait labeled. Red on pre-fix code: no dr_progress existed
+    // before the plan card (DR_REPAIR_Plan §1 root cause).
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockPlanContent = '{"action":"PLAN","title":"Рынок CRM","steps":["Собрать вендоров"]}';
+
+    await runNewDeepResearch(planParams('изучи CRM рынок'));
+
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    const drEvents = mockEmitChunk.mock.calls.filter((c) => c[1]?.event === 'dr_progress');
+    const phases = drEvents.map((c) => c[1].data.phase);
+    expect(phases).toEqual(['prepare', 'plan']);
+    const createdIdx = mockEmitChunk.mock.calls.findIndex((c) => c[1]?.created === true);
+    const prepareIdx = mockEmitChunk.mock.calls.findIndex(
+      (c) => c[1]?.event === 'dr_progress' && c[1].data.phase === 'prepare',
+    );
+    expect(createdIdx).toBeGreaterThanOrEqual(0);
+    expect(prepareIdx).toBeGreaterThan(createdIdx);
   });
 
   it('emits NO dr_progress when the plan gate is off (legacy runs are not spammed)', async () => {
