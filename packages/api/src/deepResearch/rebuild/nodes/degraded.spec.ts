@@ -18,7 +18,7 @@ import {
   type ToolCaller,
   type ResearcherNodeDeps,
 } from './researcher';
-import { composeReport, buildNoDataReport } from './report';
+import { composeReport, buildNoDataReport, createReportNode } from './report';
 import { createSupervisorNode } from './supervisor';
 import { resolveDeepResearchTier } from '../config';
 import { createScopeNode } from './scope';
@@ -560,5 +560,92 @@ describe('the no-data notice states what it knows and no more', () => {
     // No tautological "material was not gathered: gathering stopped".
     expect(text).toContain('не собрано пригодного материала.');
     expect(text).toContain('повторите исследование');
+  });
+});
+
+/**
+ * A report with no sources cannot be checked by the person reading it.
+ *
+ * Measured on the stand 24.08: one run in eight produced 11 639 characters of confident
+ * analysis containing zero links. `hasResearchMaterial` let it through, because that filter
+ * asks whether a DIGEST exists and knows nothing about sources.
+ */
+describe('a report nobody can check says so', () => {
+  const answering = (content: string): BaseChatModel =>
+    ({
+      invoke: async () => new AIMessage({ content, response_metadata: { finish_reason: 'stop' } }),
+    }) as unknown as BaseChatModel;
+
+  const stateWithSources = (sources: string[]): DeepResearchState =>
+    stateWith({
+      messages: [new HumanMessage('вопрос')],
+      findings: [
+        { round: 0, subQuestion: 'в', digest: 'настоящая выжимка с фактами', sources, tokens: 10 },
+      ],
+    });
+
+  it('appends the notice when not one finding carries a source', async () => {
+    const node = createReportNode({
+      reportModel: answering('# Отчёт\n\nВывод.'),
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+    });
+    const update = await node(stateWithSources([]), {} as RunnableConfig);
+    expect(update.finalReport).toContain('нет источников');
+    expect(warnings()).toContain('no sources in any of');
+  });
+
+  it('stays quiet when even one source survived', async () => {
+    const node = createReportNode({
+      reportModel: answering('# Отчёт\n\nВывод.'),
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+    });
+    const update = await node(stateWithSources(['https://example.com/a']), {} as RunnableConfig);
+    expect(update.finalReport).not.toContain('нет источников');
+  });
+
+  /**
+   * ONE source anywhere is enough to make the report checkable, so the condition is "some
+   * finding has a source", not "every finding does". With a single finding the two are
+   * indistinguishable — this is the case that tells them apart.
+   */
+  it('stays quiet when only part of the findings carry sources', async () => {
+    const node = createReportNode({
+      reportModel: answering('# Отчёт\n\nВывод.'),
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+    });
+    const mixed = stateWith({
+      messages: [new HumanMessage('вопрос')],
+      findings: [
+        { round: 0, subQuestion: 'а', digest: 'выжимка А', sources: [], tokens: 10 },
+        {
+          round: 0,
+          subQuestion: 'б',
+          digest: 'выжимка Б',
+          sources: ['https://example.com/b'],
+          tokens: 10,
+        },
+      ],
+    });
+    const update = await node(mixed, {} as RunnableConfig);
+    expect(update.finalReport).not.toContain('нет источников');
+  });
+
+  /** The fallback text is already an admission of failure; it has no claims to source. */
+  it('does not append it to a failure notice', async () => {
+    const node = createReportNode({
+      reportModel: answering(''),
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+    });
+    const update = await node(stateWithSources([]), {} as RunnableConfig);
+    expect(update.finalizeReason).toBe('error');
+    expect(update.finalReport).not.toContain('нет источников');
   });
 });
