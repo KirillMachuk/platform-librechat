@@ -2152,49 +2152,45 @@ html {
   }
 }
 
-@-webkit-keyframes pulseSize {
-  0%,
-  to {
-    -webkit-transform: scaleX(1);
-    transform: scaleX(1);
+/* Shimmering «Thinking…» label while the latest reply has no content yet
+   (design book §6.12, round 22 item 5 — replaces the pulsing dot). Visible
+   only under a `.submitting` ancestor, mirroring the old dot's gating: a
+   finished-but-empty message never shows a stuck label. The sweep runs
+   t2 → t1 → t2 across the text; reduced motion gets static t2. */
+.thinking-shimmer {
+  display: none;
+}
+.submitting .thinking-shimmer {
+  display: inline-block;
+  white-space: nowrap;
+  background-image: linear-gradient(
+    90deg,
+    var(--text-secondary) 0%,
+    var(--text-secondary) 35%,
+    var(--text-primary) 50%,
+    var(--text-secondary) 65%,
+    var(--text-secondary) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: thinking-shimmer-sweep 2s linear infinite;
+}
+@keyframes thinking-shimmer-sweep {
+  from {
+    background-position: 200% 0;
   }
-  50% {
-    -webkit-transform: scale3d(1.25, 1.25, 1);
-    transform: scale3d(1.25, 1.25, 1);
+  to {
+    background-position: -200% 0;
   }
 }
-@keyframes pulseSize {
-  0%,
-  to {
-    -webkit-transform: scaleX(1);
-    transform: scaleX(1);
+@media (prefers-reduced-motion: reduce) {
+  .submitting .thinking-shimmer {
+    animation: none;
+    background-image: none;
+    color: var(--text-secondary);
   }
-  50% {
-    -webkit-transform: scale3d(1.25, 1.25, 1);
-    transform: scale3d(1.25, 1.25, 1);
-  }
-}
-.submitting .result-thinking:empty:last-child:after {
-  -webkit-font-smoothing: subpixel-antialiased;
-  -webkit-animation: pulseSize 1.25s ease-in-out infinite;
-  animation: pulseSize 1.25s ease-in-out infinite;
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-  background-color: #0d0d0d;
-  background-color: var(--text-primary);
-  border-radius: 50%;
-  box-sizing: border-box;
-  content: ' ';
-  display: block;
-  height: 12px;
-  position: absolute;
-  top: -11px;
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  -webkit-transform-origin: center;
-  transform-origin: center;
-  width: 12px;
-  will-change: transform;
 }
 
 .shadow-stroke {

@@ -4,6 +4,7 @@ import { DelayedRender } from '@librechat/client';
 import type { TMessage } from 'librechat-data-provider';
 import type { TMessageContentProps, TDisplayProps } from '~/common';
 import Error from '~/components/Messages/Content/Error';
+import ThinkingIndicator from './ThinkingIndicator';
 import { useMessageContext } from '~/Providers';
 import MarkdownLite from './MarkdownLite';
 import EditMessage from './EditMessage';
@@ -31,7 +32,7 @@ const LoadingFallback = () => (
     <div className="markdown prose dark:prose-invert light w-full break-words">
       <div className="absolute">
         <p className="submitting relative">
-          <span className="result-thinking" />
+          <ThinkingIndicator />
         </p>
       </div>
     </div>
