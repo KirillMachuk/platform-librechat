@@ -2154,8 +2154,9 @@ html {
 
 /* Shimmering «Thinking…» label while the latest reply has no content yet
    (design book §6.12, round 22 item 5 — replaces the pulsing dot). Visible
-   only under a `.submitting` ancestor, mirroring the old dot's gating: a
-   finished-but-empty message never shows a stuck label. The sweep runs
+   only under a `.submitting` ancestor, mirroring the old dot's gating
+   (including its two legacy always-submitting EmptyText paths in Part.tsx —
+   parity, with a follow-up queued to gate them). The sweep runs
    t2 → t1 → t2 across the text; reduced motion gets static t2. */
 .thinking-shimmer {
   display: none;
