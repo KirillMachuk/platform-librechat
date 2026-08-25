@@ -145,7 +145,17 @@ ${subQuestion}
 ${untrustedDirective(nonce)}`;
 }
 
-/** COMPRESS: squeeze raw tool output into a bounded, source-bearing digest. */
+/**
+ * COMPRESS: turn raw tool output into a bounded, source-bearing digest.
+ *
+ * This digest IS the report's evidence — `maxConcurrentResearchers x rounds x digestCap` is
+ * the whole factual base a report is written from — so the instruction asks for transfer,
+ * not summary. It used to say "сожми в плотный дайджест", which a model obeys by writing a
+ * headline whatever the cap allows; the cap then bounded nothing that mattered.
+ *
+ * The cap is stated as a ceiling and explicitly NOT a target, because the opposite reading
+ * is a length quota, and a length quota is what pushes a model into inventing filler.
+ */
 export function buildCompressPrompt({
   subQuestion,
   jurisdiction,
@@ -163,11 +173,11 @@ export function buildCompressPrompt({
 Дата: ${now}. Юрисдикция: ${jurisdiction || 'не определена'}.
 Под-вопрос: ${subQuestion}
 
-Тебе дан сырой собранный материал (результаты инструментов). Сожми его в плотный фактический дайджест на русском, не длиннее ~${digestCap} символов:
-- только факты, цифры, даты и выводы, относящиеся к под-вопросу;
+Тебе дан сырой собранный материал (результаты инструментов). Перенеси из него в дайджест на русском ВСЁ, что относится к под-вопросу: факты, цифры, даты, названия, реквизиты норм и формулировки. Это выжимка, а не пересказ — что можно перенести точно, переноси точно, а не своими словами. Отбрасывай только не относящееся к под-вопросу и повторы.
 - рядом с каждым фактом сохраняй источник (URL/реквизиты), если он есть;
 - никаких выдуманных данных; если источник ненадёжен — отметь это;
-- без вводных фраз, сразу по существу.
+- без вводных фраз, сразу по существу;
+- верхняя граница — ${digestCap} символов. Это потолок, а не норма: если относящегося к делу меньше, пиши меньше. Ничего не добавляй ради объёма.
 
 ${untrustedDirective(nonce)}`;
 }

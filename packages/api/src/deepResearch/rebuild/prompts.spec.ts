@@ -164,3 +164,19 @@ describe('what the supervisor is given to decide on', () => {
     expect(input).toContain('конец-дайджеста');
   });
 });
+
+describe('what COMPRESS is asked for', () => {
+  it('states the cap as a ceiling and forbids padding to reach it', () => {
+    const prompt = buildCompressPrompt({
+      subQuestion: 'q',
+      jurisdiction: 'RU',
+      digestCap: 6000,
+      now: NOW,
+      nonce: NONCE,
+    });
+
+    expect(prompt).toContain('6000 символов');
+    expect(prompt).toContain('потолок, а не норма');
+    expect(prompt).toContain('Ничего не добавляй ради объёма');
+  });
+});
