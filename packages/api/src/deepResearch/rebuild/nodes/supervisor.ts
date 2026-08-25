@@ -4,6 +4,7 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type {
   DeepResearchState,
+  DeepResearchFinding,
   DeepResearchStateUpdate,
   DeepResearchConfigurable,
 } from '../state';
@@ -32,6 +33,21 @@ export interface SupervisorNodeDeps {
    * node" rule is why this is injected rather than called directly).
    */
   clock?: () => number;
+}
+
+/** The most any single completed round cost, from the findings it produced. */
+export function largestRoundTokens(findings: DeepResearchFinding[]): number {
+  const byRound = new Map<number, number>();
+  for (const finding of findings) {
+    byRound.set(finding.round, (byRound.get(finding.round) ?? 0) + finding.tokens);
+  }
+  let largest = 0;
+  for (const total of byRound.values()) {
+    if (total > largest) {
+      largest = total;
+    }
+  }
+  return largest;
 }
 
 /**
@@ -64,6 +80,9 @@ export interface SupervisorNodeDeps {
 export function budgetGateReason(args: {
   tokenUsed: number;
   round: number;
+  /** Largest completed round, from `largestRoundTokens`. Unset → mean only (the old
+   *  estimate), which is what keeps a caller with no findings behaving as before. */
+  largestRound?: number;
   tokenBudget: number;
   budgetGateRatio: number;
   maxRounds: number;
@@ -90,14 +109,25 @@ export function budgetGateReason(args: {
      * them then refused to start (the researcher's own turn-0 gate) and the round produced
      * nothing while still counting as a round.
      *
-     * The estimate is the mean round cost OF THIS RUN — `tokenUsed / round`, where `round`
-     * counts COMPLETED rounds — so it needs no constant and adapts to a topic that reads
-     * long. Before the first round there is nothing to measure: the estimate is 0 and the
-     * first round always runs, which is what keeps a small budget researching a little
-     * rather than refusing outright. Counting the run's fixed overhead (scope, plan) into
-     * the mean makes the estimate slightly high, which errs towards the reserve.
+     * The estimate is the larger of two readings of THIS run, so it needs no constant and
+     * adapts to a topic that reads long:
+     *
+     *   - the mean round, `tokenUsed / round`, which also carries the run's fixed overhead
+     *     (scope, plan) and so errs towards the reserve early;
+     *   - the biggest round actually observed, because rounds GROW: the supervisor's own
+     *     prompt carries every finding gathered so far, so round N costs more than round
+     *     N-1 by construction, and for an increasing sequence the mean sits below the last
+     *     term and further below the next one. A mean-only estimate therefore under-reserves
+     *     exactly in the regime a richer digest creates.
+     *
+     * Taking the larger can only raise the estimate, never lower it, so a run that was
+     * allowed another round before this reading existed is still allowed it. Before the
+     * first round there is nothing to measure at all: the estimate is 0 and the first round
+     * always runs, which is what keeps a small budget researching a little rather than
+     * refusing outright.
      */
-    const nextRoundTokens = args.round > 0 ? args.tokenUsed / args.round : 0;
+    const meanRoundTokens = args.round > 0 ? args.tokenUsed / args.round : 0;
+    const nextRoundTokens = Math.max(meanRoundTokens, args.largestRound ?? 0);
     if (args.tokenUsed + nextRoundTokens >= args.tokenBudget * args.budgetGateRatio) {
       return 'budget';
     }
@@ -163,6 +193,7 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
     const gate = budgetGateReason({
       tokenUsed: state.tokenUsage.total,
       round: state.round,
+      largestRound: largestRoundTokens(state.findings),
       tokenBudget: budget?.tokenBudget ?? 0,
       budgetGateRatio: budget?.budgetGateRatio ?? 1,
       maxRounds: deps.tier.maxOrchestratorCycles,

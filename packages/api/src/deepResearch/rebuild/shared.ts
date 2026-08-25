@@ -109,7 +109,13 @@ export function usageFromMessage(message: BaseMessage): Partial<DeepResearchToke
  * real usage. Estimate-only — never used when the model reports usage.
  */
 export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 3);
+  return estimateTokensOfLength(text.length);
+}
+
+/** The same proxy for a length that is already known — so a caller sizing a prompt it has
+ *  not built yet cannot drift away from the ratio the budget then actually counts with. */
+export function estimateTokensOfLength(chars: number): number {
+  return Math.ceil(Math.max(0, chars) / 3);
 }
 
 /**
@@ -253,8 +259,28 @@ export function sanitizeErrorForUser(error: unknown): string {
  * instruction space. Pair with `untrustedDirective(nonce)` in the system prompt.
  */
 export function fenceUntrusted(text: string, nonce: string): string {
-  return `<UNTRUSTED ${nonce}>\n${text}\n</UNTRUSTED ${nonce}>`;
+  return `<UNTRUSTED ${nonce}>\n${stripFenceMarkers(text, nonce)}\n</UNTRUSTED ${nonce}>`;
 }
+
+/**
+ * Removes anything that could pass for the fence from text about to be put INSIDE it.
+ *
+ * Fenced material is not only raw pages: a researcher digest is written by a model that has
+ * just read them, and it is fenced again on its way to SUPERVISOR and REPORT. A page that
+ * talks the compress model into copying the closing marker (the nonce is unguessable, but
+ * the model can see it) would close the fence early on the next hop, and everything after it
+ * would arrive in the instruction space of a prompt that had declared it data.
+ *
+ * The directive on every hop already forbids obeying instructions found inside the fence, so
+ * this is a second lock rather than the only one. It costs one pass over the text and there
+ * is no legitimate reason for research material to contain either token.
+ */
+export function stripFenceMarkers(text: string, nonce: string): string {
+  const withoutMarkers = text.replace(FENCE_MARKER, '');
+  return nonce ? withoutMarkers.split(nonce).join('') : withoutMarkers;
+}
+
+const FENCE_MARKER = /<\/?UNTRUSTED\b[^>]*>/gi;
 
 /** System directive declaring fenced spans as untrusted data, never commands. */
 export function untrustedDirective(nonce: string): string {

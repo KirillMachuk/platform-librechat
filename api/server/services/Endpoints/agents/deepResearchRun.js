@@ -1599,8 +1599,14 @@ async function runNewDeepResearch(params) {
       const maxRounds = Math.max(1, tier.maxOrchestratorCycles || 6);
       let searchCount = 0;
       const onProgress = (event) => {
+        // The sub-question is NOT logged. From round 1 on it is written by the supervisor
+        // after reading digests of untrusted pages, and on the legacy (non-sovereign) path
+        // model output arrives already de-masked — so the text can carry page-derived
+        // content or the user's own personal data straight into the stand's docker logs.
+        // Length only, the same discipline the engine already keeps in its own nodes.
         logger.info(
-          `[deepResearchRun] ${event.type}${event.subQuestion ? `: ${event.subQuestion}` : ''}`,
+          `[deepResearchRun] ${event.type}` +
+            `${event.subQuestion ? ` (sub-question ${event.subQuestion.length} chars)` : ''}`,
         );
         if (!streamId || !planGateEnabled) {
           return;

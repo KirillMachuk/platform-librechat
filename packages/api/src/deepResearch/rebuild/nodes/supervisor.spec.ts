@@ -6,6 +6,7 @@ import type { BaseMessage } from '@langchain/core/messages';
 import type { DeepResearchState, DeepResearchNodeError, DeepResearchConfigurable } from '../state';
 import {
   budgetGateReason,
+  largestRoundTokens,
   createSupervisorNode,
   routeFromSupervisor,
   normalizeSubQuestions,
@@ -164,6 +165,40 @@ describe('budgetGateReason', () => {
         maxRounds: 6,
       }),
     ).toBe('budget');
+  });
+
+  /**
+   * Rounds GROW: the supervisor's prompt carries every finding gathered so far, so round N
+   * costs more than round N-1. For an increasing series the mean sits below the last term,
+   * so a mean-only estimate under-reserves exactly in this regime. Two rounds of 100k and
+   * 300k: the mean says the next one costs 200k and fits under a 650k reserve; the biggest
+   * round actually seen says 300k and it does not.
+   */
+  const GROWING = {
+    tokenUsed: 400_000,
+    round: 2,
+    tokenBudget: 1_000_000,
+    budgetGateRatio: 0.65,
+    maxRounds: 6,
+    largestRound: 300_000,
+  };
+
+  it('refuses the next round on the biggest round seen, not on the mean', () => {
+    expect(budgetGateReason(GROWING)).toBe('budget');
+  });
+
+  it('FAILS ON PRE-FIX CODE: the mean alone let this round through', () => {
+    expect(budgetGateReason({ ...GROWING, largestRound: undefined })).toBeNull();
+  });
+
+  it('reads the biggest round out of the findings themselves', () => {
+    expect(
+      largestRoundTokens([
+        { round: 1, subQuestion: 'a', digest: 'd', sources: [], tokens: 40_000 },
+        { round: 1, subQuestion: 'b', digest: 'd', sources: [], tokens: 60_000 },
+        { round: 2, subQuestion: 'c', digest: 'd', sources: [], tokens: 300_000 },
+      ]),
+    ).toBe(300_000);
   });
 
   it('flags rounds when the round cap is hit', () => {
