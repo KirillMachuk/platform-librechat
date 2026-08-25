@@ -4,10 +4,10 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useDeleteFilesMutation } from '../mutations';
 
-const showToast = jest.fn();
+const mockShowToast = jest.fn();
 
 jest.mock('@librechat/client', () => ({
-  useToastContext: () => ({ showToast }),
+  useToastContext: () => ({ showToast: mockShowToast }),
 }));
 
 jest.mock('~/hooks', () => ({
@@ -43,8 +43,8 @@ describe('deleting a file that the server could not fully remove', () => {
     const { result } = renderHook(() => useDeleteFilesMutation(), { wrapper });
     result.current.mutate(body);
 
-    await waitFor(() => expect(showToast).toHaveBeenCalled());
-    expect(showToast).toHaveBeenCalledWith(
+    await waitFor(() => expect(mockShowToast).toHaveBeenCalled());
+    expect(mockShowToast).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'com_ui_delete_incomplete', status: 'error' }),
     );
   });
@@ -56,7 +56,7 @@ describe('deleting a file that the server could not fully remove', () => {
     result.current.mutate(body);
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(showToast).not.toHaveBeenCalledWith(
+    expect(mockShowToast).not.toHaveBeenCalledWith(
       expect.objectContaining({ message: 'com_ui_delete_success' }),
     );
   });
@@ -69,8 +69,8 @@ describe('deleting a file that the server could not fully remove', () => {
     const { result } = renderHook(() => useDeleteFilesMutation(), { wrapper });
     result.current.mutate(body);
 
-    await waitFor(() => expect(showToast).toHaveBeenCalled());
-    expect(showToast).toHaveBeenCalledWith(
+    await waitFor(() => expect(mockShowToast).toHaveBeenCalled());
+    expect(mockShowToast).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'com_ui_delete_not_allowed' }),
     );
   });
@@ -82,6 +82,6 @@ describe('deleting a file that the server could not fully remove', () => {
     result.current.mutate(body);
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(showToast).not.toHaveBeenCalled();
+    expect(mockShowToast).not.toHaveBeenCalled();
   });
 });
