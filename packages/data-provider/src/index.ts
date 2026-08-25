@@ -57,3 +57,4 @@ export * from './parameterSettings';
 export * from './codeEnvRef';
 /* deep research UX (task #21) */
 export * from './deepResearch';
+export * from './askUser';

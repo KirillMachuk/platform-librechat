@@ -41,16 +41,17 @@ import {
   MAX_PRIMED_SKILLS_PER_TURN,
 } from './skills';
 import {
+  registerAskUserTool,
+  registerCodeExecutionTools,
+  registerFileAuthoringTools,
+  isFileAuthoringToolDefinition,
+} from './tools';
+import {
   optionalChainWithEmptyCheck,
   extractLibreChatParams,
   getModelMaxTokens,
   getThreadData,
 } from '~/utils';
-import {
-  registerCodeExecutionTools,
-  registerFileAuthoringTools,
-  isFileAuthoringToolDefinition,
-} from './tools';
 import { getProviderConfig, suppressAnthropicThinkingForToolLoop } from '~/endpoints';
 import { filterFilesByEndpointConfig } from '~/files';
 import { generateArtifactsPrompt } from '~/prompts';
@@ -1172,6 +1173,19 @@ export async function initializeAgent(
     });
     toolDefinitions = fileAuthoringResult.toolDefinitions;
   }
+
+  /**
+   * The ask-user questions tool (interactive cards К3) is available to EVERY
+   * agent run — «Авто», user agents, Deep Research alike (owner's decision):
+   * asking the user for a decision is an interaction primitive, not a
+   * capability an admin gates. Known uniform tradeoff: a previously
+   * tool-LESS Anthropic agent with an explicit reasoning effort now counts
+   * as "has tools" and loses extended thinking (the multi-turn tool loop
+   * and Anthropic thinking cannot coexist on OpenRouter, see below) — the
+   * same tradeoff every tool-bearing agent already lives with.
+   */
+  const askUserResult = registerAskUserTool({ toolRegistry, toolDefinitions });
+  toolDefinitions = askUserResult.toolDefinitions;
 
   /** Check for tool presence from either full instances or definitions (event-driven mode) */
   const hasAgentTools = (structuredTools?.length ?? 0) > 0 || (toolDefinitions?.length ?? 0) > 0;

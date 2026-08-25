@@ -48,6 +48,7 @@ import {
   FILE_AUTHORING_TOOL_NAMES,
   isFileAuthoringToolDefinition,
   isCodeSessionToolName,
+  registerAskUserTool,
 } from './tools';
 
 /** Portable ceiling for OpenAI-compatible tool description validators. */
@@ -618,5 +619,26 @@ describe('registerFileAuthoringTools', () => {
         parameters: { type: 'object', properties: {} } as LCTool['parameters'],
       }),
     ).toBe(false);
+  });
+});
+
+describe('registerAskUserTool (interactive cards К3)', () => {
+  it('registers the definition once and is idempotent across repeated calls', () => {
+    const toolRegistry = new Map();
+    const first = registerAskUserTool({ toolRegistry, toolDefinitions: [] });
+    expect(first.toolDefinitions.map((d) => d.name)).toEqual(['ask_user']);
+    expect(toolRegistry.has('ask_user')).toBe(true);
+
+    const second = registerAskUserTool({ toolRegistry, toolDefinitions: first.toolDefinitions });
+    expect(second.toolDefinitions).toBe(first.toolDefinitions);
+  });
+
+  it('keeps existing definitions untouched and appends', () => {
+    const existing = [{ name: 'web_search', description: 'x', parameters: { type: 'object' } }];
+    const result = registerAskUserTool({
+      toolRegistry: new Map(),
+      toolDefinitions: existing as never,
+    });
+    expect(result.toolDefinitions.map((d) => d.name)).toEqual(['web_search', 'ask_user']);
   });
 });

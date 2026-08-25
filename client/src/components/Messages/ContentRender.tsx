@@ -1,7 +1,14 @@
 import { useCallback, useMemo, memo } from 'react';
 import { useRecoilValue } from 'recoil';
 import { useQueryClient } from '@tanstack/react-query';
-import { QueryKeys, isDrStartCommand, isDrCancelCommand } from 'librechat-data-provider';
+import {
+  QueryKeys,
+  isDrStartCommand,
+  isDrCancelCommand,
+  isAskSkipMessage,
+  isAskAnswersMessage,
+  contentHasAskUserCall,
+} from 'librechat-data-provider';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { TMessageProps, TMessageChatContext } from '~/common';
@@ -9,6 +16,7 @@ import {
   PlanCard,
   ReportCard,
   ActionChip,
+  AnswersChip,
   RunningSlot,
   TruncatedNote,
   resolveDrReport,
@@ -205,8 +213,26 @@ const ContentRender = memo(function ContentRender({
   const isDrPlanCard = !isUserTurn && msg.drKind === 'plan';
   const mountDrRunningSlot = !isUserTurn && !isDrPlanCard && isLatestMessage && isSubmitting;
 
+  /* Ask-user answers chip (interactive cards К3): the answers/skip messages
+   * are button-built, so like the DR command chips they render compactly —
+   * but ONLY under a parent that actually carries an `ask_user` tool call
+   * (the drKind lesson: prose that merely LOOKS like the marker must not
+   * change its rendering; the parent anchor is the provenance we have,
+   * since user messages carry no server-stamped kind). */
+  let isAskChip = false;
+  if (isUserTurn && (isAskAnswersMessage(msgText) || isAskSkipMessage(msgText))) {
+    const cachedForAsk = queryClient.getQueryData<TMessage[]>([
+      QueryKeys.messages,
+      conversation?.conversationId,
+    ]);
+    const askParent = cachedForAsk?.find((m) => m.messageId === msg.parentMessageId);
+    isAskChip = contentHasAskUserCall(askParent?.content);
+  }
+
   let drCard: ReactNode = null;
-  if (isDrActionChip) {
+  if (isAskChip) {
+    drCard = <AnswersChip text={msgText} />;
+  } else if (isDrActionChip) {
     drCard = <ActionChip text={msgText} />;
   } else if (isDrPlanCard) {
     // awaitingAction = the unanswered tip of the DISPLAYED branch. `isLast` (depth-based)
