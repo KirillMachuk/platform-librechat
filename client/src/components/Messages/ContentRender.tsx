@@ -1,14 +1,11 @@
 import { useCallback, useMemo, memo } from 'react';
 import { useRecoilValue } from 'recoil';
-import { useQueryClient } from '@tanstack/react-query';
-import { QueryKeys, isDrStartCommand, isDrCancelCommand } from 'librechat-data-provider';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { TMessageProps, TMessageChatContext } from '~/common';
 import {
   PlanCard,
   ReportCard,
-  ActionChip,
   RunningSlot,
   TruncatedNote,
   resolveDrReport,
@@ -16,6 +13,7 @@ import {
 } from '~/components/Chat/Messages/DeepResearch';
 import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import { useAttachments, useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
+import useDrActionChip from '~/components/Chat/Messages/DeepResearch/useDrActionChip';
 import useAskUserChip from '~/components/Chat/Messages/DeepResearch/useAskUserChip';
 import ContentParts from '~/components/Chat/Messages/Content/ContentParts';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
@@ -110,7 +108,6 @@ const ContentRender = memo(function ContentRender({
   chatContext,
 }: ContentRenderProps) {
   const localize = useLocalize();
-  const queryClient = useQueryClient();
   const { attachments, searchResults } = useAttachments({
     messageId: msg?.messageId,
     attachments: msg?.attachments,
@@ -144,9 +141,10 @@ const ContentRender = memo(function ContentRender({
   const isLatestMessage = msg?.messageId === latestMessageId;
 
   const { hasParallelContent } = useContentMetadata(msg);
-  /* Shared with MessageRender — the chip must behave identically on both
-   * user-message render paths (review К3: it was mounted on only one). */
+  /* Both shared with MessageRender — a chip must behave identically on both
+   * user-message render paths (review К3: each was mounted on only one). */
   const askChip = useAskUserChip(msg);
+  const actionChip = useDrActionChip(msg);
 
   // Task #21 phase 3: a FINISHED Deep Research report → collapsible ReportCard + reader.
   // Review r2: keyed on the persisted `drKind` provenance (no text sniffing, no ancestor
@@ -190,30 +188,18 @@ const ContentRender = memo(function ContentRender({
   // `drKind` provenance the runner stamps at message creation — never on display text, so
   // a normal-chat answer that merely starts with the plan-marker prose can never grow live
   // buttons or an autostart fuse. The one text-assisted case is the OPTIMISTIC command
-  // message (no drKind until the server save lands): the command text counts only under a
-  // drKind-verified plan/clarify parent from the cache. The running slot subscribes to
-  // dr_progress (ThinkingIndicator also reads it for the pre-plan label) and
+  // message, and `useDrActionChip` owns that rule for both render paths. The running slot
+  // subscribes to dr_progress (ThinkingIndicator also reads it for the pre-plan label) and
   // renders only during a run (isSubmitting gates it off terminally).
   const msgText = msg.text ?? '';
-  const isDrCommandKind = msg.drKind === 'start' || msg.drKind === 'cancel';
-  const isDrCommandText = isDrStartCommand(msgText) || isDrCancelCommand(msgText);
-  let isDrActionChip = isUserTurn && isDrCommandKind;
-  if (!isDrActionChip && isUserTurn && isDrCommandText) {
-    const cached = queryClient.getQueryData<TMessage[]>([
-      QueryKeys.messages,
-      conversation?.conversationId,
-    ]);
-    const parent = cached?.find((m) => m.messageId === msg.parentMessageId);
-    isDrActionChip = parent?.drKind === 'plan' || parent?.drKind === 'clarify';
-  }
   const isDrPlanCard = !isUserTurn && msg.drKind === 'plan';
   const mountDrRunningSlot = !isUserTurn && !isDrPlanCard && isLatestMessage && isSubmitting;
 
   let drCard: ReactNode = null;
   if (askChip != null) {
     drCard = askChip;
-  } else if (isDrActionChip) {
-    drCard = <ActionChip text={msgText} />;
+  } else if (actionChip != null) {
+    drCard = actionChip;
   } else if (isDrPlanCard) {
     // awaitingAction = the unanswered tip of the DISPLAYED branch. `isLast` (depth-based)
     // keeps a plan variant re-shown via the sibling switcher live (review r2). But `isLast`
@@ -271,7 +257,7 @@ const ContentRender = memo(function ContentRender({
           >
             <div
               className={cn(
-                showUserBubble && !isDrActionChip && askChip == null && USER_BUBBLE_CLASS,
+                showUserBubble && askChip == null && actionChip == null && USER_BUBBLE_CLASS,
               )}
             >
               {drCard ??

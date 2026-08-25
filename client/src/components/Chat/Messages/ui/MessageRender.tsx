@@ -3,6 +3,7 @@ import { useRecoilValue } from 'recoil';
 import type { TMessage } from 'librechat-data-provider';
 import type { TMessageProps, TMessageChatContext } from '~/common';
 import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
+import useDrActionChip from '~/components/Chat/Messages/DeepResearch/useDrActionChip';
 import useAskUserChip from '~/components/Chat/Messages/DeepResearch/useAskUserChip';
 import MessageContent from '~/components/Chat/Messages/Content/MessageContent';
 import { useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
@@ -73,6 +74,10 @@ function areMessageRenderPropsEqual(prev: MessageRenderProps, next: MessageRende
     prevMsg.unfinished === nextMsg.unfinished &&
     prevMsg.createdAt === nextMsg.createdAt &&
     prevMsg.depth === nextMsg.depth &&
+    /* The DR action chip reads it, so a `drKind` that lands late (the server save
+     * arriving over the optimistic command message) has to reach the render — the
+     * same field ContentRender's comparator already carries. */
+    prevMsg.drKind === nextMsg.drKind &&
     prevMsg.isCreatedByUser === nextMsg.isCreatedByUser &&
     (prevMsg.children?.length ?? 0) === (nextMsg.children?.length ?? 0) &&
     prevMsg.content === nextMsg.content &&
@@ -95,9 +100,13 @@ const MessageRender = memo(function MessageRender({
   chatContext,
 }: MessageRenderProps) {
   const localize = useLocalize();
-  /* Shared with ContentRender — the ask-user answers chip must behave
-   * identically on both user-message render paths (review К3). */
+  /* Shared with ContentRender — a chip must behave identically on both
+   * user-message render paths (review К3). This is the path the DR command
+   * messages actually take: nothing gives a user message `content`, so
+   * mounting the action chip on ContentRender alone left it dead. */
   const askChip = useAskUserChip(msg);
+  const actionChip = useDrActionChip(msg);
+  const chip = askChip ?? actionChip;
   const {
     ask,
     edit,
@@ -176,8 +185,8 @@ const MessageRender = memo(function MessageRender({
               showUserBubble && 'items-end',
             )}
           >
-            <div className={cn(showUserBubble && askChip == null && USER_BUBBLE_CLASS)}>
-              {askChip ?? (
+            <div className={cn(showUserBubble && chip == null && USER_BUBBLE_CLASS)}>
+              {chip ?? (
                 <MessageContext.Provider value={messageContextValue}>
                   <MessageContent
                     ask={ask}
