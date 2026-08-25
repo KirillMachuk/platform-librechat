@@ -641,18 +641,27 @@ describe('the funnel from gathered material to the digest', () => {
     },
   );
 
-  it('keeps the LAST turn of a full researcher inside the cap', () => {
-    const tier = resolveDeepResearchTier({ activeMode: 'balanced' } as TDeepResearchConfig);
-    const outputs = Array.from(
-      { length: tier.maxSearcherTurns * MAX_TOOL_CALLS_PER_TURN },
-      (_, i) => `<<${i}>>`.padEnd(MAX_TOOL_OUTPUT_CHARS, 'я'),
-    );
+  /**
+   * Asserted on the LAST characters of the last result, not on its first ones. A marker at
+   * the start of the final chunk survives even when the cap cuts the tail — including the
+   * case where the cap is short by exactly the separators `boundToolOutputs` inserts, which
+   * is what the shipped caps were before `maxGatheredChars` counted them.
+   */
+  it.each(['balanced', 'deep'] as const)(
+    'loses nothing from a full %s researcher, separators included',
+    (mode) => {
+      const tier = resolveDeepResearchTier({ activeMode: mode } as TDeepResearchConfig);
+      const outputs = Array.from(
+        { length: tier.maxSearcherTurns * MAX_TOOL_CALLS_PER_TURN },
+        (_, i) => `<<${i}>>`.padEnd(MAX_TOOL_OUTPUT_CHARS - 8, 'я') + `[конец${i}]`,
+      );
 
-    const bounded = boundToolOutputs(outputs, tier.compressInputChars);
+      const bounded = boundToolOutputs(outputs, tier.compressInputChars);
 
-    expect(bounded).toContain('<<0>>');
-    expect(bounded).toContain(`<<${outputs.length - 1}>>`);
-  });
+      expect(bounded).toContain('<<0>>');
+      expect(bounded).toContain(`[конец${outputs.length - 1}]`);
+    },
+  );
 
   it('still honours a cap an admin lowers', () => {
     const bounded = boundToolOutputs(['a'.repeat(50), 'b'.repeat(50)], 60);
