@@ -78,13 +78,19 @@ const deleteVectors = async (req, file) => {
       maxRedirects: 0,
     });
   } catch (error) {
+    if (error.response?.status === 404) {
+      /* Not a failure, and not worth an error line: the ordinary delete of an embedded file asks
+       * the vector store twice — the storage strategy calls `deleteRagFile` first and this runs
+       * as the secondary — so the second call finding nothing left IS the success case. Logging
+       * it at error level put a red line under every normal deletion, which is how real ones
+       * stop being read. */
+      logger.debug(`No vectors left to delete for ${file.file_id}`);
+      return;
+    }
     logAxiosError({
       error,
       message: 'Error deleting vectors',
     });
-    if (error.response?.status === 404) {
-      return;
-    }
     /* Everything else keeps the file: a refused connection, a timeout or a DNS
      * failure carries no `error.response` at all, and reading that as success is
      * how the text of a deleted document ends up in the index with no record left
