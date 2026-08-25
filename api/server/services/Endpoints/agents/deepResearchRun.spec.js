@@ -2311,3 +2311,60 @@ describe('failOnToolReportedError — a tool that REPORTS failure now fails', ()
     }
   });
 });
+
+describe('the live card does not promise rounds the budget will not buy', () => {
+  const { drProgressFraction } = require('./deepResearchRun');
+
+  /**
+   * `maxRounds` is the CONFIGURED cap and a run almost never reaches it — the budget gate
+   * stops first. Dividing by it made the bar crawl to 0.35 on a run that afforded two of six
+   * rounds and then jump to the 0.92 the report step claims, skipping two checklist steps.
+   */
+  it('advances on every round without racing the configured cap', () => {
+    const at = (round) => drProgressFraction({ type: 'research', round }, 6, 0);
+
+    expect(at(1)).toBeGreaterThan(0.35);
+    expect(at(2)).toBeGreaterThan(at(1));
+    expect(at(3)).toBeGreaterThan(at(2));
+  });
+
+  it('FAILS ON PRE-FIX CODE: two rounds of six no longer leave the bar at a third', () => {
+    expect(drProgressFraction({ type: 'research', round: 2 }, 6, 0)).toBeGreaterThan(
+      0.1 + 0.75 * (2 / 6),
+    );
+  });
+
+  it('never reaches the fraction the report step claims', () => {
+    for (const round of [1, 2, 4, 8, 16, 64]) {
+      expect(drProgressFraction({ type: 'research', round }, 6, 0)).toBeLessThan(0.92);
+    }
+  });
+
+  it('keeps the scope and report anchors', () => {
+    expect(drProgressFraction({ type: 'scope' }, 6, 0)).toBe(0.08);
+    expect(drProgressFraction({ type: 'report' }, 6, 0)).toBe(0.92);
+  });
+});
+
+describe('the PDF carries the truncation caveat on its own', () => {
+  const { withTruncationNotice, PDF_TRUNCATED_NOTICE } = require('./deepResearchRun');
+
+  /**
+   * The PDF is the copy that leaves the chat. In the chat "gathering stopped early" is a
+   * field on the message; a file has no such field, so a truncated report was forwarded to
+   * a manager reading as finished.
+   */
+  it('prepends the caveat for a run whose gathering was cut short', () => {
+    const out = withTruncationNotice('# Отчёт\n\nВывод.', true);
+    expect(out.startsWith(PDF_TRUNCATED_NOTICE)).toBe(true);
+    expect(out).toContain('# Отчёт');
+  });
+
+  it('leaves a complete report untouched', () => {
+    expect(withTruncationNotice('# Отчёт', false)).toBe('# Отчёт');
+  });
+
+  it('does not turn empty text into a caveat with nothing under it', () => {
+    expect(withTruncationNotice('', true)).toBe('');
+  });
+});
