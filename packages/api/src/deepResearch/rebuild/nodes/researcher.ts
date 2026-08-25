@@ -32,16 +32,6 @@ import { buildResearcherPrompt, buildCompressPrompt } from '../prompts';
 
 const ZERO_USAGE: DeepResearchTokenUsage = { input: 0, output: 0, total: 0 };
 /**
- * Fallback cap on raw tool text fed into COMPRESS, used only when a caller passes none.
- * The real cap is `tier.compressInputChars` — this constant is what the cap USED to be, and
- * it was the tightest point of the whole pipeline: a researcher gathers up to
- * `maxSearcherTurns x MAX_TOOL_CALLS_PER_TURN x MAX_TOOL_OUTPUT_CHARS` characters (160 000
- * on the balanced tier), and `.slice` keeps the FIRST 24 000 of them. Turn one alone
- * overflows that, so turns two and up were researched, paid for, re-sent in every later
- * prompt — and then dropped before they could reach the digest, let alone the report.
- */
-const COMPRESS_INPUT_CHAR_CAP = 24_000;
-/**
  * Replaces a tool result that has fallen out of the researcher's context window. The
  * `tool_call` record itself stays, so the model still knows the call happened and what it
  * asked for; only the payload goes. Kept short on purpose — it is re-sent every turn.
@@ -455,6 +445,19 @@ export function maxGatheredChars(maxSearcherTurns: number): number {
   return calls * MAX_TOOL_OUTPUT_CHARS + (calls - 1) * TOOL_OUTPUT_SEPARATOR.length;
 }
 
+/**
+ * Joins the raw tool outputs into the single bounded block COMPRESS sees — also the exact
+ * text source URLs are pulled from, so citations match the compressed material rather than
+ * trailing material beyond the cap (L6).
+ *
+ * `cap` is required, and deliberately has no default. It used to default to a fixed 24 000
+ * characters, which was the tightest point of the whole pipeline: a researcher gathers up to
+ * `maxSearcherTurns x MAX_TOOL_CALLS_PER_TURN x MAX_TOOL_OUTPUT_CHARS` characters — 160 000
+ * on the balanced tier — and `.slice` keeps the FIRST 24 000 of them. Turn one alone
+ * overflows that, so turns two and up were researched, paid for, re-sent in every later
+ * prompt, and then dropped before they could reach the digest, let alone the report. A
+ * default 6.9x below any shipped tier is a trap, not a fallback.
+ */
 export function boundToolOutputs(toolOutputs: string[], cap: number): string {
   /**
    * Empty outputs are dropped BEFORE the join: `['', '']` joined to `'\n\n---\n\n'` — a
