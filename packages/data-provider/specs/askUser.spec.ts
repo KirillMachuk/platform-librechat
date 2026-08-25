@@ -30,6 +30,13 @@ describe('parseAskUserArgs', () => {
     expect(parseAskUserArgs({ questions: [] })).toBeNull();
   });
 
+  it('deduplicates identical option strings within a question', () => {
+    const parsed = parseAskUserArgs({
+      questions: [{ prompt: 'Q', options: ['Да', 'Да ', 'Нет'] }],
+    });
+    expect(parsed?.[0].options).toEqual(['Да', 'Нет']);
+  });
+
   it('drops questions with fewer than 2 options and clamps counts', () => {
     const parsed = parseAskUserArgs({
       questions: [
