@@ -216,6 +216,8 @@ export interface ApprovalCardProps {
   headerAction?: React.ReactNode;
   onApprove?: (payload?: { answers?: Record<string, string> }) => void;
   onSecondary?: () => void;
+  /** aria-pressed on the ghost button (PlanCard's «Редактировать» mode). */
+  secondaryPressed?: boolean;
   className?: string;
 }
 
@@ -240,6 +242,7 @@ export function ApprovalCard({
   headerAction,
   onApprove,
   onSecondary,
+  secondaryPressed,
   className,
 }: ApprovalCardProps) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -248,6 +251,13 @@ export function ApprovalCard({
   const [step, setStep] = useState(0);
   const [planExpanded, setPlanExpanded] = useState(false);
   const autoApproveActive = variant === 'plan' && autoApprove != null && autoApprove.secsLeft > 0;
+  /* The fade-out keeps showing the LAST ticking frame (the original froze
+   * the pie too instead of snapping to zero). */
+  const lastAutoRef = useRef(autoApprove ?? null);
+  if (autoApprove != null) {
+    lastAutoRef.current = autoApprove;
+  }
+  const shownAuto = autoApprove ?? lastAutoRef.current;
   const [autoUI, setAutoUI] = useState<'active' | 'leaving' | 'gone'>(
     autoApproveActive ? 'active' : 'gone',
   );
@@ -364,11 +374,16 @@ export function ApprovalCard({
    * live; when the parent drops the countdown (cancel by ✕/edit/typing, or
    * expiry without unmount) the block fades out like the original's ✕. */
   useEffect(() => {
-    if (autoApproveActive && autoUI === 'gone') {
-      setAutoUI('active');
+    if (autoApproveActive) {
+      if (autoUI !== 'active') {
+        if (autoFadeTimer.current) {
+          clearTimeout(autoFadeTimer.current);
+        }
+        setAutoUI('active');
+      }
       return;
     }
-    if (!autoApproveActive && autoUI === 'active') {
+    if (autoUI === 'active') {
       setAutoUI('leaving');
       if (autoFadeTimer.current) {
         clearTimeout(autoFadeTimer.current);
@@ -493,7 +508,7 @@ export function ApprovalCard({
           <Icon className={styles.iconSvg} aria-hidden />
         </span>
         <div className={styles.headText}>
-          <div className={styles.title}>{title}</div>
+          <h3 className={styles.title}>{title}</h3>
         </div>
         {headerAction != null && <div className={styles.headActions}>{headerAction}</div>}
       </div>
@@ -808,8 +823,8 @@ export function ApprovalCard({
                       strokeDasharray={1}
                       style={{
                         strokeDashoffset:
-                          autoApprove != null && autoApprove.total > 0
-                            ? 1 - (autoApprove.total - autoApprove.secsLeft) / autoApprove.total
+                          shownAuto != null && shownAuto.total > 0
+                            ? 1 - (shownAuto.total - shownAuto.secsLeft) / shownAuto.total
                             : 1,
                       }}
                       transform="rotate(-90 12 12)"
@@ -823,7 +838,7 @@ export function ApprovalCard({
               <span className={styles.autoApproveLabel}>
                 {strings.autoApproveBefore}
                 <span className={styles.autoApproveSecs}>
-                  <RollingDigits value={String(autoApprove?.secsLeft ?? 0)} />
+                  <RollingDigits value={String(shownAuto?.secsLeft ?? 0)} />
                 </span>
                 {strings.autoApproveAfter}
               </span>
@@ -837,6 +852,7 @@ export function ApprovalCard({
               <button
                 type="button"
                 className={styles.btnGhost}
+                aria-pressed={secondaryPressed}
                 onClick={(e) => {
                   e.preventDefault();
                   onSecondary?.();

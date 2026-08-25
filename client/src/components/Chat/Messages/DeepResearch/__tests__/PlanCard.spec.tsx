@@ -19,18 +19,7 @@ jest.mock('~/data-provider', () => ({
   useGetStartupConfig: () => ({ data: mockStartupConfig }),
 }));
 jest.mock('~/common', () => ({ mainTextareaId: 'prompt-textarea' }));
-jest.mock('~/components/icons', () => ({ Telescope: () => <svg data-testid="telescope" /> }));
 jest.mock('@librechat/client', () => ({
-  // Faithful enough to assert forwarded DOM props (aria-pressed/label, className); the real
-  // Button drops the custom variant/size into class variants, so strip them off the mock.
-  Button: ({
-    children,
-    variant: _variant,
-    size: _size,
-    ...rest
-  }: React.ComponentProps<'button'> & { variant?: string; size?: string }) => (
-    <button {...rest}>{children}</button>
-  ),
   useToastContext: () => ({ showToast: mockShowToast }),
 }));
 jest.mock('librechat-data-provider', () => ({
@@ -177,7 +166,14 @@ describe('PlanCard', () => {
     jest.useFakeTimers();
     mockStartupConfig = { deepResearch: { planGate: true, planAutoStartSec: 2 } };
     render(<PlanCard message={planMessage(new Date().toISOString())} awaitingAction />);
-    for (let i = 0; i < 31; i++) {
+    // The config value must NOT set the duration: at 5s (config says 2) nothing fires yet.
+    for (let i = 0; i < 5; i++) {
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+    }
+    expect(mockSubmit).not.toHaveBeenCalled();
+    for (let i = 0; i < 27; i++) {
       act(() => {
         jest.advanceTimersByTime(1000);
       });
@@ -199,7 +195,8 @@ describe('PlanCard', () => {
           autoStartSec={2}
         />,
       );
-      for (let i = 0; i < 5; i++) {
+      // Past the FULL 30s window — without the composer-busy cancel this fires.
+      for (let i = 0; i < 32; i++) {
         act(() => {
           jest.advanceTimersByTime(1000);
         });
@@ -250,8 +247,10 @@ describe('PlanCard', () => {
     expect(getAllByText('com_ui_deep_research_edit_hint').length).toBeGreaterThan(0);
     expect(queryByText('com_ui_deep_research_autostart_cancelled')).not.toBeInTheDocument();
     // The Edit button reads as the active mode.
-    // Autostart is cancelled — it never fires — but Начать still works if they run as-is.
-    for (let i = 0; i < 5; i++) {
+    expect(getByText('com_ui_edit').closest('button')).toHaveAttribute('aria-pressed', 'true');
+    // Autostart is cancelled — it never fires even past the FULL 30s window —
+    // but Начать still works if they run as-is.
+    for (let i = 0; i < 32; i++) {
       act(() => {
         jest.advanceTimersByTime(1000);
       });

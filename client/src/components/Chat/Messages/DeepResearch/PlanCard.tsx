@@ -270,6 +270,7 @@ export default function PlanCard({
         }
         onApprove={start}
         onSecondary={edit}
+        secondaryPressed={editing}
         footnote={
           showControls ? (
             <>

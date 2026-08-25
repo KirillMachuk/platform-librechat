@@ -45,16 +45,16 @@
   color: var(--text-primary);
 }
 .icon[data-variant="questions"] {
-  background: color-mix(in srgb, var(--text-accent) 12%, var(--surface-primary));
-  color: var(--text-accent);
+  background: color-mix(in srgb, var(--c-acc) 12%, var(--surface-primary));
+  color: var(--c-acc);
 }
 .icon[data-variant="command"] {
-  background: color-mix(in srgb, var(--text-accent) 14%, var(--surface-primary));
-  color: var(--text-accent);
+  background: color-mix(in srgb, var(--c-acc) 14%, var(--surface-primary));
+  color: var(--c-acc);
 }
 .icon[data-variant="plan"] {
-  background: color-mix(in srgb, var(--text-accent) 12%, var(--surface-primary));
-  color: var(--text-accent);
+  background: color-mix(in srgb, var(--c-acc) 12%, var(--surface-primary));
+  color: var(--c-acc);
 }
 .iconSvg { width: 14px; height: 14px; }
 .headText {
@@ -552,7 +552,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--text-accent);
+  color: var(--c-acc);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -586,8 +586,8 @@
   position: absolute;
   inset: 1px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--text-accent) 22%, transparent);
-  color: var(--text-accent);
+  background: color-mix(in srgb, var(--c-acc) 22%, transparent);
+  color: var(--c-acc);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -600,7 +600,7 @@
 .autoApproveCancel:hover .autoApproveCancelGlyph,
 .autoApproveCancel:focus-visible .autoApproveCancelGlyph { opacity: 1; }
 .autoApprovePieTrack {
-  stroke: color-mix(in srgb, var(--text-accent) 22%, transparent);
+  stroke: color-mix(in srgb, var(--c-acc) 22%, transparent);
 }
 .autoApprovePieFill {
   stroke: currentColor;
