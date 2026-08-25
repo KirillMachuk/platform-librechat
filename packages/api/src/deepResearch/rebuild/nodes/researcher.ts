@@ -53,6 +53,8 @@ const CLEARED_TOOL_RESULT =
 export const MAX_TOOL_OUTPUT_CHARS = 8_000;
 /** Max tool calls executed per model turn — bounds fan-out width (M4). */
 export const MAX_TOOL_CALLS_PER_TURN = 5;
+/** What `boundToolOutputs` joins tool outputs with; counted by `maxGatheredChars`. */
+const TOOL_OUTPUT_SEPARATOR = '\n\n---\n\n';
 /** Per-tool-call wall-clock cap (ms) — a hung fetch/RAG query can't stall the run. */
 const TOOL_TIMEOUT_MS = 60_000;
 /** Floor for the deadline-shortened timeout, so a call starting marginally late still sends. */
@@ -235,11 +237,11 @@ export async function runResearchLoop(params: {
   const toolMessageTurns: number[][] = [];
   const window = Math.max(0, params.toolResultWindow ?? 0);
   let usage = ZERO_USAGE;
-  /** What the previous turn cost, in tokens — the budget gate's estimate for the next one. */
-  let lastTurnCost = 0;
   /** Output tokens of the last exchange — the only part of the next turn's cost that is not
    *  already visible in `messages`. */
   let lastOutputTokens = 0;
+  /** Tool results replaced by the window, for the log line at the end of the loop. */
+  let clearedResults = 0;
   let usageByModel: DeepResearchUsageByModel = {};
   const callerModel = params.callerModel ?? configuredModelName(caller);
 
@@ -262,10 +264,6 @@ export async function runResearchLoop(params: {
      * divided by the batch, so tokens burned on a turn that produces no material are taken
      * from the researchers of every later round as well.
      *
-     * The estimate is the LAST turn's cost, not the mean: each turn re-sends the whole
-     * conversation, so cost grows turn over turn and the previous turn is the closest
-     * available floor.
-     *
      * Turn 0 has no previous turn, and the first version of this gate therefore let it run
      * unconditionally. Two independent reviews measured what that costs: with the budget
      * already spent, `perResearcherCap` is 0 (or a handful of tokens — the supervisor
@@ -287,29 +285,32 @@ export async function runResearchLoop(params: {
       break;
     }
     /**
-     * The next turn costs its PROMPT plus its answer, and the prompt is sitting right here
-     * in `messages` — so measure it instead of guessing from the last turn's total. The old
-     * estimate used the last turn's cost alone, which is systematically too low: the tool
-     * results of turn N are not in turn N's prompt but ARE in turn N+1's. A sweep across cap
-     * values found 20 of 44 still ending in a turn that was billed and had its tool calls
-     * discarded. The answer's size is the one part not yet observable, and the last answer
-     * is the closest available stand-in for it.
+     * What the next turn costs is its PROMPT plus its answer, and the prompt is sitting
+     * right here in `messages` — so measure it rather than infer it from the last turn's
+     * total. That inference was systematically low: the tool results of turn N are not in
+     * turn N's prompt but ARE in turn N+1's, and a sweep across cap values found 20 of 44
+     * still ending in a turn that was billed and had its tool calls discarded. The answer
+     * is the one part not yet observable; the last answer stands in for it, floored by its
+     * own text so a provider-reported total that disagrees with the estimate cannot drive
+     * it below zero.
      */
-    const nextTurnEstimate = estimateContextTokens(messages) + lastOutputTokens;
+    const turnPrompt = estimateContextTokens(messages);
+    const nextTurnEstimate = turnPrompt + lastOutputTokens;
     if (turn > 0 && usage.total + nextTurnEstimate >= tokenCap) {
       logger.info(
         `[deepResearch:researcher] not starting turn ${turn + 1}: spent ${Math.round(usage.total)}, ` +
-          `next turn ~${Math.round(nextTurnEstimate)} (context ${Math.round(nextTurnEstimate - lastOutputTokens)} + ` +
+          `next turn ~${Math.round(nextTurnEstimate)} (context ${Math.round(turnPrompt)} + ` +
           `answer ~${Math.round(lastOutputTokens)}), cap ${Math.round(tokenCap)}`,
       );
       break;
     }
     const spentBeforeTurn = usage.total;
-    const turnPrompt = estimateContextTokens(messages);
     const response = await caller.invoke(messages, { signal });
     usage = mergeUsage(usage, usageFromExchange(messages, response));
-    lastTurnCost = usage.total - spentBeforeTurn;
-    lastOutputTokens = Math.max(estimateTokens(extractText(response)), lastTurnCost - turnPrompt);
+    lastOutputTokens = Math.max(
+      estimateTokens(extractText(response)),
+      usage.total - spentBeforeTurn - turnPrompt,
+    );
     usageByModel = mergeUsageByModel(
       usageByModel,
       usageByModelFromExchange(messages, response, callerModel),
@@ -380,7 +381,15 @@ export async function runResearchLoop(params: {
       messages.push(new ToolMessage({ content, tool_call_id: call.id ?? '', name: call.name }));
     }
     toolMessageTurns.push(turnToolMessages);
-    clearStaleToolResults(messages, toolMessageTurns, window);
+    clearedResults += clearStaleToolResults(messages, toolMessageTurns, window);
+  }
+  // The window is the whole point of the change and is otherwise invisible: without this
+  // line the stand cannot answer "did clearing run, and how much did it take out?".
+  if (window > 0) {
+    logger.info(
+      `[deepResearch:researcher] tool-result window ${window}: ${clearedResults} result(s) ` +
+        `cleared from the prompt, ${toolOutputs.length} kept for the digest`,
+    );
   }
   return { toolOutputs, usage, usageByModel };
 }
@@ -423,6 +432,17 @@ export function clearStaleToolResults(
 /** Joins raw tool outputs into the single bounded block COMPRESS sees — also the
  *  exact text source URLs are pulled from, so citations match the compressed
  *  material rather than trailing material beyond the cap (L6). */
+/**
+ * The most characters ONE researcher can hand COMPRESS on a tier: every turn's tool calls at
+ * their per-call cap, plus the separators `boundToolOutputs` puts between them. A tier whose
+ * `compressInputChars` sits below this pays for material and then drops it — which is what
+ * the old fixed 24 000 did to every turn after the first.
+ */
+export function maxGatheredChars(maxSearcherTurns: number): number {
+  const calls = Math.max(1, maxSearcherTurns) * MAX_TOOL_CALLS_PER_TURN;
+  return calls * MAX_TOOL_OUTPUT_CHARS + (calls - 1) * TOOL_OUTPUT_SEPARATOR.length;
+}
+
 export function boundToolOutputs(toolOutputs: string[], cap = COMPRESS_INPUT_CHAR_CAP): string {
   /**
    * Empty outputs are dropped BEFORE the join: `['', '']` joined to `'\n\n---\n\n'` — a
@@ -431,7 +451,7 @@ export function boundToolOutputs(toolOutputs: string[], cap = COMPRESS_INPUT_CHA
    */
   return toolOutputs
     .filter((output) => output.trim().length > 0)
-    .join('\n\n---\n\n')
+    .join(TOOL_OUTPUT_SEPARATOR)
     .slice(0, Math.max(1, cap));
 }
 

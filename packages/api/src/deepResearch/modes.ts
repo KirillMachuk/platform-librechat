@@ -19,7 +19,7 @@ export const DEEP_RESEARCH_MODE_DEFAULTS: Record<DeepResearchMode, ResolvedDeepR
     budgetGateRatio: 0.72,
     timeGateRatio: 0.68,
     digestCap: 6_000,
-    compressInputChars: 160_000,
+    compressInputChars: 165_000,
     toolResultWindow: 1,
   },
   deep: {
@@ -32,7 +32,7 @@ export const DEEP_RESEARCH_MODE_DEFAULTS: Record<DeepResearchMode, ResolvedDeepR
     budgetGateRatio: 0.75,
     timeGateRatio: 0.7,
     digestCap: 8_000,
-    compressInputChars: 200_000,
+    compressInputChars: 205_000,
     toolResultWindow: 1,
   },
 };

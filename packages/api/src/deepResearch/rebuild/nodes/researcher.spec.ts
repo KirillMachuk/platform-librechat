@@ -15,6 +15,7 @@ import {
   runResearchLoop,
   boundToolOutputs,
   compressResearch,
+  maxGatheredChars,
   MAX_TOOL_OUTPUT_CHARS,
   MAX_TOOL_CALLS_PER_TURN,
   createResearcherNode,
@@ -634,8 +635,9 @@ describe('the funnel from gathered material to the digest', () => {
     'the %s tier can compress everything its own limits let a researcher gather',
     (mode) => {
       const tier = resolveDeepResearchTier({ activeMode: mode } as TDeepResearchConfig);
-      const gatherable = tier.maxSearcherTurns * MAX_TOOL_CALLS_PER_TURN * MAX_TOOL_OUTPUT_CHARS;
-      expect(tier.compressInputChars).toBeGreaterThanOrEqual(gatherable);
+      expect(tier.compressInputChars).toBeGreaterThanOrEqual(
+        maxGatheredChars(tier.maxSearcherTurns),
+      );
     },
   );
 
@@ -643,7 +645,7 @@ describe('the funnel from gathered material to the digest', () => {
     const tier = resolveDeepResearchTier({ activeMode: 'balanced' } as TDeepResearchConfig);
     const outputs = Array.from(
       { length: tier.maxSearcherTurns * MAX_TOOL_CALLS_PER_TURN },
-      (_, i) => `<<${i}>>${'я'.repeat(MAX_TOOL_OUTPUT_CHARS - 8)}`,
+      (_, i) => `<<${i}>>`.padEnd(MAX_TOOL_OUTPUT_CHARS, 'я'),
     );
 
     const bounded = boundToolOutputs(outputs, tier.compressInputChars);

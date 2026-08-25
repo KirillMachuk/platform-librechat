@@ -133,9 +133,11 @@ describe('budgetGateReason', () => {
     expect(budgetGateReason(STARVED_ROUND)).toBe('budget');
   });
 
-  it('FAILS ON PRE-FIX CODE: the old point check dispatched this starved round', () => {
-    // Estimate suppressed by having no completed round to measure — the old behaviour,
-    // which must still say "keep going" or the test above proves nothing.
+  it('with nothing measured yet, keeps the old behaviour and dispatches', () => {
+    // Round 0 has no completed round to average, so the estimate is 0 by construction and
+    // the arm reduces to the old point check. Deliberately NOT named "fails on pre-fix
+    // code": it does not — it is the control that keeps the test above from passing for a
+    // gate that simply always stops, and it is the reason a small budget still researches.
     expect(budgetGateReason({ ...STARVED_ROUND, round: 0 })).toBeNull();
   });
 

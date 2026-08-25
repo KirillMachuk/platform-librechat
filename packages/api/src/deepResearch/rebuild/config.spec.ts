@@ -15,7 +15,7 @@ describe('resolveDeepResearchTier', () => {
     expect(tier.budgetGateRatio).toBe(0.75);
     expect(tier.timeGateRatio).toBe(0.7);
     expect(tier.digestCap).toBe(8000);
-    expect(tier.compressInputChars).toBe(200_000);
+    expect(tier.compressInputChars).toBe(205_000);
     expect(tier.toolResultWindow).toBe(1);
     expect(tier.perRunTokenBudget).toBe(800_000);
     expect(tier.wallClockMinutes).toBe(15);
@@ -69,7 +69,7 @@ describe('resolveDeepResearchTier', () => {
     } as TDeepResearchConfig);
 
     expect(tier.digestCap).toBe(3333);
-    expect(tier.compressInputChars).toBe(160_000);
+    expect(tier.compressInputChars).toBe(165_000);
     expect(tier.budgetGateRatio).toBe(0.72);
   });
 

@@ -1636,11 +1636,11 @@ export const deepResearchModeSchema = z.object({
    * it used to mean rebuilding the image.
    *
    * Every knob in this block down to `toolResultWindow` is deliberately `.optional()`, NOT
-   * `.default()`: the yaml is parsed with `configSchema.strict().safeParse`, so a `.default()`
-   * would materialise on EVERY tier block present in the file and then win over the per-tier
-   * value in `DEEP_RESEARCH_MODE_DEFAULTS` (the resolver reads `override.x ?? base.x`, and a
-   * defaulted field is "set"). The deep tier would silently inherit the balanced tier's
-   * numbers. Defaults for these live in `DEEP_RESEARCH_MODE_DEFAULTS`, per tier.
+   * `.default()`, unlike the older numbers above them: one schema describes BOTH tiers while
+   * the right value differs per tier, so a default here is a value with nowhere correct to
+   * live. The per-tier defaults are `DEEP_RESEARCH_MODE_DEFAULTS`, and the resolver reads
+   * `override.x ?? base.x` — for which a field carrying a schema default is indistinguishable
+   * from one an admin set on purpose. The schema stays silent and the tier decides.
    */
   budgetGateRatio: z.number().min(0.1).max(0.95).optional(),
   /** Wall-clock analogue of `budgetGateRatio` — same reason it lives here now. */
@@ -1654,9 +1654,11 @@ export const deepResearchModeSchema = z.object({
   /**
    * Max characters of raw tool output fed into COMPRESS per researcher. Anything gathered
    * beyond it is paid for and then dropped, so it must exceed what a researcher can gather
-   * (`maxSearcherTurns x 5 calls x 8000 chars`) or the last turns research for nothing.
+   * (`maxSearcherTurns x 5 calls x 8000 chars`, plus the separators between them) or the last
+   * turns research for nothing. The ceiling is high enough that even `maxSearcherTurns: 20`
+   * can be given a cap that covers its own gathering.
    */
-  compressInputChars: z.number().int().min(4000).max(400000).optional(),
+  compressInputChars: z.number().int().min(4000).max(1000000).optional(),
   /**
    * How many of the most recent turns keep their RAW tool results in the researcher's
    * message history. Older results are replaced by a short marker (the tool_use record
