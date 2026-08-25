@@ -1,14 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
-  IconChevronDown,
-  IconChevronUp,
-  IconCornerDownLeft,
-  IconListCheck,
-  IconListDetails,
-  IconMessageCircleQuestion,
-  IconTerminal2,
-  IconX,
-} from '@tabler/icons-react';
+  ChevronDown,
+  ChevronUp,
+  CornerDownLeft,
+  ListChecks,
+  ListTodo,
+  MessageCircleQuestion,
+  Terminal,
+  X,
+} from '~/components/icons';
 import styles from './ApprovalCard.module.css';
 
 /**
@@ -177,7 +177,7 @@ export function ApprovalCardHeaderAction({
         onClick();
       }}
     >
-      {children ?? <IconX className={styles.headActionIcon} stroke={2} aria-hidden />}
+      {children ?? <X className={styles.headActionIcon} stroke={2} aria-hidden />}
     </button>
   );
 }
@@ -471,9 +471,9 @@ export function ApprovalCard({
   };
 
   const VARIANT_ICONS = {
-    questions: IconMessageCircleQuestion,
-    command: IconTerminal2,
-    plan: IconListDetails,
+    questions: MessageCircleQuestion,
+    command: Terminal,
+    plan: ListTodo,
   } as const;
   const Icon = VARIANT_ICONS[variant];
 
@@ -668,7 +668,7 @@ export function ApprovalCard({
           <div className={styles.todoWell}>
             <div className={styles.todoHead}>
               <span className={styles.todoHeadIcon}>
-                <IconListCheck className={styles.todoListIcon} stroke={2} aria-hidden />
+                <ListChecks className={styles.todoListIcon} stroke={2} aria-hidden />
               </span>
               <span className={styles.todoTitle}>{todoTitle}</span>
               <span className={styles.todoCount}>{plan.length}</span>
@@ -757,7 +757,7 @@ export function ApprovalCard({
                   goToStep(safeStep - 1);
                 }}
               >
-                <IconChevronUp className={styles.stepArrowIcon} stroke={2} aria-hidden />
+                <ChevronUp className={styles.stepArrowIcon} stroke={2} aria-hidden />
               </button>
               <span className={styles.stepBadge} aria-live="polite">
                 <RollingDigits value={stepLabel} />
@@ -772,7 +772,7 @@ export function ApprovalCard({
                   goToStep(safeStep + 1);
                 }}
               >
-                <IconChevronDown className={styles.stepArrowIcon} stroke={2} aria-hidden />
+                <ChevronDown className={styles.stepArrowIcon} stroke={2} aria-hidden />
               </button>
             </div>
           )}
@@ -831,7 +831,7 @@ export function ApprovalCard({
                     />
                   </svg>
                   <span className={styles.autoApproveCancelGlyph} aria-hidden>
-                    <IconX size={8} stroke={2.5} />
+                    <X size={8} stroke={2.5} />
                   </span>
                 </button>
               </span>
@@ -871,12 +871,7 @@ export function ApprovalCard({
               }}
             >
               {approveLabel}
-              <IconCornerDownLeft
-                className={styles.btnSubmitIcon}
-                size={12}
-                stroke={2}
-                aria-hidden
-              />
+              <CornerDownLeft className={styles.btnSubmitIcon} size={12} stroke={2} aria-hidden />
             </button>
           </div>
         </div>

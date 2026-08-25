@@ -211,6 +211,10 @@
     "fit": "exact",
     "to": "copy-plus"
   },
+  "CornerDownLeft": {
+    "fit": "exact",
+    "to": "corner-down-left"
+  },
   "Database": {
     "fit": "exact",
     "to": "database"
@@ -459,9 +463,17 @@
     "fit": "close",
     "to": "link"
   },
+  "ListChecks": {
+    "fit": "near",
+    "to": "list-check"
+  },
   "ListFilter": {
     "fit": "close",
     "to": "filter"
+  },
+  "ListTodo": {
+    "fit": "near",
+    "to": "list-details"
   },
   "LoadBalancer": {
     "fit": "close",
@@ -490,6 +502,10 @@
   "MessageCircleDashed": {
     "fit": "close",
     "to": "ghost-3"
+  },
+  "MessageCircleQuestion": {
+    "fit": "exact",
+    "to": "message-circle-question"
   },
   "MessageSquare": {
     "fit": "close",
