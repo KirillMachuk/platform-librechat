@@ -116,13 +116,18 @@ const acceptTermsController = async (req, res) => {
 /**
  * Removes every file a departing account owns.
  *
- * Goes through {@link purgeFilesWithVectors} rather than `processDeleteRequest`
- * so the vector store is asked first and on its own: the caller finishes with a
- * blanket `deleteFiles(null, user.id)` that wipes whatever survived, including
- * the records a failed vector cleanup deliberately kept. Once those records are
- * gone the chunks carry the account's documents with nothing left to link them
- * to an owner, and the account itself is already deleted by then — nobody will
- * ever come back to retry. One extra attempt costs a request per file.
+ * Goes through {@link purgeFilesWithVectors} for one narrow case that
+ * `processDeleteRequest` cannot cover on its own: when a primary-storage delete
+ * throws, it rethrows before the secondary vector delete ever runs, so the vector
+ * store is never asked at all. Everywhere else that is survivable — the file keeps
+ * its record and the delete can be retried — but not here: the caller finishes with
+ * a blanket `deleteFiles(null, user.id)` that wipes every record regardless, and by
+ * then the account is gone and nobody will retry. The chunks would keep the
+ * account's documents with nothing left to link them to an owner.
+ *
+ * It buys a retry, not a guarantee: if the vector store is down, both attempts fail
+ * and the records are wiped anyway. What catches that is the audit entry this writes
+ * per file and the orphan check that runs against pgvector on the stand.
  */
 const deleteUserFiles = async (req) => {
   try {

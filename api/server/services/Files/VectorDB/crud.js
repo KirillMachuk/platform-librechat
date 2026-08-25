@@ -19,10 +19,18 @@ const { logAxiosError, generateShortLivedToken } = require('@librechat/api');
  * @param {MongoFile} file
  * @returns {boolean}
  */
-const mayHaveVectors = (file) => file?.embedded === true || file?.embeddingStatus != null;
+const mayHaveVectors = (file) =>
+  file?.embedded === true ||
+  /* Not `!= null`: two delete routes hand `req.body.files` straight to `processDeleteRequest`,
+   * so this also reads unvalidated client input, where `embeddingStatus: ''` would otherwise
+   * count as "in the embed lifecycle" and buy a pointless request per file. Real records only
+   * ever hold one of the schema's four states. */
+  (typeof file?.embeddingStatus === 'string' && file.embeddingStatus !== '');
 
-/** Ceiling for the delete call, same as the background purge carries. */
-const DELETE_TIMEOUT_MS = 60_000;
+/* Ceiling for the delete call. Someone is waiting on this one, unlike the background purge that
+ * carries 60s: measured on the stand, a delete round-trip answers in 12-72ms, so 15s is ~200x the
+ * observed worst case while capping what one stalled store can hold a bulk delete open for. */
+const DELETE_TIMEOUT_MS = 15_000;
 
 /**
  * Deletes a file from the vector database. This function takes a file object, constructs the full path, and
@@ -50,9 +58,11 @@ const deleteVectors = async (req, file) => {
     );
     return;
   }
+  /* Signed outside the try on purpose: a missing JWT_SECRET throws here, and inside the try it
+   * would be indistinguishable from the store refusing — keeping the file forever over a local
+   * misconfiguration. */
+  const jwtToken = generateShortLivedToken(req.user.id);
   try {
-    const jwtToken = generateShortLivedToken(req.user.id);
-
     return await axios.delete(`${process.env.RAG_API_URL}/documents`, {
       headers: {
         Authorization: `Bearer ${jwtToken}`,
@@ -60,9 +70,12 @@ const deleteVectors = async (req, file) => {
         accept: 'application/json',
       },
       data: [file.file_id],
-      /* A hung vector store must not hang the user's delete forever. Mirrors the
-       * background purge, which has always carried a ceiling. */
+      /* A hung vector store must not hang the user's delete forever. `maxRedirects: 0` is what
+       * makes the ceiling a wall clock: this axios only arms its connect-phase timer on that path
+       * (lib/adapters/http.js), otherwise follow-redirects restarts the timer on every hop. The
+       * vector store is an internal service that answers JSON — a redirect is not a case to follow. */
       timeout: DELETE_TIMEOUT_MS,
+      maxRedirects: 0,
     });
   } catch (error) {
     logAxiosError({
