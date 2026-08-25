@@ -72,10 +72,14 @@ const Part = memo(function Part({
       />
     );
   } else if (part.type === ContentTypes.AGENT_UPDATE) {
+    /* isSubmitting gate: showCursor alone is true for the last message of a
+     * CLOSED conversation too, which left the waiting label shimmering
+     * forever on a finished reply (round 24 audit; the vision path below
+     * always had the gate). */
     return (
       <>
         <AgentUpdate currentAgentId={part[ContentTypes.AGENT_UPDATE]?.agentId} />
-        {isLast && showCursor && (
+        {isSubmitting && isLast && showCursor && (
           <Container>
             <EmptyText />
           </Container>
@@ -93,18 +97,19 @@ const Part = memo(function Part({
     }
     /** Handle whitespace-only text to avoid layout shift */
     if (text.length > 0 && /^\s*$/.test(text)) {
-      /** Show placeholder for whitespace-only last part during streaming */
-      if (isLast && showCursor) {
+      /** Show placeholder for whitespace-only last part during streaming
+       *  (isSubmitting gate: without it the label shimmered forever on a
+       *  finished reply whose last part is whitespace-only). */
+      if (isSubmitting && isLast && showCursor) {
         return (
           <Container>
             <EmptyText />
           </Container>
         );
       }
-      /** Skip rendering non-last whitespace-only parts to avoid empty Container */
-      if (!isLast) {
-        return null;
-      }
+      /** Skip rendering whitespace-only parts outside the streaming
+       *  placeholder case — an empty Container adds nothing but layout. */
+      return null;
     }
     return (
       <Container>

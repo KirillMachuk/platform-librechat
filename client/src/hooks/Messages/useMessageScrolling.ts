@@ -50,6 +50,14 @@ export default function useMessageScrolling(messagesTree?: TMessage[] | null) {
       ([entry]) => {
         isNearBottomRef.current = entry.isIntersecting;
         debouncedSetShowScrollButton(!entry.isIntersecting);
+        /* The user came back to the bottom on their own — resume following,
+         * exactly as the scroll-to-bottom button click does. Without this,
+         * a wheel/touch anywhere over messages set abortScroll for the rest
+         * of the stream and only the button could re-attach the follow
+         * (round 24 audit: «вернулся вниз колесом — лента всё равно стоит»). */
+        if (entry.isIntersecting) {
+          setAbortScroll(false);
+        }
       },
       { root: scrollableRef.current, threshold },
     );
@@ -60,7 +68,7 @@ export default function useMessageScrolling(messagesTree?: TMessage[] | null) {
       observer.disconnect();
       clearTimeout(timeoutIdRef.current);
     };
-  }, [messagesEndRef, scrollableRef, debouncedSetShowScrollButton]);
+  }, [messagesEndRef, scrollableRef, debouncedSetShowScrollButton, setAbortScroll]);
 
   /* The mount effect above owns THE IntersectionObserver — and the BUTTON.
      This used to build a NEW observer on every scroll event and return a
@@ -118,11 +126,27 @@ export default function useMessageScrolling(messagesTree?: TMessage[] | null) {
         return;
       }
 
+      /* Self-heal on growth: wheeling down AT the bottom still trips the
+       * wheel handler's abortScroll, and the IntersectionObserver only fires
+       * on crossings — so if the sentinel never left the viewport nothing
+       * would clear the abort. Content growth runs through here on every
+       * chunk; being at the bottom is the user's answer. */
+      if (isSubmitting && abortScroll === true && isNearBottomRef.current) {
+        setAbortScroll(false);
+      }
+
       if (shouldFollowResize && isSubmitting && abortScroll !== true && isNearBottomRef.current) {
         scrollToBottom?.();
       }
     },
-    [abortScroll, clampScrollToContent, getIsNearBottom, isSubmitting, scrollToBottom],
+    [
+      abortScroll,
+      clampScrollToContent,
+      getIsNearBottom,
+      isSubmitting,
+      scrollToBottom,
+      setAbortScroll,
+    ],
   );
 
   useEffect(() => {

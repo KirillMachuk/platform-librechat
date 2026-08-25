@@ -28,13 +28,11 @@ const parseThinkingContent = (text: string) => {
 };
 
 const LoadingFallback = () => (
-  <div className="text-message mb-[0.625rem] flex min-h-[20px] flex-col items-start gap-3 overflow-visible">
+  <div className="text-message mb-[0.625rem] flex flex-col items-start gap-3 overflow-visible">
     <div className="markdown prose dark:prose-invert light w-full break-words">
-      <div className="absolute">
-        <p className="submitting relative">
-          <ThinkingIndicator />
-        </p>
-      </div>
+      <p className="submitting relative">
+        <ThinkingIndicator />
+      </p>
     </div>
   </div>
 );
