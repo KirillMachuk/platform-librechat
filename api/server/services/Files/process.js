@@ -53,7 +53,7 @@ const { getOpenAIClient } = require('~/server/controllers/assistants/helpers');
 const { loadAuthValues } = require('~/server/services/Tools/credentials');
 const { getFileStrategy } = require('~/server/utils/getFileStrategy');
 const { checkCapability } = require('~/server/services/Config');
-const { recordAudit } = require('~/server/services/Audit');
+const { recordAudit, auditRequestContext } = require('~/server/services/Audit');
 const { LB_QueueAsyncCall } = require('~/server/utils/queue');
 const { getRetentionExpiry, getAgentFileRetentionExpiry } = require('./retention');
 const { getStrategyFunctions } = require('./strategies');
@@ -355,7 +355,12 @@ const getDeleteMethod = ({ source, deletionMethods }) => {
   return deleteFile;
 };
 
-const createDeleteFileWithSecondaryStorage = ({ source, deleteFile, deletionMethods }) => {
+const createDeleteFileWithSecondaryStorage = ({
+  source,
+  deleteFile,
+  deletionMethods,
+  primaryDeletedFileIds,
+}) => {
   return async (req, file, openai) => {
     const secondaryDeleteMethods = [];
     if (mayHaveVectors(file) && source !== FileSources.vectordb) {
@@ -377,6 +382,12 @@ const createDeleteFileWithSecondaryStorage = ({ source, deleteFile, deletionMeth
       }
       logger.warn('Primary file storage was already missing during delete', err);
     }
+    /** The bytes are gone from here on. Recorded because a secondary store
+     * (vectors, code sandbox) can still fail below and reject the whole
+     * operation, which lands the file in `failedFileIds` — and an audit entry
+     * saying "failure" about a document that has in fact been destroyed is worse
+     * than no entry at all. */
+    primaryDeletedFileIds?.add(file.file_id);
 
     await Promise.all(
       secondaryDeleteMethods.map((secondaryDeleteFile) => secondaryDeleteFile(req, file)),
@@ -400,24 +411,54 @@ const createDeleteFileWithSecondaryStorage = ({ source, deleteFile, deletionMeth
  * @returns {Promise<{ deletedFileIds: string[], failedFileIds: string[] }>}
  * @throws {Error} When storage deletion cannot be scheduled or file metadata cleanup fails.
  */
-const processDeleteRequest = async ({
-  req,
-  files,
-  reason = 'user_request',
-  /** The retention sweep keeps its own accounting: it records a `file.delete`
-   * even for files it never attempts (an expired file with no owner), which this
-   * function never sees because it is not called for them. Left to both, every
-   * swept file would be journalled twice. Deliberately opt-OUT rather than
-   * opt-in — a new caller that forgets gets an entry, not silence, and silence is
-   * the failure this whole change exists to fix. */
-  skipAudit = false,
-}) => {
+/**
+ * Runs the delete and journals it, whatever happens.
+ *
+ * The recording sits in a `finally` around the whole run rather than beside the
+ * return, because this function has throw sites BEFORE its own bookkeeping — an
+ * unknown `source` reaching `getStrategyFunctions`, or `initializeClients` — and
+ * by then storage deletions for earlier files of the same batch are already in
+ * flight and will destroy bytes. Recorded only at the end, those deletions leave
+ * no entry at all, which is the exact silence this exists to remove.
+ */
+const processDeleteRequest = async (params) => {
+  const { req, files, reason = 'user_request', skipAudit = false } = params;
+  /** Shared with the run below so the entry can be written even when it throws. */
+  const tally = {
+    resolvedFileIds: new Set(),
+    failedFileIds: new Set(),
+    primaryDeletedFileIds: new Set(),
+    metadataDeletedFileIds: [],
+    /** Replaced by the inner run with its own array. Needed here because a throw
+     * leaves storage deletions IN FLIGHT: recording immediately would find both
+     * sets still empty and write nothing, which is the same silence by a longer
+     * route. Waiting for them first is what makes the entry true. */
+    promises: [],
+  };
+  try {
+    return await runDeleteRequest({ ...params, tally });
+  } finally {
+    if (!skipAudit) {
+      await Promise.allSettled(tally.promises);
+      recordFileDeletions({
+        req,
+        files,
+        deletedFileIds: tally.metadataDeletedFileIds,
+        failedFileIds: tally.failedFileIds,
+        primaryDeletedFileIds: tally.primaryDeletedFileIds,
+        reason,
+      });
+    }
+  }
+};
+
+const runDeleteRequest = async ({ req, files, tally }) => {
+  const { resolvedFileIds, failedFileIds, primaryDeletedFileIds } = tally;
   const appConfig = req.config;
-  const resolvedFileIds = new Set();
-  const failedFileIds = new Set();
   const deletionMethods = {};
   const limit = createConcurrencyLimiter(fileDeleteConcurrency());
   const promises = [];
+  tally.promises = promises;
 
   /** @type {Record<string, OpenAI | undefined>} */
   const client = { [FileSources.openai]: undefined, [FileSources.azure]: undefined };
@@ -485,7 +526,12 @@ const processDeleteRequest = async ({
     enqueueDeleteOperation({
       req,
       file,
-      deleteFile: createDeleteFileWithSecondaryStorage({ source, deleteFile, deletionMethods }),
+      deleteFile: createDeleteFileWithSecondaryStorage({
+        source,
+        deleteFile,
+        deletionMethods,
+        primaryDeletedFileIds,
+      }),
       promises,
       resolvedFileIds,
       failedFileIds,
@@ -506,6 +552,7 @@ const processDeleteRequest = async ({
   await Promise.allSettled(promises);
   const deletedFileIds = [...resolvedFileIds];
   let metadataDeletedFileIds = deletedFileIds;
+  tally.metadataDeletedFileIds = metadataDeletedFileIds;
   if (deletedFileIds.length > 0) {
     try {
       await db.deleteFiles(deletedFileIds);
@@ -513,13 +560,7 @@ const processDeleteRequest = async ({
       logger.error('Error deleting file metadata after storage deletion', error);
       deletedFileIds.forEach((fileId) => failedFileIds.add(fileId));
       metadataDeletedFileIds = [];
-      /** Recorded before rethrowing. This branch is the storage-succeeded,
-       * database-failed case: the bytes are gone and the record survives, which
-       * is the state most worth having in the journal — and the one an entry
-       * written only on the happy path would omit entirely. */
-      if (!skipAudit) {
-        recordFileDeletions({ req, files, deletedFileIds: [], failedFileIds, reason });
-      }
+      tally.metadataDeletedFileIds = [];
       throw error;
     }
     if (metadataDeletedFileIds.length > 0) {
@@ -529,16 +570,6 @@ const processDeleteRequest = async ({
         logger.error('Error cleaning up orphaned agent file references', error);
       }
     }
-  }
-
-  if (!skipAudit) {
-    recordFileDeletions({
-      req,
-      files,
-      deletedFileIds: metadataDeletedFileIds,
-      failedFileIds,
-      reason,
-    });
   }
 
   return {
@@ -559,10 +590,18 @@ const processDeleteRequest = async ({
  * was mounted per route (`auditFileUpload`, `auditProject`) and the file-delete
  * route simply never got a hook.
  *
- * `processDeleteRequest` is the one place every deletion passes through — the
- * four branches of `DELETE /api/files`, account deletion, both project routes and
- * the sweep — so recording here cannot be forgotten by the next caller, which is
- * exactly how the hole appeared. It is also the only place that knows the TRUTH:
+ * `processDeleteRequest` is where every deletion a USER can ask for passes
+ * through — the four branches of `DELETE /api/files`, account deletion, both
+ * project routes and the sweep — so recording here cannot be forgotten by the
+ * next caller, which is exactly how the hole appeared.
+ *
+ * It is NOT every way a File record can disappear. These still leave no entry,
+ * and saying so beats implying otherwise: agent and assistant avatars
+ * (`controllers/agents/v1.js`, `controllers/assistants/v1.js` — pictures, not
+ * documents) and the operator CLI `config/delete-user.js`, which is run by hand
+ * on the box and bypasses the application entirely.
+ *
+ * It is also the only place that knows the TRUTH:
  * the route awaits this function without reading its result and answers "Files
  * deleted successfully" either way, so an entry written there would claim success
  * for files that failed.
@@ -577,11 +616,17 @@ const processDeleteRequest = async ({
  * @param {Set<string>} params.failedFileIds
  * @param {string} params.reason - why they were deleted, for the entry's metadata
  */
-const recordFileDeletions = ({ req, files, deletedFileIds, failedFileIds, reason }) => {
+const recordFileDeletions = ({
+  req,
+  files,
+  deletedFileIds,
+  failedFileIds,
+  primaryDeletedFileIds,
+  reason,
+}) => {
   /** Lazy, like the vector require below: this module is loaded during startup
    * wiring, and pulling the audit service in at the top adds a cycle through
    * `~/models`. */
-  const { recordAudit, auditRequestContext } = require('~/server/services/Audit');
   const deleted = new Set(deletedFileIds);
   for (const file of files) {
     const fileId = file?.file_id;
@@ -593,8 +638,17 @@ const recordFileDeletions = ({ req, files, deletedFileIds, failedFileIds, reason
      * so that a future branch which leaves a file unresolved produces no entry
      * rather than a false one, in the record that must not contain guesses. */
     let outcome = null;
+    let partial = false;
     if (deleted.has(fileId)) {
       outcome = 'success';
+    } else if (primaryDeletedFileIds?.has(fileId)) {
+      /** The bytes are gone but the record's removal was never confirmed —
+       * a secondary store refused, or the run threw before it got that far.
+       * `failure` would tell an auditor the opposite of what happened and
+       * `success` would overclaim, so this is the schema's `unknown`, which
+       * exists precisely for an effect that was partly applied. */
+      outcome = 'unknown';
+      partial = true;
     } else if (failedFileIds.has(fileId)) {
       outcome = 'failure';
     }
@@ -612,6 +666,7 @@ const recordFileDeletions = ({ req, files, deletedFileIds, failedFileIds, reason
       outcome,
       metadata: {
         reason,
+        ...(partial ? { partial: 'storage_deleted_record_kept' } : {}),
         source: file.source ?? FileSources.local,
         /** Recorded because `file.upload` records it: without the name, the
          * journal can say a file id vanished but not which document, and the

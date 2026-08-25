@@ -221,6 +221,7 @@ const db = require('~/models');
 const {
   processAgentFileUpload,
   processDeleteRequest,
+  purgeFilesWithVectors,
   processImageFile,
   processFileURL,
   sweepExpiredFiles,
@@ -2647,8 +2648,17 @@ describe('processDeleteRequest — the audit trail for deletions', () => {
       'mongo unavailable',
     );
 
+    expect(recordAudit).toHaveBeenCalledTimes(1);
+    /** `unknown`, not `failure`: storage deletion already succeeded, so the
+     * document is destroyed even though its record survived the crash. Saying
+     * "failure" would describe the record's fate and mislead about the
+     * document's. */
     expect(recordAudit).toHaveBeenCalledWith(
-      expect.objectContaining({ targetId: 'doc-1', outcome: 'failure' }),
+      expect.objectContaining({
+        targetId: 'doc-1',
+        outcome: 'unknown',
+        metadata: expect.objectContaining({ partial: 'storage_deleted_record_kept' }),
+      }),
     );
   });
 
@@ -2660,6 +2670,88 @@ describe('processDeleteRequest — the audit trail for deletions', () => {
     expect(recordAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         metadata: expect.objectContaining({ reason: 'account_deleted' }),
+      }),
+    );
+  });
+
+  /**
+   * The case the first version of this got backwards. Primary storage deleted,
+   * a secondary store (vectors, code sandbox) then refused: the document's bytes
+   * are destroyed, its record survives, and the old code journalled `failure` —
+   * telling an auditor the exact opposite of what happened to the document.
+   */
+  it('says unknown, not failure, when the bytes are gone but the record is not', async () => {
+    getStrategyFunctions.mockImplementation((source) =>
+      source === FileSources.vectordb
+        ? { deleteFile: jest.fn().mockRejectedValue(new Error('rag unavailable')) }
+        : { deleteFile: jest.fn().mockResolvedValue(undefined) },
+    );
+
+    const result = await processDeleteRequest({
+      req,
+      files: [makeFile({ embedded: true })],
+    });
+
+    expect(result.failedFileIds).toEqual(['doc-1']);
+    expect(recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetId: 'doc-1',
+        outcome: 'unknown',
+        metadata: expect.objectContaining({ partial: 'storage_deleted_record_kept' }),
+      }),
+    );
+  });
+
+  /**
+   * There are throw sites before this function's own bookkeeping — an unknown
+   * `source` reaching getStrategyFunctions is one. By then the deletes queued for
+   * EARLIER files in the same batch are in flight and will destroy bytes. Nothing
+   * used to record them; recording without waiting would find the sets empty and
+   * write nothing, which is the same silence by a longer route.
+   */
+  it('waits for the deletes already in flight when the run throws, and records them', async () => {
+    /** Settles on a later tick than the synchronous throw below. Had the finally
+     * recorded without waiting, both id sets would still be empty and nothing
+     * would be written — which is exactly what this asserts against. */
+    const firstDelete = jest.fn(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    getStrategyFunctions.mockImplementation((source) => {
+      if (source === 'a-source-that-does-not-exist') {
+        throw new Error('unknown file source');
+      }
+      return { deleteFile: firstDelete };
+    });
+
+    const pending = processDeleteRequest({
+      req,
+      files: [
+        makeFile({ file_id: 'doc-first' }),
+        makeFile({ file_id: 'doc-second', source: 'a-source-that-does-not-exist' }),
+      ],
+    });
+    await expect(pending).rejects.toThrow('unknown file source');
+
+    expect(recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetId: 'doc-first',
+        outcome: 'unknown',
+        metadata: expect.objectContaining({ partial: 'storage_deleted_record_kept' }),
+      }),
+    );
+  });
+
+  /**
+   * `purgeFilesWithVectors` is the door the project routes and account deletion
+   * come through, and nothing tested that it carries the reason at all — so all
+   * of them could silently start journalling `user_request`.
+   */
+  it('carries the reason through purgeFilesWithVectors', async () => {
+    useDeleteMethod(jest.fn().mockResolvedValue(undefined));
+
+    await purgeFilesWithVectors({ req, files: [makeFile()], reason: 'project_deleted' });
+
+    expect(recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ reason: 'project_deleted' }),
       }),
     );
   });
