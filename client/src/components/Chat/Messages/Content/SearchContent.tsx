@@ -9,6 +9,7 @@ import type {
   SearchResultData,
   TMessageContentParts,
 } from 'librechat-data-provider';
+import { TruncatedNote, isTruncatedDrReport } from '~/components/Chat/Messages/DeepResearch';
 import { UnfinishedMessage } from './MessageContent';
 import { cn, mapAttachments } from '~/utils';
 import { SearchContext } from '~/Providers';
@@ -54,13 +55,29 @@ const SearchContent = ({
               />
             );
           })}
-        {message.unfinished === true && (
-          <Suspense>
-            <DelayedRender delay={250}>
-              <UnfinishedMessage message={message} key={`unfinished-${messageId}`} />
-            </DelayedRender>
-          </Suspense>
-        )}
+        {message.unfinished === true &&
+          /**
+           * A Deep Research report gets the plain note, never the error box.
+           *
+           * This component only ever renders the SHARE page, and a shared snapshot carries
+           * `unfinished` through (see share.ts). So a truncated DR report — a real, usable
+           * synthesis — was greeting whoever opened the link with a red role="alert" reading
+           * «Не удалось выполнить запрос. Сообщение об ошибке: …». The chat was fixed and this
+           * surface was not, which is precisely why the rule is now imported rather than
+           * written twice.
+           *
+           * Everything else keeps the existing indicator: an ordinary answer the reader
+           * stopped is genuinely unfinished, and removing that is not this change's business.
+           */
+          (isTruncatedDrReport(message) ? (
+            <TruncatedNote />
+          ) : (
+            <Suspense>
+              <DelayedRender delay={250}>
+                <UnfinishedMessage message={message} key={`unfinished-${messageId}`} />
+              </DelayedRender>
+            </Suspense>
+          ))}
       </SearchContext.Provider>
     );
   }

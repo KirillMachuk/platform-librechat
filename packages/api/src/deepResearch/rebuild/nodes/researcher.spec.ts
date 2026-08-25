@@ -179,18 +179,23 @@ describe('runResearchLoop', () => {
     const caller: ToolCaller = {
       invoke: async () => {
         calls += 1;
-        return toolCallChunk('web_search', { query: 'q' }, `c${calls}`);
+        const chunk = toolCallChunk('web_search', { query: 'q' }, `c${calls}`);
+        // A big answer, so the length-estimate path puts this turn's usage well over the cap.
+        chunk.content = 'x'.repeat(3_000);
+        return chunk;
       },
     };
-    // tokenCap of 1: the first turn's usage already meets it, so the loop stops
-    // after one model call instead of running all 10 turns.
+    // The cap comfortably covers the opening prompt — a cap that does NOT is declined before
+    // the call, which is a separate guarantee tested elsewhere — but this turn's usage blows
+    // straight past it, so the post-call backstop stops the loop after ONE model call instead
+    // of running all 10 turns.
     await runResearchLoop({
       caller,
       tools: [okTool],
       system: 's',
       question: 'q',
       nonce: NONCE,
-      tokenCap: 1,
+      tokenCap: 100,
       maxTurns: 10,
     });
     expect(calls).toBe(1);

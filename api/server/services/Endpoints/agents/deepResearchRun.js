@@ -891,6 +891,49 @@ async function resolveEndpointPricing({ req, db, endpoint, model }) {
  * exists. DR runs as an EPHEMERAL agent, for which that guard grants no shared files —
  * so only the caller's own documents survive, closing the cross-tenant read.
  */
+/**
+ * The failure sentences `file_search` RETURNS instead of throwing.
+ *
+ * Source: api/app/clients/tools/util/fileSearch.js — the auth failure, the "RAG is
+ * unreachable" case (its own comment insists this is NOT "no hits"), and the empty result.
+ * If those sentences are reworded there, the guard test below goes red and points here.
+ */
+const FILE_SEARCH_FAILURE_MARKERS = [
+  'There was an error authenticating the file search request.',
+  'The document search service is temporarily unavailable.',
+  'No content found in the files.',
+];
+
+/**
+ * Makes a tool that REPORTS failure in its return value fail the way the graph understands.
+ *
+ * The research loop decides "this call produced nothing" from a THROW (see `executeToolCall`
+ * in the engine): a thrown call is shown to the model and kept out of the gathered material.
+ * `web_search` throws, so #411 closed the hole for it. `file_search` does not — it returns a
+ * plain sentence — so its failures kept flowing into the material, were compressed into a
+ * digest, passed `hasResearchMaterial`, and came back as a confident report with a PDF built
+ * out of "The document search service is temporarily unavailable."
+ *
+ * Wrapped HERE rather than changed in the tool itself: the tool is shared with the ordinary
+ * chat path, where a returned sentence is exactly the right behaviour — the model reads it
+ * and tells the user. Only Deep Research needs it to be a failure.
+ */
+function failOnToolReportedError(tool, markers) {
+  if (!tool || typeof tool.invoke !== 'function') {
+    return tool;
+  }
+  const original = tool.invoke.bind(tool);
+  tool.invoke = async (input, config) => {
+    const result = await original(input, config);
+    const text = typeof result === 'string' ? result : result?.content;
+    if (typeof text === 'string' && markers.some((marker) => text.startsWith(marker))) {
+      throw new Error(text);
+    }
+    return result;
+  };
+  return tool;
+}
+
 async function buildChatFileSearchTool({ req, userId, conversationId, transformContent }) {
   if (!conversationId) {
     return null;
@@ -917,7 +960,10 @@ async function buildChatFileSearchTool({ req, userId, conversationId, transformC
     if (files.length === 0) {
       return null;
     }
-    return createFileSearchTool({ userId, files, fileCitations: true, transformContent });
+    return failOnToolReportedError(
+      createFileSearchTool({ userId, files, fileCitations: true, transformContent }),
+      FILE_SEARCH_FAILURE_MARKERS,
+    );
   } catch (error) {
     logger.warn('[deepResearchRun] file_search unavailable; running without chat-file RAG', error);
     return null;
@@ -1939,6 +1985,10 @@ async function runNewDeepResearch(params) {
 
 module.exports = {
   runNewDeepResearch,
+  /** Test-only exports: the wrapper that makes a tool's RETURNED failure a real failure, and
+   *  the sentences it matches — which live in another file and can drift out from under it. */
+  failOnToolReportedError,
+  FILE_SEARCH_FAILURE_MARKERS,
   buildDeepResearchTitle,
   isDrFollowUp,
   buildDrTurnContext,
