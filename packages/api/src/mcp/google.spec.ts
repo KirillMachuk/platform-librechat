@@ -57,6 +57,7 @@ describe('Google Drive MCP result normalization', () => {
         mimeType: string;
         viewUrl: string;
         modifiedTime: string;
+        sourceMarkdown: string;
       };
     }>(normalized);
 
@@ -67,6 +68,7 @@ describe('Google Drive MCP result normalization', () => {
       mimeType: 'application/vnd.google-apps.spreadsheet',
       viewUrl: 'https://docs.google.com/spreadsheets/d/sheet_123/edit',
       modifiedTime: '2026-08-24T08:30:00.000Z',
+      sourceMarkdown: '[Quarterly plan](https://docs.google.com/spreadsheets/d/sheet_123/edit)',
     });
     expect(JSON.stringify(payload)).not.toContain('contentSnippet');
     expect(JSON.stringify(payload)).not.toContain('owner@example.com');
@@ -97,13 +99,16 @@ describe('Google Drive MCP result normalization', () => {
       }),
     });
     const payload = parseNormalizedPayload<{
-      files: Array<{ viewUrl: string }>;
+      files: Array<{ viewUrl: string; sourceMarkdown: string }>;
       unsupportedFileCount: number;
       hasMore: boolean;
     }>(normalized);
 
     expect(payload.files).toHaveLength(2);
     expect(payload.files[1].viewUrl).toBe('https://docs.google.com/document/d/doc_456/edit');
+    expect(payload.files[1].sourceMarkdown).toBe(
+      '[Brief](https://docs.google.com/document/d/doc_456/edit)',
+    );
     expect(payload.unsupportedFileCount).toBe(1);
     expect(payload.hasMore).toBe(true);
     expect(JSON.stringify(payload)).not.toContain('contentSnippet');
@@ -118,7 +123,7 @@ describe('Google Drive MCP result normalization', () => {
       metadata: parseGoogleDriveMetadata(textResult(sheetMetadata)),
     });
     const payload = parseNormalizedPayload<{
-      file: { modifiedTime: string };
+      file: { modifiedTime: string; sourceMarkdown: string };
       snapshot: {
         text: string;
         characterCount: number;
@@ -129,6 +134,9 @@ describe('Google Drive MCP result normalization', () => {
     }>(normalized);
 
     expect(payload.file.modifiedTime).toBe('2026-08-24T08:30:00.000Z');
+    expect(payload.file.sourceMarkdown).toBe(
+      '[Quarterly plan](https://docs.google.com/spreadsheets/d/sheet_123/edit)',
+    );
     expect(payload.snapshot.text).toBe(content.slice(0, GOOGLE_DRIVE_SNAPSHOT_LIMIT));
     expect(payload.snapshot.characterCount).toBe(GOOGLE_DRIVE_SNAPSHOT_LIMIT);
     expect(payload.snapshot.originalCharacterCount).toBe(content.length);
@@ -145,5 +153,20 @@ describe('Google Drive MCP result normalization', () => {
         }),
       ),
     ).toThrow('invalid file metadata');
+  });
+
+  it('escapes an untrusted file name before placing it in source Markdown', () => {
+    const normalized = normalizeGoogleDriveToolResult({
+      toolName: 'get_file_metadata',
+      result: textResult({
+        ...sheetMetadata,
+        title: 'Plan ](unsafe) [open <tag>\n*now*',
+      }),
+    });
+    const payload = parseNormalizedPayload<{ file: { sourceMarkdown: string } }>(normalized);
+
+    expect(payload.file.sourceMarkdown).toBe(
+      '[Plan \\](unsafe) \\[open &lt;tag&gt; \\*now\\*](https://docs.google.com/spreadsheets/d/sheet_123/edit)',
+    );
   });
 });
