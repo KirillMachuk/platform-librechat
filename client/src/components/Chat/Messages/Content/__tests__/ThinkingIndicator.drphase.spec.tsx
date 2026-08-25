@@ -40,13 +40,13 @@ describe('ThinkingIndicator — DR pre-plan phase labels (round 23)', () => {
     expect(screen.getByText(/думаю над планом|thinking about the plan/i)).toBeInTheDocument();
   });
 
-  it('keeps the generic label for graph phases (the card owns those)', () => {
-    render(
+  it('renders NOTHING for graph phases — the progress card owns the screen (round 24)', () => {
+    const { container } = render(
       <RecoilRoot initializeState={seed('c1', 'research')}>
         <ThinkingIndicator conversationId="c1" />
       </RecoilRoot>,
     );
-    expect(screen.getByText(/думаю…|thinking…/i)).toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
   });
 });
 

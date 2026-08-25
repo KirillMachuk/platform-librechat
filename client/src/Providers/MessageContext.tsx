@@ -17,6 +17,16 @@ type MessageContext = {
    * apparently empty message. The Reasoning block expands itself once in response.
    */
   autoExpandReasoning?: boolean;
+  /**
+   * Reasoning-card expansion persisted OUTSIDE the part component. The part
+   * key carries messageId, which changes at stream finalization (intermediate
+   * id -> server id) and remounts the whole part subtree — a card the user
+   * expanded during streaming collapsed the moment the reply finished. The
+   * map lives in ContentParts (like toolGroupExpansionRef) keyed by part
+   * index, which is stable across that remount.
+   */
+  reasoningExpandedInitial?: boolean;
+  onReasoningExpandedChange?: (expanded: boolean) => void;
 };
 
 export const MessageContext = createContext<MessageContext>({} as MessageContext);

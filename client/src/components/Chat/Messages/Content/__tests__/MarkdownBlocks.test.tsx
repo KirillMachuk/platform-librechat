@@ -210,6 +210,16 @@ describe('MarkdownBlocks rendering smoke', () => {
     );
     expect(container.querySelector('.thinking-shimmer')).not.toBeNull();
     expect(container.querySelector('.thinking-shimmer')?.textContent).not.toBe('');
+    /* Geometry guard (round 24, item 1): the placeholder paragraph must sit
+     * IN FLOW, not inside an absolutely-positioned wrapper — the old
+     * `div.absolute > p` kept prose's 1.25em top margin while the reply's
+     * first paragraph got margin-top:0, so the first token painted 20px
+     * above the label. The label's <p> must be the immediate root child
+     * here (a direct `.prose` child once mounted inside the prose wrapper). */
+    const label = container.querySelector('.thinking-shimmer') as HTMLElement;
+    const paragraph = label.closest('p') as HTMLElement;
+    expect(paragraph).not.toBeNull();
+    expect(paragraph.parentElement?.classList.contains('absolute')).toBe(false);
   });
 
   it('renders no indicator for an initializing non-latest message', () => {

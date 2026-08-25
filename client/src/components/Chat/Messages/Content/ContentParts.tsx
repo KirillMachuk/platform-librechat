@@ -47,6 +47,8 @@ type PartWithContextProps = {
   hideAttachments?: boolean;
   onToolExpand?: () => void;
   autoExpandReasoning?: boolean;
+  reasoningExpandedInitial?: boolean;
+  onReasoningExpandedChange?: (expanded: boolean) => void;
 };
 
 const PartWithContext = memo(function PartWithContext({
@@ -64,6 +66,8 @@ const PartWithContext = memo(function PartWithContext({
   hideAttachments,
   onToolExpand,
   autoExpandReasoning,
+  reasoningExpandedInitial,
+  onReasoningExpandedChange,
 }: PartWithContextProps) {
   const contextValue = useMemo(
     () => ({
@@ -75,8 +79,20 @@ const PartWithContext = memo(function PartWithContext({
       isSubmitting,
       isLatestMessage,
       autoExpandReasoning,
+      reasoningExpandedInitial,
+      onReasoningExpandedChange,
     }),
-    [messageId, conversationId, idx, nextType, isSubmitting, isLatestMessage, autoExpandReasoning],
+    [
+      messageId,
+      conversationId,
+      idx,
+      nextType,
+      isSubmitting,
+      isLatestMessage,
+      autoExpandReasoning,
+      reasoningExpandedInitial,
+      onReasoningExpandedChange,
+    ],
   );
 
   return (
@@ -152,11 +168,19 @@ const ContentParts = memo(function ContentParts({
   const attachmentMap = useMemo(() => mapAttachments(attachments ?? []), [attachments]);
   const effectiveIsSubmitting = isLatestMessage ? isSubmitting : false;
   const toolGroupExpansionRef = useRef(new Map<string, ToolCallGroupExpansionState>());
+  const reasoningExpansionRef = useRef(new Map<number, boolean>());
   const fallbackScopeRef = useRef({ messageId, scope: 0 });
   if (fallbackScopeRef.current.messageId !== messageId) {
-    if (!effectiveIsSubmitting) {
+    /* A provisional id (trailing '_', see buildCreatedInitialResponse) swaps
+     * to the server id at finalization — same message, so the expansion maps
+     * must survive even when the id change and the isSubmitting flip land in
+     * one batched render. Only a change AWAY from a non-provisional id while
+     * idle means a genuinely different message. */
+    const wasProvisional = fallbackScopeRef.current.messageId.endsWith('_');
+    if (!effectiveIsSubmitting && !wasProvisional) {
       fallbackScopeRef.current.scope += 1;
       toolGroupExpansionRef.current.clear();
+      reasoningExpansionRef.current.clear();
     }
     fallbackScopeRef.current.messageId = messageId;
   }
@@ -172,6 +196,16 @@ const ContentParts = memo(function ContentParts({
     },
     [],
   );
+
+  const reasoningSettersRef = useRef(new Map<number, (expanded: boolean) => void>());
+  const getReasoningExpandedSetter = useCallback((idx: number) => {
+    let setter = reasoningSettersRef.current.get(idx);
+    if (!setter) {
+      setter = (expanded: boolean) => reasoningExpansionRef.current.set(idx, expanded);
+      reasoningSettersRef.current.set(idx, setter);
+    }
+    return setter;
+  }, []);
 
   /**
    * Interim skill cards — rendered in a separate slot ABOVE the Parts
@@ -280,12 +314,15 @@ const ContentParts = memo(function ContentParts({
           isSubmitting={effectiveIsSubmitting}
           partAttachments={attachmentMap[getToolCallId(part)]}
           autoExpandReasoning={idx === autoExpandThinkIdx}
+          reasoningExpandedInitial={reasoningExpansionRef.current.get(idx)}
+          onReasoningExpandedChange={getReasoningExpandedSetter(idx)}
         />
       );
     },
     [
       attachmentMap,
       autoExpandThinkIdx,
+      getReasoningExpandedSetter,
       content,
       conversationId,
       effectiveIsSubmitting,
@@ -314,11 +351,14 @@ const ContentParts = memo(function ContentParts({
           partAttachments={attachmentMap[getToolCallId(part)]}
           hideAttachments
           onToolExpand={onToolExpand}
+          reasoningExpandedInitial={reasoningExpansionRef.current.get(idx)}
+          onReasoningExpandedChange={getReasoningExpandedSetter(idx)}
         />
       );
     },
     [
       attachmentMap,
+      getReasoningExpandedSetter,
       content,
       conversationId,
       effectiveIsSubmitting,

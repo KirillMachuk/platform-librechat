@@ -30,7 +30,7 @@ function MessagesViewContent({
     scrollableRef,
     messagesEndRef,
     showScrollButton,
-    handleSmoothToRef,
+    handleScrollButtonClick,
     debouncedHandleScroll,
   } = useMessageScrolling(_messagesTree);
 
@@ -118,7 +118,7 @@ function MessagesViewContent({
               appear={true}
               nodeRef={scrollToBottomRef}
             >
-              <ScrollToBottom ref={scrollToBottomRef} scrollHandler={handleSmoothToRef} />
+              <ScrollToBottom ref={scrollToBottomRef} scrollHandler={handleScrollButtonClick} />
             </CSSTransition>
           </div>
 

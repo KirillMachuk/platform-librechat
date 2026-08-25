@@ -2153,7 +2153,8 @@ html {
 .thinking-shimmer {
   display: none;
 }
-.submitting .thinking-shimmer {
+.submitting .thinking-shimmer,
+.thinking-shimmer-active {
   display: inline-block;
   white-space: nowrap;
   background-image: linear-gradient(
@@ -2179,7 +2180,8 @@ html {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .submitting .thinking-shimmer {
+  .submitting .thinking-shimmer,
+  .thinking-shimmer-active {
     animation: none;
     background-image: none;
     color: var(--text-secondary);

@@ -15,6 +15,7 @@ const { AIMessageChunk } = require('@langchain/core/messages');
 
 const MOCK_REPLY = process.env.MOCK_LLM_REPLY || 'E2E mock reply: pong';
 const CHUNK_DELAY_MS = Number(process.env.MOCK_LLM_CHUNK_DELAY_MS) || 10;
+const FIRST_TOKEN_DELAY_MS = Number(process.env.MOCK_LLM_FIRST_TOKEN_DELAY_MS) || 0;
 
 const CREATE_SKILL_MARKER = 'E2E_CREATE_SKILL:';
 const EDIT_SKILL_MARKER = 'E2E_EDIT_SKILL:';
@@ -344,6 +345,13 @@ function replyResponses(text) {
  */
 class UsageEmittingFakeChatModel extends FakeChatModel {
   async *_streamResponseChunks(messages, options, runManager) {
+    // Silence between the stream opening and the first token — the window where
+    // the client shows its waiting indicator. Real models are silent here for
+    // seconds; without this knob the mock answers instantly and the indicator
+    // can never be observed or measured live.
+    if (FIRST_TOKEN_DELAY_MS > 0) {
+      await new Promise((resolve) => setTimeout(resolve, FIRST_TOKEN_DELAY_MS));
+    }
     let outputChars = 0;
     for await (const chunk of super._streamResponseChunks(messages, options, runManager)) {
       outputChars += typeof chunk.text === 'string' ? chunk.text.length : 0;

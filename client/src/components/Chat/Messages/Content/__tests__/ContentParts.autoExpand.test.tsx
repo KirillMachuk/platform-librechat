@@ -44,12 +44,15 @@ jest.mock('../Container', () => ({
 jest.mock('../Part', () => {
   const { useMessageContext } = jest.requireActual('~/Providers/MessageContext');
   const PartMock = ({ part }: { part: { type: string } }) => {
-    const { partIndex, autoExpandReasoning } = useMessageContext();
+    const { partIndex, autoExpandReasoning, reasoningExpandedInitial, onReasoningExpandedChange } =
+      useMessageContext();
     return (
       <div
         data-testid={`part-${partIndex}`}
         data-part-type={part.type}
         data-auto-expand={String(autoExpandReasoning === true)}
+        data-reasoning-initial={String(reasoningExpandedInitial)}
+        onClick={() => onReasoningExpandedChange?.(true)}
       />
     );
   };
@@ -121,5 +124,71 @@ describe('ContentParts — auto-expand for replies hidden in the thinking channe
     );
     expect(screen.getByTestId('part-0')).toHaveAttribute('data-auto-expand', 'false');
     expect(screen.getByTestId('part-1')).toHaveAttribute('data-auto-expand', 'true');
+  });
+});
+
+describe('ContentParts — reasoning expansion survives the finalization remount (round 24)', () => {
+  /* The part key carries messageId, which swaps from the intermediate id to
+   * the server id when the stream finalizes — the whole part subtree
+   * remounts. The expansion map in ContentParts must seed the remounted part
+   * with the state the user chose during streaming. The Part mock reads the
+   * context exactly the way Reasoning does. */
+  it('re-seeds a user-expanded card after the provisional id swaps to the server id', () => {
+    /* Real finalize shape: buildCreatedInitialResponse uses `${userMessageId}_`
+     * (trailing underscore = provisional), the finalHandler swaps in the server
+     * id — possibly in the same batched render that drops isSubmitting. */
+    const { rerender } = render(
+      <ContentParts
+        {...baseProps}
+        messageId="user-msg-1_"
+        isSubmitting={true}
+        content={[think('streaming thoughts')]}
+      />,
+    );
+    const partBefore = screen.getByTestId('part-0');
+    expect(partBefore).toHaveAttribute('data-reasoning-initial', 'undefined');
+    // the user expands during streaming — Reasoning reports it upward
+    partBefore.click();
+
+    rerender(
+      <ContentParts
+        {...baseProps}
+        messageId="server-id-1"
+        isSubmitting={false}
+        content={[think('streaming thoughts')]}
+      />,
+    );
+    expect(screen.getByTestId('part-0')).toHaveAttribute('data-reasoning-initial', 'true');
+  });
+
+  it('clears the stored expansion when a DIFFERENT finished message renders', () => {
+    const { rerender } = render(
+      <ContentParts
+        {...baseProps}
+        messageId="user-msg-a_"
+        isSubmitting={true}
+        content={[think('a')]}
+      />,
+    );
+    screen.getByTestId('part-0').click();
+    rerender(
+      <ContentParts
+        {...baseProps}
+        messageId="server-a"
+        isSubmitting={false}
+        content={[think('a')]}
+      />,
+    );
+    expect(screen.getByTestId('part-0')).toHaveAttribute('data-reasoning-initial', 'true');
+    // a genuinely different finished message through the same instance — state gone
+    rerender(
+      <ContentParts
+        {...baseProps}
+        messageId="server-b"
+        isSubmitting={false}
+        content={[think('b')]}
+      />,
+    );
+    expect(screen.getByTestId('part-0')).toHaveAttribute('data-reasoning-initial', 'undefined');
   });
 });

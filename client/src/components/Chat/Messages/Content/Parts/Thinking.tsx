@@ -58,11 +58,15 @@ export const ThinkingButton = memo(
     isExpanded,
     onClick,
     label,
+    shimmer = false,
     contentId,
   }: {
     isExpanded: boolean;
     onClick: (e: MouseEvent<HTMLButtonElement>) => void;
     label: string;
+    /** Shimmer sweep over the label while thoughts are streaming (round 24:
+     *  the waiting «Думаю…» continues INTO the card header, one element). */
+    shimmer?: boolean;
     contentId: string;
   }) => {
     return (
@@ -80,7 +84,9 @@ export const ThinkingButton = memo(
           className="group/button flex flex-1 items-center gap-2 px-3 py-[9px] text-left text-[length:var(--thinking-font-size)] leading-[18px] text-text-secondary"
         >
           <Lightbulb className="icon-sm shrink-0 text-text-accent" aria-hidden="true" />
-          <span className="flex-1 truncate">{label}</span>
+          <span className={shimmer ? 'thinking-shimmer-active flex-1 truncate' : 'flex-1 truncate'}>
+            {label}
+          </span>
           {/* Kimi (референс владельца 12.08): галочка у правого края, закрытая
               смотрит ВПРАВО, открытая — вниз; 18px — прежние 14 «еле видно». */}
           <ChevronDown

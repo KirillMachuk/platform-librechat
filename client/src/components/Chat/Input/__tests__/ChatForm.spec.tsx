@@ -99,6 +99,13 @@ describe('the composer shell', () => {
     expect(c.join(' ')).not.toMatch(/\bring-/);
   });
 
+  it('opts the composer out of browser autofill (round 24: contact popover on chat switch)', () => {
+    renderComposer();
+    const textarea = screen.getByTestId('text-input');
+    expect(textarea).toHaveAttribute('autocomplete', 'off');
+    expect(textarea.closest('form')).toHaveAttribute('autocomplete', 'off');
+  });
+
   it('does not change a single class when the textarea gains focus or text', () => {
     renderComposer();
     const shell = screen.getByTestId('composer-shell');

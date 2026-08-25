@@ -24,11 +24,10 @@ const Markdown = memo(function Markdown({ content = '', isLatestMessage }: TCont
   }, [content, LaTeXParsing, isInitializing]);
 
   if (isInitializing) {
-    return (
-      <div className="absolute">
-        <p className="relative">{isLatestMessage && <ThinkingIndicator />}</p>
-      </div>
-    );
+    /* In-flow, direct child of the caller's `.prose` wrapper — same geometry
+     * as the reply's first paragraph, so the first token replaces the label
+     * in place instead of painting 20px above it (see EmptyText). */
+    return <p className="relative">{isLatestMessage && <ThinkingIndicator />}</p>;
   }
 
   return (

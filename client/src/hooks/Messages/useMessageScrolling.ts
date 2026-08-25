@@ -50,6 +50,14 @@ export default function useMessageScrolling(messagesTree?: TMessage[] | null) {
       ([entry]) => {
         isNearBottomRef.current = entry.isIntersecting;
         debouncedSetShowScrollButton(!entry.isIntersecting);
+        /* The user came back to the bottom on their own — resume following,
+         * exactly as the scroll-to-bottom button click does. Without this,
+         * a wheel/touch anywhere over messages set abortScroll for the rest
+         * of the stream and only the button could re-attach the follow
+         * (round 24 audit: «вернулся вниз колесом — лента всё равно стоит»). */
+        if (entry.isIntersecting) {
+          setAbortScroll(false);
+        }
       },
       { root: scrollableRef.current, threshold },
     );
@@ -60,7 +68,7 @@ export default function useMessageScrolling(messagesTree?: TMessage[] | null) {
       observer.disconnect();
       clearTimeout(timeoutIdRef.current);
     };
-  }, [messagesEndRef, scrollableRef, debouncedSetShowScrollButton]);
+  }, [messagesEndRef, scrollableRef, debouncedSetShowScrollButton, setAbortScroll]);
 
   /* The mount effect above owns THE IntersectionObserver — and the BUTTON.
      This used to build a NEW observer on every scroll event and return a
@@ -118,11 +126,32 @@ export default function useMessageScrolling(messagesTree?: TMessage[] | null) {
         return;
       }
 
+      /* Self-heal on growth: wheeling down AT the bottom still trips the
+       * wheel handler's abortScroll, and the IntersectionObserver only fires
+       * on crossings — so if the sentinel never left the viewport nothing
+       * would clear the abort. STRICTLY at the bottom only (not the 120px
+       * follow band): a gentle upward wheel tick moves ~60-100px and must
+       * detach the follow — healing inside the band would snap the user
+       * straight back down (independent review, round 24). */
+      const scrollEl = scrollableRef.current;
+      const distance =
+        scrollEl == null ? 0 : scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
+      if (isSubmitting && abortScroll === true && distance <= 8) {
+        setAbortScroll(false);
+      }
+
       if (shouldFollowResize && isSubmitting && abortScroll !== true && isNearBottomRef.current) {
         scrollToBottom?.();
       }
     },
-    [abortScroll, clampScrollToContent, getIsNearBottom, isSubmitting, scrollToBottom],
+    [
+      abortScroll,
+      clampScrollToContent,
+      getIsNearBottom,
+      isSubmitting,
+      scrollToBottom,
+      setAbortScroll,
+    ],
   );
 
   useEffect(() => {
@@ -189,6 +218,23 @@ export default function useMessageScrolling(messagesTree?: TMessage[] | null) {
     }
   }, [autoScroll, conversationId, scrollToBottom]);
 
+  /* The scroll-to-bottom button. While a reply is streaming, the smooth
+   * glide is a lie: smoothCallback re-opens the follow gates immediately and
+   * the next chunk's instant follow (<=145ms) teleports over the animation —
+   * the user sees a started glide cut by a jump. Streaming clicks therefore
+   * jump instantly (predictable, ChatGPT-like); idle clicks keep the glide. */
+  const handleScrollButtonClick: React.MouseEventHandler<HTMLButtonElement> = useCallback(
+    (e) => {
+      if (isSubmitting) {
+        setAbortScroll(false);
+        scrollToBottom?.();
+        return;
+      }
+      handleSmoothToRef(e);
+    },
+    [isSubmitting, scrollToBottom, handleSmoothToRef, setAbortScroll],
+  );
+
   return {
     conversation,
     contentRef,
@@ -196,7 +242,7 @@ export default function useMessageScrolling(messagesTree?: TMessage[] | null) {
     messagesEndRef,
     scrollToBottom,
     showScrollButton,
-    handleSmoothToRef,
+    handleScrollButtonClick,
     debouncedHandleScroll,
   };
 }

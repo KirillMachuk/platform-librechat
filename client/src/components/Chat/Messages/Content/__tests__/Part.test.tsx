@@ -132,3 +132,47 @@ describe('Part tool renderer selection', () => {
     expect(screen.queryByTestId('tool-call')).not.toBeInTheDocument();
   });
 });
+
+describe('Part waiting-placeholder gating (round 24: no eternal shimmer on finished replies)', () => {
+  const agentUpdatePart = {
+    type: ContentTypes.AGENT_UPDATE,
+    [ContentTypes.AGENT_UPDATE]: { agentId: 'agent_1' },
+  } as unknown as TMessageContentParts;
+
+  const whitespacePart = {
+    type: ContentTypes.TEXT,
+    text: '  \n  ',
+  } as unknown as TMessageContentParts;
+
+  const renderGated = (part: TMessageContentParts, isSubmitting: boolean) =>
+    render(
+      <Part
+        part={part}
+        isSubmitting={isSubmitting}
+        isLast={true}
+        showCursor={true}
+        isCreatedByUser={false}
+      />,
+    );
+
+  it('shows the placeholder after an AGENT_UPDATE tail while streaming', () => {
+    renderGated(agentUpdatePart, true);
+    expect(screen.getByTestId('empty-text')).toBeInTheDocument();
+  });
+
+  it('never keeps the placeholder on a finished AGENT_UPDATE tail', () => {
+    renderGated(agentUpdatePart, false);
+    expect(screen.queryByTestId('empty-text')).toBeNull();
+  });
+
+  it('shows the placeholder for a whitespace-only last part while streaming', () => {
+    renderGated(whitespacePart, true);
+    expect(screen.getByTestId('empty-text')).toBeInTheDocument();
+  });
+
+  it('renders nothing for a whitespace-only last part once finished', () => {
+    renderGated(whitespacePart, false);
+    expect(screen.queryByTestId('empty-text')).toBeNull();
+    expect(screen.queryByTestId('text')).toBeNull();
+  });
+});

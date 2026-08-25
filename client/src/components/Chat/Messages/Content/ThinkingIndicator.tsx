@@ -23,9 +23,9 @@ const DR_PHASE_LABELS = {
  * MessageContext (Part-level mounts) or the prop (ContentParts mounts outside
  * the provider); with neither, the atom subscription is inert and the generic
  * label shows. Visible only under a `.submitting` ancestor, mirroring the old
- * dot's gating exactly — including two legacy EmptyText paths in Part.tsx
- * (AGENT_UPDATE tail, whitespace-only last part) that hardcode `submitting`;
- * gating those on isSubmitting is a queued follow-up.
+ * dot's gating; the two legacy EmptyText paths in Part.tsx (AGENT_UPDATE
+ * tail, whitespace-only last part) are additionally gated on isSubmitting, so
+ * a finished reply never keeps a shimmering label (round 24).
  */
 const ThinkingIndicator = memo(({ conversationId }: { conversationId?: string | null }) => {
   const localize = useLocalize();
@@ -34,6 +34,12 @@ const ThinkingIndicator = memo(({ conversationId }: { conversationId?: string | 
   const drProgress = useRecoilValue(store.drProgressByConvoId(convoKey));
   const phaseKey =
     drProgress != null ? DR_PHASE_LABELS[drProgress.phase as keyof typeof DR_PHASE_LABELS] : null;
+  /* A run phase past the plan (scope/research/report) means the progress card
+   * owns the screen — a second waiting label under it is noise (owner, round
+   * 24): the card and this label stay strictly complementary. */
+  if (drProgress != null && phaseKey == null) {
+    return null;
+  }
   return (
     <span className="thinking-shimmer">{localize(phaseKey ?? 'com_ui_thinking_indicator')}</span>
   );
