@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { tool } from '@langchain/core/tools';
-import { AIMessageChunk } from '@langchain/core/messages';
 import { FakeListChatModel } from '@langchain/core/utils/testing';
+import { AIMessageChunk, ToolMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import type { TDeepResearchConfig } from 'librechat-data-provider';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { BaseMessage } from '@langchain/core/messages';
 import type { DeepResearchState, DeepResearchFinding } from '../state';
@@ -12,7 +13,11 @@ import {
   EMPTY_DIGEST,
   extractSources,
   runResearchLoop,
+  boundToolOutputs,
   compressResearch,
+  maxGatheredChars,
+  MAX_TOOL_OUTPUT_CHARS,
+  MAX_TOOL_CALLS_PER_TURN,
   createResearcherNode,
   hasResearchMaterial,
   type ToolCaller,
@@ -614,5 +619,194 @@ describe('researchOne — the tool loop and COMPRESS are attributed separately',
     });
 
     expect(usageByModel).toEqual({});
+  });
+});
+
+describe('the funnel from gathered material to the digest', () => {
+  /**
+   * The founding case. A researcher gathers up to
+   * `maxSearcherTurns x MAX_TOOL_CALLS_PER_TURN x MAX_TOOL_OUTPUT_CHARS` characters; COMPRESS
+   * used to see the FIRST 24 000 of them. Turn one alone overflows that, so every later turn
+   * was researched, billed, re-sent in every subsequent prompt — and then dropped before it
+   * could reach the digest. A tier whose cap is below what its own limits allow silently
+   * throws research away, so the shipped tiers must clear their own arithmetic.
+   */
+  it.each(['balanced', 'deep'] as const)(
+    'the %s tier can compress everything its own limits let a researcher gather',
+    (mode) => {
+      const tier = resolveDeepResearchTier({ activeMode: mode } as TDeepResearchConfig);
+      expect(tier.compressInputChars).toBeGreaterThanOrEqual(
+        maxGatheredChars(tier.maxSearcherTurns),
+      );
+    },
+  );
+
+  /**
+   * Asserted on the LAST characters of the last result, not on its first ones. A marker at
+   * the start of the final chunk survives even when the cap cuts the tail — including the
+   * case where the cap is short by exactly the separators `boundToolOutputs` inserts, which
+   * is what the shipped caps were before `maxGatheredChars` counted them.
+   */
+  it.each(['balanced', 'deep'] as const)(
+    'loses nothing from a full %s researcher, separators included',
+    (mode) => {
+      const tier = resolveDeepResearchTier({ activeMode: mode } as TDeepResearchConfig);
+      const outputs = Array.from(
+        { length: tier.maxSearcherTurns * MAX_TOOL_CALLS_PER_TURN },
+        (_, i) => `<<${i}>>`.padEnd(MAX_TOOL_OUTPUT_CHARS - 8, 'я') + `[конец${i}]`,
+      );
+
+      const bounded = boundToolOutputs(outputs, tier.compressInputChars);
+
+      expect(bounded).toContain('<<0>>');
+      expect(bounded).toContain(`[конец${outputs.length - 1}]`);
+    },
+  );
+
+  it('still honours a cap an admin lowers', () => {
+    const bounded = boundToolOutputs(['a'.repeat(50), 'b'.repeat(50)], 60);
+    expect(bounded).toHaveLength(60);
+    expect(bounded.endsWith('b'.repeat(3))).toBe(true);
+    expect(boundToolOutputs(['a'.repeat(50), 'b'.repeat(50)], 50)).not.toContain('b');
+  });
+});
+
+describe('tool-result clearing', () => {
+  const perTurn = (turn: number) =>
+    tool(async () => `материал хода ${turn}: https://example.com/${turn}`, {
+      name: 'web_search',
+      description: 'поиск',
+      schema: z.object({ query: z.string() }),
+    });
+
+  const threeTurns = () => [
+    toolCallChunk('web_search', { query: 'q1' }, 'c1'),
+    toolCallChunk('web_search', { query: 'q2' }, 'c2'),
+    toolCallChunk('web_search', { query: 'q3' }, 'c3'),
+    finalChunk('готово'),
+  ];
+
+  it('drops results older than the window from the prompt but keeps them for the digest', async () => {
+    const shown: BaseMessage[][] = [];
+    let turn = 0;
+    const rotating = tool(
+      async () => {
+        turn += 1;
+        return `материал хода ${turn}`;
+      },
+      { name: 'web_search', description: 'поиск', schema: z.object({ query: z.string() }) },
+    );
+
+    const result = await runResearchLoop({
+      caller: recordingCaller(shown, threeTurns()),
+      tools: [rotating],
+      system: 's',
+      question: 'q',
+      nonce: NONCE,
+      tokenCap: Infinity,
+      maxTurns: 4,
+      toolResultWindow: 1,
+    });
+
+    const lastPrompt = shownToModel(shown[shown.length - 1]);
+    expect(lastPrompt).toContain('материал хода 3');
+    expect(lastPrompt).not.toContain('материал хода 1');
+    expect(lastPrompt).toContain('убран из переписки');
+    // Nothing is lost to the report: COMPRESS reads `toolOutputs`, not the message history.
+    expect(result.toolOutputs).toEqual(['материал хода 1', 'материал хода 2', 'материал хода 3']);
+  });
+
+  it('keeps every result when the window is off', async () => {
+    const shown: BaseMessage[][] = [];
+    let turn = 0;
+    const rotating = tool(
+      async () => {
+        turn += 1;
+        return `материал хода ${turn}`;
+      },
+      { name: 'web_search', description: 'поиск', schema: z.object({ query: z.string() }) },
+    );
+
+    await runResearchLoop({
+      caller: recordingCaller(shown, threeTurns()),
+      tools: [rotating],
+      system: 's',
+      question: 'q',
+      nonce: NONCE,
+      tokenCap: Infinity,
+      maxTurns: 4,
+      toolResultWindow: 0,
+    });
+
+    const lastPrompt = shownToModel(shown[shown.length - 1]);
+    expect(lastPrompt).toContain('материал хода 1');
+    expect(lastPrompt).toContain('материал хода 3');
+  });
+
+  it('never leaves a tool_call without a tool result', async () => {
+    const shown: BaseMessage[][] = [];
+    await runResearchLoop({
+      caller: recordingCaller(shown, threeTurns()),
+      tools: [perTurn(1)],
+      system: 's',
+      question: 'q',
+      nonce: NONCE,
+      tokenCap: Infinity,
+      maxTurns: 4,
+      toolResultWindow: 1,
+    });
+
+    for (const prompt of shown) {
+      const answered = new Set(
+        prompt.filter((m) => m.getType() === 'tool').map((m) => (m as ToolMessage).tool_call_id),
+      );
+      const asked = prompt.flatMap((m) => (m as AIMessageChunk).tool_calls ?? []).map((c) => c.id);
+      for (const id of asked) {
+        expect(answered.has(id ?? '')).toBe(true);
+      }
+    }
+  });
+});
+
+describe('the budget gate estimates the next turn from the prompt it would send', () => {
+  /**
+   * The old estimate was the LAST turn's cost alone. A turn that answers cheaply while its
+   * tool results balloon the conversation therefore looked affordable, and the next turn was
+   * billed and had its tool calls thrown away — measured on a sweep, 20 of 44 cap values.
+   * Here turn 1 costs little and drops ~30 000 characters of tool output into the context;
+   * the cap covers the first turn several times over but not the second turn's prompt.
+   */
+  it('refuses a turn whose prompt has outgrown the cap even though the last turn was cheap', async () => {
+    const shown: BaseMessage[][] = [];
+    const fat = tool(async () => 'ф'.repeat(MAX_TOOL_OUTPUT_CHARS), {
+      name: 'web_search',
+      description: 'поиск',
+      schema: z.object({ query: z.string() }),
+    });
+
+    await runResearchLoop({
+      caller: recordingCaller(shown, [
+        new AIMessageChunk({
+          content: '',
+          tool_calls: Array.from({ length: 4 }, (_, i) => ({
+            name: 'web_search',
+            args: { query: `q${i}` },
+            id: `c${i}`,
+            type: 'tool_call' as const,
+          })),
+        }),
+        toolCallChunk('web_search', { query: 'again' }, 'c9'),
+        finalChunk('готово'),
+      ]),
+      tools: [fat],
+      system: 'коротко',
+      question: 'вопрос',
+      nonce: NONCE,
+      tokenCap: 5_000,
+      maxTurns: 4,
+      toolResultWindow: 0,
+    });
+
+    expect(shown).toHaveLength(1);
   });
 });

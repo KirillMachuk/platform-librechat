@@ -1,56 +1,27 @@
-import type { TDeepResearchConfig, DeepResearchMode } from 'librechat-data-provider';
+import type { TDeepResearchConfig } from 'librechat-data-provider';
 import type { ResolvedDeepResearchMode } from '../types';
 import type { DeepResearchRunBudget } from './state';
 import { resolveDeepResearchMode, resolveDeepResearchModel } from '../modes';
 
 /**
- * A resolved tier for the StateGraph DR rebuild. Extends the existing
- * `ResolvedDeepResearchMode` (single source of truth for models + limits,
- * admin-overridable via `deepResearch.modes.<tier>`) with the extra knobs the
- * new graph needs. Model slugs and budgets are NEVER hardcoded here — they come
- * from `resolveDeepResearchMode`; only the new graph-specific defaults live here.
+ * A resolved tier for the StateGraph DR rebuild. `ResolvedDeepResearchMode` is the single
+ * source of truth for models and limits (admin-overridable via `deepResearch.modes.<tier>`);
+ * this adds only the derived COMPRESS model. Nothing about a tier is hardcoded here.
  */
 export interface DeepResearchTier extends ResolvedDeepResearchMode {
   /** Model for the COMPRESS step; defaults to the worker model. */
   compressModel?: string;
-  /**
-   * Fraction of `perRunTokenBudget` at which SUPERVISOR stops dispatching and
-   * routes to REPORT, reserving the remainder for synthesis (§4).
-   */
-  budgetGateRatio: number;
-  /**
-   * Fraction of the wall-clock at which SUPERVISOR stops gathering and routes to
-   * REPORT, reserving the rest for synthesis (A1 — the time analogue of
-   * `budgetGateRatio`, so a slow run still ends with a model-written report).
-   */
-  timeGateRatio: number;
-  /** Max characters of one researcher digest — bounds outer-state growth (§4). */
-  digestCap: number;
 }
 
 /**
- * New graph-specific per-tier defaults (not yet admin-exposed; promoted to
- * config in Phase 3 tuning). Budgets/models stay in the existing config.
+ * Resolves the active tier. Every budget/limit knob — including the gate ratios, the digest
+ * cap, the COMPRESS input cap and the tool-result window — now comes from the mode resolver,
+ * so an admin can tune them in config instead of waiting for an image rebuild. The only thing
+ * this layer still adds is the COMPRESS model, which is derived rather than configured.
  */
-const TIER_EXTRAS: Record<
-  DeepResearchMode,
-  { budgetGateRatio: number; timeGateRatio: number; digestCap: number }
-> = {
-  balanced: { budgetGateRatio: 0.72, timeGateRatio: 0.68, digestCap: 1200 },
-  deep: { budgetGateRatio: 0.75, timeGateRatio: 0.7, digestCap: 2000 },
-};
-
-/** Resolves the active tier (models/limits from config) plus the new graph knobs. */
 export function resolveDeepResearchTier(config?: TDeepResearchConfig): DeepResearchTier {
   const base = resolveDeepResearchMode(config);
-  const extras = TIER_EXTRAS[base.name] ?? TIER_EXTRAS.balanced;
-  return {
-    ...base,
-    compressModel: base.workerModel,
-    budgetGateRatio: extras.budgetGateRatio,
-    timeGateRatio: extras.timeGateRatio,
-    digestCap: extras.digestCap,
-  };
+  return { ...base, compressModel: base.workerModel };
 }
 
 /** Derives the per-run budget carried on `config.configurable`. */

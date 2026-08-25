@@ -1630,6 +1630,43 @@ export const deepResearchModeSchema = z.object({
   maxSearcherTurns: z.number().int().min(1).max(20).default(4),
   perRunTokenBudget: z.number().int().positive().default(400000),
   wallClockMinutes: z.number().int().min(1).max(60).default(8),
+  /**
+   * Fraction of `perRunTokenBudget` at which the supervisor stops dispatching rounds and
+   * routes to REPORT, reserving the remainder for synthesis. Was hardcoded per tier in the
+   * engine; promoted here because tuning it is exactly the knob a tenant needs and reaching
+   * it used to mean rebuilding the image.
+   *
+   * Every knob in this block down to `toolResultWindow` is deliberately `.optional()`, NOT
+   * `.default()`, unlike the older numbers above them: one schema describes BOTH tiers while
+   * the right value differs per tier, so a default here is a value with nowhere correct to
+   * live. The per-tier defaults are `DEEP_RESEARCH_MODE_DEFAULTS`, and the resolver reads
+   * `override.x ?? base.x` — for which a field carrying a schema default is indistinguishable
+   * from one an admin set on purpose. The schema stays silent and the tier decides.
+   */
+  budgetGateRatio: z.number().min(0.1).max(0.95).optional(),
+  /** Wall-clock analogue of `budgetGateRatio` — same reason it lives here now. */
+  timeGateRatio: z.number().min(0.1).max(0.95).optional(),
+  /**
+   * Max characters of ONE researcher's digest. This is the evidence the report is written
+   * from: `maxConcurrentResearchers x maxOrchestratorCycles x digestCap` is the whole
+   * factual base of a report, so it is a quality knob, not a safety one.
+   */
+  digestCap: z.number().int().min(200).max(40000).optional(),
+  /**
+   * Max characters of raw tool output fed into COMPRESS per researcher. Anything gathered
+   * beyond it is paid for and then dropped, so it must exceed what a researcher can gather
+   * (`maxSearcherTurns x 5 calls x 8000 chars`, plus the separators between them) or the last
+   * turns research for nothing. The ceiling is high enough that even `maxSearcherTurns: 20`
+   * can be given a cap that covers its own gathering.
+   */
+  compressInputChars: z.number().int().min(4000).max(1000000).optional(),
+  /**
+   * How many of the most recent turns keep their RAW tool results in the researcher's
+   * message history. Older results are replaced by a short marker (the tool_use record
+   * itself stays, so the model still knows the call happened), which is what stops each
+   * turn from re-paying for every page the previous turns read. 0 disables clearing.
+   */
+  toolResultWindow: z.number().int().min(0).max(10).optional(),
   leadModel: z.string().optional(),
   workerModel: z.string().optional(),
   writerModel: z.string().optional(),

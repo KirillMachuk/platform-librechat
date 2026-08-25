@@ -80,8 +80,27 @@ export function budgetGateReason(args: {
       return 'time';
     }
   }
-  if (args.tokenBudget > 0 && args.tokenUsed >= args.tokenBudget * args.budgetGateRatio) {
-    return 'budget';
+  if (args.tokenBudget > 0) {
+    /**
+     * The token arm asks the same question as the time arm above — "would ANOTHER round fit
+     * inside the reserve?" — and for the same reason. A round cannot be interrupted, so a
+     * point-in-time check ("are we past the reserve yet?") dispatches rounds it cannot pay
+     * for: on the stand the supervisor would dispatch on ANY remaining headroom, and a round
+     * sent at 287 900 of a 288 000 gate gave each of three researchers ~33 tokens. Each of
+     * them then refused to start (the researcher's own turn-0 gate) and the round produced
+     * nothing while still counting as a round.
+     *
+     * The estimate is the mean round cost OF THIS RUN — `tokenUsed / round`, where `round`
+     * counts COMPLETED rounds — so it needs no constant and adapts to a topic that reads
+     * long. Before the first round there is nothing to measure: the estimate is 0 and the
+     * first round always runs, which is what keeps a small budget researching a little
+     * rather than refusing outright. Counting the run's fixed overhead (scope, plan) into
+     * the mean makes the estimate slightly high, which errs towards the reserve.
+     */
+    const nextRoundTokens = args.round > 0 ? args.tokenUsed / args.round : 0;
+    if (args.tokenUsed + nextRoundTokens >= args.tokenBudget * args.budgetGateRatio) {
+      return 'budget';
+    }
   }
   if (args.round >= args.maxRounds) {
     return 'rounds';
