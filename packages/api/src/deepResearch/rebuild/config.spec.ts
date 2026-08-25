@@ -14,7 +14,9 @@ describe('resolveDeepResearchTier', () => {
     expect(tier.name).toBe('deep');
     expect(tier.budgetGateRatio).toBe(0.75);
     expect(tier.timeGateRatio).toBe(0.7);
-    expect(tier.digestCap).toBe(2000);
+    expect(tier.digestCap).toBe(8000);
+    expect(tier.compressInputChars).toBe(200_000);
+    expect(tier.toolResultWindow).toBe(1);
     expect(tier.perRunTokenBudget).toBe(800_000);
     expect(tier.wallClockMinutes).toBe(15);
   });
@@ -31,7 +33,44 @@ describe('resolveDeepResearchTier', () => {
     expect(tier.workerModel).toBe('worker-y');
     expect(tier.compressModel).toBe('worker-y');
     expect(tier.budgetGateRatio).toBe(0.72);
-    expect(tier.digestCap).toBe(1200);
+    expect(tier.digestCap).toBe(6000);
+  });
+
+  /**
+   * The point of moving these off `TIER_EXTRAS`: reaching them used to mean editing the
+   * engine and rebuilding the image. If this test ever goes green on a tier that ignores
+   * the override, the knobs are decorative again.
+   */
+  it('takes the gate ratios, digest cap, compress cap and tool window from config', () => {
+    const tier = resolveDeepResearchTier({
+      activeMode: 'balanced',
+      modes: {
+        balanced: {
+          budgetGateRatio: 0.5,
+          timeGateRatio: 0.4,
+          digestCap: 3333,
+          compressInputChars: 44_444,
+          toolResultWindow: 2,
+        },
+      },
+    } as TDeepResearchConfig);
+
+    expect(tier.budgetGateRatio).toBe(0.5);
+    expect(tier.timeGateRatio).toBe(0.4);
+    expect(tier.digestCap).toBe(3333);
+    expect(tier.compressInputChars).toBe(44_444);
+    expect(tier.toolResultWindow).toBe(2);
+  });
+
+  it('keeps the tier default for a knob the config leaves out', () => {
+    const tier = resolveDeepResearchTier({
+      activeMode: 'balanced',
+      modes: { balanced: { digestCap: 3333 } },
+    } as TDeepResearchConfig);
+
+    expect(tier.digestCap).toBe(3333);
+    expect(tier.compressInputChars).toBe(160_000);
+    expect(tier.budgetGateRatio).toBe(0.72);
   });
 
   it('gives the retired economy tier balanced knobs, not deep ones', () => {
@@ -39,7 +78,7 @@ describe('resolveDeepResearchTier', () => {
       activeMode: 'economy',
     } as unknown as TDeepResearchConfig);
     expect(tier.name).toBe('balanced');
-    expect(tier.digestCap).toBe(1200);
+    expect(tier.digestCap).toBe(6000);
     expect(tier.perRunTokenBudget).toBe(400_000);
   });
 });

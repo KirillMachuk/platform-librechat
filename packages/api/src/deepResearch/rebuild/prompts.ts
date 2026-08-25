@@ -93,9 +93,17 @@ export function buildSupervisorInput({
   maxRounds: number;
   nonce: string;
 }): string {
+  /**
+   * Findings arrive WHOLE. They used to be cut to 300 characters each, which is about one
+   * sentence of a digest: the node whose entire job is to notice what is still missing was
+   * deciding that from roughly a headline per sub-question. The digest is already the
+   * compressed form — `digestCap` bounds it at the point it is produced — so cutting it a
+   * second time here bounds nothing that is not already bounded and costs the supervisor
+   * the evidence it reasons over.
+   */
   const gathered = findings.length
     ? fenceUntrusted(
-        findings.map((f, i) => `${i + 1}. [${f.subQuestion}] ${f.digest.slice(0, 300)}`).join('\n'),
+        findings.map((f, i) => `${i + 1}. [${f.subQuestion}] ${f.digest}`).join('\n'),
         nonce,
       )
     : '(пока ничего не собрано)';

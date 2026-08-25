@@ -14,6 +14,7 @@ import type { DeepResearchTier } from '../config';
 import type { DeepResearchNode } from '../graph';
 import {
   readAnswer,
+  extractText,
   estimateTokens,
   mergeUsage,
   toErrorMessage,
@@ -23,17 +24,35 @@ import {
   mergeUsageByModel,
   configuredModelName,
   sanitizeErrorForUser,
+  estimateContextTokens,
   stripCitationControlChars,
 } from '../shared';
 import { buildResearcherPrompt, buildCompressPrompt } from '../prompts';
 
 const ZERO_USAGE: DeepResearchTokenUsage = { input: 0, output: 0, total: 0 };
-/** Cap on raw tool text fed into COMPRESS — ≈8000 tokens at estimateTokens' ~3 chars/token. */
+/**
+ * Fallback cap on raw tool text fed into COMPRESS, used only when a caller passes none.
+ * The real cap is `tier.compressInputChars` — this constant is what the cap USED to be, and
+ * it was the tightest point of the whole pipeline: a researcher gathers up to
+ * `maxSearcherTurns x MAX_TOOL_CALLS_PER_TURN x MAX_TOOL_OUTPUT_CHARS` characters (160 000
+ * on the balanced tier), and `.slice` keeps the FIRST 24 000 of them. Turn one alone
+ * overflows that, so turns two and up were researched, paid for, re-sent in every later
+ * prompt — and then dropped before they could reach the digest, let alone the report.
+ */
 const COMPRESS_INPUT_CHAR_CAP = 24_000;
-/** Per-tool-call raw output cap — bounds a single noisy page/result's context cost. */
-const MAX_TOOL_OUTPUT_CHARS = 8_000;
+/**
+ * Replaces a tool result that has fallen out of the researcher's context window. The
+ * `tool_call` record itself stays, so the model still knows the call happened and what it
+ * asked for; only the payload goes. Kept short on purpose — it is re-sent every turn.
+ */
+const CLEARED_TOOL_RESULT =
+  '[результат убран из переписки — он уже сохранён в собранном материале]';
+/** Per-tool-call raw output cap — bounds a single noisy page/result's context cost.
+ *  Exported: with `MAX_TOOL_CALLS_PER_TURN` it is the arithmetic a tier's `compressInputChars`
+ *  has to clear, and a guard asserts the shipped tiers do. */
+export const MAX_TOOL_OUTPUT_CHARS = 8_000;
 /** Max tool calls executed per model turn — bounds fan-out width (M4). */
-const MAX_TOOL_CALLS_PER_TURN = 5;
+export const MAX_TOOL_CALLS_PER_TURN = 5;
 /** Per-tool-call wall-clock cap (ms) — a hung fetch/RAG query can't stall the run. */
 const TOOL_TIMEOUT_MS = 60_000;
 /** Floor for the deadline-shortened timeout, so a call starting marginally late still sends. */
@@ -176,6 +195,13 @@ async function executeToolCall(
  * researcher cannot overrun between supervisor checks, and caps tool-call width
  * per turn (M4). Returns the raw tool outputs (for compress + source extraction)
  * and the model token usage.
+ *
+ * `toolResultWindow` bounds how much of that history is re-sent. Without it every turn
+ * pays again for every page the previous turns read, which is where roughly half of a
+ * round's tokens went: measured on the stand, a researcher's prompt tokens outweighed its
+ * completion tokens nine to one. Results outside the window are replaced by
+ * `CLEARED_TOOL_RESULT`. Nothing is lost to the report by this — `toolOutputs` is a
+ * SEPARATE accumulator and COMPRESS reads it, not the message history.
  */
 export async function runResearchLoop(params: {
   caller: ToolCaller;
@@ -185,6 +211,8 @@ export async function runResearchLoop(params: {
   maxTurns: number;
   tokenCap: number;
   nonce: string;
+  /** How many recent turns keep their RAW tool results in context; 0 or unset → keep all. */
+  toolResultWindow?: number;
   signal?: AbortSignal;
   /** Gather deadline (ms) — stop STARTING new turns past it so REPORT keeps its reserved
    *  synthesis window. Reads the injected clock; unset (either) → time arm off (A1). */
@@ -203,9 +231,15 @@ export async function runResearchLoop(params: {
   const toolsByName = new Map(tools.map((t) => [t.name, t]));
   const messages: BaseMessage[] = [new SystemMessage(system), new HumanMessage(question)];
   const toolOutputs: string[] = [];
+  /** Indices into `messages` of each turn's tool results, oldest turn first. */
+  const toolMessageTurns: number[][] = [];
+  const window = Math.max(0, params.toolResultWindow ?? 0);
   let usage = ZERO_USAGE;
   /** What the previous turn cost, in tokens — the budget gate's estimate for the next one. */
   let lastTurnCost = 0;
+  /** Output tokens of the last exchange — the only part of the next turn's cost that is not
+   *  already visible in `messages`. */
+  let lastOutputTokens = 0;
   let usageByModel: DeepResearchUsageByModel = {};
   const callerModel = params.callerModel ?? configuredModelName(caller);
 
@@ -252,17 +286,30 @@ export async function runResearchLoop(params: {
       );
       break;
     }
-    if (turn > 0 && lastTurnCost > 0 && usage.total + lastTurnCost >= tokenCap) {
+    /**
+     * The next turn costs its PROMPT plus its answer, and the prompt is sitting right here
+     * in `messages` — so measure it instead of guessing from the last turn's total. The old
+     * estimate used the last turn's cost alone, which is systematically too low: the tool
+     * results of turn N are not in turn N's prompt but ARE in turn N+1's. A sweep across cap
+     * values found 20 of 44 still ending in a turn that was billed and had its tool calls
+     * discarded. The answer's size is the one part not yet observable, and the last answer
+     * is the closest available stand-in for it.
+     */
+    const nextTurnEstimate = estimateContextTokens(messages) + lastOutputTokens;
+    if (turn > 0 && usage.total + nextTurnEstimate >= tokenCap) {
       logger.info(
         `[deepResearch:researcher] not starting turn ${turn + 1}: spent ${Math.round(usage.total)}, ` +
-          `last turn cost ${Math.round(lastTurnCost)}, cap ${Math.round(tokenCap)}`,
+          `next turn ~${Math.round(nextTurnEstimate)} (context ${Math.round(nextTurnEstimate - lastOutputTokens)} + ` +
+          `answer ~${Math.round(lastOutputTokens)}), cap ${Math.round(tokenCap)}`,
       );
       break;
     }
     const spentBeforeTurn = usage.total;
+    const turnPrompt = estimateContextTokens(messages);
     const response = await caller.invoke(messages, { signal });
     usage = mergeUsage(usage, usageFromExchange(messages, response));
     lastTurnCost = usage.total - spentBeforeTurn;
+    lastOutputTokens = Math.max(estimateTokens(extractText(response)), lastTurnCost - turnPrompt);
     usageByModel = mergeUsageByModel(
       usageByModel,
       usageByModelFromExchange(messages, response, callerModel),
@@ -290,12 +337,14 @@ export async function runResearchLoop(params: {
       );
       break;
     }
+    const turnToolMessages: number[] = [];
     for (let i = 0; i < toolCalls.length; i++) {
       const call = toolCalls[i];
       if (i >= MAX_TOOL_CALLS_PER_TURN) {
         // Every tool_call still needs a tool response (the provider rejects a
         // dangling tool_call_id), so skipped calls get a placeholder, not silence.
         const skipped = `Вызов инструмента "${call.name}" пропущен: лимит ${MAX_TOOL_CALLS_PER_TURN} вызовов за один ход.`;
+        turnToolMessages.push(messages.length);
         messages.push(
           new ToolMessage({ content: skipped, tool_call_id: call.id ?? '', name: call.name }),
         );
@@ -326,22 +375,55 @@ export async function runResearchLoop(params: {
             `(${outcome.text.length} chars of failure text, not logged)`,
         );
       }
-      messages.push(
-        new ToolMessage({
-          content: fenceUntrusted(outcome.text, nonce),
-          tool_call_id: call.id ?? '',
-          name: call.name,
-        }),
-      );
+      const content = fenceUntrusted(outcome.text, nonce);
+      turnToolMessages.push(messages.length);
+      messages.push(new ToolMessage({ content, tool_call_id: call.id ?? '', name: call.name }));
     }
+    toolMessageTurns.push(turnToolMessages);
+    clearStaleToolResults(messages, toolMessageTurns, window);
   }
   return { toolOutputs, usage, usageByModel };
+}
+
+/**
+ * Replaces the payload of every tool result older than `window` turns with a short marker,
+ * in place, and returns how many were replaced. `window <= 0` disables clearing — byte-
+ * identical to the behaviour before this existed. Only turns strictly OUTSIDE the window are
+ * touched, so the model always sees the results it just asked for.
+ *
+ * The marker replaces the CONTENT, never the message: a provider rejects a `tool_call` with
+ * no matching `tool_result`, so dropping the message outright would break the exchange.
+ */
+export function clearStaleToolResults(
+  messages: BaseMessage[],
+  toolMessageTurns: number[][],
+  window: number,
+): number {
+  if (window <= 0 || toolMessageTurns.length <= window) {
+    return 0;
+  }
+  let cleared = 0;
+  for (const indices of toolMessageTurns.slice(0, toolMessageTurns.length - window)) {
+    for (const index of indices) {
+      const message = messages[index];
+      if (!(message instanceof ToolMessage) || message.content === CLEARED_TOOL_RESULT) {
+        continue;
+      }
+      messages[index] = new ToolMessage({
+        content: CLEARED_TOOL_RESULT,
+        tool_call_id: message.tool_call_id,
+        name: message.name,
+      });
+      cleared += 1;
+    }
+  }
+  return cleared;
 }
 
 /** Joins raw tool outputs into the single bounded block COMPRESS sees — also the
  *  exact text source URLs are pulled from, so citations match the compressed
  *  material rather than trailing material beyond the cap (L6). */
-export function boundToolOutputs(toolOutputs: string[]): string {
+export function boundToolOutputs(toolOutputs: string[], cap = COMPRESS_INPUT_CHAR_CAP): string {
   /**
    * Empty outputs are dropped BEFORE the join: `['', '']` joined to `'\n\n---\n\n'` — a
    * TRUTHY string — so `compressResearch`'s "empty input → empty digest" shortcut never
@@ -350,7 +432,7 @@ export function boundToolOutputs(toolOutputs: string[]): string {
   return toolOutputs
     .filter((output) => output.trim().length > 0)
     .join('\n\n---\n\n')
-    .slice(0, COMPRESS_INPUT_CHAR_CAP);
+    .slice(0, Math.max(1, cap));
 }
 
 /** Compresses the bounded gathered material into a digest. Empty input → empty digest. */
@@ -477,6 +559,7 @@ export async function researchOne(params: {
       question: subQuestion,
       callerModel: configuredModelName(deps.model),
       maxTurns: deps.tier.maxSearcherTurns,
+      toolResultWindow: deps.tier.toolResultWindow,
       tokenCap,
       nonce: deps.nonce,
       signal,
@@ -485,7 +568,7 @@ export async function researchOne(params: {
       // without this the time arm would silently never fire (tests pass a fake).
       clock: deps.clock ?? Date.now,
     });
-    const gathered = boundToolOutputs(toolOutputs);
+    const gathered = boundToolOutputs(toolOutputs, deps.tier.compressInputChars);
     const {
       digest,
       usage: compressUsage,

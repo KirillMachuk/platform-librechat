@@ -1629,6 +1629,41 @@ export const deepResearchModeSchema = z.object({
   maxSearcherTurns: z.number().int().min(1).max(20).default(4),
   perRunTokenBudget: z.number().int().positive().default(400000),
   wallClockMinutes: z.number().int().min(1).max(60).default(8),
+  /**
+   * Fraction of `perRunTokenBudget` at which the supervisor stops dispatching rounds and
+   * routes to REPORT, reserving the remainder for synthesis. Was hardcoded per tier in the
+   * engine; promoted here because tuning it is exactly the knob a tenant needs and reaching
+   * it used to mean rebuilding the image.
+   *
+   * Every knob in this block down to `toolResultWindow` is deliberately `.optional()`, NOT
+   * `.default()`: the yaml is parsed with `configSchema.strict().safeParse`, so a `.default()`
+   * would materialise on EVERY tier block present in the file and then win over the per-tier
+   * value in `DEEP_RESEARCH_MODE_DEFAULTS` (the resolver reads `override.x ?? base.x`, and a
+   * defaulted field is "set"). The deep tier would silently inherit the balanced tier's
+   * numbers. Defaults for these live in `DEEP_RESEARCH_MODE_DEFAULTS`, per tier.
+   */
+  budgetGateRatio: z.number().min(0.1).max(0.95).optional(),
+  /** Wall-clock analogue of `budgetGateRatio` — same reason it lives here now. */
+  timeGateRatio: z.number().min(0.1).max(0.95).optional(),
+  /**
+   * Max characters of ONE researcher's digest. This is the evidence the report is written
+   * from: `maxConcurrentResearchers x maxOrchestratorCycles x digestCap` is the whole
+   * factual base of a report, so it is a quality knob, not a safety one.
+   */
+  digestCap: z.number().int().min(200).max(40000).optional(),
+  /**
+   * Max characters of raw tool output fed into COMPRESS per researcher. Anything gathered
+   * beyond it is paid for and then dropped, so it must exceed what a researcher can gather
+   * (`maxSearcherTurns x 5 calls x 8000 chars`) or the last turns research for nothing.
+   */
+  compressInputChars: z.number().int().min(4000).max(400000).optional(),
+  /**
+   * How many of the most recent turns keep their RAW tool results in the researcher's
+   * message history. Older results are replaced by a short marker (the tool_use record
+   * itself stays, so the model still knows the call happened), which is what stops each
+   * turn from re-paying for every page the previous turns read. 0 disables clearing.
+   */
+  toolResultWindow: z.number().int().min(0).max(10).optional(),
   leadModel: z.string().optional(),
   workerModel: z.string().optional(),
   writerModel: z.string().optional(),

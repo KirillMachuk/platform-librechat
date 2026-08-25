@@ -13,6 +13,16 @@ export interface ResolvedDeepResearchMode {
   perRunTokenBudget: number;
   /** Advisory wall-clock ceiling in minutes. */
   wallClockMinutes: number;
+  /** Fraction of `perRunTokenBudget` at which gathering stops, reserving the rest for REPORT. */
+  budgetGateRatio: number;
+  /** Wall-clock analogue of `budgetGateRatio`. */
+  timeGateRatio: number;
+  /** Max characters of one researcher's digest — the report's factual base. */
+  digestCap: number;
+  /** Max characters of raw tool output fed into COMPRESS per researcher. */
+  compressInputChars: number;
+  /** How many recent turns keep raw tool results in the researcher's context. 0 = no clearing. */
+  toolResultWindow: number;
   /** Orchestrator/writer model; falls back to the conversation model when unset. */
   leadModel?: string;
   /** Researcher (worker) model; falls back to the conversation model when unset. */

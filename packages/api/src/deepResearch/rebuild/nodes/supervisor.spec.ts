@@ -114,6 +114,56 @@ describe('budgetGateReason', () => {
     ).toBe('budget');
   });
 
+  /**
+   * The token arm's own founding case, measured on the stand: the supervisor dispatched a
+   * round on ANY remaining headroom. At 287 900 spent of a 288 000 gate, three researchers
+   * were handed ~33 tokens each, every one of them refused to start, and the round produced
+   * nothing while still counting as a round.
+   */
+  const STARVED_ROUND = {
+    tokenUsed: 287_900,
+    round: 1,
+    tokenBudget: 400_000,
+    budgetGateRatio: 0.72,
+    maxRounds: 6,
+  };
+
+  it('refuses a round the remaining budget cannot pay for', () => {
+    // Mean round = 287 900; 287 900 + 287 900 is far past the 288 000 reserve.
+    expect(budgetGateReason(STARVED_ROUND)).toBe('budget');
+  });
+
+  it('FAILS ON PRE-FIX CODE: the old point check dispatched this starved round', () => {
+    // Estimate suppressed by having no completed round to measure — the old behaviour,
+    // which must still say "keep going" or the test above proves nothing.
+    expect(budgetGateReason({ ...STARVED_ROUND, round: 0 })).toBeNull();
+  });
+
+  it('allows a second round when the first one leaves room for it', () => {
+    // 900k budget, reserve at 648k, a 300k first round: 300k + 300k fits.
+    expect(
+      budgetGateReason({
+        tokenUsed: 300_000,
+        round: 1,
+        tokenBudget: 900_000,
+        budgetGateRatio: 0.72,
+        maxRounds: 6,
+      }),
+    ).toBeNull();
+  });
+
+  it('stops after the round that would cross the reserve', () => {
+    expect(
+      budgetGateReason({
+        tokenUsed: 600_000,
+        round: 2,
+        tokenBudget: 900_000,
+        budgetGateRatio: 0.72,
+        maxRounds: 6,
+      }),
+    ).toBe('budget');
+  });
+
   it('flags rounds when the round cap is hit', () => {
     expect(
       budgetGateReason({

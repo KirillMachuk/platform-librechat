@@ -140,3 +140,27 @@ describe('search + report quality prompts (C2, D1)', () => {
     expect(prompt).not.toMatch(/АНАЛИТИЧЕСКУЮ ЗАПИСКУ/);
   });
 });
+
+describe('what the supervisor is given to decide on', () => {
+  /**
+   * Findings used to be cut to 300 characters each before the supervisor saw them — about
+   * one sentence of a digest. The node whose whole job is to notice what is still missing
+   * was choosing the next round from a headline per sub-question. The digest is already
+   * the compressed form (`digestCap` bounds it where it is produced), so a second cut here
+   * bounded nothing and cost the decision its evidence.
+   */
+  it('shows the whole digest, not its first sentence', () => {
+    const digest = `начало-дайджеста ${'я'.repeat(600)} конец-дайджеста`;
+
+    const input = buildSupervisorInput({
+      brief: 'b',
+      findings: [finding('q1', digest)],
+      round: 1,
+      maxRounds: 8,
+      nonce: NONCE,
+    });
+
+    expect(input).toContain('начало-дайджеста');
+    expect(input).toContain('конец-дайджеста');
+  });
+});
