@@ -355,6 +355,23 @@ export function buildNoDataReport(params: {
 }
 
 /**
+ * Appended to a report whose findings carry NO source at all.
+ *
+ * Measured on the stand 24.08: one run in eight produced 11 639 characters of confident
+ * analysis with zero links in it. `hasResearchMaterial` passed it, because that filter asks
+ * whether a DIGEST exists and knows nothing about sources — so a report nobody can check
+ * shipped looking exactly like one anybody can.
+ *
+ * It is a note, not a refusal. Research over the user's OWN documents legitimately has no
+ * URLs, and throwing that away would break the case it serves. What must not happen is the
+ * reader assuming there is something behind the text when there is not.
+ */
+export const SOURCELESS_NOTICE =
+  '\n\n---\n\n**У этого отчёта нет источников.** Материал собран, но ни одной ссылки в нём ' +
+  'не оказалось — проверить утверждения по первоисточнику нечем. Если от этих данных зависит ' +
+  'решение, повторите исследование или сузьте запрос.';
+
+/**
  * REPORT — the terminal node. Always runs before END (no path skips it) and
  * always produces a `finalReport`: model output, or a deterministic fallback.
  * When the run gathered NO usable material, it refuses to fake an analytical
@@ -387,12 +404,25 @@ export function createReportNode(deps: ReportNodeDeps): DeepResearchNode {
       nonce: deps.nonce,
       signal: config.signal,
     });
+    /**
+     * A report built from findings with no sources cannot be checked by the person reading
+     * it. Not appended to a fallback notice: that text is already an admission of failure and
+     * has no claims to source.
+     */
+    const sourceless = !fellBack && !state.findings.some((finding) => finding.sources.length > 0);
+    if (sourceless) {
+      logger.warn(
+        `[deepResearch:report] no sources in any of ${state.findings.length} finding(s) — ` +
+          'report marked unverifiable',
+      );
+    }
+    const finalText = sourceless ? text + SOURCELESS_NOTICE : text;
     return {
-      finalReport: text,
+      finalReport: finalText,
       // A failed synthesis (`fellBack`) is an 'error' outcome — the honest notice, never
       // saved as a report/PDF. A real model report keeps the concluded reason.
       finalizeReason: fellBack ? 'error' : finalizeReason,
-      messages: [new AIMessage(text)],
+      messages: [new AIMessage(finalText)],
       tokenUsage: usage,
       usageByModel,
     };

@@ -18,7 +18,7 @@ import {
   type ToolCaller,
   type ResearcherNodeDeps,
 } from './researcher';
-import { composeReport, buildNoDataReport } from './report';
+import { composeReport, buildNoDataReport, createReportNode } from './report';
 import { createSupervisorNode } from './supervisor';
 import { resolveDeepResearchTier } from '../config';
 import { createScopeNode } from './scope';
@@ -108,6 +108,126 @@ describe('a tool failure is not research material', () => {
     // REPORT asks exactly this before deciding to write an analysis at all.
     expect(hasResearchMaterial(finding)).toBe(false);
     expect(warnings()).toContain('returned no data');
+  });
+});
+
+const infos = (): string => (logger.info as jest.Mock).mock.calls.flat().map(String).join('\n');
+
+describe('a turn the budget cannot pay for is never started', () => {
+  /**
+   * The cap used to be checked only AFTER the model call, so a researcher already at its cap
+   * still made the call, was billed for it, and had its tool calls discarded — the turn bought
+   * nothing. Measured on the stand 24.08: 7 times across 9 runs. And the waste compounds:
+   * `perResearcherCap` is the run's REMAINING budget divided by the batch, so tokens burned on
+   * a dead turn are taken from every later round's researchers too.
+   */
+  const costlyTool = tool(async () => 'данные: https://example.com/a', {
+    name: 'web_search',
+    description: 'поиск',
+    schema: z.object({ query: z.string() }),
+  });
+
+  /** Every turn asks for one tool and reports exactly `cost` tokens. */
+  const callerCosting = (cost: number, sink: { calls: number }): ToolCaller => ({
+    invoke: async () => {
+      sink.calls += 1;
+      return new AIMessageChunk({
+        content: '',
+        tool_calls: [{ name: 'web_search', args: { query: 'q' }, id: 'c1', type: 'tool_call' }],
+        usage_metadata: { input_tokens: cost, output_tokens: 0, total_tokens: cost },
+      });
+    },
+  });
+
+  it('stops one turn EARLY rather than paying for a turn it must discard', async () => {
+    const sink = { calls: 0 };
+    await runResearchLoop({
+      caller: callerCosting(100, sink),
+      tools: [costlyTool],
+      system: 's',
+      question: 'q',
+      maxTurns: 10,
+      tokenCap: 250,
+      nonce: NONCE,
+    });
+    // 100 + 100 = 200 fits; a third turn would reach 300 and be thrown away, so it is not
+    // started. Before the fix the third call was made, billed, and its tool calls discarded.
+    expect(sink.calls).toBe(2);
+    expect(infos()).toContain('not starting turn 3');
+    // The backstop must NOT have fired: nothing was billed and discarded.
+    expect(warnings()).not.toContain('token cap reached');
+  });
+
+  it('always runs the first turn, even with the budget already exhausted', async () => {
+    const sink = { calls: 0 };
+    await runResearchLoop({
+      caller: callerCosting(10_000, sink),
+      tools: [costlyTool],
+      system: 's',
+      question: 'q',
+      maxTurns: 5,
+      // ZERO, not a small number: `perResearcherCap` is max(0, remaining)/batch, so a run
+      // whose budget is already spent hands its researchers exactly this. Nothing is known
+      // about a turn's cost before one has run, and refusing at zero would mean such a
+      // researcher returns no material at all rather than one turn's worth.
+      tokenCap: 0,
+      nonce: NONCE,
+    });
+    expect(sink.calls).toBe(1);
+  });
+
+  /**
+   * Why the estimate is the LAST turn and not the mean.
+   *
+   * Turn cost GROWS — each turn re-sends the whole conversation — so the mean lags behind and
+   * under-estimates what the next turn will cost. Under-estimating is exactly the failure this
+   * gate exists to prevent: it lets a doomed turn start, which is then billed and discarded.
+   * Costs here are 100, 100, 200, 300: after four turns the mean is 175 while the last turn
+   * cost 300, and the remaining headroom is 200 — between the two.
+   */
+  it('uses the last turn, not the mean, so a growing cost cannot sneak a doomed turn in', async () => {
+    const costs = [100, 100, 200, 300, 300];
+    const sink = { calls: 0 };
+    const caller: ToolCaller = {
+      invoke: async () => {
+        const cost = costs[Math.min(sink.calls, costs.length - 1)];
+        sink.calls += 1;
+        return new AIMessageChunk({
+          content: '',
+          tool_calls: [{ name: 'web_search', args: { query: 'q' }, id: 'c1', type: 'tool_call' }],
+          usage_metadata: { input_tokens: cost, output_tokens: 0, total_tokens: cost },
+        });
+      },
+    };
+    await runResearchLoop({
+      caller,
+      tools: [costlyTool],
+      system: 's',
+      question: 'q',
+      maxTurns: 10,
+      tokenCap: 900,
+      nonce: NONCE,
+    });
+    // 700 spent, last turn cost 300 → a fifth turn cannot finish and is not started.
+    expect(sink.calls).toBe(4);
+    // The mean (175) would have fitted under the 200 of headroom, started the turn anyway,
+    // and the backstop would have caught it AFTER the model was billed.
+    expect(warnings()).not.toContain('token cap reached');
+  });
+
+  it('does not gate at all when the cap is infinite', async () => {
+    const sink = { calls: 0 };
+    await runResearchLoop({
+      caller: callerCosting(100, sink),
+      tools: [costlyTool],
+      system: 's',
+      question: 'q',
+      maxTurns: 3,
+      tokenCap: Number.POSITIVE_INFINITY,
+      nonce: NONCE,
+    });
+    expect(sink.calls).toBe(3);
+    expect(infos()).not.toContain('not starting turn');
   });
 });
 
@@ -440,5 +560,92 @@ describe('the no-data notice states what it knows and no more', () => {
     // No tautological "material was not gathered: gathering stopped".
     expect(text).toContain('не собрано пригодного материала.');
     expect(text).toContain('повторите исследование');
+  });
+});
+
+/**
+ * A report with no sources cannot be checked by the person reading it.
+ *
+ * Measured on the stand 24.08: one run in eight produced 11 639 characters of confident
+ * analysis containing zero links. `hasResearchMaterial` let it through, because that filter
+ * asks whether a DIGEST exists and knows nothing about sources.
+ */
+describe('a report nobody can check says so', () => {
+  const answering = (content: string): BaseChatModel =>
+    ({
+      invoke: async () => new AIMessage({ content, response_metadata: { finish_reason: 'stop' } }),
+    }) as unknown as BaseChatModel;
+
+  const stateWithSources = (sources: string[]): DeepResearchState =>
+    stateWith({
+      messages: [new HumanMessage('вопрос')],
+      findings: [
+        { round: 0, subQuestion: 'в', digest: 'настоящая выжимка с фактами', sources, tokens: 10 },
+      ],
+    });
+
+  it('appends the notice when not one finding carries a source', async () => {
+    const node = createReportNode({
+      reportModel: answering('# Отчёт\n\nВывод.'),
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+    });
+    const update = await node(stateWithSources([]), {} as RunnableConfig);
+    expect(update.finalReport).toContain('нет источников');
+    expect(warnings()).toContain('no sources in any of');
+  });
+
+  it('stays quiet when even one source survived', async () => {
+    const node = createReportNode({
+      reportModel: answering('# Отчёт\n\nВывод.'),
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+    });
+    const update = await node(stateWithSources(['https://example.com/a']), {} as RunnableConfig);
+    expect(update.finalReport).not.toContain('нет источников');
+  });
+
+  /**
+   * ONE source anywhere is enough to make the report checkable, so the condition is "some
+   * finding has a source", not "every finding does". With a single finding the two are
+   * indistinguishable — this is the case that tells them apart.
+   */
+  it('stays quiet when only part of the findings carry sources', async () => {
+    const node = createReportNode({
+      reportModel: answering('# Отчёт\n\nВывод.'),
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+    });
+    const mixed = stateWith({
+      messages: [new HumanMessage('вопрос')],
+      findings: [
+        { round: 0, subQuestion: 'а', digest: 'выжимка А', sources: [], tokens: 10 },
+        {
+          round: 0,
+          subQuestion: 'б',
+          digest: 'выжимка Б',
+          sources: ['https://example.com/b'],
+          tokens: 10,
+        },
+      ],
+    });
+    const update = await node(mixed, {} as RunnableConfig);
+    expect(update.finalReport).not.toContain('нет источников');
+  });
+
+  /** The fallback text is already an admission of failure; it has no claims to source. */
+  it('does not append it to a failure notice', async () => {
+    const node = createReportNode({
+      reportModel: answering(''),
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+    });
+    const update = await node(stateWithSources([]), {} as RunnableConfig);
+    expect(update.finalizeReason).toBe('error');
+    expect(update.finalReport).not.toContain('нет источников');
   });
 });

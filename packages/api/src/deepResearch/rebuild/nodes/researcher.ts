@@ -203,6 +203,8 @@ export async function runResearchLoop(params: {
   const messages: BaseMessage[] = [new SystemMessage(system), new HumanMessage(question)];
   const toolOutputs: string[] = [];
   let usage = ZERO_USAGE;
+  /** What the previous turn cost, in tokens — the budget gate's estimate for the next one. */
+  let lastTurnCost = 0;
   let usageByModel: DeepResearchUsageByModel = {};
   const callerModel = params.callerModel ?? configuredModelName(caller);
 
@@ -213,8 +215,34 @@ export async function runResearchLoop(params: {
     if (deadlineMs != null && clock != null && clock() >= deadlineMs) {
       break;
     }
+    /**
+     * Budget gate: a turn the cap cannot pay for is never STARTED.
+     *
+     * The cap used to be checked only AFTER the model call. A researcher already at its cap
+     * therefore still made the call, was billed for it, and had every tool call it asked for
+     * thrown away — the turn bought literally nothing. Measured on the stand 24.08: it fired
+     * 7 times across 9 runs, i.e. most runs paid for at least one dead turn.
+     *
+     * The waste is not only the call. `perResearcherCap` is the run's REMAINING gather budget
+     * divided by the batch, so tokens burned on a turn that produces no material are taken
+     * from the researchers of every later round as well.
+     *
+     * The estimate is the LAST turn's cost, not the mean: each turn re-sends the whole
+     * conversation, so cost grows turn over turn and the previous turn is the closest
+     * available floor. Before the first turn there is nothing to measure and the turn always
+     * runs — which is what keeps a small cap from refusing to research at all.
+     */
+    if (turn > 0 && lastTurnCost > 0 && usage.total + lastTurnCost >= tokenCap) {
+      logger.info(
+        `[deepResearch:researcher] not starting turn ${turn + 1}: spent ${Math.round(usage.total)}, ` +
+          `last turn cost ${Math.round(lastTurnCost)}, cap ${Math.round(tokenCap)}`,
+      );
+      break;
+    }
+    const spentBeforeTurn = usage.total;
     const response = await caller.invoke(messages, { signal });
     usage = mergeUsage(usage, usageFromExchange(messages, response));
+    lastTurnCost = usage.total - spentBeforeTurn;
     usageByModel = mergeUsageByModel(
       usageByModel,
       usageByModelFromExchange(messages, response, callerModel),
@@ -230,11 +258,11 @@ export async function runResearchLoop(params: {
     }
     if (usage.total >= tokenCap) {
       /**
-       * The model call above is BILLED and its tool calls will now never run, so this turn
-       * bought nothing. Downstream that is indistinguishable from a search that found
-       * nothing, and the user was told "источники не открылись или поиск был недоступен" —
-       * sent to an administrator to debug a search that works fine. REPORT now words that
-       * notice from the run's conclude reason; this line is the server-side half.
+       * Backstop. The gate above should now prevent this from being reached, because a turn
+       * that cannot be paid for is not started — but the estimate can be wrong (a turn whose
+       * tool output is far larger than the last one's), and when it is, this still stops the
+       * loop rather than overrunning. If this line appears in the logs it means the estimate
+       * missed, which is worth knowing: the turn was billed and its tool calls discarded.
        */
       logger.warn(
         `[deepResearch:researcher] token cap reached (${usage.total}/${Math.round(tokenCap)}) with ` +
