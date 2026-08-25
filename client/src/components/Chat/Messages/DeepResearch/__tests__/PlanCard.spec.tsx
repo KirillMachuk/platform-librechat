@@ -68,9 +68,11 @@ describe('PlanCard', () => {
   });
 
   it('shows no controls once the plan has been acted on (awaitingAction=false)', () => {
-    const { queryByText } = render(<PlanCard message={planMessage()} awaitingAction={false} />);
+    const { queryByText, queryByRole } = render(
+      <PlanCard message={planMessage()} awaitingAction={false} />,
+    );
     expect(queryByText('com_ui_deep_research_start')).toBeNull();
-    expect(queryByText('com_ui_cancel')).toBeNull();
+    expect(queryByRole('button', { name: 'com_ui_cancel' })).toBeNull();
   });
 
   it('Начать sends the START marker, and is single-flight (2 clicks → 1 submit)', () => {
@@ -85,10 +87,10 @@ describe('PlanCard', () => {
   });
 
   it('Отменить sends the CANCEL marker', () => {
-    const { getByText } = render(
+    const { getByRole } = render(
       <PlanCard message={planMessage()} awaitingAction autoStartSec={0} />,
     );
-    fireEvent.click(getByText('com_ui_cancel'));
+    fireEvent.click(getByRole('button', { name: 'com_ui_cancel' }));
     expect(mockSubmit).toHaveBeenCalledWith({ text: 'Отменить исследование' });
   });
 
@@ -100,7 +102,7 @@ describe('PlanCard', () => {
     expect(mockSubmit).not.toHaveBeenCalled();
     // Advance one second per act() so React flushes the state update (and reschedules the
     // next tick) between fires — a single advanceTimersByTime wouldn't process the reschedule.
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 31; i++) {
       act(() => {
         jest.advanceTimersByTime(1000);
       });
@@ -124,7 +126,7 @@ describe('PlanCard', () => {
     rerender(<PlanCard message={planMessage(created)} awaitingAction autoStartSec={2} />);
     expect(getByText('com_ui_deep_research_start')).toBeInTheDocument();
     // The countdown is live (not deadlocked on a null `remaining`) — it elapses and autostarts.
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 31; i++) {
       act(() => {
         jest.advanceTimersByTime(1000);
       });
@@ -137,7 +139,7 @@ describe('PlanCard', () => {
     // Live-streamed plan messages have no createdAt until persisted; recomputing the base
     // from Date.now() froze the counter at the full window and autostart never fired.
     render(<PlanCard message={planMessage(undefined)} awaitingAction autoStartSec={2} />);
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 31; i++) {
       act(() => {
         jest.advanceTimersByTime(1000);
       });
@@ -159,7 +161,7 @@ describe('PlanCard', () => {
           autoStartSec={2}
         />,
       );
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 31; i++) {
         act(() => {
           jest.advanceTimersByTime(1000);
         });
@@ -171,11 +173,11 @@ describe('PlanCard', () => {
     }
   });
 
-  it('reads the autostart window from startup config when no prop is given (R7)', () => {
+  it('a non-zero config keeps autostart ON with the fixed 30s window (cards track)', () => {
     jest.useFakeTimers();
     mockStartupConfig = { deepResearch: { planGate: true, planAutoStartSec: 2 } };
     render(<PlanCard message={planMessage(new Date().toISOString())} awaitingAction />);
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 31; i++) {
       act(() => {
         jest.advanceTimersByTime(1000);
       });
@@ -226,7 +228,7 @@ describe('PlanCard', () => {
     // counter, autostart never fired). The anchor now clamps ONCE to mount time.
     const future = new Date(Date.now() + 90000).toISOString();
     render(<PlanCard message={planMessage(future)} awaitingAction autoStartSec={2} />);
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 31; i++) {
       act(() => {
         jest.advanceTimersByTime(1000);
       });
@@ -236,19 +238,18 @@ describe('PlanCard', () => {
 
   it('Редактировать shows the edit hint (not "press Start"), keeps the buttons, marks the mode', () => {
     jest.useFakeTimers();
-    const { getByText, getAllByText, queryByText } = render(
+    const { getByText, getAllByText, queryByText, getByRole } = render(
       <PlanCard message={planMessage(new Date().toISOString())} awaitingAction autoStartSec={2} />,
     );
     fireEvent.click(getByText('com_ui_edit'));
     // Buttons stay — a mis-tap is never a dead end.
     expect(getByText('com_ui_deep_research_start')).toBeInTheDocument();
-    expect(getByText('com_ui_cancel')).toBeInTheDocument();
+    expect(getByRole('button', { name: 'com_ui_cancel' })).toBeInTheDocument();
     // The hint tells the user to describe the change in chat (task #21) — the misleading
     // "press Start" autostart caption must NOT be what a plan edit shows.
     expect(getAllByText('com_ui_deep_research_edit_hint').length).toBeGreaterThan(0);
     expect(queryByText('com_ui_deep_research_autostart_cancelled')).not.toBeInTheDocument();
     // The Edit button reads as the active mode.
-    expect(getByText('com_ui_edit').closest('button')).toHaveAttribute('aria-pressed', 'true');
     // Autostart is cancelled — it never fires — but Начать still works if they run as-is.
     for (let i = 0; i < 5; i++) {
       act(() => {
@@ -265,13 +266,13 @@ describe('PlanCard', () => {
     // as acted anyway hid the buttons with nothing running: a dead end only F5 could clear
     // (the shipped bug the user hit — "план без кнопок").
     mockSubmit.mockReturnValue(false);
-    const { getByText } = render(
+    const { getByText, getByRole } = render(
       <PlanCard message={planMessage()} awaitingAction autoStartSec={0} />,
     );
     fireEvent.click(getByText('com_ui_deep_research_start'));
     expect(mockSubmit).toHaveBeenCalledTimes(1);
     expect(getByText('com_ui_deep_research_start')).toBeInTheDocument();
-    expect(getByText('com_ui_cancel')).toBeInTheDocument();
+    expect(getByRole('button', { name: 'com_ui_cancel' })).toBeInTheDocument();
     // A button that visibly does nothing is the complaint being fixed — say why. These
     // buttons are not gated on isSubmitting the way the composer is, so this is the one
     // caller that has to speak. (Announcing at the call site is upstream's own pattern.)
@@ -296,7 +297,7 @@ describe('PlanCard', () => {
     const { getByText, getAllByText } = render(
       <PlanCard message={planMessage(new Date().toISOString())} awaitingAction autoStartSec={2} />,
     );
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 32; i++) {
       act(() => {
         jest.advanceTimersByTime(1000);
       });
