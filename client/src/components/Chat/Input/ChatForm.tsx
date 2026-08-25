@@ -239,6 +239,10 @@ const ChatForm = memo(function ChatForm({
   return (
     <form
       onSubmit={methods.handleSubmit(submitMessage)}
+      /* autoComplete off: the browser's contact-autofill popover appeared over
+       * the composer whenever a chat switch re-focused the textarea (round 24;
+       * Safari offers contact fill for any focused named field in a form). */
+      autoComplete="off"
       className={cn(
         'mx-auto flex w-full flex-row gap-3 px-2.5 pb-[calc(14px+env(safe-area-inset-bottom,0px))] transition-[max-width] duration-300 sm:pb-0 md:px-0',
         chatColumnClass(maximizeChatSpace),
@@ -335,6 +339,7 @@ const ChatForm = memo(function ChatForm({
                     tabIndex={0}
                     data-testid="text-input"
                     rows={1}
+                    autoComplete="off"
                     aria-label={localize('com_ui_message_input')}
                     style={{ height: 44, overflowY: 'auto', overflowX: 'hidden' }}
                     className={cn(

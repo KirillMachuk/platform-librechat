@@ -213,6 +213,23 @@ export default function useMessageScrolling(messagesTree?: TMessage[] | null) {
     }
   }, [autoScroll, conversationId, scrollToBottom]);
 
+  /* The scroll-to-bottom button. While a reply is streaming, the smooth
+   * glide is a lie: smoothCallback re-opens the follow gates immediately and
+   * the next chunk's instant follow (<=145ms) teleports over the animation —
+   * the user sees a started glide cut by a jump. Streaming clicks therefore
+   * jump instantly (predictable, ChatGPT-like); idle clicks keep the glide. */
+  const handleScrollButtonClick: React.MouseEventHandler<HTMLButtonElement> = useCallback(
+    (e) => {
+      if (isSubmitting) {
+        setAbortScroll(false);
+        scrollToBottom?.();
+        return;
+      }
+      handleSmoothToRef(e);
+    },
+    [isSubmitting, scrollToBottom, handleSmoothToRef, setAbortScroll],
+  );
+
   return {
     conversation,
     contentRef,
@@ -220,7 +237,7 @@ export default function useMessageScrolling(messagesTree?: TMessage[] | null) {
     messagesEndRef,
     scrollToBottom,
     showScrollButton,
-    handleSmoothToRef,
+    handleScrollButtonClick,
     debouncedHandleScroll,
   };
 }

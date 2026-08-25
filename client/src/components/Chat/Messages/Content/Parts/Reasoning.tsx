@@ -39,8 +39,21 @@ const Reasoning = memo(({ reasoning, isLast }: ReasoningProps) => {
   const contentId = useId();
   const localize = useLocalize();
   const showThinking = useAtomValue(showThinkingAtom);
-  const { isSubmitting, isLatestMessage, nextType, autoExpandReasoning } = useMessageContext();
-  const [isExpanded, setIsExpanded] = useState(showThinking || autoExpandReasoning === true);
+  const {
+    isSubmitting,
+    isLatestMessage,
+    nextType,
+    autoExpandReasoning,
+    reasoningExpandedInitial,
+    onReasoningExpandedChange,
+  } = useMessageContext();
+  /* reasoningExpandedInitial seeds the state across the finalization remount
+   * (the part key carries messageId, which swaps to the server id when the
+   * stream ends) — without it a card the user expanded during streaming
+   * collapsed the moment the reply finished. */
+  const [isExpanded, setIsExpanded] = useState(
+    reasoningExpandedInitial ?? (showThinking || autoExpandReasoning === true),
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const { style: expandStyle, ref: expandRef } = useExpandCollapse(isExpanded);
 
@@ -65,10 +78,15 @@ const Reasoning = memo(({ reasoning, isLast }: ReasoningProps) => {
       .trim();
   }, [reasoning]);
 
-  const handleClick = useCallback((e: MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    setIsExpanded((prev) => !prev);
-  }, []);
+  const handleClick = useCallback(
+    (e: MouseEvent<HTMLButtonElement>) => {
+      e.preventDefault();
+      const next = !isExpanded;
+      onReasoningExpandedChange?.(next);
+      setIsExpanded(next);
+    },
+    [isExpanded, onReasoningExpandedChange],
+  );
 
   const effectiveIsSubmitting = isLatestMessage ? isSubmitting : false;
 
