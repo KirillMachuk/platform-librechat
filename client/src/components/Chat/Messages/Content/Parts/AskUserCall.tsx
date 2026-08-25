@@ -1,10 +1,11 @@
-import { memo, useMemo, useRef, useState } from 'react';
+import { memo, useContext, useMemo, useRef, useState } from 'react';
 import { useToastContext } from '@librechat/client';
 import { ASK_SKIP_MARKER, buildAskAnswersMessage, parseAskUserArgs } from 'librechat-data-provider';
+import type { AskUserQuestion } from 'librechat-data-provider';
 import type { ApprovalCardStrings } from '~/components/Chat/Cards/ApprovalCard';
 import { ApprovalCard } from '~/components/Chat/Cards/ApprovalCard';
+import { ChatContext, useMessageContext } from '~/Providers';
 import { useSubmitMessage } from '~/hooks/Messages';
-import { useMessageContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
 
 /**
@@ -15,21 +16,15 @@ import { useLocalize } from '~/hooks';
  * marker; the model reads either as plain text (deepResearchRun's
  * message-level pattern — no run pause, survives refresh).
  *
- * Interactive only while this is the latest message and the run has ended;
- * afterwards the card renders statically (questions visible, no controls) —
- * the chosen answers live in the answers chip right below it.
+ * Split in two on purpose (review К4): the share page renders Parts OUTSIDE
+ * ChatContext, and the chat hooks THROW there — the outer component checks
+ * the context and mounts the hook-bearing interactive body only inside a
+ * live chat; everywhere else the card renders statically.
  */
-const AskUserCall = memo(({ args }: { args: unknown }) => {
+
+function useCardStrings(): ApprovalCardStrings {
   const localize = useLocalize();
-  const { showToast } = useToastContext();
-  const { submitMessage } = useSubmitMessage();
-  const { isSubmitting, isLatestMessage } = useMessageContext();
-  const [acted, setActed] = useState(false);
-  const actedRef = useRef(false);
-
-  const questions = useMemo(() => parseAskUserArgs(args), [args]);
-
-  const cardStrings: ApprovalCardStrings = useMemo(
+  return useMemo(
     () => ({
       otherPlaceholder: localize('com_ui_cards_other_placeholder'),
       moreLabel: (n) => localize('com_ui_cards_more', { 0: String(n) }),
@@ -45,12 +40,33 @@ const AskUserCall = memo(({ args }: { args: unknown }) => {
     }),
     [localize],
   );
+}
 
-  if (questions == null) {
-    /* Args still streaming or malformed — nothing to show yet. The server
-     * handler already told the model when the shape was wrong. */
-    return null;
-  }
+function StaticCard({ questions }: { questions: AskUserQuestion[] }) {
+  const localize = useLocalize();
+  const strings = useCardStrings();
+  return (
+    <div className="my-2 w-full">
+      <ApprovalCard
+        variant="questions"
+        strings={strings}
+        title={localize('com_ui_cards_questions_title')}
+        approveLabel={localize('com_ui_cards_continue')}
+        questions={questions}
+        showActions={false}
+      />
+    </div>
+  );
+}
+
+function InteractiveCard({ questions }: { questions: AskUserQuestion[] }) {
+  const localize = useLocalize();
+  const strings = useCardStrings();
+  const { showToast } = useToastContext();
+  const { submitMessage } = useSubmitMessage();
+  const { isSubmitting, isLatestMessage } = useMessageContext();
+  const [acted, setActed] = useState(false);
+  const actedRef = useRef(false);
 
   const send = (text: string): void => {
     if (actedRef.current) {
@@ -70,7 +86,7 @@ const AskUserCall = memo(({ args }: { args: unknown }) => {
     <div className="my-2 w-full">
       <ApprovalCard
         variant="questions"
-        strings={cardStrings}
+        strings={strings}
         title={localize('com_ui_cards_questions_title')}
         approveLabel={localize('com_ui_cards_continue')}
         secondaryLabel={localize('com_ui_cards_skip')}
@@ -86,6 +102,22 @@ const AskUserCall = memo(({ args }: { args: unknown }) => {
       />
     </div>
   );
+}
+
+const AskUserCall = memo(({ args }: { args: unknown }) => {
+  const chat = useContext(ChatContext);
+  const questions = useMemo(() => parseAskUserArgs(args), [args]);
+
+  if (questions == null) {
+    /* Args still streaming or malformed — nothing to show yet. The server
+     * handler already told the model when the shape was wrong. */
+    return null;
+  }
+
+  if (chat == null) {
+    return <StaticCard questions={questions} />;
+  }
+  return <InteractiveCard questions={questions} />;
 });
 
 AskUserCall.displayName = 'AskUserCall';

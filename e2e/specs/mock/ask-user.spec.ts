@@ -59,13 +59,17 @@ test.describe('ask_user questions card', () => {
     await expect(continueBtn).toBeEnabled();
     await continueBtn.click();
 
-    /* The ONE summary message renders as the answers chip, content preserved. */
-    const chip = page.getByText('Ответы на вопросы', { exact: false }).first();
+    /* The ONE summary message renders as the answers CHIP (review K3: the
+     * raw-text assertion was green while the chip was dead - the marker
+     * matched the plain bubble). Assert the chip element itself, its
+     * localized en header, the pairs INSIDE it, and that the raw marker
+     * line is NOT on screen (the chip drops it). */
+    const chip = page.getByTestId('answers-chip');
     await expect(chip).toBeVisible({ timeout: 15_000 });
-    await expect(
-      page.getByText('Какой формат отчёта? — Полный отчёт', { exact: false }),
-    ).toBeVisible();
-    await expect(page.getByText('За какой период? — Квартал', { exact: false })).toBeVisible();
+    await expect(chip.getByText('Answers to the assistant', { exact: false })).toBeVisible();
+    await expect(chip.getByText('Какой формат отчёта? — Полный отчёт')).toBeVisible();
+    await expect(chip.getByText('За какой период? — Квартал')).toBeVisible();
+    await expect(page.getByText('Ответы на вопросы:', { exact: false })).toHaveCount(0);
 
     /* The card goes static: no Continue button anywhere anymore. */
     await expect(card.getByRole('button', { name: /Продолжить|Continue/ })).toHaveCount(0, {

@@ -1,14 +1,7 @@
 import { useCallback, useMemo, memo } from 'react';
 import { useRecoilValue } from 'recoil';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  QueryKeys,
-  isDrStartCommand,
-  isDrCancelCommand,
-  isAskSkipMessage,
-  isAskAnswersMessage,
-  contentHasAskUserCall,
-} from 'librechat-data-provider';
+import { QueryKeys, isDrStartCommand, isDrCancelCommand } from 'librechat-data-provider';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { TMessageProps, TMessageChatContext } from '~/common';
@@ -16,7 +9,6 @@ import {
   PlanCard,
   ReportCard,
   ActionChip,
-  AnswersChip,
   RunningSlot,
   TruncatedNote,
   resolveDrReport,
@@ -24,6 +16,7 @@ import {
 } from '~/components/Chat/Messages/DeepResearch';
 import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import { useAttachments, useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
+import useAskUserChip from '~/components/Chat/Messages/DeepResearch/useAskUserChip';
 import ContentParts from '~/components/Chat/Messages/Content/ContentParts';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
 import { USER_BUBBLE_CLASS } from '~/components/Chat/Messages/ui/turn';
@@ -151,6 +144,9 @@ const ContentRender = memo(function ContentRender({
   const isLatestMessage = msg?.messageId === latestMessageId;
 
   const { hasParallelContent } = useContentMetadata(msg);
+  /* Shared with MessageRender — the chip must behave identically on both
+   * user-message render paths (review К3: it was mounted on only one). */
+  const askChip = useAskUserChip(msg);
 
   // Task #21 phase 3: a FINISHED Deep Research report → collapsible ReportCard + reader.
   // Review r2: keyed on the persisted `drKind` provenance (no text sniffing, no ancestor
@@ -213,25 +209,9 @@ const ContentRender = memo(function ContentRender({
   const isDrPlanCard = !isUserTurn && msg.drKind === 'plan';
   const mountDrRunningSlot = !isUserTurn && !isDrPlanCard && isLatestMessage && isSubmitting;
 
-  /* Ask-user answers chip (interactive cards К3): the answers/skip messages
-   * are button-built, so like the DR command chips they render compactly —
-   * but ONLY under a parent that actually carries an `ask_user` tool call
-   * (the drKind lesson: prose that merely LOOKS like the marker must not
-   * change its rendering; the parent anchor is the provenance we have,
-   * since user messages carry no server-stamped kind). */
-  let isAskChip = false;
-  if (isUserTurn && (isAskAnswersMessage(msgText) || isAskSkipMessage(msgText))) {
-    const cachedForAsk = queryClient.getQueryData<TMessage[]>([
-      QueryKeys.messages,
-      conversation?.conversationId,
-    ]);
-    const askParent = cachedForAsk?.find((m) => m.messageId === msg.parentMessageId);
-    isAskChip = contentHasAskUserCall(askParent?.content);
-  }
-
   let drCard: ReactNode = null;
-  if (isAskChip) {
-    drCard = <AnswersChip text={msgText} />;
+  if (askChip != null) {
+    drCard = askChip;
   } else if (isDrActionChip) {
     drCard = <ActionChip text={msgText} />;
   } else if (isDrPlanCard) {
@@ -289,7 +269,11 @@ const ContentRender = memo(function ContentRender({
               showUserBubble && 'items-end',
             )}
           >
-            <div className={cn(showUserBubble && !isDrActionChip && USER_BUBBLE_CLASS)}>
+            <div
+              className={cn(
+                showUserBubble && !isDrActionChip && askChip == null && USER_BUBBLE_CLASS,
+              )}
+            >
               {drCard ??
                 (drReport ? (
                   <ReportCard title={drReport.title} text={msgText}>

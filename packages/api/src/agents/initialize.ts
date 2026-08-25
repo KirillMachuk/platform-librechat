@@ -390,6 +390,10 @@ export interface InitializeAgentParams {
   skillAuthoringAvailable?: boolean;
   /** Whether the code execution environment is available (execute_code capability enabled) */
   codeEnvAvailable?: boolean;
+  /** The ask_user questions tool renders as a CLIENT card — surfaces without
+   *  the chat UI (the OpenAI-compatible API) must opt out or the tool result
+   *  would claim a card nobody sees. */
+  skipAskUserTool?: boolean;
   /** Per-user skill active/inactive overrides for filtering the skill catalog. */
   skillStates?: Record<string, boolean>;
   /** Admin-configured default for shared skills (`true` = shared skills auto-activate). */
@@ -1187,7 +1191,7 @@ export async function initializeAgent(
    */
   const hasAnyToolsForAskUser =
     (structuredTools?.length ?? 0) > 0 || (toolDefinitions?.length ?? 0) > 0;
-  if (hasAnyToolsForAskUser) {
+  if (hasAnyToolsForAskUser && params.skipAskUserTool !== true) {
     const askUserResult = registerAskUserTool({ toolRegistry, toolDefinitions });
     toolDefinitions = askUserResult.toolDefinitions;
   }

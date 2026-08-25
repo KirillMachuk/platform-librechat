@@ -13,7 +13,10 @@ export default function AnswersChip({ text }: { text: string }) {
   const localize = useLocalize();
   if (isAskSkipMessage(text)) {
     return (
-      <div className="inline-flex items-center gap-1.5 rounded-full bg-surface-secondary px-3 py-1 text-xs text-text-secondary">
+      <div
+        data-testid="answers-chip"
+        className="inline-flex items-center gap-1.5 rounded-full bg-surface-secondary px-3 py-1 text-xs text-text-secondary"
+      >
         <X className="icon-xs" aria-hidden="true" />
         <span>{localize('com_ui_cards_questions_skipped')}</span>
       </div>
@@ -21,7 +24,10 @@ export default function AnswersChip({ text }: { text: string }) {
   }
   const pairs = parseAskAnswersMessage(text);
   return (
-    <div className="inline-flex max-w-full flex-col gap-1 rounded-2xl bg-surface-secondary px-3.5 py-2 text-xs text-text-secondary">
+    <div
+      data-testid="answers-chip"
+      className="inline-flex max-w-full flex-col gap-1 rounded-2xl bg-surface-secondary px-3.5 py-2 text-xs text-text-secondary"
+    >
       <div className="flex items-center gap-1.5 font-medium">
         <MessageCircleQuestion className="icon-xs" aria-hidden="true" />
         <span>{localize('com_ui_cards_answers_sent')}</span>

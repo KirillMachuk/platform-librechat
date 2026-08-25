@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MessageContext } from '~/Providers/MessageContext';
+import { ChatContext } from '~/Providers/ChatContext';
 import AskUserCall from '../Parts/AskUserCall';
 
 const mockSubmit = jest.fn();
@@ -21,16 +22,18 @@ const ARGS = JSON.stringify({
 
 const renderCall = (ctx: { isSubmitting?: boolean; isLatestMessage?: boolean } = {}, args = ARGS) =>
   render(
-    <MessageContext.Provider
-      value={{
-        messageId: 'm1',
-        isExpanded: true,
-        isSubmitting: ctx.isSubmitting ?? false,
-        isLatestMessage: ctx.isLatestMessage ?? true,
-      }}
-    >
-      <AskUserCall args={args} />
-    </MessageContext.Provider>,
+    <ChatContext.Provider value={{} as never}>
+      <MessageContext.Provider
+        value={{
+          messageId: 'm1',
+          isExpanded: true,
+          isSubmitting: ctx.isSubmitting ?? false,
+          isLatestMessage: ctx.isLatestMessage ?? true,
+        }}
+      >
+        <AskUserCall args={args} />
+      </MessageContext.Provider>
+    </ChatContext.Provider>,
   );
 
 describe('AskUserCall (interactive cards К3)', () => {
@@ -93,6 +96,17 @@ describe('AskUserCall (interactive cards К3)', () => {
     mockSubmit.mockReturnValue(undefined);
     fireEvent.click(continueBtn);
     expect(mockSubmit).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders a STATIC card outside ChatContext — the share page must not crash (review К4)', () => {
+    render(
+      <MessageContext.Provider value={{ messageId: 'm1', isExpanded: true }}>
+        <AskUserCall args={ARGS} />
+      </MessageContext.Provider>,
+    );
+    expect(screen.getByText('Какой формат?')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Continue/ })).toBeNull();
+    expect(mockSubmit).not.toHaveBeenCalled();
   });
 
   it('renders nothing while the args are still streaming', () => {

@@ -548,14 +548,12 @@ function handleAskUserCall(tc: ToolCallRequest): ToolExecuteResult {
       'ask_user needs {questions: [{prompt, options[2..6]}]} with 1-3 questions; nothing was shown to the user. Fix the arguments or continue without the tool.',
     );
   }
-  return {
-    toolCallId: tc.id,
-    status: 'success' as const,
-    content:
-      `The ${questions.length} question(s) are now shown to the user as an interactive card. ` +
+  return successResult(
+    tc,
+    `The ${questions.length} question(s) have been presented to the user as selectable options. ` +
       'End your turn now with at most one short inviting sentence and WITHOUT restating the questions. ' +
       'The answers will arrive as the next user message.',
-  };
+  );
 }
 
 function errorResult(tc: ToolCallRequest, errorMessage: string): ToolExecuteResult {

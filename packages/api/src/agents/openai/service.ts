@@ -31,6 +31,7 @@ import type {
   ToolCall,
 } from './types';
 import type { OpenAIStreamHandlerConfig, EventHandler } from './handlers';
+import type { ToolExecuteOptions } from '../handlers';
 import {
   createOpenAIContentAggregator,
   createOpenAIStreamTracker,
@@ -40,7 +41,6 @@ import {
   writeSSE,
 } from './handlers';
 import { createSafeUser } from '~/utils';
-import type { ToolExecuteOptions } from '../handlers';
 
 /**
  * Dependencies for the chat completion service
@@ -144,6 +144,9 @@ interface InitializeAgentParams {
    * skips the expansion (same semantics as the in-repo controllers).
    */
   codeEnvAvailable?: boolean;
+  /** The ask_user questions tool renders as a chat-client card; this API
+   *  surface has no card, so the service opts every run out. */
+  skipAskUserTool?: boolean;
 }
 
 /**
@@ -456,6 +459,7 @@ export async function createAgentChatCompletion(
       allowedProviders,
       isInitialAgent: true,
       codeEnvAvailable,
+      skipAskUserTool: true,
     });
 
     // Determine if streaming is enabled (check both request and agent config)

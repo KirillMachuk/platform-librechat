@@ -27,6 +27,12 @@ const MAX_PROMPT_CHARS = 300;
 const MAX_OPTION_CHARS = 120;
 const MAX_ANSWER_CHARS = 500;
 
+/** Inner newlines would break the one-line-per-answer chip format and the
+ *  summary structure — collapse any whitespace runs to single spaces. */
+function collapseInline(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
 export interface AskUserQuestion {
   id: string;
   prompt: string;
@@ -60,7 +66,7 @@ export function parseAskUserArgs(args: unknown): AskUserQuestion[] | null {
     }
     const prompt =
       typeof (item as { prompt?: unknown })?.prompt === 'string'
-        ? (item as { prompt: string }).prompt.trim().slice(0, MAX_PROMPT_CHARS)
+        ? collapseInline((item as { prompt: string }).prompt).slice(0, MAX_PROMPT_CHARS)
         : '';
     const rawOptions = (item as { options?: unknown })?.options;
     const options = Array.isArray(rawOptions)
@@ -68,17 +74,20 @@ export function parseAskUserArgs(args: unknown): AskUserQuestion[] | null {
           new Set(
             rawOptions
               .filter((o): o is string => typeof o === 'string' && o.trim().length > 0)
-              .map((o) => o.trim().slice(0, MAX_OPTION_CHARS)),
+              .map((o) => collapseInline(o).slice(0, MAX_OPTION_CHARS)),
           ),
         ).slice(0, ASK_MAX_OPTIONS)
       : [];
     if (!prompt || options.length < ASK_MIN_OPTIONS) {
       continue;
     }
-    const id =
+    let id =
       typeof (item as { id?: unknown })?.id === 'string' && (item as { id: string }).id.trim()
         ? (item as { id: string }).id.trim()
         : `q${questions.length + 1}`;
+    while (questions.some((q) => q.id === id)) {
+      id = `${id}_`;
+    }
     questions.push({ id, prompt, options });
   }
   return questions.length > 0 ? questions : null;
@@ -94,7 +103,7 @@ export function buildAskAnswersMessage(
   answers: Record<string, string>,
 ): string {
   const lines = questions.map((q, i) => {
-    const answer = (answers[q.id] ?? '').trim().slice(0, MAX_ANSWER_CHARS);
+    const answer = collapseInline(answers[q.id] ?? '').slice(0, MAX_ANSWER_CHARS);
     return `${i + 1}) ${q.prompt} — ${answer}`;
   });
   return `${ASK_ANSWERS_MARKER}\n${lines.join('\n')}`;
