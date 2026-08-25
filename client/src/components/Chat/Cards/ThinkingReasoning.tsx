@@ -106,7 +106,11 @@ export function ThinkingReasoning({
   );
 
   return (
-    <div className={styles.tr} data-static={staticMount.current ? 'true' : undefined}>
+    <div
+      className={styles.tr}
+      data-testid="thinking-block"
+      data-static={staticMount.current ? 'true' : undefined}
+    >
       <button
         type="button"
         className={streaming ? styles.trHeader : `${styles.trHeader} ${styles.isClickable}`}
@@ -145,7 +149,7 @@ export function ThinkingReasoning({
             >
               <div className={styles.trStream} style={{ transform: `translateY(${translate}px)` }}>
                 {sentences.map((line, i) => (
-                  <p key={i} className={styles.trSentence}>
+                  <p key={i} className={styles.trSentence} data-testid="think-sentence">
                     {line}
                   </p>
                 ))}
@@ -158,7 +162,9 @@ export function ThinkingReasoning({
               style={{ WebkitMaskImage: scrollMask, maskImage: scrollMask }}
               onScroll={syncScrollFades}
             >
-              <p className={styles.trFull}>{text}</p>
+              <p className={styles.trFull} data-testid="think-full">
+                {text}
+              </p>
             </div>
           )}
         </div>
