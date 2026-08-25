@@ -163,6 +163,14 @@ export const useDeleteFilesMutation = (
             message: localize('com_ui_delete_not_allowed'),
             status: 'error',
           });
+        } else if (!silent) {
+          /* The server keeps a file whose cleanup did not finish rather than leaving its text
+           * behind, so the file is still there on purpose. Without this the delete looked like it
+           * worked and the document simply reappeared on the next refresh. */
+          showToast({
+            message: localize('com_ui_delete_incomplete'),
+            status: 'error',
+          });
         }
       }
       onError?.(error, vars, context);
