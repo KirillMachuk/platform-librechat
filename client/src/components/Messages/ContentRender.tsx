@@ -16,6 +16,7 @@ import {
 } from '~/components/Chat/Messages/DeepResearch';
 import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import { useAttachments, useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
+import useAskUserChip from '~/components/Chat/Messages/DeepResearch/useAskUserChip';
 import ContentParts from '~/components/Chat/Messages/Content/ContentParts';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
 import { USER_BUBBLE_CLASS } from '~/components/Chat/Messages/ui/turn';
@@ -143,6 +144,9 @@ const ContentRender = memo(function ContentRender({
   const isLatestMessage = msg?.messageId === latestMessageId;
 
   const { hasParallelContent } = useContentMetadata(msg);
+  /* Shared with MessageRender — the chip must behave identically on both
+   * user-message render paths (review К3: it was mounted on only one). */
+  const askChip = useAskUserChip(msg);
 
   // Task #21 phase 3: a FINISHED Deep Research report → collapsible ReportCard + reader.
   // Review r2: keyed on the persisted `drKind` provenance (no text sniffing, no ancestor
@@ -206,7 +210,9 @@ const ContentRender = memo(function ContentRender({
   const mountDrRunningSlot = !isUserTurn && !isDrPlanCard && isLatestMessage && isSubmitting;
 
   let drCard: ReactNode = null;
-  if (isDrActionChip) {
+  if (askChip != null) {
+    drCard = askChip;
+  } else if (isDrActionChip) {
     drCard = <ActionChip text={msgText} />;
   } else if (isDrPlanCard) {
     // awaitingAction = the unanswered tip of the DISPLAYED branch. `isLast` (depth-based)
@@ -263,7 +269,11 @@ const ContentRender = memo(function ContentRender({
               showUserBubble && 'items-end',
             )}
           >
-            <div className={cn(showUserBubble && !isDrActionChip && USER_BUBBLE_CLASS)}>
+            <div
+              className={cn(
+                showUserBubble && !isDrActionChip && askChip == null && USER_BUBBLE_CLASS,
+              )}
+            >
               {drCard ??
                 (drReport ? (
                   <ReportCard title={drReport.title} text={msgText}>

@@ -2,6 +2,7 @@ import { memo } from 'react';
 import {
   Tools,
   Constants,
+  ASK_USER_TOOL,
   ContentTypes,
   ToolCallTypes,
   imageGenTools,
@@ -12,6 +13,7 @@ import {
   ImageGen,
   ExecuteCode,
   AgentUpdate,
+  AskUserCall,
   EmptyText,
   Reasoning,
   Summary,
@@ -188,6 +190,8 @@ const Part = memo(function Part({
           hideAttachments={hideAttachments}
         />
       );
+    } else if (isToolCall && toolCall.name === ASK_USER_TOOL) {
+      return <AskUserCall args={toolCall.args} />;
     } else if (isToolCall && toolCall.name === 'skill') {
       return (
         <SkillCall

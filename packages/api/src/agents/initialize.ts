@@ -41,16 +41,17 @@ import {
   MAX_PRIMED_SKILLS_PER_TURN,
 } from './skills';
 import {
+  registerAskUserTool,
+  registerCodeExecutionTools,
+  registerFileAuthoringTools,
+  isFileAuthoringToolDefinition,
+} from './tools';
+import {
   optionalChainWithEmptyCheck,
   extractLibreChatParams,
   getModelMaxTokens,
   getThreadData,
 } from '~/utils';
-import {
-  registerCodeExecutionTools,
-  registerFileAuthoringTools,
-  isFileAuthoringToolDefinition,
-} from './tools';
 import { getProviderConfig, suppressAnthropicThinkingForToolLoop } from '~/endpoints';
 import { filterFilesByEndpointConfig } from '~/files';
 import { generateArtifactsPrompt } from '~/prompts';
@@ -389,6 +390,10 @@ export interface InitializeAgentParams {
   skillAuthoringAvailable?: boolean;
   /** Whether the code execution environment is available (execute_code capability enabled) */
   codeEnvAvailable?: boolean;
+  /** The ask_user questions tool renders as a CLIENT card — surfaces without
+   *  the chat UI (the OpenAI-compatible API) must opt out or the tool result
+   *  would claim a card nobody sees. */
+  skipAskUserTool?: boolean;
   /** Per-user skill active/inactive overrides for filtering the skill catalog. */
   skillStates?: Record<string, boolean>;
   /** Admin-configured default for shared skills (`true` = shared skills auto-activate). */
@@ -1171,6 +1176,24 @@ export async function initializeAgent(
       includeSkillFileInstructions: skillAuthoringAvailable,
     });
     toolDefinitions = fileAuthoringResult.toolDefinitions;
+  }
+
+  /**
+   * The ask-user questions tool (interactive cards К3) joins every agent run
+   * that ALREADY carries at least one tool — «Авто», Deep Research, user
+   * agents with capabilities. Deliberately NOT unconditional: a tool-less
+   * run must stay tool-less, because the repo pins two promises that
+   * unconditional registration broke (initialize.test): chat-only Anthropic
+   * reasoning keeps extended thinking (E-H1 — any tool definition would
+   * suppress it for the tool loop), and the empty-toolDefinitions fallthrough
+   * stays empty. A tool-less chat has no tool loop for ask_user to ride
+   * anyway; the flows the owner asked for all carry tools.
+   */
+  const hasAnyToolsForAskUser =
+    (structuredTools?.length ?? 0) > 0 || (toolDefinitions?.length ?? 0) > 0;
+  if (hasAnyToolsForAskUser && params.skipAskUserTool !== true) {
+    const askUserResult = registerAskUserTool({ toolRegistry, toolDefinitions });
+    toolDefinitions = askUserResult.toolDefinitions;
   }
 
   /** Check for tool presence from either full instances or definitions (event-driven mode) */

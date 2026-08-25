@@ -2,6 +2,7 @@ import yaml from 'js-yaml';
 import { Types } from 'mongoose';
 import { logger } from '@librechat/data-schemas';
 import { GraphEvents, Constants } from '@librechat/agents';
+import { ASK_USER_TOOL, parseAskUserArgs } from 'librechat-data-provider';
 import type {
   LCTool,
   EventHandler,
@@ -530,6 +531,30 @@ const MIME_MAP: Readonly<Record<string, string>> = Object.freeze({
   '.ini': 'text/ini',
   '.svg': 'image/svg+xml',
 });
+
+/**
+ * `ask_user` (interactive cards К3) executes NOTHING: the client renders the
+ * tool call itself as the options card, and the user's answers arrive as the
+ * next chat message. The result exists to steer the model (tool results are
+ * prompt too): confirm the card is on screen and tell it to end the turn.
+ * Invalid args get a corrective error instead of a silent success, so the
+ * model can retry with a proper shape (graceful refusal beats a crash).
+ */
+function handleAskUserCall(tc: ToolCallRequest): ToolExecuteResult {
+  const questions = parseAskUserArgs(tc.args);
+  if (questions == null) {
+    return errorResult(
+      tc,
+      'ask_user needs {questions: [{prompt, options[2..6]}]} with 1-3 questions; nothing was shown to the user. Fix the arguments or continue without the tool.',
+    );
+  }
+  return successResult(
+    tc,
+    `The ${questions.length} question(s) have been presented to the user as selectable options. ` +
+      'End your turn now with at most one short inviting sentence and WITHOUT restating the questions. ' +
+      'The answers will arrive as the next user message.',
+  );
+}
 
 function errorResult(tc: ToolCallRequest, errorMessage: string): ToolExecuteResult {
   return {
@@ -3335,6 +3360,9 @@ export function createToolExecuteHandler(options: ToolExecuteOptions): EventHand
                 const execute = async (
                   sandboxContext?: SandboxSessionContext,
                 ): Promise<ToolExecuteResult> => {
+                  if (tc.name === ASK_USER_TOOL) {
+                    return handleAskUserCall(tc);
+                  }
                   const isFileAuthoringCall = isHostFileAuthoringToolCall(
                     tc.name,
                     mergedConfigurable,

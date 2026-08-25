@@ -408,6 +408,71 @@ function buildBashToolDef(opts: { enableToolOutputReferences: boolean }): LCTool
  * end-to-end (no same-run dedupe surprises for agents with both
  * `execute_code` capability AND skills active).
  */
+/**
+ * The ask-user tool (interactive cards К3): the model asks the user 1-3
+ * multiple-choice questions and the CLIENT renders them as an options card;
+ * the answers come back as the user's next message. Definition-only — the
+ * ON_TOOL_EXECUTE handler never executes anything, it acknowledges the call
+ * and instructs the model to end its turn (deepResearchRun's clarify/plan
+ * pattern: no run pause, survives refresh/restart).
+ */
+export const AskUserToolDefinition = Object.freeze({
+  name: 'ask_user',
+  description: [
+    'Ask the user up to 3 multiple-choice questions when you genuinely need their decision to proceed',
+    '(a format, a scope, a preference you cannot infer). The questions are shown as an interactive card;',
+    'each question needs 2-6 short options (the card adds its own free-text "other" choice - do not add',
+    'an "other" option yourself). Never restate the questions in your message text. After calling this',
+    'tool, END your turn with at most one short sentence; the answers arrive as the next user message',
+    'in the form "Ответы на вопросы: 1) question - answer ...". Do not use this tool for rhetorical or',
+    'trivial questions, and never call it twice in one turn.',
+  ].join(' '),
+  parameters: {
+    type: 'object',
+    properties: {
+      questions: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 3,
+        description: 'The questions to show, in order.',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: 'Stable id, e.g. "q1".' },
+            prompt: { type: 'string', description: 'The question itself, short and specific.' },
+            options: {
+              type: 'array',
+              minItems: 2,
+              maxItems: 6,
+              items: { type: 'string' },
+              description: '2-6 short answer options.',
+            },
+          },
+          required: ['prompt', 'options'],
+        },
+      },
+    },
+    required: ['questions'],
+  },
+}) as LCTool;
+
+/** Idempotently registers `ask_user` into the run's registry + definitions. */
+export function registerAskUserTool(params: {
+  toolRegistry?: LCToolRegistry;
+  toolDefinitions?: LCTool[];
+}): { toolDefinitions: LCTool[] } {
+  const { toolRegistry, toolDefinitions = [] } = params;
+  const name = AskUserToolDefinition.name;
+  const inDefs = toolDefinitions.some((d) => d.name === name);
+  if (!toolRegistry?.has(name)) {
+    toolRegistry?.set(name, AskUserToolDefinition);
+  }
+  if (inDefs) {
+    return { toolDefinitions };
+  }
+  return { toolDefinitions: [...toolDefinitions, AskUserToolDefinition] };
+}
+
 export function registerCodeExecutionTools(
   params: RegisterCodeExecutionToolsParams,
 ): RegisterCodeExecutionToolsResult {

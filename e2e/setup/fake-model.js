@@ -502,6 +502,36 @@ function fileAuthoringResponses(operation, toolNames) {
   };
 }
 
+const ASK_QUESTIONS_MARKER = 'E2E: спроси меня';
+const ASK_USER_TOOL_NAME = 'ask_user';
+
+/** Emits an ask_user tool call (interactive cards К3). Asserting the tool is
+ *  advertised is the point: it proves initializeAgent registered the
+ *  definition for a plain agent run. */
+function askUserResponses(toolNames) {
+  if (!toolNames.has(ASK_USER_TOOL_NAME)) {
+    return {
+      responses: [`E2E ask_user unavailable: ${ASK_USER_TOOL_NAME} was not advertised.`],
+    };
+  }
+  return {
+    responses: ['', 'Жду ваших ответов.'],
+    toolCalls: [
+      {
+        id: 'e2e-ask-user-1',
+        name: ASK_USER_TOOL_NAME,
+        args: {
+          questions: [
+            { id: 'q1', prompt: 'Какой формат отчёта?', options: ['Сводка', 'Полный отчёт'] },
+            { id: 'q2', prompt: 'За какой период?', options: ['Месяц', 'Квартал', 'Год'] },
+          ],
+        },
+        type: 'tool_call',
+      },
+    ],
+  };
+}
+
 function resolveResponses({ agents, messages, text, toolNames }) {
   const reply = replyResponses(text);
   if (reply) {
@@ -511,6 +541,10 @@ function resolveResponses({ agents, messages, text, toolNames }) {
   const providerFileAssertion = providerFileAssertionResponses({ messages, text });
   if (providerFileAssertion) {
     return providerFileAssertion;
+  }
+
+  if (text.includes(ASK_QUESTIONS_MARKER)) {
+    return askUserResponses(toolNames);
   }
 
   if (text.includes(ASSERT_MODEL_SPEC_SKILLS_MARKER)) {

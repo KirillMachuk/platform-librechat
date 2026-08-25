@@ -3,6 +3,7 @@ import { useRecoilValue } from 'recoil';
 import type { TMessage } from 'librechat-data-provider';
 import type { TMessageProps, TMessageChatContext } from '~/common';
 import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
+import useAskUserChip from '~/components/Chat/Messages/DeepResearch/useAskUserChip';
 import MessageContent from '~/components/Chat/Messages/Content/MessageContent';
 import { useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
@@ -94,6 +95,9 @@ const MessageRender = memo(function MessageRender({
   chatContext,
 }: MessageRenderProps) {
   const localize = useLocalize();
+  /* Shared with ContentRender — the ask-user answers chip must behave
+   * identically on both user-message render paths (review К3). */
+  const askChip = useAskUserChip(msg);
   const {
     ask,
     edit,
@@ -172,23 +176,25 @@ const MessageRender = memo(function MessageRender({
               showUserBubble && 'items-end',
             )}
           >
-            <div className={cn(showUserBubble && USER_BUBBLE_CLASS)}>
-              <MessageContext.Provider value={messageContextValue}>
-                <MessageContent
-                  ask={ask}
-                  edit={edit}
-                  isLast={isLast}
-                  text={msg.text || ''}
-                  message={msg}
-                  enterEdit={enterEdit}
-                  error={!!(msg.error ?? false)}
-                  isSubmitting={isSubmitting}
-                  unfinished={msg.unfinished ?? false}
-                  isCreatedByUser={msg.isCreatedByUser ?? true}
-                  siblingIdx={siblingIdx ?? 0}
-                  setSiblingIdx={setSiblingIdx ?? (() => ({}))}
-                />
-              </MessageContext.Provider>
+            <div className={cn(showUserBubble && askChip == null && USER_BUBBLE_CLASS)}>
+              {askChip ?? (
+                <MessageContext.Provider value={messageContextValue}>
+                  <MessageContent
+                    ask={ask}
+                    edit={edit}
+                    isLast={isLast}
+                    text={msg.text || ''}
+                    message={msg}
+                    enterEdit={enterEdit}
+                    error={!!(msg.error ?? false)}
+                    isSubmitting={isSubmitting}
+                    unfinished={msg.unfinished ?? false}
+                    isCreatedByUser={msg.isCreatedByUser ?? true}
+                    siblingIdx={siblingIdx ?? 0}
+                    setSiblingIdx={setSiblingIdx ?? (() => ({}))}
+                  />
+                </MessageContext.Provider>
+              )}
             </div>
           </div>
           {hasNoChildren && isSubmitting ? (
