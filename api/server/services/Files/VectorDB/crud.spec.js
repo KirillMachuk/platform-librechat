@@ -10,6 +10,7 @@ jest.mock('@librechat/data-schemas', () => ({
 }));
 
 const { logger } = require('@librechat/data-schemas');
+const { logAxiosError } = require('@librechat/api');
 const { deleteVectors, mayHaveVectors } = require('./crud');
 
 const req = { user: { id: 'user-123' } };
@@ -57,10 +58,23 @@ describe('deleteVectors — which files are worth asking the vector store about'
     expect(config.maxRedirects).toBe(0);
   });
 
-  it('treats a 404 as nothing left to delete', async () => {
+  /* The ordinary delete of an embedded file asks the vector store twice (the storage strategy
+   * calls `deleteRagFile` first, this runs as the secondary), so the second call finding nothing
+   * IS the success case. It must not print like a failure — a red line under every normal
+   * deletion is how real errors stop being read. */
+  it('treats a 404 as nothing left to delete, without logging a failure', async () => {
     axios.delete.mockRejectedValueOnce({ response: { status: 404 }, message: 'not found' });
 
     await expect(deleteVectors(req, { file_id: 'ready', embedded: true })).resolves.toBeUndefined();
+    expect(logAxiosError).not.toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('still reports a real failure through the axios logger', async () => {
+    axios.delete.mockRejectedValueOnce({ response: { status: 500 }, message: 'boom' });
+
+    await expect(deleteVectors(req, { file_id: 'ready', embedded: true })).rejects.toThrow();
+    expect(logAxiosError).toHaveBeenCalled();
   });
 
   /* A refused connection, a timeout or a DNS failure carries no `error.response`. Reading that as
