@@ -1,0 +1,36 @@
+const SENTENCE_END = /[.!?…]/;
+
+/**
+ * Splits streaming reasoning text into display sentences for the thinking
+ * preview (cards К4). Prefix-stable by construction: the split walks left to
+ * right, so appending text never rewrites any row but the LAST one (a
+ * sentence that happened to end exactly at the chunk boundary can still be
+ * extended by the next chunk — «весит 3.» + «14 кг» merge back, which is
+ * exactly right for decimals cut mid-number).
+ * A sentence break is honored only at «end punctuation + whitespace» (or a
+ * newline), so "3.14" and "т.д." stay whole.
+ */
+export function splitThinkSentences(text: string): string[] {
+  const sentences: string[] = [];
+  for (const line of text.split('\n')) {
+    let current = '';
+    for (let i = 0; i < line.length; i++) {
+      current += line[i];
+      if (SENTENCE_END.test(line[i]) && !SENTENCE_END.test(line[i + 1] ?? '')) {
+        const next = line[i + 1];
+        if (next === undefined || next === ' ' || next === '\t') {
+          const sentence = current.trim();
+          if (sentence) {
+            sentences.push(sentence);
+          }
+          current = '';
+        }
+      }
+    }
+    const tail = current.trim();
+    if (tail) {
+      sentences.push(tail);
+    }
+  }
+  return sentences;
+}

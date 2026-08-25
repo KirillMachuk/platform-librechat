@@ -24,6 +24,8 @@ const ASSERT_PROVIDER_FILE_MARKER = 'E2E_ASSERT_PROVIDER_FILE:';
 const REPLY_MARKER = 'E2E_REPLY:';
 const COUNTED_REPLY_MARKER = 'E2E_COUNTED_REPLY:';
 const SLOW_REPLY_MARKER = 'E2E_SLOW_REPLY:';
+const THINK_REPLY_MARKER = 'E2E_THINK_REPLY:';
+const SLOW_THINK_REPLY_MARKER = 'E2E_SLOW_THINK_REPLY:';
 const SLOW_COUNTED_REPLY_MARKER = 'E2E_SLOW_COUNTED_REPLY:';
 const RESUME_ICON_REPLY_MARKER = 'E2E_RESUME_ICON_REPLY:';
 const FORCED_ERROR_MARKER = 'E2E_FORCED_ERROR:';
@@ -234,6 +236,19 @@ function providerFileAssertionResponses({ messages, text }) {
   };
 }
 
+/* Reasoning streamed through the REAL pipeline: each piece becomes an
+ * AIMessageChunk with additional_kwargs.reasoning_content, which the agents
+ * graph turns into on_reasoning_delta -> a THINK content part (cards К4). */
+const THINK_SENTENCES = [
+  'Мысль 1: читаю запрос и прикидываю, какие данные вообще нужны для ответа.',
+  'Мысль 2: разбиваю задачу на шаги и проверяю, чего не хватает в условии.',
+  'Мысль 3: вспоминаю ограничения платформы, чтобы не предложить лишнего.',
+  'Мысль 4: сверяю план с тем, что уже написано выше в переписке.',
+  'Мысль 5: выбираю самый короткий путь и отбрасываю запасные варианты.',
+  'Мысль 6: формулирую окончательный ответ простыми словами.',
+];
+const SLOW_THINK_CHUNK_DELAY_MS = 400;
+
 function replyResponses(text) {
   /* An artifact, which the client routes into its own panel instead of drawing
    * inline. The container syntax is the one `artifactPlugin` looks for; the
@@ -271,6 +286,23 @@ function replyResponses(text) {
           '```',
         ].join('\n'),
       ],
+    };
+  }
+
+  const thinkName = getMarkerValue(text, THINK_REPLY_MARKER);
+  if (thinkName) {
+    return {
+      responses: [`E2E think reply ${thinkName}`],
+      reasoning: THINK_SENTENCES,
+    };
+  }
+
+  const slowThinkName = getMarkerValue(text, SLOW_THINK_REPLY_MARKER);
+  if (slowThinkName) {
+    return {
+      responses: [`E2E slow think reply ${slowThinkName}`],
+      reasoning: THINK_SENTENCES,
+      reasoningSleep: SLOW_THINK_CHUNK_DELAY_MS,
     };
   }
 
@@ -352,6 +384,16 @@ class UsageEmittingFakeChatModel extends FakeChatModel {
     if (FIRST_TOKEN_DELAY_MS > 0) {
       await new Promise((resolve) => setTimeout(resolve, FIRST_TOKEN_DELAY_MS));
     }
+    for (const piece of this.reasoningChunks ?? []) {
+      await new Promise((resolve) => setTimeout(resolve, this.reasoningSleepMs ?? CHUNK_DELAY_MS));
+      yield new ChatGenerationChunk({
+        text: '',
+        message: new AIMessageChunk({
+          content: '',
+          additional_kwargs: { reasoning_content: `${piece} ` },
+        }),
+      });
+    }
     let outputChars = 0;
     for await (const chunk of super._streamResponseChunks(messages, options, runManager)) {
       outputChars += typeof chunk.text === 'string' ? chunk.text.length : 0;
@@ -373,14 +415,25 @@ class UsageEmittingFakeChatModel extends FakeChatModel {
   }
 }
 
-function overrideModel({ graph, responses, sleep, toolCalls, thrownError }) {
+function overrideModel({
+  graph,
+  responses,
+  sleep,
+  toolCalls,
+  thrownError,
+  reasoning,
+  reasoningSleep,
+}) {
   if (!thrownError) {
-    graph.overrideModel = new UsageEmittingFakeChatModel({
+    const model = new UsageEmittingFakeChatModel({
       responses,
       sleep: sleep ?? CHUNK_DELAY_MS,
       emitCustomEvent: true,
       toolCalls,
     });
+    model.reasoningChunks = reasoning;
+    model.reasoningSleepMs = reasoningSleep;
+    graph.overrideModel = model;
     return;
   }
 
@@ -592,11 +645,11 @@ module.exports = function fakeModelHook(run, context) {
 
   const text = getLatestUserText(context?.messages);
   const toolNames = collectToolNames(context?.agents);
-  const { responses, sleep, toolCalls, thrownError } = resolveResponses({
+  const { responses, sleep, toolCalls, thrownError, reasoning, reasoningSleep } = resolveResponses({
     agents: context?.agents,
     messages: context?.messages,
     text,
     toolNames,
   });
-  overrideModel({ graph, responses, sleep, toolCalls, thrownError });
+  overrideModel({ graph, responses, sleep, toolCalls, thrownError, reasoning, reasoningSleep });
 };

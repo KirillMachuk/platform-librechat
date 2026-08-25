@@ -27,6 +27,16 @@ type MessageContext = {
    */
   reasoningExpandedInitial?: boolean;
   onReasoningExpandedChange?: (expanded: boolean) => void;
+  /**
+   * Thinking duration for the finished «Думал N с» header (cards К4),
+   * measured first→last think chunk of THIS session. Lives in ContentParts'
+   * timing map next to the expansion flag — same survival rules across the
+   * finalization remount. Absent after a page reload (the message carries no
+   * timing) — the header degrades to plain «Мысли».
+   */
+  reasoningDurationMs?: number;
+  /** Called by the Reasoning part on every think chunk while streaming. */
+  onReasoningStreamTick?: () => void;
 };
 
 export const MessageContext = createContext<MessageContext>({} as MessageContext);

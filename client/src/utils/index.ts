@@ -7,6 +7,7 @@ export * from './map';
 export * from './chatColumn';
 export * from './json';
 export * from './text';
+export * from './sentences';
 export * from './icons';
 export * from './email';
 export * from './share';

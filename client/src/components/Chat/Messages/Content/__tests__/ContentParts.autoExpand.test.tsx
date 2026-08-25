@@ -44,16 +44,25 @@ jest.mock('../Container', () => ({
 jest.mock('../Part', () => {
   const { useMessageContext } = jest.requireActual('~/Providers/MessageContext');
   const PartMock = ({ part }: { part: { type: string } }) => {
-    const { partIndex, autoExpandReasoning, reasoningExpandedInitial, onReasoningExpandedChange } =
-      useMessageContext();
+    const {
+      partIndex,
+      autoExpandReasoning,
+      reasoningExpandedInitial,
+      onReasoningExpandedChange,
+      reasoningDurationMs,
+      onReasoningStreamTick,
+    } = useMessageContext();
     return (
       <div
         data-testid={`part-${partIndex}`}
         data-part-type={part.type}
         data-auto-expand={String(autoExpandReasoning === true)}
         data-reasoning-initial={String(reasoningExpandedInitial)}
+        data-duration={String(reasoningDurationMs)}
         onClick={() => onReasoningExpandedChange?.(true)}
-      />
+      >
+        <button data-testid={`tick-${partIndex}`} onClick={() => onReasoningStreamTick?.()} />
+      </div>
     );
   };
   return { __esModule: true, default: PartMock };
@@ -190,5 +199,123 @@ describe('ContentParts — reasoning expansion survives the finalization remount
       />,
     );
     expect(screen.getByTestId('part-0')).toHaveAttribute('data-reasoning-initial', 'undefined');
+  });
+});
+
+describe('ContentParts — thinking duration survives the finalization remount (К4)', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('measures first→last tick and re-seeds «Думал N с» after the id swap', () => {
+    const now = jest.spyOn(Date, 'now');
+    const { rerender } = render(
+      <ContentParts
+        {...baseProps}
+        messageId="user-msg-1_"
+        isSubmitting={true}
+        content={[think('streaming thoughts')]}
+      />,
+    );
+    now.mockReturnValue(1_000);
+    screen.getByTestId('tick-0').click();
+    now.mockReturnValue(6_000);
+    screen.getByTestId('tick-0').click();
+
+    rerender(
+      <ContentParts
+        {...baseProps}
+        messageId="server-id-1"
+        isSubmitting={false}
+        content={[think('streaming thoughts')]}
+      />,
+    );
+    expect(screen.getByTestId('part-0')).toHaveAttribute('data-duration', '5000');
+  });
+
+  it('clears the measurement when a DIFFERENT finished message renders', () => {
+    const now = jest.spyOn(Date, 'now');
+    const { rerender } = render(
+      <ContentParts
+        {...baseProps}
+        messageId="user-msg-a_"
+        isSubmitting={true}
+        content={[think('a')]}
+      />,
+    );
+    now.mockReturnValue(1_000);
+    screen.getByTestId('tick-0').click();
+    now.mockReturnValue(3_000);
+    screen.getByTestId('tick-0').click();
+    rerender(
+      <ContentParts
+        {...baseProps}
+        messageId="server-a"
+        isSubmitting={false}
+        content={[think('a')]}
+      />,
+    );
+    expect(screen.getByTestId('part-0')).toHaveAttribute('data-duration', '2000');
+
+    rerender(
+      <ContentParts
+        {...baseProps}
+        messageId="server-b"
+        isSubmitting={false}
+        content={[think('b')]}
+      />,
+    );
+    expect(screen.getByTestId('part-0')).toHaveAttribute('data-duration', 'undefined');
+  });
+
+  it('regenerate wipes the old measurement — the new thought must not absorb the previous lifetime', () => {
+    /* К4 review: `ask()` flips the SAME ContentParts instance from the
+     * finished server id to a NEW provisional id with isSubmitting=true in
+     * one batched commit. Without a wipe the fresh stream's ticks reuse the
+     * stale `start` and «Думал 4 с» becomes «Думал 10 мин 3 с». */
+    const now = jest.spyOn(Date, 'now');
+    const { rerender } = render(
+      <ContentParts
+        {...baseProps}
+        messageId="user-msg-a_"
+        isSubmitting={true}
+        content={[think('first run')]}
+      />,
+    );
+    now.mockReturnValue(1_000);
+    screen.getByTestId('tick-0').click();
+    now.mockReturnValue(5_000);
+    screen.getByTestId('tick-0').click();
+    rerender(
+      <ContentParts
+        {...baseProps}
+        messageId="server-a"
+        isSubmitting={false}
+        content={[think('first run')]}
+      />,
+    );
+    expect(screen.getByTestId('part-0')).toHaveAttribute('data-duration', '4000');
+
+    rerender(
+      <ContentParts
+        {...baseProps}
+        messageId="user-msg-b_"
+        isSubmitting={true}
+        content={[think('second run')]}
+      />,
+    );
+    now.mockReturnValue(605_000);
+    screen.getByTestId('tick-0').click();
+    now.mockReturnValue(608_000);
+    screen.getByTestId('tick-0').click();
+    rerender(
+      <ContentParts
+        {...baseProps}
+        messageId="server-b"
+        isSubmitting={false}
+        content={[think('second run')]}
+      />,
+    );
+    expect(screen.getByTestId('part-0')).toHaveAttribute('data-duration', '3000');
   });
 });
