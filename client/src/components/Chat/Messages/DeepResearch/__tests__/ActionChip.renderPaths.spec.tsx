@@ -1,6 +1,6 @@
 import React from 'react';
 import { RecoilRoot } from 'recoil';
-import { render, screen } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   QueryKeys,
@@ -39,16 +39,29 @@ jest.mock('~/components/Chat/Messages/DeepResearch', () => ({
   ReportCard: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 
-/** Stands in for the plain user bubble: the raw message text, as MessageContent renders it. */
+/**
+ * The two renderers' bodies, kept DISTINGUISHABLE on purpose: asserting only
+ * "a chip instead of text" would stay green if MultiMessage ever routed
+ * everything through one path, which is the very confusion under test. Each
+ * stand-in also honours `edit`, because that is what the pencil mounts.
+ */
 jest.mock('~/components/Chat/Messages/Content/MessageContent', () => ({
   __esModule: true,
-  default: ({ text }: { text?: string }) => <div data-testid="plain-bubble">{text}</div>,
+  default: ({ text, edit }: { text?: string; edit?: boolean }) =>
+    edit === true ? (
+      <div data-testid="editor" />
+    ) : (
+      <div data-testid="message-render-body">{text}</div>
+    ),
 }));
 jest.mock('~/components/Chat/Messages/Content/ContentParts', () => ({
   __esModule: true,
-  default: ({ content }: { content?: Array<{ text?: string }> }) => (
-    <div data-testid="plain-bubble">{content?.map((p) => p?.text).join('')}</div>
-  ),
+  default: ({ content, edit }: { content?: Array<{ text?: string }>; edit?: boolean }) =>
+    edit === true ? (
+      <div data-testid="editor" />
+    ) : (
+      <div data-testid="content-render-body">{content?.map((p) => p?.text).join('')}</div>
+    ),
 }));
 jest.mock('~/components/Chat/Messages/Content/Files', () => ({
   __esModule: true,
@@ -73,6 +86,10 @@ jest.mock('~/components/Chat/Messages/ui/PlaceholderRow', () => ({
 
 const CONVO_ID = 'c1';
 
+/** Steers `useMessageActions().edit` per test — the pencil's only observable input here.
+ *  The `mock` prefix is what lets a jest.mock factory reach it. */
+const mockEdit = { on: false };
+
 jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string) => {
     if (key === 'com_ui_deep_research_started') {
@@ -96,7 +113,7 @@ jest.mock('~/hooks', () => ({
   }),
   useMessageActions: () => ({
     ask: jest.fn(),
-    edit: false,
+    edit: mockEdit.on,
     index: 0,
     enterEdit: jest.fn(),
     conversation: { conversationId: 'c1' },
@@ -147,6 +164,10 @@ function renderTree(msg: TMessage, cachedParent?: Partial<TMessage>) {
 }
 
 describe('Deep Research command chip — both user-message render paths', () => {
+  beforeEach(() => {
+    mockEdit.on = false;
+  });
+
   it('CONTROL: renders on the content[] path (ContentRender) — always did', () => {
     renderTree(
       command({ drKind: 'start', content: [{ type: ContentTypes.TEXT, text: DR_START_MARKER }] }),
@@ -159,6 +180,53 @@ describe('Deep Research command chip — both user-message render paths', () => 
     renderTree(command({ drKind: 'start' }));
     expect(screen.getByText(STARTED)).toBeInTheDocument();
     expect(screen.queryByText(DR_START_MARKER)).not.toBeInTheDocument();
+  });
+
+  /** Pins the routing itself: a command with no `content` must reach MessageRender,
+   *  one with content parts must reach ContentRender. Without this, a MultiMessage
+   *  that sent everything down one path would leave the tests above green. */
+  it('MultiMessage picks the path by `content`, and each path shows the chip', () => {
+    renderTree(command({ drKind: 'start' }));
+    expect(screen.queryByTestId('content-render-body')).not.toBeInTheDocument();
+    expect(screen.getByText(STARTED)).toBeInTheDocument();
+    cleanup();
+
+    renderTree(command({ text: 'обычный вопрос' }));
+    expect(screen.getByTestId('message-render-body')).toHaveTextContent('обычный вопрос');
+    expect(screen.queryByTestId('content-render-body')).not.toBeInTheDocument();
+    cleanup();
+
+    renderTree(
+      command({
+        text: 'обычный вопрос',
+        content: [{ type: ContentTypes.TEXT, text: 'обычный вопрос' }],
+      }),
+    );
+    expect(screen.getByTestId('content-render-body')).toHaveTextContent('обычный вопрос');
+    expect(screen.queryByTestId('message-render-body')).not.toBeInTheDocument();
+  });
+
+  /**
+   * The pencil must still work. The chip replaces the whole message body, and
+   * MessageContent is what hosts the edit textarea — so a chip that ignores `edit`
+   * turns an armed, visible Edit button into a no-op: the bubble class drops, the
+   * chip slides left, and nothing else happens. Editing was available on this path
+   * before the chip arrived; it must survive it.
+   */
+  it('yields to the editor when the message is being edited', () => {
+    mockEdit.on = true;
+    renderTree(command({ drKind: 'start' }));
+    expect(screen.getByTestId('editor')).toBeInTheDocument();
+    expect(screen.queryByText(STARTED)).not.toBeInTheDocument();
+  });
+
+  it('yields to the editor on the content[] path too', () => {
+    mockEdit.on = true;
+    renderTree(
+      command({ drKind: 'start', content: [{ type: ContentTypes.TEXT, text: DR_START_MARKER }] }),
+    );
+    expect(screen.getByTestId('editor')).toBeInTheDocument();
+    expect(screen.queryByText(STARTED)).not.toBeInTheDocument();
   });
 
   it('renders the CANCEL chip on the text-only path', () => {
@@ -178,7 +246,7 @@ describe('Deep Research command chip — both user-message render paths', () => 
     // The provenance rule: text that merely reads like the marker is still prose.
     renderTree(command(), { drKind: 'report', isCreatedByUser: false });
     expect(screen.queryByText(STARTED)).not.toBeInTheDocument();
-    expect(screen.getByTestId('plain-bubble')).toHaveTextContent(DR_START_MARKER);
+    expect(screen.getByTestId('message-render-body')).toHaveTextContent(DR_START_MARKER);
   });
 
   it('leaves an ASSISTANT message with the same text alone', () => {

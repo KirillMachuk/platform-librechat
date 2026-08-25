@@ -106,7 +106,6 @@ const MessageRender = memo(function MessageRender({
    * mounting the action chip on ContentRender alone left it dead. */
   const askChip = useAskUserChip(msg);
   const actionChip = useDrActionChip(msg);
-  const chip = askChip ?? actionChip;
   const {
     ask,
     edit,
@@ -125,6 +124,14 @@ const MessageRender = memo(function MessageRender({
     setCurrentEditId,
     chatContext,
   });
+  /**
+   * A chip replaces the whole message body, and `MessageContent` is what hosts the
+   * edit textarea — so a chip that ignores `edit` turns the message's own Edit button
+   * into a no-op: the bubble class drops, the chip slides to the left, and nothing
+   * else happens. Editing worked on this path before any chip existed and must
+   * survive it, so the editor wins while it is open.
+   */
+  const chip = edit ? null : (askChip ?? actionChip);
   const maximizeChatSpace = useRecoilValue(store.maximizeChatSpace);
 
   const handleRegenerateMessage = useCallback(() => regenerateMessage(), [regenerateMessage]);

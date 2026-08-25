@@ -195,11 +195,14 @@ const ContentRender = memo(function ContentRender({
   const isDrPlanCard = !isUserTurn && msg.drKind === 'plan';
   const mountDrRunningSlot = !isUserTurn && !isDrPlanCard && isLatestMessage && isSubmitting;
 
+  // A chip replaces the message body, so it must stand aside while the editor is open —
+  // otherwise the message's own Edit button becomes a no-op (the plan card is an assistant
+  // turn and never edits, so it stays outside this gate).
+  const chip = edit ? null : (askChip ?? actionChip);
+
   let drCard: ReactNode = null;
-  if (askChip != null) {
-    drCard = askChip;
-  } else if (actionChip != null) {
-    drCard = actionChip;
+  if (chip != null) {
+    drCard = chip;
   } else if (isDrPlanCard) {
     // awaitingAction = the unanswered tip of the DISPLAYED branch. `isLast` (depth-based)
     // keeps a plan variant re-shown via the sibling switcher live (review r2). But `isLast`
@@ -255,11 +258,7 @@ const ContentRender = memo(function ContentRender({
               showUserBubble && 'items-end',
             )}
           >
-            <div
-              className={cn(
-                showUserBubble && askChip == null && actionChip == null && USER_BUBBLE_CLASS,
-              )}
-            >
+            <div className={cn(showUserBubble && chip == null && USER_BUBBLE_CLASS)}>
               {drCard ??
                 (drReport ? (
                   <ReportCard title={drReport.title} text={msgText}>
