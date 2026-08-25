@@ -58,6 +58,11 @@ describe('deleteRagFile', () => {
           accept: 'application/json',
         },
         data: ['file-123'],
+        /* Every storage strategy runs this before the delete service asks the vector store, so
+         * an unbounded request here is what a hung store would hang on; `maxRedirects: 0` is
+         * what makes the ceiling a wall clock rather than a per-hop timer. */
+        timeout: expect.any(Number),
+        maxRedirects: 0,
       });
       expect(mockedLogger.debug).toHaveBeenCalledWith(
         '[deleteRagFile] Successfully deleted document file-123 from RAG API',
