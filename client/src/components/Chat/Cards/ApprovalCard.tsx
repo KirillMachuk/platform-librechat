@@ -23,9 +23,8 @@ import styles from './ApprovalCard.module.css';
  *   `headerAction` slot (К2 puts the cancel ✕ there);
  * - every visible string comes through the required `strings` prop
  *   (localization lives at the call site);
- * - the auto-approve timer only exists when `autoApproveSecs` is given,
- *   and the parent can cancel it externally (typing in the composer,
- *   «Редактировать») by flipping `autoApproveEnabled` to false;
+ * - the auto-approve pie is CONTROLLED: the parent owns the clock and
+ *   passes {secsLeft, total} (null cancels with the original fade);
  * - reject/onReject renamed to secondary/onSecondary — the ghost button
  *   is not always a rejection (К2 wires «Редактировать» into it).
  */
@@ -170,14 +169,14 @@ export function ApprovalCardHeaderAction({
   return (
     <button
       type="button"
-      className={styles.headAction}
+      className={`${styles.headAction} tap-target`}
       aria-label={label}
       onClick={(e) => {
         e.preventDefault();
         onClick();
       }}
     >
-      {children ?? <X className={styles.headActionIcon} stroke={2} aria-hidden />}
+      {children ?? <X className={styles.headActionIcon} aria-hidden />}
     </button>
   );
 }
@@ -343,7 +342,16 @@ export function ApprovalCard({
     if (!item) {
       return;
     }
-    const observer = new ResizeObserver(() => syncQuestionSlide(false));
+    /* observe() always delivers a mandatory initial notification — skip it
+     * so the slide animation survives; only real later resizes re-sync. */
+    let initial = true;
+    const observer = new ResizeObserver(() => {
+      if (initial) {
+        initial = false;
+        return;
+      }
+      syncQuestionSlide(false);
+    });
     observer.observe(item);
     return () => observer.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -481,6 +489,7 @@ export function ApprovalCard({
     <div
       className={`${styles.card}${className ? ` ${className}` : ''}`}
       data-variant={variant}
+      data-static={showActions ? undefined : 'true'}
       data-testid="approval-card"
       onKeyDown={(e) => {
         if (e.key !== 'Enter') {
@@ -492,11 +501,12 @@ export function ApprovalCard({
         if (safeStep !== questions.length - 1 || !canContinue) {
           return;
         }
+        /* Enter approves only from a NON-interactive spot: pressing Enter on
+         * a focused radio, pager arrow, input or button must activate that
+         * control, not submit the card with the pre-change answers (xhigh
+         * review: the original exempted only the two footer buttons). */
         const el = e.target as HTMLElement;
-        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-          return;
-        }
-        if (el.closest(`.${styles.btnGhost}`) || el.closest(`.${styles.btnPrimary}`)) {
+        if (el.closest('button, input, textarea, a, [role="radio"]')) {
           return;
         }
         e.preventDefault();
@@ -544,7 +554,7 @@ export function ApprovalCard({
                       const letter = String.fromCharCode(65 + oi);
                       return (
                         <button
-                          key={opt}
+                          key={`${q.id}-${oi}`}
                           type="button"
                           role="radio"
                           aria-checked={selected}
@@ -576,9 +586,6 @@ export function ApprovalCard({
                           : '');
                       return (
                         <div
-                          role="radio"
-                          aria-checked={otherOn}
-                          tabIndex={active ? 0 : -1}
                           className={styles.option}
                           data-selected={otherOn ? 'true' : undefined}
                           data-other="true"
@@ -588,18 +595,6 @@ export function ApprovalCard({
                               return;
                             }
                             selectOther(q.id);
-                          }}
-                          onKeyDown={(e) => {
-                            if (!active) {
-                              return;
-                            }
-                            if (e.target !== e.currentTarget) {
-                              return;
-                            }
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              selectOther(q.id);
-                            }
                           }}
                         >
                           <span className={styles.key} aria-hidden>
@@ -613,7 +608,7 @@ export function ApprovalCard({
                             type="text"
                             value={draft}
                             placeholder={strings.otherPlaceholder}
-                            tabIndex={active && otherOn ? 0 : -1}
+                            tabIndex={active ? 0 : -1}
                             aria-label={strings.customAnswerFor(q.prompt)}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -665,78 +660,80 @@ export function ApprovalCard({
               {planSummary != null && <div className={styles.planSummary}>{planSummary}</div>}
             </div>
           )}
-          <div className={styles.todoWell}>
-            <div className={styles.todoHead}>
-              <span className={styles.todoHeadIcon}>
-                <ListChecks className={styles.todoListIcon} stroke={2} aria-hidden />
-              </span>
-              <span className={styles.todoTitle}>{todoTitle}</span>
-              <span className={styles.todoCount}>{plan.length}</span>
-            </div>
-            <ul className={styles.todoList}>
-              {planPreview.map((stepItem) => (
-                <li key={stepItem.id} className={styles.todoItem}>
-                  <span className={styles.todoIconWrap}>
-                    <TodoDashedIcon />
-                  </span>
-                  <span className={styles.todoLabel}>{stepItem.title}</span>
-                </li>
-              ))}
-            </ul>
-            {hasPlanMore && (
-              <>
-                <div
-                  className={`${styles.todoCollapsible}${showPlanRest ? '' : ` ${styles.todoCollapsed}`}`}
-                >
-                  <div className={styles.todoInner}>
-                    <div className={styles.todoRest}>
-                      <ul className={`${styles.todoList} ${styles.todoListFlush}`}>
-                        {planRest.map((stepItem) => (
-                          <li key={stepItem.id} className={styles.todoItem}>
-                            <span className={styles.todoIconWrap}>
-                              <TodoDashedIcon />
-                            </span>
-                            <span className={styles.todoLabel}>{stepItem.title}</span>
-                          </li>
-                        ))}
-                      </ul>
+          {plan.length > 0 && (
+            <div className={styles.todoWell}>
+              <div className={styles.todoHead}>
+                <span className={styles.todoHeadIcon}>
+                  <ListChecks className={styles.todoListIcon} aria-hidden />
+                </span>
+                <span className={styles.todoTitle}>{todoTitle}</span>
+                <span className={styles.todoCount}>{plan.length}</span>
+              </div>
+              <ul className={styles.todoList}>
+                {planPreview.map((stepItem) => (
+                  <li key={stepItem.id} className={styles.todoItem}>
+                    <span className={styles.todoIconWrap}>
+                      <TodoDashedIcon />
+                    </span>
+                    <span className={styles.todoLabel}>{stepItem.title}</span>
+                  </li>
+                ))}
+              </ul>
+              {hasPlanMore && (
+                <>
+                  <div
+                    className={`${styles.todoCollapsible}${showPlanRest ? '' : ` ${styles.todoCollapsed}`}`}
+                  >
+                    <div className={styles.todoInner}>
+                      <div className={styles.todoRest}>
+                        <ul className={`${styles.todoList} ${styles.todoListFlush}`}>
+                          {planRest.map((stepItem) => (
+                            <li key={stepItem.id} className={styles.todoItem}>
+                              <span className={styles.todoIconWrap}>
+                                <TodoDashedIcon />
+                              </span>
+                              <span className={styles.todoLabel}>{stepItem.title}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <button
-                  type="button"
-                  className={styles.todoMore}
-                  aria-expanded={planExpanded}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setPlanExpanded((open) => !open);
-                  }}
-                >
-                  <span className={styles.todoMoreIcon} aria-hidden>
-                    <svg className={styles.todoMoreGlyph} viewBox="0 0 24 24" aria-hidden>
-                      {planExpanded ? (
-                        <rect
-                          x="4.75"
-                          y="11.25"
-                          width="14.5"
-                          height="1.5"
-                          rx="0.75"
-                          fill="currentColor"
-                        />
-                      ) : (
-                        <>
-                          <circle cx="6" cy="12" r="1.25" fill="currentColor" />
-                          <circle cx="12" cy="12" r="1.25" fill="currentColor" />
-                          <circle cx="18" cy="12" r="1.25" fill="currentColor" />
-                        </>
-                      )}
-                    </svg>
-                  </span>
-                  {planExpanded ? strings.lessLabel : strings.moreLabel(planRest.length)}
-                </button>
-              </>
-            )}
-          </div>
+                  <button
+                    type="button"
+                    className={styles.todoMore}
+                    aria-expanded={planExpanded}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setPlanExpanded((open) => !open);
+                    }}
+                  >
+                    <span className={styles.todoMoreIcon} aria-hidden>
+                      <svg className={styles.todoMoreGlyph} viewBox="0 0 24 24" aria-hidden>
+                        {planExpanded ? (
+                          <rect
+                            x="4.75"
+                            y="11.25"
+                            width="14.5"
+                            height="1.5"
+                            rx="0.75"
+                            fill="currentColor"
+                          />
+                        ) : (
+                          <>
+                            <circle cx="6" cy="12" r="1.25" fill="currentColor" />
+                            <circle cx="12" cy="12" r="1.25" fill="currentColor" />
+                            <circle cx="18" cy="12" r="1.25" fill="currentColor" />
+                          </>
+                        )}
+                      </svg>
+                    </span>
+                    {planExpanded ? strings.lessLabel : strings.moreLabel(planRest.length)}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </>
       )}
 
@@ -749,7 +746,7 @@ export function ApprovalCard({
             >
               <button
                 type="button"
-                className={styles.stepArrow}
+                className={`${styles.stepArrow} tap-target`}
                 aria-label={strings.prevQuestion}
                 disabled={safeStep <= 0}
                 onClick={(e) => {
@@ -757,14 +754,14 @@ export function ApprovalCard({
                   goToStep(safeStep - 1);
                 }}
               >
-                <ChevronUp className={styles.stepArrowIcon} stroke={2} aria-hidden />
+                <ChevronUp className={styles.stepArrowIcon} aria-hidden />
               </button>
               <span className={styles.stepBadge} aria-live="polite">
                 <RollingDigits value={stepLabel} />
               </span>
               <button
                 type="button"
-                className={styles.stepArrow}
+                className={`${styles.stepArrow} tap-target`}
                 aria-label={strings.nextQuestion}
                 disabled={safeStep >= questions.length - 1}
                 onClick={(e) => {
@@ -772,14 +769,13 @@ export function ApprovalCard({
                   goToStep(safeStep + 1);
                 }}
               >
-                <ChevronDown className={styles.stepArrowIcon} stroke={2} aria-hidden />
+                <ChevronDown className={styles.stepArrowIcon} aria-hidden />
               </button>
             </div>
           )}
           {variant === 'plan' && autoUI !== 'gone' && (
             <div
               className={`${styles.autoApprove}${autoUI === 'leaving' ? ` ${styles.autoApproveOut}` : ''}`}
-              aria-live="polite"
               data-testid="auto-approve"
             >
               <span
@@ -788,7 +784,7 @@ export function ApprovalCard({
               >
                 <button
                   type="button"
-                  className={styles.autoApproveCancel}
+                  className={`${styles.autoApproveCancel} tap-target`}
                   aria-label={strings.cancelAutoApprove}
                   disabled={autoUI !== 'active'}
                   onClick={(e) => {
@@ -871,7 +867,9 @@ export function ApprovalCard({
               }}
             >
               {approveLabel}
-              <CornerDownLeft className={styles.btnSubmitIcon} size={12} stroke={2} aria-hidden />
+              {variant === 'questions' && (
+                <CornerDownLeft className={styles.btnSubmitIcon} size={12} aria-hidden />
+              )}
             </button>
           </div>
         </div>

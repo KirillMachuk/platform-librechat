@@ -51,7 +51,6 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconChevronUp,
-  IconCornerDownLeft,
   IconCircle,
   IconCircleCheck,
   IconCirclePlus,
@@ -63,6 +62,7 @@ import {
   IconCopy,
   IconCopyCheck,
   IconCopyPlus,
+  IconCornerDownLeft,
   IconCurrencyDollar,
   IconDatabase,
   IconDeviceDesktop,
@@ -110,6 +110,8 @@ import {
   IconLayoutSidebar,
   IconLayoutSidebarLeftCollapse,
   IconLink,
+  IconListCheck,
+  IconListDetails,
   IconLoadBalancer,
   IconLoader2,
   IconLock,
@@ -117,8 +119,6 @@ import {
   IconLogout,
   IconMaximize,
   IconMenu,
-  IconListCheck,
-  IconListDetails,
   IconMessage,
   IconMessageCircleQuestion,
   IconMessages,
@@ -255,7 +255,6 @@ export const ChevronRight: LucideIcon = canon(IconChevronRight, 'ChevronRight');
 export const ChevronRightIcon: LucideIcon = canon(IconChevronRight, 'ChevronRightIcon');
 export const ChevronUp: LucideIcon = canon(IconChevronUp, 'ChevronUp');
 export const ChevronsUpDown: LucideIcon = canon(IconSelector, 'ChevronsUpDown');
-export const CornerDownLeft: LucideIcon = canon(IconCornerDownLeft, 'CornerDownLeft');
 export const Circle: LucideIcon = canon(IconCircle, 'Circle');
 export const CircleCheckBig: LucideIcon = canon(IconCircleCheck, 'CircleCheckBig');
 export const CircleHelpIcon: LucideIcon = canon(IconHelp, 'CircleHelpIcon');
@@ -270,6 +269,7 @@ export const Command: LucideIcon = canon(IconCommand, 'Command');
 export const Copy: LucideIcon = canon(IconCopy, 'Copy');
 export const CopyCheck: LucideIcon = canon(IconCopyCheck, 'CopyCheck');
 export const CopyPlus: LucideIcon = canon(IconCopyPlus, 'CopyPlus');
+export const CornerDownLeft: LucideIcon = canon(IconCornerDownLeft, 'CornerDownLeft');
 export const Database: LucideIcon = canon(IconDatabase, 'Database');
 export const Dices: LucideIcon = canon(IconDice5, 'Dices');
 export const DollarSign: LucideIcon = canon(IconCurrencyDollar, 'DollarSign');
@@ -332,7 +332,9 @@ export const LightbulbIcon: LucideIcon = canon(IconBulb, 'LightbulbIcon');
 export const LineChartIcon: LucideIcon = canon(IconChartLine, 'LineChartIcon');
 export const Link: LucideIcon = canon(IconLink, 'Link');
 export const Link2: LucideIcon = canon(IconLink, 'Link2');
+export const ListChecks: LucideIcon = canon(IconListCheck, 'ListChecks');
 export const ListFilter: LucideIcon = canon(IconFilter, 'ListFilter');
+export const ListTodo: LucideIcon = canon(IconListDetails, 'ListTodo');
 export const LoadBalancer: LucideIcon = canon(IconLoadBalancer, 'LoadBalancer');
 export const Loader2: LucideIcon = canon(IconLoader2, 'Loader2');
 export const LockIcon: LucideIcon = canon(IconLock, 'LockIcon');
@@ -340,8 +342,6 @@ export const LogOut: LucideIcon = canon(IconLogout, 'LogOut');
 export const Maximize2: LucideIcon = canon(IconMaximize, 'Maximize2');
 export const Menu: LucideIcon = canon(IconMenu, 'Menu');
 export const MessageCircleDashed: LucideIcon = canon(IconGhost3, 'MessageCircleDashed');
-export const ListChecks: LucideIcon = canon(IconListCheck, 'ListChecks');
-export const ListTodo: LucideIcon = canon(IconListDetails, 'ListTodo');
 export const MessageCircleQuestion: LucideIcon = canon(
   IconMessageCircleQuestion,
   'MessageCircleQuestion',
