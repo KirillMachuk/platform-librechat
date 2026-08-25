@@ -64,13 +64,13 @@ export function parseAskUserArgs(args: unknown): AskUserQuestion[] | null {
         : '';
     const rawOptions = (item as { options?: unknown })?.options;
     const options = Array.isArray(rawOptions)
-      ? [
-          ...new Set(
+      ? Array.from(
+          new Set(
             rawOptions
               .filter((o): o is string => typeof o === 'string' && o.trim().length > 0)
               .map((o) => o.trim().slice(0, MAX_OPTION_CHARS)),
           ),
-        ].slice(0, ASK_MAX_OPTIONS)
+        ).slice(0, ASK_MAX_OPTIONS)
       : [];
     if (!prompt || options.length < ASK_MIN_OPTIONS) {
       continue;
