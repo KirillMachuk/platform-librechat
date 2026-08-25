@@ -129,9 +129,14 @@ export default function useMessageScrolling(messagesTree?: TMessage[] | null) {
       /* Self-heal on growth: wheeling down AT the bottom still trips the
        * wheel handler's abortScroll, and the IntersectionObserver only fires
        * on crossings — so if the sentinel never left the viewport nothing
-       * would clear the abort. Content growth runs through here on every
-       * chunk; being at the bottom is the user's answer. */
-      if (isSubmitting && abortScroll === true && isNearBottomRef.current) {
+       * would clear the abort. STRICTLY at the bottom only (not the 120px
+       * follow band): a gentle upward wheel tick moves ~60-100px and must
+       * detach the follow — healing inside the band would snap the user
+       * straight back down (independent review, round 24). */
+      const scrollEl = scrollableRef.current;
+      const distance =
+        scrollEl == null ? 0 : scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
+      if (isSubmitting && abortScroll === true && distance <= 8) {
         setAbortScroll(false);
       }
 

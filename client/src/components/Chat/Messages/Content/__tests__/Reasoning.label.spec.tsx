@@ -1,5 +1,5 @@
 import { RecoilRoot } from 'recoil';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MessageContext } from '~/Providers/MessageContext';
 import Reasoning from '../Parts/Reasoning';
 
@@ -7,7 +7,13 @@ import Reasoning from '../Parts/Reasoning';
  *  header carries the same shimmering «Думаю…» as the pre-stream label (the
  *  word «Рассуждаю…» is gone); a finished card settles into «Мысли». */
 
-const renderReasoning = (isSubmitting: boolean) =>
+const renderReasoning = (
+  isSubmitting: boolean,
+  extras: {
+    reasoningExpandedInitial?: boolean;
+    onReasoningExpandedChange?: (expanded: boolean) => void;
+  } = {},
+) =>
   render(
     <RecoilRoot>
       <MessageContext.Provider
@@ -16,6 +22,7 @@ const renderReasoning = (isSubmitting: boolean) =>
           isExpanded: true,
           isSubmitting,
           isLatestMessage: true,
+          ...extras,
         }}
       >
         <Reasoning reasoning="<think>ход рассуждения модели</think>" isLast={true} />
@@ -30,6 +37,23 @@ describe('Reasoning header label (round 24: one waiting word)', () => {
     expect(label).toBeInTheDocument();
     expect(label.className).toContain('thinking-shimmer-active');
     expect(screen.queryByText(/рассуждаю/i)).toBeNull();
+  });
+
+  it('reports expansion clicks to the store and seeds from it across remounts', () => {
+    /* Independent review, round 24: the store was pinned only through a Part
+     * mock — this drives the REAL Reasoning: the header click must report
+     * upward, and reasoningExpandedInitial must seed the state. */
+    const onReasoningExpandedChange = jest.fn();
+    renderReasoning(true, { onReasoningExpandedChange });
+    const button = screen.getByRole('button', { expanded: false });
+    fireEvent.click(button);
+    expect(onReasoningExpandedChange).toHaveBeenCalledWith(true);
+    expect(screen.getByRole('button', { expanded: true })).toBeInTheDocument();
+
+    const seeded = renderReasoning(false, { reasoningExpandedInitial: true });
+    expect(
+      seeded.getAllByRole('button').some((b) => b.getAttribute('aria-expanded') === 'true'),
+    ).toBe(true);
   });
 
   it('settles into a static «Мысли» once finished', () => {

@@ -337,7 +337,7 @@ describe('useMessageScrolling follow resume (round 24: returning to the bottom r
     expect(setAbortScroll).not.toHaveBeenCalledWith(false);
   });
 
-  it('self-heals a stale abort when content grows while the user sits at the bottom', () => {
+  it('self-heals a stale abort when content grows while the user sits at the very bottom', () => {
     const setAbortScroll = jest.fn();
     renderScrolling({ contextOverrides: { abortScroll: true, setAbortScroll } });
 
@@ -346,5 +346,22 @@ describe('useMessageScrolling follow resume (round 24: returning to the bottom r
     });
 
     expect(setAbortScroll).toHaveBeenCalledWith(false);
+  });
+
+  it('does NOT self-heal inside the follow band — a gentle wheel-up must stay detached', () => {
+    const setAbortScroll = jest.fn();
+    renderScrolling({ contextOverrides: { abortScroll: true, setAbortScroll } });
+
+    const scrollable = screen.getByTestId('scrollable');
+    Object.defineProperty(scrollable, 'scrollHeight', { value: 1000, configurable: true });
+    Object.defineProperty(scrollable, 'clientHeight', { value: 200, configurable: true });
+    scrollable.scrollTop = 720; // 80px above the bottom: inside 120px band, not AT bottom
+    fireEvent.scroll(scrollable);
+
+    act(() => {
+      MockResizeObserver.last()?.trigger();
+    });
+
+    expect(setAbortScroll).not.toHaveBeenCalledWith(false);
   });
 });
