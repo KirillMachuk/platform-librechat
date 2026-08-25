@@ -233,6 +233,9 @@ function* componentTags(text) {
  *    a library's own arrow glyph the canon has no claim on.
  * ------------------------------------------------------------------ */
 const ALLOWED_STROKE = {
+  // The 8px ✕ inside the auto-approve pie: at that size the canon 1.25
+  // stroke is invisible; 2.5 is the vendored design's legibility choice.
+  'client/src/components/Chat/Cards/ApprovalCard.tsx': 1,
   'client/src/components/Chat/Menus/Endpoints/CustomMenu.tsx': 1,
   'packages/client/src/components/DropdownPopup.tsx': 1,
   'packages/client/src/components/MultiSelect.tsx': 1,
@@ -315,7 +318,7 @@ for (const root of SRC) {
     }
 
     for (const [tag, attrs] of componentTags(text)) {
-      if (/\bstrokeWidth\s*[=:]/.test(attrs)) {
+      if (/\bstrokeWidth\s*[=:]/.test(attrs) || /\bstroke\s*=\s*\{/.test(attrs)) {
         seenStroke.set(rel, (seenStroke.get(rel) ?? 0) + 1);
         if (!ALLOWED_STROKE[rel]) {
           fail(

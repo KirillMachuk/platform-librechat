@@ -1,5 +1,6 @@
+import { deepResearchModeSchema } from 'librechat-data-provider';
 import type { TDeepResearchConfig } from 'librechat-data-provider';
-import { resolveDeepResearchMode } from './modes';
+import { resolveDeepResearchMode, DEEP_RESEARCH_MODE_DEFAULTS } from './modes';
 
 /**
  * Provider routing for a Deep Research tier.
@@ -65,5 +66,56 @@ describe('resolveDeepResearchMode: provider routing', () => {
     // A DeepSeek-first list on the Anthropic tier with allow_fallbacks:false would fail
     // every call — no platform in that list serves Claude.
     expect(resolveDeepResearchMode(config).provider).toBeUndefined();
+  });
+});
+
+/**
+ * The knobs promoted out of the engine (`budgetGateRatio`, `timeGateRatio`, `digestCap`,
+ * `compressInputChars`, `toolResultWindow`) are declared WITHOUT a zod default, unlike the
+ * older numbers in the same schema.
+ *
+ * The reason is that one schema describes BOTH tiers while the sensible value differs per
+ * tier: a default in the shared schema is a value with nowhere correct to live. The per-tier
+ * defaults are `DEEP_RESEARCH_MODE_DEFAULTS`, and the resolver reads `override.x ?? base.x`
+ * — for which a field carrying a schema default is indistinguishable from a field an admin
+ * set on purpose. So the schema stays silent and the tier decides.
+ */
+describe('resolveDeepResearchMode: knobs a config leaves out', () => {
+  it('the shared schema does not invent a value for a per-tier knob', () => {
+    const parsed = deepResearchModeSchema.parse({});
+
+    expect(parsed).not.toHaveProperty('digestCap');
+    expect(parsed).not.toHaveProperty('budgetGateRatio');
+    expect(parsed).not.toHaveProperty('timeGateRatio');
+    expect(parsed).not.toHaveProperty('compressInputChars');
+    expect(parsed).not.toHaveProperty('toolResultWindow');
+  });
+
+  it('leaves the deep tier on its own knobs when the file only tunes balanced', () => {
+    const mode = resolveDeepResearchMode({
+      activeMode: 'deep',
+      modes: { balanced: { digestCap: 1234 }, deep: { leadModel: 'lead-x' } },
+    } as unknown as TDeepResearchConfig);
+
+    expect(mode.digestCap).toBe(DEEP_RESEARCH_MODE_DEFAULTS.deep.digestCap);
+    expect(mode.budgetGateRatio).toBe(DEEP_RESEARCH_MODE_DEFAULTS.deep.budgetGateRatio);
+    expect(mode.compressInputChars).toBe(DEEP_RESEARCH_MODE_DEFAULTS.deep.compressInputChars);
+    expect(mode.digestCap).not.toBe(1234);
+  });
+
+  it('still takes a knob the file DOES set on the active tier', () => {
+    const mode = resolveDeepResearchMode({
+      activeMode: 'deep',
+      modes: { deep: { digestCap: 1234, toolResultWindow: 3 } },
+    } as unknown as TDeepResearchConfig);
+
+    expect(mode.digestCap).toBe(1234);
+    expect(mode.toolResultWindow).toBe(3);
+  });
+
+  it('rejects a knob outside its allowed range', () => {
+    expect(deepResearchModeSchema.safeParse({ budgetGateRatio: 1.5 }).success).toBe(false);
+    expect(deepResearchModeSchema.safeParse({ toolResultWindow: -1 }).success).toBe(false);
+    expect(deepResearchModeSchema.safeParse({ digestCap: 10 }).success).toBe(false);
   });
 });

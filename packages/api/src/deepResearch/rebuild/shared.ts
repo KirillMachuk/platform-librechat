@@ -113,6 +113,15 @@ export function estimateTokens(text: string): number {
 }
 
 /**
+ * Estimated tokens of a whole prompt, measured EXACTLY the way `measureExchange` measures a
+ * prompt it has to estimate — so a caller predicting the next turn's input cannot drift away
+ * from the number the budget then actually counts.
+ */
+export function estimateContextTokens(messages: BaseMessage[]): number {
+  return estimateTokens(messages.map(extractText).join('\n'));
+}
+
+/**
  * Token usage for one model exchange: the reported `usage_metadata` when present
  * (the accurate path), else a length-based estimate over prompt + response so the
  * budget gate and billing still advance behind a usage-stripping proxy (e.g. the

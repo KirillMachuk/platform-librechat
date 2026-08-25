@@ -261,7 +261,7 @@ export default function PlanCard({
           ) : undefined
         }
         autoApprove={
-          showControls && countdownActive && remaining != null
+          countdownActive && remaining != null
             ? { secsLeft: remaining, total: PLAN_AUTO_START_SECS }
             : null
         }
