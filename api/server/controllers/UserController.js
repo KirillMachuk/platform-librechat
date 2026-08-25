@@ -24,6 +24,7 @@ const { invalidateCachedTools } = require('~/server/services/Config/getCachedToo
 const { purgeFilesWithVectors } = require('~/server/services/Files/process');
 const { getAppConfig } = require('~/server/services/Config');
 const { getLogStores } = require('~/cache');
+const { recordAudit } = require('~/server/services/Audit');
 const db = require('~/models');
 
 const PUBLIC_USER_RESPONSE_FIELDS = [
@@ -124,6 +125,48 @@ const acceptTermsController = async (req, res) => {
  * to an owner, and the account itself is already deleted by then — nobody will
  * ever come back to retry. One extra attempt costs a request per file.
  */
+/**
+ * Journals whatever `deleteUserFiles` left behind, immediately before the
+ * blanket `deleteFiles(null, userId)` removes it.
+ *
+ * Without this the account-deletion path told two different stories: the files
+ * it failed on were journalled `failure`, and then deleted anyway one line
+ * later. Records the same `file.delete` shape the rest of the system uses, and —
+ * like every other audit call — never lets a journal problem break the deletion.
+ */
+const auditRemainingUserFiles = async ({ req, userId }) => {
+  try {
+    const remaining = (await db.getFiles({ user: userId })) ?? [];
+    for (const file of remaining) {
+      if (!file?.file_id) {
+        continue;
+      }
+      recordAudit({
+        action: 'file.delete',
+        actorId: req?.user?._id,
+        actorEmail: req?.user?.email,
+        actorRole: req?.user?.role,
+        tenantId: file.tenantId ?? req?.user?.tenantId,
+        targetType: 'file',
+        targetId: file.file_id,
+        outcome: 'success',
+        metadata: {
+          reason: 'account_deleted',
+          /** Distinguishes it from the files the normal path handled: this one
+           * was removed by the record-level sweep, so its bytes may still be in
+           * whatever storage the normal path could not reach. */
+          partial: 'record_removed_storage_unverified',
+          source: file.source ?? 'local',
+          filename: typeof file.filename === 'string' ? file.filename : '',
+          ownerId: String(userId),
+        },
+      });
+    }
+  } catch (error) {
+    logger.error('[auditRemainingUserFiles] could not journal the remaining files', error);
+  }
+};
+
 const deleteUserFiles = async (req) => {
   try {
     const userFiles = await db.getFiles({ user: req.user.id });
@@ -377,6 +420,11 @@ const deleteUserController = async (req, res) => {
     await db.deleteUserById(user.id);
     await deleteAllSharedLinksWithCleanup(user.id);
     await deleteUserFiles(req);
+    /** Safety net for records `deleteUserFiles` could not resolve. It used to run
+     * silently, which left the journal asserting `failure` about files this line
+     * then destroyed — the audit trail contradicting the disk. Journalled with
+     * the same shape, so an account deletion accounts for every file it removes. */
+    await auditRemainingUserFiles({ req, userId: user.id });
     await db.deleteFiles(null, user.id);
     await db.deleteToolCalls(user.id);
     await db.deleteUserAgents(user.id);
