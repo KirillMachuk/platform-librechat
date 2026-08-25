@@ -51,6 +51,9 @@ require('module-alias/register');
 const { embedStoredFile, purgeStoredVectors, fetchDocMetadata, fetchFullText } = require('./crud');
 const { backoffMs, claimNext, processClaimed } = require('./worker');
 
+/** The worker's own default; read here so this spec follows a change to it. */
+const MAX_ATTEMPTS = parseInt(process.env.RAG_EMBED_MAX_ATTEMPTS ?? '', 10) || 5;
+
 const APP_CONFIG = { paths: { uploads: '/tmp' } };
 
 describe('embed worker state machine', () => {
@@ -429,7 +432,7 @@ describe('идемпотентность ретрая: дубли векторо
     }
     const after = await File.findOne({ file_id: 'exhaust' });
     expect(after.embeddingStatus).toBe('failed');
-    // 5 попыток = 5 эмбеддингов, каждый, кроме первого, начинался с очистки → копия одна.
+    // 5 attempts = 5 embeds, each but the first preceded by a purge, so one copy survives.
     expect(embedStoredFile).toHaveBeenCalledTimes(5);
     // ...and the fifth purge takes it: a terminal 'failed' never retries, so the purge that
     // would have removed it is never going to run, and our timeout never proved the gateway
@@ -439,42 +442,6 @@ describe('идемпотентность ретрая: дубли векторо
       embedStoredFile.mock.invocationCallOrder[4],
     );
   });
-});
-
-describe('the record disappears while the claim is in flight', () => {
-  let mongoServer;
-  let File;
-
-  beforeAll(async () => {
-    mongoServer = await MongoMemoryServer.create();
-    await mongoose.connect(mongoServer.getUri());
-    File = mongoose.models.File || mongoose.model('File', fileSchema);
-  }, 30000);
-
-  afterAll(async () => {
-    await mongoose.disconnect();
-    await mongoServer.stop();
-  });
-
-  beforeEach(async () => {
-    await File.deleteMany({});
-    jest.clearAllMocks();
-  });
-
-  const seedPending = (file_id) =>
-    File.create({
-      user: new mongoose.Types.ObjectId(),
-      file_id,
-      filename: 'contract.pdf',
-      filepath: '/uploads/u1/contract.pdf',
-      source: 'local',
-      type: 'application/pdf',
-      bytes: 1024,
-      embedded: false,
-      embeddingStatus: 'pending',
-      embedNextAt: new Date(Date.now() - 1000),
-      embedAttempts: 0,
-    });
 
   /* The user deletes an attachment while it is still being parsed and embedded.
    * At that moment the record still reads `embedded: false`, so the delete path
@@ -519,10 +486,15 @@ describe('the record disappears while the claim is in flight', () => {
    * purge whether or not the record was still there to mark 'failed'. */
   it('purges when the last attempt fails and the record is already gone', async () => {
     await seedPending('deleted-mid-last-attempt');
-    const claimed = await claimNext();
-    embedStoredFile.mockRejectedValue(
-      Object.assign(new Error('nope'), { response: { status: 415 } }),
+    /* Through the RETRIES-EXHAUSTED half of `permanent || exhausted`: a 415 would take the
+     * permanent half and leave this one untested. */
+    await File.updateOne(
+      { file_id: 'deleted-mid-last-attempt' },
+      { $set: { embedAttempts: MAX_ATTEMPTS - 1 } },
     );
+    const claimed = await claimNext();
+    expect(claimed.embedAttempts).toBe(MAX_ATTEMPTS);
+    embedStoredFile.mockRejectedValueOnce(new Error('gateway is unwell'));
     await File.deleteOne({ file_id: 'deleted-mid-last-attempt' });
 
     await processClaimed(claimed, APP_CONFIG);
@@ -530,5 +502,43 @@ describe('the record disappears while the claim is in flight', () => {
     expect(purgeStoredVectors).toHaveBeenCalledWith({
       file: expect.objectContaining({ file_id: 'deleted-mid-last-attempt' }),
     });
+  });
+
+  /* The destructive twin of the tests above, and the reason every write a claim makes is
+   * conditional on its own attempt number. A claim whose lease ran out finds its record already
+   * re-claimed, embedded and marked ready by a newer attempt. Its own terminal write must not
+   * land there: the purge that follows would drop the chunks the NEWER claim just committed,
+   * leaving a file that says `embedded: true` with an empty index behind it and no retry left
+   * ('failed' is outside the claim filter). A duplicate chunk is recoverable and still
+   * searchable; a deleted live index is not. */
+  it('leaves the vectors alone when a newer attempt has taken the record over', async () => {
+    await seedPending('re-claimed');
+    const stale = await claimNext();
+    /* First attempt on purpose: a retry would open with its own (legitimate) purge and this test
+     * could no longer tell the two apart. The failure below is permanent, so the claim still
+     * takes the terminal branch — the one that purges on its way out. */
+    expect(stale.embedAttempts).toBe(1);
+    /* What a newer claim leaves behind: bumped the counter through the claim CAS, embedded the
+     * file, marked it ready. */
+    await File.updateOne(
+      { file_id: 're-claimed' },
+      {
+        $set: {
+          embedded: true,
+          embeddingStatus: 'ready',
+          embedAttempts: stale.embedAttempts + 1,
+        },
+      },
+    );
+    embedStoredFile.mockRejectedValueOnce(
+      Object.assign(new Error('unsupported'), { response: { status: 415 } }),
+    );
+
+    await processClaimed(stale, APP_CONFIG);
+
+    expect(purgeStoredVectors).not.toHaveBeenCalled();
+    const record = await File.findOne({ file_id: 're-claimed' }).lean();
+    expect(record.embedded).toBe(true);
+    expect(record.embeddingStatus).toBe('ready');
   });
 });

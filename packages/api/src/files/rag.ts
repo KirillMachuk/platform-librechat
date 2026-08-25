@@ -2,6 +2,9 @@ import axios from 'axios';
 import { logger } from '@librechat/data-schemas';
 import { generateShortLivedToken } from '~/crypto/jwt';
 
+/** Ceiling for the delete call; someone is waiting on it. Mirrors the delete service's own. */
+const DELETE_TIMEOUT_MS = 15_000;
+
 interface DeleteRagFileParams {
   /** The user ID. Required for authentication. If not provided, the function returns false and logs an error. */
   userId: string;
@@ -42,6 +45,11 @@ export async function deleteRagFile({ userId, file }: DeleteRagFileParams): Prom
         accept: 'application/json',
       },
       data: [file.file_id],
+      /* Every storage strategy calls this BEFORE the delete service asks the vector store, so an
+       * unbounded request here is what a hung store would actually hang on. `maxRedirects: 0` is
+       * what makes the ceiling a wall clock — axios only arms its connect-phase timer on that path. */
+      timeout: DELETE_TIMEOUT_MS,
+      maxRedirects: 0,
     });
     logger.debug(`[deleteRagFile] Successfully deleted document ${file.file_id} from RAG API`);
     return true;

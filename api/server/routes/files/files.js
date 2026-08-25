@@ -43,6 +43,23 @@ const db = require('~/models');
 const router = express.Router();
 
 /**
+ * Answer for a delete that did not fully land.
+ *
+ * A file whose vector cleanup failed keeps its record on purpose, so that its text cannot stay
+ * searchable with nothing left to link it to an owner. Reporting that as success is how a user
+ * ends up watching a "deleted" document come back on the next refresh with no idea why, so the
+ * response says which files survived and what to do about them.
+ */
+const partialDeleteFailure = (failedFileIds) => {
+  logger.warn(`[/files] Files kept because their cleanup failed: ${failedFileIds.join(', ')}`);
+  return {
+    message:
+      'Some files could not be fully deleted and were kept so nothing is left behind. Try again in a moment.',
+    failedFileIds,
+  };
+};
+
+/**
  * Whether the caller may act on an agent's attached files: its author, an agent
  * manager, or an explicit ACL editor.
  * @param {import('express').Request} req
@@ -189,7 +206,11 @@ router.delete('/', async (req, res) => {
     }
 
     if (dbFiles.length > 0 && nonOwnedFiles.length === 0) {
-      await processDeleteRequest({ req, files: ownedFiles });
+      const { failedFileIds } = await processDeleteRequest({ req, files: ownedFiles });
+      if (failedFileIds.length > 0) {
+        res.status(500).json(partialDeleteFailure(failedFileIds));
+        return;
+      }
       logger.debug(
         `[/files] Files deleted successfully: ${ownedFiles
           .filter((f) => f.file_id)
@@ -280,7 +301,10 @@ router.delete('/', async (req, res) => {
         .json({ message: 'File associations removed successfully from Azure Assistant' });
     }
 
-    await processDeleteRequest({ req, files: authorizedFiles });
+    const { failedFileIds } = await processDeleteRequest({ req, files: authorizedFiles });
+    if (failedFileIds.length > 0) {
+      return res.status(500).json(partialDeleteFailure(failedFileIds));
+    }
 
     logger.debug(
       `[/files] Files deleted successfully: ${authorizedFiles

@@ -57,7 +57,7 @@ const { recordAudit, auditRequestContext } = require('~/server/services/Audit');
 const { LB_QueueAsyncCall } = require('~/server/utils/queue');
 const { getRetentionExpiry, getAgentFileRetentionExpiry } = require('./retention');
 const { getStrategyFunctions } = require('./strategies');
-const { mayHaveVectors } = require('./VectorDB/crud');
+const { deleteVectors, mayHaveVectors } = require('./VectorDB/crud');
 const { determineFileType } = require('~/server/utils');
 const { STTService } = require('./Audio/STTService');
 const db = require('~/models');
@@ -684,8 +684,14 @@ const recordFileDeletions = ({
  * first, then storage + metadata via {@link processDeleteRequest}. Project and
  * conversation file sources are dual-stored (storage + pgvector), and the local
  * delete strategy only removes the disk file — vector embeddings would orphan
- * in pgvector otherwise. Vector cleanup is best-effort (`Promise.allSettled`) so
- * a pgvector hiccup never blocks metadata/storage deletion.
+ * in pgvector otherwise.
+ *
+ * This first pass is deliberately best-effort: it exists for the one case
+ * {@link processDeleteRequest} cannot cover on its own — a primary-storage delete that
+ * throws rethrows before the secondary vector delete ever runs. The authoritative attempt
+ * is the secondary one inside `processDeleteRequest`, which fails the file's delete and
+ * keeps its record. So a vector outage DOES block metadata/storage deletion here; that is
+ * the point, and the record is what makes the delete retryable.
  *
  * Shared by the per-file and per-project delete routes so both stay consistent.
  *
@@ -699,17 +705,21 @@ const purgeFilesWithVectors = async ({ req, files, reason = 'user_request' }) =>
     return;
   }
 
-  const { deleteVectors } = require('./VectorDB/crud');
-  const vectorDeletions = files
-    .filter(mayHaveVectors)
-    .map((file) =>
-      deleteVectors(req, file).catch((error) =>
-        logger.error('[purgeFilesWithVectors] Vector cleanup failed', error),
+  /* Under the same cap as every other delete in this file: an account deletion hands its whole
+   * corpus to this function, and an unbounded `.map` would open one socket per file in a single
+   * tick — on a box that also runs the reranker and the embedder. */
+  const limit = createConcurrencyLimiter(fileDeleteConcurrency());
+  await Promise.all(
+    files
+      .filter(mayHaveVectors)
+      .map((file) =>
+        limit(() =>
+          deleteVectors(req, file).catch((error) =>
+            logger.error('[purgeFilesWithVectors] Vector cleanup failed', error),
+          ),
+        ),
       ),
-    );
-  if (vectorDeletions.length > 0) {
-    await Promise.allSettled(vectorDeletions);
-  }
+  );
 
   await processDeleteRequest({ req, files, reason });
 };

@@ -10,7 +10,7 @@ const {
   PURGE_TIMEOUT_MS,
   logAxiosError,
 } = require('./crud');
-const { claimNextEmbedFile, updateFile } = require('~/models');
+const { claimNextEmbedFile, findFileById, updateFile } = require('~/models');
 
 /**
  * Background RAG-embedding worker (RAG_ASYNC_EMBED).
@@ -39,12 +39,13 @@ const POLL_MS = () => intEnv('RAG_EMBED_POLL_MS', 3_000);
 const TIMEOUT_MS = () => intEnv('RAG_EMBED_TIMEOUT_MS', 30 * 60_000);
 /* The lease MUST exceed everything one claim does, otherwise it can expire while the first worker
  * is still working and a second worker re-claims the file — a duplicate parse at the (serialized)
- * doc-gateway and a second copy of the vectors. A claim runs the purge, the embed AND the metadata
- * call, so the clamp accounts for all three regardless of the configured value. */
+ * doc-gateway and a second copy of the vectors. A claim runs the retry purge, the embed, the
+ * metadata call AND the leftover purge on its way out, so the clamp accounts for all four
+ * regardless of the configured value. */
 const LEASE_MS = () =>
   Math.max(
     intEnv('RAG_EMBED_LEASE_MS', 40 * 60_000),
-    PURGE_TIMEOUT_MS + TIMEOUT_MS() + METADATA_TIMEOUT_MS() + 60_000,
+    2 * PURGE_TIMEOUT_MS + TIMEOUT_MS() + METADATA_TIMEOUT_MS() + 60_000,
   );
 const MAX_ATTEMPTS = () => intEnv('RAG_EMBED_MAX_ATTEMPTS', 5);
 const CONCURRENCY = () => intEnv('RAG_EMBED_CONCURRENCY', 1);
@@ -97,9 +98,48 @@ async function purgeLeftoverVectors(file, reason) {
   } catch (error) {
     logAxiosError({
       error,
-      message: `[embedWorker] ${file.file_id}: could not purge leftover vectors (${reason}) — its text stays in the vector store`,
+      /* Says what we could not do, not what is there: most files reaching here never committed a
+       * chunk, and a failed request proves nothing either way. Whatever it does hold now outlives
+       * its record — the daily orphan check is what finds it. */
+      message: `[embedWorker] ${file.file_id}: could not ask the vector store to drop leftovers (${reason}) — anything it holds for this file stays`,
     });
   }
+}
+
+/**
+ * Commits one state transition of THIS claim and reports what happened to the record.
+ *
+ * `updateFile` matches on `file_id` alone, so a claim whose lease expired can still write over a
+ * record that another worker has since re-claimed and finished. That write returning a document
+ * would then be read as "my claim still owns this", and the purge below would drop the vectors the
+ * NEWER claim just committed — leaving a record that says `embedded: true` with nothing behind it
+ * and no retry, because 'failed' is outside the claim filter. `embedAttempts` is incremented inside
+ * the claim's own CAS, so it names exactly one claim and makes the write conditional on still
+ * owning the record.
+ *
+ * @returns `'committed'` — the write landed and this claim still owns the record;
+ *   `'gone'` — the record was deleted mid-flight, so whatever was embedded is now unreachable;
+ *   `'taken-over'` — the record lives but belongs to a newer claim. Its vectors are not ours to
+ *   remove: a duplicate chunk is recoverable and still searchable, a deleted live index is not.
+ */
+async function commitClaim(update, attempt) {
+  const saved = await updateFile(update, { embedAttempts: attempt });
+  if (saved) {
+    return 'committed';
+  }
+  return (await findFileById(update.file_id)) ? 'taken-over' : 'gone';
+}
+
+/** Cleans up after a claim that lost its record, or stands down if a newer claim owns it. */
+async function releaseLostClaim(file, outcome, reason) {
+  if (outcome === 'taken-over') {
+    logger.warn(
+      `[embedWorker] ${file.file_id}: record re-claimed by a newer attempt, leaving its vectors alone`,
+    );
+    return;
+  }
+  logger.debug(`[embedWorker] ${file.file_id}: record gone (deleted mid-flight)`);
+  await purgeLeftoverVectors(file, reason);
 }
 
 /** Embeds one claimed record and commits the resulting state transition. */
@@ -130,17 +170,19 @@ async function processClaimed(file, appConfig) {
       fetchDocMetadata({ appConfig, file }),
       fetchFullText({ appConfig, file }),
     ]);
-    const updated = await updateFile({
-      file_id: file.file_id,
-      embedded: true,
-      embeddingStatus: 'ready',
-      embedError: null,
-      ...(docMetadata ? { docMetadata } : {}),
-      ...(fullText ? { fullText } : {}),
-    });
-    if (!updated) {
-      logger.debug(`[embedWorker] ${file.file_id}: record gone after embed (deleted mid-flight)`);
-      await purgeLeftoverVectors(file, 'deleted mid-embed');
+    const committed = await commitClaim(
+      {
+        file_id: file.file_id,
+        embedded: true,
+        embeddingStatus: 'ready',
+        embedError: null,
+        ...(docMetadata ? { docMetadata } : {}),
+        ...(fullText ? { fullText } : {}),
+      },
+      attempt,
+    );
+    if (committed !== 'committed') {
+      await releaseLostClaim(file, committed, 'deleted mid-embed');
       return;
     }
     // A project source only enters getProjectContext's fileIds once embedded=true.
@@ -159,25 +201,37 @@ async function processClaimed(file, appConfig) {
     const permanent = isPermanentFailure(error);
     const exhausted = attempt >= MAX_ATTEMPTS();
     if (permanent || exhausted) {
-      const failed = await updateFile({
-        file_id: file.file_id,
-        embeddingStatus: 'failed',
-        embedError: permanent ? `http-${error?.response?.status ?? 'unsupported'}` : 'max-retries',
-      });
+      const failed = await commitClaim(
+        {
+          file_id: file.file_id,
+          embeddingStatus: 'failed',
+          embedError: permanent
+            ? `http-${error?.response?.status ?? 'unsupported'}`
+            : 'max-retries',
+        },
+        attempt,
+      );
       /* Terminal either way: a 'failed' record never retries, and a missing one was
        * deleted mid-flight. The retry purge above will not run again, so this is the
        * last chance to drop what the attempts left behind. */
-      await purgeLeftoverVectors(file, failed ? 'gave up embedding' : 'deleted mid-embed');
+      if (failed === 'committed') {
+        await purgeLeftoverVectors(file, 'gave up embedding');
+      } else {
+        await releaseLostClaim(file, failed, 'deleted mid-embed');
+      }
       return;
     }
-    const rescheduled = await updateFile({
-      file_id: file.file_id,
-      embeddingStatus: 'pending',
-      embedNextAt: new Date(Date.now() + backoffMs(attempt)),
-      embedError: null,
-    });
-    if (!rescheduled) {
-      await purgeLeftoverVectors(file, 'deleted mid-embed');
+    const rescheduled = await commitClaim(
+      {
+        file_id: file.file_id,
+        embeddingStatus: 'pending',
+        embedNextAt: new Date(Date.now() + backoffMs(attempt)),
+        embedError: null,
+      },
+      attempt,
+    );
+    if (rescheduled !== 'committed') {
+      await releaseLostClaim(file, rescheduled, 'deleted mid-embed');
     }
   }
 }

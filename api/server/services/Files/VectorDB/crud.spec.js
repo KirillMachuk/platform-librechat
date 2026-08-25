@@ -47,13 +47,14 @@ describe('deleteVectors — which files are worth asking the vector store about'
     ]);
   });
 
-  it('carries a timeout so a hung vector store cannot hang the delete', async () => {
+  /* A ceiling only exists if it is non-zero — axios reads `timeout: 0` as "no timeout" — and only
+   * behaves as a wall clock with `maxRedirects: 0`; without it the timer restarts on every hop. */
+  it('carries a wall-clock ceiling so a hung vector store cannot hang the delete', async () => {
     await deleteVectors(req, { file_id: 'ready', embedded: true });
 
-    expect(axios.delete).toHaveBeenCalledWith(
-      'http://rag/documents',
-      expect.objectContaining({ timeout: expect.any(Number) }),
-    );
+    const [, config] = axios.delete.mock.calls[0];
+    expect(config.timeout).toBeGreaterThan(0);
+    expect(config.maxRedirects).toBe(0);
   });
 
   it('treats a 404 as nothing left to delete', async () => {
@@ -94,10 +95,17 @@ describe('deleteVectors — which files are worth asking the vector store about'
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('ready'));
   });
 
-  it('reports a file as possibly holding vectors only on those two grounds', () => {
-    expect(mayHaveVectors({ embedded: true })).toBe(true);
-    expect(mayHaveVectors({ embeddingStatus: 'pending' })).toBe(true);
-    expect(mayHaveVectors({ embedded: false })).toBe(false);
-    expect(mayHaveVectors(undefined)).toBe(false);
+  /* Two delete routes pass `req.body.files` through unvalidated, so the predicate also reads
+   * client input. These are the values that decide between "ask the vector store" and "do not". */
+  it.each([
+    ['a committed file', { embedded: true }, true],
+    ['an unfinished embed', { embedded: false, embeddingStatus: 'processing' }, true],
+    ['a file that gave up', { embedded: false, embeddingStatus: 'failed' }, true],
+    ['a file outside the lifecycle', { embedded: false }, false],
+    ['an empty status from a request body', { embeddingStatus: '' }, false],
+    ['a status explicitly nulled', { embeddingStatus: null }, false],
+    ['no file at all', undefined, false],
+  ])('decides on %s', (_name, file, expected) => {
+    expect(mayHaveVectors(file)).toBe(expected);
   });
 });
