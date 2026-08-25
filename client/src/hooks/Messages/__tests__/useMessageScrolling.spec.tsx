@@ -288,3 +288,63 @@ describe('useMessageScrolling resize reconciliation', () => {
     expect(mockScrollToBottom).not.toHaveBeenCalled();
   });
 });
+
+describe('useMessageScrolling follow resume (round 24: returning to the bottom re-attaches)', () => {
+  beforeEach(() => {
+    MockResizeObserver.reset();
+    MockIntersectionObserver.reset();
+    mockScrollToBottom.mockClear();
+    (global as unknown as { ResizeObserver: typeof MockResizeObserver }).ResizeObserver =
+      MockResizeObserver;
+    (
+      global as unknown as { IntersectionObserver: typeof MockIntersectionObserver }
+    ).IntersectionObserver = MockIntersectionObserver;
+  });
+
+  afterEach(() => {
+    (global as unknown as { ResizeObserver: typeof ResizeObserver | undefined }).ResizeObserver =
+      originalResizeObserver;
+    (
+      global as unknown as { IntersectionObserver: typeof IntersectionObserver | undefined }
+    ).IntersectionObserver = originalIntersectionObserver;
+  });
+
+  it('clears abortScroll when the end sentinel becomes visible again', () => {
+    const setAbortScroll = jest.fn();
+    renderScrolling({ contextOverrides: { abortScroll: true, setAbortScroll } });
+
+    act(() => {
+      MockIntersectionObserver.instances[0]?.callback(
+        [{ isIntersecting: true } as IntersectionObserverEntry],
+        MockIntersectionObserver.instances[0] as unknown as IntersectionObserver,
+      );
+    });
+
+    expect(setAbortScroll).toHaveBeenCalledWith(false);
+  });
+
+  it('does not clear abortScroll while the sentinel stays out of view', () => {
+    const setAbortScroll = jest.fn();
+    renderScrolling({ contextOverrides: { abortScroll: true, setAbortScroll } });
+
+    act(() => {
+      MockIntersectionObserver.instances[0]?.callback(
+        [{ isIntersecting: false } as IntersectionObserverEntry],
+        MockIntersectionObserver.instances[0] as unknown as IntersectionObserver,
+      );
+    });
+
+    expect(setAbortScroll).not.toHaveBeenCalledWith(false);
+  });
+
+  it('self-heals a stale abort when content grows while the user sits at the bottom', () => {
+    const setAbortScroll = jest.fn();
+    renderScrolling({ contextOverrides: { abortScroll: true, setAbortScroll } });
+
+    act(() => {
+      MockResizeObserver.last()?.trigger();
+    });
+
+    expect(setAbortScroll).toHaveBeenCalledWith(false);
+  });
+});
