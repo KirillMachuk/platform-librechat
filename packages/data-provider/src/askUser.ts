@@ -126,13 +126,14 @@ export function parseAskAnswersMessage(text: string): { prompt: string; answer: 
 }
 
 /** True if a message's content carries an `ask_user` tool call — the
- *  provenance anchor for rendering the answers/skip chip under it. */
-export function contentHasAskUserCall(
-  content: { type?: string; tool_call?: { name?: string } }[] | undefined | null,
-): boolean {
+ *  provenance anchor for rendering the answers/skip chip under it. Typed
+ *  loosely on purpose: TMessageContentParts is a union whose members do not
+ *  all carry `tool_call`, so the check narrows per element. */
+export function contentHasAskUserCall(content: readonly unknown[] | undefined | null): boolean {
   return (
-    content?.some(
-      (part) => part?.type === 'tool_call' && part.tool_call?.name === ASK_USER_TOOL,
-    ) === true
+    content?.some((part) => {
+      const p = part as { type?: string; tool_call?: { name?: string } } | null;
+      return p?.type === 'tool_call' && p.tool_call?.name === ASK_USER_TOOL;
+    }) === true
   );
 }

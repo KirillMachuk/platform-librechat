@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+const MCP_SERVER_TITLE = 'E2E Memory';
 
 /**
  * Interactive cards К3: the `ask_user` tool end to end on the mock stand.
@@ -11,11 +14,33 @@ import { test, expect } from '@playwright/test';
 
 const ASK_PROMPT = 'E2E: спроси меня';
 
+/** Select the mock MCP server from the composer's Tools menu (same flow as
+ *  mcp-ephemeral.spec.ts) — makes the run tool-bearing. */
+async function selectEphemeralMCP(page: Page) {
+  await page.getByRole('button', { name: 'MCP Servers', exact: true }).click();
+  const serverItem = page.getByRole('menuitemcheckbox', { name: new RegExp(MCP_SERVER_TITLE) });
+  await expect(serverItem).toBeVisible();
+  await serverItem.click();
+  await expect(serverItem).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('Escape');
+}
+
 test.describe('ask_user questions card', () => {
   test('answers flow: card → selections → summary chip → static card', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('PIN_MCP_', 'true');
+    });
     await page.goto('/c/new', { waitUntil: 'domcontentloaded' });
     const textarea = page.getByTestId('text-input');
     await textarea.waitFor({ state: 'visible' });
+
+    /* ask_user joins only tool-bearing runs (the repo pins that tool-less
+     * runs stay tool-less — chat-only Anthropic reasoning must keep its
+     * thinking). Arm the mock MCP server so this run is an ephemeral agent
+     * with a tool, like every real «Авто» chat (the mcp-ephemeral suite's
+     * own precondition pattern). */
+    await selectEphemeralMCP(page);
+
     await textarea.fill(ASK_PROMPT);
     await textarea.press('Enter');
 

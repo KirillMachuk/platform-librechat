@@ -1175,17 +1175,22 @@ export async function initializeAgent(
   }
 
   /**
-   * The ask-user questions tool (interactive cards К3) is available to EVERY
-   * agent run — «Авто», user agents, Deep Research alike (owner's decision):
-   * asking the user for a decision is an interaction primitive, not a
-   * capability an admin gates. Known uniform tradeoff: a previously
-   * tool-LESS Anthropic agent with an explicit reasoning effort now counts
-   * as "has tools" and loses extended thinking (the multi-turn tool loop
-   * and Anthropic thinking cannot coexist on OpenRouter, see below) — the
-   * same tradeoff every tool-bearing agent already lives with.
+   * The ask-user questions tool (interactive cards К3) joins every agent run
+   * that ALREADY carries at least one tool — «Авто», Deep Research, user
+   * agents with capabilities. Deliberately NOT unconditional: a tool-less
+   * run must stay tool-less, because the repo pins two promises that
+   * unconditional registration broke (initialize.test): chat-only Anthropic
+   * reasoning keeps extended thinking (E-H1 — any tool definition would
+   * suppress it for the tool loop), and the empty-toolDefinitions fallthrough
+   * stays empty. A tool-less chat has no tool loop for ask_user to ride
+   * anyway; the flows the owner asked for all carry tools.
    */
-  const askUserResult = registerAskUserTool({ toolRegistry, toolDefinitions });
-  toolDefinitions = askUserResult.toolDefinitions;
+  const hasAnyToolsForAskUser =
+    (structuredTools?.length ?? 0) > 0 || (toolDefinitions?.length ?? 0) > 0;
+  if (hasAnyToolsForAskUser) {
+    const askUserResult = registerAskUserTool({ toolRegistry, toolDefinitions });
+    toolDefinitions = askUserResult.toolDefinitions;
+  }
 
   /** Check for tool presence from either full instances or definitions (event-driven mode) */
   const hasAgentTools = (structuredTools?.length ?? 0) > 0 || (toolDefinitions?.length ?? 0) > 0;
