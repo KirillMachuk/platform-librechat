@@ -1,12 +1,18 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Button, useToastContext } from '@librechat/client';
+import { useToastContext } from '@librechat/client';
 import { parseDrPlanMessage, DR_START_MARKER, DR_CANCEL_MARKER } from 'librechat-data-provider';
 import type { TMessage } from 'librechat-data-provider';
+import type { ApprovalCardStrings } from '~/components/Chat/Cards/ApprovalCard';
+import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/ApprovalCard';
 import { useGetStartupConfig } from '~/data-provider';
 import { useSubmitMessage } from '~/hooks/Messages';
-import { Telescope } from '~/components/icons';
 import { mainTextareaId } from '~/common';
 import { useLocalize } from '~/hooks';
+
+/** Owner's decision (cards track, 25.08): the visible countdown is ALWAYS the
+ *  aicss 30 s pie; the config keeps exactly one meaning — 0 switches
+ *  autostart off. Any other configured value still means "autostart on". */
+const PLAN_AUTO_START_SECS = 30;
 
 /**
  * The autostart anchor: when the plan was made, so the window means the same thing live and
@@ -87,7 +93,8 @@ export default function PlanCard({
   const { showToast } = useToastContext();
   const { submitMessage } = useSubmitMessage();
   const { data: startupConfig } = useGetStartupConfig();
-  const effectiveAutoStartSec = autoStartSec ?? startupConfig?.deepResearch?.planAutoStartSec ?? 0;
+  const configuredAutoStart = autoStartSec ?? startupConfig?.deepResearch?.planAutoStartSec ?? 0;
+  const effectiveAutoStartSec = configuredAutoStart === 0 ? 0 : PLAN_AUTO_START_SECS;
   const { title, steps } = useMemo(() => parseDrPlanMessage(message.text ?? ''), [message.text]);
   const [acted, setActed] = useState(false);
   const [autoStartCancelled, setAutoStartCancelled] = useState(false);
@@ -214,74 +221,75 @@ export default function PlanCard({
 
   const showControls = awaitingAction && !acted;
 
+  const cardStrings: ApprovalCardStrings = useMemo(
+    () => ({
+      otherPlaceholder: localize('com_ui_cards_other_placeholder'),
+      moreLabel: (n) => localize('com_ui_cards_more', { 0: String(n) }),
+      lessLabel: localize('com_ui_cards_less'),
+      autoApproveBefore: localize('com_ui_cards_autostart_before'),
+      autoApproveAfter: localize('com_ui_cards_autostart_after'),
+      autoApproveCancelTip: localize('com_ui_cards_cancel_tip'),
+      prevQuestion: localize('com_ui_cards_prev_question'),
+      nextQuestion: localize('com_ui_cards_next_question'),
+      cancelAutoApprove: localize('com_ui_cards_cancel_autostart'),
+      questionOf: (c, t) => localize('com_ui_cards_question_of', { 0: String(c), 1: String(t) }),
+      customAnswerFor: (prompt) => localize('com_ui_cards_custom_answer_for', { 0: prompt }),
+    }),
+    [localize],
+  );
+
+  const planItems = useMemo(
+    () => steps.map((step, i) => ({ id: String(i), title: step })),
+    [steps],
+  );
+
   return (
-    <div className="my-2 w-full overflow-hidden rounded-2xl border border-border-light bg-surface-primary-alt p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Telescope className="size-4 shrink-0 text-text-secondary" aria-hidden="true" />
-        <h3 className="min-w-0 text-base font-semibold text-text-primary [overflow-wrap:anywhere]">
-          {title || localize('com_ui_deep_research')}
-        </h3>
-      </div>
-      {steps.length > 0 && (
-        <ol className="mb-4 space-y-2.5">
-          {steps.map((step, i) => (
-            <li key={i} className="flex gap-2.5 text-sm text-text-secondary">
-              <span
-                className="mt-1 inline-block size-3.5 shrink-0 rounded-full border border-border-medium"
-                aria-hidden="true"
-              />
-              <span className="min-w-0 [overflow-wrap:anywhere]">{step}</span>
-            </li>
-          ))}
-        </ol>
-      )}
-      {showControls && (
-        <>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={edit}
-              aria-pressed={editing}
-              aria-label={localize('com_ui_edit')}
-              className={editing ? 'ring-1 ring-border-heavy' : undefined}
-            >
-              {localize('com_ui_edit')}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={cancel}
-              aria-label={localize('com_ui_cancel')}
-            >
-              {localize('com_ui_cancel')}
-            </Button>
-            <Button
-              variant="submit"
-              size="sm"
-              onClick={start}
-              aria-label={localize('com_ui_deep_research_start')}
-            >
-              {localize('com_ui_deep_research_start')}
-              {remaining != null && (
-                <span className="ml-1.5 tabular-nums opacity-80">({remaining})</span>
+    <div className="my-2 w-full">
+      <ApprovalCard
+        variant="plan"
+        strings={cardStrings}
+        title={localize('com_ui_deep_research')}
+        planTitle={title || undefined}
+        todoTitle={localize('com_ui_deep_research_steps')}
+        plan={planItems}
+        approveLabel={localize('com_ui_deep_research_start')}
+        secondaryLabel={localize('com_ui_edit')}
+        showActions={showControls}
+        headerAction={
+          showControls ? (
+            <ApprovalCardHeaderAction label={localize('com_ui_cancel')} onClick={cancel} />
+          ) : undefined
+        }
+        autoApprove={
+          showControls && countdownActive && remaining != null
+            ? { secsLeft: remaining, total: PLAN_AUTO_START_SECS }
+            : null
+        }
+        onAutoApproveCancel={() =>
+          cancelAutoStart(localize('com_ui_deep_research_autostart_cancelled'))
+        }
+        onApprove={start}
+        onSecondary={edit}
+        secondaryPressed={editing}
+        footnote={
+          showControls ? (
+            <>
+              {(editing || autoStartCancelled) && (
+                <div className="mt-1 text-right text-xs text-text-tertiary">
+                  {localize(
+                    editing
+                      ? 'com_ui_deep_research_edit_hint'
+                      : 'com_ui_deep_research_autostart_cancelled',
+                  )}
+                </div>
               )}
-            </Button>
-          </div>
-          {(editing || autoStartCancelled) && (
-            <div className="mt-2 text-right text-xs text-text-tertiary">
-              {localize(
-                editing
-                  ? 'com_ui_deep_research_edit_hint'
-                  : 'com_ui_deep_research_autostart_cancelled',
-              )}
-            </div>
-          )}
-          <span role="status" className="sr-only">
-            {liveNote}
-          </span>
-        </>
-      )}
+              <span role="status" className="sr-only">
+                {liveNote}
+              </span>
+            </>
+          ) : undefined
+        }
+      />
     </div>
   );
 }

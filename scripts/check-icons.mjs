@@ -245,6 +245,9 @@ const ALLOWED_STROKE = {
  *    the rest are waiting for the screen batch that owns them.
  * ------------------------------------------------------------------ */
 const ALLOWED_INLINE_SVG = {
+  // Vendored aicss approval card: three GRAPHICS, not icons — the dashed
+  // to-do circle, the more/less dots-bar glyph, and the auto-approve pie.
+  'client/src/components/Chat/Cards/ApprovalCard.tsx': 3,
   'client/src/components/Agents/ErrorDisplay.tsx': 1,
   'client/src/components/Chat/Input/Files/DragDropOverlay.tsx': 1,
   'client/src/components/Chat/Input/Files/ProgressCircle.tsx': 1,

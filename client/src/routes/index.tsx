@@ -12,11 +12,11 @@ import { MarketplaceProvider } from '~/components/Agents/MarketplaceContext';
 import AgentMarketplace from '~/components/Agents/Marketplace';
 import { OAuthSuccess, OAuthError } from '~/components/OAuth';
 import { AuthContextProvider } from '~/hooks/AuthContext';
-import WithRum from '~/lib/rum/WithRum';
 import RouteErrorBoundary from './RouteErrorBoundary';
 import StartupLayout from './Layouts/Startup';
 import LoginLayout from './Layouts/Login';
 import dashboardRoutes from './Dashboard';
+import WithRum from '~/lib/rum/WithRum';
 import ShareRoute from './ShareRoute';
 import ChatRoute from './ChatRoute';
 import Root from './Root';
@@ -43,8 +43,19 @@ const loadSkillsView = () =>
 const baseEl = document.querySelector('base');
 const baseHref = baseEl?.getAttribute('href') || '/';
 
+/** Dev-only acceptance pages (cards track К1) — tree-shaken out of prod. */
+const devRoutes = import.meta.env.DEV
+  ? [
+      {
+        path: 'dev/cards',
+        lazy: async () => ({ Component: (await import('./Dev/CardsDemo')).default }),
+      },
+    ]
+  : [];
+
 export const router = createBrowserRouter(
   [
+    ...devRoutes,
     {
       path: 'share/:shareId',
       element: <ShareRoute />,

@@ -1436,7 +1436,8 @@ export type TStartupConfig = {
    * `final` = fetch only after the stream completes (legacy). */
   titleGenerationTiming?: 'immediate' | 'final';
   /** Deep Research plan gate (task #21). Present only when the gate is enabled;
-   * `planAutoStartSec` drives the plan card's client-side autostart countdown (0 = manual). */
+   * `planAutoStartSec` is an on/off switch since the cards track (25.08): 0 = manual only,
+   * any other value = autostart on — the visible window is always the client's fixed 30 s. */
   deepResearch?: {
     planGate: boolean;
     planAutoStartSec: number;

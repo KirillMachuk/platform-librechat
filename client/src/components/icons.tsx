@@ -51,6 +51,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconChevronUp,
+  IconCornerDownLeft,
   IconCircle,
   IconCircleCheck,
   IconCirclePlus,
@@ -116,7 +117,10 @@ import {
   IconLogout,
   IconMaximize,
   IconMenu,
+  IconListCheck,
+  IconListDetails,
   IconMessage,
+  IconMessageCircleQuestion,
   IconMessages,
   IconMicrophone,
   IconMicrophoneOff,
@@ -251,6 +255,7 @@ export const ChevronRight: LucideIcon = canon(IconChevronRight, 'ChevronRight');
 export const ChevronRightIcon: LucideIcon = canon(IconChevronRight, 'ChevronRightIcon');
 export const ChevronUp: LucideIcon = canon(IconChevronUp, 'ChevronUp');
 export const ChevronsUpDown: LucideIcon = canon(IconSelector, 'ChevronsUpDown');
+export const CornerDownLeft: LucideIcon = canon(IconCornerDownLeft, 'CornerDownLeft');
 export const Circle: LucideIcon = canon(IconCircle, 'Circle');
 export const CircleCheckBig: LucideIcon = canon(IconCircleCheck, 'CircleCheckBig');
 export const CircleHelpIcon: LucideIcon = canon(IconHelp, 'CircleHelpIcon');
@@ -335,6 +340,12 @@ export const LogOut: LucideIcon = canon(IconLogout, 'LogOut');
 export const Maximize2: LucideIcon = canon(IconMaximize, 'Maximize2');
 export const Menu: LucideIcon = canon(IconMenu, 'Menu');
 export const MessageCircleDashed: LucideIcon = canon(IconGhost3, 'MessageCircleDashed');
+export const ListChecks: LucideIcon = canon(IconListCheck, 'ListChecks');
+export const ListTodo: LucideIcon = canon(IconListDetails, 'ListTodo');
+export const MessageCircleQuestion: LucideIcon = canon(
+  IconMessageCircleQuestion,
+  'MessageCircleQuestion',
+);
 export const MessageSquare: LucideIcon = canon(IconMessage, 'MessageSquare');
 export const MessagesSquare: LucideIcon = canon(IconMessages, 'MessagesSquare');
 export const Mic: LucideIcon = canon(IconMicrophone, 'Mic');
