@@ -34,6 +34,12 @@ const ThinkingIndicator = memo(({ conversationId }: { conversationId?: string | 
   const drProgress = useRecoilValue(store.drProgressByConvoId(convoKey));
   const phaseKey =
     drProgress != null ? DR_PHASE_LABELS[drProgress.phase as keyof typeof DR_PHASE_LABELS] : null;
+  /* A run phase past the plan (scope/research/report) means the progress card
+   * owns the screen — a second waiting label under it is noise (owner, round
+   * 24): the card and this label stay strictly complementary. */
+  if (drProgress != null && phaseKey == null) {
+    return null;
+  }
   return (
     <span className="thinking-shimmer">{localize(phaseKey ?? 'com_ui_thinking_indicator')}</span>
   );

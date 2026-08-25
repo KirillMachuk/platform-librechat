@@ -90,10 +90,15 @@ const Reasoning = memo(({ reasoning, isLast }: ReasoningProps) => {
 
   const effectiveIsSubmitting = isLatestMessage ? isSubmitting : false;
 
+  /* One waiting word platform-wide (owner, round 24): while thoughts stream
+   * the header carries the same shimmering «Думаю…» the pre-stream label
+   * showed — the label reads as one element growing a card around itself —
+   * and settles into «Мысли» when the reply completes. */
+  const isStreamingThoughts = effectiveIsSubmitting && isLast;
   const label = useMemo(
     () =>
-      effectiveIsSubmitting && isLast ? localize('com_ui_thinking') : localize('com_ui_thoughts'),
-    [effectiveIsSubmitting, localize, isLast],
+      isStreamingThoughts ? localize('com_ui_thinking_indicator') : localize('com_ui_thoughts'),
+    [isStreamingThoughts, localize],
   );
 
   if (!reasoningText) {
@@ -108,6 +113,7 @@ const Reasoning = memo(({ reasoning, isLast }: ReasoningProps) => {
             isExpanded={isExpanded}
             onClick={handleClick}
             label={label}
+            shimmer={isStreamingThoughts}
             contentId={contentId}
           />
           <div
