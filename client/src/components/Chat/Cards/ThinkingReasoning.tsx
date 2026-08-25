@@ -115,12 +115,17 @@ export function ThinkingReasoning({
         type="button"
         className={streaming ? styles.trHeader : `${styles.trHeader} ${styles.isClickable}`}
         aria-expanded={isOpen}
+        aria-disabled={streaming || undefined}
         aria-controls={contentId}
         aria-label={ariaLabel}
         onClick={handleToggle}
       >
         {streaming ? (
-          <span className={`${styles.trLabel} thinking-shimmer-active`}>{shimmerLabel}</span>
+          /* No trLabel here: its `color` ties with the global shimmer's
+           * `color: transparent` at equal specificity, so which one wins
+           * would depend on CSS chunk order (К4 review) — the shimmer class
+           * owns the streaming label's color outright. */
+          <span className="thinking-shimmer-active">{shimmerLabel}</span>
         ) : (
           <span className={styles.trLabel}>
             <span className={styles.trVerb}>{doneVerb}</span>

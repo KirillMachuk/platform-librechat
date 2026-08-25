@@ -23,15 +23,20 @@ export default function useExpandCollapse(isExpanded: boolean): {
     }
   }, [isExpanded]);
 
-  const style = useMemo<CSSProperties>(
-    () => ({
+  const style = useMemo<CSSProperties>(() => {
+    /* The transition is an inline style, out of reach of any stylesheet's
+     * reduced-motion block — gate it here so every expand/collapse in the
+     * platform honors the preference (§6.17: reduced-motion гасит всё). */
+    const reduceMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+    return {
       display: 'grid',
       gridTemplateRows: isExpanded ? '1fr' : '0fr',
-      transition: EXPAND_TRANSITION,
+      transition: reduceMotion ? undefined : EXPAND_TRANSITION,
       opacity: isExpanded ? 1 : 0,
-    }),
-    [isExpanded],
-  );
+    };
+  }, [isExpanded]);
 
   return { style, ref };
 }

@@ -185,11 +185,15 @@ const ContentParts = memo(function ContentParts({
   if (fallbackScopeRef.current.messageId !== messageId) {
     /* A provisional id (trailing '_', see buildCreatedInitialResponse) swaps
      * to the server id at finalization — same message, so the expansion maps
-     * must survive even when the id change and the isSubmitting flip land in
-     * one batched render. Only a change AWAY from a non-provisional id while
-     * idle means a genuinely different message. */
+     * must survive that one transition, even when the id change and the
+     * isSubmitting flip land in one batched render. EVERY change away from a
+     * real server id is a different generation and wipes the maps — including
+     * «server id → new provisional» (regenerate / edit-and-resend reuses this
+     * instance while isSubmitting is already true; К4 review: a stale timing
+     * entry otherwise absorbs the previous reply's whole lifetime and the
+     * header reads «Думал 10 мин» for a 4-second thought). */
     const wasProvisional = fallbackScopeRef.current.messageId.endsWith('_');
-    if (!effectiveIsSubmitting && !wasProvisional) {
+    if (!wasProvisional) {
       fallbackScopeRef.current.scope += 1;
       toolGroupExpansionRef.current.clear();
       reasoningExpansionRef.current.clear();

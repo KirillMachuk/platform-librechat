@@ -3,8 +3,10 @@ const SENTENCE_END = /[.!?…]/;
 /**
  * Splits streaming reasoning text into display sentences for the thinking
  * preview (cards К4). Prefix-stable by construction: the split walks left to
- * right and a completed sentence never changes once emitted, so appending
- * text can only grow the tail or add rows — rendered rows never reflow.
+ * right, so appending text never rewrites any row but the LAST one (a
+ * sentence that happened to end exactly at the chunk boundary can still be
+ * extended by the next chunk — «весит 3.» + «14 кг» merge back, which is
+ * exactly right for decimals cut mid-number).
  * A sentence break is honored only at «end punctuation + whitespace» (or a
  * newline), so "3.14" and "т.д." stay whole.
  */

@@ -267,4 +267,55 @@ describe('ContentParts — thinking duration survives the finalization remount (
     );
     expect(screen.getByTestId('part-0')).toHaveAttribute('data-duration', 'undefined');
   });
+
+  it('regenerate wipes the old measurement — the new thought must not absorb the previous lifetime', () => {
+    /* К4 review: `ask()` flips the SAME ContentParts instance from the
+     * finished server id to a NEW provisional id with isSubmitting=true in
+     * one batched commit. Without a wipe the fresh stream's ticks reuse the
+     * stale `start` and «Думал 4 с» becomes «Думал 10 мин 3 с». */
+    const now = jest.spyOn(Date, 'now');
+    const { rerender } = render(
+      <ContentParts
+        {...baseProps}
+        messageId="user-msg-a_"
+        isSubmitting={true}
+        content={[think('first run')]}
+      />,
+    );
+    now.mockReturnValue(1_000);
+    screen.getByTestId('tick-0').click();
+    now.mockReturnValue(5_000);
+    screen.getByTestId('tick-0').click();
+    rerender(
+      <ContentParts
+        {...baseProps}
+        messageId="server-a"
+        isSubmitting={false}
+        content={[think('first run')]}
+      />,
+    );
+    expect(screen.getByTestId('part-0')).toHaveAttribute('data-duration', '4000');
+
+    rerender(
+      <ContentParts
+        {...baseProps}
+        messageId="user-msg-b_"
+        isSubmitting={true}
+        content={[think('second run')]}
+      />,
+    );
+    now.mockReturnValue(605_000);
+    screen.getByTestId('tick-0').click();
+    now.mockReturnValue(608_000);
+    screen.getByTestId('tick-0').click();
+    rerender(
+      <ContentParts
+        {...baseProps}
+        messageId="server-b"
+        isSubmitting={false}
+        content={[think('second run')]}
+      />,
+    );
+    expect(screen.getByTestId('part-0')).toHaveAttribute('data-duration', '3000');
+  });
 });
