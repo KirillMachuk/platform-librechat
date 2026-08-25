@@ -288,6 +288,22 @@ async function countOtherActiveDrJobs(streamId) {
  *  honest "не удалось сформировать отчёт" notice. A PDF of that notice is a useless file. */
 const PDF_ELIGIBLE_REASONS = new Set(['completed', 'budget', 'rounds']);
 
+/**
+ * The PDF is the copy that LEAVES the chat — forwarded, printed, attached to an email — so it
+ * is the one copy that has to carry the caveat itself. In the chat "gathering stopped early"
+ * is a field on the message, rendered beside the report by the client; a file has no such
+ * field, and a report that reads as finished when it is not is the exact failure this track
+ * exists to remove. Prepended, not appended: a caveat found after the conclusion is not one.
+ */
+const PDF_TRUNCATED_NOTICE =
+  '**Сбор материала остановился раньше, чем тема была исчерпана** — прогон достиг своего ' +
+  'лимита. Выводы ниже опираются только на то, что успели собрать.\n\n---\n\n';
+
+/** Prepends the caveat for a run whose gathering was cut short; otherwise returns as-is. */
+function withTruncationNotice(markdown, unfinished) {
+  return unfinished && markdown ? PDF_TRUNCATED_NOTICE + markdown : markdown;
+}
+
 /** Outcomes whose saved text IS a real model report, but with gathering cut short behind it
  *  — the only case where the frontend's "may be incomplete … results above are still usable"
  *  indicator tells the truth. Every other outcome is a COMPLETE message (a full report, a
@@ -327,14 +343,21 @@ function drKindForReason(finalizeReason) {
  * orphan files) and non-report outcomes. Must run BEFORE the response is saved so the
  * persisted message carries the file.
  */
-async function attachReportPdf({ req, responseMessage, reportMarkdown, title, finalizeReason }) {
+async function attachReportPdf({
+  req,
+  responseMessage,
+  reportMarkdown,
+  title,
+  finalizeReason,
+  unfinished,
+}) {
   if (req?.body?.isTemporary || !PDF_ELIGIBLE_REASONS.has(finalizeReason)) {
     logger.info(
       `[deepResearchRun] PDF skipped (${req?.body?.isTemporary ? 'temporary chat' : `reason=${finalizeReason}`})`,
     );
     return;
   }
-  const markdown = (reportMarkdown ?? '').trim();
+  const markdown = withTruncationNotice((reportMarkdown ?? '').trim(), unfinished);
   if (!markdown) {
     return;
   }
@@ -432,7 +455,18 @@ async function isDrFollowUp({ userId, conversationId, parentMessageId }) {
 /** Max DR-exchange messages walked when assembling the dialogue (bounds runaway edits). */
 const MAX_DR_CHAIN = 24;
 
-/** Coarse 0..1 progress for the live card (task #21) from a graph progress event. */
+/**
+ * Coarse 0..1 progress for the live card (task #21) from a graph progress event.
+ *
+ * `maxRounds` is the CONFIGURED round cap, and a run almost never reaches it — the budget
+ * gate stops first. Dividing by it made the bar a promise the run does not keep: with a cap
+ * of 6 and a run that affords 2, the bar crawled to 0.35 and then jumped to 0.92, and the
+ * plan checklist skipped two steps in one go on the way.
+ *
+ * So the curve approaches its ceiling instead of racing a denominator: each round adds less
+ * than the one before and the bar never stalls, never fills early, and needs no forecast of
+ * how many rounds the money will buy. It stays below the 0.92 the report step claims.
+ */
 function drProgressFraction(event, maxRounds, searchCount) {
   if (event.type === 'scope') {
     return 0.08;
@@ -440,7 +474,8 @@ function drProgressFraction(event, maxRounds, searchCount) {
   if (event.type === 'report') {
     return 0.92;
   }
-  return 0.1 + 0.75 * Math.min((event.round || searchCount) / maxRounds, 1);
+  const round = Math.max(0, event.round || searchCount || 0);
+  return 0.1 + 0.75 * (round / (round + 1.5));
 }
 
 /** RU "current action" line for the live card (task #21) from a graph progress event. */
@@ -1599,8 +1634,14 @@ async function runNewDeepResearch(params) {
       const maxRounds = Math.max(1, tier.maxOrchestratorCycles || 6);
       let searchCount = 0;
       const onProgress = (event) => {
+        // The sub-question is NOT logged. From round 1 on it is written by the supervisor
+        // after reading digests of untrusted pages, and on the legacy (non-sovereign) path
+        // model output arrives already de-masked — so the text can carry page-derived
+        // content or the user's own personal data straight into the stand's docker logs.
+        // Length only, the same discipline the engine already keeps in its own nodes.
         logger.info(
-          `[deepResearchRun] ${event.type}${event.subQuestion ? `: ${event.subQuestion}` : ''}`,
+          `[deepResearchRun] ${event.type}` +
+            `${event.subQuestion ? ` (sub-question ${event.subQuestion.length} chars)` : ''}`,
         );
         if (!streamId || !planGateEnabled) {
           return;
@@ -1836,6 +1877,7 @@ async function runNewDeepResearch(params) {
     reportMarkdown: finalReportText,
     title: deepResearchTitle,
     finalizeReason: result.finalizeReason,
+    unfinished,
   });
 
   // Save user + response BEFORE the final event (mirrors request.js:523-546 — avoids
@@ -1993,4 +2035,8 @@ module.exports = {
   isDrFollowUp,
   buildDrTurnContext,
   buildDeepResearchCollectedUsage,
+  /** Test-only: the live card's progress curve and the caveat the PDF carries on its own. */
+  drProgressFraction,
+  withTruncationNotice,
+  PDF_TRUNCATED_NOTICE,
 };

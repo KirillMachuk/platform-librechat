@@ -156,8 +156,22 @@ export async function composeReport(params: {
   /** Same tokens as `spentOnEmpty`, attributed to whichever model burnt them. */
   let spentOnEmptyByModel: DeepResearchUsageByModel = {};
 
+  /**
+   * Halving the CAP only shrinks the prompt while digests actually sit at the cap. They no
+   * longer do: COMPRESS is now told the cap is a ceiling and not a target, precisely so it
+   * writes less when there is less to write. With a cap of 8000 and real digests near 3000,
+   * the first two retries re-sent byte-identical evidence and differed only in the source
+   * list — two paid calls that could not fix an oversized prompt because they did not make
+   * it any smaller. So the ladder starts from the longest digest actually present.
+   *
+   * Attempt 0 still passes the tier's own cap, byte for byte as before: the first attempt
+   * must not silently start trimming evidence that fits.
+   */
+  const longestDigest = findings.reduce((longest, f) => Math.max(longest, f.digest.length), 0);
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const perDigestCap = Math.floor(digestCap / 2 ** attempt);
+    const shrinkFrom = Math.min(digestCap, longestDigest || digestCap);
+    const perDigestCap =
+      attempt === 0 ? digestCap : Math.max(1, Math.floor(shrinkFrom / 2 ** attempt));
     const perFindingSources = Math.max(1, Math.ceil(SOURCES_PER_FINDING / 2 ** attempt));
     try {
       const prompt = [
@@ -375,9 +389,9 @@ export function buildNoDataReport(params: {
  * reader assuming there is something behind the text when there is not.
  */
 export const SOURCELESS_NOTICE =
-  '\n\n---\n\n**В отчёте нет ссылок на источники.** В собранном материале не оказалось ни ' +
+  '**В отчёте нет ссылок на источники.** В собранном материале не оказалось ни ' +
   'одной ссылки, поэтому сверить утверждения с публикациями не получится. Если от этих данных ' +
-  'зависит решение, проверьте ключевые цифры отдельно.';
+  'зависит решение, проверьте ключевые цифры отдельно.\n\n---\n\n';
 
 /**
  * REPORT — the terminal node. Always runs before END (no path skips it) and
@@ -424,7 +438,14 @@ export function createReportNode(deps: ReportNodeDeps): DeepResearchNode {
           'report marked unverifiable',
       );
     }
-    const finalText = sourceless ? text + SOURCELESS_NOTICE : text;
+    /**
+     * The warning goes ABOVE the report, not below it. In the chat the report is shown
+     * through a card capped at 320 px — roughly the first ten lines — so a notice appended
+     * to the end of a report of tens of thousands of characters is something the reader only
+     * meets after expanding and scrolling to the bottom, which is exactly the reader who did
+     * not need warning. A caveat that arrives after the decision is not a caveat.
+     */
+    const finalText = sourceless ? SOURCELESS_NOTICE + text : text;
     return {
       finalReport: finalText,
       // A failed synthesis (`fellBack`) is an 'error' outcome — the honest notice, never

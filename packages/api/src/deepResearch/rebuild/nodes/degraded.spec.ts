@@ -348,11 +348,11 @@ describe('boundToolOutputs', () => {
   it('empty outputs do not become a truthy separator string', () => {
     // Joining ['', ''] produced '\n\n---\n\n', which is truthy, so COMPRESS was invoked —
     // and billed — on nothing but separators.
-    expect(boundToolOutputs(['', '   '])).toBe('');
+    expect(boundToolOutputs(['', '   '], 24_000)).toBe('');
   });
 
   it('keeps real outputs joined as before', () => {
-    expect(boundToolOutputs(['a', '', 'b'])).toBe('a\n\n---\n\nb');
+    expect(boundToolOutputs(['a', '', 'b'], 24_000)).toBe('a\n\n---\n\nb');
   });
 });
 
@@ -653,6 +653,24 @@ describe('a report nobody can check says so', () => {
       ],
     });
 
+  /**
+   * The notice sits ABOVE the report. In the chat the report is rendered through a card
+   * capped at 320 px — about ten lines — so a warning appended to the end of a report tens of
+   * thousands of characters long only reaches a reader who expanded it and scrolled to the
+   * bottom, which is not the reader who needed warning.
+   */
+  it('puts the notice ABOVE the report, where the card actually shows it', async () => {
+    const node = createReportNode({
+      reportModel: answering('# Отчёт\n\nВывод.'),
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+    });
+    const update = await node(stateWithSources([]), {} as RunnableConfig);
+    const report = String(update.finalReport ?? '');
+    expect(report.indexOf('нет ссылок на источники')).toBeLessThan(report.indexOf('# Отчёт'));
+  });
+
   it('appends the notice when not one finding carries a source', async () => {
     const node = createReportNode({
       reportModel: answering('# Отчёт\n\nВывод.'),
@@ -716,5 +734,75 @@ describe('a report nobody can check says so', () => {
     const update = await node(stateWithSources([]), {} as RunnableConfig);
     expect(update.finalizeReason).toBe('error');
     expect(update.finalReport).not.toContain('нет ссылок на источники');
+  });
+});
+
+describe('material that was gathered and then dropped says so', () => {
+  /**
+   * The founding defect of this whole change was silent: COMPRESS saw the first 24 000
+   * characters of a researcher's gathering and the rest vanished without a word. A tier can
+   * still be configured back into that state (raise `maxSearcherTurns`, leave the cap), so
+   * the drop must at least be visible in the logs.
+   */
+  it('warns with numbers when the COMPRESS cap cuts gathered material', () => {
+    boundToolOutputs(['а'.repeat(5_000), 'б'.repeat(5_000)], 4_000);
+    expect(warnings()).toContain('COMPRESS cap dropped');
+    expect(warnings()).toContain('this material was paid for');
+  });
+
+  it('stays quiet when everything fits', () => {
+    boundToolOutputs(['а'.repeat(100), 'б'.repeat(100)], 100_000);
+    expect(warnings()).not.toContain('COMPRESS cap dropped');
+  });
+});
+
+describe('the report retry ladder actually shrinks the prompt', () => {
+  /**
+   * Halving the CAP only shrinks anything while digests sit at the cap, and COMPRESS is now
+   * told the cap is a ceiling rather than a target. With a cap of 8000 and real digests near
+   * 3000 the first two retries re-sent byte-identical evidence: two paid calls that could not
+   * fix an oversized prompt because they did not make it smaller.
+   */
+  it('cuts the evidence on the retry even when digests sit well below the cap', async () => {
+    const prompts: string[] = [];
+    let call = 0;
+    const model = {
+      invoke: async (messages: BaseMessage[]) => {
+        prompts.push(messages.map((m) => String(m.content)).join('\n'));
+        call += 1;
+        if (call === 1) {
+          throw new Error('maximum context length exceeded');
+        }
+        return new AIMessage({
+          content: '# Отчёт\n\nВывод.',
+          response_metadata: { finish_reason: 'stop' },
+        });
+      },
+    } as unknown as BaseChatModel;
+
+    const node = createReportNode({
+      reportModel: model,
+      tier: { ...TIER, digestCap: 8_000 },
+      now: NOW,
+      nonce: NONCE,
+    });
+    await node(
+      stateWith({
+        messages: [new HumanMessage('вопрос')],
+        findings: [
+          {
+            round: 1,
+            subQuestion: 'в',
+            digest: 'ф'.repeat(3_000),
+            sources: ['https://a.example/x'],
+            tokens: 10,
+          },
+        ],
+      }),
+      {} as RunnableConfig,
+    );
+
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1].length).toBeLessThan(prompts[0].length);
   });
 });

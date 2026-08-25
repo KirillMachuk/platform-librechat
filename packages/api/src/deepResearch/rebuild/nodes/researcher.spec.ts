@@ -16,6 +16,7 @@ import {
   boundToolOutputs,
   compressResearch,
   maxGatheredChars,
+  researcherBudgetSplit,
   MAX_TOOL_OUTPUT_CHARS,
   MAX_TOOL_CALLS_PER_TURN,
   createResearcherNode,
@@ -808,5 +809,76 @@ describe('the budget gate estimates the next turn from the prompt it would send'
     });
 
     expect(shown).toHaveLength(1);
+  });
+});
+
+describe('researcherBudgetSplit — COMPRESS is inside the researcher budget', () => {
+  const tier = { compressInputChars: 160_000, maxSearcherTurns: 4 };
+
+  it('reserves what COMPRESS will cost before the loop is allowed to spend', () => {
+    const { loopCap } = researcherBudgetSplit(tier, 200_000);
+    // The reserve is the compress prompt at ~3 chars/token; the loop gets the rest.
+    expect(loopCap).toBe(200_000 - Math.ceil(160_000 / 3));
+    expect(loopCap).toBeLessThan(200_000);
+  });
+
+  it('never reserves more than half the researcher budget', () => {
+    // A reserve that starves the loop spends the round's money and has nothing to compress.
+    const { loopCap } = researcherBudgetSplit(tier, 10_000);
+    expect(loopCap).toBe(5_000);
+  });
+
+  it('caps the COMPRESS prompt at what the tier can actually gather', () => {
+    // A cap far above the tier's own ceiling reserves for material that cannot exist.
+    const { compressChars } = researcherBudgetSplit(
+      { compressInputChars: 400_000, maxSearcherTurns: 4 },
+      Infinity,
+    );
+    expect(compressChars).toBe(maxGatheredChars(4));
+  });
+
+  it('passes an unbudgeted run through untouched', () => {
+    expect(researcherBudgetSplit(tier, Infinity).loopCap).toBe(Infinity);
+  });
+
+  it('FAILS ON PRE-FIX CODE: the loop no longer gets the whole cap', () => {
+    // Pre-fix, `runResearchLoop` received `tokenCap` itself and COMPRESS was billed on top
+    // of it. If this ever equals the cap again, the unbudgeted half is back.
+    expect(researcherBudgetSplit(tier, 200_000).loopCap).not.toBe(200_000);
+  });
+});
+
+describe('the skipped-tool-call placeholder', () => {
+  it('is fenced like every other tool message — the model chose that name', async () => {
+    const shown: BaseMessage[][] = [];
+    const many = new AIMessageChunk({
+      content: '',
+      tool_calls: Array.from({ length: MAX_TOOL_CALLS_PER_TURN + 2 }, (_, i) => ({
+        name: 'web_search',
+        args: { query: `q${i}` },
+        id: `c${i}`,
+        type: 'tool_call' as const,
+      })),
+    });
+
+    await runResearchLoop({
+      caller: recordingCaller(shown, [many, finalChunk('готово')]),
+      tools: [okTool],
+      system: 's',
+      question: 'q',
+      nonce: NONCE,
+      tokenCap: Infinity,
+      maxTurns: 2,
+      toolResultWindow: 0,
+    });
+
+    const skipped = shown[shown.length - 1]
+      .filter((m) => m.getType() === 'tool')
+      .map((m) => (typeof m.content === 'string' ? m.content : ''))
+      .filter((text) => text.includes('пропущен'));
+    expect(skipped).not.toHaveLength(0);
+    for (const text of skipped) {
+      expect(text).toContain(`<UNTRUSTED ${NONCE}>`);
+    }
   });
 });

@@ -24,22 +24,13 @@ import {
   mergeUsageByModel,
   configuredModelName,
   sanitizeErrorForUser,
+  estimateTokensOfLength,
   estimateContextTokens,
   stripCitationControlChars,
 } from '../shared';
 import { buildResearcherPrompt, buildCompressPrompt } from '../prompts';
 
 const ZERO_USAGE: DeepResearchTokenUsage = { input: 0, output: 0, total: 0 };
-/**
- * Fallback cap on raw tool text fed into COMPRESS, used only when a caller passes none.
- * The real cap is `tier.compressInputChars` — this constant is what the cap USED to be, and
- * it was the tightest point of the whole pipeline: a researcher gathers up to
- * `maxSearcherTurns x MAX_TOOL_CALLS_PER_TURN x MAX_TOOL_OUTPUT_CHARS` characters (160 000
- * on the balanced tier), and `.slice` keeps the FIRST 24 000 of them. Turn one alone
- * overflows that, so turns two and up were researched, paid for, re-sent in every later
- * prompt — and then dropped before they could reach the digest, let alone the report.
- */
-const COMPRESS_INPUT_CHAR_CAP = 24_000;
 /**
  * Replaces a tool result that has fallen out of the researcher's context window. The
  * `tool_call` record itself stays, so the model still knows the call happened and what it
@@ -346,8 +337,15 @@ export async function runResearchLoop(params: {
         // dangling tool_call_id), so skipped calls get a placeholder, not silence.
         const skipped = `Вызов инструмента "${call.name}" пропущен: лимит ${MAX_TOOL_CALLS_PER_TURN} вызовов за один ход.`;
         turnToolMessages.push(messages.length);
+        // Fenced like every other tool message: `call.name` is written by a model that has
+        // just read untrusted pages, so this string is model-derived text and must not sit
+        // outside the fence its siblings sit inside.
         messages.push(
-          new ToolMessage({ content: skipped, tool_call_id: call.id ?? '', name: call.name }),
+          new ToolMessage({
+            content: fenceUntrusted(skipped, nonce),
+            tool_call_id: call.id ?? '',
+            name: call.name,
+          }),
         );
         continue;
       }
@@ -386,8 +384,12 @@ export async function runResearchLoop(params: {
   // The window is the whole point of the change and is otherwise invisible: without this
   // line the stand cannot answer "did clearing run, and how much did it take out?".
   if (window > 0) {
+    // A window at least as wide as the turn cap can never clear anything, and "0 cleared"
+    // reads as "there was nothing to clear" rather than "this knob is doing nothing".
+    const inert =
+      window >= Math.max(1, maxTurns) ? ' (window >= maxSearcherTurns: never fires)' : '';
     logger.info(
-      `[deepResearch:researcher] tool-result window ${window}: ${clearedResults} result(s) ` +
+      `[deepResearch:researcher] tool-result window ${window}${inert}: ${clearedResults} result(s) ` +
         `cleared from the prompt, ${toolOutputs.length} kept for the digest`,
     );
   }
@@ -443,16 +445,41 @@ export function maxGatheredChars(maxSearcherTurns: number): number {
   return calls * MAX_TOOL_OUTPUT_CHARS + (calls - 1) * TOOL_OUTPUT_SEPARATOR.length;
 }
 
-export function boundToolOutputs(toolOutputs: string[], cap = COMPRESS_INPUT_CHAR_CAP): string {
+/**
+ * Joins the raw tool outputs into the single bounded block COMPRESS sees — also the exact
+ * text source URLs are pulled from, so citations match the compressed material rather than
+ * trailing material beyond the cap (L6).
+ *
+ * `cap` is required, and deliberately has no default. It used to default to a fixed 24 000
+ * characters, which was the tightest point of the whole pipeline: a researcher gathers up to
+ * `maxSearcherTurns x MAX_TOOL_CALLS_PER_TURN x MAX_TOOL_OUTPUT_CHARS` characters — 160 000
+ * on the balanced tier — and `.slice` keeps the FIRST 24 000 of them. Turn one alone
+ * overflows that, so turns two and up were researched, paid for, re-sent in every later
+ * prompt, and then dropped before they could reach the digest, let alone the report. A
+ * default 6.9x below any shipped tier is a trap, not a fallback.
+ */
+export function boundToolOutputs(toolOutputs: string[], cap: number): string {
   /**
    * Empty outputs are dropped BEFORE the join: `['', '']` joined to `'\n\n---\n\n'` — a
    * TRUTHY string — so `compressResearch`'s "empty input → empty digest" shortcut never
    * fired and the compress model was invoked, and billed, on nothing but separators.
    */
-  return toolOutputs
-    .filter((output) => output.trim().length > 0)
-    .join(TOOL_OUTPUT_SEPARATOR)
-    .slice(0, Math.max(1, cap));
+  const kept = toolOutputs.filter((output) => output.trim().length > 0);
+  const bounded = kept.join(TOOL_OUTPUT_SEPARATOR).slice(0, Math.max(1, cap));
+  const gathered =
+    kept.reduce((total, output) => total + output.length, 0) +
+    Math.max(0, kept.length - 1) * TOOL_OUTPUT_SEPARATOR.length;
+  if (gathered > bounded.length) {
+    // Dropping material that was already searched for, fetched and paid for is the defect
+    // this cap exists around, not a routine event. It is silent by nature — the digest that
+    // follows looks exactly the same — so it says so out loud, in numbers, never content.
+    logger.warn(
+      `[deepResearch:researcher] COMPRESS cap dropped ${gathered - bounded.length} of ` +
+        `${gathered} gathered chars (cap ${cap}); raise compressInputChars or lower ` +
+        'maxSearcherTurns — this material was paid for and will not reach the report',
+    );
+  }
+  return bounded;
 }
 
 /** Compresses the bounded gathered material into a digest. Empty input → empty digest. */
@@ -506,17 +533,18 @@ export function isContentUrl(url: string): boolean {
  *  (C1), capped at MAX_SOURCES. */
 export function extractSources(gathered: string): string[] {
   const urls = new Set<string>();
-  const matches = gathered.match(SOURCE_URL);
-  if (matches) {
-    for (const match of matches) {
-      const url = match.replace(/[.,;:]+$/, '');
-      if (!isContentUrl(url)) {
-        continue;
-      }
-      urls.add(url);
-      if (urls.size >= MAX_SOURCES) {
-        break;
-      }
+  // `match` would materialise EVERY url in the block before the cap is applied, and the block
+  // is now the researcher's whole gathering rather than its first 24 000 characters. Walking
+  // the regex stops at the cap instead.
+  const scanner = new RegExp(SOURCE_URL.source, 'g');
+  for (let hit = scanner.exec(gathered); hit !== null; hit = scanner.exec(gathered)) {
+    const url = hit[0].replace(/[.,;:]+$/, '');
+    if (!isContentUrl(url)) {
+      continue;
+    }
+    urls.add(url);
+    if (urls.size >= MAX_SOURCES) {
+      break;
     }
   }
   return Array.from(urls);
@@ -533,6 +561,33 @@ export const FAILED_DIGEST_PREFIX = '(ошибка исследования';
 export function hasResearchMaterial(finding: DeepResearchFinding): boolean {
   const digest = finding.digest.trim();
   return digest.length > 0 && digest !== EMPTY_DIGEST && !digest.startsWith(FAILED_DIGEST_PREFIX);
+}
+
+/**
+ * COMPRESS is the biggest single call a researcher makes, and it used to sit outside
+ * every budget: `tokenCap` was handed to the tool loop only, and the compress call that
+ * follows was made unconditionally. That was tolerable while its input was capped at
+ * 24 000 characters (~8k tokens); at a tier's real gathering it is ~53k on balanced and
+ * ~67k on deep — more than the loop itself — so the unbudgeted half had become the
+ * larger half. An admin raising `maxSearcherTurns` to 6 could put a round 11% over the
+ * whole run's budget with nothing to stop it: the new engine has no hard token abort,
+ * only the wall-clock watchdog.
+ *
+ * So the loop is given what is left AFTER reserving what compress will cost. The reserve
+ * is the worst case (the cap, or the tier's own gathering ceiling if that is smaller),
+ * and it is never more than half the researcher's budget — a reserve that starves the
+ * loop would spend the round's money and have nothing to compress.
+ */
+export function researcherBudgetSplit(
+  tier: Pick<DeepResearchTier, 'compressInputChars' | 'maxSearcherTurns'>,
+  tokenCap: number,
+): { loopCap: number; compressChars: number } {
+  const compressChars = Math.min(tier.compressInputChars, maxGatheredChars(tier.maxSearcherTurns));
+  if (!Number.isFinite(tokenCap)) {
+    return { loopCap: tokenCap, compressChars };
+  }
+  const compressReserve = Math.min(estimateTokensOfLength(compressChars), tokenCap / 2);
+  return { loopCap: Math.max(0, tokenCap - compressReserve), compressChars };
 }
 
 export interface ResearchOneResult {
@@ -562,6 +617,7 @@ export async function researchOne(params: {
 }): Promise<ResearchOneResult> {
   const { caller, deps, subQuestion, round, jurisdiction, tokenCap, signal, deadlineMs } = params;
   try {
+    const { loopCap, compressChars } = researcherBudgetSplit(deps.tier, tokenCap);
     const {
       toolOutputs,
       usage: loopUsage,
@@ -580,7 +636,7 @@ export async function researchOne(params: {
       callerModel: configuredModelName(deps.model),
       maxTurns: deps.tier.maxSearcherTurns,
       toolResultWindow: deps.tier.toolResultWindow,
-      tokenCap,
+      tokenCap: loopCap,
       nonce: deps.nonce,
       signal,
       deadlineMs,
@@ -588,7 +644,7 @@ export async function researchOne(params: {
       // without this the time arm would silently never fire (tests pass a fake).
       clock: deps.clock ?? Date.now,
     });
-    const gathered = boundToolOutputs(toolOutputs, deps.tier.compressInputChars);
+    const gathered = boundToolOutputs(toolOutputs, compressChars);
     const {
       digest,
       usage: compressUsage,
