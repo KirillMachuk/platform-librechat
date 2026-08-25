@@ -1769,9 +1769,10 @@ export const deepResearchSchema = z.object({
    */
   planGate: z.boolean().default(false),
   /**
-   * Seconds the plan card waits before auto-starting the research (client-side timer on
-   * the Start button). 0 → no autostart (manual Start only). Ignored when `planGate` is
-   * off. Default 60.
+   * Autostart switch for the plan card since the cards track (25.08): 0 → no autostart
+   * (manual Start only); ANY other value → autostart on with the client's FIXED 30-second
+   * pie — the number no longer sets the duration (the numeric type and range stay for
+   * config back-compat). Ignored when `planGate` is off. Default 60 (= on).
    */
   planAutoStartSec: z.number().int().min(0).max(600).default(60),
   modes: z

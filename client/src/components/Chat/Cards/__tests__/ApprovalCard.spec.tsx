@@ -95,6 +95,33 @@ describe('ApprovalCard — questions variant', () => {
     expect(onApprove).toHaveBeenCalledWith({ answers: { q1: 'Первый', q2: 'В сейфе' } });
   });
 
+  it('Enter on a focused radio activates nothing card-wide (no stale submit) — xhigh review', () => {
+    const { onApprove } = renderQuestions();
+    fireEvent.click(screen.getByRole('radio', { name: /Первый/ }));
+    act(() => {
+      jest.advanceTimersByTime(320);
+    });
+    fireEvent.click(screen.getByRole('radio', { name: /Там/ }));
+    // all answered, last question: Enter while focus sits on a RADIO must not approve
+    const radio = screen.getByRole('radio', { name: /Тут/ });
+    fireEvent.keyDown(radio, { key: 'Enter', bubbles: true });
+    expect(onApprove).not.toHaveBeenCalled();
+  });
+
+  it('marks the card static for CSS when showActions=false', () => {
+    render(
+      <ApprovalCard
+        variant="questions"
+        strings={strings}
+        title="Вопросы"
+        approveLabel="Продолжить"
+        questions={QUESTIONS}
+        showActions={false}
+      />,
+    );
+    expect(screen.getByTestId('approval-card')).toHaveAttribute('data-static', 'true');
+  });
+
   it('the secondary button reports without answers', () => {
     const { onSecondary } = renderQuestions();
     fireEvent.click(screen.getByRole('button', { name: 'Пропустить' }));
