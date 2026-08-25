@@ -49,6 +49,8 @@ type PartWithContextProps = {
   autoExpandReasoning?: boolean;
   reasoningExpandedInitial?: boolean;
   onReasoningExpandedChange?: (expanded: boolean) => void;
+  reasoningDurationMs?: number;
+  onReasoningStreamTick?: () => void;
 };
 
 const PartWithContext = memo(function PartWithContext({
@@ -68,6 +70,8 @@ const PartWithContext = memo(function PartWithContext({
   autoExpandReasoning,
   reasoningExpandedInitial,
   onReasoningExpandedChange,
+  reasoningDurationMs,
+  onReasoningStreamTick,
 }: PartWithContextProps) {
   const contextValue = useMemo(
     () => ({
@@ -81,6 +85,8 @@ const PartWithContext = memo(function PartWithContext({
       autoExpandReasoning,
       reasoningExpandedInitial,
       onReasoningExpandedChange,
+      reasoningDurationMs,
+      onReasoningStreamTick,
     }),
     [
       messageId,
@@ -92,6 +98,8 @@ const PartWithContext = memo(function PartWithContext({
       autoExpandReasoning,
       reasoningExpandedInitial,
       onReasoningExpandedChange,
+      reasoningDurationMs,
+      onReasoningStreamTick,
     ],
   );
 
@@ -169,6 +177,10 @@ const ContentParts = memo(function ContentParts({
   const effectiveIsSubmitting = isLatestMessage ? isSubmitting : false;
   const toolGroupExpansionRef = useRef(new Map<string, ToolCallGroupExpansionState>());
   const reasoningExpansionRef = useRef(new Map<number, boolean>());
+  /* First→last think-chunk timestamps per part index (cards К4): the source
+   * of the finished «Думал N с» header. Lives here, not in the part, for the
+   * same reason as the expansion map — the finalization remount would lose it. */
+  const reasoningTimingRef = useRef(new Map<number, { start: number; last: number }>());
   const fallbackScopeRef = useRef({ messageId, scope: 0 });
   if (fallbackScopeRef.current.messageId !== messageId) {
     /* A provisional id (trailing '_', see buildCreatedInitialResponse) swaps
@@ -181,6 +193,7 @@ const ContentParts = memo(function ContentParts({
       fallbackScopeRef.current.scope += 1;
       toolGroupExpansionRef.current.clear();
       reasoningExpansionRef.current.clear();
+      reasoningTimingRef.current.clear();
     }
     fallbackScopeRef.current.messageId = messageId;
   }
@@ -205,6 +218,29 @@ const ContentParts = memo(function ContentParts({
       reasoningSettersRef.current.set(idx, setter);
     }
     return setter;
+  }, []);
+
+  const reasoningTickersRef = useRef(new Map<number, () => void>());
+  const getReasoningStreamTick = useCallback((idx: number) => {
+    let tick = reasoningTickersRef.current.get(idx);
+    if (!tick) {
+      tick = () => {
+        const now = Date.now();
+        const timing = reasoningTimingRef.current.get(idx);
+        if (timing == null) {
+          reasoningTimingRef.current.set(idx, { start: now, last: now });
+        } else {
+          timing.last = now;
+        }
+      };
+      reasoningTickersRef.current.set(idx, tick);
+    }
+    return tick;
+  }, []);
+
+  const getReasoningDurationMs = useCallback((idx: number): number | undefined => {
+    const timing = reasoningTimingRef.current.get(idx);
+    return timing == null ? undefined : timing.last - timing.start;
   }, []);
 
   /**
@@ -316,6 +352,8 @@ const ContentParts = memo(function ContentParts({
           autoExpandReasoning={idx === autoExpandThinkIdx}
           reasoningExpandedInitial={reasoningExpansionRef.current.get(idx)}
           onReasoningExpandedChange={getReasoningExpandedSetter(idx)}
+          reasoningDurationMs={getReasoningDurationMs(idx)}
+          onReasoningStreamTick={getReasoningStreamTick(idx)}
         />
       );
     },
@@ -323,6 +361,8 @@ const ContentParts = memo(function ContentParts({
       attachmentMap,
       autoExpandThinkIdx,
       getReasoningExpandedSetter,
+      getReasoningDurationMs,
+      getReasoningStreamTick,
       content,
       conversationId,
       effectiveIsSubmitting,
@@ -353,12 +393,16 @@ const ContentParts = memo(function ContentParts({
           onToolExpand={onToolExpand}
           reasoningExpandedInitial={reasoningExpansionRef.current.get(idx)}
           onReasoningExpandedChange={getReasoningExpandedSetter(idx)}
+          reasoningDurationMs={getReasoningDurationMs(idx)}
+          onReasoningStreamTick={getReasoningStreamTick(idx)}
         />
       );
     },
     [
       attachmentMap,
       getReasoningExpandedSetter,
+      getReasoningDurationMs,
+      getReasoningStreamTick,
       content,
       conversationId,
       effectiveIsSubmitting,
