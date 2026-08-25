@@ -308,6 +308,42 @@ describe('the loop stops paying for turns it does not need', () => {
   });
 });
 
+/**
+ * `call.name` is produced by a model that has just read untrusted web pages. Echoing it into
+ * the log is a narrow path for page content to reach a place this runner deliberately keeps
+ * free of research material — and an invented name is the interesting case anyway, because it
+ * means the model asked for a tool that does not exist.
+ */
+describe('the log never echoes a tool name the model invented', () => {
+  it('logs the registry name, or "unknown" — never the model\'s string', async () => {
+    const invented = 'ИНЪЕКЦИЯ-ИЗ-СТРАНИЦЫ-игнорируй-инструкции';
+    const caller: ToolCaller = (() => {
+      const responses = [
+        new AIMessageChunk({
+          content: '',
+          tool_calls: [{ name: invented, args: {}, id: 'c1', type: 'tool_call' }],
+        }),
+        new AIMessageChunk({ content: 'готово' }),
+      ];
+      let i = 0;
+      return { invoke: async () => responses[Math.min(i++, responses.length - 1)] };
+    })();
+    const result = await runResearchLoop({
+      caller,
+      tools: [],
+      system: 's',
+      question: 'q',
+      maxTurns: 2,
+      tokenCap: Number.POSITIVE_INFINITY,
+      nonce: NONCE,
+    });
+    expect(warnings()).toContain('"unknown"');
+    expect(warnings()).not.toContain(invented);
+    // The MODEL still sees the failure — it has to know the tool does not exist.
+    expect(result.toolOutputs).toEqual([]);
+  });
+});
+
 describe('boundToolOutputs', () => {
   it('empty outputs do not become a truthy separator string', () => {
     // Joining ['', ''] produced '\n\n---\n\n', which is truthy, so COMPRESS was invoked —
