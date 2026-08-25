@@ -14,6 +14,7 @@ import type { DeepResearchTier } from '../config';
 import type { DeepResearchNode } from '../graph';
 import {
   readAnswer,
+  estimateTokens,
   mergeUsage,
   toErrorMessage,
   fenceUntrusted,
@@ -229,9 +230,28 @@ export async function runResearchLoop(params: {
      *
      * The estimate is the LAST turn's cost, not the mean: each turn re-sends the whole
      * conversation, so cost grows turn over turn and the previous turn is the closest
-     * available floor. Before the first turn there is nothing to measure and the turn always
-     * runs — which is what keeps a small cap from refusing to research at all.
+     * available floor.
+     *
+     * Turn 0 has no previous turn, and the first version of this gate therefore let it run
+     * unconditionally. Two independent reviews measured what that costs: with the budget
+     * already spent, `perResearcherCap` is 0 (or a handful of tokens — the supervisor
+     * dispatches a round on ANY remaining headroom, so a round sent at 287 900 of a 288 000
+     * gate gives each of three researchers ~33), and the researcher then paid for a model
+     * call whose tool calls the backstop immediately discarded. The very waste this gate was
+     * written to stop, moved from turn N to turn 0, three times per round.
+     *
+     * So turn 0 runs unless the cap cannot cover even the prompt about to be SENT. That is
+     * arithmetic, not a guess: a call whose input alone exceeds the cap cannot come back
+     * inside it. Anything above that floor still runs — a small cap must research a little,
+     * not refuse.
      */
+    if (turn === 0 && Number.isFinite(tokenCap) && estimateTokens(system + question) >= tokenCap) {
+      logger.info(
+        `[deepResearch:researcher] not starting: cap ${Math.round(tokenCap)} cannot cover the ` +
+          `opening prompt (~${estimateTokens(system + question)}), the call would be billed for nothing`,
+      );
+      break;
+    }
     if (turn > 0 && lastTurnCost > 0 && usage.total + lastTurnCost >= tokenCap) {
       logger.info(
         `[deepResearch:researcher] not starting turn ${turn + 1}: spent ${Math.round(usage.total)}, ` +
@@ -296,8 +316,13 @@ export async function runResearchLoop(params: {
         // The failure TEXT is deliberately not logged: on the legacy (non-sovereign) path it
         // can echo the user's raw query back, and this runner takes care elsewhere never to
         // put research content in the logs.
+        // The NAME is printed from the tool registry, not from `call.name`: the latter is
+        // produced by a model that has just read untrusted web pages, so echoing it into the
+        // log is a (narrow) path for page content to reach a place this runner keeps clean.
+        // An unknown name is the interesting case anyway — it means the model invented one.
+        const loggedName = toolsByName.has(call.name) ? call.name : 'unknown';
         logger.warn(
-          `[deepResearch:researcher] tool "${call.name}" returned no data ` +
+          `[deepResearch:researcher] tool "${loggedName}" returned no data ` +
             `(${outcome.text.length} chars of failure text, not logged)`,
         );
       }

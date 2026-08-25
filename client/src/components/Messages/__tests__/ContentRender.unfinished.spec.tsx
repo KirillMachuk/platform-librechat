@@ -15,12 +15,23 @@ import ContentRender from '~/components/Messages/ContentRender';
  * A truncated report therefore looked exactly as finished as a complete one, and the only
  * trace of the truncation stayed in the database.
  */
-/** The real ru string for `com_ui_unfinished_message`, so the tests assert what is SEEN. */
+/**
+ * The real ru string, so the tests assert what is SEEN rather than a key.
+ *
+ * The note has its OWN key now. The shared `com_ui_unfinished_message` describes three
+ * possible causes — "ещё обрабатывался, был остановлен или достиг лимита" — and under a Deep
+ * Research report two of them cannot happen: the message is final, and a user Stop produces a
+ * different message with a different drKind. Saying three things when one is known is the
+ * same fault this series exists to remove, pointed the other way.
+ */
 const UNFINISHED_TEXT =
-  'Этот ответ может быть неполным — он ещё обрабатывался, был остановлен или достиг лимита.';
+  'Сбор материала для этого отчёта прервался раньше времени: исследование успело охватить не всё, что планировало. Сам отчёт написан по тому, что удалось собрать, — им можно пользоваться.';
 
 const mockResolveDrReport = jest.fn(() => null as { title: string } | null);
+// The heavy cards are stubbed, but TruncatedNote and isTruncatedDrReport come from the REAL
+// module: they are what is under test here, and a stub would only assert itself.
 jest.mock('~/components/Chat/Messages/DeepResearch', () => ({
+  ...jest.requireActual('~/components/Chat/Messages/DeepResearch'),
   __esModule: true,
   PlanCard: () => <div />,
   ActionChip: () => <div />,
@@ -57,7 +68,8 @@ jest.mock('~/components/Chat/Messages/Content/Files', () => ({
 }));
 
 jest.mock('~/hooks', () => ({
-  useLocalize: () => (key: string) => (key === 'com_ui_unfinished_message' ? UNFINISHED_TEXT : key),
+  useLocalize: () => (key: string) =>
+    key === 'com_ui_dr_report_truncated' ? UNFINISHED_TEXT : key,
   useAttachments: () => ({ attachments: undefined, searchResults: undefined }),
   useContentMetadata: () => ({ hasParallelContent: false }),
   useMessageActions: () => ({

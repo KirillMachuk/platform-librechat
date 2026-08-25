@@ -10,7 +10,9 @@ import {
   ReportCard,
   ActionChip,
   RunningSlot,
+  TruncatedNote,
   resolveDrReport,
+  isTruncatedDrReport,
 } from '~/components/Chat/Messages/DeepResearch';
 import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import { useAttachments, useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
@@ -155,55 +157,13 @@ const ContentRender = memo(function ContentRender({
   }, [msg, isSubmitting]);
 
   /**
-   * "The answer may be incomplete" — for a Deep Research report whose GATHERING was cut
-   * short by its token budget or its round cap.
-   *
-   * The flag was set and never shown here. It is rendered by exactly one component,
-   * MessageContent, which serves LEGACY plain-text messages; every message carrying
-   * structured `content` parts renders through this one instead — and that includes every
-   * DR report. So a report built from a fraction of the intended research looked exactly as
-   * finished as a complete one, and the only trace stayed in the database. The memo
-   * comparator above has been comparing `unfinished` all along: it watched a value nothing
-   * displayed.
-   *
-   * Deliberately narrowed to `drKind === 'report'`, and that narrowing is load-bearing.
-   * `unfinished` is ALSO set on an ordinary chat answer the user stopped
-   * (`request.js` sets it from `signal.aborted` and persists it), and this component renders
-   * ordinary messages too. Showing the hint for every message would put a red alert box
-   * under every answer anyone ever stopped — a platform-wide change, on one of the most
-   * common actions there is, arriving as a side effect of a Deep Research fix. The runner
-   * only ever sets `unfinished` for the 'budget'/'rounds' outcomes, and both of those are
-   * stamped `drKind: 'report'`, so this predicate loses no case it was meant to catch.
-   *
-   * Suppressed while the message is still streaming: a message in flight is legitimately
-   * incomplete, and the hint would otherwise fire on every run.
+   * The note now lives in one place and is gated by one exported predicate — see
+   * `TruncatedNote`. It used to be inlined here and nowhere else, so the share page kept
+   * showing the same report as a red «Не удалось выполнить запрос».
    */
   const unfinishedNotice = useMemo(
-    () =>
-      msg &&
-      !isSubmitting &&
-      msg.unfinished === true &&
-      msg.drKind === 'report' &&
-      msg.isCreatedByUser !== true ? (
-        /**
-         * A plain note, NOT `UnfinishedMessage`.
-         *
-         * That component wraps the same sentence in `ErrorMessage`, which renders an
-         * `role="alert"` red box and prefixes the text with `com_error_generic_prefix` —
-         * "Не удалось выполнить запрос. Сообщение об ошибке: …". Under a Deep Research report
-         * that is simply false: the report is a real synthesis that was written from less
-         * material than intended, and announcing it as a failed request is worse than saying
-         * nothing at all. The wording itself (`com_ui_unfinished_message`) is right; only the
-         * error framing around it was wrong.
-         */
-        <div
-          className="mt-2 border-l-2 border-border-medium py-0.5 pl-3 text-sm text-text-secondary"
-          data-testid="dr-unfinished-notice"
-        >
-          {localize('com_ui_unfinished_message')}
-        </div>
-      ) : null,
-    [isSubmitting, localize, msg],
+    () => (!isSubmitting && isTruncatedDrReport(msg) ? <TruncatedNote /> : null),
+    [isSubmitting, msg],
   );
 
   if (!msg) {

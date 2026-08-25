@@ -33,6 +33,12 @@ const NONCE = 'test-nonce';
 const TIER = resolveDeepResearchTier();
 
 const warnings = (): string => (logger.warn as jest.Mock).mock.calls.flat().map(String).join('\n');
+/** Both levels: the budget gate reports at info, degradations at warn. */
+const logs = (): string =>
+  [logger.warn, logger.info]
+    .flatMap((fn) => (fn as jest.Mock).mock.calls.flat())
+    .map(String)
+    .join('\n');
 
 /** A model that answers `text` and reports how it stopped. */
 const modelSaying = (text: string, finishReason = 'stop'): BaseChatModel =>
@@ -158,22 +164,46 @@ describe('a turn the budget cannot pay for is never started', () => {
     expect(warnings()).not.toContain('token cap reached');
   });
 
-  it('always runs the first turn, even with the budget already exhausted', async () => {
+  /**
+   * The turn-0 hole, found by two independent reviews after the first version of this gate
+   * shipped. Its test asserted only that ONE call happened and never that material came back
+   * — so it stayed green while the researcher paid for a call whose tool calls the backstop
+   * discarded. Both halves are asserted now.
+   */
+  it('does not pay for an opening call the cap cannot cover', async () => {
     const sink = { calls: 0 };
-    await runResearchLoop({
+    const result = await runResearchLoop({
       caller: callerCosting(10_000, sink),
       tools: [costlyTool],
       system: 's',
       question: 'q',
       maxTurns: 5,
-      // ZERO, not a small number: `perResearcherCap` is max(0, remaining)/batch, so a run
-      // whose budget is already spent hands its researchers exactly this. Nothing is known
-      // about a turn's cost before one has run, and refusing at zero would mean such a
-      // researcher returns no material at all rather than one turn's worth.
+      // ZERO is reachable: `perResearcherCap` is max(0, remaining)/batch, and the supervisor
+      // dispatches a round on ANY remaining headroom — a round sent just under the gate hands
+      // each of three researchers a handful of tokens, or none.
       tokenCap: 0,
       nonce: NONCE,
     });
-    expect(sink.calls).toBe(1);
+    expect(sink.calls).toBe(0);
+    expect(result.toolOutputs).toEqual([]);
+    expect(logs()).toContain('cannot cover the opening prompt');
+  });
+
+  it('still researches on a cap that is small but can pay for the opening prompt', async () => {
+    const sink = { calls: 0 };
+    const result = await runResearchLoop({
+      caller: callerCosting(100, sink),
+      tools: [costlyTool],
+      system: 's'.repeat(300),
+      question: 'q',
+      // ~101 estimated tokens of opening prompt against a cap of 5 000: the call is worth
+      // making. A small cap must research a little, not refuse.
+      maxTurns: 5,
+      tokenCap: 5_000,
+      nonce: NONCE,
+    });
+    expect(sink.calls).toBeGreaterThan(0);
+    expect(result.toolOutputs.length).toBeGreaterThan(0);
   });
 
   /**
@@ -258,20 +288,59 @@ describe('the loop stops paying for turns it does not need', () => {
     const caller: ToolCaller = {
       invoke: async () =>
         new AIMessageChunk({
-          content: '',
+          // A large answer, so this turn's estimated usage lands over the cap AFTER the call —
+          // which is the case the backstop exists for. A cap too small to pay for the opening
+          // prompt is declined before the call and never reaches this line.
+          content: 'x'.repeat(3_000),
           tool_calls: [{ name: 'web_search', args: { query: 'q' }, id: 'c1', type: 'tool_call' }],
         }),
     };
     await runResearchLoop({
       caller,
       tools: [],
-      system: 'с'.repeat(400),
+      system: 's',
       question: 'q',
       maxTurns: 3,
-      tokenCap: 1,
+      tokenCap: 100,
       nonce: NONCE,
     });
     expect(warnings()).toContain('token cap reached');
+  });
+});
+
+/**
+ * `call.name` is produced by a model that has just read untrusted web pages. Echoing it into
+ * the log is a narrow path for page content to reach a place this runner deliberately keeps
+ * free of research material — and an invented name is the interesting case anyway, because it
+ * means the model asked for a tool that does not exist.
+ */
+describe('the log never echoes a tool name the model invented', () => {
+  it('logs the registry name, or "unknown" — never the model\'s string', async () => {
+    const invented = 'ИНЪЕКЦИЯ-ИЗ-СТРАНИЦЫ-игнорируй-инструкции';
+    const caller: ToolCaller = (() => {
+      const responses = [
+        new AIMessageChunk({
+          content: '',
+          tool_calls: [{ name: invented, args: {}, id: 'c1', type: 'tool_call' }],
+        }),
+        new AIMessageChunk({ content: 'готово' }),
+      ];
+      let i = 0;
+      return { invoke: async () => responses[Math.min(i++, responses.length - 1)] };
+    })();
+    const result = await runResearchLoop({
+      caller,
+      tools: [],
+      system: 's',
+      question: 'q',
+      maxTurns: 2,
+      tokenCap: Number.POSITIVE_INFINITY,
+      nonce: NONCE,
+    });
+    expect(warnings()).toContain('"unknown"');
+    expect(warnings()).not.toContain(invented);
+    // The MODEL still sees the failure — it has to know the tool does not exist.
+    expect(result.toolOutputs).toEqual([]);
   });
 });
 
@@ -592,7 +661,7 @@ describe('a report nobody can check says so', () => {
       nonce: NONCE,
     });
     const update = await node(stateWithSources([]), {} as RunnableConfig);
-    expect(update.finalReport).toContain('нет источников');
+    expect(update.finalReport).toContain('нет ссылок на источники');
     expect(warnings()).toContain('no sources in any of');
   });
 
@@ -604,7 +673,7 @@ describe('a report nobody can check says so', () => {
       nonce: NONCE,
     });
     const update = await node(stateWithSources(['https://example.com/a']), {} as RunnableConfig);
-    expect(update.finalReport).not.toContain('нет источников');
+    expect(update.finalReport).not.toContain('нет ссылок на источники');
   });
 
   /**
@@ -633,7 +702,7 @@ describe('a report nobody can check says so', () => {
       ],
     });
     const update = await node(mixed, {} as RunnableConfig);
-    expect(update.finalReport).not.toContain('нет источников');
+    expect(update.finalReport).not.toContain('нет ссылок на источники');
   });
 
   /** The fallback text is already an admission of failure; it has no claims to source. */
@@ -646,6 +715,6 @@ describe('a report nobody can check says so', () => {
     });
     const update = await node(stateWithSources([]), {} as RunnableConfig);
     expect(update.finalizeReason).toBe('error');
-    expect(update.finalReport).not.toContain('нет источников');
+    expect(update.finalReport).not.toContain('нет ссылок на источники');
   });
 });

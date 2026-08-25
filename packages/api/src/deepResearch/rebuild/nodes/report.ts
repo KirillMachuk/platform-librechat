@@ -357,6 +357,14 @@ export function buildNoDataReport(params: {
 /**
  * Appended to a report whose findings carry NO source at all.
  *
+ * The wording deliberately says "no LINKS", not "nothing to check". `sources` is filled by a
+ * URL regex over the gathered text (`extractSources`), so research over the user's OWN
+ * attached documents produces an empty list EVERY time — the source there is a file the
+ * reader already has. The first version of this notice told those readers their report could
+ * not be verified and advised re-running, which would return exactly the same empty list: a
+ * claim the data does not support, plus advice that cannot work. That is the defect this
+ * whole series exists to remove, reintroduced by its own fix.
+ *
  * Measured on the stand 24.08: one run in eight produced 11 639 characters of confident
  * analysis with zero links in it. `hasResearchMaterial` passed it, because that filter asks
  * whether a DIGEST exists and knows nothing about sources — so a report nobody can check
@@ -367,9 +375,9 @@ export function buildNoDataReport(params: {
  * reader assuming there is something behind the text when there is not.
  */
 export const SOURCELESS_NOTICE =
-  '\n\n---\n\n**У этого отчёта нет источников.** Материал собран, но ни одной ссылки в нём ' +
-  'не оказалось — проверить утверждения по первоисточнику нечем. Если от этих данных зависит ' +
-  'решение, повторите исследование или сузьте запрос.';
+  '\n\n---\n\n**В отчёте нет ссылок на источники.** В собранном материале не оказалось ни ' +
+  'одной ссылки, поэтому сверить утверждения с публикациями не получится. Если от этих данных ' +
+  'зависит решение, проверьте ключевые цифры отдельно.';
 
 /**
  * REPORT — the terminal node. Always runs before END (no path skips it) and

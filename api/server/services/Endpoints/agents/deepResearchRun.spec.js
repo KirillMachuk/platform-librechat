@@ -2254,3 +2254,60 @@ describe('buildDeepResearchCollectedUsage — a run is billed per ANSWERING mode
     expect(note).not.toMatch(/ESTIMATE/);
   });
 });
+
+/**
+ * `file_search` reports its failures by RETURNING a sentence, not by throwing — and the
+ * research loop decides "this produced nothing" from a throw. So a dead RAG service used to
+ * flow into the gathered material, get compressed into a digest, pass `hasResearchMaterial`
+ * and come back as a confident report with a PDF built out of "The document search service is
+ * temporarily unavailable." #411 closed exactly this hole for `web_search`, which throws.
+ */
+describe('failOnToolReportedError — a tool that REPORTS failure now fails', () => {
+  const { failOnToolReportedError, FILE_SEARCH_FAILURE_MARKERS } = require('./deepResearchRun');
+
+  const toolReturning = (value) => ({ name: 'file_search', invoke: async () => value });
+
+  it('throws on every failure sentence file_search can return', async () => {
+    expect(FILE_SEARCH_FAILURE_MARKERS.length).toBeGreaterThan(0);
+    for (const marker of FILE_SEARCH_FAILURE_MARKERS) {
+      const tool = failOnToolReportedError(toolReturning(marker), FILE_SEARCH_FAILURE_MARKERS);
+      await expect(tool.invoke({}, {})).rejects.toThrow(marker.slice(0, 24));
+    }
+  });
+
+  it('also sees the sentence inside a ToolMessage-shaped result', async () => {
+    const marker = FILE_SEARCH_FAILURE_MARKERS[0];
+    const tool = failOnToolReportedError(
+      toolReturning({ content: marker }),
+      FILE_SEARCH_FAILURE_MARKERS,
+    );
+    await expect(tool.invoke({}, {})).rejects.toThrow();
+  });
+
+  it('passes real search results through untouched', async () => {
+    const hit = 'File: Договор.pdf\nСтороны договорились…';
+    const tool = failOnToolReportedError(toolReturning(hit), FILE_SEARCH_FAILURE_MARKERS);
+    await expect(tool.invoke({}, {})).resolves.toBe(hit);
+  });
+
+  it('leaves a tool without invoke alone rather than throwing', () => {
+    expect(failOnToolReportedError(null, FILE_SEARCH_FAILURE_MARKERS)).toBeNull();
+  });
+
+  /**
+   * The sentences live in another file. If someone rewords them there, this wrapper silently
+   * stops matching and the hole reopens with every test still green — so the drift is asserted
+   * rather than hoped for.
+   */
+  it('the sentences it matches still exist in fileSearch.js', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const source = fs.readFileSync(
+      path.join(__dirname, '../../../../app/clients/tools/util/fileSearch.js'),
+      'utf8',
+    );
+    for (const marker of FILE_SEARCH_FAILURE_MARKERS) {
+      expect(source).toContain(marker);
+    }
+  });
+});
