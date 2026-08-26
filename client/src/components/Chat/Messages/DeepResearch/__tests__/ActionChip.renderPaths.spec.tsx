@@ -1,14 +1,10 @@
 import React from 'react';
 import { RecoilRoot } from 'recoil';
 import { render, screen, cleanup } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  QueryKeys,
-  ContentTypes,
-  DR_START_MARKER,
-  DR_CANCEL_MARKER,
-} from 'librechat-data-provider';
+import { ContentTypes, DR_START_MARKER, DR_CANCEL_MARKER } from 'librechat-data-provider';
 import type { TMessage } from 'librechat-data-provider';
+import type { MessagesViewContextValue } from '~/Providers/MessagesViewContext';
+import { MessagesViewContext } from '~/Providers/MessagesViewContext';
 import MultiMessage from '~/components/Chat/Messages/MultiMessage';
 
 /**
@@ -28,8 +24,11 @@ import MultiMessage from '~/components/Chat/Messages/MultiMessage';
  * was always green — it is what made the defect invisible.
  */
 
-const STARTED = 'Исследование запущено';
-const CANCELLED = 'Исследование отменено';
+/* Asserting on the KEYS, not on the Russian text: a renamed key must break this
+ * test, while a reworded translation must not. The mock localize below is what
+ * makes the key the visible string. */
+const STARTED = 'com_ui_deep_research_started';
+const CANCELLED = 'com_ui_deep_research_cancelled';
 
 jest.mock('~/components/Chat/Messages/DeepResearch', () => ({
   ...jest.requireActual('~/components/Chat/Messages/DeepResearch'),
@@ -91,15 +90,7 @@ const CONVO_ID = 'c1';
 const mockEdit = { on: false };
 
 jest.mock('~/hooks', () => ({
-  useLocalize: () => (key: string) => {
-    if (key === 'com_ui_deep_research_started') {
-      return 'Исследование запущено';
-    }
-    if (key === 'com_ui_deep_research_cancelled') {
-      return 'Исследование отменено';
-    }
-    return key;
-  },
+  useLocalize: () => (key: string) => key,
   useAttachments: () => ({ attachments: undefined, searchResults: undefined }),
   useContentMetadata: () => ({ hasParallelContent: false }),
   useMessageProcess: () => ({
@@ -139,26 +130,38 @@ function command(partial: Partial<TMessage> = {}): TMessage {
   } as unknown as TMessage;
 }
 
-/** @param cachedParent seeds the messages cache the optimistic-command rule reads. */
-function renderTree(msg: TMessage, cachedParent?: Partial<TMessage>) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  if (cachedParent) {
-    queryClient.setQueryData([QueryKeys.messages, CONVO_ID], [
-      { messageId: 'p1', ...cachedParent },
-    ] as TMessage[]);
-  }
+/**
+ * @param parent seeds the message list the optimistic-command rule reads. It is the
+ * SAME list the view renders from (`getMessages`), which is what lets the share page
+ * reuse this rule without a chat cache.
+ */
+function renderTree(msg: TMessage, parent?: Partial<TMessage>) {
+  const messages = parent ? ([{ messageId: 'p1', ...parent }] as TMessage[]) : [];
+  const ctx = {
+    conversation: null,
+    conversationId: CONVO_ID,
+    ask: () => {},
+    regenerate: () => {},
+    handleContinue: () => {},
+    latestMessageId: 'm1',
+    latestMessageDepth: 0,
+    isSubmitting: false,
+    abortScroll: false,
+    setAbortScroll: () => {},
+    index: 0,
+    getMessages: () => messages,
+    setMessages: () => {},
+  } as unknown as MessagesViewContextValue;
   return render(
     <RecoilRoot>
-      <QueryClientProvider client={queryClient}>
+      <MessagesViewContext.Provider value={ctx}>
         <MultiMessage
           messageId={null}
           messagesTree={[msg]}
           currentEditId={null}
           setCurrentEditId={jest.fn()}
         />
-      </QueryClientProvider>
+      </MessagesViewContext.Provider>
     </RecoilRoot>,
   );
 }
@@ -235,9 +238,22 @@ describe('Deep Research command chip — both user-message render paths', () => 
     expect(screen.queryByText(DR_CANCEL_MARKER)).not.toBeInTheDocument();
   });
 
+  /**
+   * The caption follows the SAME field that admitted the chip. It used to be
+   * re-derived from the message text, so a persisted `drKind: 'cancel'` whose text
+   * was anything else announced «запущено» — a label asserting a state its own data
+   * denies. Unreachable today (the runner stamps drKind only alongside the marker),
+   * which is exactly why it needs a test rather than a reader's trust.
+   */
+  it('takes the caption from drKind, not from the text', () => {
+    renderTree(command({ drKind: 'cancel', text: 'что-то совершенно другое' }));
+    expect(screen.getByText(CANCELLED)).toBeInTheDocument();
+    expect(screen.queryByText(STARTED)).not.toBeInTheDocument();
+  });
+
   it('renders the OPTIMISTIC command (no drKind yet) under a plan parent', () => {
     // The live window between the click and the server save: the message has no
-    // drKind, so the chip leans on the cached parent's drKind provenance.
+    // drKind, so the chip leans on the parent's drKind provenance.
     renderTree(command(), { drKind: 'plan', isCreatedByUser: false });
     expect(screen.getByText(STARTED)).toBeInTheDocument();
   });

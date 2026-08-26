@@ -34,7 +34,6 @@ jest.mock('~/components/Chat/Messages/DeepResearch', () => ({
   ...jest.requireActual('~/components/Chat/Messages/DeepResearch'),
   __esModule: true,
   PlanCard: () => <div />,
-  ActionChip: () => <div />,
   RunningSlot: () => <div />,
   ReportCard: ({ children }: { children?: React.ReactNode }) => (
     <div data-testid="report-card">{children}</div>
