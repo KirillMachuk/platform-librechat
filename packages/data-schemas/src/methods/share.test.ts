@@ -5,6 +5,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import type { SchemaWithMeiliMethods } from '~/models/plugins/mongoMeili';
 import type * as t from '~/types';
 import { createShareMethods, type ShareMethods } from './share';
+import realMessageSchema from '~/schema/message';
 
 describe('Share Methods', () => {
   let mongoServer: MongoMemoryServer;
@@ -1531,6 +1532,10 @@ describe('Share Methods', () => {
         user: userId,
         messages: messages.map((m) => m._id),
       });
+
+      /* This file declares its own trimmed message schema, so without this the test
+       * could pass on a field the REAL schema no longer has. */
+      expect(realMessageSchema.path('drKind')).toBeDefined();
 
       const result = await shareMethods.getSharedMessages(shareId);
 
