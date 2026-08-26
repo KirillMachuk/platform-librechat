@@ -2,9 +2,9 @@ import { nanoid } from 'nanoid';
 import mongoose from 'mongoose';
 import { Constants } from 'librechat-data-provider';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { createShareMethods, type ShareMethods } from './share';
 import type { SchemaWithMeiliMethods } from '~/models/plugins/mongoMeili';
 import type * as t from '~/types';
+import { createShareMethods, type ShareMethods } from './share';
 
 describe('Share Methods', () => {
   let mongoServer: MongoMemoryServer;
@@ -50,6 +50,7 @@ describe('Share Methods', () => {
         manualSkills: [String],
         alwaysAppliedSkills: [String],
         parentMessageId: String,
+        drKind: String,
         attachments: [mongoose.Schema.Types.Mixed],
         files: [mongoose.Schema.Types.Mixed],
         content: [mongoose.Schema.Types.Mixed],
@@ -1478,6 +1479,65 @@ describe('Share Methods', () => {
       // Both messages should have the same anonymized conversationId
       expect(result?.messages[0].conversationId).toBe(result?.conversationId);
       expect(result?.messages[1].conversationId).toBe(result?.conversationId);
+    });
+
+    /**
+     * `drKind` is how every Deep Research surface decides what to draw — the command
+     * chip, the plan/report cards, the truncated-report notice. The public projection
+     * is a whitelist, so a field missing from it is not "absent data" but a silently
+     * different rendering: the shared conversation showed the raw «Начать исследование»
+     * and answered a truncated report with a red error banner. The client cannot detect
+     * this — it just sees undefined — so the assertion belongs here, at the projection.
+     */
+    test('should carry drKind through to the shared projection', async () => {
+      const { Constants } = await import('librechat-data-provider');
+      const userId = new mongoose.Types.ObjectId().toString();
+      const conversationId = `conv_${nanoid()}`;
+      const shareId = `share_${nanoid()}`;
+      const planId = `msg_${nanoid()}`;
+
+      const messages = await Message.create([
+        {
+          messageId: planId,
+          conversationId,
+          user: userId,
+          text: 'План исследования',
+          isCreatedByUser: false,
+          parentMessageId: Constants.NO_PARENT,
+          drKind: 'plan',
+        },
+        {
+          messageId: `msg_${nanoid()}`,
+          conversationId,
+          user: userId,
+          text: 'Начать исследование',
+          isCreatedByUser: true,
+          parentMessageId: planId,
+          drKind: 'start',
+        },
+        {
+          messageId: `msg_${nanoid()}`,
+          conversationId,
+          user: userId,
+          text: 'Обычный вопрос',
+          isCreatedByUser: true,
+          parentMessageId: planId,
+        },
+      ]);
+
+      await SharedLink.create({
+        shareId,
+        conversationId,
+        user: userId,
+        messages: messages.map((m) => m._id),
+      });
+
+      const result = await shareMethods.getSharedMessages(shareId);
+
+      expect(result?.messages).toHaveLength(3);
+      expect(result?.messages[0].drKind).toBe('plan');
+      expect(result?.messages[1].drKind).toBe('start');
+      expect(result?.messages[2].drKind).toBeUndefined();
     });
 
     test('should handle NO_PARENT constant correctly', async () => {

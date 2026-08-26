@@ -9,8 +9,8 @@ import {
   buildAskAnswersMessage,
 } from 'librechat-data-provider';
 import type { TMessage } from 'librechat-data-provider';
-import type { MessagesViewContextValue } from '~/Providers/MessagesViewContext';
-import { MessagesViewContext } from '~/Providers/MessagesViewContext';
+import { ShareMessagesProvider } from '~/components/Share/ShareMessagesProvider';
+import { USER_BUBBLE_CLASS } from '~/components/Chat/Messages/ui/turn';
 import Message from '~/components/Share/Message';
 
 /**
@@ -76,27 +76,17 @@ function userMessage(partial: Partial<TMessage> = {}): TMessage {
   } as unknown as TMessage;
 }
 
-/** @param parent the shared list's parent turn — the provenance the rules read. */
+/**
+ * Goes through the REAL `ShareMessagesProvider`, not a hand-built context: the wiring
+ * from the shared message list to `getMessages()` is part of what is under test here.
+ *
+ * @param parent the shared list's parent turn — the provenance the rules read.
+ */
 function renderShared(msg: TMessage, parent?: Partial<TMessage>) {
   const messages = [{ messageId: PARENT_ID, isCreatedByUser: false, ...parent }, msg] as TMessage[];
-  const ctx = {
-    conversation: null,
-    conversationId: undefined,
-    ask: () => {},
-    regenerate: () => {},
-    handleContinue: () => {},
-    latestMessageId: msg.messageId,
-    latestMessageDepth: msg.depth,
-    isSubmitting: false,
-    abortScroll: false,
-    setAbortScroll: () => {},
-    index: 0,
-    getMessages: () => messages,
-    setMessages: () => {},
-  } as unknown as MessagesViewContextValue;
   return render(
     <RecoilRoot>
-      <MessagesViewContext.Provider value={ctx}>
+      <ShareMessagesProvider messages={messages}>
         <Message
           message={msg}
           siblingIdx={0}
@@ -105,16 +95,35 @@ function renderShared(msg: TMessage, parent?: Partial<TMessage>) {
           currentEditId={null}
           setCurrentEditId={jest.fn()}
         />
-      </MessagesViewContext.Provider>
+      </ShareMessagesProvider>
     </RecoilRoot>,
   );
 }
 
+/**
+ * The chip is its own pill; leaving it inside the grey user bubble draws a pill in a pill.
+ * The bubble class carries arbitrary-value Tailwind tokens that are not valid CSS
+ * selectors, so it is matched by its one distinctive plain token — and `bubbleGuard`
+ * asserts that token is still part of the class, so a rename cannot leave this
+ * measuring nothing.
+ */
+const BUBBLE_MARKER = 'bg-bubble';
+
+function bubbleGuard(): void {
+  expect(USER_BUBBLE_CLASS).toContain(BUBBLE_MARKER);
+}
+
+function bubbleCount(container: HTMLElement): number {
+  bubbleGuard();
+  return container.querySelectorAll(`[class*="${BUBBLE_MARKER}"]`).length;
+}
+
 describe('Share view — command and answers chips', () => {
-  it('renders the DR start chip instead of the raw marker', () => {
-    renderShared(userMessage({ drKind: 'start' }), { drKind: 'plan' });
+  it('renders the DR start chip instead of the raw marker, outside the user bubble', () => {
+    const { container } = renderShared(userMessage({ drKind: 'start' }), { drKind: 'plan' });
     expect(screen.getByText(STARTED)).toBeInTheDocument();
     expect(screen.queryByText(DR_START_MARKER)).not.toBeInTheDocument();
+    expect(bubbleCount(container)).toBe(0);
   });
 
   it('renders the DR cancel chip', () => {
@@ -139,10 +148,11 @@ describe('Share view — command and answers chips', () => {
     expect(screen.getByTestId('share-body')).toHaveTextContent(DR_START_MARKER);
   });
 
-  it('leaves an ordinary shared user message alone', () => {
-    renderShared(userMessage({ text: 'обычный вопрос' }), { drKind: 'plan' });
+  it('leaves an ordinary shared user message alone, still in its bubble', () => {
+    const { container } = renderShared(userMessage({ text: 'обычный вопрос' }), { drKind: 'plan' });
     expect(screen.getByTestId('share-body')).toHaveTextContent('обычный вопрос');
     expect(screen.queryByText(STARTED)).not.toBeInTheDocument();
+    expect(bubbleCount(container)).toBe(1);
   });
 
   it('keeps the assistant turn on its normal content path', () => {

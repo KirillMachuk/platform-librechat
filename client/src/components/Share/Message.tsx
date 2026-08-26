@@ -34,7 +34,9 @@ export default function Message(props: TMessageProps) {
    * the raw «Начать исследование» where the chat shows a pill, and the same for the
    * ask_user answers. Both hooks read the parent through `getMessages()`, which
    * `ShareMessagesProvider` supplies here, so the provenance rule is the one rule —
-   * nothing about it is re-implemented for this page.
+   * nothing about it is re-implemented for this page. (`MessageParts` is a fourth, but
+   * it is reachable only for the `assistants` endpoint, where neither DR nor ask_user
+   * runs.)
    */
   const askChip = useAskUserChip(message);
   const actionChip = useDrActionChip(message);

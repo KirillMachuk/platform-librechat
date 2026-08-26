@@ -17,10 +17,7 @@ export default function ActionChip({ cancelled }: { cancelled: boolean }) {
   const localize = useLocalize();
   const Icon = cancelled ? X : Play;
   return (
-    <div
-      data-testid="dr-action-chip"
-      className="inline-flex items-center gap-1.5 rounded-full bg-surface-secondary px-3 py-1 text-xs text-text-secondary"
-    >
+    <div className="inline-flex items-center gap-1.5 rounded-full bg-surface-secondary px-3 py-1 text-xs text-text-secondary">
       <Icon className="icon-xs" aria-hidden="true" />
       <span>
         {cancelled

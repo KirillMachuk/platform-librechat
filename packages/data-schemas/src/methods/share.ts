@@ -161,6 +161,12 @@ function anonymizeMessages(messages: t.IMessage[], newConvoId: string): t.Shared
       finish_reason: message.finish_reason,
       ...(message.manualSkills && { manualSkills: message.manualSkills }),
       ...(message.alwaysAppliedSkills && { alwaysAppliedSkills: message.alwaysAppliedSkills }),
+      /* Render provenance, not content: the Deep Research surfaces key EVERY decision on
+       * this field — the command chip, the plan/report cards, the truncated-report notice.
+       * Dropping it from the public projection is why a shared conversation still showed
+       * the raw «Начать исследование» and met a truncated report with a red error banner.
+       * It is a fixed six-value enum and carries nothing about the user. */
+      ...(message.drKind && { drKind: message.drKind }),
       ...(files && { files }),
       ...(attachments && { attachments }),
     };
