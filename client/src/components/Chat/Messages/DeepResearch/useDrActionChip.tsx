@@ -1,7 +1,7 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { QueryKeys, isDrStartCommand, isDrCancelCommand } from 'librechat-data-provider';
+import { isDrStartCommand, isDrCancelCommand } from 'librechat-data-provider';
 import type { TMessage } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
+import { useOptionalMessagesOperations } from '~/Providers/MessagesViewContext';
 import ActionChip from './ActionChip';
 
 /**
@@ -19,24 +19,30 @@ import ActionChip from './ActionChip';
  * Provenance rule, unchanged from ContentRender: the persisted `drKind` decides,
  * and the command TEXT counts only for the optimistic window before the server
  * save lands — and only under a drKind-verified plan/clarify parent. Prose that
- * merely reads like the marker stays prose.
+ * merely reads like the marker stays prose. `drKind` also picks the LABEL: the
+ * text decides only in the optimistic window, where it is the very thing that
+ * admitted the chip, so the caption can never assert a state the data denies.
+ *
+ * The parent comes from `getMessages()` — the same list the surrounding view
+ * renders — rather than a hand-built react-query key. That is what makes the
+ * hook work unchanged on the share page (ShareMessagesProvider supplies the
+ * shared messages) and outside any provider (the stub returns undefined).
  */
 export default function useDrActionChip(msg: TMessage | undefined | null): ReactNode | null {
-  const queryClient = useQueryClient();
+  const { getMessages } = useOptionalMessagesOperations();
   if (msg?.isCreatedByUser !== true) {
     return null;
   }
   const text = msg.text ?? '';
   if (msg.drKind === 'start' || msg.drKind === 'cancel') {
-    return <ActionChip text={text} />;
+    return <ActionChip cancelled={msg.drKind === 'cancel'} />;
   }
   if (!isDrStartCommand(text) && !isDrCancelCommand(text)) {
     return null;
   }
-  const cached = queryClient.getQueryData<TMessage[]>([QueryKeys.messages, msg.conversationId]);
-  const parent = cached?.find((m) => m.messageId === msg.parentMessageId);
+  const parent = getMessages()?.find((m) => m.messageId === msg.parentMessageId);
   if (parent?.drKind !== 'plan' && parent?.drKind !== 'clarify') {
     return null;
   }
-  return <ActionChip text={text} />;
+  return <ActionChip cancelled={isDrCancelCommand(text)} />;
 }

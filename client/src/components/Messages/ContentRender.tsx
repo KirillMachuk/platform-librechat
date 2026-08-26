@@ -77,6 +77,9 @@ function areContentRenderPropsEqual(prev: ContentRenderProps, next: ContentRende
 
   return (
     prevMsg.messageId === nextMsg.messageId &&
+    /* Both chip rules resolve their parent by this id; a late id swap during the
+     * SSE lifecycle must therefore reach the render. */
+    prevMsg.parentMessageId === nextMsg.parentMessageId &&
     prevMsg.text === nextMsg.text &&
     prevMsg.error === nextMsg.error &&
     prevMsg.unfinished === nextMsg.unfinished &&

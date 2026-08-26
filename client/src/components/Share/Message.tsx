@@ -1,4 +1,6 @@
 import type { TMessageProps } from '~/common';
+import useDrActionChip from '~/components/Chat/Messages/DeepResearch/useDrActionChip';
+import useAskUserChip from '~/components/Chat/Messages/DeepResearch/useAskUserChip';
 import MinimalHoverButtons from '~/components/Chat/Messages/MinimalHoverButtons';
 import MessageContent from '~/components/Chat/Messages/Content/MessageContent';
 import SearchContent from '~/components/Chat/Messages/Content/SearchContent';
@@ -26,6 +28,17 @@ export default function Message(props: TMessageProps) {
     messageId: message?.messageId,
     attachments: message?.attachments,
   });
+  /**
+   * The share view is a THIRD renderer of user messages, next to MessageRender and
+   * ContentRender, and it had neither chip: a shared Deep Research conversation showed
+   * the raw «Начать исследование» where the chat shows a pill, and the same for the
+   * ask_user answers. Both hooks read the parent through `getMessages()`, which
+   * `ShareMessagesProvider` supplies here, so the provenance rule is the one rule —
+   * nothing about it is re-implemented for this page.
+   */
+  const askChip = useAskUserChip(message);
+  const actionChip = useDrActionChip(message);
+  const chip = askChip ?? actionChip;
 
   if (!message) {
     return null;
@@ -61,7 +74,7 @@ export default function Message(props: TMessageProps) {
                     isUserTurn && 'items-end',
                   )}
                 >
-                  <div className={cn(isUserTurn && USER_BUBBLE_CLASS)}>
+                  <div className={cn(isUserTurn && chip == null && USER_BUBBLE_CLASS)}>
                     <MessageContext.Provider
                       value={{
                         messageId,
@@ -71,28 +84,29 @@ export default function Message(props: TMessageProps) {
                         isLatestMessage: false, // No concept of latest message in share view
                       }}
                     >
-                      {message.content ? (
-                        <SearchContent
-                          message={message}
-                          attachments={attachments}
-                          searchResults={searchResults}
-                        />
-                      ) : (
-                        <MessageContent
-                          edit={false}
-                          error={error}
-                          isLast={false}
-                          ask={() => {}}
-                          text={text || ''}
-                          message={message}
-                          isSubmitting={false}
-                          enterEdit={() => ({})}
-                          unfinished={unfinished}
-                          siblingIdx={siblingIdx ?? 0}
-                          isCreatedByUser={isCreatedByUser}
-                          setSiblingIdx={setSiblingIdx ?? (() => ({}))}
-                        />
-                      )}
+                      {chip ??
+                        (message.content ? (
+                          <SearchContent
+                            message={message}
+                            attachments={attachments}
+                            searchResults={searchResults}
+                          />
+                        ) : (
+                          <MessageContent
+                            edit={false}
+                            error={error}
+                            isLast={false}
+                            ask={() => {}}
+                            text={text || ''}
+                            message={message}
+                            isSubmitting={false}
+                            enterEdit={() => ({})}
+                            unfinished={unfinished}
+                            siblingIdx={siblingIdx ?? 0}
+                            isCreatedByUser={isCreatedByUser}
+                            setSiblingIdx={setSiblingIdx ?? (() => ({}))}
+                          />
+                        ))}
                     </MessageContext.Provider>
                   </div>
                 </div>
