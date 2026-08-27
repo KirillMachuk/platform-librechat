@@ -1747,8 +1747,13 @@ async function runNewDeepResearch(params) {
            * final, and must not restart anything. */
           if (reportStartedMs === 0) {
             reportStartedMs = Date.now();
-            reportTicker = setInterval(emitReportProgress, REPORT_TICK_MS);
-            reportTicker.unref?.();
+            /* No card listening (legacy gate-off run) → no heartbeat. `emitDrProgress`
+             * would swallow every tick anyway; a timer whose only job is to be ignored
+             * for four minutes is not worth arming. */
+            if (streamId && planGateEnabled) {
+              reportTicker = setInterval(emitReportProgress, REPORT_TICK_MS);
+              reportTicker.unref?.();
+            }
           }
           emitReportProgress();
           return;

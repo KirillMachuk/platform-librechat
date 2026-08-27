@@ -1512,6 +1512,31 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     expect(last.progress).toBeGreaterThan(0.92);
   });
 
+  it('arms no heartbeat on a legacy run with no card listening', async () => {
+    // The gate lives in the emit, so a timer here would tick for four minutes into a
+    // function that discards every tick. Observable only as a pending timer.
+    mockStartSovereignSession.mockResolvedValue(null);
+    jest.useFakeTimers();
+    let armed = -1;
+    try {
+      mockRunDeepResearch.mockImplementationOnce(async (params) => {
+        const before = jest.getTimerCount();
+        params.onProgress({ type: 'report' });
+        armed = jest.getTimerCount() - before;
+        return {
+          finalReport: 'Отчёт',
+          finalizeReason: 'completed',
+          usage: { input: 1, output: 1, total: 2 },
+          findings: [],
+        };
+      });
+      await runNewDeepResearch(baseParams('изучи CRM')); // no planGate
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(armed).toBe(0);
+  });
+
   it('never asks the engine for token streaming', async () => {
     // Not an omission — a measured dead end. Every DR node model is built
     // `streaming: false` on purpose (see the non-streaming test above), so the token
