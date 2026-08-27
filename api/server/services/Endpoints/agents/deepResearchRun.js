@@ -490,6 +490,53 @@ function drProgressAction(event) {
 }
 
 /**
+ * Report-phase progress, derived from HOW MUCH of the report is already written.
+ *
+ * The REPORT node is one long completion — on a deep run it holds the screen for three to
+ * four minutes, and the graph emits no state update while it runs, so the card had nothing
+ * to say: the bar sat still and the action line kept naming the last sub-question the
+ * supervisor had asked for, long after research was over. The engine streams that node's
+ * tokens (`runDeepResearch({ onToken })`); this turns their accumulated LENGTH into a
+ * fraction, so the card moves exactly when the model writes and stops when it stops.
+ *
+ * Asymptotic on purpose. Nothing here knows how long the report will be, so a curve that
+ * could reach its ceiling on its own would simply freeze again one number higher; this one
+ * starts at the 0.92 the report step already claimed and approaches 0.99 without arriving.
+ * Only the run's end fills the bar.
+ */
+const REPORT_HALFWAY_CHARS = 8_000;
+/** Ceiling the curve approaches; only the run's end fills the bar. */
+const REPORT_CEILING = 0.99;
+function drReportFraction(chars) {
+  const written = Math.max(0, chars);
+  /* The floor is the report step's own number, read from the curve above rather than
+   * repeated here — two copies of 0.92 would drift the day one of them is tuned. */
+  const floor = drProgressFraction({ type: 'report' }, 0, 0);
+  return floor + (REPORT_CEILING - floor) * (written / (written + REPORT_HALFWAY_CHARS));
+}
+
+/** Below this the size is noise — a line that flickers between "0,1" and "0,3" reads worse
+ *  than no number at all, and the first tokens arrive in a burst. */
+const REPORT_SIZE_FLOOR_CHARS = 1_000;
+
+/**
+ * RU action line for the report phase, carrying the size once there is one worth naming.
+ *
+ * A count, never the text. See the `onToken` handler for why the report's own words must
+ * not travel this channel.
+ */
+function drReportAction(chars) {
+  if (chars < REPORT_SIZE_FLOOR_CHARS) {
+    return 'Формирует отчёт';
+  }
+  return `Формирует отчёт — ${(chars / 1000).toFixed(1).replace('.', ',')} тыс. знаков`;
+}
+
+/** How often the report phase may refresh the card. Tokens arrive by the hundred per
+ *  second; every one of them is an SSE event and a job-store write if left ungated. */
+const REPORT_PROGRESS_MIN_INTERVAL_MS = 1_500;
+
+/**
  * Renders the collected DR exchange (top-down) + the current unsaved turn text as a
  * labeled transcript for the plan decision / research input. START/CANCEL command
  * messages carry no research content and are skipped.
@@ -1636,6 +1683,50 @@ async function runNewDeepResearch(params) {
         planGateEnabled && isPlanMessage(turn.parentText) ? extractPlanSteps(turn.parentText) : [];
       const maxRounds = Math.max(1, tier.maxOrchestratorCycles || 6);
       let searchCount = 0;
+      /**
+       * One `dr_progress` snapshot. The client REPLACES its snapshot wholesale
+       * (`setDrProgress` in useResumableSSE), so every emit has to carry the checklist and
+       * the search count too — a partial one would blank the card's steps.
+       */
+      const emitDrProgress = (phase, action, progress) => {
+        if (!streamId || !planGateEnabled) {
+          return;
+        }
+        Promise.resolve(
+          GenerationJobManager.emitChunk(streamId, {
+            event: 'dr_progress',
+            data: { phase, steps: planSteps, action, searches: searchCount, progress },
+          }),
+        ).catch(() => {});
+      };
+      /**
+       * Report-phase liveness: the engine streams the REPORT node's tokens here, and we
+       * consume ONLY their length.
+       *
+       * The report's own words deliberately never travel this channel. In sovereign mode
+       * the model writes on MASKED material and the text is de-masked exactly once, at the
+       * end (`sovereign.restore`) — the substitution map lives inside the anonymizer, not
+       * in this process, so there is nothing here to de-mask a chunk with. Forwarding raw
+       * tokens would put `[[PERSON_1]]` on screen in the report's own title (the one place
+       * a report echoes the user's question) and then silently swap it for the real name
+       * when the run finalizes. A length cannot leak, needs no restore, and behaves the
+       * same on the legacy path — while still being a true signal: it moves when, and only
+       * when, the model writes.
+       */
+      let reportChars = 0;
+      let lastReportEmitMs = 0;
+      const emitReportProgress = () =>
+        emitDrProgress('report', drReportAction(reportChars), drReportFraction(reportChars));
+      const onReportToken = (text) => {
+        reportChars += text.length;
+        const now = Date.now();
+        if (now - lastReportEmitMs < REPORT_PROGRESS_MIN_INTERVAL_MS) {
+          return;
+        }
+        lastReportEmitMs = now;
+        emitReportProgress();
+      };
+
       const onProgress = (event) => {
         // The sub-question is NOT logged. From round 1 on it is written by the supervisor
         // after reading digests of untrusted pages, and on the legacy (non-sovereign) path
@@ -1646,24 +1737,23 @@ async function runNewDeepResearch(params) {
           `[deepResearchRun] ${event.type}` +
             `${event.subQuestion ? ` (sub-question ${event.subQuestion.length} chars)` : ''}`,
         );
-        if (!streamId || !planGateEnabled) {
+        if (event.type === 'report') {
+          /* LangGraph streams 'updates' AFTER a node returns, so this arrives when the
+           * report is already written — by then the token stream has moved the bar past
+           * the step's opening number, and re-emitting that number would walk it backwards
+           * on the last tick before the final. Same pair, same counter: at zero tokens
+           * (streaming off) it is byte-for-byte the old snapshot. */
+          emitReportProgress();
           return;
         }
         if (event.type === 'research') {
           searchCount += 1;
         }
-        Promise.resolve(
-          GenerationJobManager.emitChunk(streamId, {
-            event: 'dr_progress',
-            data: {
-              phase: event.type,
-              steps: planSteps,
-              action: drProgressAction(event),
-              searches: searchCount,
-              progress: drProgressFraction(event, maxRounds, searchCount),
-            },
-          }),
-        ).catch(() => {});
+        emitDrProgress(
+          event.type,
+          drProgressAction(event),
+          drProgressFraction(event, maxRounds, searchCount),
+        );
       };
 
       result = await runDeepResearch({
@@ -1682,6 +1772,11 @@ async function runNewDeepResearch(params) {
         signal,
         wallClockMs: Math.max(1, tier.wallClockMinutes) * 60_000,
         onProgress,
+        /* Only when a card is actually listening: `onToken` switches LangGraph into
+         * 'messages' stream mode for the WHOLE graph (every node's tokens, filtered down
+         * to the report node inside the engine), and with no card to feed that is churn
+         * for nothing. Same gate as every other dr_progress emit. */
+        onToken: streamId && planGateEnabled ? onReportToken : undefined,
       });
     }
   } catch (error) {
@@ -2052,6 +2147,8 @@ module.exports = {
   buildDeepResearchCollectedUsage,
   /** Test-only: the live card's progress curve and the caveat the PDF carries on its own. */
   drProgressFraction,
+  drReportFraction,
+  drReportAction,
   withTruncationNotice,
   PDF_TRUNCATED_NOTICE,
 };

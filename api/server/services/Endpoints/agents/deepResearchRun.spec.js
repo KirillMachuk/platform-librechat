@@ -1399,6 +1399,159 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     const drEvents = mockEmitChunk.mock.calls.filter((c) => c[1]?.event === 'dr_progress');
     expect(drEvents).toHaveLength(0);
   });
+
+  /**
+   * The report node is a single long completion — three to four minutes on a deep run,
+   * during which the graph emits nothing. The card had no way to say so: its bar sat
+   * still and its action line still named the last sub-question. These four cover the
+   * signal that replaced that silence, and the rule that keeps it safe.
+   */
+  function planChain() {
+    return [
+      { messageId: 'orig', isCreatedByUser: true, parentMessageId: null, text: 'изучи CRM рынок' },
+      {
+        messageId: 'p1',
+        isCreatedByUser: false,
+        parentMessageId: 'orig',
+        drKind: 'plan',
+        text: '**План исследования:** Рынок CRM\n\n1. Собрать вендоров\n2. Сравнить цены',
+      },
+    ];
+  }
+
+  /** Drives onProgress/onToken on a controlled clock so the throttle is exercised, not raced. */
+  function streamingRun(script) {
+    mockRunDeepResearch.mockImplementationOnce(async (params) => {
+      const nowSpy = jest.spyOn(Date, 'now');
+      const clock = { ms: 1_000_000 };
+      nowSpy.mockImplementation(() => clock.ms);
+      try {
+        script(params, clock);
+      } finally {
+        nowSpy.mockRestore();
+      }
+      return {
+        finalReport: 'Отчёт',
+        finalizeReason: 'completed',
+        usage: { input: 1, output: 1, total: 2 },
+        findings: [],
+      };
+    });
+  }
+
+  const reportSnapshots = () =>
+    mockEmitChunk.mock.calls
+      .filter((c) => c[1]?.event === 'dr_progress' && c[1].data.phase === 'report')
+      .map((c) => c[1].data);
+
+  it('report tokens keep the card moving while the node writes', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getMessages.mockResolvedValueOnce(planChain());
+    streamingRun((params, clock) => {
+      params.onProgress({ type: 'research', round: 1, subQuestion: 'конкуренты' });
+      params.onToken('# Заголовок отчёта\n\n'.padEnd(2_000, 'а'));
+      clock.ms += 2_000;
+      params.onToken('раздел '.padEnd(6_000, 'б'));
+    });
+
+    await runNewDeepResearch(planParams('Начать исследование'));
+
+    const snapshots = reportSnapshots();
+    expect(snapshots).toHaveLength(2);
+    expect(snapshots[1].progress).toBeGreaterThan(snapshots[0].progress);
+    expect(snapshots[0].action).toContain('2,0 тыс. знаков');
+    expect(snapshots[1].action).toContain('8,0 тыс. знаков');
+    // The client REPLACES its snapshot, so a report tick has to carry the checklist and
+    // the search count too — a partial one would blank the card it is trying to animate.
+    expect(snapshots[0].steps).toEqual(['Собрать вендоров', 'Сравнить цены']);
+    expect(snapshots[0].searches).toBe(1);
+  });
+
+  it('the report TEXT never rides the progress channel', async () => {
+    // The founding rule, not a nicety: in sovereign mode the node writes on MASKED
+    // material and the map that de-masks it lives in the anonymizer, so a forwarded
+    // chunk would show the user `[[PERSON_1]]` and swap it at the end. A length cannot.
+    const words = 'СЕКРЕТНАЯ-СТРОКА-ОТЧЁТА';
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getMessages.mockResolvedValueOnce(planChain());
+    streamingRun((params) => {
+      params.onToken(`# ${words}\n\nтело`);
+    });
+
+    await runNewDeepResearch(planParams('Начать исследование'));
+
+    expect(reportSnapshots()).toHaveLength(1);
+    const wire = JSON.stringify(
+      mockEmitChunk.mock.calls.filter((c) => c[1]?.event === 'dr_progress'),
+    );
+    expect(wire).not.toContain(words);
+  });
+
+  it('a burst of tokens inside the throttle window is one snapshot, not hundreds', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getMessages.mockResolvedValueOnce(planChain());
+    streamingRun((params, clock) => {
+      for (let i = 0; i < 200; i++) {
+        clock.ms += 5; // 1s of dense streaming — well inside the window
+        params.onToken('токен ');
+      }
+    });
+
+    await runNewDeepResearch(planParams('Начать исследование'));
+
+    expect(reportSnapshots()).toHaveLength(1);
+  });
+
+  it('the graph\u2019s own report update does not walk the bar backwards', async () => {
+    // 'updates' streams AFTER a node returns, so the report update lands once the tokens
+    // have already moved the bar past the step's opening 0.92. Pre-fix it re-emitted that
+    // opening number on the last tick before the final.
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getMessages.mockResolvedValueOnce(planChain());
+    streamingRun((params, clock) => {
+      params.onToken('текст '.padEnd(9_000, 'в'));
+      clock.ms += 2_000;
+      params.onProgress({ type: 'report' });
+    });
+
+    await runNewDeepResearch(planParams('Начать исследование'));
+
+    const snapshots = reportSnapshots();
+    expect(snapshots).toHaveLength(2);
+    expect(snapshots[1].progress).toBeGreaterThanOrEqual(snapshots[0].progress);
+    expect(snapshots[1].progress).toBeGreaterThan(0.92);
+  });
+
+  it('a gate-off run is never put into token streaming at all', async () => {
+    // onToken switches LangGraph into 'messages' mode for the whole graph; with no card
+    // listening that is every node's tokens crossing the process for nothing.
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockImplementationOnce(async () => ({
+      finalReport: 'Отчёт',
+      finalizeReason: 'completed',
+      usage: { input: 1, output: 1, total: 2 },
+      findings: [],
+    }));
+
+    await runNewDeepResearch(baseParams('изучи CRM'));
+
+    expect(mockRunDeepResearch.mock.calls[0][0].onToken).toBeUndefined();
+  });
+
+  it('a gated run hands the engine a token sink', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getMessages.mockResolvedValueOnce(planChain());
+    mockRunDeepResearch.mockImplementationOnce(async () => ({
+      finalReport: 'Отчёт',
+      finalizeReason: 'completed',
+      usage: { input: 1, output: 1, total: 2 },
+      findings: [],
+    }));
+
+    await runNewDeepResearch(planParams('Начать исследование'));
+
+    expect(typeof mockRunDeepResearch.mock.calls[0][0].onToken).toBe('function');
+  });
 });
 
 describe('runNewDeepResearch — task #21 aborted anchor (persist a re-plannable Stop)', () => {
@@ -2382,6 +2535,31 @@ describe('the live card does not promise rounds the budget will not buy', () => 
   it('keeps the scope and report anchors', () => {
     expect(drProgressFraction({ type: 'scope' }, 6, 0)).toBe(0.08);
     expect(drProgressFraction({ type: 'report' }, 6, 0)).toBe(0.92);
+  });
+});
+
+describe('the report phase has a curve of its own (the last minutes stop reading as hung)', () => {
+  const { drReportFraction, drReportAction } = require('./deepResearchRun');
+
+  it('starts exactly where the report step stood and only ever rises', () => {
+    expect(drReportFraction(0)).toBe(0.92);
+    const at = (chars) => drReportFraction(chars);
+    for (const chars of [500, 2_000, 8_000, 20_000, 60_000]) {
+      expect(at(chars)).toBeGreaterThan(at(chars / 2));
+    }
+  });
+
+  it('never arrives — only the end of the run fills the bar', () => {
+    // A curve that could reach its ceiling on its own would freeze again, one number
+    // higher, on exactly the long reports this was written for.
+    expect(drReportFraction(1_000_000)).toBeLessThan(0.99);
+    expect(drReportFraction(50_000)).toBeLessThan(0.99);
+  });
+
+  it('names a size only once there is one worth naming', () => {
+    expect(drReportAction(0)).toBe('Формирует отчёт');
+    expect(drReportAction(999)).toBe('Формирует отчёт');
+    expect(drReportAction(8_400)).toBe('Формирует отчёт — 8,4 тыс. знаков');
   });
 });
 
