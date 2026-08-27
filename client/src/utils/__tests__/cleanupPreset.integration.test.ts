@@ -143,7 +143,7 @@ describe('cleanupPreset - a custom endpoint whose conversation lost endpointType
   it('resolves the family from the endpoints config instead of throwing', () => {
     const result = cleanupPreset({
       preset,
-      endpointsConfig: { '1ma': { type: EModelEndpoint.custom } },
+      endpointsConfig: { '1ma': { type: EModelEndpoint.custom, order: 0 } },
     });
 
     expect(result.endpointType).toBe(EModelEndpoint.custom);
@@ -154,7 +154,7 @@ describe('cleanupPreset - a custom endpoint whose conversation lost endpointType
   it('keeps a stored family — the config is a fallback, never an override', () => {
     const result = cleanupPreset({
       preset: { ...preset, endpointType: EModelEndpoint.custom },
-      endpointsConfig: { '1ma': { type: EModelEndpoint.google } },
+      endpointsConfig: { '1ma': { type: EModelEndpoint.google, order: 0 } },
     });
 
     expect(result.endpointType).toBe(EModelEndpoint.custom);

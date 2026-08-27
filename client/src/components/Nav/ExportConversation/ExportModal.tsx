@@ -84,9 +84,10 @@ export default function ExportModal({
 
   /**
    * The export used to be fired and forgotten, so a throw inside it became an unhandled
-   * rejection: no file, no message, the dialog still open — the button simply read as
-   * broken (that is how the `Unknown endpoint` defect reached the owner). A failure now
-   * says so and names the next step, and the dialog stays open so the choice is not lost.
+   * rejection: no file, no message — the button simply read as broken (that is how the
+   * `Unknown endpoint` defect reached the owner). A failure now says so and names the
+   * next step. (The dialog never closed on Export, before or after this; that is the
+   * template's doing, not ours.)
    */
   const handleExport = useCallback(async () => {
     try {

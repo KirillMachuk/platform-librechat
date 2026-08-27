@@ -163,13 +163,10 @@ export default function useExportConversation({
   };
 
   const exportScreenshot = async () => {
-    let data;
-    try {
-      data = await captureScreenshot();
-    } catch (err) {
-      console.error('Failed to capture screenshot');
-      return console.error(err);
-    }
+    /* The capture used to swallow its own failure and return, which left the screenshot
+     * the one format that could fail without saying so — the same silence this change
+     * removes everywhere else. The caller owns the message now. */
+    const data = await captureScreenshot();
     download(data, `${filename}.png`, 'image/png');
   };
 
