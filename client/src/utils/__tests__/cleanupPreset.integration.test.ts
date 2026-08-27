@@ -117,3 +117,50 @@ describe('cleanupPreset - real parsing with defaultParamsEndpoint', () => {
     expect(result.topK).toBe(40);
   });
 });
+
+/**
+ * A conversation is not guaranteed to carry `endpointType`. A Deep Research run
+ * persisted rows without it, and on the stand 42 of 170 conversations were in that
+ * state — every one of them a research chat. A custom endpoint's NAME is not a schema
+ * key, so `parseConvo` throws `Unknown endpoint: <name>` on those rows and takes its
+ * caller down: Export (json/txt/markdown) and «Save as preset» both died there, both
+ * without a word to the user. Resolving the family from the endpoints config fixes the
+ * rows already on disk, with no data migration.
+ */
+describe('cleanupPreset - a custom endpoint whose conversation lost endpointType', () => {
+  const preset = {
+    presetId: 'test-id',
+    title: 'Исследование',
+    endpoint: '1ma',
+    model: 'deepseek/deepseek-v4-flash-0731',
+    temperature: 0.7,
+  };
+
+  it('throws without the config — the failure this fixes', () => {
+    expect(() => cleanupPreset({ preset })).toThrow('Unknown endpoint: 1ma');
+  });
+
+  it('resolves the family from the endpoints config instead of throwing', () => {
+    const result = cleanupPreset({
+      preset,
+      endpointsConfig: { '1ma': { type: EModelEndpoint.custom } },
+    });
+
+    expect(result.endpointType).toBe(EModelEndpoint.custom);
+    expect(result.endpoint).toBe('1ma');
+    expect(result.model).toBe('deepseek/deepseek-v4-flash-0731');
+  });
+
+  it('keeps a stored family — the config is a fallback, never an override', () => {
+    const result = cleanupPreset({
+      preset: { ...preset, endpointType: EModelEndpoint.custom },
+      endpointsConfig: { '1ma': { type: EModelEndpoint.google } },
+    });
+
+    expect(result.endpointType).toBe(EModelEndpoint.custom);
+  });
+
+  it('still throws when the config does not describe the endpoint either', () => {
+    expect(() => cleanupPreset({ preset, endpointsConfig: {} })).toThrow('Unknown endpoint: 1ma');
+  });
+});

@@ -1,5 +1,5 @@
-import filenamify from 'filenamify';
 import { useEffect, useState, useMemo, useCallback } from 'react';
+import filenamify from 'filenamify';
 import {
   Input,
   Label,
@@ -8,9 +8,11 @@ import {
   Checkbox,
   Dropdown,
   OGDialogTemplate,
+  useToastContext,
 } from '@librechat/client';
 import type { TConversation } from 'librechat-data-provider';
 import { useLocalize, useExportConversation } from '~/hooks';
+import { NotificationSeverity } from '~/common';
 
 const TYPE_OPTIONS = [
   { value: 'screenshot', label: 'screenshot (.png)' },
@@ -69,6 +71,7 @@ export default function ExportModal({
     [type],
   );
   const exportOptionsSupport = useMemo(() => type !== 'csv' && type !== 'screenshot', [type]);
+  const { showToast } = useToastContext();
 
   const { exportConversation } = useExportConversation({
     conversation,
@@ -78,6 +81,24 @@ export default function ExportModal({
     exportBranches,
     recursive,
   });
+
+  /**
+   * The export used to be fired and forgotten, so a throw inside it became an unhandled
+   * rejection: no file, no message, the dialog still open — the button simply read as
+   * broken (that is how the `Unknown endpoint` defect reached the owner). A failure now
+   * says so and names the next step, and the dialog stays open so the choice is not lost.
+   */
+  const handleExport = useCallback(async () => {
+    try {
+      await exportConversation();
+    } catch (error) {
+      console.error('[ExportModal] export failed', error);
+      showToast({
+        message: localize('com_nav_export_failed'),
+        severity: NotificationSeverity.ERROR,
+      });
+    }
+  }, [exportConversation, showToast, localize]);
 
   return (
     <OGDialog open={open} onOpenChange={onOpenChange} triggerRef={triggerRef}>
@@ -188,7 +209,7 @@ export default function ExportModal({
         }
         buttons={
           <>
-            <Button onClick={exportConversation} variant="submit">
+            <Button onClick={handleExport} variant="submit">
               {localize('com_endpoint_export')}
             </Button>
           </>
