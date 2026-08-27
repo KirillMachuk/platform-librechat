@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { Button } from '@librechat/client';
 import { useFormContext } from 'react-hook-form';
 import { useQueryClient } from '@tanstack/react-query';
 import { Constants, EModelEndpoint, QueryKeys } from 'librechat-data-provider';
@@ -13,6 +14,7 @@ import {
   useLocalize,
 } from '~/hooks';
 import CustomUserVarsSection from '~/components/MCP/CustomUserVarsSection';
+import OAuthDisclosure from '~/components/MCP/OAuthDisclosure';
 import { PluginPagination } from '~/components/Plugins/Store';
 import { useAgentPanelContext } from '~/Providers';
 import { useMCPToolsQuery } from '~/data-provider';
@@ -195,7 +197,7 @@ function MCPToolSelectDialog({
     const hasCustomUserVars =
       serverConfig?.customUserVars && Object.keys(serverConfig.customUserVars).length > 0;
 
-    if (hasCustomUserVars) {
+    if (hasCustomUserVars || serverConfig?.oauthDisclosure) {
       setConfiguringServer(serverName);
     } else {
       await handleDirectAdd(serverName);
@@ -297,6 +299,13 @@ function MCPToolSelectDialog({
                   {localize('com_ui_mcp_configure_server_description', { 0: configuringServer })}
                 </p>
               </div>
+              {availableMCPServersMap?.[configuringServer]?.oauthDisclosure && (
+                <div className="mb-4">
+                  <OAuthDisclosure
+                    disclosure={availableMCPServersMap[configuringServer].oauthDisclosure}
+                  />
+                </div>
+              )}
               <CustomUserVarsSection
                 serverName={configuringServer}
                 isSubmitting={isSavingCustomVars}
@@ -304,6 +313,18 @@ function MCPToolSelectDialog({
                 onSave={(authData) => handleSaveCustomVars(configuringServer, authData)}
                 onRevoke={() => handleRevokeCustomVars(configuringServer)}
               />
+              {Object.keys(availableMCPServersMap?.[configuringServer]?.customUserVars ?? {})
+                .length === 0 && (
+                <div className="flex justify-end">
+                  <Button
+                    variant="submit"
+                    disabled={isInitializing === configuringServer}
+                    onClick={() => handleDirectAdd(configuringServer)}
+                  >
+                    {localize('com_nav_mcp_connect')}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 

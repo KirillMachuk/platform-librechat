@@ -32,6 +32,53 @@ describe('MCPOptionsSchema', () => {
     });
   });
 
+  describe('OAuth disclosure', () => {
+    const oauthDisclosure = {
+      title: 'Before connecting Google Drive',
+      items: ['Read-only access to files selected by the user.'],
+      links: [{ label: 'Privacy policy', url: 'https://example.com/privacy' }],
+    };
+
+    it('accepts an operator-managed disclosure with HTTPS links', () => {
+      const result = MCPOptionsSchema.safeParse({
+        type: 'streamable-http',
+        url: 'https://mcp-server.com/http',
+        oauthDisclosure,
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.oauthDisclosure).toEqual(oauthDisclosure);
+      }
+    });
+
+    it('rejects disclosure links that do not use HTTPS', () => {
+      const result = MCPOptionsSchema.safeParse({
+        type: 'streamable-http',
+        url: 'https://mcp-server.com/http',
+        oauthDisclosure: {
+          ...oauthDisclosure,
+          links: [{ label: 'Privacy policy', url: 'http://example.com/privacy' }],
+        },
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    it('strips the operator disclosure from user-managed server input', () => {
+      const result = MCPServerUserInputSchema.safeParse({
+        type: 'streamable-http',
+        url: 'https://mcp-server.com/http',
+        oauthDisclosure,
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect('oauthDisclosure' in result.data).toBe(false);
+      }
+    });
+  });
+
   describe('OBO transport support', () => {
     it('should accept obo on SSE transport', () => {
       const result = MCPOptionsSchema.safeParse({
@@ -752,6 +799,7 @@ describe('MCP_USER_INPUT_FIELDS', () => {
     expect(MCP_USER_INPUT_FIELDS.has('timeout')).toBe(false);
     expect(MCP_USER_INPUT_FIELDS.has('chatMenu')).toBe(false);
     expect(MCP_USER_INPUT_FIELDS.has('allowedTools')).toBe(false);
+    expect(MCP_USER_INPUT_FIELDS.has('oauthDisclosure')).toBe(false);
     expect(MCP_USER_INPUT_FIELDS.has('requiresOAuth')).toBe(false);
     expect(MCP_USER_INPUT_FIELDS.has('customUserVars')).toBe(false);
     expect(MCP_USER_INPUT_FIELDS.has('oauth_headers')).toBe(false);

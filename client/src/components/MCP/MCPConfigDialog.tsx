@@ -6,11 +6,12 @@ import {
   OGDialogHeader,
   OGDialogContent,
 } from '@librechat/client';
-import type { MCPServerStatus } from 'librechat-data-provider';
+import type { MCPOAuthDisclosure, MCPServerStatus } from 'librechat-data-provider';
 import type { ConfigFieldDetail } from '~/common';
 import ServerInitializationSection from './ServerInitializationSection';
 import { KeyRound, PlugZap, AlertTriangle } from '~/components/icons';
 import CustomUserVarsSection from './CustomUserVarsSection';
+import OAuthDisclosure from './OAuthDisclosure';
 import { useLocalize } from '~/hooks';
 
 interface MCPConfigDialogProps {
@@ -22,6 +23,8 @@ interface MCPConfigDialogProps {
   isSubmitting?: boolean;
   onRevoke?: () => void;
   serverName: string;
+  serverTitle?: string;
+  oauthDisclosure?: MCPOAuthDisclosure;
   serverStatus?: MCPServerStatus;
   conversationId?: string | null;
   storageContextKey?: string;
@@ -35,6 +38,8 @@ export default function MCPConfigDialog({
   isSubmitting = false,
   onRevoke,
   serverName,
+  serverTitle,
+  oauthDisclosure,
   serverStatus,
   conversationId,
   storageContextKey,
@@ -43,8 +48,8 @@ export default function MCPConfigDialog({
 
   const hasFields = Object.keys(fieldsSchema).length > 0;
   const dialogTitle = hasFields
-    ? localize('com_ui_configure_mcp_variables_for', { 0: serverName })
-    : `${serverName} MCP Server`;
+    ? localize('com_ui_configure_mcp_variables_for', { 0: serverTitle || serverName })
+    : serverTitle || `${serverName} MCP Server`;
 
   const fullTitle = useMemo(() => {
     if (!serverStatus) {
@@ -164,6 +169,10 @@ export default function MCPConfigDialog({
           onRevoke={onRevoke || (() => {})}
           isSubmitting={isSubmitting}
         />
+
+        {serverStatus?.requiresOAuth && oauthDisclosure && (
+          <OAuthDisclosure disclosure={oauthDisclosure} />
+        )}
 
         {/* Server Initialization Section */}
         <ServerInitializationSection

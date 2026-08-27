@@ -265,6 +265,7 @@ export function redactServerSecrets(
     url: config.url,
     title: config.title,
     description: config.description,
+    oauthDisclosure: config.oauthDisclosure,
     iconPath: config.iconPath,
     chatMenu: config.chatMenu,
     requiresOAuth: config.requiresOAuth,

@@ -10,6 +10,8 @@ import {
 import type { TAttachment } from 'librechat-data-provider';
 import { useLocalize, useProgress, useExpandCollapse } from '~/hooks';
 import { ToolIcon, getToolIconType, isError } from './ToolOutput';
+import OAuthDisclosure from '~/components/MCP/OAuthDisclosure';
+import { useMCPServersQuery } from '~/data-provider';
 import { TriangleAlert } from '~/components/icons';
 import { logger, parseToolName } from '~/utils';
 import { useMCPIconMap } from '~/hooks/MCP';
@@ -116,6 +118,8 @@ export default function ToolCall({
   }, [name, function_name, localize]);
   const mcpIconMap = useMCPIconMap();
   const mcpIconUrl = isMCPToolCall ? mcpIconMap.get(mcpServerName) : undefined;
+  const { data: mcpServers } = useMCPServersQuery({ enabled: isMCPToolCall });
+  const oauthDisclosure = isMCPToolCall ? mcpServers?.[mcpServerName]?.oauthDisclosure : undefined;
 
   const actionId = useMemo(() => {
     if (isMCPToolCall || !parsedAuthUrl) {
@@ -260,6 +264,7 @@ export default function ToolCall({
       </div>
       {auth != null && auth && progress < 1 && !showCancelled && (
         <div className="flex w-full flex-col gap-2.5">
+          {oauthDisclosure && <OAuthDisclosure disclosure={oauthDisclosure} />}
           <div className="mb-1 mt-2">
             <Button
               className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium"

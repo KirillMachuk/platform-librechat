@@ -4,6 +4,8 @@ import { Tools, Constants } from 'librechat-data-provider';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ToolCall from '../ToolCall';
 
+const mockUseMCPServersQuery = jest.fn(() => ({ data: undefined }));
+
 // Mock dependencies
 jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string, values?: any) => {
@@ -36,6 +38,10 @@ jest.mock('~/hooks', () => ({
 
 jest.mock('~/hooks/MCP', () => ({
   useMCPIconMap: () => new Map(),
+}));
+
+jest.mock('~/data-provider', () => ({
+  useMCPServersQuery: (...args: unknown[]) => mockUseMCPServersQuery(...args),
 }));
 
 jest.mock('~/components/Chat/Messages/Content/MessageContent', () => ({
@@ -116,6 +122,7 @@ describe('ToolCall', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseMCPServersQuery.mockReturnValue({ data: undefined });
   });
 
   describe('attachments prop passing', () => {
@@ -284,6 +291,39 @@ describe('ToolCall', () => {
   });
 
   describe('authentication flow', () => {
+    it('shows the configured disclosure immediately before MCP sign-in', () => {
+      mockUseMCPServersQuery.mockReturnValue({
+        data: {
+          'google-drive': {
+            oauthDisclosure: {
+              title: 'Before connecting Google Drive',
+              items: ['Read-only access to the files you ask the assistant to use.'],
+              links: [{ label: 'Privacy policy', url: 'https://example.com/privacy' }],
+            },
+          },
+        },
+      });
+
+      renderWithRecoil(
+        <ToolCall
+          {...mockProps}
+          name={`oauth${Constants.mcp_delimiter}google-drive`}
+          initialProgress={0.5}
+          auth="https://accounts.google.com/o/oauth2/v2/auth"
+          isSubmitting={true}
+        />,
+      );
+
+      expect(screen.getByText('Before connecting Google Drive')).toBeInTheDocument();
+      expect(
+        screen.getByText('Read-only access to the files you ask the assistant to use.'),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Privacy policy' })).toHaveAttribute(
+        'href',
+        'https://example.com/privacy',
+      );
+    });
+
     it('should show sign-in button when auth URL is provided', () => {
       const originalOpen = window.open;
       window.open = jest.fn();

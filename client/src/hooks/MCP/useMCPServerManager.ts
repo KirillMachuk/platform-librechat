@@ -648,6 +648,8 @@ export function useMCPServerManager({
 
     return {
       serverName: selectedToolForConfig.name,
+      serverTitle: loadedServers?.[selectedToolForConfig.name]?.title,
+      oauthDisclosure: loadedServers?.[selectedToolForConfig.name]?.oauthDisclosure,
       serverStatus: connectionStatus?.[selectedToolForConfig.name],
       isOpen: isConfigModalOpen,
       onOpenChange: handleDialogOpenChange,
@@ -659,6 +661,7 @@ export function useMCPServerManager({
     };
   }, [
     selectedToolForConfig,
+    loadedServers,
     connectionStatus,
     isConfigModalOpen,
     handleDialogOpenChange,

@@ -1,5 +1,6 @@
 import mongoose, { Schema } from 'mongoose';
 import type { IMessage } from '~/types/message';
+import { sanitizeGoogleDriveToolOutputs } from '~/utils/googleDriveToolOutput';
 
 const messageSchema: Schema<IMessage> = new Schema(
   {
@@ -112,6 +113,7 @@ const messageSchema: Schema<IMessage> = new Schema(
       type: [{ type: mongoose.Schema.Types.Mixed }],
       default: undefined,
       meiliIndex: true,
+      set: sanitizeGoogleDriveToolOutputs,
     },
     thread_id: {
       type: String,

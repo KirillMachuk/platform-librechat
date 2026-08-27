@@ -154,6 +154,29 @@ const OboOptionsSchema = z.object({
   scopes: z.string().min(1),
 });
 
+const HTTPSUrlSchema = z
+  .string()
+  .url()
+  .refine((value) => new URL(value).protocol === 'https:', {
+    message: 'Disclosure links must use HTTPS',
+  });
+
+export const MCPOAuthDisclosureSchema = z.object({
+  title: z.string().min(1).max(160),
+  items: z.array(z.string().min(1).max(1200)).min(1).max(8),
+  links: z
+    .array(
+      z.object({
+        label: z.string().min(1).max(120),
+        url: HTTPSUrlSchema,
+      }),
+    )
+    .min(1)
+    .max(4),
+});
+
+export type MCPOAuthDisclosure = z.infer<typeof MCPOAuthDisclosureSchema>;
+
 const BaseOptionsSchema = z.object({
   /** Display name for the MCP server - only letters, numbers, and spaces allowed */
   title: z
@@ -185,6 +208,8 @@ const BaseOptionsSchema = z.object({
   serverInstructions: z.union([z.boolean(), z.string()]).optional(),
   /** Restricts the MCP tools exposed and callable for this server. An empty list denies all tools. */
   allowedTools: z.array(z.string().min(1)).optional(),
+  /** Operator-provided disclosure shown immediately before a user starts OAuth. */
+  oauthDisclosure: MCPOAuthDisclosureSchema.optional(),
   /**
    * Whether this server requires OAuth authentication
    * If not specified, will be auto-detected during construction
@@ -389,6 +414,7 @@ const omitServerManagedFields = <T extends z.ZodObject<z.ZodRawShape>>(schema: T
     chatMenu: true,
     serverInstructions: true,
     allowedTools: true,
+    oauthDisclosure: true,
     requiresOAuth: true,
     customUserVars: true,
     oauth_headers: true,

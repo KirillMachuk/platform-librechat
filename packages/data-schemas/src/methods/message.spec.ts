@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { RetentionMode } from 'librechat-data-provider';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import type { IMessage } from '..';
+import { GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED } from '~/utils/googleDriveToolOutput';
 import { tenantStorage, runAsSystem } from '~/config/tenantContext';
 import { createMessageMethods } from './message';
 import { createModels } from '../models';
@@ -1111,6 +1112,58 @@ describe('Message Operations', () => {
       const doc = await Message.findOne({ messageId }).lean();
       expect(doc?.text).toBe('Updated');
       expect(doc?.tenantId).toBeUndefined();
+    });
+  });
+
+  describe('Google Drive output persistence', () => {
+    const googleDriveContent = () => [
+      {
+        type: 'tool_call',
+        tool_call: {
+          id: 'drive-call-1',
+          name: 'read_file_content_mcp_google-drive',
+          args: '{"fileId":"file-1"}',
+          output: 'private document contents',
+        },
+      },
+    ];
+
+    it('redacts Google Drive output without mutating the live message', async () => {
+      const content = googleDriveContent();
+      const messageId = uuidv4();
+
+      await saveMessage(
+        { userId: 'user123' },
+        {
+          messageId,
+          conversationId: uuidv4(),
+          content,
+        },
+      );
+
+      expect(content[0].tool_call.output).toBe('private document contents');
+      const saved = await Message.findOne({ messageId }).lean();
+      const savedContent = saved?.content as typeof content | undefined;
+      expect(savedContent?.[0].tool_call.output).toBe(GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED);
+      expect(savedContent?.[0].tool_call.args).toBe('{"fileId":"file-1"}');
+    });
+
+    it('redacts Google Drive output during bulk imports', async () => {
+      const content = googleDriveContent();
+      const messageId = uuidv4();
+
+      await bulkSaveMessages([
+        {
+          messageId,
+          conversationId: uuidv4(),
+          user: 'user123',
+          content,
+        },
+      ]);
+
+      const saved = await Message.findOne({ messageId }).lean();
+      const savedContent = saved?.content as typeof content | undefined;
+      expect(savedContent?.[0].tool_call.output).toBe(GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED);
     });
   });
 });

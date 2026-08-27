@@ -56,7 +56,11 @@ export default function UninitializedMCPTool({ serverInfo }: { serverInfo?: MCPS
               return;
             }
             if (!isServerInitializing) {
-              initializeServer(serverName);
+              if (statusIconProps?.serverStatus?.requiresOAuth) {
+                statusIconProps.onConfigClick(e);
+              } else {
+                initializeServer(serverName);
+              }
             }
           }}
           role="button"
@@ -65,7 +69,11 @@ export default function UninitializedMCPTool({ serverInfo }: { serverInfo?: MCPS
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
               if (!isServerInitializing) {
-                initializeServer(serverName);
+                if (statusIconProps?.serverStatus?.requiresOAuth) {
+                  statusIconProps.onConfigClick(e as unknown as React.MouseEvent);
+                } else {
+                  initializeServer(serverName);
+                }
               }
             }
           }}
