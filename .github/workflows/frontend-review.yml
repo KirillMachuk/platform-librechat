@@ -132,6 +132,13 @@ jobs:
         run: npm run typecheck
         working-directory: client
 
+      # `packages/client` builds with tsdown alone, which strips types without checking
+      # them, and no workflow ran tsc over it — so a type error in the shared UI package
+      # could reach main while every check stayed green. Its own tsconfig, ~5s, and the
+      # job already has the node_modules and the data-provider build it needs.
+      - name: Type check client package
+        run: npx tsc --noEmit -p packages/client/tsconfig.json
+
   test-ubuntu:
     name: 'Tests: Ubuntu (shard ${{ matrix.shard }}/4)'
     needs: build
