@@ -173,7 +173,7 @@
   "overrides": {
     "@xmldom/xmldom": "^0.8.13",
     "elliptic": "^6.6.1",
-    "form-data": "^4.0.4",
+    "form-data": "^4.0.6",
     "langsmith": "^0.6.0",
     "postcss": "^8.5.13",
     "tslib": "^2.8.1",
