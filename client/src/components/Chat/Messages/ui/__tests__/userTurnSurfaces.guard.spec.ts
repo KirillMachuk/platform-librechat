@@ -1,4 +1,4 @@
-import { join } from 'path';
+import { join, sep } from 'path';
 import { readFileSync, readdirSync, statSync } from 'fs';
 
 /**
@@ -52,7 +52,15 @@ function walk(dir: string, out: string[] = []): string[] {
 describe('every user-turn surface carries the chip rules', () => {
   const surfaces = walk(join(CLIENT_SRC, 'components'))
     .filter((file) => readFileSync(file, 'utf8').includes(BUBBLE))
-    .map((file) => file.slice(CLIENT_SRC.length + 1));
+    /* Posix separators, or the EXEMPT keys below never match on Windows and this whole
+     * guard fails there while passing on Ubuntu — which is exactly what it did on its
+     * first CI run. */
+    .map((file) =>
+      file
+        .slice(CLIENT_SRC.length + 1)
+        .split(sep)
+        .join('/'),
+    );
 
   it('finds the surfaces at all (a matcher that matches nothing guards nothing)', () => {
     expect(surfaces.length).toBeGreaterThanOrEqual(4);
@@ -64,7 +72,7 @@ describe('every user-turn surface carries the chip rules', () => {
       expect(EXEMPT.get(surface)).toBeTruthy();
       return;
     }
-    const source = readFileSync(join(CLIENT_SRC, surface), 'utf8');
+    const source = readFileSync(join(CLIENT_SRC, ...surface.split('/')), 'utf8');
     for (const hook of HOOKS) {
       /* A CALL, not a substring: `expect(source).toContain(hook)` also accepts
        * `useDrActionChipX`, so a rename would have slipped straight past. */
@@ -80,7 +88,7 @@ describe('every user-turn surface carries the chip rules', () => {
 
   it('lists no exemption for a file that no longer exists', () => {
     for (const exempt of EXEMPT.keys()) {
-      expect(() => statSync(join(CLIENT_SRC, exempt))).not.toThrow();
+      expect(() => statSync(join(CLIENT_SRC, ...exempt.split('/')))).not.toThrow();
     }
   });
 });
