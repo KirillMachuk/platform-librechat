@@ -447,6 +447,13 @@ describe('Share Methods', () => {
             tenantId: 'tenant-a',
             storageKey: 'private/upload.png',
             source: 's3',
+            /* Real rows carry these — on the stand 35 files hold `fullText` (contracts
+             * among them) and 53 hold `docMetadata`. Without them in the fixture the
+             * assertions below would pass on a file that never had the fields. */
+            fullText: 'Договор №1. Стороны: ООО «Ромашка» и ИП Иванов…',
+            docMetadata: { docType: 'contract', parties: ['ООО «Ромашка»'] },
+            embedError: 'connect ECONNREFUSED 10.0.0.4:8000',
+            previewError: 'pdfjs: failed to render page 3',
           },
         ],
         attachments: [
@@ -496,6 +503,12 @@ describe('Share Methods', () => {
       expect(file).not.toHaveProperty('user');
       expect(file).not.toHaveProperty('tenantId');
       expect(file).not.toHaveProperty('source');
+      /* Document CONTENT must not ride along with a shared conversation: sharing a chat
+       * is not sharing the full text of every file attached to it. */
+      expect(file).not.toHaveProperty('fullText');
+      expect(file).not.toHaveProperty('docMetadata');
+      expect(file).not.toHaveProperty('embedError');
+      expect(file).not.toHaveProperty('previewError');
       // The file's conversation id is rewritten to the anonymized id, not the original.
       expect(file?.conversationId).toBe(shared?.conversationId);
       expect(file?.conversationId).not.toBe(conversationId);
