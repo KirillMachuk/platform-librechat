@@ -11,6 +11,7 @@ import {
   researchOne,
   isContentUrl,
   EMPTY_DIGEST,
+  FAILED_DIGEST_PREFIX,
   extractSources,
   runResearchLoop,
   boundToolOutputs,
@@ -880,5 +881,70 @@ describe('the skipped-tool-call placeholder', () => {
     for (const text of skipped) {
       expect(text).toContain(`<UNTRUSTED ${NONCE}>`);
     }
+  });
+});
+
+describe('a failing COMPRESS does not erase what the loop already spent', () => {
+  /**
+   * The catch used to return ZERO_USAGE, so a researcher whose compress step threw hid the
+   * whole tool loop's tokens from `state.tokenUsage`, from `finding.tokens`, and therefore
+   * from both supervisor estimates. A run whose compress failed every round would spend real
+   * money and keep opening rounds, because neither gate could see any of it.
+   */
+  it('still reports the tool loop tokens when COMPRESS throws', async () => {
+    const { usage, finding } = await researchOne({
+      caller: scriptedCaller([
+        new AIMessageChunk({
+          content: 'нашёл',
+          tool_calls: [{ name: 'web_search', args: { query: 'q' }, id: 'c1', type: 'tool_call' }],
+          usage_metadata: { input_tokens: 4000, output_tokens: 1000, total_tokens: 5000 },
+        }),
+        finalChunk('готово'),
+      ]),
+      deps: {
+        model: {} as unknown as BaseChatModel,
+        compressModel: {
+          invoke: async () => {
+            throw new Error('контекст переполнен');
+          },
+        } as unknown as BaseChatModel,
+        tools: [okTool],
+        tier: TIER,
+        now: NOW,
+        nonce: NONCE,
+      },
+      subQuestion: 'вопрос',
+      round: 1,
+      jurisdiction: 'RU',
+      tokenCap: Infinity,
+    });
+
+    expect(usage.total).toBeGreaterThan(0);
+    expect(finding.tokens).toBe(usage.total);
+    expect(finding.digest).toContain(FAILED_DIGEST_PREFIX);
+  });
+
+  it('still reports nothing when the failure came before any model answered', async () => {
+    const { usage } = await researchOne({
+      caller: {
+        invoke: async () => {
+          throw new Error('поиск недоступен');
+        },
+      },
+      deps: {
+        model: {} as unknown as BaseChatModel,
+        compressModel: new FakeListChatModel({ responses: ['unused'] }),
+        tools: [],
+        tier: TIER,
+        now: NOW,
+        nonce: NONCE,
+      },
+      subQuestion: 'вопрос',
+      round: 1,
+      jurisdiction: 'RU',
+      tokenCap: Infinity,
+    });
+
+    expect(usage.total).toBe(0);
   });
 });

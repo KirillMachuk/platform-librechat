@@ -183,11 +183,23 @@ describe('budgetGateReason', () => {
     largestRound: 300_000,
   };
 
-  it('refuses the next round on the biggest round seen, not on the mean', () => {
+  it('FAILS ON PRE-FIX CODE: refuses the next round on the biggest round seen, not the mean', () => {
+    // Pre-fix this returned null: the mean of 400k over two rounds is 200k, and
+    // 400k + 200k sits under the 650k reserve. Only the biggest round seen refuses it.
     expect(budgetGateReason(GROWING)).toBe('budget');
   });
 
-  it('FAILS ON PRE-FIX CODE: the mean alone let this round through', () => {
+  /**
+   * A CONTROL, not a regression test — it passes on pre-fix code and is meant to. It proves
+   * the test above is not trivially true: suppress the new reading and the gate must go back
+   * to letting the round through. Without it, a gate that simply always said 'budget' would
+   * satisfy the test above and look correct.
+   *
+   * It carried the "FAILS ON PRE-FIX CODE" label by mistake, which is the same lie a test can
+   * tell as a green-for-the-wrong-reason assertion: the label claimed regression cover that
+   * sat one line up, unlabelled.
+   */
+  it('CONTROL (passes pre-fix too): the mean alone lets this round through', () => {
     expect(budgetGateReason({ ...GROWING, largestRound: undefined })).toBeNull();
   });
 
