@@ -288,27 +288,12 @@ async function countOtherActiveDrJobs(streamId) {
  *  honest "не удалось сформировать отчёт" notice. A PDF of that notice is a useless file. */
 const PDF_ELIGIBLE_REASONS = new Set(['completed', 'budget', 'rounds']);
 
-/**
- * The PDF is the copy that LEAVES the chat — forwarded, printed, attached to an email — so it
- * is the one copy that has to carry the caveat itself. In the chat "gathering stopped early"
- * is a field on the message, rendered beside the report by the client; a file has no such
- * field, and a report that reads as finished when it is not is the exact failure this track
- * exists to remove. Prepended, not appended: a caveat found after the conclusion is not one.
- */
-const PDF_TRUNCATED_NOTICE =
-  '**Сбор материала остановился раньше, чем тема была исчерпана** — прогон достиг своего ' +
-  'лимита. Выводы ниже опираются только на то, что успели собрать.\n\n---\n\n';
-
-/** Prepends the caveat for a run whose gathering was cut short; otherwise returns as-is. */
-function withTruncationNotice(markdown, unfinished) {
-  return unfinished && markdown ? PDF_TRUNCATED_NOTICE + markdown : markdown;
-}
-
 /** Outcomes whose saved text IS a real model report, but with gathering cut short behind it
- *  — the only case where the frontend's "may be incomplete … results above are still usable"
- *  indicator tells the truth. Every other outcome is a COMPLETE message (a full report, a
- *  plan, a Stop, or an honest failure notice with nothing above it), so it must not carry an
- *  indicator promising usable results (PR-2: no partial reports → no partial indicator). */
+ *  — the only ones that get stamped `unfinished`. Nothing renders that flag any more (see
+ *  where it is set, below); it is the machine record truncated runs are counted from, so
+ *  the set has to keep meaning exactly this and nothing wider. Every other outcome saves a
+ *  COMPLETE message (a full report, a plan, a Stop, or an honest failure notice with
+ *  nothing above it) and is not a truncation of anything. */
 const TRUNCATED_REASONS = new Set(['budget', 'rounds']);
 
 /**
@@ -343,21 +328,14 @@ function drKindForReason(finalizeReason) {
  * orphan files) and non-report outcomes. Must run BEFORE the response is saved so the
  * persisted message carries the file.
  */
-async function attachReportPdf({
-  req,
-  responseMessage,
-  reportMarkdown,
-  title,
-  finalizeReason,
-  unfinished,
-}) {
+async function attachReportPdf({ req, responseMessage, reportMarkdown, title, finalizeReason }) {
   if (req?.body?.isTemporary || !PDF_ELIGIBLE_REASONS.has(finalizeReason)) {
     logger.info(
       `[deepResearchRun] PDF skipped (${req?.body?.isTemporary ? 'temporary chat' : `reason=${finalizeReason}`})`,
     );
     return;
   }
-  const markdown = withTruncationNotice((reportMarkdown ?? '').trim(), unfinished);
+  const markdown = (reportMarkdown ?? '').trim();
   if (!markdown) {
     return;
   }
@@ -1854,15 +1832,19 @@ async function runNewDeepResearch(params) {
     logger.warn(`[deepResearchRun] node error [${nodeError.node}]: ${nodeError.message}`);
   }
 
-  // The frontend "unfinished" indicator reads "…may be incomplete… Any results shown above
-  // are still usable", so it may ONLY go under a message that HAS usable results above it
-  // and really was cut short — i.e. budget/rounds, where the model wrote a real report but
-  // gathering stopped at its gate. Every other outcome now saves a COMPLETE, self-contained
-  // message: a full report ('completed'), a plan/clarify card, a concurrency refusal
-  // ('limit'), a dismissed plan ('cancelled'), a clean STOPPED notice ('aborted'), or an
-  // honest failure notice with nothing above it ('time'/'error'/'nodata') — putting
-  // "results above are still usable" under those would be a lie. Hence an ALLOW-list: with
-  // no partial reports left (PR-2), "unfinished" is the exception, not the default.
+  // `unfinished` is now a MACHINE record, not a message to anybody: nothing renders it for a
+  // Deep Research report on any surface (owner decision, 27.08.2026 — a report written from
+  // less material is still a real synthesis, and a self-deprecating line under it reads to a
+  // client as an unreliable platform rather than as candour). It is still written, because
+  // it is how a truncated run is counted afterwards — `tools/dr_run_metrics/snapshot.py`
+  // reads it straight off `db.messages` — and the ops line above still names the reason.
+  //
+  // The ALLOW-list stays narrow for the same reason it was narrow before: the flag has to
+  // mean "the model wrote a real report but gathering stopped at its gate" and nothing else,
+  // or the count it feeds stops meaning anything. Every other outcome saves a COMPLETE,
+  // self-contained message: a full report ('completed'), a plan/clarify card, a concurrency
+  // refusal ('limit'), a dismissed plan ('cancelled'), a clean STOPPED notice ('aborted'), or
+  // an honest failure notice with nothing above it ('time'/'error'/'nodata').
   //
   // A user Stop (aborted) ALWAYS saves a clean STOPPED notice and NEVER a report — owner
   // decision (2026-07-13): Stop = "I don't want this", so no partial, no findings dump,
@@ -1989,7 +1971,6 @@ async function runNewDeepResearch(params) {
     reportMarkdown: finalReportText,
     title: deepResearchTitle,
     finalizeReason: result.finalizeReason,
-    unfinished,
   });
 
   // Save user + response BEFORE the final event (mirrors request.js:523-546 — avoids
@@ -2159,10 +2140,8 @@ module.exports = {
   isDrFollowUp,
   buildDrTurnContext,
   buildDeepResearchCollectedUsage,
-  /** Test-only: the live card's progress curve and the caveat the PDF carries on its own. */
+  /** Test-only: the live card's progress curves. */
   drProgressFraction,
   drReportFraction,
   drReportAction,
-  withTruncationNotice,
-  PDF_TRUNCATED_NOTICE,
 };

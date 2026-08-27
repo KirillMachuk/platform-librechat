@@ -2563,25 +2563,58 @@ describe('the report phase has a curve of its own (the last minutes stop reading
   });
 });
 
-describe('the PDF carries the truncation caveat on its own', () => {
-  const { withTruncationNotice, PDF_TRUNCATED_NOTICE } = require('./deepResearchRun');
+describe('a truncated run is recorded, not announced (owner decision 27.08.2026)', () => {
+  /**
+   * A report written from less material is still a real synthesis. A line under it saying
+   * so reads to a client as "this platform is unreliable" far more loudly than it reads as
+   * candour, so no surface shows one any more: not the chat, not the reader, not the share
+   * page, and not the PDF.
+   *
+   * What must NOT go with it is the record. `unfinished` is still stamped on the message —
+   * `tools/dr_run_metrics/snapshot.py` counts truncated runs straight off `db.messages`,
+   * and that count is how the budget work was proved (4 of 9 before, 0 of 5 after). Drop
+   * the flag to "clean up" and the measurement silently reports zero forever.
+   */
+  it('stamps the flag on a run whose gathering hit the budget gate', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockRunDeepResearch.mockImplementationOnce(async () => ({
+      finalReport: '# Отчёт\n\nВывод.',
+      finalizeReason: 'budget',
+      usage: { input: 1, output: 1, total: 2 },
+      findings: [],
+    }));
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(mockSavedMessages.find((m) => m.messageId === 'r1').unfinished).toBe(true);
+  });
+
+  it('leaves a complete run unflagged (the control)', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    expect(mockSavedMessages.find((m) => m.messageId === 'r1').unfinished).toBe(false);
+  });
 
   /**
-   * The PDF is the copy that leaves the chat. In the chat "gathering stopped early" is a
-   * field on the message; a file has no such field, so a truncated report was forwarded to
-   * a manager reading as finished.
+   * FAILS ON PRE-CHANGE CODE: the PDF used to open with «Сбор материала остановился
+   * раньше…». The PDF is the copy that leaves the chat — forwarded, printed, mailed on —
+   * so a caveat left there is the one that travels furthest.
    */
-  it('prepends the caveat for a run whose gathering was cut short', () => {
-    const out = withTruncationNotice('# Отчёт\n\nВывод.', true);
-    expect(out.startsWith(PDF_TRUNCATED_NOTICE)).toBe(true);
-    expect(out).toContain('# Отчёт');
-  });
+  it('hands the PDF the report itself, with nothing prepended to it', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    const report = '# Отчёт\n\nВывод.';
+    mockRunDeepResearch.mockImplementationOnce(async () => ({
+      finalReport: report,
+      finalizeReason: 'budget',
+      usage: { input: 1, output: 1, total: 2 },
+      findings: [],
+    }));
 
-  it('leaves a complete report untouched', () => {
-    expect(withTruncationNotice('# Отчёт', false)).toBe('# Отчёт');
-  });
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
 
-  it('does not turn empty text into a caveat with nothing under it', () => {
-    expect(withTruncationNotice('', true)).toBe('');
+    expect(mockReportToPdfBuffer).toHaveBeenCalledTimes(1);
+    expect(mockReportToPdfBuffer.mock.calls[0][0]).toBe(report);
   });
 });
