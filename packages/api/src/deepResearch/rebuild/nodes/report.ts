@@ -26,7 +26,7 @@ import {
   sanitizeErrorForUser,
 } from '../shared';
 import { MAX_SOURCES, hasResearchMaterial } from './researcher';
-import { buildReportPrompt } from '../prompts';
+import { buildReportPrompt, formatFindings } from '../prompts';
 
 const DEFAULT_MAX_RETRIES = 3;
 /**
@@ -78,33 +78,6 @@ export function concludeToFinalize(reason: SupervisorConcludeReason | null): Fin
 
 function isContextLimitError(error: unknown): boolean {
   return /context|token|length|maximum|too long|413|payload too large/i.test(toErrorMessage(error));
-}
-
-/**
- * Renders the findings REPORT synthesises from, shrunk to `perDigestCap` / `perFindingSources`.
- *
- * BOTH halves shrink on a retry. Only the digest used to: a run with many findings could enter
- * the third attempt at an eighth of its evidence while carrying its full source lists — so the
- * model saw the URLs of facts whose text had been cut away, and wrote the report from what was
- * left. It was still returned as a normal 'completed' report, with nothing to say it had been
- * written from a fraction of the material.
- */
-function formatFindings(
-  findings: DeepResearchFinding[],
-  perDigestCap: number,
-  perFindingSources: number,
-): string {
-  if (findings.length === 0) {
-    return '(материал не собран)';
-  }
-  return findings
-    .map((finding, i) => {
-      const digest = finding.digest.slice(0, Math.max(1, perDigestCap));
-      const shown = finding.sources.slice(0, Math.max(1, perFindingSources));
-      const sources = shown.length > 0 ? `\nИсточники: ${shown.join(', ')}` : '';
-      return `### Находка ${i + 1}: ${finding.subQuestion}\n${digest}${sources}`;
-    })
-    .join('\n\n');
 }
 
 /**
