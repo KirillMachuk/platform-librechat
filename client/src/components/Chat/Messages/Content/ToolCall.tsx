@@ -120,6 +120,7 @@ export default function ToolCall({
   const mcpIconUrl = isMCPToolCall ? mcpIconMap.get(mcpServerName) : undefined;
   const { data: mcpServers } = useMCPServersQuery({ enabled: isMCPToolCall });
   const oauthDisclosure = isMCPToolCall ? mcpServers?.[mcpServerName]?.oauthDisclosure : undefined;
+  const canStartOAuth = mcpServerName !== 'google-drive' || oauthDisclosure != null;
 
   const actionId = useMemo(() => {
     if (isMCPToolCall || !parsedAuthUrl) {
@@ -262,7 +263,7 @@ export default function ToolCall({
           )}
         </div>
       </div>
-      {auth != null && auth && progress < 1 && !showCancelled && (
+      {auth != null && auth && progress < 1 && !showCancelled && canStartOAuth && (
         <div className="flex w-full flex-col gap-2.5">
           {oauthDisclosure && <OAuthDisclosure disclosure={oauthDisclosure} />}
           <div className="mb-1 mt-2">

@@ -49,6 +49,25 @@ describe('sanitizeGoogleDriveToolOutputs', () => {
     );
   });
 
+  it('redacts Google Drive output inside resumable-stream run-step events', () => {
+    const eventData = {
+      result: {
+        id: 'step-1',
+        tool_call: {
+          name: 'read_file_content_mcp_google-drive',
+          args: '{"fileId":"kept-for-provenance"}',
+          output: 'restricted Redis data',
+        },
+      },
+    };
+
+    const sanitized = sanitizeGoogleDriveToolOutputs(eventData) as typeof eventData;
+
+    expect(sanitized.result.tool_call.output).toBe(GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED);
+    expect(sanitized.result.tool_call.args).toContain('kept-for-provenance');
+    expect(eventData.result.tool_call.output).toBe('restricted Redis data');
+  });
+
   it('does not change unrelated or lookalike tools', () => {
     const content = [
       {

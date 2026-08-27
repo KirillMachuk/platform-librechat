@@ -4,7 +4,7 @@ const GOOGLE_DRIVE_TOOL_NAMES = new Set([
   'read_file_content_mcp_google-drive',
 ]);
 
-export const GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED = JSON.stringify({
+export const GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED: string = JSON.stringify({
   status: 'not_persisted',
   provider: 'google-drive',
   requiresReread: true,
@@ -32,22 +32,17 @@ function sanitizeValue(value: unknown): unknown {
   let changed = false;
   let result: Record<string, unknown> = value;
 
-  if (value.type === 'tool_call' && isRecord(value.tool_call)) {
-    const toolCall = value.tool_call;
-    if (
-      typeof toolCall.name === 'string' &&
-      GOOGLE_DRIVE_TOOL_NAMES.has(toolCall.name) &&
-      toolCall.output !== GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED
-    ) {
-      result = {
-        ...value,
-        tool_call: {
-          ...toolCall,
-          output: GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED,
-        },
-      };
-      changed = true;
-    }
+  if (
+    typeof value.name === 'string' &&
+    GOOGLE_DRIVE_TOOL_NAMES.has(value.name) &&
+    Object.prototype.hasOwnProperty.call(value, 'output') &&
+    value.output !== GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED
+  ) {
+    result = {
+      ...value,
+      output: GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED,
+    };
+    changed = true;
   }
 
   for (const [key, item] of Object.entries(result)) {

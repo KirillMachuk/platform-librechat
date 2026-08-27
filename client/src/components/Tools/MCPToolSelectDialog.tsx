@@ -188,8 +188,8 @@ function MCPToolSelectDialog({
 
   const onAddTool = async (serverName: string) => {
     if (configuringServer === serverName) {
-      setConfiguringServer(null);
-      await handleDirectAdd(serverName);
+      // OAuth may start only from the explicit Connect button immediately below
+      // the disclosure, never from a second click on the server card.
       return;
     }
 

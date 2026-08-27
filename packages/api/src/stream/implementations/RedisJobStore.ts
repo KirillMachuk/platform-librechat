@@ -1,5 +1,5 @@
-import { logger } from '@librechat/data-schemas';
 import { createContentAggregator } from '@librechat/agents';
+import { logger, sanitizeGoogleDriveToolOutputs } from '@librechat/data-schemas';
 import type { StandardGraph } from '@librechat/agents';
 import type { Agents } from 'librechat-data-provider';
 import type { Redis, Cluster } from 'ioredis';
@@ -703,12 +703,13 @@ export class RedisJobStore implements IJobStore {
 
   async appendChunk(streamId: string, event: unknown): Promise<void> {
     const key = KEYS.chunks(streamId);
+    const persistedEvent = sanitizeGoogleDriveToolOutputs(event);
     // Pipeline XADD + EXPIRE in a single round-trip.
     // EXPIRE is O(1) and idempotent — refreshing TTL on every chunk is better than
     // only setting it once, since the original approach could let the TTL expire
     // during long-running streams.
     const pipeline = this.redis.pipeline();
-    pipeline.xadd(key, '*', 'event', JSON.stringify(event));
+    pipeline.xadd(key, '*', 'event', JSON.stringify(persistedEvent));
     pipeline.expire(key, this.ttl.running);
     await pipeline.exec();
   }
@@ -740,7 +741,8 @@ export class RedisJobStore implements IJobStore {
    */
   async saveRunSteps(streamId: string, runSteps: Agents.RunStep[]): Promise<void> {
     const key = KEYS.runSteps(streamId);
-    await this.redis.set(key, JSON.stringify(runSteps), 'EX', this.ttl.running);
+    const persistedRunSteps = sanitizeGoogleDriveToolOutputs(runSteps);
+    await this.redis.set(key, JSON.stringify(persistedRunSteps), 'EX', this.ttl.running);
   }
 
   // ===== Consumer Group Methods =====

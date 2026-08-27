@@ -322,6 +322,25 @@ describe('ToolCall', () => {
         'href',
         'https://example.com/privacy',
       );
+      expect(screen.getByRole('button', { name: 'Sign in to accounts.google.com' })).toBeVisible();
+    });
+
+    it('does not expose Google Drive OAuth while the required disclosure is unavailable', () => {
+      mockUseMCPServersQuery.mockReturnValue({ data: undefined });
+
+      renderWithRecoil(
+        <ToolCall
+          {...mockProps}
+          name={`oauth${Constants.mcp_delimiter}google-drive`}
+          initialProgress={0.5}
+          auth="https://accounts.google.com/o/oauth2/v2/auth"
+          isSubmitting={true}
+        />,
+      );
+
+      expect(
+        screen.queryByRole('button', { name: 'Sign in to accounts.google.com' }),
+      ).not.toBeInTheDocument();
     });
 
     it('should show sign-in button when auth URL is provided', () => {
