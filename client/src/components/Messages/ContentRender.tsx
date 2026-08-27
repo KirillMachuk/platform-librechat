@@ -165,6 +165,13 @@ const ContentRender = memo(function ContentRender({
    * The note now lives in one place and is gated by one exported predicate — see
    * `TruncatedNote`. It used to be inlined here and nowhere else, so the share page kept
    * showing the same report as a red «Не удалось выполнить запрос».
+   *
+   * It is handed to `ReportCard` rather than rendered beside it. As a sibling it sat
+   * below the card, where the composer cut it in half on a phone, and the reader — a
+   * Radix portal — could not show it at all: the surface where the report is actually
+   * read was the only one that never said the report was cut short. The sibling render
+   * below survives for the one case with no card: a legacy pre-drKind report, where
+   * `resolveDrReport` returns null but the note still applies.
    */
   const unfinishedNotice = useMemo(
     () => (!isSubmitting && isTruncatedDrReport(msg) ? <TruncatedNote /> : null),
@@ -264,7 +271,7 @@ const ContentRender = memo(function ContentRender({
             <div className={cn(showUserBubble && chip == null && USER_BUBBLE_CLASS)}>
               {drCard ??
                 (drReport ? (
-                  <ReportCard title={drReport.title} text={msgText}>
+                  <ReportCard title={drReport.title} text={msgText} notice={unfinishedNotice}>
                     {contentPartsEl}
                   </ReportCard>
                 ) : (
@@ -276,7 +283,7 @@ const ContentRender = memo(function ContentRender({
                   </>
                 ))}
             </div>
-            {unfinishedNotice}
+            {drReport == null && unfinishedNotice}
             {/* Assistant-side file artifacts (e.g. the Deep Research report PDF):
                 Container renders message.files for USER messages only, so without this
                 the assistant's attached files never appear. Images excluded — generated

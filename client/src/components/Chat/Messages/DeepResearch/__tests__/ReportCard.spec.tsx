@@ -51,6 +51,45 @@ describe('ReportCard', () => {
     expect(writeText).toHaveBeenCalledWith('RAW-MD');
   });
 
+  /**
+   * The «report is incomplete» note has to reach BOTH surfaces.
+   *
+   * Measured at 375×812 before this prop existed (`tools/dr_report_card_probe.js`):
+   * `noticeInsideDialog: false` — the reader, where the whole report is actually read,
+   * was the one surface that never said the report had been cut short.
+   */
+  it('carries the note inside the collapsed card', () => {
+    const { getByTestId } = render(
+      <ReportCard title="T" text="md" notice={<div data-testid="note">неполный</div>}>
+        <div>body</div>
+      </ReportCard>,
+    );
+    expect(getByTestId('note')).toBeInTheDocument();
+  });
+
+  it('carries the note inside the reader too', () => {
+    const { getByText, getByTestId, getAllByTestId } = render(
+      <ReportCard title="T" text="md" notice={<div data-testid="note">неполный</div>}>
+        <div>body</div>
+      </ReportCard>,
+    );
+    act(() => {
+      fireEvent.click(getByText('com_ui_expand'));
+    });
+    const reader = getByTestId('reader');
+    // FAILS ON PRE-FIX CODE: the reader is a portal and the note used to live outside it.
+    expect(getAllByTestId('note').some((el) => reader.contains(el))).toBe(true);
+  });
+
+  it('says nothing extra when the report is complete', () => {
+    const { queryByTestId } = render(
+      <ReportCard title="T" text="md">
+        <div>body</div>
+      </ReportCard>,
+    );
+    expect(queryByTestId('note')).toBeNull();
+  });
+
   it('expands into the full-screen reader on Развернуть', () => {
     const { getByText, queryByTestId } = render(
       <ReportCard title="T" text="md">

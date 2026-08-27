@@ -1399,6 +1399,158 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     const drEvents = mockEmitChunk.mock.calls.filter((c) => c[1]?.event === 'dr_progress');
     expect(drEvents).toHaveLength(0);
   });
+
+  /**
+   * The report node is a single long completion — three to four minutes on a deep run,
+   * during which the graph used to say nothing at all. The card spent those minutes
+   * showing the LAST sub-question at a bar that never moved: not idle, wrong.
+   */
+  function planChain() {
+    return [
+      { messageId: 'orig', isCreatedByUser: true, parentMessageId: null, text: 'изучи CRM рынок' },
+      {
+        messageId: 'p1',
+        isCreatedByUser: false,
+        parentMessageId: 'orig',
+        drKind: 'plan',
+        text: '**План исследования:** Рынок CRM\n\n1. Собрать вендоров\n2. Сравнить цены',
+      },
+    ];
+  }
+
+  function graphRun(script) {
+    mockRunDeepResearch.mockImplementationOnce(async (params) => {
+      script(params);
+      return {
+        finalReport: 'Отчёт',
+        finalizeReason: 'completed',
+        usage: { input: 1, output: 1, total: 2 },
+        findings: [],
+      };
+    });
+  }
+
+  const reportSnapshots = () =>
+    mockEmitChunk.mock.calls
+      .filter((c) => c[1]?.event === 'dr_progress' && c[1].data.phase === 'report')
+      .map((c) => c[1].data);
+
+  it('keeps a heartbeat for the whole time the report is being written', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getMessages.mockResolvedValueOnce(planChain());
+    jest.useFakeTimers();
+    try {
+      graphRun((params) => {
+        params.onProgress({ type: 'research', round: 1, subQuestion: 'конкуренты' });
+        // The engine announces the phase from the supervisor's concluding pass.
+        params.onProgress({ type: 'report' });
+        // Advanced in slices, not one leap: a single long jump can hide a handler that
+        // only ever runs once.
+        for (let i = 0; i < 14; i++) {
+          jest.advanceTimersByTime(5_000);
+        }
+      });
+      await runNewDeepResearch(planParams('Начать исследование'));
+    } finally {
+      jest.useRealTimers();
+    }
+
+    const snapshots = reportSnapshots();
+    // FAILS ON PRE-FIX CODE: one snapshot, then silence for the rest of the phase.
+    expect(snapshots.length).toBeGreaterThanOrEqual(14);
+    expect(snapshots[snapshots.length - 1].progress).toBeGreaterThan(snapshots[0].progress);
+    expect(snapshots[snapshots.length - 1].action).toMatch(/Формирует отчёт — \d+ мин \d+ с/);
+    // The client REPLACES its snapshot, so every tick has to carry the checklist and the
+    // search count too — a partial one would blank the card it is trying to animate.
+    expect(snapshots[0].steps).toEqual(['Собрать вендоров', 'Сравнить цены']);
+    expect(snapshots[0].searches).toBe(1);
+  });
+
+  it('stops the heartbeat when the run ends', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getMessages.mockResolvedValueOnce(planChain());
+    jest.useFakeTimers();
+    let after = 0;
+    try {
+      graphRun((params) => {
+        params.onProgress({ type: 'report' });
+        jest.advanceTimersByTime(10_000);
+      });
+      await runNewDeepResearch(planParams('Начать исследование'));
+      const during = reportSnapshots().length;
+      // A timer that outlives the run keeps emitting into a stream the client has already
+      // finalized — the card would flicker back to life under the finished report.
+      jest.advanceTimersByTime(60_000);
+      after = reportSnapshots().length - during;
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(after).toBe(0);
+  });
+
+  it('the second report event does not restart the clock', async () => {
+    // The engine fires 'report' twice by design: the supervisor's conclusion (the phase
+    // starts) and the report node's own update (it is over). Restarting on the second
+    // would walk the bar back to its opening number on the last tick before the final.
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getMessages.mockResolvedValueOnce(planChain());
+    jest.useFakeTimers();
+    try {
+      graphRun((params) => {
+        params.onProgress({ type: 'report' });
+        jest.advanceTimersByTime(120_000);
+        params.onProgress({ type: 'report' });
+      });
+      await runNewDeepResearch(planParams('Начать исследование'));
+    } finally {
+      jest.useRealTimers();
+    }
+    const snapshots = reportSnapshots();
+    const last = snapshots[snapshots.length - 1];
+    const previous = snapshots[snapshots.length - 2];
+    expect(last.progress).toBeGreaterThanOrEqual(previous.progress);
+    expect(last.progress).toBeGreaterThan(0.92);
+  });
+
+  it('arms no heartbeat on a legacy run with no card listening', async () => {
+    // The gate lives in the emit, so a timer here would tick for four minutes into a
+    // function that discards every tick. Observable only as a pending timer.
+    mockStartSovereignSession.mockResolvedValue(null);
+    jest.useFakeTimers();
+    let armed = -1;
+    try {
+      mockRunDeepResearch.mockImplementationOnce(async (params) => {
+        const before = jest.getTimerCount();
+        params.onProgress({ type: 'report' });
+        armed = jest.getTimerCount() - before;
+        return {
+          finalReport: 'Отчёт',
+          finalizeReason: 'completed',
+          usage: { input: 1, output: 1, total: 2 },
+          findings: [],
+        };
+      });
+      await runNewDeepResearch(baseParams('изучи CRM')); // no planGate
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(armed).toBe(0);
+  });
+
+  it('never asks the engine for token streaming', async () => {
+    // Not an omission — a measured dead end. Every DR node model is built
+    // `streaming: false` on purpose (see the non-streaming test above), so the token
+    // callback delivers the whole report in ONE burst after the node is already done.
+    // A length-of-text signal looks perfect against a streaming fake and does nothing on
+    // the stand.
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getMessages.mockResolvedValueOnce(planChain());
+    graphRun(() => {});
+
+    await runNewDeepResearch(planParams('Начать исследование'));
+
+    expect(mockRunDeepResearch.mock.calls[0][0].onToken).toBeUndefined();
+  });
 });
 
 describe('runNewDeepResearch — task #21 aborted anchor (persist a re-plannable Stop)', () => {
@@ -2382,6 +2534,32 @@ describe('the live card does not promise rounds the budget will not buy', () => 
   it('keeps the scope and report anchors', () => {
     expect(drProgressFraction({ type: 'scope' }, 6, 0)).toBe(0.08);
     expect(drProgressFraction({ type: 'report' }, 6, 0)).toBe(0.92);
+  });
+});
+
+describe('the report phase has a curve of its own (the last minutes stop reading as hung)', () => {
+  const { drReportFraction, drReportAction } = require('./deepResearchRun');
+  const MIN = 60_000;
+
+  it('starts exactly where the report step stood and only ever rises', () => {
+    expect(drReportFraction(0)).toBe(0.92);
+    for (const ms of [10_000, MIN, 3 * MIN, 10 * MIN, 30 * MIN]) {
+      expect(drReportFraction(ms)).toBeGreaterThan(drReportFraction(ms / 2));
+    }
+  });
+
+  it('never arrives — only the end of the run fills the bar', () => {
+    // A curve that could reach its ceiling on its own would freeze again, one number
+    // higher, on exactly the long reports this was written for.
+    expect(drReportFraction(60 * MIN)).toBeLessThan(0.99);
+    expect(drReportFraction(5 * MIN)).toBeLessThan(0.99);
+  });
+
+  it('names the elapsed time only once the phase has actually been running', () => {
+    expect(drReportAction(0)).toBe('Формирует отчёт');
+    expect(drReportAction(29_000)).toBe('Формирует отчёт');
+    expect(drReportAction(45_000)).toBe('Формирует отчёт — 45 с');
+    expect(drReportAction(130_000)).toBe('Формирует отчёт — 2 мин 10 с');
   });
 });
 

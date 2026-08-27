@@ -29,14 +29,31 @@ function headingLevel(tag: string): number {
  * closing needs no re-parse); on <md the TOC — previously absent on phones — renders as
  * a collapsible «Содержание» disclosure above the text; the scroll region is keyboard-
  * focusable so PageDown/arrows work without a mouse.
+ *
+ * Two phone-shaped rules, both measured at 375×812 on a 15 000-character report
+ * (`tools/dr_report_card_probe.js`):
+ *
+ * 1. The reader is FULL SCREEN below `md`. It used to be a 96vw × 88dvh box with the
+ *    chat showing around its edges — on a 375px phone that spends the scarce width on
+ *    a margin and reads as a popup rather than a document. Above `md` it stays the
+ *    centred box it was. The breakpoint pattern is the fork's own (`EditPresetDialog`).
+ * 2. The «report is incomplete» note is a PROP, not a sibling. Rendered outside the
+ *    card it was cut in half by the composer in the chat, and the reader — a Radix
+ *    portal — never showed it at all: the one surface where the whole report is read
+ *    was the one surface that did not say the report was cut short. Measured before the
+ *    fix: `noticeInsideDialog: false`.
  */
 export default function ReportCard({
   title,
   text,
+  notice,
   children,
 }: {
   title: string;
   text: string;
+  /** The «report is incomplete» note, when there is one. Rendered INSIDE the card and
+   *  INSIDE the reader — see the component doc for why it cannot live beside them. */
+  notice?: ReactNode;
   children: ReactNode;
 }) {
   const localize = useLocalize();
@@ -136,6 +153,7 @@ export default function ReportCard({
             aria-hidden="true"
           />
         </div>
+        {notice != null && <div className="px-4 pb-1">{notice}</div>}
         <div className="flex items-center justify-end gap-2 px-3 py-2">
           <Button variant="ghost" size="sm" onClick={copy}>
             {copyLabel}
@@ -148,7 +166,7 @@ export default function ReportCard({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
           showCloseButton={true}
-          className="flex h-[88dvh] w-[min(96vw,56rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0"
+          className="flex h-[100dvh] max-h-[100dvh] w-full max-w-full flex-col gap-0 overflow-hidden rounded-none p-0 md:h-[88dvh] md:max-h-[88dvh] md:w-[min(96vw,56rem)] md:max-w-4xl md:rounded-xl"
         >
           <DialogHeader className="border-b border-border-light px-4 py-4 sm:px-6">
             <div className="flex items-center justify-between gap-3 pr-10">
@@ -187,6 +205,7 @@ export default function ReportCard({
               aria-label={displayTitle}
               className="focus-inset min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 focus-visible:outline-none sm:px-8"
             >
+              {notice}
               {children}
             </div>
           </div>

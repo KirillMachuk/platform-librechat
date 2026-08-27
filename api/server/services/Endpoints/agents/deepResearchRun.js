@@ -490,6 +490,57 @@ function drProgressAction(event) {
 }
 
 /**
+ * Report-phase progress, derived from HOW LONG the report has been writing.
+ *
+ * The REPORT node is one long completion — on a deep run it holds the screen for three to
+ * four minutes with no state update of its own. Until the engine learned to announce the
+ * phase from the supervisor's concluding pass, the card spent those minutes showing the
+ * LAST sub-question at a bar that never moved: not merely idle, but wrong.
+ *
+ * Elapsed time, not text written. Every DR node model is deliberately built
+ * `streaming: false` (see `buildNodeModel`: the streaming branch estimates usage through a
+ * tiktoken download a sovereign deployment cannot reach, which cost ~200 s of dead retries
+ * per call), so token callbacks deliver the whole report in ONE burst when the node is
+ * already done. A length-of-text signal reads beautifully in a test with a streaming fake
+ * and does exactly nothing in production. The clock does not lie either way.
+ *
+ * Asymptotic on purpose. Nothing here knows how long a given report will take, so a curve
+ * that could reach its ceiling on its own would simply freeze again one number higher;
+ * this one starts at the 0.92 the report step already claimed and approaches 0.99 without
+ * arriving. Only the run's end fills the bar.
+ */
+const REPORT_HALFWAY_MS = 3 * 60_000;
+/** Ceiling the curve approaches; only the run's end fills the bar. */
+const REPORT_CEILING = 0.99;
+function drReportFraction(elapsedMs) {
+  const elapsed = Math.max(0, elapsedMs);
+  /* The floor is the report step's own number, read from the curve above rather than
+   * repeated here — two copies of 0.92 would drift the day one of them is tuned. */
+  const floor = drProgressFraction({ type: 'report' }, 0, 0);
+  return floor + (REPORT_CEILING - floor) * (elapsed / (elapsed + REPORT_HALFWAY_MS));
+}
+
+/** Below this the phase has only just started and the plain label reads better than
+ *  a counter ticking up from zero. */
+const REPORT_ELAPSED_FLOOR_MS = 30_000;
+
+/** RU action line for the report phase, carrying the elapsed time once there is some. */
+function drReportAction(elapsedMs) {
+  if (elapsedMs < REPORT_ELAPSED_FLOOR_MS) {
+    return 'Формирует отчёт';
+  }
+  const totalSeconds = Math.floor(elapsedMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const elapsed = minutes > 0 ? `${minutes} мин ${seconds} с` : `${seconds} с`;
+  return `Формирует отчёт — ${elapsed}`;
+}
+
+/** How often the report phase refreshes the card while the model writes. Every tick is an
+ *  SSE event and a job-store write, so it is a heartbeat, not an animation. */
+const REPORT_TICK_MS = 5_000;
+
+/**
  * Renders the collected DR exchange (top-down) + the current unsaved turn text as a
  * labeled transcript for the plan decision / research input. START/CANCEL command
  * messages carry no research content and are skipped.
@@ -1636,6 +1687,49 @@ async function runNewDeepResearch(params) {
         planGateEnabled && isPlanMessage(turn.parentText) ? extractPlanSteps(turn.parentText) : [];
       const maxRounds = Math.max(1, tier.maxOrchestratorCycles || 6);
       let searchCount = 0;
+      /**
+       * One `dr_progress` snapshot. The client REPLACES its snapshot wholesale
+       * (`setDrProgress` in useResumableSSE), so every emit has to carry the checklist and
+       * the search count too — a partial one would blank the card's steps.
+       */
+      const emitDrProgress = (phase, action, progress) => {
+        if (!streamId || !planGateEnabled) {
+          return;
+        }
+        Promise.resolve(
+          GenerationJobManager.emitChunk(streamId, {
+            event: 'dr_progress',
+            data: { phase, steps: planSteps, action, searches: searchCount, progress },
+          }),
+        ).catch(() => {});
+      };
+      /**
+       * Report-phase heartbeat. The engine announces the phase from the supervisor's
+       * concluding pass — the only moment it can, since REPORT itself says nothing until
+       * it is finished — and from there a timer keeps the card honest for the minutes the
+       * model spends writing.
+       *
+       * Nothing of the report's own text travels this channel, and that is a rule rather
+       * than an omission: in sovereign mode the model writes on MASKED material and the
+       * text is de-masked exactly once, at the end (`sovereign.restore`), with the
+       * substitution map held inside the anonymizer and not in this process. A chunk
+       * forwarded from here could not be de-masked at all — it would put `[[PERSON_1]]`
+       * on screen in the report's own title, the one place a report echoes the question,
+       * and then swap it for the real name when the run finalizes.
+       */
+      let reportStartedMs = 0;
+      let reportTicker = null;
+      const emitReportProgress = () => {
+        const elapsedMs = reportStartedMs > 0 ? Date.now() - reportStartedMs : 0;
+        emitDrProgress('report', drReportAction(elapsedMs), drReportFraction(elapsedMs));
+      };
+      const stopReportTicker = () => {
+        if (reportTicker != null) {
+          clearInterval(reportTicker);
+          reportTicker = null;
+        }
+      };
+
       const onProgress = (event) => {
         // The sub-question is NOT logged. From round 1 on it is written by the supervisor
         // after reading digests of untrusted pages, and on the legacy (non-sovereign) path
@@ -1646,43 +1740,58 @@ async function runNewDeepResearch(params) {
           `[deepResearchRun] ${event.type}` +
             `${event.subQuestion ? ` (sub-question ${event.subQuestion.length} chars)` : ''}`,
         );
-        if (!streamId || !planGateEnabled) {
+        if (event.type === 'report') {
+          /* Fired twice by design: once when the supervisor concludes (the phase STARTS)
+           * and once when the report node returns (it is over). The first arrival starts
+           * the clock and the heartbeat; the second is just the last tick before the
+           * final, and must not restart anything. */
+          if (reportStartedMs === 0) {
+            reportStartedMs = Date.now();
+            /* No card listening (legacy gate-off run) → no heartbeat. `emitDrProgress`
+             * would swallow every tick anyway; a timer whose only job is to be ignored
+             * for four minutes is not worth arming. */
+            if (streamId && planGateEnabled) {
+              reportTicker = setInterval(emitReportProgress, REPORT_TICK_MS);
+              reportTicker.unref?.();
+            }
+          }
+          emitReportProgress();
           return;
         }
         if (event.type === 'research') {
           searchCount += 1;
         }
-        Promise.resolve(
-          GenerationJobManager.emitChunk(streamId, {
-            event: 'dr_progress',
-            data: {
-              phase: event.type,
-              steps: planSteps,
-              action: drProgressAction(event),
-              searches: searchCount,
-              progress: drProgressFraction(event, maxRounds, searchCount),
-            },
-          }),
-        ).catch(() => {});
+        emitDrProgress(
+          event.type,
+          drProgressAction(event),
+          drProgressFraction(event, maxRounds, searchCount),
+        );
       };
 
-      result = await runDeepResearch({
-        graph,
-        // Track B: the graph sees the MASKED question (sovereign) or the raw text (legacy).
-        input: {
-          messages: [new HumanMessage(sovereign ? sovereign.maskedQuestion : researchInput)],
-        },
-        configurable: {
-          runId,
-          userId,
-          conversationId,
-          mode: tier.name,
-          budget: tierToRunBudget(tier),
-        },
-        signal,
-        wallClockMs: Math.max(1, tier.wallClockMinutes) * 60_000,
-        onProgress,
-      });
+      try {
+        result = await runDeepResearch({
+          graph,
+          // Track B: the graph sees the MASKED question (sovereign) or the raw text (legacy).
+          input: {
+            messages: [new HumanMessage(sovereign ? sovereign.maskedQuestion : researchInput)],
+          },
+          configurable: {
+            runId,
+            userId,
+            conversationId,
+            mode: tier.name,
+            budget: tierToRunBudget(tier),
+          },
+          signal,
+          wallClockMs: Math.max(1, tier.wallClockMinutes) * 60_000,
+          onProgress,
+        });
+      } finally {
+        /* The heartbeat must not outlive the run on ANY path — including the abort that
+         * unwinds through here — or it keeps emitting into a stream the client has
+         * already finalized. */
+        stopReportTicker();
+      }
     }
   } catch (error) {
     if (error instanceof DeepResearchConfigError) {
@@ -2052,6 +2161,8 @@ module.exports = {
   buildDeepResearchCollectedUsage,
   /** Test-only: the live card's progress curve and the caveat the PDF carries on its own. */
   drProgressFraction,
+  drReportFraction,
+  drReportAction,
   withTruncationNotice,
   PDF_TRUNCATED_NOTICE,
 };

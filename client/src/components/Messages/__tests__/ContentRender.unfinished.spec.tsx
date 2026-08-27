@@ -1,6 +1,6 @@
 import React from 'react';
 import { RecoilRoot } from 'recoil';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { TMessage } from 'librechat-data-provider';
 import ContentRender from '~/components/Messages/ContentRender';
@@ -35,8 +35,14 @@ jest.mock('~/components/Chat/Messages/DeepResearch', () => ({
   __esModule: true,
   PlanCard: () => <div />,
   RunningSlot: () => <div />,
-  ReportCard: ({ children }: { children?: React.ReactNode }) => (
-    <div data-testid="report-card">{children}</div>
+  /* Mirrors the real card's contract: the note is a PROP it renders, not a sibling
+   * someone else draws next to it. A stub that dropped `notice` would keep passing
+   * while the note vanished from the card and from the reader. */
+  ReportCard: ({ notice, children }: { notice?: React.ReactNode; children?: React.ReactNode }) => (
+    <div data-testid="report-card">
+      {notice}
+      {children}
+    </div>
   ),
   resolveDrReport: (...args: unknown[]) => mockResolveDrReport(...(args as [])),
 }));
@@ -148,6 +154,27 @@ describe('ContentRender — an incomplete Deep Research report says so', () => {
     expect(screen.getByTestId('dr-unfinished-notice')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.queryByText(/Не удалось выполнить запрос/)).not.toBeInTheDocument();
+  });
+
+  /**
+   * FAILS ON PRE-FIX CODE: the note was rendered as a SIBLING after the card, so it was
+   * outside this subtree. Being outside cost it both surfaces that matter — on a phone
+   * the composer cut it in half in the chat, and the reader (a Radix portal) never
+   * carried it at all, which left the one place the report is actually read as the one
+   * place that never said the report was cut short.
+   */
+  it('hands the note to the card instead of dropping it beside the card', () => {
+    renderMessage(drReport({ unfinished: true }));
+    const card = screen.getByTestId('report-card');
+    expect(within(card).getByTestId('dr-unfinished-notice')).toBeInTheDocument();
+  });
+
+  /** CONTROL for the test above: a report with no card still shows the note itself. */
+  it('still shows the note on a legacy report that gets no card', () => {
+    mockResolveDrReport.mockReturnValue(null);
+    renderMessage(drReport({ unfinished: true }));
+    expect(screen.getByTestId('dr-unfinished-notice')).toBeInTheDocument();
+    expect(screen.queryByTestId('report-card')).not.toBeInTheDocument();
   });
 
   it('stays quiet on a complete report', () => {
