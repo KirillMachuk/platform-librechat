@@ -2106,5 +2106,6 @@
   "com_ui_file_mode_native": "Original file",
   "com_ui_file_mode_search": "Search in document",
   "com_warning_model_no_vision": "This model can't read images. Switch to a model with vision (e.g. Sonnet, GPT-5, or Gemini) to work with pictures.",
-  "com_ui_temporary_chat_note": "This chat won't appear in your history."
+  "com_ui_temporary_chat_note": "This chat won't appear in your history.",
+  "com_nav_export_failed": "Could not export the conversation. Try another format, or uncheck “include options”."
 }

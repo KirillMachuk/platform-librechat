@@ -1,14 +1,30 @@
-import { parseConvo } from 'librechat-data-provider';
-import type { TPreset } from 'librechat-data-provider';
+import { parseConvo, getEndpointField } from 'librechat-data-provider';
+import type { TPreset, TEndpointsConfig } from 'librechat-data-provider';
 
 type UIPreset = Partial<TPreset> & { presetOverride?: Partial<TPreset> };
 type TCleanupPreset = {
   preset?: UIPreset;
   defaultParamsEndpoint?: string | null;
+  endpointsConfig?: TEndpointsConfig | null;
 };
 
-const cleanupPreset = ({ preset: _preset, defaultParamsEndpoint }: TCleanupPreset): TPreset => {
-  const { endpoint, endpointType } = _preset ?? ({} as UIPreset);
+/**
+ * `parseConvo` resolves a CUSTOM endpoint through `endpointType`, because a custom
+ * endpoint's NAME is not a schema key — without it it throws `Unknown endpoint: <name>`
+ * and takes its caller down. Conversations are not guaranteed to carry the field: a
+ * Deep Research run persisted rows without it (fixed), and every such row already on
+ * disk still lacks it. Resolving it from the endpoints config here — the same
+ * `getEndpointField(…, 'type')` lookup `EndpointIcon` and `EndpointSettings` already
+ * use — makes those rows work too, with no data migration. Stored value wins; the
+ * config is the fallback, not an override.
+ */
+const cleanupPreset = ({
+  preset: _preset,
+  defaultParamsEndpoint,
+  endpointsConfig,
+}: TCleanupPreset): TPreset => {
+  const { endpoint } = _preset ?? ({} as UIPreset);
+  const endpointType = _preset?.endpointType ?? getEndpointField(endpointsConfig, endpoint, 'type');
   if (endpoint == null || endpoint === '') {
     console.error(`Unknown endpoint ${endpoint}`, _preset);
     return {

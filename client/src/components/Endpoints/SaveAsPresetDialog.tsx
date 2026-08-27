@@ -3,6 +3,7 @@ import { useCreatePresetMutation } from 'librechat-data-provider/react-query';
 import { OGDialogTemplate, OGDialog, Input, Label, useToastContext } from '@librechat/client';
 import type { TEditPresetProps } from '~/common';
 import { cn, removeFocusOutlines, cleanupPreset, defaultTextProps } from '~/utils';
+import { useGetEndpointsQuery } from '~/data-provider';
 import { NotificationSeverity } from '~/common';
 import { useLocalize } from '~/hooks';
 
@@ -11,6 +12,9 @@ const SaveAsPresetDialog = ({ open, onOpenChange, preset }: TEditPresetProps) =>
   const createPresetMutation = useCreatePresetMutation();
   const { showToast } = useToastContext();
   const localize = useLocalize();
+  /** Same reason as Export: without the endpoint's param family `cleanupPreset` throws
+   *  on a conversation saved without it, and this dialog died just as silently. */
+  const { data: endpointsConfig } = useGetEndpointsQuery();
 
   const submitPreset = () => {
     const _preset = cleanupPreset({
@@ -18,6 +22,7 @@ const SaveAsPresetDialog = ({ open, onOpenChange, preset }: TEditPresetProps) =>
         ...preset,
         title,
       },
+      endpointsConfig,
     });
 
     const toastTitle =

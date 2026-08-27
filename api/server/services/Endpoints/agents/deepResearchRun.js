@@ -1160,6 +1160,8 @@ async function billDeepResearchUsage({
  * @param {string} params.parentMessageId
  * @param {string} params.responseMessageId
  * @param {string} params.sender
+ * @param {string} [params.endpointType]  The endpoint's param family, persisted with the
+ *   conversation so its settings stay parseable (a custom endpoint name is not a schema key).
  * @param {object} params.userMessage  The preliminary user message (for the final event).
  * @param {string} params.text         The user's research request.
  * @param {object} [params.turn]       Precomputed DR turn context (request.js classifies
@@ -1176,6 +1178,7 @@ async function runNewDeepResearch(params) {
     streamId,
     signal,
     endpoint,
+    endpointType,
     conversationModel,
     userId,
     conversationId,
@@ -1966,6 +1969,18 @@ async function runNewDeepResearch(params) {
         {
           conversationId,
           endpoint,
+          /** The endpoint's PARAM FAMILY, saved beside the endpoint itself because the two
+           *  are read as a pair. A custom endpoint's name is not a schema key, so anything
+           *  that parses a conversation's settings resolves it through `endpointType` — with
+           *  the field missing, `parseConvo` throws `Unknown endpoint: <name>` and the caller
+           *  dies. That is what broke Export: json/txt/markdown build an options block from
+           *  the parsed conversation and every DR chat threw there, while csv and screenshot
+           *  (which build no options) worked — measured on the stand, 42 of 42 conversations
+           *  missing this field were DR ones, 0 of 128 others. The normal path persists it
+           *  from client options (`getSaveOptions`); a DR run bypasses AgentClient, so it
+           *  must carry the same pair itself. Third field of this exact omission after the
+           *  model card and the project link below. */
+          ...(endpointType ? { endpointType } : {}),
           model: leadModelSlug,
           title: deepResearchTitle,
           /** The chat's model card. DR persisted four fields and not this one, so a chat

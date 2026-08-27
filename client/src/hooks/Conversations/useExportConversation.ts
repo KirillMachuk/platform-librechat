@@ -1,5 +1,5 @@
-import download from 'downloadjs';
 import { useCallback } from 'react';
+import download from 'downloadjs';
 import { useParams } from 'react-router-dom';
 import exportFromJSON from 'export-from-json';
 import { useQueryClient } from '@tanstack/react-query';
@@ -19,8 +19,9 @@ import type {
 } from 'librechat-data-provider';
 import useBuildMessageTree from '~/hooks/Messages/useBuildMessageTree';
 import { useScreenshot } from '~/hooks/ScreenshotContext';
-import { useLocalize } from '~/hooks';
+import { useGetEndpointsQuery } from '~/data-provider';
 import { cleanupPreset } from '~/utils';
+import { useLocalize } from '~/hooks';
 
 type ExportValues = {
   fieldName: string;
@@ -47,6 +48,9 @@ export default function useExportConversation({
   const { captureScreenshot } = useScreenshot();
   const buildMessageTree = useBuildMessageTree();
   const localize = useLocalize();
+  /** Lets `cleanupPreset` resolve a custom endpoint's param family for conversations
+   *  saved without it — see the note there. */
+  const { data: endpointsConfig } = useGetEndpointsQuery();
 
   const { conversationId: paramId } = useParams();
 
@@ -159,13 +163,10 @@ export default function useExportConversation({
   };
 
   const exportScreenshot = async () => {
-    let data;
-    try {
-      data = await captureScreenshot();
-    } catch (err) {
-      console.error('Failed to capture screenshot');
-      return console.error(err);
-    }
+    /* The capture used to swallow its own failure and return, which left the screenshot
+     * the one format that could fail without saying so — the same silence this change
+     * removes everywhere else. The caller owns the message now. */
+    const data = await captureScreenshot();
     download(data, `${filename}.png`, 'image/png');
   };
 
@@ -243,7 +244,7 @@ export default function useExportConversation({
 
     if (includeOptions === true) {
       data += '\n## Options\n';
-      const options = cleanupPreset({ preset: conversation as TPreset });
+      const options = cleanupPreset({ preset: conversation as TPreset, endpointsConfig });
 
       for (const key of Object.keys(options)) {
         data += `- ${key}: ${options[key]}\n`;
@@ -299,7 +300,7 @@ export default function useExportConversation({
 
     if (includeOptions === true) {
       data += '\nOptions\n########################\n';
-      const options = cleanupPreset({ preset: conversation as TPreset });
+      const options = cleanupPreset({ preset: conversation as TPreset, endpointsConfig });
 
       for (const key of Object.keys(options)) {
         data += `${key}: ${options[key]}\n`;
@@ -355,7 +356,7 @@ export default function useExportConversation({
     };
 
     if (includeOptions === true) {
-      data['options'] = cleanupPreset({ preset: conversation as TPreset });
+      data['options'] = cleanupPreset({ preset: conversation as TPreset, endpointsConfig });
     }
 
     const messages = await buildMessageTree({
@@ -378,17 +379,23 @@ export default function useExportConversation({
     download(blob, `${filename}.json`, 'application/json');
   };
 
-  const exportConversation = () => {
+  /**
+   * Async so the caller can await it and SAY something when it fails. Every branch used
+   * to be fired and forgotten: a throw became an unhandled rejection, the dialog stayed
+   * open and the Export button read as dead — which is exactly how the `Unknown endpoint`
+   * defect reached the user, with no message anywhere.
+   */
+  const exportConversation = async () => {
     if (type === 'json') {
-      exportJSON();
+      await exportJSON();
     } else if (type == 'text') {
-      exportText();
+      await exportText();
     } else if (type == 'markdown') {
-      exportMarkdown();
+      await exportMarkdown();
     } else if (type == 'csv') {
-      exportCSV();
+      await exportCSV();
     } else if (type == 'screenshot') {
-      exportScreenshot();
+      await exportScreenshot();
     }
   };
 

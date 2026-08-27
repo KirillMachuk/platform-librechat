@@ -1,9 +1,9 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import filenamify from 'filenamify';
 import exportFromJSON from 'export-from-json';
 import { useToastContext } from '@librechat/client';
 import { QueryKeys } from 'librechat-data-provider';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRecoilState, useSetRecoilState, useRecoilValue } from 'recoil';
 import { useCreatePresetMutation, useGetModelsQuery } from 'librechat-data-provider/react-query';
 import type { TPreset, TEndpointsConfig } from 'librechat-data-provider';
@@ -158,7 +158,15 @@ export default function usePresets(index = 0) {
   };
 
   const onFileSelected = (jsonData: Record<string, unknown>) => {
-    const jsonPreset = { ...cleanupPreset({ preset: jsonData }), presetId: null };
+    /* An IMPORTED preset is an arbitrary user file, so it may carry a custom endpoint
+     * name with no `endpointType` — and this call sits inside a FileReader callback,
+     * where a throw is not even a rejected promise, just a dead Import button. Same
+     * config fallback as Export and «Save as preset». */
+    const endpointsConfig = queryClient.getQueryData<TEndpointsConfig>([QueryKeys.endpoints]);
+    const jsonPreset = {
+      ...cleanupPreset({ preset: jsonData, endpointsConfig }),
+      presetId: null,
+    };
     importPreset(jsonPreset);
   };
 
