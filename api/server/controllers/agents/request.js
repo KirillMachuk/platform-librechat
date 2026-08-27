@@ -426,6 +426,7 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
             streamId,
             signal: job.abortController.signal,
             endpoint: endpointOption.endpoint,
+            endpointType: endpointOption.endpointType,
             conversationModel: endpointOption.model_parameters?.model,
             userId,
             conversationId,
@@ -492,6 +493,9 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
           streamId,
           signal: job.abortController.signal,
           endpoint: client?.options?.agent?.endpoint ?? endpointOption.endpoint,
+          /** `initializeClient` copies this straight off `endpointOption`, so both call
+           *  sites read the one source. Persisted with the conversation by the runner. */
+          endpointType: endpointOption.endpointType,
           conversationModel: drConversationModel(client, endpointOption),
           userId,
           conversationId,

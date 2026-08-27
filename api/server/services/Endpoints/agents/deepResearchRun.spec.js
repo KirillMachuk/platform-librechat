@@ -1740,6 +1740,42 @@ describe('runNewDeepResearch — a research chat stays in its Project', () => {
     const [, fields] = models.saveConvo.mock.calls.at(-1);
     expect(fields).not.toHaveProperty('project_id');
   });
+
+  /**
+   * The FOUNDING CASE, asserted the way it actually failed rather than by field name.
+   *
+   * A custom endpoint's name ('1ma' here, as on the stand) is not a schema key, so anything
+   * that parses a conversation's settings resolves it through `endpointType`. With the field
+   * missing `parseConvo` throws `Unknown endpoint: 1ma` — which is exactly how Export died:
+   * json/txt/markdown build an options block from the parsed conversation, csv and the
+   * screenshot do not, so those two kept working and the failure read as "the button does
+   * nothing". Measured on the stand before the fix: 42 of 42 conversations missing
+   * `endpointType` were DR ones, 0 of 128 others.
+   */
+  it('persists a conversation whose settings still parse (the Export failure)', async () => {
+    const { parseConvo } = require('librechat-data-provider');
+    const p = baseParams('изучи рынок CRM');
+    p.endpointType = 'custom';
+
+    await runNewDeepResearch(p);
+
+    const [, fields] = models.saveConvo.mock.calls.at(-1);
+    expect(fields.endpoint).toBe('1ma');
+    expect(() =>
+      parseConvo({
+        endpoint: fields.endpoint,
+        endpointType: fields.endpointType,
+        conversation: fields,
+      }),
+    ).not.toThrow();
+  });
+
+  it('writes no endpointType when the request carries none', async () => {
+    await runNewDeepResearch(baseParams('изучи рынок CRM'));
+
+    const [, fields] = models.saveConvo.mock.calls.at(-1);
+    expect(fields).not.toHaveProperty('endpointType');
+  });
 });
 
 /**
