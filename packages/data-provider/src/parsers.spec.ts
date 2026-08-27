@@ -10,7 +10,11 @@ import { EModelEndpoint } from './schemas';
  * promise — just a dead Import button, the exact failure the export work set out to end.
  */
 describe('inherited object keys are not endpoint schemas', () => {
-  const inherited = ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf'];
+  /* The type says `EModelEndpoint`; a preset FILE says whatever it likes. The cast is
+   * the point of the test — it reproduces the value that actually arrives at runtime. */
+  const inherited = ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf'].map(
+    (name) => name as EModelEndpoint,
+  );
 
   it.each(inherited)('parseConvo refuses %s by name, not by TypeError', (endpoint) => {
     expect(() => parseConvo({ endpoint, conversation: {} })).toThrow(
