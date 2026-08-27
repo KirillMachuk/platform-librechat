@@ -133,6 +133,65 @@ describe('runDeepResearch', () => {
     expect(progress.some((p) => p.type === 'report')).toBe(true);
   });
 
+  it('announces the report phase BEFORE the report is written, not after', async () => {
+    /**
+     * The report node is a single long completion — minutes on a real run — and 'updates'
+     * streams only AFTER a node returns. Keyed on the report node's own update, the UI
+     * therefore spent the whole write showing the last sub-question and flashed «writing
+     * the report» for an instant before the final. The supervisor's concluding pass is the
+     * one moment the graph can say the phase has started.
+     *
+     * Token streaming is not the alternative: production node models are built
+     * `streaming: false` on purpose, so the token callback hands over the finished report
+     * in one burst — later than this event, not earlier.
+     *
+     * FAILS ON PRE-FIX CODE: the first 'report' progress event arrived after the report
+     * model had already run.
+     */
+    const order: string[] = [];
+    const reportModel = new FakeListChatModel({ responses: ['# Отчёт готов'] });
+    const originalInvoke = reportModel.invoke.bind(reportModel);
+    reportModel.invoke = (async (...args: Parameters<typeof originalInvoke>) => {
+      order.push('report-model-called');
+      return originalInvoke(...args);
+    }) as typeof reportModel.invoke;
+
+    const graph = createDeepResearchGraph({
+      leadModel: new FakeListChatModel({
+        responses: [
+          '{"jurisdiction":"RU","brief":"b"}',
+          '{"action":"RESEARCH","subQuestion":"объём рынка"}',
+          '{"action":"COMPLETE","subQuestion":""}',
+        ],
+      }),
+      workerModel: fakeToolWorker(),
+      compressModel: new FakeListChatModel({ responses: ['дайджест'] }),
+      reportModel,
+      tools: [webSearchTool],
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+    });
+
+    await runDeepResearch({
+      graph,
+      input: { messages: [new HumanMessage('изучи рынок')] },
+      configurable: configurable(),
+      wallClockMs: 60_000,
+      onProgress: (event) => {
+        if (event.type === 'report') {
+          order.push('report-phase-announced');
+        }
+      },
+    });
+
+    expect(order[0]).toBe('report-phase-announced');
+    expect(order).toContain('report-model-called');
+    expect(order.indexOf('report-phase-announced')).toBeLessThan(
+      order.indexOf('report-model-called'),
+    );
+  });
+
   it('finalizes a round-capped partial when the recursion limit is hit (L8)', async () => {
     // A supervisor that never concludes (single cycling RESEARCH response) loops
     // forever; with the token gate disabled and a tiny recursionLimit, langgraph

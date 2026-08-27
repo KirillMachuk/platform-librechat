@@ -97,6 +97,22 @@ function handleUpdate(data: unknown, onProgress: (progress: DeepResearchProgress
   for (const [node, value] of Object.entries(data as Record<string, Partial<DeepResearchState>>)) {
     if (node === 'scope' && value.jurisdiction) {
       onProgress({ type: 'scope', jurisdiction: value.jurisdiction });
+    } else if (node === 'supervisor' && value.concludeReason) {
+      /**
+       * The supervisor has stopped gathering — `routeFromSupervisor` sends the run to
+       * REPORT next. This is the ONLY moment the graph can announce the report phase, and
+       * it matters because REPORT is a single long completion: minutes of writing with no
+       * state update of its own. 'updates' streams AFTER a node returns, so the `report`
+       * branch below fires when the report is already WRITTEN — until this line existed,
+       * the UI spent those minutes still showing the last sub-question the supervisor had
+       * asked for, then flashed "writing the report" for an instant before the final.
+       *
+       * Token streaming is not an alternative here: every DR node model is built
+       * `streaming: false` on purpose (the streaming branch estimates usage through a
+       * tiktoken download that a sovereign deployment cannot reach), so `onToken` delivers
+       * the whole report in one burst at the end — after this event, not before it.
+       */
+      onProgress({ type: 'report' });
     } else if (node === 'supervisor' && value.currentSubQuestion) {
       onProgress({ type: 'research', round: value.round, subQuestion: value.currentSubQuestion });
     } else if (node === 'report') {

@@ -490,51 +490,55 @@ function drProgressAction(event) {
 }
 
 /**
- * Report-phase progress, derived from HOW MUCH of the report is already written.
+ * Report-phase progress, derived from HOW LONG the report has been writing.
  *
  * The REPORT node is one long completion — on a deep run it holds the screen for three to
- * four minutes, and the graph emits no state update while it runs, so the card had nothing
- * to say: the bar sat still and the action line kept naming the last sub-question the
- * supervisor had asked for, long after research was over. The engine streams that node's
- * tokens (`runDeepResearch({ onToken })`); this turns their accumulated LENGTH into a
- * fraction, so the card moves exactly when the model writes and stops when it stops.
+ * four minutes with no state update of its own. Until the engine learned to announce the
+ * phase from the supervisor's concluding pass, the card spent those minutes showing the
+ * LAST sub-question at a bar that never moved: not merely idle, but wrong.
  *
- * Asymptotic on purpose. Nothing here knows how long the report will be, so a curve that
- * could reach its ceiling on its own would simply freeze again one number higher; this one
- * starts at the 0.92 the report step already claimed and approaches 0.99 without arriving.
- * Only the run's end fills the bar.
+ * Elapsed time, not text written. Every DR node model is deliberately built
+ * `streaming: false` (see `buildNodeModel`: the streaming branch estimates usage through a
+ * tiktoken download a sovereign deployment cannot reach, which cost ~200 s of dead retries
+ * per call), so token callbacks deliver the whole report in ONE burst when the node is
+ * already done. A length-of-text signal reads beautifully in a test with a streaming fake
+ * and does exactly nothing in production. The clock does not lie either way.
+ *
+ * Asymptotic on purpose. Nothing here knows how long a given report will take, so a curve
+ * that could reach its ceiling on its own would simply freeze again one number higher;
+ * this one starts at the 0.92 the report step already claimed and approaches 0.99 without
+ * arriving. Only the run's end fills the bar.
  */
-const REPORT_HALFWAY_CHARS = 8_000;
+const REPORT_HALFWAY_MS = 3 * 60_000;
 /** Ceiling the curve approaches; only the run's end fills the bar. */
 const REPORT_CEILING = 0.99;
-function drReportFraction(chars) {
-  const written = Math.max(0, chars);
+function drReportFraction(elapsedMs) {
+  const elapsed = Math.max(0, elapsedMs);
   /* The floor is the report step's own number, read from the curve above rather than
    * repeated here — two copies of 0.92 would drift the day one of them is tuned. */
   const floor = drProgressFraction({ type: 'report' }, 0, 0);
-  return floor + (REPORT_CEILING - floor) * (written / (written + REPORT_HALFWAY_CHARS));
+  return floor + (REPORT_CEILING - floor) * (elapsed / (elapsed + REPORT_HALFWAY_MS));
 }
 
-/** Below this the size is noise — a line that flickers between "0,1" and "0,3" reads worse
- *  than no number at all, and the first tokens arrive in a burst. */
-const REPORT_SIZE_FLOOR_CHARS = 1_000;
+/** Below this the phase has only just started and the plain label reads better than
+ *  a counter ticking up from zero. */
+const REPORT_ELAPSED_FLOOR_MS = 30_000;
 
-/**
- * RU action line for the report phase, carrying the size once there is one worth naming.
- *
- * A count, never the text. See the `onToken` handler for why the report's own words must
- * not travel this channel.
- */
-function drReportAction(chars) {
-  if (chars < REPORT_SIZE_FLOOR_CHARS) {
+/** RU action line for the report phase, carrying the elapsed time once there is some. */
+function drReportAction(elapsedMs) {
+  if (elapsedMs < REPORT_ELAPSED_FLOOR_MS) {
     return 'Формирует отчёт';
   }
-  return `Формирует отчёт — ${(chars / 1000).toFixed(1).replace('.', ',')} тыс. знаков`;
+  const totalSeconds = Math.floor(elapsedMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const elapsed = minutes > 0 ? `${minutes} мин ${seconds} с` : `${seconds} с`;
+  return `Формирует отчёт — ${elapsed}`;
 }
 
-/** How often the report phase may refresh the card. Tokens arrive by the hundred per
- *  second; every one of them is an SSE event and a job-store write if left ungated. */
-const REPORT_PROGRESS_MIN_INTERVAL_MS = 1_500;
+/** How often the report phase refreshes the card while the model writes. Every tick is an
+ *  SSE event and a job-store write, so it is a heartbeat, not an animation. */
+const REPORT_TICK_MS = 5_000;
 
 /**
  * Renders the collected DR exchange (top-down) + the current unsaved turn text as a
@@ -1700,31 +1704,30 @@ async function runNewDeepResearch(params) {
         ).catch(() => {});
       };
       /**
-       * Report-phase liveness: the engine streams the REPORT node's tokens here, and we
-       * consume ONLY their length.
+       * Report-phase heartbeat. The engine announces the phase from the supervisor's
+       * concluding pass — the only moment it can, since REPORT itself says nothing until
+       * it is finished — and from there a timer keeps the card honest for the minutes the
+       * model spends writing.
        *
-       * The report's own words deliberately never travel this channel. In sovereign mode
-       * the model writes on MASKED material and the text is de-masked exactly once, at the
-       * end (`sovereign.restore`) — the substitution map lives inside the anonymizer, not
-       * in this process, so there is nothing here to de-mask a chunk with. Forwarding raw
-       * tokens would put `[[PERSON_1]]` on screen in the report's own title (the one place
-       * a report echoes the user's question) and then silently swap it for the real name
-       * when the run finalizes. A length cannot leak, needs no restore, and behaves the
-       * same on the legacy path — while still being a true signal: it moves when, and only
-       * when, the model writes.
+       * Nothing of the report's own text travels this channel, and that is a rule rather
+       * than an omission: in sovereign mode the model writes on MASKED material and the
+       * text is de-masked exactly once, at the end (`sovereign.restore`), with the
+       * substitution map held inside the anonymizer and not in this process. A chunk
+       * forwarded from here could not be de-masked at all — it would put `[[PERSON_1]]`
+       * on screen in the report's own title, the one place a report echoes the question,
+       * and then swap it for the real name when the run finalizes.
        */
-      let reportChars = 0;
-      let lastReportEmitMs = 0;
-      const emitReportProgress = () =>
-        emitDrProgress('report', drReportAction(reportChars), drReportFraction(reportChars));
-      const onReportToken = (text) => {
-        reportChars += text.length;
-        const now = Date.now();
-        if (now - lastReportEmitMs < REPORT_PROGRESS_MIN_INTERVAL_MS) {
-          return;
+      let reportStartedMs = 0;
+      let reportTicker = null;
+      const emitReportProgress = () => {
+        const elapsedMs = reportStartedMs > 0 ? Date.now() - reportStartedMs : 0;
+        emitDrProgress('report', drReportAction(elapsedMs), drReportFraction(elapsedMs));
+      };
+      const stopReportTicker = () => {
+        if (reportTicker != null) {
+          clearInterval(reportTicker);
+          reportTicker = null;
         }
-        lastReportEmitMs = now;
-        emitReportProgress();
       };
 
       const onProgress = (event) => {
@@ -1738,11 +1741,15 @@ async function runNewDeepResearch(params) {
             `${event.subQuestion ? ` (sub-question ${event.subQuestion.length} chars)` : ''}`,
         );
         if (event.type === 'report') {
-          /* LangGraph streams 'updates' AFTER a node returns, so this arrives when the
-           * report is already written — by then the token stream has moved the bar past
-           * the step's opening number, and re-emitting that number would walk it backwards
-           * on the last tick before the final. Same pair, same counter: at zero tokens
-           * (streaming off) it is byte-for-byte the old snapshot. */
+          /* Fired twice by design: once when the supervisor concludes (the phase STARTS)
+           * and once when the report node returns (it is over). The first arrival starts
+           * the clock and the heartbeat; the second is just the last tick before the
+           * final, and must not restart anything. */
+          if (reportStartedMs === 0) {
+            reportStartedMs = Date.now();
+            reportTicker = setInterval(emitReportProgress, REPORT_TICK_MS);
+            reportTicker.unref?.();
+          }
           emitReportProgress();
           return;
         }
@@ -1756,28 +1763,30 @@ async function runNewDeepResearch(params) {
         );
       };
 
-      result = await runDeepResearch({
-        graph,
-        // Track B: the graph sees the MASKED question (sovereign) or the raw text (legacy).
-        input: {
-          messages: [new HumanMessage(sovereign ? sovereign.maskedQuestion : researchInput)],
-        },
-        configurable: {
-          runId,
-          userId,
-          conversationId,
-          mode: tier.name,
-          budget: tierToRunBudget(tier),
-        },
-        signal,
-        wallClockMs: Math.max(1, tier.wallClockMinutes) * 60_000,
-        onProgress,
-        /* Only when a card is actually listening: `onToken` switches LangGraph into
-         * 'messages' stream mode for the WHOLE graph (every node's tokens, filtered down
-         * to the report node inside the engine), and with no card to feed that is churn
-         * for nothing. Same gate as every other dr_progress emit. */
-        onToken: streamId && planGateEnabled ? onReportToken : undefined,
-      });
+      try {
+        result = await runDeepResearch({
+          graph,
+          // Track B: the graph sees the MASKED question (sovereign) or the raw text (legacy).
+          input: {
+            messages: [new HumanMessage(sovereign ? sovereign.maskedQuestion : researchInput)],
+          },
+          configurable: {
+            runId,
+            userId,
+            conversationId,
+            mode: tier.name,
+            budget: tierToRunBudget(tier),
+          },
+          signal,
+          wallClockMs: Math.max(1, tier.wallClockMinutes) * 60_000,
+          onProgress,
+        });
+      } finally {
+        /* The heartbeat must not outlive the run on ANY path — including the abort that
+         * unwinds through here — or it keeps emitting into a stream the client has
+         * already finalized. */
+        stopReportTicker();
+      }
     }
   } catch (error) {
     if (error instanceof DeepResearchConfigError) {
