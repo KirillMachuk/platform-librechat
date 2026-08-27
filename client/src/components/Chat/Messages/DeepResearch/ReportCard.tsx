@@ -37,23 +37,14 @@ function headingLevel(tag: string): number {
  *    chat showing around its edges — on a 375px phone that spends the scarce width on
  *    a margin and reads as a popup rather than a document. Above `md` it stays the
  *    centred box it was. The breakpoint pattern is the fork's own (`EditPresetDialog`).
- * 2. The «report is incomplete» note is a PROP, not a sibling. Rendered outside the
- *    card it was cut in half by the composer in the chat, and the reader — a Radix
- *    portal — never showed it at all: the one surface where the whole report is read
- *    was the one surface that did not say the report was cut short. Measured before the
- *    fix: `noticeInsideDialog: false`.
  */
 export default function ReportCard({
   title,
   text,
-  notice,
   children,
 }: {
   title: string;
   text: string;
-  /** The «report is incomplete» note, when there is one. Rendered INSIDE the card and
-   *  INSIDE the reader — see the component doc for why it cannot live beside them. */
-  notice?: ReactNode;
   children: ReactNode;
 }) {
   const localize = useLocalize();
@@ -153,7 +144,6 @@ export default function ReportCard({
             aria-hidden="true"
           />
         </div>
-        {notice != null && <div className="px-4 pb-1">{notice}</div>}
         <div className="flex items-center justify-end gap-2 px-3 py-2">
           <Button variant="ghost" size="sm" onClick={copy}>
             {copyLabel}
@@ -205,7 +195,6 @@ export default function ReportCard({
               aria-label={displayTitle}
               className="focus-inset min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 focus-visible:outline-none sm:px-8"
             >
-              {notice}
               {children}
             </div>
           </div>

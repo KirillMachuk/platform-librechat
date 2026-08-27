@@ -7,9 +7,7 @@ import {
   PlanCard,
   ReportCard,
   RunningSlot,
-  TruncatedNote,
   resolveDrReport,
-  isTruncatedDrReport,
 } from '~/components/Chat/Messages/DeepResearch';
 import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import { useAttachments, useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
@@ -162,21 +160,15 @@ const ContentRender = memo(function ContentRender({
   }, [msg, isSubmitting]);
 
   /**
-   * The note now lives in one place and is gated by one exported predicate — see
-   * `TruncatedNote`. It used to be inlined here and nowhere else, so the share page kept
-   * showing the same report as a red «Не удалось выполнить запрос».
+   * A report whose gathering was cut short says nothing about it here — owner decision,
+   * 27.08.2026. See `isTruncatedDrReport`: the flag is still stamped and still logged, so
+   * the fact stays measurable; it simply is not the client's problem to read about.
    *
-   * It is handed to `ReportCard` rather than rendered beside it. As a sibling it sat
-   * below the card, where the composer cut it in half on a phone, and the reader — a
-   * Radix portal — could not show it at all: the surface where the report is actually
-   * read was the only one that never said the report was cut short. The sibling render
-   * below survives for the one case with no card: a legacy pre-drKind report, where
-   * `resolveDrReport` returns null but the note still applies.
+   * Nothing is needed to SUPPRESS anything on this path: the general `unfinished` hint
+   * lives in MessageContent, which serves plain-text messages, and every report carries
+   * structured content parts and therefore renders here. The share page is the surface
+   * that does need an explicit suppression — see SearchContent.
    */
-  const unfinishedNotice = useMemo(
-    () => (!isSubmitting && isTruncatedDrReport(msg) ? <TruncatedNote /> : null),
-    [isSubmitting, msg],
-  );
 
   if (!msg) {
     return null;
@@ -271,7 +263,7 @@ const ContentRender = memo(function ContentRender({
             <div className={cn(showUserBubble && chip == null && USER_BUBBLE_CLASS)}>
               {drCard ??
                 (drReport ? (
-                  <ReportCard title={drReport.title} text={msgText} notice={unfinishedNotice}>
+                  <ReportCard title={drReport.title} text={msgText}>
                     {contentPartsEl}
                   </ReportCard>
                 ) : (
@@ -283,7 +275,6 @@ const ContentRender = memo(function ContentRender({
                   </>
                 ))}
             </div>
-            {drReport == null && unfinishedNotice}
             {/* Assistant-side file artifacts (e.g. the Deep Research report PDF):
                 Container renders message.files for USER messages only, so without this
                 the assistant's attached files never appear. Images excluded — generated

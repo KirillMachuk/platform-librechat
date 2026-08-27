@@ -36,3 +36,29 @@ export function resolveDrReport(
   }
   return { title: extractReportTitle(text) ?? '' };
 }
+
+/**
+ * True for a Deep Research report whose GATHERING was cut short (budget/round gate).
+ *
+ * Nothing renders a note for it any more — owner decision, 27.08.2026: a report written
+ * from less material is still a real synthesis, and a self-deprecating line under it reads
+ * to a client as "this platform is unreliable" far more loudly than it reads as candour.
+ * The fact is not lost: the runner still stamps `unfinished` on the message and still logs
+ * `finalized reason=budget`, which is where we measure it (`tools/dr_run_metrics`).
+ *
+ * The predicate itself has to stay, and that is the part worth reading twice. `unfinished`
+ * is a GENERAL message flag — an ordinary chat answer the user stopped carries it too — and
+ * the surfaces that render it (MessageContent, for plain-text messages; SearchContent, on
+ * the share page) turn it into a red `role="alert"` box prefixed «Не удалось выполнить
+ * запрос. Сообщение об ошибке: …». Over a report that was written successfully that is
+ * simply false, and every truncated report already in the database still carries the flag.
+ * A DR report reaches the share page, so this rule is what keeps the box off it there;
+ * ContentRender, which renders reports in the chat, has never drawn the box at all.
+ */
+export function isTruncatedDrReport(
+  message?: Pick<TMessage, 'unfinished' | 'drKind' | 'isCreatedByUser'> | null,
+): boolean {
+  return (
+    message?.unfinished === true && message.drKind === 'report' && message.isCreatedByUser !== true
+  );
+}

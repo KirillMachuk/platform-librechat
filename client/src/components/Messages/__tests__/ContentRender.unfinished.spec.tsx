@@ -1,46 +1,47 @@
 import React from 'react';
 import { RecoilRoot } from 'recoil';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { TMessage } from 'librechat-data-provider';
 import ContentRender from '~/components/Messages/ContentRender';
 
 /**
- * "The answer may be incomplete" reached exactly one render path.
+ * A Deep Research report whose GATHERING was cut short says nothing about it — owner
+ * decision, 27.08.2026. A report written from less material is still a real synthesis, and
+ * a self-deprecating line under it reads to a client as an unreliable platform rather than
+ * as candour. The fact is not lost: the runner still stamps `unfinished` on the message and
+ * still logs the reason, which is where truncated runs are counted.
  *
- * The server has always marked a run whose GATHERING was cut short (token budget, round cap)
- * with `unfinished: true`. The hint that renders it lives in MessageContent, which serves
- * legacy plain-text messages — while every message carrying structured `content` parts, which
- * is every Deep Research report, renders through ContentRender, where nothing read the flag.
- * A truncated report therefore looked exactly as finished as a complete one, and the only
- * trace of the truncation stayed in the database.
- */
-/**
- * The real ru string, so the tests assert what is SEEN rather than a key.
+ * Two things must hold here, and only one of them is "no note".
  *
- * The note has its OWN key now. The shared `com_ui_unfinished_message` describes three
- * possible causes — "ещё обрабатывался, был остановлен или достиг лимита" — and under a Deep
- * Research report two of them cannot happen: the message is final, and a user Stop produces a
- * different message with a different drKind. Saying three things when one is known is the
- * same fault this series exists to remove, pointed the other way.
+ * The second is that no ERROR appears in the vacated slot. `unfinished` is a general message
+ * flag, and the platform's own indicator for it is a red `role="alert"` box prefixed «Не
+ * удалось выполнить запрос. Сообщение об ошибке: …». Over a report that was written
+ * successfully that is a false statement, and every truncated report already in the database
+ * still carries the flag. Today this path is safe because the general indicator lives in
+ * MessageContent, which serves plain-text messages, while every report carries structured
+ * content parts and renders here — these tests are what notices if that ever changes.
  */
-const UNFINISHED_TEXT =
-  'Сбор материала для этого отчёта прервался раньше времени: исследование успело охватить не всё, что планировало. Сам отчёт написан по тому, что удалось собрать, — им можно пользоваться.';
-
 const mockResolveDrReport = jest.fn(() => null as { title: string } | null);
-// The heavy cards are stubbed, but TruncatedNote and isTruncatedDrReport come from the REAL
-// module: they are what is under test here, and a stub would only assert itself.
+
+// The heavy cards are stubbed; `isTruncatedDrReport` comes from the REAL module.
+// The card stub renders whatever it is handed, INCLUDING element props nobody should be
+// passing any more — a stub that quietly swallowed extras would hide a re-added note.
 jest.mock('~/components/Chat/Messages/DeepResearch', () => ({
   ...jest.requireActual('~/components/Chat/Messages/DeepResearch'),
   __esModule: true,
   PlanCard: () => <div />,
   RunningSlot: () => <div />,
-  /* Mirrors the real card's contract: the note is a PROP it renders, not a sibling
-   * someone else draws next to it. A stub that dropped `notice` would keep passing
-   * while the note vanished from the card and from the reader. */
-  ReportCard: ({ notice, children }: { notice?: React.ReactNode; children?: React.ReactNode }) => (
-    <div data-testid="report-card">
-      {notice}
+  /* The stub reports every prop the card is handed beyond the two it legitimately takes.
+   * The note used to travel as one of those extra props, so this is what notices if
+   * anything is ever handed back to the card to render beside the report. */
+  ReportCard: ({ children, ...rest }: { children?: React.ReactNode } & Record<string, unknown>) => (
+    <div
+      data-testid="report-card"
+      data-extra-props={Object.keys(rest)
+        .filter((key) => key !== 'title' && key !== 'text')
+        .join(',')}
+    >
       {children}
     </div>
   ),
@@ -73,8 +74,7 @@ jest.mock('~/components/Chat/Messages/Content/Files', () => ({
 }));
 
 jest.mock('~/hooks', () => ({
-  useLocalize: () => (key: string) =>
-    key === 'com_ui_dr_report_truncated' ? UNFINISHED_TEXT : key,
+  useLocalize: () => (key: string) => key,
   useAttachments: () => ({ attachments: undefined, searchResults: undefined }),
   useContentMetadata: () => ({ hasParallelContent: false }),
   useMessageActions: () => ({
@@ -130,80 +130,57 @@ function renderMessage(msg: TMessage, isSubmitting = false) {
 const drReport = (partial: Partial<TMessage> = {}) =>
   messageWith({ drKind: 'report', ...partial } as Partial<TMessage>);
 
-describe('ContentRender — an incomplete Deep Research report says so', () => {
+describe('ContentRender — a truncated Deep Research report is recorded, not announced', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockResolveDrReport.mockReturnValue({ title: 'Отчёт' });
   });
 
-  it('shows the hint on a report whose gathering was cut short', () => {
+  it('hands the card the report and nothing else', () => {
     renderMessage(drReport({ unfinished: true }));
-    expect(screen.getByText(UNFINISHED_TEXT)).toBeInTheDocument();
+    const card = screen.getByTestId('report-card');
+    // The note used to ride to the card as a prop; anything handed back that way shows up
+    // here by name rather than having to be recognised by what it renders.
+    expect(card.getAttribute('data-extra-props')).toBe('');
+    expect(screen.getByTestId('content-parts')).toBeInTheDocument();
   });
 
   /**
-   * The notice must not be an ERROR.
-   *
-   * The obvious way to render it — reusing `UnfinishedMessage` — wraps this same sentence in
-   * `ErrorMessage`, which produces a red `role="alert"` box prefixed with «Не удалось
-   * выполнить запрос. Сообщение об ошибке: …». Under a report that was successfully written,
-   * merely from less material, that is a false statement and worse than showing nothing.
+   * The half that is easy to lose. Removing a note is one line; removing it in a way that
+   * lets the platform's red «Не удалось выполнить запрос» box take the vacated slot would be
+   * strictly worse than the note ever was — and it would land on old reports too, since the
+   * flag they carry is still in the database.
    */
-  it('presents it as a note, not as a failed request', () => {
+  it('and puts no error box in its place', () => {
     renderMessage(drReport({ unfinished: true }));
-    expect(screen.getByTestId('dr-unfinished-notice')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.queryByText(/Не удалось выполнить запрос/)).not.toBeInTheDocument();
   });
 
-  /**
-   * FAILS ON PRE-FIX CODE: the note was rendered as a SIBLING after the card, so it was
-   * outside this subtree. Being outside cost it both surfaces that matter — on a phone
-   * the composer cut it in half in the chat, and the reader (a Radix portal) never
-   * carried it at all, which left the one place the report is actually read as the one
-   * place that never said the report was cut short.
-   */
-  it('hands the note to the card instead of dropping it beside the card', () => {
-    renderMessage(drReport({ unfinished: true }));
-    const card = screen.getByTestId('report-card');
-    expect(within(card).getByTestId('dr-unfinished-notice')).toBeInTheDocument();
-  });
-
-  /** CONTROL for the test above: a report with no card still shows the note itself. */
-  it('still shows the note on a legacy report that gets no card', () => {
+  it('says nothing on a legacy report that gets no card either', () => {
     mockResolveDrReport.mockReturnValue(null);
     renderMessage(drReport({ unfinished: true }));
-    expect(screen.getByTestId('dr-unfinished-notice')).toBeInTheDocument();
     expect(screen.queryByTestId('report-card')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('stays quiet on a complete report', () => {
+  it('says nothing on a complete report', () => {
     renderMessage(drReport());
-    expect(screen.queryByTestId('dr-unfinished-notice')).not.toBeInTheDocument();
-  });
-
-  it('stays quiet while the report is still streaming', () => {
-    // A message in flight is legitimately incomplete; the hint would fire on every run.
-    renderMessage(drReport({ unfinished: true }), true);
-    expect(screen.queryByTestId('dr-unfinished-notice')).not.toBeInTheDocument();
+    const card = screen.getByTestId('report-card');
+    expect(card.getAttribute('data-extra-props')).toBe('');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   /**
-   * The regression this component must NOT cause.
-   *
-   * `unfinished` is also set — and persisted — on an ordinary chat answer the user stopped.
-   * This component renders those too, so an unqualified check would put a red alert box under
-   * every answer anyone ever pressed Stop on: a platform-wide change to one of the commonest
-   * actions there is, arriving as a side effect of a Deep Research fix.
+   * `unfinished` is also set on an ordinary chat answer the user stopped, and this component
+   * renders those too. It has never drawn anything for them and must not start: that would
+   * be a platform-wide change to one of the commonest actions there is, arriving as a side
+   * effect of a Deep Research decision.
    */
-  it('stays quiet on an ordinary answer the user stopped', () => {
+  it('leaves an ordinary answer the user stopped exactly as it was', () => {
     mockResolveDrReport.mockReturnValue(null);
     renderMessage(messageWith({ unfinished: true }));
-    expect(screen.queryByTestId('dr-unfinished-notice')).not.toBeInTheDocument();
-  });
-
-  it('stays quiet on a user message', () => {
-    renderMessage(drReport({ unfinished: true, isCreatedByUser: true }));
-    expect(screen.queryByTestId('dr-unfinished-notice')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByTestId('content-parts')).toBeInTheDocument();
   });
 });

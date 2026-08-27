@@ -6,17 +6,21 @@ import SearchContent from '~/components/Chat/Messages/Content/SearchContent';
 
 /**
  * The public share page renders through THIS component, and a shared snapshot carries
- * `unfinished` with it (see share.ts). So a Deep Research report whose gathering was cut
- * short — a real, usable synthesis — greeted whoever opened the link with a red
- * `role="alert"` reading «Не удалось выполнить запрос. Сообщение об ошибке: …».
+ * `unfinished` with it (see share.ts).
  *
- * The chat surface was fixed and this one was not: the rule lived inline in ContentRender and
- * nowhere else. It is imported from one place now, and this test is why it stays that way.
+ * Nothing tells a reader that a Deep Research report was cut short any more — owner
+ * decision, 27.08.2026: a report written from less material is still a real synthesis, and
+ * a self-deprecating line under it reads as an unreliable platform rather than as candour.
+ *
+ * The SUPPRESSION is what this file guards, and it is not the same thing as the note. Left
+ * to itself this component turns `unfinished` into a red `role="alert"` box prefixed «Не
+ * удалось выполнить запрос. Сообщение об ошибке: …» — a false statement about a report that
+ * was written successfully. Every truncated report already in the database still carries the
+ * flag, so deleting the rule along with the note would hand exactly those reports an error
+ * box on the one surface a client is most likely to open: a link someone sent them.
  */
-const NOTE = 'Сбор материала для этого отчёта прервался раньше времени.';
-
 jest.mock('~/hooks', () => ({
-  useLocalize: () => (key: string) => (key === 'com_ui_dr_report_truncated' ? NOTE : key),
+  useLocalize: () => (key: string) => key,
 }));
 
 jest.mock('~/components/Chat/Messages/Content/Part', () => ({
@@ -45,25 +49,36 @@ const renderShared = (msg: TMessage) =>
     </RecoilRoot>,
   );
 
-describe('SearchContent (share page) — a truncated DR report is a note, not a failure', () => {
-  it('shows the plain note and no alert for a truncated report', async () => {
+describe('SearchContent (share page) — a truncated DR report is neither flagged nor failed', () => {
+  it('says nothing at all about a truncated report — no note, no alert', async () => {
     renderShared(message({ unfinished: true, drKind: 'report' } as Partial<TMessage>));
-    expect(await screen.findByTestId('dr-unfinished-notice')).toBeInTheDocument();
+    await screen.findByTestId('part');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.queryByText(/Не удалось выполнить запрос/)).not.toBeInTheDocument();
   });
 
-  it('says nothing at all for a complete report', () => {
+  it('says nothing about a complete report either', async () => {
     renderShared(message({ drKind: 'report' } as Partial<TMessage>));
-    expect(screen.queryByTestId('dr-unfinished-notice')).not.toBeInTheDocument();
+    await screen.findByTestId('part');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   /**
-   * An ordinary answer the reader stopped IS genuinely unfinished, and this change does not
-   * take that indicator away — it only stops a Deep Research report being called a failure.
+   * The regression this file exists to catch, and the reason the rule survives the note.
+   *
+   * An ordinary answer the reader stopped IS genuinely unfinished, and it keeps the platform
+   * indicator it has always had. A guard written as "never show the box" instead of "never
+   * show the box on a DR report" would take it away from every stopped answer on the site.
    */
-  it('leaves the existing indicator alone for a stopped ordinary answer', async () => {
+  it('keeps the existing indicator for a stopped ordinary answer', async () => {
     renderShared(message({ unfinished: true }));
-    expect(screen.queryByTestId('dr-unfinished-notice')).not.toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  /** The rule is drKind-gated, not text-gated: a stopped answer that merely LOOKS like a
+   *  report keeps the indicator. */
+  it('keeps it for a stopped answer with no drKind, however report-like its text', async () => {
+    renderShared(message({ unfinished: true, text: '# Отчёт по рынку CRM' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
   });
 });
