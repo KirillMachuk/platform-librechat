@@ -3,7 +3,6 @@ import type { ZodIssue } from 'zod';
 import type * as a from './types/assistants';
 import type * as s from './schemas';
 import type * as t from './types';
-import { ContentTypes } from './types/runs';
 import {
   openAISchema,
   openRouterSchema,
@@ -18,6 +17,7 @@ import {
   compactAssistantSchema,
 } from './schemas';
 import { bedrockInputSchema } from './bedrock';
+import { ContentTypes } from './types/runs';
 import { alternateName } from './config';
 
 type EndpointSchema =
@@ -47,6 +47,19 @@ const endpointSchemas: Record<EndpointSchemaLookupKey, EndpointSchema> = {
 
 const isEndpointSchemaLookupKey = (value?: string | null): value is EndpointSchemaLookupKey =>
   value != null && Object.prototype.hasOwnProperty.call(endpointSchemas, value);
+
+/**
+ * Membership test against a specific schema map. `schemas[name]` alone is not one:
+ * for 'constructor', 'toString' or '__proto__' it answers with an INHERITED value, so a
+ * guard written as `if (!schema)` lets those through and the next line dies on
+ * `schema.parse is not a function` — a TypeError instead of the named error, raised on
+ * whatever endpoint name a user's preset file happens to contain.
+ */
+const hasOwnSchema = <TSchema>(
+  schemas: Record<EndpointSchemaLookupKey, TSchema>,
+  value?: string | null,
+): value is EndpointSchemaLookupKey =>
+  value != null && Object.prototype.hasOwnProperty.call(schemas, value);
 
 const getFallbackEndpointSchema = <TSchema>(
   schemas: Record<EndpointSchemaLookupKey, TSchema>,
@@ -175,7 +188,10 @@ export const parseConvo = ({
   possibleValues?: TPossibleValues;
   defaultParamsEndpoint?: string | null;
 }) => {
-  const primarySchema = endpointSchemas[endpoint] as EndpointSchema | undefined;
+  /* Own-property lookup, not `endpointSchemas[endpoint]` — see `hasOwnSchema`. */
+  const primarySchema = hasOwnSchema(endpointSchemas, endpoint)
+    ? (endpointSchemas[endpoint] as EndpointSchema | undefined)
+    : undefined;
 
   if (!primarySchema && !endpointType) {
     throw new Error(`Unknown endpoint: ${endpoint}`);
@@ -323,7 +339,10 @@ export const parseCompactConvo = ({
     throw new Error(`undefined endpoint: ${endpoint}`);
   }
 
-  const primarySchema = compactEndpointSchemas[endpoint] as CompactEndpointSchema | undefined;
+  /* Own-property lookup, as in `parseConvo` — see `hasOwnSchema`. */
+  const primarySchema = hasOwnSchema(compactEndpointSchemas, endpoint)
+    ? (compactEndpointSchemas[endpoint] as CompactEndpointSchema | undefined)
+    : undefined;
 
   if (!primarySchema && !endpointType) {
     throw new Error(`Unknown endpoint: ${endpoint}`);
