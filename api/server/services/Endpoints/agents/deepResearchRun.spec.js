@@ -1761,6 +1761,9 @@ describe('runNewDeepResearch — a research chat stays in its Project', () => {
 
     const [, fields] = models.saveConvo.mock.calls.at(-1);
     expect(fields.endpoint).toBe('1ma');
+    /* The VALUE, not just parseability: 'google' would also parse cleanly and quietly
+     * describe the chat as something it is not. */
+    expect(fields.endpointType).toBe('custom');
     expect(() =>
       parseConvo({
         endpoint: fields.endpoint,
