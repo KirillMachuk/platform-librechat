@@ -65,18 +65,6 @@ const SENSITIVE_SHARED_FILE_FIELDS = new Set([
   'embedded',
   'usage',
   'metadata',
-  /* Document CONTENT and pipeline state. A denylist keeps whatever it was not told
-   * about, so these rode along: on the stand 35 files carry `fullText` — including
-   * contracts of 124k and 32k characters — and 53 carry `docMetadata` (extracted
-   * parties, dates, identifiers). Sharing a CONVERSATION handed over the full text of
-   * every document attached to it. Nothing renders them: `fullText` has no consumer
-   * anywhere in the client, and `docMetadata` is read only by the owner's own file
-   * library (`SidePanel/Files/columns.tsx`), never by the share view. The extracted
-   * `text` stays — tool-call attachments (mermaid, logs) render from it. */
-  'fullText',
-  'docMetadata',
-  'embedError',
-  'previewError',
 ]);
 
 /**
