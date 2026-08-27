@@ -89,6 +89,11 @@ const CONVO_ID = 'c1';
  *  The `mock` prefix is what lets a jest.mock factory reach it. */
 const mockEdit = { on: false };
 
+const mockChatContext = {
+  chatContext: { isSubmitting: false },
+  effectiveIsSubmitting: false,
+};
+
 jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string) => key,
   useAttachments: () => ({ attachments: undefined, searchResults: undefined }),
@@ -98,10 +103,11 @@ jest.mock('~/hooks', () => ({
     handleScroll: jest.fn(),
     isSubmitting: false,
   }),
-  useMemoizedChatContext: () => ({
-    chatContext: { isSubmitting: false },
-    effectiveIsSubmitting: false,
-  }),
+  /* STABLE on purpose. Returning a fresh literal made `prev.chatContext !== next.chatContext`
+   * true on every pass, which short-circuits both memo comparators to "not equal" — so the
+   * comparator fields under test were never consulted and a test could not tell a correct
+   * comparator from a gutted one. */
+  useMemoizedChatContext: () => mockChatContext,
   useMessageActions: () => ({
     ask: jest.fn(),
     edit: mockEdit.on,
@@ -135,8 +141,8 @@ function command(partial: Partial<TMessage> = {}): TMessage {
  * SAME list the view renders from (`getMessages`), which is what lets the share page
  * reuse this rule without a chat cache.
  */
-function renderTree(msg: TMessage, parent?: Partial<TMessage>) {
-  const messages = parent ? ([{ messageId: 'p1', ...parent }] as TMessage[]) : [];
+/** The rendered tree, so a test can hand the SAME shape back to `rerender`. */
+function tree(msg: TMessage, messages: TMessage[]) {
   const ctx = {
     conversation: null,
     conversationId: CONVO_ID,
@@ -152,7 +158,7 @@ function renderTree(msg: TMessage, parent?: Partial<TMessage>) {
     getMessages: () => messages,
     setMessages: () => {},
   } as unknown as MessagesViewContextValue;
-  return render(
+  return (
     <RecoilRoot>
       <MessagesViewContext.Provider value={ctx}>
         <MultiMessage
@@ -162,8 +168,13 @@ function renderTree(msg: TMessage, parent?: Partial<TMessage>) {
           setCurrentEditId={jest.fn()}
         />
       </MessagesViewContext.Provider>
-    </RecoilRoot>,
+    </RecoilRoot>
   );
+}
+
+function renderTree(msg: TMessage, parent?: Partial<TMessage>, messages?: TMessage[]) {
+  const list = messages ?? (parent ? ([{ messageId: 'p1', ...parent }] as TMessage[]) : []);
+  return render(tree(msg, list));
 }
 
 describe('Deep Research command chip — both user-message render paths', () => {
@@ -263,6 +274,41 @@ describe('Deep Research command chip — both user-message render paths', () => 
     renderTree(command(), { drKind: 'report', isCreatedByUser: false });
     expect(screen.queryByText(STARTED)).not.toBeInTheDocument();
     expect(screen.getByTestId('message-render-body')).toHaveTextContent(DR_START_MARKER);
+  });
+
+  /**
+   * The memo comparators, asserted through an actual re-render — the only way they can be.
+   *
+   * Both chip rules read a field the renderer does not otherwise care about, and both
+   * fields arrive LATE: `drKind` lands when the server save replaces the optimistic
+   * command message, and `parentMessageId` changes across the SSE lifecycle. If the
+   * comparator does not carry them, memo answers "equal", the render never happens and
+   * the chip never appears. Deleting either line from a comparator must turn one of these
+   * red; a single-render test cannot see the difference at all.
+   */
+  describe('a late-arriving field still reaches the render', () => {
+    it('drKind added after the first render brings the chip', () => {
+      const before = command({ parentMessageId: 'p-report' });
+      const { rerender } = renderTree(before, { drKind: 'report', isCreatedByUser: false });
+      expect(screen.queryByText(STARTED)).not.toBeInTheDocument();
+
+      rerender(tree({ ...before, drKind: 'start' }, [{ messageId: 'p-report', drKind: 'report' }]));
+      expect(screen.getByText(STARTED)).toBeInTheDocument();
+    });
+
+    it('a re-parented command finds its plan card', () => {
+      const messages = [
+        { messageId: 'p-report', drKind: 'report', isCreatedByUser: false },
+        { messageId: 'p-plan', drKind: 'plan', isCreatedByUser: false },
+      ] as TMessage[];
+      const before = command({ parentMessageId: 'p-report' });
+
+      const { rerender } = renderTree(before, undefined, messages);
+      expect(screen.queryByText(STARTED)).not.toBeInTheDocument();
+
+      rerender(tree({ ...before, parentMessageId: 'p-plan' }, messages));
+      expect(screen.getByText(STARTED)).toBeInTheDocument();
+    });
   });
 
   it('leaves an ASSISTANT message with the same text alone', () => {

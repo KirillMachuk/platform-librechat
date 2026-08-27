@@ -26,7 +26,14 @@ export default function AnswersChip({ text }: { text: string }) {
   return (
     <div
       data-testid="answers-chip"
-      className="inline-flex max-w-full flex-col gap-1 rounded-2xl bg-surface-secondary px-3.5 py-2 text-xs text-text-secondary"
+      /* Same width ceiling as the bubble it replaces (USER_BUBBLE_CLASS): without it a
+       * long set of answers stretched the full column — 343px of 343 on a phone,
+       * 768 of 768 on desktop — so the same element read as "my reply" when short and
+       * as a full-width slab when long, while still sitting under `items-end`.
+       * The size follows the reader's message-size setting, like the bubble: this
+       * block holds the user's OWN words, and pinning it to 12px handed someone who
+       * enlarged text to 20px their own answers in the smallest type on screen. */
+      className="inline-flex max-w-[85%] flex-col gap-1 rounded-2xl bg-surface-secondary px-3.5 py-2 text-[length:var(--thinking-font-size)] text-text-secondary md:max-w-[78%]"
     >
       <div className="flex items-center gap-1.5 font-medium">
         <MessageCircleQuestion className="icon-xs" aria-hidden="true" />

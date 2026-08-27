@@ -41,6 +41,7 @@ export default function ExportModal({
   const [type, setType] = useState<string>('screenshot');
 
   const [includeOptions, setIncludeOptions] = useState<boolean | 'indeterminate'>(true);
+  const [isExporting, setIsExporting] = useState(false);
   const [exportBranches, setExportBranches] = useState<boolean | 'indeterminate'>(false);
   const [recursive, setRecursive] = useState<boolean | 'indeterminate'>(true);
 
@@ -83,23 +84,40 @@ export default function ExportModal({
   });
 
   /**
-   * The export used to be fired and forgotten, so a throw inside it became an unhandled
-   * rejection: no file, no message — the button simply read as broken (that is how the
-   * `Unknown endpoint` defect reached the owner). A failure now says so and names the
-   * next step. (The dialog never closed on Export, before or after this; that is the
-   * template's doing, not ours.)
+   * Both outcomes have to be visible. The export used to be fired and forgotten, so a
+   * throw became an unhandled rejection — no file, no message, the button simply reading
+   * as broken (that is how the `Unknown endpoint` defect reached the owner). Success was
+   * just as mute: the dialog does not close by itself (there is no `DialogClose` around
+   * this button), so the screen after a finished export looked exactly like the screen
+   * before the click — and on a phone, where no download shelf appears, that is
+   * indistinguishable from nothing happening. Closing on success is the signal.
+   *
+   * The button is also disabled while the export runs: a screenshot of a long chat takes
+   * seconds, and a second click used to produce a second file.
+   *
+   * The advice half of the failure message is conditional, because the checkbox it names
+   * is disabled for csv and the screenshot — telling someone to uncheck a control they
+   * cannot reach is a dead end dressed as a next step.
    */
   const handleExport = useCallback(async () => {
+    setIsExporting(true);
     try {
       await exportConversation();
+      onOpenChange(false);
     } catch (error) {
       console.error('[ExportModal] export failed', error);
       showToast({
-        message: localize('com_nav_export_failed'),
+        message: localize(
+          exportOptionsSupport && includeOptions === true
+            ? 'com_nav_export_failed_options'
+            : 'com_nav_export_failed',
+        ),
         severity: NotificationSeverity.ERROR,
       });
+    } finally {
+      setIsExporting(false);
     }
-  }, [exportConversation, showToast, localize]);
+  }, [exportConversation, onOpenChange, showToast, localize, exportOptionsSupport, includeOptions]);
 
   return (
     <OGDialog open={open} onOpenChange={onOpenChange} triggerRef={triggerRef}>
@@ -210,7 +228,7 @@ export default function ExportModal({
         }
         buttons={
           <>
-            <Button onClick={handleExport} variant="submit">
+            <Button onClick={handleExport} disabled={isExporting} variant="submit">
               {localize('com_endpoint_export')}
             </Button>
           </>
