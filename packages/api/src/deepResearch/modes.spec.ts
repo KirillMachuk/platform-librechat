@@ -1,4 +1,4 @@
-import { deepResearchModeSchema } from 'librechat-data-provider';
+import { configSchema, deepResearchModeSchema } from 'librechat-data-provider';
 import type { TDeepResearchConfig } from 'librechat-data-provider';
 import { resolveDeepResearchMode, DEEP_RESEARCH_MODE_DEFAULTS } from './modes';
 
@@ -120,7 +120,25 @@ describe('resolveDeepResearchMode: knobs a config leaves out', () => {
    * instead of 8, and 400 000 tokens of budget instead of 800 000.
    */
   it('a tier block naming only a model inherits no numbers at all', () => {
-    const parsed = deepResearchModeSchema.parse({ leadModel: 'lead-x' });
+    /**
+     * Parsed the way PRODUCTION parses it, not the way this file finds convenient.
+     * `librechat.yaml` goes through `configSchema.strict().safeParse`
+     * (`loadCustomConfig.js`), where the mode schema is nested two levels down. Calling
+     * `deepResearchModeSchema.parse` directly asserts the SCHEMA and not the PATH: the
+     * day someone wraps `modes` in a `.default({})` or a transform, the leak returns and
+     * a direct-schema test stays green. Noticed by a peer session during the 27.08
+     * rollout, and it was right — the first version of this test did go through
+     * `configSchema` and I weakened it myself while matching the style of its neighbours.
+     */
+    const config = configSchema.strict().safeParse({
+      version: '1.2.8',
+      deepResearch: { activeMode: 'deep', modes: { deep: { leadModel: 'lead-x' } } },
+    });
+    expect(config.success).toBe(true);
+    const parsed = (config.success ? config.data : ({} as never)).deepResearch?.modes?.deep as
+      | Record<string, unknown>
+      | undefined;
+    expect(parsed).toBeDefined();
 
     for (const knob of [
       'maxConcurrentResearchers',
@@ -132,10 +150,9 @@ describe('resolveDeepResearchMode: knobs a config leaves out', () => {
       expect(parsed).not.toHaveProperty(knob);
     }
 
-    const mode = resolveDeepResearchMode({
-      activeMode: 'deep',
-      modes: { deep: parsed },
-    } as unknown as TDeepResearchConfig);
+    const mode = resolveDeepResearchMode(
+      (config.success ? config.data.deepResearch : undefined) as unknown as TDeepResearchConfig,
+    );
     expect(mode.perRunTokenBudget).toBe(DEEP_RESEARCH_MODE_DEFAULTS.deep.perRunTokenBudget);
     expect(mode.maxOrchestratorCycles).toBe(DEEP_RESEARCH_MODE_DEFAULTS.deep.maxOrchestratorCycles);
     expect(mode.leadModel).toBe('lead-x');
