@@ -113,6 +113,34 @@ describe('resolveDeepResearchMode: knobs a config leaves out', () => {
     expect(mode.toolResultWindow).toBe(3);
   });
 
+  /**
+   * The half of this trap that stayed open until the final review: the five ORIGINAL fields
+   * were still `.default()`, so a `deep:` block carrying nothing but a model name pulled the
+   * balanced tier's numbers over the deep tier's — 3 researchers instead of 4, 6 rounds
+   * instead of 8, and 400 000 tokens of budget instead of 800 000.
+   */
+  it('a tier block naming only a model inherits no numbers at all', () => {
+    const parsed = deepResearchModeSchema.parse({ leadModel: 'lead-x' });
+
+    for (const knob of [
+      'maxConcurrentResearchers',
+      'maxOrchestratorCycles',
+      'maxSearcherTurns',
+      'perRunTokenBudget',
+      'wallClockMinutes',
+    ]) {
+      expect(parsed).not.toHaveProperty(knob);
+    }
+
+    const mode = resolveDeepResearchMode({
+      activeMode: 'deep',
+      modes: { deep: parsed },
+    } as unknown as TDeepResearchConfig);
+    expect(mode.perRunTokenBudget).toBe(DEEP_RESEARCH_MODE_DEFAULTS.deep.perRunTokenBudget);
+    expect(mode.maxOrchestratorCycles).toBe(DEEP_RESEARCH_MODE_DEFAULTS.deep.maxOrchestratorCycles);
+    expect(mode.leadModel).toBe('lead-x');
+  });
+
   it('rejects a knob outside its allowed range', () => {
     expect(deepResearchModeSchema.safeParse({ budgetGateRatio: 1.5 }).success).toBe(false);
     expect(deepResearchModeSchema.safeParse({ toolResultWindow: -1 }).success).toBe(false);

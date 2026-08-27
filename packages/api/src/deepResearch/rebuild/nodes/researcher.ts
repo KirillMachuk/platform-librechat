@@ -616,6 +616,15 @@ export async function researchOne(params: {
   deadlineMs?: number;
 }): Promise<ResearchOneResult> {
   const { caller, deps, subQuestion, round, jurisdiction, tokenCap, signal, deadlineMs } = params;
+  /**
+   * Declared OUTSIDE the try so a COMPRESS failure cannot erase what the tool loop already
+   * spent. The catch used to return `ZERO_USAGE`, which hid the loop's tokens from
+   * `state.tokenUsage`, from `finding.tokens`, and so from BOTH supervisor estimates — a run
+   * whose compress step failed every round would spend real money and open every remaining
+   * round, because neither gate could see any of it.
+   */
+  let spentSoFar: DeepResearchTokenUsage = ZERO_USAGE;
+  let spentByModel: DeepResearchUsageByModel = {};
   try {
     const { loopCap, compressChars } = researcherBudgetSplit(deps.tier, tokenCap);
     const {
@@ -644,6 +653,8 @@ export async function researchOne(params: {
       // without this the time arm would silently never fire (tests pass a fake).
       clock: deps.clock ?? Date.now,
     });
+    spentSoFar = loopUsage;
+    spentByModel = loopUsageByModel;
     const gathered = boundToolOutputs(toolOutputs, compressChars);
     const {
       digest,
@@ -681,10 +692,10 @@ export async function researchOne(params: {
         subQuestion,
         digest: `${FAILED_DIGEST_PREFIX}: ${sanitizeErrorForUser(error)})`,
         sources: [],
-        tokens: 0,
+        tokens: spentSoFar.total,
       },
-      usage: ZERO_USAGE,
-      usageByModel: {},
+      usage: spentSoFar,
+      usageByModel: spentByModel,
       error: { node: 'researcher', message: toErrorMessage(error), at: deps.now },
     };
   }

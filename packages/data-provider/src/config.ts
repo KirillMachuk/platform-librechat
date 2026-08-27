@@ -1625,11 +1625,25 @@ export type DeepResearchMode = (typeof DeepResearchModes)[number];
  * is the one step where the strong model is the quality lever.
  */
 export const deepResearchModeSchema = z.object({
-  maxConcurrentResearchers: z.number().int().min(1).max(8).default(3),
-  maxOrchestratorCycles: z.number().int().min(1).max(16).default(6),
-  maxSearcherTurns: z.number().int().min(1).max(20).default(4),
-  perRunTokenBudget: z.number().int().positive().default(400000),
-  wallClockMinutes: z.number().int().min(1).max(60).default(8),
+  /**
+   * EVERY field here is `.optional()`, never `.default()`, and that is load-bearing.
+   *
+   * `librechat.yaml` is parsed with `configSchema.strict().safeParse`, so a `.default()`
+   * materialises on any tier block PRESENT in the file — and the mode resolver reads
+   * `override.x ?? base.x`, for which a defaulted field is indistinguishable from one the
+   * admin wrote. A `deep:` block containing nothing but a `leadModel` would therefore have
+   * silently rewritten the tier to the DEFAULTS OF THE BALANCED ONE: 3 researchers instead
+   * of 4, 6 rounds instead of 8, and 400 000 tokens of budget instead of 800 000 — with the
+   * config file saying none of it.
+   *
+   * Defaults live in `DEEP_RESEARCH_MODE_DEFAULTS`, per tier, which is the only place that
+   * knows which tier it is filling in for.
+   */
+  maxConcurrentResearchers: z.number().int().min(1).max(8).optional(),
+  maxOrchestratorCycles: z.number().int().min(1).max(16).optional(),
+  maxSearcherTurns: z.number().int().min(1).max(20).optional(),
+  perRunTokenBudget: z.number().int().positive().optional(),
+  wallClockMinutes: z.number().int().min(1).max(60).optional(),
   /**
    * Fraction of `perRunTokenBudget` at which the supervisor stops dispatching rounds and
    * routes to REPORT, reserving the remainder for synthesis. Was hardcoded per tier in the
