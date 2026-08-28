@@ -20,6 +20,57 @@ import ToolCallInfo from './ToolCallInfo';
 import ProgressText from './ProgressText';
 import store from '~/store';
 
+function OAuthPrompt({
+  authDomain,
+  onClick,
+  disclosure,
+}: {
+  authDomain: string;
+  onClick: () => void;
+  disclosure?: Parameters<typeof OAuthDisclosure>[0]['disclosure'];
+}) {
+  const localize = useLocalize();
+
+  return (
+    <div className="flex w-full flex-col gap-2.5">
+      {disclosure && <OAuthDisclosure disclosure={disclosure} />}
+      <div className="mb-1 mt-2">
+        <Button
+          className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium"
+          variant="default"
+          rel="noopener noreferrer"
+          onClick={onClick}
+        >
+          {localize('com_ui_sign_in_to_domain', { 0: authDomain })}
+        </Button>
+      </div>
+      <p className="flex items-center text-xs text-text-warning">
+        <TriangleAlert className="mr-1.5 inline-block h-4 w-4" aria-hidden="true" />
+        {localize('com_assistants_allow_sites_you_trust')}
+      </p>
+    </div>
+  );
+}
+
+function MCPAuthPrompt({
+  serverName,
+  authDomain,
+  onClick,
+}: {
+  serverName: string;
+  authDomain: string;
+  onClick: () => void;
+}) {
+  const { data: mcpServers } = useMCPServersQuery({ enabled: serverName.length > 0 });
+  const disclosure = mcpServers?.[serverName]?.oauthDisclosure;
+
+  if (serverName === 'google-drive' && disclosure == null) {
+    return null;
+  }
+
+  return <OAuthPrompt authDomain={authDomain} onClick={onClick} disclosure={disclosure} />;
+}
+
 export default function ToolCall({
   initialProgress = 0.1,
   isLast = false,
@@ -118,9 +169,6 @@ export default function ToolCall({
   }, [name, function_name, localize]);
   const mcpIconMap = useMCPIconMap();
   const mcpIconUrl = isMCPToolCall ? mcpIconMap.get(mcpServerName) : undefined;
-  const { data: mcpServers } = useMCPServersQuery({ enabled: isMCPToolCall });
-  const oauthDisclosure = isMCPToolCall ? mcpServers?.[mcpServerName]?.oauthDisclosure : undefined;
-  const canStartOAuth = mcpServerName !== 'google-drive' || oauthDisclosure != null;
 
   const actionId = useMemo(() => {
     if (isMCPToolCall || !parsedAuthUrl) {
@@ -263,25 +311,19 @@ export default function ToolCall({
           )}
         </div>
       </div>
-      {auth != null && auth && progress < 1 && !showCancelled && canStartOAuth && (
-        <div className="flex w-full flex-col gap-2.5">
-          {oauthDisclosure && <OAuthDisclosure disclosure={oauthDisclosure} />}
-          <div className="mb-1 mt-2">
-            <Button
-              className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium"
-              variant="default"
-              rel="noopener noreferrer"
-              onClick={handleOAuthClick}
-            >
-              {localize('com_ui_sign_in_to_domain', { 0: authDomain })}
-            </Button>
-          </div>
-          <p className="flex items-center text-xs text-text-warning">
-            <TriangleAlert className="mr-1.5 inline-block h-4 w-4" aria-hidden="true" />
-            {localize('com_assistants_allow_sites_you_trust')}
-          </p>
-        </div>
-      )}
+      {auth != null &&
+        auth &&
+        progress < 1 &&
+        !showCancelled &&
+        (isMCPToolCall ? (
+          <MCPAuthPrompt
+            serverName={mcpServerName}
+            authDomain={authDomain}
+            onClick={handleOAuthClick}
+          />
+        ) : (
+          <OAuthPrompt authDomain={authDomain} onClick={handleOAuthClick} />
+        ))}
       {!hideAttachments && attachments && attachments.length > 0 && (
         <AttachmentGroup attachments={attachments} />
       )}

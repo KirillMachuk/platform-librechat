@@ -32,20 +32,7 @@ function sanitizeValue(value: unknown): unknown {
   let changed = false;
   let result: Record<string, unknown> = value;
 
-  if (
-    typeof value.name === 'string' &&
-    GOOGLE_DRIVE_TOOL_NAMES.has(value.name) &&
-    Object.prototype.hasOwnProperty.call(value, 'output') &&
-    value.output !== GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED
-  ) {
-    result = {
-      ...value,
-      output: GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED,
-    };
-    changed = true;
-  }
-
-  for (const [key, item] of Object.entries(result)) {
+  for (const [key, item] of Object.entries(value)) {
     const next = sanitizeValue(item);
     if (next !== item) {
       if (!changed) {
@@ -54,6 +41,25 @@ function sanitizeValue(value: unknown): unknown {
       }
       result[key] = next;
     }
+  }
+
+  const toolCall = result.tool_call;
+  if (
+    result.type === 'tool_call' &&
+    isRecord(toolCall) &&
+    typeof toolCall.name === 'string' &&
+    GOOGLE_DRIVE_TOOL_NAMES.has(toolCall.name) &&
+    Object.prototype.hasOwnProperty.call(toolCall, 'output') &&
+    toolCall.output !== GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED
+  ) {
+    if (!changed) {
+      result = { ...value };
+    }
+    result.tool_call = {
+      ...toolCall,
+      output: GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED,
+    };
+    changed = true;
   }
 
   return changed ? result : value;

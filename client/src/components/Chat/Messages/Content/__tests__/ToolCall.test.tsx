@@ -4,7 +4,9 @@ import { Tools, Constants } from 'librechat-data-provider';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ToolCall from '../ToolCall';
 
-const mockUseMCPServersQuery = jest.fn(() => ({ data: undefined }));
+const mockUseMCPServersQuery = jest.fn((): { data: Record<string, unknown> | undefined } => ({
+  data: undefined,
+}));
 
 // Mock dependencies
 jest.mock('~/hooks', () => ({
@@ -41,7 +43,7 @@ jest.mock('~/hooks/MCP', () => ({
 }));
 
 jest.mock('~/data-provider', () => ({
-  useMCPServersQuery: (...args: unknown[]) => mockUseMCPServersQuery(...args),
+  useMCPServersQuery: () => mockUseMCPServersQuery(),
 }));
 
 jest.mock('~/components/Chat/Messages/Content/MessageContent', () => ({

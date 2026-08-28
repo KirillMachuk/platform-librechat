@@ -15,6 +15,7 @@ describe('RedisJobStore Google Drive privacy boundary', () => {
       event: 'on_run_step_completed',
       data: {
         result: {
+          type: 'tool_call',
           tool_call: {
             name: 'read_file_content_mcp_google-drive',
             args: '{"fileId":"kept"}',
@@ -39,6 +40,7 @@ describe('RedisJobStore Google Drive privacy boundary', () => {
     const liveRunSteps = [
       {
         id: 'step-1',
+        type: 'tool_call',
         tool_call: {
           name: 'search_files_mcp_google-drive',
           output: 'private search results',
@@ -46,6 +48,7 @@ describe('RedisJobStore Google Drive privacy boundary', () => {
       },
       {
         id: 'step-2',
+        type: 'tool_call',
         tool_call: {
           name: 'read_file_content_mcp_dropbox',
           output: 'unrelated output',
@@ -59,5 +62,37 @@ describe('RedisJobStore Google Drive privacy boundary', () => {
     expect(persisted[0].tool_call.output).toBe(GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED);
     expect(persisted[1].tool_call.output).toBe('unrelated output');
     expect(liveRunSteps[0].tool_call.output).toBe('private search results');
+  });
+
+  it('sanitizes the final event stored in job metadata without changing the live event', async () => {
+    const evalCommand = jest.fn().mockResolvedValue(1);
+    const redis = { eval: evalCommand } as unknown as Redis;
+    const store = new RedisJobStore(redis);
+    const liveFinalEvent = {
+      final: true,
+      responseMessage: {
+        content: [
+          {
+            type: 'tool_call',
+            tool_call: {
+              name: 'read_file_content_mcp_google-drive',
+              output: 'private final response content',
+            },
+          },
+        ],
+      },
+    };
+
+    await store.updateJob('stream-3', { finalEvent: JSON.stringify(liveFinalEvent) });
+
+    const args = evalCommand.mock.calls[0];
+    const fieldIndex = args.indexOf('finalEvent');
+    const persisted = JSON.parse(args[fieldIndex + 1]) as typeof liveFinalEvent;
+    expect(persisted.responseMessage.content[0].tool_call.output).toBe(
+      GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED,
+    );
+    expect(liveFinalEvent.responseMessage.content[0].tool_call.output).toBe(
+      'private final response content',
+    );
   });
 });

@@ -53,6 +53,7 @@ describe('sanitizeGoogleDriveToolOutputs', () => {
     const eventData = {
       result: {
         id: 'step-1',
+        type: 'tool_call',
         tool_call: {
           name: 'read_file_content_mcp_google-drive',
           args: '{"fileId":"kept-for-provenance"}',
@@ -81,5 +82,24 @@ describe('sanitizeGoogleDriveToolOutputs', () => {
     ];
 
     expect(sanitizeGoogleDriveToolOutputs(content)).toBe(content);
+  });
+
+  it('does not redact lookalike data nested inside another tool call arguments', () => {
+    const content = [
+      {
+        type: 'tool_call',
+        tool_call: {
+          name: 'database_import',
+          args: {
+            name: 'read_file_content_mcp_google-drive',
+            output: 'ordinary imported data',
+          },
+          output: 'import completed',
+        },
+      },
+    ];
+
+    expect(sanitizeGoogleDriveToolOutputs(content)).toBe(content);
+    expect(content[0].tool_call.args.output).toBe('ordinary imported data');
   });
 });

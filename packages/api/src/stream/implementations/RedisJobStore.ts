@@ -948,6 +948,15 @@ export class RedisJobStore implements IJobStore {
         continue;
       }
 
+      if (key === 'finalEvent' && typeof value === 'string') {
+        try {
+          result[key] = JSON.stringify(sanitizeGoogleDriveToolOutputs(JSON.parse(value)));
+        } catch {
+          result[key] = value;
+        }
+        continue;
+      }
+
       if (typeof value === 'object') {
         result[key] = JSON.stringify(value);
       } else if (typeof value === 'boolean') {
