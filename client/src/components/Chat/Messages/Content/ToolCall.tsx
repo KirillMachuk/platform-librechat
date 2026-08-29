@@ -10,6 +10,8 @@ import {
 import type { TAttachment } from 'librechat-data-provider';
 import { useLocalize, useProgress, useExpandCollapse } from '~/hooks';
 import { ToolIcon, getToolIconType, isError } from './ToolOutput';
+import OAuthDisclosure from '~/components/MCP/OAuthDisclosure';
+import { useMCPServersQuery } from '~/data-provider';
 import { TriangleAlert } from '~/components/icons';
 import { logger, parseToolName } from '~/utils';
 import { useMCPIconMap } from '~/hooks/MCP';
@@ -17,6 +19,57 @@ import { AttachmentGroup } from './Parts';
 import ToolCallInfo from './ToolCallInfo';
 import ProgressText from './ProgressText';
 import store from '~/store';
+
+function OAuthPrompt({
+  authDomain,
+  onClick,
+  disclosure,
+}: {
+  authDomain: string;
+  onClick: () => void;
+  disclosure?: Parameters<typeof OAuthDisclosure>[0]['disclosure'];
+}) {
+  const localize = useLocalize();
+
+  return (
+    <div className="flex w-full flex-col gap-2.5">
+      {disclosure && <OAuthDisclosure disclosure={disclosure} />}
+      <div className="mb-1 mt-2">
+        <Button
+          className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium"
+          variant="default"
+          rel="noopener noreferrer"
+          onClick={onClick}
+        >
+          {localize('com_ui_sign_in_to_domain', { 0: authDomain })}
+        </Button>
+      </div>
+      <p className="flex items-center text-xs text-text-warning">
+        <TriangleAlert className="mr-1.5 inline-block h-4 w-4" aria-hidden="true" />
+        {localize('com_assistants_allow_sites_you_trust')}
+      </p>
+    </div>
+  );
+}
+
+function MCPAuthPrompt({
+  serverName,
+  authDomain,
+  onClick,
+}: {
+  serverName: string;
+  authDomain: string;
+  onClick: () => void;
+}) {
+  const { data: mcpServers } = useMCPServersQuery({ enabled: serverName.length > 0 });
+  const disclosure = mcpServers?.[serverName]?.oauthDisclosure;
+
+  if (serverName === 'google-drive' && disclosure == null) {
+    return null;
+  }
+
+  return <OAuthPrompt authDomain={authDomain} onClick={onClick} disclosure={disclosure} />;
+}
 
 export default function ToolCall({
   initialProgress = 0.1,
@@ -258,24 +311,19 @@ export default function ToolCall({
           )}
         </div>
       </div>
-      {auth != null && auth && progress < 1 && !showCancelled && (
-        <div className="flex w-full flex-col gap-2.5">
-          <div className="mb-1 mt-2">
-            <Button
-              className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium"
-              variant="default"
-              rel="noopener noreferrer"
-              onClick={handleOAuthClick}
-            >
-              {localize('com_ui_sign_in_to_domain', { 0: authDomain })}
-            </Button>
-          </div>
-          <p className="flex items-center text-xs text-text-warning">
-            <TriangleAlert className="mr-1.5 inline-block h-4 w-4" aria-hidden="true" />
-            {localize('com_assistants_allow_sites_you_trust')}
-          </p>
-        </div>
-      )}
+      {auth != null &&
+        auth &&
+        progress < 1 &&
+        !showCancelled &&
+        (isMCPToolCall ? (
+          <MCPAuthPrompt
+            serverName={mcpServerName}
+            authDomain={authDomain}
+            onClick={handleOAuthClick}
+          />
+        ) : (
+          <OAuthPrompt authDomain={authDomain} onClick={handleOAuthClick} />
+        ))}
       {!hideAttachments && attachments && attachments.length > 0 && (
         <AttachmentGroup attachments={attachments} />
       )}

@@ -70,7 +70,7 @@ const { primeFiles: primeSearchFiles } = require('~/app/clients/tools/util/fileS
 const { primeFiles: primeCodeFiles } = require('~/server/services/Files/Code/process');
 const { manifestToolMap, toolkits } = require('~/app/clients/tools/manifest');
 const { createOnSearchResults } = require('~/server/services/Tools/search');
-const { reinitMCPServer } = require('~/server/services/Tools/mcp');
+const { hasRequiredOAuthDisclosure, reinitMCPServer } = require('~/server/services/Tools/mcp');
 const { createMCPPermissionContext, resolveConfigServers } = require('~/server/services/MCP');
 const { getMCPRequestContext } = require('~/server/services/MCPRequestContext');
 const { recordUsage } = require('~/server/services/Threads');
@@ -689,6 +689,7 @@ async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, to
   const oauthStepIndexes = new Map();
   /** @type {Record<string, import('@librechat/api').LCAvailableTools>} */
   const mcpAvailableTools = {};
+  const resolvedMCPServerConfigs = new Map();
   const requestScopedConnections = getMCPRequestContext(req, res);
   const rememberMCPAvailableTools = (serverName, availableTools) => {
     if (!availableTools || Object.keys(availableTools).length === 0) {
@@ -697,8 +698,51 @@ async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, to
     mcpAvailableTools[serverName] = availableTools;
   };
 
+  const getSafeMCPServerConfig = async (serverName) => {
+    if (resolvedMCPServerConfigs.has(serverName)) {
+      return resolvedMCPServerConfigs.get(serverName);
+    }
+
+    let serverConfig;
+    try {
+      serverConfig =
+        configServers?.[serverName] ??
+        (await getMCPServersRegistry().getServerConfig(serverName, req.user.id, configServers));
+    } catch (err) {
+      logger.warn(
+        `[Tool Definitions] MCP registry unavailable while resolving '${serverName}': ${
+          err?.message ?? err
+        }. Skipping MCP tool exposure for this lookup.`,
+      );
+      resolvedMCPServerConfigs.set(serverName, null);
+      return null;
+    }
+
+    if (!serverConfig) {
+      logger.warn(
+        `[Tool Definitions] Skipping MCP server '${serverName}': no server config found (server may have been removed).`,
+      );
+      resolvedMCPServerConfigs.set(serverName, null);
+      return null;
+    }
+
+    if (!hasRequiredOAuthDisclosure(serverName, serverConfig)) {
+      logger.error(
+        `[Tool Definitions] Skipping MCP server '${serverName}': required OAuth disclosure is missing.`,
+      );
+      resolvedMCPServerConfigs.set(serverName, null);
+      return null;
+    }
+
+    resolvedMCPServerConfigs.set(serverName, serverConfig);
+    return serverConfig;
+  };
+
   const createOAuthEmitter = (serverName, index) => {
     return async (authURL, options) => {
+      if (!(await getSafeMCPServerConfig(serverName))) {
+        return;
+      }
       if (emittedOAuthStarts.get(serverName) === authURL) {
         return;
       }
@@ -803,24 +847,8 @@ async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, to
       return true;
     };
 
-    let serverConfig;
-    try {
-      serverConfig =
-        configServers?.[serverName] ??
-        (await getMCPServersRegistry().getServerConfig(serverName, userId, configServers));
-    } catch (err) {
-      logger.warn(
-        `[Tool Definitions] MCP registry unavailable while resolving '${serverName}': ${
-          err?.message ?? err
-        }. Skipping MCP tool exposure for this lookup.`,
-      );
-      return null;
-    }
-
+    const serverConfig = await getSafeMCPServerConfig(serverName);
     if (!serverConfig) {
-      logger.warn(
-        `[Tool Definitions] Skipping MCP server '${serverName}': no server config found (server may have been removed).`,
-      );
       return null;
     }
 
@@ -951,6 +979,10 @@ async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, to
 
   for (const serverName of getMCPServerNamesFromTools(filteredTools)) {
     if (pendingOAuthServers.has(serverName)) {
+      continue;
+    }
+
+    if (!(await getSafeMCPServerConfig(serverName))) {
       continue;
     }
 

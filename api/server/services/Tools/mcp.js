@@ -4,7 +4,7 @@ const {
   getMissingCustomUserVars,
   requiresEphemeralUserConnection,
 } = require('@librechat/api');
-const { CacheKeys, Constants } = require('librechat-data-provider');
+const { CacheKeys, Constants, MCPOAuthDisclosureSchema } = require('librechat-data-provider');
 const { getMCPManager, getMCPServersRegistry, getFlowStateManager } = require('~/config');
 const { findToken, createToken, updateToken, deleteTokens } = require('~/models');
 const { getGraphApiToken } = require('~/server/services/GraphTokenService');
@@ -12,6 +12,12 @@ const { exchangeOboToken } = require('~/server/services/OboTokenService');
 const { createOboTrustChecker } = require('~/server/services/OboPolicyService');
 const { updateMCPServerTools } = require('~/server/services/Config');
 const { getLogStores } = require('~/cache');
+
+const GOOGLE_DRIVE_SERVER_NAME = 'google-drive';
+
+const hasRequiredOAuthDisclosure = (serverName, serverConfig) =>
+  serverName !== GOOGLE_DRIVE_SERVER_NAME ||
+  MCPOAuthDisclosureSchema.safeParse(serverConfig?.oauthDisclosure).success;
 
 /**
  * Reinitializes an MCP server connection and discovers available tools.
@@ -62,6 +68,20 @@ async function reinitMCPServer({
     const registry = getMCPServersRegistry();
     serverConfig =
       serverConfig ?? (await registry.getServerConfig(serverName, user?.id, configServers));
+    if (!hasRequiredOAuthDisclosure(serverName, serverConfig)) {
+      logger.error(
+        '[MCP Reinitialize] Google Drive disclosure missing; refusing connection and OAuth',
+      );
+      return {
+        availableTools: null,
+        success: false,
+        message: 'Google Drive OAuth disclosure is not configured',
+        oauthRequired: false,
+        serverName,
+        oauthUrl: null,
+        tools: null,
+      };
+    }
     ephemeralServer = serverConfig ? requiresEphemeralUserConnection(serverConfig) : false;
     if (serverConfig?.inspectionFailed) {
       if (serverConfig.source === 'config') {
@@ -288,5 +308,6 @@ async function reinitMCPServer({
 }
 
 module.exports = {
+  hasRequiredOAuthDisclosure,
   reinitMCPServer,
 };

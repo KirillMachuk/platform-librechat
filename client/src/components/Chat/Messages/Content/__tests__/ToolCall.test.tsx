@@ -4,6 +4,10 @@ import { Tools, Constants } from 'librechat-data-provider';
 import { render, screen, fireEvent } from '@testing-library/react';
 import ToolCall from '../ToolCall';
 
+const mockUseMCPServersQuery = jest.fn((): { data: Record<string, unknown> | undefined } => ({
+  data: undefined,
+}));
+
 // Mock dependencies
 jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string, values?: any) => {
@@ -36,6 +40,10 @@ jest.mock('~/hooks', () => ({
 
 jest.mock('~/hooks/MCP', () => ({
   useMCPIconMap: () => new Map(),
+}));
+
+jest.mock('~/data-provider', () => ({
+  useMCPServersQuery: () => mockUseMCPServersQuery(),
 }));
 
 jest.mock('~/components/Chat/Messages/Content/MessageContent', () => ({
@@ -116,6 +124,7 @@ describe('ToolCall', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseMCPServersQuery.mockReturnValue({ data: undefined });
   });
 
   describe('attachments prop passing', () => {
@@ -284,6 +293,58 @@ describe('ToolCall', () => {
   });
 
   describe('authentication flow', () => {
+    it('shows the configured disclosure immediately before MCP sign-in', () => {
+      mockUseMCPServersQuery.mockReturnValue({
+        data: {
+          'google-drive': {
+            oauthDisclosure: {
+              title: 'Before connecting Google Drive',
+              items: ['Read-only access to the files you ask the assistant to use.'],
+              links: [{ label: 'Privacy policy', url: 'https://example.com/privacy' }],
+            },
+          },
+        },
+      });
+
+      renderWithRecoil(
+        <ToolCall
+          {...mockProps}
+          name={`oauth${Constants.mcp_delimiter}google-drive`}
+          initialProgress={0.5}
+          auth="https://accounts.google.com/o/oauth2/v2/auth"
+          isSubmitting={true}
+        />,
+      );
+
+      expect(screen.getByText('Before connecting Google Drive')).toBeInTheDocument();
+      expect(
+        screen.getByText('Read-only access to the files you ask the assistant to use.'),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Privacy policy' })).toHaveAttribute(
+        'href',
+        'https://example.com/privacy',
+      );
+      expect(screen.getByRole('button', { name: 'Sign in to accounts.google.com' })).toBeVisible();
+    });
+
+    it('does not expose Google Drive OAuth while the required disclosure is unavailable', () => {
+      mockUseMCPServersQuery.mockReturnValue({ data: undefined });
+
+      renderWithRecoil(
+        <ToolCall
+          {...mockProps}
+          name={`oauth${Constants.mcp_delimiter}google-drive`}
+          initialProgress={0.5}
+          auth="https://accounts.google.com/o/oauth2/v2/auth"
+          isSubmitting={true}
+        />,
+      );
+
+      expect(
+        screen.queryByRole('button', { name: 'Sign in to accounts.google.com' }),
+      ).not.toBeInTheDocument();
+    });
+
     it('should show sign-in button when auth URL is provided', () => {
       const originalOpen = window.open;
       window.open = jest.fn();

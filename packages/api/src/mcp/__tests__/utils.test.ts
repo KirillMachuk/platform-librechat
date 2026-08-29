@@ -89,6 +89,21 @@ describe('buildOAuthToolCallName', () => {
 });
 
 describe('redactServerSecrets', () => {
+  it('preserves the operator-managed OAuth disclosure', () => {
+    const oauthDisclosure = {
+      title: 'Before connecting Google Drive',
+      items: ['Read-only access.'],
+      links: [{ label: 'Privacy policy', url: 'https://example.com/privacy' }],
+    };
+    const config: ParsedServerConfig = {
+      type: 'sse',
+      url: 'https://example.com/mcp',
+      oauthDisclosure,
+    };
+
+    expect(redactServerSecrets(config).oauthDisclosure).toEqual(oauthDisclosure);
+  });
+
   it('should strip apiKey.key from admin-sourced keys', () => {
     const config: ParsedServerConfig = {
       type: 'sse',

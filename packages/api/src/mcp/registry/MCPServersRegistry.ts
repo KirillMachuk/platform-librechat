@@ -42,6 +42,7 @@ const ADMIN_CONFIGURABLE_FIELDS = [
   'startup',
   'chatMenu',
   'serverInstructions',
+  'oauthDisclosure',
   'customUserVars',
   'timeout',
   'sseReadTimeout',

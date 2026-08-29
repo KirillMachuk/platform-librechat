@@ -3,10 +3,10 @@ import { MCPIcon } from '@librechat/client';
 import { PermissionBits, hasPermissions } from 'librechat-data-provider';
 import type { MCPServerStatusIconProps } from '~/components/MCP/MCPServerStatusIcon';
 import type { MCPServerDefinition } from '~/hooks';
-import MCPServerDialog from './MCPServerDialog';
-import { getStatusDotColor } from './MCPStatusBadge';
-import MCPCardActions from './MCPCardActions';
 import { useMCPServerManager, useLocalize } from '~/hooks';
+import { getStatusDotColor } from './MCPStatusBadge';
+import MCPServerDialog from './MCPServerDialog';
+import MCPCardActions from './MCPCardActions';
 import { cn } from '~/utils';
 
 interface MCPServerCardProps {
@@ -50,10 +50,17 @@ export default function MCPServerCard({
   const canEdit = canCreateEditMCPs && canEditThisServer;
 
   const handleInitialize = () => {
+    if (server.serverName === 'google-drive' && server.config.oauthDisclosure == null) {
+      return;
+    }
+
     /** If server has custom user vars and is not already connected, show config dialog first
      *  This ensures users can enter credentials before initialization attempts
      */
-    if (hasCustomUserVars && serverStatus?.connectionState !== 'connected') {
+    if (
+      server.config.oauthDisclosure ||
+      (hasCustomUserVars && serverStatus?.connectionState !== 'connected')
+    ) {
       onConfigClick({ stopPropagation: () => {}, preventDefault: () => {} } as React.MouseEvent);
       return;
     }
