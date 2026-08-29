@@ -50,6 +50,10 @@ export default function MCPServerCard({
   const canEdit = canCreateEditMCPs && canEditThisServer;
 
   const handleInitialize = () => {
+    if (server.serverName === 'google-drive' && server.config.oauthDisclosure == null) {
+      return;
+    }
+
     /** If server has custom user vars and is not already connected, show config dialog first
      *  This ensures users can enter credentials before initialization attempts
      */

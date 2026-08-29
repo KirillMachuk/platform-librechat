@@ -47,6 +47,7 @@ export default function MCPConfigDialog({
   const localize = useLocalize();
 
   const hasFields = Object.keys(fieldsSchema).length > 0;
+  const isGoogleDriveDisclosureMissing = serverName === 'google-drive' && oauthDisclosure == null;
   const dialogTitle = hasFields
     ? localize('com_ui_configure_mcp_variables_for', { 0: serverTitle || serverName })
     : serverTitle || `${serverName} MCP Server`;
@@ -175,13 +176,15 @@ export default function MCPConfigDialog({
         )}
 
         {/* Server Initialization Section */}
-        <ServerInitializationSection
-          serverName={serverName}
-          conversationId={conversationId}
-          storageContextKey={storageContextKey}
-          requiresOAuth={serverStatus?.requiresOAuth || false}
-          hasCustomUserVars={fieldsSchema && Object.keys(fieldsSchema).length > 0}
-        />
+        {!isGoogleDriveDisclosureMissing && (
+          <ServerInitializationSection
+            serverName={serverName}
+            conversationId={conversationId}
+            storageContextKey={storageContextKey}
+            requiresOAuth={serverStatus?.requiresOAuth || false}
+            hasCustomUserVars={fieldsSchema && Object.keys(fieldsSchema).length > 0}
+          />
+        )}
       </OGDialogContent>
     </OGDialog>
   );

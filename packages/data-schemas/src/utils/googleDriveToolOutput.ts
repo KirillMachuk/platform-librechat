@@ -14,6 +14,42 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function sanitizeToolCall(toolCall: Record<string, unknown>): Record<string, unknown> {
+  let changed = false;
+  let result = toolCall;
+
+  for (const [key, item] of Object.entries(toolCall)) {
+    /** Tool arguments and ordinary tool output are payload data, not content-part containers. */
+    if (key === 'args' || key === 'output') {
+      continue;
+    }
+
+    const next = sanitizeValue(item);
+    if (next !== item) {
+      if (!changed) {
+        result = { ...toolCall };
+        changed = true;
+      }
+      result[key] = next;
+    }
+  }
+
+  if (
+    typeof result.name === 'string' &&
+    GOOGLE_DRIVE_TOOL_NAMES.has(result.name) &&
+    Object.prototype.hasOwnProperty.call(result, 'output') &&
+    result.output !== GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED
+  ) {
+    if (!changed) {
+      result = { ...toolCall };
+    }
+    result.output = GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED;
+    changed = true;
+  }
+
+  return changed ? result : toolCall;
+}
+
 function sanitizeValue(value: unknown): unknown {
   if (Array.isArray(value)) {
     let changed = false;
@@ -31,9 +67,13 @@ function sanitizeValue(value: unknown): unknown {
 
   let changed = false;
   let result: Record<string, unknown> = value;
+  const isToolCallEnvelope = value.type === 'tool_call' && isRecord(value.tool_call);
 
   for (const [key, item] of Object.entries(value)) {
-    const next = sanitizeValue(item);
+    const next =
+      key === 'tool_call' && isToolCallEnvelope
+        ? sanitizeToolCall(item as Record<string, unknown>)
+        : sanitizeValue(item);
     if (next !== item) {
       if (!changed) {
         result = { ...value };
@@ -41,25 +81,6 @@ function sanitizeValue(value: unknown): unknown {
       }
       result[key] = next;
     }
-  }
-
-  const toolCall = result.tool_call;
-  if (
-    result.type === 'tool_call' &&
-    isRecord(toolCall) &&
-    typeof toolCall.name === 'string' &&
-    GOOGLE_DRIVE_TOOL_NAMES.has(toolCall.name) &&
-    Object.prototype.hasOwnProperty.call(toolCall, 'output') &&
-    toolCall.output !== GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED
-  ) {
-    if (!changed) {
-      result = { ...value };
-    }
-    result.tool_call = {
-      ...toolCall,
-      output: GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED,
-    };
-    changed = true;
   }
 
   return changed ? result : value;

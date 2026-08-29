@@ -91,8 +91,13 @@ describe('sanitizeGoogleDriveToolOutputs', () => {
         tool_call: {
           name: 'database_import',
           args: {
-            name: 'read_file_content_mcp_google-drive',
-            output: 'ordinary imported data',
+            payload: {
+              type: 'tool_call',
+              tool_call: {
+                name: 'read_file_content_mcp_google-drive',
+                output: 'ordinary imported data',
+              },
+            },
           },
           output: 'import completed',
         },
@@ -100,6 +105,28 @@ describe('sanitizeGoogleDriveToolOutputs', () => {
     ];
 
     expect(sanitizeGoogleDriveToolOutputs(content)).toBe(content);
-    expect(content[0].tool_call.args.output).toBe('ordinary imported data');
+    expect(content[0].tool_call.args.payload.tool_call.output).toBe('ordinary imported data');
+  });
+
+  it('does not redact lookalike data returned by another tool', () => {
+    const content = [
+      {
+        type: 'tool_call',
+        tool_call: {
+          name: 'database_export',
+          args: '{}',
+          output: {
+            type: 'tool_call',
+            tool_call: {
+              name: 'read_file_content_mcp_google-drive',
+              output: 'ordinary exported data',
+            },
+          },
+        },
+      },
+    ];
+
+    expect(sanitizeGoogleDriveToolOutputs(content)).toBe(content);
+    expect(content[0].tool_call.output.tool_call.output).toBe('ordinary exported data');
   });
 });

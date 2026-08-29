@@ -345,6 +345,15 @@ export function useMCPServerManager({
 
   const initializeServer = useCallback(
     async (serverName: string, autoOpenOAuth: boolean = true) => {
+      if (serverName === 'google-drive' && loadedServers?.[serverName]?.oauthDisclosure == null) {
+        showToast({
+          message: localize('com_ui_mcp_init_failed', { 0: serverName }),
+          status: 'error',
+        });
+        cleanupServerState(serverName);
+        return;
+      }
+
       updateServerInitState(serverName, { isInitializing: true });
       try {
         const response = await reinitializeMutation.mutateAsync(serverName);
@@ -410,6 +419,7 @@ export function useMCPServerManager({
       mcpValues,
       cleanupServerState,
       setMCPValues,
+      loadedServers,
     ],
   );
 

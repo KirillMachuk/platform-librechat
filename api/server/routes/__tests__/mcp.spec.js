@@ -14,6 +14,12 @@ function generateTestCsrfToken(flowId) {
     .slice(0, 32);
 }
 
+const validGoogleDriveDisclosure = {
+  title: 'Connect Google Drive',
+  items: ['Read files only after a user request.'],
+  links: [{ label: 'Privacy policy', url: 'https://1ma.ai/politika' }],
+};
+
 const mockRegistryInstance = {
   getServerConfig: jest.fn(),
   getOAuthServers: jest.fn(),
@@ -257,6 +263,56 @@ describe('MCP Routes', () => {
   describe('GET /:serverName/oauth/initiate', () => {
     const { MCPOAuthHandler } = require('@librechat/api');
     const { getLogStores } = require('~/cache');
+
+    it('should refuse Google Drive OAuth when the operator disclosure is missing', async () => {
+      mockRegistryInstance.getServerConfig.mockResolvedValue({
+        endpoint: 'https://drivemcp.googleapis.com/mcp/v1',
+      });
+
+      const response = await request(app).get('/api/mcp/google-drive/oauth/initiate').query({
+        userId: 'test-user-id',
+        flowId: 'test-user-id:google-drive',
+      });
+
+      expect(response.status).toBe(503);
+      expect(response.body).toEqual({
+        error: 'Google Drive OAuth disclosure is not configured',
+      });
+      expect(getLogStores).not.toHaveBeenCalled();
+      expect(MCPOAuthHandler.initiateOAuthFlow).not.toHaveBeenCalled();
+    });
+
+    it('should continue Google Drive OAuth when the operator disclosure is valid', async () => {
+      const mockFlowManager = {
+        getFlowState: jest.fn().mockResolvedValue({
+          status: 'PENDING',
+          createdAt: Date.now(),
+          metadata: {
+            serverName: 'google-drive',
+            userId: 'test-user-id',
+            authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+          },
+        }),
+      };
+      mockRegistryInstance.getServerConfig.mockResolvedValue({
+        endpoint: 'https://drivemcp.googleapis.com/mcp/v1',
+        oauthDisclosure: validGoogleDriveDisclosure,
+      });
+      getLogStores.mockReturnValue({});
+      require('~/config').getFlowStateManager.mockReturnValue(mockFlowManager);
+
+      const response = await request(app).get('/api/mcp/google-drive/oauth/initiate').query({
+        userId: 'test-user-id',
+        flowId: 'test-user-id:google-drive',
+      });
+
+      expect(response.status).toBe(302);
+      expect(response.headers.location).toBe('https://accounts.google.com/o/oauth2/v2/auth');
+      expect(mockFlowManager.getFlowState).toHaveBeenCalledWith(
+        'test-user-id:google-drive',
+        'mcp_oauth',
+      );
+    });
 
     it('should reuse stored authorization URL without starting a new OAuth flow', async () => {
       const mockFlowManager = {
@@ -1823,6 +1879,60 @@ describe('MCP Routes', () => {
 
   describe('POST /:serverName/reinitialize', () => {
     // mockRegistryInstance is defined at the top of the file
+
+    it('should refuse Google Drive reinitialization when the operator disclosure is missing', async () => {
+      const mockMcpManager = {
+        disconnectUserConnection: jest.fn().mockResolvedValue(),
+      };
+
+      mockRegistryInstance.getServerConfig.mockResolvedValue({
+        endpoint: 'https://drivemcp.googleapis.com/mcp/v1',
+      });
+      require('~/config').getMCPManager.mockReturnValue(mockMcpManager);
+
+      const response = await request(app).post('/api/mcp/google-drive/reinitialize');
+
+      expect(response.status).toBe(503);
+      expect(response.body).toEqual({
+        error: 'Google Drive OAuth disclosure is not configured',
+      });
+      expect(mockMcpManager.disconnectUserConnection).not.toHaveBeenCalled();
+      expect(require('~/server/services/Tools/mcp').reinitMCPServer).not.toHaveBeenCalled();
+    });
+
+    it('should allow Google Drive reinitialization with a valid operator disclosure', async () => {
+      const mockMcpManager = {
+        disconnectUserConnection: jest.fn().mockResolvedValue(),
+      };
+
+      mockRegistryInstance.getServerConfig.mockResolvedValue({
+        endpoint: 'https://drivemcp.googleapis.com/mcp/v1',
+        oauthDisclosure: validGoogleDriveDisclosure,
+      });
+      require('~/config').getMCPManager.mockReturnValue(mockMcpManager);
+      require('~/server/services/Tools/mcp').reinitMCPServer.mockResolvedValue({
+        success: true,
+        message: "MCP server 'google-drive' ready for OAuth authentication",
+        serverName: 'google-drive',
+        oauthRequired: true,
+        oauthUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+      });
+
+      const response = await request(app).post('/api/mcp/google-drive/reinitialize');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        success: true,
+        message: "MCP server 'google-drive' ready for OAuth authentication",
+        serverName: 'google-drive',
+        oauthRequired: true,
+        oauthUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+      });
+      expect(mockMcpManager.disconnectUserConnection).toHaveBeenCalledWith(
+        'test-user-id',
+        'google-drive',
+      );
+    });
 
     it('should return 404 when server is not found in configuration', async () => {
       const mockMcpManager = {

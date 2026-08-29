@@ -80,6 +80,13 @@ function MCPToolSelectDialog({
 
   const handleDirectAdd = async (serverName: string, authData?: Record<string, string>) => {
     try {
+      if (
+        serverName === 'google-drive' &&
+        availableMCPServersMap?.[serverName]?.oauthDisclosure == null
+      ) {
+        return;
+      }
+
       setIsInitializing(serverName);
 
       // First, save auth if provided
@@ -194,6 +201,10 @@ function MCPToolSelectDialog({
     }
 
     const serverConfig = availableMCPServersMap?.[serverName];
+    if (serverName === 'google-drive' && serverConfig?.oauthDisclosure == null) {
+      return;
+    }
+
     const hasCustomUserVars =
       serverConfig?.customUserVars && Object.keys(serverConfig.customUserVars).length > 0;
 

@@ -6,6 +6,7 @@ const {
   PermissionBits,
   PermissionTypes,
   Permissions,
+  MCPOAuthDisclosureSchema,
 } = require('librechat-data-provider');
 const {
   getBasePath,
@@ -53,6 +54,12 @@ const db = require('~/models');
 const router = Router();
 
 const OAUTH_CSRF_COOKIE_PATH = '/api/mcp';
+const GOOGLE_DRIVE_SERVER_NAME = 'google-drive';
+const GOOGLE_DRIVE_DISCLOSURE_ERROR = 'Google Drive OAuth disclosure is not configured';
+
+const hasRequiredOAuthDisclosure = (serverName, serverConfig) =>
+  serverName !== GOOGLE_DRIVE_SERVER_NAME ||
+  MCPOAuthDisclosureSchema.safeParse(serverConfig?.oauthDisclosure).success;
 
 const getOAuthFlowId = (userId, serverName) =>
   MCPOAuthHandler.generateFlowId(userId, serverName, getTenantId());
@@ -121,6 +128,22 @@ router.get('/:serverName/oauth/initiate', requireJwtAuth, setOAuthSession, async
         expectedFlowId,
       });
       return res.status(403).json({ error: 'Flow mismatch' });
+    }
+
+    if (serverName === GOOGLE_DRIVE_SERVER_NAME) {
+      const configServers = await resolveConfigServers(req);
+      const serverConfig = await getMCPServersRegistry().getServerConfig(
+        serverName,
+        user.id,
+        configServers,
+      );
+      if (!serverConfig) {
+        return res.status(404).json({ error: `MCP server '${serverName}' not found` });
+      }
+      if (!hasRequiredOAuthDisclosure(serverName, serverConfig)) {
+        logger.error('[MCP OAuth] Google Drive disclosure missing; refusing OAuth initiation');
+        return res.status(503).json({ error: GOOGLE_DRIVE_DISCLOSURE_ERROR });
+      }
     }
 
     logger.debug('[MCP OAuth] Initiate request', { serverName, userId, flowId });
@@ -687,6 +710,10 @@ router.post(
         return res.status(404).json({
           error: `MCP server '${serverName}' not found in configuration`,
         });
+      }
+      if (!hasRequiredOAuthDisclosure(serverName, serverConfig)) {
+        logger.error('[MCP Reinitialize] Google Drive disclosure missing; refusing OAuth');
+        return res.status(503).json({ error: GOOGLE_DRIVE_DISCLOSURE_ERROR });
       }
 
       await mcpManager.disconnectUserConnection(user.id, serverName);
