@@ -31,6 +31,64 @@ jest.mock('~/cache', () => ({
 
 const { reinitMCPServer } = require('./mcp');
 
+describe('reinitMCPServer — Google Drive OAuth disclosure gating', () => {
+  const user = { id: 'user-123' };
+  const serverName = 'google-drive';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUpdateMCPServerTools.mockResolvedValue({});
+  });
+
+  it.each([undefined, { title: '', items: [], links: [] }])(
+    'does not connect or emit OAuth when the disclosure is missing or invalid',
+    async (oauthDisclosure) => {
+      const oauthStart = jest.fn();
+
+      const result = await reinitMCPServer({
+        user,
+        serverName,
+        serverConfig: {
+          type: 'streamable-http',
+          url: 'https://drivemcp.googleapis.com/mcp/v1',
+          oauthDisclosure,
+        },
+        oauthStart,
+      });
+
+      expect(result).toMatchObject({
+        availableTools: null,
+        success: false,
+        oauthRequired: false,
+        oauthUrl: null,
+      });
+      expect(mockGetConnection).not.toHaveBeenCalled();
+      expect(mockDiscoverServerTools).not.toHaveBeenCalled();
+      expect(oauthStart).not.toHaveBeenCalled();
+    },
+  );
+
+  it('connects when the operator disclosure is valid', async () => {
+    mockGetConnection.mockResolvedValue({ fetchTools: jest.fn().mockResolvedValue([]) });
+
+    await reinitMCPServer({
+      user,
+      serverName,
+      serverConfig: {
+        type: 'streamable-http',
+        url: 'https://drivemcp.googleapis.com/mcp/v1',
+        oauthDisclosure: {
+          title: 'Connect Google Drive',
+          items: ['Read files only after a user request.'],
+          links: [{ label: 'Privacy policy', url: 'https://1ma.ai/politika' }],
+        },
+      },
+    });
+
+    expect(mockGetConnection).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('reinitMCPServer — customUserVars gating (issue #10969)', () => {
   const user = { id: 'user-123' };
   const serverName = 'Thingy';

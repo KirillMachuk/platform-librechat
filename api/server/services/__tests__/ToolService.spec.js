@@ -48,6 +48,7 @@ const mockGetServerConfig = jest.fn();
 const mockFlowManager = { getFlowState: jest.fn() };
 const mockResolveConfigServers = jest.fn();
 const mockUserCanUseMCPServers = jest.fn().mockResolvedValue(true);
+const mockHasRequiredOAuthDisclosure = jest.fn(() => true);
 jest.mock('~/server/services/Tools/credentials', () => ({
   loadAuthValues: jest.fn().mockResolvedValue({}),
 }));
@@ -55,6 +56,7 @@ jest.mock('~/server/services/Tools/search', () => ({
   createOnSearchResults: jest.fn(),
 }));
 jest.mock('~/server/services/Tools/mcp', () => ({
+  hasRequiredOAuthDisclosure: (...args) => mockHasRequiredOAuthDisclosure(...args),
   reinitMCPServer: jest.fn(),
 }));
 jest.mock('~/server/services/Files/process', () => ({
@@ -143,6 +145,7 @@ describe('ToolService - Action Capability Gating', () => {
     mockGetServerConfig.mockResolvedValue(undefined);
     mockFlowManager.getFlowState.mockResolvedValue(undefined);
     mockResolveConfigServers.mockResolvedValue({});
+    mockHasRequiredOAuthDisclosure.mockReturnValue(true);
     mockGetRoleByName.mockResolvedValue({
       permissions: {
         [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: true },
@@ -509,6 +512,44 @@ describe('ToolService - Action Capability Gating', () => {
       ]);
     });
 
+    it('does not emit or resume Google Drive OAuth without the required disclosure', async () => {
+      const serverName = 'google-drive';
+      const authorizationUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
+      const mcpTool = `search${Constants.mcp_delimiter}${serverName}`;
+      const capabilities = [AgentCapabilities.tools];
+      const req = createMockReq(capabilities);
+      const res = { writableEnded: false };
+      mockGetEndpointsConfig.mockResolvedValue(createEndpointsConfig(capabilities));
+      mockResolveConfigServers.mockResolvedValue({
+        [serverName]: {
+          type: 'streamable-http',
+          url: 'https://drivemcp.googleapis.com/mcp/v1',
+        },
+      });
+      mockHasRequiredOAuthDisclosure.mockReturnValue(false);
+      mockFlowManager.getFlowState.mockResolvedValue({
+        status: 'PENDING',
+        createdAt: Date.now(),
+        metadata: { authorizationUrl },
+      });
+      mockLoadToolDefinitions.mockResolvedValue({
+        toolDefinitions: [mcpTool],
+        toolRegistry: new Map(),
+        hasDeferredTools: false,
+      });
+
+      const result = await loadAgentTools({
+        req,
+        res,
+        agent: { id: 'agent_123', tools: [mcpTool] },
+        definitionsOnly: true,
+      });
+
+      expect(result.toolDefinitions).toEqual([mcpTool]);
+      expect(mockSendEvent).not.toHaveBeenCalled();
+      expect(reinitMCPServer).not.toHaveBeenCalled();
+    });
+
     it('should not expose cached MCP tool definitions when the registry lookup fails', async () => {
       const serverName = 'private-server';
       const mcpTool = `search${Constants.mcp_delimiter}${serverName}`;
@@ -704,6 +745,11 @@ describe('ToolService - Action Capability Gating', () => {
       const req = createMockReq(capabilities);
       const res = { writableEnded: false };
       mockGetEndpointsConfig.mockResolvedValue(createEndpointsConfig(capabilities));
+      mockGetServerConfig.mockResolvedValue({
+        type: 'streamable-http',
+        url: 'https://demo.librechat.ai/mcp',
+        requiresOAuth: true,
+      });
       mockFlowManager.getFlowState.mockResolvedValue({
         status: 'PENDING',
         createdAt: Date.now(),
@@ -757,6 +803,11 @@ describe('ToolService - Action Capability Gating', () => {
       const req = createMockReq(capabilities);
       const res = { writableEnded: false };
       mockGetEndpointsConfig.mockResolvedValue(createEndpointsConfig(capabilities));
+      mockGetServerConfig.mockResolvedValue({
+        type: 'streamable-http',
+        url: 'https://demo.librechat.ai/mcp',
+        requiresOAuth: true,
+      });
       mockFlowManager.getFlowState.mockResolvedValue({
         status: 'PENDING',
         createdAt: Date.now(),
