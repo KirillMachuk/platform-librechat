@@ -229,9 +229,13 @@ class StreamRunManager {
    * The run step event object.
    */
   async handleRunStepEvent(event) {
-    logger.debug('Run step event:', event.data);
-
     const step = event.data;
+    logger.debug('Run step event:', {
+      event: event.event,
+      stepId: step?.id,
+      status: step?.status,
+      type: step?.type,
+    });
     this.steps.set(step.id, step);
 
     if (event.event === AssistantStreamEvents.ThreadRunStepCreated) {
@@ -647,7 +651,10 @@ class StreamRunManager {
     const isMessage = step.type === StepTypes.MESSAGE_CREATION;
 
     if (isMessage) {
-      logger.debug('RunStep Message completion: to be handled by Message Event.', step);
+      logger.debug('RunStep message completion will be handled by the message event.', {
+        stepId: step.id,
+        status: step.status,
+      });
       return;
     }
 
