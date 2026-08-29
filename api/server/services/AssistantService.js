@@ -359,7 +359,9 @@ async function runAssistant({
   const runManager = new RunManager({
     in_progress,
     final: async ({ step, runStatus, stepsByStatus }) => {
-      logger.debug(`[runAssistant] Final step for ${run_id} with status ${runStatus}`, step);
+      logger.debug(`[runAssistant] Final step for ${run_id} with status ${runStatus}`, {
+        stepId: step?.id,
+      });
 
       const promises = [];
       // promises.push(

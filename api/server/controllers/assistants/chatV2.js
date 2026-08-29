@@ -423,8 +423,9 @@ const chatV2 = async (req, res) => {
 
     await processRun();
     logger.debug('[/assistants/chat/] response', {
-      run: response.run,
-      steps: response.steps,
+      runId: response.run?.id,
+      runStatus: response.run?.status,
+      stepCount: Array.isArray(response.steps) ? response.steps.length : undefined,
     });
 
     if (response.run.status === RunStatus.CANCELLED) {
