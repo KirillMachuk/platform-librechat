@@ -151,7 +151,6 @@ class RunManager {
     }
 
     logger.debug(`[RunManager] Default handler for ${step.id} with status \`${runStatus}\``, {
-      step,
       runStatus,
       final,
       isLast,

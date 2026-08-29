@@ -42,7 +42,7 @@ const { findToken, createToken, updateToken, deleteTokens } = db;
 const { getGraphApiToken } = require('./GraphTokenService');
 const { exchangeOboToken } = require('./OboTokenService');
 const { createOboTrustChecker } = require('./OboPolicyService');
-const { reinitMCPServer } = require('./Tools/mcp');
+const { hasRequiredOAuthDisclosure, reinitMCPServer } = require('./Tools/mcp');
 const { getAppConfig } = require('./Config');
 const { getLogStores } = require('~/cache');
 
@@ -571,6 +571,10 @@ async function createMCPTools({
 }) {
   const serverConfig =
     config ?? (await getMCPServersRegistry().getServerConfig(serverName, user?.id, configServers));
+  if (!hasRequiredOAuthDisclosure(serverName, serverConfig)) {
+    logger.error(`[MCP][${serverName}] Required OAuth disclosure missing; skipping all tools.`);
+    return [];
+  }
 
   if (serverConfig?.url) {
     const appConfig = await getAppConfig({
@@ -682,6 +686,12 @@ async function createMCPTool({
 
   const serverConfig =
     config ?? (await getMCPServersRegistry().getServerConfig(serverName, user?.id, configServers));
+  if (!hasRequiredOAuthDisclosure(serverName, serverConfig)) {
+    logger.error(
+      `[MCP][${serverName}][${toolName}] Required OAuth disclosure missing; skipping tool.`,
+    );
+    return undefined;
+  }
   if (!isMCPToolAllowed(serverConfig, toolName)) {
     logger.warn(`[MCP][${serverName}][${toolName}] Tool blocked by server allowlist.`);
     return undefined;

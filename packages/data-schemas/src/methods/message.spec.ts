@@ -1165,5 +1165,38 @@ describe('Message Operations', () => {
       const savedContent = saved?.content as typeof content | undefined;
       expect(savedContent?.[0].tool_call.output).toBe(GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED);
     });
+
+    it('redacts legacy Assistants Google Drive output at the database boundary', async () => {
+      const content = [
+        {
+          type: 'tool_call',
+          tool_call: {
+            id: 'legacy-drive-call-1',
+            type: 'function',
+            function: {
+              name: 'read_file_content_mcp_google-drive',
+              arguments: '{"fileId":"legacy-file-1"}',
+              output: 'private legacy document contents',
+            },
+          },
+        },
+      ];
+      const messageId = uuidv4();
+
+      await saveMessage(
+        { userId: 'user123' },
+        {
+          messageId,
+          conversationId: uuidv4(),
+          content,
+        },
+      );
+
+      expect(content[0].tool_call.function.output).toBe('private legacy document contents');
+      const saved = await Message.findOne({ messageId }).lean();
+      const savedContent = saved?.content as typeof content | undefined;
+      expect(savedContent?.[0].tool_call.function.output).toBe(GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED);
+      expect(savedContent?.[0].tool_call.function.arguments).toContain('legacy-file-1');
+    });
   });
 });

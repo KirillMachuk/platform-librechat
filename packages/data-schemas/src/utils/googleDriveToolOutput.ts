@@ -14,9 +14,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function sanitizeLegacyFunctionCall(
+  functionCall: Record<string, unknown>,
+): Record<string, unknown> {
+  if (
+    typeof functionCall.name !== 'string' ||
+    !GOOGLE_DRIVE_TOOL_NAMES.has(functionCall.name) ||
+    !Object.prototype.hasOwnProperty.call(functionCall, 'output') ||
+    functionCall.output === GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED
+  ) {
+    return functionCall;
+  }
+
+  return {
+    ...functionCall,
+    output: GOOGLE_DRIVE_OUTPUT_NOT_PERSISTED,
+  };
+}
+
 function sanitizeToolCall(toolCall: Record<string, unknown>): Record<string, unknown> {
   let changed = false;
   let result = toolCall;
+  const isLegacyFunctionCall = toolCall.type === 'function' && isRecord(toolCall.function);
 
   for (const [key, item] of Object.entries(toolCall)) {
     /** Tool arguments and ordinary tool output are payload data, not content-part containers. */
@@ -24,7 +43,10 @@ function sanitizeToolCall(toolCall: Record<string, unknown>): Record<string, unk
       continue;
     }
 
-    const next = sanitizeValue(item);
+    const next =
+      key === 'function' && isLegacyFunctionCall
+        ? sanitizeLegacyFunctionCall(item as Record<string, unknown>)
+        : sanitizeValue(item);
     if (next !== item) {
       if (!changed) {
         result = { ...toolCall };

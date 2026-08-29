@@ -1,5 +1,6 @@
 // Mock all dependencies - define mocks before imports
 const mockGetTenantId = jest.fn();
+const mockHasRequiredOAuthDisclosure = jest.fn(() => true);
 
 jest.mock('@librechat/data-schemas', () => ({
   logger: {
@@ -82,6 +83,7 @@ jest.mock('~/models', () => ({
 }));
 
 jest.mock('./Tools/mcp', () => ({
+  hasRequiredOAuthDisclosure: (...args) => mockHasRequiredOAuthDisclosure(...args),
   reinitMCPServer: jest.fn(),
 }));
 
@@ -99,6 +101,7 @@ describe('tests for the new helper functions used by the MCP connection status e
     jest.clearAllMocks();
     jest.spyOn(MCPOAuthHandler, 'generateFlowId');
     mockGetTenantId.mockReturnValue(undefined);
+    mockHasRequiredOAuthDisclosure.mockReturnValue(true);
 
     mockGetMCPManager = require('~/config').getMCPManager;
     mockGetFlowStateManager = require('~/config').getFlowStateManager;
@@ -777,6 +780,7 @@ describe('User parameter passing tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetTenantId.mockReturnValue(undefined);
+    mockHasRequiredOAuthDisclosure.mockReturnValue(true);
     mockReinitMCPServer = require('./Tools/mcp').reinitMCPServer;
     mockGetMCPManager = require('~/config').getMCPManager;
     mockGetFlowStateManager = require('~/config').getFlowStateManager;
@@ -803,6 +807,23 @@ describe('User parameter passing tests', () => {
   });
 
   describe('createMCPTools', () => {
+    it('does not initialize Google Drive tools without the required disclosure', async () => {
+      mockHasRequiredOAuthDisclosure.mockReturnValue(false);
+
+      const result = await createMCPTools({
+        user: { id: 'drive-user' },
+        serverName: 'google-drive',
+        provider: 'assistants',
+        config: {
+          type: 'streamable-http',
+          url: 'https://drivemcp.googleapis.com/mcp/v1',
+        },
+      });
+
+      expect(result).toEqual([]);
+      expect(mockReinitMCPServer).not.toHaveBeenCalled();
+    });
+
     it('should pass user parameter to reinitMCPServer when calling reconnectServer internally', async () => {
       const mockUser = { id: 'test-user-123', name: 'Test User' };
       const mockRes = { write: jest.fn(), flush: jest.fn() };
@@ -915,6 +936,33 @@ describe('User parameter passing tests', () => {
   });
 
   describe('createMCPTool', () => {
+    it('does not create a cached Google Drive tool without the required disclosure', async () => {
+      const toolKey = `read_file_content${D}google-drive`;
+      mockHasRequiredOAuthDisclosure.mockReturnValue(false);
+
+      const result = await createMCPTool({
+        user: { id: 'drive-user' },
+        toolKey,
+        provider: 'assistants',
+        config: {
+          type: 'streamable-http',
+          url: 'https://drivemcp.googleapis.com/mcp/v1',
+          allowedTools: ['read_file_content'],
+        },
+        availableTools: {
+          [toolKey]: {
+            function: {
+              description: 'Read file',
+              parameters: { type: 'object', properties: {} },
+            },
+          },
+        },
+      });
+
+      expect(result).toBeUndefined();
+      expect(mockReinitMCPServer).not.toHaveBeenCalled();
+    });
+
     it('should pass user parameter to reinitMCPServer when tool not in cache', async () => {
       const mockUser = { id: 'test-user-456', email: 'test@example.com' };
       const mockRes = { write: jest.fn(), flush: jest.fn() };
