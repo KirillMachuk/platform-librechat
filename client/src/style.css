@@ -2188,6 +2188,38 @@ html {
   }
 }
 
+/* The same sweep as PAINT ONLY — no display, no white-space, no color of its
+ * own beyond the clip (r25 package Б review). `.thinking-shimmer-active` is a
+ * one-line LABEL utility: its `display: inline-block; white-space: nowrap`
+ * stopped a wrapping label from wrapping (a long research step then ran ~26px
+ * past the card at 375px) and killed a `line-clamp-2` on the action line by
+ * source order. Consumers that already own their layout use this one and keep
+ * it. It must stay the ONLY color rule on its element — a component rule with
+ * higher specificity repaints the glyphs opaque and the gradient disappears
+ * under them, which is exactly how a shimmer shipped that never shimmered. */
+.thinking-shimmer-paint {
+  background-image: linear-gradient(
+    90deg,
+    var(--text-secondary) 0%,
+    var(--text-secondary) 35%,
+    var(--text-primary) 50%,
+    var(--text-secondary) 65%,
+    var(--text-secondary) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: thinking-shimmer-sweep 2s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .thinking-shimmer-paint {
+    animation: none;
+    background-image: none;
+    color: var(--text-secondary);
+  }
+}
+
 .shadow-stroke {
   position: relative;
 }

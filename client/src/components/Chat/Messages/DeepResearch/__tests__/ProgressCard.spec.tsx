@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import type { TDeepResearchProgress } from '~/store';
 import ProgressCard from '../ProgressCard';
 
@@ -60,9 +60,11 @@ describe('ProgressCard (r25: the plan card frame, running)', () => {
   });
 
   it('shimmers the label of the step being worked on', () => {
+    /* The class only PAINTS (see shimmerContract.spec: the label utility's
+     * nowrap/inline-block broke wrapping and line-clamp). */
     render(<ProgressCard data={snapshot({ steps: ['Собрать', 'Сравнить'], progress: 0.5 })} />);
-    expect(screen.getByText('Сравнить').className).toContain('thinking-shimmer-active');
-    expect(screen.getByText('Собрать').className).not.toContain('thinking-shimmer-active');
+    expect(screen.getByText('Сравнить').className).toContain('thinking-shimmer-paint');
+    expect(screen.getByText('Собрать').className).not.toContain('thinking-shimmer-paint');
   });
 
   it('never hides the running step behind «Ещё N» (preview is 3)', () => {
@@ -81,7 +83,7 @@ describe('ProgressCard (r25: the plan card frame, running)', () => {
     );
     expect(rowOf('Шаг 5')).toHaveAttribute('data-status', 'active');
     expect(container.querySelector('.todoCollapsed')).toBeNull();
-    expect(screen.getByRole('button', { name: /com_ui_cards_more/ })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /com_ui_cards_less/ })).toHaveAttribute(
       'aria-expanded',
       'true',
     );
@@ -112,9 +114,38 @@ describe('ProgressCard (r25: the plan card frame, running)', () => {
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '42');
   });
 
-  it('offline: the network notice replaces the action line, nothing pulses', () => {
-    render(<ProgressCard data={snapshot({ steps: ['Собрать'], stalled: true })} />);
+  it('offline: the network notice replaces the action line, and NOTHING shimmers', () => {
+    /* The card must not look busy while the run is parked (review r2). The
+     * frame would have kept shimmering the active step — the test name
+     * promised «nothing pulses» while only the action line was checked. */
+    const { container } = render(
+      <ProgressCard data={snapshot({ steps: ['Собрать', 'Сравнить'], stalled: true })} />,
+    );
     expect(screen.getByRole('status')).toHaveTextContent('com_ui_deep_research_offline');
     expect(screen.queryByText('Исследует источники')).not.toBeInTheDocument();
+    expect(container.querySelector('.thinking-shimmer-paint')).toBeNull();
+    expect(container.querySelector('li[data-status="active"]')).toBeNull();
+  });
+
+  it('the «Ещё N» toggle stays alive while a run force-opened the well', () => {
+    /* Auto-expand used to win over every click: the caption flipped, the rows
+     * never moved, and a screen reader heard «expanded» either way. */
+    const { container } = render(
+      <ProgressCard
+        data={snapshot({
+          steps: ['Шаг 1', 'Шаг 2', 'Шаг 3', 'Шаг 4', 'Шаг 5'],
+          progress: 0.9,
+        })}
+      />,
+    );
+    const toggle = screen.getByRole('button', { name: /com_ui_cards_less/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(toggle);
+    expect(container.querySelector('.todoCollapsed')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /com_ui_cards_more/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 });

@@ -1,9 +1,8 @@
 import { useMemo } from 'react';
-import { TooltipAnchor } from '@librechat/client';
 import type { ApprovalCardStrings, ApprovalPlanStep } from '~/components/Chat/Cards/ApprovalCard';
 import type { TDeepResearchProgress } from '~/store';
 import type { TranslationKeys } from '~/hooks';
-import { ApprovalCard } from '~/components/Chat/Cards/ApprovalCard';
+import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/ApprovalCard';
 import { Square, WifiOff } from '~/components/icons';
 import { useChatContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
@@ -59,16 +58,19 @@ export default function ProgressCard({ data }: { data: TDeepResearchProgress }) 
           PHASE_STEPS.findIndex((p) => p.phase === data.phase),
         );
     const titles = hasPlan ? planSteps : PHASE_STEPS.map((p) => localize(p.key));
+    /* Offline: the run is parked, so nothing may look busy — the step keeps
+     * its place but stops being «active» (review r2's invariant, which the
+     * frame's shimmer would otherwise have broken silently). */
     return titles.map((title, i) => {
       let status: ApprovalPlanStep['status'] = 'pending';
       if (i < activeStep) {
         status = 'done';
-      } else if (i === activeStep) {
+      } else if (i === activeStep && data.stalled !== true) {
         status = 'active';
       }
       return { id: String(i), title, status };
     });
-  }, [data.steps, data.progress, data.phase, localize]);
+  }, [data.steps, data.progress, data.phase, data.stalled, localize]);
 
   const cardStrings: ApprovalCardStrings = useMemo(
     () => ({
@@ -88,33 +90,28 @@ export default function ProgressCard({ data }: { data: TDeepResearchProgress }) 
   );
 
   return (
-    <div className="my-2 w-full" data-testid="dr-progress-card">
+    <div className="my-2 w-full">
       <ApprovalCard
         variant="plan"
         strings={cardStrings}
         title={localize('com_ui_deep_research')}
         todoTitle={localize('com_ui_deep_research_steps')}
         plan={steps}
-        approveLabel={localize('com_ui_deep_research_start')}
         showActions={false}
         headerAction={
-          <TooltipAnchor
-            description={localize('com_ui_stop')}
-            render={
-              <button
-                type="button"
-                onClick={stopGenerating}
-                aria-label={localize('com_ui_stop')}
-                data-testid="dr-stop"
-                className="tap-target -m-1.5 flex size-10 items-center justify-center text-text-tertiary transition-colors [@media(hover:hover)]:hover:text-text-primary"
-              >
-                <Square className="size-3.5 fill-current" aria-hidden="true" />
-              </button>
-            }
-          />
+          /* The frame's own header slot — same 24px box and 12px inset as the
+           * plan card's ✕, which is the whole point of «two cards, one
+           * product» (review). It keeps the ≥44px tap height via tap-target. */
+          <ApprovalCardHeaderAction
+            label={localize('com_ui_stop')}
+            onClick={stopGenerating}
+            testId="dr-stop"
+          >
+            <Square className="size-3 fill-current" aria-hidden="true" />
+          </ApprovalCardHeaderAction>
         }
         footnote={
-          <div className="mt-3">
+          <div className="mt-1">
             {stalled ? (
               <div
                 role="status"
@@ -125,12 +122,10 @@ export default function ProgressCard({ data }: { data: TDeepResearchProgress }) 
               </div>
             ) : (
               data.action && (
-                <div
-                  className={cn(
-                    'mb-2 line-clamp-2 min-h-5 text-xs text-text-tertiary [overflow-wrap:anywhere]',
-                    'thinking-shimmer-active',
-                  )}
-                >
+                /* The paint-only shimmer: the label utility's inline-block
+                 * beat `line-clamp-2` by source order and flattened this to a
+                 * single clipped row (r25 package Б review). */
+                <div className="thinking-shimmer-paint mb-2 line-clamp-2 min-h-5 text-xs [overflow-wrap:anywhere]">
                   {data.action}
                 </div>
               )

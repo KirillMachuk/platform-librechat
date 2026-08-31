@@ -113,8 +113,12 @@ export default function CardsDemo() {
             plan={[
               { id: '1', title: 'Собрать предложения крупнейших агрегаторов', status: 'done' },
               { id: '2', title: 'Сравнить комиссии и условия 2025-2026', status: 'done' },
-              { id: '3', title: 'Выделить тренды по регионам', status: 'active' },
-              { id: '4', title: 'Сопоставить с российскими условиями', status: 'pending' },
+              { id: '3', title: 'Выделить тренды по регионам', status: 'done' },
+              {
+                id: '4',
+                title: 'Сопоставить найденное с российскими условиями рынка и требованиями сетей',
+                status: 'active',
+              },
               { id: '5', title: 'Сформировать таблицу и рекомендацию', status: 'pending' },
             ]}
             approveLabel="Начать"
@@ -127,8 +131,9 @@ export default function CardsDemo() {
             }
             footnote={
               <div className="mt-3">
-                <div className="thinking-shimmer-active mb-2 text-xs text-text-tertiary">
-                  Исследует: комиссии агрегаторов по регионам
+                <div className="thinking-shimmer-paint mb-2 line-clamp-2 text-xs">
+                  Исследует: комиссии агрегаторов по регионам и условия подключения для сетей
+                  быстрого питания
                 </div>
                 <div className="h-1 w-full overflow-hidden rounded-full bg-surface-hover">
                   <div className="h-full w-[52%] rounded-full bg-text-accent" />
