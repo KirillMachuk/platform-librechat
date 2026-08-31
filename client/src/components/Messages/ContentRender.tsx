@@ -150,7 +150,9 @@ const ContentRender = memo(function ContentRender({
   const drCommand = useDrCommand(msg);
   /* Provenance for the cancel notice: it is the child of the very command
    * that cancelled a plan. Read through the same optional messages view the
-   * command rule uses, so it works on the share page too. */
+   * command rule uses. NOTE: the share page does not render this component at
+   * all (Share/Message → SearchContent), so this suppression is chat-only —
+   * a shared conversation still shows the notice (r26 review). */
   const { getMessages } = useOptionalMessagesOperations();
   /**
    * Does the live run belong to THIS plan? The active branch's tail must sit

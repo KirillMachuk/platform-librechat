@@ -43,8 +43,6 @@ const PHASE_STEPS: { phase: string; key: TranslationKeys }[] = [
 export default function ProgressCard({ data }: { data: TDeepResearchProgress }) {
   const localize = useLocalize();
   const { stopGenerating } = useChatContext();
-  const stalled = data.stalled === true;
-  const pct = Math.max(0, Math.min(100, Math.round((data.progress ?? 0) * 100)));
   const steps: ApprovalPlanStep[] = useMemo(() => {
     /* A PROCEED run has no plan, so the three phases stand in for steps and
      * the ACTIVE one comes from `phase`, not from the coarse fraction:

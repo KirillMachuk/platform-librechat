@@ -62,7 +62,11 @@ jest.mock('~/data-provider', () => ({
 const PLAN_TEXT = '**План исследования:** Рынок CRM\n\n1. Собрать\n2. Сравнить';
 const CONVO = 'c-run';
 
-const tree = (over: { latestId: string; runReply?: Partial<TMessage> }): TMessage[] => {
+const tree = (over: {
+  latestId: string;
+  runReply?: Partial<TMessage>;
+  cancelInstead?: boolean;
+}): TMessage[] => {
   const reply = {
     messageId: 'resp1',
     conversationId: CONVO,
@@ -74,16 +78,37 @@ const tree = (over: { latestId: string; runReply?: Partial<TMessage> }): TMessag
     children: [],
     ...over.runReply,
   } as unknown as TMessage;
-  const start = {
-    messageId: 'start1',
+  const cancelReply = {
+    messageId: 'cancel-reply',
     conversationId: CONVO,
-    parentMessageId: 'plan1',
-    isCreatedByUser: true,
-    drKind: 'start',
-    text: 'Начать исследование',
-    depth: 1,
-    children: [reply],
+    parentMessageId: 'cancel1',
+    isCreatedByUser: false,
+    text: 'Исследование отменено.',
+    content: [{ type: 'text', text: 'Исследование отменено.' }],
+    depth: 2,
+    children: [],
   } as unknown as TMessage;
+  const start = over.cancelInstead
+    ? ({
+        messageId: 'cancel1',
+        conversationId: CONVO,
+        parentMessageId: 'plan1',
+        isCreatedByUser: true,
+        drKind: 'cancel',
+        text: 'Отменить исследование',
+        depth: 1,
+        children: [cancelReply],
+      } as unknown as TMessage)
+    : ({
+        messageId: 'start1',
+        conversationId: CONVO,
+        parentMessageId: 'plan1',
+        isCreatedByUser: true,
+        drKind: 'start',
+        text: 'Начать исследование',
+        depth: 1,
+        children: [reply],
+      } as unknown as TMessage);
   return [
     {
       messageId: 'plan1',
@@ -108,8 +133,13 @@ const renderTree = (opts: {
   latestId: string;
   snapshot?: unknown;
   runReply?: Partial<TMessage>;
+  cancelInstead?: boolean;
 }) => {
-  const messagesTree = tree({ latestId: opts.latestId, runReply: opts.runReply });
+  const messagesTree = tree({
+    latestId: opts.latestId,
+    runReply: opts.runReply,
+    cancelInstead: opts.cancelInstead,
+  });
   const ctx = {
     conversation: { conversationId: CONVO },
     conversationId: CONVO,
@@ -201,6 +231,22 @@ describe('which plan card draws a live Deep Research run (r26 review)', () => {
     expect(screen.getByText('Собрать').closest('li')).toHaveAttribute('data-status', 'done');
     expect(screen.getByText('Сравнить').closest('li')).toHaveAttribute('data-status', 'done');
     expect(screen.queryByTestId('dr-stop')).toBeNull();
+  });
+
+  it('the «Исследование отменено.» notice is not drawn under the badge', () => {
+    /* The plan card wears «Отменено»; a full-width paragraph repeating it is
+     * duplication (owner r26). The message itself stays in the tree. */
+    renderTree({
+      latestId: 'cancel-reply',
+      cancelInstead: true,
+    });
+    expect(screen.queryByTestId('content-parts')).toBeNull();
+    expect(screen.getByTestId('plan-cancelled')).toBeInTheDocument();
+  });
+
+  it('prose that merely equals the notice text, with no cancel parent, still renders', () => {
+    renderTree({ latestId: 'resp1', runReply: { text: 'Исследование отменено.' } });
+    expect(screen.getByTestId('content-parts')).toBeInTheDocument();
   });
 
   it('a stopped run says «Остановлено» instead of reading as never started', () => {
