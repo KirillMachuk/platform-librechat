@@ -22,6 +22,9 @@ export interface DeepResearchProgress {
   round?: number;
   subQuestion?: string;
   jurisdiction?: string;
+  /** 1-based step of the approved plan this round advances; absent/0 when the
+   *  run has no plan or the supervisor did not name one (owner r27). */
+  planStep?: number;
 }
 
 export interface RunDeepResearchParams {
@@ -114,7 +117,12 @@ function handleUpdate(data: unknown, onProgress: (progress: DeepResearchProgress
        */
       onProgress({ type: 'report' });
     } else if (node === 'supervisor' && value.currentSubQuestion) {
-      onProgress({ type: 'research', round: value.round, subQuestion: value.currentSubQuestion });
+      onProgress({
+        type: 'research',
+        round: value.round,
+        subQuestion: value.currentSubQuestion,
+        planStep: value.planStep,
+      });
     } else if (node === 'report') {
       onProgress({ type: 'report' });
     }

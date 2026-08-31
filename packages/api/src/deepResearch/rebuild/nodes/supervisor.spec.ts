@@ -1,5 +1,5 @@
 import { FakeListChatModel } from '@langchain/core/utils/testing';
-import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { AIMessage, AIMessageChunk, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { BaseMessage } from '@langchain/core/messages';
@@ -10,6 +10,7 @@ import {
   createSupervisorNode,
   routeFromSupervisor,
   normalizeSubQuestions,
+  normalizePlanStep,
 } from './supervisor';
 import { resolveDeepResearchTier } from '../config';
 
@@ -26,6 +27,7 @@ function stateWith(partial: Partial<DeepResearchState>): DeepResearchState {
     currentSubQuestions: [],
     findings: [],
     round: 0,
+    planStep: 0,
     researcherCount: 0,
     tokenUsage: { input: 0, output: 0, total: 0 },
     usageByModel: {},
@@ -45,6 +47,13 @@ function configWith(tokenBudget = 800_000, budgetGateRatio = 0.75): RunnableConf
     budget: { wallClockMs: 900_000, tokenBudget, budgetGateRatio, timeGateRatio: 0.68 },
   };
   return { configurable };
+}
+
+const PLAN = ['Собрать климатические нормы', 'Сравнить типичные температуры', 'Свести таблицу'];
+
+function configWithPlan(planSteps: string[] = PLAN): RunnableConfig {
+  const base = configWith().configurable as DeepResearchConfigurable;
+  return { configurable: { ...base, planSteps } };
 }
 
 describe('budgetGateReason', () => {
@@ -497,5 +506,119 @@ describe('createSupervisorNode', () => {
     const errors = (update.errors ?? []) as DeepResearchNodeError[];
     expect(errors).toHaveLength(1);
     expect(errors[0].node).toBe('supervisor');
+  });
+});
+
+/**
+ * The plan the user approved used to reach nothing: the graph ran on the brief
+ * alone, so an EDITED plan changed no part of the research, and the card guessed
+ * the highlighted step from a progress fraction — on a five-step plan the first
+ * research round painted step 3 and ticked off two (owner r27). The supervisor
+ * now works the plan and names the step its batch advances.
+ */
+describe('normalizePlanStep — the reported step, or nothing (r27)', () => {
+  it('takes an in-range integer, 1-based', () => {
+    expect(normalizePlanStep(1, 3)).toBe(1);
+    expect(normalizePlanStep(3, 3)).toBe(3);
+  });
+
+  it('reads a number the model quoted as a string', () => {
+    expect(normalizePlanStep('2', 3)).toBe(2);
+    expect(normalizePlanStep(' 2 ', 3)).toBe(2);
+  });
+
+  it('refuses anything outside the plan it was shown', () => {
+    expect(normalizePlanStep(0, 3)).toBe(0);
+    expect(normalizePlanStep(4, 3)).toBe(0);
+    expect(normalizePlanStep(-1, 3)).toBe(0);
+  });
+
+  it('refuses what is not an integer step — a half-step is not a step', () => {
+    expect(normalizePlanStep(2.5, 3)).toBe(0);
+    expect(normalizePlanStep(NaN, 3)).toBe(0);
+    expect(normalizePlanStep(null, 3)).toBe(0);
+    expect(normalizePlanStep(undefined, 3)).toBe(0);
+    expect(normalizePlanStep({ step: 2 }, 3)).toBe(0);
+  });
+
+  it('does not read a step out of prose that merely starts with a digit', () => {
+    /* `parseInt` would answer 3 for «3 из 5» and 3 for «300», and both would
+     * move the user's checklist somewhere the model never said. */
+    expect(normalizePlanStep('3 из 5', 3)).toBe(0);
+    expect(normalizePlanStep('шаг 2', 3)).toBe(0);
+  });
+
+  it('is 0 when there is no plan at all — a PROCEED run has no step to be on', () => {
+    expect(normalizePlanStep(1, 0)).toBe(0);
+  });
+});
+
+describe('SUPERVISOR works the approved plan (r27)', () => {
+  const capture = () => {
+    const seen: BaseMessage[][] = [];
+    const model = new FakeListChatModel({ responses: ['{}'] }) as BaseChatModel;
+    return { seen, model };
+  };
+
+  it('puts the plan in the HUMAN material and asks for the step in the RULES', async () => {
+    const { seen, model } = capture();
+    const answer = '{"action":"RESEARCH","subQuestions":["норма осадков"],"planStep":2}';
+    jest.spyOn(model, 'invoke').mockImplementation(async (messages) => {
+      seen.push(messages as BaseMessage[]);
+      return new AIMessageChunk(answer);
+    });
+    const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(
+      stateWith({}),
+      configWithPlan(),
+    );
+    const [system, human] = seen[0];
+    expect(String(system.content)).toContain('planStep');
+    expect(String(human.content)).toContain('Утверждённый план исследования');
+    expect(String(human.content)).toContain('2. Сравнить типичные температуры');
+    expect(update.planStep).toBe(2);
+  });
+
+  it('a round the model did not label keeps the step the run was already on', async () => {
+    /* «Did not say» is a first-class outcome: the card holds still rather than
+     * moving the highlight somewhere invented. */
+    const model = new FakeListChatModel({
+      responses: ['{"action":"RESEARCH","subQuestions":["ещё вопрос"]}'],
+    });
+    const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(
+      stateWith({ round: 1, planStep: 2 }),
+      configWithPlan(),
+    );
+    expect(update.planStep).toBe(2);
+  });
+
+  it('a step outside the plan is refused, not clamped into a lie', async () => {
+    const model = new FakeListChatModel({
+      responses: ['{"action":"RESEARCH","subQuestions":["ещё вопрос"],"planStep":9}'],
+    });
+    const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(
+      stateWith({ round: 1, planStep: 1 }),
+      configWithPlan(),
+    );
+    expect(update.planStep).toBe(1);
+  });
+
+  it('a PROCEED run (no plan) gets the prompt it always had — no plan block, no planStep', async () => {
+    /* The System/Human split was measured on this exact prompt (7 of 28 empty
+     * answers before it). A run with no plan must not ride along on a change
+     * that was made for plan runs. */
+    const { seen, model } = capture();
+    jest.spyOn(model, 'invoke').mockImplementation(async (messages) => {
+      seen.push(messages as BaseMessage[]);
+      return new AIMessageChunk('{"action":"RESEARCH","subQuestions":["вопрос"]}');
+    });
+    const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(
+      stateWith({}),
+      configWith(),
+    );
+    const [system, human] = seen[0];
+    expect(String(system.content)).not.toContain('planStep');
+    expect(String(system.content)).not.toContain('ПЛАН, УТВЕРЖДЁННЫЙ');
+    expect(String(human.content)).not.toContain('Утверждённый план');
+    expect(update.planStep).toBe(0);
   });
 });

@@ -1,5 +1,5 @@
 import { render, fireEvent } from '@testing-library/react';
-import { ThinkingReasoning } from '../ThinkingReasoning';
+import { ThinkingReasoning, ThinkingWaitLabel } from '../ThinkingReasoning';
 
 /**
  * Guards for the vendored aicss thinking block (cards К4, §6.17): the stream
@@ -121,19 +121,31 @@ describe('ThinkingReasoning (cards К4)', () => {
     expect(getByRole('button')).toHaveTextContent(/^Мысли$/);
   });
 
-  it('the brain marks the FINISHED block only — the wait must not visibly swap (r26)', () => {
-    /* Streaming, the header is the same bare shimmering word as the in-flow
-     * waiting label, so «Думаю…» does not jump into another design mid-wait.
-     * The icon appears with the fold, which is a state change anyway. */
-    const { container } = render(<ThinkingReasoning {...defaultProps} text={textOf(1)} />);
-    expect(container.querySelector('.trBrain')).not.toBeNull();
+  it('ONE waiting look: the streaming header IS the standalone waiting label (r27)', () => {
+    /* The owner reported the same complaint twice — the waiting word appears in
+     * one design and then swaps into another. r26 answered it by taking the
+     * brain OFF the streaming header; r27 overturned that («нужно сделать
+     * единый стандарт… сразу новая надпись с иконкой»). The contract is now
+     * equality, not absence: whatever the standalone label renders, the
+     * streaming header renders, character for character. Comparing the two
+     * outputs is the guard — a change to either one alone turns it red. */
     const streamed = render(
       <ThinkingReasoning {...defaultProps} streaming={true} text={textOf(1)} />,
     );
-    expect(streamed.container.querySelector('.trBrain')).toBeNull();
-    expect(streamed.container.querySelector('.thinking-shimmer-active')?.textContent).toBe(
-      'Думаю…',
-    );
+    const header = streamed.container.querySelector('button');
+    const standalone = render(<ThinkingWaitLabel label="Думаю…" />);
+    const label = standalone.container.querySelector('[data-testid="waiting-label"]');
+
+    expect(header?.innerHTML).toBe(label?.innerHTML);
+    expect(header?.querySelector('.trBrain')).not.toBeNull();
+    expect(header?.querySelector('.thinking-shimmer-active')?.textContent).toBe('Думаю…');
+    /* The chevron is the one thing the wait does NOT get: it is a control, and
+     * there is nothing to fold until the thoughts stop (owner r26 on the ⏎). */
+    expect(header?.querySelector('.trChevron')).toBeNull();
+
+    const finished = render(<ThinkingReasoning {...defaultProps} text={textOf(1)} />);
+    expect(finished.container.querySelector('.trBrain')).not.toBeNull();
+    expect(finished.container.querySelector('.trChevron')).not.toBeNull();
   });
 
   it('mounted finished is static; born streaming keeps its entry animation', () => {

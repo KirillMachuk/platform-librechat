@@ -1,7 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button, Dialog, DialogTitle, DialogHeader, DialogContent } from '@librechat/client';
 import type { ReactNode } from 'react';
-import { FileText, Maximize2 } from '~/components/icons';
+import {
+  ApprovalCardFrame,
+  ApprovalCardActions,
+  ApprovalCardButton,
+  ApprovalCardHeaderAction,
+} from '~/components/Chat/Cards/ApprovalCard';
+import { Maximize2 } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
@@ -119,39 +125,38 @@ export default function ReportCard({
 
   return (
     <>
-      <div className="my-2 w-full overflow-hidden rounded-2xl border border-border-light bg-surface-primary-alt">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="flex w-full items-center gap-2.5 border-b border-border-light px-4 py-3 text-left hover:bg-surface-hover"
-          aria-label={localize('com_ui_expand')}
+      <div className="my-2 w-full">
+        <ApprovalCardFrame
+          variant="report"
+          title={displayTitle}
+          testId="report-card"
+          isStatic={true}
+          oneLineTitle={true}
+          headerAction={
+            <ApprovalCardHeaderAction
+              label={localize('com_ui_expand')}
+              onClick={() => setOpen(true)}
+            >
+              <Maximize2 className="size-3.5" aria-hidden="true" />
+            </ApprovalCardHeaderAction>
+          }
         >
-          <span
-            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-submit text-white"
-            aria-hidden="true"
-          >
-            <FileText className="size-4" />
-          </span>
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text-primary">
-            {displayTitle}
-          </span>
-          <Maximize2 className="size-4 shrink-0 text-text-secondary" aria-hidden="true" />
-        </button>
-        <div className={cn('relative max-h-80 overflow-hidden px-4 pt-2', open && 'hidden')}>
-          {children}
-          <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-surface-primary-alt to-transparent"
-            aria-hidden="true"
-          />
-        </div>
-        <div className="flex items-center justify-end gap-2 px-3 py-2">
-          <Button variant="ghost" size="sm" onClick={copy}>
-            {copyLabel}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-            {localize('com_ui_expand')}
-          </Button>
-        </div>
+          <div className={cn('relative max-h-80 overflow-hidden', open && 'hidden')}>
+            {children}
+            <div
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-surface-primary to-transparent"
+              aria-hidden="true"
+            />
+          </div>
+          <ApprovalCardActions>
+            <ApprovalCardButton kind="ghost" onClick={copy}>
+              {copyLabel}
+            </ApprovalCardButton>
+            <ApprovalCardButton onClick={() => setOpen(true)}>
+              {localize('com_ui_expand')}
+            </ApprovalCardButton>
+          </ApprovalCardActions>
+        </ApprovalCardFrame>
       </div>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent

@@ -108,6 +108,15 @@ export interface DeepResearchConfigurable {
   mode: DeepResearchMode;
   budget: DeepResearchRunBudget;
   /**
+   * The steps of the plan the user approved, in order, when this run came from
+   * a plan card. SUPERVISOR keeps its sub-questions on that agenda and names
+   * the step each round advances, which is what lets the card highlight a step
+   * truthfully instead of guessing it from a progress fraction (owner r27).
+   * Empty/undefined = a PROCEED run with no plan: the supervisor prompt is then
+   * byte-identical to the one measured before this existed.
+   */
+  planSteps?: string[];
+  /**
    * Absolute wall-clock deadline (ms epoch) at which SUPERVISOR stops gathering
    * and routes to REPORT, reserving the remaining time for synthesis (A1). Set by
    * the run wrapper at start = now + wallClockMs × timeGateRatio. Undefined → the
@@ -190,6 +199,15 @@ export const DeepResearchStateAnnotation = Annotation.Root({
   findings: Annotation<DeepResearchFinding[]>({ reducer: concat, default: () => [] }),
   /** Completed orchestrator rounds (written only by SUPERVISOR). */
   round: Annotation<number>({ reducer: lastWins, default: () => 0 }),
+  /**
+   * Which step of the user-approved plan this round advances, 1-based; 0 when
+   * the run has no plan or the supervisor did not say. It is the supervisor's
+   * OWN answer, not arithmetic: the plan card used to derive the highlighted
+   * step from the progress fraction, which put a 5-step plan on step 3 at the
+   * first research round while the action line described something else
+   * entirely (owner r27). There is nothing else on the wire that knows.
+   */
+  planStep: Annotation<number>({ reducer: lastWins, default: () => 0 }),
   /** Researchers dispatched so far (written only by SUPERVISOR; caps spawns). */
   researcherCount: Annotation<number>({ reducer: lastWins, default: () => 0 }),
   /** Set by SUPERVISOR when the gather loop ends; the routing edge reads it. */

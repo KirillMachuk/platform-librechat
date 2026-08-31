@@ -1666,6 +1666,30 @@ async function runNewDeepResearch(params) {
       const maxRounds = Math.max(1, tier.maxOrchestratorCycles || 6);
       let searchCount = 0;
       /**
+       * Which plan step the card highlights, 0-based — and the reason this is a
+       * variable here rather than arithmetic in the client.
+       *
+       * The card used to derive it from the progress fraction: `floor(0.40 × 5)`
+       * put a five-step plan on step 3 at the FIRST research round, so step 1 was
+       * never once shown as running and two steps were already ticked off, while
+       * the action line under them described a sub-question that belongs to no
+       * step at all (owner r27). The fraction encodes supervisor rounds, and the
+       * relation between rounds and plan steps does not exist — the supervisor
+       * now says which step its batch advances and that answer travels here.
+       *
+       * Monotonic on purpose: a checklist reads as progress, so a step that has
+       * gone back would UN-TICK finished work. Held server-side so a reload, a
+       * replay and a second tab all agree. It starts on the first step — SCOPE
+       * is the run working toward it — and marks nothing done until a later
+       * step is actually reported.
+       */
+      let planStepIndex = 0;
+      /** Did the graph actually receive the plan? Sovereign masking can fail or
+       *  come back unmappable, and then the run is steered by the brief alone
+       *  and can never name a step — so the card must be told NOTHING rather
+       *  than left holding step 1 for the whole run. */
+      let agendaReachedGraph = false;
+      /**
        * One `dr_progress` snapshot. The client REPLACES its snapshot wholesale
        * (`setDrProgress` in useResumableSSE), so every emit has to carry the checklist and
        * the search count too — a partial one would blank the card's steps.
@@ -1677,7 +1701,14 @@ async function runNewDeepResearch(params) {
         Promise.resolve(
           GenerationJobManager.emitChunk(streamId, {
             event: 'dr_progress',
-            data: { phase, steps: planSteps, action, searches: searchCount, progress },
+            data: {
+              phase,
+              steps: planSteps,
+              action,
+              searches: searchCount,
+              progress,
+              stepIndex: agendaReachedGraph ? planStepIndex : undefined,
+            },
           }),
         ).catch(() => {});
       };
@@ -1723,6 +1754,13 @@ async function runNewDeepResearch(params) {
            * and once when the report node returns (it is over). The first arrival starts
            * the clock and the heartbeat; the second is just the last tick before the
            * final, and must not restart anything. */
+          /* Writing the report IS the plan's last step — the gathering is over,
+           * so everything before it has genuinely happened. This is also the
+           * only honest way to close a plan whose middle steps the supervisor
+           * never named. */
+          if (planSteps.length > 0) {
+            planStepIndex = planSteps.length - 1;
+          }
           if (reportStartedMs === 0) {
             reportStartedMs = Date.now();
             /* No card listening (legacy gate-off run) → no heartbeat. `emitDrProgress`
@@ -1738,6 +1776,18 @@ async function runNewDeepResearch(params) {
         }
         if (event.type === 'research') {
           searchCount += 1;
+          /* The supervisor's own answer, never below where the card already is
+           * (see `planStepIndex`). A round it did not label leaves the
+           * highlight where it stands rather than moving it somewhere made up.
+           * It is asked for the EARLIEST step the batch still advances, not the
+           * furthest: a round that legitimately spans steps 1, 3 and 5 would
+           * otherwise report 5 and tick four steps off at once — the owner's
+           * original complaint with a model in place of the arithmetic (r27
+           * review). Earliest + monotonic means a step reads done only once the
+           * run has moved past it. */
+          if (event.planStep > 0 && event.planStep <= planSteps.length) {
+            planStepIndex = Math.max(planStepIndex, event.planStep - 1);
+          }
         }
         emitDrProgress(
           event.type,
@@ -1745,6 +1795,42 @@ async function runNewDeepResearch(params) {
           drProgressFraction(event, maxRounds, searchCount),
         );
       };
+
+      /**
+       * The plan the graph is given must be MASKED in sovereign mode.
+       *
+       * The plan message is saved de-masked — the user reads their own names on
+       * their own card — so `planSteps` carries real PII, and handing it to the
+       * supervisor would egress exactly what Track B exists to prevent, in the
+       * one place a plan echoes the request. `dr_progress.steps` keeps the
+       * de-masked copy: that one is the user's own screen.
+       *
+       * ONE masking call for the whole list, not one per step: the anonymizer is
+       * the dominant cost of a DR turn, and six round-trips before the graph
+       * starts would be paid by every plan run. The split back is RECONCILED
+       * against the input — a masking that changed the line count means the
+       * mapping is unknown, and an unknown mapping degrades to no agenda at all
+       * (the card then reports no step, which it already knows how to draw).
+       */
+      let graphPlanSteps = planSteps;
+      if (sovereign && planSteps.length > 0) {
+        try {
+          const masked = (await sovereign.maskContent(planSteps.join('\n'))).split('\n');
+          graphPlanSteps = masked.length === planSteps.length ? masked : [];
+          if (graphPlanSteps.length === 0) {
+            logger.warn(
+              `[deepResearchRun] masked plan came back as ${masked.length} lines for ${planSteps.length} steps; running without the plan agenda`,
+            );
+          }
+        } catch (error) {
+          logger.warn(
+            '[deepResearchRun] plan masking failed; running without the plan agenda',
+            error,
+          );
+          graphPlanSteps = [];
+        }
+      }
+      agendaReachedGraph = graphPlanSteps.length > 0;
 
       try {
         result = await runDeepResearch({
@@ -1759,6 +1845,14 @@ async function runNewDeepResearch(params) {
             conversationId,
             mode: tier.name,
             budget: tierToRunBudget(tier),
+            /* The plan the user approved (and may have edited), MASKED in
+             * sovereign mode. It reached the graph only indirectly before r27 —
+             * dissolved into the research brief through the dialogue transcript
+             * — so SUPERVISOR, the node that decides what to research next,
+             * never saw the steps as steps and could not say which one a round
+             * advances. This is that channel. Empty for a PROCEED run, which
+             * keeps that path's prompts exactly as they were measured. */
+            planSteps: graphPlanSteps,
           },
           signal,
           wallClockMs: Math.max(1, tier.wallClockMinutes) * 60_000,

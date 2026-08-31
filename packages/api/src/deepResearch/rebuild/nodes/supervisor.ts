@@ -166,14 +166,40 @@ export function normalizeSubQuestions(
   return batch;
 }
 
+/**
+ * Which plan step this batch advances, 1-based — the supervisor's own answer,
+ * clamped to the plan it was shown. 0 means "it did not say", and that is a
+ * first-class outcome: a missing or nonsense value leaves the card's highlight
+ * where it was rather than moving it somewhere invented. Anything the model can
+ * return that is not an integer inside the plan (prose, 0, 7 of 5, a float, a
+ * number as a string) lands on 0 — a strict integer check, because `Number('3
+ * шаг')` is NaN but `parseInt` would happily read 3 out of «3 из 5» and out of
+ * «300».
+ */
+export function normalizePlanStep(value: unknown, stepCount: number): number {
+  if (stepCount <= 0) {
+    return 0;
+  }
+  const step = typeof value === 'string' ? Number(value.trim()) : value;
+  if (typeof step !== 'number' || !Number.isInteger(step) || step < 1 || step > stepCount) {
+    return 0;
+  }
+  return step;
+}
+
 function parseSupervisorOutput(
   text: string,
   maxBatch: number,
-): { completeRequested: boolean; subQuestions: string[] } {
+  stepCount: number,
+): { completeRequested: boolean; subQuestions: string[]; planStep: number } {
   const parsed = tolerantJsonParse(text);
   const action = String(parsed?.action ?? '').toLowerCase();
   const subQuestions = normalizeSubQuestions(parsed?.subQuestions, parsed?.subQuestion, maxBatch);
-  return { completeRequested: action.includes('complete'), subQuestions };
+  return {
+    completeRequested: action.includes('complete'),
+    subQuestions,
+    planStep: normalizePlanStep(parsed?.planStep, stepCount),
+  };
 }
 
 /**
@@ -211,6 +237,7 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
       // and it returned EMPTY on 7 of 28 measured calls; an empty answer parses to no
       // sub-questions and the fallback below researches the whole brief as ONE question,
       // silently costing the round its parallel fan-out.
+      const planSteps = configurable?.planSteps ?? [];
       const prompt = [
         new SystemMessage(
           buildSupervisorPrompt({
@@ -218,6 +245,7 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
             jurisdiction: state.jurisdiction,
             maxConcurrent: deps.tier.maxConcurrentResearchers,
             nonce: deps.nonce,
+            planSteps,
           }),
         ),
         new HumanMessage(
@@ -227,14 +255,16 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
             round: state.round,
             maxRounds: deps.tier.maxOrchestratorCycles,
             nonce: deps.nonce,
+            planSteps,
           }),
         ),
       ];
       const response = await deps.model.invoke(prompt, { signal: config.signal });
       const answer = readAnswer('supervisor', response);
-      const { completeRequested, subQuestions } = parseSupervisorOutput(
+      const { completeRequested, subQuestions, planStep } = parseSupervisorOutput(
         answer.text,
         deps.tier.maxConcurrentResearchers,
+        planSteps.length,
       );
       const tokenUsage = usageFromExchange(prompt, response);
       const usageByModel = usageByModelFromExchange(
@@ -274,6 +304,9 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
         currentSubQuestion: batch[0],
         currentSubQuestions: batch,
         round: state.round + 1,
+        /* 0 (did not say / no plan) carries forward the previous value rather
+         * than resetting the card to "nothing running". */
+        planStep: planStep || state.planStep,
         researcherCount: state.researcherCount + batch.length,
         tokenUsage,
         usageByModel,

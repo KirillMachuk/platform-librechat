@@ -62,10 +62,21 @@ jest.mock('~/data-provider', () => ({
 const PLAN_TEXT = '**План исследования:** Рынок CRM\n\n1. Собрать\n2. Сравнить';
 const CONVO = 'c-run';
 
+/**
+ * The start command as the CLIENT holds it while the run is live.
+ *
+ * `drKind: 'start'` is stamped server-side AFTER the `created` event goes out,
+ * so during the whole run the client's copy has only the marker text — it grows
+ * the field on finalization or on reload. Every guard here used the persisted
+ * shape, which is why a rule keyed on `drKind` could pass them all and still
+ * leave a live research drawing nothing (r27 review). `persisted: true` opts
+ * into the after-the-fact shape.
+ */
 const tree = (over: {
   latestId: string;
   runReply?: Partial<TMessage>;
   cancelInstead?: boolean;
+  persisted?: boolean;
 }): TMessage[] => {
   const reply = {
     messageId: 'resp1',
@@ -104,7 +115,7 @@ const tree = (over: {
         conversationId: CONVO,
         parentMessageId: 'plan1',
         isCreatedByUser: true,
-        drKind: 'start',
+        ...(over.persisted === true ? { drKind: 'start' } : {}),
         text: 'Начать исследование',
         depth: 1,
         children: [reply],
@@ -134,12 +145,21 @@ const renderTree = (opts: {
   snapshot?: unknown;
   runReply?: Partial<TMessage>;
   cancelInstead?: boolean;
-}) => {
-  const messagesTree = tree({
-    latestId: opts.latestId,
-    runReply: opts.runReply,
-    cancelInstead: opts.cancelInstead,
-  });
+  persisted?: boolean;
+}) =>
+  renderCustom(
+    tree({
+      latestId: opts.latestId,
+      runReply: opts.runReply,
+      cancelInstead: opts.cancelInstead,
+      persisted: opts.persisted,
+    }),
+    opts.latestId,
+    opts.snapshot,
+  );
+
+const renderCustom = (messagesTree: TMessage[], latestId: string, snapshot?: unknown) => {
+  const opts = { latestId, snapshot };
   const ctx = {
     conversation: { conversationId: CONVO },
     conversationId: CONVO,
@@ -205,6 +225,10 @@ const RUNNING = {
   action: 'Ищет источники',
   searches: 1,
   progress: 0.5,
+  /* The step the RUN reported (r27). It used to be derived from `progress`,
+   * which on this very snapshot would put the card on step 2 of 2 and tick
+   * step 1 off — while the run had only just started. */
+  stepIndex: 1,
 };
 
 describe('which plan card draws a live Deep Research run (r26 review)', () => {
@@ -214,6 +238,180 @@ describe('which plan card draws a live Deep Research run (r26 review)', () => {
     expect(screen.getByText('Сравнить').closest('li')).toHaveAttribute('data-status', 'active');
     expect(screen.getByTestId('dr-stop')).toBeInTheDocument();
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
+  });
+
+  it('the SAME run, reloaded (drKind now stamped), still belongs to the same card', () => {
+    renderTree({ latestId: 'resp1', snapshot: RUNNING, persisted: true });
+    expect(screen.getByTestId('dr-stop')).toBeInTheDocument();
+    expect(screen.getByText('Сравнить').closest('li')).toHaveAttribute('data-status', 'active');
+  });
+
+  it('a run that reports NO step marks none — the fraction must not fill in for it', () => {
+    /* The defect (owner r27): the index came from `floor(progress × steps)`, so
+     * a snapshot like this one — a live run, half the bar, no step reported —
+     * painted step 2 active and step 1 done. Nothing on the wire knew that. */
+    const { stepIndex: _dropped, ...noStep } = RUNNING;
+    renderTree({ latestId: 'resp1', snapshot: noStep });
+    expect(screen.getByText('Собрать').closest('li')).not.toHaveAttribute('data-status', 'done');
+    expect(screen.getByText('Сравнить').closest('li')).not.toHaveAttribute('data-status', 'active');
+    /* The run is still visibly a run: Stop and the bar stay. */
+    expect(screen.getByTestId('dr-stop')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
+  });
+
+  it('the reported step is followed even when the fraction disagrees', () => {
+    renderTree({ latestId: 'resp1', snapshot: { ...RUNNING, progress: 0.95, stepIndex: 0 } });
+    expect(screen.getByText('Собрать').closest('li')).toHaveAttribute('data-status', 'active');
+    expect(screen.getByText('Сравнить').closest('li')).not.toHaveAttribute('data-status', 'done');
+  });
+
+  it('a SECOND research does not also light up the first plan card (r27)', () => {
+    /* Stop → comment → re-plan → Start leaves the first plan's start command in
+     * the ancestry of the second run's tail. A walk that answered «is this
+     * start command anywhere above me» said yes to BOTH plans, so the old card
+     * drew the new run: its Stop, its bar, and its step index applied to a
+     * different list of steps. The nearest start command owns the run. */
+    const PLAN2 = '**План исследования:** Погода\n\n1. Нормы\n2. Температуры';
+    const node = (over: Record<string, unknown>) =>
+      ({ conversationId: CONVO, children: [], ...over }) as unknown as TMessage;
+    const reply2 = node({
+      messageId: 'resp2',
+      parentMessageId: 'start2',
+      isCreatedByUser: false,
+      text: '',
+      content: [],
+      depth: 5,
+    });
+    const start2 = node({
+      messageId: 'start2',
+      parentMessageId: 'plan2',
+      isCreatedByUser: true,
+      drKind: 'start',
+      text: 'Начать исследование',
+      depth: 4,
+      children: [reply2],
+    });
+    const plan2 = node({
+      messageId: 'plan2',
+      parentMessageId: 'aborted1',
+      isCreatedByUser: false,
+      drKind: 'plan',
+      text: PLAN2,
+      content: [{ type: 'text', text: PLAN2 }],
+      depth: 3,
+      children: [start2],
+    });
+    const aborted1 = node({
+      messageId: 'aborted1',
+      parentMessageId: 'start1',
+      isCreatedByUser: false,
+      drKind: 'aborted',
+      text: 'Исследование остановлено.',
+      content: [],
+      depth: 2,
+      children: [plan2],
+    });
+    const start1 = node({
+      messageId: 'start1',
+      parentMessageId: 'plan1',
+      isCreatedByUser: true,
+      drKind: 'start',
+      text: 'Начать исследование',
+      depth: 1,
+      children: [aborted1],
+    });
+    const messagesTree = [
+      node({
+        messageId: 'plan1',
+        parentMessageId: null,
+        isCreatedByUser: false,
+        drKind: 'plan',
+        text: PLAN_TEXT,
+        content: [{ type: 'text', text: PLAN_TEXT }],
+        depth: 0,
+        children: [start1],
+      }),
+    ];
+    renderCustom(messagesTree, 'resp2', {
+      phase: 'research',
+      steps: ['Нормы', 'Температуры'],
+      action: 'Исследует',
+      searches: 1,
+      progress: 0.5,
+      stepIndex: 1,
+    });
+
+    /* The SECOND plan runs: its own second step is active. */
+    expect(screen.getByText('Температуры').closest('li')).toHaveAttribute('data-status', 'active');
+    /* The FIRST plan is done with — it wears «Остановлено», not a live run. */
+    expect(screen.getByText('Собрать').closest('li')).not.toHaveAttribute('data-status', 'done');
+    expect(screen.getByTestId('plan-stopped')).toBeInTheDocument();
+    expect(screen.getAllByTestId('dr-stop')).toHaveLength(1);
+  });
+
+  it('a RE-PLAN turn does not light the stopped plan card either (r27)', () => {
+    /* After a Stop the user comments and the runner re-plans. That turn's user
+     * message is a plain comment, not a start command — but the first plan's
+     * start command is still an ancestor of it, so an ancestry-only rule made
+     * the stopped card sprout a Stop button and a progress bar while the model
+     * was merely writing a new plan. */
+    const node = (over: Record<string, unknown>) =>
+      ({ conversationId: CONVO, children: [], ...over }) as unknown as TMessage;
+    const replanReply = node({
+      messageId: 'replan',
+      parentMessageId: 'comment1',
+      isCreatedByUser: false,
+      text: '',
+      content: [],
+      depth: 4,
+    });
+    const comment1 = node({
+      messageId: 'comment1',
+      parentMessageId: 'aborted1',
+      isCreatedByUser: true,
+      text: 'добавь ещё шаг про цены',
+      depth: 3,
+      children: [replanReply],
+    });
+    const aborted1 = node({
+      messageId: 'aborted1',
+      parentMessageId: 'start1',
+      isCreatedByUser: false,
+      drKind: 'aborted',
+      text: 'Исследование остановлено.',
+      content: [],
+      depth: 2,
+      children: [comment1],
+    });
+    const start1 = node({
+      messageId: 'start1',
+      parentMessageId: 'plan1',
+      isCreatedByUser: true,
+      drKind: 'start',
+      text: 'Начать исследование',
+      depth: 1,
+      children: [aborted1],
+    });
+    renderCustom(
+      [
+        node({
+          messageId: 'plan1',
+          parentMessageId: null,
+          isCreatedByUser: false,
+          drKind: 'plan',
+          text: PLAN_TEXT,
+          content: [{ type: 'text', text: PLAN_TEXT }],
+          depth: 0,
+          children: [start1],
+        }),
+      ],
+      'replan',
+      { phase: 'plan', steps: [], action: '', searches: 0, progress: 0 },
+    );
+
+    expect(screen.queryByTestId('dr-stop')).toBeNull();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(screen.getByTestId('plan-stopped')).toBeInTheDocument();
   });
 
   it('with no run in flight the same card is just a plan', () => {

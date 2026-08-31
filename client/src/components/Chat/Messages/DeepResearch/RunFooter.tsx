@@ -33,12 +33,26 @@ export function runStatusSteps(
   });
 }
 
-/** Where a run with N plan steps stands, from the coarse progress fraction. */
+/**
+ * Which plan step the run is on — as REPORTED, not as guessed.
+ *
+ * It used to be `floor(progress × stepCount)`, and that arithmetic has no basis:
+ * `progress` is a curve over supervisor rounds, and rounds do not map onto plan
+ * steps. On a five-step plan the first research round lands at 0.40, so the card
+ * opened on step 3 with steps 1–2 already checked off, under an action line
+ * describing something else (owner r27). The run now says which step it is on
+ * (SUPERVISOR names it, the runner clamps and monotonises it).
+ *
+ * Missing — a PROCEED run, a pre-r27 snapshot, a plan whose steps the supervisor
+ * never labelled — returns -1: NO step is marked active or done. A checklist
+ * that shows nothing is honest; one that shows the wrong step is not.
+ */
 export function runActiveIndex(data: TDeepResearchProgress, stepCount: number): number {
-  return Math.min(
-    Math.floor((data.progress ?? 0) * Math.max(stepCount, 1)),
-    Math.max(stepCount - 1, 0),
-  );
+  const reported = data.stepIndex;
+  if (typeof reported !== 'number' || !Number.isFinite(reported) || stepCount <= 0) {
+    return -1;
+  }
+  return Math.min(Math.max(Math.trunc(reported), 0), stepCount - 1);
 }
 
 export default function RunFooter({ data }: { data: TDeepResearchProgress }) {

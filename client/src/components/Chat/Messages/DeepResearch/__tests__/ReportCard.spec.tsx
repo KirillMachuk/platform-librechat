@@ -9,6 +9,13 @@ jest.mock('~/components/icons', () => ({
   Maximize2: () => <svg data-testid="max-icon" />,
 }));
 jest.mock('@librechat/client', () => ({
+  TooltipAnchor: ({
+    description,
+    render: element,
+  }: {
+    description?: string;
+    render?: React.ReactElement;
+  }) => <span data-tooltip={description}>{element}</span>,
   Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
     <button onClick={onClick}>{children}</button>
   ),
@@ -49,6 +56,40 @@ describe('ReportCard', () => {
     );
     fireEvent.click(getAllByText('com_ui_copy')[0]);
     expect(writeText).toHaveBeenCalledWith('RAW-MD');
+  });
+
+  it('wears the shared card frame, not a shape of its own (owner r27)', () => {
+    /* The report was the last DR surface still on the pre-К2 frame — its own
+     * radius, its own header, its own buttons — sitting directly under a plan
+     * card in the new one. It is the same object now: the frame's card class,
+     * the frame's head with the report icon, the frame's buttons. Asserting the
+     * CLASSES (identity-obj-proxy gives the raw module keys) is what makes a
+     * silent drift back to bespoke markup red. */
+    const { getByTestId, container } = render(
+      <ReportCard title="Рынок CRM" text="md">
+        <div>тело</div>
+      </ReportCard>,
+    );
+    const card = getByTestId('report-card');
+    expect(card.className).toContain('card');
+    expect(card).toHaveAttribute('data-variant', 'report');
+    expect(card.querySelector('.head .icon')).toHaveAttribute('data-variant', 'report');
+    expect(card.querySelector('.title')?.textContent).toBe('Рынок CRM');
+    /* The report's title is USER content in a 24px head row: measured on the
+     * acceptance page, a two-line title stood 34px and pushed 5px out of the
+     * head into the card's gap. One line, with the full text on hover. */
+    expect(card.querySelector('.title')?.className).toContain('titleOneLine');
+    expect(card.querySelector('.title')?.closest('[data-tooltip]')).toHaveAttribute(
+      'data-tooltip',
+      'Рынок CRM',
+    );
+    expect(container.querySelector('.btnGhost')?.textContent).toBe('com_ui_copy');
+    expect(container.querySelector('.btnPrimary')?.textContent).toBe('com_ui_expand');
+    /* The header's icon-only control says what it does. */
+    expect(container.querySelector('button.headAction')?.closest('[data-tooltip]')).toHaveAttribute(
+      'data-tooltip',
+      'com_ui_expand',
+    );
   });
 
   it('expands into the full-screen reader on Развернуть', () => {

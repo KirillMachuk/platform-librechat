@@ -12,10 +12,12 @@ import { useLocalize } from '~/hooks';
  * The three research phases, shown as a generic checklist when a run has no approved plan
  * (a PROCEED run — the model judged the request clear enough to skip the plan card — emits
  * empty `steps`). Without this the live card collapsed to a bare progress bar. The active
- * phase comes from the snapshot's `phase`, NOT the coarse progress fraction: research spans
- * a wide fraction band, so a fraction-derived index would mis-highlight scope as active
- * well into research (the plan-steps path can use the fraction because plan steps are
- * evenly distributed across it; the three phases are not).
+ * phase comes from the snapshot's `phase`, which is a fact the run reports.
+ *
+ * It never came from the progress fraction, and the note here used to excuse the plan-steps
+ * path for doing exactly that — "plan steps are evenly distributed across it". They are not:
+ * the fraction is a curve over supervisor rounds, and the first round of a five-step plan
+ * landed on step 3 with two ticked off (owner r27). That path now uses a reported index too.
  */
 const PHASE_STEPS: { phase: string; key: TranslationKeys }[] = [
   { phase: 'scope', key: 'com_ui_deep_research_phase_scope' },

@@ -178,8 +178,17 @@ const ContentRender = memo(function ContentRender({
       }
       let cursor = list.find((m) => m.messageId === latestMessageId);
       for (let hops = 0; cursor != null && hops < 64; hops++) {
-        if (cursor.messageId === startCommandId) {
-          return true;
+        /* The turn in flight is the one whose USER message is the nearest one
+         * above the tail, so the run belongs to this plan only if that message
+         * IS this plan's start command. «Is the start command anywhere above
+         * me» was too weak on a branch that holds more than one DR turn: after
+         * Stop → comment → re-plan → Start, the first plan's start command is
+         * still an ancestor of everything that follows, so the old card lit up
+         * too — drawing the new run's Stop, bar and step index against its own,
+         * different steps. It also lit up during the RE-PLAN turn, whose user
+         * message is a plain comment and not a start command at all (r27). */
+        if (cursor.isCreatedByUser === true) {
+          return cursor.messageId === startCommandId;
         }
         const parentId: string | null = cursor.parentMessageId ?? null;
         cursor = parentId == null ? undefined : list.find((m) => m.messageId === parentId);

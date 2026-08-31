@@ -1359,6 +1359,184 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     expect(research[1].data.progress).toBeLessThanOrEqual(1);
   });
 
+  it('carries the approved plan into the graph and reports the step the run is on (r27)', async () => {
+    /**
+     * Two defects in one place (owner r27). The graph never SAW the plan — a run
+     * was steered by the brief alone, so a plan the user edited changed nothing
+     * about the research. And the card derived the highlighted step from the
+     * progress fraction: `floor(0.40 × 3)` = 1, so the first research round
+     * opened on step 2 with step 1 already ticked, under an action line about
+     * something else. The supervisor now names the step and it travels here.
+     */
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getMessages.mockResolvedValueOnce([
+      { messageId: 'orig', isCreatedByUser: true, parentMessageId: null, text: 'погода в Сочи' },
+      {
+        messageId: 'p1',
+        isCreatedByUser: false,
+        parentMessageId: 'orig',
+        drKind: 'plan',
+        text: '**План исследования:** Погода\n\n1. Собрать нормы\n2. Сравнить температуры\n3. Свести таблицу',
+      },
+    ]);
+    let seenConfigurable = null;
+    mockRunDeepResearch.mockImplementationOnce(async (params) => {
+      seenConfigurable = params.configurable;
+      params.onProgress({ type: 'scope', jurisdiction: 'RU' });
+      params.onProgress({ type: 'research', round: 1, subQuestion: 'нормы', planStep: 1 });
+      params.onProgress({ type: 'research', round: 2, subQuestion: 'температуры', planStep: 2 });
+      /* A round the model did not label, and one that points backwards: the
+       * highlight must hold, never un-tick finished work. */
+      params.onProgress({ type: 'research', round: 3, subQuestion: 'ещё' });
+      params.onProgress({ type: 'research', round: 4, subQuestion: 'назад', planStep: 1 });
+      /* The LAST step, named during gathering. A `<` where the clamp needs `<=`
+       * would drop it silently and the run would finish having never shown the
+       * final step as running (r27 review found this exact mutation alive). */
+      params.onProgress({ type: 'research', round: 5, subQuestion: 'таблица', planStep: 3 });
+      params.onProgress({ type: 'report' });
+      return {
+        finalReport: 'Отчёт',
+        finalizeReason: 'completed',
+        usage: { input: 1, output: 1, total: 2 },
+        findings: [],
+      };
+    });
+
+    await runNewDeepResearch(planParams('Начать исследование'));
+
+    expect(seenConfigurable.planSteps).toEqual([
+      'Собрать нормы',
+      'Сравнить температуры',
+      'Свести таблицу',
+    ]);
+    const steps = mockEmitChunk.mock.calls
+      .filter((c) => c[1]?.event === 'dr_progress' && c[1].data.steps.length > 0)
+      .map((c) => [c[1].data.phase, c[1].data.stepIndex]);
+    expect(steps).toEqual([
+      ['scope', 0],
+      ['research', 0],
+      ['research', 1],
+      ['research', 1],
+      ['research', 1],
+      ['research', 2],
+      ['report', 2],
+    ]);
+  });
+
+  describe('the plan the GRAPH sees is masked in sovereign mode (r27)', () => {
+    const planTree = () => [
+      { messageId: 'orig', isCreatedByUser: true, parentMessageId: null, text: 'изучи для Ивана' },
+      {
+        messageId: 'p1',
+        isCreatedByUser: false,
+        parentMessageId: 'orig',
+        drKind: 'plan',
+        text: '**План исследования:** Рынок\n\n1. Собрать данные по Иванову Ивану\n2. Сравнить цены',
+      },
+    ];
+    const runOnce = async () => {
+      let seen = null;
+      mockRunDeepResearch.mockImplementationOnce(async (params) => {
+        seen = params.configurable;
+        params.onProgress({ type: 'research', round: 1, subQuestion: 'q', planStep: 1 });
+        return {
+          finalReport: 'Отчёт',
+          finalizeReason: 'completed',
+          usage: { input: 1, output: 1, total: 2 },
+          findings: [],
+        };
+      });
+      await runNewDeepResearch(planParams('Начать исследование'));
+      return seen;
+    };
+
+    it('FAILS ON PRE-FIX CODE: the graph gets placeholders, the user card keeps the names', async () => {
+      /* The plan message is stored DE-MASKED — the user reads their own names —
+       * so handing `planSteps` to the supervisor as-is egresses exactly what
+       * Track B exists to stop, in the one place a plan echoes the request. */
+      models.getMessages.mockResolvedValueOnce(planTree());
+      mockStartSovereignSession.mockResolvedValue({
+        maskedQuestion: 'изучи для [PERSON_1]',
+        passthroughHeaders: {},
+        maskContent: jest.fn(async (t) => t.replace(/Иванову Ивану/g, '[PERSON_1]')),
+        restore: jest.fn(async (t) => t),
+        drop: jest.fn(async () => {}),
+      });
+
+      const configurable = await runOnce();
+
+      expect(configurable.planSteps).toEqual(['Собрать данные по [PERSON_1]', 'Сравнить цены']);
+      expect(JSON.stringify(configurable.planSteps)).not.toContain('Иванову');
+      /* The card the USER looks at keeps the real names. */
+      const research = mockEmitChunk.mock.calls.find(
+        (c) => c[1]?.event === 'dr_progress' && c[1].data.phase === 'research',
+      );
+      expect(research[1].data.steps).toEqual(['Собрать данные по Иванову Ивану', 'Сравнить цены']);
+    });
+
+    it('a masking failure drops the agenda rather than sending raw PII', async () => {
+      models.getMessages.mockResolvedValueOnce(planTree());
+      mockStartSovereignSession.mockResolvedValue({
+        maskedQuestion: 'изучи для [PERSON_1]',
+        passthroughHeaders: {},
+        maskContent: jest.fn(async () => {
+          throw new Error('anonymizer down');
+        }),
+        restore: jest.fn(async (t) => t),
+        drop: jest.fn(async () => {}),
+      });
+
+      const configurable = await runOnce();
+
+      expect(configurable.planSteps).toEqual([]);
+      /* And the card is told NOTHING rather than left holding step 1: with no
+       * agenda the run can never name a step, so a highlight would be a claim
+       * nobody made. */
+      const research = mockEmitChunk.mock.calls.find(
+        (c) => c[1]?.event === 'dr_progress' && c[1].data.phase === 'research',
+      );
+      expect(research[1].data.steps.length).toBe(2);
+      expect(research[1].data.stepIndex).toBeUndefined();
+    });
+
+    it('a masking that changed the line count drops the agenda — the mapping is unknown', async () => {
+      models.getMessages.mockResolvedValueOnce(planTree());
+      mockStartSovereignSession.mockResolvedValue({
+        maskedQuestion: 'изучи для [PERSON_1]',
+        passthroughHeaders: {},
+        maskContent: jest.fn(async (t) => `${t}\nлишняя строка`),
+        restore: jest.fn(async (t) => t),
+        drop: jest.fn(async () => {}),
+      });
+
+      const configurable = await runOnce();
+
+      expect(configurable.planSteps).toEqual([]);
+    });
+  });
+
+  it('a PROCEED run reports no step at all — there is no plan to be on (r27)', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockPlanContent = '{"action":"PROCEED"}';
+    mockRunDeepResearch.mockImplementationOnce(async (params) => {
+      params.onProgress({ type: 'research', round: 1, subQuestion: 'q' });
+      return {
+        finalReport: 'Отчёт',
+        finalizeReason: 'completed',
+        usage: { input: 1, output: 1, total: 2 },
+        findings: [],
+      };
+    });
+
+    await runNewDeepResearch(planParams('изучи CRM рынок'));
+
+    const research = mockEmitChunk.mock.calls.find(
+      (c) => c[1]?.event === 'dr_progress' && c[1].data.phase === 'research',
+    );
+    expect(research[1].data.steps).toEqual([]);
+    expect(research[1].data.stepIndex).toBeUndefined();
+  });
+
   it('labels the pre-plan silence: prepare right after created, plan before the decision (round 23)', async () => {
     // A fresh gated turn that ends at the plan card: the graph never runs, yet the
     // client must see the wait labeled. Red on pre-fix code: no dr_progress existed

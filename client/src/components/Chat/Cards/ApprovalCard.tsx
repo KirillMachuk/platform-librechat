@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { TooltipAnchor } from '@librechat/client';
 import {
   Check,
   ChevronDown,
   ChevronUp,
   CircleArrowRight,
+  FileText,
   ListChecks,
   ListTodo,
   MessageCircleQuestion,
@@ -30,7 +32,7 @@ import styles from './ApprovalCard.module.css';
  *   is not always a rejection (К2 wires «Редактировать» into it).
  */
 
-export type ApprovalVariant = 'questions' | 'command' | 'plan';
+export type ApprovalVariant = 'questions' | 'command' | 'plan' | 'report';
 
 export interface ApprovalQuestion {
   id: string;
@@ -183,7 +185,12 @@ function TodoDashedIcon() {
 }
 
 /** Header icon button in the original's headAction style — К2 passes the
- *  cancel ✕ through `headerAction` wrapped in this. */
+ *  cancel ✕ through `headerAction` wrapped in this. The button carries no
+ *  caption, so `label` is both its accessible name and the visible hint on
+ *  hover/focus (owner r27: «кнопка остановить исследование при наведении не
+ *  показывает подсказку»). The plate is the platform's TooltipAnchor, not the
+ *  card's own — §6.6 is one tooltip design everywhere — dropped BELOW the
+ *  button because the head sits on the card's top edge. */
 export function ApprovalCardHeaderAction({
   label,
   onClick,
@@ -196,17 +203,139 @@ export function ApprovalCardHeaderAction({
   testId?: string;
 }) {
   return (
+    <TooltipAnchor
+      description={label}
+      side="bottom"
+      render={
+        <button
+          type="button"
+          className={`${styles.headAction} tap-target`}
+          aria-label={label}
+          data-testid={testId}
+          onClick={(e) => {
+            e.preventDefault();
+            onClick();
+          }}
+        >
+          {children ?? <X className={styles.headActionIcon} aria-hidden />}
+        </button>
+      }
+    />
+  );
+}
+
+const VARIANT_ICONS = {
+  questions: MessageCircleQuestion,
+  command: Terminal,
+  plan: ListTodo,
+  report: FileText,
+} as const;
+
+/**
+ * The card SHELL — frame, head, icon, title, header-action slot — with the
+ * body left to the caller. Extracted so the finished research report wears the
+ * same object as the plan it came from (owner r27): it was the last surface on
+ * the pre-К2 frame, a different radius, a different header, a different button
+ * set, sitting directly under a card in the new one.
+ */
+export function ApprovalCardFrame({
+  variant,
+  title,
+  headerAction,
+  isStatic,
+  oneLineTitle,
+  testId = 'approval-card',
+  className,
+  onKeyDown,
+  children,
+}: {
+  variant: ApprovalVariant;
+  title: string;
+  headerAction?: React.ReactNode;
+  /** Skip the entry animation (history and share mount finished cards). */
+  isStatic?: boolean;
+  /** Keep the title to one line with an ellipsis. Required whenever the title
+   *  is user content rather than a fixed caption — the head is a 24px row. */
+  oneLineTitle?: boolean;
+  testId?: string;
+  className?: string;
+  onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
+  children?: React.ReactNode;
+}) {
+  const Icon = VARIANT_ICONS[variant];
+  return (
+    <div
+      className={`${styles.card}${className ? ` ${className}` : ''}`}
+      data-variant={variant}
+      data-static={isStatic ? 'true' : undefined}
+      data-testid={testId}
+      onKeyDown={onKeyDown}
+    >
+      <div className={styles.head}>
+        <span className={styles.icon} data-variant={variant}>
+          <Icon className={styles.iconSvg} aria-hidden />
+        </span>
+        <div className={styles.headText}>
+          {oneLineTitle ? (
+            /* A clamped title needs its full text somewhere, and §6.6 says that
+             * is the ink plate — `onlyWhenTruncated` keeps it quiet when the
+             * title happens to fit. The clamped element IS the anchor here, and
+             * that is what the plate measures (it looks for a
+             * `[data-truncated-label]`/`.truncate` DESCENDANT and falls back to
+             * the anchor itself), so no marker element is needed. */
+            <TooltipAnchor
+              description={title}
+              onlyWhenTruncated
+              /* The anchor hands its render a pointer cursor, which here would
+               * promise a click the title no longer performs — the report's
+               * header used to BE the button that opened the reader (§6.6's own
+               * note: pass cursor-default on non-clickable text). The tab stop
+               * it also adds stays: on focus it reveals the full title, which is
+               * the only keyboard way to read a clamped one. */
+              className="cursor-default"
+              render={<h3 className={`${styles.title} ${styles.titleOneLine}`}>{title}</h3>}
+            />
+          ) : (
+            <h3 className={styles.title}>{title}</h3>
+          )}
+        </div>
+        {headerAction != null && <div className={styles.headActions}>{headerAction}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** The card's action row: buttons right-aligned, in the frame's own style. */
+export function ApprovalCardActions({ children }: { children: React.ReactNode }) {
+  return (
+    <div className={styles.actions}>
+      <span className={styles.actionsSpacer} aria-hidden />
+      <div className={styles.actionBtns}>{children}</div>
+    </div>
+  );
+}
+
+/** A card button — `primary` is the filled one, `ghost` the quiet one. */
+export function ApprovalCardButton({
+  kind = 'primary',
+  onClick,
+  children,
+}: {
+  kind?: 'primary' | 'ghost';
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
     <button
       type="button"
-      className={`${styles.headAction} tap-target`}
-      aria-label={label}
-      data-testid={testId}
+      className={`${kind === 'ghost' ? styles.btnGhost : styles.btnPrimary} tap-target`}
       onClick={(e) => {
         e.preventDefault();
         onClick();
       }}
     >
-      {children ?? <X className={styles.headActionIcon} aria-hidden />}
+      {children}
     </button>
   );
 }
@@ -567,19 +696,13 @@ export function ApprovalCard({
     setStep(Math.min(Math.max(next, 0), questions.length - 1));
   };
 
-  const VARIANT_ICONS = {
-    questions: MessageCircleQuestion,
-    command: Terminal,
-    plan: ListTodo,
-  } as const;
-  const Icon = VARIANT_ICONS[variant];
-
   return (
-    <div
-      className={`${styles.card}${className ? ` ${className}` : ''}`}
-      data-variant={variant}
-      data-static={showActions ? undefined : 'true'}
-      data-testid="approval-card"
+    <ApprovalCardFrame
+      variant={variant}
+      title={title}
+      headerAction={headerAction}
+      isStatic={!showActions}
+      className={className}
       onKeyDown={(e) => {
         if (e.key !== 'Enter') {
           return;
@@ -602,16 +725,6 @@ export function ApprovalCard({
         handleApprove();
       }}
     >
-      <div className={styles.head}>
-        <span className={styles.icon} data-variant={variant}>
-          <Icon className={styles.iconSvg} aria-hidden />
-        </span>
-        <div className={styles.headText}>
-          <h3 className={styles.title}>{title}</h3>
-        </div>
-        {headerAction != null && <div className={styles.headActions}>{headerAction}</div>}
-      </div>
-
       {variant === 'questions' && questions.length > 0 && (
         <div
           className={styles.questionsViewport}
@@ -1039,7 +1152,7 @@ export function ApprovalCard({
         </div>
       )}
       {footnote}
-    </div>
+    </ApprovalCardFrame>
   );
 }
 
