@@ -33,6 +33,7 @@ function stateWith(partial: Partial<DeepResearchState>): DeepResearchState {
     currentSubQuestions: [],
     findings: [],
     round: 0,
+    planStep: 0,
     researcherCount: 0,
     tokenUsage: { input: 0, output: 0, total: 0 },
     usageByModel: {},

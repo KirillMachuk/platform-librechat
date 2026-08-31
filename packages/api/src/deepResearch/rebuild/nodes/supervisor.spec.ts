@@ -1,5 +1,5 @@
 import { FakeListChatModel } from '@langchain/core/utils/testing';
-import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { AIMessage, AIMessageChunk, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { BaseMessage } from '@langchain/core/messages';
@@ -565,7 +565,7 @@ describe('SUPERVISOR works the approved plan (r27)', () => {
     const answer = '{"action":"RESEARCH","subQuestions":["норма осадков"],"planStep":2}';
     jest.spyOn(model, 'invoke').mockImplementation(async (messages) => {
       seen.push(messages as BaseMessage[]);
-      return new AIMessage(answer);
+      return new AIMessageChunk(answer);
     });
     const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(
       stateWith({}),
@@ -609,7 +609,7 @@ describe('SUPERVISOR works the approved plan (r27)', () => {
     const { seen, model } = capture();
     jest.spyOn(model, 'invoke').mockImplementation(async (messages) => {
       seen.push(messages as BaseMessage[]);
-      return new AIMessage('{"action":"RESEARCH","subQuestions":["вопрос"]}');
+      return new AIMessageChunk('{"action":"RESEARCH","subQuestions":["вопрос"]}');
     });
     const update = await createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE })(
       stateWith({}),
