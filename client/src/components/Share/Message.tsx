@@ -46,13 +46,6 @@ export default function Message(props: TMessageProps) {
     return null;
   }
 
-  /* r25: the START row is hidden on the share page too (the report says it
-   * ran). The CANCEL row stays as a plain text bubble here — share renders no
-   * plan card, so without this row a cancelled run would just trail off. */
-  if (drCommand === 'start') {
-    return null;
-  }
-
   const {
     text = '',
     children,
@@ -61,6 +54,25 @@ export default function Message(props: TMessageProps) {
     unfinished = false,
     isCreatedByUser = true,
   } = message;
+
+  /* r25: the START row is hidden on the share page too (the report says it
+   * ran) — but ONLY the row. Unlike the chat renderers, this component owns
+   * the recursion into its children, and the whole DR run (progress, report)
+   * hangs UNDER the start command in the tree: a bare `return null` here cut
+   * the report out of every shared research (r25a review, критично). The
+   * CANCEL row stays as a plain text bubble — share renders no plan card, so
+   * without it a cancelled run would just trail off. */
+  if (drCommand === 'start') {
+    return (
+      <MultiMessage
+        key={messageId}
+        messageId={messageId}
+        messagesTree={children ?? []}
+        currentEditId={currentEditId}
+        setCurrentEditId={setCurrentEditId}
+      />
+    );
+  }
 
   const isUserTurn = isCreatedByUser === true;
 

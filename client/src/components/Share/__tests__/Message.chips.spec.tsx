@@ -49,9 +49,25 @@ jest.mock('~/components/Chat/Messages/SubRow', () => ({
   __esModule: true,
   default: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
+/**
+ * NOT a blank stand-in: this component owns the recursion into a message's
+ * children on the share page, and stubbing it away is exactly what let a
+ * `return null` for the hidden DR start row cut the whole research (progress,
+ * report) out of every shared conversation while this suite stayed green
+ * (r25a review). The mock renders the subtree the way the real one does, so a
+ * lost subtree is visible here.
+ */
 jest.mock('~/components/Share/MultiMessage', () => ({
   __esModule: true,
-  default: () => <div />,
+  default: ({ messagesTree }: { messagesTree?: Array<{ messageId: string; text?: string }> }) => (
+    <div data-testid="share-subtree">
+      {(messagesTree ?? []).map((child) => (
+        <div key={child.messageId} data-testid={`share-child-${child.messageId}`}>
+          {child.text}
+        </div>
+      ))}
+    </div>
+  ),
 }));
 
 const PARENT_ID = 'p1';
@@ -123,6 +139,24 @@ describe('Share view — command and answers chips', () => {
     expect(screen.queryByText(DR_START_MARKER)).not.toBeInTheDocument();
     expect(screen.queryByTestId('share-body')).not.toBeInTheDocument();
     expect(bubbleCount(container)).toBe(0);
+  });
+
+  it('keeps the whole subtree under a hidden start row — the report is a CHILD of it', () => {
+    /* The share page recurses into children from inside this component, so a
+     * bare `return null` for the hidden row deleted the entire research from
+     * the shared page (r25a review). */
+    renderShared(
+      userMessage({
+        drKind: 'start',
+        children: [
+          { messageId: 'report-1', text: 'Итоговый отчёт исследования' },
+        ] as unknown as TMessage['children'],
+      }),
+      { drKind: 'plan' },
+    );
+    expect(screen.getByTestId('share-child-report-1')).toHaveTextContent(
+      'Итоговый отчёт исследования',
+    );
   });
 
   it('keeps the DR cancel row as a plain bubble (share has no plan-card badge)', () => {

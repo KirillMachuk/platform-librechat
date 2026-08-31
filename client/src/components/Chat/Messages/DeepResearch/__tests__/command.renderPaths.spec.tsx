@@ -68,7 +68,7 @@ jest.mock('~/components/Chat/Messages/HoverButtons', () => ({
 }));
 jest.mock('~/components/Chat/Messages/SiblingSwitch', () => ({
   __esModule: true,
-  default: () => <div />,
+  default: () => <div data-testid="sibling-switch" />,
 }));
 jest.mock('~/components/Chat/Messages/SubRow', () => ({
   __esModule: true,
@@ -320,6 +320,28 @@ describe('Deep Research command rows — hidden on both user-message render path
       rerender(tree({ ...before, parentMessageId: 'p-plan' }, ctx));
       expect(screen.queryByTestId('message-render-body')).not.toBeInTheDocument();
     });
+  });
+
+  it('keeps the sibling switcher on a hidden command row that HAS siblings', () => {
+    /* r25a review: hiding the row wholesale took SubRow/SiblingSwitch with it,
+     * so a branch created by an older edit-and-resend became unreachable. */
+    render(
+      <RecoilRoot>
+        <MessagesViewContext.Provider value={makeCtx([])}>
+          <MultiMessage
+            messageId={null}
+            messagesTree={[
+              command({ drKind: 'start', messageId: 'm1' }),
+              command({ drKind: 'start', messageId: 'm2', text: 'вторая ветка' }),
+            ]}
+            currentEditId={null}
+            setCurrentEditId={setCurrentEditId}
+          />
+        </MessagesViewContext.Provider>
+      </RecoilRoot>,
+    );
+    expect(screen.getByTestId('sibling-switch')).toBeInTheDocument();
+    expect(screen.queryByTestId('message-render-body')).not.toBeInTheDocument();
   });
 
   it('leaves an ASSISTANT message with the same text alone', () => {

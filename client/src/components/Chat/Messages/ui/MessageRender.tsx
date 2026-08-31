@@ -162,10 +162,25 @@ const MessageRender = memo(function MessageRender({
     return null;
   }
 
-  /* r25 (owner): DR command rows are hidden — the progress/report card says
-   * «запущено», the plan card's badge says «отменено». See useDrCommand. */
+  /* r25 (owner): DR command rows are hidden — only the row. A command with
+   * SIBLINGS keeps its switcher (an older edit-and-resend created a branch,
+   * and hiding the row wholesale made that branch unreachable — r25a review):
+   * the body goes, the switcher row stays. */
   if (drCommand != null && !edit) {
-    return null;
+    if ((siblingCount ?? 1) <= 1) {
+      return null;
+    }
+    return (
+      <div className="mx-auto flex flex-1 gap-3 md:max-w-[47rem] xl:max-w-[55rem]">
+        <SubRow classes="text-xs justify-end">
+          <SiblingSwitch
+            siblingIdx={siblingIdx}
+            siblingCount={siblingCount}
+            setSiblingIdx={setSiblingIdx}
+          />
+        </SubRow>
+      </div>
+    );
   }
 
   const baseClasses = {
