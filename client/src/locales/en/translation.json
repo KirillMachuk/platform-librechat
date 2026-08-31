@@ -922,6 +922,8 @@
   "com_ui_cards_question_of": "Question {{0}} of {{1}}",
   "com_ui_cards_custom_answer_for": "Custom answer: {{0}}",
   "com_ui_deep_research_steps": "Steps",
+  "com_ui_deep_research_stop": "Stop research",
+  "com_ui_deep_research_stopped": "Stopped",
   "com_ui_cancel": "Cancel",
   "com_ui_cancelled": "Cancelled",
   "com_ui_category": "Category",

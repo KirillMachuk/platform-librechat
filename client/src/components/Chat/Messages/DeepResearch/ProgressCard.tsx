@@ -3,8 +3,9 @@ import type { ApprovalCardStrings, ApprovalPlanStep } from '~/components/Chat/Ca
 import type { TDeepResearchProgress } from '~/store';
 import type { TranslationKeys } from '~/hooks';
 import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/ApprovalCard';
-import { Square, WifiOff } from '~/components/icons';
+import RunFooter, { runStatusSteps } from './RunFooter';
 import { useChatContext } from '~/Providers';
+import { Square } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 
 /**
@@ -42,34 +43,18 @@ const PHASE_STEPS: { phase: string; key: TranslationKeys }[] = [
 export default function ProgressCard({ data }: { data: TDeepResearchProgress }) {
   const localize = useLocalize();
   const { stopGenerating } = useChatContext();
-  const stalled = data.stalled === true;
-  const pct = Math.max(0, Math.min(100, Math.round((data.progress ?? 0) * 100)));
   const steps: ApprovalPlanStep[] = useMemo(() => {
-    /* Derived inside the memo on purpose: `data.steps ?? []` is a fresh array
-     * on every dr_progress snapshot, and as a dependency it would rebuild this
-     * list on every render (CI lint caught it). */
-    const planSteps = data.steps ?? [];
-    const hasPlan = planSteps.length > 0;
-    const activeStep = hasPlan
-      ? Math.min(Math.floor((data.progress ?? 0) * planSteps.length), planSteps.length - 1)
-      : Math.max(
-          0,
-          PHASE_STEPS.findIndex((p) => p.phase === data.phase),
-        );
-    const titles = hasPlan ? planSteps : PHASE_STEPS.map((p) => localize(p.key));
-    /* Offline: the run is parked, so nothing may look busy — the step keeps
-     * its place but stops being «active» (review r2's invariant, which the
-     * frame's shimmer would otherwise have broken silently). */
-    return titles.map((title, i) => {
-      let status: ApprovalPlanStep['status'] = 'pending';
-      if (i < activeStep) {
-        status = 'done';
-      } else if (i === activeStep && data.stalled !== true) {
-        status = 'active';
-      }
-      return { id: String(i), title, status };
-    });
-  }, [data.steps, data.progress, data.phase, data.stalled, localize]);
+    /* A PROCEED run has no plan, so the three phases stand in for steps and
+     * the ACTIVE one comes from `phase`, not from the coarse fraction:
+     * research spans a wide band and a fraction-derived index would mark
+     * scope active well into research. */
+    const titles = PHASE_STEPS.map((p) => localize(p.key));
+    const activeIndex = Math.max(
+      0,
+      PHASE_STEPS.findIndex((p) => p.phase === data.phase),
+    );
+    return runStatusSteps(titles, data, activeIndex);
+  }, [data, localize]);
 
   const cardStrings: ApprovalCardStrings = useMemo(
     () => ({
@@ -102,48 +87,14 @@ export default function ProgressCard({ data }: { data: TDeepResearchProgress }) 
            * plan card's ✕, which is the whole point of «two cards, one
            * product» (review). It keeps the ≥44px tap height via tap-target. */
           <ApprovalCardHeaderAction
-            label={localize('com_ui_stop')}
+            label={localize('com_ui_deep_research_stop')}
             onClick={stopGenerating}
             testId="dr-stop"
           >
             <Square className="size-3 fill-current" aria-hidden="true" />
           </ApprovalCardHeaderAction>
         }
-        footnote={
-          <div className="mt-1">
-            {stalled ? (
-              <div
-                role="status"
-                className="mb-2 flex min-h-5 items-center gap-1.5 text-xs text-text-tertiary"
-              >
-                <WifiOff className="size-3.5 shrink-0" aria-hidden="true" />
-                <span>{localize('com_ui_deep_research_offline')}</span>
-              </div>
-            ) : (
-              data.action && (
-                /* The paint-only shimmer: the label utility's inline-block
-                 * beat `line-clamp-2` by source order and flattened this to a
-                 * single clipped row (r25 package Б review). */
-                <div className="thinking-shimmer-paint mb-2 line-clamp-2 min-h-5 text-xs [overflow-wrap:anywhere]">
-                  {data.action}
-                </div>
-              )
-            )}
-            <div
-              role="progressbar"
-              aria-label={localize('com_ui_deep_research')}
-              aria-valuenow={pct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              className="h-1 w-full overflow-hidden rounded-full bg-surface-hover"
-            >
-              <div
-                className="h-full rounded-full bg-text-accent transition-[width] duration-500 ease-out"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-          </div>
-        }
+        footnote={<RunFooter data={data} />}
       />
     </div>
   );

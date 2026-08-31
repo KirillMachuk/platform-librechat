@@ -460,7 +460,6 @@
   font-weight: 500;
   cursor: pointer;
 }
-.btnSubmitIcon { width: 12px; height: 12px; flex: none; }
 .btnGhost::before,
 .btnPrimary::before {
   content: "";

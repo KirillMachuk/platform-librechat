@@ -4,7 +4,6 @@ import {
   ChevronDown,
   ChevronUp,
   CircleArrowRight,
-  CornerDownLeft,
   ListChecks,
   ListTodo,
   MessageCircleQuestion,
@@ -1034,9 +1033,6 @@ export function ApprovalCard({
                 }}
               >
                 {approveLabel}
-                {variant === 'questions' && (
-                  <CornerDownLeft className={styles.btnSubmitIcon} size={12} aria-hidden />
-                )}
               </button>
             )}
           </div>

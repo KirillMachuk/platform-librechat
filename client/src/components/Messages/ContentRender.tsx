@@ -1,6 +1,6 @@
 import { useCallback, useMemo, memo } from 'react';
 import { useRecoilValue } from 'recoil';
-import { isDrCancelCommand } from 'librechat-data-provider';
+import { isDrCancelCommand, isDrStartCommand, DR_CANCELLED_MESSAGE } from 'librechat-data-provider';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { TMessageProps, TMessageChatContext } from '~/common';
@@ -13,6 +13,7 @@ import {
 import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import { useAttachments, useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
 import useAskUserChip from '~/components/Chat/Messages/DeepResearch/useAskUserChip';
+import { useOptionalMessagesOperations } from '~/Providers/MessagesViewContext';
 import useDrCommand from '~/components/Chat/Messages/DeepResearch/useDrCommand';
 import ContentParts from '~/components/Chat/Messages/Content/ContentParts';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
@@ -147,6 +148,54 @@ const ContentRender = memo(function ContentRender({
    * user-message render paths (review К3: each was mounted on only one). */
   const askChip = useAskUserChip(msg);
   const drCommand = useDrCommand(msg);
+  /* Provenance for the cancel notice: it is the child of the very command
+   * that cancelled a plan. Read through the same optional messages view the
+   * command rule uses. NOTE: the share page does not render this component at
+   * all (Share/Message → SearchContent), so this suppression is chat-only —
+   * a shared conversation still shows the notice (r26 review). */
+  const { getMessages } = useOptionalMessagesOperations();
+  /**
+   * Does the live run belong to THIS plan? The active branch's tail must sit
+   * under this plan's start command.
+   *
+   * The obvious predicate — «has a start command AND is submitting» — is a
+   * tautology that never fires (r26 review): a plan with a start command has a
+   * child, so it is never the latest message, and the `isSubmitting` that
+   * reaches this component is already `isLatestMessage ? isSubmitting : false`.
+   * With the standalone running card stepped aside for plan runs, that left a
+   * multi-minute research drawing NOTHING. Liveness itself comes from the
+   * progress atom, which the card subscribes to and which is cleared the
+   * moment a run ends; this only answers WHICH plan owns it.
+   */
+  const isRunningPlan = useCallback(
+    (startCommandId?: string): boolean => {
+      if (startCommandId == null || latestMessageId == null) {
+        return false;
+      }
+      const list = getMessages();
+      if (list == null) {
+        return false;
+      }
+      let cursor = list.find((m) => m.messageId === latestMessageId);
+      for (let hops = 0; cursor != null && hops < 64; hops++) {
+        if (cursor.messageId === startCommandId) {
+          return true;
+        }
+        const parentId: string | null = cursor.parentMessageId ?? null;
+        cursor = parentId == null ? undefined : list.find((m) => m.messageId === parentId);
+      }
+      return false;
+    },
+    [latestMessageId, getMessages],
+  );
+
+  const drCancelNotice = useMemo(() => {
+    if (msg?.isCreatedByUser === true || (msg?.text ?? '') !== DR_CANCELLED_MESSAGE) {
+      return false;
+    }
+    const parent = getMessages()?.find((m) => m.messageId === msg?.parentMessageId);
+    return parent?.drKind === 'cancel' || isDrCancelCommand(parent?.text ?? '');
+  }, [msg?.isCreatedByUser, msg?.text, msg?.parentMessageId, getMessages]);
 
   // Task #21 phase 3: a FINISHED Deep Research report → collapsible ReportCard + reader.
   // Review r2: keyed on the persisted `drKind` provenance (no text sniffing, no ancestor
@@ -172,6 +221,15 @@ const ContentRender = memo(function ContentRender({
    */
 
   if (!msg) {
+    return null;
+  }
+
+  /* The cancel NOTICE is hidden too (owner r26): the plan card above already
+   * wears an «Отменено» badge, so a full-width paragraph repeating it is
+   * duplication. Keyed on the exact server constant AND on a DR provenance in
+   * the branch — prose that merely reads the same stays prose. The message
+   * itself is untouched: it is what keeps the next turn out of DR routing. */
+  if (!edit && drCancelNotice) {
     return null;
   }
 
@@ -236,14 +294,32 @@ const ContentRender = memo(function ContentRender({
     // buttons/timer until a reload (task #21 live bug). `isLatestMessage` (stable id match)
     // covers that case; ORing keeps the sibling-switcher case working. hasNoChildren still
     // gates: once Начать/an edit is sent the card has a child and goes inert.
-    const cancelled = (msg.children ?? []).some(
+    const children = msg.children ?? [];
+    const cancelled = children.some(
       (child) => child.drKind === 'cancel' || isDrCancelCommand(child.text ?? ''),
     );
+    /* One card for the plan AND its execution (owner r26). The run hangs
+     * under the START command, which is this plan's child, so the card that
+     * owns the run is the one whose start command exists — and the report,
+     * when it lands, is that command's own child. */
+    const startCommand = children.find(
+      (child) => child.drKind === 'start' || isDrStartCommand(child.text ?? ''),
+    );
+    const runReplies = startCommand?.children ?? [];
+    let outcome: 'report' | 'stopped' | undefined;
+    if (runReplies.some((child) => child.drKind === 'report')) {
+      outcome = 'report';
+    } else if (runReplies.some((child) => child.drKind === 'aborted')) {
+      outcome = 'stopped';
+    }
     drCard = (
       <PlanCard
         message={msg}
         awaitingAction={hasNoChildren && (isLast || isLatestMessage)}
         cancelled={cancelled}
+        isRunning={isRunningPlan(startCommand?.messageId)}
+        conversationId={conversation?.conversationId}
+        outcome={outcome}
       />
     );
   }
