@@ -96,7 +96,9 @@ export default function ReadFileCall({
           onClick={toggleCode}
           inProgressText={localize('com_ui_reading_file', { 0: fileName })}
           finishedText={
-            cancelled ? localize('com_ui_cancelled') : localize('com_ui_read_file', { 0: fileName })
+            cancelled
+              ? localize('com_ui_tool_call_not_run')
+              : localize('com_ui_read_file', { 0: fileName })
           }
           errorSuffix={hasError && !cancelled ? localize('com_ui_tool_failed') : undefined}
           icon={

@@ -199,3 +199,60 @@ describe('Error – a long message stays cut', () => {
     expect(container.textContent!.length).toBeLessThan(700);
   });
 });
+
+/**
+ * 31.08.2026 on the stand: a run in «Авто» built a 62 KB .pptx, attached it to the
+ * message, and then ran out of the steps allotted to one turn. Printed directly under the
+ * finished deck: «Не удалось выполнить запрос» plus «Попробуйте ещё раз» — a denial of
+ * work the user can see and scroll to, and an invitation to pay for all of it twice.
+ * A run that broke with finished work in it leads with what survived instead.
+ */
+describe('Error – a run that stopped with the work already done', () => {
+  const runIncompleteText = JSON.stringify({
+    code: 'run_incomplete',
+    info:
+      'Агент выполнил предельное число действий за один ответ. ' +
+      'Напишите «продолжай» — он продолжит с того места, где остановился.',
+  });
+
+  /** Same instance the app renders through, switched the way the RU cases above do. */
+  const renderRu = async (text: string) => {
+    appI18n.addResourceBundle('ru', 'translation', translationRu, true, true);
+    await appI18n.changeLanguage('ru');
+    return render(<Error text={text} />);
+  };
+
+  afterEach(async () => {
+    await appI18n.changeLanguage('en');
+  });
+
+  it('does not tell the user the request failed (RU)', async () => {
+    const { container } = await renderRu(runIncompleteText);
+    expect(container.textContent).not.toContain('Не удалось выполнить запрос');
+  });
+
+  it('says the work survived and where it is (RU)', async () => {
+    const { container } = await renderRu(runIncompleteText);
+    expect(container.textContent).toContain('выше в этом ответе');
+    expect(container.textContent).toContain('заново не нужно');
+  });
+
+  it('keeps the reason the run stopped, and the way to carry on (RU)', async () => {
+    const { container } = await renderRu(runIncompleteText);
+    expect(container.textContent).toContain('предельное число действий');
+    expect(container.textContent).toContain('продолжай');
+  });
+
+  it('ships the key in both en and ru (no production fallback)', () => {
+    expect(translationEn['com_error_run_incomplete']).toEqual(expect.any(String));
+    expect(translationEn['com_error_run_incomplete']).toContain('{{0}}');
+    expect(translationRu['com_error_run_incomplete']).toMatch(/[а-яА-Я]/);
+    expect(translationRu['com_error_run_incomplete']).toContain('{{0}}');
+  });
+
+  /** A run that produced nothing really did fail: that frame is correct and stays. */
+  it('leaves an ordinary failure wearing the failed-request frame (RU)', async () => {
+    const { container } = await renderRu('Произошла ошибка при обработке запроса.');
+    expect(container.textContent).toContain('Не удалось выполнить запрос');
+  });
+});

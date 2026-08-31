@@ -248,7 +248,7 @@ export default function ToolCall({
 
   const getFinishedText = () => {
     if (cancelled) {
-      return localize('com_ui_cancelled');
+      return localize('com_ui_tool_call_not_run');
     }
     if (isMCPToolCall === true) {
       return localize('com_assistants_completed_function', { 0: function_name });

@@ -3567,3 +3567,152 @@ describe('AgentClient - a run with nothing to show says so', () => {
     expect(completion.some((part) => part.type === 'error')).toBe(false);
   });
 });
+
+/**
+ * 31.08.2026 on the stand, run `1d4605a4` in «Авто»: «Подготовь материалы к встрече».
+ * The agent searched the library, read three documents twice over, primed the `pptx`
+ * skill and built Korporativnaya-AI-platforma-QSR.pptx — 62 KB, attached to the message,
+ * downloadable. Then the loop ran out of the steps allotted to one turn on its 13th model
+ * call, and the user was told the request had failed and to try again — printed directly
+ * underneath the finished deck. Retrying means paying for all thirteen turns a second time.
+ *
+ * The SDK raises this with no HTTP status anywhere, which is exactly why it used to reach
+ * the neutral fallback.
+ */
+describe('getUserFacingError - a run that ran out of steps', () => {
+  const { getUserFacingError } = AgentClient;
+
+  /** Field for field what the stand logged at 10:11:20.487Z. */
+  const stepLimit = () =>
+    Object.assign(
+      new Error(
+        'Recursion limit of 25 reached without hitting a stop condition. You can increase ' +
+          'the limit by setting the "recursionLimit" config key.\n\nTroubleshooting URL: ' +
+          'https://docs.langchain.com/oss/javascript/langgraph/GRAPH_RECURSION_LIMIT/\n',
+      ),
+      { name: 'GraphRecursionError', lc_error_code: 'GRAPH_RECURSION_LIMIT' },
+    );
+
+  it('says the run ran out of steps, and names carrying on as the way forward', () => {
+    const shown = getUserFacingError(stepLimit());
+
+    expect(shown).toContain('предельное число действий');
+    expect(shown).toContain('продолжай');
+    expect(shown).not.toBe('Произошла ошибка при обработке запроса. Попробуйте ещё раз.');
+  });
+
+  /** The one instruction that is wrong here: the work is done and it was paid for. */
+  it('does not send the user to run the whole thing again', () => {
+    expect(getUserFacingError(stepLimit())).not.toContain('ещё раз');
+  });
+
+  it('does not leak the config key or the SDK docs URL into the chat', () => {
+    const shown = getUserFacingError(stepLimit());
+
+    expect(shown).not.toContain('recursionLimit');
+    expect(shown).not.toContain('http');
+    expect(shown).not.toContain('Recursion');
+  });
+
+  /** The SDK fields are not guaranteed across versions; the sentence is. */
+  it('recognises it from the message alone', () => {
+    const shown = getUserFacingError(new Error('Recursion limit of 25 reached without hitting'));
+
+    expect(shown).toContain('предельное число действий');
+  });
+
+  /** A provider outage that happens to hit mid-run keeps its own, better advice. */
+  it('leaves an upstream failure with a real status alone', () => {
+    const shown = getUserFacingError({ status: 503, message: 'upstream 503' });
+
+    expect(shown).toContain('Сервис моделей временно недоступен');
+  });
+
+  /**
+   * The unknown-cause fallback has the same problem the moment a run has already
+   * produced something: "try again" reads as "pay for all of that twice".
+   */
+  it('stops telling a run that already did the work to start over', () => {
+    const generic = { message: 'socket hang up' };
+
+    expect(getUserFacingError(generic)).toBe(
+      'Произошла ошибка при обработке запроса. Попробуйте ещё раз.',
+    );
+    expect(getUserFacingError(generic, { hasCompletedWork: true })).toContain('продолжай');
+  });
+});
+
+/**
+ * The other half of the same incident: what the message says when the run breaks after
+ * the work is already in it. A bare error string is wrapped by the client in «Не удалось
+ * выполнить запрос» — true for a run that produced nothing, a lie printed on top of a
+ * finished .pptx. The structured `run_incomplete` form routes to a frame that leads with
+ * what survived instead.
+ */
+describe('AgentClient - a run that broke after doing the work', () => {
+  const finishedToolCall = () => ({
+    type: ContentTypes.TOOL_CALL,
+    tool_call: { id: 'c1', name: 'bash_tool', args: '{}', output: 'Presentation saved' },
+  });
+
+  /** The step the agent had lined up when the loop ran out — dispatched, never run. */
+  const danglingToolCall = () => ({
+    type: ContentTypes.TOOL_CALL,
+    tool_call: { id: 'c2', name: 'bash_tool', args: '{}' },
+  });
+
+  const stepLimitError = () =>
+    Object.assign(new Error('Recursion limit of 25 reached without hitting a stop condition.'), {
+      name: 'GraphRecursionError',
+      lc_error_code: 'GRAPH_RECURSION_LIMIT',
+    });
+
+  /** Throws from `primeInvokedSkills`, the first awaited call inside `chatCompletion`'s
+   *  try block, so the catch under test runs without standing up a whole graph. */
+  const runThatBreaks = async (contentParts, err) => {
+    const client = new AgentClient({
+      req: { user: { id: 'user-123' }, body: {}, config: { endpoints: {} } },
+      res: {},
+      agent: {
+        id: 'agent-123',
+        endpoint: EModelEndpoint.openAI,
+        provider: EModelEndpoint.openAI,
+        model_parameters: { model: 'deepseek/deepseek-v4-flash-0731' },
+      },
+      endpointTokenConfig: {},
+      primeInvokedSkills: () => Promise.reject(err),
+    });
+    client.contentParts = contentParts;
+    await client.chatCompletion({ payload: [] });
+    return client.contentParts.find((part) => part.type === ContentTypes.ERROR);
+  };
+
+  it('does not announce a failed request over work the user can already see', async () => {
+    const error = await runThatBreaks([finishedToolCall(), danglingToolCall()], stepLimitError());
+
+    expect(error).toBeDefined();
+    const body = JSON.parse(error[ContentTypes.ERROR]);
+    expect(body.code).toBe('run_incomplete');
+    expect(body.info).toContain('предельное число действий');
+  });
+
+  /** A run that produced nothing really did fail; that frame stays. */
+  it('leaves a run with nothing behind it as a plain failure', async () => {
+    const error = await runThatBreaks([danglingToolCall()], stepLimitError());
+
+    expect(error).toBeDefined();
+    expect(error[ContentTypes.ERROR]).toBe(
+      'Агент выполнил предельное число действий за один ответ. ' +
+        'Напишите «продолжай» — он продолжит с того места, где остановился.',
+    );
+  });
+
+  /** A tool call that never came back is not evidence that anything got done. */
+  it('does not count a dispatched-but-unrun tool call as work', async () => {
+    const error = await runThatBreaks([danglingToolCall()], { message: 'socket hang up' });
+
+    expect(error[ContentTypes.ERROR]).toBe(
+      'Произошла ошибка при обработке запроса. Попробуйте ещё раз.',
+    );
+  });
+});

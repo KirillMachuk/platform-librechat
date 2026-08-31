@@ -393,7 +393,7 @@ export default function RetrievalCall({
             return localize('com_ui_searching_files');
           }
           if (cancelled) {
-            return localize('com_ui_cancelled');
+            return localize('com_ui_tool_call_not_run');
           }
           return localize('com_ui_retrieved_files');
         })()}

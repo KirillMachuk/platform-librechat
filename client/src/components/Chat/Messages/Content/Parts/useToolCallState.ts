@@ -47,6 +47,13 @@ export default function useToolCallState(
       return next;
     });
   }, [onExpand]);
+  /**
+   * The stream ended with this call still short of `progress === 1`: it was dispatched and
+   * never came back. That is all this side knows — a Stop, a run that ran out of steps and
+   * a dropped connection are indistinguishable from here. Callers therefore label it as the
+   * outcome («Не выполнен», `com_ui_tool_call_not_run`) and not as a cause: the card used to
+   * read «Отменен» over a run nobody had cancelled (stand, 31.08).
+   */
   const cancelled = !isSubmitting && progress < 1 && !hasError;
 
   return {

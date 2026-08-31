@@ -41,7 +41,7 @@ export default function SkillCall({
           inProgressText={localize('com_ui_skill_running', { 0: skillName })}
           finishedText={
             cancelled
-              ? localize('com_ui_cancelled')
+              ? localize('com_ui_tool_call_not_run')
               : localize('com_ui_skill_finished', { 0: skillName })
           }
           errorSuffix={hasError && !cancelled ? localize('com_ui_tool_failed') : undefined}
