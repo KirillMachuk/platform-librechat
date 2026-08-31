@@ -2632,6 +2632,13 @@ export enum ErrorTypes {
    * here the client was watching a live run that stopped producing.
    */
   GENERATION_INTERRUPTED = 'generation_interrupted',
+  /**
+   * The run broke before it finished, but it had already completed tool calls — so the
+   * message it is attached to carries real work (files, search results, a generated
+   * document). Rendered with a frame that leads with what survived, instead of the
+   * blanket «request failed» that sends the user to run — and pay for — all of it again.
+   */
+  RUN_INCOMPLETE = 'run_incomplete',
 }
 
 /**

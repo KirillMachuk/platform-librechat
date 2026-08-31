@@ -166,7 +166,9 @@ export default function FileAuthoringCall({
             0: fileName,
           })}
           finishedText={
-            cancelled ? localize('com_ui_cancelled') : localize(finishedKey, { 0: fileName })
+            cancelled
+              ? localize('com_ui_tool_call_not_run')
+              : localize(finishedKey, { 0: fileName })
           }
           errorSuffix={hasError && !cancelled ? localize('com_ui_tool_failed') : undefined}
           icon={

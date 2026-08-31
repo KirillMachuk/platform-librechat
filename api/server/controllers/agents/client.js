@@ -66,6 +66,7 @@ const {
 } = require('@librechat/agents');
 const {
   Constants,
+  ErrorTypes,
   UsageEvents,
   Permissions,
   VisionModes,
@@ -123,13 +124,39 @@ const NO_IMAGE_ENDPOINT_MESSAGE = /image input/i;
 const NO_IMAGE_ENDPOINT_STATUS = 404;
 
 /**
+ * The agent loop ran out of the steps allotted to one turn. LangGraph counts one
+ * step per node visit, so the ceiling is `2 x tool rounds + 1`: at the stand's
+ * `recursionLimit: 25` the agent gets 13 model turns and 12 rounds of tool calls.
+ * The SDK raises this as an ordinary Error with no HTTP status, which is why it used
+ * to fall all the way through to the neutral "try again" — the one piece of advice
+ * that is wrong here, because by definition those 12 rounds of work already happened
+ * and are sitting in the message above (logged on the stand 31.08, run
+ * `1d4605a4`: 16 finished tool calls, a 62 KB .pptx among the attachments).
+ */
+const isStepLimitError = (err) =>
+  err?.lc_error_code === 'GRAPH_RECURSION_LIMIT' ||
+  err?.name === 'GraphRecursionError' ||
+  /Recursion limit of \d+ reached/i.test(typeof err?.message === 'string' ? err.message : '');
+
+/**
  * Maps an upstream/model-provider error to a clean, neutral message for the
  * end user. The precise technical reason (status/code/provider/raw) is logged
  * separately in `sendCompletion`'s catch; this never leaks the provider name
  * or internal details into the chat. Status is read from the SDK error object
  * and, as a fallback, parsed from a wrapped message like "402 ...".
+ *
+ * `hasCompletedWork` says whether the run already finished tool calls before it
+ * broke. It changes only the branches whose advice would otherwise be wrong: telling
+ * someone to run the whole thing again — and pay again — when the answer is to carry
+ * on from what is already there.
  */
-function getUserFacingError(err) {
+function getUserFacingError(err, { hasCompletedWork = false } = {}) {
+  /* Before the status parse below, which reads any 3-digit 4xx/5xx out of the message
+   * text: raise `recursionLimit` past 400 and "Recursion limit of 500 reached" would be
+   * served to the user as a provider outage. */
+  if (isStepLimitError(err)) {
+    return 'Агент выполнил предельное число действий за один ответ. Напишите «продолжай» — он продолжит с того места, где остановился.';
+  }
   const parsed =
     typeof err?.message === 'string' ? Number((err.message.match(/\b([45]\d\d)\b/) || [])[1]) : NaN;
   const status =
@@ -211,9 +238,32 @@ function getUserFacingError(err) {
   if (typeof status === 'number' && status >= 500) {
     return 'Сервис моделей временно недоступен. Попробуйте ещё раз через минуту.';
   }
+  if (hasCompletedWork) {
+    return 'Причина сбоя не определена. Напишите «продолжай» — агент продолжит с того места, где остановился.';
+  }
   return 'Произошла ошибка при обработке запроса. Попробуйте ещё раз.';
 }
 const MEMORY_INPUT_CHARS_PER_TOKEN = 8;
+
+/**
+ * Whether the run already finished real work before it broke: at least one tool call
+ * that came back with an output. That is the difference between "nothing happened,
+ * ask again" and "the deck is built and sitting in this very message" — and it is
+ * what decides whether the failure notice is allowed to say «попробуйте ещё раз»,
+ * which on the second reading means «pay for all of that a second time».
+ *
+ * A finished tool call, not text, is the signal on purpose: files, search results and
+ * generated documents all arrive through tools, whereas a half-streamed sentence is
+ * not work the user would mind losing.
+ * @param {Array<{ type?: string, tool_call?: { output?: unknown } }>} contentParts
+ */
+const hasCompletedToolWork = (contentParts) =>
+  contentParts.some(
+    (part) =>
+      part?.type === ContentTypes.TOOL_CALL &&
+      part.tool_call?.output != null &&
+      String(part.tool_call.output) !== '',
+  );
 
 /**
  * Whether a finished run left the user anything to look at. Reasoning parts do not count:
@@ -1757,13 +1807,32 @@ class AgentClient extends BaseClient {
             [ContentTypes.ERROR]: JSON.stringify(err.balanceErrorMessage),
           });
         } else {
-          logger.error(
-            '[api/server/controllers/agents/client.js #sendCompletion] Unhandled error type',
-            err,
-          );
+          const hasCompletedWork = hasCompletedToolWork(this.contentParts);
+          /** The step ceiling is a configured stop, not a fault — same reasoning as the
+           *  balance branch above. Logged so it can still be counted, at a level that
+           *  does not put a tuning decision in front of whoever reads error logs. */
+          if (isStepLimitError(err)) {
+            logger.warn(
+              '[api/server/controllers/agents/client.js #sendCompletion] Run hit the step ceiling',
+              { messageId: this.responseMessageId, conversationId: this.conversationId },
+            );
+          } else {
+            logger.error(
+              '[api/server/controllers/agents/client.js #sendCompletion] Unhandled error type',
+              err,
+            );
+          }
+          const message = getUserFacingError(err, { hasCompletedWork });
+          /** A run that broke AFTER doing the work must not be announced as a failed
+           *  request. The client wraps a bare string in «Не удалось выполнить запрос»
+           *  — true for a run that produced nothing, a lie for one whose files are
+           *  right above the notice, and an invitation to pay for the same work twice.
+           *  The structured form routes to a frame that leads with what survived. */
           this.contentParts.push({
             type: ContentTypes.ERROR,
-            [ContentTypes.ERROR]: getUserFacingError(err),
+            [ContentTypes.ERROR]: hasCompletedWork
+              ? JSON.stringify({ code: ErrorTypes.RUN_INCOMPLETE, info: message })
+              : message,
           });
         }
       }

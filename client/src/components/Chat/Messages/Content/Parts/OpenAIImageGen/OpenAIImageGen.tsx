@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { AGENT_STYLE_TOOLS } from '.';
 import { PixelCard } from '@librechat/client';
 import type { TAttachment, TFile, TAttachmentMetadata } from 'librechat-data-provider';
 import { ToolIcon, isError } from '~/components/Chat/Messages/Content/ToolOutput';
 import Image from '~/components/Chat/Messages/Content/Image';
 import { useProgress, useLocalize } from '~/hooks';
 import ProgressText from './ProgressText';
-import { AGENT_STYLE_TOOLS } from '.';
 import { scaleImage } from '~/utils';
 
 function computeCancelled(
@@ -219,7 +219,7 @@ export default function OpenAIImageGen({
             return localize('com_ui_image_gen_failed');
           }
           if (cancelled) {
-            return localize('com_ui_cancelled');
+            return localize('com_ui_tool_call_not_run');
           }
           return localize('com_ui_image_created');
         })()}

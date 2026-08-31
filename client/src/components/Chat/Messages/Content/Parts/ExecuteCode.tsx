@@ -84,7 +84,7 @@ export default function ExecuteCode({
           onClick={toggleCode}
           inProgressText={localize('com_ui_analyzing')}
           finishedText={
-            cancelled ? localize('com_ui_cancelled') : localize('com_ui_analyzing_finished')
+            cancelled ? localize('com_ui_tool_call_not_run') : localize('com_ui_analyzing_finished')
           }
           errorSuffix={hasError && !cancelled ? localize('com_ui_tool_failed') : undefined}
           icon={

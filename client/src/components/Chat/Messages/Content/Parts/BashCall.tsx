@@ -64,7 +64,7 @@ export default function BashCall({
               : localize('com_ui_running_command')
           }
           finishedText={
-            cancelled ? localize('com_ui_cancelled') : localize('com_ui_command_finished')
+            cancelled ? localize('com_ui_tool_call_not_run') : localize('com_ui_command_finished')
           }
           errorSuffix={hasError && !cancelled ? localize('com_ui_tool_failed') : undefined}
           icon={

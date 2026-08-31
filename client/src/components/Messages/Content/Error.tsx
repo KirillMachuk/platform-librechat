@@ -84,6 +84,13 @@ const errorMessages = {
   [ErrorTypes.DEEP_RESEARCH_MODEL_INCOMPATIBLE]: 'com_error_deep_research_model_incompatible',
   [ErrorTypes.STREAM_EXPIRED]: 'com_error_stream_expired',
   [ErrorTypes.GENERATION_INTERRUPTED]: 'com_error_generation_interrupted',
+  /** The run broke with finished work already in the message. Lead with what survived —
+   *  the default frame («Не удалось выполнить запрос») denies files the user can see
+   *  and scroll to, and pushes them into paying for the same run twice. */
+  [ErrorTypes.RUN_INCOMPLETE]: (json: TGenericError, localize: LocalizeFunction) => {
+    const { info } = json;
+    return localize('com_error_run_incomplete', { 0: info ?? '' });
+  },
   [ViolationTypes.BAN]: 'com_error_ban',
   [ViolationTypes.ILLEGAL_MODEL_REQUEST]: (json: TGenericError, localize: LocalizeFunction) => {
     const { info } = json;
