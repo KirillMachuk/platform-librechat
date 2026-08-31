@@ -46,16 +46,18 @@ export default function ProgressCard({ data }: { data: TDeepResearchProgress }) 
   const { stopGenerating } = useChatContext();
   const stalled = data.stalled === true;
   const pct = Math.max(0, Math.min(100, Math.round((data.progress ?? 0) * 100)));
-  const planSteps = data.steps ?? [];
-  const hasPlan = planSteps.length > 0;
-  const activeStep = hasPlan
-    ? Math.min(Math.floor((data.progress ?? 0) * planSteps.length), planSteps.length - 1)
-    : Math.max(
-        0,
-        PHASE_STEPS.findIndex((p) => p.phase === data.phase),
-      );
-
   const steps: ApprovalPlanStep[] = useMemo(() => {
+    /* Derived inside the memo on purpose: `data.steps ?? []` is a fresh array
+     * on every dr_progress snapshot, and as a dependency it would rebuild this
+     * list on every render (CI lint caught it). */
+    const planSteps = data.steps ?? [];
+    const hasPlan = planSteps.length > 0;
+    const activeStep = hasPlan
+      ? Math.min(Math.floor((data.progress ?? 0) * planSteps.length), planSteps.length - 1)
+      : Math.max(
+          0,
+          PHASE_STEPS.findIndex((p) => p.phase === data.phase),
+        );
     const titles = hasPlan ? planSteps : PHASE_STEPS.map((p) => localize(p.key));
     return titles.map((title, i) => {
       let status: ApprovalPlanStep['status'] = 'pending';
@@ -66,7 +68,7 @@ export default function ProgressCard({ data }: { data: TDeepResearchProgress }) 
       }
       return { id: String(i), title, status };
     });
-  }, [hasPlan, planSteps, activeStep, localize]);
+  }, [data.steps, data.progress, data.phase, localize]);
 
   const cardStrings: ApprovalCardStrings = useMemo(
     () => ({
