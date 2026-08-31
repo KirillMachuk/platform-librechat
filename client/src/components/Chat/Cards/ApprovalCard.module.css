@@ -355,6 +355,20 @@
   font-weight: 400;
   color: var(--text-tertiary);
 }
+/* Running plan (r25 package Б): a finished step reads as settled ink, the one
+ * being worked on lifts to full contrast (its label also carries the platform
+ * shimmer), everything ahead stays the plan's own resting tertiary. */
+.todoItem[data-status='done'] .todoIcon,
+.todoItem[data-status='done'] .todoLabel {
+  color: var(--text-secondary);
+}
+.todoItem[data-status='active'] .todoIcon {
+  color: var(--text-primary);
+}
+.todoItem[data-status='active'] .todoLabel {
+  color: var(--text-primary);
+  font-weight: 500;
+}
 .todoCollapsible {
   display: grid;
   grid-template-rows: 1fr;

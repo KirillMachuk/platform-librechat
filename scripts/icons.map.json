@@ -159,6 +159,10 @@
     "fit": "exact",
     "to": "circle"
   },
+  "CircleArrowRight": {
+    "fit": "exact",
+    "to": "circle-arrow-right"
+  },
   "CircleCheckBig": {
     "fit": "close",
     "to": "circle-check"

@@ -106,6 +106,38 @@ export default function CardsDemo() {
           />
 
           <ApprovalCard
+            variant="plan"
+            strings={strings}
+            title="Глубокое исследование"
+            todoTitle="Шаги"
+            plan={[
+              { id: '1', title: 'Собрать предложения крупнейших агрегаторов', status: 'done' },
+              { id: '2', title: 'Сравнить комиссии и условия 2025-2026', status: 'done' },
+              { id: '3', title: 'Выделить тренды по регионам', status: 'active' },
+              { id: '4', title: 'Сопоставить с российскими условиями', status: 'pending' },
+              { id: '5', title: 'Сформировать таблицу и рекомендацию', status: 'pending' },
+            ]}
+            approveLabel="Начать"
+            showActions={false}
+            headerAction={
+              <ApprovalCardHeaderAction
+                label="Остановить"
+                onClick={() => push('Прогресс → стоп')}
+              />
+            }
+            footnote={
+              <div className="mt-3">
+                <div className="thinking-shimmer-active mb-2 text-xs text-text-tertiary">
+                  Исследует: комиссии агрегаторов по регионам
+                </div>
+                <div className="h-1 w-full overflow-hidden rounded-full bg-surface-hover">
+                  <div className="h-full w-[52%] rounded-full bg-text-accent" />
+                </div>
+              </div>
+            }
+          />
+
+          <ApprovalCard
             variant="command"
             strings={strings}
             title="Выполнить команду?"

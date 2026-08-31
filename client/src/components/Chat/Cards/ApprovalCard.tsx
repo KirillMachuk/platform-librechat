@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
+  Check,
   ChevronDown,
   ChevronUp,
+  CircleArrowRight,
   CornerDownLeft,
   ListChecks,
   ListTodo,
@@ -40,6 +42,10 @@ export interface ApprovalQuestion {
 export interface ApprovalPlanStep {
   id: string;
   title: string;
+  /** Live status while a plan RUNS (r25 package Б): the dashed circle is the
+   *  plan's own resting state, the arrow marks the step being worked on (its
+   *  label carries the platform shimmer), the check marks a finished one. */
+  status?: 'pending' | 'active' | 'done';
 }
 
 export interface ApprovalCardStrings {
@@ -132,6 +138,16 @@ function RollingDigits({ value }: { value: string }) {
       })}
     </>
   );
+}
+
+function TodoStatusIcon({ status }: { status?: ApprovalPlanStep['status'] }) {
+  if (status === 'done') {
+    return <Check className={styles.todoIcon} aria-hidden />;
+  }
+  if (status === 'active') {
+    return <CircleArrowRight className={styles.todoIcon} aria-hidden />;
+  }
+  return <TodoDashedIcon />;
 }
 
 function TodoDashedIcon() {
@@ -393,7 +409,10 @@ export function ApprovalCard({
   const planPreview = plan.slice(0, previewCount);
   const planRest = plan.slice(previewCount);
   const hasPlanMore = planRest.length > 0;
-  const showPlanRest = planExpanded || !hasPlanMore;
+  /* A step being worked on must never sit inside the collapsed well — the card
+   * would show a frozen preview while the run moved on (r25 package Б). */
+  const activeHidden = planRest.some((stepItem) => stepItem.status === 'active');
+  const showPlanRest = planExpanded || activeHidden || !hasPlanMore;
 
   const canContinue = variant !== 'questions' || allAnswered;
 
@@ -710,11 +729,24 @@ export function ApprovalCard({
               </div>
               <ul className={styles.todoList}>
                 {planPreview.map((stepItem) => (
-                  <li key={stepItem.id} className={styles.todoItem}>
+                  <li
+                    key={stepItem.id}
+                    className={styles.todoItem}
+                    data-status={stepItem.status}
+                    aria-current={stepItem.status === 'active' ? 'step' : undefined}
+                  >
                     <span className={styles.todoIconWrap}>
-                      <TodoDashedIcon />
+                      <TodoStatusIcon status={stepItem.status} />
                     </span>
-                    <span className={styles.todoLabel}>{stepItem.title}</span>
+                    <span
+                      className={
+                        stepItem.status === 'active'
+                          ? `${styles.todoLabel} thinking-shimmer-active`
+                          : styles.todoLabel
+                      }
+                    >
+                      {stepItem.title}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -727,11 +759,24 @@ export function ApprovalCard({
                       <div className={styles.todoRest}>
                         <ul className={`${styles.todoList} ${styles.todoListFlush}`}>
                           {planRest.map((stepItem) => (
-                            <li key={stepItem.id} className={styles.todoItem}>
+                            <li
+                              key={stepItem.id}
+                              className={styles.todoItem}
+                              data-status={stepItem.status}
+                              aria-current={stepItem.status === 'active' ? 'step' : undefined}
+                            >
                               <span className={styles.todoIconWrap}>
-                                <TodoDashedIcon />
+                                <TodoStatusIcon status={stepItem.status} />
                               </span>
-                              <span className={styles.todoLabel}>{stepItem.title}</span>
+                              <span
+                                className={
+                                  stepItem.status === 'active'
+                                    ? `${styles.todoLabel} thinking-shimmer-active`
+                                    : styles.todoLabel
+                                }
+                              >
+                                {stepItem.title}
+                              </span>
                             </li>
                           ))}
                         </ul>

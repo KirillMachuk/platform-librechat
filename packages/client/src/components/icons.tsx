@@ -52,6 +52,7 @@ import {
   IconChevronRight,
   IconChevronUp,
   IconCircle,
+  IconCircleArrowRight,
   IconCircleCheck,
   IconCirclePlus,
   IconCircleX,
@@ -256,6 +257,7 @@ export const ChevronRightIcon: LucideIcon = canon(IconChevronRight, 'ChevronRigh
 export const ChevronUp: LucideIcon = canon(IconChevronUp, 'ChevronUp');
 export const ChevronsUpDown: LucideIcon = canon(IconSelector, 'ChevronsUpDown');
 export const Circle: LucideIcon = canon(IconCircle, 'Circle');
+export const CircleArrowRight: LucideIcon = canon(IconCircleArrowRight, 'CircleArrowRight');
 export const CircleCheckBig: LucideIcon = canon(IconCircleCheck, 'CircleCheckBig');
 export const CircleHelpIcon: LucideIcon = canon(IconHelp, 'CircleHelpIcon');
 export const CircleIcon: LucideIcon = canon(IconCircle, 'CircleIcon');
