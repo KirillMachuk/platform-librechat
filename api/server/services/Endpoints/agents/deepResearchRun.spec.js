@@ -1389,6 +1389,10 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
        * highlight must hold, never un-tick finished work. */
       params.onProgress({ type: 'research', round: 3, subQuestion: 'ещё' });
       params.onProgress({ type: 'research', round: 4, subQuestion: 'назад', planStep: 1 });
+      /* The LAST step, named during gathering. A `<` where the clamp needs `<=`
+       * would drop it silently and the run would finish having never shown the
+       * final step as running (r27 review found this exact mutation alive). */
+      params.onProgress({ type: 'research', round: 5, subQuestion: 'таблица', planStep: 3 });
       params.onProgress({ type: 'report' });
       return {
         finalReport: 'Отчёт',
@@ -1414,6 +1418,7 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
       ['research', 1],
       ['research', 1],
       ['research', 1],
+      ['research', 2],
       ['report', 2],
     ]);
   });

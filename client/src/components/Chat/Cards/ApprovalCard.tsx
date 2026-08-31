@@ -286,6 +286,13 @@ export function ApprovalCardFrame({
             <TooltipAnchor
               description={title}
               onlyWhenTruncated
+              /* The anchor hands its render a pointer cursor, which here would
+               * promise a click the title no longer performs — the report's
+               * header used to BE the button that opened the reader (§6.6's own
+               * note: pass cursor-default on non-clickable text). The tab stop
+               * it also adds stays: on focus it reveals the full title, which is
+               * the only keyboard way to read a clamped one. */
+              className="cursor-default"
               render={<h3 className={`${styles.title} ${styles.titleOneLine}`}>{title}</h3>}
             />
           ) : (

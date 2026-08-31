@@ -62,10 +62,21 @@ jest.mock('~/data-provider', () => ({
 const PLAN_TEXT = '**План исследования:** Рынок CRM\n\n1. Собрать\n2. Сравнить';
 const CONVO = 'c-run';
 
+/**
+ * The start command as the CLIENT holds it while the run is live.
+ *
+ * `drKind: 'start'` is stamped server-side AFTER the `created` event goes out,
+ * so during the whole run the client's copy has only the marker text — it grows
+ * the field on finalization or on reload. Every guard here used the persisted
+ * shape, which is why a rule keyed on `drKind` could pass them all and still
+ * leave a live research drawing nothing (r27 review). `persisted: true` opts
+ * into the after-the-fact shape.
+ */
 const tree = (over: {
   latestId: string;
   runReply?: Partial<TMessage>;
   cancelInstead?: boolean;
+  persisted?: boolean;
 }): TMessage[] => {
   const reply = {
     messageId: 'resp1',
@@ -104,7 +115,7 @@ const tree = (over: {
         conversationId: CONVO,
         parentMessageId: 'plan1',
         isCreatedByUser: true,
-        drKind: 'start',
+        ...(over.persisted === true ? { drKind: 'start' } : {}),
         text: 'Начать исследование',
         depth: 1,
         children: [reply],
@@ -134,12 +145,14 @@ const renderTree = (opts: {
   snapshot?: unknown;
   runReply?: Partial<TMessage>;
   cancelInstead?: boolean;
+  persisted?: boolean;
 }) =>
   renderCustom(
     tree({
       latestId: opts.latestId,
       runReply: opts.runReply,
       cancelInstead: opts.cancelInstead,
+      persisted: opts.persisted,
     }),
     opts.latestId,
     opts.snapshot,
@@ -225,6 +238,12 @@ describe('which plan card draws a live Deep Research run (r26 review)', () => {
     expect(screen.getByText('Сравнить').closest('li')).toHaveAttribute('data-status', 'active');
     expect(screen.getByTestId('dr-stop')).toBeInTheDocument();
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
+  });
+
+  it('the SAME run, reloaded (drKind now stamped), still belongs to the same card', () => {
+    renderTree({ latestId: 'resp1', snapshot: RUNNING, persisted: true });
+    expect(screen.getByTestId('dr-stop')).toBeInTheDocument();
+    expect(screen.getByText('Сравнить').closest('li')).toHaveAttribute('data-status', 'active');
   });
 
   it('a run that reports NO step marks none — the fraction must not fill in for it', () => {

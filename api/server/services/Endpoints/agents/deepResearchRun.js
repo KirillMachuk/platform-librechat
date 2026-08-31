@@ -1778,7 +1778,13 @@ async function runNewDeepResearch(params) {
           searchCount += 1;
           /* The supervisor's own answer, never below where the card already is
            * (see `planStepIndex`). A round it did not label leaves the
-           * highlight where it stands rather than moving it somewhere made up. */
+           * highlight where it stands rather than moving it somewhere made up.
+           * It is asked for the EARLIEST step the batch still advances, not the
+           * furthest: a round that legitimately spans steps 1, 3 and 5 would
+           * otherwise report 5 and tick four steps off at once — the owner's
+           * original complaint with a model in place of the arithmetic (r27
+           * review). Earliest + monotonic means a step reads done only once the
+           * run has moved past it. */
           if (event.planStep > 0 && event.planStep <= planSteps.length) {
             planStepIndex = Math.max(planStepIndex, event.planStep - 1);
           }
@@ -1840,10 +1846,12 @@ async function runNewDeepResearch(params) {
             mode: tier.name,
             budget: tierToRunBudget(tier),
             /* The plan the user approved (and may have edited), MASKED in
-             * sovereign mode. Until r27 the graph never saw it: the run was
-             * steered only by the brief, so a plan the user had corrected
-             * changed nothing about the research. Empty for a PROCEED run,
-             * which keeps that path's prompts exactly as they were measured. */
+             * sovereign mode. It reached the graph only indirectly before r27 —
+             * dissolved into the research brief through the dialogue transcript
+             * — so SUPERVISOR, the node that decides what to research next,
+             * never saw the steps as steps and could not say which one a round
+             * advances. This is that channel. Empty for a PROCEED run, which
+             * keeps that path's prompts exactly as they were measured. */
             planSteps: graphPlanSteps,
           },
           signal,
