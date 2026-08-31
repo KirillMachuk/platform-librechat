@@ -99,10 +99,15 @@ describe('the composer shell', () => {
     expect(c.join(' ')).not.toMatch(/\bring-/);
   });
 
-  it('opts the composer out of browser autofill (round 24: contact popover on chat switch)', () => {
+  it('opts the composer out of browser autofill (r24 + r25: contact popover on chat switch)', () => {
+    /* Chrome ignores autocomplete="off" for contact autofill by policy — the
+     * textarea must carry the one honored token, "new-password", plus the
+     * password-manager opt-outs; the form keeps "off" for everything else. */
     renderComposer();
     const textarea = screen.getByTestId('text-input');
-    expect(textarea).toHaveAttribute('autocomplete', 'off');
+    expect(textarea).toHaveAttribute('autocomplete', 'new-password');
+    expect(textarea).toHaveAttribute('data-1p-ignore', 'true');
+    expect(textarea).toHaveAttribute('data-lpignore', 'true');
     expect(textarea.closest('form')).toHaveAttribute('autocomplete', 'off');
   });
 

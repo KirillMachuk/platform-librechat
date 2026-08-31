@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import type { MouseEvent } from 'react';
+import { Brain, ChevronDown } from '~/components/icons';
 import styles from './ThinkingReasoning.module.css';
-import { ChevronDown } from '~/components/icons';
 import { splitThinkSentences } from '~/utils';
 import { useExpandCollapse } from '~/hooks';
 
@@ -120,6 +120,7 @@ export function ThinkingReasoning({
         aria-label={ariaLabel}
         onClick={handleToggle}
       >
+        <Brain className={styles.trBrain} aria-hidden="true" />
         {streaming ? (
           /* No trLabel here: its `color` ties with the global shimmer's
            * `color: transparent` at equal specificity, so which one wins

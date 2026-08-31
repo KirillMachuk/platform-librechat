@@ -239,9 +239,11 @@ export default function ToolCallGroup({
 
   return (
     <div className="mb-2 mt-1" ref={rootRef}>
+      {/* text-left: the UA stylesheet centers button text, and on a phone the
+       * wrapped label+summary lines each centered themselves (owner r25). */}
       <button
         type="button"
-        className="inline-flex w-full items-center gap-2 py-1 text-text-secondary focus-visible:outline-none"
+        className="inline-flex w-full items-center gap-2 py-1 text-left text-text-secondary focus-visible:outline-none"
         onClick={handleToggle}
         aria-expanded={isExpanded}
         aria-label={groupLabel}
@@ -277,7 +279,7 @@ export default function ToolCallGroup({
         )}
         <ChevronDown
           className={cn(
-            'size-4 shrink-0 text-text-secondary transition-transform duration-200 ease-out',
+            'ml-auto size-4 shrink-0 text-text-secondary transition-transform duration-200 ease-out',
             isExpanded && 'rotate-180',
           )}
           aria-hidden="true"

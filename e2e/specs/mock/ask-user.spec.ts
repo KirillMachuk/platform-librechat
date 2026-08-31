@@ -71,9 +71,9 @@ test.describe('ask_user questions card', () => {
     await expect(chip.getByText('За какой период? — Квартал')).toBeVisible();
     await expect(page.getByText('Ответы на вопросы:', { exact: false })).toHaveCount(0);
 
-    /* The card goes static: no Continue button anywhere anymore. */
-    await expect(card.getByRole('button', { name: /Продолжить|Continue/ })).toHaveCount(0, {
-      timeout: 15_000,
-    });
+    /* r25: the answered card FOLDS into the one-line summary — no frozen
+     * carousel, no Continue anywhere; the chip above carries the content. */
+    await expect(page.getByTestId('ask-user-collapsed')).toBeVisible({ timeout: 15_000 });
+    await expect(card.getByRole('button', { name: /Продолжить|Continue/ })).toHaveCount(0);
   });
 });

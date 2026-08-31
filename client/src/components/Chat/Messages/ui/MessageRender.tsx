@@ -3,8 +3,8 @@ import { useRecoilValue } from 'recoil';
 import type { TMessage } from 'librechat-data-provider';
 import type { TMessageProps, TMessageChatContext } from '~/common';
 import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
-import useDrActionChip from '~/components/Chat/Messages/DeepResearch/useDrActionChip';
 import useAskUserChip from '~/components/Chat/Messages/DeepResearch/useAskUserChip';
+import useDrCommand from '~/components/Chat/Messages/DeepResearch/useDrCommand';
 import MessageContent from '~/components/Chat/Messages/Content/MessageContent';
 import { useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
@@ -108,7 +108,7 @@ const MessageRender = memo(function MessageRender({
    * messages actually take: nothing gives a user message `content`, so
    * mounting the action chip on ContentRender alone left it dead. */
   const askChip = useAskUserChip(msg);
-  const actionChip = useDrActionChip(msg);
+  const drCommand = useDrCommand(msg);
   const {
     ask,
     edit,
@@ -134,7 +134,7 @@ const MessageRender = memo(function MessageRender({
    * else happens. Editing worked on this path before any chip existed and must
    * survive it, so the editor wins while it is open.
    */
-  const chip = edit ? null : (askChip ?? actionChip);
+  const chip = edit ? null : askChip;
   const maximizeChatSpace = useRecoilValue(store.maximizeChatSpace);
 
   const handleRegenerateMessage = useCallback(() => regenerateMessage(), [regenerateMessage]);
@@ -160,6 +160,27 @@ const MessageRender = memo(function MessageRender({
 
   if (!msg) {
     return null;
+  }
+
+  /* r25 (owner): DR command rows are hidden — only the row. A command with
+   * SIBLINGS keeps its switcher (an older edit-and-resend created a branch,
+   * and hiding the row wholesale made that branch unreachable — r25a review):
+   * the body goes, the switcher row stays. */
+  if (drCommand != null && !edit) {
+    if ((siblingCount ?? 1) <= 1) {
+      return null;
+    }
+    return (
+      <div className="mx-auto flex flex-1 gap-3 md:max-w-[47rem] xl:max-w-[55rem]">
+        <SubRow classes="text-xs justify-end">
+          <SiblingSwitch
+            siblingIdx={siblingIdx}
+            siblingCount={siblingCount}
+            setSiblingIdx={setSiblingIdx}
+          />
+        </SubRow>
+      </div>
+    );
   }
 
   const baseClasses = {

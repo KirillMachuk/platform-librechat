@@ -1,4 +1,4 @@
-import { Constants, ContentTypes, ToolCallTypes } from 'librechat-data-provider';
+import { Constants, ContentTypes, ToolCallTypes, ASK_USER_TOOL } from 'librechat-data-provider';
 import type { TMessageContentParts, Agents } from 'librechat-data-provider';
 import type { PartWithIndex } from '~/components/Chat/Messages/Content/ParallelContent';
 
@@ -17,6 +17,12 @@ function isGroupableToolCall(part: TMessageContentParts): boolean {
   const isStandardToolCall =
     'args' in toolCall && (!toolCall.type || toolCall.type === ToolCallTypes.TOOL_CALL);
   if (isStandardToolCall && toolCall.name?.startsWith(Constants.LC_TRANSFER_TO_)) {
+    return false;
+  }
+  /* The ask_user questions card is a user-facing control, not a tool chip —
+   * swallowed into a collapsed ToolCallGroup it would simply not be seen
+   * (r25: the model may call e.g. web_search and ask_user back to back). */
+  if (isStandardToolCall && toolCall.name === ASK_USER_TOOL) {
     return false;
   }
   return true;

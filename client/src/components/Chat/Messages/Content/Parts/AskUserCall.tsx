@@ -1,25 +1,35 @@
-import { memo, useContext, useMemo, useRef, useState } from 'react';
+import { memo, useContext, useId, useMemo, useRef, useState } from 'react';
 import { useToastContext } from '@librechat/client';
 import { ASK_SKIP_MARKER, buildAskAnswersMessage, parseAskUserArgs } from 'librechat-data-provider';
 import type { AskUserQuestion } from 'librechat-data-provider';
 import type { ApprovalCardStrings } from '~/components/Chat/Cards/ApprovalCard';
+import { MessageCircleQuestion, ChevronDown } from '~/components/icons';
 import { ApprovalCard } from '~/components/Chat/Cards/ApprovalCard';
+import useExpandCollapse from '~/hooks/Messages/useExpandCollapse';
 import { ChatContext, useMessageContext } from '~/Providers';
 import { useSubmitMessage } from '~/hooks/Messages';
 import { useLocalize } from '~/hooks';
+import { cn } from '~/utils';
 
 /**
  * Renders the `ask_user` tool call as the interactive questions card
- * (interactive cards К3). The tool executes nothing server-side — THIS is
+ * (interactive cards К3/r25). The tool executes nothing server-side — THIS is
  * the tool's real body: «Продолжить» submits ONE ordinary user message with
  * all answers (buildAskAnswersMessage), «Пропустить» submits the skip
  * marker; the model reads either as plain text (deepResearchRun's
  * message-level pattern — no run pause, survives refresh).
  *
+ * r25 (owner): the options are selectable the moment the card appears — even
+ * while the model's closing sentence still streams — and only the commit
+ * controls wait for the turn to end (actionsArmed). Selections survive the
+ * finalization remount through ContentParts' askAnswers map. An answered or
+ * historical card folds into a one-line summary (the answers chip below
+ * carries the content), reopening onto the static card.
+ *
  * Split in two on purpose (review К4): the share page renders Parts OUTSIDE
  * ChatContext, and the chat hooks THROW there — the outer component checks
  * the context and mounts the hook-bearing interactive body only inside a
- * live chat; everywhere else the card renders statically.
+ * live chat; everywhere else the folded summary renders.
  */
 
 function useCardStrings(): ApprovalCardStrings {
@@ -46,7 +56,7 @@ function StaticCard({ questions }: { questions: AskUserQuestion[] }) {
   const localize = useLocalize();
   const strings = useCardStrings();
   return (
-    <div className="my-2 w-full">
+    <div className="w-full pt-2">
       <ApprovalCard
         variant="questions"
         strings={strings}
@@ -59,12 +69,52 @@ function StaticCard({ questions }: { questions: AskUserQuestion[] }) {
   );
 }
 
+/** The folded state of an answered/historical questions card: one dim line
+ *  in the «Думал N с» family; the content lives in the answers chip below. */
+function CollapsedQuestions({ questions }: { questions: AskUserQuestion[] }) {
+  const localize = useLocalize();
+  const contentId = useId();
+  const [open, setOpen] = useState(false);
+  const { style: expandStyle, ref: expandRef } = useExpandCollapse(open);
+  const label = localize('com_ui_cards_questions_title');
+  return (
+    <div className="my-2 w-full" data-testid="ask-user-collapsed">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={contentId}
+        className="flex items-center gap-1.5 text-[length:calc(var(--markdown-font-size)*13/16)] font-medium leading-[18px] text-text-tertiary transition-colors [@media(hover:hover)]:hover:text-text-primary"
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <MessageCircleQuestion className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <span>{label}</span>
+        <ChevronDown
+          className={cn('h-3 w-3 shrink-0 transition-transform duration-200', open && 'rotate-180')}
+          aria-hidden="true"
+        />
+      </button>
+      <div
+        id={contentId}
+        role="group"
+        aria-label={label}
+        aria-hidden={!open || undefined}
+        style={expandStyle}
+      >
+        <div className="relative overflow-hidden" ref={expandRef}>
+          <StaticCard questions={questions} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function InteractiveCard({ questions }: { questions: AskUserQuestion[] }) {
   const localize = useLocalize();
   const strings = useCardStrings();
   const { showToast } = useToastContext();
   const { submitMessage } = useSubmitMessage();
-  const { isSubmitting, isLatestMessage } = useMessageContext();
+  const { isSubmitting, isLatestMessage, askAnswersInitial, onAskAnswersChange } =
+    useMessageContext();
   const [acted, setActed] = useState(false);
   const actedRef = useRef(false);
 
@@ -80,7 +130,12 @@ function InteractiveCard({ questions }: { questions: AskUserQuestion[] }) {
     setActed(true);
   };
 
-  const interactive = isLatestMessage === true && isSubmitting !== true && !acted;
+  const present = isLatestMessage === true && !acted;
+  const armed = present && isSubmitting !== true;
+
+  if (!present) {
+    return <CollapsedQuestions questions={questions} />;
+  }
 
   return (
     <div className="my-2 w-full">
@@ -91,7 +146,10 @@ function InteractiveCard({ questions }: { questions: AskUserQuestion[] }) {
         approveLabel={localize('com_ui_cards_continue')}
         secondaryLabel={localize('com_ui_cards_skip')}
         questions={questions}
-        showActions={interactive}
+        showActions={true}
+        actionsArmed={armed}
+        initialAnswers={askAnswersInitial}
+        onAnswersChange={onAskAnswersChange}
         onApprove={(payload) => {
           if (payload?.answers == null) {
             return;
@@ -115,7 +173,7 @@ const AskUserCall = memo(({ args }: { args: unknown }) => {
   }
 
   if (chat == null) {
-    return <StaticCard questions={questions} />;
+    return <CollapsedQuestions questions={questions} />;
   }
   return <InteractiveCard questions={questions} />;
 });

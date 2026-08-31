@@ -1,5 +1,6 @@
 import { useCallback, useMemo, memo } from 'react';
 import { useRecoilValue } from 'recoil';
+import { isDrCancelCommand } from 'librechat-data-provider';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { TMessageProps, TMessageChatContext } from '~/common';
@@ -11,8 +12,8 @@ import {
 } from '~/components/Chat/Messages/DeepResearch';
 import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import { useAttachments, useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
-import useDrActionChip from '~/components/Chat/Messages/DeepResearch/useDrActionChip';
 import useAskUserChip from '~/components/Chat/Messages/DeepResearch/useAskUserChip';
+import useDrCommand from '~/components/Chat/Messages/DeepResearch/useDrCommand';
 import ContentParts from '~/components/Chat/Messages/Content/ContentParts';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
 import { USER_BUBBLE_CLASS } from '~/components/Chat/Messages/ui/turn';
@@ -145,7 +146,7 @@ const ContentRender = memo(function ContentRender({
   /* Both shared with MessageRender — a chip must behave identically on both
    * user-message render paths (review К3: each was mounted on only one). */
   const askChip = useAskUserChip(msg);
-  const actionChip = useDrActionChip(msg);
+  const drCommand = useDrCommand(msg);
 
   // Task #21 phase 3: a FINISHED Deep Research report → collapsible ReportCard + reader.
   // Review r2: keyed on the persisted `drKind` provenance (no text sniffing, no ancestor
@@ -174,6 +175,27 @@ const ContentRender = memo(function ContentRender({
     return null;
   }
 
+  /* r25 (owner): DR command rows are hidden — only the row. A command with
+   * SIBLINGS keeps its switcher (an older edit-and-resend created a branch,
+   * and hiding the row wholesale made that branch unreachable — r25a review):
+   * the body goes, the switcher row stays. */
+  if (drCommand != null && !edit) {
+    if ((siblingCount ?? 1) <= 1) {
+      return null;
+    }
+    return (
+      <div className="mx-auto flex flex-1 gap-3 md:max-w-[47rem] xl:max-w-[55rem]">
+        <SubRow classes="text-xs justify-end">
+          <SiblingSwitch
+            siblingIdx={siblingIdx}
+            siblingCount={siblingCount}
+            setSiblingIdx={setSiblingIdx}
+          />
+        </SubRow>
+      </div>
+    );
+  }
+
   const baseClasses = {
     common: 'group mx-auto flex flex-1 gap-3 transition-all duration-300 transform-gpu ',
     chat: chatColumnClass(maximizeChatSpace, hasParallelContent),
@@ -190,7 +212,7 @@ const ContentRender = memo(function ContentRender({
   // `drKind` provenance the runner stamps at message creation — never on display text, so
   // a normal-chat answer that merely starts with the plan-marker prose can never grow live
   // buttons or an autostart fuse. The one text-assisted case is the OPTIMISTIC command
-  // message, and `useDrActionChip` owns that rule for both render paths. The running slot
+  // message, and `useDrCommand` owns that rule for both render paths. The running slot
   // subscribes to dr_progress (ThinkingIndicator also reads it for the pre-plan label) and
   // renders only during a run (isSubmitting gates it off terminally).
   const msgText = msg.text ?? '';
@@ -200,7 +222,7 @@ const ContentRender = memo(function ContentRender({
   // A chip replaces the message body, so it must stand aside while the editor is open —
   // otherwise the message's own Edit button becomes a no-op (the plan card is an assistant
   // turn and never edits, so it stays outside this gate).
-  const chip = edit ? null : (askChip ?? actionChip);
+  const chip = edit ? null : askChip;
 
   let drCard: ReactNode = null;
   if (chip != null) {
@@ -214,8 +236,15 @@ const ContentRender = memo(function ContentRender({
     // buttons/timer until a reload (task #21 live bug). `isLatestMessage` (stable id match)
     // covers that case; ORing keeps the sibling-switcher case working. hasNoChildren still
     // gates: once Начать/an edit is sent the card has a child and goes inert.
+    const cancelled = (msg.children ?? []).some(
+      (child) => child.drKind === 'cancel' || isDrCancelCommand(child.text ?? ''),
+    );
     drCard = (
-      <PlanCard message={msg} awaitingAction={hasNoChildren && (isLast || isLatestMessage)} />
+      <PlanCard
+        message={msg}
+        awaitingAction={hasNoChildren && (isLast || isLatestMessage)}
+        cancelled={cancelled}
+      />
     );
   }
 

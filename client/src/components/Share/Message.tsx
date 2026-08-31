@@ -1,7 +1,7 @@
 import type { TMessageProps } from '~/common';
-import useDrActionChip from '~/components/Chat/Messages/DeepResearch/useDrActionChip';
 import useAskUserChip from '~/components/Chat/Messages/DeepResearch/useAskUserChip';
 import MinimalHoverButtons from '~/components/Chat/Messages/MinimalHoverButtons';
+import useDrCommand from '~/components/Chat/Messages/DeepResearch/useDrCommand';
 import MessageContent from '~/components/Chat/Messages/Content/MessageContent';
 import SearchContent from '~/components/Chat/Messages/Content/SearchContent';
 import { USER_BUBBLE_CLASS } from '~/components/Chat/Messages/ui/turn';
@@ -39,8 +39,8 @@ export default function Message(props: TMessageProps) {
    * runs.)
    */
   const askChip = useAskUserChip(message);
-  const actionChip = useDrActionChip(message);
-  const chip = askChip ?? actionChip;
+  const drCommand = useDrCommand(message);
+  const chip = askChip;
 
   if (!message) {
     return null;
@@ -54,6 +54,25 @@ export default function Message(props: TMessageProps) {
     unfinished = false,
     isCreatedByUser = true,
   } = message;
+
+  /* r25: the START row is hidden on the share page too (the report says it
+   * ran) — but ONLY the row. Unlike the chat renderers, this component owns
+   * the recursion into its children, and the whole DR run (progress, report)
+   * hangs UNDER the start command in the tree: a bare `return null` here cut
+   * the report out of every shared research (r25a review, критично). The
+   * CANCEL row stays as a plain text bubble — share renders no plan card, so
+   * without it a cancelled run would just trail off. */
+  if (drCommand === 'start') {
+    return (
+      <MultiMessage
+        key={messageId}
+        messageId={messageId}
+        messagesTree={children ?? []}
+        currentEditId={currentEditId}
+        setCurrentEditId={setCurrentEditId}
+      />
+    );
+  }
 
   const isUserTurn = isCreatedByUser === true;
 

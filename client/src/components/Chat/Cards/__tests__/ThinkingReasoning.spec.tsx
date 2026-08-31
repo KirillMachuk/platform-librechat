@@ -121,6 +121,15 @@ describe('ThinkingReasoning (cards К4)', () => {
     expect(getByRole('button')).toHaveTextContent(/^Мысли$/);
   });
 
+  it('carries the brain icon in both states (r25, reference screens)', () => {
+    const { container } = render(<ThinkingReasoning {...defaultProps} text={textOf(1)} />);
+    expect(container.querySelector('.trBrain')).not.toBeNull();
+    const streamed = render(
+      <ThinkingReasoning {...defaultProps} streaming={true} text={textOf(1)} />,
+    );
+    expect(streamed.container.querySelector('.trBrain')).not.toBeNull();
+  });
+
   it('mounted finished is static; born streaming keeps its entry animation', () => {
     const { container } = render(<ThinkingReasoning {...defaultProps} text={textOf(1)} />);
     expect(container.querySelector('.tr')).toHaveAttribute('data-static', 'true');

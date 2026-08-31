@@ -8,27 +8,23 @@ import { MessagesViewContext } from '~/Providers/MessagesViewContext';
 import MultiMessage from '~/components/Chat/Messages/MultiMessage';
 
 /**
- * The Deep Research command chip must reach BOTH user-message render paths.
+ * The Deep Research command decision must reach BOTH user-message render paths.
  *
  * `MultiMessage` routes on `message.content`: a message that carries content parts
  * goes to ContentRender, everything else to MessageRender. The DR command messages
  * («Начать исследование» / «Отменить исследование») are built by
  * `getPreliminaryUserMessage` on the server and by `useChatFunctions` on the client,
- * and NEITHER gives them a `content` array — verified on the live stand, where all 30
- * persisted `drKind: start|cancel` messages have no `content` field. So the real
- * routing sends every one of them to MessageRender, which is exactly where the chip
- * was NOT mounted: the user saw the raw command text in a plain bubble.
+ * and NEITHER gives them a `content` array — so the real routing sends every one of
+ * them to MessageRender. A rule mounted on one path only is dead on the other (that
+ * shipped, twice).
  *
- * The tests below drive the REAL `MultiMessage`, so the routing decision is the
- * component's, not the test's. The content-bearing case is kept as the control that
- * was always green — it is what made the defect invisible.
+ * r25 (owner): command ROWS ARE HIDDEN — «запущено» is what the progress/report
+ * card already says, «отменено» lands as the plan card's header badge. So the
+ * observable here flips: a recognized command renders NOTHING (no body testid, no
+ * marker text), while prose lookalikes and assistant messages keep their text.
+ * The tests drive the REAL `MultiMessage`, so the routing decision is the
+ * component's, not the test's.
  */
-
-/* Asserting on the KEYS, not on the Russian text: a renamed key must break this
- * test, while a reworded translation must not. The mock localize below is what
- * makes the key the visible string. */
-const STARTED = 'com_ui_deep_research_started';
-const CANCELLED = 'com_ui_deep_research_cancelled';
 
 jest.mock('~/components/Chat/Messages/DeepResearch', () => ({
   ...jest.requireActual('~/components/Chat/Messages/DeepResearch'),
@@ -72,7 +68,7 @@ jest.mock('~/components/Chat/Messages/HoverButtons', () => ({
 }));
 jest.mock('~/components/Chat/Messages/SiblingSwitch', () => ({
   __esModule: true,
-  default: () => <div />,
+  default: () => <div data-testid="sibling-switch" />,
 }));
 jest.mock('~/components/Chat/Messages/SubRow', () => ({
   __esModule: true,
@@ -190,32 +186,32 @@ function renderTree(msg: TMessage, parent?: Partial<TMessage>, messages?: TMessa
   return render(tree(msg, makeCtx(list)));
 }
 
-describe('Deep Research command chip — both user-message render paths', () => {
+describe('Deep Research command rows — hidden on both user-message render paths', () => {
   beforeEach(() => {
     mockEdit.on = false;
   });
 
-  it('CONTROL: renders on the content[] path (ContentRender) — always did', () => {
+  it('hides the START row on the content[] path (ContentRender)', () => {
     renderTree(
       command({ drKind: 'start', content: [{ type: ContentTypes.TEXT, text: DR_START_MARKER }] }),
     );
-    expect(screen.getByText(STARTED)).toBeInTheDocument();
+    expect(screen.queryByTestId('content-render-body')).not.toBeInTheDocument();
     expect(screen.queryByText(DR_START_MARKER)).not.toBeInTheDocument();
   });
 
-  it('renders on the text-only path (MessageRender) — the shape prod actually stores', () => {
+  it('hides the START row on the text-only path — the shape prod actually stores', () => {
     renderTree(command({ drKind: 'start' }));
-    expect(screen.getByText(STARTED)).toBeInTheDocument();
+    expect(screen.queryByTestId('message-render-body')).not.toBeInTheDocument();
     expect(screen.queryByText(DR_START_MARKER)).not.toBeInTheDocument();
   });
 
-  /** Pins the routing itself: a command with no `content` must reach MessageRender,
-   *  one with content parts must reach ContentRender. Without this, a MultiMessage
-   *  that sent everything down one path would leave the tests above green. */
-  it('MultiMessage picks the path by `content`, and each path shows the chip', () => {
+  /** Pins the routing itself: an ordinary message with no `content` must reach
+   *  MessageRender, one with content parts must reach ContentRender — while a
+   *  recognized command renders on NEITHER. */
+  it('MultiMessage picks the path by `content`, and each path hides the command', () => {
     renderTree(command({ drKind: 'start' }));
     expect(screen.queryByTestId('content-render-body')).not.toBeInTheDocument();
-    expect(screen.getByText(STARTED)).toBeInTheDocument();
+    expect(screen.queryByTestId('message-render-body')).not.toBeInTheDocument();
     cleanup();
 
     renderTree(command({ text: 'обычный вопрос' }));
@@ -244,7 +240,6 @@ describe('Deep Research command chip — both user-message render paths', () => 
     mockEdit.on = true;
     renderTree(command({ drKind: 'start' }));
     expect(screen.getByTestId('editor')).toBeInTheDocument();
-    expect(screen.queryByText(STARTED)).not.toBeInTheDocument();
   });
 
   it('yields to the editor on the content[] path too', () => {
@@ -253,12 +248,11 @@ describe('Deep Research command chip — both user-message render paths', () => 
       command({ drKind: 'start', content: [{ type: ContentTypes.TEXT, text: DR_START_MARKER }] }),
     );
     expect(screen.getByTestId('editor')).toBeInTheDocument();
-    expect(screen.queryByText(STARTED)).not.toBeInTheDocument();
   });
 
-  it('renders the CANCEL chip on the text-only path', () => {
+  it('hides the CANCEL row on the text-only path (the plan badge carries the outcome)', () => {
     renderTree(command({ drKind: 'cancel', text: DR_CANCEL_MARKER }));
-    expect(screen.getByText(CANCELLED)).toBeInTheDocument();
+    expect(screen.queryByTestId('message-render-body')).not.toBeInTheDocument();
     expect(screen.queryByText(DR_CANCEL_MARKER)).not.toBeInTheDocument();
   });
 
@@ -269,23 +263,23 @@ describe('Deep Research command chip — both user-message render paths', () => 
    * denies. Unreachable today (the runner stamps drKind only alongside the marker),
    * which is exactly why it needs a test rather than a reader's trust.
    */
-  it('takes the caption from drKind, not from the text', () => {
+  it('drKind alone decides: a cancel with unrelated text is still hidden', () => {
     renderTree(command({ drKind: 'cancel', text: 'что-то совершенно другое' }));
-    expect(screen.getByText(CANCELLED)).toBeInTheDocument();
-    expect(screen.queryByText(STARTED)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('message-render-body')).not.toBeInTheDocument();
+    expect(screen.queryByText('что-то совершенно другое')).not.toBeInTheDocument();
   });
 
-  it('renders the OPTIMISTIC command (no drKind yet) under a plan parent', () => {
+  it('hides the OPTIMISTIC command (no drKind yet) under a plan parent', () => {
     // The live window between the click and the server save: the message has no
-    // drKind, so the chip leans on the parent's drKind provenance.
+    // drKind, so the rule leans on the parent's drKind provenance.
     renderTree(command(), { drKind: 'plan', isCreatedByUser: false });
-    expect(screen.getByText(STARTED)).toBeInTheDocument();
+    expect(screen.queryByTestId('message-render-body')).not.toBeInTheDocument();
+    expect(screen.queryByText(DR_START_MARKER)).not.toBeInTheDocument();
   });
 
   it('leaves marker-lookalike prose alone (no drKind, no plan parent)', () => {
     // The provenance rule: text that merely reads like the marker is still prose.
     renderTree(command(), { drKind: 'report', isCreatedByUser: false });
-    expect(screen.queryByText(STARTED)).not.toBeInTheDocument();
     expect(screen.getByTestId('message-render-body')).toHaveTextContent(DR_START_MARKER);
   });
 
@@ -300,20 +294,20 @@ describe('Deep Research command chip — both user-message render paths', () => 
    * red; a single-render test cannot see the difference at all.
    */
   describe('a late-arriving field still reaches the render', () => {
-    it('drKind added after the first render brings the chip', () => {
+    it('drKind added after the first render hides the row', () => {
       const ctx = makeCtx([
         { messageId: 'p-report', drKind: 'report', isCreatedByUser: false },
       ] as TMessage[]);
       const before = command({ parentMessageId: 'p-report' });
 
       const { rerender } = render(tree(before, ctx));
-      expect(screen.queryByText(STARTED)).not.toBeInTheDocument();
+      expect(screen.getByTestId('message-render-body')).toHaveTextContent(DR_START_MARKER);
 
       rerender(tree({ ...before, drKind: 'start' }, ctx));
-      expect(screen.getByText(STARTED)).toBeInTheDocument();
+      expect(screen.queryByTestId('message-render-body')).not.toBeInTheDocument();
     });
 
-    it('a re-parented command finds its plan card', () => {
+    it('a re-parented command finds its plan card and hides', () => {
       const ctx = makeCtx([
         { messageId: 'p-report', drKind: 'report', isCreatedByUser: false },
         { messageId: 'p-plan', drKind: 'plan', isCreatedByUser: false },
@@ -321,11 +315,33 @@ describe('Deep Research command chip — both user-message render paths', () => 
       const before = command({ parentMessageId: 'p-report' });
 
       const { rerender } = render(tree(before, ctx));
-      expect(screen.queryByText(STARTED)).not.toBeInTheDocument();
+      expect(screen.getByTestId('message-render-body')).toHaveTextContent(DR_START_MARKER);
 
       rerender(tree({ ...before, parentMessageId: 'p-plan' }, ctx));
-      expect(screen.getByText(STARTED)).toBeInTheDocument();
+      expect(screen.queryByTestId('message-render-body')).not.toBeInTheDocument();
     });
+  });
+
+  it('keeps the sibling switcher on a hidden command row that HAS siblings', () => {
+    /* r25a review: hiding the row wholesale took SubRow/SiblingSwitch with it,
+     * so a branch created by an older edit-and-resend became unreachable. */
+    render(
+      <RecoilRoot>
+        <MessagesViewContext.Provider value={makeCtx([])}>
+          <MultiMessage
+            messageId={null}
+            messagesTree={[
+              command({ drKind: 'start', messageId: 'm1' }),
+              command({ drKind: 'start', messageId: 'm2', text: 'вторая ветка' }),
+            ]}
+            currentEditId={null}
+            setCurrentEditId={setCurrentEditId}
+          />
+        </MessagesViewContext.Provider>
+      </RecoilRoot>,
+    );
+    expect(screen.getByTestId('sibling-switch')).toBeInTheDocument();
+    expect(screen.queryByTestId('message-render-body')).not.toBeInTheDocument();
   });
 
   it('leaves an ASSISTANT message with the same text alone', () => {
@@ -333,6 +349,6 @@ describe('Deep Research command chip — both user-message render paths', () => 
       drKind: 'plan',
       isCreatedByUser: false,
     });
-    expect(screen.queryByText(STARTED)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('message-render-body')).toBeInTheDocument();
   });
 });
