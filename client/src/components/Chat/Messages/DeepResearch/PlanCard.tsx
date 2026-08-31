@@ -6,11 +6,12 @@ import type { TMessage } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { ApprovalCardStrings } from '~/components/Chat/Cards/ApprovalCard';
 import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/ApprovalCard';
+import RunFooter, { runActiveIndex, runStatusSteps } from './RunFooter';
 import { drProgressByConvoId } from '~/store/deepResearch';
 import { useGetStartupConfig } from '~/data-provider';
-import { Square, WifiOff } from '~/components/icons';
 import { useSubmitMessage } from '~/hooks/Messages';
 import { useChatContext } from '~/Providers';
+import { Square } from '~/components/icons';
 import { mainTextareaId } from '~/common';
 import { useLocalize } from '~/hooks';
 
@@ -94,7 +95,7 @@ export default function PlanCard({
   cancelled = false,
   isRunning = false,
   conversationId,
-  finished = false,
+  outcome,
 }: {
   message: TMessage;
   awaitingAction: boolean;
@@ -109,8 +110,10 @@ export default function PlanCard({
    *  every progress event (RunningSlot's own warning). */
   isRunning?: boolean;
   conversationId?: string | null;
-  /** The run under this plan ended with a report: every step reads done. */
-  finished?: boolean;
+  /** How the run under this plan ended: a report (every step reads done) or a
+   *  stop (the steps are NOT claimed done — the card says «Остановлено»).
+   *  Absent = it never ran, and the plan keeps its resting look. */
+  outcome?: 'report' | 'stopped';
 }) {
   const localize = useLocalize();
   const { showToast } = useToastContext();
@@ -270,65 +273,19 @@ export default function PlanCard({
    * ends with a report they all read done. A plan that never ran keeps the
    * resting look (no status at all), which is what the approval state is. */
   const planItems = useMemo(() => {
-    if (finished) {
+    if (outcome === 'report') {
       return steps.map((step, i) => ({ id: String(i), title: step, status: 'done' as const }));
     }
     if (running == null) {
       return steps.map((step, i) => ({ id: String(i), title: step }));
     }
-    const activeStep = Math.min(
-      Math.floor((running.progress ?? 0) * Math.max(steps.length, 1)),
-      Math.max(steps.length - 1, 0),
-    );
-    return steps.map((step, i) => {
-      let status: 'pending' | 'active' | 'done' = 'pending';
-      if (i < activeStep) {
-        status = 'done';
-      } else if (i === activeStep && running.stalled !== true) {
-        status = 'active';
-      }
-      return { id: String(i), title: step, status };
-    });
-  }, [steps, running, finished]);
+    return runStatusSteps(steps, running, runActiveIndex(running, steps.length));
+  }, [steps, running, outcome]);
 
   /* The run's own footer: what it is doing now, and how far along it is.
    * Offline replaces the action line and freezes everything — a parked run
    * must not look busy (review r2's invariant, kept from the split card). */
-  const runningFootnote =
-    running == null ? null : (
-      <div className="mt-1">
-        {running.stalled === true ? (
-          <div
-            role="status"
-            className="mb-2 flex min-h-5 items-center gap-1.5 text-xs text-text-tertiary"
-          >
-            <WifiOff className="size-3.5 shrink-0" aria-hidden="true" />
-            <span>{localize('com_ui_deep_research_offline')}</span>
-          </div>
-        ) : (
-          running.action && (
-            <div className="thinking-shimmer-paint mb-2 line-clamp-2 min-h-5 text-xs [overflow-wrap:anywhere]">
-              {running.action}
-            </div>
-          )
-        )}
-        <div
-          role="progressbar"
-          aria-label={localize('com_ui_deep_research')}
-          aria-valuenow={Math.max(0, Math.min(100, Math.round((running.progress ?? 0) * 100)))}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          className="h-1 w-full overflow-hidden rounded-full bg-surface-hover"
-        >
-          <div
-            className="h-full rounded-full bg-text-accent transition-[width] duration-500 ease-out"
-            style={{
-              width: `${Math.max(0, Math.min(100, Math.round((running.progress ?? 0) * 100)))}%`,
-            }}
-          />
-        </div>
-      </div>
-    );
+  const runningFootnote = running == null ? null : <RunFooter data={running} />;
 
   const controlsFootnote = showControls ? (
     <>
@@ -362,6 +319,14 @@ export default function PlanCard({
     headerAction = (
       <span data-testid="plan-cancelled" className="text-xs font-medium text-text-tertiary">
         {localize('com_ui_cards_cancelled')}
+      </span>
+    );
+  } else if (outcome === 'stopped') {
+    /* A stopped run must not read as «never started» — and its steps are NOT
+     * claimed done, because nobody knows how far it got (r26 review). */
+    headerAction = (
+      <span data-testid="plan-stopped" className="text-xs font-medium text-text-tertiary">
+        {localize('com_ui_deep_research_stopped')}
       </span>
     );
   }

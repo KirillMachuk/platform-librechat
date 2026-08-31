@@ -120,13 +120,56 @@ describe('PlanCard', () => {
     it('a finished run leaves every step done, with no Stop and no progress bar', () => {
       rtlRender(
         <RecoilRoot>
-          <PlanCard message={planMessage()} awaitingAction={false} finished />
+          <PlanCard message={planMessage()} awaitingAction={false} outcome="report" />
         </RecoilRoot>,
       );
       expect(screen.getByText('Собрать').closest('li')).toHaveAttribute('data-status', 'done');
       expect(screen.getByText('Сравнить').closest('li')).toHaveAttribute('data-status', 'done');
       expect(screen.queryByTestId('dr-stop')).toBeNull();
       expect(screen.queryByRole('progressbar')).toBeNull();
+    });
+
+    it('the running step shimmers, and is never hidden behind «Ещё N»', () => {
+      /* The plan's own well collapses past three steps; a step being worked
+       * on inside the hidden rest would freeze the card on a stale preview. */
+      const long =
+        '**План исследования:** Рынок CRM\n\n1. Шаг 1\n2. Шаг 2\n3. Шаг 3\n4. Шаг 4\n5. Шаг 5';
+      rtlRender(
+        <RecoilRoot
+          initializeState={({ set }) => {
+            set(drProgressByConvoId('c1'), {
+              phase: 'research',
+              steps: [],
+              action: 'Идёт',
+              searches: 1,
+              progress: 0.9,
+            } as never);
+          }}
+        >
+          <PlanCard
+            message={{ messageId: 'r9', text: long } as never}
+            awaitingAction={false}
+            isRunning
+            conversationId="c1"
+          />
+        </RecoilRoot>,
+      );
+      const active = screen.getByText('Шаг 5');
+      expect(active.closest('li')).toHaveAttribute('data-status', 'active');
+      expect(active.className).toContain('thinking-shimmer-paint');
+      expect(document.querySelector('.todoCollapsed')).toBeNull();
+    });
+
+    it('a STOPPED run says so, and does not claim the steps are done', () => {
+      /* Nobody knows how far it got, and «no status at all» would read as
+       * «never started» (r26 review). */
+      rtlRender(
+        <RecoilRoot>
+          <PlanCard message={planMessage()} awaitingAction={false} outcome="stopped" />
+        </RecoilRoot>,
+      );
+      expect(screen.getByTestId('plan-stopped')).toHaveTextContent('com_ui_deep_research_stopped');
+      expect(screen.getByText('Собрать').closest('li')).not.toHaveAttribute('data-status', 'done');
     });
 
     it('a plan that never ran keeps its resting look (no statuses at all)', () => {

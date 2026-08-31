@@ -152,6 +152,41 @@ const ContentRender = memo(function ContentRender({
    * that cancelled a plan. Read through the same optional messages view the
    * command rule uses, so it works on the share page too. */
   const { getMessages } = useOptionalMessagesOperations();
+  /**
+   * Does the live run belong to THIS plan? The active branch's tail must sit
+   * under this plan's start command.
+   *
+   * The obvious predicate — «has a start command AND is submitting» — is a
+   * tautology that never fires (r26 review): a plan with a start command has a
+   * child, so it is never the latest message, and the `isSubmitting` that
+   * reaches this component is already `isLatestMessage ? isSubmitting : false`.
+   * With the standalone running card stepped aside for plan runs, that left a
+   * multi-minute research drawing NOTHING. Liveness itself comes from the
+   * progress atom, which the card subscribes to and which is cleared the
+   * moment a run ends; this only answers WHICH plan owns it.
+   */
+  const isRunningPlan = useCallback(
+    (startCommandId?: string): boolean => {
+      if (startCommandId == null || latestMessageId == null) {
+        return false;
+      }
+      const list = getMessages();
+      if (list == null) {
+        return false;
+      }
+      let cursor = list.find((m) => m.messageId === latestMessageId);
+      for (let hops = 0; cursor != null && hops < 64; hops++) {
+        if (cursor.messageId === startCommandId) {
+          return true;
+        }
+        const parentId: string | null = cursor.parentMessageId ?? null;
+        cursor = parentId == null ? undefined : list.find((m) => m.messageId === parentId);
+      }
+      return false;
+    },
+    [latestMessageId, getMessages],
+  );
+
   const drCancelNotice = useMemo(() => {
     if (msg?.isCreatedByUser === true || (msg?.text ?? '') !== DR_CANCELLED_MESSAGE) {
       return false;
@@ -268,15 +303,21 @@ const ContentRender = memo(function ContentRender({
     const startCommand = children.find(
       (child) => child.drKind === 'start' || isDrStartCommand(child.text ?? ''),
     );
-    const finished = (startCommand?.children ?? []).some((child) => child.drKind === 'report');
+    const runReplies = startCommand?.children ?? [];
+    let outcome: 'report' | 'stopped' | undefined;
+    if (runReplies.some((child) => child.drKind === 'report')) {
+      outcome = 'report';
+    } else if (runReplies.some((child) => child.drKind === 'aborted')) {
+      outcome = 'stopped';
+    }
     drCard = (
       <PlanCard
         message={msg}
         awaitingAction={hasNoChildren && (isLast || isLatestMessage)}
         cancelled={cancelled}
-        isRunning={startCommand != null && isSubmitting}
+        isRunning={isRunningPlan(startCommand?.messageId)}
         conversationId={conversation?.conversationId}
-        finished={finished}
+        outcome={outcome}
       />
     );
   }
