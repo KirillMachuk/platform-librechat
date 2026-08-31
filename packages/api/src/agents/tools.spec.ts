@@ -49,6 +49,7 @@ import {
   isFileAuthoringToolDefinition,
   isCodeSessionToolName,
   registerAskUserTool,
+  AskUserToolDefinition,
 } from './tools';
 
 /** Portable ceiling for OpenAI-compatible tool description validators. */
@@ -619,6 +620,35 @@ describe('registerFileAuthoringTools', () => {
         parameters: { type: 'object', properties: {} } as LCTool['parameters'],
       }),
     ).toBe(false);
+  });
+});
+
+describe('AskUserToolDefinition description (r25 live acceptance)', () => {
+  /* Live acceptance on the stand found the MODEL writing bad questions into a
+   * correct card: «можно выбрать несколько» on a single-select card, ranges
+   * that overlap («до 5 / 5-15»), two subjects in one prompt with options
+   * answering only one of them, and a lead-in repeated on both sides of the
+   * card. The card cannot fix any of that — this description is the only place
+   * that teaches it, so these are the promises it must carry. */
+  const description = String(AskUserToolDefinition.description);
+
+  it('states that the card is single-choice', () => {
+    expect(description).toMatch(/SINGLE-CHOICE/);
+    expect(description).toMatch(/choose several|multiple answers/i);
+  });
+
+  it('demands one subject per question with same-axis options', () => {
+    expect(description).toMatch(/ONE thing/);
+    expect(description).toMatch(/different subject belongs to a different question/);
+  });
+
+  it('demands non-overlapping, gapless numeric ranges, by example', () => {
+    expect(description).toMatch(/must not overlap/);
+    expect(description).toMatch(/up to 5 \/ 6-15/);
+  });
+
+  it('forbids repeating the lead-in around the card', () => {
+    expect(description).toMatch(/do not repeat before the card/);
   });
 });
 

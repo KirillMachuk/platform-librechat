@@ -95,6 +95,34 @@ describe('ApprovalCard — questions variant', () => {
     expect(onApprove).toHaveBeenCalledWith({ answers: { q1: 'Первый', q2: 'В сейфе' } });
   });
 
+  it('Enter in «Другое…» ADVANCES when the question is not the last one', () => {
+    /* r25 acceptance (business-os-83): «Enter в Другое… не перелистывает».
+     * The last-question path is covered above; this is the non-last path. */
+    render(
+      <ApprovalCard
+        variant="questions"
+        strings={strings}
+        title="Вопросы"
+        approveLabel="Продолжить"
+        questions={[
+          { id: 'q1', prompt: 'Объём работ?', options: ['Косметика', 'Капитальный'] },
+          { id: 'q2', prompt: 'Бюджет?', options: ['До 5', 'Больше'] },
+          { id: 'q3', prompt: 'Сроки?', options: ['Месяц', 'Квартал'] },
+        ]}
+        onApprove={jest.fn()}
+      />,
+    );
+    expect(screen.getByLabelText('Вопрос 1 из 3')).toBeInTheDocument();
+    const custom = screen.getByLabelText('Свой ответ: Объём работ?');
+    fireEvent.click(custom);
+    fireEvent.change(custom, { target: { value: 'Только переговорная и кухня' } });
+    fireEvent.keyDown(custom, { key: 'Enter' });
+    act(() => {
+      jest.advanceTimersByTime(400);
+    });
+    expect(screen.getByLabelText('Вопрос 2 из 3')).toBeInTheDocument();
+  });
+
   it('Enter on a focused radio activates nothing card-wide (no stale submit) — xhigh review', () => {
     const { onApprove } = renderQuestions();
     fireEvent.click(screen.getByRole('radio', { name: /Первый/ }));
