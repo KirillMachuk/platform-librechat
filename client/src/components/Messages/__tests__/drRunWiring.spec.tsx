@@ -134,12 +134,19 @@ const renderTree = (opts: {
   snapshot?: unknown;
   runReply?: Partial<TMessage>;
   cancelInstead?: boolean;
-}) => {
-  const messagesTree = tree({
-    latestId: opts.latestId,
-    runReply: opts.runReply,
-    cancelInstead: opts.cancelInstead,
-  });
+}) =>
+  renderCustom(
+    tree({
+      latestId: opts.latestId,
+      runReply: opts.runReply,
+      cancelInstead: opts.cancelInstead,
+    }),
+    opts.latestId,
+    opts.snapshot,
+  );
+
+const renderCustom = (messagesTree: TMessage[], latestId: string, snapshot?: unknown) => {
+  const opts = { latestId, snapshot };
   const ctx = {
     conversation: { conversationId: CONVO },
     conversationId: CONVO,
@@ -237,6 +244,90 @@ describe('which plan card draws a live Deep Research run (r26 review)', () => {
     renderTree({ latestId: 'resp1', snapshot: { ...RUNNING, progress: 0.95, stepIndex: 0 } });
     expect(screen.getByText('Собрать').closest('li')).toHaveAttribute('data-status', 'active');
     expect(screen.getByText('Сравнить').closest('li')).not.toHaveAttribute('data-status', 'done');
+  });
+
+  it('a SECOND research does not also light up the first plan card (r27)', () => {
+    /* Stop → comment → re-plan → Start leaves the first plan's start command in
+     * the ancestry of the second run's tail. A walk that answered «is this
+     * start command anywhere above me» said yes to BOTH plans, so the old card
+     * drew the new run: its Stop, its bar, and its step index applied to a
+     * different list of steps. The nearest start command owns the run. */
+    const PLAN2 = '**План исследования:** Погода\n\n1. Нормы\n2. Температуры';
+    const node = (over: Record<string, unknown>) =>
+      ({ conversationId: CONVO, children: [], ...over }) as unknown as TMessage;
+    const reply2 = node({
+      messageId: 'resp2',
+      parentMessageId: 'start2',
+      isCreatedByUser: false,
+      text: '',
+      content: [],
+      depth: 5,
+    });
+    const start2 = node({
+      messageId: 'start2',
+      parentMessageId: 'plan2',
+      isCreatedByUser: true,
+      drKind: 'start',
+      text: 'Начать исследование',
+      depth: 4,
+      children: [reply2],
+    });
+    const plan2 = node({
+      messageId: 'plan2',
+      parentMessageId: 'aborted1',
+      isCreatedByUser: false,
+      drKind: 'plan',
+      text: PLAN2,
+      content: [{ type: 'text', text: PLAN2 }],
+      depth: 3,
+      children: [start2],
+    });
+    const aborted1 = node({
+      messageId: 'aborted1',
+      parentMessageId: 'start1',
+      isCreatedByUser: false,
+      drKind: 'aborted',
+      text: 'Исследование остановлено.',
+      content: [],
+      depth: 2,
+      children: [plan2],
+    });
+    const start1 = node({
+      messageId: 'start1',
+      parentMessageId: 'plan1',
+      isCreatedByUser: true,
+      drKind: 'start',
+      text: 'Начать исследование',
+      depth: 1,
+      children: [aborted1],
+    });
+    const messagesTree = [
+      node({
+        messageId: 'plan1',
+        parentMessageId: null,
+        isCreatedByUser: false,
+        drKind: 'plan',
+        text: PLAN_TEXT,
+        content: [{ type: 'text', text: PLAN_TEXT }],
+        depth: 0,
+        children: [start1],
+      }),
+    ];
+    renderCustom(messagesTree, 'resp2', {
+      phase: 'research',
+      steps: ['Нормы', 'Температуры'],
+      action: 'Исследует',
+      searches: 1,
+      progress: 0.5,
+      stepIndex: 1,
+    });
+
+    /* The SECOND plan runs: its own second step is active. */
+    expect(screen.getByText('Температуры').closest('li')).toHaveAttribute('data-status', 'active');
+    /* The FIRST plan is done with — it wears «Остановлено», not a live run. */
+    expect(screen.getByText('Собрать').closest('li')).not.toHaveAttribute('data-status', 'done');
+    expect(screen.getByTestId('plan-stopped')).toBeInTheDocument();
+    expect(screen.getAllByTestId('dr-stop')).toHaveLength(1);
   });
 
   it('with no run in flight the same card is just a plan', () => {

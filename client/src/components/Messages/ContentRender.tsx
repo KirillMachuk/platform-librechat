@@ -178,8 +178,15 @@ const ContentRender = memo(function ContentRender({
       }
       let cursor = list.find((m) => m.messageId === latestMessageId);
       for (let hops = 0; cursor != null && hops < 64; hops++) {
-        if (cursor.messageId === startCommandId) {
-          return true;
+        /* The NEAREST start command on the way up owns the live run, and only
+         * it. A branch can hold several: Stop → comment → re-plan → Start
+         * leaves the first plan's start command in the ancestry of the second
+         * run's tail, so a plain "is it anywhere above me" walk lit BOTH plan
+         * cards — the old one drawing the new run's step index against its own,
+         * different steps. Stopping at the first start command answers the
+         * question that was actually asked (r27). */
+        if (cursor.drKind === 'start') {
+          return cursor.messageId === startCommandId;
         }
         const parentId: string | null = cursor.parentMessageId ?? null;
         cursor = parentId == null ? undefined : list.find((m) => m.messageId === parentId);
