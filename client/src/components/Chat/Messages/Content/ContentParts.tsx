@@ -1,5 +1,5 @@
 import { memo, useRef, useMemo, useCallback } from 'react';
-import { ContentTypes } from 'librechat-data-provider';
+import { ContentTypes, ASK_USER_TOOL } from 'librechat-data-provider';
 import type {
   TMessageContentParts,
   SearchResultData,
@@ -191,8 +191,12 @@ const ContentParts = memo(function ContentParts({
   const reasoningTimingRef = useRef(new Map<number, { start: number; last: number }>());
   /* ask_user answers picked while the tail text still streams (r25) — the
    * finalization remount would wipe the card's local state at exactly the
-   * moment «Продолжить» arms. Same survival rules as the maps above. */
-  const askAnswersRef = useRef(new Map<number, Record<string, string>>());
+   * moment «Продолжить» arms. Keyed by the TOOL CALL id, not by part index:
+   * the streaming message can carry an empty text placeholder the persisted
+   * one does not, so the card's index shifts across finalization and an
+   * index-keyed entry is silently missed — which is exactly how the owner
+   * lost a filled-in card (r26). The tool call id survives the swap. */
+  const askAnswersRef = useRef(new Map<string, Record<string, string>>());
   const fallbackScopeRef = useRef({ messageId, scope: 0 });
   if (fallbackScopeRef.current.messageId !== messageId) {
     /* A provisional id (trailing '_', see buildCreatedInitialResponse) swaps
@@ -260,12 +264,12 @@ const ContentParts = memo(function ContentParts({
     return timing == null ? undefined : timing.last - timing.start;
   }, []);
 
-  const askAnswersSettersRef = useRef(new Map<number, (answers: Record<string, string>) => void>());
-  const getAskAnswersSetter = useCallback((idx: number) => {
-    let setter = askAnswersSettersRef.current.get(idx);
+  const askAnswersSettersRef = useRef(new Map<string, (answers: Record<string, string>) => void>());
+  const getAskAnswersSetter = useCallback((key: string) => {
+    let setter = askAnswersSettersRef.current.get(key);
     if (!setter) {
-      setter = (answers: Record<string, string>) => askAnswersRef.current.set(idx, answers);
-      askAnswersSettersRef.current.set(idx, setter);
+      setter = (answers: Record<string, string>) => askAnswersRef.current.set(key, answers);
+      askAnswersSettersRef.current.set(key, setter);
     }
     return setter;
   }, []);
@@ -381,8 +385,8 @@ const ContentParts = memo(function ContentParts({
           onReasoningExpandedChange={getReasoningExpandedSetter(idx)}
           reasoningDurationMs={getReasoningDurationMs(idx)}
           onReasoningStreamTick={getReasoningStreamTick(idx)}
-          askAnswersInitial={askAnswersRef.current.get(idx)}
-          onAskAnswersChange={getAskAnswersSetter(idx)}
+          askAnswersInitial={askAnswersRef.current.get(getToolCallId(part) || String(idx))}
+          onAskAnswersChange={getAskAnswersSetter(getToolCallId(part) || String(idx))}
         />
       );
     },
@@ -425,8 +429,8 @@ const ContentParts = memo(function ContentParts({
           onReasoningExpandedChange={getReasoningExpandedSetter(idx)}
           reasoningDurationMs={getReasoningDurationMs(idx)}
           onReasoningStreamTick={getReasoningStreamTick(idx)}
-          askAnswersInitial={askAnswersRef.current.get(idx)}
-          onAskAnswersChange={getAskAnswersSetter(idx)}
+          askAnswersInitial={askAnswersRef.current.get(getToolCallId(part) || String(idx))}
+          onAskAnswersChange={getAskAnswersSetter(getToolCallId(part) || String(idx))}
         />
       );
     },
@@ -451,10 +455,26 @@ const ContentParts = memo(function ContentParts({
       return [];
     }
     const result: PartWithIndex[] = [];
+    /* A questions card IS the message (owner r26): the model's closing
+     * sentence under it — «Уточнил вопросы, жду ваших ответов» — says what
+     * the card already says, and the tool description now asks for silence.
+     * Models improvise anyway, so the client makes the promise true: prose
+     * after an ask_user call in the SAME message is not drawn. Everything
+     * before the card, and every other part type, renders as usual. */
+    let askUserSeen = false;
     content.forEach((part, idx) => {
-      if (part) {
-        result.push({ part, idx });
+      if (!part) {
+        return;
       }
+      if (
+        part.type === ContentTypes.TOOL_CALL &&
+        (part[ContentTypes.TOOL_CALL] as Agents.ToolCall | undefined)?.name === ASK_USER_TOOL
+      ) {
+        askUserSeen = true;
+      } else if (askUserSeen && part.type === ContentTypes.TEXT) {
+        return;
+      }
+      result.push({ part, idx });
     });
     return result;
   }, [content]);
