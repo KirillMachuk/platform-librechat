@@ -1,10 +1,11 @@
-import { Progress, TooltipAnchor } from '@librechat/client';
+import { useMemo } from 'react';
+import type { ApprovalCardStrings, ApprovalPlanStep } from '~/components/Chat/Cards/ApprovalCard';
 import type { TDeepResearchProgress } from '~/store';
 import type { TranslationKeys } from '~/hooks';
-import { Check, Square, Loader2, WifiOff } from '~/components/icons';
+import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/ApprovalCard';
+import { Square, WifiOff } from '~/components/icons';
 import { useChatContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
-import { cn } from '~/utils';
 
 /**
  * The three research phases, shown as a generic checklist when a run has no approved plan
@@ -22,113 +23,128 @@ const PHASE_STEPS: { phase: string; key: TranslationKeys }[] = [
 ];
 
 /**
- * The live Deep Research RUNNING card (task #21): the plan steps as a checklist that
- * advances with progress, the current action line, a progress bar, and a Stop button.
- * Driven entirely by the latest `dr_progress` snapshot (proportional — the active step
- * is derived from the coarse progress fraction). This is what replaces the ~6 minutes of
- * silence that read as "hung". Stop reuses the standard generation abort.
+ * The live Deep Research RUNNING card (task #21; r25 package Б).
  *
- * Review r2: `stalled` (offline park / reconnect backoff) swaps the action line for a
- * "waiting for network" notice and freezes the busy animations — a card with no
- * connection must not pulse as if the run were healthy. Animations also respect
- * prefers-reduced-motion, and the Stop control carries a ≥40px hit area (the visual
- * circle stays small; the tap target does not).
+ * Since r25 it renders through the SAME vendored frame as the plan card the
+ * user approved (owner: the two looked like different products): the plan's
+ * own steps carry live statuses — check / arrow with a shimmering label /
+ * dashed circle — the Stop control sits in the header where the plan card's ✕
+ * was, and the current action line plus the progress bar ride the footnote.
+ * A step that is being worked on is never hidden behind «Ещё N» (the card
+ * auto-expands for it).
+ *
+ * Driven entirely by the latest `dr_progress` snapshot. `stalled` (offline
+ * park / reconnect backoff) swaps the action line for a "waiting for network"
+ * notice and freezes the busy animations — a card with no connection must not
+ * pulse as if the run were healthy (review r2). The Stop control keeps its
+ * ≥40px hit area; the visual circle stays small.
  */
 export default function ProgressCard({ data }: { data: TDeepResearchProgress }) {
   const localize = useLocalize();
   const { stopGenerating } = useChatContext();
   const stalled = data.stalled === true;
   const pct = Math.max(0, Math.min(100, Math.round((data.progress ?? 0) * 100)));
-  const planSteps = data.steps ?? [];
-  const hasPlan = planSteps.length > 0;
-  const steps = hasPlan ? planSteps : PHASE_STEPS.map((p) => localize(p.key));
-  const activeStep = hasPlan
-    ? Math.min(Math.floor((data.progress ?? 0) * planSteps.length), planSteps.length - 1)
-    : Math.max(
-        0,
-        PHASE_STEPS.findIndex((p) => p.phase === data.phase),
-      );
+  const steps: ApprovalPlanStep[] = useMemo(() => {
+    /* Derived inside the memo on purpose: `data.steps ?? []` is a fresh array
+     * on every dr_progress snapshot, and as a dependency it would rebuild this
+     * list on every render (CI lint caught it). */
+    const planSteps = data.steps ?? [];
+    const hasPlan = planSteps.length > 0;
+    const activeStep = hasPlan
+      ? Math.min(Math.floor((data.progress ?? 0) * planSteps.length), planSteps.length - 1)
+      : Math.max(
+          0,
+          PHASE_STEPS.findIndex((p) => p.phase === data.phase),
+        );
+    const titles = hasPlan ? planSteps : PHASE_STEPS.map((p) => localize(p.key));
+    /* Offline: the run is parked, so nothing may look busy — the step keeps
+     * its place but stops being «active» (review r2's invariant, which the
+     * frame's shimmer would otherwise have broken silently). */
+    return titles.map((title, i) => {
+      let status: ApprovalPlanStep['status'] = 'pending';
+      if (i < activeStep) {
+        status = 'done';
+      } else if (i === activeStep && data.stalled !== true) {
+        status = 'active';
+      }
+      return { id: String(i), title, status };
+    });
+  }, [data.steps, data.progress, data.phase, data.stalled, localize]);
+
+  const cardStrings: ApprovalCardStrings = useMemo(
+    () => ({
+      otherPlaceholder: localize('com_ui_cards_other_placeholder'),
+      moreLabel: (n) => localize('com_ui_cards_more', { 0: String(n) }),
+      lessLabel: localize('com_ui_cards_less'),
+      autoApproveBefore: localize('com_ui_cards_autostart_before'),
+      autoApproveAfter: localize('com_ui_cards_autostart_after'),
+      autoApproveCancelTip: localize('com_ui_cards_cancel_tip'),
+      prevQuestion: localize('com_ui_cards_prev_question'),
+      nextQuestion: localize('com_ui_cards_next_question'),
+      cancelAutoApprove: localize('com_ui_cards_cancel_autostart'),
+      questionOf: (c, t) => localize('com_ui_cards_question_of', { 0: String(c), 1: String(t) }),
+      customAnswerFor: (prompt) => localize('com_ui_cards_custom_answer_for', { 0: prompt }),
+    }),
+    [localize],
+  );
 
   return (
-    <div className="my-2 w-full overflow-hidden rounded-2xl border border-border-light bg-surface-primary-alt p-4">
-      {steps.length > 0 && (
-        <ol className="mb-3 space-y-2.5">
-          {steps.map((step, i) => {
-            const done = i < activeStep;
-            const active = i === activeStep;
-            return (
-              <li
-                key={i}
-                aria-current={active ? 'step' : undefined}
-                className="flex items-start gap-2.5 text-sm"
+    <div className="my-2 w-full">
+      <ApprovalCard
+        variant="plan"
+        strings={cardStrings}
+        title={localize('com_ui_deep_research')}
+        todoTitle={localize('com_ui_deep_research_steps')}
+        plan={steps}
+        showActions={false}
+        headerAction={
+          /* The frame's own header slot — same 24px box and 12px inset as the
+           * plan card's ✕, which is the whole point of «two cards, one
+           * product» (review). It keeps the ≥44px tap height via tap-target. */
+          <ApprovalCardHeaderAction
+            label={localize('com_ui_stop')}
+            onClick={stopGenerating}
+            testId="dr-stop"
+          >
+            <Square className="size-3 fill-current" aria-hidden="true" />
+          </ApprovalCardHeaderAction>
+        }
+        footnote={
+          <div className="mt-1">
+            {stalled ? (
+              <div
+                role="status"
+                className="mb-2 flex min-h-5 items-center gap-1.5 text-xs text-text-tertiary"
               >
-                <span
-                  className="mt-0.5 flex size-4 shrink-0 items-center justify-center"
-                  aria-hidden="true"
-                >
-                  {done && <Check className="size-4 text-text-primary" />}
-                  {active && (
-                    <Loader2
-                      className={cn(
-                        'size-3.5 text-text-secondary',
-                        !stalled && 'animate-spin motion-reduce:animate-none',
-                      )}
-                    />
-                  )}
-                  {!done && !active && (
-                    <span className="size-3 rounded-full border border-border-medium" />
-                  )}
-                </span>
-                <span
-                  className={cn(
-                    'min-w-0 [overflow-wrap:anywhere]',
-                    done || active ? 'text-text-primary' : 'text-text-tertiary',
-                  )}
-                >
-                  {step}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
-      )}
-      {stalled ? (
-        <div
-          role="status"
-          className="mb-3 flex min-h-5 items-center gap-1.5 text-sm text-text-secondary"
-        >
-          <WifiOff className="size-3.5 shrink-0" aria-hidden="true" />
-          <span>{localize('com_ui_deep_research_offline')}</span>
-        </div>
-      ) : (
-        data.action && (
-          <div className="mb-3 line-clamp-2 min-h-5 animate-pulse text-sm text-text-secondary [overflow-wrap:anywhere] motion-reduce:animate-none">
-            {data.action}
-          </div>
-        )
-      )}
-      <div className="flex items-center gap-3">
-        <Progress
-          value={pct}
-          aria-label={localize('com_ui_deep_research')}
-          className="h-1.5 flex-1"
-        />
-        <TooltipAnchor
-          description={localize('com_ui_stop')}
-          render={
-            <button
-              type="button"
-              onClick={stopGenerating}
-              aria-label={localize('com_ui_stop')}
-              className="group -m-1.5 flex size-10 shrink-0 items-center justify-center"
+                <WifiOff className="size-3.5 shrink-0" aria-hidden="true" />
+                <span>{localize('com_ui_deep_research_offline')}</span>
+              </div>
+            ) : (
+              data.action && (
+                /* The paint-only shimmer: the label utility's inline-block
+                 * beat `line-clamp-2` by source order and flattened this to a
+                 * single clipped row (r25 package Б review). */
+                <div className="thinking-shimmer-paint mb-2 line-clamp-2 min-h-5 text-xs [overflow-wrap:anywhere]">
+                  {data.action}
+                </div>
+              )
+            )}
+            <div
+              role="progressbar"
+              aria-label={localize('com_ui_deep_research')}
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              className="h-1 w-full overflow-hidden rounded-full bg-surface-hover"
             >
-              <span className="flex size-7 items-center justify-center rounded-full border border-border-medium text-text-secondary transition-colors group-hover:bg-surface-hover">
-                <Square className="size-3 fill-current" />
-              </span>
-            </button>
-          }
-        />
-      </div>
+              <div
+                className="h-full rounded-full bg-text-accent transition-[width] duration-500 ease-out"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+        }
+      />
     </div>
   );
 }

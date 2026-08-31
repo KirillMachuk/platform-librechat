@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
+  Check,
   ChevronDown,
   ChevronUp,
+  CircleArrowRight,
   CornerDownLeft,
   ListChecks,
   ListTodo,
@@ -40,6 +42,10 @@ export interface ApprovalQuestion {
 export interface ApprovalPlanStep {
   id: string;
   title: string;
+  /** Live status while a plan RUNS (r25 package Б): the dashed circle is the
+   *  plan's own resting state, the arrow marks the step being worked on (its
+   *  label carries the platform shimmer), the check marks a finished one. */
+  status?: 'pending' | 'active' | 'done';
 }
 
 export interface ApprovalCardStrings {
@@ -134,6 +140,16 @@ function RollingDigits({ value }: { value: string }) {
   );
 }
 
+function TodoStatusIcon({ status }: { status?: ApprovalPlanStep['status'] }) {
+  if (status === 'done') {
+    return <Check className={styles.todoIcon} aria-hidden />;
+  }
+  if (status === 'active') {
+    return <CircleArrowRight className={styles.todoIcon} aria-hidden />;
+  }
+  return <TodoDashedIcon />;
+}
+
 function TodoDashedIcon() {
   const dots = 12;
   const dash = 0.022;
@@ -161,16 +177,19 @@ export function ApprovalCardHeaderAction({
   label,
   onClick,
   children,
+  testId,
 }: {
   label: string;
   onClick: () => void;
   children?: React.ReactNode;
+  testId?: string;
 }) {
   return (
     <button
       type="button"
       className={`${styles.headAction} tap-target`}
       aria-label={label}
+      data-testid={testId}
       onClick={(e) => {
         e.preventDefault();
         onClick();
@@ -185,7 +204,8 @@ export interface ApprovalCardProps {
   variant: ApprovalVariant;
   strings: ApprovalCardStrings;
   title: string;
-  approveLabel: string;
+  /** Absent on a card that shows no actions (the running research card). */
+  approveLabel?: string;
   secondaryLabel?: string;
   questions?: ApprovalQuestion[];
   command?: string;
@@ -280,7 +300,11 @@ export function ApprovalCard({
     return seeded;
   });
   const [step, setStep] = useState(0);
-  const [planExpanded, setPlanExpanded] = useState(false);
+  /* Tri-state: null = nobody has decided, so the card decides (a running step
+   * in the hidden rest force-opens the well). An explicit click always wins —
+   * with a plain boolean the toggle went dead during a run: it flipped its own
+   * caption while auto-expand kept the rows open (r25 package Б review). */
+  const [planExpanded, setPlanExpanded] = useState<boolean | null>(null);
   const autoApproveActive = variant === 'plan' && autoApprove != null && autoApprove.secsLeft > 0;
   /* The fade-out keeps showing the LAST ticking frame (the original froze
    * the pie too instead of snapping to zero). */
@@ -393,7 +417,10 @@ export function ApprovalCard({
   const planPreview = plan.slice(0, previewCount);
   const planRest = plan.slice(previewCount);
   const hasPlanMore = planRest.length > 0;
-  const showPlanRest = planExpanded || !hasPlanMore;
+  /* A step being worked on must never sit inside the collapsed well — the card
+   * would show a frozen preview while the run moved on (r25 package Б). */
+  const activeHidden = planRest.some((stepItem) => stepItem.status === 'active');
+  const showPlanRest = planExpanded ?? (activeHidden || !hasPlanMore);
 
   const canContinue = variant !== 'questions' || allAnswered;
 
@@ -710,11 +737,24 @@ export function ApprovalCard({
               </div>
               <ul className={styles.todoList}>
                 {planPreview.map((stepItem) => (
-                  <li key={stepItem.id} className={styles.todoItem}>
+                  <li
+                    key={stepItem.id}
+                    className={styles.todoItem}
+                    data-status={stepItem.status}
+                    aria-current={stepItem.status === 'active' ? 'step' : undefined}
+                  >
                     <span className={styles.todoIconWrap}>
-                      <TodoDashedIcon />
+                      <TodoStatusIcon status={stepItem.status} />
                     </span>
-                    <span className={styles.todoLabel}>{stepItem.title}</span>
+                    <span
+                      className={
+                        stepItem.status === 'active'
+                          ? `${styles.todoLabel} thinking-shimmer-paint`
+                          : styles.todoLabel
+                      }
+                    >
+                      {stepItem.title}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -727,11 +767,24 @@ export function ApprovalCard({
                       <div className={styles.todoRest}>
                         <ul className={`${styles.todoList} ${styles.todoListFlush}`}>
                           {planRest.map((stepItem) => (
-                            <li key={stepItem.id} className={styles.todoItem}>
+                            <li
+                              key={stepItem.id}
+                              className={styles.todoItem}
+                              data-status={stepItem.status}
+                              aria-current={stepItem.status === 'active' ? 'step' : undefined}
+                            >
                               <span className={styles.todoIconWrap}>
-                                <TodoDashedIcon />
+                                <TodoStatusIcon status={stepItem.status} />
                               </span>
-                              <span className={styles.todoLabel}>{stepItem.title}</span>
+                              <span
+                                className={
+                                  stepItem.status === 'active'
+                                    ? `${styles.todoLabel} thinking-shimmer-paint`
+                                    : styles.todoLabel
+                                }
+                              >
+                                {stepItem.title}
+                              </span>
                             </li>
                           ))}
                         </ul>
@@ -741,15 +794,19 @@ export function ApprovalCard({
                   <button
                     type="button"
                     className={styles.todoMore}
-                    aria-expanded={planExpanded}
+                    /* What is SHOWN, not what the user last clicked: a running
+                     * step force-opens the well (r25 package Б), and reporting
+                     * the stale user flag would announce «collapsed» over
+                     * visible rows. */
+                    aria-expanded={showPlanRest}
                     onClick={(e) => {
                       e.preventDefault();
-                      setPlanExpanded((open) => !open);
+                      setPlanExpanded(!showPlanRest);
                     }}
                   >
                     <span className={styles.todoMoreIcon} aria-hidden>
                       <svg className={styles.todoMoreGlyph} viewBox="0 0 24 24" aria-hidden>
-                        {planExpanded ? (
+                        {showPlanRest ? (
                           <rect
                             x="4.75"
                             y="11.25"
@@ -767,7 +824,7 @@ export function ApprovalCard({
                         )}
                       </svg>
                     </span>
-                    {planExpanded ? strings.lessLabel : strings.moreLabel(planRest.length)}
+                    {showPlanRest ? strings.lessLabel : strings.moreLabel(planRest.length)}
                   </button>
                 </>
               )}

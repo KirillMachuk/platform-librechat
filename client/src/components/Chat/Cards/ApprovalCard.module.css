@@ -355,6 +355,28 @@
   font-weight: 400;
   color: var(--text-tertiary);
 }
+/* Running plan (r25 package Б): a finished step reads as settled ink, the one
+ * being worked on lifts to full contrast (its label also carries the platform
+ * shimmer), everything ahead stays the plan's own resting tertiary. */
+.todoItem[data-status='done'] .todoIcon,
+.todoItem[data-status='done'] .todoLabel {
+  color: var(--text-secondary);
+}
+.todoItem[data-status='active'] .todoIcon {
+  color: var(--text-primary);
+}
+/* NO color here on purpose: the running step's label is painted by the
+ * shimmer, and a component rule of higher specificity would repaint the
+ * glyphs opaque and hide the gradient underneath (r25 package Б review). */
+.todoItem[data-status='active'] .todoLabel {
+  font-weight: 500;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* The shimmer is off here, so the step needs its own contrast back. */
+  .todoItem[data-status='active'] .todoLabel {
+    color: var(--text-primary);
+  }
+}
 .todoCollapsible {
   display: grid;
   grid-template-rows: 1fr;
