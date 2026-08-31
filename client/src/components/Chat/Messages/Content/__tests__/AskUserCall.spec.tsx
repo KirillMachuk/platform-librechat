@@ -1,4 +1,7 @@
+import { buildAskAnswersMessage } from 'librechat-data-provider';
 import { render, screen, fireEvent, act } from '@testing-library/react';
+import type { MessagesViewContextValue } from '~/Providers/MessagesViewContext';
+import { MessagesViewContext } from '~/Providers/MessagesViewContext';
 import { MessageContext } from '~/Providers/MessageContext';
 import { ChatContext } from '~/Providers/ChatContext';
 import AskUserCall from '../Parts/AskUserCall';
@@ -155,6 +158,74 @@ describe('AskUserCall (interactive cards К3 + r25)', () => {
     );
     expect(screen.getByTestId('ask-user-collapsed')).toBeInTheDocument();
     expect(mockSubmit).not.toHaveBeenCalled();
+  });
+
+  describe('an answered card still SHOWS what was answered (r25 acceptance)', () => {
+    /* The regression this fixes: folding mounted a fresh card, so the chosen
+     * option lost its mark, «Другое…» came back empty, and a screen reader
+     * announced every option as not-checked. */
+    const QUESTIONS = [
+      { id: 'q1', prompt: 'Какой формат?', options: ['Сводка', 'Отчёт'] },
+      { id: 'q2', prompt: 'Период?', options: ['Месяц', 'Год'] },
+    ];
+
+    const withAnswerMessage = (answers: Record<string, string>) => {
+      const text = buildAskAnswersMessage(QUESTIONS, answers);
+      const messages = [
+        { messageId: 'answer-1', parentMessageId: 'm1', isCreatedByUser: true, text },
+      ];
+      return {
+        getMessages: () => messages,
+      } as unknown as MessagesViewContextValue;
+    };
+
+    const renderFolded = (
+      ctx: MessagesViewContextValue | undefined,
+      extras: { askAnswersInitial?: Record<string, string> } = {},
+    ) => {
+      const tree = (
+        <MessageContext.Provider
+          value={{
+            messageId: 'm1',
+            isExpanded: true,
+            isSubmitting: false,
+            isLatestMessage: false,
+            askAnswersInitial: extras.askAnswersInitial,
+          }}
+        >
+          <AskUserCall args={ARGS} />
+        </MessageContext.Provider>
+      );
+      return render(
+        ctx ? (
+          <MessagesViewContext.Provider value={ctx}>{tree}</MessagesViewContext.Provider>
+        ) : (
+          tree
+        ),
+      );
+    };
+
+    it('restores the chosen option from the answers MESSAGE (survives a reload)', () => {
+      renderFolded(withAnswerMessage({ q1: 'Отчёт', q2: 'Месяц' }));
+      fireEvent.click(screen.getByRole('button', { expanded: false }));
+      expect(screen.getByRole('radio', { name: /Отчёт/ })).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByRole('radio', { name: /Сводка/ })).toHaveAttribute(
+        'aria-checked',
+        'false',
+      );
+    });
+
+    it('restores a free-text answer into «Другое…» instead of an empty field', () => {
+      renderFolded(withAnswerMessage({ q1: 'Свой вариант ответа', q2: 'Месяц' }));
+      fireEvent.click(screen.getByRole('button', { expanded: false }));
+      expect(screen.getByDisplayValue('Свой вариант ответа')).toBeInTheDocument();
+    });
+
+    it('falls back to the in-session draft when no answers message is around', () => {
+      renderFolded(undefined, { askAnswersInitial: { q1: 'Отчёт', q2: 'Год' } });
+      fireEvent.click(screen.getByRole('button', { expanded: false }));
+      expect(screen.getByRole('radio', { name: /Отчёт/ })).toHaveAttribute('aria-checked', 'true');
+    });
   });
 
   it('renders nothing while the args are still streaming', () => {
