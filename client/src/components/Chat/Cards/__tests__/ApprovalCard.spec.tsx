@@ -203,22 +203,27 @@ describe('ApprovalCard — the questions group behaves like a radio group (r25 a
     expect(screen.getByRole('radio', { name: /Первый/ })).toHaveFocus();
   });
 
-  it('an arrow key does not leak to the card-level Enter/submit handler', () => {
-    const onApprove = jest.fn();
+  it('an arrow key does not escape the card (stopPropagation, not just a no-op)', () => {
+    /* The previous version asserted that onApprove was not called, which was
+     * true with or without stopPropagation — the mutation survived (r25c
+     * review). This watches the event itself leave the card. */
+    const onOuterKeyDown = jest.fn();
     render(
-      <ApprovalCard
-        variant="questions"
-        strings={strings}
-        title="Вопросы"
-        approveLabel="Продолжить"
-        questions={QUESTIONS}
-        onApprove={onApprove}
-      />,
+      <div onKeyDown={onOuterKeyDown}>
+        <ApprovalCard
+          variant="questions"
+          strings={strings}
+          title="Вопросы"
+          approveLabel="Продолжить"
+          questions={QUESTIONS}
+          onApprove={jest.fn()}
+        />
+      </div>,
     );
     const first = screen.getByRole('radio', { name: /Первый/ });
     first.focus();
     fireEvent.keyDown(first, { key: 'ArrowDown' });
-    expect(onApprove).not.toHaveBeenCalled();
+    expect(onOuterKeyDown).not.toHaveBeenCalled();
   });
 });
 

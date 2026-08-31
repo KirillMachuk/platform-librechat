@@ -433,7 +433,7 @@ export const AskUserToolDefinition = Object.freeze({
     'never "up to 5 / 5-15 / 15-50".',
     'Never restate the questions in your message text, and do not repeat before the card what you will',
     'say after it. After calling this tool, END your turn with at most one short sentence; the answers',
-    'arrive as the next user message in the form "Ответы на вопросы: 1) question - answer ...".',
+    'arrive as the next user message in the form "Ответы на вопросы: 1) question — answer ...".',
     'Do not use this tool for rhetorical or trivial questions, and never call it twice in one turn.',
   ].join(' '),
   parameters: {
