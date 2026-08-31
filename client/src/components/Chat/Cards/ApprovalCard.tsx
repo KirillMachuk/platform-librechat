@@ -183,7 +183,9 @@ function TodoDashedIcon() {
 }
 
 /** Header icon button in the original's headAction style — К2 passes the
- *  cancel ✕ through `headerAction` wrapped in this. */
+ *  cancel ✕ through `headerAction` wrapped in this. The button carries no
+ *  caption, so `label` is both its accessible name and the visible plate the
+ *  card shows on hover/focus (owner r27). */
 export function ApprovalCardHeaderAction({
   label,
   onClick,
@@ -196,18 +198,20 @@ export function ApprovalCardHeaderAction({
   testId?: string;
 }) {
   return (
-    <button
-      type="button"
-      className={`${styles.headAction} tap-target`}
-      aria-label={label}
-      data-testid={testId}
-      onClick={(e) => {
-        e.preventDefault();
-        onClick();
-      }}
-    >
-      {children ?? <X className={styles.headActionIcon} aria-hidden />}
-    </button>
+    <span className={styles.headActionTip} data-tip={label}>
+      <button
+        type="button"
+        className={`${styles.headAction} tap-target`}
+        aria-label={label}
+        data-testid={testId}
+        onClick={(e) => {
+          e.preventDefault();
+          onClick();
+        }}
+      >
+        {children ?? <X className={styles.headActionIcon} aria-hidden />}
+      </button>
+    </span>
   );
 }
 
