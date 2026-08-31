@@ -647,8 +647,12 @@ describe('AskUserToolDefinition description (r25 live acceptance)', () => {
     expect(description).toMatch(/up to 5 \/ 6-15/);
   });
 
-  it('forbids repeating the lead-in around the card', () => {
-    expect(description).toMatch(/do not repeat before the card/);
+  it('asks for silence after the call — the card is the whole message (r26)', () => {
+    /* The owner does not want a closing sentence under the card, and the
+     * client hides one anyway; the description must not ask for it either. */
+    expect(description).toMatch(/write NOTHING after the call/);
+    expect(description).toMatch(/END your turn immediately/);
+    expect(description).not.toMatch(/at most one short sentence/);
   });
 });
 
