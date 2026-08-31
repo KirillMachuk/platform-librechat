@@ -66,7 +66,12 @@ describe('ProgressCard (r25: the plan card frame, running)', () => {
   });
 
   it('never hides the running step behind «Ещё N» (preview is 3)', () => {
-    render(
+    /* The collapsed well keeps its rows in the DOM (grid-rows collapse), so
+     * `toBeVisible()` cannot see the difference in jsdom — a mutation proved
+     * that assertion green with auto-expand removed. The honest observable is
+     * the well's own state: the collapsed class is gone and the toggle
+     * announces itself open. */
+    const { container } = render(
       <ProgressCard
         data={snapshot({
           steps: ['Шаг 1', 'Шаг 2', 'Шаг 3', 'Шаг 4', 'Шаг 5'],
@@ -75,7 +80,30 @@ describe('ProgressCard (r25: the plan card frame, running)', () => {
       />,
     );
     expect(rowOf('Шаг 5')).toHaveAttribute('data-status', 'active');
-    expect(screen.getByText('Шаг 5')).toBeVisible();
+    expect(container.querySelector('.todoCollapsed')).toBeNull();
+    expect(screen.getByRole('button', { name: /com_ui_cards_more/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
+  it('keeps the well collapsed while every hidden step is still ahead', () => {
+    /* The control for the guard above: without it, a test that only ever sees
+     * an expanded well proves nothing about the auto-expand rule. */
+    const { container } = render(
+      <ProgressCard
+        data={snapshot({
+          steps: ['Шаг 1', 'Шаг 2', 'Шаг 3', 'Шаг 4', 'Шаг 5'],
+          progress: 0,
+        })}
+      />,
+    );
+    expect(rowOf('Шаг 1')).toHaveAttribute('data-status', 'active');
+    expect(container.querySelector('.todoCollapsed')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /com_ui_cards_more/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 
   it('puts Stop in the header and reports progress to assistive tech', () => {

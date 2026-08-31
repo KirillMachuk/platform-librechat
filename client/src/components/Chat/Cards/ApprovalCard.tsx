@@ -786,7 +786,11 @@ export function ApprovalCard({
                   <button
                     type="button"
                     className={styles.todoMore}
-                    aria-expanded={planExpanded}
+                    /* What is SHOWN, not what the user last clicked: a running
+                     * step force-opens the well (r25 package Б), and reporting
+                     * the stale user flag would announce «collapsed» over
+                     * visible rows. */
+                    aria-expanded={showPlanRest}
                     onClick={(e) => {
                       e.preventDefault();
                       setPlanExpanded((open) => !open);
