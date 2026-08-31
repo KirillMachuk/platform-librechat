@@ -1785,6 +1785,41 @@ async function runNewDeepResearch(params) {
         );
       };
 
+      /**
+       * The plan the graph is given must be MASKED in sovereign mode.
+       *
+       * The plan message is saved de-masked — the user reads their own names on
+       * their own card — so `planSteps` carries real PII, and handing it to the
+       * supervisor would egress exactly what Track B exists to prevent, in the
+       * one place a plan echoes the request. `dr_progress.steps` keeps the
+       * de-masked copy: that one is the user's own screen.
+       *
+       * ONE masking call for the whole list, not one per step: the anonymizer is
+       * the dominant cost of a DR turn, and six round-trips before the graph
+       * starts would be paid by every plan run. The split back is RECONCILED
+       * against the input — a masking that changed the line count means the
+       * mapping is unknown, and an unknown mapping degrades to no agenda at all
+       * (the card then reports no step, which it already knows how to draw).
+       */
+      let graphPlanSteps = planSteps;
+      if (sovereign && planSteps.length > 0) {
+        try {
+          const masked = (await sovereign.maskContent(planSteps.join('\n'))).split('\n');
+          graphPlanSteps = masked.length === planSteps.length ? masked : [];
+          if (graphPlanSteps.length === 0) {
+            logger.warn(
+              `[deepResearchRun] masked plan came back as ${masked.length} lines for ${planSteps.length} steps; running without the plan agenda`,
+            );
+          }
+        } catch (error) {
+          logger.warn(
+            '[deepResearchRun] plan masking failed; running without the plan agenda',
+            error,
+          );
+          graphPlanSteps = [];
+        }
+      }
+
       try {
         result = await runDeepResearch({
           graph,
@@ -1798,12 +1833,12 @@ async function runNewDeepResearch(params) {
             conversationId,
             mode: tier.name,
             budget: tierToRunBudget(tier),
-            /* The plan the user approved (and may have edited). Until r27 the
-             * graph never saw it: the run was steered only by the brief, so a
-             * plan the user had corrected changed nothing about the research.
-             * Empty for a PROCEED run, which keeps that path's prompts exactly
-             * as they were measured. */
-            planSteps,
+            /* The plan the user approved (and may have edited), MASKED in
+             * sovereign mode. Until r27 the graph never saw it: the run was
+             * steered only by the brief, so a plan the user had corrected
+             * changed nothing about the research. Empty for a PROCEED run,
+             * which keeps that path's prompts exactly as they were measured. */
+            planSteps: graphPlanSteps,
           },
           signal,
           wallClockMs: Math.max(1, tier.wallClockMinutes) * 60_000,

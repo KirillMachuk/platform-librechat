@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { ApprovalCardStrings } from '../ApprovalCard';
-import { ApprovalCard } from '../ApprovalCard';
+import { ApprovalCard, ApprovalCardHeaderAction } from '../ApprovalCard';
 
 const strings: ApprovalCardStrings = {
   otherPlaceholder: 'Другое…',
@@ -402,5 +402,35 @@ describe('ApprovalCard — plan variant', () => {
   it('renders no countdown at all without autoApprove (config switch off)', () => {
     renderPlan();
     expect(screen.queryByTestId('auto-approve')).toBeNull();
+  });
+});
+
+describe('the card header action (owner r27)', () => {
+  it('the header action carries its label as a visible plate, not only as aria', () => {
+    /* «кнопка остановить исследование при наведении не показывает подсказку,
+     * что за кнопка». A 24px glyph with an aria-label is named for a screen
+     * reader and anonymous for everyone else — the card already had a plate for
+     * the autostart ✕ and the header had none. */
+    render(
+      <ApprovalCard
+        variant="plan"
+        strings={strings}
+        title="Глубокое исследование"
+        approveLabel="Начать"
+        plan={[{ id: '1', title: 'Шаг' }]}
+        headerAction={
+          <ApprovalCardHeaderAction
+            label="Остановить исследование"
+            onClick={jest.fn()}
+            testId="dr-stop"
+          />
+        }
+      />,
+    );
+    const button = screen.getByTestId('dr-stop');
+    expect(button).toHaveAttribute('aria-label', 'Остановить исследование');
+    const plate = button.closest('.headActionTip');
+    expect(plate).not.toBeNull();
+    expect(plate).toHaveAttribute('data-tip', 'Остановить исследование');
   });
 });

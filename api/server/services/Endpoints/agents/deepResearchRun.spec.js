@@ -1418,6 +1418,90 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     ]);
   });
 
+  describe('the plan the GRAPH sees is masked in sovereign mode (r27)', () => {
+    const planTree = () => [
+      { messageId: 'orig', isCreatedByUser: true, parentMessageId: null, text: 'изучи для Ивана' },
+      {
+        messageId: 'p1',
+        isCreatedByUser: false,
+        parentMessageId: 'orig',
+        drKind: 'plan',
+        text: '**План исследования:** Рынок\n\n1. Собрать данные по Иванову Ивану\n2. Сравнить цены',
+      },
+    ];
+    const runOnce = async () => {
+      let seen = null;
+      mockRunDeepResearch.mockImplementationOnce(async (params) => {
+        seen = params.configurable;
+        params.onProgress({ type: 'research', round: 1, subQuestion: 'q', planStep: 1 });
+        return {
+          finalReport: 'Отчёт',
+          finalizeReason: 'completed',
+          usage: { input: 1, output: 1, total: 2 },
+          findings: [],
+        };
+      });
+      await runNewDeepResearch(planParams('Начать исследование'));
+      return seen;
+    };
+
+    it('FAILS ON PRE-FIX CODE: the graph gets placeholders, the user card keeps the names', async () => {
+      /* The plan message is stored DE-MASKED — the user reads their own names —
+       * so handing `planSteps` to the supervisor as-is egresses exactly what
+       * Track B exists to stop, in the one place a plan echoes the request. */
+      models.getMessages.mockResolvedValueOnce(planTree());
+      mockStartSovereignSession.mockResolvedValue({
+        maskedQuestion: 'изучи для [PERSON_1]',
+        passthroughHeaders: {},
+        maskContent: jest.fn(async (t) => t.replace(/Иванову Ивану/g, '[PERSON_1]')),
+        restore: jest.fn(async (t) => t),
+        drop: jest.fn(async () => {}),
+      });
+
+      const configurable = await runOnce();
+
+      expect(configurable.planSteps).toEqual(['Собрать данные по [PERSON_1]', 'Сравнить цены']);
+      expect(JSON.stringify(configurable.planSteps)).not.toContain('Иванову');
+      /* The card the USER looks at keeps the real names. */
+      const research = mockEmitChunk.mock.calls.find(
+        (c) => c[1]?.event === 'dr_progress' && c[1].data.phase === 'research',
+      );
+      expect(research[1].data.steps).toEqual(['Собрать данные по Иванову Ивану', 'Сравнить цены']);
+    });
+
+    it('a masking failure drops the agenda rather than sending raw PII', async () => {
+      models.getMessages.mockResolvedValueOnce(planTree());
+      mockStartSovereignSession.mockResolvedValue({
+        maskedQuestion: 'изучи для [PERSON_1]',
+        passthroughHeaders: {},
+        maskContent: jest.fn(async () => {
+          throw new Error('anonymizer down');
+        }),
+        restore: jest.fn(async (t) => t),
+        drop: jest.fn(async () => {}),
+      });
+
+      const configurable = await runOnce();
+
+      expect(configurable.planSteps).toEqual([]);
+    });
+
+    it('a masking that changed the line count drops the agenda — the mapping is unknown', async () => {
+      models.getMessages.mockResolvedValueOnce(planTree());
+      mockStartSovereignSession.mockResolvedValue({
+        maskedQuestion: 'изучи для [PERSON_1]',
+        passthroughHeaders: {},
+        maskContent: jest.fn(async (t) => `${t}\nлишняя строка`),
+        restore: jest.fn(async (t) => t),
+        drop: jest.fn(async () => {}),
+      });
+
+      const configurable = await runOnce();
+
+      expect(configurable.planSteps).toEqual([]);
+    });
+  });
+
   it('a PROCEED run reports no step at all — there is no plan to be on (r27)', async () => {
     mockStartSovereignSession.mockResolvedValue(null);
     mockPlanContent = '{"action":"PROCEED"}';

@@ -89,6 +89,8 @@ describe('PlanCard', () => {
           action: 'Ищет источники',
           searches: 1,
           progress: 0.5,
+          /* The step the RUN reported (r27) — the fraction no longer decides. */
+          stepIndex: 1,
         }),
       );
       expect(screen.getByText('Собрать').closest('li')).toHaveAttribute('data-status', 'done');
@@ -109,6 +111,7 @@ describe('PlanCard', () => {
           action: 'Ищет источники',
           searches: 1,
           progress: 0.5,
+          stepIndex: 1,
           stalled: true,
         }),
       );
@@ -143,6 +146,7 @@ describe('PlanCard', () => {
               action: 'Идёт',
               searches: 1,
               progress: 0.9,
+              stepIndex: 4,
             } as never);
           }}
         >
