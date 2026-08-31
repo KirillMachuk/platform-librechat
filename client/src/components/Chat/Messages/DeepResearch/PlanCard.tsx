@@ -1,12 +1,17 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useRecoilValue } from 'recoil';
 import { useToastContext } from '@librechat/client';
 import { parseDrPlanMessage, DR_START_MARKER, DR_CANCEL_MARKER } from 'librechat-data-provider';
 import type { TMessage } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { ApprovalCardStrings } from '~/components/Chat/Cards/ApprovalCard';
+import type { TDeepResearchProgress } from '~/store/deepResearch';
 import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/ApprovalCard';
+import { drProgressByConvoId } from '~/store/deepResearch';
 import { useGetStartupConfig } from '~/data-provider';
+import { Square, WifiOff } from '~/components/icons';
 import { useSubmitMessage } from '~/hooks/Messages';
+import { useChatContext } from '~/Providers';
 import { mainTextareaId } from '~/common';
 import { useLocalize } from '~/hooks';
 
@@ -14,6 +19,8 @@ import { useLocalize } from '~/hooks';
  *  aicss 30 s pie; the config keeps exactly one meaning — 0 switches
  *  autostart off. Any other configured value still means "autostart on". */
 const PLAN_AUTO_START_SECS = 30;
+/** The stop square inside the header slot — same 24px box as the plan's ✕. */
+const STOP_GLYPH = 'size-3 fill-current';
 
 /**
  * The autostart anchor: when the plan was made, so the window means the same thing live and
@@ -86,6 +93,9 @@ export default function PlanCard({
   awaitingAction,
   autoStartSec,
   cancelled = false,
+  isRunning = false,
+  conversationId,
+  finished = false,
 }: {
   message: TMessage;
   awaitingAction: boolean;
@@ -93,10 +103,23 @@ export default function PlanCard({
   /** The plan has a cancel child: the outcome lands as the header badge
    *  (r25 — the «Исследование отменено» chip row is hidden). */
   cancelled?: boolean;
+  /** THIS plan's start command exists and the chat is generating: the card
+   *  becomes the running card (r26, owner: one card for the plan and its
+   *  execution, not two). The snapshot is subscribed HERE, in the leaf —
+   *  subscribing in ContentRender would re-render the whole transcript on
+   *  every progress event (RunningSlot's own warning). */
+  isRunning?: boolean;
+  conversationId?: string | null;
+  /** The run under this plan ended with a report: every step reads done. */
+  finished?: boolean;
 }) {
   const localize = useLocalize();
   const { showToast } = useToastContext();
   const { submitMessage } = useSubmitMessage();
+  const { stopGenerating } = useChatContext();
+  /* An idle card subscribes to the empty key — a shared, always-null atom —
+   * so a conversation full of past plans costs one no-op subscription each. */
+  const running = useRecoilValue(drProgressByConvoId(isRunning ? (conversationId ?? '') : ''));
   const { data: startupConfig } = useGetStartupConfig();
   const configuredAutoStart = autoStartSec ?? startupConfig?.deepResearch?.planAutoStartSec ?? 0;
   const effectiveAutoStartSec = configuredAutoStart === 0 ? 0 : PLAN_AUTO_START_SECS;
@@ -243,13 +266,98 @@ export default function PlanCard({
     [localize],
   );
 
-  const planItems = useMemo(
-    () => steps.map((step, i) => ({ id: String(i), title: step })),
-    [steps],
-  );
+  /* One card for the whole research (r26). While the run is live the plan's
+   * own steps carry its status — done / being worked on / ahead — and when it
+   * ends with a report they all read done. A plan that never ran keeps the
+   * resting look (no status at all), which is what the approval state is. */
+  const planItems = useMemo(() => {
+    if (finished) {
+      return steps.map((step, i) => ({ id: String(i), title: step, status: 'done' as const }));
+    }
+    if (running == null) {
+      return steps.map((step, i) => ({ id: String(i), title: step }));
+    }
+    const activeStep = Math.min(
+      Math.floor((running.progress ?? 0) * Math.max(steps.length, 1)),
+      Math.max(steps.length - 1, 0),
+    );
+    return steps.map((step, i) => {
+      let status: 'pending' | 'active' | 'done' = 'pending';
+      if (i < activeStep) {
+        status = 'done';
+      } else if (i === activeStep && running.stalled !== true) {
+        status = 'active';
+      }
+      return { id: String(i), title: step, status };
+    });
+  }, [steps, running, finished]);
+
+  /* The run's own footer: what it is doing now, and how far along it is.
+   * Offline replaces the action line and freezes everything — a parked run
+   * must not look busy (review r2's invariant, kept from the split card). */
+  const runningFootnote =
+    running == null ? null : (
+      <div className="mt-1">
+        {running.stalled === true ? (
+          <div
+            role="status"
+            className="mb-2 flex min-h-5 items-center gap-1.5 text-xs text-text-tertiary"
+          >
+            <WifiOff className="size-3.5 shrink-0" aria-hidden="true" />
+            <span>{localize('com_ui_deep_research_offline')}</span>
+          </div>
+        ) : (
+          running.action && (
+            <div className="thinking-shimmer-paint mb-2 line-clamp-2 min-h-5 text-xs [overflow-wrap:anywhere]">
+              {running.action}
+            </div>
+          )
+        )}
+        <div
+          role="progressbar"
+          aria-label={localize('com_ui_deep_research')}
+          aria-valuenow={Math.max(0, Math.min(100, Math.round((running.progress ?? 0) * 100)))}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          className="h-1 w-full overflow-hidden rounded-full bg-surface-hover"
+        >
+          <div
+            className="h-full rounded-full bg-text-accent transition-[width] duration-500 ease-out"
+            style={{
+              width: `${Math.max(0, Math.min(100, Math.round((running.progress ?? 0) * 100)))}%`,
+            }}
+          />
+        </div>
+      </div>
+    );
+
+  const controlsFootnote = showControls ? (
+    <>
+      {(editing || autoStartCancelled) && (
+        <div className="mt-1 text-right text-xs text-text-tertiary">
+          {localize(
+            editing ? 'com_ui_deep_research_edit_hint' : 'com_ui_deep_research_autostart_cancelled',
+          )}
+        </div>
+      )}
+      <span role="status" className="sr-only">
+        {liveNote}
+      </span>
+    </>
+  ) : undefined;
 
   let headerAction: ReactNode;
-  if (showControls) {
+  if (running != null) {
+    headerAction = (
+      <ApprovalCardHeaderAction
+        label={localize('com_ui_deep_research_stop')}
+        onClick={stopGenerating}
+        testId="dr-stop"
+      >
+        <Square className={STOP_GLYPH} aria-hidden="true" />
+      </ApprovalCardHeaderAction>
+    );
+  } else if (showControls) {
     headerAction = <ApprovalCardHeaderAction label={localize('com_ui_cancel')} onClick={cancel} />;
   } else if (cancelled) {
     headerAction = (
@@ -283,24 +391,7 @@ export default function PlanCard({
         onApprove={start}
         onSecondary={edit}
         secondaryPressed={editing}
-        footnote={
-          showControls ? (
-            <>
-              {(editing || autoStartCancelled) && (
-                <div className="mt-1 text-right text-xs text-text-tertiary">
-                  {localize(
-                    editing
-                      ? 'com_ui_deep_research_edit_hint'
-                      : 'com_ui_deep_research_autostart_cancelled',
-                  )}
-                </div>
-              )}
-              <span role="status" className="sr-only">
-                {liveNote}
-              </span>
-            </>
-          ) : undefined
-        }
+        footnote={runningFootnote ?? controlsFootnote}
       />
     </div>
   );

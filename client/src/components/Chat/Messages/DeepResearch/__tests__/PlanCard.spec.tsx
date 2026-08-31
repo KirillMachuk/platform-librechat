@@ -1,6 +1,8 @@
 import React from 'react';
-import { render, act, fireEvent, screen } from '@testing-library/react';
+import { RecoilRoot } from 'recoil';
+import { render as rtlRender, act, fireEvent, screen } from '@testing-library/react';
 import type { TMessage } from 'librechat-data-provider';
+import { drProgressByConvoId } from '~/store/deepResearch';
 import PlanCard from '../PlanCard';
 
 const mockSubmit = jest.fn();
@@ -19,6 +21,10 @@ jest.mock('~/data-provider', () => ({
   useGetStartupConfig: () => ({ data: mockStartupConfig }),
 }));
 jest.mock('~/common', () => ({ mainTextareaId: 'prompt-textarea' }));
+const mockStop = jest.fn();
+jest.mock('~/Providers', () => ({
+  useChatContext: () => ({ stopGenerating: mockStop }),
+}));
 jest.mock('@librechat/client', () => ({
   useToastContext: () => ({ showToast: mockShowToast }),
 }));
@@ -34,6 +40,9 @@ jest.mock('librechat-data-provider', () => ({
     return { title, steps };
   },
 }));
+
+/** The card reads the live snapshot from Recoil, so every render needs a root. */
+const render = (ui: React.ReactElement) => rtlRender(<RecoilRoot>{ui}</RecoilRoot>);
 
 const PLAN = '**План исследования:** Рынок CRM\n\n1. Собрать\n2. Сравнить';
 const planMessage = (createdAt?: string): TMessage =>
@@ -54,6 +63,81 @@ describe('PlanCard', () => {
     expect(getByText('Рынок CRM')).toBeInTheDocument();
     expect(getByText('Собрать')).toBeInTheDocument();
     expect(getByText('Сравнить')).toBeInTheDocument();
+  });
+
+  describe('one card for the plan AND its run (owner r26)', () => {
+    const withRun = (snapshot: Record<string, unknown> | null) => (
+      <RecoilRoot
+        initializeState={({ set }) => {
+          set(drProgressByConvoId('c1'), snapshot as never);
+        }}
+      >
+        <PlanCard
+          message={planMessage()}
+          awaitingAction={false}
+          isRunning={snapshot != null}
+          conversationId="c1"
+        />
+      </RecoilRoot>
+    );
+
+    it('the approved plan itself shows the live statuses and the Stop control', () => {
+      rtlRender(
+        withRun({
+          phase: 'research',
+          steps: ['Собрать', 'Сравнить'],
+          action: 'Ищет источники',
+          searches: 1,
+          progress: 0.5,
+        }),
+      );
+      expect(screen.getByText('Собрать').closest('li')).toHaveAttribute('data-status', 'done');
+      expect(screen.getByText('Сравнить').closest('li')).toHaveAttribute('data-status', 'active');
+      expect(screen.getByTestId('dr-stop')).toHaveAttribute(
+        'aria-label',
+        'com_ui_deep_research_stop',
+      );
+      expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
+      expect(screen.getByText('Ищет источники')).toBeInTheDocument();
+    });
+
+    it('offline freezes it: no active step, no action line', () => {
+      rtlRender(
+        withRun({
+          phase: 'research',
+          steps: ['Собрать', 'Сравнить'],
+          action: 'Ищет источники',
+          searches: 1,
+          progress: 0.5,
+          stalled: true,
+        }),
+      );
+      expect(screen.queryByText('Ищет источники')).not.toBeInTheDocument();
+      expect(document.querySelector('li[data-status="active"]')).toBeNull();
+      expect(screen.getByRole('status')).toHaveTextContent('com_ui_deep_research_offline');
+    });
+
+    it('a finished run leaves every step done, with no Stop and no progress bar', () => {
+      rtlRender(
+        <RecoilRoot>
+          <PlanCard message={planMessage()} awaitingAction={false} finished />
+        </RecoilRoot>,
+      );
+      expect(screen.getByText('Собрать').closest('li')).toHaveAttribute('data-status', 'done');
+      expect(screen.getByText('Сравнить').closest('li')).toHaveAttribute('data-status', 'done');
+      expect(screen.queryByTestId('dr-stop')).toBeNull();
+      expect(screen.queryByRole('progressbar')).toBeNull();
+    });
+
+    it('a plan that never ran keeps its resting look (no statuses at all)', () => {
+      rtlRender(
+        <RecoilRoot>
+          <PlanCard message={planMessage()} awaitingAction={false} />
+        </RecoilRoot>,
+      );
+      expect(screen.getByText('Собрать').closest('li')).not.toHaveAttribute('data-status');
+      expect(screen.queryByTestId('dr-stop')).toBeNull();
+    });
   });
 
   it('r25: a cancelled plan wears the «Отменено» badge instead of controls', () => {
@@ -119,7 +203,11 @@ describe('PlanCard', () => {
     );
     expect(queryByText('com_ui_deep_research_start')).not.toBeInTheDocument();
     // It becomes the actionable tip a render later.
-    rerender(<PlanCard message={planMessage(created)} awaitingAction autoStartSec={2} />);
+    rerender(
+      <RecoilRoot>
+        <PlanCard message={planMessage(created)} awaitingAction autoStartSec={2} />
+      </RecoilRoot>,
+    );
     expect(getByText('com_ui_deep_research_start')).toBeInTheDocument();
     // The countdown is live (not deadlocked on a null `remaining`) — it elapses and autostarts.
     for (let i = 0; i < 31; i++) {

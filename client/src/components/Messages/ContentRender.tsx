@@ -1,6 +1,6 @@
 import { useCallback, useMemo, memo } from 'react';
 import { useRecoilValue } from 'recoil';
-import { isDrCancelCommand } from 'librechat-data-provider';
+import { isDrCancelCommand, isDrStartCommand } from 'librechat-data-provider';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { TMessageProps, TMessageChatContext } from '~/common';
@@ -236,14 +236,26 @@ const ContentRender = memo(function ContentRender({
     // buttons/timer until a reload (task #21 live bug). `isLatestMessage` (stable id match)
     // covers that case; ORing keeps the sibling-switcher case working. hasNoChildren still
     // gates: once Начать/an edit is sent the card has a child and goes inert.
-    const cancelled = (msg.children ?? []).some(
+    const children = msg.children ?? [];
+    const cancelled = children.some(
       (child) => child.drKind === 'cancel' || isDrCancelCommand(child.text ?? ''),
     );
+    /* One card for the plan AND its execution (owner r26). The run hangs
+     * under the START command, which is this plan's child, so the card that
+     * owns the run is the one whose start command exists — and the report,
+     * when it lands, is that command's own child. */
+    const startCommand = children.find(
+      (child) => child.drKind === 'start' || isDrStartCommand(child.text ?? ''),
+    );
+    const finished = (startCommand?.children ?? []).some((child) => child.drKind === 'report');
     drCard = (
       <PlanCard
         message={msg}
         awaitingAction={hasNoChildren && (isLast || isLatestMessage)}
         cancelled={cancelled}
+        isRunning={startCommand != null && isSubmitting}
+        conversationId={conversation?.conversationId}
+        finished={finished}
       />
     );
   }
