@@ -1484,6 +1484,14 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
       const configurable = await runOnce();
 
       expect(configurable.planSteps).toEqual([]);
+      /* And the card is told NOTHING rather than left holding step 1: with no
+       * agenda the run can never name a step, so a highlight would be a claim
+       * nobody made. */
+      const research = mockEmitChunk.mock.calls.find(
+        (c) => c[1]?.event === 'dr_progress' && c[1].data.phase === 'research',
+      );
+      expect(research[1].data.steps.length).toBe(2);
+      expect(research[1].data.stepIndex).toBeUndefined();
     });
 
     it('a masking that changed the line count drops the agenda — the mapping is unknown', async () => {

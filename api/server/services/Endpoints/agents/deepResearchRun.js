@@ -1684,6 +1684,11 @@ async function runNewDeepResearch(params) {
        * step is actually reported.
        */
       let planStepIndex = 0;
+      /** Did the graph actually receive the plan? Sovereign masking can fail or
+       *  come back unmappable, and then the run is steered by the brief alone
+       *  and can never name a step — so the card must be told NOTHING rather
+       *  than left holding step 1 for the whole run. */
+      let agendaReachedGraph = false;
       /**
        * One `dr_progress` snapshot. The client REPLACES its snapshot wholesale
        * (`setDrProgress` in useResumableSSE), so every emit has to carry the checklist and
@@ -1702,7 +1707,7 @@ async function runNewDeepResearch(params) {
               action,
               searches: searchCount,
               progress,
-              stepIndex: planSteps.length > 0 ? planStepIndex : undefined,
+              stepIndex: agendaReachedGraph ? planStepIndex : undefined,
             },
           }),
         ).catch(() => {});
@@ -1819,6 +1824,7 @@ async function runNewDeepResearch(params) {
           graphPlanSteps = [];
         }
       }
+      agendaReachedGraph = graphPlanSteps.length > 0;
 
       try {
         result = await runDeepResearch({
