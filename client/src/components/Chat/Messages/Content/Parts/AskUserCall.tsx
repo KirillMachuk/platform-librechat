@@ -4,7 +4,7 @@ import {
   ASK_SKIP_MARKER,
   buildAskAnswersMessage,
   isAskAnswersMessage,
-  parseAskAnswersMessage,
+  isAskSkipMessage,
   parseAskUserArgs,
 } from 'librechat-data-provider';
 import type { AskUserQuestion } from 'librechat-data-provider';
@@ -74,21 +74,39 @@ function useAnsweredValues(questions: AskUserQuestion[]): Record<string, string>
   const { getMessages } = useOptionalMessagesOperations();
   const messages = getMessages();
   return useMemo(() => {
-    const answerMessage = messages?.find(
+    const reply = messages?.find(
       (m) =>
         m.parentMessageId === messageId &&
         m.isCreatedByUser === true &&
-        isAskAnswersMessage(m.text ?? ''),
+        (isAskAnswersMessage(m.text ?? '') || isAskSkipMessage(m.text ?? '')),
     );
-    const pairs = answerMessage ? parseAskAnswersMessage(answerMessage.text ?? '') : [];
-    if (pairs.length > 0) {
+    /* Skipped: the user walked away from whatever was half-picked, so the card
+     * must show nothing. Falling through to the draft made it claim an answer
+     * the user never sent, right above a chip reading «Вопросы пропущены»
+     * (r25c review). */
+    if (reply != null && isAskSkipMessage(reply.text ?? '')) {
+      return undefined;
+    }
+    if (reply != null) {
+      /* Matched by the question's OWN text, not by line order: the summary
+       * separator « — » also occurs inside model-written prompts («Формат
+       * отчёта — краткий или подробный?»), and a positional parse then put
+       * half the question into the answer, or slid every answer up a row when
+       * one line failed to parse. The prompts here and the ones in the summary
+       * both come from parseAskUserArgs, so they are equal byte for byte. */
+      const lines = (reply.text ?? '').split('\n').slice(1);
       const restored: Record<string, string> = {};
-      questions.forEach((q, i) => {
-        const pair = pairs[i];
-        if (pair != null && pair.answer) {
-          restored[q.id] = pair.answer;
+      for (const q of questions) {
+        const marker = `) ${q.prompt} — `;
+        const line = lines.find((l) => l.includes(marker));
+        if (line == null) {
+          continue;
         }
-      });
+        const answer = line.slice(line.indexOf(marker) + marker.length).trim();
+        if (answer) {
+          restored[q.id] = answer;
+        }
+      }
       if (Object.keys(restored).length > 0) {
         return restored;
       }
