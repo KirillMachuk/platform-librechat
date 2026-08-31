@@ -27,6 +27,10 @@ jest.mock('~/Providers', () => ({
 }));
 jest.mock('@librechat/client', () => ({
   useToastContext: () => ({ showToast: mockShowToast }),
+  /* Passes its render through: the plate sits OVER the control, it does not
+     replace it (canon §6.6). */
+  TooltipAnchor: ({ render }: { description?: React.ReactNode; render?: React.ReactElement }) =>
+    render ?? null,
 }));
 jest.mock('librechat-data-provider', () => ({
   DR_START_MARKER: 'Начать исследование',

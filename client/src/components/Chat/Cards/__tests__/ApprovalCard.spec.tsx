@@ -1,4 +1,18 @@
+import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
+
+/* The card's header action wears the platform ink plate (§6.6). The real
+ * anchor is Ariakit + framer-motion; these tests care about WHO is wrapped and
+ * with WHICH description, so the mock exposes both on the rendered element. */
+jest.mock('@librechat/client', () => ({
+  TooltipAnchor: ({
+    description,
+    render: element,
+  }: {
+    description?: string;
+    render?: React.ReactElement;
+  }) => <span data-tooltip={description}>{element}</span>,
+}));
 import type { ApprovalCardStrings } from '../ApprovalCard';
 import { ApprovalCard, ApprovalCardHeaderAction } from '../ApprovalCard';
 
@@ -429,8 +443,9 @@ describe('the card header action (owner r27)', () => {
     );
     const button = screen.getByTestId('dr-stop');
     expect(button).toHaveAttribute('aria-label', 'Остановить исследование');
-    const plate = button.closest('.headActionTip');
-    expect(plate).not.toBeNull();
-    expect(plate).toHaveAttribute('data-tip', 'Остановить исследование');
+    expect(button.closest('[data-tooltip]')).toHaveAttribute(
+      'data-tooltip',
+      'Остановить исследование',
+    );
   });
 });

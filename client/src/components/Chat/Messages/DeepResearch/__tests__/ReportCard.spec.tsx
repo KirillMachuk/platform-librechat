@@ -9,6 +9,13 @@ jest.mock('~/components/icons', () => ({
   Maximize2: () => <svg data-testid="max-icon" />,
 }));
 jest.mock('@librechat/client', () => ({
+  TooltipAnchor: ({
+    description,
+    render: element,
+  }: {
+    description?: string;
+    render?: React.ReactElement;
+  }) => <span data-tooltip={description}>{element}</span>,
   Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
     <button onClick={onClick}>{children}</button>
   ),
@@ -72,12 +79,17 @@ describe('ReportCard', () => {
      * acceptance page, a two-line title stood 34px and pushed 5px out of the
      * head into the card's gap. One line, with the full text on hover. */
     expect(card.querySelector('.title')?.className).toContain('titleOneLine');
-    expect(card.querySelector('.title')).toHaveAttribute('title', 'Рынок CRM');
+    expect(card.querySelector('.title')?.closest('[data-tooltip]')).toHaveAttribute(
+      'data-tooltip',
+      'Рынок CRM',
+    );
     expect(container.querySelector('.btnGhost')?.textContent).toBe('com_ui_copy');
     expect(container.querySelector('.btnPrimary')?.textContent).toBe('com_ui_expand');
     /* The header's icon-only control says what it does. */
-    const tip = container.querySelector('.headActionTip');
-    expect(tip).toHaveAttribute('data-tip', 'com_ui_expand');
+    expect(container.querySelector('button.headAction')?.closest('[data-tooltip]')).toHaveAttribute(
+      'data-tooltip',
+      'com_ui_expand',
+    );
   });
 
   it('expands into the full-screen reader on Развернуть', () => {

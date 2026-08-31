@@ -83,55 +83,6 @@
   gap: 2px;
   margin-left: auto;
 }
-/* Every header action is an icon with no caption, so each one needs the card's
- * own plate to say what it does (owner r27: «Остановить исследование» read as
- * an unlabelled square). Same plate as the autostart ✕ below it — one tooltip
- * idiom per card — but dropped BELOW the button and right-aligned: the header
- * sits at the card's top edge, where a plate above would land on the message
- * before it, and at the right edge, where a centred one would overhang. */
-.headActionTip {
-  position: relative;
-  display: inline-flex;
-  flex: none;
-  line-height: 0;
-}
-.headActionTip::after {
-  content: attr(data-tip);
-  position: absolute;
-  right: 0;
-  top: calc(100% + 2px);
-  transform: translateY(-1px);
-  z-index: 1;
-  padding: 4px 5px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--text-primary) 62%, transparent);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  color: var(--surface-primary);
-  font-size: 10px;
-  font-weight: 500;
-  line-height: 1;
-  white-space: nowrap;
-  opacity: 0;
-  filter: blur(2px);
-  pointer-events: none;
-  transition: opacity 0.15s ease, transform 0.15s ease, filter 0.15s ease;
-}
-.headActionTip:not([data-tip])::after {
-  display: none;
-}
-.headActionTip:focus-within::after {
-  opacity: 1;
-  filter: blur(0);
-  transform: translateY(0);
-}
-@media (hover: hover) {
-  .headActionTip:hover::after {
-    opacity: 1;
-    filter: blur(0);
-    transform: translateY(0);
-  }
-}
 .headAction {
   position: relative;
   z-index: 0;
@@ -163,7 +114,8 @@
  * ask for one line: measured on the acceptance page, a two-line title stood 34px
  * tall and pushed 5px out of the head into the card's gap, and a third line
  * would have landed on the body. The full title is one tap away in the reader,
- * and the native tooltip carries it on hover. */
+ * and the canon ink plate carries it on hover (TooltipAnchor onlyWhenTruncated,
+ * §6.6 — the native title balloon is banned platform-wide). */
 .titleOneLine {
   overflow: hidden;
   white-space: nowrap;
@@ -759,10 +711,9 @@
   .autoApprove,
   .autoApprovePie,
   .autoApproveCancelGlyph { transition: none; }
-  /* The to-do well snaps instead of sliding; the tip appears without a fade. */
+  /* The to-do well snaps instead of sliding. */
   .todoCollapsible,
-  .todoCollapsed,
-  .headActionTip::after { transition: none; }
+  .todoCollapsed { transition: none; }
   .option,
   .key,
   .key::before,

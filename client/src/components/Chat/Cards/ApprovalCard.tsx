@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { TooltipAnchor } from '@librechat/client';
 import {
   Check,
   ChevronDown,
@@ -185,8 +186,11 @@ function TodoDashedIcon() {
 
 /** Header icon button in the original's headAction style — К2 passes the
  *  cancel ✕ through `headerAction` wrapped in this. The button carries no
- *  caption, so `label` is both its accessible name and the visible plate the
- *  card shows on hover/focus (owner r27). */
+ *  caption, so `label` is both its accessible name and the visible hint on
+ *  hover/focus (owner r27: «кнопка остановить исследование при наведении не
+ *  показывает подсказку»). The plate is the platform's TooltipAnchor, not the
+ *  card's own — §6.6 is one tooltip design everywhere — dropped BELOW the
+ *  button because the head sits on the card's top edge. */
 export function ApprovalCardHeaderAction({
   label,
   onClick,
@@ -199,20 +203,24 @@ export function ApprovalCardHeaderAction({
   testId?: string;
 }) {
   return (
-    <span className={styles.headActionTip} data-tip={label}>
-      <button
-        type="button"
-        className={`${styles.headAction} tap-target`}
-        aria-label={label}
-        data-testid={testId}
-        onClick={(e) => {
-          e.preventDefault();
-          onClick();
-        }}
-      >
-        {children ?? <X className={styles.headActionIcon} aria-hidden />}
-      </button>
-    </span>
+    <TooltipAnchor
+      description={label}
+      side="bottom"
+      render={
+        <button
+          type="button"
+          className={`${styles.headAction} tap-target`}
+          aria-label={label}
+          data-testid={testId}
+          onClick={(e) => {
+            e.preventDefault();
+            onClick();
+          }}
+        >
+          {children ?? <X className={styles.headActionIcon} aria-hidden />}
+        </button>
+      }
+    />
   );
 }
 
@@ -268,12 +276,23 @@ export function ApprovalCardFrame({
           <Icon className={styles.iconSvg} aria-hidden />
         </span>
         <div className={styles.headText}>
-          <h3
-            className={oneLineTitle ? `${styles.title} ${styles.titleOneLine}` : styles.title}
-            title={oneLineTitle ? title : undefined}
-          >
-            {title}
-          </h3>
+          {oneLineTitle ? (
+            /* A clamped title needs its full text somewhere, and §6.6 says that
+             * is the ink plate — `onlyWhenTruncated` keeps it quiet when the
+             * title happens to fit. `data-truncated-label` is what the anchor
+             * measures. */
+            <TooltipAnchor
+              description={title}
+              onlyWhenTruncated
+              render={
+                <h3 className={`${styles.title} ${styles.titleOneLine}`} data-truncated-label>
+                  {title}
+                </h3>
+              }
+            />
+          ) : (
+            <h3 className={styles.title}>{title}</h3>
+          )}
         </div>
         {headerAction != null && <div className={styles.headActions}>{headerAction}</div>}
       </div>
