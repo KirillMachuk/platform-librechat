@@ -120,7 +120,14 @@ export function ThinkingReasoning({
         aria-label={ariaLabel}
         onClick={handleToggle}
       >
-        <Brain className={styles.trBrain} aria-hidden="true" />
+        {/* The brain marks the FINISHED, foldable artifact. While the model is
+         * still thinking the header is the same bare shimmering word the
+         * in-flow waiting label shows, so the two do not visibly swap mid-wait
+         * (owner r26). The icon cannot lead the waiting label instead: that
+         * label is an in-flow prose child whose first character must sit
+         * exactly where the reply's first token will paint (canon §6.12,
+         * round 24), and an icon would push it sideways. */}
+        {!streaming && <Brain className={styles.trBrain} aria-hidden="true" />}
         {streaming ? (
           /* No trLabel here: its `color` ties with the global shimmer's
            * `color: transparent` at equal specificity, so which one wins

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, memo } from 'react';
 import { useRecoilValue } from 'recoil';
-import { isDrCancelCommand, isDrStartCommand } from 'librechat-data-provider';
+import { isDrCancelCommand, isDrStartCommand, DR_CANCELLED_MESSAGE } from 'librechat-data-provider';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { TMessageProps, TMessageChatContext } from '~/common';
@@ -13,6 +13,7 @@ import {
 import { cn, chatColumnClass, getHeaderPrefixForScreenReader, getMessageAriaLabel } from '~/utils';
 import { useAttachments, useLocalize, useMessageActions, useContentMetadata } from '~/hooks';
 import useAskUserChip from '~/components/Chat/Messages/DeepResearch/useAskUserChip';
+import { useOptionalMessagesOperations } from '~/Providers/MessagesViewContext';
 import useDrCommand from '~/components/Chat/Messages/DeepResearch/useDrCommand';
 import ContentParts from '~/components/Chat/Messages/Content/ContentParts';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
@@ -147,6 +148,17 @@ const ContentRender = memo(function ContentRender({
    * user-message render paths (review К3: each was mounted on only one). */
   const askChip = useAskUserChip(msg);
   const drCommand = useDrCommand(msg);
+  /* Provenance for the cancel notice: it is the child of the very command
+   * that cancelled a plan. Read through the same optional messages view the
+   * command rule uses, so it works on the share page too. */
+  const { getMessages } = useOptionalMessagesOperations();
+  const drCancelNotice = useMemo(() => {
+    if (msg?.isCreatedByUser === true || (msg?.text ?? '') !== DR_CANCELLED_MESSAGE) {
+      return false;
+    }
+    const parent = getMessages()?.find((m) => m.messageId === msg?.parentMessageId);
+    return parent?.drKind === 'cancel' || isDrCancelCommand(parent?.text ?? '');
+  }, [msg?.isCreatedByUser, msg?.text, msg?.parentMessageId, getMessages]);
 
   // Task #21 phase 3: a FINISHED Deep Research report → collapsible ReportCard + reader.
   // Review r2: keyed on the persisted `drKind` provenance (no text sniffing, no ancestor
@@ -172,6 +184,15 @@ const ContentRender = memo(function ContentRender({
    */
 
   if (!msg) {
+    return null;
+  }
+
+  /* The cancel NOTICE is hidden too (owner r26): the plan card above already
+   * wears an «Отменено» badge, so a full-width paragraph repeating it is
+   * duplication. Keyed on the exact server constant AND on a DR provenance in
+   * the branch — prose that merely reads the same stays prose. The message
+   * itself is untouched: it is what keeps the next turn out of DR routing. */
+  if (!edit && drCancelNotice) {
     return null;
   }
 

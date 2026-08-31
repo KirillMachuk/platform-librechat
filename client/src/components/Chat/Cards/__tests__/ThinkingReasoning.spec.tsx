@@ -121,13 +121,19 @@ describe('ThinkingReasoning (cards К4)', () => {
     expect(getByRole('button')).toHaveTextContent(/^Мысли$/);
   });
 
-  it('carries the brain icon in both states (r25, reference screens)', () => {
+  it('the brain marks the FINISHED block only — the wait must not visibly swap (r26)', () => {
+    /* Streaming, the header is the same bare shimmering word as the in-flow
+     * waiting label, so «Думаю…» does not jump into another design mid-wait.
+     * The icon appears with the fold, which is a state change anyway. */
     const { container } = render(<ThinkingReasoning {...defaultProps} text={textOf(1)} />);
     expect(container.querySelector('.trBrain')).not.toBeNull();
     const streamed = render(
       <ThinkingReasoning {...defaultProps} streaming={true} text={textOf(1)} />,
     );
-    expect(streamed.container.querySelector('.trBrain')).not.toBeNull();
+    expect(streamed.container.querySelector('.trBrain')).toBeNull();
+    expect(streamed.container.querySelector('.thinking-shimmer-active')?.textContent).toBe(
+      'Думаю…',
+    );
   });
 
   it('mounted finished is static; born streaming keeps its entry animation', () => {
