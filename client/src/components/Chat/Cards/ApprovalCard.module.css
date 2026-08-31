@@ -692,3 +692,30 @@
   .btnPrimary::before,
   .stepArrow { transition: none; }
 }
+
+/* Phone-sized controls (§7: 44px). The BOX carries the size — an absolute
+ * overlay gives height but not width (measured on the stand: the pager arrows
+ * were 18×44) and stray zones feed the scrollers. Desktop keeps the original
+ * density. The autostart pie is deliberately NOT resized: it sits inline with
+ * its own label, a 44px box would tear that row apart, and cancelling
+ * autostart has two other paths (Редактировать, typing in the composer). */
+@media (pointer: coarse) {
+  /* Only the ARROWS need a real box: they are 18px wide, and the platform's
+   * `.tap-target` overlay stretches height but not width. Wide controls
+   * (buttons 95-117px, option rows 351px) get their 44px from that overlay
+   * instead — growing them visibly added 113px to the card on a 375px screen
+   * and wrapped the action row (r25c review, measured). */
+  .stepArrow {
+    width: 44px;
+    height: 44px;
+  }
+  /* Option rows are the exception: their neighbours sit 6px apart, so an
+   * invisible 44px zone over a 29px row would overlap the row above and below
+   * and steal taps near the edges. Here the box grows on purpose. */
+  .option {
+    min-height: 44px;
+  }
+  .optionInput {
+    min-height: 32px;
+  }
+}

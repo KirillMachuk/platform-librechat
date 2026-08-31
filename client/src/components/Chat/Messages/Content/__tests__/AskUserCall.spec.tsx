@@ -1,4 +1,7 @@
+import { buildAskAnswersMessage } from 'librechat-data-provider';
 import { render, screen, fireEvent, act } from '@testing-library/react';
+import type { MessagesViewContextValue } from '~/Providers/MessagesViewContext';
+import { MessagesViewContext } from '~/Providers/MessagesViewContext';
 import { MessageContext } from '~/Providers/MessageContext';
 import { ChatContext } from '~/Providers/ChatContext';
 import AskUserCall from '../Parts/AskUserCall';
@@ -155,6 +158,163 @@ describe('AskUserCall (interactive cards К3 + r25)', () => {
     );
     expect(screen.getByTestId('ask-user-collapsed')).toBeInTheDocument();
     expect(mockSubmit).not.toHaveBeenCalled();
+  });
+
+  describe('an answered card still SHOWS what was answered (r25 acceptance)', () => {
+    /* The regression this fixes: folding mounted a fresh card, so the chosen
+     * option lost its mark, «Другое…» came back empty, and a screen reader
+     * announced every option as not-checked. */
+    const QUESTIONS = [
+      { id: 'q1', prompt: 'Какой формат?', options: ['Сводка', 'Отчёт'] },
+      { id: 'q2', prompt: 'Период?', options: ['Месяц', 'Год'] },
+    ];
+
+    const withAnswerMessage = (answers: Record<string, string>) => {
+      const text = buildAskAnswersMessage(QUESTIONS, answers);
+      const messages = [
+        { messageId: 'answer-1', parentMessageId: 'm1', isCreatedByUser: true, text },
+      ];
+      return {
+        getMessages: () => messages,
+      } as unknown as MessagesViewContextValue;
+    };
+
+    const renderFolded = (
+      ctx: MessagesViewContextValue | undefined,
+      extras: { askAnswersInitial?: Record<string, string> } = {},
+    ) => {
+      const tree = (
+        <MessageContext.Provider
+          value={{
+            messageId: 'm1',
+            isExpanded: true,
+            isSubmitting: false,
+            isLatestMessage: false,
+            askAnswersInitial: extras.askAnswersInitial,
+          }}
+        >
+          <AskUserCall args={ARGS} />
+        </MessageContext.Provider>
+      );
+      return render(
+        ctx ? (
+          <MessagesViewContext.Provider value={ctx}>{tree}</MessagesViewContext.Provider>
+        ) : (
+          tree
+        ),
+      );
+    };
+
+    it('restores the chosen option from the answers MESSAGE (survives a reload)', () => {
+      renderFolded(withAnswerMessage({ q1: 'Отчёт', q2: 'Месяц' }));
+      fireEvent.click(screen.getByRole('button', { expanded: false }));
+      expect(screen.getByRole('radio', { name: /Отчёт/ })).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByRole('radio', { name: /Сводка/ })).toHaveAttribute(
+        'aria-checked',
+        'false',
+      );
+    });
+
+    it('restores a free-text answer into «Другое…» instead of an empty field', () => {
+      renderFolded(withAnswerMessage({ q1: 'Свой вариант ответа', q2: 'Месяц' }));
+      fireEvent.click(screen.getByRole('button', { expanded: false }));
+      expect(screen.getByDisplayValue('Свой вариант ответа')).toBeInTheDocument();
+    });
+
+    it('falls back to the in-session draft when no answers message is around', () => {
+      renderFolded(undefined, { askAnswersInitial: { q1: 'Отчёт', q2: 'Год' } });
+      fireEvent.click(screen.getByRole('button', { expanded: false }));
+      expect(screen.getByRole('radio', { name: /Отчёт/ })).toHaveAttribute('aria-checked', 'true');
+    });
+
+    it('ignores an answers message that belongs to a DIFFERENT card', () => {
+      /* getMessages() is the whole conversation, branches included, and `.find`
+       * takes the first hit — the provenance checks are the only thing keeping
+       * a neighbour's answers off this card (r25c review: both survived
+       * mutation until this fixture existed). */
+      const foreign = buildAskAnswersMessage(QUESTIONS, { q1: 'Сводка', q2: 'Год' });
+      const ctx = {
+        getMessages: () => [
+          { messageId: 'x1', parentMessageId: 'OTHER-CARD', isCreatedByUser: true, text: foreign },
+          { messageId: 'x2', parentMessageId: 'm1', isCreatedByUser: false, text: foreign },
+        ],
+      } as unknown as MessagesViewContextValue;
+      renderFolded(ctx, { askAnswersInitial: { q1: 'Отчёт', q2: 'Месяц' } });
+      fireEvent.click(screen.getByRole('button', { expanded: false }));
+      /* Neither foreign message may win: the draft is what shows. */
+      expect(screen.getByRole('radio', { name: /Отчёт/ })).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByRole('radio', { name: /Сводка/ })).toHaveAttribute(
+        'aria-checked',
+        'false',
+      );
+    });
+
+    it('survives a « — » inside the question text (matched by prompt, not by order)', () => {
+      /* «Формат отчёта — краткий или подробный?» is ordinary Russian, and the
+       * summary separator is the same dash: a positional parse put half the
+       * question into «Другое…» and left every option unchecked. */
+      const tricky = [
+        { id: 'q1', prompt: 'Формат — краткий или подробный?', options: ['Сводка', 'Отчёт'] },
+        { id: 'q2', prompt: 'Период?', options: ['Месяц', 'Год'] },
+      ];
+      const text = buildAskAnswersMessage(tricky, { q1: 'Отчёт', q2: 'Месяц' });
+      const ctx = {
+        getMessages: () => [
+          { messageId: 'a1', parentMessageId: 'm1', isCreatedByUser: true, text },
+        ],
+      } as unknown as MessagesViewContextValue;
+      render(
+        <MessagesViewContext.Provider value={ctx}>
+          <MessageContext.Provider
+            value={{
+              messageId: 'm1',
+              isExpanded: true,
+              isSubmitting: false,
+              isLatestMessage: false,
+            }}
+          >
+            <AskUserCall args={JSON.stringify({ questions: tricky })} />
+          </MessageContext.Provider>
+        </MessagesViewContext.Provider>,
+      );
+      fireEvent.click(screen.getByRole('button', { expanded: false }));
+      expect(screen.getByRole('radio', { name: /Отчёт/ })).toHaveAttribute('aria-checked', 'true');
+      expect(screen.queryByDisplayValue(/краткий или подробный/)).toBeNull();
+    });
+
+    it('a SKIPPED card shows nothing, not the abandoned draft', () => {
+      /* «Пропустить» is reachable with options already clicked; the card used
+       * to display that abandoned draft as an answer, directly above a chip
+       * reading «Вопросы пропущены» (r25c review). */
+      const ctx = {
+        getMessages: () => [
+          {
+            messageId: 's1',
+            parentMessageId: 'm1',
+            isCreatedByUser: true,
+            text: 'Пропустить вопросы',
+          },
+        ],
+      } as unknown as MessagesViewContextValue;
+      renderFolded(ctx, { askAnswersInitial: { q1: 'Отчёт', q2: 'Месяц' } });
+      fireEvent.click(screen.getByRole('button', { expanded: false }));
+      expect(screen.getByRole('radio', { name: /Отчёт/ })).toHaveAttribute('aria-checked', 'false');
+      expect(screen.getByRole('radio', { name: /Сводка/ })).toHaveAttribute(
+        'aria-checked',
+        'false',
+      );
+    });
+
+    it('keeps the pager so every answered question is reachable', () => {
+      /* Without it the folded card exposed only question 1: the rest stayed
+       * aria-hidden with no way to page to them (r25c review). */
+      renderFolded(withAnswerMessage({ q1: 'Отчёт', q2: 'Месяц' }));
+      fireEvent.click(screen.getByRole('button', { expanded: false }));
+      const next = screen.getByRole('button', { name: /next question|Следующий вопрос/i });
+      fireEvent.click(next);
+      expect(screen.getByRole('radio', { name: /Месяц/ })).toHaveAttribute('aria-checked', 'true');
+      expect(screen.queryByRole('button', { name: /Continue/ })).toBeNull();
+    });
   });
 
   it('renders nothing while the args are still streaming', () => {

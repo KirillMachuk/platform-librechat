@@ -157,6 +157,76 @@ describe('ApprovalCard — questions variant', () => {
   });
 });
 
+describe('ApprovalCard — the questions group behaves like a radio group (r25 acceptance)', () => {
+  /* It was ANNOUNCED as one (role=radiogroup) but behaved like a button list:
+   * every option was a tab stop and the arrows did nothing. */
+  const renderQ = () =>
+    render(
+      <ApprovalCard
+        variant="questions"
+        strings={strings}
+        title="Вопросы"
+        approveLabel="Продолжить"
+        questions={QUESTIONS}
+        onApprove={jest.fn()}
+      />,
+    );
+
+  it('carries ONE tab stop, on the first option when nothing is chosen', () => {
+    renderQ();
+    const radios = screen.getAllByRole('radio', { hidden: true }).filter((r) => r.textContent);
+    const visible = radios.filter((r) => r.closest('[data-active="true"]') != null);
+    expect(visible.map((r) => r.getAttribute('tabindex'))).toEqual(['0', '-1']);
+  });
+
+  it('moves the tab stop onto the chosen option', () => {
+    renderQ();
+    fireEvent.click(screen.getByRole('radio', { name: /Второй/ }));
+    const chosen = screen.getByRole('radio', { name: /Второй/ });
+    expect(chosen).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('radio', { name: /Первый/ })).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('ArrowDown/ArrowUp move the focus inside the group and reach «Другое…»', () => {
+    renderQ();
+    const first = screen.getByRole('radio', { name: /Первый/ });
+    first.focus();
+    fireEvent.keyDown(first, { key: 'ArrowDown' });
+    expect(screen.getByRole('radio', { name: /Второй/ })).toHaveFocus();
+
+    fireEvent.keyDown(screen.getByRole('radio', { name: /Второй/ }), { key: 'ArrowDown' });
+    expect(screen.getByLabelText('Свой ответ: Какой подход?')).toHaveFocus();
+
+    const second = screen.getByRole('radio', { name: /Второй/ });
+    second.focus();
+    fireEvent.keyDown(second, { key: 'ArrowUp' });
+    expect(screen.getByRole('radio', { name: /Первый/ })).toHaveFocus();
+  });
+
+  it('an arrow key does not escape the card (stopPropagation, not just a no-op)', () => {
+    /* The previous version asserted that onApprove was not called, which was
+     * true with or without stopPropagation — the mutation survived (r25c
+     * review). This watches the event itself leave the card. */
+    const onOuterKeyDown = jest.fn();
+    render(
+      <div onKeyDown={onOuterKeyDown}>
+        <ApprovalCard
+          variant="questions"
+          strings={strings}
+          title="Вопросы"
+          approveLabel="Продолжить"
+          questions={QUESTIONS}
+          onApprove={jest.fn()}
+        />
+      </div>,
+    );
+    const first = screen.getByRole('radio', { name: /Первый/ });
+    first.focus();
+    fireEvent.keyDown(first, { key: 'ArrowDown' });
+    expect(onOuterKeyDown).not.toHaveBeenCalled();
+  });
+});
+
 describe('ApprovalCard — actionsArmed (r25: select now, commit when the turn ends)', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => {

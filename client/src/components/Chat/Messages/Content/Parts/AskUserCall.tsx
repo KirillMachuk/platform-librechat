@@ -1,8 +1,15 @@
 import { memo, useContext, useId, useMemo, useRef, useState } from 'react';
 import { useToastContext } from '@librechat/client';
-import { ASK_SKIP_MARKER, buildAskAnswersMessage, parseAskUserArgs } from 'librechat-data-provider';
+import {
+  ASK_SKIP_MARKER,
+  buildAskAnswersMessage,
+  isAskAnswersMessage,
+  isAskSkipMessage,
+  parseAskUserArgs,
+} from 'librechat-data-provider';
 import type { AskUserQuestion } from 'librechat-data-provider';
 import type { ApprovalCardStrings } from '~/components/Chat/Cards/ApprovalCard';
+import { useOptionalMessagesOperations } from '~/Providers/MessagesViewContext';
 import { MessageCircleQuestion, ChevronDown } from '~/components/icons';
 import { ApprovalCard } from '~/components/Chat/Cards/ApprovalCard';
 import useExpandCollapse from '~/hooks/Messages/useExpandCollapse';
@@ -52,7 +59,69 @@ function useCardStrings(): ApprovalCardStrings {
   );
 }
 
-function StaticCard({ questions }: { questions: AskUserQuestion[] }) {
+/**
+ * What the user actually answered, for a card that is no longer live.
+ *
+ * Two sources, in this order: the answers summary MESSAGE the card itself
+ * submitted (durable — survives a reload and works on the share page, and it
+ * is what was really sent), then the in-session draft map. Without this the
+ * folded card renders a fresh, blank ApprovalCard: the chosen option loses
+ * its mark, the «Другое…» text disappears, and a screen reader announces
+ * every option as not-checked — which is actively wrong (r25 acceptance).
+ */
+function useAnsweredValues(questions: AskUserQuestion[]): Record<string, string> | undefined {
+  const { messageId, askAnswersInitial } = useMessageContext();
+  const { getMessages } = useOptionalMessagesOperations();
+  const messages = getMessages();
+  return useMemo(() => {
+    const reply = messages?.find(
+      (m) =>
+        m.parentMessageId === messageId &&
+        m.isCreatedByUser === true &&
+        (isAskAnswersMessage(m.text ?? '') || isAskSkipMessage(m.text ?? '')),
+    );
+    /* Skipped: the user walked away from whatever was half-picked, so the card
+     * must show nothing. Falling through to the draft made it claim an answer
+     * the user never sent, right above a chip reading «Вопросы пропущены»
+     * (r25c review). */
+    if (reply != null && isAskSkipMessage(reply.text ?? '')) {
+      return undefined;
+    }
+    if (reply != null) {
+      /* Matched by the question's OWN text, not by line order: the summary
+       * separator « — » also occurs inside model-written prompts («Формат
+       * отчёта — краткий или подробный?»), and a positional parse then put
+       * half the question into the answer, or slid every answer up a row when
+       * one line failed to parse. The prompts here and the ones in the summary
+       * both come from parseAskUserArgs, so they are equal byte for byte. */
+      const lines = (reply.text ?? '').split('\n').slice(1);
+      const restored: Record<string, string> = {};
+      for (const q of questions) {
+        const marker = `) ${q.prompt} — `;
+        const line = lines.find((l) => l.includes(marker));
+        if (line == null) {
+          continue;
+        }
+        const answer = line.slice(line.indexOf(marker) + marker.length).trim();
+        if (answer) {
+          restored[q.id] = answer;
+        }
+      }
+      if (Object.keys(restored).length > 0) {
+        return restored;
+      }
+    }
+    return askAnswersInitial;
+  }, [messages, messageId, questions, askAnswersInitial]);
+}
+
+function StaticCard({
+  questions,
+  answers,
+}: {
+  questions: AskUserQuestion[];
+  answers?: Record<string, string>;
+}) {
   const localize = useLocalize();
   const strings = useCardStrings();
   return (
@@ -63,6 +132,7 @@ function StaticCard({ questions }: { questions: AskUserQuestion[] }) {
         title={localize('com_ui_cards_questions_title')}
         approveLabel={localize('com_ui_cards_continue')}
         questions={questions}
+        initialAnswers={answers}
         showActions={false}
       />
     </div>
@@ -73,6 +143,7 @@ function StaticCard({ questions }: { questions: AskUserQuestion[] }) {
  *  in the «Думал N с» family; the content lives in the answers chip below. */
 function CollapsedQuestions({ questions }: { questions: AskUserQuestion[] }) {
   const localize = useLocalize();
+  const answers = useAnsweredValues(questions);
   const contentId = useId();
   const [open, setOpen] = useState(false);
   const { style: expandStyle, ref: expandRef } = useExpandCollapse(open);
@@ -101,7 +172,7 @@ function CollapsedQuestions({ questions }: { questions: AskUserQuestion[] }) {
         style={expandStyle}
       >
         <div className="relative overflow-hidden" ref={expandRef}>
-          <StaticCard questions={questions} />
+          <StaticCard questions={questions} answers={answers} />
         </div>
       </div>
     </div>

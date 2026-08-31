@@ -66,6 +66,18 @@ export interface ApprovalCardStrings {
 }
 
 const ADVANCE_MS = 320;
+/** Arrow keys inside a radio group move the focus; both axes, as ARIA asks. */
+/** Up/Down only — inside a text field Left/Right belong to the caret. */
+const VERTICAL_DELTA: Record<string, number | undefined> = {
+  ArrowDown: 1,
+  ArrowUp: -1,
+};
+const ARROW_DELTA: Record<string, number | undefined> = {
+  ArrowDown: 1,
+  ArrowRight: 1,
+  ArrowUp: -1,
+  ArrowLeft: -1,
+};
 const ROLL_MS = 400;
 
 function RollingDigits({ value }: { value: string }) {
@@ -320,6 +332,7 @@ export function ApprovalCard({
   const autoFadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const questionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const customInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const optionRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const qMeasured = useRef(false);
   const [qViewportH, setQViewportH] = useState<number | undefined>(undefined);
   const [qTrackY, setQTrackY] = useState(0);
@@ -337,6 +350,17 @@ export function ApprovalCard({
   }, []);
 
   const safeStep = Math.min(step, Math.max(questions.length - 1, 0));
+  /** Which option in a question owns the group's single tab stop: the chosen
+   *  one, or the first when nothing is chosen yet (ARIA radio-group rule). */
+  const rovingIndex = (q: ApprovalQuestion): number => {
+    /* -1 when the answer is free text: the «Другое…» input owns the group's
+     * tab stop then, and leaving one on an option made two (r25c review). */
+    if (isOtherChoice(q)) {
+      return -1;
+    }
+    const chosen = q.options.indexOf(answers[q.id] ?? '');
+    return chosen >= 0 ? chosen : 0;
+  };
   const allAnswered =
     questions.length > 0 && questions.every((q) => Boolean(answers[q.id]?.trim()));
   const stepLabel = `${safeStep + 1} / ${questions.length}`;
@@ -624,9 +648,40 @@ export function ApprovalCard({
                           type="button"
                           role="radio"
                           aria-checked={selected}
-                          tabIndex={active ? 0 : -1}
+                          ref={(el) => {
+                            optionRefs.current[`${q.id}-${oi}`] = el;
+                          }}
+                          /* Roving tabindex, as a radio group is supposed to
+                           * behave: Tab reaches the group once and lands on
+                           * the selected option (or the first), the arrows
+                           * move within it. Before this every option was a
+                           * tab stop and the arrows did nothing — announced
+                           * as a radio group, behaving like a button list
+                           * (r25 acceptance). Deliberate deviation from APG:
+                           * arrows MOVE focus without selecting, because
+                           * selecting auto-advances the carousel after 320ms
+                           * and navigation would become impossible. */
+                          tabIndex={active && oi === rovingIndex(q) ? 0 : -1}
                           className={styles.option}
                           data-selected={selected ? 'true' : undefined}
+                          onKeyDown={(e) => {
+                            if (!active) {
+                              return;
+                            }
+                            const delta = ARROW_DELTA[e.key];
+                            if (delta == null) {
+                              return;
+                            }
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const total = q.options.length + 1;
+                            const next = (oi + delta + total) % total;
+                            if (next === q.options.length) {
+                              customInputRefs.current[q.id]?.focus();
+                              return;
+                            }
+                            optionRefs.current[`${q.id}-${next}`]?.focus();
+                          }}
                           onClick={(e) => {
                             e.preventDefault();
                             if (!active) {
@@ -674,7 +729,9 @@ export function ApprovalCard({
                             type="text"
                             value={draft}
                             placeholder={strings.otherPlaceholder}
-                            tabIndex={active ? 0 : -1}
+                            tabIndex={
+                              active && (isOtherChoice(q) || q.options.length === 0) ? 0 : -1
+                            }
                             aria-label={strings.customAnswerFor(q.prompt)}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -697,7 +754,19 @@ export function ApprovalCard({
                               if (e.key === 'Enter') {
                                 e.preventDefault();
                                 commitCustom(q.id, e.currentTarget.value);
+                                return;
                               }
+                              /* The ring closes both ways: arrows walk out of
+                               * the free-text row back into the options. Up/Down
+                               * only — Left/Right belong to the caret here. */
+                              const delta = VERTICAL_DELTA[e.key];
+                              if (delta == null) {
+                                return;
+                              }
+                              e.preventDefault();
+                              const total = q.options.length + 1;
+                              const next = (q.options.length + delta + total) % total;
+                              optionRefs.current[`${q.id}-${next}`]?.focus();
                             }}
                           />
                         </div>
@@ -833,9 +902,9 @@ export function ApprovalCard({
         </>
       )}
 
-      {showActions && (
+      {(showActions || variant === 'questions') && (
         <div className={styles.actions}>
-          {variant === 'questions' && (
+          {variant === 'questions' && questions.length > 1 && (
             <div
               className={styles.stepNav}
               aria-label={strings.questionOf(safeStep + 1, questions.length)}
@@ -936,14 +1005,14 @@ export function ApprovalCard({
               </span>
             </div>
           )}
-          {variant !== 'questions' && !(variant === 'plan' && autoUI !== 'gone') && (
+          {showActions && variant !== 'questions' && !(variant === 'plan' && autoUI !== 'gone') && (
             <span className={styles.actionsSpacer} aria-hidden />
           )}
           <div className={styles.actionBtns}>
-            {secondaryLabel != null && (
+            {showActions && secondaryLabel != null && (
               <button
                 type="button"
-                className={styles.btnGhost}
+                className={`${styles.btnGhost} tap-target`}
                 aria-pressed={secondaryPressed}
                 disabled={!actionsArmed}
                 onClick={(e) => {
@@ -954,20 +1023,22 @@ export function ApprovalCard({
                 {secondaryLabel}
               </button>
             )}
-            <button
-              type="button"
-              className={styles.btnPrimary}
-              disabled={!canContinue || !actionsArmed}
-              onClick={(e) => {
-                e.preventDefault();
-                handleApprove();
-              }}
-            >
-              {approveLabel}
-              {variant === 'questions' && (
-                <CornerDownLeft className={styles.btnSubmitIcon} size={12} aria-hidden />
-              )}
-            </button>
+            {showActions && (
+              <button
+                type="button"
+                className={`${styles.btnPrimary} tap-target`}
+                disabled={!canContinue || !actionsArmed}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleApprove();
+                }}
+              >
+                {approveLabel}
+                {variant === 'questions' && (
+                  <CornerDownLeft className={styles.btnSubmitIcon} size={12} aria-hidden />
+                )}
+              </button>
+            )}
           </div>
         </div>
       )}
