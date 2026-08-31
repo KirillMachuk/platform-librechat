@@ -330,6 +330,71 @@ describe('which plan card draws a live Deep Research run (r26 review)', () => {
     expect(screen.getAllByTestId('dr-stop')).toHaveLength(1);
   });
 
+  it('a RE-PLAN turn does not light the stopped plan card either (r27)', () => {
+    /* After a Stop the user comments and the runner re-plans. That turn's user
+     * message is a plain comment, not a start command — but the first plan's
+     * start command is still an ancestor of it, so an ancestry-only rule made
+     * the stopped card sprout a Stop button and a progress bar while the model
+     * was merely writing a new plan. */
+    const node = (over: Record<string, unknown>) =>
+      ({ conversationId: CONVO, children: [], ...over }) as unknown as TMessage;
+    const replanReply = node({
+      messageId: 'replan',
+      parentMessageId: 'comment1',
+      isCreatedByUser: false,
+      text: '',
+      content: [],
+      depth: 4,
+    });
+    const comment1 = node({
+      messageId: 'comment1',
+      parentMessageId: 'aborted1',
+      isCreatedByUser: true,
+      text: 'добавь ещё шаг про цены',
+      depth: 3,
+      children: [replanReply],
+    });
+    const aborted1 = node({
+      messageId: 'aborted1',
+      parentMessageId: 'start1',
+      isCreatedByUser: false,
+      drKind: 'aborted',
+      text: 'Исследование остановлено.',
+      content: [],
+      depth: 2,
+      children: [comment1],
+    });
+    const start1 = node({
+      messageId: 'start1',
+      parentMessageId: 'plan1',
+      isCreatedByUser: true,
+      drKind: 'start',
+      text: 'Начать исследование',
+      depth: 1,
+      children: [aborted1],
+    });
+    renderCustom(
+      [
+        node({
+          messageId: 'plan1',
+          parentMessageId: null,
+          isCreatedByUser: false,
+          drKind: 'plan',
+          text: PLAN_TEXT,
+          content: [{ type: 'text', text: PLAN_TEXT }],
+          depth: 0,
+          children: [start1],
+        }),
+      ],
+      'replan',
+      { phase: 'plan', steps: [], action: '', searches: 0, progress: 0 },
+    );
+
+    expect(screen.queryByTestId('dr-stop')).toBeNull();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(screen.getByTestId('plan-stopped')).toBeInTheDocument();
+  });
+
   it('with no run in flight the same card is just a plan', () => {
     renderTree({ latestId: 'resp1' });
     expect(screen.getByText('Собрать').closest('li')).not.toHaveAttribute('data-status');
