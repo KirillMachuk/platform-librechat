@@ -159,7 +159,13 @@ lines.forEach((line, index) => {
     const separator = reference.indexOf('#');
     const path = separator === -1 ? reference : reference.slice(0, separator);
     const anchor = separator === -1 ? '' : reference.slice(separator + 1);
-    if (!/\.(ts|tsx)$/.test(path)) {
+    /* `.js` is allowed for `api/**` only. That workspace is the fork's legacy
+     * JavaScript server (CLAUDE.md: new backend code goes to packages/api in
+     * TS), so its specs can never be .ts — and refusing them meant no runner
+     * behaviour could ever be claimed as covered here. Everywhere else the
+     * TS-only rule stands, so a stray .js test elsewhere is still a problem. */
+    const isLegacyApiSpec = /^api\/.+\.spec\.js$/.test(path);
+    if (!/\.(ts|tsx)$/.test(path) && !isLegacyApiSpec) {
       problems.push(`${lineNo}: owning test is not a .ts/.tsx file — "${path}"`);
       continue;
     }
