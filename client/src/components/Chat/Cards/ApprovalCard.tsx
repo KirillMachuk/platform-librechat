@@ -66,6 +66,13 @@ export interface ApprovalCardStrings {
 }
 
 const ADVANCE_MS = 320;
+/** Arrow keys inside a radio group move the focus; both axes, as ARIA asks. */
+const ARROW_DELTA: Record<string, number | undefined> = {
+  ArrowDown: 1,
+  ArrowRight: 1,
+  ArrowUp: -1,
+  ArrowLeft: -1,
+};
 const ROLL_MS = 400;
 
 function RollingDigits({ value }: { value: string }) {
@@ -320,6 +327,7 @@ export function ApprovalCard({
   const autoFadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const questionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const customInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const optionRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const qMeasured = useRef(false);
   const [qViewportH, setQViewportH] = useState<number | undefined>(undefined);
   const [qTrackY, setQTrackY] = useState(0);
@@ -337,6 +345,12 @@ export function ApprovalCard({
   }, []);
 
   const safeStep = Math.min(step, Math.max(questions.length - 1, 0));
+  /** Which option in a question owns the group's single tab stop: the chosen
+   *  one, or the first when nothing is chosen yet (ARIA radio-group rule). */
+  const rovingIndex = (q: ApprovalQuestion): number => {
+    const chosen = q.options.indexOf(answers[q.id] ?? '');
+    return chosen >= 0 ? chosen : 0;
+  };
   const allAnswered =
     questions.length > 0 && questions.every((q) => Boolean(answers[q.id]?.trim()));
   const stepLabel = `${safeStep + 1} / ${questions.length}`;
@@ -624,9 +638,37 @@ export function ApprovalCard({
                           type="button"
                           role="radio"
                           aria-checked={selected}
-                          tabIndex={active ? 0 : -1}
+                          ref={(el) => {
+                            optionRefs.current[`${q.id}-${oi}`] = el;
+                          }}
+                          /* Roving tabindex, as a radio group is supposed to
+                           * behave: Tab reaches the group once and lands on
+                           * the selected option (or the first), the arrows
+                           * move within it. Before this every option was a
+                           * tab stop and the arrows did nothing — announced
+                           * as a radio group, behaving like a button list
+                           * (r25 acceptance). */
+                          tabIndex={active && oi === rovingIndex(q) ? 0 : -1}
                           className={styles.option}
                           data-selected={selected ? 'true' : undefined}
+                          onKeyDown={(e) => {
+                            if (!active) {
+                              return;
+                            }
+                            const delta = ARROW_DELTA[e.key];
+                            if (delta == null) {
+                              return;
+                            }
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const total = q.options.length + 1;
+                            const next = (oi + delta + total) % total;
+                            if (next === q.options.length) {
+                              customInputRefs.current[q.id]?.focus();
+                              return;
+                            }
+                            optionRefs.current[`${q.id}-${next}`]?.focus();
+                          }}
                           onClick={(e) => {
                             e.preventDefault();
                             if (!active) {

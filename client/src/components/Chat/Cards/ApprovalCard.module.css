@@ -692,3 +692,28 @@
   .btnPrimary::before,
   .stepArrow { transition: none; }
 }
+
+/* Phone-sized controls (§7: 44px). The BOX carries the size — an absolute
+ * overlay gives height but not width (measured on the stand: the pager arrows
+ * were 18×44) and stray zones feed the scrollers. Desktop keeps the original
+ * density. The autostart pie is deliberately NOT resized: it sits inline with
+ * its own label, a 44px box would tear that row apart, and cancelling
+ * autostart has two other paths (Редактировать, typing in the composer). */
+@media (pointer: coarse) {
+  .stepArrow {
+    width: 44px;
+    height: 44px;
+  }
+  .option {
+    min-height: 44px;
+  }
+  .optionInput {
+    min-height: 32px;
+  }
+  .btnGhost,
+  .btnPrimary {
+    min-height: 44px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
