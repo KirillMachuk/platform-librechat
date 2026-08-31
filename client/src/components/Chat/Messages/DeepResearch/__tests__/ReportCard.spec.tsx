@@ -68,6 +68,11 @@ describe('ReportCard', () => {
     expect(card).toHaveAttribute('data-variant', 'report');
     expect(card.querySelector('.head .icon')).toHaveAttribute('data-variant', 'report');
     expect(card.querySelector('.title')?.textContent).toBe('Рынок CRM');
+    /* The report's title is USER content in a 24px head row: measured on the
+     * acceptance page, a two-line title stood 34px and pushed 5px out of the
+     * head into the card's gap. One line, with the full text on hover. */
+    expect(card.querySelector('.title')?.className).toContain('titleOneLine');
+    expect(card.querySelector('.title')).toHaveAttribute('title', 'Рынок CRM');
     expect(container.querySelector('.btnGhost')?.textContent).toBe('com_ui_copy');
     expect(container.querySelector('.btnPrimary')?.textContent).toBe('com_ui_expand');
     /* The header's icon-only control says what it does. */

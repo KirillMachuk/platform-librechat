@@ -158,6 +158,17 @@
 }
 .headAction:active { transform: scale(0.99); }
 .headActionIcon { width: 14px; height: 14px; flex: none; }
+/* The head is a fixed 24px row built for a fixed caption («Вопросы», «Глубокое
+ * исследование»). A card whose title is USER content — the report's own — must
+ * ask for one line: measured on the acceptance page, a two-line title stood 34px
+ * tall and pushed 5px out of the head into the card's gap, and a third line
+ * would have landed on the body. The full title is one tap away in the reader,
+ * and the native tooltip carries it on hover. */
+.titleOneLine {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .title {
   overflow-wrap: anywhere;
   font-size: 13.5px;

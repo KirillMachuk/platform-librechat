@@ -131,6 +131,7 @@ export default function ReportCard({
           title={displayTitle}
           testId="report-card"
           isStatic={true}
+          oneLineTitle={true}
           headerAction={
             <ApprovalCardHeaderAction
               label={localize('com_ui_expand')}

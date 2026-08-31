@@ -235,6 +235,7 @@ export function ApprovalCardFrame({
   title,
   headerAction,
   isStatic,
+  oneLineTitle,
   testId = 'approval-card',
   className,
   onKeyDown,
@@ -245,6 +246,9 @@ export function ApprovalCardFrame({
   headerAction?: React.ReactNode;
   /** Skip the entry animation (history and share mount finished cards). */
   isStatic?: boolean;
+  /** Keep the title to one line with an ellipsis. Required whenever the title
+   *  is user content rather than a fixed caption — the head is a 24px row. */
+  oneLineTitle?: boolean;
   testId?: string;
   className?: string;
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
@@ -264,7 +268,12 @@ export function ApprovalCardFrame({
           <Icon className={styles.iconSvg} aria-hidden />
         </span>
         <div className={styles.headText}>
-          <h3 className={styles.title}>{title}</h3>
+          <h3
+            className={oneLineTitle ? `${styles.title} ${styles.titleOneLine}` : styles.title}
+            title={oneLineTitle ? title : undefined}
+          >
+            {title}
+          </h3>
         </div>
         {headerAction != null && <div className={styles.headActions}>{headerAction}</div>}
       </div>
