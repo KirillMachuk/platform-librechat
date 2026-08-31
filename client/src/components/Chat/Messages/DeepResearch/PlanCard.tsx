@@ -5,7 +5,6 @@ import { parseDrPlanMessage, DR_START_MARKER, DR_CANCEL_MARKER } from 'librechat
 import type { TMessage } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { ApprovalCardStrings } from '~/components/Chat/Cards/ApprovalCard';
-import type { TDeepResearchProgress } from '~/store/deepResearch';
 import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/ApprovalCard';
 import { drProgressByConvoId } from '~/store/deepResearch';
 import { useGetStartupConfig } from '~/data-provider';
