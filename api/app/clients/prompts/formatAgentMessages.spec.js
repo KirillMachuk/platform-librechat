@@ -363,6 +363,67 @@ describe('formatAgentMessages', () => {
     expect(hasErrorContent).toBe(false);
   });
 
+  /**
+   * A run that broke at the step ceiling is told to carry on with «продолжай», so the
+   * message it left behind has to survive being replayed: finished tool calls, one call
+   * that was dispatched and never came back, and the error part the user was shown.
+   *
+   * A contract guard, not a regression test — this shape already replayed correctly, and
+   * that is exactly why the new wording is allowed to promise resuming. Every tool_call
+   * must keep its matching ToolMessage: drop one and the provider rejects the whole turn,
+   * which would turn the advice into a dead end.
+   */
+  it('replays a run that stopped mid-tool-call, so «продолжай» has something to resume', () => {
+    const payload = [
+      { role: 'user', content: 'Подготовь материалы к встрече' },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: ContentTypes.TEXT,
+            [ContentTypes.TEXT]: 'Собираю презентацию.',
+            tool_call_ids: ['done-1'],
+          },
+          {
+            type: ContentTypes.TOOL_CALL,
+            tool_call: {
+              id: 'done-1',
+              name: 'bash_tool',
+              args: '{"command":"python3 build_presentation.py"}',
+              output: 'Presentation saved to /mnt/data/deck.pptx',
+            },
+          },
+          {
+            type: ContentTypes.TOOL_CALL,
+            tool_call: { id: 'never-ran', name: 'bash_tool', args: '{"command":"ls"}' },
+          },
+          {
+            type: ContentTypes.ERROR,
+            [ContentTypes.ERROR]: JSON.stringify({ code: 'run_incomplete', info: 'предел' }),
+          },
+        ],
+      },
+      { role: 'user', content: 'продолжай' },
+    ];
+
+    const result = formatAgentMessages(payload);
+
+    const toolMessages = result.filter((message) => message instanceof ToolMessage);
+    const calledIds = result
+      .filter((message) => message instanceof AIMessage)
+      .flatMap((message) => message.tool_calls ?? [])
+      .map((call) => call.id);
+    expect(calledIds).toEqual(['done-1', 'never-ran']);
+    expect(toolMessages.map((message) => message.tool_call_id)).toEqual(['done-1', 'never-ran']);
+
+    /** The work is what the next turn reads instead of redoing it. */
+    expect(toolMessages[0].content).toContain('deck.pptx');
+    /** The call that never ran still needs its answer, empty though it is. */
+    expect(toolMessages[1].content).toBe('');
+    /** The failure notice is for the person, not for the model. */
+    expect(JSON.stringify(result)).not.toContain('run_incomplete');
+  });
+
   describe('Vertex Gemini thoughtSignatures persistence (issue #13006 follow-up)', () => {
     const SIG_A = 'AY89a1/sigA==';
     const SIG_B = 'AY89a1/sigB==';
