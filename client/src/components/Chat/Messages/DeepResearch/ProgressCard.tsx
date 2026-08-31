@@ -6,7 +6,6 @@ import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/
 import { Square, WifiOff } from '~/components/icons';
 import { useChatContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
-import { cn } from '~/utils';
 
 /**
  * The three research phases, shown as a generic checklist when a run has no approved plan
