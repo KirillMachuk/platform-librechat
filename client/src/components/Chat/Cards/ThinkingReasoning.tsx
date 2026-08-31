@@ -25,6 +25,39 @@ const GAP = 4;
 const MAX_H = 180;
 const FADE = 16;
 
+/**
+ * The waiting look, shared by the two places that show it (owner r27, «нужно
+ * сделать единый стандарт этого рассуждения»): the header of a reasoning block
+ * whose thoughts are still streaming, and the in-flow label that stands in
+ * before any content has arrived at all. The user sees ONE word in ONE spot
+ * across both, so it is one piece of markup — they used to be two components in
+ * two type scales and the handoff looked like the design changing mid-wait.
+ */
+function WaitingContent({ label }: { label: string }) {
+  return (
+    <>
+      <Brain className={styles.trBrain} aria-hidden="true" />
+      {/* No trLabel here: its `color` ties with the global shimmer's
+       * `color: transparent` at equal specificity, so which one wins would
+       * depend on CSS chunk order (К4 review) — the shimmer class owns the
+       * waiting label's color outright. */}
+      <span className="thinking-shimmer-active">{label}</span>
+    </>
+  );
+}
+
+/** The standalone waiting label (no block, no chevron — there is nothing to
+ *  fold yet). Hidden unless a `.submitting` ancestor is present: that gate is
+ *  the one the bare shimmering word carried, and it is what keeps a finished
+ *  reply from parking a label on screen forever. */
+export function ThinkingWaitLabel({ label }: { label: string }) {
+  return (
+    <span className={styles.trWait} data-testid="waiting-label">
+      <WaitingContent label={label} />
+    </span>
+  );
+}
+
 type ThinkingReasoningProps = {
   text: string;
   streaming: boolean;
@@ -120,27 +153,28 @@ export function ThinkingReasoning({
         aria-label={ariaLabel}
         onClick={handleToggle}
       >
-        {/* The brain marks the FINISHED, foldable artifact. While the model is
-         * still thinking the header is the same bare shimmering word the
-         * in-flow waiting label shows, so the two do not visibly swap mid-wait
-         * (owner r26). The icon cannot lead the waiting label instead: that
-         * label is an in-flow prose child whose first character must sit
-         * exactly where the reply's first token will paint (canon §6.12,
-         * round 24), and an icon would push it sideways. */}
-        {!streaming && <Brain className={styles.trBrain} aria-hidden="true" />}
+        {/* The brain leads from the first moment (owner r27): the waiting label
+         * before this block, this header while the thoughts stream and this
+         * header once they are folded are one thing to the reader, so the icon
+         * is not something the third state introduces. It supersedes the round
+         * 24 rule that kept the waiting word bare so its first character would
+         * sit where the reply's first token paints — that seam was invisible
+         * and cost a visible one (§6.12). The chevron is the exception and
+         * stays gated: it is a control, and while streaming there is nothing
+         * to fold — a glyph that promises an action it cannot do is the same
+         * complaint as the ⏎ hint (r26). */}
         {streaming ? (
-          /* No trLabel here: its `color` ties with the global shimmer's
-           * `color: transparent` at equal specificity, so which one wins
-           * would depend on CSS chunk order (К4 review) — the shimmer class
-           * owns the streaming label's color outright. */
-          <span className="thinking-shimmer-active">{shimmerLabel}</span>
+          <WaitingContent label={shimmerLabel} />
         ) : (
-          <span className={styles.trLabel}>
-            <span className={styles.trVerb}>{doneVerb}</span>
-            {doneSuffix != null && <> {doneSuffix}</>}
-          </span>
+          <>
+            <Brain className={styles.trBrain} aria-hidden="true" />
+            <span className={styles.trLabel}>
+              <span className={styles.trVerb}>{doneVerb}</span>
+              {doneSuffix != null && <> {doneSuffix}</>}
+            </span>
+            <ChevronDown className={styles.trChevron} aria-hidden="true" />
+          </>
         )}
-        {!streaming && <ChevronDown className={styles.trChevron} aria-hidden="true" />}
       </button>
 
       <div

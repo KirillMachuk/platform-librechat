@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronUp,
   CircleArrowRight,
+  FileText,
   ListChecks,
   ListTodo,
   MessageCircleQuestion,
@@ -30,7 +31,7 @@ import styles from './ApprovalCard.module.css';
  *   is not always a rejection (К2 wires «Редактировать» into it).
  */
 
-export type ApprovalVariant = 'questions' | 'command' | 'plan';
+export type ApprovalVariant = 'questions' | 'command' | 'plan' | 'report';
 
 export interface ApprovalQuestion {
   id: string;
@@ -212,6 +213,97 @@ export function ApprovalCardHeaderAction({
         {children ?? <X className={styles.headActionIcon} aria-hidden />}
       </button>
     </span>
+  );
+}
+
+const VARIANT_ICONS = {
+  questions: MessageCircleQuestion,
+  command: Terminal,
+  plan: ListTodo,
+  report: FileText,
+} as const;
+
+/**
+ * The card SHELL — frame, head, icon, title, header-action slot — with the
+ * body left to the caller. Extracted so the finished research report wears the
+ * same object as the plan it came from (owner r27): it was the last surface on
+ * the pre-К2 frame, a different radius, a different header, a different button
+ * set, sitting directly under a card in the new one.
+ */
+export function ApprovalCardFrame({
+  variant,
+  title,
+  headerAction,
+  isStatic,
+  testId = 'approval-card',
+  className,
+  onKeyDown,
+  children,
+}: {
+  variant: ApprovalVariant;
+  title: string;
+  headerAction?: React.ReactNode;
+  /** Skip the entry animation (history and share mount finished cards). */
+  isStatic?: boolean;
+  testId?: string;
+  className?: string;
+  onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
+  children?: React.ReactNode;
+}) {
+  const Icon = VARIANT_ICONS[variant];
+  return (
+    <div
+      className={`${styles.card}${className ? ` ${className}` : ''}`}
+      data-variant={variant}
+      data-static={isStatic ? 'true' : undefined}
+      data-testid={testId}
+      onKeyDown={onKeyDown}
+    >
+      <div className={styles.head}>
+        <span className={styles.icon} data-variant={variant}>
+          <Icon className={styles.iconSvg} aria-hidden />
+        </span>
+        <div className={styles.headText}>
+          <h3 className={styles.title}>{title}</h3>
+        </div>
+        {headerAction != null && <div className={styles.headActions}>{headerAction}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** The card's action row: buttons right-aligned, in the frame's own style. */
+export function ApprovalCardActions({ children }: { children: React.ReactNode }) {
+  return (
+    <div className={styles.actions}>
+      <span className={styles.actionsSpacer} aria-hidden />
+      <div className={styles.actionBtns}>{children}</div>
+    </div>
+  );
+}
+
+/** A card button — `primary` is the filled one, `ghost` the quiet one. */
+export function ApprovalCardButton({
+  kind = 'primary',
+  onClick,
+  children,
+}: {
+  kind?: 'primary' | 'ghost';
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={`${kind === 'ghost' ? styles.btnGhost : styles.btnPrimary} tap-target`}
+      onClick={(e) => {
+        e.preventDefault();
+        onClick();
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -571,19 +663,13 @@ export function ApprovalCard({
     setStep(Math.min(Math.max(next, 0), questions.length - 1));
   };
 
-  const VARIANT_ICONS = {
-    questions: MessageCircleQuestion,
-    command: Terminal,
-    plan: ListTodo,
-  } as const;
-  const Icon = VARIANT_ICONS[variant];
-
   return (
-    <div
-      className={`${styles.card}${className ? ` ${className}` : ''}`}
-      data-variant={variant}
-      data-static={showActions ? undefined : 'true'}
-      data-testid="approval-card"
+    <ApprovalCardFrame
+      variant={variant}
+      title={title}
+      headerAction={headerAction}
+      isStatic={!showActions}
+      className={className}
       onKeyDown={(e) => {
         if (e.key !== 'Enter') {
           return;
@@ -606,16 +692,6 @@ export function ApprovalCard({
         handleApprove();
       }}
     >
-      <div className={styles.head}>
-        <span className={styles.icon} data-variant={variant}>
-          <Icon className={styles.iconSvg} aria-hidden />
-        </span>
-        <div className={styles.headText}>
-          <h3 className={styles.title}>{title}</h3>
-        </div>
-        {headerAction != null && <div className={styles.headActions}>{headerAction}</div>}
-      </div>
-
       {variant === 'questions' && questions.length > 0 && (
         <div
           className={styles.questionsViewport}
@@ -1043,7 +1119,7 @@ export function ApprovalCard({
         </div>
       )}
       {footnote}
-    </div>
+    </ApprovalCardFrame>
   );
 }
 

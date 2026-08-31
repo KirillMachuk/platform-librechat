@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { useRecoilValue } from 'recoil';
+import { ThinkingWaitLabel } from '~/components/Chat/Cards/ThinkingReasoning';
 import { useMessageContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
 import store from '~/store';
@@ -17,6 +18,10 @@ const DR_PHASE_LABELS = {
  * Shimmering «Thinking…» label shown while the latest reply has no content yet
  * (a non-reasoning model before its first token, or Deep Research before the
  * plan card). Replaces the pulsing dot (design book §6.12, round 22 item 5).
+ * Since r27 it IS the reasoning block's own header — same component, same
+ * brain icon, same 13px scale — so a model that starts thinking swaps nothing
+ * on screen; before, this label was 16px prose and the block's header 13px,
+ * and the jump read as the design changing mid-wait.
  * During a Deep Research run the label follows the run's pre-plan phase
  * («Готовлю агента» → «Думаю над планом») via the dr_progress atom — same
  * shimmer, different words (round 23, item 3). conversationId comes from
@@ -40,9 +45,7 @@ const ThinkingIndicator = memo(({ conversationId }: { conversationId?: string | 
   if (drProgress != null && phaseKey == null) {
     return null;
   }
-  return (
-    <span className="thinking-shimmer">{localize(phaseKey ?? 'com_ui_thinking_indicator')}</span>
-  );
+  return <ThinkingWaitLabel label={localize(phaseKey ?? 'com_ui_thinking_indicator')} />;
 });
 
 export default ThinkingIndicator;

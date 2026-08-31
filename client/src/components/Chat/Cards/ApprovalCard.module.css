@@ -64,6 +64,10 @@
   background: color-mix(in srgb, var(--c-acc) 12%, var(--surface-primary));
   color: var(--c-acc);
 }
+.icon[data-variant="report"] {
+  background: color-mix(in srgb, var(--c-acc) 12%, var(--surface-primary));
+  color: var(--c-acc);
+}
 .iconSvg { width: 14px; height: 14px; }
 .headText {
   min-width: 0;

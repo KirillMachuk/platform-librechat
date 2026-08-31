@@ -2144,16 +2144,13 @@ html {
   }
 }
 
-/* Shimmering «Thinking…» label while the latest reply has no content yet
-   (design book §6.12, round 22 item 5 — replaces the pulsing dot). Visible
-   only under a `.submitting` ancestor, mirroring the old dot's gating
-   (including its two legacy always-submitting EmptyText paths in Part.tsx —
-   parity, with a follow-up queued to gate them). The sweep runs
-   t2 → t1 → t2 across the text; reduced motion gets static t2. */
-.thinking-shimmer {
-  display: none;
-}
-.submitting .thinking-shimmer,
+/* The shimmering word itself — «Думаю…» before the first token, the same word
+   in a streaming reasoning header, and the running plan step's label. The
+   sweep runs t2 → t1 → t2 across the text; reduced motion gets static t2.
+   The `.submitting` gate that used to live here moved to `.trWait` in
+   ThinkingReasoning.module.css when the waiting label became the reasoning
+   header (r27): the gate has to hide the brain icon too, and one file
+   deciding it beats two classes racing on CSS chunk order. */
 .thinking-shimmer-active {
   display: inline-block;
   white-space: nowrap;
@@ -2180,7 +2177,6 @@ html {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .submitting .thinking-shimmer,
   .thinking-shimmer-active {
     animation: none;
     background-image: none;

@@ -30,7 +30,14 @@
     opacity: 1;
   }
 }
-.trHeader {
+/* ONE waiting look (owner r27). The in-flow «Думаю…» that shows before any
+ * content arrives and the reasoning block's own header are the same word in
+ * the same place, so they are the same geometry here — they used to be two
+ * renderers in two type scales (16px/26px/400 in the prose flow vs
+ * 13px/18px/500 here) and the handoff read as the design changing mid-wait.
+ * Sharing ONE declaration list is the point: a value that lives twice drifts. */
+.trHeader,
+.trWait {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -44,6 +51,17 @@
   line-height: 18px;
   font-weight: 500;
   letter-spacing: -0.005em;
+}
+/* The waiting label keeps the gate the bare `.thinking-shimmer` word had: it
+ * shows only under a `.submitting` ancestor, so a finished reply that ended
+ * up with no text never keeps a label — or now an icon — waiting forever.
+ * Both rules live in THIS file so the winner is decided by source order here
+ * and not by which CSS chunk a build happens to emit first. */
+.trWait {
+  display: none;
+}
+:global(.submitting) .trWait {
+  display: inline-flex;
 }
 .trHeader.isClickable {
   cursor: pointer;

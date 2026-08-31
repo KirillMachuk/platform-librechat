@@ -2,6 +2,14 @@
 import { useEffect, useState } from 'react';
 import type { ApprovalCardStrings } from '~/components/Chat/Cards/ApprovalCard';
 import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/ApprovalCard';
+import ReportCard from '~/components/Chat/Messages/DeepResearch/ReportCard';
+
+const REPORT_TEXT = [
+  'Ключевые выводы: агрегаторы забирают 25–35% с заказа, собственный канал окупается от 600 заказов в месяц на точку.',
+  'Комиссия зависит от города и от того, кто везёт: за курьера агрегатора берут больше, за самовывоз — заметно меньше.',
+  'Собственное приложение снимает комиссию, но добавляет расходы на поддержку, маркетинг и логистику.',
+  'Рекомендация: держать оба канала, а собственный продвигать скидкой, которая дешевле комиссии агрегатора.',
+].join('\n\n');
 
 /**
  * Dev-only acceptance page for the interactive-cards track (К1): all
@@ -141,6 +149,17 @@ export default function CardsDemo() {
               </div>
             }
           />
+
+          <ReportCard
+            title="Рынок доставки для быстрого питания: агрегаторы и собственные каналы"
+            text={REPORT_TEXT}
+          >
+            <div className="markdown prose dark:prose-invert light w-full break-words">
+              {REPORT_TEXT.split('\n\n').map((p, i) => (
+                <p key={i}>{p}</p>
+              ))}
+            </div>
+          </ReportCard>
 
           <ApprovalCard
             variant="command"
