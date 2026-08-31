@@ -279,16 +279,14 @@ export function ApprovalCardFrame({
           {oneLineTitle ? (
             /* A clamped title needs its full text somewhere, and §6.6 says that
              * is the ink plate — `onlyWhenTruncated` keeps it quiet when the
-             * title happens to fit. `data-truncated-label` is what the anchor
-             * measures. */
+             * title happens to fit. The clamped element IS the anchor here, and
+             * that is what the plate measures (it looks for a
+             * `[data-truncated-label]`/`.truncate` DESCENDANT and falls back to
+             * the anchor itself), so no marker element is needed. */
             <TooltipAnchor
               description={title}
               onlyWhenTruncated
-              render={
-                <h3 className={`${styles.title} ${styles.titleOneLine}`} data-truncated-label>
-                  {title}
-                </h3>
-              }
+              render={<h3 className={`${styles.title} ${styles.titleOneLine}`}>{title}</h3>}
             />
           ) : (
             <h3 className={styles.title}>{title}</h3>
