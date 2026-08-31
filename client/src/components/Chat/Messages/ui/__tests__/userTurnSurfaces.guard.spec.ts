@@ -17,7 +17,10 @@ import { readFileSync, readdirSync, statSync } from 'fs';
  */
 const CLIENT_SRC = join(__dirname, '../../../../..');
 const BUBBLE = 'USER_BUBBLE_CLASS';
-const HOOKS = ['useDrActionChip', 'useAskUserChip'];
+/* r25: useDrCommand replaced useDrActionChip — command rows are hidden (start)
+ * or land as the plan card's badge (cancel), but every user-turn surface must
+ * still consult the rule, or the raw «Начать исследование» bubble returns. */
+const HOOKS = ['useDrCommand', 'useAskUserChip'];
 
 /** Surfaces that draw the bubble but deliberately carry no chips. */
 const EXEMPT = new Map<string, string>([

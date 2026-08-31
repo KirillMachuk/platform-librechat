@@ -339,7 +339,16 @@ const ChatForm = memo(function ChatForm({
                     tabIndex={0}
                     data-testid="text-input"
                     rows={1}
-                    autoComplete="off"
+                    /* Chrome ignores autocomplete="off" for contact/address
+                     * autofill BY POLICY, so the round-24 "off" still let the
+                     * popover open on every chat-switch refocus (owner r25).
+                     * "new-password" is the one token both Chrome and Safari
+                     * honor as «never fill stored data here» — the same trick
+                     * Registration.tsx uses in the opposite direction. The
+                     * data attrs silence 1Password/LastPass overlays. */
+                    autoComplete="new-password"
+                    data-1p-ignore="true"
+                    data-lpignore="true"
                     aria-label={localize('com_ui_message_input')}
                     style={{ height: 44, overflowY: 'auto', overflowX: 'hidden' }}
                     className={cn(

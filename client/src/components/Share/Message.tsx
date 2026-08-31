@@ -1,7 +1,7 @@
 import type { TMessageProps } from '~/common';
-import useDrActionChip from '~/components/Chat/Messages/DeepResearch/useDrActionChip';
 import useAskUserChip from '~/components/Chat/Messages/DeepResearch/useAskUserChip';
 import MinimalHoverButtons from '~/components/Chat/Messages/MinimalHoverButtons';
+import useDrCommand from '~/components/Chat/Messages/DeepResearch/useDrCommand';
 import MessageContent from '~/components/Chat/Messages/Content/MessageContent';
 import SearchContent from '~/components/Chat/Messages/Content/SearchContent';
 import { USER_BUBBLE_CLASS } from '~/components/Chat/Messages/ui/turn';
@@ -39,10 +39,17 @@ export default function Message(props: TMessageProps) {
    * runs.)
    */
   const askChip = useAskUserChip(message);
-  const actionChip = useDrActionChip(message);
-  const chip = askChip ?? actionChip;
+  const drCommand = useDrCommand(message);
+  const chip = askChip;
 
   if (!message) {
+    return null;
+  }
+
+  /* r25: the START row is hidden on the share page too (the report says it
+   * ran). The CANCEL row stays as a plain text bubble here — share renders no
+   * plan card, so without this row a cancelled run would just trail off. */
+  if (drCommand === 'start') {
     return null;
   }
 

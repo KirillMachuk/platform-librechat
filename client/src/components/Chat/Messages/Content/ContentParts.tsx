@@ -51,6 +51,8 @@ type PartWithContextProps = {
   onReasoningExpandedChange?: (expanded: boolean) => void;
   reasoningDurationMs?: number;
   onReasoningStreamTick?: () => void;
+  askAnswersInitial?: Record<string, string>;
+  onAskAnswersChange?: (answers: Record<string, string>) => void;
 };
 
 const PartWithContext = memo(function PartWithContext({
@@ -72,6 +74,8 @@ const PartWithContext = memo(function PartWithContext({
   onReasoningExpandedChange,
   reasoningDurationMs,
   onReasoningStreamTick,
+  askAnswersInitial,
+  onAskAnswersChange,
 }: PartWithContextProps) {
   const contextValue = useMemo(
     () => ({
@@ -87,6 +91,8 @@ const PartWithContext = memo(function PartWithContext({
       onReasoningExpandedChange,
       reasoningDurationMs,
       onReasoningStreamTick,
+      askAnswersInitial,
+      onAskAnswersChange,
     }),
     [
       messageId,
@@ -100,6 +106,8 @@ const PartWithContext = memo(function PartWithContext({
       onReasoningExpandedChange,
       reasoningDurationMs,
       onReasoningStreamTick,
+      askAnswersInitial,
+      onAskAnswersChange,
     ],
   );
 
@@ -181,6 +189,10 @@ const ContentParts = memo(function ContentParts({
    * of the finished «Думал N с» header. Lives here, not in the part, for the
    * same reason as the expansion map — the finalization remount would lose it. */
   const reasoningTimingRef = useRef(new Map<number, { start: number; last: number }>());
+  /* ask_user answers picked while the tail text still streams (r25) — the
+   * finalization remount would wipe the card's local state at exactly the
+   * moment «Продолжить» arms. Same survival rules as the maps above. */
+  const askAnswersRef = useRef(new Map<number, Record<string, string>>());
   const fallbackScopeRef = useRef({ messageId, scope: 0 });
   if (fallbackScopeRef.current.messageId !== messageId) {
     /* A provisional id (trailing '_', see buildCreatedInitialResponse) swaps
@@ -198,6 +210,7 @@ const ContentParts = memo(function ContentParts({
       toolGroupExpansionRef.current.clear();
       reasoningExpansionRef.current.clear();
       reasoningTimingRef.current.clear();
+      askAnswersRef.current.clear();
     }
     fallbackScopeRef.current.messageId = messageId;
   }
@@ -245,6 +258,16 @@ const ContentParts = memo(function ContentParts({
   const getReasoningDurationMs = useCallback((idx: number): number | undefined => {
     const timing = reasoningTimingRef.current.get(idx);
     return timing == null ? undefined : timing.last - timing.start;
+  }, []);
+
+  const askAnswersSettersRef = useRef(new Map<number, (answers: Record<string, string>) => void>());
+  const getAskAnswersSetter = useCallback((idx: number) => {
+    let setter = askAnswersSettersRef.current.get(idx);
+    if (!setter) {
+      setter = (answers: Record<string, string>) => askAnswersRef.current.set(idx, answers);
+      askAnswersSettersRef.current.set(idx, setter);
+    }
+    return setter;
   }, []);
 
   /**
@@ -358,6 +381,8 @@ const ContentParts = memo(function ContentParts({
           onReasoningExpandedChange={getReasoningExpandedSetter(idx)}
           reasoningDurationMs={getReasoningDurationMs(idx)}
           onReasoningStreamTick={getReasoningStreamTick(idx)}
+          askAnswersInitial={askAnswersRef.current.get(idx)}
+          onAskAnswersChange={getAskAnswersSetter(idx)}
         />
       );
     },
@@ -367,6 +392,7 @@ const ContentParts = memo(function ContentParts({
       getReasoningExpandedSetter,
       getReasoningDurationMs,
       getReasoningStreamTick,
+      getAskAnswersSetter,
       content,
       conversationId,
       effectiveIsSubmitting,
@@ -399,6 +425,8 @@ const ContentParts = memo(function ContentParts({
           onReasoningExpandedChange={getReasoningExpandedSetter(idx)}
           reasoningDurationMs={getReasoningDurationMs(idx)}
           onReasoningStreamTick={getReasoningStreamTick(idx)}
+          askAnswersInitial={askAnswersRef.current.get(idx)}
+          onAskAnswersChange={getAskAnswersSetter(idx)}
         />
       );
     },
@@ -407,6 +435,7 @@ const ContentParts = memo(function ContentParts({
       getReasoningExpandedSetter,
       getReasoningDurationMs,
       getReasoningStreamTick,
+      getAskAnswersSetter,
       content,
       conversationId,
       effectiveIsSubmitting,

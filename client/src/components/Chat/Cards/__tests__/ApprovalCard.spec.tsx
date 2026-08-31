@@ -129,6 +129,100 @@ describe('ApprovalCard — questions variant', () => {
   });
 });
 
+describe('ApprovalCard — actionsArmed (r25: select now, commit when the turn ends)', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => {
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+    jest.useRealTimers();
+  });
+
+  const renderUnarmed = (onApprove = jest.fn(), onSecondary = jest.fn()) => {
+    render(
+      <ApprovalCard
+        variant="questions"
+        strings={strings}
+        title="Вопросы"
+        approveLabel="Продолжить"
+        secondaryLabel="Пропустить"
+        questions={QUESTIONS}
+        actionsArmed={false}
+        onApprove={onApprove}
+        onSecondary={onSecondary}
+      />,
+    );
+    return { onApprove, onSecondary };
+  };
+
+  const answerAll = () => {
+    fireEvent.click(screen.getByRole('radio', { name: /Первый/ }));
+    act(() => {
+      jest.advanceTimersByTime(320);
+    });
+    fireEvent.click(screen.getByRole('radio', { name: /Тут/ }));
+  };
+
+  it('options stay LIVE while unarmed — no data-static inertness', () => {
+    const { onApprove } = renderUnarmed();
+    expect(document.querySelector('[data-static]')).toBeNull();
+    answerAll();
+    expect(screen.getByRole('radio', { name: /Тут/ })).toHaveAttribute('aria-checked', 'true');
+    expect(onApprove).not.toHaveBeenCalled();
+  });
+
+  it('both buttons are disabled and the card-level Enter does not approve', () => {
+    const { onApprove, onSecondary } = renderUnarmed();
+    answerAll();
+    expect(screen.getByRole('button', { name: /Продолжить/ })).toBeDisabled();
+    const skip = screen.getByRole('button', { name: 'Пропустить' });
+    expect(skip).toBeDisabled();
+    fireEvent.click(skip);
+    expect(onSecondary).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(screen.getByText('Вопросы').closest('div') as HTMLElement, {
+      key: 'Enter',
+    });
+    expect(onApprove).not.toHaveBeenCalled();
+  });
+
+  it('Enter in «Другое…» on the last question records the answer but does not submit', () => {
+    const { onApprove } = renderUnarmed();
+    fireEvent.click(screen.getByRole('radio', { name: /Первый/ }));
+    act(() => {
+      jest.advanceTimersByTime(320);
+    });
+    const custom = screen.getByLabelText('Свой ответ: Где хранить?');
+    fireEvent.click(custom);
+    fireEvent.change(custom, { target: { value: 'Свой вариант' } });
+    fireEvent.keyDown(custom, { key: 'Enter' });
+    expect(onApprove).not.toHaveBeenCalled();
+    expect(screen.getByDisplayValue('Свой вариант')).toBeInTheDocument();
+  });
+
+  it('initialAnswers seed the selections and report through onAnswersChange', () => {
+    const onAnswersChange = jest.fn();
+    render(
+      <ApprovalCard
+        variant="questions"
+        strings={strings}
+        title="Вопросы"
+        approveLabel="Продолжить"
+        questions={QUESTIONS}
+        initialAnswers={{ q1: 'Первый', q2: 'Свой ответ мимо вариантов' }}
+        onAnswersChange={onAnswersChange}
+      />,
+    );
+    expect(screen.getByRole('radio', { name: /Первый/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByDisplayValue('Свой ответ мимо вариантов')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Продолжить/ })).toBeEnabled();
+    expect(onAnswersChange).toHaveBeenCalledWith({
+      q1: 'Первый',
+      q2: 'Свой ответ мимо вариантов',
+    });
+  });
+});
+
 describe('ApprovalCard — plan variant', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => {

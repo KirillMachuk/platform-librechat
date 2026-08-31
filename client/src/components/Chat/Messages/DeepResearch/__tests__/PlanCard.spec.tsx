@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, act, fireEvent } from '@testing-library/react';
+import { render, act, fireEvent, screen } from '@testing-library/react';
 import type { TMessage } from 'librechat-data-provider';
 import PlanCard from '../PlanCard';
 
@@ -54,6 +54,13 @@ describe('PlanCard', () => {
     expect(getByText('Рынок CRM')).toBeInTheDocument();
     expect(getByText('Собрать')).toBeInTheDocument();
     expect(getByText('Сравнить')).toBeInTheDocument();
+  });
+
+  it('r25: a cancelled plan wears the «Отменено» badge instead of controls', () => {
+    render(<PlanCard message={planMessage()} awaitingAction={false} cancelled />);
+    expect(screen.getByTestId('plan-cancelled')).toHaveTextContent('com_ui_cards_cancelled');
+    expect(screen.queryByRole('button', { name: 'com_ui_cancel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'com_ui_deep_research_start' })).toBeNull();
   });
 
   it('shows no controls once the plan has been acted on (awaitingAction=false)', () => {

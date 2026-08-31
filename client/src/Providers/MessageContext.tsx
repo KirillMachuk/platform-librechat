@@ -37,6 +37,14 @@ type MessageContext = {
   reasoningDurationMs?: number;
   /** Called by the Reasoning part on every think chunk while streaming. */
   onReasoningStreamTick?: () => void;
+  /**
+   * ask_user answers preserved across the finalization remount (r25): the
+   * user selects options while the model's tail text still streams, and the
+   * id swap would wipe the card's local state at exactly the moment
+   * «Продолжить» arms. Map lives in ContentParts, keyed by part index.
+   */
+  askAnswersInitial?: Record<string, string>;
+  onAskAnswersChange?: (answers: Record<string, string>) => void;
 };
 
 export const MessageContext = createContext<MessageContext>({} as MessageContext);

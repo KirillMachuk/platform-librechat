@@ -210,6 +210,17 @@ export interface ApprovalCardProps {
   /** False renders the card statically: no action row, no pie (an answered
    *  plan card keeps its content but stops being a control). */
   showActions?: boolean;
+  /** False keeps the option rows LIVE but disarms every commit path —
+   *  «Продолжить»/«Пропустить», the card-level Enter, the free-text
+   *  auto-approve. The ask_user card arms them only once the model's turn
+   *  ends (r25: answers are selectable while the tail text still streams). */
+  actionsArmed?: boolean;
+  /** Seeds the answers across the finalization remount (the part key carries
+   *  messageId — the reasoningExpandedInitial survival pattern). A seeded
+   *  answer outside the question's options re-selects «Другое…» with it. */
+  initialAnswers?: Record<string, string>;
+  /** Reports every answers change upward (a ref write in the parent). */
+  onAnswersChange?: (answers: Record<string, string>) => void;
   /** Extra header button(s), rendered where the original had Download/
    *  Maximize. Use ApprovalCardHeaderAction. */
   headerAction?: React.ReactNode;
@@ -238,15 +249,36 @@ export function ApprovalCard({
   onAutoApproveCancel,
   footnote,
   showActions = true,
+  actionsArmed = true,
+  initialAnswers,
+  onAnswersChange,
   headerAction,
   onApprove,
   onSecondary,
   secondaryPressed,
   className,
 }: ApprovalCardProps) {
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [otherSelected, setOtherSelected] = useState<Record<string, boolean>>({});
-  const [customDraft, setCustomDraft] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string>>(() => initialAnswers ?? {});
+  const [otherSelected, setOtherSelected] = useState<Record<string, boolean>>(() => {
+    const seeded: Record<string, boolean> = {};
+    for (const q of questions) {
+      const a = initialAnswers?.[q.id];
+      if (a != null && !q.options.includes(a)) {
+        seeded[q.id] = true;
+      }
+    }
+    return seeded;
+  });
+  const [customDraft, setCustomDraft] = useState<Record<string, string>>(() => {
+    const seeded: Record<string, string> = {};
+    for (const q of questions) {
+      const a = initialAnswers?.[q.id];
+      if (a != null && !q.options.includes(a)) {
+        seeded[q.id] = a;
+      }
+    }
+    return seeded;
+  });
   const [step, setStep] = useState(0);
   const [planExpanded, setPlanExpanded] = useState(false);
   const autoApproveActive = variant === 'plan' && autoApprove != null && autoApprove.secsLeft > 0;
@@ -365,7 +397,14 @@ export function ApprovalCard({
 
   const canContinue = variant !== 'questions' || allAnswered;
 
+  useEffect(() => {
+    onAnswersChange?.(answers);
+  }, [answers, onAnswersChange]);
+
   const handleApprove = (nextAnswers?: Record<string, string>) => {
+    if (!actionsArmed) {
+      return;
+    }
     if (variant === 'questions') {
       const a = nextAnswers ?? answers;
       const ok = questions.every((q) => Boolean(a[q.id]?.trim()));
@@ -849,6 +888,7 @@ export function ApprovalCard({
                 type="button"
                 className={styles.btnGhost}
                 aria-pressed={secondaryPressed}
+                disabled={!actionsArmed}
                 onClick={(e) => {
                   e.preventDefault();
                   onSecondary?.();
@@ -860,7 +900,7 @@ export function ApprovalCard({
             <button
               type="button"
               className={styles.btnPrimary}
-              disabled={!canContinue}
+              disabled={!canContinue || !actionsArmed}
               onClick={(e) => {
                 e.preventDefault();
                 handleApprove();

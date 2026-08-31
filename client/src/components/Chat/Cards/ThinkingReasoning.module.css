@@ -40,7 +40,7 @@
   border: 0;
   background: transparent;
   cursor: default;
-  font-size: var(--thinking-font-size);
+  font-size: calc(var(--markdown-font-size) * 13 / 16);
   line-height: 18px;
   font-weight: 500;
   letter-spacing: -0.005em;
@@ -48,24 +48,45 @@
 .trHeader.isClickable {
   cursor: pointer;
 }
+/* r25 (owner, reference screens): the finished header sits DIM — brain icon,
+ * verb, duration and chevron all tertiary-grade — and lifts to the primary
+ * text color only under a real cursor. Touch has no hover (§7): the header
+ * stays dim and the tap just toggles. Color transitions ride the icon and
+ * label so the lift is soft, not a blink. */
+.trBrain {
+  height: 14px;
+  width: 14px;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  transition: color 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
 .trLabel {
-  color: color-mix(in srgb, var(--text-secondary) 68%, transparent);
+  color: color-mix(in srgb, var(--text-tertiary) 75%, transparent);
+  transition: color 150ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .trVerb {
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
+  transition: color 150ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .trChevron {
   height: 12px;
   width: 12px;
   flex-shrink: 0;
   color: var(--text-tertiary);
-  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 150ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .trHeader[aria-expanded='true'] .trChevron {
   transform: rotate(180deg);
 }
-.trHeader.isClickable:hover .trChevron {
-  color: var(--text-secondary);
+@media (hover: hover) {
+  .trHeader.isClickable:hover .trBrain,
+  .trHeader.isClickable:hover .trLabel,
+  .trHeader.isClickable:hover .trVerb,
+  .trHeader.isClickable:hover .trChevron {
+    color: var(--text-primary);
+  }
 }
 .trViewport {
   margin-top: 6px;
@@ -88,12 +109,15 @@
   transition: transform 560ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
+/* r25: the thoughts run one step SMALLER and dimmer than the reply
+ * (×13/16 of the message size vs the reply's ×16/16 and the old ×14/16) so
+ * interleaved thinking never competes with the answer on a phone. */
 .trSentence {
   margin: 0;
   height: 40px;
   line-height: 20px;
-  font-size: var(--thinking-font-size);
-  color: var(--text-tertiary);
+  font-size: calc(var(--markdown-font-size) * 13 / 16);
+  color: color-mix(in srgb, var(--text-tertiary) 85%, transparent);
   letter-spacing: -0.005em;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -114,9 +138,9 @@
 .trFull {
   margin: 0;
   white-space: pre-wrap;
-  font-size: var(--thinking-font-size);
+  font-size: calc(var(--markdown-font-size) * 13 / 16);
   line-height: 20px;
-  color: var(--text-tertiary);
+  color: color-mix(in srgb, var(--text-tertiary) 85%, transparent);
   letter-spacing: -0.005em;
 }
 @media (prefers-reduced-motion: reduce) {

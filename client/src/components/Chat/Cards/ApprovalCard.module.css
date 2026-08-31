@@ -95,9 +95,13 @@
   color: var(--text-tertiary);
   cursor: pointer;
 }
-.headAction:hover {
-  color: var(--text-primary);
-  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+/* Hover only where a cursor exists — on touch :hover sticks after a tap
+ * (§7: hovers do not exist on touch). Focus rules stay unconditional. */
+@media (hover: hover) {
+  .headAction:hover {
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  }
 }
 .headAction:active { transform: scale(0.99); }
 .headActionIcon { width: 14px; height: 14px; flex: none; }
@@ -192,7 +196,9 @@
   cursor: pointer;
   transition: background-color 150ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.option:hover:not([data-selected="true"]) { background: var(--surface-hover); }
+@media (hover: hover) {
+  .option:hover:not([data-selected="true"]) { background: var(--surface-hover); }
+}
 .option[data-selected="true"] {
   border-color: transparent;
   background: var(--surface-primary);
@@ -394,7 +400,9 @@
   justify-content: center;
 }
 .todoMoreGlyph { width: 16px; height: 16px; }
-.todoMore:hover { color: var(--text-primary); }
+@media (hover: hover) {
+  .todoMore:hover { color: var(--text-primary); }
+}
 .todoMore:active { transform: scale(0.99); }
 .actions {
   display: flex;
@@ -444,8 +452,10 @@
 .btnGhost::before {
   background: color-mix(in srgb, var(--text-primary) 6%, transparent);
 }
-.btnGhost:hover::before {
-  background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+@media (hover: hover) {
+  .btnGhost:hover::before {
+    background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  }
 }
 .btnGhost[aria-pressed='true'] {
   box-shadow: inset 0 0 0 1px var(--border-medium);
@@ -458,8 +468,11 @@
 .btnPrimary:active:not(:disabled) { transform: scale(0.98); }
 .btnPrimary { color: var(--surface-primary); }
 .btnPrimary::before { background: var(--text-primary); }
-.btnPrimary:hover:not(:disabled)::before { background: color-mix(in srgb, var(--text-primary) 86%, var(--surface-primary)); }
+@media (hover: hover) {
+  .btnPrimary:hover:not(:disabled)::before { background: color-mix(in srgb, var(--text-primary) 86%, var(--surface-primary)); }
+}
 .btnPrimary:disabled { opacity: 0.38; cursor: default; }
+.btnGhost:disabled { opacity: 0.38; cursor: default; }
 .stepNav {
   flex: none;
   display: inline-flex;
@@ -482,7 +495,9 @@
   line-height: 0;
   transition: color 150ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.stepArrow:hover:not(:disabled) { color: var(--text-primary); }
+@media (hover: hover) {
+  .stepArrow:hover:not(:disabled) { color: var(--text-primary); }
+}
 .stepArrow:active:not(:disabled) { transform: scale(0.99); }
 .stepArrow:disabled { opacity: 0.28; cursor: default; }
 .stepArrowIcon { width: 14px; height: 14px; }
@@ -560,11 +575,17 @@
   transition: opacity 0.15s ease, transform 0.15s ease, filter 0.15s ease;
 }
 .autoApproveTip:not([data-tip])::after { display: none; }
-.autoApproveTip:hover::after,
 .autoApproveTip:focus-within::after {
   opacity: 1;
   filter: blur(0);
   transform: translateX(-50%) translateY(0);
+}
+@media (hover: hover) {
+  .autoApproveTip:hover::after {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateX(-50%) translateY(0);
+  }
 }
 .autoApproveCancel {
   position: relative;
@@ -617,10 +638,12 @@
   transition: opacity 150ms cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
 }
-.autoApproveCancel:hover .autoApprovePie,
 .autoApproveCancel:focus-visible .autoApprovePie { opacity: 0; }
-.autoApproveCancel:hover .autoApproveCancelGlyph,
 .autoApproveCancel:focus-visible .autoApproveCancelGlyph { opacity: 1; }
+@media (hover: hover) {
+  .autoApproveCancel:hover .autoApprovePie { opacity: 0; }
+  .autoApproveCancel:hover .autoApproveCancelGlyph { opacity: 1; }
+}
 .autoApprovePieTrack {
   stroke: color-mix(in srgb, var(--c-acc) 22%, transparent);
 }

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useToastContext } from '@librechat/client';
 import { parseDrPlanMessage, DR_START_MARKER, DR_CANCEL_MARKER } from 'librechat-data-provider';
 import type { TMessage } from 'librechat-data-provider';
+import type { ReactNode } from 'react';
 import type { ApprovalCardStrings } from '~/components/Chat/Cards/ApprovalCard';
 import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/ApprovalCard';
 import { useGetStartupConfig } from '~/data-provider';
@@ -84,10 +85,14 @@ export default function PlanCard({
   message,
   awaitingAction,
   autoStartSec,
+  cancelled = false,
 }: {
   message: TMessage;
   awaitingAction: boolean;
   autoStartSec?: number;
+  /** The plan has a cancel child: the outcome lands as the header badge
+   *  (r25 — the «Исследование отменено» chip row is hidden). */
+  cancelled?: boolean;
 }) {
   const localize = useLocalize();
   const { showToast } = useToastContext();
@@ -243,6 +248,17 @@ export default function PlanCard({
     [steps],
   );
 
+  let headerAction: ReactNode;
+  if (showControls) {
+    headerAction = <ApprovalCardHeaderAction label={localize('com_ui_cancel')} onClick={cancel} />;
+  } else if (cancelled) {
+    headerAction = (
+      <span data-testid="plan-cancelled" className="text-xs font-medium text-text-tertiary">
+        {localize('com_ui_cards_cancelled')}
+      </span>
+    );
+  }
+
   return (
     <div className="my-2 w-full">
       <ApprovalCard
@@ -255,11 +271,7 @@ export default function PlanCard({
         approveLabel={localize('com_ui_deep_research_start')}
         secondaryLabel={localize('com_ui_edit')}
         showActions={showControls}
-        headerAction={
-          showControls ? (
-            <ApprovalCardHeaderAction label={localize('com_ui_cancel')} onClick={cancel} />
-          ) : undefined
-        }
+        headerAction={headerAction}
         autoApprove={
           countdownActive && remaining != null
             ? { secsLeft: remaining, total: PLAN_AUTO_START_SECS }

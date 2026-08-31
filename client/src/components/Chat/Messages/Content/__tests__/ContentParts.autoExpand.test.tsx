@@ -51,6 +51,8 @@ jest.mock('../Part', () => {
       onReasoningExpandedChange,
       reasoningDurationMs,
       onReasoningStreamTick,
+      askAnswersInitial,
+      onAskAnswersChange,
     } = useMessageContext();
     return (
       <div
@@ -59,9 +61,14 @@ jest.mock('../Part', () => {
         data-auto-expand={String(autoExpandReasoning === true)}
         data-reasoning-initial={String(reasoningExpandedInitial)}
         data-duration={String(reasoningDurationMs)}
+        data-ask-answers={JSON.stringify(askAnswersInitial ?? null)}
         onClick={() => onReasoningExpandedChange?.(true)}
       >
         <button data-testid={`tick-${partIndex}`} onClick={() => onReasoningStreamTick?.()} />
+        <button
+          data-testid={`answer-${partIndex}`}
+          onClick={() => onAskAnswersChange?.({ q1: 'Отчёт' })}
+        />
       </div>
     );
   };
@@ -317,5 +324,43 @@ describe('ContentParts — thinking duration survives the finalization remount (
       />,
     );
     expect(screen.getByTestId('part-0')).toHaveAttribute('data-duration', '3000');
+  });
+});
+
+describe('ContentParts — ask_user answers survive the finalization remount (r25)', () => {
+  it('re-seeds mid-stream selections after the id swap and wipes them for a new message', () => {
+    const { rerender } = render(
+      <ContentParts
+        {...baseProps}
+        messageId="user-msg-1_"
+        isSubmitting={true}
+        content={[think('streaming tail')]}
+      />,
+    );
+    expect(screen.getByTestId('part-0')).toHaveAttribute('data-ask-answers', 'null');
+    screen.getByTestId('answer-0').click();
+
+    rerender(
+      <ContentParts
+        {...baseProps}
+        messageId="server-id-1"
+        isSubmitting={false}
+        content={[think('streaming tail')]}
+      />,
+    );
+    expect(screen.getByTestId('part-0')).toHaveAttribute(
+      'data-ask-answers',
+      JSON.stringify({ q1: 'Отчёт' }),
+    );
+
+    rerender(
+      <ContentParts
+        {...baseProps}
+        messageId="server-b"
+        isSubmitting={false}
+        content={[think('b')]}
+      />,
+    );
+    expect(screen.getByTestId('part-0')).toHaveAttribute('data-ask-answers', 'null');
   });
 });
