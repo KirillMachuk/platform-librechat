@@ -15,6 +15,15 @@ export interface TDeepResearchProgress {
   /** Set by useResumableSSE while the stream is offline/reconnecting — the card swaps
    *  its action line for a "waiting for network" notice instead of pulsing as healthy. */
   stalled?: boolean;
+  /**
+   * Which plan step the run is on, 0-based, as reported BY THE RUN (the
+   * supervisor names the step its batch advances; the runner clamps it and
+   * never lets it go backwards). Absent = the server does not know — a PROCEED
+   * run, or a snapshot from before r27 — and the card must not invent one:
+   * deriving it from `progress` is exactly the defect this replaced, which
+   * ticked off two steps of a five-step plan on the first research round.
+   */
+  stepIndex?: number;
 }
 
 /**

@@ -1666,6 +1666,25 @@ async function runNewDeepResearch(params) {
       const maxRounds = Math.max(1, tier.maxOrchestratorCycles || 6);
       let searchCount = 0;
       /**
+       * Which plan step the card highlights, 0-based — and the reason this is a
+       * variable here rather than arithmetic in the client.
+       *
+       * The card used to derive it from the progress fraction: `floor(0.40 × 5)`
+       * put a five-step plan on step 3 at the FIRST research round, so step 1 was
+       * never once shown as running and two steps were already ticked off, while
+       * the action line under them described a sub-question that belongs to no
+       * step at all (owner r27). The fraction encodes supervisor rounds, and the
+       * relation between rounds and plan steps does not exist — the supervisor
+       * now says which step its batch advances and that answer travels here.
+       *
+       * Monotonic on purpose: a checklist reads as progress, so a step that has
+       * gone back would UN-TICK finished work. Held server-side so a reload, a
+       * replay and a second tab all agree. It starts on the first step — SCOPE
+       * is the run working toward it — and marks nothing done until a later
+       * step is actually reported.
+       */
+      let planStepIndex = 0;
+      /**
        * One `dr_progress` snapshot. The client REPLACES its snapshot wholesale
        * (`setDrProgress` in useResumableSSE), so every emit has to carry the checklist and
        * the search count too — a partial one would blank the card's steps.
@@ -1677,7 +1696,14 @@ async function runNewDeepResearch(params) {
         Promise.resolve(
           GenerationJobManager.emitChunk(streamId, {
             event: 'dr_progress',
-            data: { phase, steps: planSteps, action, searches: searchCount, progress },
+            data: {
+              phase,
+              steps: planSteps,
+              action,
+              searches: searchCount,
+              progress,
+              stepIndex: planSteps.length > 0 ? planStepIndex : undefined,
+            },
           }),
         ).catch(() => {});
       };
@@ -1723,6 +1749,13 @@ async function runNewDeepResearch(params) {
            * and once when the report node returns (it is over). The first arrival starts
            * the clock and the heartbeat; the second is just the last tick before the
            * final, and must not restart anything. */
+          /* Writing the report IS the plan's last step — the gathering is over,
+           * so everything before it has genuinely happened. This is also the
+           * only honest way to close a plan whose middle steps the supervisor
+           * never named. */
+          if (planSteps.length > 0) {
+            planStepIndex = planSteps.length - 1;
+          }
           if (reportStartedMs === 0) {
             reportStartedMs = Date.now();
             /* No card listening (legacy gate-off run) → no heartbeat. `emitDrProgress`
@@ -1738,6 +1771,12 @@ async function runNewDeepResearch(params) {
         }
         if (event.type === 'research') {
           searchCount += 1;
+          /* The supervisor's own answer, never below where the card already is
+           * (see `planStepIndex`). A round it did not label leaves the
+           * highlight where it stands rather than moving it somewhere made up. */
+          if (event.planStep > 0 && event.planStep <= planSteps.length) {
+            planStepIndex = Math.max(planStepIndex, event.planStep - 1);
+          }
         }
         emitDrProgress(
           event.type,
@@ -1759,6 +1798,12 @@ async function runNewDeepResearch(params) {
             conversationId,
             mode: tier.name,
             budget: tierToRunBudget(tier),
+            /* The plan the user approved (and may have edited). Until r27 the
+             * graph never saw it: the run was steered only by the brief, so a
+             * plan the user had corrected changed nothing about the research.
+             * Empty for a PROCEED run, which keeps that path's prompts exactly
+             * as they were measured. */
+            planSteps,
           },
           signal,
           wallClockMs: Math.max(1, tier.wallClockMinutes) * 60_000,

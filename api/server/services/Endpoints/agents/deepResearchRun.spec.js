@@ -1359,6 +1359,87 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     expect(research[1].data.progress).toBeLessThanOrEqual(1);
   });
 
+  it('carries the approved plan into the graph and reports the step the run is on (r27)', async () => {
+    /**
+     * Two defects in one place (owner r27). The graph never SAW the plan — a run
+     * was steered by the brief alone, so a plan the user edited changed nothing
+     * about the research. And the card derived the highlighted step from the
+     * progress fraction: `floor(0.40 × 3)` = 1, so the first research round
+     * opened on step 2 with step 1 already ticked, under an action line about
+     * something else. The supervisor now names the step and it travels here.
+     */
+    mockStartSovereignSession.mockResolvedValue(null);
+    models.getMessages.mockResolvedValueOnce([
+      { messageId: 'orig', isCreatedByUser: true, parentMessageId: null, text: 'погода в Сочи' },
+      {
+        messageId: 'p1',
+        isCreatedByUser: false,
+        parentMessageId: 'orig',
+        drKind: 'plan',
+        text: '**План исследования:** Погода\n\n1. Собрать нормы\n2. Сравнить температуры\n3. Свести таблицу',
+      },
+    ]);
+    let seenConfigurable = null;
+    mockRunDeepResearch.mockImplementationOnce(async (params) => {
+      seenConfigurable = params.configurable;
+      params.onProgress({ type: 'scope', jurisdiction: 'RU' });
+      params.onProgress({ type: 'research', round: 1, subQuestion: 'нормы', planStep: 1 });
+      params.onProgress({ type: 'research', round: 2, subQuestion: 'температуры', planStep: 2 });
+      /* A round the model did not label, and one that points backwards: the
+       * highlight must hold, never un-tick finished work. */
+      params.onProgress({ type: 'research', round: 3, subQuestion: 'ещё' });
+      params.onProgress({ type: 'research', round: 4, subQuestion: 'назад', planStep: 1 });
+      params.onProgress({ type: 'report' });
+      return {
+        finalReport: 'Отчёт',
+        finalizeReason: 'completed',
+        usage: { input: 1, output: 1, total: 2 },
+        findings: [],
+      };
+    });
+
+    await runNewDeepResearch(planParams('Начать исследование'));
+
+    expect(seenConfigurable.planSteps).toEqual([
+      'Собрать нормы',
+      'Сравнить температуры',
+      'Свести таблицу',
+    ]);
+    const steps = mockEmitChunk.mock.calls
+      .filter((c) => c[1]?.event === 'dr_progress' && c[1].data.steps.length > 0)
+      .map((c) => [c[1].data.phase, c[1].data.stepIndex]);
+    expect(steps).toEqual([
+      ['scope', 0],
+      ['research', 0],
+      ['research', 1],
+      ['research', 1],
+      ['research', 1],
+      ['report', 2],
+    ]);
+  });
+
+  it('a PROCEED run reports no step at all — there is no plan to be on (r27)', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockPlanContent = '{"action":"PROCEED"}';
+    mockRunDeepResearch.mockImplementationOnce(async (params) => {
+      params.onProgress({ type: 'research', round: 1, subQuestion: 'q' });
+      return {
+        finalReport: 'Отчёт',
+        finalizeReason: 'completed',
+        usage: { input: 1, output: 1, total: 2 },
+        findings: [],
+      };
+    });
+
+    await runNewDeepResearch(planParams('изучи CRM рынок'));
+
+    const research = mockEmitChunk.mock.calls.find(
+      (c) => c[1]?.event === 'dr_progress' && c[1].data.phase === 'research',
+    );
+    expect(research[1].data.steps).toEqual([]);
+    expect(research[1].data.stepIndex).toBeUndefined();
+  });
+
   it('labels the pre-plan silence: prepare right after created, plan before the decision (round 23)', async () => {
     // A fresh gated turn that ends at the plan card: the graph never runs, yet the
     // client must see the wait labeled. Red on pre-fix code: no dr_progress existed

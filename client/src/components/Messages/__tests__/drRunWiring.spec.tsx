@@ -205,6 +205,10 @@ const RUNNING = {
   action: 'Ищет источники',
   searches: 1,
   progress: 0.5,
+  /* The step the RUN reported (r27). It used to be derived from `progress`,
+   * which on this very snapshot would put the card on step 2 of 2 and tick
+   * step 1 off — while the run had only just started. */
+  stepIndex: 1,
 };
 
 describe('which plan card draws a live Deep Research run (r26 review)', () => {
@@ -214,6 +218,25 @@ describe('which plan card draws a live Deep Research run (r26 review)', () => {
     expect(screen.getByText('Сравнить').closest('li')).toHaveAttribute('data-status', 'active');
     expect(screen.getByTestId('dr-stop')).toBeInTheDocument();
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
+  });
+
+  it('a run that reports NO step marks none — the fraction must not fill in for it', () => {
+    /* The defect (owner r27): the index came from `floor(progress × steps)`, so
+     * a snapshot like this one — a live run, half the bar, no step reported —
+     * painted step 2 active and step 1 done. Nothing on the wire knew that. */
+    const { stepIndex: _dropped, ...noStep } = RUNNING;
+    renderTree({ latestId: 'resp1', snapshot: noStep });
+    expect(screen.getByText('Собрать').closest('li')).not.toHaveAttribute('data-status', 'done');
+    expect(screen.getByText('Сравнить').closest('li')).not.toHaveAttribute('data-status', 'active');
+    /* The run is still visibly a run: Stop and the bar stay. */
+    expect(screen.getByTestId('dr-stop')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
+  });
+
+  it('the reported step is followed even when the fraction disagrees', () => {
+    renderTree({ latestId: 'resp1', snapshot: { ...RUNNING, progress: 0.95, stepIndex: 0 } });
+    expect(screen.getByText('Собрать').closest('li')).toHaveAttribute('data-status', 'active');
+    expect(screen.getByText('Сравнить').closest('li')).not.toHaveAttribute('data-status', 'done');
   });
 
   it('with no run in flight the same card is just a plan', () => {
