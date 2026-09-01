@@ -146,7 +146,11 @@ describe('PlanCard', () => {
           initializeState={({ set }) => {
             set(drProgressByConvoId('c1'), {
               phase: 'research',
-              steps: [],
+              /* A live plan run always carries its steps on the wire — that is
+               * the very field the standalone card stands down on, so the card
+               * must claim exactly those snapshots and no others (r28 review:
+               * an empty-steps snapshot is a run NOBODY draws). */
+              steps: ['Шаг 1', 'Шаг 2', 'Шаг 3', 'Шаг 4', 'Шаг 5'],
               action: 'Идёт',
               searches: 1,
               progress: 0.9,

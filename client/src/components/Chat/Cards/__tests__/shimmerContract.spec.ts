@@ -76,3 +76,106 @@ describe('shimmer contract (r25 package Б review)', () => {
     expect(body).toMatch(/color:\s*var\(--text-primary\)/);
   });
 });
+
+describe('transparent text must survive being selected (owner r28)', () => {
+  /**
+   * Selecting a shimmering label left a blank petrol bar: the glyphs are drawn
+   * by a gradient clipped to the text, the text itself is transparent, and the
+   * selection background paints over the gradient with nothing left to draw the
+   * letters. Measured in the running app: without the paired rule the selection
+   * pseudo-element resolves to `rgba(0, 0, 0, 0)` for both `color` and
+   * `-webkit-text-fill-color`; with it, to the solid text colour.
+   *
+   * This guards the CLASS of defect, not one instance — eleven places use it,
+   * five of them straight from upstream — so it scans EVERY stylesheet the app
+   * ships, expands grouped selectors, and demands that each zeroing class name
+   * a selection colour that actually restores the fill (r28 review found all
+   * three of those holes in the first version of this guard).
+   */
+  const SHEETS: [string, string][] = [
+    ['style.css', STYLE],
+    ['ApprovalCard.module.css', MODULE],
+    [
+      'ThinkingReasoning.module.css',
+      readFileSync(join(__dirname, '../ThinkingReasoning.module.css'), 'utf8'),
+    ],
+  ];
+
+  /* Comments first: a rule's selector is «everything since the last closing
+   * brace», so a comment ABOVE it joins the selector text and a comment that
+   * merely mentions a class name would be read as one (found while writing
+   * this). */
+  const rules = (css: string): [string, string][] =>
+    [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^}]*)\}/g)].map(
+      ([, selector, body]) => [selector, body],
+    );
+
+  /** Every class in a rule that zeroes the text fill — grouped selectors give
+   *  one entry per class, not just the last one. */
+  const zeroing = (css: string): string[] => {
+    const out = new Set<string>();
+    for (const [selector, body] of rules(css)) {
+      const zeroed =
+        /(^|[^-])color:\s*transparent/.test(body) ||
+        /-webkit-text-fill-color:\s*transparent/.test(body);
+      if (!zeroed || selector.includes('::selection')) {
+        continue;
+      }
+      /* Only the SUBJECT of each compound: in `.dark .shimmer` the element that
+       * carries the transparent fill is `.shimmer`, and demanding a selection
+       * rule for the theme wrapper would be nonsense. */
+      for (const part of selector.split(',')) {
+        const subject =
+          part
+            .trim()
+            .split(/[\s>+~]+/)
+            .pop() ?? '';
+        for (const [, name] of subject.matchAll(/\.([\w-]+)/g)) {
+          out.add(name);
+        }
+      }
+    }
+    return [...out];
+  };
+
+  /** Bodies of the selection rules that name `cls`, across every sheet. */
+  const selectionBodies = (cls: string): string[] =>
+    SHEETS.flatMap(([, css]) =>
+      rules(css)
+        .filter(([selector]) => new RegExp(`\\.${cls}::selection(\\s|,|$)`).test(selector))
+        .map(([, body]) => body),
+    );
+
+  it('finds the classes that zero the text fill (the guard must have something to guard)', () => {
+    const all = SHEETS.flatMap(([, css]) => zeroing(css));
+    expect(all.length).toBeGreaterThan(0);
+  });
+
+  it('every one of them has a selection rule that RESTORES the fill', () => {
+    const broken: string[] = [];
+    for (const [sheet, css] of SHEETS) {
+      for (const cls of zeroing(css)) {
+        const bodies = selectionBodies(cls);
+        const restores = bodies.some(
+          (b) => /(^|[^-])color:\s*[^;]+/.test(b) || /-webkit-text-fill-color:\s*[^;]+/.test(b),
+        );
+        if (!restores) {
+          broken.push(`${sheet}: .${cls}`);
+        }
+      }
+    }
+    /* A selection rule that only sets a background leaves the glyphs exactly as
+     * invisible, so «has a rule» is not the bar — «puts a colour back» is. */
+    expect(broken).toEqual([]);
+  });
+
+  it('the selection rule restores BOTH properties', () => {
+    /* The two class families zero the fill differently — `color` in ours, the
+     * upstream `-webkit-text-fill-color` in `.shimmer` — so one property alone
+     * would leave the other family invisible. */
+    const rule = STYLE.slice(STYLE.indexOf('.thinking-shimmer-active::selection'));
+    const body = rule.slice(rule.indexOf('{') + 1, rule.indexOf('}'));
+    expect(body).toMatch(/(^|[^-])color:\s*var\(--text-/);
+    expect(body).toMatch(/-webkit-text-fill-color:\s*var\(--text-/);
+  });
+});

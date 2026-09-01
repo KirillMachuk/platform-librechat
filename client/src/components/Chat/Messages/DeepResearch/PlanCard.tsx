@@ -121,7 +121,15 @@ export default function PlanCard({
   const { stopGenerating } = useChatContext();
   /* An idle card subscribes to the empty key — a shared, always-null atom —
    * so a conversation full of past plans costs one no-op subscription each. */
-  const running = useRecoilValue(drProgressByConvoId(isRunning ? (conversationId ?? '') : ''));
+  const snapshot = useRecoilValue(drProgressByConvoId(isRunning ? (conversationId ?? '') : ''));
+  /* Complementary with RunningSlot BY CONSTRUCTION: it stands down exactly when
+   * the snapshot carries steps, so this card must claim exactly the same
+   * snapshots. Before the graph starts (prepare/plan) the snapshot has none —
+   * neither card draws and the waiting label owns the screen, which is the r26
+   * arrangement. Reading the same field on both sides is what keeps a gap from
+   * opening between them (r28 review found one: a continuation drew nothing at
+   * all for minutes). */
+  const running = (snapshot?.steps?.length ?? 0) > 0 ? snapshot : null;
   const { data: startupConfig } = useGetStartupConfig();
   const configuredAutoStart = autoStartSec ?? startupConfig?.deepResearch?.planAutoStartSec ?? 0;
   const effectiveAutoStartSec = configuredAutoStart === 0 ? 0 : PLAN_AUTO_START_SECS;

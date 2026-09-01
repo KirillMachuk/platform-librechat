@@ -7,6 +7,7 @@ import {
   buildPlanPrompt,
   isStartCommand,
   extractPlanSteps,
+  extractPlanStepsFromTranscript,
   isCancelCommand,
   formatPlanMessage,
   CANCELLED_MESSAGE,
@@ -55,8 +56,19 @@ describe('parsePlanDecision (review r2: fails CLOSED to PLAN)', () => {
     expect(out.questions).toEqual(['a', 'b', 'c']);
   });
 
-  it('returns PROCEED for an explicit PROCEED', () => {
-    expect(parsePlanDecision('{"action":"PROCEED"}').action).toBe('PROCEED');
+  it('a PROCEED on a turn with no approved plan is DOWNGRADED to PLAN (r28 review)', () => {
+    /* The rule «a research always has a plan» cannot live in the prompt alone:
+     * everything else in this parser is fail-closed precisely because a model
+     * may answer off-contract. Without an approved plan in the branch there is
+     * nothing to proceed WITH, so the gate must produce a card. */
+    expect(parsePlanDecision('{"action":"PROCEED"}').action).toBe('PLAN');
+    expect(parsePlanDecision('{"action":"PROCEED"}', { allowClarify: false }).action).toBe('PLAN');
+  });
+
+  it('honours PROCEED only where a plan already exists to be run', () => {
+    expect(
+      parsePlanDecision('{"action":"PROCEED"}', { allowClarify: false, allowProceed: true }).action,
+    ).toBe('PROCEED');
   });
 
   it('fails CLOSED to PLAN on garbage / empty / CLARIFY-without-Q / PLAN-without-steps', () => {
@@ -84,10 +96,12 @@ describe('parsePlanDecision (review r2: fails CLOSED to PLAN)', () => {
     expect(out.questions).toEqual([]);
   });
 
-  it('honors an explicit PROCEED when allowClarify is false (the «начинай» reply)', () => {
-    expect(parsePlanDecision('{"action":"PROCEED"}', { allowClarify: false }).action).toBe(
-      'PROCEED',
-    );
+  it('honors an explicit PROCEED when a plan already exists (the «начинай» reply)', () => {
+    /* r28 review: `allowClarify: false` alone is not enough — answering
+     * clarifying questions also lands here and leaves no plan in the branch. */
+    expect(
+      parsePlanDecision('{"action":"PROCEED"}', { allowClarify: false, allowProceed: true }).action,
+    ).toBe('PROCEED');
   });
 
   it('still allows PLAN when allowClarify is false', () => {
@@ -106,11 +120,38 @@ describe('parsePlanDecision (review r2: fails CLOSED to PLAN)', () => {
 });
 
 describe('buildPlanPrompt', () => {
-  it('asks for the CLARIFY|PLAN|PROCEED JSON and honors an explicit start', () => {
+  it('a FRESH turn may only clarify or plan — never decide a plan is unnecessary (r28)', () => {
+    /* The owner's rule: «план всегда должен быть» — he approves it before the
+     * run and reads the progress by it. A gate that could skip the plan left
+     * the live card with no steps to show, which is what made it invent three
+     * constants. PROCEED survives only as the anti-loop answer below. */
     const prompt = buildPlanPrompt({ now: '2026-07-09' });
-    expect(prompt).toMatch(/CLARIFY\|PLAN\|PROCEED/);
+    expect(prompt).toMatch(/"CLARIFY\|PLAN"/);
+    expect(prompt).not.toMatch(/CLARIFY\|PLAN\|PROCEED/);
+    expect(prompt).toMatch(/План нужен ВСЕГДА/);
     expect(prompt).toMatch(/"action"/);
     expect(prompt).toMatch(/"steps"/);
+  });
+
+  it('offers PROCEED only when an approved plan already exists (anti-loop)', () => {
+    const withPlan = buildPlanPrompt({
+      now: '2026-07-09',
+      allowClarify: false,
+      allowProceed: true,
+    });
+    expect(withPlan).toMatch(/"PLAN\|PROCEED"/);
+    expect(withPlan).toMatch(/начинай/);
+    /* Answering clarifying questions leaves no plan in the branch, so «начинай»
+     * must still produce one rather than launch a planless run (r28 review). */
+    const withoutPlan = buildPlanPrompt({ now: '2026-07-09', allowClarify: false });
+    expect(withoutPlan).toMatch(/"PLAN"/);
+    expect(withoutPlan).not.toMatch(/PROCEED/);
+  });
+
+  it('caps a step to one line of the card', () => {
+    /* The steps are rows in a narrow card; the model was writing sentences that
+     * wrapped to three lines (owner r28: «учти размер карточки»). */
+    expect(buildPlanPrompt({ now: '2026-07-09' })).toMatch(/ДО 60 знаков/);
   });
 
   it('forbids CLARIFY when allowClarify is false', () => {
@@ -175,5 +216,70 @@ describe('isStartCommand / isCancelCommand', () => {
     expect(isStartCommand('✕ Отменить исследование')).toBe(false);
     expect(isCancelCommand('▶ Начать исследование')).toBe(false);
     expect(isCancelCommand('')).toBe(false);
+  });
+});
+
+describe('extractPlanStepsFromTranscript (r28)', () => {
+  const plan = '**План исследования:** Рынок\n\n1. Собрать вендоров\n2. Сравнить цены';
+
+  it('reads the steps out of a dialogue transcript', () => {
+    const transcript = `Диалог по задаче исследования.\n\nИсходный запрос пользователя:\nизучи рынок\n\nПредложенный план:\n${plan}\n\nОтвет пользователя:\nНачать исследование`;
+    expect(extractPlanStepsFromTranscript(transcript)).toEqual([
+      'Собрать вендоров',
+      'Сравнить цены',
+    ]);
+  });
+
+  it('does NOT swallow the clarify questions, which are numbered the same way', () => {
+    /* The whole reason for slicing from the marker: a naive scan of the
+     * transcript would return the questions and the steps as one list, and the
+     * count check downstream would then silently drop the agenda. */
+    const transcript = `Уточняющие вопросы:\n1. Какой бюджет?\n2. Какой регион?\n\nОтвет пользователя:\nлюбой\n\nПредложенный план:\n${plan}`;
+    expect(extractPlanStepsFromTranscript(transcript)).toEqual([
+      'Собрать вендоров',
+      'Сравнить цены',
+    ]);
+  });
+
+  it('takes the LAST plan when the branch carries more than one', () => {
+    const older = '**План исследования:** Старый\n\n1. Старый шаг';
+    expect(extractPlanStepsFromTranscript(`${older}\n\nПредложенный план:\n${plan}`)).toEqual([
+      'Собрать вендоров',
+      'Сравнить цены',
+    ]);
+  });
+
+  it('returns nothing when the transcript carries no plan at all', () => {
+    expect(extractPlanStepsFromTranscript('Исходный запрос пользователя:\nизучи рынок')).toEqual(
+      [],
+    );
+    expect(extractPlanStepsFromTranscript('')).toEqual([]);
+  });
+
+  it('survives masking — placeholders are ordinary text in a step', () => {
+    const masked =
+      '**План исследования:** Рынок\n\n1. Собрать данные по [PERSON_1]\n2. Сравнить цены';
+    expect(extractPlanStepsFromTranscript(masked)).toEqual([
+      'Собрать данные по [PERSON_1]',
+      'Сравнить цены',
+    ]);
+  });
+});
+
+describe('a plan step is always one line (r28 review)', () => {
+  it('folds a multi-line step so the two extractors cannot disagree', () => {
+    /* `extractPlanStepsFromTranscript` stops at the first unnumbered line while
+     * `extractPlanSteps` keeps scanning, so a step with a newline made the
+     * counts differ and silently dropped the agenda in sovereign mode. */
+    const decision = parsePlanDecision(
+      JSON.stringify({
+        action: 'PLAN',
+        title: 'T',
+        steps: ['Собрать данные\nи сравнить', 'Вывод'],
+      }),
+    );
+    expect(decision.steps).toEqual(['Собрать данные и сравнить', 'Вывод']);
+    const message = formatPlanMessage({ title: 'T', steps: decision.steps });
+    expect(extractPlanSteps(message)).toEqual(extractPlanStepsFromTranscript(message));
   });
 });

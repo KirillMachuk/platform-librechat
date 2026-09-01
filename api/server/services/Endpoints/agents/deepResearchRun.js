@@ -24,6 +24,7 @@ const {
   formatClarifyMessage,
   buildPlanPrompt,
   parsePlanDecision,
+  extractPlanStepsFromTranscript,
   formatPlanMessage,
   isPlanMessage,
   isStartCommand,
@@ -587,6 +588,9 @@ async function buildDrTurnContext({
     dialogue: null,
     originalRequest: text ?? '',
     parentText: '',
+    /** Text of the plan the user approved earlier in THIS branch, '' when there
+     *  is none. A fresh turn has no chain, so there is nothing to inherit. */
+    planText: '',
     duplicateStart: false,
   };
   if (!parentMessageId || !conversationId || parentMessageId === Constants.NO_PARENT) {
@@ -659,7 +663,29 @@ async function buildDrTurnContext({
           m.drKind === 'start' &&
           m.messageId !== currentUserMessageId,
       );
-    return { kind, dialogue, originalRequest, parentText: parent.text ?? '', duplicateStart };
+    /**
+     * The approved plan of THIS branch, found by walking back through the chain
+     * rather than by looking at the direct parent only.
+     *
+     * The parent is a plan message just once — on the turn that starts it. On
+     * every later turn (a Stop anchor, then a comment) the parent is something
+     * else, so the run lost the plan the user had approved and continued with
+     * NO agenda at all: the live card then had no steps to show and fell back
+     * to three constants that fit any research (owner r28: «план всегда должен
+     * быть… вместо реальных шагов подставляются шаблоны»). The nearest plan
+     * above the turn is the one the user is still working on.
+     */
+    const planMsg = [...chain]
+      .reverse()
+      .find((m) => m.drKind === 'plan' || isPlanMessage(m.text ?? ''));
+    return {
+      kind,
+      dialogue,
+      originalRequest,
+      parentText: parent.text ?? '',
+      planText: planMsg?.text ?? '',
+      duplicateStart,
+    };
   } catch (error) {
     logger.warn(
       '[deepResearchRun] failed to build DR turn context; treating as a fresh request',
@@ -713,16 +739,17 @@ async function runPlanDecision({
   signal,
   allowClarify,
   isRefinement = false,
+  allowProceed = false,
 }) {
   try {
     const model = await buildModel(leadModelSlug);
     const prompt = [
-      new SystemMessage(buildPlanPrompt({ now, allowClarify, isRefinement })),
+      new SystemMessage(buildPlanPrompt({ now, allowClarify, isRefinement, allowProceed })),
       new HumanMessage(input),
     ];
     const response = await model.invoke(prompt, { signal });
     return {
-      ...parsePlanDecision(extractMessageText(response?.content), { allowClarify }),
+      ...parsePlanDecision(extractMessageText(response?.content), { allowClarify, allowProceed }),
       usage: usageFromExchange(prompt, response),
       usageByModel: usageByModelFromExchange(prompt, response, leadModelSlug),
     };
@@ -1518,6 +1545,12 @@ async function runNewDeepResearch(params) {
         // A comment on an existing plan (card edit or post-Stop) → tell the model to return
         // an UPDATED plan that reflects the change, not a near-identical one (task #21).
         isRefinement: turn.kind === 'plan-edit',
+        /* Skipping the card is only allowed when the branch ALREADY holds a
+         * plan the user approved: «начинай» then runs THAT plan instead of
+         * answering with another card, and a research still never runs without
+         * one. Fail-closed in the parser too — the prompt is not a contract
+         * (r28 review). */
+        allowProceed: (turn.planText ?? '') !== '',
       });
       planUsage = decision.usage;
       planUsageByModel = decision.usageByModel;
@@ -1661,8 +1694,9 @@ async function runNewDeepResearch(params) {
       // Progress is proportional (computed here — no graph changes). Steps come from the
       // approved plan message. Gated on the plan gate + streamId; fire-and-forget so a slow
       // emit never blocks the run, and it always ALSO logs (the shipped ops line).
-      const planSteps =
-        planGateEnabled && isPlanMessage(turn.parentText) ? extractPlanSteps(turn.parentText) : [];
+      /* The plan of this branch, not merely of the direct parent — see
+       * `planText` in the turn context. */
+      const planSteps = planGateEnabled ? extractPlanSteps(turn.planText ?? '') : [];
       const maxRounds = Math.max(1, tier.maxOrchestratorCycles || 6);
       let searchCount = 0;
       /**
@@ -1800,34 +1834,32 @@ async function runNewDeepResearch(params) {
        * The plan the graph is given must be MASKED in sovereign mode.
        *
        * The plan message is saved de-masked — the user reads their own names on
-       * their own card — so `planSteps` carries real PII, and handing it to the
-       * supervisor would egress exactly what Track B exists to prevent, in the
-       * one place a plan echoes the request. `dr_progress.steps` keeps the
-       * de-masked copy: that one is the user's own screen.
+       * their own card — so `planSteps` carries real PII. In passthrough the
+       * anonymizer forwards model calls untouched, so anything this channel
+       * puts in the supervisor's prompt goes out exactly as written.
        *
-       * ONE masking call for the whole list, not one per step: the anonymizer is
-       * the dominant cost of a DR turn, and six round-trips before the graph
-       * starts would be paid by every plan run. The split back is RECONCILED
-       * against the input — a masking that changed the line count means the
+       * It is NOT masked with a second call, though. The transcript that became
+       * `maskedQuestion` already contains the plan message verbatim, so the
+       * steps are in there with this run's own placeholders: reading them back
+       * costs no round trip (the anonymizer is the dominant latency of a DR
+       * turn), keeps them identical to the ones the brief was built from, and
+       * lets the detector work on the long text — a step masked alone is a
+       * short isolated string, and `/v1/detect` is a detection pass with no
+       * literal re-match, so a surname it caught in the transcript it can miss
+       * there (r28 review).
+       *
+       * RECONCILED against the de-masked list: a different count means the
        * mapping is unknown, and an unknown mapping degrades to no agenda at all
        * (the card then reports no step, which it already knows how to draw).
        */
       let graphPlanSteps = planSteps;
       if (sovereign && planSteps.length > 0) {
-        try {
-          const masked = (await sovereign.maskContent(planSteps.join('\n'))).split('\n');
-          graphPlanSteps = masked.length === planSteps.length ? masked : [];
-          if (graphPlanSteps.length === 0) {
-            logger.warn(
-              `[deepResearchRun] masked plan came back as ${masked.length} lines for ${planSteps.length} steps; running without the plan agenda`,
-            );
-          }
-        } catch (error) {
+        const masked = extractPlanStepsFromTranscript(sovereign.maskedQuestion);
+        graphPlanSteps = masked.length === planSteps.length ? masked : [];
+        if (graphPlanSteps.length === 0) {
           logger.warn(
-            '[deepResearchRun] plan masking failed; running without the plan agenda',
-            error,
+            `[deepResearchRun] masked transcript yielded ${masked.length} plan steps for ${planSteps.length}; running without the plan agenda`,
           );
-          graphPlanSteps = [];
         }
       }
       agendaReachedGraph = graphPlanSteps.length > 0;

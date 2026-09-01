@@ -44,7 +44,7 @@ const base = { phase: 'research', action: 'Ищет', searches: 1, progress: 0.5
 describe('RunningSlot — the PROCEED-run card only (r26)', () => {
   it('draws the standalone card when the run has NO plan steps', () => {
     withSnapshot({ ...base, steps: [] });
-    expect(screen.getByText('com_ui_deep_research_phase_research')).toBeInTheDocument();
+    expect(screen.getByText('Ищет')).toBeInTheDocument();
     expect(screen.getByTestId('dr-stop')).toBeInTheDocument();
   });
 

@@ -79,29 +79,48 @@ export function buildPlanPrompt({
   now,
   allowClarify = true,
   isRefinement = false,
+  allowProceed = false,
 }: {
   now: string;
   allowClarify?: boolean;
   isRefinement?: boolean;
+  /** May this turn skip the card and just run? Only when the branch ALREADY
+   *  holds a plan the user approved — then «начинай» runs THAT plan instead of
+   *  answering with another card, and the owner's rule that a research always
+   *  has a plan still holds. With no plan in the branch there is nothing to
+   *  proceed with, so the gate must produce one. */
+  allowProceed?: boolean;
 }): string {
-  const clarifyRule = allowClarify
-    ? `- Если для АДРЕСНОЙ рекомендации не хватает критичных вводных (масштаб бизнеса, бюджет, on-prem/облако, отрасль, юрисдикция, ключевые требования) — верни action "CLARIFY" и от 1 до ${MAX_CLARIFY_QUESTIONS} КОРОТКИХ вопросов, только самые важные. Не задавай вопросы ради вопросов.`
-    : `- Пользователю уже задавали уточнения (или он просил начинать) — БОЛЬШЕ НЕ УТОЧНЯЙ. Действие "CLARIFY" запрещено; выбирай "PLAN" или "PROCEED". Если пользователь явно просит начать/запустить исследование («начинай», «поехали», «запускай») — верни "PROCEED", не предлагай новый план.`;
+  const CLARIFY_ALLOWED = `- Если для АДРЕСНОЙ рекомендации не хватает критичных вводных (масштаб бизнеса, бюджет, on-prem/облако, отрасль, юрисдикция, ключевые требования) — верни action "CLARIFY" и от 1 до ${MAX_CLARIFY_QUESTIONS} КОРОТКИХ вопросов, только самые важные. Не задавай вопросы ради вопросов.`;
+  const START_ALLOWED = `- Пользователю уже задавали уточнения (или он просил начинать) — БОЛЬШЕ НЕ УТОЧНЯЙ. Действие "CLARIFY" запрещено; выбирай "PLAN" или "PROCEED". Если пользователь явно просит начать/запустить исследование («начинай», «поехали», «запускай») — верни "PROCEED": уже утверждённый план будет запущен как есть, новый предлагать не нужно.`;
+  const PLAN_ONLY = `- Пользователю уже задавали уточнения — БОЛЬШЕ НЕ УТОЧНЯЙ. Действие "CLARIFY" запрещено. Утверждённого плана в этом диалоге ещё нет, поэтому верни "PLAN": даже на «начинай» сначала нужен план, который пользователь подтвердит.`;
+  let clarifyRule = PLAN_ONLY;
+  if (allowClarify) {
+    clarifyRule = CLARIFY_ALLOWED;
+  } else if (allowProceed) {
+    clarifyRule = START_ALLOWED;
+  }
   const refinementRule = isRefinement
     ? `\n\nРЕЖИМ ПРАВКИ ПЛАНА: в диалоге есть блок «Предложенный план», а последнее сообщение пользователя — ПРАВКА к нему. Верни action "PLAN" — ОБНОВЛЁННЫЙ план, в котором правка пользователя ЯВНО учтена в шагах (требование по языку, региону, бюджету, источникам или формату вырази отдельным шагом или условием внутри шагов). НЕ повторяй прежний план дословно и НЕ игнорируй правку.`
     : '';
+  let actions = 'PLAN';
+  if (allowClarify) {
+    actions = 'CLARIFY|PLAN';
+  } else if (allowProceed) {
+    actions = 'PLAN|PROCEED';
+  }
   return `Ты — модуль ПЛАНИРОВАНИЯ системы глубокого исследования (Deep Research) для рынка СНГ.
 Дата: ${now}.
 
 Тебе дан запрос пользователя (или диалог уточнения). Реши, что вернуть:
 ${clarifyRule}
-- Иначе верни action "PLAN": короткий ПЛАН исследования из 3–6 шагов. Каждый шаг — сжатая формулировка действия (глагол в инфинитиве). ПОСЛЕДНИЙ шаг ВСЕГДА описывает формат результата (например, «Сформировать сравнительную таблицу и рекомендацию»). Также верни "title" — короткую ТЕМУ исследования в именительном падеже (3–7 слов, это тема, а не команда, без кавычек).
-- Если запрос предельно ясен и план не нужен — верни action "PROCEED".${refinementRule}
+- Иначе верни action "PLAN": короткий ПЛАН исследования из 3–6 шагов. Каждый шаг — сжатая формулировка действия (глагол в инфинитиве), ДО 60 знаков: это строка в узкой карточке, она не должна переноситься на три строки. Подробности выноси в сам ход исследования, а не в текст шага. ПОСЛЕДНИЙ шаг ВСЕГДА описывает формат результата (например, «Сформировать таблицу и рекомендацию»). Также верни "title" — короткую ТЕМУ исследования в именительном падеже (3–7 слов, это тема, а не команда, без кавычек).
+${allowProceed ? '' : '- План нужен ВСЕГДА, даже если запрос кажется простым: пользователь утверждает его перед запуском и по нему видит ход работы. Не решай за него, что план не требуется.\n'}${refinementRule}
 
 Язык вопросов, шагов и заголовка = язык запроса пользователя.
 
 Ответь СТРОГО одним JSON-объектом, без markdown и текста вне JSON:
-{"action": "CLARIFY|PLAN|PROCEED", "questions": ["<вопрос>"], "title": "<тема>", "steps": ["<шаг 1>", "<шаг 2>"]}`;
+{"action": "${actions}", "questions": ["<вопрос>"], "title": "<тема>", "steps": ["<шаг 1>", "<шаг 2>"]}`;
 }
 
 /** Trims, drops empties, de-duplicates, and caps a string array from model output. */
@@ -115,7 +134,11 @@ function cleanStringList(value: unknown, cap: number): string[] {
     if (typeof item !== 'string') {
       continue;
     }
-    const trimmed = item.trim();
+    /* One line per step. The card draws them as rows, and the two extractors
+     * disagree on a multi-line one — the transcript reader stops at the first
+     * unnumbered line while the message reader keeps going — which silently
+     * drops the whole agenda on the count check (r28 review). */
+    const trimmed = item.replace(/\s*\n\s*/g, ' ').trim();
     if (!trimmed || seen.has(trimmed)) {
       continue;
     }
@@ -138,7 +161,10 @@ function cleanStringList(value: unknown, cap: number): string[] {
  */
 export function parsePlanDecision(
   text: string,
-  { allowClarify = true }: { allowClarify?: boolean } = {},
+  {
+    allowClarify = true,
+    allowProceed = false,
+  }: { allowClarify?: boolean; allowProceed?: boolean } = {},
 ): PlanDecision {
   const parsed = tolerantJsonParse(text);
   const action = String(parsed?.action ?? '').toUpperCase();
@@ -149,7 +175,7 @@ export function parsePlanDecision(
   if (action === 'CLARIFY' && allowClarify && questions.length > 0) {
     return { action: 'CLARIFY', questions, title: '', steps: [] };
   }
-  if (action === 'PROCEED') {
+  if (action === 'PROCEED' && allowProceed) {
     return { action: 'PROCEED', questions: [], title: '', steps: [] };
   }
   return { action: 'PLAN', questions: [], title, steps };
@@ -165,6 +191,44 @@ export function formatPlanMessage({ title, steps }: { title: string; steps: stri
   const heading = `${PLAN_MARKER} ${title.trim()}`.trimEnd();
   const list = steps.map((step, i) => `${i + 1}. ${step}`).join('\n');
   return `${heading}\n\n${list}`;
+}
+
+/**
+ * The plan's steps as they appear INSIDE a dialogue transcript — used to read
+ * them back out of the already-masked question instead of masking them a second
+ * time (r28).
+ *
+ * The transcript is what the sovereign session masks, and it carries the plan
+ * message verbatim, so the masked question already contains the steps with the
+ * run's own placeholders. Extracting them here costs nothing, keeps the
+ * placeholders identical to the ones the brief was built from, and lets the
+ * detector work on the long text with context — a step masked alone is a short
+ * isolated string, and `/v1/detect` is a detection pass with no literal
+ * re-match, so a surname it recognised in the transcript it can miss there.
+ *
+ * The slice matters: clarify questions are numbered the same way, so a naive
+ * scan of the whole transcript would mix them in. Numbered lines are collected
+ * from the plan marker until the first line that is neither numbered nor blank
+ * — which is the next labelled block.
+ */
+export function extractPlanStepsFromTranscript(transcript: string): string[] {
+  const text = String(transcript ?? '');
+  const at = text.lastIndexOf(PLAN_MARKER);
+  if (at === -1) {
+    return [];
+  }
+  const steps: string[] = [];
+  for (const line of text.slice(at).split(/\r?\n/).slice(1)) {
+    const match = line.match(/^\s*\d+\.\s+(.*\S)\s*$/);
+    if (match) {
+      steps.push(match[1].trim());
+      continue;
+    }
+    if (line.trim() && steps.length > 0) {
+      break;
+    }
+  }
+  return steps;
 }
 
 /** True if a message is a PLAN card (detected by the fixed marker). */

@@ -322,3 +322,25 @@ describe('AskUserCall (interactive cards К3 + r25)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+describe('the folded card leaves room for its own edge (owner r28)', () => {
+  it('the clipping wrapper is widened so the card ring is not cut off', () => {
+    /**
+     * The card's edge is a box-shadow ring painted OUTSIDE its border box, and
+     * the wrapper that makes the collapse animation work carries
+     * `overflow: hidden` — which clips sideways too. Measured against the real
+     * stylesheet: with the wrapper flush to the card there are 0px of room on
+     * each side (the hairline is simply gone); with the negative margin and its
+     * matching padding there are 4px, and the card does not move. jsdom has no
+     * layout, so the geometry lives in that measurement and this guard pins the
+     * pair that produces it — dropping either half brings the clipping back.
+     */
+    renderCall({ isLatestMessage: false });
+    const wrapper = screen
+      .getByTestId('ask-user-collapsed')
+      .querySelector('[class*="overflow-hidden"]');
+    expect(wrapper).not.toBeNull();
+    expect(wrapper?.className).toContain('-mx-1');
+    expect(wrapper?.className).toContain('px-1');
+  });
+});

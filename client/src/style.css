@@ -1242,13 +1242,7 @@ samp {
      native rendering and full Cyrillic on every OS, zero font downloads.
      Roboto Mono is out — its Cyrillic subset was never shipped anyway. */
   font-family:
-    ui-monospace,
-    SFMono-Regular,
-    'SF Mono',
-    Menlo,
-    Consolas,
-    'Liberation Mono',
-    monospace;
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 }
 code.language-text,
 code.language-txt,
@@ -1746,7 +1740,9 @@ body {
   font-size: var(--markdown-font-size, var(--font-size-base));
   /* 26px at the 16px default — the GPT reading rhythm the owner measured
      (16/26); the old 25.6px was the 1.6 ratio and read too dense. */
-  line-height: calc(26px * var(--markdown-font-size, var(--font-size-base)) / var(--font-size-base));
+  line-height: calc(
+    26px * var(--markdown-font-size, var(--font-size-base)) / var(--font-size-base)
+  );
 }
 
 /* The chat heading scale, owner 11.08 after reading real answers: the old
@@ -2721,7 +2717,9 @@ html {
   /* Канон §3 (11.08): 16/26 — тот же ритм, что у .markdown/.prose выше; это
      правило стоит ПОЗЖЕ их в файле и на том же элементе, поэтому обязано
      повторять их значение, а не спорить с ним (1.6 давал 25,6 и побеждал). */
-  line-height: calc(26px * var(--markdown-font-size, var(--font-size-base)) / var(--font-size-base));
+  line-height: calc(
+    26px * var(--markdown-font-size, var(--font-size-base)) / var(--font-size-base)
+  );
 }
 
 .message-content pre code {
@@ -2792,6 +2790,27 @@ html {
    token audit; this is its consumer. */
 ::selection {
   background: var(--c-sel);
+}
+
+/* Selecting a shimmering label used to leave a blank petrol bar (owner r28).
+   Those labels have no colour of their own: a gradient is clipped to the glyph
+   shapes and the text itself is transparent, so the selection background paints
+   over the gradient and nothing is left to draw the letters with. The rule
+   above sets only a background, and a selection pseudo-element does NOT inherit
+   the element's transparent fill — so naming a solid colour here is enough to
+   bring the glyphs back for the selected range, in every one of the eleven
+   places these classes are used (tool status lines, «Результаты обработки»,
+   the running plan step, the DR action line, file and PDF loading labels,
+   «Думаю…», the reasoning header). Both properties are set because the two
+   class families zero the fill differently — `color` in ours, the upstream
+   `-webkit-text-fill-color` in `.shimmer` — and each family must be immune to
+   the other's mechanism. Measured in the running app: without this rule the
+   selection pseudo-element resolves to rgba(0, 0, 0, 0) for both. */
+.thinking-shimmer-active::selection,
+.thinking-shimmer-paint::selection,
+.shimmer::selection {
+  color: var(--text-primary);
+  -webkit-text-fill-color: var(--text-primary);
 }
 
 :focus {

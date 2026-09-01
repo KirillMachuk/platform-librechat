@@ -199,7 +199,9 @@ jest.mock('@librechat/api', () => ({
     `Ты — модуль ПЛАНИРОВАНИЯ. ${now}${allowClarify ? '' : ' CLARIFY запрещено'}${
       isRefinement ? ' РЕЖИМ ПРАВКИ ПЛАНА' : ''
     }`,
-  parsePlanDecision: (text, { allowClarify = true } = {}) => {
+  /* Mirrors the real parser, INCLUDING its fail-closed rules: PROCEED is only
+   * honoured where a plan already exists to be run (r28 review). */
+  parsePlanDecision: (text, { allowClarify = true, allowProceed = false } = {}) => {
     let parsed = null;
     try {
       parsed = JSON.parse(text);
@@ -219,7 +221,7 @@ jest.mock('@librechat/api', () => ({
     if (action === 'CLARIFY' && allowClarify && questions.length) {
       return { action: 'CLARIFY', questions, title: '', steps: [] };
     }
-    if (action === 'PROCEED') {
+    if (action === 'PROCEED' && allowProceed) {
       return { action: 'PROCEED', questions: [], title: '', steps: [] };
     }
     // Review r2: ambiguity fails CLOSED to PLAN (possibly with empty steps — the runner
@@ -244,6 +246,28 @@ jest.mock('@librechat/api', () => ({
       const m = line.match(/^\s*\d+\.\s+(.*\S)\s*$/);
       if (m) {
         steps.push(m[1].trim());
+      }
+    }
+    return steps;
+  },
+  /* Mirrors the real helper: numbered lines from the plan marker on, stopping
+   * at the first line that is neither numbered nor blank (clarify questions are
+   * numbered the same way and must not be mixed in). */
+  extractPlanStepsFromTranscript: (transcript) => {
+    const text = String(transcript ?? '');
+    const at = text.lastIndexOf('**План исследования:**');
+    if (at === -1) {
+      return [];
+    }
+    const steps = [];
+    for (const line of text.slice(at).split(/\r?\n/).slice(1)) {
+      const m = line.match(/^\s*\d+\.\s+(.*\S)\s*$/);
+      if (m) {
+        steps.push(m[1].trim());
+        continue;
+      }
+      if (line.trim() && steps.length > 0) {
+        break;
       }
     }
     return steps;
@@ -1101,6 +1125,15 @@ describe('runNewDeepResearch — P0 review fixes (billing + abort signal)', () =
 describe('runNewDeepResearch — task #21 plan gate', () => {
   const models = require('~/models');
 
+  /* `jest.clearAllMocks()` wipes recorded calls but NOT queued one-shot
+   * resolutions: a conversation a test queues and does not consume leaks into
+   * the next test and silently hands it someone else's history. That is how
+   * flipping ONE test's outcome reddened five unrelated ones (r28). */
+  beforeEach(() => {
+    models.getMessages.mockReset();
+    models.getMessages.mockImplementation(async () => []);
+  });
+
   function planParams(text, extra = {}) {
     const p = baseParams(text);
     p.req.config.deepResearch = { planGate: true, ...extra };
@@ -1123,13 +1156,19 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     expect(msg.unfinished).toBe(false);
   });
 
-  it('fresh turn where the model PROCEEDs: runs the graph with no card', async () => {
+  it('fresh turn where the model PROCEEDs: still shows a card, never a planless run (r28)', async () => {
+    /* Was the opposite until r28. The owner's rule is that a research always
+     * has a plan — he approves it before the run and reads progress by it — so
+     * a PROCEED with nothing approved yet fails closed to a card. */
     mockStartSovereignSession.mockResolvedValue(null);
     mockPlanContent = '{"action":"PROCEED"}';
 
-    await runNewDeepResearch(planParams('сравни Битрикс24 и AmoCRM по цене за 2026 год'));
+    const result = await runNewDeepResearch(
+      planParams('сравни Битрикс24 и AmoCRM по цене за 2026 год'),
+    );
 
-    expect(mockRunDeepResearch).toHaveBeenCalledTimes(1);
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    expect(result.finalizeReason).toBe('plan');
   });
 
   it('START on a plan parent: runs the graph without a second decision', async () => {
@@ -1452,13 +1491,16 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
 
     it('FAILS ON PRE-FIX CODE: the graph gets placeholders, the user card keeps the names', async () => {
       /* The plan message is stored DE-MASKED — the user reads their own names —
-       * so handing `planSteps` to the supervisor as-is egresses exactly what
-       * Track B exists to stop, in the one place a plan echoes the request. */
+       * and in passthrough the anonymizer forwards model calls untouched, so
+       * this channel is the only thing between the plan and OpenRouter. The
+       * masked copy is read back out of the transcript that was ALREADY masked
+       * (r28), not masked a second time. */
       models.getMessages.mockResolvedValueOnce(planTree());
       mockStartSovereignSession.mockResolvedValue({
-        maskedQuestion: 'изучи для [PERSON_1]',
+        maskedQuestion:
+          'Диалог по задаче исследования.\n\nПредложенный план:\n**План исследования:** Рынок\n\n1. Собрать данные по [PERSON_1]\n2. Сравнить цены\n\nОтвет пользователя:\nНачать исследование',
         passthroughHeaders: {},
-        maskContent: jest.fn(async (t) => t.replace(/Иванову Ивану/g, '[PERSON_1]')),
+        maskContent: jest.fn(async (t) => t),
         restore: jest.fn(async (t) => t),
         drop: jest.fn(async () => {}),
       });
@@ -1474,14 +1516,31 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
       expect(research[1].data.steps).toEqual(['Собрать данные по Иванову Ивану', 'Сравнить цены']);
     });
 
-    it('a masking failure drops the agenda rather than sending raw PII', async () => {
+    it('costs NO extra anonymizer call — the steps come from the masked question (r28)', async () => {
+      /* The anonymizer is the dominant latency of a DR turn, and the transcript
+       * it already masked carries the plan verbatim. */
+      models.getMessages.mockResolvedValueOnce(planTree());
+      const maskContent = jest.fn(async (t) => t);
+      mockStartSovereignSession.mockResolvedValue({
+        maskedQuestion:
+          'Предложенный план:\n**План исследования:** Рынок\n\n1. Собрать данные по [PERSON_1]\n2. Сравнить цены',
+        passthroughHeaders: {},
+        maskContent,
+        restore: jest.fn(async (t) => t),
+        drop: jest.fn(async () => {}),
+      });
+
+      await runOnce();
+
+      expect(maskContent).not.toHaveBeenCalled();
+    });
+
+    it('a transcript that yields a different step count drops the agenda — the mapping is unknown', async () => {
       models.getMessages.mockResolvedValueOnce(planTree());
       mockStartSovereignSession.mockResolvedValue({
-        maskedQuestion: 'изучи для [PERSON_1]',
+        maskedQuestion: 'Предложенный план:\n**План исследования:** Рынок\n\n1. Только один шаг',
         passthroughHeaders: {},
-        maskContent: jest.fn(async () => {
-          throw new Error('anonymizer down');
-        }),
+        maskContent: jest.fn(async (t) => t),
         restore: jest.fn(async (t) => t),
         drop: jest.fn(async () => {}),
       });
@@ -1489,37 +1548,86 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
       const configurable = await runOnce();
 
       expect(configurable.planSteps).toEqual([]);
-      /* And the card is told NOTHING rather than left holding step 1: with no
-       * agenda the run can never name a step, so a highlight would be a claim
-       * nobody made. */
+      /* And the card is told NOTHING rather than left holding step 1. */
       const research = mockEmitChunk.mock.calls.find(
         (c) => c[1]?.event === 'dr_progress' && c[1].data.phase === 'research',
       );
       expect(research[1].data.steps.length).toBe(2);
       expect(research[1].data.stepIndex).toBeUndefined();
     });
-
-    it('a masking that changed the line count drops the agenda — the mapping is unknown', async () => {
-      models.getMessages.mockResolvedValueOnce(planTree());
-      mockStartSovereignSession.mockResolvedValue({
-        maskedQuestion: 'изучи для [PERSON_1]',
-        passthroughHeaders: {},
-        maskContent: jest.fn(async (t) => `${t}\nлишняя строка`),
-        restore: jest.fn(async (t) => t),
-        drop: jest.fn(async () => {}),
-      });
-
-      const configurable = await runOnce();
-
-      expect(configurable.planSteps).toEqual([]);
-    });
   });
 
-  it('a PROCEED run reports no step at all — there is no plan to be on (r27)', async () => {
+  it('FAILS ON PRE-FIX CODE: answering the clarifying questions still gets a plan, not a planless run (r28 review)', async () => {
+    /**
+     * «План всегда должен быть» has to survive a model that answers
+     * off-contract. On this turn CLARIFY is forbidden (anti-loop) and the
+     * branch holds no approved plan yet, so PROCEED would start the most
+     * expensive action in the product with nothing for the user to confirm and
+     * nothing for the card to show. The parser fails closed to PLAN.
+     */
     mockStartSovereignSession.mockResolvedValue(null);
     mockPlanContent = '{"action":"PROCEED"}';
+    models.getMessages.mockResolvedValueOnce([
+      { messageId: 'orig', isCreatedByUser: true, parentMessageId: null, text: 'изучи рынок' },
+      {
+        messageId: 'c1',
+        isCreatedByUser: false,
+        parentMessageId: 'orig',
+        drKind: 'clarify',
+        text: 'Уточните:\n1. Бюджет?\n2. Регион?',
+      },
+    ]);
+
+    const params = planParams('ок, поехали');
+    params.parentMessageId = 'c1';
+    params.userMessage.parentMessageId = 'c1';
+    const result = await runNewDeepResearch(params);
+
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    expect(result.finalizeReason).toBe('plan');
+  });
+
+  it('FAILS ON PRE-FIX CODE: a continuation after Stop keeps the plan the user approved (r28)', async () => {
+    /**
+     * The owner's report: «план всегда должен быть… вместо реальных шагов
+     * подставляются шаблоны». Measured on his own production thread — plan →
+     * start → Stop → comment → report. The plan is the parent exactly once, on
+     * the turn that starts it; on the continuation the parent is the STOPPED
+     * anchor, so `isPlanMessage(parentText)` was false and the run went ahead
+     * with no agenda. The card then had nothing to draw and fell back to three
+     * constants that fit any research. The plan of the BRANCH is what the user
+     * is still working on, so the turn context walks back to it.
+     */
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockPlanContent = '{"action":"PROCEED"}';
+    models.getMessages.mockResolvedValueOnce([
+      { messageId: 'orig', isCreatedByUser: true, parentMessageId: null, text: 'погода в Минске' },
+      {
+        messageId: 'p1',
+        isCreatedByUser: false,
+        parentMessageId: 'orig',
+        drKind: 'plan',
+        text: '**План исследования:** Погода\n\n1. Собрать нормы\n2. Сравнить температуры',
+      },
+      {
+        messageId: 's1',
+        isCreatedByUser: true,
+        parentMessageId: 'p1',
+        drKind: 'start',
+        text: 'Начать исследование',
+      },
+      {
+        messageId: 'a1',
+        isCreatedByUser: false,
+        parentMessageId: 's1',
+        drKind: 'aborted',
+        text: 'Исследование остановлено.',
+      },
+    ]);
+    let seenConfigurable = null;
     mockRunDeepResearch.mockImplementationOnce(async (params) => {
-      params.onProgress({ type: 'research', round: 1, subQuestion: 'q' });
+      seenConfigurable = params.configurable;
+      params.onProgress({ type: 'research', round: 1, subQuestion: 'нормы', planStep: 1 });
       return {
         finalReport: 'Отчёт',
         finalizeReason: 'completed',
@@ -1528,13 +1636,35 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
       };
     });
 
-    await runNewDeepResearch(planParams('изучи CRM рынок'));
+    /* The user comments on the stopped run — parent is the aborted anchor. */
+    const params = planParams('продолжай, но добавь про осадки');
+    params.parentMessageId = 'a1';
+    params.userMessage.parentMessageId = 'a1';
+    await runNewDeepResearch(params);
 
+    expect(seenConfigurable.planSteps).toEqual(['Собрать нормы', 'Сравнить температуры']);
     const research = mockEmitChunk.mock.calls.find(
       (c) => c[1]?.event === 'dr_progress' && c[1].data.phase === 'research',
     );
-    expect(research[1].data.steps).toEqual([]);
-    expect(research[1].data.stepIndex).toBeUndefined();
+    expect(research[1].data.steps).toEqual(['Собрать нормы', 'Сравнить температуры']);
+    expect(research[1].data.stepIndex).toBe(0);
+  });
+
+  it('a gate-ON turn can no longer reach the graph without a plan (r28)', async () => {
+    /* This used to be «a PROCEED run reports no step at all»: with the gate on,
+     * a fresh PROCEED started a planless run. It cannot any more — the parser
+     * fails closed to a card — so the case the old test described is now
+     * unreachable, and asserting on it would assert on nothing. The remaining
+     * planless run is the sovereign degradation, which has its own guard. */
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockPlanContent = '{"action":"PROCEED"}';
+
+    const result = await runNewDeepResearch(planParams('изучи CRM рынок'));
+
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    expect(result.finalizeReason).toBe('plan');
+    const saved = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(saved.text).toContain('**План исследования:**');
   });
 
   it('labels the pre-plan silence: prepare right after created, plan before the decision (round 23)', async () => {

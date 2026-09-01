@@ -34,22 +34,26 @@ const snapshot = (over: Partial<TDeepResearchProgress>): TDeepResearchProgress =
   ...over,
 });
 
-const rowOf = (text: string) => screen.getByText(text).closest('li');
-
 describe('ProgressCard — the PROCEED run card (r26)', () => {
-  it('falls back to the three research phases when a run has no plan', () => {
-    render(<ProgressCard data={snapshot({ steps: [], phase: 'research' })} />);
-    expect(screen.getByText('com_ui_deep_research_phase_scope')).toBeInTheDocument();
-    expect(screen.getByText('com_ui_deep_research_phase_research')).toBeInTheDocument();
-    expect(screen.getByText('com_ui_deep_research_phase_report')).toBeInTheDocument();
-    /* phase='research' → scope done, research active — driven by `phase`, not
-     * the 0.5 fraction (which would place the active mark differently). */
-    expect(rowOf('com_ui_deep_research_phase_scope')).toHaveAttribute('data-status', 'done');
-    expect(rowOf('com_ui_deep_research_phase_research')).toHaveAttribute('data-status', 'active');
-    expect(rowOf('com_ui_deep_research_phase_report')).toHaveAttribute('data-status', 'pending');
-    // The active phase is marked for assistive tech (VoiceOver reads it as the current step).
-    expect(rowOf('com_ui_deep_research_phase_research')).toHaveAttribute('aria-current', 'step');
-    expect(rowOf('com_ui_deep_research_phase_scope')).not.toHaveAttribute('aria-current');
+  it('invents NO steps when a run has no plan — the well is not drawn at all', () => {
+    /* It used to substitute three constants («Определение области
+     * исследования» / «Исследование источников» / «Формирование отчёта») into
+     * the same well, with the same «Шаги» heading and checkmarks a real plan
+     * gets. The owner read them as HIS plan, and they fit any research — the
+     * card was hiding an empty state behind invented content (r28). Since the
+     * gate always produces a plan and a continuation inherits the approved one,
+     * this card shows only what it knows: the action line and the bar. */
+    const { container } = render(
+      <ProgressCard data={snapshot({ steps: [], phase: 'research' })} />,
+    );
+    expect(screen.queryByText('com_ui_deep_research_phase_scope')).toBeNull();
+    expect(screen.queryByText('com_ui_deep_research_phase_research')).toBeNull();
+    expect(screen.queryByText('com_ui_deep_research_phase_report')).toBeNull();
+    expect(screen.queryByText('com_ui_deep_research_steps')).toBeNull();
+    expect(container.querySelector('li')).toBeNull();
+    /* What it does know is still there. */
+    expect(screen.getByText('Исследует источники')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
   });
 
   it('puts Stop in the header and reports progress to assistive tech', () => {
