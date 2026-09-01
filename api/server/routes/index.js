@@ -28,6 +28,7 @@ const billing = require('./billing');
 const actions = require('./actions');
 const apiKeys = require('./apiKeys');
 const banner = require('./banner');
+const favicon = require('./favicon');
 const search = require('./search');
 const models = require('./models');
 const convos = require('./convos');
@@ -46,6 +47,7 @@ const rum = require('./rum');
 
 module.exports = {
   rum,
+  favicon,
   mcp,
   auth,
   adminAuth,

@@ -305,6 +305,10 @@ const startServer = async () => {
   app.use('/api/assistants', routes.assistants);
   app.use('/api/files', await routes.files.initialize());
   app.use('/images/', createValidateImageRequest(appConfig.secureImageLinks), routes.staticRoute);
+  /* Source favicons, fetched and cached by us so the reader's browser never
+   * announces its reading list to a third party. Authenticated from the session
+   * cookie inside the router — an `<img>` carries no Authorization header. */
+  app.use('/api/favicon', routes.favicon);
   app.use('/api/share', preAuthTenantMiddleware, routes.share);
   app.use('/api/roles', routes.roles);
   app.use('/api/agents/chat', rejectChatStartsUntilReady);

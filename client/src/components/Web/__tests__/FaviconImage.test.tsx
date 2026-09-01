@@ -2,14 +2,35 @@ import { render, fireEvent } from '@testing-library/react';
 import { FaviconImage } from '../SourceHovercard';
 
 /**
- * The icon is fetched from an external service and arrives through a redirect —
- * measured at ~0.8s, and some domains answer 404 and never produce one. The
- * label was therefore on screen next to empty holes, which reads as broken
- * (owner r28: «иконки стали появляться с задержкой после надписи и это
- * выглядит нелепо»).
+ * The icon used to be fetched by the browser from an external service, which
+ * told a third party which sites the reader's research had surfaced, and
+ * arrived through a redirect — measured at ~0.8s, some domains answering 404
+ * and never producing one. The label was therefore on screen next to empty
+ * holes, which reads as broken (owner r28: «иконки стали появляться с
+ * задержкой после надписи и это выглядит нелепо»).
  */
-describe('FaviconImage — the box is never an empty hole (owner r28)', () => {
+describe('FaviconImage — the icon comes from us, and the box is never an empty hole', () => {
   const iconOf = (c: HTMLElement) => c.querySelector('svg');
+  const srcOf = (c: HTMLElement) => c.querySelector('img')?.getAttribute('src') ?? '';
+
+  it('asks our own backend for the icon, so the browser tells nobody what was read', () => {
+    /* A relative path is the assertion: it cannot leave this origin. */
+    expect(srcOf(render(<FaviconImage domain="example.com" />).container)).toBe(
+      '/api/favicon?domain=example.com',
+    );
+  });
+
+  it('encodes the domain instead of pasting it into the query', () => {
+    /* A domain with only ordinary characters cannot tell encoding from no
+     * encoding; one carrying `&` and `=` would otherwise smuggle a second
+     * parameter into our own request (r28 review). */
+    expect(srcOf(render(<FaviconImage domain="a&sz=999.example" />).container)).toBe(
+      '/api/favicon?domain=a%26sz%3D999.example',
+    );
+    expect(srcOf(render(<FaviconImage domain="пример.рф" />).container)).toBe(
+      `/api/favicon?domain=${encodeURIComponent('пример.рф')}`,
+    );
+  });
 
   it('holds the box with a neutral glyph until the real icon has decoded', () => {
     const { container } = render(<FaviconImage domain="example.com" />);
