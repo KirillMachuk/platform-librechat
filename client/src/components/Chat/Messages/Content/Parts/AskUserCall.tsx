@@ -171,7 +171,15 @@ function CollapsedQuestions({ questions }: { questions: AskUserQuestion[] }) {
         aria-hidden={!open || undefined}
         style={expandStyle}
       >
-        <div className="relative overflow-hidden" ref={expandRef}>
+        {/* `overflow-hidden` is what makes the 0fr row actually clip, and it
+         * clips sideways too — the card's edge is a box-shadow ring painted
+         * OUTSIDE its border box, so the hairline was cut off at the left and
+         * right and only survived at the top, where an 8px margin gave it room
+         * (owner r28: «по сторонам border… скрывается»). The negative margin
+         * moves the clip boundary outward and the equal padding puts the card
+         * back where it was, so nothing shifts and the ring has somewhere to
+         * live. */}
+        <div className="relative -mx-1 overflow-hidden px-1" ref={expandRef}>
           <StaticCard questions={questions} answers={answers} />
         </div>
       </div>
