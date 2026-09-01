@@ -21,6 +21,12 @@ describe('FaviconImage — the icon comes from us, and the box is never an empty
   });
 
   it('encodes the domain instead of pasting it into the query', () => {
+    /* A domain with only ordinary characters cannot tell encoding from no
+     * encoding; one carrying `&` and `=` would otherwise smuggle a second
+     * parameter into our own request (r28 review). */
+    expect(srcOf(render(<FaviconImage domain="a&sz=999.example" />).container)).toBe(
+      '/api/favicon?domain=a%26sz%3D999.example',
+    );
     expect(srcOf(render(<FaviconImage domain="пример.рф" />).container)).toBe(
       `/api/favicon?domain=${encodeURIComponent('пример.рф')}`,
     );

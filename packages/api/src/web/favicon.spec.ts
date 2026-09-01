@@ -3,12 +3,8 @@ jest.mock('undici', () => ({
   fetch: jest.fn(),
 }));
 
-/** The only thing here we cannot control: what the resolver answers. */
-jest.mock('node:dns/promises', () => ({ lookup: jest.fn() }));
-
 import jwt from 'jsonwebtoken';
 import { fetch } from 'undici';
-import { lookup } from 'node:dns/promises';
 import type { NextFunction, Request, Response } from 'express';
 import {
   faviconAuth,
@@ -20,7 +16,6 @@ import {
 } from './favicon';
 
 const mockFetch = jest.mocked(fetch);
-const mockLookup = jest.mocked(lookup);
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02, 0x03]);
 const GIF = Buffer.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00]);
@@ -79,9 +74,6 @@ function makeResponse() {
 beforeEach(() => {
   faviconCache.clear();
   mockFetch.mockReset();
-  mockLookup.mockReset();
-  /** A public address, so the SSRF guard lets ordinary domains through. */
-  mockLookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }] as never);
 });
 
 describe('normalizeFaviconDomain — the parameter is untrusted content', () => {
@@ -150,11 +142,23 @@ describe('resolveFavicon — one upstream request per domain', () => {
   });
 
   it('names the domain to upstream as a parameter, never as a destination', async () => {
+    /* This is the invariant that lets the endpoint skip a DNS-resolving SSRF
+     * check: the host is a constant and the domain only ever rides in the
+     * query. Anything that makes the requested domain part of the destination
+     * has to restore `resolveHostnameSSRF` — and turns this red first. */
     answerWith(PNG);
-    await resolveFavicon('example.com');
+    for (const domain of ['example.com', 'xn--e1afmkfd.xn--p1ai', 'a-b.c-d.example']) {
+      await resolveFavicon(domain);
+    }
 
-    const [url] = mockFetch.mock.calls[0];
-    expect(String(url)).toBe('https://www.google.com/s2/favicons?domain=example.com&sz=32');
+    for (const [url] of mockFetch.mock.calls) {
+      const parsed = new URL(String(url));
+      expect(parsed.origin).toBe('https://www.google.com');
+      expect(parsed.pathname).toBe('/s2/favicons');
+    }
+    expect(String(mockFetch.mock.calls[0][0])).toBe(
+      'https://www.google.com/s2/favicons?domain=example.com&sz=32',
+    );
   });
 
   it('collapses a burst of concurrent readers into a single fetch', async () => {
@@ -218,15 +222,6 @@ describe('resolveFavicon — one upstream request per domain', () => {
     answerWith(GIF);
     const entry = await resolveFavicon('gif.example');
     expect(entry.icon?.contentType).toBe('image/gif');
-  });
-
-  it('refuses a domain that resolves inside our own network, without fetching', async () => {
-    mockLookup.mockResolvedValue([{ address: '10.0.0.5', family: 4 }] as never);
-
-    const entry = await resolveFavicon('sneaky.example');
-
-    expect(entry.icon).toBeNull();
-    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('answers no icon when upstream fails outright', async () => {

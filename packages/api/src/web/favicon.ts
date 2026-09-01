@@ -4,8 +4,8 @@ import { fetch as undiciFetch } from 'undici';
 import { logger } from '@librechat/data-schemas';
 import type { RequestInit, Response as UndiciResponse } from 'undici';
 import type { NextFunction, Request, Response } from 'express';
-import { isSSRFTarget, resolveHostnameSSRF } from '~/auth/domain';
 import { getEnvProxyDispatcher } from '~/utils/proxy';
+import { isSSRFTarget } from '~/auth/domain';
 
 /**
  * Source favicons, fetched by us instead of by the reader's browser.
@@ -51,9 +51,9 @@ const FETCH_TIMEOUT_MS = 5_000;
 
 /**
  * Measured p50 610 bytes and max 2955 bytes across the corpus above, so this is
- * twenty times the largest icon anyone has been served. It is a bound, not a
- * budget: an answer over it is treated as no icon rather than truncated, because
- * half an icon decodes to nothing anyway.
+ * five times the largest icon anyone has been served and twenty-five times the
+ * median. It is a bound, not a budget: an answer over it is treated as no icon
+ * rather than truncated, because half an icon decodes to nothing anyway.
  */
 const MAX_ICON_BYTES = 16 * 1024;
 
@@ -170,6 +170,22 @@ export function normalizeFaviconDomain(raw: unknown): string | null {
   return domain;
 }
 
+/**
+ * The one place a domain meets a URL, and the reason this endpoint needs no
+ * DNS-resolving SSRF check: the host is a constant, the domain only ever rides
+ * in the query, and `normalizeFaviconDomain` has already reduced it to
+ * `[a-z0-9.-]`, so `encodeURIComponent` has nothing left to escape out of.
+ *
+ * ANY change that makes the requested domain part of the destination — a
+ * different upstream, or going to the site itself — has to bring back
+ * `resolveHostnameSSRF` from `~/auth/domain` with it. The spec pins the
+ * invariant («never a destination»), so that change cannot land quietly.
+ *
+ * The check is not kept "just in case" because it is not free: `dns.lookup`
+ * runs getaddrinfo on the libuv thread pool that the whole process shares with
+ * the file system and crypto, it takes no abort signal, and the hostname would
+ * be chosen by whoever wrote the search result.
+ */
 function upstreamUrl(domain: string): string {
   return `${UPSTREAM_ORIGIN}?domain=${encodeURIComponent(domain)}&sz=${ICON_PIXELS}`;
 }
@@ -210,18 +226,6 @@ function fetchOptions(controller: AbortController): RequestInit {
 }
 
 async function fetchIcon(domain: string): Promise<FaviconIcon | null> {
-  /**
-   * Today's upstream is a fixed host and this domain is only ever a query
-   * parameter, so nothing here connects to it. The check sits next to the fetch
-   * anyway, because that is where it would be needed the day upstream changes,
-   * and because a domain that resolves inside our own network is a probe whether
-   * or not we would have dialled it. One lookup per cache miss, never per request.
-   */
-  if (await resolveHostnameSSRF(domain)) {
-    logger.debug(`[favicon] ${domain} resolves to a restricted address; refused`);
-    return null;
-  }
-
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -445,6 +449,8 @@ export async function faviconHandler(req: Request, res: Response): Promise<void>
     logger.warn(
       `[favicon] failed to serve ${domain}: ${error instanceof Error ? error.message : String(error)}`,
     );
-    sendNoIcon(res);
+    if (!res.headersSent) {
+      sendNoIcon(res);
+    }
   }
 }
