@@ -265,6 +265,85 @@ describe('which plan card draws a live Deep Research run (r26 review)', () => {
     expect(screen.getByText('Сравнить').closest('li')).not.toHaveAttribute('data-status', 'done');
   });
 
+  it('FAILS ON PRE-FIX CODE: a continuation after Stop is still drawn by the plan card (r28)', () => {
+    /**
+     * The flagship case of r28. The server now hands the graph the plan of the
+     * BRANCH, so a continuation after a Stop emits a snapshot WITH steps —
+     * which is exactly the signal that makes the standalone card step aside.
+     * The plan card then has to be the one that draws it. Keyed on the start
+     * command (r27) it was not: after a Stop the nearest user message is the
+     * user's comment, so neither surface claimed the run and a multi-minute
+     * research drew nothing at all.
+     */
+    const node = (over: Record<string, unknown>) =>
+      ({ conversationId: CONVO, children: [], ...over }) as unknown as TMessage;
+    const reply = node({
+      messageId: 'resp-cont',
+      parentMessageId: 'comment1',
+      isCreatedByUser: false,
+      text: '',
+      content: [],
+      depth: 4,
+    });
+    const comment1 = node({
+      messageId: 'comment1',
+      parentMessageId: 'aborted1',
+      isCreatedByUser: true,
+      text: 'продолжай, но добавь про осадки',
+      depth: 3,
+      children: [reply],
+    });
+    const aborted1 = node({
+      messageId: 'aborted1',
+      parentMessageId: 'start1',
+      isCreatedByUser: false,
+      drKind: 'aborted',
+      text: 'Исследование остановлено.',
+      content: [],
+      depth: 2,
+      children: [comment1],
+    });
+    const start1 = node({
+      messageId: 'start1',
+      parentMessageId: 'plan1',
+      isCreatedByUser: true,
+      text: 'Начать исследование',
+      depth: 1,
+      children: [aborted1],
+    });
+    renderCustom(
+      [
+        node({
+          messageId: 'plan1',
+          parentMessageId: null,
+          isCreatedByUser: false,
+          drKind: 'plan',
+          text: PLAN_TEXT,
+          content: [{ type: 'text', text: PLAN_TEXT }],
+          depth: 0,
+          children: [start1],
+        }),
+      ],
+      'resp-cont',
+      RUNNING,
+    );
+
+    expect(screen.getByTestId('dr-stop')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+    expect(screen.getByText('Сравнить').closest('li')).toHaveAttribute('data-status', 'active');
+  });
+
+  it('draws nothing live before the graph starts — the waiting label owns that gap (r28)', () => {
+    /* prepare/plan snapshots carry no steps; the standalone card stands down on
+     * the same field, so both surfaces must stay quiet or one of them lies. */
+    renderTree({
+      latestId: 'resp1',
+      snapshot: { phase: 'plan', steps: [], action: '', searches: 0, progress: 0 },
+    });
+    expect(screen.queryByTestId('dr-stop')).toBeNull();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+  });
+
   it('a SECOND research does not also light up the first plan card (r27)', () => {
     /* Stop → comment → re-plan → Start leaves the first plan's start command in
      * the ancestry of the second run's tail. A walk that answered «is this

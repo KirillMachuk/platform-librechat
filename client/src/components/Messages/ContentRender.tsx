@@ -1,6 +1,11 @@
 import { useCallback, useMemo, memo } from 'react';
 import { useRecoilValue } from 'recoil';
-import { isDrCancelCommand, isDrStartCommand, DR_CANCELLED_MESSAGE } from 'librechat-data-provider';
+import {
+  isDrPlanMessage,
+  isDrCancelCommand,
+  isDrStartCommand,
+  DR_CANCELLED_MESSAGE,
+} from 'librechat-data-provider';
 import type { TMessage, TMessageContentParts } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import type { TMessageProps, TMessageChatContext } from '~/common';
@@ -155,21 +160,28 @@ const ContentRender = memo(function ContentRender({
    * a shared conversation still shows the notice (r26 review). */
   const { getMessages } = useOptionalMessagesOperations();
   /**
-   * Does the live run belong to THIS plan? The active branch's tail must sit
-   * under this plan's start command.
+   * Does the live run belong to THIS plan? The NEAREST plan above the active
+   * tail owns it — and only that one.
    *
-   * The obvious predicate — «has a start command AND is submitting» — is a
-   * tautology that never fires (r26 review): a plan with a start command has a
-   * child, so it is never the latest message, and the `isSubmitting` that
-   * reaches this component is already `isLatestMessage ? isSubmitting : false`.
-   * With the standalone running card stepped aside for plan runs, that left a
-   * multi-minute research drawing NOTHING. Liveness itself comes from the
-   * progress atom, which the card subscribes to and which is cleared the
-   * moment a run ends; this only answers WHICH plan owns it.
+   * Two earlier shapes of this predicate were wrong in opposite directions.
+   * «Has a start command AND is submitting» could never fire (r26 review): a
+   * plan with a start command has a child, so it is never the latest message.
+   * «Is this plan's START COMMAND the nearest user message above the tail»
+   * (r27) fired for exactly one turn — the one launched from the button — and
+   * went dark for every continuation: after a Stop the nearest user message is
+   * the user's comment, so no card claimed the run while the standalone card
+   * had already stepped aside for it, and a multi-minute research drew NOTHING
+   * (r28 review). The run belongs to a PLAN, not to the click that started it,
+   * and the server now hands the graph that same branch plan.
+   *
+   * Walking to the nearest plan keeps what r27 bought: on a branch holding two
+   * researches only one plan is nearest, so the older card stays quiet.
+   * Liveness itself comes from the progress atom, which the card subscribes to
+   * and which is cleared the moment a run ends; this only answers WHICH plan.
    */
   const isRunningPlan = useCallback(
-    (startCommandId?: string): boolean => {
-      if (startCommandId == null || latestMessageId == null) {
+    (planMessageId?: string): boolean => {
+      if (planMessageId == null || latestMessageId == null) {
         return false;
       }
       const list = getMessages();
@@ -178,17 +190,8 @@ const ContentRender = memo(function ContentRender({
       }
       let cursor = list.find((m) => m.messageId === latestMessageId);
       for (let hops = 0; cursor != null && hops < 64; hops++) {
-        /* The turn in flight is the one whose USER message is the nearest one
-         * above the tail, so the run belongs to this plan only if that message
-         * IS this plan's start command. «Is the start command anywhere above
-         * me» was too weak on a branch that holds more than one DR turn: after
-         * Stop → comment → re-plan → Start, the first plan's start command is
-         * still an ancestor of everything that follows, so the old card lit up
-         * too — drawing the new run's Stop, bar and step index against its own,
-         * different steps. It also lit up during the RE-PLAN turn, whose user
-         * message is a plain comment and not a start command at all (r27). */
-        if (cursor.isCreatedByUser === true) {
-          return cursor.messageId === startCommandId;
+        if (cursor.drKind === 'plan' || isDrPlanMessage(cursor.text ?? '')) {
+          return cursor.messageId === planMessageId;
         }
         const parentId: string | null = cursor.parentMessageId ?? null;
         cursor = parentId == null ? undefined : list.find((m) => m.messageId === parentId);
@@ -326,7 +329,7 @@ const ContentRender = memo(function ContentRender({
         message={msg}
         awaitingAction={hasNoChildren && (isLast || isLatestMessage)}
         cancelled={cancelled}
-        isRunning={isRunningPlan(startCommand?.messageId)}
+        isRunning={isRunningPlan(msg.messageId)}
         conversationId={conversation?.conversationId}
         outcome={outcome}
       />
