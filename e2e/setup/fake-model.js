@@ -29,6 +29,7 @@ const SLOW_THINK_REPLY_MARKER = 'E2E_SLOW_THINK_REPLY:';
 const SLOW_COUNTED_REPLY_MARKER = 'E2E_SLOW_COUNTED_REPLY:';
 const RESUME_ICON_REPLY_MARKER = 'E2E_RESUME_ICON_REPLY:';
 const FORCED_ERROR_MARKER = 'E2E_FORCED_ERROR:';
+const TOOL_THEN_ERROR_MARKER = 'E2E_TOOL_THEN_ERROR:';
 const MARKDOWN_REPLY_MARKER = 'E2E_MARKDOWN_REPLY';
 const ARTIFACT_REPLY_MARKER = 'E2E_ARTIFACT_REPLY';
 const CREATE_FILE_AUTHORING_FINAL_TEXT = 'E2E file authoring complete';
@@ -421,6 +422,7 @@ function overrideModel({
   sleep,
   toolCalls,
   thrownError,
+  thrownErrorAfterTool,
   reasoning,
   reasoningSleep,
 }) {
@@ -439,9 +441,16 @@ function overrideModel({
 
   class ThrowingFakeChatModel extends FakeChatModel {
     async *_streamResponseChunks(messages, options, runManager) {
+      /* `thrownErrorAfterTool` holds the throw back until a tool result is already in the
+       * transcript, which is the only way to script "the run did the work, then broke" —
+       * the shape the run-incomplete notice exists for. Without the flag every turn
+       * throws, so the first one would die before it could emit its tool call. */
+      const armed =
+        !thrownErrorAfterTool ||
+        (messages ?? []).some((message) => messageType(message) === 'tool');
       yield* super._streamResponseChunks(
         messages,
-        { ...options, thrownErrorString: thrownError },
+        armed ? { ...options, thrownErrorString: thrownError } : options,
         runManager,
       );
     }
@@ -596,6 +605,32 @@ function resolveResponses({ agents, messages, text, toolNames }) {
     return providerFileAssertion;
   }
 
+  /** A run that finishes a tool call and then breaks — the case the run-incomplete notice
+   *  exists for, and the one `E2E_FORCED_ERROR` cannot script: that one throws on its first
+   *  turn, so it leaves nothing behind but text. Lives here rather than in `replyResponses`
+   *  because it needs `toolNames`, which only this function is handed. */
+  const toolThenErrorName = getMarkerValue(text, TOOL_THEN_ERROR_MARKER);
+  if (toolThenErrorName) {
+    if (!toolNames.has(ASK_USER_TOOL_NAME)) {
+      return { responses: [`E2E tool-then-error unavailable: ${ASK_USER_TOOL_NAME} missing.`] };
+    }
+    return {
+      responses: ['', ''],
+      toolCalls: [
+        {
+          id: `e2e-tool-then-error-${toolThenErrorName}`,
+          name: ASK_USER_TOOL_NAME,
+          args: {
+            questions: [{ id: 'q1', prompt: 'Какой формат?', options: ['Кратко', 'Полно'] }],
+          },
+          type: 'tool_call',
+        },
+      ],
+      thrownError: `E2E forced stream error after tool ${toolThenErrorName}`,
+      thrownErrorAfterTool: true,
+    };
+  }
+
   if (text.includes(ASK_QUESTIONS_MARKER)) {
     return askUserResponses(toolNames);
   }
@@ -645,11 +680,28 @@ module.exports = function fakeModelHook(run, context) {
 
   const text = getLatestUserText(context?.messages);
   const toolNames = collectToolNames(context?.agents);
-  const { responses, sleep, toolCalls, thrownError, reasoning, reasoningSleep } = resolveResponses({
+  const {
+    responses,
+    sleep,
+    toolCalls,
+    thrownError,
+    thrownErrorAfterTool,
+    reasoning,
+    reasoningSleep,
+  } = resolveResponses({
     agents: context?.agents,
     messages: context?.messages,
     text,
     toolNames,
   });
-  overrideModel({ graph, responses, sleep, toolCalls, thrownError, reasoning, reasoningSleep });
+  overrideModel({
+    graph,
+    responses,
+    sleep,
+    toolCalls,
+    thrownError,
+    thrownErrorAfterTool,
+    reasoning,
+    reasoningSleep,
+  });
 };

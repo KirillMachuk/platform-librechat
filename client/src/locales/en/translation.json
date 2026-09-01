@@ -402,7 +402,7 @@
   "com_error_no_base_url": "No base URL found. Please provide one and try again.",
   "com_error_no_user_key": "No key found. Please provide a key and try again.",
   "com_error_refusal": "Response refused by safety filters. Rewrite your message and try again. If you encounter this frequently while using Claude Sonnet 4.5 or Opus 4.1, you can try Sonnet 4, which has different usage restrictions.",
-  "com_error_run_incomplete": "The run stopped before it finished. Everything it had already done is saved above in this reply — the results and files are there, you do not need to produce them again. {{0}}",
+  "com_error_run_incomplete": "The run was interrupted; the work so far is saved. Say \"continue\" and I will pick up where I left off.",
   "com_error_stream_expired": "The response stream has expired or already completed. Please try again.",
   "com_error_token_balance": "You've run out of available balance. Please contact your administrator to continue.",
   "com_file_pages": "Pages: {{pages}}",
