@@ -1,7 +1,7 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useState } from 'react';
 import * as Ariakit from '@ariakit/react';
 import { VisuallyHidden } from '@ariakit/react';
-import { ChevronDown, FileText } from '~/components/icons';
+import { ChevronDown, FileText, Globe } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
@@ -35,16 +35,42 @@ export function getCleanDomain(url: string) {
 }
 
 export function FaviconImage({ domain, className = '' }: { domain: string; className?: string }) {
-  /* Decorative by contract: every call site sets the favicon beside the
-   * domain or source name in text, so a non-empty alt only doubles the
-   * accessible name («example.com example.com» — caught by the suite). */
+  /**
+   * The icon is not ours: the browser fetches it from an external service, and
+   * that answer arrives through a redirect — measured at ~0.8s per icon, with
+   * some domains answering 404 and never producing one at all. So the row's
+   * text was on screen while its icons were still empty holes, which read as
+   * broken (owner r28).
+   *
+   * The box is therefore never empty: a neutral glyph holds it until the real
+   * icon has actually decoded, and stays for good when it never arrives. The
+   * placeholder is REPLACED rather than layered under the image — these icons
+   * are PNGs with transparent corners, and a glyph behind one shows through it
+   * permanently.
+   *
+   * `loading="lazy"` stays. It is not what makes the icon late (an in-viewport
+   * image is fetched as soon as layout knows about it); it is what keeps a
+   * collapsed list of sources — which lives in the DOM at zero height — from
+   * firing a request per source the moment the message renders.
+   *
+   * Decorative by contract: every call site sets the favicon beside the domain
+   * or source name in text, so a non-empty alt only doubles the accessible
+   * name («example.com example.com» — caught by the suite).
+   */
+  const [shown, setShown] = useState(false);
   return (
-    <img
-      src={getFaviconUrl(domain)}
-      alt=""
-      className={cn('size-4 shrink-0 rounded-full', className)}
-      loading="lazy"
-    />
+    <span className={cn('relative inline-flex size-4 shrink-0', className)}>
+      {!shown && (
+        <Globe className="absolute inset-0 size-full text-text-tertiary opacity-60" aria-hidden />
+      )}
+      <img
+        src={getFaviconUrl(domain)}
+        alt=""
+        className={cn('size-full rounded-full', !shown && 'opacity-0')}
+        loading="lazy"
+        onLoad={() => setShown(true)}
+      />
+    </span>
   );
 }
 
