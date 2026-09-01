@@ -125,7 +125,11 @@ describe('transparent text must survive being selected (owner r28)', () => {
        * carries the transparent fill is `.shimmer`, and demanding a selection
        * rule for the theme wrapper would be nonsense. */
       for (const part of selector.split(',')) {
-        const subject = part.trim().split(/[\s>+~]+/).pop() ?? '';
+        const subject =
+          part
+            .trim()
+            .split(/[\s>+~]+/)
+            .pop() ?? '';
         for (const [, name] of subject.matchAll(/\.([\w-]+)/g)) {
           out.add(name);
         }

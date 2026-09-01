@@ -265,3 +265,21 @@ describe('extractPlanStepsFromTranscript (r28)', () => {
     ]);
   });
 });
+
+describe('a plan step is always one line (r28 review)', () => {
+  it('folds a multi-line step so the two extractors cannot disagree', () => {
+    /* `extractPlanStepsFromTranscript` stops at the first unnumbered line while
+     * `extractPlanSteps` keeps scanning, so a step with a newline made the
+     * counts differ and silently dropped the agenda in sovereign mode. */
+    const decision = parsePlanDecision(
+      JSON.stringify({
+        action: 'PLAN',
+        title: 'T',
+        steps: ['Собрать данные\nи сравнить', 'Вывод'],
+      }),
+    );
+    expect(decision.steps).toEqual(['Собрать данные и сравнить', 'Вывод']);
+    const message = formatPlanMessage({ title: 'T', steps: decision.steps });
+    expect(extractPlanSteps(message)).toEqual(extractPlanStepsFromTranscript(message));
+  });
+});

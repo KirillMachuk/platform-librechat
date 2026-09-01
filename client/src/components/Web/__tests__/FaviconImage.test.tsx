@@ -41,12 +41,41 @@ describe('FaviconImage — the box is never an empty hole (owner r28)', () => {
     expect(container.querySelector('img')).toHaveAttribute('loading', 'lazy');
   });
 
-  it('passes the caller size through, so the stacked icons keep their geometry', () => {
+  it('lets the caller size win instead of racing the default in the built CSS', () => {
+    /* tailwind-merge at this version does not resolve `size-*` against
+     * `size-*`, so leaving the default in place would make the winner depend on
+     * stylesheet order rather than on the call site (r28 review). */
     const { container } = render(
       <FaviconImage domain="example.com" className="ml-[-6px] size-3" />,
     );
     const box = container.firstElementChild as HTMLElement;
     expect(box.className).toContain('size-3');
+    expect(box.className).not.toContain('size-4');
     expect(box.className).toContain('ml-[-6px]');
+  });
+
+  it('keeps the caller rounding on the IMAGE, where it is visible', () => {
+    /* One call site asks for `rounded-sm`; on the box it would do nothing (no
+     * background, no clipping) while the icon stayed round (r28 review). */
+    const { container } = render(
+      <FaviconImage domain="example.com" className="size-4 rounded-sm" />,
+    );
+    expect(container.querySelector('img')?.className).toContain('rounded-sm');
+    expect(container.querySelector('img')?.className).not.toContain('rounded-full');
+  });
+
+  it('defaults to a round icon when the caller says nothing', () => {
+    const { container } = render(<FaviconImage domain="example.com" />);
+    expect(container.querySelector('img')?.className).toContain('rounded-full');
+  });
+
+  it('shows the glyph again when the same slot is reused for another domain', () => {
+    /* The stack mounts icons by index, so a changed source list hands this
+     * instance a new domain; a stale «loaded» would leave an empty hole. */
+    const { container, rerender } = render(<FaviconImage domain="example.com" />);
+    fireEvent.load(container.querySelector('img') as HTMLImageElement);
+    expect(iconOf(container)).toBeNull();
+    rerender(<FaviconImage domain="other.com" />);
+    expect(iconOf(container)).not.toBeNull();
   });
 });

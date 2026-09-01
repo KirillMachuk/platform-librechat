@@ -125,7 +125,11 @@ function cleanStringList(value: unknown, cap: number): string[] {
     if (typeof item !== 'string') {
       continue;
     }
-    const trimmed = item.trim();
+    /* One line per step. The card draws them as rows, and the two extractors
+     * disagree on a multi-line one — the transcript reader stops at the first
+     * unnumbered line while the message reader keeps going — which silently
+     * drops the whole agenda on the count check (r28 review). */
+    const trimmed = item.replace(/\s*\n\s*/g, ' ').trim();
     if (!trimmed || seen.has(trimmed)) {
       continue;
     }

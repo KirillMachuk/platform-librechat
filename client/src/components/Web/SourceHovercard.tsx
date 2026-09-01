@@ -1,4 +1,4 @@
-import React, { ReactNode, useState } from 'react';
+import React, { ReactNode, useEffect, useState } from 'react';
 import * as Ariakit from '@ariakit/react';
 import { VisuallyHidden } from '@ariakit/react';
 import { ChevronDown, FileText, Globe } from '~/components/icons';
@@ -58,15 +58,30 @@ export function FaviconImage({ domain, className = '' }: { domain: string; class
    * name («example.com example.com» — caught by the suite).
    */
   const [shown, setShown] = useState(false);
+  /* The stack mounts these by index (`key={`icon-${i}`}`), so a changed source
+   * list reuses the instance with a NEW domain. Without this the box would stay
+   * «loaded» and a 404 on the new icon would leave the empty hole this exists
+   * to prevent (r28 review). */
+  useEffect(() => setShown(false), [domain]);
+  /* The caller's size and rounding must keep winning. tailwind-merge at this
+   * version does not resolve `size-*` against `size-*`, so a default left in
+   * place would race the caller's in the built CSS rather than lose to it; and
+   * one call site asks for `rounded-sm`, which belongs on the image, not on the
+   * box (r28 review). */
+  const hasSize = /(^|\s)(size|[wh])-/.test(className);
+  const rounding = className.match(/(^|\s)(rounded(-[\w[\]-]+)?)/)?.[2] ?? 'rounded-full';
   return (
-    <span className={cn('relative inline-flex size-4 shrink-0', className)}>
+    <span className={cn('relative inline-flex shrink-0', hasSize ? '' : 'size-4', className)}>
       {!shown && (
-        <Globe className="absolute inset-0 size-full text-text-tertiary opacity-60" aria-hidden />
+        <Globe
+          className={cn('absolute inset-0 size-full text-text-tertiary opacity-60', rounding)}
+          aria-hidden
+        />
       )}
       <img
         src={getFaviconUrl(domain)}
         alt=""
-        className={cn('size-full rounded-full', !shown && 'opacity-0')}
+        className={cn('size-full', rounding, !shown && 'opacity-0')}
         loading="lazy"
         onLoad={() => setShown(true)}
       />
