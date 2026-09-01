@@ -76,3 +76,52 @@ describe('shimmer contract (r25 package Б review)', () => {
     expect(body).toMatch(/color:\s*var\(--text-primary\)/);
   });
 });
+
+describe('transparent text must survive being selected (owner r28)', () => {
+  /**
+   * Selecting a shimmering label left a blank petrol bar: the glyphs are drawn
+   * by a gradient clipped to the text, the text itself is transparent, and the
+   * selection background paints over the gradient with nothing left to draw the
+   * letters. Measured in the running app: without the paired rule the selection
+   * pseudo-element resolves to `rgba(0, 0, 0, 0)` for both `color` and
+   * `-webkit-text-fill-color`; with it, to the solid text colour.
+   *
+   * This is a CLASS of defect, not one instance — eleven places use it, five of
+   * them straight from upstream — so the guard is on the rule, not on a
+   * component: whatever zeroes the text fill must name a selection colour.
+   */
+  const zeroingClasses = () => {
+    const found = new Set<string>();
+    const re = /\.([\w-]+)\s*\{([^}]*)\}/g;
+    for (const [, name, body] of STYLE.matchAll(re)) {
+      if (
+        /(^|[^-])color:\s*transparent/.test(body) ||
+        /-webkit-text-fill-color:\s*transparent/.test(body)
+      ) {
+        found.add(name);
+      }
+    }
+    return [...found];
+  };
+
+  it('finds the classes that zero the text fill (the guard must have something to guard)', () => {
+    expect(zeroingClasses().length).toBeGreaterThan(0);
+  });
+
+  it('every one of them names a selection colour', () => {
+    const selectors = STYLE.match(/[^{}]*::selection[^{]*\{[^}]*\}/g)?.join('\n') ?? '';
+    for (const name of zeroingClasses()) {
+      expect(`${name} -> ${selectors}`).toContain(`.${name}::selection`);
+    }
+  });
+
+  it('the selection rule restores BOTH properties', () => {
+    /* The two class families zero the fill differently — `color` in ours, the
+     * upstream `-webkit-text-fill-color` in `.shimmer` — so one property alone
+     * would leave the other family invisible. */
+    const rule = STYLE.slice(STYLE.indexOf('.thinking-shimmer-active::selection'));
+    const body = rule.slice(rule.indexOf('{') + 1, rule.indexOf('}'));
+    expect(body).toMatch(/(^|[^-])color:\s*var\(--text-/);
+    expect(body).toMatch(/-webkit-text-fill-color:\s*var\(--text-/);
+  });
+});
