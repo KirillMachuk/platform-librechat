@@ -1,6 +1,7 @@
 import React, { ReactNode, useEffect, useState } from 'react';
 import * as Ariakit from '@ariakit/react';
 import { VisuallyHidden } from '@ariakit/react';
+import { faviconUrl } from 'librechat-data-provider';
 import { ChevronDown, FileText, Globe } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -25,10 +26,6 @@ interface SourceHovercardProps {
   fileRelevance?: number;
 }
 
-function getFaviconUrl(domain: string) {
-  return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-}
-
 export function getCleanDomain(url: string) {
   const domain = url.replace(/(^\w+:|^)\/\//, '').split('/')[0];
   return domain.startsWith('www.') ? domain.substring(4) : domain;
@@ -36,11 +33,13 @@ export function getCleanDomain(url: string) {
 
 export function FaviconImage({ domain, className = '' }: { domain: string; className?: string }) {
   /**
-   * The icon is not ours: the browser fetches it from an external service, and
-   * that answer arrives through a redirect — measured at ~0.8s per icon, with
-   * some domains answering 404 and never producing one at all. So the row's
-   * text was on screen while its icons were still empty holes, which read as
-   * broken (owner r28).
+   * The icon comes from our own backend, which fetches it once per domain and
+   * caches it (`packages/api/src/web/favicon.ts`). It used to be an external
+   * icon service the browser called itself, which announced the reader's whole
+   * source list to a third party — and answered through a redirect, measured at
+   * ~0.8s per icon, some domains never producing one at all. So the row's text
+   * was on screen while its icons were still empty holes, which read as broken
+   * (owner r28).
    *
    * The box is therefore never empty: a neutral glyph holds it until the real
    * icon has actually decoded, and stays for good when it never arrives. The
@@ -79,7 +78,7 @@ export function FaviconImage({ domain, className = '' }: { domain: string; class
         />
       )}
       <img
-        src={getFaviconUrl(domain)}
+        src={faviconUrl(domain)}
         alt=""
         className={cn('size-full', rounding, !shown && 'opacity-0')}
         loading="lazy"

@@ -313,6 +313,13 @@ export const agentFiles = (agentId: string) => `${BASE_URL}/api/files/agent/${ag
 
 export const images = () => `${files()}/images`;
 
+/**
+ * The icon of a web-search source, served and cached by our own backend. It used
+ * to be an external icon service the reader's browser called directly, which told
+ * a third party which sites their research had surfaced.
+ */
+export const faviconUrl = (domain: string) => `${BASE_URL}/api/favicon${buildQuery({ domain })}`;
+
 export const avatar = () => `${images()}/avatar`;
 
 export const speech = () => `${files()}/speech`;
