@@ -34,8 +34,6 @@ const snapshot = (over: Partial<TDeepResearchProgress>): TDeepResearchProgress =
   ...over,
 });
 
-const rowOf = (text: string) => screen.getByText(text).closest('li');
-
 describe('ProgressCard — the PROCEED run card (r26)', () => {
   it('invents NO steps when a run has no plan — the well is not drawn at all', () => {
     /* It used to substitute three constants («Определение области
