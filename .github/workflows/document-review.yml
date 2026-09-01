@@ -1,0 +1,69 @@
+name: Document Quality Gate
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'skill/docx/**'
+      - 'bench/documents/**'
+      - '.github/workflows/document-review.yml'
+  pull_request:
+    paths:
+      - 'skill/docx/**'
+      - 'bench/documents/**'
+      - '.github/workflows/document-review.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: document-review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docx-quality:
+    name: Russian DOCX golden matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: bench/documents/requirements.txt
+
+      - name: Install the office render toolchain
+        run: |
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get -o Acquire::Retries=3 install -y \
+            libreoffice-writer \
+            poppler-utils \
+            fonts-dejavu-core \
+            fonts-liberation2 \
+            fonts-noto-core
+
+      - name: Install document dependencies
+        run: python -m pip install --disable-pip-version-check -r bench/documents/requirements.txt
+
+      - name: Run document unit tests
+        run: python -m unittest discover -s bench/documents -p 'test_*.py'
+
+      - name: Run the render-based golden matrix
+        run: python bench/documents/run_goldens.py --runs 3
+
+      - name: Upload render evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: document-quality-evidence
+          path: |
+            bench/documents/results/matrix-summary.json
+            bench/documents/results/*/run-1/montage.png
+            bench/documents/results/*/run-1/*.artifact-report.json
+          if-no-files-found: warn
+          retention-days: 7

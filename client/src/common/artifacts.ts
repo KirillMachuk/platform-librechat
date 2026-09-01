@@ -18,7 +18,7 @@ export interface CodeBlock {
  * `source` keeps its enum and a wrong value cannot typecheck.
  */
 export type ArtifactSourceFile = Partial<
-  Pick<TFile, 'file_id' | 'filename' | 'filepath' | 'source' | 'user'>
+  Pick<TFile, 'file_id' | 'filename' | 'filepath' | 'source' | 'user' | 'artifactReport'>
 >;
 
 export type GoogleWorkspaceKind = 'document' | 'spreadsheet' | 'presentation' | 'drive_file';

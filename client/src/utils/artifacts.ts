@@ -888,6 +888,7 @@ export function fileToArtifact(
         | 'createdAt'
         | 'source'
         | 'user'
+        | 'artifactReport'
       >
   >,
   options?: FileToArtifactOptions,
@@ -950,6 +951,7 @@ export function fileToArtifact(
       filepath: attachment.filepath,
       source: attachment.source,
       user: attachment.user,
+      artifactReport: attachment.artifactReport,
     },
   };
 }
@@ -975,6 +977,7 @@ export function filePreviewArtifact(
       | 'bytes'
       | 'updatedAt'
       | 'createdAt'
+      | 'artifactReport'
     >
   >,
   meta?: { relevance?: number; pages?: number[]; pageRelevance?: Record<number, number> },
@@ -991,6 +994,7 @@ export function filePreviewArtifact(
       filepath: file.filepath,
       source: file.source,
       user: file.user,
+      artifactReport: file.artifactReport,
     },
     preview: {
       fileType: file.type,

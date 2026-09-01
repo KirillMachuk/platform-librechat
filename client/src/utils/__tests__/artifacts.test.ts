@@ -1,8 +1,10 @@
 import { FileSources } from 'librechat-data-provider';
+import type { TArtifactReport } from 'librechat-data-provider';
 import type { ToolArtifactType } from '../artifacts';
 import {
   buildSandpackOptions,
   detectArtifactTypeFromFile,
+  filePreviewArtifact,
   fileToArtifact,
   isCodeOnlyArtifact,
   isPreviewOnlyArtifact,
@@ -636,6 +638,30 @@ describe('fileToArtifact', () => {
       source: FileSources.local,
       user: 'user-1',
     });
+  });
+
+  it('preserves optional QA metadata for tool and stored-file previews', () => {
+    const artifactReport: TArtifactReport = {
+      status: 'ready',
+      format: 'docx',
+      sourceFileIds: ['notes.pdf'],
+      previewAssets: [{ filename: 'report.pdf', kind: 'pdf' }],
+      qaChecks: [{ name: 'render', status: 'passed', message: 'Every page rendered' }],
+      issues: [],
+      changeLog: [{ target: 'Document', summary: 'Created report' }],
+      skillVersion: '1.0.0',
+      repairIterations: 0,
+    };
+    const toolArtifact = fileToArtifact({ ...baseFile, artifactReport });
+    const previewArtifact = filePreviewArtifact({
+      file_id: 'fid-2',
+      filename: 'report.docx',
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      artifactReport,
+    });
+
+    expect(toolArtifact?.file?.artifactReport).toBe(artifactReport);
+    expect(previewArtifact.file?.artifactReport).toBe(artifactReport);
   });
 
   it('returns null for unsupported types so callers can fall through', () => {
