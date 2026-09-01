@@ -7,6 +7,7 @@ import {
   buildPlanPrompt,
   isStartCommand,
   extractPlanSteps,
+  extractPlanStepsFromTranscript,
   isCancelCommand,
   formatPlanMessage,
   CANCELLED_MESSAGE,
@@ -193,5 +194,52 @@ describe('isStartCommand / isCancelCommand', () => {
     expect(isStartCommand('✕ Отменить исследование')).toBe(false);
     expect(isCancelCommand('▶ Начать исследование')).toBe(false);
     expect(isCancelCommand('')).toBe(false);
+  });
+});
+
+describe('extractPlanStepsFromTranscript (r28)', () => {
+  const plan = '**План исследования:** Рынок\n\n1. Собрать вендоров\n2. Сравнить цены';
+
+  it('reads the steps out of a dialogue transcript', () => {
+    const transcript = `Диалог по задаче исследования.\n\nИсходный запрос пользователя:\nизучи рынок\n\nПредложенный план:\n${plan}\n\nОтвет пользователя:\nНачать исследование`;
+    expect(extractPlanStepsFromTranscript(transcript)).toEqual([
+      'Собрать вендоров',
+      'Сравнить цены',
+    ]);
+  });
+
+  it('does NOT swallow the clarify questions, which are numbered the same way', () => {
+    /* The whole reason for slicing from the marker: a naive scan of the
+     * transcript would return the questions and the steps as one list, and the
+     * count check downstream would then silently drop the agenda. */
+    const transcript = `Уточняющие вопросы:\n1. Какой бюджет?\n2. Какой регион?\n\nОтвет пользователя:\nлюбой\n\nПредложенный план:\n${plan}`;
+    expect(extractPlanStepsFromTranscript(transcript)).toEqual([
+      'Собрать вендоров',
+      'Сравнить цены',
+    ]);
+  });
+
+  it('takes the LAST plan when the branch carries more than one', () => {
+    const older = '**План исследования:** Старый\n\n1. Старый шаг';
+    expect(extractPlanStepsFromTranscript(`${older}\n\nПредложенный план:\n${plan}`)).toEqual([
+      'Собрать вендоров',
+      'Сравнить цены',
+    ]);
+  });
+
+  it('returns nothing when the transcript carries no plan at all', () => {
+    expect(extractPlanStepsFromTranscript('Исходный запрос пользователя:\nизучи рынок')).toEqual(
+      [],
+    );
+    expect(extractPlanStepsFromTranscript('')).toEqual([]);
+  });
+
+  it('survives masking — placeholders are ordinary text in a step', () => {
+    const masked =
+      '**План исследования:** Рынок\n\n1. Собрать данные по [PERSON_1]\n2. Сравнить цены';
+    expect(extractPlanStepsFromTranscript(masked)).toEqual([
+      'Собрать данные по [PERSON_1]',
+      'Сравнить цены',
+    ]);
   });
 });

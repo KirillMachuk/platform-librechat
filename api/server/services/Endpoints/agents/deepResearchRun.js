@@ -24,6 +24,7 @@ const {
   formatClarifyMessage,
   buildPlanPrompt,
   parsePlanDecision,
+  extractPlanStepsFromTranscript,
   formatPlanMessage,
   isPlanMessage,
   isStartCommand,
@@ -1826,34 +1827,32 @@ async function runNewDeepResearch(params) {
        * The plan the graph is given must be MASKED in sovereign mode.
        *
        * The plan message is saved de-masked — the user reads their own names on
-       * their own card — so `planSteps` carries real PII, and handing it to the
-       * supervisor would egress exactly what Track B exists to prevent, in the
-       * one place a plan echoes the request. `dr_progress.steps` keeps the
-       * de-masked copy: that one is the user's own screen.
+       * their own card — so `planSteps` carries real PII. In passthrough the
+       * anonymizer forwards model calls untouched, so anything this channel
+       * puts in the supervisor's prompt goes out exactly as written.
        *
-       * ONE masking call for the whole list, not one per step: the anonymizer is
-       * the dominant cost of a DR turn, and six round-trips before the graph
-       * starts would be paid by every plan run. The split back is RECONCILED
-       * against the input — a masking that changed the line count means the
+       * It is NOT masked with a second call, though. The transcript that became
+       * `maskedQuestion` already contains the plan message verbatim, so the
+       * steps are in there with this run's own placeholders: reading them back
+       * costs no round trip (the anonymizer is the dominant latency of a DR
+       * turn), keeps them identical to the ones the brief was built from, and
+       * lets the detector work on the long text — a step masked alone is a
+       * short isolated string, and `/v1/detect` is a detection pass with no
+       * literal re-match, so a surname it caught in the transcript it can miss
+       * there (r28 review).
+       *
+       * RECONCILED against the de-masked list: a different count means the
        * mapping is unknown, and an unknown mapping degrades to no agenda at all
        * (the card then reports no step, which it already knows how to draw).
        */
       let graphPlanSteps = planSteps;
       if (sovereign && planSteps.length > 0) {
-        try {
-          const masked = (await sovereign.maskContent(planSteps.join('\n'))).split('\n');
-          graphPlanSteps = masked.length === planSteps.length ? masked : [];
-          if (graphPlanSteps.length === 0) {
-            logger.warn(
-              `[deepResearchRun] masked plan came back as ${masked.length} lines for ${planSteps.length} steps; running without the plan agenda`,
-            );
-          }
-        } catch (error) {
+        const masked = extractPlanStepsFromTranscript(sovereign.maskedQuestion);
+        graphPlanSteps = masked.length === planSteps.length ? masked : [];
+        if (graphPlanSteps.length === 0) {
           logger.warn(
-            '[deepResearchRun] plan masking failed; running without the plan agenda',
-            error,
+            `[deepResearchRun] masked transcript yielded ${masked.length} plan steps for ${planSteps.length}; running without the plan agenda`,
           );
-          graphPlanSteps = [];
         }
       }
       agendaReachedGraph = graphPlanSteps.length > 0;

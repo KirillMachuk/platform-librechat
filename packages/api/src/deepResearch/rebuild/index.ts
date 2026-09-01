@@ -31,6 +31,7 @@ export {
   buildPlanPrompt,
   isStartCommand,
   extractPlanSteps,
+  extractPlanStepsFromTranscript,
   isCancelCommand,
   formatPlanMessage,
   parsePlanDecision,

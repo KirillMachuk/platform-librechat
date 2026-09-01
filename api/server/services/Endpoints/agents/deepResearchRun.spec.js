@@ -248,6 +248,28 @@ jest.mock('@librechat/api', () => ({
     }
     return steps;
   },
+  /* Mirrors the real helper: numbered lines from the plan marker on, stopping
+   * at the first line that is neither numbered nor blank (clarify questions are
+   * numbered the same way and must not be mixed in). */
+  extractPlanStepsFromTranscript: (transcript) => {
+    const text = String(transcript ?? '');
+    const at = text.lastIndexOf('**План исследования:**');
+    if (at === -1) {
+      return [];
+    }
+    const steps = [];
+    for (const line of text.slice(at).split(/\r?\n/).slice(1)) {
+      const m = line.match(/^\s*\d+\.\s+(.*\S)\s*$/);
+      if (m) {
+        steps.push(m[1].trim());
+        continue;
+      }
+      if (line.trim() && steps.length > 0) {
+        break;
+      }
+    }
+    return steps;
+  },
   CANCELLED_MESSAGE: 'Исследование отменено.',
 }));
 
@@ -1452,13 +1474,16 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
 
     it('FAILS ON PRE-FIX CODE: the graph gets placeholders, the user card keeps the names', async () => {
       /* The plan message is stored DE-MASKED — the user reads their own names —
-       * so handing `planSteps` to the supervisor as-is egresses exactly what
-       * Track B exists to stop, in the one place a plan echoes the request. */
+       * and in passthrough the anonymizer forwards model calls untouched, so
+       * this channel is the only thing between the plan and OpenRouter. The
+       * masked copy is read back out of the transcript that was ALREADY masked
+       * (r28), not masked a second time. */
       models.getMessages.mockResolvedValueOnce(planTree());
       mockStartSovereignSession.mockResolvedValue({
-        maskedQuestion: 'изучи для [PERSON_1]',
+        maskedQuestion:
+          'Диалог по задаче исследования.\n\nПредложенный план:\n**План исследования:** Рынок\n\n1. Собрать данные по [PERSON_1]\n2. Сравнить цены\n\nОтвет пользователя:\nНачать исследование',
         passthroughHeaders: {},
-        maskContent: jest.fn(async (t) => t.replace(/Иванову Ивану/g, '[PERSON_1]')),
+        maskContent: jest.fn(async (t) => t),
         restore: jest.fn(async (t) => t),
         drop: jest.fn(async () => {}),
       });
@@ -1474,14 +1499,31 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
       expect(research[1].data.steps).toEqual(['Собрать данные по Иванову Ивану', 'Сравнить цены']);
     });
 
-    it('a masking failure drops the agenda rather than sending raw PII', async () => {
+    it('costs NO extra anonymizer call — the steps come from the masked question (r28)', async () => {
+      /* The anonymizer is the dominant latency of a DR turn, and the transcript
+       * it already masked carries the plan verbatim. */
+      models.getMessages.mockResolvedValueOnce(planTree());
+      const maskContent = jest.fn(async (t) => t);
+      mockStartSovereignSession.mockResolvedValue({
+        maskedQuestion:
+          'Предложенный план:\n**План исследования:** Рынок\n\n1. Собрать данные по [PERSON_1]\n2. Сравнить цены',
+        passthroughHeaders: {},
+        maskContent,
+        restore: jest.fn(async (t) => t),
+        drop: jest.fn(async () => {}),
+      });
+
+      await runOnce();
+
+      expect(maskContent).not.toHaveBeenCalled();
+    });
+
+    it('a transcript that yields a different step count drops the agenda — the mapping is unknown', async () => {
       models.getMessages.mockResolvedValueOnce(planTree());
       mockStartSovereignSession.mockResolvedValue({
-        maskedQuestion: 'изучи для [PERSON_1]',
+        maskedQuestion: 'Предложенный план:\n**План исследования:** Рынок\n\n1. Только один шаг',
         passthroughHeaders: {},
-        maskContent: jest.fn(async () => {
-          throw new Error('anonymizer down');
-        }),
+        maskContent: jest.fn(async (t) => t),
         restore: jest.fn(async (t) => t),
         drop: jest.fn(async () => {}),
       });
@@ -1489,29 +1531,12 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
       const configurable = await runOnce();
 
       expect(configurable.planSteps).toEqual([]);
-      /* And the card is told NOTHING rather than left holding step 1: with no
-       * agenda the run can never name a step, so a highlight would be a claim
-       * nobody made. */
+      /* And the card is told NOTHING rather than left holding step 1. */
       const research = mockEmitChunk.mock.calls.find(
         (c) => c[1]?.event === 'dr_progress' && c[1].data.phase === 'research',
       );
       expect(research[1].data.steps.length).toBe(2);
       expect(research[1].data.stepIndex).toBeUndefined();
-    });
-
-    it('a masking that changed the line count drops the agenda — the mapping is unknown', async () => {
-      models.getMessages.mockResolvedValueOnce(planTree());
-      mockStartSovereignSession.mockResolvedValue({
-        maskedQuestion: 'изучи для [PERSON_1]',
-        passthroughHeaders: {},
-        maskContent: jest.fn(async (t) => `${t}\nлишняя строка`),
-        restore: jest.fn(async (t) => t),
-        drop: jest.fn(async () => {}),
-      });
-
-      const configurable = await runOnce();
-
-      expect(configurable.planSteps).toEqual([]);
     });
   });
 

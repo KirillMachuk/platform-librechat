@@ -168,6 +168,44 @@ export function formatPlanMessage({ title, steps }: { title: string; steps: stri
   return `${heading}\n\n${list}`;
 }
 
+/**
+ * The plan's steps as they appear INSIDE a dialogue transcript — used to read
+ * them back out of the already-masked question instead of masking them a second
+ * time (r28).
+ *
+ * The transcript is what the sovereign session masks, and it carries the plan
+ * message verbatim, so the masked question already contains the steps with the
+ * run's own placeholders. Extracting them here costs nothing, keeps the
+ * placeholders identical to the ones the brief was built from, and lets the
+ * detector work on the long text with context — a step masked alone is a short
+ * isolated string, and `/v1/detect` is a detection pass with no literal
+ * re-match, so a surname it recognised in the transcript it can miss there.
+ *
+ * The slice matters: clarify questions are numbered the same way, so a naive
+ * scan of the whole transcript would mix them in. Numbered lines are collected
+ * from the plan marker until the first line that is neither numbered nor blank
+ * — which is the next labelled block.
+ */
+export function extractPlanStepsFromTranscript(transcript: string): string[] {
+  const text = String(transcript ?? '');
+  const at = text.lastIndexOf(PLAN_MARKER);
+  if (at === -1) {
+    return [];
+  }
+  const steps: string[] = [];
+  for (const line of text.slice(at).split(/\r?\n/).slice(1)) {
+    const match = line.match(/^\s*\d+\.\s+(.*\S)\s*$/);
+    if (match) {
+      steps.push(match[1].trim());
+      continue;
+    }
+    if (line.trim() && steps.length > 0) {
+      break;
+    }
+  }
+  return steps;
+}
+
 /** True if a message is a PLAN card (detected by the fixed marker). */
 export function isPlanMessage(text: string): boolean {
   return typeof text === 'string' && text.trimStart().startsWith(PLAN_MARKER);
