@@ -106,11 +106,29 @@ describe('parsePlanDecision (review r2: fails CLOSED to PLAN)', () => {
 });
 
 describe('buildPlanPrompt', () => {
-  it('asks for the CLARIFY|PLAN|PROCEED JSON and honors an explicit start', () => {
+  it('a FRESH turn may only clarify or plan — never decide a plan is unnecessary (r28)', () => {
+    /* The owner's rule: «план всегда должен быть» — he approves it before the
+     * run and reads the progress by it. A gate that could skip the plan left
+     * the live card with no steps to show, which is what made it invent three
+     * constants. PROCEED survives only as the anti-loop answer below. */
     const prompt = buildPlanPrompt({ now: '2026-07-09' });
-    expect(prompt).toMatch(/CLARIFY\|PLAN\|PROCEED/);
+    expect(prompt).toMatch(/"CLARIFY\|PLAN"/);
+    expect(prompt).not.toMatch(/CLARIFY\|PLAN\|PROCEED/);
+    expect(prompt).toMatch(/План нужен ВСЕГДА/);
     expect(prompt).toMatch(/"action"/);
     expect(prompt).toMatch(/"steps"/);
+  });
+
+  it('keeps PROCEED only where the user explicitly asks to start (anti-loop)', () => {
+    const prompt = buildPlanPrompt({ now: '2026-07-09', allowClarify: false });
+    expect(prompt).toMatch(/"PLAN\|PROCEED"/);
+    expect(prompt).toMatch(/начинай/);
+  });
+
+  it('caps a step to one line of the card', () => {
+    /* The steps are rows in a narrow card; the model was writing sentences that
+     * wrapped to three lines (owner r28: «учти размер карточки»). */
+    expect(buildPlanPrompt({ now: '2026-07-09' })).toMatch(/ДО 60 знаков/);
   });
 
   it('forbids CLARIFY when allowClarify is false', () => {
