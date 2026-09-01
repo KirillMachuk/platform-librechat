@@ -1467,7 +1467,9 @@ function getRunSandboxContext(key: string): SandboxSessionContext {
 }
 
 /** Non-empty means it can actually steer codeapi to an existing sandbox. */
-function hasSandboxSession(context: SandboxSessionContext | undefined): boolean {
+function hasSandboxSession(
+  context: SandboxSessionContext | undefined,
+): context is SandboxSessionContext {
   return (
     context != null &&
     ((typeof context.session_id === 'string' && context.session_id.length > 0) ||
@@ -1476,20 +1478,58 @@ function hasSandboxSession(context: SandboxSessionContext | undefined): boolean 
 }
 
 /**
- * The session context a tool call should travel with: what the SDK seeded for
- * this call when it has one, otherwise what this conversation learned from an
- * earlier step (which is the only source for host file-authoring tools — the
- * SDK does not seed those).
+ * Union of the file refs two sandbox memories hold, keyed by the name codeapi
+ * materialises them under. On a collision the higher `version` wins; failing that the
+ * SDK's own entry does, since that is the live session's view of its own files.
+ */
+function unionSandboxFiles(
+  seeded: SandboxSessionContext,
+  runContext: SandboxSessionContext,
+): SandboxSessionContext['files'] {
+  const byName = new Map<string, NonNullable<SandboxSessionContext['files']>[number]>();
+  for (const file of [...(runContext.files ?? []), ...(seeded.files ?? [])]) {
+    const existing = byName.get(file.name);
+    if (existing == null || (file.version ?? 0) > (existing.version ?? 0)) {
+      byName.set(file.name, file);
+    }
+  }
+  return [...byName.values()];
+}
+
+/**
+ * The session context a tool call should travel with.
+ *
+ * Two memories of the same sandbox exist and neither is complete on its own: the SDK
+ * seeds `codeSessionContext` on the calls it knows about (code execution, `skill`,
+ * `read_file`), and the host records what its own file authoring established —
+ * `create_file` and `edit_file` are not on the SDK's list, so their files exist only
+ * in the host's copy.
+ *
+ * Picking one side drops the other's files. Measured on the stand 31.08 (run
+ * `1d4605a4`): the `pptx` skill filled the SDK's side, `create_file` then wrote a spec
+ * into the host's side, and every later `bash_tool` call came back "No such file or
+ * directory" — because the seeded side was non-empty and won outright. Five of that
+ * run's twelve tool rounds went on working around it.
+ *
+ * So merge instead of choosing. The session id stays the SDK's when it has one (that
+ * is the live sandbox); the files are the union of both sides.
  */
 function resolveSandboxContextForCall(
   tc: ToolCallRequest,
   runContext: SandboxSessionContext | undefined,
 ): SandboxSessionContext | undefined {
   const seeded = tc.codeSessionContext as SandboxSessionContext | undefined;
-  if (hasSandboxSession(seeded)) {
+  if (!hasSandboxSession(seeded)) {
+    return hasSandboxSession(runContext) ? runContext : seeded;
+  }
+  if (!hasSandboxSession(runContext) || runContext === seeded) {
     return seeded;
   }
-  return hasSandboxSession(runContext) ? runContext : seeded;
+  return {
+    ...seeded,
+    session_id: seeded.session_id ?? runContext.session_id,
+    files: unionSandboxFiles(seeded, runContext),
+  };
 }
 
 function isSandboxMissingFileError(error: unknown): boolean {

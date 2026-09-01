@@ -325,6 +325,80 @@ describe('sandbox session continuity', () => {
     expect(new Set(sandbox.writeTargets).size).toBe(1);
   });
 
+  /**
+   * 31.08.2026 on the stand, run `1d4605a4`: the `pptx` skill unpacked its files into the
+   * run's sandbox, then `create_file` wrote a spec — and every later `bash_tool` call said
+   * "No such file or directory", twice over, until the model gave up and rewrote the file
+   * with a shell heredoc. Five of that run's twelve tool rounds went on the workaround,
+   * which is why it hit the step ceiling.
+   *
+   * The two sides each keep a memory of the sandbox: the SDK seeds `codeSessionContext` on
+   * the calls it knows about, and the host records what its own file authoring established.
+   * The tests above only ever exercise the case where the SDK's side is EMPTY — so the
+   * fallback to the host's side is enough and they pass. Here the SDK's side is NOT empty,
+   * which is the ordinary shape of a real run, and picking one side means the other side's
+   * files are silently dropped.
+   */
+  it('lets code see a file created AFTER the sandbox already had files in it', async () => {
+    const sandbox = new FakeSandbox();
+    const handler = makeHandler(sandbox, { tools: [makeExecTool(sandbox)] });
+    const thread = freshThread();
+
+    /* Step 1 — code establishes the sandbox and puts a file in it, the way priming a
+     * skill does before the model ever asks for a file to be written. */
+    const [seeded] = await step(
+      handler,
+      [
+        {
+          id: 'call_seed',
+          name: 'execute_code',
+          args: { code: 'WRITE seed.txt from-the-skill' },
+        } as ToolCallRequest,
+      ],
+      thread,
+    );
+    expect(seeded.status).toBe('success');
+    const seededContext = {
+      session_id: (seeded.artifact as { session_id?: string }).session_id,
+      files: (seeded.artifact as { files?: FileRef[] }).files,
+    };
+
+    /* Step 2 — the model writes a spec file. The SDK does not seed authoring calls, so
+     * this call arrives bare, exactly as it does in production. */
+    const [written] = await step(
+      handler,
+      [
+        {
+          id: 'call_write_spec',
+          name: 'create_file',
+          args: { file_path: '/mnt/data/spec.json', content: '{"job":"pptx"}' },
+        } as ToolCallRequest,
+      ],
+      thread,
+    );
+    expect(written.status).toBe('success');
+
+    /* Step 3 — code runs over the spec. This call DOES arrive seeded (it is a tool the
+     * SDK tracks), carrying the sandbox from step 1 — the state that makes the two
+     * memories disagree. The user asked for one thing: read the file that was just
+     * written. */
+    const [ran] = await step(
+      handler,
+      [
+        {
+          id: 'call_use_spec',
+          name: 'execute_code',
+          args: { code: 'READ spec.json' },
+          codeSessionContext: seededContext,
+        } as unknown as ToolCallRequest,
+      ],
+      thread,
+    );
+
+    expect(String(ran.content)).not.toContain('No such file or directory');
+    expect(String(ran.content)).toContain('pptx');
+  });
+
   it('does not hand one conversation the sandbox of another', async () => {
     const sandbox = new FakeSandbox();
     const handler = makeHandler(sandbox);
