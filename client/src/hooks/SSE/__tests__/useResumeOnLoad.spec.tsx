@@ -377,4 +377,106 @@ describe('useResumeOnLoad', () => {
 
     expect(observedSiblingIndexes[observedSiblingIndexes.length - 1]).toBe(1);
   });
+  it('FAILS ON PRE-FIX CODE: the resumed snapshot does not carry the turn it resumes (r29)', async () => {
+    /* `submission.messages` is the transcript BEFORE the turn — every handler that closes
+     * one writes `[...messages, requestMessage, responseMessage]`. A resumed turn reads its
+     * messages from the database, where the user message is already saved, so leaving it in
+     * appends it twice and the thread grows a branch nobody made (owner, r29: a «2 / 2»
+     * switcher under a Deep Research plan, its first half an empty dead end). */
+    const plan = {
+      messageId: 'plan',
+      parentMessageId: Constants.NO_PARENT,
+      conversationId: CONVERSATION_ID,
+      text: 'План исследования',
+      isCreatedByUser: false,
+    } as TMessage;
+    const start = buildUserMessage(CONVERSATION_ID, 'start');
+    start.parentMessageId = plan.messageId;
+    const observedSubmissions: Array<TSubmission | null> = [];
+
+    mockUseStreamStatus.mockReturnValue({
+      isSuccess: true,
+      isFetching: false,
+      data: {
+        active: true,
+        status: 'running',
+        streamId: CONVERSATION_ID,
+        resumeState: {
+          runSteps: [],
+          aggregatedContent: [],
+          replayEvents: [],
+          responseMessageId: 'start_',
+          conversationId: CONVERSATION_ID,
+          userMessage: {
+            messageId: start.messageId,
+            parentMessageId: plan.messageId,
+            conversationId: CONVERSATION_ID,
+            text: start.text,
+          },
+        },
+      },
+    });
+
+    renderUseResumeOnLoad({
+      messages: [plan, start],
+      onSubmission: (currentSubmission) => observedSubmissions.push(currentSubmission),
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const resumed = observedSubmissions[observedSubmissions.length - 1];
+    expect(resumed?.userMessage.messageId).toBe(start.messageId);
+    expect(resumed?.messages.map((message) => message.messageId)).toEqual([plan.messageId]);
+  });
+
+  it('FAILS ON PRE-FIX CODE: drops the partial response too, so the finished one lands alone', async () => {
+    /* The database copy of the response is whatever was saved at disconnect; the final
+     * event carries the finished one under the SAME id. Both in one array is the same
+     * duplicate as above. */
+    const user = buildUserMessage(CONVERSATION_ID);
+    const partial = {
+      messageId: RESPONSE_MESSAGE_ID,
+      parentMessageId: USER_MESSAGE_ID,
+      conversationId: CONVERSATION_ID,
+      text: 'partial',
+      isCreatedByUser: false,
+    } as TMessage;
+    const observedSubmissions: Array<TSubmission | null> = [];
+
+    mockUseStreamStatus.mockReturnValue({
+      isSuccess: true,
+      isFetching: false,
+      data: {
+        active: true,
+        status: 'running',
+        streamId: CONVERSATION_ID,
+        resumeState: {
+          runSteps: [],
+          aggregatedContent: [{ type: 'text', text: 'partial' }],
+          replayEvents: [],
+          responseMessageId: RESPONSE_MESSAGE_ID,
+          conversationId: CONVERSATION_ID,
+          userMessage: {
+            messageId: USER_MESSAGE_ID,
+            parentMessageId: Constants.NO_PARENT,
+            conversationId: CONVERSATION_ID,
+            text: user.text,
+          },
+        },
+      },
+    });
+
+    renderUseResumeOnLoad({
+      messages: [user, partial],
+      onSubmission: (currentSubmission) => observedSubmissions.push(currentSubmission),
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(observedSubmissions[observedSubmissions.length - 1]?.messages).toEqual([]);
+  });
 });

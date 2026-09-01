@@ -83,6 +83,32 @@ function preferDefinedString(value?: string | null, fallback?: string): string |
 }
 
 /**
+ * `submission.messages` is the transcript BEFORE this turn, and every handler that
+ * closes a turn rebuilds the array from it — `finalHandler`, `cancelHandler` and
+ * `errorHandler` all write `[...submission.messages, requestMessage, responseMessage]`.
+ * `ask()` satisfies that contract for a fresh submit, because it snapshots the array
+ * before it appends the message being sent.
+ *
+ * A RESUMED turn has no such moment: its messages come from the database, where this
+ * turn's user message (and often a partial response) is already saved. Left in the
+ * snapshot, they are appended a SECOND time when the run ends — the same messageId twice
+ * in one array. `buildTree` then hangs both copies under the same parent, and the chat
+ * grows a branch nobody made: the owner's plan card sprouted a «2 / 2» switcher whose
+ * first half was an empty dead end (the report hangs off the second copy only). It heals
+ * on reload, which is why it reads as a ghost.
+ */
+function messagesBeforeTurn(
+  messages: TMessage[],
+  userMessageId: string | undefined,
+  responseMessageId: string | undefined,
+): TMessage[] {
+  /* An absent id matches nothing: comparing against `undefined` would drop any
+   * message that happens to have no id of its own. */
+  const turn = new Set([userMessageId, responseMessageId].filter(Boolean));
+  return messages.filter((message) => !turn.has(message.messageId));
+}
+
+/**
  * Build a submission object from resume state for reconnected streams.
  * This provides the minimum data needed for useResumableSSE to subscribe.
  */
@@ -151,7 +177,7 @@ function buildSubmissionFromResumeState(
   } as TConversation;
 
   return {
-    messages,
+    messages: messagesBeforeTurn(messages, userMessage.messageId, initialResponse.messageId),
     userMessage,
     initialResponse,
     conversation,
@@ -334,12 +360,16 @@ export default function useResumeOnLoad(
     } else {
       // Minimal submission without resume state
       const lastUserMessage = [...messages].reverse().find((m) => m.isCreatedByUser);
+      const userMessage =
+        lastUserMessage ?? ({ messageId: 'resume', conversationId, text: '' } as TMessage);
+      const responseMessageId =
+        messages.find((m) => !m.isCreatedByUser && m.parentMessageId === userMessage.messageId)
+          ?.messageId ?? 'resume_';
       const submission = {
-        messages,
-        userMessage:
-          lastUserMessage ?? ({ messageId: 'resume', conversationId, text: '' } as TMessage),
+        messages: messagesBeforeTurn(messages, userMessage.messageId, responseMessageId),
+        userMessage,
         initialResponse: {
-          messageId: 'resume_',
+          messageId: responseMessageId,
           conversationId,
           text: '',
           content: streamStatus.aggregatedContent ?? [{ type: 'text', text: '' }],

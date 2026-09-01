@@ -20,6 +20,7 @@ import { useAttachments, useLocalize, useMessageActions, useContentMetadata } fr
 import useAskUserChip from '~/components/Chat/Messages/DeepResearch/useAskUserChip';
 import { useOptionalMessagesOperations } from '~/Providers/MessagesViewContext';
 import useDrCommand from '~/components/Chat/Messages/DeepResearch/useDrCommand';
+import CommandRow from '~/components/Chat/Messages/DeepResearch/CommandRow';
 import ContentParts from '~/components/Chat/Messages/Content/ContentParts';
 import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
 import { USER_BUBBLE_CLASS } from '~/components/Chat/Messages/ui/turn';
@@ -250,19 +251,13 @@ const ContentRender = memo(function ContentRender({
    * and hiding the row wholesale made that branch unreachable — r25a review):
    * the body goes, the switcher row stays. */
   if (drCommand != null && !edit) {
-    if ((siblingCount ?? 1) <= 1) {
-      return null;
-    }
     return (
-      <div className="mx-auto flex flex-1 gap-3 md:max-w-[47rem] xl:max-w-[55rem]">
-        <SubRow classes="text-xs justify-end">
-          <SiblingSwitch
-            siblingIdx={siblingIdx}
-            siblingCount={siblingCount}
-            setSiblingIdx={setSiblingIdx}
-          />
-        </SubRow>
-      </div>
+      <CommandRow
+        siblingIdx={siblingIdx}
+        siblingCount={siblingCount}
+        setSiblingIdx={setSiblingIdx}
+        hasParallelContent={hasParallelContent}
+      />
     );
   }
 
