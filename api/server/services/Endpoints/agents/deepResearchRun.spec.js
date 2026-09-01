@@ -1515,6 +1515,69 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     });
   });
 
+  it('FAILS ON PRE-FIX CODE: a continuation after Stop keeps the plan the user approved (r28)', async () => {
+    /**
+     * The owner's report: «план всегда должен быть… вместо реальных шагов
+     * подставляются шаблоны». Measured on his own production thread — plan →
+     * start → Stop → comment → report. The plan is the parent exactly once, on
+     * the turn that starts it; on the continuation the parent is the STOPPED
+     * anchor, so `isPlanMessage(parentText)` was false and the run went ahead
+     * with no agenda. The card then had nothing to draw and fell back to three
+     * constants that fit any research. The plan of the BRANCH is what the user
+     * is still working on, so the turn context walks back to it.
+     */
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockPlanContent = '{"action":"PROCEED"}';
+    models.getMessages.mockResolvedValueOnce([
+      { messageId: 'orig', isCreatedByUser: true, parentMessageId: null, text: 'погода в Минске' },
+      {
+        messageId: 'p1',
+        isCreatedByUser: false,
+        parentMessageId: 'orig',
+        drKind: 'plan',
+        text: '**План исследования:** Погода\n\n1. Собрать нормы\n2. Сравнить температуры',
+      },
+      {
+        messageId: 's1',
+        isCreatedByUser: true,
+        parentMessageId: 'p1',
+        drKind: 'start',
+        text: 'Начать исследование',
+      },
+      {
+        messageId: 'a1',
+        isCreatedByUser: false,
+        parentMessageId: 's1',
+        drKind: 'aborted',
+        text: 'Исследование остановлено.',
+      },
+    ]);
+    let seenConfigurable = null;
+    mockRunDeepResearch.mockImplementationOnce(async (params) => {
+      seenConfigurable = params.configurable;
+      params.onProgress({ type: 'research', round: 1, subQuestion: 'нормы', planStep: 1 });
+      return {
+        finalReport: 'Отчёт',
+        finalizeReason: 'completed',
+        usage: { input: 1, output: 1, total: 2 },
+        findings: [],
+      };
+    });
+
+    /* The user comments on the stopped run — parent is the aborted anchor. */
+    const params = planParams('продолжай, но добавь про осадки');
+    params.parentMessageId = 'a1';
+    params.userMessage.parentMessageId = 'a1';
+    await runNewDeepResearch(params);
+
+    expect(seenConfigurable.planSteps).toEqual(['Собрать нормы', 'Сравнить температуры']);
+    const research = mockEmitChunk.mock.calls.find(
+      (c) => c[1]?.event === 'dr_progress' && c[1].data.phase === 'research',
+    );
+    expect(research[1].data.steps).toEqual(['Собрать нормы', 'Сравнить температуры']);
+    expect(research[1].data.stepIndex).toBe(0);
+  });
+
   it('a PROCEED run reports no step at all — there is no plan to be on (r27)', async () => {
     mockStartSovereignSession.mockResolvedValue(null);
     mockPlanContent = '{"action":"PROCEED"}';

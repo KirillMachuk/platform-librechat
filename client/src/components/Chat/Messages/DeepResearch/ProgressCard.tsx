@@ -1,62 +1,29 @@
 import { useMemo } from 'react';
-import type { ApprovalCardStrings, ApprovalPlanStep } from '~/components/Chat/Cards/ApprovalCard';
+import type { ApprovalCardStrings } from '~/components/Chat/Cards/ApprovalCard';
 import type { TDeepResearchProgress } from '~/store';
-import type { TranslationKeys } from '~/hooks';
 import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/ApprovalCard';
-import RunFooter, { runStatusSteps } from './RunFooter';
 import { useChatContext } from '~/Providers';
 import { Square } from '~/components/icons';
 import { useLocalize } from '~/hooks';
+import RunFooter from './RunFooter';
 
 /**
- * The three research phases, shown as a generic checklist when a run has no approved plan
- * (a PROCEED run — the model judged the request clear enough to skip the plan card — emits
- * empty `steps`). Without this the live card collapsed to a bare progress bar. The active
- * phase comes from the snapshot's `phase`, which is a fact the run reports.
+ * The live card for a run that carries NO approved plan.
  *
- * It never came from the progress fraction, and the note here used to excuse the plan-steps
- * path for doing exactly that — "plan steps are evenly distributed across it". They are not:
- * the fraction is a curve over supervisor rounds, and the first round of a five-step plan
- * landed on step 3 with two ticked off (owner r27). That path now uses a reported index too.
- */
-const PHASE_STEPS: { phase: string; key: TranslationKeys }[] = [
-  { phase: 'scope', key: 'com_ui_deep_research_phase_scope' },
-  { phase: 'research', key: 'com_ui_deep_research_phase_research' },
-  { phase: 'report', key: 'com_ui_deep_research_phase_report' },
-];
-
-/**
- * The live Deep Research RUNNING card (task #21; r25 package Б).
- *
- * Since r25 it renders through the SAME vendored frame as the plan card the
- * user approved (owner: the two looked like different products): the plan's
- * own steps carry live statuses — check / arrow with a shimmering label /
- * dashed circle — the Stop control sits in the header where the plan card's ✕
- * was, and the current action line plus the progress bar ride the footnote.
- * A step that is being worked on is never hidden behind «Ещё N» (the card
- * auto-expands for it).
- *
- * Driven entirely by the latest `dr_progress` snapshot. `stalled` (offline
- * park / reconnect backoff) swaps the action line for a "waiting for network"
- * notice and freezes the busy animations — a card with no connection must not
- * pulse as if the run were healthy (review r2). The Stop control keeps its
- * ≥40px hit area; the visual circle stays small.
+ * It used to fill that emptiness with three constants — «Определение области
+ * исследования» / «Исследование источников» / «Формирование отчёта» — laid out
+ * in the same well, with the same «Шаги» heading and the same checkmarks as a
+ * real plan. The owner read them as HIS plan and they fit any research at all
+ * (r28: «вместо реальных шагов подставляются шаблоны, которые подойдут всем
+ * DR»). Adding invented content to hide an empty card is the defect, not the
+ * cure; the plan gate now always produces a plan and a continuation inherits
+ * the one already approved, so this card is the residue — a legacy thread, or a
+ * run whose plan could not be recovered. It shows only what it actually knows:
+ * what the run is doing now, and how far along it is.
  */
 export default function ProgressCard({ data }: { data: TDeepResearchProgress }) {
   const localize = useLocalize();
   const { stopGenerating } = useChatContext();
-  const steps: ApprovalPlanStep[] = useMemo(() => {
-    /* A PROCEED run has no plan, so the three phases stand in for steps and
-     * the ACTIVE one comes from `phase`, not from the coarse fraction:
-     * research spans a wide band and a fraction-derived index would mark
-     * scope active well into research. */
-    const titles = PHASE_STEPS.map((p) => localize(p.key));
-    const activeIndex = Math.max(
-      0,
-      PHASE_STEPS.findIndex((p) => p.phase === data.phase),
-    );
-    return runStatusSteps(titles, data, activeIndex);
-  }, [data, localize]);
 
   const cardStrings: ApprovalCardStrings = useMemo(
     () => ({
@@ -81,8 +48,7 @@ export default function ProgressCard({ data }: { data: TDeepResearchProgress }) 
         variant="plan"
         strings={cardStrings}
         title={localize('com_ui_deep_research')}
-        todoTitle={localize('com_ui_deep_research_steps')}
-        plan={steps}
+        plan={[]}
         showActions={false}
         headerAction={
           /* The frame's own header slot — same 24px box and 12px inset as the

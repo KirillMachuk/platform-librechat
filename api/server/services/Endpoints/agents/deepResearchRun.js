@@ -587,6 +587,9 @@ async function buildDrTurnContext({
     dialogue: null,
     originalRequest: text ?? '',
     parentText: '',
+    /** Text of the plan the user approved earlier in THIS branch, '' when there
+     *  is none. A fresh turn has no chain, so there is nothing to inherit. */
+    planText: '',
     duplicateStart: false,
   };
   if (!parentMessageId || !conversationId || parentMessageId === Constants.NO_PARENT) {
@@ -659,7 +662,29 @@ async function buildDrTurnContext({
           m.drKind === 'start' &&
           m.messageId !== currentUserMessageId,
       );
-    return { kind, dialogue, originalRequest, parentText: parent.text ?? '', duplicateStart };
+    /**
+     * The approved plan of THIS branch, found by walking back through the chain
+     * rather than by looking at the direct parent only.
+     *
+     * The parent is a plan message just once — on the turn that starts it. On
+     * every later turn (a Stop anchor, then a comment) the parent is something
+     * else, so the run lost the plan the user had approved and continued with
+     * NO agenda at all: the live card then had no steps to show and fell back
+     * to three constants that fit any research (owner r28: «план всегда должен
+     * быть… вместо реальных шагов подставляются шаблоны»). The nearest plan
+     * above the turn is the one the user is still working on.
+     */
+    const planMsg = [...chain]
+      .reverse()
+      .find((m) => m.drKind === 'plan' || isPlanMessage(m.text ?? ''));
+    return {
+      kind,
+      dialogue,
+      originalRequest,
+      parentText: parent.text ?? '',
+      planText: planMsg?.text ?? '',
+      duplicateStart,
+    };
   } catch (error) {
     logger.warn(
       '[deepResearchRun] failed to build DR turn context; treating as a fresh request',
@@ -1661,8 +1686,9 @@ async function runNewDeepResearch(params) {
       // Progress is proportional (computed here — no graph changes). Steps come from the
       // approved plan message. Gated on the plan gate + streamId; fire-and-forget so a slow
       // emit never blocks the run, and it always ALSO logs (the shipped ops line).
-      const planSteps =
-        planGateEnabled && isPlanMessage(turn.parentText) ? extractPlanSteps(turn.parentText) : [];
+      /* The plan of this branch, not merely of the direct parent — see
+       * `planText` in the turn context. */
+      const planSteps = planGateEnabled ? extractPlanSteps(turn.planText ?? '') : [];
       const maxRounds = Math.max(1, tier.maxOrchestratorCycles || 6);
       let searchCount = 0;
       /**
