@@ -3596,7 +3596,7 @@ describe('getUserFacingError - a run that ran out of steps', () => {
   it('says the run ran out of steps, and names carrying on as the way forward', () => {
     const shown = getUserFacingError(stepLimit());
 
-    expect(shown).toContain('предельное число действий');
+    expect(shown).toContain('предел действий');
     expect(shown).toContain('продолжай');
     expect(shown).not.toBe('Произошла ошибка при обработке запроса. Попробуйте ещё раз.');
   });
@@ -3618,7 +3618,7 @@ describe('getUserFacingError - a run that ran out of steps', () => {
   it('recognises it from the message alone', () => {
     const shown = getUserFacingError(new Error('Recursion limit of 25 reached without hitting'));
 
-    expect(shown).toContain('предельное число действий');
+    expect(shown).toContain('предел действий');
   });
 
   /** A provider outage that happens to hit mid-run keeps its own, better advice. */
@@ -3626,19 +3626,6 @@ describe('getUserFacingError - a run that ran out of steps', () => {
     const shown = getUserFacingError({ status: 503, message: 'upstream 503' });
 
     expect(shown).toContain('Сервис моделей временно недоступен');
-  });
-
-  /**
-   * The unknown-cause fallback has the same problem the moment a run has already
-   * produced something: "try again" reads as "pay for all of that twice".
-   */
-  it('stops telling a run that already did the work to start over', () => {
-    const generic = { message: 'socket hang up' };
-
-    expect(getUserFacingError(generic)).toBe(
-      'Произошла ошибка при обработке запроса. Попробуйте ещё раз.',
-    );
-    expect(getUserFacingError(generic, { hasCompletedWork: true })).toContain('продолжай');
   });
 });
 
@@ -3691,9 +3678,9 @@ describe('AgentClient - a run that broke after doing the work', () => {
     const error = await runThatBreaks([finishedToolCall(), danglingToolCall()], stepLimitError());
 
     expect(error).toBeDefined();
-    const body = JSON.parse(error[ContentTypes.ERROR]);
-    expect(body.code).toBe('run_incomplete');
-    expect(body.info).toContain('предельное число действий');
+    /** A bare code: the wording is the client's, and nothing free-form of ours goes
+     *  into JSON that the client has to parse back out. */
+    expect(JSON.parse(error[ContentTypes.ERROR])).toEqual({ code: 'run_incomplete' });
   });
 
   /** A run that produced nothing really did fail; that frame stays. */
@@ -3702,8 +3689,8 @@ describe('AgentClient - a run that broke after doing the work', () => {
 
     expect(error).toBeDefined();
     expect(error[ContentTypes.ERROR]).toBe(
-      'Агент выполнил предельное число действий за один ответ. ' +
-        'Напишите «продолжай» — он продолжит с того места, где остановился.',
+      'Достигнут предел действий за один ответ. ' +
+        'Напишите «продолжай» — продолжу с места, где остановился.',
     );
   });
 

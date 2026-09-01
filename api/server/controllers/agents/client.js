@@ -145,17 +145,16 @@ const isStepLimitError = (err) =>
  * or internal details into the chat. Status is read from the SDK error object
  * and, as a fallback, parsed from a wrapped message like "402 ...".
  *
- * `hasCompletedWork` says whether the run already finished tool calls before it
- * broke. It changes only the branches whose advice would otherwise be wrong: telling
- * someone to run the whole thing again — and pay again — when the answer is to carry
- * on from what is already there.
+ * Only reached when the run has nothing to show for itself. A run that broke after
+ * finishing tool calls is announced by `ErrorTypes.RUN_INCOMPLETE` instead, which the
+ * client localizes on its own — see the push site in `chatCompletion`.
  */
-function getUserFacingError(err, { hasCompletedWork = false } = {}) {
+function getUserFacingError(err) {
   /* Before the status parse below, which reads any 3-digit 4xx/5xx out of the message
    * text: raise `recursionLimit` past 400 and "Recursion limit of 500 reached" would be
    * served to the user as a provider outage. */
   if (isStepLimitError(err)) {
-    return 'Агент выполнил предельное число действий за один ответ. Напишите «продолжай» — он продолжит с того места, где остановился.';
+    return 'Достигнут предел действий за один ответ. Напишите «продолжай» — продолжу с места, где остановился.';
   }
   const parsed =
     typeof err?.message === 'string' ? Number((err.message.match(/\b([45]\d\d)\b/) || [])[1]) : NaN;
@@ -237,9 +236,6 @@ function getUserFacingError(err, { hasCompletedWork = false } = {}) {
   }
   if (typeof status === 'number' && status >= 500) {
     return 'Сервис моделей временно недоступен. Попробуйте ещё раз через минуту.';
-  }
-  if (hasCompletedWork) {
-    return 'Причина сбоя не определена. Напишите «продолжай» — агент продолжит с того места, где остановился.';
   }
   return 'Произошла ошибка при обработке запроса. Попробуйте ещё раз.';
 }
@@ -1807,7 +1803,6 @@ class AgentClient extends BaseClient {
             [ContentTypes.ERROR]: JSON.stringify(err.balanceErrorMessage),
           });
         } else {
-          const hasCompletedWork = hasCompletedToolWork(this.contentParts);
           /** The step ceiling is a configured stop, not a fault — same reasoning as the
            *  balance branch above. Logged so it can still be counted, at a level that
            *  does not put a tuning decision in front of whoever reads error logs. */
@@ -1822,17 +1817,18 @@ class AgentClient extends BaseClient {
               err,
             );
           }
-          const message = getUserFacingError(err, { hasCompletedWork });
           /** A run that broke AFTER doing the work must not be announced as a failed
            *  request. The client wraps a bare string in «Не удалось выполнить запрос»
            *  — true for a run that produced nothing, a lie for one whose files are
            *  right above the notice, and an invitation to pay for the same work twice.
-           *  The structured form routes to a frame that leads with what survived. */
+           *  A bare code, with no sentence of ours inside it: the client owns the
+           *  wording, so it stays one localizable string and nothing free-form ends up
+           *  inside JSON the client has to parse back out. */
           this.contentParts.push({
             type: ContentTypes.ERROR,
-            [ContentTypes.ERROR]: hasCompletedWork
-              ? JSON.stringify({ code: ErrorTypes.RUN_INCOMPLETE, info: message })
-              : message,
+            [ContentTypes.ERROR]: hasCompletedToolWork(this.contentParts)
+              ? JSON.stringify({ code: ErrorTypes.RUN_INCOMPLETE })
+              : getUserFacingError(err),
           });
         }
       }
