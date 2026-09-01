@@ -199,7 +199,9 @@ jest.mock('@librechat/api', () => ({
     `Ты — модуль ПЛАНИРОВАНИЯ. ${now}${allowClarify ? '' : ' CLARIFY запрещено'}${
       isRefinement ? ' РЕЖИМ ПРАВКИ ПЛАНА' : ''
     }`,
-  parsePlanDecision: (text, { allowClarify = true } = {}) => {
+  /* Mirrors the real parser, INCLUDING its fail-closed rules: PROCEED is only
+   * honoured where a plan already exists to be run (r28 review). */
+  parsePlanDecision: (text, { allowClarify = true, allowProceed = false } = {}) => {
     let parsed = null;
     try {
       parsed = JSON.parse(text);
@@ -219,7 +221,7 @@ jest.mock('@librechat/api', () => ({
     if (action === 'CLARIFY' && allowClarify && questions.length) {
       return { action: 'CLARIFY', questions, title: '', steps: [] };
     }
-    if (action === 'PROCEED') {
+    if (action === 'PROCEED' && allowProceed) {
       return { action: 'PROCEED', questions: [], title: '', steps: [] };
     }
     // Review r2: ambiguity fails CLOSED to PLAN (possibly with empty steps — the runner
@@ -1123,6 +1125,15 @@ describe('runNewDeepResearch — P0 review fixes (billing + abort signal)', () =
 describe('runNewDeepResearch — task #21 plan gate', () => {
   const models = require('~/models');
 
+  /* `jest.clearAllMocks()` wipes recorded calls but NOT queued one-shot
+   * resolutions: a conversation a test queues and does not consume leaks into
+   * the next test and silently hands it someone else's history. That is how
+   * flipping ONE test's outcome reddened five unrelated ones (r28). */
+  beforeEach(() => {
+    models.getMessages.mockReset();
+    models.getMessages.mockImplementation(async () => []);
+  });
+
   function planParams(text, extra = {}) {
     const p = baseParams(text);
     p.req.config.deepResearch = { planGate: true, ...extra };
@@ -1145,13 +1156,19 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     expect(msg.unfinished).toBe(false);
   });
 
-  it('fresh turn where the model PROCEEDs: runs the graph with no card', async () => {
+  it('fresh turn where the model PROCEEDs: still shows a card, never a planless run (r28)', async () => {
+    /* Was the opposite until r28. The owner's rule is that a research always
+     * has a plan — he approves it before the run and reads progress by it — so
+     * a PROCEED with nothing approved yet fails closed to a card. */
     mockStartSovereignSession.mockResolvedValue(null);
     mockPlanContent = '{"action":"PROCEED"}';
 
-    await runNewDeepResearch(planParams('сравни Битрикс24 и AmoCRM по цене за 2026 год'));
+    const result = await runNewDeepResearch(
+      planParams('сравни Битрикс24 и AmoCRM по цене за 2026 год'),
+    );
 
-    expect(mockRunDeepResearch).toHaveBeenCalledTimes(1);
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    expect(result.finalizeReason).toBe('plan');
   });
 
   it('START on a plan parent: runs the graph without a second decision', async () => {
@@ -1540,6 +1557,36 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     });
   });
 
+  it('FAILS ON PRE-FIX CODE: answering the clarifying questions still gets a plan, not a planless run (r28 review)', async () => {
+    /**
+     * «План всегда должен быть» has to survive a model that answers
+     * off-contract. On this turn CLARIFY is forbidden (anti-loop) and the
+     * branch holds no approved plan yet, so PROCEED would start the most
+     * expensive action in the product with nothing for the user to confirm and
+     * nothing for the card to show. The parser fails closed to PLAN.
+     */
+    mockStartSovereignSession.mockResolvedValue(null);
+    mockPlanContent = '{"action":"PROCEED"}';
+    models.getMessages.mockResolvedValueOnce([
+      { messageId: 'orig', isCreatedByUser: true, parentMessageId: null, text: 'изучи рынок' },
+      {
+        messageId: 'c1',
+        isCreatedByUser: false,
+        parentMessageId: 'orig',
+        drKind: 'clarify',
+        text: 'Уточните:\n1. Бюджет?\n2. Регион?',
+      },
+    ]);
+
+    const params = planParams('ок, поехали');
+    params.parentMessageId = 'c1';
+    params.userMessage.parentMessageId = 'c1';
+    const result = await runNewDeepResearch(params);
+
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    expect(result.finalizeReason).toBe('plan');
+  });
+
   it('FAILS ON PRE-FIX CODE: a continuation after Stop keeps the plan the user approved (r28)', async () => {
     /**
      * The owner's report: «план всегда должен быть… вместо реальных шагов
@@ -1603,26 +1650,21 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     expect(research[1].data.stepIndex).toBe(0);
   });
 
-  it('a PROCEED run reports no step at all — there is no plan to be on (r27)', async () => {
+  it('a gate-ON turn can no longer reach the graph without a plan (r28)', async () => {
+    /* This used to be «a PROCEED run reports no step at all»: with the gate on,
+     * a fresh PROCEED started a planless run. It cannot any more — the parser
+     * fails closed to a card — so the case the old test described is now
+     * unreachable, and asserting on it would assert on nothing. The remaining
+     * planless run is the sovereign degradation, which has its own guard. */
     mockStartSovereignSession.mockResolvedValue(null);
     mockPlanContent = '{"action":"PROCEED"}';
-    mockRunDeepResearch.mockImplementationOnce(async (params) => {
-      params.onProgress({ type: 'research', round: 1, subQuestion: 'q' });
-      return {
-        finalReport: 'Отчёт',
-        finalizeReason: 'completed',
-        usage: { input: 1, output: 1, total: 2 },
-        findings: [],
-      };
-    });
 
-    await runNewDeepResearch(planParams('изучи CRM рынок'));
+    const result = await runNewDeepResearch(planParams('изучи CRM рынок'));
 
-    const research = mockEmitChunk.mock.calls.find(
-      (c) => c[1]?.event === 'dr_progress' && c[1].data.phase === 'research',
-    );
-    expect(research[1].data.steps).toEqual([]);
-    expect(research[1].data.stepIndex).toBeUndefined();
+    expect(mockRunDeepResearch).not.toHaveBeenCalled();
+    expect(result.finalizeReason).toBe('plan');
+    const saved = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(saved.text).toContain('**План исследования:**');
   });
 
   it('labels the pre-plan silence: prepare right after created, plan before the decision (round 23)', async () => {

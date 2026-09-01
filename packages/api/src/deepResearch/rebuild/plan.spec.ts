@@ -56,8 +56,19 @@ describe('parsePlanDecision (review r2: fails CLOSED to PLAN)', () => {
     expect(out.questions).toEqual(['a', 'b', 'c']);
   });
 
-  it('returns PROCEED for an explicit PROCEED', () => {
-    expect(parsePlanDecision('{"action":"PROCEED"}').action).toBe('PROCEED');
+  it('a PROCEED on a turn with no approved plan is DOWNGRADED to PLAN (r28 review)', () => {
+    /* The rule «a research always has a plan» cannot live in the prompt alone:
+     * everything else in this parser is fail-closed precisely because a model
+     * may answer off-contract. Without an approved plan in the branch there is
+     * nothing to proceed WITH, so the gate must produce a card. */
+    expect(parsePlanDecision('{"action":"PROCEED"}').action).toBe('PLAN');
+    expect(parsePlanDecision('{"action":"PROCEED"}', { allowClarify: false }).action).toBe('PLAN');
+  });
+
+  it('honours PROCEED only where a plan already exists to be run', () => {
+    expect(
+      parsePlanDecision('{"action":"PROCEED"}', { allowClarify: false, allowProceed: true }).action,
+    ).toBe('PROCEED');
   });
 
   it('fails CLOSED to PLAN on garbage / empty / CLARIFY-without-Q / PLAN-without-steps', () => {
@@ -85,10 +96,12 @@ describe('parsePlanDecision (review r2: fails CLOSED to PLAN)', () => {
     expect(out.questions).toEqual([]);
   });
 
-  it('honors an explicit PROCEED when allowClarify is false (the «начинай» reply)', () => {
-    expect(parsePlanDecision('{"action":"PROCEED"}', { allowClarify: false }).action).toBe(
-      'PROCEED',
-    );
+  it('honors an explicit PROCEED when a plan already exists (the «начинай» reply)', () => {
+    /* r28 review: `allowClarify: false` alone is not enough — answering
+     * clarifying questions also lands here and leaves no plan in the branch. */
+    expect(
+      parsePlanDecision('{"action":"PROCEED"}', { allowClarify: false, allowProceed: true }).action,
+    ).toBe('PROCEED');
   });
 
   it('still allows PLAN when allowClarify is false', () => {
@@ -120,10 +133,19 @@ describe('buildPlanPrompt', () => {
     expect(prompt).toMatch(/"steps"/);
   });
 
-  it('keeps PROCEED only where the user explicitly asks to start (anti-loop)', () => {
-    const prompt = buildPlanPrompt({ now: '2026-07-09', allowClarify: false });
-    expect(prompt).toMatch(/"PLAN\|PROCEED"/);
-    expect(prompt).toMatch(/начинай/);
+  it('offers PROCEED only when an approved plan already exists (anti-loop)', () => {
+    const withPlan = buildPlanPrompt({
+      now: '2026-07-09',
+      allowClarify: false,
+      allowProceed: true,
+    });
+    expect(withPlan).toMatch(/"PLAN\|PROCEED"/);
+    expect(withPlan).toMatch(/начинай/);
+    /* Answering clarifying questions leaves no plan in the branch, so «начинай»
+     * must still produce one rather than launch a planless run (r28 review). */
+    const withoutPlan = buildPlanPrompt({ now: '2026-07-09', allowClarify: false });
+    expect(withoutPlan).toMatch(/"PLAN"/);
+    expect(withoutPlan).not.toMatch(/PROCEED/);
   });
 
   it('caps a step to one line of the card', () => {

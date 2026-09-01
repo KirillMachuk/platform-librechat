@@ -739,16 +739,17 @@ async function runPlanDecision({
   signal,
   allowClarify,
   isRefinement = false,
+  allowProceed = false,
 }) {
   try {
     const model = await buildModel(leadModelSlug);
     const prompt = [
-      new SystemMessage(buildPlanPrompt({ now, allowClarify, isRefinement })),
+      new SystemMessage(buildPlanPrompt({ now, allowClarify, isRefinement, allowProceed })),
       new HumanMessage(input),
     ];
     const response = await model.invoke(prompt, { signal });
     return {
-      ...parsePlanDecision(extractMessageText(response?.content), { allowClarify }),
+      ...parsePlanDecision(extractMessageText(response?.content), { allowClarify, allowProceed }),
       usage: usageFromExchange(prompt, response),
       usageByModel: usageByModelFromExchange(prompt, response, leadModelSlug),
     };
@@ -1544,6 +1545,12 @@ async function runNewDeepResearch(params) {
         // A comment on an existing plan (card edit or post-Stop) → tell the model to return
         // an UPDATED plan that reflects the change, not a near-identical one (task #21).
         isRefinement: turn.kind === 'plan-edit',
+        /* Skipping the card is only allowed when the branch ALREADY holds a
+         * plan the user approved: «начинай» then runs THAT plan instead of
+         * answering with another card, and a research still never runs without
+         * one. Fail-closed in the parser too — the prompt is not a contract
+         * (r28 review). */
+        allowProceed: (turn.planText ?? '') !== '',
       });
       planUsage = decision.usage;
       planUsageByModel = decision.usageByModel;

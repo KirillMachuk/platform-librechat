@@ -79,25 +79,34 @@ export function buildPlanPrompt({
   now,
   allowClarify = true,
   isRefinement = false,
+  allowProceed = false,
 }: {
   now: string;
   allowClarify?: boolean;
   isRefinement?: boolean;
+  /** May this turn skip the card and just run? Only when the branch ALREADY
+   *  holds a plan the user approved — then «начинай» runs THAT plan instead of
+   *  answering with another card, and the owner's rule that a research always
+   *  has a plan still holds. With no plan in the branch there is nothing to
+   *  proceed with, so the gate must produce one. */
+  allowProceed?: boolean;
 }): string {
   const clarifyRule = allowClarify
     ? `- Если для АДРЕСНОЙ рекомендации не хватает критичных вводных (масштаб бизнеса, бюджет, on-prem/облако, отрасль, юрисдикция, ключевые требования) — верни action "CLARIFY" и от 1 до ${MAX_CLARIFY_QUESTIONS} КОРОТКИХ вопросов, только самые важные. Не задавай вопросы ради вопросов.`
-    : `- Пользователю уже задавали уточнения (или он просил начинать) — БОЛЬШЕ НЕ УТОЧНЯЙ. Действие "CLARIFY" запрещено; выбирай "PLAN" или "PROCEED". Если пользователь явно просит начать/запустить исследование («начинай», «поехали», «запускай») — верни "PROCEED", не предлагай новый план.`;
+    : allowProceed
+      ? `- Пользователю уже задавали уточнения (или он просил начинать) — БОЛЬШЕ НЕ УТОЧНЯЙ. Действие "CLARIFY" запрещено; выбирай "PLAN" или "PROCEED". Если пользователь явно просит начать/запустить исследование («начинай», «поехали», «запускай») — верни "PROCEED": уже утверждённый план будет запущен как есть, новый предлагать не нужно.`
+      : `- Пользователю уже задавали уточнения — БОЛЬШЕ НЕ УТОЧНЯЙ. Действие "CLARIFY" запрещено. Утверждённого плана в этом диалоге ещё нет, поэтому верни "PLAN": даже на «начинай» сначала нужен план, который пользователь подтвердит.`;
   const refinementRule = isRefinement
     ? `\n\nРЕЖИМ ПРАВКИ ПЛАНА: в диалоге есть блок «Предложенный план», а последнее сообщение пользователя — ПРАВКА к нему. Верни action "PLAN" — ОБНОВЛЁННЫЙ план, в котором правка пользователя ЯВНО учтена в шагах (требование по языку, региону, бюджету, источникам или формату вырази отдельным шагом или условием внутри шагов). НЕ повторяй прежний план дословно и НЕ игнорируй правку.`
     : '';
-  const actions = allowClarify ? 'CLARIFY|PLAN' : 'PLAN|PROCEED';
+  const actions = allowClarify ? 'CLARIFY|PLAN' : allowProceed ? 'PLAN|PROCEED' : 'PLAN';
   return `Ты — модуль ПЛАНИРОВАНИЯ системы глубокого исследования (Deep Research) для рынка СНГ.
 Дата: ${now}.
 
 Тебе дан запрос пользователя (или диалог уточнения). Реши, что вернуть:
 ${clarifyRule}
 - Иначе верни action "PLAN": короткий ПЛАН исследования из 3–6 шагов. Каждый шаг — сжатая формулировка действия (глагол в инфинитиве), ДО 60 знаков: это строка в узкой карточке, она не должна переноситься на три строки. Подробности выноси в сам ход исследования, а не в текст шага. ПОСЛЕДНИЙ шаг ВСЕГДА описывает формат результата (например, «Сформировать таблицу и рекомендацию»). Также верни "title" — короткую ТЕМУ исследования в именительном падеже (3–7 слов, это тема, а не команда, без кавычек).
-- План нужен ВСЕГДА, даже если запрос кажется простым: пользователь утверждает его перед запуском и по нему видит ход работы. Не решай за него, что план не требуется.${refinementRule}
+${allowProceed ? '' : '- План нужен ВСЕГДА, даже если запрос кажется простым: пользователь утверждает его перед запуском и по нему видит ход работы. Не решай за него, что план не требуется.\n'}${refinementRule}
 
 Язык вопросов, шагов и заголовка = язык запроса пользователя.
 
@@ -139,7 +148,10 @@ function cleanStringList(value: unknown, cap: number): string[] {
  */
 export function parsePlanDecision(
   text: string,
-  { allowClarify = true }: { allowClarify?: boolean } = {},
+  {
+    allowClarify = true,
+    allowProceed = false,
+  }: { allowClarify?: boolean; allowProceed?: boolean } = {},
 ): PlanDecision {
   const parsed = tolerantJsonParse(text);
   const action = String(parsed?.action ?? '').toUpperCase();
@@ -150,7 +162,7 @@ export function parsePlanDecision(
   if (action === 'CLARIFY' && allowClarify && questions.length > 0) {
     return { action: 'CLARIFY', questions, title: '', steps: [] };
   }
-  if (action === 'PROCEED') {
+  if (action === 'PROCEED' && allowProceed) {
     return { action: 'PROCEED', questions: [], title: '', steps: [] };
   }
   return { action: 'PLAN', questions: [], title, steps };
