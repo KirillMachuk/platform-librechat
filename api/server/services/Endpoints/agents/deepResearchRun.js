@@ -457,7 +457,33 @@ function drProgressFraction(event, maxRounds, searchCount) {
   return 0.1 + 0.75 * (round / (round + 1.5));
 }
 
-/** RU "current action" line for the live card (task #21) from a graph progress event. */
+/**
+ * A masked entity in a sub-question, e.g. `[PERSON_1]`. Its own constant on
+ * purpose: TITLE_PII_PLACEHOLDER above is `g`-flagged for `replace`, and a
+ * global regex carries `lastIndex` across `.test` calls — it would answer
+ * differently on alternating rounds.
+ */
+const ACTION_PII_PLACEHOLDER = /\[[A-Z][A-Z_]*_\d+\]/;
+
+/**
+ * RU "current action" line for the live card (task #21) from a graph progress event.
+ *
+ * In sovereign mode this line is the ONE place a placeholder could reach the
+ * user's screen: the supervisor writes it on masked material and it is streamed
+ * out as-is, while everything else they read — the report, the plan card, the
+ * clarify questions — is de-masked before it is saved. A run about a named
+ * person showed «Исследует: условия для [PERSON_1]» for minutes, which reads as
+ * a glitch.
+ *
+ * The masked line is replaced by the generic one rather than restored. De-masking
+ * here would mean an anonymizer call inside the emit, and the emit is
+ * fire-and-forget: awaiting inside it makes the whole progress channel
+ * asynchronous, which reorders snapshots the client replaces wholesale (a late
+ * one un-ticks a finished step) and lets a snapshot land AFTER the final event,
+ * resurrecting a card the run has already closed. That is a real risk on the
+ * live channel in exchange for a cosmetic gain on a rare turn; a clean generic
+ * line costs nothing and says the same thing.
+ */
 function drProgressAction(event) {
   if (event.type === 'scope') {
     return 'Определяет область исследования';
@@ -465,7 +491,8 @@ function drProgressAction(event) {
   if (event.type === 'report') {
     return 'Формирует отчёт';
   }
-  return event.subQuestion ? `Исследует: ${event.subQuestion}` : 'Исследует источники';
+  const detail = event.subQuestion && !ACTION_PII_PLACEHOLDER.test(event.subQuestion);
+  return detail ? `Исследует: ${event.subQuestion}` : 'Исследует источники';
 }
 
 /**

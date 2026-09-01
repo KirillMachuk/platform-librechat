@@ -1535,6 +1535,80 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
       expect(maskContent).not.toHaveBeenCalled();
     });
 
+    it('the progress channel never calls the anonymizer (r28)', async () => {
+      /* The decision behind the generic fallback above, locked: restoring a
+       * name inside the emit would make a fire-and-forget path asynchronous —
+       * snapshots reorder, and one can land after the final event and
+       * resurrect a closed card. Progress stays synchronous, restore stays on
+       * the report. */
+      models.getMessages.mockResolvedValueOnce(planTree());
+      const restore = jest.fn(async (t) => t);
+      mockStartSovereignSession.mockResolvedValue({
+        maskedQuestion:
+          'Предложенный план:\n**План исследования:** Рынок\n\n1. Собрать данные\n2. Сравнить цены',
+        passthroughHeaders: {},
+        maskContent: jest.fn(async (t) => t),
+        restore,
+        drop: jest.fn(async () => {}),
+      });
+      mockRunDeepResearch.mockImplementationOnce(async (params) => {
+        params.onProgress({ type: 'research', round: 1, subQuestion: 'цены на CRM', planStep: 1 });
+        return {
+          finalReport: 'Отчёт',
+          finalizeReason: 'completed',
+          usage: { input: 1, output: 1, total: 2 },
+          findings: [],
+        };
+      });
+
+      await runNewDeepResearch(planParams('Начать исследование'));
+
+      /* Exactly one restore — the final report's — and none for the progress. */
+      expect(restore).toHaveBeenCalledTimes(1);
+      expect(restore).toHaveBeenCalledWith('Отчёт');
+    });
+
+    it('a masked sub-question never reaches the screen as machinery (r28)', async () => {
+      /* The one place a placeholder could show: the supervisor writes this line
+       * on masked material and it is streamed straight out. Replaced by the
+       * generic line, not restored — de-masking inside a fire-and-forget emit
+       * would make the whole progress channel asynchronous. */
+      models.getMessages.mockResolvedValueOnce(planTree());
+      mockStartSovereignSession.mockResolvedValue({
+        maskedQuestion:
+          'Предложенный план:\n**План исследования:** Рынок\n\n1. Собрать данные по [PERSON_1]\n2. Сравнить цены',
+        passthroughHeaders: {},
+        maskContent: jest.fn(async (t) => t),
+        restore: jest.fn(async (t) => t),
+        drop: jest.fn(async () => {}),
+      });
+      mockRunDeepResearch.mockImplementationOnce(async (params) => {
+        params.onProgress({
+          type: 'research',
+          round: 1,
+          subQuestion: 'условия для [PERSON_1]',
+          planStep: 1,
+        });
+        params.onProgress({ type: 'research', round: 2, subQuestion: 'цены на CRM', planStep: 2 });
+        return {
+          finalReport: 'Отчёт',
+          finalizeReason: 'completed',
+          usage: { input: 1, output: 1, total: 2 },
+          findings: [],
+        };
+      });
+
+      await runNewDeepResearch(planParams('Начать исследование'));
+
+      const actions = mockEmitChunk.mock.calls
+        .filter((c) => c[1]?.event === 'dr_progress' && c[1].data.phase === 'research')
+        .map((c) => c[1].data.action);
+      expect(actions[0]).toBe('Исследует источники');
+      /* A clean sub-question still reaches the card — the fallback is for the
+       * masked one only. */
+      expect(actions[1]).toBe('Исследует: цены на CRM');
+    });
+
     it('a transcript that yields a different step count drops the agenda — the mapping is unknown', async () => {
       models.getMessages.mockResolvedValueOnce(planTree());
       mockStartSovereignSession.mockResolvedValue({
