@@ -9,6 +9,7 @@ import type { NextFunction, Request, Response } from 'express';
 import {
   identifyFaviconReader,
   faviconCache,
+  publicFaviconCache,
   faviconHandler,
   createFaviconCache,
   faviconPrefetchPending,
@@ -89,6 +90,7 @@ beforeEach(async () => {
     await new Promise((resolve) => setImmediate(resolve));
   }
   faviconCache.clear();
+  publicFaviconCache.clear();
   mockFetch.mockReset();
 });
 
@@ -553,6 +555,69 @@ describe('the icon cache is bounded by bytes, not left to expire', () => {
   });
 });
 
+describe('the two stores keep a stranger from timing what the client searched', () => {
+  it('does not answer a stranger from the store warming fills', async () => {
+    /* A cached icon comes back in ~4ms and an uncached one in ~200ms, and that gap
+     * is legible from outside. Were the store shared, `?domain=<candidate>` would
+     * answer whether this client's searches turned that site up lately — the very
+     * leak this endpoint exists to close. */
+    answerWith(PNG);
+    await resolveFavicon('searched-by-the-client.example');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    await resolveFavicon('searched-by-the-client.example', 'public');
+
+    /* The stranger paid for their own fetch, so the answer took what a miss takes. */
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(publicFaviconCache.size).toBe(1);
+  });
+
+  it('does not let a stranger warm what the client reads either', async () => {
+    answerWith(PNG);
+    await resolveFavicon('opened-on-a-shared-page.example', 'public');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    await resolveFavicon('opened-on-a-shared-page.example');
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('serves the second visitor to a shared page from the store the first one filled', async () => {
+    answerWith(PNG);
+    await resolveFavicon('shared.example', 'public');
+    await resolveFavicon('shared.example', 'public');
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(faviconCache.size).toBe(0);
+  });
+
+  it('gives the store behind share links a smaller budget than the one the client reads from', async () => {
+    /* Same 300 icons into each: the public store has to start evicting where the
+     * client's does not, or an anonymous flood is free to cost as much as the
+     * client's own week of research. */
+    answerWith(Buffer.concat([PNG, Buffer.alloc(8 * 1024)]));
+
+    for (let i = 0; i < 300; i++) {
+      await resolveFavicon(`flood${i}.example`, 'public');
+    }
+    expect(publicFaviconCache.size).toBeLessThan(300);
+
+    for (let i = 0; i < 300; i++) {
+      await resolveFavicon(`held${i}.example`);
+    }
+    expect(faviconCache.size).toBe(300);
+  });
+
+  it('warming never touches the store strangers are served from', async () => {
+    answerWith(PNG);
+    prefetchFavicons(['https://warmed.example/a']);
+    await until(() => faviconPrefetchPending() === 0);
+
+    expect(faviconCache.size).toBe(1);
+    expect(publicFaviconCache.size).toBe(0);
+  });
+});
+
 describe('identifyFaviconReader — the cookie names the reader, it does not admit them', () => {
   const USER_ID = '0123456789abcdef01234567';
   const SECRET = 'refresh-secret-for-tests';
@@ -627,11 +692,35 @@ describe('identifyFaviconReader — the cookie names the reader, it does not adm
 });
 
 describe('faviconHandler', () => {
-  const call = async (domain: unknown) => {
+  const call = async (domain: unknown, userId?: string) => {
     const res = makeResponse();
+    if (userId) {
+      res.locals.userId = userId;
+    }
     await faviconHandler({ query: { domain } } as unknown as Request, res as unknown as Response);
     return res;
   };
+
+  it('serves a reader the cookie named from the store warming fills', async () => {
+    answerWith(PNG);
+
+    await call('example.com', '0123456789abcdef01234567');
+
+    expect(faviconCache.size).toBe(1);
+    expect(publicFaviconCache.size).toBe(0);
+  });
+
+  it('serves a reader the cookie did not name from the store share links fill', async () => {
+    /* This is the seam the whole separation rests on: get it backwards and a
+     * stranger is timing the client's own cache again, with every test above still
+     * green because they call `resolveFavicon` directly. */
+    answerWith(PNG);
+
+    await call('example.com');
+
+    expect(publicFaviconCache.size).toBe(1);
+    expect(faviconCache.size).toBe(0);
+  });
 
   it('serves the icon with a type that matches its bytes and refuses sniffing', async () => {
     answerWith(PNG);

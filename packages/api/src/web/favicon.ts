@@ -82,6 +82,13 @@ const MISS_TTL_MS = 60 * 60 * 1000;
  */
 const MAX_CACHE_BYTES = 8 * 1024 * 1024;
 
+/**
+ * The store behind share links gets a quarter of that. It is filled one icon at a
+ * time by people opening shared pages rather than by warming, and keeping it small
+ * bounds what an anonymous flood can cost: its own budget, never the client's.
+ */
+const PUBLIC_CACHE_BYTES = 2 * 1024 * 1024;
+
 const HIT_MAX_AGE_S = 24 * 60 * 60;
 const MISS_MAX_AGE_S = 60 * 60;
 
@@ -331,17 +338,59 @@ export function createFaviconCache(maxBytes: number): FaviconCache {
   };
 }
 
-export const faviconCache = createFaviconCache(MAX_CACHE_BYTES);
+interface FaviconStore {
+  cache: FaviconCache;
+  /**
+   * One upstream request per domain even when a message renders twenty icons at
+   * once. Without this, opening a report with many sources on a cold cache would
+   * fan out one outbound request per `<img>` rather than one per domain.
+   */
+  inFlight: Map<string, Promise<FaviconEntry>>;
+}
+
+function createFaviconStore(maxBytes: number): FaviconStore {
+  return { cache: createFaviconCache(maxBytes), inFlight: new Map() };
+}
 
 /**
- * One upstream request per domain even when a message renders twenty icons at
- * once. Without this, opening a report with many sources on a cold cache would
- * fan out one outbound request per `<img>` rather than one per domain.
+ * TWO stores, and the separation is the whole point.
+ *
+ * A cached icon comes back in about 4ms and an uncached one in about 200ms, and
+ * that difference is legible from the outside. One shared store would therefore
+ * answer a question nobody should be able to ask us: send `?domain=<candidate>`
+ * and the response time says whether this client's searches turned that site up
+ * lately. Warming makes it worse, not better — it fills the cache with every
+ * domain of every result set, so a single store would be close to a week's index
+ * of what the company has been reading. That is precisely the leak this endpoint
+ * was built to close, and reopening it to anyone who can open a share link would
+ * have undone the whole thing.
+ *
+ * So a reader with a session is served from the store that warming fills, and a
+ * reader without one is served from a store that only ever holds what other
+ * anonymous visitors have already asked for. Probing the second one reveals what
+ * is on the shared pages people have opened — which is what a shared page is for.
+ * The bytes are identical either way; only the timing is partitioned, because the
+ * timing is the only thing that was leaking.
+ *
+ * The second store is also what keeps an anonymous flood from evicting the icons
+ * the client's own answers depend on: the budgets are separate.
  */
-const inFlight = new Map<string, Promise<FaviconEntry>>();
+const readerStore = createFaviconStore(MAX_CACHE_BYTES);
+const publicStore = createFaviconStore(PUBLIC_CACHE_BYTES);
 
-export async function resolveFavicon(domain: string): Promise<FaviconEntry> {
-  const cached = faviconCache.get(domain, Date.now());
+/** Who is asking. Anything a session did not name is `public`. */
+export type FaviconAudience = 'reader' | 'public';
+
+export const faviconCache = readerStore.cache;
+export const publicFaviconCache = publicStore.cache;
+
+export async function resolveFavicon(
+  domain: string,
+  audience: FaviconAudience = 'reader',
+): Promise<FaviconEntry> {
+  const { cache, inFlight } = audience === 'public' ? publicStore : readerStore;
+
+  const cached = cache.get(domain, Date.now());
   if (cached) {
     return cached;
   }
@@ -357,7 +406,7 @@ export async function resolveFavicon(domain: string): Promise<FaviconEntry> {
       icon,
       expiresAt: Date.now() + (icon ? HIT_TTL_MS : MISS_TTL_MS),
     };
-    faviconCache.set(domain, entry);
+    cache.set(domain, entry);
     return entry;
   })().finally(() => inFlight.delete(domain));
 
@@ -593,8 +642,12 @@ export async function faviconHandler(req: Request, res: Response): Promise<void>
     return;
   }
 
+  /* A reader the cookie did not name is served from the store share links fill, so
+   * that the time this answer takes says nothing about what the client searched. */
+  const audience: FaviconAudience = res.locals.userId ? 'reader' : 'public';
+
   try {
-    const { icon } = await resolveFavicon(domain);
+    const { icon } = await resolveFavicon(domain, audience);
     if (!icon) {
       sendNoIcon(res);
       return;

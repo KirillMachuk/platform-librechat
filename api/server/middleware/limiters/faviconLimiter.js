@@ -1,12 +1,13 @@
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 const { limiterCache, removePorts } = require('@librechat/api');
 
 const FAVICON_WINDOW_MS = 15 * 60 * 1000;
 const FAVICON_MAX = 1200;
 
 /**
- * Bounds how many source icons one signed-in reader can ask for, and with them how
- * many outbound requests we can be made to send.
+ * Bounds how many source icons one caller can ask for, and with them how many
+ * outbound requests we can be made to send.
  *
  * The ceiling is deliberately far above real reading rather than near it, because
  * every request counts — cache hits and «no icon» answers included, since the count
@@ -22,8 +23,11 @@ const FAVICON_MAX = 1200;
  *
  * Keyed by the user when a cookie names one, because every reader on the client's
  * network shares an address. A conversation read through a share link has no
- * cookie, so those fall back to the address — `removePorts` rather than `req.ip`
- * because express-rate-limit refuses an un-normalised IPv6 key.
+ * cookie, so those fall back to the address, through the library's own
+ * `ipKeyGenerator`: it strips the port AND masks IPv6 to a /56, without which a
+ * single client holding a /64 would have more keys than there are seconds in the
+ * window and no limit at all. The stand answers on IPv4 only today; this is the
+ * half that would fail silently the day it does not.
  *
  * The same ceiling means something different on each key, and both are meant. Per
  * account it is one person reading; per address it is however many people open the
@@ -41,7 +45,8 @@ const faviconLimiter = rateLimit({
     res.set('Cache-Control', 'no-store');
     res.status(429).end();
   },
-  keyGenerator: (req, res) => res.locals.userId ?? `ip:${removePorts(req) ?? 'unknown'}`,
+  keyGenerator: (req, res) =>
+    res.locals.userId || `ip:${ipKeyGenerator(removePorts(req) || 'unknown')}`,
   store: limiterCache('favicon_limiter'),
 });
 

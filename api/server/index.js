@@ -306,8 +306,10 @@ const startServer = async () => {
   app.use('/api/files', await routes.files.initialize());
   app.use('/images/', createValidateImageRequest(appConfig.secureImageLinks), routes.staticRoute);
   /* Source favicons, fetched and cached by us so the reader's browser never
-   * announces its reading list to a third party. Authenticated from the session
-   * cookie inside the router — an `<img>` carries no Authorization header. */
+   * announces its reading list to a third party. The router reads the session
+   * cookie — an `<img>` carries no Authorization header — but does not insist on
+   * one: a conversation shared by link is read without an account, and is served
+   * from a cache of its own so that the timing tells nobody what was searched. */
   app.use('/api/favicon', routes.favicon);
   app.use('/api/share', preAuthTenantMiddleware, routes.share);
   app.use('/api/roles', routes.roles);
