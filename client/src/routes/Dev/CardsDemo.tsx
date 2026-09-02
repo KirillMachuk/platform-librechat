@@ -1,5 +1,5 @@
 /* eslint-disable i18next/no-literal-string -- dev-only acceptance page, deliberate Russian fixtures */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { ApprovalCardStrings } from '~/components/Chat/Cards/ApprovalCard';
 import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/ApprovalCard';
 import ReportCard from '~/components/Chat/Messages/DeepResearch/ReportCard';
@@ -13,20 +13,13 @@ const REPORT_TEXT = [
 
 /**
  * Dev-only acceptance page for the interactive-cards track (К1): all
- * ApprovalCard variants side by side, live countdown, both themes via the
+ * ApprovalCard variants side by side, both themes via the
  * toggle button. Registered ONLY when import.meta.env.DEV (routes/index.tsx),
  * so production builds tree-shake the route away.
  */
 export default function CardsDemo() {
   const [dark, setDark] = useState(false);
   const [log, setLog] = useState<string[]>([]);
-  const [secsLeft, setSecsLeft] = useState(30);
-  const [countdownOn, setCountdownOn] = useState(true);
-
-  useEffect(() => {
-    const id = setInterval(() => setSecsLeft((s) => (s > 0 ? s - 1 : 0)), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   const push = (line: string) => setLog((l) => [line, ...l].slice(0, 8));
 
@@ -34,12 +27,8 @@ export default function CardsDemo() {
     otherPlaceholder: 'Другое…',
     moreLabel: (n) => `Ещё ${n}`,
     lessLabel: 'Свернуть',
-    autoApproveBefore: 'Автозапуск через ',
-    autoApproveAfter: ' с',
-    autoApproveCancelTip: 'Отмена',
     prevQuestion: 'Предыдущий вопрос',
     nextQuestion: 'Следующий вопрос',
-    cancelAutoApprove: 'Отменить автозапуск',
     questionOf: (c, t) => `Вопрос ${c} из ${t}`,
     customAnswerFor: (p) => `Свой ответ: ${p}`,
   };
@@ -102,13 +91,11 @@ export default function CardsDemo() {
             approveLabel="Начать"
             secondaryLabel="Редактировать"
             headerAction={
-              <ApprovalCardHeaderAction label="Отменить" onClick={() => push('План → отмена')} />
+              <ApprovalCardHeaderAction
+                label="Отменить исследование"
+                onClick={() => push('План → отмена')}
+              />
             }
-            autoApprove={countdownOn && secsLeft > 0 ? { secsLeft, total: 30 } : null}
-            onAutoApproveCancel={() => {
-              setCountdownOn(false);
-              push('План → автозапуск отменён');
-            }}
             onApprove={() => push('План → старт')}
             onSecondary={() => push('План → редактировать')}
           />

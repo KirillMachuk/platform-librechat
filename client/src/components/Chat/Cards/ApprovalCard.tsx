@@ -19,15 +19,15 @@ import styles from './ApprovalCard.module.css';
  * registry snapshot 2026-08-25). Design and mechanics are the original's
  * (vertical question carousel with 320ms auto-advance, «Something else»
  * free-text row, rolling-digit pager, plan to-do well with grid-rows
- * collapse, auto-approve pie with hover-to-cancel). Adaptation per
+ * collapse). Adaptation per
  * DESIGN_SYSTEM.md §6.17 and the owner's decisions:
  * - lucide → Tabler icons; demo defaults, «use client» and the dead
  *   Download button removed; Maximize replaced by a caller-provided
  *   `headerAction` slot (К2 puts the cancel ✕ there);
  * - every visible string comes through the required `strings` prop
  *   (localization lives at the call site);
- * - the auto-approve pie is CONTROLLED: the parent owns the clock and
- *   passes {secsLeft, total} (null cancels with the original fade);
+ * - the auto-approve pie is gone (r30, owner 02.09): a plan waits for a
+ *   click, and «run immediately» is a setting, not a timer on the card;
  * - reject/onReject renamed to secondary/onSecondary — the ghost button
  *   is not always a rejection (К2 wires «Редактировать» into it).
  */
@@ -54,14 +54,9 @@ export interface ApprovalCardStrings {
   otherPlaceholder: string;
   moreLabel: (hidden: number) => string;
   lessLabel: string;
-  /** «Auto Approve in {digits}s» — parts around the rolling digits */
-  autoApproveBefore: string;
-  autoApproveAfter: string;
-  autoApproveCancelTip?: string;
   /** Aria */
   prevQuestion: string;
   nextQuestion: string;
-  cancelAutoApprove: string;
   questionOf: (current: number, total: number) => string;
   customAnswerFor: (prompt: string) => string;
 }
@@ -356,19 +351,10 @@ export interface ApprovalCardProps {
   /** Label of the to-do well head (the original's «To-dos»). */
   todoTitle?: string;
   planPreviewCount?: number;
-  /** CONTROLLED auto-approve pie (plan variant): the parent owns the clock
-   *  and the firing (PlanCard's wall-clock countdown survived a series of
-   *  shipped bugs — background-tab throttling, F5 resume, refusal disarm —
-   *  and must stay the only timer). The card only draws: pass
-   *  {secsLeft, total} while counting, null/absent when there is no timer;
-   *  a transition to null plays the original fade-out. */
-  autoApprove?: { secsLeft: number; total: number } | null;
-  /** The ✕ on the pie; the parent cancels its own countdown here. */
-  onAutoApproveCancel?: () => void;
-  /** Hint line under the actions (edit hint, autostart-cancelled note). */
+  /** Hint line under the actions (the plan's edit hint, the run footer). */
   footnote?: React.ReactNode;
-  /** False renders the card statically: no action row, no pie (an answered
-   *  plan card keeps its content but stops being a control). */
+  /** False renders the card statically: no action row (an answered plan
+   *  card keeps its content but stops being a control). */
   showActions?: boolean;
   /** False keeps the option rows LIVE but disarms every commit path —
    *  «Продолжить»/«Пропустить», the card-level Enter, the free-text
@@ -405,8 +391,6 @@ export function ApprovalCard({
   planSummary,
   todoTitle,
   planPreviewCount = 3,
-  autoApprove,
-  onAutoApproveCancel,
   footnote,
   showActions = true,
   actionsArmed = true,
@@ -445,19 +429,7 @@ export function ApprovalCard({
    * with a plain boolean the toggle went dead during a run: it flipped its own
    * caption while auto-expand kept the rows open (r25 package Б review). */
   const [planExpanded, setPlanExpanded] = useState<boolean | null>(null);
-  const autoApproveActive = variant === 'plan' && autoApprove != null && autoApprove.secsLeft > 0;
-  /* The fade-out keeps showing the LAST ticking frame (the original froze
-   * the pie too instead of snapping to zero). */
-  const lastAutoRef = useRef(autoApprove ?? null);
-  if (autoApprove != null) {
-    lastAutoRef.current = autoApprove;
-  }
-  const shownAuto = autoApprove ?? lastAutoRef.current;
-  const [autoUI, setAutoUI] = useState<'active' | 'leaving' | 'gone'>(
-    autoApproveActive ? 'active' : 'gone',
-  );
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const autoFadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const questionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const customInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const optionRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -470,9 +442,6 @@ export function ApprovalCard({
     return () => {
       if (advanceTimer.current) {
         clearTimeout(advanceTimer.current);
-      }
-      if (autoFadeTimer.current) {
-        clearTimeout(autoFadeTimer.current);
       }
     };
   }, []);
@@ -595,29 +564,6 @@ export function ApprovalCard({
     }
     onApprove?.();
   };
-
-  /* Controlled fade: while the parent supplies ticking seconds the pie is
-   * live; when the parent drops the countdown (cancel by ✕/edit/typing, or
-   * expiry without unmount) the block fades out like the original's ✕. */
-  useEffect(() => {
-    if (autoApproveActive) {
-      if (autoUI !== 'active') {
-        if (autoFadeTimer.current) {
-          clearTimeout(autoFadeTimer.current);
-        }
-        setAutoUI('active');
-      }
-      return;
-    }
-    if (autoUI === 'active') {
-      setAutoUI('leaving');
-      if (autoFadeTimer.current) {
-        clearTimeout(autoFadeTimer.current);
-      }
-      autoFadeTimer.current = setTimeout(() => setAutoUI('gone'), 280);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoApproveActive]);
 
   const selectOption = (questionId: string, opt: string) => {
     setOtherSelected((prev) => ({ ...prev, [questionId]: false }));
@@ -1050,74 +996,7 @@ export function ApprovalCard({
               </button>
             </div>
           )}
-          {variant === 'plan' && autoUI !== 'gone' && (
-            <div
-              className={`${styles.autoApprove}${autoUI === 'leaving' ? ` ${styles.autoApproveOut}` : ''}`}
-              data-testid="auto-approve"
-            >
-              <span
-                className={styles.autoApproveTip}
-                data-tip={strings.autoApproveCancelTip ?? undefined}
-              >
-                <button
-                  type="button"
-                  className={`${styles.autoApproveCancel} tap-target`}
-                  aria-label={strings.cancelAutoApprove}
-                  disabled={autoUI !== 'active'}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onAutoApproveCancel?.();
-                  }}
-                >
-                  <svg
-                    className={styles.autoApprovePie}
-                    viewBox="0 0 24 24"
-                    width="16"
-                    height="16"
-                    aria-hidden
-                  >
-                    <circle
-                      className={styles.autoApprovePieTrack}
-                      cx="12"
-                      cy="12"
-                      r="9"
-                      fill="none"
-                      strokeWidth="1.8"
-                    />
-                    <circle
-                      className={styles.autoApprovePieFill}
-                      cx="12"
-                      cy="12"
-                      r="9"
-                      fill="none"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      pathLength={1}
-                      strokeDasharray={1}
-                      style={{
-                        strokeDashoffset:
-                          shownAuto != null && shownAuto.total > 0
-                            ? 1 - (shownAuto.total - shownAuto.secsLeft) / shownAuto.total
-                            : 1,
-                      }}
-                      transform="rotate(-90 12 12)"
-                    />
-                  </svg>
-                  <span className={styles.autoApproveCancelGlyph} aria-hidden>
-                    <X size={8} stroke={2.5} />
-                  </span>
-                </button>
-              </span>
-              <span className={styles.autoApproveLabel}>
-                {strings.autoApproveBefore}
-                <span className={styles.autoApproveSecs}>
-                  <RollingDigits value={String(shownAuto?.secsLeft ?? 0)} />
-                </span>
-                {strings.autoApproveAfter}
-              </span>
-            </div>
-          )}
-          {showActions && variant !== 'questions' && !(variant === 'plan' && autoUI !== 'gone') && (
+          {showActions && variant !== 'questions' && (
             <span className={styles.actionsSpacer} aria-hidden />
           )}
           <div className={styles.actionBtns}>

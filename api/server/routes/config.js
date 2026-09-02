@@ -302,14 +302,12 @@ router.get('/', async function (req, res) {
       payload.webSearch = webSearch;
     }
 
-    /** Deep Research plan gate (task #21): the autostart window is a CLIENT-side timer on
-     *  the plan card, so the yaml knob must reach the frontend. Exposed only while the gate
-     *  is on; models/budgets and the rest of the deepResearch config stay server-side. */
+    /** Deep Research plan gate (task #21): the client shows its «run immediately» switch
+     *  (Settings → Chat, r30) only while there is a plan card to skip. Exposed only while
+     *  the gate is on; models/budgets and the rest of the deepResearch config stay
+     *  server-side. */
     if (appConfig?.deepResearch?.planGate === true) {
-      payload.deepResearch = {
-        planGate: true,
-        planAutoStartSec: appConfig.deepResearch.planAutoStartSec ?? 60,
-      };
+      payload.deepResearch = { planGate: true };
     }
 
     const buildInfo = buildBuildInfoPayload(appConfig?.interfaceConfig);

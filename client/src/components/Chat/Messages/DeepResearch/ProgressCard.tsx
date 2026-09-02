@@ -1,7 +1,6 @@
-import { useMemo } from 'react';
-import type { ApprovalCardStrings } from '~/components/Chat/Cards/ApprovalCard';
 import type { TDeepResearchProgress } from '~/store';
 import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/ApprovalCard';
+import useCardStrings from '~/components/Chat/Cards/useCardStrings';
 import { useChatContext } from '~/Providers';
 import { Square } from '~/components/icons';
 import { useLocalize } from '~/hooks';
@@ -25,22 +24,7 @@ export default function ProgressCard({ data }: { data: TDeepResearchProgress }) 
   const localize = useLocalize();
   const { stopGenerating } = useChatContext();
 
-  const cardStrings: ApprovalCardStrings = useMemo(
-    () => ({
-      otherPlaceholder: localize('com_ui_cards_other_placeholder'),
-      moreLabel: (n) => localize('com_ui_cards_more', { 0: String(n) }),
-      lessLabel: localize('com_ui_cards_less'),
-      autoApproveBefore: localize('com_ui_cards_autostart_before'),
-      autoApproveAfter: localize('com_ui_cards_autostart_after'),
-      autoApproveCancelTip: localize('com_ui_cards_cancel_tip'),
-      prevQuestion: localize('com_ui_cards_prev_question'),
-      nextQuestion: localize('com_ui_cards_next_question'),
-      cancelAutoApprove: localize('com_ui_cards_cancel_autostart'),
-      questionOf: (c, t) => localize('com_ui_cards_question_of', { 0: String(c), 1: String(t) }),
-      customAnswerFor: (prompt) => localize('com_ui_cards_custom_answer_for', { 0: prompt }),
-    }),
-    [localize],
-  );
+  const cardStrings = useCardStrings();
 
   return (
     <div className="my-2 w-full">

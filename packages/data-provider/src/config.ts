@@ -1435,12 +1435,11 @@ export type TStartupConfig = {
    * `immediate` = fetch in parallel with the active stream (default);
    * `final` = fetch only after the stream completes (legacy). */
   titleGenerationTiming?: 'immediate' | 'final';
-  /** Deep Research plan gate (task #21). Present only when the gate is enabled;
-   * `planAutoStartSec` is an on/off switch since the cards track (25.08): 0 = manual only,
-   * any other value = autostart on — the visible window is always the client's fixed 30 s. */
+  /** Deep Research plan gate (task #21). Present only when the gate is enabled: the
+   * Settings → Chat «run immediately» switch shows only while there is a plan card to skip
+   * (r30). The rest of the deepResearch config stays server-side. */
   deepResearch?: {
     planGate: boolean;
-    planAutoStartSec: number;
   };
   analyticsGtmId?: string;
   rum?: TRumConfig;
@@ -1776,19 +1775,18 @@ export const deepResearchSchema = z.object({
   clarify: z.boolean().default(true),
   /**
    * Present a research PLAN card (title + steps) before starting, with Start / Edit /
-   * Cancel + autostart — the ChatGPT-style plan gate (task #21). When on, the pre-graph
+   * Cancel — the ChatGPT-style plan gate (task #21). When on, the pre-graph
    * decision returns a plan instead of running immediately; questions (clarify) remain a
    * separate prior step. Default false → today's behaviour (no card). Pure kill-switch,
    * no code deploy needed; flip per tenant once validated on lab.
    */
   planGate: z.boolean().default(false),
-  /**
-   * Autostart switch for the plan card since the cards track (25.08): 0 → no autostart
-   * (manual Start only); ANY other value → autostart on with the client's FIXED 30-second
-   * pie — the number no longer sets the duration (the numeric type and range stay for
-   * config back-compat). Ignored when `planGate` is off. Default 60 (= on).
+  /*
+   * `planAutoStartSec` — the plan card's autostart window — was REMOVED in r30 (owner
+   * 02.09): the card waits for a click, and «run immediately» is a per-user client setting.
+   * This object is not `.strict()`, so a stale key in a yaml is dropped silently: delete it
+   * from the file rather than leave a knob that does nothing.
    */
-  planAutoStartSec: z.number().int().min(0).max(600).default(60),
   modes: z
     .object({
       balanced: deepResearchModeSchema.optional(),

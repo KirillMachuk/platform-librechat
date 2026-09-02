@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { SETTINGS_TAB_BODY } from '@librechat/client';
 import { showThinkingAtom } from '~/store/showThinking';
+import DeepResearchAutoStart from './DeepResearchAutoStart';
 import FontSizeSelector from './FontSizeSelector';
 import AdvancedPrompts from './AdvancedPrompts';
 import ChatDirection from './ChatDirection';
@@ -136,6 +137,7 @@ function Chat() {
           switchId={config.switchId}
         />
       ))}
+      <DeepResearchAutoStart />
       <AdvancedPrompts />
     </div>
   );

@@ -48,7 +48,7 @@ import { useApplyAgentTemplate } from '~/hooks/Agents';
 import { useAuthContext } from '~/hooks/AuthContext';
 import { MESSAGE_UPDATE_INTERVAL } from '~/common';
 import { useLiveAnnouncer } from '~/Providers';
-import store from '~/store';
+import store, { markPlanArrivedLive } from '~/store';
 
 type TSyncData = {
   sync: boolean;
@@ -776,6 +776,15 @@ export default function useEventHandlers({
               finalMessages[i] = { ...msg, files: preservedFiles };
             }
           }
+        }
+
+        /* A plan that lands through THIS tab's stream has just arrived: with «run
+         * immediately» on, the card may start it by itself (r30). Marked before the render
+         * that mounts the card, so the card sees it on its first effect. A plan loaded
+         * from history never gets the mark — reopening an old, unstarted plan must not
+         * launch it. */
+        if (responseMessage?.drKind === 'plan' && responseMessage.messageId) {
+          markPlanArrivedLive(responseMessage.messageId);
         }
 
         if (finalMessages.length > 0) {
