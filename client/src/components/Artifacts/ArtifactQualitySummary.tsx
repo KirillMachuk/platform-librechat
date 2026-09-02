@@ -47,7 +47,7 @@ export default function ArtifactQualitySummary({ artifact }: { artifact: Artifac
         </span>
       </summary>
 
-      <div className="mt-2 max-h-64 space-y-3 overflow-y-auto pl-4 pr-1 text-text-secondary">
+      <div className="pan-x mt-2 max-h-64 space-y-3 overflow-y-auto pl-4 pr-1 text-text-secondary">
         <section aria-label={localize('com_ui_artifact_qa_checks')}>
           <h3 className="mb-1 font-medium text-text-primary">
             {localize('com_ui_artifact_qa_checks')}
