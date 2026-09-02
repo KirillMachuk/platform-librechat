@@ -1,0 +1,62 @@
+[
+  {
+    "id": "ru-decision-memo",
+    "documentType": "memo",
+    "prompt": "Create a Russian decision memo from project notes.",
+    "requirements": { "minPages": 1, "semanticLists": true, "sources": true }
+  },
+  {
+    "id": "ru-business-report",
+    "documentType": "report",
+    "prompt": "Create a multi-section Russian business report with an executive summary.",
+    "requirements": { "minPages": 2, "semanticLists": true, "sources": true }
+  },
+  {
+    "id": "ru-sop",
+    "documentType": "sop",
+    "prompt": "Create a Russian SOP with roles, numbered steps, controls, and escalation rules.",
+    "requirements": { "minPages": 2, "semanticLists": true, "tables": true }
+  },
+  {
+    "id": "ru-long-cyrillic",
+    "documentType": "report",
+    "prompt": "Create a readable Russian report with long headings and dense source notes.",
+    "requirements": { "minPages": 2, "cyrillic": true, "sources": true }
+  },
+  {
+    "id": "ru-multipage-table",
+    "documentType": "report",
+    "prompt": "Create a Russian report containing a table that continues across pages.",
+    "requirements": { "minPages": 3, "tables": true, "repeatingHeader": true }
+  },
+  {
+    "id": "ru-source-traceability",
+    "documentType": "memo",
+    "prompt": "Create an evidence-backed Russian memo with assumptions and specific sources.",
+    "requirements": { "minPages": 2, "sources": true, "assumptions": true }
+  },
+  {
+    "id": "ru-template-fidelity",
+    "documentType": "report",
+    "prompt": "Fill a Russian Word template without changing its styles or page geometry.",
+    "requirements": { "minPages": 1, "templateFidelity": true, "immutableInput": true }
+  },
+  {
+    "id": "ru-targeted-edit",
+    "documentType": "memo",
+    "prompt": "Change one approved phrase in an existing Russian Word document.",
+    "requirements": { "minPages": 1, "targetedEdit": true, "immutableInput": true }
+  },
+  {
+    "id": "ru-page-breaks",
+    "documentType": "report",
+    "prompt": "Create a Russian report with deliberate section page breaks and no empty pages.",
+    "requirements": { "minPages": 3, "noBlankPages": true }
+  },
+  {
+    "id": "ru-mixed-typography",
+    "documentType": "memo",
+    "prompt": "Create a Russian memo containing English abbreviations, percentages, dates, and currency.",
+    "requirements": { "minPages": 1, "cyrillic": true, "semanticLists": true }
+  }
+]

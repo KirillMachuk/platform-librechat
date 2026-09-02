@@ -16,6 +16,7 @@ import { Code, ExternalLink, Play, Reload, X } from '~/components/icons';
 import CopyButton from '~/components/Messages/Content/CopyButton';
 import { useShareContext, useMutationState } from '~/Providers';
 import GoogleWorkspacePreview from './GoogleWorkspacePreview';
+import ArtifactQualitySummary from './ArtifactQualitySummary';
 import useArtifacts from '~/hooks/Artifacts/useArtifacts';
 import DownloadArtifact from './DownloadArtifact';
 import ArtifactVersion from './ArtifactVersion';
@@ -440,7 +441,10 @@ export default function Artifacts() {
           </div>
 
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-primary">
-            <div className="absolute inset-0 flex flex-col">{previewBody}</div>
+            <div className="absolute inset-0 flex flex-col">
+              <ArtifactQualitySummary artifact={currentArtifact} />
+              <div className="min-h-0 flex-1">{previewBody}</div>
+            </div>
 
             <div
               className={cn(

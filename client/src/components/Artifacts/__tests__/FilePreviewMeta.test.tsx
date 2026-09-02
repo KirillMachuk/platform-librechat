@@ -38,10 +38,10 @@ const buildArtifact = (preview: Record<string, unknown>): Artifact =>
   ({
     id: 'artifact-1',
     identifier: 'artifact-1',
-    title: 'contract.pdf',
+    title: 'contract.bin',
     type: 'application/vnd.librechat.docx-preview',
-    file: { file_id: 'file-1', filename: 'contract.pdf' },
-    preview: { fileType: 'application/pdf', bytes: 62_000, ...preview },
+    file: { file_id: 'file-1', filename: 'contract.bin' },
+    preview: { fileType: 'application/octet-stream', bytes: 62_000, ...preview },
   }) as unknown as Artifact;
 
 const renderBody = (artifact: Artifact) =>

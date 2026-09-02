@@ -1,4 +1,5 @@
 import { pptxArtifactReportFixture } from './__fixtures__/pptxArtifactReport';
+import { docxArtifactReportFixture } from './__fixtures__/docxArtifactReport';
 import { artifactJobSchema, artifactReportSchema } from './artifactReport';
 
 describe('artifactReportSchema', () => {
@@ -8,6 +9,16 @@ describe('artifactReportSchema', () => {
     expect(parsed.status).toBe('ready');
     expect(parsed.previewAssets[0].pageCount).toBe(8);
     expect(parsed.reviewHints).toEqual({ sourcePanel: true });
+  });
+
+  it('accepts the DOCX render report and preserves format-specific evidence', () => {
+    const parsed = artifactReportSchema.parse(docxArtifactReportFixture);
+
+    expect(parsed.format).toBe('docx');
+    expect(parsed.previewAssets[0].pageCount).toBe(3);
+    expect(parsed.qaChecks.find((check) => check.name === 'render')?.details).toEqual({
+      pageCount: 3,
+    });
   });
 
   it('rejects repair counts beyond the automatic repair limit', () => {
