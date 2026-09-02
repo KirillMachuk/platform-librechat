@@ -18,7 +18,7 @@ export default function useSubmitMessage() {
   const setActivePrompt = useSetRecoilState(store.activePromptByIndex(index));
 
   const submitMessage = useCallback(
-    (data?: { text: string; parentMessageId?: string | null }) => {
+    (data?: { text: string; parentMessageId?: string | null; conversationId?: string | null }) => {
       if (!data) {
         return console.warn('No data provided to submitMessage');
       }
@@ -33,11 +33,14 @@ export default function useSubmitMessage() {
       const submitted = ask(
         {
           text: data.text,
-          /* A card sending a command ABOUT its own message names the parent, instead of
-           * trusting that the latest-message selector has already caught up with the final
-           * that mounted the card (r30: the plan card's self-start fires on that very
-           * render). Absent → the branch tail, as before. */
+          /* A card sending a command ABOUT its own message names the parent and the
+           * conversation, instead of trusting that the latest-message selector and the
+           * chat context have already caught up with the final that mounted the card (r30:
+           * the plan card's self-start fires on that very render — for the first research
+           * in a new chat, the same final also navigates to the new conversation). Absent →
+           * the branch tail and the current chat, as before. */
           parentMessageId: data.parentMessageId,
+          conversationId: data.conversationId,
         },
         {
           addedConvo: addedConvo ?? undefined,

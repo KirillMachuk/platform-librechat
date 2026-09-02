@@ -4,6 +4,7 @@ import { Provider as JotaiProvider, createStore } from 'jotai';
 import { render as rtlRender, act, fireEvent, screen } from '@testing-library/react';
 import type { TMessage } from 'librechat-data-provider';
 import {
+  consumePlanArrivedLive,
   drAutoStartAtom,
   drProgressByConvoId,
   markPlanArrivedLive,
@@ -52,10 +53,12 @@ jest.mock('librechat-data-provider', () => ({
 
 const PLAN = '**План исследования:** Рынок CRM\n\n1. Собрать\n2. Сравнить';
 const planMessage = (createdAt?: string): TMessage =>
-  ({ messageId: 'r1', text: PLAN, createdAt }) as unknown as TMessage;
+  ({ messageId: 'r1', conversationId: 'c1', text: PLAN, createdAt }) as unknown as TMessage;
 
-const START = { text: 'Начать исследование', parentMessageId: 'r1' };
-const CANCEL = { text: 'Отменить исследование', parentMessageId: 'r1' };
+/* The card names its target — the plan as parent, its conversation as the chat — rather
+ * than trusting selectors that may still be catching up with the final that mounted it. */
+const START = { text: 'Начать исследование', parentMessageId: 'r1', conversationId: 'c1' };
+const CANCEL = { text: 'Отменить исследование', parentMessageId: 'r1', conversationId: 'c1' };
 
 type Props = React.ComponentProps<typeof PlanCard>;
 
@@ -81,6 +84,9 @@ describe('PlanCard', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+    /* The live-arrival mark is module state: a test that sets it must not lend it to the
+     * next one (review r30, М3 — the history test was green only by test order). */
+    consumePlanArrivedLive('r1');
     // `clearAllMocks` clears calls but NOT return values, so a refusal set by one test would
     // leak into the next. `undefined` is what the real `submitMessage` returns on success.
     mockSubmit.mockReturnValue(undefined);

@@ -89,10 +89,18 @@ describe('useSubmitMessage', () => {
     ask.mockReturnValue(undefined);
     const { result } = renderHook(() => useSubmitMessage());
     act(() => {
-      result.current.submitMessage({ text: 'Начать исследование', parentMessageId: 'plan-1' });
+      result.current.submitMessage({
+        text: 'Начать исследование',
+        parentMessageId: 'plan-1',
+        conversationId: 'convo-1',
+      });
     });
     expect(ask).toHaveBeenCalledWith(
-      expect.objectContaining({ text: 'Начать исследование', parentMessageId: 'plan-1' }),
+      expect.objectContaining({
+        text: 'Начать исследование',
+        parentMessageId: 'plan-1',
+        conversationId: 'convo-1',
+      }),
       expect.anything(),
     );
     expect(reset).toHaveBeenCalled();
@@ -105,5 +113,6 @@ describe('useSubmitMessage', () => {
       result.current.submitMessage({ text: 'обычное сообщение' });
     });
     expect(ask.mock.calls[0][0].parentMessageId).toBeUndefined();
+    expect(ask.mock.calls[0][0].conversationId).toBeUndefined();
   });
 });

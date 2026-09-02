@@ -133,7 +133,13 @@ export default function PlanCard({
       if (actedRef.current) {
         return false;
       }
-      if (submitMessage({ text: marker, parentMessageId: message.messageId }) === false) {
+      if (
+        submitMessage({
+          text: marker,
+          parentMessageId: message.messageId,
+          conversationId: message.conversationId,
+        }) === false
+      ) {
         if (!quiet) {
           showToast({ message: localize('com_ui_send_while_submitting'), status: 'warning' });
         }
@@ -143,7 +149,7 @@ export default function PlanCard({
       setActed(true);
       return true;
     },
-    [submitMessage, showToast, localize, message.messageId],
+    [submitMessage, showToast, localize, message.messageId, message.conversationId],
   );
 
   const start = useCallback(() => act(DR_START_MARKER), [act]);
@@ -160,14 +166,17 @@ export default function PlanCard({
   }, [localize]);
 
   /* The self-start (r30). Read in render only to keep the buttons off the first frame of
-   * a plan about to start itself; the mark is SPENT in the effect below — the one place a
-   * start is fired from — so a double-invoked dev render cannot spend it. */
+   * a plan about to start itself — and ON it when a draft in the composer already means
+   * the card will stand down (otherwise the row would blink in a frame later). The mark is
+   * SPENT in the effect below, the one place a start is fired from, so a re-run of the
+   * effect can never spend it twice. */
   const selfStartArmed =
     startRightAway &&
     awaitingAction &&
     !acted &&
     !selfStartDeclined &&
-    planArrivedLive(message.messageId);
+    planArrivedLive(message.messageId) &&
+    !isComposerBusy();
 
   useEffect(() => {
     if (!awaitingAction || acted) {

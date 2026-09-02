@@ -1,7 +1,7 @@
 import React from 'react';
-import { PermissionTypes } from 'librechat-data-provider';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { PermissionTypes, isUserPreferenceKey } from 'librechat-data-provider';
 import DeepResearchAutoStart from '../DeepResearchAutoStart';
 import { drAutoStartAtom } from '~/store/deepResearch';
 
@@ -78,11 +78,17 @@ describe('«Запускать исследование сразу» (r30)', () 
     localStorage.clear();
   });
 
-  it('shows, off by default, with its explanation on screen (canon §6.4: a line, not an «i»)', () => {
+  it('shows, off by default, and hands the row its title and explanation keys', () => {
     renderWith();
     expect(screen.getByTestId('drAutoStart')).not.toBeChecked();
     expect(screen.getByText('com_nav_dr_auto_start')).toBeInTheDocument();
     expect(screen.getByText('com_nav_dr_auto_start_desc')).toBeInTheDocument();
+  });
+
+  it('follows the account like its neighbours on the Chat tab (review r30, В1)', () => {
+    /* Every other switch on the tab is mirrored to the account through this allowlist; a
+     * switch left out would be on at the laptop and off at the phone. */
+    expect(isUserPreferenceKey('drAutoStart')).toBe(true);
   });
 
   it('turning it on is what the plan card reads', () => {

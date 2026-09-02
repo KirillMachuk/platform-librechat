@@ -41,8 +41,9 @@ export const drProgressByConvoId = atomFamily<TDeepResearchProgress | null, stri
 /**
  * «Запускать исследование сразу» (Settings → Chat; r30, owner 02.09). Replaces the plan
  * card's 30-second autostart: the card now waits for a click for as long as it takes, and
- * with this on it starts itself the moment a plan lands live. Stored per browser, like
- * every other chat setting.
+ * with this on it starts itself the moment a plan lands live. Listed in
+ * `userPreferenceDefinitions`, so it follows the account onto the next device like every
+ * other switch on the Chat tab (review r30, В1: it was the one that would not have).
  */
 export const drAutoStartAtom = createStorageAtom<boolean>('drAutoStart', false);
 

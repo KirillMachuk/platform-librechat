@@ -3,6 +3,7 @@ import type { UserPreferenceKey } from 'librechat-data-provider';
 import type { RecoilState } from 'recoil';
 import type { useStore } from 'jotai';
 import { showThinkingAtom } from '~/store/showThinking';
+import { drAutoStartAtom } from '~/store/deepResearch';
 import { storePreference } from '~/utils/preferences';
 import { fontSizeAtom } from '~/store/fontSize';
 import { mcpPinnedAtom } from '~/store/mcp';
@@ -91,6 +92,7 @@ export const preferenceAppliers: Record<UserPreferenceKey, PreferenceApplier> = 
   maximizeChatSpace: recoilBoolean(store.maximizeChatSpace),
   centerFormOnLanding: recoilBoolean(store.centerFormOnLanding),
   showThinking: (raw, { jotai }) => jotai.set(showThinkingAtom, asBoolean(raw)),
+  drAutoStart: (raw, { jotai }) => jotai.set(drAutoStartAtom, asBoolean(raw)),
   autoExpandTools: recoilBoolean(store.autoExpandTools),
   LaTeXParsing: recoilBoolean(store.LaTeXParsing),
   saveDrafts: recoilBoolean(store.saveDrafts),
