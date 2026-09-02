@@ -24,11 +24,12 @@ The builder accepts one UTF-8 JSON object. All paths are absolute sandbox paths.
   "sources": [],
   "changeLog": [],
   "repairIterations": 0,
-  "outputPdf": true
+  "outputPdf": false
 }
 ```
 
 Use `inputPath` plus `edits` for a targeted revision, or `templatePath` plus `templateLayout` on every new slide for template authoring. Never make the output path equal to either input path.
+`outputPdf` defaults to `false`. Set the literal boolean `true` only when the user explicitly asks to receive a PDF in addition to the editable presentation. The builder always creates an internal `.preview.pdf` for render QA.
 
 ## Russian-first example
 
@@ -96,11 +97,7 @@ Use `inputPath` plus `edits` for a targeted revision, or `templatePath` plus `te
     {
       "layout": "summary",
       "title": "Что нужно утвердить сегодня",
-      "bullets": [
-        "Бюджет первой волны",
-        "Контрольные точки",
-        "Ежемесячный обзор воронки"
-      ]
+      "bullets": ["Бюджет первой волны", "Контрольные точки", "Ежемесячный обзор воронки"]
     }
   ],
   "sources": [
@@ -116,7 +113,7 @@ Use `inputPath` plus `edits` for a targeted revision, or `templatePath` plus `te
     }
   ],
   "repairIterations": 0,
-  "outputPdf": true
+  "outputPdf": false
 }
 ```
 
@@ -152,7 +149,7 @@ Use `inputPath` plus `edits` for a targeted revision, or `templatePath` plus `te
       "summary": "Updated the approved forecast"
     }
   ],
-  "outputPdf": true
+  "outputPdf": false
 }
 ```
 
@@ -165,7 +162,13 @@ The builder writes `<output>.artifact-report.json` next to the presentation. Con
   "status": "ready",
   "format": "pptx",
   "sourceFileIds": ["financial-model.xlsx"],
-  "previewAssets": [{ "filename": "plan-rosta-2027.pdf", "kind": "pdf" }],
+  "previewAssets": [
+    {
+      "filename": "plan-rosta-2027.preview.pdf",
+      "kind": "pdf",
+      "delivery": "preview_only"
+    }
+  ],
   "qaChecks": [
     {
       "name": "render",
@@ -174,10 +177,8 @@ The builder writes `<output>.artifact-report.json` next to the presentation. Con
     }
   ],
   "issues": [],
-  "changeLog": [
-    { "target": "Presentation", "summary": "Created a new decision deck" }
-  ],
-  "skillVersion": "3.1.0",
+  "changeLog": [{ "target": "Presentation", "summary": "Created a new decision deck" }],
+  "skillVersion": "3.2.0",
   "repairIterations": 0
 }
 ```
@@ -185,5 +186,5 @@ The builder writes `<output>.artifact-report.json` next to the presentation. Con
 - `status` is `ready` or `needs_review`.
 - `qaChecks[].status` is `passed`, `warning`, or `failed`; `details` is optional.
 - `issues[]` contains `code`, `severity` (`warning` or `critical`), `message`, and an optional `target`.
-- `previewAssets[]` currently exposes the derived PDF. Future page or slide previews may be added without changing the required fields.
+- `previewAssets[]` exposes the verified render used by the product preview. `delivery` is `preview_only` by default and `requested` only for a user-requested PDF. The server adds the authenticated `filepath`; the skill must never supply it.
 - `repairIterations` is capped at two. A remaining critical issue always produces `needs_review`.

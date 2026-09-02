@@ -6,6 +6,13 @@ jest.mock('librechat-data-provider', () => {
   const actual = jest.requireActual('librechat-data-provider');
   return {
     ...actual,
+    getVerifiedPresentationPreviewAsset: jest.fn((report) =>
+      report?.format === 'pptx'
+        ? report.previewAssets?.find(
+            (asset) => asset.kind === 'pdf' && typeof asset.filepath === 'string',
+          )
+        : undefined,
+    ),
     mergeFileConfig: jest.fn((config) => {
       const merged = actual.mergeFileConfig(config);
       // Override the serverFileSizeLimit with our test value
@@ -1153,6 +1160,51 @@ describe('Code Process', () => {
         // Persisted record with the pending status.
         expect(createFile).toHaveBeenCalledWith(
           expect.objectContaining({ status: 'pending', text: null, textFormat: null }),
+          true,
+        );
+      });
+
+      it('uses the verified render PDF for PPTX instead of starting the browser HTML renderer', async () => {
+        mockAxios.mockResolvedValue({ data: Buffer.alloc(100) });
+        determineFileType.mockResolvedValue({
+          mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        });
+        const artifactReport = {
+          status: 'ready',
+          format: 'pptx',
+          sourceFileIds: [],
+          previewAssets: [
+            {
+              filename: 'deck.preview.pdf',
+              kind: 'pdf',
+              delivery: 'preview_only',
+              filepath: '/api/files/code/download/abcdefghijklmnopqrstu/123456789012345678901',
+            },
+          ],
+          qaChecks: [{ name: 'render', status: 'passed', message: 'Rendered' }],
+          issues: [],
+          changeLog: [],
+          skillVersion: '3.2.0',
+          repairIterations: 0,
+        };
+
+        const result = await processCodeOutput({
+          ...baseParams,
+          name: 'deck.pptx',
+          artifactReport,
+        });
+
+        expect(result.file).toMatchObject({
+          filename: 'deck.pptx',
+          status: 'ready',
+          text: null,
+          textFormat: null,
+          artifactReport,
+        });
+        expect(result.finalize).toBeUndefined();
+        expect(mockExtractCodeArtifactText).not.toHaveBeenCalled();
+        expect(createFile).toHaveBeenCalledWith(
+          expect.objectContaining({ status: 'ready', previewError: null, previewRevision: null }),
           true,
         );
       });

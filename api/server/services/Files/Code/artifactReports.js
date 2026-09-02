@@ -4,6 +4,7 @@ const { getCodeBaseURL } = require('@librechat/agents');
 const { artifactReportSchema } = require('librechat-data-provider');
 const {
   createAxiosInstance,
+  getBasePath,
   getCodeApiAuthHeaders,
   buildCodeEnvDownloadQuery,
   codeServerHttpAgent,
@@ -14,6 +15,8 @@ const ARTIFACT_REPORT_SUFFIX = '.artifact-report.json';
 const ARTIFACT_REPORT_MAX_BYTES = 256 * 1024;
 const ARTIFACT_REPORT_MAX_DEPTH = 20;
 const SUPPORTED_ARTIFACT_FORMATS = new Set(['pptx', 'docx', 'xlsx', 'pdf', 'csv']);
+const CODE_OUTPUT_ID_PATTERN = /^[A-Za-z0-9_-]{21}$/;
+const SAFE_BASE_PATH_PATTERN = /^\/(?:[A-Za-z0-9._~-]+\/?)*$/;
 
 /**
  * Return the authored filename described by a report sidecar, or null
@@ -81,6 +84,19 @@ function parseArtifactReport(buffer, targetName) {
   }
 
   const raw = JSON.parse(buffer.toString('utf8').replace(/^\uFEFF/, ''));
+  /* `filepath` is a server-owned capability: accepting it from a model-
+   * generated sidecar would let sandbox content choose what the browser
+   * fetches. Strip it before schema validation and inject it later only
+   * after matching the asset to a real output from this tool call. */
+  if (Array.isArray(raw?.previewAssets)) {
+    raw.previewAssets = raw.previewAssets.map((asset) => {
+      if (asset == null || typeof asset !== 'object' || Array.isArray(asset)) {
+        return asset;
+      }
+      const { filepath: _untrustedFilepath, ...trustedFields } = asset;
+      return trustedFields;
+    });
+  }
   if (hasUnsafeReportShape(raw)) {
     throw new Error('Artifact report contains unsafe object keys or nesting');
   }
@@ -91,6 +107,101 @@ function parseArtifactReport(buffer, targetName) {
     throw new Error(`Artifact report format ${report.format} does not match ${targetName}`);
   }
   return report;
+}
+
+/**
+ * Build the authenticated, same-origin route for an actual Code API output.
+ * A malformed configured base path fails closed to the application root.
+ *
+ * @param {string} storageSessionId
+ * @param {string} fileId
+ * @returns {string | null}
+ */
+function codeOutputPreviewPath(storageSessionId, fileId) {
+  if (!CODE_OUTPUT_ID_PATTERN.test(storageSessionId) || !CODE_OUTPUT_ID_PATTERN.test(fileId)) {
+    return null;
+  }
+  const configuredBasePath = getBasePath();
+  const basePath =
+    typeof configuredBasePath === 'string' && SAFE_BASE_PATH_PATTERN.test(configuredBasePath)
+      ? configuredBasePath.replace(/\/$/, '')
+      : '';
+  return `${basePath}/api/files/code/download/${storageSessionId}/${fileId}`;
+}
+
+/**
+ * Attach server-owned download paths to preview assets that correspond to
+ * exactly one real, non-inherited output from the same tool result.
+ *
+ * @param {object} params
+ * @param {Map<string, import('librechat-data-provider').TArtifactReport>} params.reportsByFilename
+ * @param {Array<{id: string, name: string, inherited?: boolean, storage_session_id?: string, session_id?: string}>} params.files
+ * @param {string} [params.session_id]
+ * @returns {Map<string, import('librechat-data-provider').TArtifactReport>}
+ */
+function attachArtifactPreviewFiles({ reportsByFilename, files, session_id }) {
+  const outputsByName = new Map();
+  for (const file of files ?? []) {
+    if (file.inherited || getArtifactReportTargetName(file.name)) {
+      continue;
+    }
+    const matches = outputsByName.get(file.name) ?? [];
+    matches.push(file);
+    outputsByName.set(file.name, matches);
+  }
+
+  const enriched = new Map();
+  for (const [targetName, report] of reportsByFilename ?? []) {
+    if (report.format !== 'pptx') {
+      enriched.set(targetName, report);
+      continue;
+    }
+    const previewAssets = report.previewAssets.map((asset) => {
+      if (asset.kind !== 'pdf') {
+        return { ...asset };
+      }
+      const matches = outputsByName.get(asset.filename) ?? [];
+      if (matches.length !== 1) {
+        return { ...asset };
+      }
+      const file = matches[0];
+      const storageSessionId = file.storage_session_id ?? file.session_id ?? session_id;
+      const filepath = codeOutputPreviewPath(storageSessionId, file.id);
+      return filepath ? { ...asset, filepath } : { ...asset };
+    });
+    enriched.set(targetName, { ...report, previewAssets });
+  }
+  return enriched;
+}
+
+/**
+ * Identify render evidence that should power the parent PPTX preview but must
+ * not appear as a second attachment. Explicitly requested PDFs always remain
+ * visible. Filename conventions make the hide decision fail closed.
+ *
+ * @param {string} name
+ * @param {Map<string, import('librechat-data-provider').TArtifactReport>} reportsByFilename
+ * @returns {boolean}
+ */
+function isInternalArtifactPreview(name, reportsByFilename) {
+  for (const [targetName, report] of reportsByFilename ?? []) {
+    if (report.format !== 'pptx') {
+      continue;
+    }
+    const targetStem = path.basename(targetName, path.extname(targetName));
+    for (const asset of report.previewAssets ?? []) {
+      if (asset.kind !== 'pdf' || asset.filename !== name || asset.delivery === 'requested') {
+        continue;
+      }
+      if (asset.delivery === 'preview_only' && asset.filename === `${targetStem}.preview.pdf`) {
+        return true;
+      }
+      if (asset.delivery == null && asset.filename === `${targetStem}.pdf`) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -197,7 +308,9 @@ async function collectArtifactReports({ req, files, session_id }) {
 
 module.exports = {
   ARTIFACT_REPORT_MAX_BYTES,
+  attachArtifactPreviewFiles,
   collectArtifactReports,
   getArtifactReportTargetName,
+  isInternalArtifactPreview,
   parseArtifactReport,
 };

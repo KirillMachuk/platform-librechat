@@ -1,5 +1,9 @@
 import dedent from 'dedent';
-import { excelMimeTypes, shadcnComponents } from 'librechat-data-provider';
+import {
+  excelMimeTypes,
+  getVerifiedPresentationPreviewAsset,
+  shadcnComponents,
+} from 'librechat-data-provider';
 import type {
   SandpackProviderProps,
   SandpackPredefinedTemplate,
@@ -743,8 +747,15 @@ const OFFICE_HTML_BUCKETS: ReadonlySet<ToolArtifactType> = new Set([
   TOOL_ARTIFACT_TYPES.PRESENTATION,
 ]);
 
+const hasVerifiedPresentationPreview = (
+  type: ToolArtifactType,
+  attachment: Partial<Pick<TFile, 'artifactReport'>>,
+): boolean =>
+  type === TOOL_ARTIFACT_TYPES.PRESENTATION &&
+  getVerifiedPresentationPreviewAsset(attachment.artifactReport) != null;
+
 export function detectArtifactTypeFromFile(
-  attachment: Partial<Pick<TFile, 'filename' | 'type' | 'text' | 'textFormat'>>,
+  attachment: Partial<Pick<TFile, 'filename' | 'type' | 'text' | 'textFormat' | 'artifactReport'>>,
 ): ToolArtifactType | null {
   /* Compute the basename once and reuse it across the extension AND
    * bare-name lookups. Both `extensionOf(filename)` and
@@ -796,7 +807,12 @@ export function detectArtifactTypeFromFile(
    * text is "fall through to the legacy download path"; preserve that
    * by returning null here. The downgrade only matters when there's
    * actual text content that needs safe-escaping. */
-  if (OFFICE_HTML_BUCKETS.has(type) && attachment.textFormat !== 'html') {
+  const usesVerifiedPresentationPreview = hasVerifiedPresentationPreview(type, attachment);
+  if (
+    OFFICE_HTML_BUCKETS.has(type) &&
+    attachment.textFormat !== 'html' &&
+    !usesVerifiedPresentationPreview
+  ) {
     if (!attachment.text) {
       return null;
     }
@@ -806,7 +822,8 @@ export function detectArtifactTypeFromFile(
     !attachment.text &&
     type !== TOOL_ARTIFACT_TYPES.PLAIN_TEXT &&
     type !== TOOL_ARTIFACT_TYPES.MARKDOWN &&
-    type !== TOOL_ARTIFACT_TYPES.CODE
+    type !== TOOL_ARTIFACT_TYPES.CODE &&
+    !usesVerifiedPresentationPreview
   ) {
     /* HTML, REACT, MERMAID, and the office preview buckets all require
      * real content — their renderers (sandpack iframes / mermaid.js /
@@ -902,11 +919,13 @@ export function fileToArtifact(
   // can't accidentally hand HTML/React/Mermaid an empty buffer that
   // their viewers would error on. Plain-text and markdown are still
   // tolerated empty — the markdown viewer renders empty cleanly.
+  const usesVerifiedPresentationPreview = hasVerifiedPresentationPreview(type, attachment);
   if (
     !attachment.text &&
     type !== TOOL_ARTIFACT_TYPES.PLAIN_TEXT &&
     type !== TOOL_ARTIFACT_TYPES.MARKDOWN &&
-    type !== TOOL_ARTIFACT_TYPES.CODE
+    type !== TOOL_ARTIFACT_TYPES.CODE &&
+    !usesVerifiedPresentationPreview
   ) {
     /* HTML, REACT, MERMAID, and the office preview buckets all require
      * real content — their renderers (sandpack iframes / mermaid.js /

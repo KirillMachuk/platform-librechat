@@ -31,6 +31,13 @@ jest.mock('../ArtifactTabs', () => ({
   ),
 }));
 
+jest.mock('../VerifiedPresentationPreview', () => ({
+  __esModule: true,
+  default: ({ url, title }: { url: string; title: string }) => (
+    <div data-testid="verified-presentation-preview">{`${title}:${url}`}</div>
+  ),
+}));
+
 const mockUseArtifacts = jest.fn();
 jest.mock('~/hooks/Artifacts/useArtifacts', () => ({
   __esModule: true,
@@ -198,6 +205,59 @@ describe('Artifacts panel', () => {
     renderPanel();
 
     expect(screen.getByTestId('artifact-tabs')).toHaveTextContent('artifact-2');
+  });
+
+  it('uses the verified LibreOffice PDF for a generated presentation', () => {
+    setPanelState({
+      currentArtifact: buildArtifact({
+        title: 'deck.pptx',
+        type: TOOL_ARTIFACT_TYPES.PRESENTATION,
+        content: '',
+        file: {
+          file_id: 'deck-1',
+          filename: 'deck.pptx',
+          artifactReport: {
+            status: 'ready',
+            format: 'pptx',
+            sourceFileIds: [],
+            previewAssets: [
+              {
+                filename: 'deck.preview.pdf',
+                kind: 'pdf',
+                delivery: 'preview_only',
+                filepath: '/api/files/code/download/abcdefghijklmnopqrstu/123456789012345678901',
+              },
+            ],
+            qaChecks: [{ name: 'render', status: 'passed', message: 'Rendered' }],
+            issues: [],
+            changeLog: [],
+            skillVersion: '3.2.0',
+            repairIterations: 0,
+          },
+        },
+      }),
+    });
+
+    renderPanel();
+
+    expect(screen.getByTestId('verified-presentation-preview')).toHaveTextContent(
+      'deck.pptx:/api/files/code/download/abcdefghijklmnopqrstu/123456789012345678901',
+    );
+    expect(screen.queryByTestId('artifact-tabs')).not.toBeInTheDocument();
+  });
+
+  it('keeps the browser renderer fallback for legacy presentations', () => {
+    setPanelState({
+      currentArtifact: buildArtifact({
+        title: 'legacy.pptx',
+        type: TOOL_ARTIFACT_TYPES.PRESENTATION,
+      }),
+    });
+
+    renderPanel();
+
+    expect(screen.getByTestId('artifact-tabs')).toBeInTheDocument();
+    expect(screen.queryByTestId('verified-presentation-preview')).not.toBeInTheDocument();
   });
 
   describe('header actions', () => {

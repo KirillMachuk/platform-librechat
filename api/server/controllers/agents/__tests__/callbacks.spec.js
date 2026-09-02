@@ -1,5 +1,7 @@
 const { Tools } = require('librechat-data-provider');
 const mockCollectArtifactReports = jest.fn(async () => new Map());
+const mockAttachArtifactPreviewFiles = jest.fn(({ reportsByFilename }) => reportsByFilename);
+const mockIsInternalArtifactPreview = jest.fn(() => false);
 
 // Mock all dependencies before requiring the module
 jest.mock('nanoid', () => ({
@@ -58,11 +60,13 @@ jest.mock('~/server/services/Files/Code/process', () => ({
 }));
 
 jest.mock('~/server/services/Files/Code/artifactReports', () => ({
+  attachArtifactPreviewFiles: (...args) => mockAttachArtifactPreviewFiles(...args),
   collectArtifactReports: (...args) => mockCollectArtifactReports(...args),
   getArtifactReportTargetName: (name) =>
     /\.(pptx|docx|xlsx|pdf|csv)\.artifact-report\.json$/i.test(name)
       ? name.replace(/\.artifact-report\.json$/i, '')
       : null,
+  isInternalArtifactPreview: (...args) => mockIsInternalArtifactPreview(...args),
 }));
 
 jest.mock('~/server/services/Tools/credentials', () => ({
@@ -80,6 +84,8 @@ describe('createToolEndCallback', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCollectArtifactReports.mockResolvedValue(new Map());
+    mockAttachArtifactPreviewFiles.mockImplementation(({ reportsByFilename }) => reportsByFilename);
+    mockIsInternalArtifactPreview.mockReturnValue(false);
 
     // Get the mocked logger
     logger = require('@librechat/data-schemas').logger;
@@ -458,6 +464,67 @@ describe('createToolEndCallback', () => {
           artifactReport,
         }),
       );
+    });
+
+    it('uses an internal PDF as PPTX preview evidence without emitting a second attachment', async () => {
+      const baseReport = {
+        status: 'ready',
+        format: 'pptx',
+        sourceFileIds: [],
+        previewAssets: [{ filename: 'deck.preview.pdf', kind: 'pdf', delivery: 'preview_only' }],
+        qaChecks: [{ name: 'render', status: 'passed', message: 'Rendered' }],
+        issues: [],
+        changeLog: [],
+        skillVersion: '3.2.0',
+        repairIterations: 0,
+      };
+      const enrichedReport = {
+        ...baseReport,
+        previewAssets: [
+          {
+            ...baseReport.previewAssets[0],
+            filepath: '/api/files/code/download/abcdefghijklmnopqrstu/123456789012345678901',
+          },
+        ],
+      };
+      mockCollectArtifactReports.mockResolvedValue(new Map([['deck.pptx', baseReport]]));
+      mockAttachArtifactPreviewFiles.mockReturnValue(new Map([['deck.pptx', enrichedReport]]));
+      mockIsInternalArtifactPreview.mockImplementation((name) => name === 'deck.preview.pdf');
+      processCodeOutput.mockImplementation(async ({ name, artifactReport }) => ({
+        file: {
+          file_id: name === 'deck.pptx' ? 'pptx-id' : 'unexpected-id',
+          filename: name,
+          artifactReport,
+        },
+      }));
+
+      const toolEndCallback = createToolEndCallback({ req, res, artifactPromises });
+      const event = makeCodeExecutionEvent({
+        runId: 'run-1',
+        threadId: 'thread-1',
+        toolCallId: 'tool-1',
+        fileId: 'pptx-id',
+        name: 'deck.pptx',
+      });
+      event.output.artifact.files.push({
+        id: '123456789012345678901',
+        name: 'deck.preview.pdf',
+        storage_session_id: 'abcdefghijklmnopqrstu',
+      });
+
+      await toolEndCallback({ output: event.output }, event.metadata);
+      const attachments = (await Promise.all(artifactPromises)).filter(Boolean);
+
+      expect(mockAttachArtifactPreviewFiles).toHaveBeenCalledWith(
+        expect.objectContaining({ files: event.output.artifact.files }),
+      );
+      expect(processCodeOutput).toHaveBeenCalledTimes(1);
+      expect(processCodeOutput).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'deck.pptx', artifactReport: enrichedReport }),
+      );
+      expect(attachments).toEqual([
+        expect.objectContaining({ filename: 'deck.pptx', artifactReport: enrichedReport }),
+      ]);
     });
 
     it('the preview update emit uses the current run messageId, not the persisted DB messageId (cross-turn filename reuse)', async () => {
