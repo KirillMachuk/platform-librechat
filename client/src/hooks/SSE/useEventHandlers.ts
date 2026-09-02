@@ -46,9 +46,9 @@ import useContentHandler from '~/hooks/SSE/useContentHandler';
 import useStepHandler from '~/hooks/SSE/useStepHandler';
 import { useApplyAgentTemplate } from '~/hooks/Agents';
 import { useAuthContext } from '~/hooks/AuthContext';
+import store, { markPlanArrivedLive } from '~/store';
 import { MESSAGE_UPDATE_INTERVAL } from '~/common';
 import { useLiveAnnouncer } from '~/Providers';
-import store, { markPlanArrivedLive } from '~/store';
 
 type TSyncData = {
   sync: boolean;

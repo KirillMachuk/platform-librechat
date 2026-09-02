@@ -1,19 +1,19 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useRecoilValue } from 'recoil';
 import { useAtomValue } from 'jotai';
+import { useRecoilValue } from 'recoil';
 import { useToastContext } from '@librechat/client';
 import { parseDrPlanMessage, DR_START_MARKER, DR_CANCEL_MARKER } from 'librechat-data-provider';
 import type { TMessage } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
-import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/ApprovalCard';
-import useCardStrings from '~/components/Chat/Cards/useCardStrings';
-import RunFooter, { runActiveIndex, runStatusSteps } from './RunFooter';
 import {
   consumePlanArrivedLive,
   drAutoStartAtom,
   drProgressByConvoId,
   planArrivedLive,
 } from '~/store/deepResearch';
+import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/ApprovalCard';
+import RunFooter, { runActiveIndex, runStatusSteps } from './RunFooter';
+import useCardStrings from '~/components/Chat/Cards/useCardStrings';
 import { useSubmitMessage } from '~/hooks/Messages';
 import { useChatContext } from '~/Providers';
 import { Square } from '~/components/icons';

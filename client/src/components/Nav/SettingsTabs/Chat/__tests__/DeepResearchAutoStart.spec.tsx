@@ -1,9 +1,9 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { Provider as JotaiProvider, createStore } from 'jotai';
 import { PermissionTypes } from 'librechat-data-provider';
-import { drAutoStartAtom } from '~/store/deepResearch';
+import { Provider as JotaiProvider, createStore } from 'jotai';
+import { render, screen, fireEvent } from '@testing-library/react';
 import DeepResearchAutoStart from '../DeepResearchAutoStart';
+import { drAutoStartAtom } from '~/store/deepResearch';
 
 let mockPlanGate = true;
 let mockDenied: string[] = [];

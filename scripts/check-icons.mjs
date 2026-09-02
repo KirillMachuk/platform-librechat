@@ -233,9 +233,6 @@ function* componentTags(text) {
  *    a library's own arrow glyph the canon has no claim on.
  * ------------------------------------------------------------------ */
 const ALLOWED_STROKE = {
-  // The 8px ✕ inside the auto-approve pie: at that size the canon 1.25
-  // stroke is invisible; 2.5 is the vendored design's legibility choice.
-  'client/src/components/Chat/Cards/ApprovalCard.tsx': 1,
   'client/src/components/Chat/Menus/Endpoints/CustomMenu.tsx': 1,
   'packages/client/src/components/DropdownPopup.tsx': 1,
   'packages/client/src/components/MultiSelect.tsx': 1,
@@ -248,9 +245,10 @@ const ALLOWED_STROKE = {
  *    the rest are waiting for the screen batch that owns them.
  * ------------------------------------------------------------------ */
 const ALLOWED_INLINE_SVG = {
-  // Vendored aicss approval card: three GRAPHICS, not icons — the dashed
-  // to-do circle, the more/less dots-bar glyph, and the auto-approve pie.
-  'client/src/components/Chat/Cards/ApprovalCard.tsx': 3,
+  // Vendored aicss approval card: two GRAPHICS, not icons — the dashed
+  // to-do circle and the more/less dots-bar glyph (the auto-approve pie,
+  // the third, went with the countdown in r30).
+  'client/src/components/Chat/Cards/ApprovalCard.tsx': 2,
   'client/src/components/Agents/ErrorDisplay.tsx': 1,
   'client/src/components/Chat/Input/Files/DragDropOverlay.tsx': 1,
   'client/src/components/Chat/Input/Files/ProgressCircle.tsx': 1,
@@ -308,7 +306,6 @@ for (const root of SRC) {
   for (const path of sources(join(ROOT, root))) {
     const rel = relative(ROOT, path).split(sep).join('/');
     const text = stripComments(readFileSync(path, 'utf8'));
-
 
     if (!path.startsWith(ICON_LIB)) {
       const count = (text.match(/<svg[\s/>]/g) ?? []).length;
