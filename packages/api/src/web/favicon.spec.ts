@@ -11,7 +11,9 @@ import {
   faviconCache,
   faviconHandler,
   createFaviconCache,
+  faviconPrefetchPending,
   normalizeFaviconDomain,
+  prefetchFavicons,
   resolveFavicon,
 } from './favicon';
 
@@ -71,9 +73,287 @@ function makeResponse() {
   return res;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  /* Warming is process-wide background work, so it outlives the test that started
+   * it. Waiting for quiet here is what keeps these tests independent of the order
+   * they run in — and giving up LOUDLY is what keeps a leaked lane from turning
+   * the rest of the file into a row of timeouts with no cause named. */
+  let turns = 0;
+  while (faviconPrefetchPending() > 0) {
+    if (++turns > 5000) {
+      throw new Error(
+        `a previous test left ${faviconPrefetchPending()} warming task(s) running; ` +
+          'it must release every fetch it blocked',
+      );
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
   faviconCache.clear();
   mockFetch.mockReset();
+});
+
+/** Yields the event loop until `predicate` holds; the assertion after it decides. */
+async function until(predicate: () => boolean, turns = 5000): Promise<void> {
+  for (let i = 0; i < turns && !predicate(); i++) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
+async function yieldTurns(count: number): Promise<void> {
+  for (let i = 0; i < count; i++) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
+const askedDomains = () =>
+  mockFetch.mock.calls.map(([url]) => new URL(String(url)).searchParams.get('domain'));
+
+describe('prefetchFavicons — the icons are fetched before anyone waits for them', () => {
+  it('warms the exact key the browser will ask for, `www.` and all', async () => {
+    /* The client derives the key with `getCleanDomain`, whose `www.` test is
+     * case-sensitive. Warming a different key warms nothing and says nothing —
+     * every icon would still arrive, just as slowly as before. */
+    answerWith(PNG);
+    prefetchFavicons([
+      'https://www.example.com/article?a=1',
+      'https://WWW.Example.com/other',
+      'https://sub.example.org:8443/x#frag',
+    ]);
+
+    await until(() => faviconCache.size === 3);
+    expect(askedDomains().sort()).toEqual(['example.com', 'sub.example.org', 'www.example.com']);
+  });
+
+  it('leaves nothing for the reader to wait for', async () => {
+    answerWith(PNG);
+    prefetchFavicons(['https://www.example.com/a']);
+    await until(() => faviconCache.size === 1);
+    const afterWarming = mockFetch.mock.calls.length;
+
+    const entry = await resolveFavicon('example.com');
+
+    expect(entry.icon?.body.equals(PNG)).toBe(true);
+    expect(mockFetch).toHaveBeenCalledTimes(afterWarming);
+  });
+
+  it('returns without waiting for any of the fetching', () => {
+    /* It is called on the path that streams the sources to the screen, so the
+     * requests may leave immediately — but nothing may be awaited before the
+     * sources themselves reach the reader. */
+    answerWith(PNG);
+
+    expect(prefetchFavicons(['https://example.com/a'])).toBeUndefined();
+
+    expect(faviconCache.size).toBe(0);
+    expect(faviconPrefetchPending()).toBeGreaterThan(0);
+  });
+
+  it('never has more than six requests outstanding', async () => {
+    /* The gate opens for good rather than releasing one batch: a lane picks up its
+     * next domain the instant the previous one settles, so releasing only what was
+     * outstanding at that moment strands the lanes that start afterwards — and a
+     * stranded lane is held for the life of the process, which every later test
+     * then has to do without. */
+    let active = 0;
+    let peak = 0;
+    let open = false;
+    let waiting: Array<() => void> = [];
+    mockFetch.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          active += 1;
+          peak = Math.max(peak, active);
+          const finish = () => {
+            active -= 1;
+            resolve(upstreamAnswers(PNG) as never);
+          };
+          if (open) {
+            finish();
+          } else {
+            waiting.push(finish);
+          }
+        }),
+    );
+
+    prefetchFavicons(Array.from({ length: 30 }, (_, i) => `https://site${i}.example/a`));
+    await until(() => waiting.length >= 6);
+    await yieldTurns(30);
+    expect(peak).toBe(6);
+
+    open = true;
+    const outstanding = waiting;
+    waiting = [];
+    outstanding.forEach((finish) => finish());
+
+    await until(() => faviconCache.size === 30);
+    expect(faviconCache.size).toBe(30);
+    expect(peak).toBe(6);
+  });
+
+  it('warms at most 64 domains from one result set', async () => {
+    answerWith(PNG);
+    prefetchFavicons(Array.from({ length: 200 }, (_, i) => `https://site${i}.example/a`));
+
+    await until(() => faviconCache.size === 64);
+    await yieldTurns(50);
+    expect(faviconCache.size).toBe(64);
+  });
+
+  it('spends its budget on the sites it does not have, not the ones it does', async () => {
+    /* The map of sources a request accumulates is dominated by sites seen before —
+     * half of them, measured. If those counted against the cap, the ninth search of
+     * a research run would spend the whole budget re-warming what is already held
+     * and leave every new site cold, which is the one case this exists for. */
+    answerWith(PNG);
+    const held = Array.from({ length: 60 }, (_, i) => `https://held${i}.example/a`);
+    prefetchFavicons(held);
+    await until(() => faviconPrefetchPending() === 0);
+    expect(faviconCache.size).toBe(60);
+    const beforeSecondSearch = mockFetch.mock.calls.length;
+
+    const fresh = Array.from({ length: 8 }, (_, i) => `https://fresh${i}.example/a`);
+    prefetchFavicons([...held, ...fresh]);
+    await until(() => faviconPrefetchPending() === 0);
+
+    expect(faviconCache.size).toBe(68);
+    expect(askedDomains().slice(beforeSecondSearch).sort()).toEqual(
+      fresh.map((_, i) => `fresh${i}.example`).sort(),
+    );
+  });
+
+  it('keeps the six-lane ceiling across searches that overlap', async () => {
+    /* The ceiling is on the process, not the call: a research run issues a search
+     * per sub-question and they land on top of each other. */
+    let active = 0;
+    let peak = 0;
+    let open = false;
+    const waiting: Array<() => void> = [];
+    mockFetch.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          active += 1;
+          peak = Math.max(peak, active);
+          const finish = () => {
+            active -= 1;
+            resolve(upstreamAnswers(PNG) as never);
+          };
+          if (open) {
+            finish();
+          } else {
+            waiting.push(finish);
+          }
+        }),
+    );
+
+    for (let search = 0; search < 10; search++) {
+      prefetchFavicons(Array.from({ length: 20 }, (_, i) => `https://s${search}d${i}.example/a`));
+    }
+    await until(() => waiting.length >= 6);
+    await yieldTurns(30);
+    expect(peak).toBe(6);
+
+    open = true;
+    waiting.splice(0).forEach((finish) => finish());
+    await until(() => faviconPrefetchPending() === 0);
+    expect(peak).toBe(6);
+  });
+
+  it('opens a lane for every domain of a small result, not half of them', async () => {
+    /* A lane takes its domain off the queue the moment it starts, so a ceiling
+     * re-read against the shrinking queue would start three lanes for six domains
+     * and warm an ordinary search at half speed. */
+    let active = 0;
+    let peak = 0;
+    const waiting: Array<() => void> = [];
+    mockFetch.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          active += 1;
+          peak = Math.max(peak, active);
+          waiting.push(() => {
+            active -= 1;
+            resolve(upstreamAnswers(PNG) as never);
+          });
+        }),
+    );
+
+    prefetchFavicons(Array.from({ length: 6 }, (_, i) => `https://small${i}.example/a`));
+    await until(() => waiting.length >= 6);
+    await yieldTurns(20);
+
+    expect(peak).toBe(6);
+    waiting.splice(0).forEach((finish) => finish());
+    await until(() => faviconPrefetchPending() === 0);
+  });
+
+  it('does not re-fetch a domain already held', async () => {
+    answerWith(PNG);
+    await resolveFavicon('example.com');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    prefetchFavicons(['https://example.com/a', 'https://www.example.com/b']);
+    await yieldTurns(50);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('queues a domain once, however many searches name it', async () => {
+    /* One research run issues a search per sub-question and they name the same
+     * authoritative sites over and over. Without the dedupe the backlog fills with
+     * copies of them and pushes real work past its ceiling. */
+    let open = false;
+    const waiting: Array<() => void> = [];
+    mockFetch.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          const finish = () => resolve(upstreamAnswers(PNG) as never);
+          if (open) {
+            finish();
+          } else {
+            waiting.push(finish);
+          }
+        }),
+    );
+
+    const links = Array.from({ length: 10 }, (_, i) => `https://site${i}.example/a`);
+    for (let i = 0; i < 60; i++) {
+      prefetchFavicons(links);
+    }
+    await yieldTurns(20);
+
+    /* Six in a lane and four still queued — not six hundred. */
+    expect(faviconPrefetchPending()).toBeLessThanOrEqual(10);
+
+    open = true;
+    waiting.splice(0).forEach((finish) => finish());
+    await until(() => faviconCache.size === 10);
+    expect(faviconCache.size).toBe(10);
+  });
+
+  it('shrugs off links that are not sources, and never throws', async () => {
+    answerWith(PNG);
+    expect(() =>
+      prefetchFavicons([
+        'not a url',
+        'https://localhost/secret',
+        'https://10.0.0.5/x',
+        'https://[::1]/x',
+        '',
+        'https://good.example/a',
+      ]),
+    ).not.toThrow();
+
+    await until(() => faviconCache.size === 1);
+    await yieldTurns(30);
+    expect(askedDomains()).toEqual(['good.example']);
+  });
+
+  it('does nothing at all when a search returned no usable source', () => {
+    answerWith(PNG);
+    prefetchFavicons([]);
+    prefetchFavicons(['https://localhost/x']);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
 });
 
 describe('normalizeFaviconDomain — the parameter is untrusted content', () => {
