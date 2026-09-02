@@ -584,133 +584,12 @@
 .digitRollInner[data-dir="up"][data-shifted="true"] { transform: translateY(-1em); }
 .digitRollInner[data-dir="down"][data-shifted="true"] { transform: translateY(0); }
 .digitRollInner span { height: 1em; line-height: 1em; }
-.autoApprove {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  color: var(--text-tertiary);
-  transition: opacity 280ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.autoApproveOut {
-  opacity: 0;
-  pointer-events: none;
-}
-.autoApproveTip {
-  position: relative;
-  display: inline-flex;
-  flex: none;
-  line-height: 0;
-}
-.autoApproveTip::after {
-  content: attr(data-tip);
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 2px);
-  transform: translateX(-50%) translateY(1px);
-  padding: 4px 5px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--text-primary) 62%, transparent);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  color: var(--surface-primary);
-  font-size: 10px;
-  font-weight: 500;
-  line-height: 1;
-  white-space: nowrap;
-  opacity: 0;
-  filter: blur(2px);
-  pointer-events: none;
-  transition: opacity 0.15s ease, transform 0.15s ease, filter 0.15s ease;
-}
-.autoApproveTip:not([data-tip])::after { display: none; }
-.autoApproveTip:focus-within::after {
-  opacity: 1;
-  filter: blur(0);
-  transform: translateX(-50%) translateY(0);
-}
-@media (hover: hover) {
-  .autoApproveTip:hover::after {
-    opacity: 1;
-    filter: blur(0);
-    transform: translateX(-50%) translateY(0);
-  }
-}
-.autoApproveCancel {
-  position: relative;
-  flex: none;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--c-acc);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.autoApproveCancel:disabled { cursor: default; }
-.autoApproveLabel {
-  font-size: 12px;
-  line-height: 1;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.autoApproveSecs {
-  display: inline-flex;
-  align-items: center;
-  overflow: hidden;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  vertical-align: baseline;
-}
-.autoApprovePie {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  color: inherit;
-  display: block;
-  transition: opacity 150ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.autoApproveCancelGlyph {
-  position: absolute;
-  inset: 1px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--c-acc) 22%, transparent);
-  color: var(--c-acc);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 150ms cubic-bezier(0.22, 1, 0.36, 1);
-  pointer-events: none;
-}
-.autoApproveCancel:focus-visible .autoApprovePie { opacity: 0; }
-.autoApproveCancel:focus-visible .autoApproveCancelGlyph { opacity: 1; }
-@media (hover: hover) {
-  .autoApproveCancel:hover .autoApprovePie { opacity: 0; }
-  .autoApproveCancel:hover .autoApproveCancelGlyph { opacity: 1; }
-}
-.autoApprovePieTrack {
-  stroke: color-mix(in srgb, var(--c-acc) 22%, transparent);
-}
-.autoApprovePieFill {
-  stroke: currentColor;
-  transition: stroke-dashoffset 1s linear;
-}
 @media (prefers-reduced-motion: reduce) {
   .card { animation: none; }
   .questionsViewport[data-animate="true"],
   .questionsTrack[data-animate="true"],
   .questionsTrack[data-animate="true"] .question { transition: none; }
   .digitRollInner { transition: none; }
-  .autoApprovePieFill { transition: none; }
-  .autoApprove,
-  .autoApprovePie,
-  .autoApproveCancelGlyph { transition: none; }
   /* The to-do well snaps instead of sliding. */
   .todoCollapsible,
   .todoCollapsed { transition: none; }
@@ -727,9 +606,7 @@
 /* Phone-sized controls (§7: 44px). The BOX carries the size — an absolute
  * overlay gives height but not width (measured on the stand: the pager arrows
  * were 18×44) and stray zones feed the scrollers. Desktop keeps the original
- * density. The autostart pie is deliberately NOT resized: it sits inline with
- * its own label, a 44px box would tear that row apart, and cancelling
- * autostart has two other paths (Редактировать, typing in the composer). */
+ * density. */
 @media (pointer: coarse) {
   /* Only the ARROWS need a real box: they are 18px wide, and the platform's
    * `.tap-target` overlay stretches height but not width. Wide controls

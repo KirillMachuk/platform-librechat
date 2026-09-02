@@ -70,6 +70,8 @@ export const userPreferenceDefinitions = {
   maximizeChatSpace: BOOLEAN,
   centerFormOnLanding: BOOLEAN,
   showThinking: BOOLEAN,
+  /** «Запускать исследование сразу» (r30) — a person's choice, not a device's. */
+  drAutoStart: BOOLEAN,
   [`${LocalStorageKeys.AUTO_EXPAND_TOOLS}`]: BOOLEAN,
   LaTeXParsing: BOOLEAN,
   saveDrafts: BOOLEAN,

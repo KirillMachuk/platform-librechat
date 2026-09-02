@@ -56,7 +56,7 @@ jest.mock('~/hooks/AuthContext', () => ({
   AuthContextProvider: ({ children }: { children?: React.ReactNode }) => children,
 }));
 jest.mock('~/data-provider', () => ({
-  useGetStartupConfig: () => ({ data: { deepResearch: { planGate: true, planAutoStartSec: 0 } } }),
+  useGetStartupConfig: () => ({ data: { deepResearch: { planGate: true } } }),
 }));
 
 const PLAN_TEXT = '**План исследования:** Рынок CRM\n\n1. Собрать\n2. Сравнить';

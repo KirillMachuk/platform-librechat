@@ -4,6 +4,11 @@
 version: 1.3.11
 cache: true
 
+# The plan gate is on for the client tenant, and the Settings → Chat «run immediately»
+# switch shows only while it is (r30). Deep Research itself never runs on the mock.
+deepResearch:
+  planGate: true
+
 interface:
   # Exercises the cost row in the context usage gauge (off by default).
   # Mock models price at the default rate, so synthetic usage yields a value.

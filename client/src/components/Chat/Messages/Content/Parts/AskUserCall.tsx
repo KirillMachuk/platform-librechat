@@ -8,10 +8,10 @@ import {
   parseAskUserArgs,
 } from 'librechat-data-provider';
 import type { AskUserQuestion } from 'librechat-data-provider';
-import type { ApprovalCardStrings } from '~/components/Chat/Cards/ApprovalCard';
 import { useOptionalMessagesOperations } from '~/Providers/MessagesViewContext';
 import { MessageCircleQuestion, ChevronDown } from '~/components/icons';
 import { ApprovalCard } from '~/components/Chat/Cards/ApprovalCard';
+import useCardStrings from '~/components/Chat/Cards/useCardStrings';
 import useExpandCollapse from '~/hooks/Messages/useExpandCollapse';
 import { ChatContext, useMessageContext } from '~/Providers';
 import { useSubmitMessage } from '~/hooks/Messages';
@@ -38,26 +38,6 @@ import { cn } from '~/utils';
  * the context and mounts the hook-bearing interactive body only inside a
  * live chat; everywhere else the folded summary renders.
  */
-
-function useCardStrings(): ApprovalCardStrings {
-  const localize = useLocalize();
-  return useMemo(
-    () => ({
-      otherPlaceholder: localize('com_ui_cards_other_placeholder'),
-      moreLabel: (n) => localize('com_ui_cards_more', { 0: String(n) }),
-      lessLabel: localize('com_ui_cards_less'),
-      autoApproveBefore: localize('com_ui_cards_autostart_before'),
-      autoApproveAfter: localize('com_ui_cards_autostart_after'),
-      autoApproveCancelTip: localize('com_ui_cards_cancel_tip'),
-      prevQuestion: localize('com_ui_cards_prev_question'),
-      nextQuestion: localize('com_ui_cards_next_question'),
-      cancelAutoApprove: localize('com_ui_cards_cancel_autostart'),
-      questionOf: (c, t) => localize('com_ui_cards_question_of', { 0: String(c), 1: String(t) }),
-      customAnswerFor: (prompt) => localize('com_ui_cards_custom_answer_for', { 0: prompt }),
-    }),
-    [localize],
-  );
-}
 
 /**
  * What the user actually answered, for a card that is no longer live.

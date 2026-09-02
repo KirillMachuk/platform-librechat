@@ -1,4 +1,5 @@
 import { atomFamily } from 'recoil';
+import { createStorageAtom } from './jotai-utils';
 
 /**
  * Live Deep Research progress snapshot carried by the `dr_progress` SSE event
@@ -36,5 +37,38 @@ export const drProgressByConvoId = atomFamily<TDeepResearchProgress | null, stri
   key: 'drProgressByConvoId',
   default: null,
 });
+
+/**
+ * «Запускать исследование сразу» (Settings → Chat; r30, owner 02.09). Replaces the plan
+ * card's 30-second autostart: the card now waits for a click for as long as it takes, and
+ * with this on it starts itself the moment a plan lands live. Listed in
+ * `userPreferenceDefinitions`, so it follows the account onto the next device like every
+ * other switch on the Chat tab (review r30, В1: it was the one that would not have).
+ */
+export const drAutoStartAtom = createStorageAtom<boolean>('drAutoStart', false);
+
+/**
+ * Plan messages whose FINAL event this tab processed (`finalHandler` marks them, the plan
+ * card spends the mark). This is what separates a plan that JUST ARRIVED from one loaded
+ * from history: the self-start may only ever fire on the former — reopening an old,
+ * unstarted plan must never launch a research nobody asked for today. One mark permits
+ * one decision; whatever the card decides (start, or stand down for a draft in the
+ * composer, or a refusal), the mark is gone, so a later remount or a later flip of the
+ * setting cannot start a plan that has been waiting.
+ */
+const plansArrivedLive = new Set<string>();
+
+export function markPlanArrivedLive(messageId: string): void {
+  plansArrivedLive.add(messageId);
+}
+
+export function planArrivedLive(messageId: string): boolean {
+  return plansArrivedLive.has(messageId);
+}
+
+/** Spends the mark; true only for the first caller. */
+export function consumePlanArrivedLive(messageId: string): boolean {
+  return plansArrivedLive.delete(messageId);
+}
 
 export default { drProgressByConvoId };

@@ -82,4 +82,37 @@ describe('useSubmitMessage', () => {
     expect(submitted).toBe(false);
     expect(reset).not.toHaveBeenCalled();
   });
+
+  it('forwards a caller-named parent, so a card can thread a command under its own message', () => {
+    /* The plan card's self-start fires on the very render that mounted the card (r30); it
+     * names the plan as the parent instead of trusting the latest-message selector. */
+    ask.mockReturnValue(undefined);
+    const { result } = renderHook(() => useSubmitMessage());
+    act(() => {
+      result.current.submitMessage({
+        text: 'Начать исследование',
+        parentMessageId: 'plan-1',
+        conversationId: 'convo-1',
+      });
+    });
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'Начать исследование',
+        parentMessageId: 'plan-1',
+        conversationId: 'convo-1',
+      }),
+      expect.anything(),
+    );
+    expect(reset).toHaveBeenCalled();
+  });
+
+  it('leaves the parent to the branch tail when no caller names one', () => {
+    ask.mockReturnValue(undefined);
+    const { result } = renderHook(() => useSubmitMessage());
+    act(() => {
+      result.current.submitMessage({ text: 'обычное сообщение' });
+    });
+    expect(ask.mock.calls[0][0].parentMessageId).toBeUndefined();
+    expect(ask.mock.calls[0][0].conversationId).toBeUndefined();
+  });
 });

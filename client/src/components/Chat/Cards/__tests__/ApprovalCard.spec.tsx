@@ -20,12 +20,8 @@ const strings: ApprovalCardStrings = {
   otherPlaceholder: 'Другое…',
   moreLabel: (n) => `Ещё ${n}`,
   lessLabel: 'Свернуть',
-  autoApproveBefore: 'Автозапуск через ',
-  autoApproveAfter: ' с',
-  autoApproveCancelTip: 'Отмена',
   prevQuestion: 'Предыдущий вопрос',
   nextQuestion: 'Следующий вопрос',
-  cancelAutoApprove: 'Отменить автозапуск',
   questionOf: (c, t) => `Вопрос ${c} из ${t}`,
   customAnswerFor: (p) => `Свой ответ: ${p}`,
 };
@@ -373,49 +369,6 @@ describe('ApprovalCard — plan variant', () => {
       'aria-expanded',
       'true',
     );
-  });
-
-  it('draws the controlled pie and reports the ✕ to the parent (the card never ticks itself)', () => {
-    const onCancel = jest.fn();
-    const { onApprove } = renderPlan({
-      autoApprove: { secsLeft: 5, total: 30 },
-      onAutoApproveCancel: onCancel,
-    });
-    expect(screen.getByTestId('auto-approve')).toBeInTheDocument();
-    act(() => {
-      jest.advanceTimersByTime(10000);
-    });
-    // the parent owns the clock: nothing fires from inside the card
-    expect(onApprove).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Отменить автозапуск' }));
-    expect(onCancel).toHaveBeenCalledTimes(1);
-  });
-
-  it('fades the pie out when the parent drops the countdown', () => {
-    const onApprove = jest.fn();
-    const base = {
-      variant: 'plan' as const,
-      strings,
-      title: 'Задачи',
-      todoTitle: 'Задачи',
-      approveLabel: 'Начать',
-      plan: PLAN,
-      onApprove,
-    };
-    const { rerender } = render(
-      <ApprovalCard {...base} autoApprove={{ secsLeft: 5, total: 30 }} />,
-    );
-    expect(screen.getByTestId('auto-approve')).toBeInTheDocument();
-    rerender(<ApprovalCard {...base} autoApprove={null} />);
-    act(() => {
-      jest.advanceTimersByTime(280);
-    });
-    expect(screen.queryByTestId('auto-approve')).toBeNull();
-  });
-
-  it('renders no countdown at all without autoApprove (config switch off)', () => {
-    renderPlan();
-    expect(screen.queryByTestId('auto-approve')).toBeNull();
   });
 });
 
