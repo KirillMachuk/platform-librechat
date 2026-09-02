@@ -91,6 +91,24 @@ describe('GET /api/favicon — the chain in front of the handler', () => {
     );
   });
 
+  it('gives one IPv6 client one bucket, not one per address it holds', async () => {
+    /* A client is handed a /64; without the library's own masking each address in
+     * it is a key of its own and the limit stops existing. Nothing else can see
+     * this: every other test here speaks IPv4, and express-rate-limit's own guard
+     * is blind to it because `removePorts` reads `req['ip']` in brackets on
+     * purpose, which is exactly what its heuristic scans for. */
+    const first = await request(app)
+      .get('/api/favicon?domain=localhost')
+      .set('X-Forwarded-For', '2001:db8:1234:5678::1');
+    const neighbour = await request(app)
+      .get('/api/favicon?domain=localhost')
+      .set('X-Forwarded-For', '2001:db8:1234:5678::99ff');
+
+    expect(Number(neighbour.headers['x-ratelimit-remaining'])).toBe(
+      Number(first.headers['x-ratelimit-remaining']) - 1,
+    );
+  });
+
   it('refuses an unnamed reader when sharing is switched off', async () => {
     /* The door is open only because sharing is: with no public page to be on, an
      * anonymous caller has no business here. */

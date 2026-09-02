@@ -582,6 +582,32 @@ describe('the two stores keep a stranger from timing what the client searched', 
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
+  it('a stranger arriving mid-fetch does not join the fetch started for a reader', async () => {
+    /* The stores have an in-flight map EACH, and this is the only test that can see
+     * it: every other one waits for a fetch to finish before starting the next, so
+     * one shared map would pass them all. Sharing it would put the stranger's
+     * latency back on the reader's schedule — a narrow window, but the same leak in
+     * miniature, and their answer would land in the wrong store besides. */
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    mockFetch.mockImplementation(async () => {
+      await gate;
+      return upstreamAnswers(PNG) as never;
+    });
+
+    const readerPending = resolveFavicon('being-warmed.example');
+    await yieldTurns(1);
+    const strangerPending = resolveFavicon('being-warmed.example', 'public');
+    await yieldTurns(1);
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    release();
+    await Promise.all([readerPending, strangerPending]);
+    expect(faviconCache.size).toBe(1);
+    expect(publicFaviconCache.size).toBe(1);
+  });
+
   it('serves the second visitor to a shared page from the store the first one filled', async () => {
     answerWith(PNG);
     await resolveFavicon('shared.example', 'public');
