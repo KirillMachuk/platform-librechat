@@ -156,6 +156,9 @@ const CODE_READ_FILE_DEF: LCTool = Object.freeze({
   responseFormat: ReadFileToolDefinition.responseFormat,
 }) as LCTool;
 
+const BASH_WORKSPACE_LIFETIME_GUIDANCE =
+  'Workspace lifetime: /tmp is scratch for this call only. Write every file needed by a later bash_tool call under /mnt/data; create and consume /tmp files within one call.';
+
 const SKILL_CREATE_FILE_PARAMETERS: LCTool['parameters'] = Object.freeze({
   type: 'object',
   properties: {
@@ -380,7 +383,7 @@ export function isFileAuthoringToolDefinition(def: LCTool | undefined): boolean 
 function createBashToolDef(enableToolOutputReferences: boolean): LCTool {
   return Object.freeze({
     name: BashExecutionToolDefinition.name,
-    description: buildBashExecutionToolDescription({ enableToolOutputReferences }),
+    description: `${buildBashExecutionToolDescription({ enableToolOutputReferences })}\n\n${BASH_WORKSPACE_LIFETIME_GUIDANCE}`,
     parameters: BashExecutionToolDefinition.schema as unknown as LCTool['parameters'],
   }) as LCTool;
 }
