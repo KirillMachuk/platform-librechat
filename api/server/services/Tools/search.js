@@ -54,7 +54,12 @@ function createOnSearchResults(res, streamId = null) {
     const data = { turn, ...structuredClone(results.data ?? {}) };
     context.searchResultData = data;
 
-    // Map sources to links
+    /* `context.sourceMap` lives for the whole request and is never cleared, so by
+     * the ninth sub-question of a research run it holds every earlier search too.
+     * The icons are warmed from THIS result instead: handing over the accumulated
+     * map would spend the whole warming budget on sites already held and leave the
+     * new ones — the only ones that cost the reader anything — cold. */
+    const freshLinks = [];
     for (let i = 0; i < data.organic.length; i++) {
       const source = data.organic[i];
       if (source.link) {
@@ -63,6 +68,7 @@ function createOnSearchResults(res, streamId = null) {
           index: i,
           turn,
         });
+        freshLinks.push(source.link);
       }
     }
     for (let i = 0; i < data.topStories.length; i++) {
@@ -73,6 +79,7 @@ function createOnSearchResults(res, streamId = null) {
           index: i,
           turn,
         });
+        freshLinks.push(source.link);
       }
     }
 
@@ -81,7 +88,7 @@ function createOnSearchResults(res, streamId = null) {
      * asks for them, so the icons are fetched now instead of while someone waits
      * for them. Fire-and-forget by contract — nothing on this path may wait. */
     try {
-      prefetchFavicons(context.sourceMap.keys());
+      prefetchFavicons(freshLinks);
     } catch (error) {
       logger.warn('[onSearchResults] could not warm the source icons', error);
     }

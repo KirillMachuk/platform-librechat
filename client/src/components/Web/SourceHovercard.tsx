@@ -26,6 +26,13 @@ interface SourceHovercardProps {
   fileRelevance?: number;
 }
 
+/**
+ * MIRRORED on the server by `domainFromSourceLink` in
+ * `packages/api/src/web/favicon.ts`, which warms the icon cache under the key this
+ * produces — the case-sensitive `www.` test included. Changing this without
+ * changing that one leaves the warming pointed at keys nobody asks for, and says
+ * nothing: every icon still arrives, just as slowly as before the cache existed.
+ */
 export function getCleanDomain(url: string) {
   const domain = url.replace(/(^\w+:|^)\/\//, '').split('/')[0];
   return domain.startsWith('www.') ? domain.substring(4) : domain;

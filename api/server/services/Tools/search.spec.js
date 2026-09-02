@@ -56,6 +56,36 @@ describe('onSearchResults hands the source domains to the icon cache', () => {
     expect(sent()).toEqual(['https://example.com/a']);
   });
 
+  it('hands over the search that just happened, not everything seen so far', () => {
+    /* The source map lives for the whole request and is never cleared, so by the
+     * ninth sub-question of a research run it carries every earlier search too.
+     * Handing that over spends the warming budget on sites already held. */
+    const { onSearchResults } = createOnSearchResults({ headersSent: true, write: jest.fn() });
+
+    onSearchResults(results({ organic: [{ link: 'https://first.example/a' }] }), runnableConfig);
+    onSearchResults(
+      results({
+        organic: [{ link: 'https://second.example/b' }],
+        topStories: [{ link: 'https://third.example/c' }],
+      }),
+      runnableConfig,
+    );
+
+    expect(prefetchFavicons).toHaveBeenCalledTimes(2);
+    expect([...prefetchFavicons.mock.calls[1][0]]).toEqual([
+      'https://second.example/b',
+      'https://third.example/c',
+    ]);
+  });
+
+  it('is a real export of the package the server imports it from', () => {
+    /* This file mocks the barrel in order to spy on the hand-over, so a
+     * `prefetchFavicons` that vanished from it would still look fine here — and in
+     * production would be a TypeError swallowed by the guard at the call site,
+     * leaving a dead feature and a single warn line to notice it by. */
+    expect(typeof jest.requireActual('@librechat/api').prefetchFavicons).toBe('function');
+  });
+
   it('asks for nothing when the search itself failed', () => {
     const { onSearchResults } = createOnSearchResults({ headersSent: true, write: jest.fn() });
 
@@ -67,7 +97,7 @@ describe('onSearchResults hands the source domains to the icon cache', () => {
   it('still streams the sources when warming the icons throws', () => {
     /* The icons are a garnish on this path. A fault in them must never cost the
      * reader the sources themselves. */
-    prefetchFavicons.mockImplementation(() => {
+    prefetchFavicons.mockImplementationOnce(() => {
       throw new Error('cache exploded');
     });
     const write = jest.fn();
