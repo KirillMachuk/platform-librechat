@@ -6,6 +6,7 @@ import type { RequestInit, Response as UndiciResponse } from 'undici';
 import type { NextFunction, Request, Response } from 'express';
 import { getEnvProxyDispatcher } from '~/utils/proxy';
 import { isSSRFTarget } from '~/auth/domain';
+import { isEnabled } from '~/utils';
 
 /**
  * Source favicons, fetched by us instead of by the reader's browser.
@@ -526,7 +527,8 @@ function cookieUserId(req: Request): string | null {
 }
 
 /**
- * Authenticates from the session cookie rather than the `Authorization` header.
+ * Names the reader from the session cookie rather than the `Authorization` header,
+ * and does not insist on finding one.
  *
  * An `<img>` cannot carry a header, and it has to stay an `<img>`: `loading=lazy`
  * is what keeps a collapsed list of sources — present in the DOM at zero height —
@@ -539,16 +541,37 @@ function cookieUserId(req: Request): string | null {
  * deliberate trade — the alternative is a user lookup per icon, twenty of them
  * per message, to gate bytes that are a public site's logo either way.
  *
+ * WHY A MISSING COOKIE IS NOT REFUSED. A conversation shared by link is read
+ * without signing in, so demanding a session left every icon in a shared research
+ * answer a grey globe. What these bytes are decides it: a public site's logo, for
+ * domains the shared page already lists beside them in plain text — serving them
+ * discloses nothing the reader is not already looking at. What keeps the endpoint
+ * narrow was never the cookie: one upstream host that is a constant, a domain that
+ * is only ever a query parameter, 16KB apiece, a cache with a fixed ceiling, and
+ * for a caller who proves nothing, a limit counted per address.
+ *
+ * A cookie that does not verify is treated as no cookie at all, never as the user
+ * it names — otherwise choosing a user id would be a way to mint a fresh bucket.
+ *
+ * The door is open only because sharing is: with `ALLOW_SHARED_LINKS` switched off
+ * there is no page an anonymous reader could legitimately be on, and the request is
+ * refused as before. Mirrors `api/server/routes/share.js`, where that flag decides
+ * whether the public route exists at all.
+ *
  * Must be mounted after `cookieParser`.
  */
-export function faviconAuth(req: Request, res: Response, next: NextFunction): void {
+export function identifyFaviconReader(req: Request, res: Response, next: NextFunction): void {
   const userId = cookieUserId(req);
-  if (!userId) {
+  if (userId) {
+    res.locals.userId = userId;
+    next();
+    return;
+  }
+  if (process.env.ALLOW_SHARED_LINKS !== undefined && !isEnabled(process.env.ALLOW_SHARED_LINKS)) {
     res.set('Cache-Control', 'no-store');
     res.status(401).end();
     return;
   }
-  res.locals.userId = userId;
   next();
 }
 

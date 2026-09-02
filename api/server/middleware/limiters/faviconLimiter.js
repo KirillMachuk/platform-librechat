@@ -1,5 +1,5 @@
 const rateLimit = require('express-rate-limit');
-const { limiterCache } = require('@librechat/api');
+const { limiterCache, removePorts } = require('@librechat/api');
 
 const FAVICON_WINDOW_MS = 15 * 60 * 1000;
 const FAVICON_MAX = 1200;
@@ -20,10 +20,19 @@ const FAVICON_MAX = 1200;
  * entry. Those stay capped at 80 a minute per account, against a cache whose total
  * size is fixed anyway.
  *
- * Keyed by the user the cookie proves, not by address: every reader on the client's
- * network shares one. `faviconAuth` runs first and is what guarantees the key
- * exists — without it express-rate-limit puts every caller in one shared bucket
- * rather than failing, which is why the route's wiring has its own test.
+ * Keyed by the user when a cookie names one, because every reader on the client's
+ * network shares an address. A conversation read through a share link has no
+ * cookie, so those fall back to the address — `removePorts` rather than `req.ip`
+ * because express-rate-limit refuses an un-normalised IPv6 key.
+ *
+ * The same ceiling means something different on each key, and both are meant. Per
+ * account it is one person reading; per address it is however many people open the
+ * same shared answer from one office, which is why it is not lowered for them: the
+ * refusal would be invisible to every one of them.
+ *
+ * `identifyFaviconReader` runs first and is what guarantees a key exists — without
+ * it express-rate-limit puts every caller in one shared bucket rather than failing,
+ * which is why the route's wiring has its own test.
  */
 const faviconLimiter = rateLimit({
   windowMs: FAVICON_WINDOW_MS,
@@ -32,7 +41,7 @@ const faviconLimiter = rateLimit({
     res.set('Cache-Control', 'no-store');
     res.status(429).end();
   },
-  keyGenerator: (_req, res) => res.locals.userId,
+  keyGenerator: (req, res) => res.locals.userId ?? `ip:${removePorts(req) ?? 'unknown'}`,
   store: limiterCache('favicon_limiter'),
 });
 

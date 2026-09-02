@@ -7,7 +7,7 @@ import jwt from 'jsonwebtoken';
 import { fetch } from 'undici';
 import type { NextFunction, Request, Response } from 'express';
 import {
-  faviconAuth,
+  identifyFaviconReader,
   faviconCache,
   faviconHandler,
   createFaviconCache,
@@ -553,7 +553,7 @@ describe('the icon cache is bounded by bytes, not left to expire', () => {
   });
 });
 
-describe('faviconAuth — an <img> proves itself with the session cookie', () => {
+describe('identifyFaviconReader — the cookie names the reader, it does not admit them', () => {
   const USER_ID = '0123456789abcdef01234567';
   const SECRET = 'refresh-secret-for-tests';
   const originalEnv = process.env;
@@ -569,11 +569,11 @@ describe('faviconAuth — an <img> proves itself with the session cookie', () =>
   const run = (cookies: Record<string, string>) => {
     const res = makeResponse();
     const next = jest.fn() as NextFunction;
-    faviconAuth({ cookies } as unknown as Request, res as unknown as Response, next);
+    identifyFaviconReader({ cookies } as unknown as Request, res as unknown as Response, next);
     return { res, next };
   };
 
-  it('lets a valid session through and names the user for the rate limiter', () => {
+  it('names the reader from a valid session, for the rate limiter to count against', () => {
     const token = jwt.sign({ id: USER_ID }, SECRET, { expiresIn: '1h' });
     const { res, next } = run({ refreshToken: token });
 
@@ -596,11 +596,33 @@ describe('faviconAuth — an <img> proves itself with the session cookie', () =>
     ['an expired token', { refreshToken: jwt.sign({ id: USER_ID }, SECRET, { expiresIn: -60 }) }],
     ['a payload without a user id', { refreshToken: jwt.sign({ sub: USER_ID }, SECRET) }],
     ['an id that is not a user id', { refreshToken: jwt.sign({ id: 'root' }, SECRET) }],
-  ])('refuses %s', (_label, cookies) => {
+  ])('lets %s through unnamed, so the limiter falls back to the address', (_label, cookies) => {
+    /* A conversation read through a share link has no cookie, and a cookie that does
+     * not verify must buy nothing that no cookie would not — otherwise choosing a
+     * user id would be a way to mint a bucket of one's own. */
     const { res, next } = run(cookies);
+
+    expect(next).toHaveBeenCalled();
+    expect(res.locals.userId).toBeUndefined();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unnamed reader when sharing is switched off', () => {
+    /* No public page to be on, no reason to be here. */
+    process.env.ALLOW_SHARED_LINKS = 'false';
+    const { res, next } = run({});
 
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.headers['Cache-Control']).toBe('no-store');
+  });
+
+  it('still names a signed-in reader when sharing is switched off', () => {
+    process.env.ALLOW_SHARED_LINKS = 'false';
+    const { res, next } = run({ refreshToken: jwt.sign({ id: USER_ID }, SECRET) });
+
+    expect(next).toHaveBeenCalled();
+    expect(res.locals.userId).toBe(USER_ID);
   });
 });
 
