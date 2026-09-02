@@ -1,7 +1,7 @@
 const { nanoid } = require('nanoid');
 const { Tools } = require('librechat-data-provider');
 const { logger } = require('@librechat/data-schemas');
-const { GenerationJobManager } = require('@librechat/api');
+const { GenerationJobManager, prefetchFavicons } = require('@librechat/api');
 
 /**
  * Helper to write attachment events either to res or to job emitter.
@@ -74,6 +74,16 @@ function createOnSearchResults(res, streamId = null) {
           turn,
         });
       }
+    }
+
+    /* The sources are on their way to the screen; their icons are not. We know
+     * the domains here, seconds (in Deep Research, minutes) before the browser
+     * asks for them, so the icons are fetched now instead of while someone waits
+     * for them. Fire-and-forget by contract — nothing on this path may wait. */
+    try {
+      prefetchFavicons(context.sourceMap.keys());
+    } catch (error) {
+      logger.warn('[onSearchResults] could not warm the source icons', error);
     }
 
     context.toolCallId = runnableConfig.toolCall.id;

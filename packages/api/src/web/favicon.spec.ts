@@ -11,7 +11,9 @@ import {
   faviconCache,
   faviconHandler,
   createFaviconCache,
+  faviconPrefetchPending,
   normalizeFaviconDomain,
+  prefetchFavicons,
   resolveFavicon,
 } from './favicon';
 
@@ -71,9 +73,192 @@ function makeResponse() {
   return res;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  /* Warming is process-wide background work, so it outlives the test that started
+   * it. Waiting for quiet here is what keeps these tests independent of the order
+   * they run in. */
+  for (let i = 0; i < 5000 && faviconPrefetchPending() > 0; i++) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
   faviconCache.clear();
   mockFetch.mockReset();
+});
+
+/** Yields the event loop until `predicate` holds; the assertion after it decides. */
+async function until(predicate: () => boolean, turns = 5000): Promise<void> {
+  for (let i = 0; i < turns && !predicate(); i++) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
+async function yieldTurns(count: number): Promise<void> {
+  for (let i = 0; i < count; i++) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
+const askedDomains = () =>
+  mockFetch.mock.calls.map(([url]) => new URL(String(url)).searchParams.get('domain'));
+
+describe('prefetchFavicons — the icons are fetched before anyone waits for them', () => {
+  it('warms the exact key the browser will ask for, `www.` and all', async () => {
+    /* The client derives the key with `getCleanDomain`, whose `www.` test is
+     * case-sensitive. Warming a different key warms nothing and says nothing —
+     * every icon would still arrive, just as slowly as before. */
+    answerWith(PNG);
+    prefetchFavicons([
+      'https://www.example.com/article?a=1',
+      'https://WWW.Example.com/other',
+      'https://sub.example.org:8443/x#frag',
+    ]);
+
+    await until(() => faviconCache.size === 3);
+    expect(askedDomains().sort()).toEqual(['example.com', 'sub.example.org', 'www.example.com']);
+  });
+
+  it('leaves nothing for the reader to wait for', async () => {
+    answerWith(PNG);
+    prefetchFavicons(['https://www.example.com/a']);
+    await until(() => faviconCache.size === 1);
+    const afterWarming = mockFetch.mock.calls.length;
+
+    const entry = await resolveFavicon('example.com');
+
+    expect(entry.icon?.body.equals(PNG)).toBe(true);
+    expect(mockFetch).toHaveBeenCalledTimes(afterWarming);
+  });
+
+  it('returns without waiting for any of the fetching', () => {
+    /* It is called on the path that streams the sources to the screen, so the
+     * requests may leave immediately — but nothing may be awaited before the
+     * sources themselves reach the reader. */
+    answerWith(PNG);
+
+    expect(prefetchFavicons(['https://example.com/a'])).toBeUndefined();
+
+    expect(faviconCache.size).toBe(0);
+    expect(faviconPrefetchPending()).toBeGreaterThan(0);
+  });
+
+  it('never has more than six requests outstanding', async () => {
+    /* The gate opens for good rather than releasing one batch: a lane picks up its
+     * next domain the instant the previous one settles, so releasing only what was
+     * outstanding at that moment strands the lanes that start afterwards — and a
+     * stranded lane is held for the life of the process, which every later test
+     * then has to do without. */
+    let active = 0;
+    let peak = 0;
+    let open = false;
+    let waiting: Array<() => void> = [];
+    mockFetch.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          active += 1;
+          peak = Math.max(peak, active);
+          const finish = () => {
+            active -= 1;
+            resolve(upstreamAnswers(PNG) as never);
+          };
+          if (open) {
+            finish();
+          } else {
+            waiting.push(finish);
+          }
+        }),
+    );
+
+    prefetchFavicons(Array.from({ length: 30 }, (_, i) => `https://site${i}.example/a`));
+    await until(() => waiting.length >= 6);
+    await yieldTurns(30);
+    expect(peak).toBe(6);
+
+    open = true;
+    const outstanding = waiting;
+    waiting = [];
+    outstanding.forEach((finish) => finish());
+
+    await until(() => faviconCache.size === 30);
+    expect(faviconCache.size).toBe(30);
+    expect(peak).toBe(6);
+  });
+
+  it('warms at most 64 domains from one result set', async () => {
+    answerWith(PNG);
+    prefetchFavicons(Array.from({ length: 200 }, (_, i) => `https://site${i}.example/a`));
+
+    await until(() => faviconCache.size === 64);
+    await yieldTurns(50);
+    expect(faviconCache.size).toBe(64);
+  });
+
+  it('does not re-fetch a domain already held', async () => {
+    answerWith(PNG);
+    await resolveFavicon('example.com');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    prefetchFavicons(['https://example.com/a', 'https://www.example.com/b']);
+    await yieldTurns(50);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('queues a domain once, however many searches name it', async () => {
+    /* One research run issues a search per sub-question and they name the same
+     * authoritative sites over and over. Without the dedupe the backlog fills with
+     * copies of them and pushes real work past its ceiling. */
+    let open = false;
+    const waiting: Array<() => void> = [];
+    mockFetch.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          const finish = () => resolve(upstreamAnswers(PNG) as never);
+          if (open) {
+            finish();
+          } else {
+            waiting.push(finish);
+          }
+        }),
+    );
+
+    const links = Array.from({ length: 10 }, (_, i) => `https://site${i}.example/a`);
+    for (let i = 0; i < 60; i++) {
+      prefetchFavicons(links);
+    }
+    await yieldTurns(20);
+
+    /* Six in a lane and four still queued — not six hundred. */
+    expect(faviconPrefetchPending()).toBeLessThanOrEqual(10);
+
+    open = true;
+    waiting.splice(0).forEach((finish) => finish());
+    await until(() => faviconCache.size === 10);
+    expect(faviconCache.size).toBe(10);
+  });
+
+  it('shrugs off links that are not sources, and never throws', async () => {
+    answerWith(PNG);
+    expect(() =>
+      prefetchFavicons([
+        'not a url',
+        'https://localhost/secret',
+        'https://10.0.0.5/x',
+        'https://[::1]/x',
+        '',
+        'https://good.example/a',
+      ]),
+    ).not.toThrow();
+
+    await until(() => faviconCache.size === 1);
+    await yieldTurns(30);
+    expect(askedDomains()).toEqual(['good.example']);
+  });
+
+  it('does nothing at all when a search returned no usable source', () => {
+    answerWith(PNG);
+    prefetchFavicons([]);
+    prefetchFavicons(['https://localhost/x']);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
 });
 
 describe('normalizeFaviconDomain — the parameter is untrusted content', () => {

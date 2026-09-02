@@ -356,6 +356,127 @@ export async function resolveFavicon(domain: string): Promise<FaviconEntry> {
   return request;
 }
 
+/**
+ * How many source domains one search result is allowed to warm. Measured on live
+ * data 02.09.2026: a conversation carries 10 sources at the median, and the
+ * heaviest Deep Research answer carried 116. The cap is above the normal case and
+ * below the pathological one — a result set larger than this is not a reading list.
+ */
+const PREFETCH_MAX_DOMAINS = 64;
+
+/**
+ * Warming lanes. Firing every domain at once is what we are avoiding: measured on
+ * the stand, 109 icons requested simultaneously took 1365ms and each individual
+ * request rose to a p50 of 1179ms through contention, against 87ms for the same
+ * 109 served from cache. Six lanes clear a 64-domain result in about two seconds
+ * of wall time, which the model spends writing anyway, without a burst.
+ */
+const PREFETCH_LANES = 6;
+
+/**
+ * The cache key the browser is going to ask for, derived from a source link.
+ *
+ * MIRRORS `getCleanDomain` in `client/src/components/Web/SourceHovercard.tsx`,
+ * deliberately character for character — including that its `www.` test is
+ * case-sensitive, so `WWW.Example.com` keeps its prefix on both sides. Warming a
+ * key that differs from the one the browser requests warms nothing at all, and
+ * does so silently: every icon would still arrive, just as slowly as before.
+ */
+function domainFromSourceLink(link: string): string | null {
+  if (typeof link !== 'string') {
+    return null;
+  }
+  const host = link.replace(/(^\w+:|^)\/\//, '').split('/')[0];
+  return normalizeFaviconDomain(host.startsWith('www.') ? host.slice(4) : host);
+}
+
+/**
+ * Domains waiting to be warmed, and the lanes draining them.
+ *
+ * The bound is deliberately on the PROCESS, not on the call: one Deep Research run
+ * issues a search per sub-question, so a per-call limit of six would still let ten
+ * overlapping searches open sixty sockets. Warming is background work — it must
+ * never be able to crowd out the requests a reader is actually waiting on.
+ */
+const prefetchQueue: string[] = [];
+const prefetchQueued = new Set<string>();
+let prefetchLanes = 0;
+
+/** A ceiling on the backlog itself, so a burst of searches cannot grow it without end. */
+const PREFETCH_MAX_QUEUE = 512;
+
+/**
+ * Warming still outstanding, queued or in a lane. Exposed so that quiet can be
+ * waited for rather than guessed at — by a test, or when diagnosing whether the
+ * background work is keeping up with a long research run.
+ */
+export function faviconPrefetchPending(): number {
+  return prefetchQueue.length + prefetchLanes;
+}
+
+async function drainPrefetchQueue(): Promise<void> {
+  try {
+    while (prefetchQueue.length > 0) {
+      const domain = prefetchQueue.shift() as string;
+      await resolveFavicon(domain).catch(() => undefined);
+      prefetchQueued.delete(domain);
+    }
+  } finally {
+    prefetchLanes -= 1;
+  }
+}
+
+/**
+ * Fetches the icons for a set of sources before anyone asks for them.
+ *
+ * The server learns which sites a search turned up strictly before the browser
+ * does — this is called the moment results arrive, and the model then spends
+ * seconds (a Deep Research run, minutes) writing the answer around them. Doing the
+ * outbound work in that window is why this exists: it moves the cold fetch off the
+ * reader's wait, and unlike the cache it helps even when every domain is new,
+ * which in this client's data is 47% of them.
+ *
+ * Measured on the stand 02.09.2026: 109 icons asked for at once cost 1365ms cold
+ * against 87ms warm, so this is worth about 1.3s on a heavy research answer.
+ *
+ * Returns immediately and never throws. Nothing downstream may wait on it: the
+ * caller is on the path that streams the sources to the screen.
+ */
+export function prefetchFavicons(links: Iterable<string>): void {
+  let added = 0;
+  try {
+    for (const link of links) {
+      if (added >= PREFETCH_MAX_DOMAINS || prefetchQueue.length >= PREFETCH_MAX_QUEUE) {
+        break;
+      }
+      const domain = domainFromSourceLink(link);
+      if (!domain || prefetchQueued.has(domain)) {
+        continue;
+      }
+      prefetchQueued.add(domain);
+      prefetchQueue.push(domain);
+      added += 1;
+    }
+  } catch {
+    /* A source list that will not iterate is not a reason to lose the sources. */
+  }
+
+  if (added === 0) {
+    return;
+  }
+
+  while (prefetchLanes < PREFETCH_LANES && prefetchLanes < prefetchQueue.length) {
+    prefetchLanes += 1;
+    /* A rejection here has nobody to catch it, and Node ends the process over an
+     * unhandled one. Warming an icon must not be able to do that. */
+    void drainPrefetchQueue().catch(() => undefined);
+  }
+  /* At info, not debug: the whole point of warming is that nobody sees it happen,
+   * so without a line in the log there is no way to tell a working rollout from a
+   * silently dead one, and the stand runs with debug off. */
+  logger.info(`[favicon] warming ${added} source domain(s) ahead of the reader`);
+}
+
 function cookieUserId(req: Request): string | null {
   const secret = process.env.JWT_REFRESH_SECRET;
   if (!secret) {
