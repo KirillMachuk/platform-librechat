@@ -545,6 +545,7 @@ Covered by a flow, not just seeded: `PROMPTS.SHARE`/`SHARE_PUBLIC`, `AGENTS.SHAR
 | A dialog holds focus against anything else claiming it                       | a11y  | —                                                                                                            | gap      |
 | A menu popover follows the menu pattern, not the modal one                   | a11y  | `e2e/specs/mock/menu-pattern.spec.ts#it is a menu of menu items, and it does not lock the page like a modal` | covered  |
 | A menu answers the arrow keys and hands focus back on Escape                 | a11y  | `e2e/specs/mock/menu-pattern.spec.ts#arrow keys walk its items and Escape gives focus back`                  | covered  |
+| The account menu icons are one size — the Help item no longer oversized (#363 swap) | e2e | `e2e/specs/mock/menu-pattern.spec.ts#are one size, the Help item included` | covered |
 | The settings dialog passes axe                                               | a11y  | `e2e/specs/mock/a11y.spec.ts#the settings dialog has no WCAG A/AA violations`                                | covered  |
 | The projects panel passes axe                                                | a11y  | `e2e/specs/mock/a11y.spec.ts#the projects panel has no WCAG A/AA violations`                                 | covered  |
 | The agents panel passes axe                                                  | a11y  | `e2e/specs/mock/a11y.spec.ts#the agents panel fails only on its category tab`                                | fixme:Ф1 |
@@ -609,6 +610,8 @@ of encoded.
 | The file library dialog stacks on the canon dialog layer | e2e | `e2e/specs/mock/canon.spec.ts#the file library dialog is on the canon dialog layer` | covered |
 | A dialog opened from inside a dialog is the one drawn on top | e2e | `e2e/specs/mock/canon.spec.ts#a dialog opened from a dialog is the one you can click` | covered |
 | The buttons under an answer are visible always, on every answer and not just the newest | e2e | `e2e/specs/mock/message-actions.spec.ts#an older answer keeps its actions on screen, not behind the mouse` | covered |
+| A triple-click copies the message text without a tail of blank lines (the toolbar row is outside selection) | e2e | `e2e/specs/mock/message-actions.spec.ts#a triple-click copies the message text without a tail of blank lines` | covered |
+| A selection across turns copies no screen-reader-only headings («Prompt 1:», «Response 2:») | e2e | `e2e/specs/mock/message-actions.spec.ts#a selection across turns carries no screen-reader headings` | covered |
 | Each answer in a comparison carries its own Copy and Keep | e2e | `e2e/specs/mock/multi-convo.spec.ts#every answer carries its own Copy and its own way to keep it` | covered |
 | A phone shows one compared answer at a time, switched by a segment | e2e | `e2e/specs/mock/multi-convo.spec.ts#a phone shows one answer at a time and switches between them` | covered |
 | Every image reserves its space before it loads | e2e | `e2e/specs/mock/canon.spec.ts#every image reserves its space before it loads` | covered |

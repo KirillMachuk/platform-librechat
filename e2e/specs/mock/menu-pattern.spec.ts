@@ -102,3 +102,31 @@ test.describe('the account menu follows the menu pattern', () => {
       .toBe('nav-user');
   });
 });
+
+/**
+ * Every item in the account menu wears the same icon size (§2 ladder, `icon-md`).
+ * The Help & FAQ item did not: the icon swap in #363 replaced a sized 18px glyph
+ * with a bare icon at the set's default 24px, and the one oversized icon pushed
+ * its own label sideways (owner, 02.09: «стала странной и большой, сдвигает
+ * текст»). Measured as painted, item against item, so a future swap that drops
+ * the size class again fails here instead of on the owner's screen.
+ */
+test.describe('the account menu icons', () => {
+  test('are one size, the Help item included', async ({ page }) => {
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    const menu = await openAccountMenu(page);
+    const sizeOf = async (name: RegExp) => {
+      const icon = menu.getByRole('menuitem', { name }).locator('svg').first();
+      await expect(icon).toBeVisible();
+      const box = await icon.boundingBox();
+      if (!box) {
+        throw new Error(`no icon box for ${name}`);
+      }
+      return { width: Math.round(box.width), height: Math.round(box.height) };
+    };
+    const settings = await sizeOf(/settings/i);
+    const help = await sizeOf(/help/i);
+    expect(help).toEqual(settings);
+    expect(help.width).toBeLessThanOrEqual(20);
+  });
+});
