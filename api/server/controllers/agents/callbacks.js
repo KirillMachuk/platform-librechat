@@ -25,8 +25,10 @@ const {
 const { processFileCitations } = require('~/server/services/Files/Citations');
 const { processCodeOutput, runPreviewFinalize } = require('~/server/services/Files/Code/process');
 const {
+  attachArtifactPreviewFiles,
   collectArtifactReports,
   getArtifactReportTargetName,
+  isInternalArtifactPreview,
 } = require('~/server/services/Files/Code/artifactReports');
 const { saveBase64Image } = require('~/server/services/Files/process');
 
@@ -791,7 +793,13 @@ function createToolEndCallback({ req, res, artifactPromises, streamId = null }) 
       req,
       files: output.artifact.files,
       session_id: output.artifact.session_id,
-    });
+    }).then((reportsByFilename) =>
+      attachArtifactPreviewFiles({
+        reportsByFilename,
+        files: output.artifact.files,
+        session_id: output.artifact.session_id,
+      }),
+    );
 
     for (const file of output.artifact.files) {
       /* `inherited` files are unchanged passthroughs of inputs the caller
@@ -808,6 +816,9 @@ function createToolEndCallback({ req, res, artifactPromises, streamId = null }) 
       artifactPromises.push(
         (async () => {
           const reportsByFilename = await reportsPromise;
+          if (isInternalArtifactPreview(name, reportsByFilename)) {
+            return null;
+          }
           const result = await processCodeOutput({
             req,
             id,
@@ -1066,7 +1077,13 @@ function createResponsesToolEndCallback({ req, res, tracker, artifactPromises })
       req,
       files: output.artifact.files,
       session_id: output.artifact.session_id,
-    });
+    }).then((reportsByFilename) =>
+      attachArtifactPreviewFiles({
+        reportsByFilename,
+        files: output.artifact.files,
+        session_id: output.artifact.session_id,
+      }),
+    );
 
     for (const file of output.artifact.files) {
       /* `inherited` files are unchanged passthroughs of inputs the caller
@@ -1083,6 +1100,9 @@ function createResponsesToolEndCallback({ req, res, tracker, artifactPromises })
       artifactPromises.push(
         (async () => {
           const reportsByFilename = await reportsPromise;
+          if (isInternalArtifactPreview(name, reportsByFilename)) {
+            return null;
+          }
           const result = await processCodeOutput({
             req,
             id,

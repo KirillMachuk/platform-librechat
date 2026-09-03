@@ -34,7 +34,7 @@ sat right on top of its bullets.
 """
 TITLE_GAP = round(TITLE_LINE_HEIGHT * 0.65, 2)
 
-SKILL_VERSION = "3.1.0"
+SKILL_VERSION = "3.2.0"
 MAX_REPAIR_ITERATIONS = 2
 WIDE_WIDTH = Inches(13.333)
 WIDE_HEIGHT = Inches(7.5)
@@ -1467,8 +1467,19 @@ def _check_structure(path: Path, spec: dict[str, Any]) -> tuple[list[dict[str, A
     return checks, issues
 
 
+def _output_pdf_requested(spec: dict[str, Any]) -> bool:
+    """Deliver a PDF only when the caller explicitly requests one."""
+    return spec.get("outputPdf") is True
+
+
+def _render_pdf_target(path: Path, spec: dict[str, Any]) -> tuple[Path, str]:
+    if _output_pdf_requested(spec):
+        return path.with_suffix(".pdf"), "requested"
+    return path.with_suffix(".preview.pdf"), "preview_only"
+
+
 def _render(
-    path: Path, keep_pdf: bool, expected_slides: int
+    path: Path, output_pdf: Path, expected_slides: int
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], Path | None]:
     checks: list[dict[str, Any]] = []
     issues: list[dict[str, Any]] = []
@@ -1552,11 +1563,8 @@ def _render(
         else:
             checks.append({"name": "visual-raster", "status": "warning", "message": "Poppler rasterizer is unavailable"})
             issues.append(_issue("raster-unavailable", "warning", "Rendered PDF could not be raster-checked"))
-        preview_pdf = None
-        if keep_pdf:
-            preview_pdf = path.with_suffix(".pdf")
-            shutil.copy2(pdf, preview_pdf)
-        return checks, issues, preview_pdf
+        shutil.copy2(pdf, output_pdf)
+        return checks, issues, output_pdf
     except subprocess.TimeoutExpired:
         checks.append({"name": "render", "status": "failed", "message": "LibreOffice render timed out"})
         issues.append(_issue("render-timeout", "critical", "LibreOffice render exceeded 45 seconds"))
@@ -1565,13 +1573,31 @@ def _render(
         shutil.rmtree(render_dir, ignore_errors=True)
 
 
-def _report(spec: dict[str, Any], checks: list[dict[str, Any]], issues: list[dict[str, Any]], changes: list[dict[str, str]], preview_pdf: Path | None, repair_iterations: int = 0) -> dict[str, Any]:
+def _report(
+    spec: dict[str, Any],
+    checks: list[dict[str, Any]],
+    issues: list[dict[str, Any]],
+    changes: list[dict[str, str]],
+    preview_pdf: Path | None,
+    preview_delivery: str | None = None,
+    repair_iterations: int = 0,
+) -> dict[str, Any]:
     status = "needs_review" if any(issue.get("severity") == "critical" for issue in issues) else "ready"
     return {
         "status": status,
         "format": "pptx",
         "sourceFileIds": list(spec.get("job", {}).get("sourceFileIds", [])),
-        "previewAssets": ([{"filename": preview_pdf.name, "kind": "pdf"}] if preview_pdf else []),
+        "previewAssets": (
+            [
+                {
+                    "filename": preview_pdf.name,
+                    "kind": "pdf",
+                    "delivery": preview_delivery or "preview_only",
+                }
+            ]
+            if preview_pdf
+            else []
+        ),
         "qaChecks": checks,
         "issues": issues,
         "changeLog": changes,
@@ -1599,19 +1625,26 @@ def main() -> int:
         checks.append({"name": "immutable-input", "status": "passed" if immutable else "failed", "message": "Input/template file was not modified" if immutable else "Input/template file changed during authoring"})
         if not immutable:
             issues.append(_issue("input-modified", "critical", "Input/template file changed during authoring"))
+    render_target, preview_delivery = _render_pdf_target(output, spec)
     render_checks, render_issues, rendered_pdf = _render(
-        output,
-        keep_pdf=bool(spec.get("outputPdf", True)),
-        expected_slides=len(prs.slides),
+        output, output_pdf=render_target, expected_slides=len(prs.slides)
     )
     checks.extend(render_checks)
     issues.extend(render_issues)
     preview_pdf = rendered_pdf
-    report = _report(spec, checks, issues, changes, preview_pdf, int(spec.get("repairIterations", 0)))
+    report = _report(
+        spec,
+        checks,
+        issues,
+        changes,
+        preview_pdf,
+        preview_delivery,
+        int(spec.get("repairIterations", 0)),
+    )
     report_path = Path(f"{output}.artifact-report.json")
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     reports = [str(report_path)]
-    if preview_pdf:
+    if preview_pdf and preview_delivery == "requested":
         pdf_report = {
             **report,
             "format": "pdf",

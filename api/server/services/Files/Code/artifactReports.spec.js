@@ -1,76 +1,11 @@
 const mockAxios = jest.fn();
 
-/* This worktree intentionally has no installed package build. API tests
- * resolve the shared dependency from a sibling worktree, whose dist
- * predates this branch, so provide the new runtime schema at the test
- * boundary. The canonical schema has its own source-level tests. */
-jest.mock('librechat-data-provider', () => {
-  const actual = jest.requireActual('librechat-data-provider');
-  const { z } = require('zod');
-  const artifactReportSchema = z
-    .object({
-      status: z.enum(['ready', 'needs_review']),
-      format: z.enum(['pptx', 'docx', 'xlsx', 'pdf', 'csv']),
-      sourceFileIds: z.array(z.string()),
-      previewAssets: z.array(
-        z.object({ filename: z.string().min(1), kind: z.enum(['pdf', 'image']) }).passthrough(),
-      ),
-      qaChecks: z
-        .array(
-          z
-            .object({
-              name: z.string().min(1),
-              status: z.enum(['passed', 'warning', 'failed']),
-              message: z.string(),
-            })
-            .passthrough(),
-        )
-        .min(1),
-      issues: z.array(
-        z
-          .object({
-            code: z.string().min(1),
-            severity: z.enum(['warning', 'critical']),
-            message: z.string().min(1),
-          })
-          .passthrough(),
-      ),
-      changeLog: z.array(
-        z.object({ target: z.string().min(1), summary: z.string().min(1) }).passthrough(),
-      ),
-      skillVersion: z.string().min(1),
-      repairIterations: z.number().int().min(0).max(2),
-    })
-    .passthrough()
-    .superRefine((report, context) => {
-      if (report.status !== 'ready') {
-        return;
-      }
-
-      const hasFailedCheck = report.qaChecks.some((check) => check.status === 'failed');
-      const hasCriticalIssue = report.issues.some((issue) => issue.severity === 'critical');
-      if (!hasFailedCheck && !hasCriticalIssue) {
-        return;
-      }
-
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['status'],
-        message: 'Ready reports cannot contain failed QA checks or critical issues',
-      });
-    });
-
-  return {
-    ...actual,
-    artifactReportSchema,
-  };
-});
-
 jest.mock('@librechat/api', () => {
   const http = require('http');
   const https = require('https');
   return {
     createAxiosInstance: jest.fn(() => mockAxios),
+    getBasePath: jest.fn(() => ''),
     getCodeApiAuthHeaders: jest.fn(async () => ({
       Authorization: 'Bearer test-token',
     })),
@@ -93,8 +28,10 @@ jest.mock('@librechat/data-schemas', () => ({
 const { logger } = require('@librechat/data-schemas');
 const {
   ARTIFACT_REPORT_MAX_BYTES,
+  attachArtifactPreviewFiles,
   collectArtifactReports,
   getArtifactReportTargetName,
+  isInternalArtifactPreview,
   parseArtifactReport,
 } = require('./artifactReports');
 
@@ -226,6 +163,133 @@ describe('artifact report sidecars', () => {
       JSON.stringify({ ...validReport, reviewHints: { $where: 'malicious' } }),
     );
     expect(() => parseArtifactReport(unsafe, 'board-deck.pptx')).toThrow('unsafe object keys');
+  });
+
+  it('strips an untrusted preview filepath before validation', () => {
+    const report = parseArtifactReport(
+      Buffer.from(
+        JSON.stringify({
+          ...validReport,
+          previewAssets: [
+            {
+              filename: 'board-deck.preview.pdf',
+              kind: 'pdf',
+              delivery: 'preview_only',
+              filepath: 'https://evil.example/deck.pdf',
+            },
+          ],
+        }),
+      ),
+      'board-deck.pptx',
+    );
+
+    expect(report.previewAssets[0]).not.toHaveProperty('filepath');
+  });
+
+  it('attaches a server-owned preview path only for an actual output file', () => {
+    const reports = new Map([
+      [
+        'board-deck.pptx',
+        {
+          ...validReport,
+          previewAssets: [
+            {
+              filename: 'board-deck.preview.pdf',
+              kind: 'pdf',
+              delivery: 'preview_only',
+            },
+          ],
+        },
+      ],
+    ]);
+    const files = [
+      {
+        id: '123456789012345678901',
+        name: 'board-deck.preview.pdf',
+        storage_session_id: 'abcdefghijklmnopqrstu',
+      },
+    ];
+
+    const enriched = attachArtifactPreviewFiles({ reportsByFilename: reports, files });
+
+    expect(enriched.get('board-deck.pptx').previewAssets[0]).toMatchObject({
+      filepath: '/api/files/code/download/abcdefghijklmnopqrstu/123456789012345678901',
+    });
+    expect(reports.get('board-deck.pptx').previewAssets[0]).not.toHaveProperty('filepath');
+  });
+
+  it('does not attach a preview path for an absent, inherited, or malformed output', () => {
+    const report = {
+      ...validReport,
+      previewAssets: [
+        {
+          filename: 'board-deck.preview.pdf',
+          kind: 'pdf',
+          delivery: 'preview_only',
+        },
+      ],
+    };
+    const reports = new Map([['board-deck.pptx', report]]);
+
+    for (const files of [
+      [],
+      [
+        {
+          id: '123456789012345678901',
+          name: 'board-deck.preview.pdf',
+          storage_session_id: 'short',
+        },
+      ],
+      [
+        {
+          id: '123456789012345678901',
+          name: 'board-deck.preview.pdf',
+          storage_session_id: 'abcdefghijklmnopqrstu',
+          inherited: true,
+        },
+      ],
+    ]) {
+      const enriched = attachArtifactPreviewFiles({ reportsByFilename: reports, files });
+      expect(enriched.get('board-deck.pptx').previewAssets[0]).not.toHaveProperty('filepath');
+    }
+  });
+
+  it('hides only conventional internal previews and keeps requested or arbitrary PDFs visible', () => {
+    const internal = new Map([
+      [
+        'board-deck.pptx',
+        {
+          ...validReport,
+          previewAssets: [
+            {
+              filename: 'board-deck.preview.pdf',
+              kind: 'pdf',
+              delivery: 'preview_only',
+            },
+          ],
+        },
+      ],
+    ]);
+    expect(isInternalArtifactPreview('board-deck.preview.pdf', internal)).toBe(true);
+    expect(isInternalArtifactPreview('board-deck.pdf', internal)).toBe(false);
+
+    const requested = new Map([
+      [
+        'board-deck.pptx',
+        {
+          ...validReport,
+          previewAssets: [{ filename: 'board-deck.pdf', kind: 'pdf', delivery: 'requested' }],
+        },
+      ],
+    ]);
+    expect(isInternalArtifactPreview('board-deck.pdf', requested)).toBe(false);
+    expect(isInternalArtifactPreview('other.preview.pdf', internal)).toBe(false);
+  });
+
+  it('hides the legacy same-stem PDF only when delivery metadata is absent', () => {
+    const reports = new Map([['board-deck.pptx', validReport]]);
+
+    expect(isInternalArtifactPreview('board-deck.pdf', reports)).toBe(true);
   });
 
   it('does not associate a valid report when its authored file is absent', async () => {

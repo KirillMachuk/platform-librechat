@@ -1,6 +1,10 @@
+import {
+  artifactJobSchema,
+  artifactReportSchema,
+  getVerifiedPresentationPreviewAsset,
+} from './artifactReport';
 import { pptxArtifactReportFixture } from './__fixtures__/pptxArtifactReport';
 import { docxArtifactReportFixture } from './__fixtures__/docxArtifactReport';
-import { artifactJobSchema, artifactReportSchema } from './artifactReport';
 
 describe('artifactReportSchema', () => {
   it('accepts the PPTX fixture and preserves unknown optional fields', () => {
@@ -72,6 +76,61 @@ describe('artifactReportSchema', () => {
         ],
       }).success,
     ).toBe(true);
+  });
+
+  it('accepts a same-origin verified PDF preview for a presentation', () => {
+    const filepath = '/app/api/files/code/download/abcdefghijklmnopqrstu/123456789012345678901';
+    const report = artifactReportSchema.parse({
+      ...pptxArtifactReportFixture,
+      previewAssets: [
+        {
+          filename: 'board-deck.preview.pdf',
+          kind: 'pdf',
+          delivery: 'preview_only',
+          filepath,
+        },
+      ],
+    });
+
+    expect(getVerifiedPresentationPreviewAsset(report)).toMatchObject({ filepath });
+  });
+
+  it.each([
+    'https://evil.example/deck.pdf',
+    '//evil.example/deck.pdf',
+    '/api/files/code/download/short/123456789012345678901',
+    '/api/files/code/download/abcdefghijklmnopqrstu/123456789012345678901?download=1',
+    '/api/files/code/download/abcdefghijklmnopqrstu/123456789012345678901#preview',
+  ])('rejects an unsafe presentation preview path: %s', (filepath) => {
+    expect(
+      artifactReportSchema.safeParse({
+        ...pptxArtifactReportFixture,
+        previewAssets: [
+          {
+            filename: 'board-deck.preview.pdf',
+            kind: 'pdf',
+            delivery: 'preview_only',
+            filepath,
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('does not treat image assets or non-presentation reports as a verified deck preview', () => {
+    expect(
+      getVerifiedPresentationPreviewAsset({
+        ...pptxArtifactReportFixture,
+        previewAssets: [
+          {
+            filename: 'slide-1.png',
+            kind: 'image',
+            filepath: '/api/files/code/download/abcdefghijklmnopqrstu/123456789012345678901',
+          },
+        ],
+      }),
+    ).toBeUndefined();
+    expect(getVerifiedPresentationPreviewAsset(docxArtifactReportFixture)).toBeUndefined();
   });
 });
 

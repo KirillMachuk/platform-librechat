@@ -104,6 +104,91 @@ def _slide_xml(path: Path, number: int) -> bytes:
 
 
 class PresentationBuilderTests(unittest.TestCase):
+    def test_pdf_delivery_is_opt_in_and_requires_a_literal_boolean(self):
+        self.assertFalse(BUILDER._output_pdf_requested({}))
+        self.assertFalse(BUILDER._output_pdf_requested({"outputPdf": False}))
+        self.assertFalse(BUILDER._output_pdf_requested({"outputPdf": "true"}))
+        self.assertFalse(BUILDER._output_pdf_requested({"outputPdf": 1}))
+        self.assertTrue(BUILDER._output_pdf_requested({"outputPdf": True}))
+
+    def test_default_render_pdf_is_an_internal_preview(self):
+        output = Path("/mnt/data/weather-minsk.pptx")
+
+        path, delivery = BUILDER._render_pdf_target(output, {})
+
+        self.assertEqual(path, Path("/mnt/data/weather-minsk.preview.pdf"))
+        self.assertEqual(delivery, "preview_only")
+
+    def test_explicit_pdf_delivery_uses_the_requested_filename(self):
+        output = Path("/mnt/data/weather-minsk.pptx")
+
+        path, delivery = BUILDER._render_pdf_target(output, {"outputPdf": True})
+
+        self.assertEqual(path, Path("/mnt/data/weather-minsk.pdf"))
+        self.assertEqual(delivery, "requested")
+
+    def test_preview_report_marks_internal_pdf_without_creating_a_pdf_sidecar(self):
+        preview = Path("/mnt/data/weather-minsk.preview.pdf")
+        report = BUILDER._report(
+            _base_spec(),
+            [{"name": "render", "status": "passed", "message": "Rendered"}],
+            [],
+            [],
+            preview,
+            "preview_only",
+        )
+
+        self.assertEqual(
+            report["previewAssets"],
+            [
+                {
+                    "filename": "weather-minsk.preview.pdf",
+                    "kind": "pdf",
+                    "delivery": "preview_only",
+                }
+            ],
+        )
+
+    def test_main_keeps_default_preview_pdf_internal_but_reports_an_explicit_pdf(self):
+        def fake_render(_path: Path, output_pdf: Path, expected_slides: int):
+            self.assertGreater(expected_slides, 0)
+            output_pdf.write_bytes(b"%PDF-1.7\n")
+            return (
+                [{"name": "render", "status": "passed", "message": "Rendered"}],
+                [],
+                output_pdf,
+            )
+
+        for requested in (False, True):
+            with self.subTest(requested=requested), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                output = root / "weather-minsk.pptx"
+                spec = _base_spec(output.name)
+                if requested:
+                    spec["outputPdf"] = True
+                else:
+                    spec.pop("outputPdf", None)
+                spec_path = root / "spec.json"
+                spec_path.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+
+                with mock.patch.object(BUILDER, "_render", side_effect=fake_render), mock.patch.object(
+                    sys, "argv", [str(BUILDER_PATH), str(spec_path), str(output)]
+                ):
+                    self.assertEqual(BUILDER.main(), 0)
+
+                preview = root / (
+                    "weather-minsk.pdf" if requested else "weather-minsk.preview.pdf"
+                )
+                parent_report = json.loads(
+                    Path(f"{output}.artifact-report.json").read_text(encoding="utf-8")
+                )
+                self.assertTrue(preview.exists())
+                self.assertEqual(
+                    parent_report["previewAssets"][0]["delivery"],
+                    "requested" if requested else "preview_only",
+                )
+                self.assertEqual(Path(f"{preview}.artifact-report.json").exists(), requested)
+
     def test_matrix_is_russian_first_and_covers_ten_distinct_scenarios(self):
         cases = json.loads((Path(__file__).with_name("cases.json")).read_text(encoding="utf-8"))
 

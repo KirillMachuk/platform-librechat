@@ -5,7 +5,7 @@ description: Create or revise editable PowerPoint presentations with a Russian-f
 
 # Professional PowerPoint authoring
 
-Create the requested `.pptx`; do not substitute Markdown, HTML, or PDF. The editable PowerPoint file is the primary artifact. A PDF may only be a derived preview.
+Create the requested `.pptx`; do not substitute Markdown, HTML, or PDF. The editable PowerPoint file is the primary artifact. A PDF is delivered only when the user explicitly requests it; the builder still creates an internal LibreOffice PDF for preview and QA.
 
 ## Available runtime
 
@@ -43,12 +43,13 @@ Create the requested `.pptx`; do not substitute Markdown, HTML, or PDF. The edit
    ```
 
    Later calls keep whatever they need, so a repair spanning several calls simply writes the spec again in the call that rebuilds. Never place final artifacts inside `/mnt/data/pptx`, `/mnt/data/out`, or another subdirectory.
+
 6. Read `/mnt/data/<clear-name>.pptx.artifact-report.json`. The builder reopens the file, checks structure and editability, renders every slide through LibreOffice, raster-checks the result, verifies immutable inputs, and confirms that a targeted revision changed no unrequested package parts.
 7. Inspect the derived PDF when the environment exposes visual file inspection. Review every slide, not only a contact sheet: clipping, wrapping, contrast, hierarchy, whitespace, alignment, factual sources, and consistency with the template.
 8. If a defect remains, revise the JSON and rerun. Allow at most two repair iterations and set `repairIterations` to the actual count.
 9. Deliver the `.pptx` only when the report status is `ready` and the visual review is clean. If a critical issue remains, deliver it as `needs_review` and state the exact issue plainly.
 
-Final user files must be direct children of `/mnt/data` and use the requested base name: `/mnt/data/<name>.pptx` and its derived `/mnt/data/<name>.pdf`. Do not deliver or mention the JSON spec, artifact-report JSON, rendered slide PNGs, montages, or scratch directories unless the user explicitly asks for QA evidence; the platform consumes artifact reports as metadata.
+Final user files must be direct children of `/mnt/data` and use the requested base name. Always deliver `/mnt/data/<name>.pptx`. Set `outputPdf: true` and deliver `/mnt/data/<name>.pdf` only when the user explicitly asks for PDF; otherwise `/mnt/data/<name>.preview.pdf` is internal preview evidence and must not appear as a separate attachment. Do not deliver or mention the JSON spec, artifact-report JSON, rendered slide PNGs, montages, or scratch directories unless the user explicitly asks for QA evidence; the platform consumes artifact reports as metadata.
 
 ## Core layouts
 
@@ -62,4 +63,4 @@ Use only the layout needed for the message: `title`, `claim`, `section`, `bullet
 
 ## Completion response
 
-Give the user the `.pptx` link first. Briefly mention the audience/goal, source or assumption caveats, QA status, and any derived PDF. Never claim that a deck is verified if the artifact report says `needs_review`.
+Give the user the `.pptx` link first. Briefly mention the audience/goal, source or assumption caveats, QA status, and an explicitly requested PDF if present. Never mention the internal preview PDF and never claim that a deck is verified if the artifact report says `needs_review`.

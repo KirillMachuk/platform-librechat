@@ -3,16 +3,19 @@ import copy from 'copy-to-clipboard';
 import * as Tabs from '@radix-ui/react-tabs';
 import { useSetRecoilState, useResetRecoilState } from 'recoil';
 import { Button, Spinner, useMediaQuery, Radio } from '@librechat/client';
+import { getVerifiedPresentationPreviewAsset } from 'librechat-data-provider';
 import type { SandpackPreviewRef } from '@codesandbox/sandpack-react';
 import {
   isCodeOnlyArtifact,
   isFilePreviewArtifact,
   isGoogleWorkspacePreviewArtifact,
   isPreviewOnlyArtifact,
+  TOOL_ARTIFACT_TYPES,
 } from '~/utils/artifacts';
 import { GOOGLE_FILE_LOCALIZATION_KEYS, validateGoogleWorkspaceFile } from '~/utils/google';
 import { displayFilename } from '~/components/Chat/Messages/Content/Parts/attachmentTypes';
 import { Code, ExternalLink, Play, Reload, X } from '~/components/icons';
+import VerifiedPresentationPreview from './VerifiedPresentationPreview';
 import CopyButton from '~/components/Messages/Content/CopyButton';
 import { useShareContext, useMutationState } from '~/Providers';
 import GoogleWorkspacePreview from './GoogleWorkspacePreview';
@@ -38,6 +41,7 @@ export default function Artifacts() {
   const [isVisible, setIsVisible] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [presentationPreviewRevision, setPresentationPreviewRevision] = useState(0);
   const [isMounted, setIsMounted] = useState(false);
   const [height, setHeight] = useState(90);
   const [isDragging, setIsDragging] = useState(false);
@@ -224,6 +228,7 @@ export default function Artifacts() {
 
   const handleRefresh = () => {
     setIsRefreshing(true);
+    setPresentationPreviewRevision((revision) => revision + 1);
     const client = previewRef.current?.getClient();
     if (client) {
       client.dispatch({ type: 'refresh' });
@@ -254,19 +259,33 @@ export default function Artifacts() {
   const mobileHeaderAlignment = isGoogleWorkspacePreview ? 'justify-between' : 'justify-center';
   // `vh` includes Safari's retractable browser chrome and can push a full-screen header off-screen.
   const mobilePanelHeight = isGoogleWorkspacePreview ? '100dvh' : `${height}vh`;
+  const verifiedPresentationPreview =
+    currentArtifact.type === TOOL_ARTIFACT_TYPES.PRESENTATION
+      ? getVerifiedPresentationPreviewAsset(currentArtifact.file?.artifactReport)
+      : undefined;
+  const legacyArtifactPreview = (
+    <ArtifactTabs
+      artifact={currentArtifact}
+      previewRef={previewRef as React.MutableRefObject<SandpackPreviewRef>}
+      isSharedConvo={isSharedConvo}
+    />
+  );
   let previewBody: React.ReactNode;
   if (isFilePreview) {
     previewBody = <FilePreviewBody artifact={currentArtifact} />;
   } else if (isGoogleWorkspacePreview) {
     previewBody = <GoogleWorkspacePreview artifact={currentArtifact} isMobile={isMobile} />;
-  } else {
+  } else if (verifiedPresentationPreview?.filepath) {
     previewBody = (
-      <ArtifactTabs
-        artifact={currentArtifact}
-        previewRef={previewRef as React.MutableRefObject<SandpackPreviewRef>}
-        isSharedConvo={isSharedConvo}
+      <VerifiedPresentationPreview
+        url={verifiedPresentationPreview.filepath}
+        title={displayFilename(currentArtifact.title)}
+        refreshKey={presentationPreviewRevision}
+        fallback={<FilePreviewBody artifact={currentArtifact} />}
       />
     );
+  } else {
+    previewBody = legacyArtifactPreview;
   }
 
   return (

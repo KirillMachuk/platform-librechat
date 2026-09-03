@@ -13,8 +13,10 @@ const { processFileURL, uploadImageBuffer } = require('~/server/services/Files/p
 const { getRetentionExpiry } = require('~/server/services/Files/retention');
 const { processCodeOutput, runPreviewFinalize } = require('~/server/services/Files/Code/process');
 const {
+  attachArtifactPreviewFiles,
   collectArtifactReports,
   getArtifactReportTargetName,
+  isInternalArtifactPreview,
 } = require('~/server/services/Files/Code/artifactReports');
 const { loadAuthValues } = require('~/server/services/Tools/credentials');
 const { loadTools } = require('~/app/clients/tools/util');
@@ -189,7 +191,13 @@ const callTool = async (req, res) => {
       req,
       files: artifact.files,
       session_id: artifact.session_id,
-    });
+    }).then((reportsByFilename) =>
+      attachArtifactPreviewFiles({
+        reportsByFilename,
+        files: artifact.files,
+        session_id: artifact.session_id,
+      }),
+    );
     for (const file of artifact.files) {
       /* Files flagged `inherited` by codeapi are unchanged passthroughs of
        * inputs the caller already owns (skill files, prior downloaded inputs,
@@ -204,6 +212,9 @@ const callTool = async (req, res) => {
       artifactPromises.push(
         (async () => {
           const reportsByFilename = await reportsPromise;
+          if (isInternalArtifactPreview(name, reportsByFilename)) {
+            return null;
+          }
           const result = await processCodeOutput({
             req,
             id,
@@ -237,7 +248,7 @@ const callTool = async (req, res) => {
         }),
       );
     }
-    const attachments = await Promise.all(artifactPromises);
+    const attachments = (await Promise.all(artifactPromises)).filter(Boolean);
     toolCallData.attachments = attachments;
     createToolCall(toolCallData).catch((error) => {
       logger.error(`Error creating tool call: ${error.message}`);

@@ -75,6 +75,25 @@ describe('buildSandpackOptions', () => {
 });
 
 describe('detectArtifactTypeFromFile', () => {
+  const verifiedDeckReport: TArtifactReport = {
+    status: 'ready',
+    format: 'pptx',
+    sourceFileIds: [],
+    previewAssets: [
+      {
+        filename: 'slides.preview.pdf',
+        kind: 'pdf',
+        delivery: 'preview_only',
+        filepath: '/api/files/code/download/abcdefghijklmnopqrstu/123456789012345678901',
+      },
+    ],
+    qaChecks: [{ name: 'render', status: 'passed', message: 'Rendered' }],
+    issues: [],
+    changeLog: [],
+    skillVersion: '3.2.0',
+    repairIterations: 0,
+  };
+
   it.each([
     ['index.html', TOOL_ARTIFACT_TYPES.HTML],
     ['index.HTM', TOOL_ARTIFACT_TYPES.HTML],
@@ -110,6 +129,31 @@ describe('detectArtifactTypeFromFile', () => {
     expect(detectArtifactTypeFromFile({ filename, type: '', text: 'content', textFormat })).toBe(
       expected,
     );
+  });
+
+  it('routes a verified PPTX preview without browser-rendered HTML', () => {
+    expect(
+      detectArtifactTypeFromFile({
+        filename: 'slides.pptx',
+        type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        artifactReport: verifiedDeckReport,
+      }),
+    ).toBe(TOOL_ARTIFACT_TYPES.PRESENTATION);
+  });
+
+  it('does not route an empty PPTX whose report has no server-owned preview path', () => {
+    expect(
+      detectArtifactTypeFromFile({
+        filename: 'slides.pptx',
+        type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        artifactReport: {
+          ...verifiedDeckReport,
+          previewAssets: [
+            { filename: 'slides.preview.pdf', kind: 'pdf', delivery: 'preview_only' },
+          ],
+        },
+      }),
+    ).toBeNull();
   });
 
   it.each([
@@ -662,6 +706,42 @@ describe('fileToArtifact', () => {
 
     expect(toolArtifact?.file?.artifactReport).toBe(artifactReport);
     expect(previewArtifact.file?.artifactReport).toBe(artifactReport);
+  });
+
+  it('builds an empty-content presentation artifact when a verified PDF preview exists', () => {
+    const artifactReport: TArtifactReport = {
+      status: 'ready',
+      format: 'pptx',
+      sourceFileIds: [],
+      previewAssets: [
+        {
+          filename: 'deck.preview.pdf',
+          kind: 'pdf',
+          delivery: 'preview_only',
+          filepath: '/api/files/code/download/abcdefghijklmnopqrstu/123456789012345678901',
+        },
+      ],
+      qaChecks: [{ name: 'render', status: 'passed', message: 'Rendered' }],
+      issues: [],
+      changeLog: [],
+      skillVersion: '3.2.0',
+      repairIterations: 0,
+    };
+
+    const artifact = fileToArtifact({
+      ...baseFile,
+      filename: 'deck.pptx',
+      type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      text: undefined,
+      textFormat: undefined,
+      artifactReport,
+    });
+
+    expect(artifact).toMatchObject({
+      type: TOOL_ARTIFACT_TYPES.PRESENTATION,
+      content: '',
+      file: { artifactReport },
+    });
   });
 
   it('returns null for unsupported types so callers can fall through', () => {

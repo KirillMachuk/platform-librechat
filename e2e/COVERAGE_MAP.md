@@ -266,6 +266,9 @@ for why that matters.
 | pptx 4:3 renders slides                                     | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
 | pptx with many slides renders every slide                   | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
 | pptx: our wrap-and-scale pass shows every slide, not just the first (vendor renderer stood in for) | e2e | `e2e/specs/mock/office-preview-slides.spec.ts#shows every slide of the deck, not just the first one` | covered |
+| A generated PPTX uses its verified LibreOffice PDF instead of the vendor browser renderer | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx#uses the verified LibreOffice PDF for a generated presentation` | covered |
+| A verified deck preview accepts only bounded PDF bytes and falls back on an invalid response | unit | `client/src/components/Artifacts/__tests__/VerifiedPresentationPreview.test.tsx` | covered |
+| A legacy PPTX without verified render evidence keeps the existing browser fallback | unit | `client/src/components/Artifacts/__tests__/Artifacts.test.tsx#keeps the browser renderer fallback for legacy presentations` | covered |
 | md opens as readable text                                   | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |
 | md offers rendered and source views                         | e2e   | —                                                                                                             | todo:Ф1 |
 | Source code file opens as text                              | e2e   | `e2e/specs/mock/file-preview.spec.ts`                                                                         | covered |

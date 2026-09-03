@@ -386,6 +386,18 @@ describe('registerCodeExecutionTools', () => {
     const findBashDef = (defs: LCTool[]): LCTool | undefined =>
       defs.find((d) => d.name === 'bash_tool');
 
+    it('warns at write time that /tmp cannot be reused by a later call', () => {
+      const result = registerCodeExecutionTools({
+        toolRegistry: makeRegistry(),
+        toolDefinitions: [],
+        includeBash: true,
+      });
+
+      const bash = findBashDef(result.toolDefinitions);
+      expect(bash?.description).toContain('/tmp is scratch for this call only');
+      expect(bash?.description).toContain('needed by a later bash_tool call under /mnt/data');
+    });
+
     it('appends the {{tool<idx>turn<turn>}} guide when flag is true', () => {
       const result = registerCodeExecutionTools({
         toolRegistry: makeRegistry(),

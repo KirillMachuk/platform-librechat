@@ -31,6 +31,7 @@ const {
   EModelEndpoint,
   mergeFileConfig,
   getEndpointFileConfig,
+  getVerifiedPresentationPreviewAsset,
 } = require('librechat-data-provider');
 const { filterFilesByAgentAccess } = require('~/server/services/Files/permissions');
 const { createFile, getFiles, updateFile, claimCodeFile } = require('~/models');
@@ -555,6 +556,7 @@ const processCodeOutput = async ({
      * — run it inline so the caller gets a fully-resolved record
      * without juggling a finalize step. */
     const expectsPreview = hasOfficeHtmlPath(leafName, mimeType);
+    const verifiedPresentationPreview = getVerifiedPresentationPreviewAsset(artifactReport);
 
     const baseFile = {
       file_id,
@@ -579,6 +581,23 @@ const processCodeOutput = async ({
       artifactReport: artifactReport ?? null,
       ...(await getRetentionExpiry(req)),
     };
+
+    if (expectsPreview && verifiedPresentationPreview) {
+      /* The authoring skill already rendered every slide through
+       * LibreOffice and the report points at that exact PDF. Persist the
+       * editable PPTX as ready without invoking the lower-fidelity browser
+       * renderer; the client reads the server-owned preview route instead. */
+      const file = {
+        ...baseFile,
+        text: null,
+        textFormat: null,
+        status: 'ready',
+        previewError: null,
+        previewRevision: null,
+      };
+      await createFile(file, true);
+      return { file: Object.assign(file, { messageId, toolCallId }) };
+    }
 
     if (expectsPreview) {
       /* Persist with `status: 'pending'` and explicit
