@@ -5,13 +5,77 @@ import { useLocalize } from '~/hooks';
 const MAX_PREVIEW_BYTES = 50 * 1024 * 1024;
 const PDF_MAGIC = '%PDF-';
 
-const readBlobBytes = (blob: Blob): Promise<ArrayBuffer> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as ArrayBuffer);
-    reader.onerror = () => reject(reader.error ?? new Error('Unable to read preview bytes'));
-    reader.readAsArrayBuffer(blob);
-  });
+const cancelReader = async (reader: ReadableStreamDefaultReader<Uint8Array>) => {
+  try {
+    await reader.cancel();
+  } catch {
+    // The request may already have been aborted or the stream may already be closed.
+  }
+};
+
+export const readBoundedPdf = async (
+  response: Response,
+  maxBytes = MAX_PREVIEW_BYTES,
+): Promise<Blob> => {
+  const contentLength = response.headers.get('content-length');
+  if (contentLength !== null) {
+    const declaredBytes = Number(contentLength);
+    if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new Error('Preview size is outside the accepted range');
+    }
+  }
+
+  if (!response.body) {
+    throw new Error('Preview response has no body');
+  }
+
+  const reader = response.body.getReader();
+  const chunks: ArrayBuffer[] = [];
+  const expectedHeader = Array.from(PDF_MAGIC, (character) => character.charCodeAt(0));
+  let bytesRead = 0;
+  let headerBytesRead = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (!value?.byteLength) {
+        continue;
+      }
+
+      bytesRead += value.byteLength;
+      if (bytesRead > maxBytes) {
+        await cancelReader(reader);
+        throw new Error('Preview size is outside the accepted range');
+      }
+
+      for (const byte of value) {
+        if (headerBytesRead >= expectedHeader.length) {
+          break;
+        }
+        if (byte !== expectedHeader[headerBytesRead]) {
+          await cancelReader(reader);
+          throw new Error('Preview response is not a PDF');
+        }
+        headerBytesRead += 1;
+      }
+      const chunk = new ArrayBuffer(value.byteLength);
+      new Uint8Array(chunk).set(value);
+      chunks.push(chunk);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (headerBytesRead < expectedHeader.length) {
+    throw new Error('Preview size is outside the accepted range');
+  }
+
+  return new Blob(chunks, { type: 'application/pdf' });
+};
 
 type Props = {
   url: string;
@@ -45,18 +109,11 @@ export default function VerifiedPresentationPreview({ url, title, refreshKey, fa
         if (!response.ok) {
           throw new Error(`Preview request failed with status ${response.status}`);
         }
-        const blob = await response.blob();
-        if (blob.size < PDF_MAGIC.length || blob.size > MAX_PREVIEW_BYTES) {
-          throw new Error('Preview size is outside the accepted range');
-        }
-        const header = new Uint8Array(await readBlobBytes(blob.slice(0, PDF_MAGIC.length)));
-        if (String.fromCharCode(...header) !== PDF_MAGIC) {
-          throw new Error('Preview response is not a PDF');
-        }
+        const blob = await readBoundedPdf(response);
         if (abort.signal.aborted) {
           return;
         }
-        objectUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+        objectUrl = URL.createObjectURL(blob);
         setPreviewUrl(objectUrl);
       } catch {
         if (!abort.signal.aborted) {
