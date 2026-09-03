@@ -42,6 +42,15 @@
   height: var(--c-ic-sm);
   width: var(--c-ic-sm);
 }
+/* Text that exists for screen readers only («Prompt 1:», «Response 2:» over
+ * every turn) is spoken, never selected: a selection dragged across several
+ * messages used to copy those invisible headings into the clipboard
+ * (measured with tools/copy_selection_probe.js). Assistive tech does not
+ * read selection state, so this changes nothing for it. */
+.sr-only {
+  user-select: none;
+}
+
 .icon-md {
   height: var(--c-ic);
   width: var(--c-ic);

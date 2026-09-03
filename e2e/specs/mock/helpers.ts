@@ -187,11 +187,25 @@ export function mockReply(page: Page) {
   return messagesView(page).getByText(new RegExp(MOCK_REPLY_TEXT, 'i'));
 }
 
-/** Type a message, send it, and wait for the streamed `/api/agents` response. */
+/**
+ * Type a message, send it, and wait for the streamed `/api/agents` response.
+ *
+ * The response resolves on the stream's HEADERS, while the turn is still being
+ * generated — so a second `sendMessage` straight after the first used to press
+ * Enter into a composer that was still busy, which swallows the key (the text
+ * stayed in the box, «Send message» came back, nothing was sent, and the wait
+ * for a response timed out). Seen twice in a row on message-actions.spec under
+ * load. The composer is idle once «Stop generating» is gone, so that is waited
+ * for before the key goes down; on a fresh chat the button never existed and
+ * the wait is free.
+ */
 export async function sendMessage(page: Page, text: string): Promise<Response> {
   const input = page.getByRole('textbox', { name: 'Message input' });
   await input.click();
   await input.fill(text);
+  await expect(page.getByRole('button', { name: 'Stop generating' })).toBeHidden({
+    timeout: 30000,
+  });
   const [response] = await Promise.all([
     page.waitForResponse(isAgentsStream, { timeout: 30000 }),
     input.press('Enter'),

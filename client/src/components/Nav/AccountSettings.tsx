@@ -1,8 +1,8 @@
 import { useState, memo, useRef } from 'react';
 import * as Menu from '@ariakit/react/menu';
 import { DropdownMenuSeparator, Avatar } from '@librechat/client';
+import { ExternalLink, Settings as SettingsGlyph } from '~/components/icons';
 import { useGetStartupConfig, useGetUserBalance } from '~/data-provider';
-import { Link, Settings as SettingsGlyph } from '~/components/icons';
 import { useAuthContext } from '~/hooks/AuthContext';
 import { LogOut } from '~/components/icons';
 import { useLocalize } from '~/hooks';
@@ -68,7 +68,11 @@ function AccountSettings({ collapsed = false }: { collapsed?: boolean }) {
             onClick={() => window.open(startupConfig?.helpAndFaqURL, '_blank')}
             className="select-item text-sm"
           >
-            <Link aria-hidden="true" />
+            {/* Opens a page elsewhere, so the glyph is the external-link arrow the item
+                carried before the icon swap (#363 replaced the sized 18px LinkIcon with a
+                bare chain link at the icon set's default 24px — the one oversized icon in
+                the menu). `icon-md` is what its neighbours wear. */}
+            <ExternalLink className="icon-md" aria-hidden="true" />
             {localize('com_nav_help_faq')}
           </Menu.MenuItem>
         )}

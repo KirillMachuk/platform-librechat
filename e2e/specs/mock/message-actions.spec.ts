@@ -123,3 +123,59 @@ test.describe('the buttons under an answer', () => {
     expect(await paintedOpacity(dislikes.first()), 'and its dislike button').toBeGreaterThan(0.99);
   });
 });
+
+/**
+ * A copied message is the message — nothing more. The row of controls under a
+ * turn and the screen-reader-only heading over it («Prompt 1:», «Response 2:»)
+ * are not content, yet a selection used to take them along: a triple-click
+ * serialised the empty toolbar blocks into a tail of blank lines (6 on a
+ * question, 9 on an answer, measured with tools/copy_selection_probe.js), and a
+ * selection dragged across turns copied the invisible headings. The owner met
+ * the first as «…дай прогноз подробный» followed by five empty lines.
+ *
+ * Read from the clipboard itself, not from the DOM: what the browser hands to
+ * the paste is the only thing the user sees. The floor is the browser's own:
+ * a triple-click on a bare `<p>a</p><p>b</p>` page already copies the text
+ * plus TWO newlines in Chromium (measured), so that much is allowed here and
+ * anything beyond it is ours.
+ */
+test.describe('copying a message by selection', () => {
+  test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
+
+  test('a triple-click copies the message text without a tail of blank lines', async ({ page }) => {
+    await twoTurns(page);
+    const first = page.getByText(replyText('first')).first();
+    await first.click({ clickCount: 3 });
+    await page.keyboard.press('ControlOrMeta+C');
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    /* Up to two trailing newlines are the browser's paragraph break; a third is the toolbar. */
+    expect(copied.startsWith(replyText('first'))).toBe(true);
+    expect(copied.slice(replyText('first').length)).toMatch(/^\n{0,2}$/);
+  });
+
+  test('a selection across turns carries no screen-reader headings', async ({ page }) => {
+    await twoTurns(page);
+    const first = page.getByText(replyText('first')).first();
+    const second = page.getByText(replyText('second')).first();
+    /* The selection is built as a Range from the first reply to the second — the
+     * same object a drag across both turns produces — because a page without a
+     * caret cannot be extended from the keyboard, and a drag depends on layout. */
+    await first.evaluate(
+      (from, to) => {
+        const range = document.createRange();
+        range.setStartBefore(from);
+        range.setEndAfter(to as Node);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      },
+      await second.elementHandle(),
+    );
+    await page.keyboard.press('ControlOrMeta+C');
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).toContain(replyText('first'));
+    expect(copied).toContain(replyText('second'));
+    expect(copied).not.toMatch(/^(Prompt|Response) \d+:/m);
+    expect(copied).not.toMatch(/\n\s*\n\s*\n/);
+  });
+});
