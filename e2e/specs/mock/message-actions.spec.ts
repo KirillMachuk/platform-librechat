@@ -179,6 +179,27 @@ test.describe('copying a message by selection', () => {
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(replyText('first'));
   });
 
+  test('a drag from the last message released over the composer copies exactly the message', async ({
+    page,
+  }) => {
+    await twoTurns(page);
+    const last = page.getByText(replyText('second')).first();
+    const box = await last.boundingBox();
+    const composer = await page.getByRole('textbox', { name: 'Message input' }).boundingBox();
+    if (!box || !composer) {
+      throw new Error('no boxes to drag between');
+    }
+    await page.evaluate(() => window.getSelection()?.removeAllRanges());
+    await page.mouse.move(box.x + 1, box.y + 4);
+    await page.mouse.down();
+    await page.mouse.move(composer.x + composer.width / 2, composer.y + composer.height / 2, {
+      steps: 20,
+    });
+    await page.mouse.up();
+    await page.keyboard.press('ControlOrMeta+C');
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(replyText('second'));
+  });
+
   test('a code line keeps its newline: inside a code block a newline is content', async ({
     page,
   }) => {

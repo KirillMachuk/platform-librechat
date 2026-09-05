@@ -1,4 +1,4 @@
-import { findSelectionCut, releasedInTextField, trimSelectionEnd } from '../selectionEnd';
+import { findSelectionCut, trimSelectionEnd } from '../selectionEnd';
 
 /**
  * jsdom has Ranges and a Selection but no layout and no user-select, so these
@@ -46,12 +46,53 @@ describe('trimSelectionEnd', () => {
     expect(trimSelectionEnd(selection, log)).toBe(false);
   });
 
-  it('trailing spaces of a normal paragraph are dropped, the words are kept', () => {
-    const log = mount('<p id="a">hello world   </p><p id="b">next</p>');
+  it('trailing spaces of a heading or list item are dropped, the words are kept', () => {
+    const log = mount('<h2 id="a">hello world   </h2><p id="b">next</p>');
     const a = text(log.querySelector('#a'));
     const selection = select(a, 0, log.querySelector('#b') as Node, 0);
     trimSelectionEnd(selection, log);
     expect(selection.getRangeAt(0).toString()).toBe('hello world');
+  });
+
+  it('a pre-wrap paragraph (every message paragraph) keeps a typed trailing newline, not the block break', () => {
+    const log = mount(
+      '<p id="a" style="white-space: pre-wrap">line one\nline two\n</p><p id="b">next</p>',
+    );
+    const a = text(log.querySelector('#a'));
+    const selection = select(a, 0, log.querySelector('#b') as Node, 0);
+    expect(trimSelectionEnd(selection, log)).toBe(true);
+    expect(selection.getRangeAt(0).toString()).toBe('line one\nline two\n');
+  });
+
+  it('a selection that spans a block boundary but covers no character is left alone, never collapsed', () => {
+    const log = mount('<p id="a" style="white-space: pre-wrap">word</p><p id="b">next</p>');
+    const a = text(log.querySelector('#a'));
+    const selection = select(a, a.data.length, log.querySelector('#b') as Node, 0);
+    expect(trimSelectionEnd(selection, log)).toBe(false);
+    expect(selection.getRangeAt(0).collapsed).toBe(false);
+  });
+
+  it('a backward selection keeps its direction: the anchor stays on the end side', () => {
+    const log = mount('<p id="a">как дела</p><p id="b">next</p>');
+    const a = text(log.querySelector('#a'));
+    const b = log.querySelector('#b') as Node;
+    const selection = document.getSelection() as Selection;
+    selection.setBaseAndExtent(b, 0, a, 0);
+    expect(trimSelectionEnd(selection, log)).toBe(true);
+    expect(selection.anchorNode).toBe(a);
+    expect(selection.anchorOffset).toBe('как дела'.length);
+    expect(selection.focusNode).toBe(a);
+    expect(selection.focusOffset).toBe(0);
+  });
+
+  it('a table is text: a drag released past a table is cut inside its last covered cell', () => {
+    const log = mount(
+      '<p id="a">intro</p><table><tbody><tr><td id="c1">c1</td><td id="c2">c2</td></tr></tbody></table><p id="b">next</p>',
+    );
+    const a = text(log.querySelector('#a'));
+    const selection = select(a, 0, log.querySelector('#b') as Node, 0);
+    expect(trimSelectionEnd(selection, log)).toBe(true);
+    expect(selection.getRangeAt(0).endContainer).toBe(text(log.querySelector('#c2')));
   });
 
   it('inside <pre> a newline is content: the covered part is kept whole', () => {
@@ -164,16 +205,5 @@ describe('trimSelectionEnd', () => {
     range.setStart(a, 4);
     range.setEnd(log.querySelector('#b') as Node, 0);
     expect(findSelectionCut(range, log)).toEqual({ node: a, offset: 'one two'.length });
-  });
-});
-
-describe('releasedInTextField', () => {
-  it('is true for a release inside a textarea, an input or an editable element', () => {
-    document.body.innerHTML =
-      '<textarea id="t"></textarea><div contenteditable="true"><span id="e">x</span></div><p id="p">y</p>';
-    expect(releasedInTextField(document.getElementById('t'))).toBe(true);
-    expect(releasedInTextField(document.getElementById('e'))).toBe(true);
-    expect(releasedInTextField(document.getElementById('p'))).toBe(false);
-    expect(releasedInTextField(null)).toBe(false);
   });
 });

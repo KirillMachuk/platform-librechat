@@ -14,25 +14,49 @@
  * character, so the native copy — text/plain AND text/html — serialises the
  * text and nothing after it.
  *
- * What it deliberately leaves alone:
- * - collapsed selections, and any selection while a text field is active or
- *   the release happened inside one — a textarea reports its own selection
- *   as a collapsed DOM range in Chromium, and touching it would destroy the
- *   edit the user is making;
- * - selections that start or end outside the transcript;
- * - a tail that holds a replaced element (an image, a table, a video…):
- *   the drag took the picture along on purpose, and the trim would drop it
- *   from the text/html copy;
- * - trailing newlines INSIDE `<pre>`/`white-space: pre` text — in a code
- *   block a newline is content;
- * - keyboard-made and touch-made selections (no mouse release to hook; on
- *   phones the selection handles are browser chrome and a trim on every
- *   change would fight them).
+ * The contract, each line with a unit case:
+ * - a collapsed selection, or any selection while a text field is focused
+ *   (an edit in progress — a field's own selection is a collapsed DOM range
+ *   in Chromium, and the field keeps focus through the drag), is left alone;
+ * - a selection that STARTS outside the transcript is left alone; one that
+ *   ends after it (the strip under the composer, the composer itself — where
+ *   a triple-click on the last message and a drag released below it end) is
+ *   trimmed back to the last character of the transcript it covers;
+ * - a tail that holds a selectable picture (image, video, canvas…) is left
+ *   alone: the drag took it on purpose and the trim would drop it from the
+ *   text/html copy. Icon buttons under a message and the composer after it
+ *   are out of selection and do not count; a table is text like any other;
+ * - preformatted text (`pre`, `pre-wrap`, `pre-line` — every message
+ *   paragraph here is pre-wrap) keeps every character it covers: a typed
+ *   newline or a code line's newline is content. The last line of a code
+ *   block still copies without a trailing newline — Chromium serialises a
+ *   newline only when the range leaves the block;
+ * - elsewhere (headings, list items, cells) the cut lands right after the
+ *   last visible character;
+ * - text under `inert` or `user-select: none` is never where the cut lands;
+ * - the selection never collapses and its direction is kept.
+ *
+ * Deliberately out of scope: touch selections (made with the browser's own
+ * handles, which dispatch no release), and — the one trade-off of owning the
+ * bounds — after a triple-click a Shift+click extends by characters, not by
+ * paragraphs, because the trim resets the browser's selection granularity.
+ * A keyboard-made selection is trimmed at the next left-button release.
  */
 
 const NOT_WHITESPACE = /[^\s\u200B-\u200D\u2060\uFEFF]/;
-const REPLACED_ELEMENTS = 'img, picture, video, audio, canvas, svg, iframe, object, embed, table';
-const TEXT_FIELD = 'textarea, input, [contenteditable=""], [contenteditable="true"]';
+const REPLACED_ELEMENTS = new Set([
+  'IMG',
+  'PICTURE',
+  'VIDEO',
+  'AUDIO',
+  'CANVAS',
+  'SVG',
+  'IFRAME',
+  'OBJECT',
+  'EMBED',
+]);
+const TEXT_FIELD =
+  'textarea, input, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]';
 
 function lastNonWhitespaceIndex(text: string): number {
   for (let i = text.length - 1; i >= 0; i--) {
@@ -92,8 +116,16 @@ export interface SelectionCut {
  */
 export function findSelectionCut(range: Range, root: Node): SelectionCut | null {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  /* Start where the selection starts, not at the top of the transcript: the
+   * nodes before it are never candidates, and a long chat has thousands. */
+  const start = range.startContainer;
+  walker.currentNode = start;
   let cut: SelectionCut | null = null;
-  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+  for (
+    let node = (start.nodeType === Node.TEXT_NODE ? start : walker.nextNode()) as Text | null;
+    node;
+    node = walker.nextNode() as Text | null
+  ) {
     const length = node.data.length;
     if (length === 0) {
       continue;
@@ -102,15 +134,11 @@ export function findSelectionCut(range: Range, root: Node): SelectionCut | null 
       /* Starts after the end: nothing further can be covered. */
       break;
     }
-    if (range.comparePoint(node, length) < 0) {
-      /* Ends before the start: not part of the selection. */
-      continue;
-    }
     /* The part of this node inside the range. A boundary inside a text node
      * always names that node as its container. */
     const from = range.startContainer === node ? range.startOffset : 0;
     const to = range.endContainer === node ? range.endOffset : length;
-    if (!isSelectable(node)) {
+    if (to <= from || !isSelectable(node)) {
       continue;
     }
     const part = node.data.slice(from, to);
@@ -141,13 +169,13 @@ function tailHoldsReplacedElement(range: Range, cut: SelectionCut, container: No
   const tail = document.createRange();
   tail.setStart(cut.node, cut.offset);
   tail.setEnd(range.endContainer, range.endOffset);
-  const root =
-    container.nodeType === Node.ELEMENT_NODE ? (container as Element) : container.parentElement;
-  if (!root) {
-    return false;
-  }
-  for (const el of Array.from(root.querySelectorAll(REPLACED_ELEMENTS))) {
-    if (tail.comparePoint(el, 0) === 0 && isSelectableFrom(el)) {
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_ELEMENT);
+  walker.currentNode = cut.node;
+  for (let el = walker.nextNode() as Element | null; el; el = walker.nextNode() as Element | null) {
+    if (tail.comparePoint(el, 0) > 0) {
+      break;
+    }
+    if (REPLACED_ELEMENTS.has(el.tagName.toUpperCase()) && isSelectableFrom(el)) {
       return true;
     }
   }
@@ -213,8 +241,8 @@ export function trimSelectionEnd(selection: Selection, container: Node): boolean
     return false;
   }
   if (typeof selection.setBaseAndExtent !== 'function') {
-    /* No way to keep the direction here (jsdom, very old WebKit): the trim
-     * still lands, the selection just becomes forward. */
+    /* No way to keep the direction here (very old WebKit): the trim still
+     * lands, the selection just becomes forward. */
     range.setEnd(cut.node, cut.offset);
     selection.removeAllRanges();
     selection.addRange(range);
@@ -227,9 +255,4 @@ export function trimSelectionEnd(selection: Selection, container: Node): boolean
     selection.setBaseAndExtent(cut.node, cut.offset, range.startContainer, range.startOffset);
   }
   return true;
-}
-
-/** True when the mouse release should be ignored: it landed in a text field. */
-export function releasedInTextField(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest(TEXT_FIELD) != null;
 }
