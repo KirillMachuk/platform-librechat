@@ -134,10 +134,11 @@ test.describe('the buttons under an answer', () => {
  * the first as «…дай прогноз подробный» followed by five empty lines.
  *
  * Read from the clipboard itself, not from the DOM: what the browser hands to
- * the paste is the only thing the user sees. The floor is the browser's own:
- * a triple-click on a bare `<p>a</p><p>b</p>` page already copies the text
- * plus TWO newlines in Chromium (measured), so that much is allowed here and
- * anything beyond it is ours.
+ * the paste is the only thing the user sees. Chromium's own triple-click also
+ * takes the "paragraph break" after a `<p>` and serialises it as two newlines
+ * (measured on a bare page) — the transcript ends a mouse selection at the
+ * last character it covers (`useTrimSelectionEnd`), so a copied message is
+ * exactly the message.
  */
 test.describe('copying a message by selection', () => {
   test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
@@ -148,9 +149,84 @@ test.describe('copying a message by selection', () => {
     await first.click({ clickCount: 3 });
     await page.keyboard.press('ControlOrMeta+C');
     const copied = await page.evaluate(() => navigator.clipboard.readText());
-    /* Up to two trailing newlines are the browser's paragraph break; a third is the toolbar. */
-    expect(copied.startsWith(replyText('first'))).toBe(true);
-    expect(copied.slice(replyText('first').length)).toMatch(/^\n{0,2}$/);
+    expect(copied).toBe(replyText('first'));
+  });
+
+  test('the last message in the chat copies the same way (its selection used to run into the composer strip)', async ({
+    page,
+  }) => {
+    await twoTurns(page);
+    await page.getByText(replyText('second')).first().click({ clickCount: 3 });
+    await page.keyboard.press('ControlOrMeta+C');
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(replyText('second'));
+  });
+
+  test('a drag released below the message copies the message, not the blank space under it', async ({
+    page,
+  }) => {
+    await twoTurns(page);
+    const first = page.getByText(replyText('first')).first();
+    const box = await first.boundingBox();
+    if (!box) {
+      throw new Error('the first reply has no box');
+    }
+    await page.evaluate(() => window.getSelection()?.removeAllRanges());
+    await page.mouse.move(box.x + 1, box.y + 4);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.6, box.y + box.height + 40, { steps: 20 });
+    await page.mouse.up();
+    await page.keyboard.press('ControlOrMeta+C');
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(replyText('first'));
+  });
+
+  test('a code line keeps its newline: inside a code block a newline is content', async ({
+    page,
+  }) => {
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
+    /* A code block in the user's own message — the same markdown renderer. */
+    await sendMessage(page, '```\nreturn 1\nreturn 2\n```');
+    const line = page.getByText('return 1', { exact: false }).first();
+    await expect(line).toBeVisible({ timeout: 30000 });
+    /* Chromium's triple-click inside <pre> selects the line and its newline. */
+    await line.click({ clickCount: 3 });
+    await page.keyboard.press('ControlOrMeta+C');
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('return 1\n');
+  });
+
+  test('a selection in the edit textarea is left alone', async ({ page }) => {
+    await twoTurns(page);
+    const turn = page
+      .getByText(replyPrompt('first'))
+      .first()
+      .locator('xpath=ancestor::*[contains(@class,"message-render")][1]');
+    await turn.hover();
+    await turn.getByRole('button', { name: /Edit/ }).first().click();
+    const editor = page.getByTestId('message-text-editor').first();
+    await expect(editor).toBeVisible();
+    /* Select inside the field the way a keyboard user does, then release the
+     * mouse over the field — the release is what the trim listens to, and a
+     * release in a text field must leave the field's own selection alone. */
+    await editor.click();
+    await page.keyboard.press('Home');
+    await page.keyboard.press('Shift+End');
+    const before = await editor.evaluate((el) => {
+      const t = el as HTMLTextAreaElement;
+      return [t.selectionStart, t.selectionEnd];
+    });
+    expect(before[1]).toBeGreaterThan(before[0]);
+    const box = await editor.boundingBox();
+    if (!box) {
+      throw new Error('the editor has no box');
+    }
+    await page.mouse.move(box.x + box.width - 8, box.y + box.height / 2);
+    await page.mouse.up();
+    const after = await editor.evaluate((el) => {
+      const t = el as HTMLTextAreaElement;
+      return [t.selectionStart, t.selectionEnd];
+    });
+    expect(after).toEqual(before);
+    expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('TEXTAREA');
   });
 
   test('a selection across turns carries no screen-reader headings', async ({ page }) => {

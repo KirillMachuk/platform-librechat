@@ -4,6 +4,7 @@ import { useRecoilValue } from 'recoil';
 import { CSSTransition } from 'react-transition-group';
 import type { TMessage } from 'librechat-data-provider';
 import { useScreenshot, useMessageScrolling, useScrollToMessage, useLocalize } from '~/hooks';
+import useTrimSelectionEnd from '~/hooks/Messages/useTrimSelectionEnd';
 import ScrollToBottom from '~/components/Messages/ScrollToBottom';
 import { MessagesViewProvider } from '~/Providers';
 import { fontSizeAtom } from '~/store/fontSize';
@@ -33,6 +34,9 @@ function MessagesViewContent({
     handleScrollButtonClick,
     debouncedHandleScroll,
   } = useMessageScrolling(_messagesTree);
+  /* A mouse selection ends at the last character it covers, not at the block
+   * after it — the copied message is the message (see the hook). */
+  useTrimSelectionEnd(contentRef);
 
   const { conversationId } = conversation ?? {};
   const isMessagesReady = Array.isArray(_messagesTree) && _messagesTree.length > 0;
