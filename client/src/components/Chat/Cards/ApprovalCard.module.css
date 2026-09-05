@@ -150,11 +150,18 @@
   color: var(--text-tertiary);
   white-space: pre-line;
 }
+/* The carousel clips at its padding box, and the canon focus ring is drawn
+ * OUTSIDE an option's box (outline 2px + outline-offset 2px = 4px). The old
+ * 1px of padding left the ring 1px of room on the left and right of every
+ * option and under the last one — measured live 05.09 with
+ * tools/ask_card_focus_ring_probe.js (review 02.09, К1). The padding is the
+ * ring's room and the negative margin returns the width to the card; the
+ * viewport height adds the same room twice (ApprovalCard.tsx, syncQuestionSlide). */
 .questionsViewport {
   overflow: hidden;
   width: 100%;
-  padding: 1px;
-  margin: -1px;
+  padding: var(--c-focus-ring-room);
+  margin: calc(-1 * var(--c-focus-ring-room));
 }
 .questionsViewport[data-animate="true"] {
   transition: height 360ms cubic-bezier(0.22, 1, 0.36, 1);

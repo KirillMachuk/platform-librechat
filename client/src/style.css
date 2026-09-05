@@ -365,6 +365,12 @@ html {
   --c-ease: linear;
   /* иконки (§4) */
   --c-ic: 18px;
+  /* How far the §1.8 focus ring reaches OUTSIDE a control's box: outline 2px +
+     outline-offset 2px. Any clipping container around focusable controls must
+     leave this much room (the questions carousel reads it, and so does the
+     height math in ApprovalCard.tsx) — measured 05.09: 1px of it clipped the
+     ring on both sides of every answer option. */
+  --c-focus-ring-room: 4px;
   --c-ic-sm: 16px;
   --c-ic-xs: 14px;
   /* 1.25 — решение владельца 11.08-4 под штриховые Tabler (было 1.75). */
