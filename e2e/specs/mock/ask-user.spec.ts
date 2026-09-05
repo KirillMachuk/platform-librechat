@@ -76,4 +76,77 @@ test.describe('ask_user questions card', () => {
     await expect(page.getByTestId('ask-user-collapsed')).toBeVisible({ timeout: 15_000 });
     await expect(card.getByRole('button', { name: /Продолжить|Continue/ })).toHaveCount(0);
   });
+
+  /**
+   * The canon focus ring is drawn OUTSIDE an option's box (outline 2px +
+   * offset 2px), and the carousel clips at its own padding box — so the
+   * viewport must leave the ring 4px on every side of every option. It left
+   * 1px on the left and right (review 02.09, К1; measured live 05.09), which
+   * cut the ring to a sliver for anyone answering with the keyboard. The room
+   * is geometry, so it is asserted as geometry: option box against the clip
+   * box, on the first option and on the last (the one that meets the bottom).
+   */
+  test('an answer option has room for its focus ring on every side', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('PIN_MCP_', 'true');
+    });
+    await page.goto('/c/new', { waitUntil: 'domcontentloaded' });
+    const textarea = page.getByTestId('text-input');
+    await textarea.waitFor({ state: 'visible' });
+    await selectEphemeralMCP(page);
+    await textarea.fill(ASK_PROMPT);
+    await textarea.press('Enter');
+    const card = page.getByTestId('approval-card');
+    await expect(card.getByRole('radio').first()).toBeVisible({ timeout: 30_000 });
+
+    /* Keyboard focus, as a keyboard user would arrive: Shift+Tab out of the
+     * composer lands on the card's roving radio. */
+    await textarea.focus();
+    for (let i = 0; i < 40; i++) {
+      await page.keyboard.press('Shift+Tab');
+      const onRadio = await page.evaluate(
+        () => document.activeElement?.getAttribute('role') === 'radio',
+      );
+      if (onRadio) {
+        break;
+      }
+    }
+    const room = () =>
+      page.evaluate(() => {
+        const el = document.activeElement as HTMLElement;
+        const clip = el.closest('[class*="questionsViewport"]') as HTMLElement;
+        const o = el.getBoundingClientRect();
+        const v = clip.getBoundingClientRect();
+        return {
+          role: el.getAttribute('role'),
+          left: o.left - v.left,
+          right: v.right - o.right,
+          top: o.top - v.top,
+          bottom: v.bottom - o.bottom,
+        };
+      });
+    const ring = 4;
+    const first = await room();
+    expect(first.role).toBe('radio');
+    for (const side of ['left', 'right', 'top', 'bottom'] as const) {
+      expect(first[side], `first option, ${side}`).toBeGreaterThanOrEqual(ring);
+    }
+    /* Arrow Down walks the radios; the last radio sits above the «Другое…» row,
+     * which is the row that meets the bottom edge of the clip box. */
+    const radios = await card.getByRole('radio').count();
+    for (let i = 1; i < radios; i++) {
+      await page.keyboard.press('ArrowDown');
+    }
+    const last = await room();
+    expect(last.role).toBe('radio');
+    for (const side of ['left', 'right', 'top', 'bottom'] as const) {
+      expect(last[side], `last option, ${side}`).toBeGreaterThanOrEqual(ring);
+    }
+    const otherBottom = await page.evaluate(() => {
+      const other = document.querySelector('[class*="option"][data-other="true"]') as HTMLElement;
+      const clip = other.closest('[class*="questionsViewport"]') as HTMLElement;
+      return clip.getBoundingClientRect().bottom - other.getBoundingClientRect().bottom;
+    });
+    expect(otherBottom, 'the «Другое…» row, bottom').toBeGreaterThanOrEqual(ring);
+  });
 });

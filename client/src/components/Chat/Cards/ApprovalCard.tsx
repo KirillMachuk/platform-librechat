@@ -62,6 +62,18 @@ export interface ApprovalCardStrings {
 }
 
 const ADVANCE_MS = 320;
+/**
+ * The canon focus ring lives OUTSIDE a control's box (outline 2px + offset 2px):
+ * the carousel viewport must leave it that much room or clip it (review 02.09,
+ * К1 — measured 1px of 4). Read from the stylesheet so the CSS module and this
+ * height math cannot drift apart; 4 is the canon value if the variable is
+ * missing (a test environment without the stylesheet).
+ */
+function focusRingRoom(el: HTMLElement): number {
+  const raw = getComputedStyle(el).getPropertyValue('--c-focus-ring-room');
+  const px = parseFloat(raw);
+  return Number.isFinite(px) ? px : 4;
+}
 /** Arrow keys inside a radio group move the focus; both axes, as ARIA asks. */
 /** Up/Down only — inside a text field Left/Right belong to the caret. */
 const VERTICAL_DELTA: Record<string, number | undefined> = {
@@ -478,7 +490,9 @@ export function ApprovalCard({
     const reduce =
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    setQViewportH(item.offsetHeight + 2);
+    /* Room for the focus ring above the first and below the last option: the
+     * same value the viewport's padding takes from the stylesheet. */
+    setQViewportH(item.offsetHeight + 2 * focusRingRoom(item));
     setQTrackY(item.offsetTop);
     setQAnimate(animate && !reduce);
   };
