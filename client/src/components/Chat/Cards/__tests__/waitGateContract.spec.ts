@@ -29,10 +29,12 @@ describe('waiting-label gate contract (owner r27)', () => {
   it('that shared list carries the geometry both of them must agree on', () => {
     const shared = MODULE.slice(MODULE.indexOf('.trHeader,'));
     const body = shared.slice(shared.indexOf('{') + 1, shared.indexOf('}'));
-    expect(body).toMatch(/font-size:\s*calc\(var\(--markdown-font-size\) \* 13 \/ 16\)/);
-    expect(body).toMatch(/line-height:\s*18px/);
-    expect(body).toMatch(/font-weight:\s*500/);
-    expect(body).toMatch(/gap:\s*6px/);
+    /* The size of the message (owner, 05.09): the header and the waiting
+     * label share the reply's size and differ from it by colour only. */
+    expect(body).toMatch(/font-size:\s*var\(--markdown-font-size\)/);
+    expect(body).toMatch(/line-height:\s*24px/);
+    expect(body).toMatch(/font-weight:\s*400/);
+    expect(body).toMatch(/gap:\s*8px/);
   });
 
   /** The STANDALONE `.trWait { … }` rule — not the shared `.trHeader, .trWait`

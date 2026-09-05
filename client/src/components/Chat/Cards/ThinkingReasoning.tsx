@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
+import { useMemo, useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react';
 import type { MouseEvent } from 'react';
 import { Brain, ChevronDown } from '~/components/icons';
 import styles from './ThinkingReasoning.module.css';
@@ -20,7 +20,6 @@ import { useExpandCollapse } from '~/hooks';
  *    natively scrollable viewport whose fades follow the scroll position.
  */
 
-const SENT_H = 40;
 const GAP = 4;
 const MAX_H = 180;
 const FADE = 16;
@@ -89,12 +88,30 @@ export function ThinkingReasoning({
   const [fade, setFade] = useState({ top: false, bottom: false });
 
   const sentences = useMemo(() => (streaming ? splitThinkSentences(text) : []), [streaming, text]);
+  const paragraphs = useMemo(() => (streaming ? [] : text.split(/\n{2,}/)), [streaming, text]);
+
+  /* Rows are as tall as their text (one or two lines), so the stream's height
+   * is measured, not multiplied: the cap and the slide-up follow the real rows. */
+  const streamRef = useRef<HTMLDivElement>(null);
+  const [rowsH, setRowsH] = useState(0);
+  useLayoutEffect(() => {
+    const stream = streamRef.current;
+    if (!stream) {
+      setRowsH(0);
+      return;
+    }
+    let sum = 0;
+    for (const row of Array.from(stream.children)) {
+      sum += (row as HTMLElement).offsetHeight;
+    }
+    setRowsH(sum);
+  }, [sentences]);
 
   const isOpen = streaming ? true : expanded;
   const { style: expandStyle, ref: expandRef } = useExpandCollapse(isOpen);
 
   const count = sentences.length;
-  const contentH = count > 0 ? count * SENT_H + (count - 1) * GAP : 0;
+  const contentH = count > 0 ? rowsH + (count - 1) * GAP : 0;
   const capped = contentH > MAX_H;
   const viewH = capped ? MAX_H : contentH;
   const translate = capped ? MAX_H - FADE - contentH : 0;
@@ -194,7 +211,11 @@ export function ThinkingReasoning({
                 maskImage: streamMask,
               }}
             >
-              <div className={styles.trStream} style={{ transform: `translateY(${translate}px)` }}>
+              <div
+                ref={streamRef}
+                className={styles.trStream}
+                style={{ transform: `translateY(${translate}px)` }}
+              >
                 {sentences.map((line, i) => (
                   <p key={i} className={styles.trSentence} data-testid="think-sentence">
                     {line}
@@ -209,9 +230,13 @@ export function ThinkingReasoning({
               style={{ WebkitMaskImage: scrollMask, maskImage: scrollMask }}
               onScroll={syncScrollFades}
             >
-              <p className={styles.trFull} data-testid="think-full">
-                {text}
-              </p>
+              <div className={styles.trFull} data-testid="think-full">
+                {paragraphs.map((paragraph, i) => (
+                  <p key={i} className={styles.trPara}>
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
             </div>
           )}
         </div>
