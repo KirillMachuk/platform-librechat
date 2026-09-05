@@ -2165,55 +2165,26 @@ html {
 .thinking-shimmer-active {
   display: inline-block;
   white-space: nowrap;
-  background-image: linear-gradient(
-    90deg,
-    var(--text-secondary) 0%,
-    var(--text-secondary) 35%,
-    var(--text-primary) 50%,
-    var(--text-secondary) 65%,
-    var(--text-secondary) 100%
-  );
-  background-size: 200% 100%;
+  background-image: var(--shimmer-image);
+  background-repeat: no-repeat;
+  background-size: var(--shimmer-size);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   animation: thinking-shimmer-sweep 2s linear infinite;
 }
-@keyframes thinking-shimmer-sweep {
-  from {
-    background-position: 200% 0;
-  }
-  to {
-    background-position: -200% 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .thinking-shimmer-active {
-    animation: none;
-    background-image: none;
-    color: var(--text-secondary);
-  }
-}
-
-/* The same sweep as PAINT ONLY — no display, no white-space, no color of its
- * own beyond the clip (r25 package Б review). `.thinking-shimmer-active` is a
- * one-line LABEL utility: its `display: inline-block; white-space: nowrap`
- * stopped a wrapping label from wrapping (a long research step then ran ~26px
- * past the card at 375px) and killed a `line-clamp-2` on the action line by
- * source order. Consumers that already own their layout use this one and keep
- * it. It must stay the ONLY color rule on its element — a component rule with
- * higher specificity repaints the glyphs opaque and the gradient disappears
- * under them, which is exactly how a shimmer shipped that never shimmered. */
+/* The sweep (owner, 05.09, after shadcn's `shimmer` utility): the base is the
+   muted grey the label already wears (t3), and the band does not darken it —
+   in the light theme the band is the same grey at 20% alpha, so the letters
+   FADE toward the page under it; in the dark theme the band is lifted toward
+   white, so they brighten. Band width 3ch + 40px, tilt 20°, one pass = 2 s.
+   Shared by the label utility and the paint-only twin below through custom
+   properties, so the two cannot drift. */
+.thinking-shimmer-active,
 .thinking-shimmer-paint {
-  background-image: linear-gradient(
-    90deg,
-    var(--text-secondary) 0%,
-    var(--text-secondary) 35%,
-    var(--text-primary) 50%,
-    var(--text-secondary) 65%,
-    var(--text-secondary) 100%
-  );
-  background-size: 200% 100%;
+  background-image: var(--shimmer-image);
+  background-repeat: no-repeat;
+  background-size: var(--shimmer-size);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -2223,7 +2194,7 @@ html {
   .thinking-shimmer-paint {
     animation: none;
     background-image: none;
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
   }
 }
 
