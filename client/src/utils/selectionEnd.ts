@@ -15,9 +15,12 @@
  * text and nothing after it.
  *
  * The contract, each line with a unit case:
- * - a collapsed selection, or any selection while a text field is focused
- *   (an edit in progress — a field's own selection is a collapsed DOM range
- *   in Chromium, and the field keeps focus through the drag), is left alone;
+ * - a collapsed selection is left alone, and that is also what keeps a text
+ *   field's own selection safe: the composer and a message being edited hold
+ *   their selection inside the control, where the document reports a COLLAPSED
+ *   range. Asking instead which element has focus was a real defect — the
+ *   composer keeps focus after a send, so a message copied while it did came
+ *   out with the blank lines this whole file exists to remove (owner, 06.09);
  * - a selection that STARTS outside the transcript is left alone; one that
  *   ends after it (the strip under the composer, the composer itself — where
  *   a triple-click on the last message and a drag released below it end) is
@@ -33,14 +36,14 @@
  *   newline only when the range leaves the block;
  * - elsewhere (headings, list items, cells) the cut lands right after the
  *   last visible character;
- * - text under `inert` or `user-select: none` is never where the cut lands;
+ * - text under `inert`, `user-select: none`, or inside a form control (a
+ *   message being edited) is never where the cut lands;
  * - the selection never collapses and its direction is kept.
  *
- * Deliberately out of scope: touch selections (made with the browser's own
- * handles, which dispatch no release), and — the one trade-off of owning the
- * bounds — after a triple-click a Shift+click extends by characters, not by
- * paragraphs, because the trim resets the browser's selection granularity.
- * A keyboard-made selection is trimmed at the next left-button release.
+ * Applied at COPY time (see `useTrimSelectionEnd`), so it covers every way a
+ * selection can be made — mouse, keyboard, Shift+click, a phone's handles,
+ * Select All — and leaves the selection alone while the user is still working
+ * with it.
  */
 
 const NOT_WHITESPACE = /[^\s\u200B-\u200D\u2060\uFEFF]/;
@@ -55,9 +58,6 @@ const REPLACED_ELEMENTS = new Set([
   'OBJECT',
   'EMBED',
 ]);
-const TEXT_FIELD =
-  'textarea, input, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]';
-
 function lastNonWhitespaceIndex(text: string): number {
   for (let i = text.length - 1; i >= 0; i--) {
     if (NOT_WHITESPACE.test(text[i])) {
@@ -72,6 +72,13 @@ function isSelectableFrom(start: Element | null): boolean {
   let el = start;
   while (el) {
     if (el.hasAttribute('inert')) {
+      return false;
+    }
+    /* A form control's value is the control's, not the transcript's: a message
+     * being edited sits in a textarea inside the log, and the clipboard walks
+     * into text controls (Chromium's serialiser enters them). The end of a
+     * selection over messages must never land in there. */
+    if (el.matches('textarea, input, select')) {
       return false;
     }
     const style = getComputedStyle(el);
@@ -224,10 +231,6 @@ export function trimSelectionEnd(selection: Selection, container: Node): boolean
     return false;
   }
   if (!container.contains(range.startContainer) || !endsInOrAfter(range, container)) {
-    return false;
-  }
-  const active = document.activeElement;
-  if (active && active.matches(TEXT_FIELD)) {
     return false;
   }
   const cut = findSelectionCut(range, container);

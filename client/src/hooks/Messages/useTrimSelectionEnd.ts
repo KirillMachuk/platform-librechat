@@ -3,25 +3,29 @@ import type { RefObject } from 'react';
 import { trimSelectionEnd } from '~/utils/selectionEnd';
 
 /**
- * After a mouse release, ends a selection made inside the transcript at the
- * last character it covers — see `trimSelectionEnd` for what and why.
+ * Ends a transcript selection at its last character AT THE MOMENT OF COPYING —
+ * see `trimSelectionEnd` for what the browser gets wrong and why.
  *
- * The listener sits on the document, not on the container: a drag that is
- * released over the header, the composer or outside the window never
- * bubbles a mouseup through the container, and that is exactly the sloppy
- * drag this exists for — a drag from the last message is released over the
- * composer more often than not. The container only bounds which selections
- * count; an edit in progress is recognised by the focused field, not by
- * where the mouse went up. Mouse only: touch selection is made with the
- * browser's own handles, which dispatch no release event to the page, and a
- * trim on every selection change would snap the handles back.
+ * The adjustment hangs on the `copy` event rather than on a mouse release, and
+ * that is the whole point: the clipboard is then correct no matter HOW the
+ * selection was made — mouse, keyboard, Shift+click, a phone's selection
+ * handles, Select All — in any engine, and whatever had focus while it was
+ * made. The earlier mouse-release version had to guess all of that, and a case
+ * it guessed wrong still copied blank lines (owner, 06.09).
+ *
+ * The browser serialises the selection when the default action runs, after
+ * this handler returns, so adjusting it here fixes BOTH clipboard flavours —
+ * text and rich — without us composing either by hand.
+ *
+ * A copy made while a text field holds the caret — the composer keeps focus
+ * after a send — needs no special case: the field's own selection lives inside
+ * the control and the document reports a collapsed range, which
+ * `trimSelectionEnd` leaves alone. Asking who had focus instead is exactly the
+ * defect this replaces.
  */
 export default function useTrimSelectionEnd(container: RefObject<HTMLElement | null>) {
   useEffect(() => {
-    const onPointerUp = (event: PointerEvent) => {
-      if (event.pointerType !== 'mouse' || event.button !== 0) {
-        return;
-      }
+    const onCopy = () => {
       const root = container.current;
       if (!root) {
         return;
@@ -32,7 +36,11 @@ export default function useTrimSelectionEnd(container: RefObject<HTMLElement | n
       }
       trimSelectionEnd(selection, root);
     };
-    document.addEventListener('pointerup', onPointerUp);
-    return () => document.removeEventListener('pointerup', onPointerUp);
+    document.addEventListener('copy', onCopy);
+    document.addEventListener('cut', onCopy);
+    return () => {
+      document.removeEventListener('copy', onCopy);
+      document.removeEventListener('cut', onCopy);
+    };
   }, [container]);
 }
