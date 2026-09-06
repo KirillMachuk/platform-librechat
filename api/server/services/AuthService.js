@@ -490,7 +490,7 @@ const requestPasswordReset = async (req) => {
   if (emailEnabled) {
     await sendEmail({
       email: user.email,
-      subject: 'Password Reset Request',
+      subject: `${process.env.APP_TITLE || '1ma'}: восстановление пароля`,
       payload: {
         appName: process.env.APP_TITLE || '1ma',
         name: user.name || user.username || user.email,
@@ -541,7 +541,7 @@ const resetPassword = async (userId, token, password) => {
   if (checkEmailConfig()) {
     await sendEmail({
       email: user.email,
-      subject: 'Password Reset Successfully',
+      subject: `${process.env.APP_TITLE || '1ma'}: пароль изменён`,
       payload: {
         appName: process.env.APP_TITLE || '1ma',
         name: user.name || user.username || user.email,

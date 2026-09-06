@@ -1,6 +1,7 @@
 const { logger } = require('@librechat/data-schemas');
 const {
   readBillingConfig,
+  recipientsForAlert,
   createBillingNotifier,
   createBillingReconciler,
   createOpenRouterManagement,
@@ -50,14 +51,18 @@ function getBillingWiring() {
    * @returns {Promise<number>} how many recipients the mail actually went to.
    */
   async function sendAlert(alert) {
-    if (!config.notifyEmails.length) {
+    /* Not every alert goes to everyone: the reconcile mail names the upstream provider
+     * and our cost basis, so it stays with the operators even when the client's
+     * coordinators are configured. */
+    const recipients = recipientsForAlert(config, alert.kind);
+    if (!recipients.length) {
       logger.warn(
         `[billing] alert "${alert.kind}" not emailed — BILLING_NOTIFY_EMAILS/BILLING_OPERATOR_EMAILS empty`,
       );
       return 0;
     }
     let delivered = 0;
-    for (const email of config.notifyEmails) {
+    for (const email of recipients) {
       try {
         await sendEmail({
           email,
@@ -73,7 +78,7 @@ function getBillingWiring() {
     }
     if (delivered === 0) {
       logger.error(
-        `[billing] alert "${alert.kind}" reached NONE of ${config.notifyEmails.length} recipient(s)`,
+        `[billing] alert "${alert.kind}" reached NONE of ${recipients.length} recipient(s)`,
       );
     }
     return delivered;

@@ -1,4 +1,4 @@
-import { readBillingConfig } from './config';
+import { readBillingConfig, recipientsForAlert } from './config';
 
 /** Anchor-day derivation from BILLING_SERVICE_START_DATE — the switch between calendar
  *  month (anchor 1) and the rolling «month of service». Money-adjacent, so pinned. */
@@ -63,5 +63,54 @@ describe('readBillingConfig — landed cost', () => {
     expect(
       readBillingConfig({ ...base, BILLING_LANDED_COST_MULTIPLIER: value }).landedCostMultiplier,
     ).toBe(1);
+  });
+});
+
+/** Who each alert reaches. The reconcile mail names the upstream provider and our cost
+ *  basis, so it must never widen to the client's coordinators — that is the whole point
+ *  of the split, and a regression here leaks commercial data to the customer. */
+describe('recipientsForAlert — client alerts widen, operator alerts do not', () => {
+  const operators = ['ops-a@example.com', 'ops-b@example.com'];
+
+  test('no client list configured → every kind goes to the operators only', () => {
+    const config = { notifyEmails: operators, clientEmails: [] };
+    expect(recipientsForAlert(config, 'pool80')).toEqual(operators);
+    expect(recipientsForAlert(config, 'exhausted')).toEqual(operators);
+    expect(recipientsForAlert(config, 'reconcile')).toEqual(operators);
+  });
+
+  test('client list configured → only the client-facing kinds include it', () => {
+    const config = { notifyEmails: operators, clientEmails: ['coordinator@client.example'] };
+    expect(recipientsForAlert(config, 'pool80')).toEqual([...operators, 'coordinator@client.example']);
+    expect(recipientsForAlert(config, 'exhausted')).toEqual([
+      ...operators,
+      'coordinator@client.example',
+    ]);
+    expect(recipientsForAlert(config, 'reconcile')).toEqual(operators);
+    expect(recipientsForAlert(config, 'reconcile')).not.toContain('coordinator@client.example');
+  });
+
+  test('an address on both lists is mailed once', () => {
+    const config = { notifyEmails: operators, clientEmails: ['ops-a@example.com'] };
+    expect(recipientsForAlert(config, 'pool80')).toEqual(operators);
+  });
+
+  test('readBillingConfig parses BILLING_CLIENT_EMAILS and keeps it out of reconcile', () => {
+    const config = readBillingConfig({
+      BILLING_INTERNAL_TOKEN: 'secret',
+      BILLING_OPERATOR_EMAILS: 'Ops@Example.com',
+      BILLING_CLIENT_EMAILS: ' Coordinator@Client.example , ',
+    } as NodeJS.ProcessEnv);
+    expect(config.clientEmails).toEqual(['coordinator@client.example']);
+    expect(recipientsForAlert(config, 'pool80')).toEqual([
+      'ops@example.com',
+      'coordinator@client.example',
+    ]);
+    expect(recipientsForAlert(config, 'reconcile')).toEqual(['ops@example.com']);
+  });
+
+  test('unset BILLING_CLIENT_EMAILS leaves an empty list, not undefined', () => {
+    const config = readBillingConfig({ BILLING_INTERNAL_TOKEN: 'secret' } as NodeJS.ProcessEnv);
+    expect(config.clientEmails).toEqual([]);
   });
 });

@@ -4,6 +4,7 @@ export { createOpenRouterManagement, computeKeyLimitUsd, shouldApplyKeyLimit } f
 export { createBillingReconciler } from './reconcile';
 export {
   readBillingConfig,
+  recipientsForAlert,
   DEFAULT_POOL_CREDITS,
   DEFAULT_LIMIT_HEADROOM,
   DEFAULT_LANDED_COST_MULTIPLIER,

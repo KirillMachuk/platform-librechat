@@ -4,11 +4,13 @@
   </head>
   <body style='font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #1a1a1a; background: #f6f6f6; margin: 0; padding: 24px;'>
     <div style='max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 8px; padding: 24px;'>
-      <h2 style='margin: 0 0 12px; color: #b42318;'>⛔ Кредиты исчерпаны — модели остановлены</h2>
+      <h2 style='margin: 0 0 12px;'>⛔ Кредиты исчерпаны — модели временно недоступны</h2>
       <p style='margin: 0 0 16px; line-height: 1.5;'>
         Контур <strong>1ma</strong>, период оказания услуг <strong>{{month}}</strong> (Europe/Minsk).
-        Пул периода и докупленные пакеты израсходованы полностью — включена мягкая блокировка:
-        запросы к моделям не выполняются, остальные функции платформы работают.
+      </p>
+      <p style='margin: 0 0 16px; line-height: 1.5;'>
+        Пул периода и докупленные пакеты израсходованы полностью. Запросы к моделям сейчас
+        не выполняются; остальные функции платформы работают как обычно.
       </p>
       <table style='border-collapse: collapse; width: 100%;'>
         <tr>
@@ -21,9 +23,13 @@
         </tr>
       </table>
       <p style='margin: 16px 0 0; line-height: 1.5; color: #666;'>
-        Доступ восстановится автоматически после начисления пакета (экран «Расходы» → «Начислить
-        пакет» или CLI <code>npm run add-credit-package</code>) либо с началом нового месяца оказания услуг.
+        Доступ к моделям восстановится автоматически — после приобретения дополнительного
+        пакета Кредитов либо с началом нового периода оказания услуг. По вопросам пакета
+        обратитесь к вашему контактному лицу в 1ma.
       </p>
     </div>
+    <p style='max-width: 560px; margin: 12px auto 0; color: #999; font-size: 12px;'>
+      Письмо отправлено автоматически, ответы на этот адрес не читаются.
+    </p>
   </body>
 </html>

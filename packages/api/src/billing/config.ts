@@ -1,4 +1,5 @@
 import { creditsToMicroUsd, normalizeAnchorDay } from '@librechat/data-schemas';
+import type { BillingAlertKind } from './types';
 
 /** Default included pool: 25 000 Credits per team per service period (Europe/Minsk). */
 export const DEFAULT_POOL_CREDITS = 25_000;
@@ -31,8 +32,14 @@ export interface BillingConfig {
   anchorDay: number;
   /** Lowercased emails of platform (1ma) operators — the only principals allowed to add packages. */
   operatorEmails: string[];
-  /** Alert recipients; defaults to the operator list. */
+  /** Operator alert recipients; defaults to the operator list. Every alert reaches these. */
   notifyEmails: string[];
+  /**
+   * The client's own coordinators. They receive ONLY the alerts written for them —
+   * see `recipientsForAlert`. Empty by default, which keeps delivery exactly as it
+   * was before this list existed.
+   */
+  clientEmails: string[];
   openrouter: {
     managementKey?: string;
     keyHash?: string;
@@ -87,6 +94,7 @@ export function readBillingConfig(env: NodeJS.ProcessEnv = process.env): Billing
     Number.isFinite(poolCredits) && poolCredits > 0 ? poolCredits : DEFAULT_POOL_CREDITS;
   const operatorEmails = csv(env.BILLING_OPERATOR_EMAILS);
   const notifyEmails = csv(env.BILLING_NOTIFY_EMAILS);
+  const clientEmails = csv(env.BILLING_CLIENT_EMAILS);
   const headroom = Number.parseFloat(env.BILLING_OPENROUTER_LIMIT_HEADROOM ?? '');
   const landedCostMultiplier = Number(env.BILLING_LANDED_COST_MULTIPLIER ?? '');
   const serviceStartDate = (env.BILLING_SERVICE_START_DATE ?? '').trim() || null;
@@ -100,6 +108,7 @@ export function readBillingConfig(env: NodeJS.ProcessEnv = process.env): Billing
     anchorDay: parseServiceAnchorDay(serviceStartDate),
     operatorEmails,
     notifyEmails: notifyEmails.length > 0 ? notifyEmails : operatorEmails,
+    clientEmails,
     openrouter: {
       managementKey: env.OPENROUTER_MANAGEMENT_KEY || undefined,
       keyHash: env.OPENROUTER_KEY_HASH || undefined,
@@ -110,4 +119,33 @@ export function readBillingConfig(env: NodeJS.ProcessEnv = process.env): Billing
       headroom: Number.isFinite(headroom) && headroom >= 0 ? headroom : DEFAULT_LIMIT_HEADROOM,
     },
   };
+}
+
+/**
+ * Alerts whose body is written for the client to read. Everything else is operator-only.
+ *
+ * This is a whitelist rather than a `kind !== 'reconcile'` test on purpose: a new alert
+ * kind must be deliberately declared client-safe, and until someone does that it stays
+ * with the operators. The rule the whitelist enforces is the one `BillingAlert` already
+ * documents — the reconcile fields "may carry USD", and the client's view of billing is
+ * dollar-free, so a reconcile mail names the upstream provider and our cost basis.
+ */
+const CLIENT_FACING_ALERTS: ReadonlySet<BillingAlertKind> = new Set<BillingAlertKind>([
+  'pool80',
+  'exhausted',
+]);
+
+/**
+ * Who this particular alert goes to. Operators always; the client's coordinators only
+ * for the alerts meant for them. With `BILLING_CLIENT_EMAILS` unset the result is
+ * `notifyEmails` for every kind — i.e. exactly the pre-split behaviour.
+ */
+export function recipientsForAlert(
+  config: Pick<BillingConfig, 'notifyEmails' | 'clientEmails'>,
+  kind: BillingAlertKind,
+): string[] {
+  if (!CLIENT_FACING_ALERTS.has(kind)) {
+    return config.notifyEmails;
+  }
+  return [...new Set([...config.notifyEmails, ...config.clientEmails])];
 }
