@@ -15,9 +15,12 @@ const { sendEmail } = require('~/server/utils');
  * before dotenv/mongoose are ready, so nothing here may run at require time.
  */
 
+/* The subject is the half most people read, so the two client-facing ones say the same
+ * thing their bodies do — and «месячного» is wrong outright: `alert.month` is the service
+ * period's START DATE, and a period anchored anywhere but the 1st is not a month. */
 const SUBJECTS = {
-  pool80: (a) => `1ma Кредиты: израсходовано ${a.percentUsed}% месячного пула (${a.month})`,
-  exhausted: (a) => `1ma Кредиты: пул и пакеты исчерпаны — модели остановлены (${a.month})`,
+  pool80: (a) => `1ma Кредиты: израсходовано ${a.percentUsed}% пула (период с ${a.month})`,
+  exhausted: (a) => `1ma Кредиты: пул исчерпан — модели временно недоступны (период с ${a.month})`,
   reconcile: (a) => `1ma Кредиты: расхождение с OpenRouter ${a.diffPercent}% (${a.month})`,
 };
 

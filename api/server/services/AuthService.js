@@ -223,7 +223,7 @@ const sendVerificationEmail = async (user) => {
   }/verify?token=${verifyToken}&email=${encodeURIComponent(user.email)}`;
   await sendEmail({
     email: user.email,
-    subject: 'Verify your email',
+    subject: `${process.env.APP_TITLE || '1ma'}: подтверждение адреса`,
     payload: {
       appName: process.env.APP_TITLE || '1ma',
       name: user.name || user.username || user.email,
@@ -873,7 +873,7 @@ const resendVerificationEmail = async (req) => {
 
     await sendEmail({
       email: user.email,
-      subject: 'Verify your email',
+      subject: `${process.env.APP_TITLE || '1ma'}: подтверждение адреса`,
       payload: {
         appName: process.env.APP_TITLE || '1ma',
         name: user.name || user.username || user.email,
