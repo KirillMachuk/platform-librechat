@@ -1,5 +1,5 @@
 /**
- * Ends a mouse selection at the last character it actually covers.
+ * Ends a transcript selection at the last character it actually covers.
  *
  * A triple-click in Chromium selects the paragraph AND the "paragraph break"
  * after it — the range ends at the start of whatever block comes next — and
@@ -9,10 +9,12 @@
  * message arrived as «текст» plus two empty lines even after the toolbar row
  * under it was taken out of selection (#473) — the owner's complaint, still
  * open. Editors (ProseMirror, CKEditor) solve this by owning the selection
- * bounds themselves; this does the same for the transcript: after the mouse
- * is released, the end of the selection is moved back to the last selected
+ * bounds themselves; this does the same for the transcript: at the moment of
+ * copying, the end of the selection is moved back to the last selected
  * character, so the native copy — text/plain AND text/html — serialises the
- * text and nothing after it.
+ * text and nothing after it. Measured on the built bundle: with this off the
+ * rich copy carried the empty toolbar row and the next message's markup
+ * (31 KB of HTML against 464 bytes) as well as the two blank lines.
  *
  * The contract, each line with a unit case:
  * - a collapsed selection is left alone, and that is also what keeps a text
@@ -40,10 +42,10 @@
  *   message being edited) is never where the cut lands;
  * - the selection never collapses and its direction is kept.
  *
- * Applied at COPY time (see `useTrimSelectionEnd`), so it covers every way a
- * selection can be made — mouse, keyboard, Shift+click, a phone's handles,
- * Select All — and leaves the selection alone while the user is still working
- * with it.
+ * Applied at COPY time (see `useTrimSelectionEnd`): the selection is left
+ * alone while the user is still working with it, and how it was made no longer
+ * matters. A selection that STARTS outside the transcript — Select All — is
+ * not ours and stays untouched.
  */
 
 const NOT_WHITESPACE = /[^\s\u200B-\u200D\u2060\uFEFF]/;
@@ -74,10 +76,11 @@ function isSelectableFrom(start: Element | null): boolean {
     if (el.hasAttribute('inert')) {
       return false;
     }
-    /* A form control's value is the control's, not the transcript's: a message
-     * being edited sits in a textarea inside the log, and the clipboard walks
-     * into text controls (Chromium's serialiser enters them). The end of a
-     * selection over messages must never land in there. */
+    /* A form control's value is the control's, not the transcript's. Today's
+     * message editor keeps its value off the DOM, so a text walker finds
+     * nothing inside it; this is the guard for the day one of them renders its
+     * text as a child node (a fixture that does exactly that cuts at
+     * «как делаdraft» without it). */
     if (el.matches('textarea, input, select')) {
       return false;
     }

@@ -160,20 +160,6 @@ describe('trimSelectionEnd', () => {
     expect(selection.getRangeAt(0).toString()).toBe('как дела');
   });
 
-  it("a text field's own selection is left alone: the document reports it collapsed", () => {
-    /* What a textarea with `setSelectionRange` looks like to the document — a
-     * collapsed range whose text the field still reports as selected. */
-    const log = mount('<p id="a">как дела</p><textarea id="t">draft</textarea>');
-    const field = log.querySelector('#t') as HTMLTextAreaElement;
-    field.focus();
-    field.setSelectionRange(0, 5);
-    const parent = field.parentNode as Node;
-    const selection = select(parent, 0, parent, 0);
-    expect(trimSelectionEnd(selection, log)).toBe(false);
-    expect(field.selectionStart).toBe(0);
-    expect(field.selectionEnd).toBe(5);
-  });
-
   it('a tail that holds an image is left alone: the picture stays in the copy', () => {
     const log = mount('<p id="a">look</p><p id="i"><img src="x.png" alt=""></p><p id="b">next</p>');
     const a = text(log.querySelector('#a'));

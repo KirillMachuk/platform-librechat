@@ -7,11 +7,13 @@ import { trimSelectionEnd } from '~/utils/selectionEnd';
  * see `trimSelectionEnd` for what the browser gets wrong and why.
  *
  * The adjustment hangs on the `copy` event rather than on a mouse release, and
- * that is the whole point: the clipboard is then correct no matter HOW the
- * selection was made — mouse, keyboard, Shift+click, a phone's selection
- * handles, Select All — in any engine, and whatever had focus while it was
- * made. The earlier mouse-release version had to guess all of that, and a case
- * it guessed wrong still copied blank lines (owner, 06.09).
+ * that is the whole point: it no longer matters how the selection was made or
+ * what had focus while it was made. The earlier mouse-release version had to
+ * guess both, and a case it guessed wrong — the composer keeps the caret after
+ * a send — still copied blank lines (owner, 06.09). Measured in Chromium:
+ * mouse, keyboard and a selection built with no pointer event at all now copy
+ * the same clean text; a Select All, which starts outside the transcript, is
+ * left to the browser as before.
  *
  * The browser serialises the selection when the default action runs, after
  * this handler returns, so adjusting it here fixes BOTH clipboard flavours —
@@ -36,11 +38,11 @@ export default function useTrimSelectionEnd(container: RefObject<HTMLElement | n
       }
       trimSelectionEnd(selection, root);
     };
+    /* `copy` only: a cut over the transcript copies nothing (Chromium runs no
+     * default action on a non-editable selection — measured), and the one
+     * editable spot inside the log, a message being edited, holds a collapsed
+     * range that this leaves alone anyway. */
     document.addEventListener('copy', onCopy);
-    document.addEventListener('cut', onCopy);
-    return () => {
-      document.removeEventListener('copy', onCopy);
-      document.removeEventListener('cut', onCopy);
-    };
+    return () => document.removeEventListener('copy', onCopy);
   }, [container]);
 }
