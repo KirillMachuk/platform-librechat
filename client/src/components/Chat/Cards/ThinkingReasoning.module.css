@@ -114,6 +114,16 @@
     color: var(--text-primary);
   }
 }
+/* OPEN is a state, not a hover: while the thoughts are unfolded the header
+ * keeps the lifted colour it had under the cursor, so opening and closing the
+ * block no longer flickers between two tones (owner, 06.09). Outside the hover
+ * query on purpose — a phone has no cursor but does have an open block. */
+.trHeader.isClickable[aria-expanded='true'] .trBrain,
+.trHeader.isClickable[aria-expanded='true'] .trLabel,
+.trHeader.isClickable[aria-expanded='true'] .trVerb,
+.trHeader.isClickable[aria-expanded='true'] .trChevron {
+  color: var(--text-primary);
+}
 .trViewport {
   margin-top: 6px;
   overflow: hidden;

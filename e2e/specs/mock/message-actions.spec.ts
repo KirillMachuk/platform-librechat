@@ -136,9 +136,9 @@ test.describe('the buttons under an answer', () => {
  * Read from the clipboard itself, not from the DOM: what the browser hands to
  * the paste is the only thing the user sees. Chromium's own triple-click also
  * takes the "paragraph break" after a `<p>` and serialises it as two newlines
- * (measured on a bare page) — the transcript ends a mouse selection at the
- * last character it covers (`useTrimSelectionEnd`), so a copied message is
- * exactly the message.
+ * (measured on a bare page) — the transcript ends the selection at its last
+ * character AT COPY TIME (`useTrimSelectionEnd`), so a copied message is
+ * exactly the message however the selection was made.
  */
 test.describe('copying a message by selection', () => {
   test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
@@ -215,7 +215,41 @@ test.describe('copying a message by selection', () => {
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('return 1\n');
   });
 
-  test('a selection in the edit textarea is left alone', async ({ page }) => {
+  test('a message copied while the composer holds the caret is still exactly the message', async ({
+    page,
+  }) => {
+    /* The composer keeps focus after a send, and that focus used to switch the
+     * cleanup off — the owner's own case (06.09): his message pasted with blank
+     * lines while the model's, copied with focus elsewhere, did not. The
+     * selection here is built without touching the mouse, so the composer keeps
+     * the caret exactly as it does in the app. */
+    await twoTurns(page);
+    await page.getByRole('textbox', { name: 'Message input' }).focus();
+    await page
+      .getByText(replyPrompt('first'))
+      .first()
+      .evaluate((el) => {
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+        walker.currentNode = el;
+        const next = walker.nextNode();
+        if (!next || !el.firstChild) {
+          throw new Error('no block after the message');
+        }
+        const range = document.createRange();
+        range.setStart(el.firstChild, 0);
+        range.setEnd(next, 0);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      });
+    expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('TEXTAREA');
+    await page.keyboard.press('ControlOrMeta+C');
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(replyPrompt('first'));
+  });
+
+  test('copying from the message editor copies the field, and its selection survives', async ({
+    page,
+  }) => {
     await twoTurns(page);
     const turn = page
       .getByText(replyPrompt('first'))
@@ -225,29 +259,16 @@ test.describe('copying a message by selection', () => {
     await turn.getByRole('button', { name: /Edit/ }).first().click();
     const editor = page.getByTestId('message-text-editor').first();
     await expect(editor).toBeVisible();
-    /* Select inside the field the way a keyboard user does, then release the
-     * mouse over the field — the release is what the trim listens to, and a
-     * release in a text field must leave the field's own selection alone. */
     await editor.click();
     await page.keyboard.press('Home');
     await page.keyboard.press('Shift+End');
-    const before = await editor.evaluate((el) => {
-      const t = el as HTMLTextAreaElement;
-      return [t.selectionStart, t.selectionEnd];
+    await page.keyboard.press('ControlOrMeta+C');
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(replyPrompt('first'));
+    const [start, end] = await editor.evaluate((el) => {
+      const field = el as HTMLTextAreaElement;
+      return [field.selectionStart, field.selectionEnd];
     });
-    expect(before[1]).toBeGreaterThan(before[0]);
-    const box = await editor.boundingBox();
-    if (!box) {
-      throw new Error('the editor has no box');
-    }
-    await page.mouse.move(box.x + box.width - 8, box.y + box.height / 2);
-    await page.mouse.up();
-    const after = await editor.evaluate((el) => {
-      const t = el as HTMLTextAreaElement;
-      return [t.selectionStart, t.selectionEnd];
-    });
-    expect(after).toEqual(before);
-    expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('TEXTAREA');
+    expect(end).toBeGreaterThan(start);
   });
 
   test('a selection across turns carries no screen-reader headings', async ({ page }) => {

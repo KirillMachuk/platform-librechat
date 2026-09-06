@@ -84,3 +84,30 @@ describe('thought rows are as tall as their text (р34)', () => {
     expect(body).toMatch(/-webkit-line-clamp:\s*2/);
   });
 });
+
+/**
+ * Opening the thoughts must not dim the header back down: the block toggles
+ * between two tones on every click otherwise (owner, 06.09). The open state is
+ * not a hover, so the rule lives outside the hover query — a phone has no
+ * cursor but does have an open block.
+ */
+describe('the thinking header stays lifted while the block is open (р35)', () => {
+  it('the open state paints the same parts the cursor does', () => {
+    const open = MODULE.slice(MODULE.indexOf(".trHeader.isClickable[aria-expanded='true']"));
+    const rule = open.slice(0, open.indexOf('}') + 1);
+    for (const part of ['.trBrain', '.trLabel', '.trVerb', '.trChevron']) {
+      expect(rule).toContain(part);
+    }
+    expect(rule).toMatch(/color:\s*var\(--text-primary\)/);
+  });
+
+  it('sits outside the hover query, so a phone sees it too', () => {
+    const open = MODULE.indexOf(".trHeader.isClickable[aria-expanded='true']");
+    const hoverQuery = MODULE.lastIndexOf('@media (hover: hover)', open);
+    const queryEnd = MODULE.indexOf(
+      '\n}',
+      MODULE.indexOf('color: var(--text-primary)', hoverQuery),
+    );
+    expect(open).toBeGreaterThan(queryEnd);
+  });
+});

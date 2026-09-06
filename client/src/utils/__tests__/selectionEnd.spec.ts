@@ -149,12 +149,15 @@ describe('trimSelectionEnd', () => {
     expect(selection.getRangeAt(0).toString()).toBe('как дела');
   });
 
-  it('a selection made while a text field is active is left alone (an edit in progress)', () => {
+  it('a message is trimmed even while a text field holds the caret — the composer keeps focus after a send', () => {
+    /* Asking who had focus was the defect: the composer keeps it, so a message
+     * copied right after sending one came out with the blank lines (owner, 06.09). */
     const log = mount('<p id="a">как дела</p><textarea id="t">draft</textarea><p id="b">next</p>');
     const a = text(log.querySelector('#a'));
     (log.querySelector('#t') as HTMLTextAreaElement).focus();
     const selection = select(a, 0, log.querySelector('#b') as Node, 0);
-    expect(trimSelectionEnd(selection, log)).toBe(false);
+    expect(trimSelectionEnd(selection, log)).toBe(true);
+    expect(selection.getRangeAt(0).toString()).toBe('как дела');
   });
 
   it('a tail that holds an image is left alone: the picture stays in the copy', () => {

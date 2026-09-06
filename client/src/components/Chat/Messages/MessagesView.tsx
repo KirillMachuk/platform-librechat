@@ -34,8 +34,8 @@ function MessagesViewContent({
     handleScrollButtonClick,
     debouncedHandleScroll,
   } = useMessageScrolling(_messagesTree);
-  /* A mouse selection ends at the last character it covers, not at the block
-   * after it — the copied message is the message (see the hook). */
+  /* A selection ends at the last character it covers, not at the block after
+   * it — the copied message is the message (see the hook). */
   useTrimSelectionEnd(contentRef);
 
   const { conversationId } = conversation ?? {};

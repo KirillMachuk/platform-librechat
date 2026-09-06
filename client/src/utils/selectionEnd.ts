@@ -1,5 +1,5 @@
 /**
- * Ends a mouse selection at the last character it actually covers.
+ * Ends a transcript selection at the last character it actually covers.
  *
  * A triple-click in Chromium selects the paragraph AND the "paragraph break"
  * after it — the range ends at the start of whatever block comes next — and
@@ -9,15 +9,20 @@
  * message arrived as «текст» plus two empty lines even after the toolbar row
  * under it was taken out of selection (#473) — the owner's complaint, still
  * open. Editors (ProseMirror, CKEditor) solve this by owning the selection
- * bounds themselves; this does the same for the transcript: after the mouse
- * is released, the end of the selection is moved back to the last selected
+ * bounds themselves; this does the same for the transcript: at the moment of
+ * copying, the end of the selection is moved back to the last selected
  * character, so the native copy — text/plain AND text/html — serialises the
- * text and nothing after it.
+ * text and nothing after it. Measured on the built bundle: with this off the
+ * rich copy carried the empty toolbar row and the next message's markup
+ * (31 KB of HTML against 464 bytes) as well as the two blank lines.
  *
  * The contract, each line with a unit case:
- * - a collapsed selection, or any selection while a text field is focused
- *   (an edit in progress — a field's own selection is a collapsed DOM range
- *   in Chromium, and the field keeps focus through the drag), is left alone;
+ * - a collapsed selection is left alone, and that is also what keeps a text
+ *   field's own selection safe: the composer and a message being edited hold
+ *   their selection inside the control, where the document reports a COLLAPSED
+ *   range. Asking instead which element has focus was a real defect — the
+ *   composer keeps focus after a send, so a message copied while it did came
+ *   out with the blank lines this whole file exists to remove (owner, 06.09);
  * - a selection that STARTS outside the transcript is left alone; one that
  *   ends after it (the strip under the composer, the composer itself — where
  *   a triple-click on the last message and a drag released below it end) is
@@ -33,14 +38,14 @@
  *   newline only when the range leaves the block;
  * - elsewhere (headings, list items, cells) the cut lands right after the
  *   last visible character;
- * - text under `inert` or `user-select: none` is never where the cut lands;
+ * - text under `inert`, `user-select: none`, or inside a form control (a
+ *   message being edited) is never where the cut lands;
  * - the selection never collapses and its direction is kept.
  *
- * Deliberately out of scope: touch selections (made with the browser's own
- * handles, which dispatch no release), and — the one trade-off of owning the
- * bounds — after a triple-click a Shift+click extends by characters, not by
- * paragraphs, because the trim resets the browser's selection granularity.
- * A keyboard-made selection is trimmed at the next left-button release.
+ * Applied at COPY time (see `useTrimSelectionEnd`): the selection is left
+ * alone while the user is still working with it, and how it was made no longer
+ * matters. A selection that STARTS outside the transcript — Select All — is
+ * not ours and stays untouched.
  */
 
 const NOT_WHITESPACE = /[^\s\u200B-\u200D\u2060\uFEFF]/;
@@ -55,9 +60,6 @@ const REPLACED_ELEMENTS = new Set([
   'OBJECT',
   'EMBED',
 ]);
-const TEXT_FIELD =
-  'textarea, input, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]';
-
 function lastNonWhitespaceIndex(text: string): number {
   for (let i = text.length - 1; i >= 0; i--) {
     if (NOT_WHITESPACE.test(text[i])) {
@@ -72,6 +74,14 @@ function isSelectableFrom(start: Element | null): boolean {
   let el = start;
   while (el) {
     if (el.hasAttribute('inert')) {
+      return false;
+    }
+    /* A form control's value is the control's, not the transcript's. Today's
+     * message editor keeps its value off the DOM, so a text walker finds
+     * nothing inside it; this is the guard for the day one of them renders its
+     * text as a child node (a fixture that does exactly that cuts at
+     * «как делаdraft» without it). */
+    if (el.matches('textarea, input, select')) {
       return false;
     }
     const style = getComputedStyle(el);
@@ -224,10 +234,6 @@ export function trimSelectionEnd(selection: Selection, container: Node): boolean
     return false;
   }
   if (!container.contains(range.startContainer) || !endsInOrAfter(range, container)) {
-    return false;
-  }
-  const active = document.activeElement;
-  if (active && active.matches(TEXT_FIELD)) {
     return false;
   }
   const cut = findSelectionCut(range, container);
