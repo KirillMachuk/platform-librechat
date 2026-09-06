@@ -81,7 +81,10 @@ describe('recipientsForAlert — client alerts widen, operator alerts do not', (
 
   test('client list configured → only the client-facing kinds include it', () => {
     const config = { notifyEmails: operators, clientEmails: ['coordinator@client.example'] };
-    expect(recipientsForAlert(config, 'pool80')).toEqual([...operators, 'coordinator@client.example']);
+    expect(recipientsForAlert(config, 'pool80')).toEqual([
+      ...operators,
+      'coordinator@client.example',
+    ]);
     expect(recipientsForAlert(config, 'exhausted')).toEqual([
       ...operators,
       'coordinator@client.example',
