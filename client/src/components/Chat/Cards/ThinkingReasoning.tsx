@@ -88,7 +88,16 @@ export function ThinkingReasoning({
   const [fade, setFade] = useState({ top: false, bottom: false });
 
   const sentences = useMemo(() => (streaming ? splitThinkSentences(text) : []), [streaming, text]);
-  const paragraphs = useMemo(() => (streaming ? [] : text.split(/\n{2,}/)), [streaming, text]);
+  const paragraphs = useMemo(
+    () =>
+      streaming
+        ? []
+        : text
+            .split(/(?:\r?\n){2,}/)
+            .map((paragraph) => paragraph.trim())
+            .filter(Boolean),
+    [streaming, text],
+  );
 
   /* Rows are as tall as their text (one or two lines), so the stream's height
    * is measured, not multiplied: the cap and the slide-up follow the real rows. */
@@ -100,11 +109,24 @@ export function ThinkingReasoning({
       setRowsH(0);
       return;
     }
-    let sum = 0;
-    for (const row of Array.from(stream.children)) {
-      sum += (row as HTMLElement).offsetHeight;
+    const measure = () => {
+      let sum = 0;
+      for (const row of Array.from(stream.children)) {
+        sum += (row as HTMLElement).offsetHeight;
+      }
+      setRowsH(sum);
+    };
+    measure();
+    /* A row re-wraps without its text changing — the sidebar opens, the window
+     * narrows, the phone turns — and the block stays in stream mode for the
+     * whole submission, so a height measured once would strand the cap and the
+     * slide at the old numbers. */
+    if (typeof ResizeObserver === 'undefined') {
+      return;
     }
-    setRowsH(sum);
+    const observer = new ResizeObserver(measure);
+    observer.observe(stream);
+    return () => observer.disconnect();
   }, [sentences]);
 
   const isOpen = streaming ? true : expanded;

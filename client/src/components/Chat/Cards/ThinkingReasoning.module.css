@@ -42,7 +42,7 @@
   align-items: center;
   gap: 8px;
   align-self: flex-start;
-  min-height: 24px;
+  min-height: calc(26px * var(--markdown-font-size, var(--font-size-base)) / var(--font-size-base));
   padding: 0;
   border: 0;
   background: transparent;
@@ -50,8 +50,13 @@
   /* The size of the message itself (owner, 05.09, after shadcn/AI Elements:
    * the status line and the reply share one size and differ by colour only);
    * the thoughts under it keep ×13/16. */
-  font-size: var(--markdown-font-size);
-  line-height: 24px;
+  font-size: var(--markdown-font-size, var(--font-size-base));
+  /* The message's own line box, by the same formula the prose uses
+   * (style.css `.markdown`/`.prose`), so the two keep step at every font-size
+   * setting — a hardcoded 24px matched only the default and drifted from there. */
+  line-height: calc(
+    26px * var(--markdown-font-size, var(--font-size-base)) / var(--font-size-base)
+  );
   font-weight: 400;
   letter-spacing: -0.005em;
 }

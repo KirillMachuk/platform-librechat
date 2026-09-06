@@ -2155,42 +2155,68 @@ html {
   }
 }
 
-/* The shimmering word itself — «Думаю…» before the first token, the same word
-   in a streaming reasoning header, and the running plan step's label. The
-   sweep runs t2 → t1 → t2 across the text; reduced motion gets static t2.
+/* The shimmering word — «Думаю…» before the first token, the same word in a
+   streaming reasoning header, the Deep Research action line and the running
+   plan step's label. Р34 (owner, 05.09, after shadcn's `shimmer` utility):
+   the base is the muted grey the label already wears (t3) and the band does
+   NOT darken it — in the light theme the band is that same grey at 20% alpha,
+   so the letters fade toward the page under it; in the dark theme the band is
+   lifted toward white, so they brighten. Band 3ch + 40px, tilt 20°, one pass
+   2 s. Both classes read ONE set of custom properties so the label utility and
+   the paint-only twin cannot drift apart — and every property and keyframe
+   they read is defined in THIS file. That is not a style preference: these
+   elements carry `color: transparent`, so one undefined `var()` makes the
+   gradient declaration invalid and the text disappears entirely (it shipped
+   that way for one commit — `shimmerContract.spec.ts` now resolves every
+   reference).
    The `.submitting` gate that used to live here moved to `.trWait` in
    ThinkingReasoning.module.css when the waiting label became the reasoning
    header (r27): the gate has to hide the brain icon too, and one file
    deciding it beats two classes racing on CSS chunk order. */
+.thinking-shimmer-active,
+.thinking-shimmer-paint {
+  --shimmer-base: var(--text-tertiary);
+  --shimmer-highlight: color-mix(in srgb, var(--text-tertiary) 20%, transparent);
+  --shimmer-spread: calc(3ch + 40px);
+  background-image: linear-gradient(
+    110deg,
+    var(--shimmer-base) calc(50% - var(--shimmer-spread)),
+    color-mix(in srgb, var(--shimmer-highlight), var(--shimmer-base) 50%)
+      calc(50% - var(--shimmer-spread) * 0.5),
+    var(--shimmer-highlight) 50%,
+    color-mix(in srgb, var(--shimmer-highlight), var(--shimmer-base) 50%)
+      calc(50% + var(--shimmer-spread) * 0.5),
+    var(--shimmer-base) calc(50% + var(--shimmer-spread))
+  );
+  background-repeat: no-repeat;
+  background-size: calc(200% + var(--shimmer-spread) * 2) 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: thinking-shimmer-sweep 2s linear infinite;
+}
+/* The label utility owns its own layout — one line, no wrapping — because its
+   consumers rely on it. The paint-only twin must NOT: a wrapping research step
+   ran ~26px past the card at 375px, and a `line-clamp-2` died by source order
+   (r25 package Б review). */
 .thinking-shimmer-active {
   display: inline-block;
   white-space: nowrap;
-  background-image: var(--shimmer-image);
-  background-repeat: no-repeat;
-  background-size: var(--shimmer-size);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: thinking-shimmer-sweep 2s linear infinite;
 }
-/* The sweep (owner, 05.09, after shadcn's `shimmer` utility): the base is the
-   muted grey the label already wears (t3), and the band does not darken it —
-   in the light theme the band is the same grey at 20% alpha, so the letters
-   FADE toward the page under it; in the dark theme the band is lifted toward
-   white, so they brighten. Band width 3ch + 40px, tilt 20°, one pass = 2 s.
-   Shared by the label utility and the paint-only twin below through custom
-   properties, so the two cannot drift. */
-.thinking-shimmer-active,
-.thinking-shimmer-paint {
-  background-image: var(--shimmer-image);
-  background-repeat: no-repeat;
-  background-size: var(--shimmer-size);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: thinking-shimmer-sweep 2s linear infinite;
+.dark .thinking-shimmer-active,
+.dark .thinking-shimmer-paint {
+  --shimmer-highlight: color-mix(in srgb, var(--text-tertiary) 35%, #fff);
+}
+@keyframes thinking-shimmer-sweep {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
+  .thinking-shimmer-active,
   .thinking-shimmer-paint {
     animation: none;
     background-image: none;

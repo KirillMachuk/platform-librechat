@@ -179,3 +179,55 @@ describe('transparent text must survive being selected (owner r28)', () => {
     expect(body).toMatch(/-webkit-text-fill-color:\s*var\(--text-/);
   });
 });
+
+/**
+ * The shimmer paints text that carries `color: transparent`, so a reference
+ * that does not resolve does not degrade — it erases the words. One commit
+ * shipped exactly that: a refactor moved the gradient behind custom properties
+ * and deleted both the properties and the keyframes, and «Думаю…», the Deep
+ * Research action line and the running plan step all rendered blank while every
+ * test here stayed green (they only asserted that the declarations were
+ * present). These resolve what the declarations point AT.
+ */
+describe('every shimmer reference resolves inside the stylesheet', () => {
+  const rules = STYLE.slice(
+    STYLE.indexOf('.thinking-shimmer-active,'),
+    STYLE.indexOf('.shadow-stroke {'),
+  );
+
+  it('the block exists and is the one the classes are defined in', () => {
+    expect(rules).toContain('.thinking-shimmer-paint');
+    expect(rules.length).toBeGreaterThan(200);
+  });
+
+  it('every custom property it reads is defined in the same stylesheet', () => {
+    const read = new Set(Array.from(rules.matchAll(/var\((--[a-z0-9-]+)/g), (m) => m[1]));
+    expect(read.size).toBeGreaterThan(0);
+    for (const name of read) {
+      expect(STYLE).toMatch(new RegExp(`\\s${name}:`));
+    }
+  });
+
+  it('every animation it names has its keyframes in the same stylesheet', () => {
+    const named = Array.from(rules.matchAll(/animation:\s*([a-z0-9-]+)/g), (m) => m[1]).filter(
+      (name) => name !== 'none',
+    );
+    expect(named.length).toBeGreaterThan(0);
+    for (const name of named) {
+      expect(STYLE).toContain(`@keyframes ${name}`);
+    }
+  });
+
+  it('reduced motion gives BOTH classes their colour back', () => {
+    const guarded = STYLE.slice(
+      STYLE.indexOf(
+        '@media (prefers-reduced-motion: reduce)',
+        STYLE.indexOf('.thinking-shimmer-active,'),
+      ),
+    );
+    const block = guarded.slice(0, guarded.indexOf('\n}\n') + 3);
+    expect(block).toContain('.thinking-shimmer-active');
+    expect(block).toContain('.thinking-shimmer-paint');
+    expect(block).toMatch(/color:\s*var\(--text-/);
+  });
+});
