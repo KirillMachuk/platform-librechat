@@ -29,10 +29,16 @@ describe('waiting-label gate contract (owner r27)', () => {
   it('that shared list carries the geometry both of them must agree on', () => {
     const shared = MODULE.slice(MODULE.indexOf('.trHeader,'));
     const body = shared.slice(shared.indexOf('{') + 1, shared.indexOf('}'));
-    expect(body).toMatch(/font-size:\s*calc\(var\(--markdown-font-size\) \* 13 \/ 16\)/);
-    expect(body).toMatch(/line-height:\s*18px/);
-    expect(body).toMatch(/font-weight:\s*500/);
-    expect(body).toMatch(/gap:\s*6px/);
+    /* The size of the message (owner, 05.09): the header and the waiting
+     * label share the reply's size and differ from it by colour only. */
+    expect(body).toMatch(/font-size:\s*var\(--markdown-font-size, var\(--font-size-base\)\)/);
+    /* The message's own line box, by the formula `.markdown` uses — a literal
+     * px value matched the default size only and drifted at every other one. */
+    expect(body).toMatch(
+      /line-height:\s*calc\(\s*26px \* var\(--markdown-font-size, var\(--font-size-base\)\) \/ var\(--font-size-base\)\s*\)/,
+    );
+    expect(body).toMatch(/font-weight:\s*400/);
+    expect(body).toMatch(/gap:\s*8px/);
   });
 
   /** The STANDALONE `.trWait { … }` rule — not the shared `.trHeader, .trWait`
@@ -53,5 +59,28 @@ describe('waiting-label gate contract (owner r27)', () => {
     const hiddenAt = MODULE.search(hiddenRule);
     expect(hiddenAt).toBeGreaterThan(MODULE.indexOf('.trHeader,'));
     expect(MODULE.indexOf(':global(.submitting) .trWait {')).toBeGreaterThan(hiddenAt);
+  });
+});
+
+/**
+ * The row geometry lives in CSS, and the component test can only pin the
+ * arithmetic around it (it fakes `offsetHeight`). Reverting these two lines to
+ * the vendored `height: 40px` brings back the empty line under every one-line
+ * thought — «текст через строку» — with every JS test still green, so the CSS
+ * is pinned here, where the stylesheet itself is read.
+ */
+describe('thought rows are as tall as their text (р34)', () => {
+  const rule = MODULE.slice(MODULE.indexOf('.trSentence {'));
+  const body = rule.slice(rule.indexOf('{') + 1, rule.indexOf('}'));
+
+  it('a row grows from one line to two, and is never a fixed box', () => {
+    expect(body).toMatch(/min-height:\s*20px/);
+    expect(body).toMatch(/max-height:\s*40px/);
+    expect(body).not.toMatch(/(^|[^-])height:\s*40px/);
+  });
+
+  it('two lines is the cap, by the line box and the clamp together', () => {
+    expect(body).toMatch(/line-height:\s*20px/);
+    expect(body).toMatch(/-webkit-line-clamp:\s*2/);
   });
 });

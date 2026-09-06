@@ -1,6 +1,21 @@
 import { render, fireEvent } from '@testing-library/react';
 import { ThinkingReasoning, ThinkingWaitLabel } from '../ThinkingReasoning';
 
+/* jsdom has no layout: rows report the height a real row of that many lines
+ * would have (20px per line, two at most), so the measured geometry runs. */
+let rowHeight = 40;
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+    configurable: true,
+    get() {
+      return (this as HTMLElement).classList.contains('trSentence') ? rowHeight : 0;
+    },
+  });
+});
+beforeEach(() => {
+  rowHeight = 40;
+});
+
 /**
  * Guards for the vendored aicss thinking block (cards К4, §6.17): the stream
  * preview reveals clamped sentence rows and auto-scrolls behind the fade
@@ -61,6 +76,49 @@ describe('ThinkingReasoning (cards К4)', () => {
     expect(viewport?.style.height).toBe('180px');
     expect(stream?.style.transform).toBe('translateY(-96px)');
     expect(viewport?.style.maskImage).toContain('linear-gradient');
+  });
+
+  it('one-line rows take one line: six of them fit without the cap or the slide', () => {
+    rowHeight = 20;
+    const { container } = render(
+      <ThinkingReasoning
+        text="A one. B two. C three. D four. E five. F six."
+        streaming
+        expanded
+        onToggle={() => undefined}
+        shimmerLabel="Думаю…"
+        doneVerb="Думал"
+        ariaLabel="Мысли"
+        contentId="think-1"
+      />,
+    );
+    expect(container.querySelectorAll('.trSentence')).toHaveLength(6);
+    /* 6×20 + 5×4 = 140 < 180: no cap, no slide — and no empty line per row. */
+    expect(container.querySelector<HTMLElement>('.trViewport')?.style.height).toBe('140px');
+    expect(container.querySelector<HTMLElement>('.trStream')?.style.transform).toBe(
+      'translateY(0px)',
+    );
+  });
+
+  it('a finished text is paragraphs, one per double newline, with no empty line between', () => {
+    const { container } = render(
+      <ThinkingReasoning
+        text={'First paragraph.\nStill first.\n\nSecond paragraph.\n\n\nThird.'}
+        streaming={false}
+        expanded
+        onToggle={() => undefined}
+        shimmerLabel="Думаю…"
+        doneVerb="Думал"
+        ariaLabel="Мысли"
+        contentId="think-1"
+      />,
+    );
+    const paragraphs = container.querySelectorAll('[data-testid="think-full"] .trPara');
+    expect(Array.from(paragraphs).map((p) => p.textContent)).toEqual([
+      'First paragraph.\nStill first.',
+      'Second paragraph.',
+      'Third.',
+    ]);
   });
 
   it('grows the viewport with the content before the cap', () => {
