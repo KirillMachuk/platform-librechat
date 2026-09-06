@@ -1,6 +1,7 @@
 const { logger } = require('@librechat/data-schemas');
 const {
   readBillingConfig,
+  recipientsForAlert,
   createBillingNotifier,
   createBillingReconciler,
   createOpenRouterManagement,
@@ -14,9 +15,12 @@ const { sendEmail } = require('~/server/utils');
  * before dotenv/mongoose are ready, so nothing here may run at require time.
  */
 
+/* The subject is the half most people read, so the two client-facing ones say the same
+ * thing their bodies do — and «месячного» is wrong outright: `alert.month` is the service
+ * period's START DATE, and a period anchored anywhere but the 1st is not a month. */
 const SUBJECTS = {
-  pool80: (a) => `1ma Кредиты: израсходовано ${a.percentUsed}% месячного пула (${a.month})`,
-  exhausted: (a) => `1ma Кредиты: пул и пакеты исчерпаны — модели остановлены (${a.month})`,
+  pool80: (a) => `1ma Кредиты: израсходовано ${a.percentUsed}% пула (период с ${a.month})`,
+  exhausted: (a) => `1ma Кредиты: пул исчерпан — модели временно недоступны (период с ${a.month})`,
   reconcile: (a) => `1ma Кредиты: расхождение с OpenRouter ${a.diffPercent}% (${a.month})`,
 };
 
@@ -50,14 +54,18 @@ function getBillingWiring() {
    * @returns {Promise<number>} how many recipients the mail actually went to.
    */
   async function sendAlert(alert) {
-    if (!config.notifyEmails.length) {
+    /* Not every alert goes to everyone: the reconcile mail names the upstream provider
+     * and our cost basis, so it stays with the operators even when the client's
+     * coordinators are configured. */
+    const recipients = recipientsForAlert(config, alert.kind);
+    if (!recipients.length) {
       logger.warn(
         `[billing] alert "${alert.kind}" not emailed — BILLING_NOTIFY_EMAILS/BILLING_OPERATOR_EMAILS empty`,
       );
       return 0;
     }
     let delivered = 0;
-    for (const email of config.notifyEmails) {
+    for (const email of recipients) {
       try {
         await sendEmail({
           email,
@@ -73,7 +81,7 @@ function getBillingWiring() {
     }
     if (delivered === 0) {
       logger.error(
-        `[billing] alert "${alert.kind}" reached NONE of ${config.notifyEmails.length} recipient(s)`,
+        `[billing] alert "${alert.kind}" reached NONE of ${recipients.length} recipient(s)`,
       );
     }
     return delivered;
