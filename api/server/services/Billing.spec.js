@@ -25,8 +25,15 @@ jest.mock('@librechat/api', () => ({
     anchorDay: 1,
     operatorEmails: [],
     notifyEmails: [],
+    clientEmails: [],
     openrouter: { baseUrl: 'https://openrouter.ai/api/v1', headroom: 0.1 },
   })),
+  /* Stands in for the real router, which decides that a `reconcile` alert stays with the
+   * operators while the client-facing kinds may widen. The routing RULE is covered where
+   * it lives (`packages/api/src/billing/config.spec.ts`); re-implementing it here would
+   * only create a second copy to drift. What this file checks is the wiring: that
+   * `sendAlert` asks, and mails exactly the answer. */
+  recipientsForAlert: jest.fn((config) => config.notifyEmails),
   createBillingNotifier: jest.fn(() => ({ handleSpendResult: jest.fn() })),
   createBillingReconciler: jest.fn(() => ({
     run: mockRun,
@@ -340,5 +347,85 @@ describe('startBillingSchedule — the internal check is not hostage to OpenRout
     expect(warnings.some((line) => /no OpenRouter key available to read usage/.test(line))).toBe(
       true,
     );
+  });
+});
+
+/**
+ * The wiring guard for the recipient split. `sendAlert` used to mail one fixed list to
+ * every alert kind; the reconcile mail names the upstream provider and our cost basis,
+ * so putting a client coordinator on that list would have handed them our numbers. What
+ * matters here is that `sendAlert` ASKS who this kind goes to and mails exactly that —
+ * the rule it asks is covered in `packages/api/src/billing/config.spec.ts`.
+ */
+describe('sendAlert routes by alert kind', () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it('mails whoever the router names for that kind, not the operator list', async () => {
+    const api = require('@librechat/api');
+    api.readBillingConfig.mockReturnValue({
+      enabled: true,
+      internalToken: 'token',
+      poolCredits: 25_000,
+      poolMicroUsd: 250_000_000,
+      landedCostMultiplier: 1,
+      serviceStartDate: null,
+      anchorDay: 1,
+      operatorEmails: ['ops@1ma.ai'],
+      notifyEmails: ['ops@1ma.ai'],
+      clientEmails: ['coordinator@client.example'],
+      openrouter: { baseUrl: 'https://openrouter.ai/api/v1', headroom: 0.1 },
+    });
+    api.recipientsForAlert.mockReturnValue(['ops@1ma.ai', 'coordinator@client.example']);
+    const { sendEmail: freshSendEmail } = require('~/server/utils');
+    freshSendEmail.mockResolvedValue({});
+    const { getBillingWiring: freshWiring } = require('./Billing');
+
+    const delivered = await freshWiring().sendAlert({
+      kind: 'pool80',
+      month: '2026-09-01',
+      spentCredits: 20_000,
+      poolCredits: 25_000,
+      percentUsed: 80,
+    });
+
+    // Asked about THIS kind — not about some default.
+    expect(api.recipientsForAlert).toHaveBeenCalledWith(
+      expect.objectContaining({ clientEmails: ['coordinator@client.example'] }),
+      'pool80',
+    );
+    // …and mailed exactly the answer, including the address that is not an operator.
+    expect(delivered).toBe(2);
+    expect(freshSendEmail.mock.calls.map((call) => call[0].email)).toEqual([
+      'ops@1ma.ai',
+      'coordinator@client.example',
+    ]);
+  });
+
+  it('an empty answer is a warning and no mail, even with operators configured', async () => {
+    const api = require('@librechat/api');
+    api.readBillingConfig.mockReturnValue({
+      enabled: true,
+      internalToken: 'token',
+      poolCredits: 25_000,
+      poolMicroUsd: 250_000_000,
+      landedCostMultiplier: 1,
+      serviceStartDate: null,
+      anchorDay: 1,
+      operatorEmails: ['ops@1ma.ai'],
+      notifyEmails: ['ops@1ma.ai'],
+      clientEmails: [],
+      openrouter: { baseUrl: 'https://openrouter.ai/api/v1', headroom: 0.1 },
+    });
+    api.recipientsForAlert.mockReturnValue([]);
+    const { sendEmail: freshSendEmail } = require('~/server/utils');
+    const { getBillingWiring: freshWiring } = require('./Billing');
+
+    const delivered = await freshWiring().sendAlert({ kind: 'exhausted', month: '2026-09-01' });
+
+    expect(delivered).toBe(0);
+    expect(freshSendEmail).not.toHaveBeenCalled();
   });
 });
