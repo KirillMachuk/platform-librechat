@@ -13,10 +13,10 @@
   },
   "renderEvidence": {
     "algorithm": "sha256-json-v1",
-    "matrixDigest": "2d7db778a5762d0f218f2a8d0d37416da13973f07912036f51d37d5d691e953a"
+    "matrixDigest": "511d2676ddaf9e661736a9f07c1afef9ece0ee99c5ba91065515f9a23c0f83b5"
   },
-  "reviewer": "Claude review of the CI renders after the claim-marker and title-gap fixes",
-  "reviewedAt": "2026-08-15",
+  "reviewer": "Codex review of the CI renders after the PowerPoint chart compatibility fix",
+  "reviewedAt": "2026-09-07",
   "cases": {
     "ru-board-notes": {
       "score": 9.4,
@@ -129,5 +129,5 @@
       "notes": "Russian and English business notation, currency, ratios, dates, native chart, and table render consistently."
     }
   },
-  "reviewNotes": "The digest is a raster hash and belongs to the renderer that made it, so it is taken from the CI run that scores the gate, not from a local one. Reviewed the run-1 montages that run published for ru-long-copy and ru-board-notes, the two cases carrying a claim slide: the accent marker now sits on the centre line of the claim it marks instead of an inch above it, and every title has a clear break before its content, including the three-line one that used to sit on its own bullets. Slide content is unchanged, so the per-case dimensions from the 2026-08-11 review still hold."
+  "reviewNotes": "The digest is the exact Ubuntu CI raster evidence, not a local LibreOffice hash. Reviewed all ten run-1 montages at full resolution after preserving python-pptx's signed chart-axis identifiers and removing the destructive chart-title access. All Cyrillic text remains legible, slide titles and content are unclipped, charts have no placeholder titles or stray glyphs, no slide is blank, and the deck narratives and editable evidence are unchanged. The existing per-case dimension scores therefore still apply without an increase."
 }
