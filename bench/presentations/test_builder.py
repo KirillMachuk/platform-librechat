@@ -219,7 +219,26 @@ class PresentationBuilderTests(unittest.TestCase):
 
             BUILDER._clear_stale_outputs(output)
 
-            self.assertTrue(all(not path.exists() for path in stale))
+        self.assertTrue(all(not path.exists() for path in stale))
+
+    def test_main_rejects_a_same_stem_pdf_source_without_modifying_it(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source = root / "weather-minsk.pdf"
+            output = root / "weather-minsk.pptx"
+            original = b"immutable source"
+            source.write_bytes(original)
+            spec = _base_spec(output.name)
+            spec["inputPath"] = str(source)
+            spec_path = root / "spec.json"
+            spec_path.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+
+            with mock.patch.object(sys, "argv", [str(BUILDER_PATH), str(spec_path), str(output)]):
+                with self.assertRaisesRegex(ValueError, "choose a different output stem"):
+                    BUILDER.main()
+
+            self.assertEqual(source.read_bytes(), original)
+            self.assertFalse(output.exists())
 
     def test_matrix_is_russian_first_and_covers_ten_distinct_scenarios(self):
         cases = json.loads((Path(__file__).with_name("cases.json")).read_text(encoding="utf-8"))

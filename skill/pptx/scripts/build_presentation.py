@@ -1736,9 +1736,8 @@ def _report(
     }
 
 
-def _clear_stale_outputs(output: Path) -> None:
-    """Remove prior repair artifacts so a failed rebuild cannot look successful."""
-    candidates = [
+def _stale_output_paths(output: Path) -> list[Path]:
+    return [
         output,
         Path(f"{output}.artifact-report.json"),
         output.with_suffix(".pdf"),
@@ -1746,7 +1745,11 @@ def _clear_stale_outputs(output: Path) -> None:
         output.with_suffix(".preview.pdf"),
         Path(f'{output.with_suffix(".preview.pdf")}.artifact-report.json'),
     ]
-    for candidate in candidates:
+
+
+def _clear_stale_outputs(output: Path) -> None:
+    """Remove prior repair artifacts so a failed rebuild cannot look successful."""
+    for candidate in _stale_output_paths(output):
         try:
             candidate.unlink()
         except FileNotFoundError:
@@ -1762,8 +1765,13 @@ def main() -> int:
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
     _job(spec, output)
     source_path = spec.get("inputPath") or spec.get("templatePath")
-    if source_path and Path(source_path).resolve() == output.resolve():
-        raise ValueError("Input/template file must never be overwritten")
+    if source_path:
+        resolved_source = Path(source_path).resolve()
+        if any(resolved_source == candidate.resolve() for candidate in _stale_output_paths(output)):
+            raise ValueError(
+                "Input/template file conflicts with an output or QA sidecar; "
+                "choose a different output stem"
+            )
     source_hash = _sha256(Path(source_path)) if source_path else None
     output.parent.mkdir(parents=True, exist_ok=True)
     _clear_stale_outputs(output)
