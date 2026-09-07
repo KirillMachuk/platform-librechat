@@ -14,12 +14,12 @@
  * unrelated citations both show up.
  */
 
-import { renderHook, act } from '@testing-library/react';
+import { Tools } from 'librechat-data-provider';
 import { RecoilRoot, useRecoilValue } from 'recoil';
 import { QueryClient } from '@tanstack/react-query';
-import { Tools } from 'librechat-data-provider';
-import type { ReactNode } from 'react';
+import { renderHook, act } from '@testing-library/react';
 import type { TAttachment, EventSubmission } from 'librechat-data-provider';
+import type { ReactNode } from 'react';
 import useAttachmentHandler from '../useAttachmentHandler';
 import store from '~/store';
 
@@ -96,6 +96,63 @@ describe('useAttachmentHandler upsert-by-file_id', () => {
     });
   });
 
+  it('replaces an earlier repair attempt when the sandbox changes the file_id', () => {
+    const ctx = setup();
+    ctx.handle(
+      makeAttachment({
+        file_id: 'draft-id',
+        filename: 'weather.pptx',
+        artifactReport: { status: 'needs_review' },
+      }),
+    );
+    ctx.handle(
+      makeAttachment({
+        file_id: 'ready-id',
+        filename: 'weather.pptx',
+        artifactReport: { status: 'ready' },
+      }),
+    );
+
+    expect(ctx.list).toHaveLength(1);
+    expect(ctx.list[0]).toMatchObject({
+      file_id: 'ready-id',
+      filename: 'weather.pptx',
+      artifactReport: { status: 'ready' },
+    });
+  });
+
+  it('does not carry a stale terminal preview status across different repair file IDs', () => {
+    const ctx = setup();
+    ctx.handle(makeAttachment({ file_id: 'draft-id', filename: 'weather.pptx', status: 'ready' }));
+    ctx.handle(
+      makeAttachment({ file_id: 'repair-id', filename: 'weather.pptx', status: 'pending' }),
+    );
+
+    expect(ctx.list).toHaveLength(1);
+    expect(ctx.list[0]).toMatchObject({ file_id: 'repair-id', status: 'pending' });
+  });
+
+  it('does not merge a stale artifact report into a replacement repair file', () => {
+    const ctx = setup();
+    ctx.handle(
+      makeAttachment({
+        file_id: 'draft-id',
+        filename: 'weather.pptx',
+        artifactReport: { status: 'ready' },
+      }),
+    );
+    ctx.handle(
+      makeAttachment({
+        file_id: 'replacement-id',
+        filename: 'weather.pptx',
+      }),
+    );
+
+    expect(ctx.list).toHaveLength(1);
+    expect(ctx.list[0]).toMatchObject({ file_id: 'replacement-id' });
+    expect(ctx.list[0]).not.toHaveProperty('artifactReport');
+  });
+
   it('upserts a failed deferred update over the pending placeholder', () => {
     const ctx = setup();
     ctx.handle(makeAttachment({ status: 'pending' }));
@@ -106,8 +163,8 @@ describe('useAttachmentHandler upsert-by-file_id', () => {
 
   it('keeps multiple distinct file_ids as separate entries', () => {
     const ctx = setup();
-    ctx.handle(makeAttachment({ file_id: 'fid-A' }));
-    ctx.handle(makeAttachment({ file_id: 'fid-B' }));
+    ctx.handle(makeAttachment({ file_id: 'fid-A', filename: 'first.xlsx' }));
+    ctx.handle(makeAttachment({ file_id: 'fid-B', filename: 'second.xlsx' }));
     expect(ctx.list).toHaveLength(2);
     expect(ctx.list.map((a) => (a as { file_id: string }).file_id).sort()).toEqual([
       'fid-A',

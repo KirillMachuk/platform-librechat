@@ -175,20 +175,29 @@ function attachArtifactPreviewFiles({ reportsByFilename, files, session_id }) {
 }
 
 /**
- * Identify render evidence that should power the parent PPTX preview but must
- * not appear as a second attachment. Explicitly requested PDFs always remain
- * visible. Filename conventions make the hide decision fail closed.
+ * Identify internal authoring evidence that must not appear as a user
+ * attachment. `_qa_` is the reserved prefix for specs, rendered slide images,
+ * and other model-only review files. A same-stem `.preview.pdf` is likewise
+ * hidden when a PPTX report exists, so a stale preview from an earlier repair
+ * cannot leak into chat while unrelated user PDFs remain visible.
  *
  * @param {string} name
  * @param {Map<string, import('librechat-data-provider').TArtifactReport>} reportsByFilename
  * @returns {boolean}
  */
 function isInternalArtifactPreview(name, reportsByFilename) {
+  const basename = typeof name === 'string' ? path.basename(name).toLowerCase() : '';
+  if (basename.startsWith('_qa_')) {
+    return true;
+  }
   for (const [targetName, report] of reportsByFilename ?? []) {
     if (report.format !== 'pptx') {
       continue;
     }
     const targetStem = path.basename(targetName, path.extname(targetName));
+    if (basename === `${targetStem.toLowerCase()}.preview.pdf`) {
+      return true;
+    }
     for (const asset of report.previewAssets ?? []) {
       if (asset.kind !== 'pdf' || asset.filename !== name || asset.delivery === 'requested') {
         continue;

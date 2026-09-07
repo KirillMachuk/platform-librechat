@@ -64,7 +64,6 @@ describe('VerifiedPresentationPreview', () => {
           url="/api/files/code/download/abcdefghijklmnopqrstu/123456789012345678901"
           title="deck.pptx"
           refreshKey={0}
-          fallback={<div data-testid="fallback" />}
         />,
       );
     });
@@ -72,28 +71,42 @@ describe('VerifiedPresentationPreview', () => {
     expect(await screen.findByTestId('pdf-preview')).toHaveTextContent(
       'deck.pptx:blob:verified-preview',
     );
-    expect(screen.queryByTestId('fallback')).not.toBeInTheDocument();
+    expect(screen.queryByText('com_ui_preview_failed')).not.toBeInTheDocument();
   });
 
   it.each([
     ['an HTTP failure', { ok: false }],
     ['non-PDF bytes', streamingResponse(['<html>wrong</html>']).response],
-  ])('falls back to the legacy renderer for %s', async (_label, response) => {
-    global.fetch = jest.fn(async () => response) as unknown as typeof fetch;
+  ])(
+    'shows a safe failure instead of the lossy browser renderer for %s',
+    async (_label, response) => {
+      global.fetch = jest.fn(async () => response) as unknown as typeof fetch;
+
+      await act(async () => {
+        render(
+          <VerifiedPresentationPreview
+            url="/api/files/code/download/abcdefghijklmnopqrstu/123456789012345678901"
+            title="deck.pptx"
+            refreshKey={0}
+          />,
+        );
+      });
+
+      expect(await screen.findByText('com_ui_preview_failed')).toBeInTheDocument();
+      expect(screen.queryByTestId('pdf-preview')).not.toBeInTheDocument();
+    },
+  );
+
+  it('shows a safe failure when a generated deck has no verified preview asset', async () => {
+    const fetchSpy = jest.fn();
+    global.fetch = fetchSpy as unknown as typeof fetch;
 
     await act(async () => {
-      render(
-        <VerifiedPresentationPreview
-          url="/api/files/code/download/abcdefghijklmnopqrstu/123456789012345678901"
-          title="deck.pptx"
-          refreshKey={0}
-          fallback={<div data-testid="fallback" />}
-        />,
-      );
+      render(<VerifiedPresentationPreview title="deck.pptx" refreshKey={0} />);
     });
 
-    expect(await screen.findByTestId('fallback')).toBeInTheDocument();
-    expect(screen.queryByTestId('pdf-preview')).not.toBeInTheDocument();
+    expect(await screen.findByText('com_ui_preview_failed')).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('cancels a chunked response as soon as the streaming byte limit is exceeded', async () => {

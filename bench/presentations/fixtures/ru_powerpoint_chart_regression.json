@@ -1,0 +1,68 @@
+{
+  "job": {
+    "format": "pptx",
+    "audience": "Russian-speaking business user",
+    "goal": "Verify PowerPoint compatibility of an editable chart",
+    "sourceFileIds": [],
+    "immutableElements": [],
+    "locale": "ru-RU",
+    "filename": "ru-powerpoint-chart-regression.pptx",
+    "acceptanceCriteria": [
+      "The deck opens without repair in Microsoft PowerPoint",
+      "The chart remains editable",
+      "Cyrillic renders correctly"
+    ]
+  },
+  "slides": [
+    {
+      "layout": "title",
+      "title": "Погода в Минске — август 2026",
+      "subtitle": "Проверка совместимости с PowerPoint"
+    },
+    {
+      "layout": "claim",
+      "title": "Главное",
+      "claim": "Август сохраняет комфортное тепло",
+      "support": "Кириллица и русская типографика должны сохраниться.",
+      "source": "Источник: регрессионный сценарий"
+    },
+    {
+      "layout": "metrics",
+      "title": "Типичный августовский день",
+      "metrics": [
+        { "value": "+24°", "label": "днём" },
+        { "value": "+14°", "label": "ночью" }
+      ],
+      "source": "Источник: регрессионный сценарий"
+    },
+    {
+      "layout": "chart",
+      "title": "Во второй половине августа заметно прохладнее",
+      "chart": {
+        "type": "column",
+        "categories": ["Начало месяца", "Конец месяца"],
+        "series": [
+          { "name": "Днём, °C", "values": [22.6, 20.7] },
+          { "name": "Ночью, °C", "values": [12.4, 10.6] }
+        ],
+        "numberFormat": "0.0"
+      },
+      "takeaway": "Около двух градусов",
+      "detail": "К концу месяца становится прохладнее.",
+      "source": "Источник: регрессионный сценарий"
+    },
+    {
+      "layout": "sources",
+      "title": "Источники",
+      "entries": [
+        { "label": "Проверочный сценарий", "url": "fixture.json — совместимость графика" }
+      ]
+    }
+  ],
+  "sources": [{ "label": "Проверочный сценарий", "url": "fixture.json — совместимость графика" }],
+  "changeLog": [
+    { "target": "Presentation", "summary": "Created a PowerPoint compatibility regression deck" }
+  ],
+  "repairIterations": 0,
+  "outputPdf": true
+}

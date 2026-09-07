@@ -263,6 +263,9 @@ export default function Artifacts() {
     currentArtifact.type === TOOL_ARTIFACT_TYPES.PRESENTATION
       ? getVerifiedPresentationPreviewAsset(currentArtifact.file?.artifactReport)
       : undefined;
+  const hasGeneratedPresentationReport =
+    currentArtifact.type === TOOL_ARTIFACT_TYPES.PRESENTATION &&
+    currentArtifact.file?.artifactReport?.format === 'pptx';
   const legacyArtifactPreview = (
     <ArtifactTabs
       artifact={currentArtifact}
@@ -275,13 +278,12 @@ export default function Artifacts() {
     previewBody = <FilePreviewBody artifact={currentArtifact} />;
   } else if (isGoogleWorkspacePreview) {
     previewBody = <GoogleWorkspacePreview artifact={currentArtifact} isMobile={isMobile} />;
-  } else if (verifiedPresentationPreview?.filepath) {
+  } else if (hasGeneratedPresentationReport) {
     previewBody = (
       <VerifiedPresentationPreview
-        url={verifiedPresentationPreview.filepath}
+        url={verifiedPresentationPreview?.filepath}
         title={displayFilename(currentArtifact.title)}
         refreshKey={presentationPreviewRevision}
-        fallback={<FilePreviewBody artifact={currentArtifact} />}
       />
     );
   } else {

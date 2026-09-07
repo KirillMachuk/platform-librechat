@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -104,17 +105,25 @@ def _slide_xml(path: Path, number: int) -> bytes:
 
 
 class PresentationBuilderTests(unittest.TestCase):
-    def test_pdf_delivery_is_opt_in_and_requires_a_literal_boolean(self):
-        self.assertFalse(BUILDER._output_pdf_requested({}))
+    def test_pdf_delivery_is_default_and_only_literal_false_opts_out(self):
+        self.assertTrue(BUILDER._output_pdf_requested({}))
         self.assertFalse(BUILDER._output_pdf_requested({"outputPdf": False}))
-        self.assertFalse(BUILDER._output_pdf_requested({"outputPdf": "true"}))
-        self.assertFalse(BUILDER._output_pdf_requested({"outputPdf": 1}))
+        self.assertTrue(BUILDER._output_pdf_requested({"outputPdf": "true"}))
+        self.assertTrue(BUILDER._output_pdf_requested({"outputPdf": 1}))
         self.assertTrue(BUILDER._output_pdf_requested({"outputPdf": True}))
 
-    def test_default_render_pdf_is_an_internal_preview(self):
+    def test_default_render_pdf_is_a_same_stem_user_deliverable(self):
         output = Path("/mnt/data/weather-minsk.pptx")
 
         path, delivery = BUILDER._render_pdf_target(output, {})
+
+        self.assertEqual(path, Path("/mnt/data/weather-minsk.pdf"))
+        self.assertEqual(delivery, "requested")
+
+    def test_explicit_pptx_only_request_keeps_pdf_internal(self):
+        output = Path("/mnt/data/weather-minsk.pptx")
+
+        path, delivery = BUILDER._render_pdf_target(output, {"outputPdf": False})
 
         self.assertEqual(path, Path("/mnt/data/weather-minsk.preview.pdf"))
         self.assertEqual(delivery, "preview_only")
@@ -149,7 +158,7 @@ class PresentationBuilderTests(unittest.TestCase):
             ],
         )
 
-    def test_main_keeps_default_preview_pdf_internal_but_reports_an_explicit_pdf(self):
+    def test_main_delivers_pdf_by_default_but_keeps_explicit_pptx_only_preview_internal(self):
         def fake_render(_path: Path, output_pdf: Path, expected_slides: int):
             self.assertGreater(expected_slides, 0)
             output_pdf.write_bytes(b"%PDF-1.7\n")
@@ -159,15 +168,15 @@ class PresentationBuilderTests(unittest.TestCase):
                 output_pdf,
             )
 
-        for requested in (False, True):
-            with self.subTest(requested=requested), tempfile.TemporaryDirectory() as folder:
+        for output_pdf in (False, None, True):
+            with self.subTest(output_pdf=output_pdf), tempfile.TemporaryDirectory() as folder:
                 root = Path(folder)
                 output = root / "weather-minsk.pptx"
                 spec = _base_spec(output.name)
-                if requested:
-                    spec["outputPdf"] = True
-                else:
+                if output_pdf is None:
                     spec.pop("outputPdf", None)
+                else:
+                    spec["outputPdf"] = output_pdf
                 spec_path = root / "spec.json"
                 spec_path.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
 
@@ -177,7 +186,9 @@ class PresentationBuilderTests(unittest.TestCase):
                     self.assertEqual(BUILDER.main(), 0)
 
                 preview = root / (
-                    "weather-minsk.pdf" if requested else "weather-minsk.preview.pdf"
+                    "weather-minsk.preview.pdf"
+                    if output_pdf is False
+                    else "weather-minsk.pdf"
                 )
                 parent_report = json.loads(
                     Path(f"{output}.artifact-report.json").read_text(encoding="utf-8")
@@ -185,9 +196,30 @@ class PresentationBuilderTests(unittest.TestCase):
                 self.assertTrue(preview.exists())
                 self.assertEqual(
                     parent_report["previewAssets"][0]["delivery"],
-                    "requested" if requested else "preview_only",
+                    "preview_only" if output_pdf is False else "requested",
                 )
-                self.assertEqual(Path(f"{preview}.artifact-report.json").exists(), requested)
+                self.assertEqual(
+                    Path(f"{preview}.artifact-report.json").exists(),
+                    output_pdf is not False,
+                )
+
+    def test_repair_clears_stale_deck_pdfs_and_ready_reports_before_rebuilding(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "weather-minsk.pptx"
+            stale = [
+                output,
+                Path(f"{output}.artifact-report.json"),
+                output.with_suffix(".pdf"),
+                Path(f'{output.with_suffix(".pdf")}.artifact-report.json'),
+                output.with_suffix(".preview.pdf"),
+                Path(f'{output.with_suffix(".preview.pdf")}.artifact-report.json'),
+            ]
+            for path in stale:
+                path.write_bytes(b"stale")
+
+            BUILDER._clear_stale_outputs(output)
+
+            self.assertTrue(all(not path.exists() for path in stale))
 
     def test_matrix_is_russian_first_and_covers_ten_distinct_scenarios(self):
         cases = json.loads((Path(__file__).with_name("cases.json")).read_text(encoding="utf-8"))
@@ -294,14 +326,82 @@ class PresentationBuilderTests(unittest.TestCase):
         self.assertIn("Process step title", names)
         self.assertFalse(any(shape.shape_type == MSO_SHAPE_TYPE.PICTURE for slide in deck.slides for shape in slide.shapes))
 
-    def test_native_chart_axis_ids_are_valid_unsigned_openxml_values(self):
+    def test_native_chart_axis_ids_stay_within_powerpoints_signed_32_bit_range(self):
         with tempfile.TemporaryDirectory() as folder:
             output = Path(folder) / "presentation.pptx"
             _save(_base_spec(), output)
             with zipfile.ZipFile(output) as archive:
-                chart_xml = archive.read("ppt/charts/chart1.xml")
+                chart_xml = archive.read("ppt/charts/chart1.xml").decode("utf-8")
+            compatibility_problems = BUILDER._powerpoint_compatibility_issues(output)
 
-        self.assertNotRegex(chart_xml.decode("utf-8"), r'<c:(?:axId|crossAx) val="-')
+        values = [
+            int(value)
+            for value in re.findall(r'<c:(?:axId|crossAx) val="(-?\d+)"', chart_xml)
+        ]
+        self.assertTrue(values)
+        self.assertTrue(all(-(2**31) <= value <= 2**31 - 1 and value != 0 for value in values))
+        self.assertEqual(compatibility_problems, [])
+
+    def test_powerpoint_compatibility_gate_rejects_overflowing_chart_axis_ids(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            valid = root / "valid.pptx"
+            broken = root / "broken.pptx"
+            _save(_base_spec(), valid)
+            with zipfile.ZipFile(valid) as source, zipfile.ZipFile(broken, "w") as target:
+                for info in source.infolist():
+                    payload = source.read(info.filename)
+                    if info.filename == "ppt/charts/chart1.xml":
+                        payload = re.sub(
+                            rb'(<c:(?:axId|crossAx) val=")-?\d+',
+                            rb'\g<1>4294967295',
+                            payload,
+                            count=1,
+                        )
+                    target.writestr(info, payload)
+
+            problems = BUILDER._powerpoint_compatibility_issues(broken)
+
+        self.assertTrue(any("PowerPoint-incompatible chart axis id" in item for item in problems))
+
+    def test_powerpoint_compatibility_gate_bounds_xml_reads(self):
+        with tempfile.TemporaryDirectory() as folder:
+            package = Path(folder) / "oversized.pptx"
+            with zipfile.ZipFile(package, "w") as archive:
+                archive.writestr(
+                    "_rels/.rels",
+                    b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships" />',
+                )
+            with mock.patch.object(BUILDER, "MAX_COMPAT_XML_BYTES", 32):
+                problems = BUILDER._powerpoint_compatibility_issues(package)
+
+        self.assertIn("oversized package XML: _rels/.rels", problems)
+
+    def test_live_weather_regression_fixture_keeps_all_five_slides_and_editable_chart(self):
+        fixture = json.loads(
+            (ROOT / "bench/presentations/fixtures/ru_powerpoint_chart_regression.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / fixture["job"]["filename"]
+            deck = _save(fixture, output)
+            checks, issues = BUILDER._check_structure(output, fixture)
+
+        self.assertEqual(len(deck.slides), 5)
+        self.assertEqual(
+            sum(
+                shape.shape_type == MSO_SHAPE_TYPE.CHART
+                for slide in deck.slides
+                for shape in slide.shapes
+            ),
+            1,
+        )
+        compatibility = next(
+            check for check in checks if check["name"] == "powerpoint-compatibility"
+        )
+        self.assertEqual(compatibility["status"], "passed")
+        self.assertEqual(issues, [])
 
     def test_decorative_shapes_do_not_inherit_default_theme_shadows(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -810,9 +910,11 @@ class PresentationBuilderTests(unittest.TestCase):
 
         self.assertIn("Treat the builder as an executable", instructions)
         self.assertIn("Never reconstruct an attached presentation", instructions)
-        self.assertIn("scratch for one call", instructions)
+        self.assertIn("`/tmp` is empty on the next call", instructions)
+        self.assertIn("`/mnt/data/_qa_<stem>-spec.json`", instructions)
         self.assertIn("Final user files must be direct children of `/mnt/data`", instructions)
-        self.assertIn("Do not deliver or mention the JSON spec", instructions)
+        self.assertIn("Do not deliver or mention `_qa_` files", instructions)
+        self.assertIn("Never write a `QA:` line", instructions)
 
     def test_template_mode_rejects_layout_without_inherited_content_slots(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -1,5 +1,4 @@
 import { useSetRecoilState } from 'recoil';
-import type { QueryClient } from '@tanstack/react-query';
 import { QueryKeys, Tools } from 'librechat-data-provider';
 import type {
   MemoriesResponse,
@@ -7,6 +6,7 @@ import type {
   TAttachment,
   TFile,
 } from 'librechat-data-provider';
+import type { QueryClient } from '@tanstack/react-query';
 import { handleMemoryArtifact } from '~/utils/memory';
 import store from '~/store';
 
@@ -16,6 +16,7 @@ export default function useAttachmentHandler(queryClient?: QueryClient) {
   return ({ data }: { data: TAttachment; submission: EventSubmission }) => {
     const { messageId } = data;
     const fileId = (data as Partial<TFile>).file_id;
+    const filename = (data as Partial<TFile>).filename;
 
     const fileData = data as TFile;
     if (
@@ -70,7 +71,8 @@ export default function useAttachmentHandler(queryClient?: QueryClient) {
     setAttachmentsMap((prevMap) => {
       const messageAttachments =
         (prevMap as Record<string, TAttachment[] | undefined>)[messageId] || [];
-      /* Upsert by `file_id` rather than always appending. The
+      /* Upsert by `file_id`, with filename as the repair-iteration fallback,
+       * rather than always appending. The
        * deferred-preview flow emits the same attachment twice: first
        * with `status: 'pending'` and `text: null`, then again with
        * `status: 'ready'` (and text/textFormat) or `'failed'` (with
@@ -81,18 +83,24 @@ export default function useAttachmentHandler(queryClient?: QueryClient) {
        * citations) keep the legacy append behavior. */
       if (fileId) {
         const existingIndex = messageAttachments.findIndex(
-          (a) => (a as Partial<TFile>).file_id === fileId,
+          (attachment) =>
+            (attachment as Partial<TFile>).file_id === fileId ||
+            (typeof filename === 'string' &&
+              filename.length > 0 &&
+              (attachment as Partial<TFile>).filename === filename),
         );
         if (existingIndex > -1) {
           const existing = messageAttachments[existingIndex] as Partial<TFile>;
           const incoming = data as Partial<TFile>;
-          const next = { ...existing, ...data } as TAttachment;
+          const sameFileId = existing.file_id === incoming.file_id;
+          const next = (sameFileId ? { ...existing, ...data } : data) as TAttachment;
           /* Don't let a phase-1 replay (finalHandler iterates
            * `responseMessage.attachments`, which is the immediate-persist
            * snapshot at status:pending) regress a record a deferred
            * update has already moved to ready/failed. Pin the terminal
            * lifecycle fields when the merge would downgrade. */
           if (
+            sameFileId &&
             (existing.status === 'ready' || existing.status === 'failed') &&
             incoming.status === 'pending'
           ) {
