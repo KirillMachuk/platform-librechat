@@ -22,8 +22,9 @@ const KINDS: ReadonlySet<string> = new Set<ClientErrorKind>(['boundary', 'window
  * mail. `\s+` collapses none of these.
  */
 const CONTROL =
-  // eslint-disable-next-line no-control-regex -- matching them is the point: they are
-  // what lets a public writer rewrite what the operator sees.
+  // Matching them is the point: they are what lets a public writer rewrite what the
+  // operator sees, rather than only what is stored.
+  // eslint-disable-next-line no-control-regex
   /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/g;
 
 function clip(value: unknown, limit: number): string {
