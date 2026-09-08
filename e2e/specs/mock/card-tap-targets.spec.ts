@@ -167,19 +167,28 @@ test.describe('card controls reach 44px on a phone', () => {
     await page.reload({ timeout: 20000 });
     const plan = page.locator('[data-testid="approval-card"][data-variant="plan"]');
     await expect(plan).toBeVisible({ timeout: 30000 });
-    await expect(page.getByTestId('plan-more')).toBeVisible();
+    /* Awaiting approval: the ✕ is there and every step is on screen — a plan
+     * being asked about is never cut to «Ещё N» (design review item 10). */
     await expect(page.getByTestId('dr-cancel')).toBeVisible();
+    await expect(page.getByTestId('plan-more')).toHaveCount(0);
     /* The card's phone box must not push the head or the card sideways. */
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       ),
     ).toBe(0);
+    found = await measureCanon(page);
+    expect(found.targets.map(identify)).not.toContain('dr-cancel');
+    expect(await stolenCentres(page, ['dr-cancel'])).toEqual([]);
 
+    /* A later turn makes the plan a record: the preview well and «Ещё N» appear. */
+    await sendByButton(page, 'E2E_THINK_REPLY:after');
+    await expect(page.getByText('E2E think reply after').first()).toBeVisible({ timeout: 30000 });
+    await expect(page.getByTestId('plan-more')).toBeVisible();
+    await page.getByTestId('plan-more').scrollIntoViewIfNeeded();
     found = await measureCanon(page);
     expect(found.targets.map(identify)).not.toContain('plan-more');
-    expect(found.targets.map(identify)).not.toContain('dr-cancel');
-    expect(await stolenCentres(page, ['plan-more', 'dr-cancel'])).toEqual([]);
+    expect(await stolenCentres(page, ['plan-more'])).toEqual([]);
   });
 
   test('the folded questions card', async ({ page }) => {
