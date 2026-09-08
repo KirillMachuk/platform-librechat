@@ -7,7 +7,7 @@ const {
   DEFAULT_SESSION_EXPIRY,
   DEFAULT_REFRESH_TOKEN_EXPIRY,
 } = require('@librechat/data-schemas');
-const { ErrorTypes, SystemRoles, errorsToString } = require('librechat-data-provider');
+const { SystemRoles, errorsToString } = require('librechat-data-provider');
 const {
   math,
   isEnabled,
@@ -435,10 +435,12 @@ const requestPasswordReset = async (req) => {
     logger.warn(
       `[requestPasswordReset] Blocked - email domain not allowed [Email: ${email}] [IP: ${req.ip}]`,
     );
-    const error = new Error(ErrorTypes.AUTH_FAILED);
-    error.code = ErrorTypes.AUTH_FAILED;
-    error.message = 'Email domain not allowed';
-    return error;
+    /* The same answer as every other outcome. A 400 here told an unauthenticated
+     * caller which domains the contour accepts, and contradicted the promise this
+     * function makes everywhere else. */
+    return {
+      message: 'If an account with that email exists, a password reset link has been sent to it.',
+    };
   }
 
   const user = await findUser({ email }, 'email _id role tenantId');
@@ -488,7 +490,10 @@ const requestPasswordReset = async (req) => {
   const link = `${domains.client}/reset-password?token=${resetToken}&userId=${user._id}`;
 
   if (emailEnabled) {
-    await sendEmail({
+    /* Not awaited: the reply must not take as long as the mail server does. Waiting
+     * made an existing address answer hundreds of milliseconds slower than an unknown
+     * one, which is a stopwatch reading the generic message out loud. */
+    sendEmail({
       email: user.email,
       subject: `${process.env.APP_TITLE || '1ma'}: восстановление пароля`,
       payload: {
@@ -498,15 +503,21 @@ const requestPasswordReset = async (req) => {
         year: new Date().getFullYear(),
       },
       template: 'requestPasswordReset.handlebars',
+    }).catch((error) => {
+      logger.error(`[requestPasswordReset] Could not send the reset mail to ${email}:`, error);
     });
     logger.info(
       `[requestPasswordReset] Link emailed. [Email: ${email}] [ID: ${user._id}] [IP: ${req.ip}]`,
     );
   } else {
-    logger.info(
-      `[requestPasswordReset] Link issued. [Email: ${email}] [ID: ${user._id}] [IP: ${req.ip}]`,
+    /* The link goes to the log and NOWHERE else. Upstream returns it to the caller
+     * here as a convenience for local development without SMTP, and on a reachable
+     * deployment that is an account takeover: anyone who knows a colleague's address
+     * asks for a reset and is handed the link. A typo in EMAIL_HOST is enough to
+     * enter this branch, so the safety cannot rest on the mail staying configured. */
+    logger.warn(
+      `[requestPasswordReset] Mail is NOT configured — link issued to the log only. [Email: ${email}] [ID: ${user._id}] [IP: ${req.ip}]`,
     );
-    return { link };
   }
 
   return {
@@ -523,6 +534,14 @@ const requestPasswordReset = async (req) => {
  * @returns
  */
 const resetPassword = async (userId, token, password) => {
+  /* Registration enforces a minimum through `registerSchema`; the reset path enforced
+   * nothing, so the one flow a stranger can reach was also the one that accepted a
+   * one-character password. */
+  const minPasswordLength = parseInt(process.env.MIN_PASSWORD_LENGTH, 10) || 8;
+  if (typeof password !== 'string' || password.trim().length < minPasswordLength) {
+    return new Error(`Password must be at least ${minPasswordLength} characters`);
+  }
+
   const passwordResetToken = await findPasswordResetToken(userId);
 
   if (!passwordResetToken) {

@@ -13,7 +13,10 @@ const max = positiveInt(process.env.CLIENT_ERROR_MAX, 20);
  * can cost in total: past this many reports in a window the contour stops writing,
  * whoever is asking. Winston rotates the error log at 20 MB but keeps every rolled
  * file for 14 days, so "unbounded writes" means "unbounded disk". */
-const globalMax = positiveInt(process.env.CLIENT_ERROR_GLOBAL_MAX, 600);
+/* 60 per window is ~8 600 reports a day, orders of magnitude above what a contour
+ * with a handful of users produces, and low enough that filling the disk through this
+ * endpoint stops being possible. The previous 600 was a number, not a bound. */
+const globalMax = positiveInt(process.env.CLIENT_ERROR_GLOBAL_MAX, 60);
 
 /**
  * Silently drops the excess instead of answering 429.

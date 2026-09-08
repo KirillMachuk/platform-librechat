@@ -237,6 +237,12 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     utcMonth: string;
     tenantId?: string;
   }) => Promise<boolean>;
+  /** Gives back a `80`/`exhausted` claim whose alert reached nobody. */
+  releaseCreditMonthAlert: (params: {
+    month: string;
+    kind: '80' | 'exhausted';
+    tenantId?: string;
+  }) => Promise<boolean>;
   markCreditMonthNotified: (params: {
     month: string;
     kind: '80' | 'exhausted' | 'reconcile';
@@ -689,6 +695,33 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     return updated != null;
   }
 
+  /**
+   * Gives back a client-facing alert's claim when the mail reached nobody.
+   *
+   * `releaseCreditMonthNotified` only ever handled the reconcile claim, so the two
+   * alerts the contract actually promises the customer had no way back: the claim was
+   * taken before sending, and a dead mail server burned it for the rest of the period.
+   */
+  async function releaseCreditMonthAlert(params: {
+    month: string;
+    kind: '80' | 'exhausted';
+    tenantId?: string;
+  }): Promise<boolean> {
+    const field = params.kind === '80' ? 'notified80At' : 'notifiedExhaustedAt';
+    const updated = await CreditMonth()
+      .findOneAndUpdate(
+        {
+          ...tenantFilter<ICreditMonth>(params.tenantId),
+          month: params.month,
+          [field]: { $ne: null },
+        },
+        { $set: { [field]: null } },
+        { new: true },
+      )
+      .lean<ICreditMonth>();
+    return updated != null;
+  }
+
   async function getCreditMonth(params: {
     month: string;
     tenantId?: string;
@@ -828,6 +861,7 @@ export function createCreditMethods(mongoose: typeof import('mongoose')): {
     listCreditPackages,
     markCreditMonthNotified,
     releaseCreditMonthNotified,
+    releaseCreditMonthAlert,
     getCreditMonth,
     sumCreditSpendJournal,
     sumCreditSpendJournalRange,

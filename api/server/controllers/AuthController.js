@@ -146,7 +146,17 @@ const resetPasswordController = async (req, res) => {
     if (resetPasswordService instanceof Error) {
       return res.status(400).json(resetPasswordService);
     } else {
-      await deleteAllUserSessions({ userId: req.body.userId });
+      /* The password is already changed and the reset token already spent by this
+       * point, so a failure to drop the old sessions must not be reported as a failed
+       * reset — that told the user to try again with a token that no longer exists. */
+      try {
+        await deleteAllUserSessions({ userId: req.body.userId });
+      } catch (sessionError) {
+        logger.error(
+          '[resetPasswordController] Password was reset but old sessions were not dropped:',
+          sessionError,
+        );
+      }
       return res.status(200).json(resetPasswordService);
     }
   } catch (e) {

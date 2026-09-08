@@ -4,7 +4,7 @@ import { Spinner, Button } from '@librechat/client';
 import { useOutletContext } from 'react-router-dom';
 import { loginPage } from 'librechat-data-provider';
 import { useRequestPasswordResetMutation } from 'librechat-data-provider/react-query';
-import type { TRequestPasswordReset, TRequestPasswordResetResponse } from 'librechat-data-provider';
+import type { TRequestPasswordReset } from 'librechat-data-provider';
 import type { FC } from 'react';
 import type { TLoginLayoutContext } from '~/common';
 import { AuthField, authFieldClassName, errorId } from './Field';
@@ -41,29 +41,20 @@ function RequestPasswordReset() {
     formState: { errors },
   } = useForm<TRequestPasswordReset>();
   const [bodyText, setBodyText] = useState<ReactNode | undefined>(undefined);
-  const { startupConfig, setHeaderText } = useOutletContext<TLoginLayoutContext>();
+  const { setHeaderText } = useOutletContext<TLoginLayoutContext>();
 
   const requestPasswordReset = useRequestPasswordResetMutation();
   const { isLoading } = requestPasswordReset;
 
   const onSubmit = (data: TRequestPasswordReset) => {
     requestPasswordReset.mutate(data, {
-      onSuccess: (data: TRequestPasswordResetResponse) => {
-        if (data.link && !startupConfig?.emailEnabled) {
-          setHeaderText('com_auth_reset_password');
-          setBodyText(
-            <span>
-              {localize('com_auth_click')}{' '}
-              <a className="text-text-accent underline underline-offset-2" href={data.link}>
-                {localize('com_auth_here')}
-              </a>{' '}
-              {localize('com_auth_to_reset_your_password')}
-            </span>,
-          );
-        } else {
-          setHeaderText('com_auth_reset_password_link_sent');
-          setBodyText(<ResetPasswordBodyText />);
-        }
+      onSuccess: () => {
+        /* One outcome, always. The server no longer returns the reset link to the
+         * caller, so the branch that rendered it as a clickable anchor described a
+         * response that cannot happen — and described an account takeover when it
+         * could. */
+        setHeaderText('com_auth_reset_password_link_sent');
+        setBodyText(<ResetPasswordBodyText />);
       },
       onError: () => {
         setHeaderText('com_auth_reset_password_link_sent');

@@ -147,6 +147,74 @@ describe('createBillingNotifier', () => {
     expect(deps.markCreditMonthNotified).not.toHaveBeenCalled();
   });
 
+  it('gives the claim back when the alert reached nobody, so a later spend retries', async () => {
+    /* The claim is taken before sending. Without this, one dead mail server silences
+     * the two alerts the contract promises the client for the rest of the period —
+     * up to thirty days — and the customer's first news of a soft block is the block. */
+    const releaseCreditMonthAlert = jest.fn().mockResolvedValue(true);
+    const deps = createDeps({
+      sendAlert: jest.fn().mockResolvedValue(0),
+      releaseCreditMonthAlert,
+    });
+    const notifier = createBillingNotifier(deps);
+
+    await notifier.handleSpendResult(
+      spendResult({ crossed80: true, spentBeforeMicroUsd: 790_000, spentAfterMicroUsd: 810_000 }),
+    );
+
+    expect(releaseCreditMonthAlert).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: '80', month: '2026-07' }),
+    );
+  });
+
+  it('releases the exhausted claim too, not only the 80% one', async () => {
+    const releaseCreditMonthAlert = jest.fn().mockResolvedValue(true);
+    const deps = createDeps({
+      getCreditBillingStatus: jest.fn().mockResolvedValue(statusOf({ blocked: true })),
+      sendAlert: jest.fn().mockResolvedValue(0),
+      releaseCreditMonthAlert,
+    });
+    const notifier = createBillingNotifier(deps);
+
+    await notifier.handleSpendResult(
+      spendResult({ crossedPool: true, spentAfterMicroUsd: POOL + 1 }),
+    );
+
+    expect(releaseCreditMonthAlert).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'exhausted' }),
+    );
+  });
+
+  it('keeps the claim when the alert was delivered', async () => {
+    const releaseCreditMonthAlert = jest.fn().mockResolvedValue(true);
+    const deps = createDeps({
+      sendAlert: jest.fn().mockResolvedValue(2),
+      releaseCreditMonthAlert,
+    });
+    const notifier = createBillingNotifier(deps);
+
+    await notifier.handleSpendResult(
+      spendResult({ crossed80: true, spentBeforeMicroUsd: 790_000, spentAfterMicroUsd: 810_000 }),
+    );
+
+    expect(releaseCreditMonthAlert).not.toHaveBeenCalled();
+  });
+
+  it('treats a void-returning sender as delivered, keeping the old behaviour', async () => {
+    const releaseCreditMonthAlert = jest.fn().mockResolvedValue(true);
+    const deps = createDeps({
+      sendAlert: jest.fn().mockResolvedValue(undefined),
+      releaseCreditMonthAlert,
+    });
+    const notifier = createBillingNotifier(deps);
+
+    await notifier.handleSpendResult(
+      spendResult({ crossed80: true, spentBeforeMicroUsd: 790_000, spentAfterMicroUsd: 810_000 }),
+    );
+
+    expect(releaseCreditMonthAlert).not.toHaveBeenCalled();
+  });
+
   it('never throws when the alert channel fails', async () => {
     const deps = createDeps({ sendAlert: jest.fn().mockRejectedValue(new Error('smtp down')) });
     const notifier = createBillingNotifier(deps);
