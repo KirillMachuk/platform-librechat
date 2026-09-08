@@ -17,8 +17,7 @@ const seed =
       phase,
       steps: [],
       action: '',
-      searches: 0,
-      progress: 0,
+      sources: 0,
     });
 
 describe('ThinkingIndicator — DR pre-plan phase labels (round 23)', () => {

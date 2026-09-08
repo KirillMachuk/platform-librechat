@@ -338,7 +338,7 @@ describe('which plan card draws a live Deep Research run (r26 review)', () => {
      * the same field, so both surfaces must stay quiet or one of them lies. */
     renderTree({
       latestId: 'resp1',
-      snapshot: { phase: 'plan', steps: [], action: '', searches: 0, progress: 0 },
+      snapshot: { phase: 'plan', steps: [], action: '', sources: 0 },
     });
     expect(screen.queryByTestId('dr-stop')).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
@@ -415,8 +415,7 @@ describe('which plan card draws a live Deep Research run (r26 review)', () => {
       phase: 'research',
       steps: ['Нормы', 'Температуры'],
       action: 'Исследует',
-      searches: 1,
-      progress: 0.5,
+      sources: 0,
       stepIndex: 1,
     });
 
@@ -485,7 +484,7 @@ describe('which plan card draws a live Deep Research run (r26 review)', () => {
         }),
       ],
       'replan',
-      { phase: 'plan', steps: [], action: '', searches: 0, progress: 0 },
+      { phase: 'plan', steps: [], action: '', sources: 0 },
     );
 
     expect(screen.queryByTestId('dr-stop')).toBeNull();

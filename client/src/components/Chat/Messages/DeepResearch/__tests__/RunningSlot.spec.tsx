@@ -39,7 +39,7 @@ const withSnapshot = (snapshot: Partial<TDeepResearchProgress> | null) =>
     </RecoilRoot>,
   );
 
-const base = { phase: 'research', action: 'Ищет', searches: 1, progress: 0.5 };
+const base = { phase: 'research', action: 'Ищет', sources: 1 };
 
 describe('RunningSlot — the PROCEED-run card only (r26)', () => {
   it('draws the standalone card when the run has NO plan steps', () => {
