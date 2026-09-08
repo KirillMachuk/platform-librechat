@@ -1486,9 +1486,11 @@ class AgentClient extends BaseClient {
        * history, preserving sticky manual re-priming across turns.
        */
       const manualSkillPrimes = this.options.agent?.manualSkillPrimes;
+      const autoMatchedSkillPrimes = this.options.agent?.autoMatchedSkillPrimes;
       const alwaysApplySkillPrimes = this.options.agent?.alwaysApplySkillPrimes;
       const freshSkillPrimeNames = collectFreshSkillPrimeNames({
         manualSkillPrimes,
+        autoMatchedSkillPrimes,
         alwaysApplySkillPrimes,
       });
       const formatOptions =
@@ -1531,26 +1533,34 @@ class AgentClient extends BaseClient {
        * added-convo agents' per-agent state is an agents-SDK concern,
        * not this layer's to gate.
        *
-       * `manualSkillPrimes` / `alwaysApplySkillPrimes` are resolved above
+       * Manual, auto-matched, and always-apply primes are resolved above
        * (used to build `freshSkillPrimeNames` for dedupe against historical
        * skill reconstruction).
        */
       if (
         (manualSkillPrimes && manualSkillPrimes.length > 0) ||
+        (autoMatchedSkillPrimes && autoMatchedSkillPrimes.length > 0) ||
         (alwaysApplySkillPrimes && alwaysApplySkillPrimes.length > 0)
       ) {
         const primeResult = injectSkillPrimes({
           initialMessages,
           indexTokenCountMap,
           manualSkillPrimes,
+          autoMatchedSkillPrimes,
           alwaysApplySkillPrimes,
         });
         indexTokenCountMap = primeResult.indexTokenCountMap;
         if (primeResult.inserted > 0) {
           const manualNames = (manualSkillPrimes ?? []).map((p) => p.name);
+          const autoMatchedNames = (autoMatchedSkillPrimes ?? []).map((p) => p.name);
           const alwaysApplyNames = (alwaysApplySkillPrimes ?? []).map((p) => p.name);
           logger.debug(
-            `[AgentClient] Primed ${primeResult.inserted} skill(s) at message index ${primeResult.insertIdx} — manual: [${manualNames.join(', ')}], always-apply: [${alwaysApplyNames.join(', ')}]`,
+            `[AgentClient] Primed ${primeResult.inserted} skill(s) at message index ${primeResult.insertIdx} — manual: [${manualNames.join(', ')}], auto-matched: [${autoMatchedNames.join(', ')}], always-apply: [${alwaysApplyNames.join(', ')}]`,
+          );
+        }
+        if (primeResult.autoMatchedDropped > 0) {
+          logger.warn(
+            `[AgentClient] Dropped ${primeResult.autoMatchedDropped} auto-matched prime(s) to stay within MAX_PRIMED_SKILLS_PER_TURN.`,
           );
         }
         if (primeResult.alwaysApplyDropped > 0) {

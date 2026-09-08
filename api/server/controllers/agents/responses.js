@@ -606,15 +606,18 @@ const createResponse = async (req, res) => {
      * carries over.
      */
     const manualSkillPrimes = primaryConfig.manualSkillPrimes;
+    const autoMatchedSkillPrimes = primaryConfig.autoMatchedSkillPrimes;
     const alwaysApplySkillPrimes = primaryConfig.alwaysApplySkillPrimes;
     if (
       (manualSkillPrimes && manualSkillPrimes.length > 0) ||
+      (autoMatchedSkillPrimes && autoMatchedSkillPrimes.length > 0) ||
       (alwaysApplySkillPrimes && alwaysApplySkillPrimes.length > 0)
     ) {
       const primeResult = injectSkillPrimes({
         initialMessages: formattedMessages,
         indexTokenCountMap,
         manualSkillPrimes,
+        autoMatchedSkillPrimes,
         alwaysApplySkillPrimes,
       });
       indexTokenCountMap = primeResult.indexTokenCountMap;
@@ -626,6 +629,11 @@ const createResponse = async (req, res) => {
       if (primeResult.alwaysApplyDropped > 0) {
         logger.warn(
           `[Responses API] Dropped ${primeResult.alwaysApplyDropped} always-apply prime(s) to stay within MAX_PRIMED_SKILLS_PER_TURN.`,
+        );
+      }
+      if (primeResult.autoMatchedDropped > 0) {
+        logger.warn(
+          `[Responses API] Dropped ${primeResult.autoMatchedDropped} auto-matched prime(s) to stay within MAX_PRIMED_SKILLS_PER_TURN.`,
         );
       }
     }

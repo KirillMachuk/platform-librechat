@@ -2089,6 +2089,7 @@ describe('resolveAlwaysApplySkills', () => {
 
 describe('injectSkillPrimes', () => {
   const manual = (name: string, body: string) => ({ name, body });
+  const autoMatched = (name: string, body: string) => ({ name, body });
   const always = (name: string, body: string) => ({ name, body });
 
   it('splices both lists with always-apply first, manual last (closer to user msg)', () => {
@@ -2119,6 +2120,39 @@ describe('injectSkillPrimes', () => {
     const manualPrime = messages[1] as HumanMessage;
     expect(alwaysPrime.additional_kwargs.trigger).toBe('always-apply');
     expect(manualPrime.additional_kwargs.trigger).toBe('manual');
+  });
+
+  it('places an auto-matched artifact skill after ambient skills and before manual selection', () => {
+    const messages = [new HumanMessage('create a deck')];
+    injectSkillPrimes({
+      initialMessages: messages,
+      indexTokenCountMap: undefined,
+      manualSkillPrimes: [manual('brand', 'brand-body')],
+      autoMatchedSkillPrimes: [autoMatched('pptx', 'pptx-body')],
+      alwaysApplySkillPrimes: [always('legal', 'legal-body')],
+    });
+
+    expect(messages.map((message) => (message as HumanMessage).content)).toEqual([
+      'legal-body',
+      'pptx-body',
+      'brand-body',
+      'create a deck',
+    ]);
+    expect((messages[1] as HumanMessage).additional_kwargs.trigger).toBe('auto-match');
+  });
+
+  it('keeps a manual selection when it duplicates an auto-matched skill', () => {
+    const messages = [new HumanMessage('create a deck')];
+    const result = injectSkillPrimes({
+      initialMessages: messages,
+      indexTokenCountMap: undefined,
+      manualSkillPrimes: [manual('pptx', 'manual-body')],
+      autoMatchedSkillPrimes: [autoMatched('pptx', 'auto-body')],
+    });
+
+    expect(result.autoMatchedDedupedFromManual).toBe(1);
+    expect(result.inserted).toBe(1);
+    expect((messages[0] as HumanMessage).content).toBe('manual-body');
   });
 
   it('is a no-op when both lists are empty/undefined', () => {
@@ -2250,12 +2284,15 @@ describe('injectSkillPrimes', () => {
 });
 
 describe('collectFreshSkillPrimeNames', () => {
-  it('returns the union of manual + always-apply prime names', () => {
+  it('returns the union of manual + auto-matched + always-apply prime names', () => {
     const names = collectFreshSkillPrimeNames({
       manualSkillPrimes: [{ name: 'pdf-analyzer' }, { name: 'code-review' }],
+      autoMatchedSkillPrimes: [{ name: 'pptx' }],
       alwaysApplySkillPrimes: [{ name: 'clickhouse-best-practices' }],
     });
-    expect(names).toEqual(new Set(['pdf-analyzer', 'code-review', 'clickhouse-best-practices']));
+    expect(names).toEqual(
+      new Set(['pdf-analyzer', 'code-review', 'pptx', 'clickhouse-best-practices']),
+    );
   });
 
   it('dedupes a skill that is both manual and always-apply', () => {

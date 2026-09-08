@@ -30,8 +30,12 @@ import type {
   EndpointTokenConfig,
   InitializeResultBase,
 } from '~/types';
+import type {
+  ResolvedAlwaysApplySkill,
+  ResolvedAutoMatchedSkill,
+  ResolvedManualSkill,
+} from './skills';
 import type { LCAvailableTools, RequestScopedMCPConnectionStore } from '../mcp/types';
-import type { ResolvedManualSkill, ResolvedAlwaysApplySkill } from './skills';
 import type { TFilterFilesByAgentAccess } from './resources';
 import {
   injectSkillCatalog,
@@ -298,6 +302,12 @@ export type InitializedAgent = Agent & {
    */
   manualSkillPrimes?: ResolvedManualSkill[];
   /**
+   * Skills selected by the host from this turn's explicit artifact request.
+   * They are not displayed as user-selected `$` Skills and never persist as
+   * sticky conversation state.
+   */
+  autoMatchedSkillPrimes?: ResolvedAutoMatchedSkill[];
+  /**
    * Skills auto-primed this turn because their `always-apply` frontmatter
    * flag is set. Resolved against the same `accessibleSkillIds` set and
    * subjected to the same active-state / ACL filters as the catalog, then
@@ -405,6 +415,8 @@ export interface InitializeAgentParams {
    * meta user messages before the LLM call.
    */
   manualSkills?: string[];
+  /** Skill names selected by a deterministic host-side route for this turn. */
+  autoMatchedSkills?: string[];
 }
 
 /**
@@ -824,9 +836,9 @@ export async function initializeAgent(
   });
 
   /**
-   * Pre-resolve manually-invoked + always-apply skill primes so their
-   * `allowed-tools` can be unioned into the agent's effective tool set
-   * BEFORE `loadTools` runs. Single load is correctness-critical: a
+   * Pre-resolve manual, auto-matched, and always-apply skill primes so their
+   * `allowed-tools` can be unioned into the agent's effective tool set BEFORE
+   * `loadTools` runs. Single load is correctness-critical: a
    * second `loadTools` pass would compute its own `userMCPAuthMap` /
    * `toolContextMap` / OAuth flow state that the InitializedAgent never
    * sees, so an MCP tool added via `allowed-tools` would be visible to
@@ -838,42 +850,55 @@ export async function initializeAgent(
    * `resolveManualSkills` doc for why a skill outside the catalog cap can
    * still be authorizable for direct manual invocation.
    *
-   * Manual + always-apply primes feed the same `unionPrimeAllowedTools`
-   * call — the helper is pure / set-based, so concatenating the two
-   * lists gives the right union with no double-counting. Manual primes
-   * go first so their names win on dedup (primes earlier in the list
-   * contribute before the same name gets deduped on a later prime).
+   * Manual, auto-matched, and always-apply primes feed the same
+   * `unionPrimeAllowedTools` call — the helper is pure / set-based, so
+   * concatenating the lists gives the right union with no double-counting.
+   * Manual primes go first, followed by auto-matched primes, so a duplicate
+   * name retains the higher-intent route's tool policy.
    */
   const hasSkillAccess = (params.accessibleSkillIds?.length ?? 0) > 0;
   const skillAuthoringAvailable = params.skillAuthoringAvailable === true;
   let manualSkillPrimes: ResolvedManualSkill[] | undefined;
+  let autoMatchedSkillPrimes: ResolvedAutoMatchedSkill[] | undefined;
   let alwaysApplySkillPrimes: ResolvedAlwaysApplySkill[] | undefined;
   let extraAllowedToolNames: string[] = [];
   let perSkillExtras: Map<string, string[]> = new Map();
   if (hasSkillAccess) {
-    const [manualPrimesResult, alwaysApplyPrimesResult] = await Promise.all([
-      params.manualSkills?.length && db.getSkillByName
-        ? resolveManualSkills({
-            names: params.manualSkills,
-            getSkillByName: db.getSkillByName,
-            accessibleSkillIds: params.accessibleSkillIds!,
-            userId: req.user?.id,
-            skillStates: params.skillStates,
-            defaultActiveOnShare: params.defaultActiveOnShare,
-          })
-        : Promise.resolve<ResolvedManualSkill[] | undefined>(undefined),
-      db.listAlwaysApplySkills
-        ? resolveAlwaysApplySkills({
-            listAlwaysApplySkills: db.listAlwaysApplySkills,
-            accessibleSkillIds: params.accessibleSkillIds!,
-            userId: req.user?.id,
-            skillStates: params.skillStates,
-            defaultActiveOnShare: params.defaultActiveOnShare,
-          })
-        : Promise.resolve<ResolvedAlwaysApplySkill[] | undefined>(undefined),
-    ]);
+    const [manualPrimesResult, autoMatchedPrimesResult, alwaysApplyPrimesResult] =
+      await Promise.all([
+        params.manualSkills?.length && db.getSkillByName
+          ? resolveManualSkills({
+              names: params.manualSkills,
+              getSkillByName: db.getSkillByName,
+              accessibleSkillIds: params.accessibleSkillIds!,
+              userId: req.user?.id,
+              skillStates: params.skillStates,
+              defaultActiveOnShare: params.defaultActiveOnShare,
+            })
+          : Promise.resolve<ResolvedManualSkill[] | undefined>(undefined),
+        params.autoMatchedSkills?.length && db.getSkillByName
+          ? resolveManualSkills({
+              names: params.autoMatchedSkills,
+              getSkillByName: db.getSkillByName,
+              accessibleSkillIds: params.accessibleSkillIds!,
+              userId: req.user?.id,
+              skillStates: params.skillStates,
+              defaultActiveOnShare: params.defaultActiveOnShare,
+            })
+          : Promise.resolve<ResolvedAutoMatchedSkill[] | undefined>(undefined),
+        db.listAlwaysApplySkills
+          ? resolveAlwaysApplySkills({
+              listAlwaysApplySkills: db.listAlwaysApplySkills,
+              accessibleSkillIds: params.accessibleSkillIds!,
+              userId: req.user?.id,
+              skillStates: params.skillStates,
+              defaultActiveOnShare: params.defaultActiveOnShare,
+            })
+          : Promise.resolve<ResolvedAlwaysApplySkill[] | undefined>(undefined),
+      ]);
 
     manualSkillPrimes = manualPrimesResult;
+    autoMatchedSkillPrimes = autoMatchedPrimesResult;
     alwaysApplySkillPrimes = alwaysApplyPrimesResult;
 
     /**
@@ -887,18 +912,19 @@ export async function initializeAgent(
      * tool-union step below doesn't bill allowed-tools to the dropped
      * always-apply entry.
      */
-    if (
-      alwaysApplySkillPrimes &&
-      alwaysApplySkillPrimes.length > 0 &&
-      manualSkillPrimes &&
-      manualSkillPrimes.length > 0
-    ) {
-      const manualNames = new Set(manualSkillPrimes.map((p) => p.name));
-      const deduped = alwaysApplySkillPrimes.filter((p) => !manualNames.has(p.name));
+    const manualNames = new Set((manualSkillPrimes ?? []).map((p) => p.name));
+    if (autoMatchedSkillPrimes && autoMatchedSkillPrimes.length > 0 && manualNames.size > 0) {
+      autoMatchedSkillPrimes = autoMatchedSkillPrimes.filter((p) => !manualNames.has(p.name));
+    }
+    const autoMatchedNames = new Set((autoMatchedSkillPrimes ?? []).map((p) => p.name));
+    if (alwaysApplySkillPrimes && alwaysApplySkillPrimes.length > 0) {
+      const deduped = alwaysApplySkillPrimes.filter(
+        (p) => !manualNames.has(p.name) && !autoMatchedNames.has(p.name),
+      );
       const removed = alwaysApplySkillPrimes.length - deduped.length;
       if (removed > 0) {
         logger.info(
-          `[initializeAgent] Dropped ${removed} always-apply prime(s) already present in the manual list; same-named skills prime only once per turn.`,
+          `[initializeAgent] Dropped ${removed} always-apply prime(s) already present in a manual or auto-matched list; same-named skills prime only once per turn.`,
         );
         alwaysApplySkillPrimes = deduped;
       }
@@ -913,17 +939,28 @@ export async function initializeAgent(
      * should never be silently dropped.
      */
     const manualCount = manualSkillPrimes?.length ?? 0;
+    const autoMatchedCount = autoMatchedSkillPrimes?.length ?? 0;
     const alwaysApplyCount = alwaysApplySkillPrimes?.length ?? 0;
-    if (alwaysApplySkillPrimes && manualCount + alwaysApplyCount > MAX_PRIMED_SKILLS_PER_TURN) {
-      const budgetForAlwaysApply = Math.max(0, MAX_PRIMED_SKILLS_PER_TURN - manualCount);
+    if (
+      alwaysApplySkillPrimes &&
+      manualCount + autoMatchedCount + alwaysApplyCount > MAX_PRIMED_SKILLS_PER_TURN
+    ) {
+      const budgetForAlwaysApply = Math.max(
+        0,
+        MAX_PRIMED_SKILLS_PER_TURN - manualCount - autoMatchedCount,
+      );
       const dropped = alwaysApplyCount - budgetForAlwaysApply;
       logger.warn(
-        `[initializeAgent] Combined primes (${manualCount} manual + ${alwaysApplyCount} always-apply) exceeds MAX_PRIMED_SKILLS_PER_TURN (${MAX_PRIMED_SKILLS_PER_TURN}); truncating ${dropped} always-apply prime(s) so persisted user-message pills stay in sync with what got primed.`,
+        `[initializeAgent] Combined primes (${manualCount} manual + ${autoMatchedCount} auto-matched + ${alwaysApplyCount} always-apply) exceeds MAX_PRIMED_SKILLS_PER_TURN (${MAX_PRIMED_SKILLS_PER_TURN}); truncating ${dropped} always-apply prime(s).`,
       );
       alwaysApplySkillPrimes = alwaysApplySkillPrimes.slice(0, budgetForAlwaysApply);
     }
 
-    const primesForUnion = [...(manualSkillPrimes ?? []), ...(alwaysApplySkillPrimes ?? [])];
+    const primesForUnion = [
+      ...(manualSkillPrimes ?? []),
+      ...(autoMatchedSkillPrimes ?? []),
+      ...(alwaysApplySkillPrimes ?? []),
+    ];
     if (primesForUnion.length > 0) {
       const union = unionPrimeAllowedTools({
         primes: primesForUnion,
@@ -1374,6 +1411,7 @@ export async function initializeAgent(
     accessibleSkillIds: executableSkillIds,
     activeSkillNames,
     manualSkillPrimes,
+    autoMatchedSkillPrimes,
     alwaysApplySkillPrimes,
     attachments: compatibilityAttachments,
     requestAttachments,

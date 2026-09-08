@@ -311,6 +311,13 @@ export interface PrimeInvokedSkillsDeps {
   req: ServerRequest;
   /** Raw message payload (before formatAgentMessages). Used to extract invoked skill names. */
   payload: Array<Partial<{ role: string; content: unknown }>>;
+  /** Fresh turn-scoped primes whose bundled files must be present before the
+   * model's first code call. History-derived names are merged with this list. */
+  freshSkillNames?: Iterable<string>;
+  /** Exact IDs for fresh primes. When an accessible user and deployment skill
+   * share a name, staging must use the same resolved skill that supplied the
+   * body to the model rather than whichever duplicate wins a broad lookup. */
+  freshSkillIdsByName?: ReadonlyMap<string, Types.ObjectId>;
   accessibleSkillIds: Types.ObjectId[];
   /** `execute_code` capability flag for the run. When false, the batch-upload
    *  path is skipped entirely — skill bodies still reconstruct for history
@@ -342,8 +349,8 @@ export interface PrimeInvokedSkillsResult {
 }
 
 /**
- * Extracts previously invoked skills from message history, resolves their
- * bodies from DB, and re-primes their files to the code env.
+ * Resolves skills invoked in history plus fresh turn-scoped primes, then
+ * prepares their bodies and files for the code environment.
  *
  * Returns:
  * - initialSessions: seeds Graph.sessions so ToolNode injects session_id into bash/code tools
@@ -352,11 +359,16 @@ export interface PrimeInvokedSkillsResult {
 export async function primeInvokedSkills(
   deps: PrimeInvokedSkillsDeps,
 ): Promise<PrimeInvokedSkillsResult> {
-  if (!deps.payload?.length || !deps.accessibleSkillIds?.length) {
+  if (!deps.accessibleSkillIds?.length) {
     return {};
   }
 
-  const invokedSkills = extractInvokedSkillsFromPayload(deps.payload);
+  const invokedSkills = extractInvokedSkillsFromPayload(deps.payload ?? []);
+  for (const skillName of deps.freshSkillNames ?? []) {
+    if (typeof skillName === 'string' && skillName.length > 0) {
+      invokedSkills.add(skillName);
+    }
+  }
   if (invokedSkills.size === 0) {
     return {};
   }
@@ -366,7 +378,11 @@ export async function primeInvokedSkills(
   // Phase 1: Resolve all skills in parallel (DB lookups)
   const resolveResults = await Promise.allSettled(
     Array.from(invokedSkills).map(async (skillName) => {
-      const skill = await deps.getSkillByName(skillName, deps.accessibleSkillIds);
+      const freshSkillId = deps.freshSkillIdsByName?.get(skillName);
+      const skill = await deps.getSkillByName(
+        skillName,
+        freshSkillId ? [freshSkillId] : deps.accessibleSkillIds,
+      );
       return skill ?? undefined;
     }),
   );
