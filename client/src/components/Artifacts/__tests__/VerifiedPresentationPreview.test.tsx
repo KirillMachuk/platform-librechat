@@ -2,6 +2,10 @@ import React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import VerifiedPresentationPreview, { readBoundedPdf } from '../VerifiedPresentationPreview';
 
+jest.mock('librechat-data-provider', () => ({
+  getTokenHeader: jest.fn(() => 'Bearer test-token'),
+}));
+
 jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string) => key,
 }));
@@ -71,7 +75,30 @@ describe('VerifiedPresentationPreview', () => {
     expect(await screen.findByTestId('pdf-preview')).toHaveTextContent(
       'deck.pptx:blob:verified-preview',
     );
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/files/code/download/abcdefghijklmnopqrstu/123456789012345678901',
+      expect.objectContaining({
+        credentials: 'same-origin',
+        headers: { Authorization: 'Bearer test-token' },
+      }),
+    );
     expect(screen.queryByText('com_ui_preview_failed')).not.toBeInTheDocument();
+  });
+
+  it('never forwards the bearer token to an external preview URL', async () => {
+    const { response } = streamingResponse(['%P', 'DF-1.7\nverified']);
+    const externalUrl = 'https://example.invalid/preview.pdf';
+    global.fetch = jest.fn(async () => response) as unknown as typeof fetch;
+
+    await act(async () => {
+      render(<VerifiedPresentationPreview url={externalUrl} title="deck.pptx" refreshKey={0} />);
+    });
+
+    await screen.findByTestId('pdf-preview');
+    expect(global.fetch).toHaveBeenCalledWith(
+      externalUrl,
+      expect.not.objectContaining({ headers: expect.anything() }),
+    );
   });
 
   it.each([
