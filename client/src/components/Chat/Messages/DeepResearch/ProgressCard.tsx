@@ -1,8 +1,7 @@
 import type { TDeepResearchProgress } from '~/store';
-import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/ApprovalCard';
+import { ApprovalCard, CARD_SLOT_CLASS } from '~/components/Chat/Cards/ApprovalCard';
+import RunStopAction from './RunStop';
 import useCardStrings from '~/components/Chat/Cards/useCardStrings';
-import { useChatContext } from '~/Providers';
-import { Square } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import RunFooter from './RunFooter';
 
@@ -22,30 +21,18 @@ import RunFooter from './RunFooter';
  */
 export default function ProgressCard({ data }: { data: TDeepResearchProgress }) {
   const localize = useLocalize();
-  const { stopGenerating } = useChatContext();
 
   const cardStrings = useCardStrings();
 
   return (
-    <div className="my-2 w-full">
+    <div className={CARD_SLOT_CLASS}>
       <ApprovalCard
         variant="plan"
         strings={cardStrings}
         title={localize('com_ui_deep_research')}
         plan={[]}
         showActions={false}
-        headerAction={
-          /* The frame's own header slot — same 24px box and 12px inset as the
-           * plan card's ✕, which is the whole point of «two cards, one
-           * product» (review). It keeps the ≥44px tap height via tap-target. */
-          <ApprovalCardHeaderAction
-            label={localize('com_ui_deep_research_stop')}
-            onClick={stopGenerating}
-            testId="dr-stop"
-          >
-            <Square className="size-3 fill-current" aria-hidden="true" />
-          </ApprovalCardHeaderAction>
-        }
+        headerAction={<RunStopAction />}
         footnote={<RunFooter data={data} />}
       />
     </div>

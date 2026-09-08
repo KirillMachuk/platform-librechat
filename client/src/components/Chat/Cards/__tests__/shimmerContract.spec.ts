@@ -1,5 +1,5 @@
-import { join } from 'path';
-import { readFileSync } from 'fs';
+import { join, relative } from 'path';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 
 /**
  * The shimmer is CSS, and CSS is where it broke — twice, silently, with the
@@ -92,14 +92,40 @@ describe('transparent text must survive being selected (owner r28)', () => {
    * a selection colour that actually restores the fill (r28 review found all
    * three of those holes in the first version of this guard).
    */
-  const SHEETS: [string, string][] = [
-    ['style.css', STYLE],
-    ['ApprovalCard.module.css', MODULE],
-    [
-      'ThinkingReasoning.module.css',
-      readFileSync(join(__dirname, '../ThinkingReasoning.module.css'), 'utf8'),
-    ],
-  ];
+  /* Found, not listed: a hard list of three read three of the four sheets under
+   * client/src, and a new `.module.css` would have joined the blind zone in
+   * silence (design review 02.09, В8). */
+  const stylesheets = (dir: string, out: string[] = []): string[] => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const child = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== 'node_modules' && entry.name !== 'dist') {
+          stylesheets(child, out);
+        }
+      } else if (entry.name.endsWith('.css')) {
+        out.push(child);
+      }
+    }
+    return out;
+  };
+  const ROOTS = [CLIENT_SRC, join(CLIENT_SRC, '../../packages/client/src')].filter(existsSync);
+  const SHEETS: [string, string][] = ROOTS.flatMap((root) =>
+    stylesheets(root).map((file): [string, string] => [
+      relative(CLIENT_SRC, file),
+      readFileSync(file, 'utf8'),
+    ]),
+  );
+
+  it('reads every stylesheet the client ships, the phone one included', () => {
+    expect(SHEETS.map(([name]) => name)).toEqual(
+      expect.arrayContaining([
+        'style.css',
+        'mobile.css',
+        'components/Chat/Cards/ApprovalCard.module.css',
+        'components/Chat/Cards/ThinkingReasoning.module.css',
+      ]),
+    );
+  });
 
   /* Comments first: a rule's selector is «everything since the last closing
    * brace», so a comment ABOVE it joins the selector text and a comment that

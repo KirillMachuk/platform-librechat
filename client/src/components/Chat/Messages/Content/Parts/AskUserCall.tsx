@@ -10,7 +10,7 @@ import {
 import type { AskUserQuestion } from 'librechat-data-provider';
 import { useOptionalMessagesOperations } from '~/Providers/MessagesViewContext';
 import { MessageCircleQuestion, ChevronDown } from '~/components/icons';
-import { ApprovalCard } from '~/components/Chat/Cards/ApprovalCard';
+import { ApprovalCard, CARD_SLOT_CLASS } from '~/components/Chat/Cards/ApprovalCard';
 import useCardStrings from '~/components/Chat/Cards/useCardStrings';
 import useExpandCollapse from '~/hooks/Messages/useExpandCollapse';
 import { ChatContext, useMessageContext } from '~/Providers';
@@ -129,7 +129,7 @@ function CollapsedQuestions({ questions }: { questions: AskUserQuestion[] }) {
   const { style: expandStyle, ref: expandRef } = useExpandCollapse(open);
   const label = localize('com_ui_cards_questions_title');
   return (
-    <div className="my-2 w-full" data-testid="ask-user-collapsed">
+    <div className={CARD_SLOT_CLASS} data-testid="ask-user-collapsed">
       <button
         type="button"
         data-testid="ask-user-collapsed-toggle"
@@ -200,7 +200,7 @@ function InteractiveCard({ questions }: { questions: AskUserQuestion[] }) {
   }
 
   return (
-    <div className="my-2 w-full">
+    <div className={CARD_SLOT_CLASS}>
       <ApprovalCard
         variant="questions"
         strings={strings}

@@ -14,6 +14,9 @@ import {
 } from '~/components/icons';
 import styles from './ApprovalCard.module.css';
 
+/** The slot a card takes in the message column — one string for every card that sits in the transcript. */
+export const CARD_SLOT_CLASS = 'my-2 w-full';
+
 /**
  * Vendored from aicss.dev approval-card (github.com/kvnkld/aicss, MIT,
  * registry snapshot 2026-08-25). Design and mechanics are the original's
@@ -86,10 +89,25 @@ const ARROW_DELTA: Record<string, number | undefined> = {
   ArrowUp: -1,
   ArrowLeft: -1,
 };
-const ROLL_MS = 400;
+/**
+ * How long the digit roll runs, read from the stylesheet that animates it — the
+ * one source. A JS constant sat next to the CSS duration and the two had
+ * already drifted (400 against 350; design review 02.09, В9). Under
+ * reduced-motion the transition is none, the duration reads 0 and the roll
+ * ends at once.
+ */
+function transitionMs(el: Element): number {
+  const first = getComputedStyle(el).transitionDuration.split(',')[0]?.trim() ?? '';
+  const n = parseFloat(first);
+  if (!Number.isFinite(n)) {
+    return 0;
+  }
+  return first.endsWith('ms') ? n : n * 1000;
+}
 
 function RollingDigits({ value }: { value: string }) {
   const prevRef = useRef(value);
+  const innerRef = useRef<HTMLSpanElement | null>(null);
   const [oldVal, setOldVal] = useState(value);
   const [newVal, setNewVal] = useState(value);
   const [rolling, setRolling] = useState(false);
@@ -114,18 +132,28 @@ function RollingDigits({ value }: { value: string }) {
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => setShifted(true));
     });
-    const done = setTimeout(() => {
-      setRolling(false);
-      setOldVal(value);
-      setShifted(false);
-    }, ROLL_MS);
 
     return () => {
       cancelAnimationFrame(raf1);
       cancelAnimationFrame(raf2);
-      clearTimeout(done);
     };
   }, [value]);
+
+  useEffect(() => {
+    if (!shifted) {
+      return;
+    }
+    const inner = innerRef.current;
+    const done = setTimeout(
+      () => {
+        setRolling(false);
+        setOldVal(prevRef.current);
+        setShifted(false);
+      },
+      inner ? transitionMs(inner) : 0,
+    );
+    return () => clearTimeout(done);
+  }, [shifted]);
 
   const chars = rolling ? newVal : oldVal;
 
@@ -146,6 +174,7 @@ function RollingDigits({ value }: { value: string }) {
         return (
           <span key={`${i}-${o}-${n}-${dir}`} className={styles.digitRoll}>
             <span
+              ref={innerRef}
               className={styles.digitRollInner}
               data-dir={dir}
               data-shifted={shifted ? 'true' : undefined}
