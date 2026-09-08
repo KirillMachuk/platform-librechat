@@ -61,7 +61,13 @@ const {
   codeServerHttpsAgent,
   getCodeApiAuthHeaders,
 } = require('@librechat/api');
-const { deleteCodeEnvFile, getCodeOutputDownloadStream, uploadCodeEnvFile } = require('./crud');
+const { getCodeBaseURL } = require('@librechat/agents');
+const {
+  deleteCodeEnvFile,
+  getCodeOutputDownloadStream,
+  uploadCodeEnvFile,
+  batchUploadCodeEnvFiles,
+} = require('./crud');
 
 describe('Code CRUD', () => {
   beforeEach(() => {
@@ -413,6 +419,52 @@ describe('Code CRUD', () => {
       mockAxios.post.mockRejectedValue(new Error('ECONNREFUSED'));
 
       await expect(uploadCodeEnvFile(baseUploadParams)).rejects.toThrow();
+    });
+  });
+
+  /* An unconfigured Code Interpreter arrives as an EMPTY base URL, not an absent
+   * one, and empty is not "off" — it is relative. On 2026-09-08 a recreate handed
+   * the stand's container an empty address and the pptx skill upload died with
+   * `TypeError: Invalid URL` from inside axios: a message naming neither the
+   * sandbox nor the setting, on a path where the model is told to fix and retry.
+   * The request must not be attempted, and the refusal must say where to look. */
+  describe('an unconfigured Code Interpreter', () => {
+    beforeEach(() => {
+      getCodeBaseURL.mockReturnValue('');
+      /* `jest.clearAllMocks()` clears CALLS, not queued outcomes, so a
+       * `mockRejectedValue` from an earlier test in this file would otherwise decide
+       * what these ones see. Reset the behaviour, not just the counters. */
+      mockAxios.mockReset();
+      mockAxios.post.mockReset();
+    });
+
+    afterEach(() => {
+      getCodeBaseURL.mockReturnValue('https://code-api.example.com');
+    });
+
+    const skillBatch = () =>
+      batchUploadCodeEnvFiles({
+        req: { user: { id: 'user-123' } },
+        files: [{ stream: Readable.from(['x']), filename: 'spec.md' }],
+        kind: 'skill',
+        id: 'pptx',
+        version: 1,
+      });
+
+    it('refuses the batch upload before sending anything', async () => {
+      await expect(skillBatch()).rejects.toThrow(/LIBRECHAT_CODE_BASEURL/);
+      expect(mockAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('names the next step, so the error is not a dead end', async () => {
+      await expect(skillBatch()).rejects.toThrow(/recreate the container/);
+    });
+
+    it('does not attempt a relative download either', async () => {
+      await expect(
+        getCodeOutputDownloadStream('session-1/file-1', { kind: 'user', id: 'user-123' }),
+      ).rejects.toThrow(/LIBRECHAT_CODE_BASEURL/);
+      expect(mockAxios).not.toHaveBeenCalled();
     });
   });
 });

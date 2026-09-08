@@ -17,6 +17,32 @@ const axios = createAxiosInstance();
 const MAX_FILE_SIZE = 150 * 1024 * 1024;
 
 /**
+ * The sandbox address, or a refusal that names what is wrong.
+ *
+ * An unconfigured `LIBRECHAT_CODE_BASEURL` is EMPTY, not absent, and empty is not
+ * «off» — it is relative. Every caller here interpolates it into a request path, so
+ * the empty case reached axios as `/upload/batch` and came back as `TypeError:
+ * Invalid URL`, a message that names neither the sandbox nor the setting — on the one
+ * path where the model is told to fix the error and retry. Note that the variable
+ * being UNSET is a different state, which upstream's own default already handles;
+ * only the empty string lands here. `readSandboxFile` and `writeSandboxFile` in
+ * ./process.js already refuse on an empty base URL; these paths did not.
+ *
+ * @returns {string} Absolute base URL of the Code API.
+ * @throws {Error} When no sandbox address is configured.
+ */
+function requireCodeBaseURL() {
+  const baseURL = getCodeBaseURL();
+  if (!baseURL) {
+    throw new Error(
+      'Code Interpreter is not configured: LIBRECHAT_CODE_BASEURL is set but empty. ' +
+        'Point it at your Code API base URL and recreate the container.',
+    );
+  }
+  return baseURL;
+}
+
+/**
  * Retrieves a download stream for a specified file.
  * @param {string} fileIdentifier - The identifier for the file (e.g., "session_id/fileId").
  * @param {{ kind: 'skill' | 'agent' | 'user'; id: string; version?: number }} identity
@@ -29,7 +55,7 @@ const MAX_FILE_SIZE = 150 * 1024 * 1024;
  */
 async function getCodeOutputDownloadStream(fileIdentifier, identity, req) {
   try {
-    const baseURL = getCodeBaseURL();
+    const baseURL = requireCodeBaseURL();
     const query = buildCodeEnvDownloadQuery(identity);
     const authHeaders = await getCodeApiAuthHeaders(req);
     /** @type {import('axios').AxiosRequestConfig} */
@@ -74,7 +100,7 @@ async function deleteCodeEnvFile(req, file) {
   let lastError;
   const missingOrUnsupportedStatuses = new Set([404, 405]);
   try {
-    const baseURL = getCodeBaseURL();
+    const baseURL = requireCodeBaseURL();
     const query = buildCodeEnvDownloadQuery({
       kind: ref.kind,
       id: ref.id,
@@ -152,7 +178,7 @@ async function uploadCodeEnvFile({ req, stream, filename, kind, id, version }) {
     appendCodeEnvFileIdentity(form, { kind, id, version });
     appendCodeEnvFile(form, stream, filename);
 
-    const baseURL = getCodeBaseURL();
+    const baseURL = requireCodeBaseURL();
     const authHeaders = await getCodeApiAuthHeaders(req);
     /** @type {import('axios').AxiosRequestConfig} */
     const options = {
@@ -215,6 +241,10 @@ async function uploadCodeEnvFile({ req, stream, filename, kind, id, version }) {
  * @throws {Error} If the batch upload fails entirely.
  */
 async function batchUploadCodeEnvFiles({ req, files, kind, id, version, read_only = false }) {
+  /* Checked before the caller's streams are attached to a FormData that will never
+   * be sent: refusing after that leaves them half-consumed for no reason. */
+  const baseURL = requireCodeBaseURL();
+
   const form = new FormData();
   appendCodeEnvFileIdentity(form, { kind, id, version });
   if (read_only) {
@@ -224,7 +254,6 @@ async function batchUploadCodeEnvFiles({ req, files, kind, id, version, read_onl
     appendCodeEnvFile(form, file.stream, file.filename);
   }
 
-  const baseURL = getCodeBaseURL();
   const authHeaders = await getCodeApiAuthHeaders(req);
   /** @type {import('axios').AxiosRequestConfig} */
   const options = {

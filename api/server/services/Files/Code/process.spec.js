@@ -1677,6 +1677,77 @@ describe('Code Process', () => {
         );
       });
 
+      /* `create_file` reads a path BEFORE writing it, only to learn whether it is
+       * creating or replacing. That read is a PROBE, so a miss is the ordinary answer
+       * and must not be filed as a platform fault — until this was fixed, every
+       * created file left one `error`-level line behind while the call it belonged to
+       * succeeded. The permission is the CALLER'S, passed as `expectMissing`: a read
+       * that expects the file to exist keeps the loud path, because a miss there is
+       * exactly how the sandbox-continuity bug of 31.08 (#464) became visible in this
+       * log. Classifying by message instead would also have silenced a broken sandbox
+       * image and skill files that failed to mount. */
+      it('stays quiet about a miss the caller came to check for', async () => {
+        const { logAxiosError } = require('@librechat/api');
+        mockAxios.mockResolvedValueOnce({
+          data: { stdout: '', stderr: 'cat: /mnt/data/new.json: No such file or directory\n' },
+        });
+
+        await expect(
+          readSandboxFile({ file_path: '/mnt/data/new.json', expectMissing: true }),
+        ).rejects.toThrow('No such file or directory');
+
+        expect(logAxiosError).not.toHaveBeenCalled();
+        expect(logger.error).not.toHaveBeenCalled();
+      });
+
+      it('still reports the SAME miss for a read that expected the file', async () => {
+        const { logAxiosError } = require('@librechat/api');
+        mockAxios.mockResolvedValueOnce({
+          data: { stdout: '', stderr: 'cat: /mnt/data/plan.md: No such file or directory\n' },
+        });
+
+        await expect(readSandboxFile({ file_path: '/mnt/data/plan.md' })).rejects.toThrow(
+          'No such file or directory',
+        );
+
+        expect(logAxiosError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'Error reading sandbox file "/mnt/data/plan.md"',
+          }),
+        );
+      });
+
+      it('reports a broken sandbox even when the probe asked for silence', async () => {
+        const { logAxiosError } = require('@librechat/api');
+        mockAxios.mockResolvedValueOnce({
+          data: { stdout: '', stderr: 'sh: cat: not found\n' },
+        });
+
+        await expect(
+          readSandboxFile({ file_path: '/mnt/data/new.json', expectMissing: true }),
+        ).rejects.toThrow('not found');
+
+        /* A bare «not found» is a shell talking about a missing COMMAND, not a tool
+         * talking about an absent path — a broken sandbox image is not what the probe
+         * asked about, and would otherwise go unreported until the write that follows. */
+        expect(logAxiosError).toHaveBeenCalled();
+      });
+
+      it('reports a transport failure even when the probe asked for silence', async () => {
+        const { logAxiosError } = require('@librechat/api');
+        mockAxios.mockRejectedValueOnce(new Error('socket hang up: file not found upstream'));
+
+        await expect(
+          readSandboxFile({ file_path: '/mnt/data/new.json', expectMissing: true }),
+        ).rejects.toThrow('socket hang up');
+
+        expect(logAxiosError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'Error reading sandbox file "/mnt/data/new.json"',
+          }),
+        );
+      });
+
       it('returns stdout even when stderr is also present (stdout wins on partial-success)', async () => {
         // Some `cat` builds emit warnings on stderr while still producing
         // stdout (e.g. unusual line endings). Surface the content.
