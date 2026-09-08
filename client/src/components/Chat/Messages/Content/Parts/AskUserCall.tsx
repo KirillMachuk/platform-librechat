@@ -132,9 +132,12 @@ function CollapsedQuestions({ questions }: { questions: AskUserQuestion[] }) {
     <div className="my-2 w-full" data-testid="ask-user-collapsed">
       <button
         type="button"
+        data-testid="ask-user-collapsed-toggle"
         aria-expanded={open}
         aria-controls={contentId}
-        className="flex items-center gap-1.5 text-[length:calc(var(--markdown-font-size)*13/16)] font-medium leading-[18px] text-text-tertiary transition-colors [@media(hover:hover)]:hover:text-text-primary"
+        /* `tap-target`: an 18px line to the eye, 44 to a finger on a phone
+         * (design review 02.09, item 6). */
+        className="tap-target flex items-center gap-1.5 text-[length:calc(var(--markdown-font-size)*13/16)] font-medium leading-[18px] text-text-tertiary transition-colors [@media(hover:hover)]:hover:text-text-primary"
         onClick={() => setOpen((prev) => !prev)}
       >
         <MessageCircleQuestion className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />

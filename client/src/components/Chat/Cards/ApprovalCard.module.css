@@ -624,6 +624,16 @@
     width: 44px;
     height: 44px;
   }
+  /* The head's ✕ — «Отменить исследование», the only way to cancel — is 24px
+   * wide, and the overlay cannot widen it. A real 44px box, pulled in by a
+   * negative margin so its margin box stays the 24px the head row is built
+   * for: the icon does not move, the row does not grow, and 10px of overhang
+   * fits inside the card's 12px padding (design review 02.09, item 6). */
+  .headAction {
+    width: 44px;
+    height: 44px;
+    margin: -10px;
+  }
   /* Option rows are the exception: their neighbours sit 6px apart, so an
    * invisible 44px zone over a 29px row would overlap the row above and below
    * and steal taps near the edges. Here the box grows on purpose. */

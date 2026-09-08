@@ -934,7 +934,11 @@ export function ApprovalCard({
                   </div>
                   <button
                     type="button"
-                    className={styles.todoMore}
+                    data-testid="plan-more"
+                    /* `tap-target`: an 18px line to the eye, 44 to a finger on
+                     * a phone — the same helper the wide card buttons rely on
+                     * (design review 02.09, item 6). */
+                    className={`${styles.todoMore} tap-target`}
                     /* What is SHOWN, not what the user last clicked: a running
                      * step force-opens the well (r25 package Б), and reporting
                      * the stale user flag would announce «collapsed» over
