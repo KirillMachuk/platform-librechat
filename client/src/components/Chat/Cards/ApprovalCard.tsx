@@ -934,6 +934,7 @@ export function ApprovalCard({
                   </div>
                   <button
                     type="button"
+                    data-testid="plan-more"
                     className={styles.todoMore}
                     /* What is SHOWN, not what the user last clicked: a running
                      * step force-opens the well (r25 package Б), and reporting

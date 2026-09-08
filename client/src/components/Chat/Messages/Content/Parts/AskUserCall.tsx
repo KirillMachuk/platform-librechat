@@ -132,6 +132,7 @@ function CollapsedQuestions({ questions }: { questions: AskUserQuestion[] }) {
     <div className="my-2 w-full" data-testid="ask-user-collapsed">
       <button
         type="button"
+        data-testid="ask-user-collapsed-toggle"
         aria-expanded={open}
         aria-controls={contentId}
         className="flex items-center gap-1.5 text-[length:calc(var(--markdown-font-size)*13/16)] font-medium leading-[18px] text-text-tertiary transition-colors [@media(hover:hover)]:hover:text-text-primary"

@@ -185,6 +185,7 @@ export function ThinkingReasoning({
     >
       <button
         type="button"
+        data-testid="thinking-header"
         className={streaming ? styles.trHeader : `${styles.trHeader} ${styles.isClickable}`}
         aria-expanded={isOpen}
         aria-disabled={streaming || undefined}

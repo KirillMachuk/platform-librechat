@@ -92,6 +92,35 @@ describe('ReportCard', () => {
     );
   });
 
+  it('the table of contents highlights under a cursor only, never under a finger', async () => {
+    /* Design review 02.09, item 7: the TOC buttons carried a bare `hover:`
+     * while every other card surface wraps hover in `(hover: hover)` — on a
+     * touch screen a tap left the row painted as hovered until the next tap
+     * elsewhere. Asserted on the RESOLVED className (twMerge can drop a
+     * conflicting class silently), on the buttons the reader actually builds
+     * from the headings it renders. */
+    const { getByText, findAllByRole } = render(
+      <ReportCard title="Рынок CRM" text="md">
+        <div>
+          <h2>Раздел один</h2>
+          <h3>Подраздел</h3>
+        </div>
+      </ReportCard>,
+    );
+    fireEvent.click(getByText('com_ui_expand'));
+    const items = (await findAllByRole('button', { name: /Раздел один|Подраздел/ })).filter(
+      (el) => el.className.includes('truncate'),
+    );
+    /* The list is built once and mounted twice — the phone's <details> and the
+     * desktop aside — so two headings give four buttons. */
+    expect(items.length).toBeGreaterThanOrEqual(2);
+    for (const item of items) {
+      expect(item.className).toContain('[@media(hover:hover)]:hover:bg-surface-hover');
+      expect(item.className).toContain('[@media(hover:hover)]:hover:text-text-primary');
+      expect(item.className).not.toMatch(/(^|\s)hover:/);
+    }
+  });
+
   it('expands into the full-screen reader on Развернуть', () => {
     const { getByText, queryByTestId } = render(
       <ReportCard title="T" text="md">
