@@ -1003,6 +1003,28 @@ const primeFiles = async (options) => {
 };
 
 /**
+ * Does this sandbox stderr say «that path is not there», rather than «the sandbox
+ * broke»? Deliberately NOT the same test as `isSandboxMissingFileError` in
+ * packages/api/src/agents/handlers.ts: that one decides what the MODEL is told and
+ * runs on any thrown value, while this one only ever runs on the sandbox's own
+ * stderr, and only for a caller that said a miss is an expected outcome. The texts
+ * overlap but are NOT the same set, and the two must not be assumed interchangeable.
+ *
+ * @param {string} [message]
+ * @returns {boolean}
+ */
+function isMissingSandboxPathMessage(message) {
+  const text = String(message ?? '').toLowerCase();
+  /* Only the shapes a tool uses to talk about a PATH. A bare «not found» is what a
+   * shell says about a missing COMMAND (`sh: cat: not found`) — that is a broken
+   * sandbox image, not an absent file, and it must keep the loud path even inside a
+   * probe. `isSandboxMissingFileError` in handlers.ts does accept the looser text,
+   * because what the model is told and what the operator is told are not the same
+   * question. */
+  return text.includes('no such file or directory') || text.includes('cannot access');
+}
+
+/**
  * Reads a single file from the code-execution sandbox by shelling `cat`
  * through the sandbox `/exec` endpoint. Used by the `read_file` host
  * handler when the requested path is a code-env path (`/mnt/data/...`)
@@ -1017,6 +1039,13 @@ const primeFiles = async (options) => {
  * v3.1.72+) so the read lands in the same sandbox session that holds
  * the agent's prior-turn artifacts.
  *
+ * `expectMissing` is for a caller that reads a path only to find out whether it is
+ * there — today just `create_file`'s read-before-write. It changes nothing about
+ * what is thrown; it only stops a miss from being logged as a platform fault. Any
+ * read that expects the file to exist must leave it off, because a miss there is a
+ * real finding. Errors raised from the sandbox's own stderr carry `sandboxStderr:
+ * true`, which is what separates «the sandbox answered» from «the request failed».
+ *
  * @param {Object} params
  * @param {string} params.file_path - Absolute path inside the sandbox (e.g. `/mnt/data/foo.txt`).
  * @param {string} [params.session_id] - Sandbox session id from the seeded context.
@@ -1024,7 +1053,7 @@ const primeFiles = async (options) => {
  * @param {ServerRequest} [params.req] - Current authenticated request, used to mint Code API auth.
  * @returns {Promise<{content: string} | null>}
  */
-async function readSandboxFile({ file_path, session_id, files, req }) {
+async function readSandboxFile({ file_path, session_id, files, req, expectMissing = false }) {
   const baseURL = getCodeBaseURL();
   if (!baseURL) {
     return null;
@@ -1061,13 +1090,37 @@ async function readSandboxFile({ file_path, session_id, files, req }) {
     });
     const result = response?.data ?? {};
     if (result.stderr && (result.stdout == null || result.stdout === '')) {
-      throw new Error(String(result.stderr).trim());
+      const stderrError = new Error(String(result.stderr).trim());
+      /* The sandbox answered and `cat` had something to say about the file. That is
+       * a different animal from a transport failure, and the catch below needs to
+       * tell them apart, so the origin is tagged here rather than guessed there. */
+      stderrError.sandboxStderr = true;
+      throw stderrError;
     }
     if (result.stdout == null) {
       return null;
     }
     return { content: String(result.stdout) };
   } catch (error) {
+    /* Only the caller knows whether a missing path is news. `create_file` reads
+     * before writing purely to learn whether it is creating or replacing, so a miss
+     * there is the expected outcome of a probe and logging it as a platform error
+     * described a successful call as a failure. Every OTHER read asked for a file it
+     * expects to exist — a miss there is exactly how the sandbox-continuity bug of
+     * 31.08 (#464) showed itself in this log — so it keeps the loud path.
+     *
+     * The decision is therefore the caller's `expectMissing`, never the text alone:
+     * classifying by message would also have swallowed a broken sandbox image
+     * (`cat: not found`) and skill files that failed to mount. `sandboxStderr` is set
+     * only where the sandbox itself answered, so transport failures cannot reach here
+     * even from a probe. */
+    if (
+      expectMissing === true &&
+      error?.sandboxStderr === true &&
+      isMissingSandboxPathMessage(error.message)
+    ) {
+      throw error;
+    }
     logAxiosError({
       message: `Error reading sandbox file "${file_path}"`,
       error,
@@ -1090,6 +1143,9 @@ async function readSandboxFile({ file_path, session_id, files, req }) {
  * @param {ServerRequest} [params.req] - Current authenticated request, used to mint Code API auth.
  * @returns {Promise<{stdout?: string, stderr?: string, session_id?: string, files?: Array<Object>} | null>}
  */
+/* No `expectMissing` twin here on purpose: a write is never a probe. Its stderr is
+ * always a real failure — the caller asked for the file to exist afterwards — so the
+ * loud path is correct, and «aligning» the two would lose a genuine fault. */
 async function writeSandboxFile({ file_path, content, session_id, files, req }) {
   const baseURL = getCodeBaseURL();
   if (!baseURL) {

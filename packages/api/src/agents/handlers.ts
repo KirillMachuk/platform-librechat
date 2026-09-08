@@ -234,6 +234,14 @@ export interface ToolExecuteOptions {
     session_id?: string;
     files?: Array<{ id: string; name: string; session_id?: string; storage_session_id?: string }>;
     req?: ServerRequest;
+    /**
+     * Set only by a caller that reads a path purely to find out whether it is there
+     * — `create_file`'s read-before-write. It changes nothing about what is thrown;
+     * it tells the host not to log an expected miss as a platform fault. A read that
+     * expects the file to exist must leave it unset: a miss there is a real finding,
+     * and it is how the sandbox-continuity bug of 31.08 became visible.
+     */
+    expectMissing?: boolean;
   }) => Promise<{ content: string } | null>;
   /**
    * Writes a UTF-8 text file into the code-execution sandbox via the
@@ -1560,12 +1568,16 @@ async function loadSandboxTextForAuthoring({
   options,
   req,
   sandboxContext,
+  expectMissing = false,
 }: {
   filePath: string;
   tc: ToolCallRequest;
   options: ToolExecuteOptions;
   req?: ServerRequest;
   sandboxContext?: SandboxSessionContext;
+  /** True when the read is a probe and a miss is an ordinary answer — see the
+   *  callback's own note. `create_file` sets it; `edit_file` must not. */
+  expectMissing?: boolean;
 }): Promise<LoadedSandboxText> {
   const ext = lowercaseExtension(filePath);
   if (BINARY_EXTENSIONS_NEVER_READABLE.has(ext)) {
@@ -1585,6 +1597,7 @@ async function loadSandboxTextForAuthoring({
       session_id: ctx?.session_id,
       files: ctx?.files,
       ...(req ? { req } : {}),
+      ...(expectMissing ? { expectMissing: true } : {}),
     });
     if (!result || result.content == null) {
       return {
@@ -2340,12 +2353,16 @@ async function handleSandboxCreateFileCall({
     return errorResult(tc, pathError);
   }
 
+  /* A probe, not a read: the only reason to look is to find out whether this is a
+   * create or a replace, so `missing` is the ordinary answer and must not be logged
+   * as a platform fault. Every other read in this file expects the file to exist. */
   const current = await loadSandboxTextForAuthoring({
     filePath,
     tc,
     options,
     req,
     sandboxContext,
+    expectMissing: true,
   });
   if (current.status === 'error') {
     return errorResult(tc, current.message);
