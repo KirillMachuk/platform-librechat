@@ -53,6 +53,7 @@ describe('sanitizeClientErrorReport', () => {
     });
     expect(report?.message).toBe('secretpublic');
     expect(report?.stack).toBe('[2J[1;31mFAKE OK[0m');
+    // eslint-disable-next-line no-control-regex -- asserting that none survived
     expect(report?.message).not.toMatch(/[\u0000-\u001f]/);
     expect(report?.path).not.toContain('\u202E');
   });
