@@ -449,9 +449,12 @@ html {
   /* выделение и перекрытия */
   --c-sel: #e6f0f4;
   --c-scrim: rgba(0, 0, 0, 0.42);
-  /* тени — их ровно две */
+  /* тени — их ровно три: sm (поверхности), lg (то, что парит) и card — контактная тень
+     интерактивных карточек §6.17 и выбранного варианта поверх волосяной рамки; одна на обе
+     темы, потому что это след у самой кромки, а не глубина (р36-г, ревью 02.09 п. 11) */
   --c-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.05);
   --c-shadow-lg: 0 10px 32px rgba(0, 0, 0, 0.16);
+  --c-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.02);
   /* код */
   --c-code-bg: #f5f5f5;
   --c-code-ink: #171717;
@@ -489,6 +492,7 @@ html {
   --c-scrim: rgba(0, 0, 0, 0.55);
   --c-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
   --c-shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.5);
+  --c-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.02);
   --c-code-bg: #161616;
   --c-code-ink: #f0f0f0;
 }
@@ -735,7 +739,7 @@ pre {
   padding: 0;
   border-radius: 50%;
   border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--c-shadow-sm);
   background-color: #ffffff;
   z-index: 10;
   overflow: hidden;
@@ -744,7 +748,7 @@ pre {
 
 .dark .premium-scroll-button {
   border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--c-shadow-sm);
   background-color: #2a2a2e;
 }
 
@@ -2109,9 +2113,7 @@ html {
   animation: toast-close 0.12s cubic-bezier(0.4, 0, 1, 1) both;
 }
 .toast-root .alert-root {
-  box-shadow:
-    0 0 1px rgba(67, 90, 111, 0.3),
-    0 5px 8px -4px rgba(67, 90, 111, 0.3);
+  box-shadow: var(--c-shadow-lg);
   flex-shrink: 0;
   pointer-events: all;
 }
@@ -2904,9 +2906,7 @@ html {
   background-color: var(--surface-primary);
   padding: 0.5rem;
   color: var(--text-primary);
-  box-shadow:
-    0 10px 15px -3px rgb(0 0 0 / 0.1),
-    0 4px 6px -4px rgb(0 0 0 / 0.1);
+  box-shadow: var(--c-shadow-lg);
   transform-origin: top;
   opacity: 0;
   transition-property: opacity, scale, translate;
@@ -2941,9 +2941,7 @@ html {
 .popover-ui:where(.dark, .dark *) {
   background-color: var(--surface-secondary);
   color: var(--text-secondary);
-  box-shadow:
-    0 10px 15px -3px rgb(0 0 0 / 0.25),
-    0 4px 6px -4px rgb(0 0 0 / 0.1);
+  box-shadow: var(--c-shadow-lg);
 }
 
 .select-item {
