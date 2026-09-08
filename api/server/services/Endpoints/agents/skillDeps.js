@@ -213,7 +213,7 @@ function getAuthorSkillByName({ req, name }) {
  * one source of truth — if `ResolvedManualSkill` ever renames `_id` or
  * gains new identifying fields, only this helper changes.
  *
- * Combines both manual (`$`-popover) primes AND always-apply primes so
+ * Combines manual (`$`-popover), auto-matched, and always-apply primes so
  * `read_file` can:
  *  - Relax the `disable-model-invocation: true` gate for either source
  *    (the body is already in context; blocking its own files would be
@@ -222,30 +222,38 @@ function getAuthorSkillByName({ req, name }) {
  *    primed (otherwise a newer same-name duplicate could shadow the
  *    body/file pair within a single turn).
  *
- * On the rare overlap (a name appears in both arrays because upstream
- * dedup was skipped), manual wins — manual invocation is explicit user
- * intent and carries the authoritative `_id` for this turn.
+ * On the rare overlap (a name appears in multiple arrays because upstream
+ * dedup was skipped), manual wins, then auto-match, then always-apply.
  *
- * Returns `undefined` (not `{}`) when both arrays are empty, so the
+ * Returns `undefined` (not `{}`) when every list is empty, so the
  * downstream `enrichWithSkillConfigurable` cleanly omits the field from
  * `mergedConfigurable` rather than threading an empty object.
  *
  * @param {Array<{ name: string, _id: { toString(): string } }> | undefined} manualSkillPrimes
+ * @param {Array<{ name: string, _id: { toString(): string } }> | undefined} autoMatchedSkillPrimes
  * @param {Array<{ name: string, _id: { toString(): string } }> | undefined} alwaysApplySkillPrimes
  * @returns {Record<string, string> | undefined}
  */
-function buildSkillPrimedIdsByName(manualSkillPrimes, alwaysApplySkillPrimes) {
+function buildSkillPrimedIdsByName(
+  manualSkillPrimes,
+  autoMatchedSkillPrimes,
+  alwaysApplySkillPrimes,
+) {
   const manualCount = manualSkillPrimes?.length ?? 0;
+  const autoMatchedCount = autoMatchedSkillPrimes?.length ?? 0;
   const alwaysApplyCount = alwaysApplySkillPrimes?.length ?? 0;
-  if (manualCount === 0 && alwaysApplyCount === 0) {
+  if (manualCount === 0 && autoMatchedCount === 0 && alwaysApplyCount === 0) {
     return undefined;
   }
   const out = {};
-  /* Order matters on the edge case where the same name appears in both
-     lists: always-apply goes in first, then manual overwrites — manual
-     wins because it's explicit user intent for this turn. */
+  /* Lowest-intent entries go in first so the higher-intent route wins. */
   if (alwaysApplyCount > 0) {
     for (const p of alwaysApplySkillPrimes) {
+      out[p.name] = p._id.toString();
+    }
+  }
+  if (autoMatchedCount > 0) {
+    for (const p of autoMatchedSkillPrimes) {
       out[p.name] = p._id.toString();
     }
   }
@@ -289,7 +297,11 @@ function buildAgentToolContext({ agent, config }) {
     skillAuthoringAvailable: config.skillAuthoringAvailable,
     fileAuthoringToolNames: config.fileAuthoringToolNames,
     skillPrimedIdsByName:
-      buildSkillPrimedIdsByName(config.manualSkillPrimes, config.alwaysApplySkillPrimes) ?? {},
+      buildSkillPrimedIdsByName(
+        config.manualSkillPrimes,
+        config.autoMatchedSkillPrimes,
+        config.alwaysApplySkillPrimes,
+      ) ?? {},
   };
 }
 

@@ -51,6 +51,7 @@ const {
   enrichLoadedToolsWithAgentContext,
 } = require('./skillDeps');
 const { getModelsConfig } = require('~/server/controllers/ModelController');
+const { selectAutoMatchedSkills } = require('./autoSkills');
 const { checkPermission, findAccessibleResources } = require('~/server/services/PermissionService');
 const AgentClient = require('~/server/controllers/agents/client');
 const { processAddedConvo } = require('./addedConvo');
@@ -507,6 +508,10 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
    * @type {string[] | undefined}
    */
   const manualSkills = extractManualSkills(req.body);
+  const autoMatchedSkills = selectAutoMatchedSkills({
+    spec: endpointOption.spec ?? req.body?.spec,
+    text: req.body?.text,
+  });
 
   const selectedModelSpec =
     endpointOption.spec && Array.isArray(appConfig?.modelSpecs?.list)
@@ -574,6 +579,7 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
       skillStates,
       defaultActiveOnShare,
       manualSkills,
+      autoMatchedSkills,
     },
     {
       getFiles: db.getFiles,
@@ -1166,7 +1172,9 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
 
   /** History priming uses the user's full ACL-accessible skill set (not
    *  per-agent scoped) because prior turns may reference skills no longer
-   *  in any active agent's scope; the ACL check is the security gate.
+   *  in any active agent's scope; fresh primes additionally carry their
+   *  exact resolved ID so their body and sandbox files cannot split across
+   *  same-named accessible skills. The ACL check is the security gate.
    *  `codeEnvAvailable` comes from `primaryConfig` — @see
    *  `InitializedAgent.codeEnvAvailable` for the per-agent narrowing. */
   const handlePrimeInvokedSkills = skillsCapabilityEnabled
@@ -1176,6 +1184,21 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
           payload,
           accessibleSkillIds,
           codeEnvAvailable: primaryConfig.codeEnvAvailable === true,
+          freshSkillNames: [
+            ...(primaryConfig.manualSkillPrimes ?? []).map((skill) => skill.name),
+            ...(primaryConfig.autoMatchedSkillPrimes ?? []).map((skill) => skill.name),
+            ...(primaryConfig.alwaysApplySkillPrimes ?? []).map((skill) => skill.name),
+          ],
+          /** Preserve the exact body/file pairing for fresh primes. Lower
+           * intent routes are inserted first so manual `$` picks win on the
+           * rare duplicate-name edge case, matching prompt injection. */
+          freshSkillIdsByName: new Map(
+            [
+              ...(primaryConfig.alwaysApplySkillPrimes ?? []),
+              ...(primaryConfig.autoMatchedSkillPrimes ?? []),
+              ...(primaryConfig.manualSkillPrimes ?? []),
+            ].map((skill) => [skill.name, skill._id]),
+          ),
           ...getSkillToolDeps(),
         })
     : undefined;

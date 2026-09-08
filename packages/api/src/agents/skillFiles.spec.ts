@@ -126,6 +126,62 @@ describe('primeInvokedSkills — execute_code capability gate', () => {
     expect(deps.getSkillByName).not.toHaveBeenCalled();
   });
 
+  it('stages a fresh artifact skill before a model tool call exists in history', async () => {
+    mockExtract.mockReturnValue(new Set());
+    const exactSkillId = new Types.ObjectId();
+    const listSkillFiles = jest.fn().mockResolvedValue([
+      {
+        relativePath: 'scripts/build_presentation.py',
+        filename: 'build_presentation.py',
+        filepath: '/storage/pptx/scripts/build_presentation.py',
+        source: 's3',
+        bytes: 256,
+      },
+    ]);
+    const batchUploadCodeEnvFiles = jest.fn().mockResolvedValue({
+      storage_session_id: 'session-pptx',
+      files: [{ fileId: 'pptx-builder', filename: 'pptx/scripts/build_presentation.py' }],
+    });
+    const deps = makeDeps({
+      freshSkillNames: ['pptx'],
+      freshSkillIdsByName: new Map([['pptx', exactSkillId]]),
+      codeEnvAvailable: true,
+      getSkillByName: jest.fn().mockResolvedValue({
+        _id: exactSkillId,
+        name: 'pptx',
+        body: 'pptx body',
+        version: SKILL_VERSION,
+        fileCount: 2,
+      }),
+      listSkillFiles,
+      getStrategyFunctions: jest.fn().mockReturnValue({
+        getDownloadStream: jest.fn().mockResolvedValue(Readable.from(Buffer.from(''))),
+      }),
+      batchUploadCodeEnvFiles,
+    });
+
+    const result = await primeInvokedSkills(deps);
+
+    expect(deps.getSkillByName).toHaveBeenCalledWith('pptx', [exactSkillId]);
+    expect(listSkillFiles).toHaveBeenCalledWith(exactSkillId);
+    expect(batchUploadCodeEnvFiles).toHaveBeenCalledTimes(1);
+    expect(batchUploadCodeEnvFiles.mock.calls[0][0].files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ filename: 'pptx/SKILL.md' }),
+        expect.objectContaining({ filename: 'pptx/scripts/build_presentation.py' }),
+      ]),
+    );
+    expect(result.skills?.get('pptx')).toBe('pptx body');
+    expect(result.initialSessions?.get('execute_code')?.files).toEqual([
+      expect.objectContaining({
+        id: 'pptx-builder',
+        resource_id: exactSkillId.toString(),
+        name: 'pptx/scripts/build_presentation.py',
+        storage_session_id: 'session-pptx',
+      }),
+    ]);
+  });
+
   it('writes kind/version/storage_session_id on every cached file after a fresh upload', async () => {
     /* Per-file refs in `CodeSessionContext.files` carry the resource
      * identity (kind=skill, id=skillId, version=skill.version) so

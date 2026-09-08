@@ -36,10 +36,10 @@ export const MAX_MANUAL_SKILLS = 10;
 export const MAX_ALWAYS_APPLY_SKILLS = 20;
 
 /**
- * Combined hard ceiling applied in `injectSkillPrimes`. When the total
- * (manual + always-apply) exceeds this, always-apply gets truncated
- * first — manual invocation is explicit user intent and should never
- * be silently dropped.
+ * Combined hard ceiling applied in `injectSkillPrimes`. When the total of
+ * manual, auto-matched, and always-apply primes exceeds this, ambient
+ * always-apply primes are truncated first and manual selections are never
+ * silently dropped.
  */
 export const MAX_PRIMED_SKILLS_PER_TURN = 30;
 
@@ -75,11 +75,18 @@ export const SKILL_TRIGGER_MANUAL = 'manual';
  */
 export const SKILL_TRIGGER_MODEL = 'model';
 export const SKILL_TRIGGER_ALWAYS_APPLY = 'always-apply';
+/**
+ * The host selected this skill from an explicit artifact request before the
+ * model ran. It is distinct from `always-apply`: only matching turns receive
+ * the body, so unrelated chats do not spend context on artifact workflows.
+ */
+export const SKILL_TRIGGER_AUTO_MATCH = 'auto-match';
 
 export type SkillTrigger =
   | typeof SKILL_TRIGGER_MANUAL
   | typeof SKILL_TRIGGER_MODEL
-  | typeof SKILL_TRIGGER_ALWAYS_APPLY;
+  | typeof SKILL_TRIGGER_ALWAYS_APPLY
+  | typeof SKILL_TRIGGER_AUTO_MATCH;
 
 /**
  * Predicate that identifies a LangChain message as one we spliced in via
@@ -690,6 +697,12 @@ export type ResolvedManualSkill = ResolvedSkillPrime;
 export type ResolvedAlwaysApplySkill = ResolvedSkillPrime;
 
 /**
+ * A deployment-selected skill for the current turn. This is used for narrow,
+ * deterministic routes such as an explicit request to create a presentation.
+ */
+export type ResolvedAutoMatchedSkill = ResolvedSkillPrime;
+
+/**
  * Resolves user-provided skill names to `{ name, body }` pairs ready for
  * priming. Filters out:
  *  - names not backed by an accessible skill (ACL miss or typo),
@@ -1098,13 +1111,18 @@ export function injectManualSkillPrimes(
  */
 export function collectFreshSkillPrimeNames({
   manualSkillPrimes,
+  autoMatchedSkillPrimes,
   alwaysApplySkillPrimes,
 }: {
   manualSkillPrimes?: Pick<ResolvedManualSkill, 'name'>[];
+  autoMatchedSkillPrimes?: Pick<ResolvedAutoMatchedSkill, 'name'>[];
   alwaysApplySkillPrimes?: Pick<ResolvedAlwaysApplySkill, 'name'>[];
 }): Set<string> {
   const names = new Set<string>();
   for (const prime of manualSkillPrimes ?? []) {
+    names.add(prime.name);
+  }
+  for (const prime of autoMatchedSkillPrimes ?? []) {
     names.add(prime.name);
   }
   for (const prime of alwaysApplySkillPrimes ?? []) {
@@ -1120,14 +1138,16 @@ export interface InjectSkillPrimesParams {
   indexTokenCountMap: Record<number, number> | undefined;
   /** Resolved manual-invocation primes ($-popover). */
   manualSkillPrimes?: Pick<ResolvedManualSkill, 'name' | 'body'>[];
+  /** Skills selected by the host for this explicit artifact request. */
+  autoMatchedSkillPrimes?: Pick<ResolvedAutoMatchedSkill, 'name' | 'body'>[];
   /** Resolved `always-apply` primes (frontmatter-driven, auto-applied every turn). */
   alwaysApplySkillPrimes?: Pick<ResolvedAlwaysApplySkill, 'name' | 'body'>[];
   /**
    * Combined ceiling on primes per turn. Defaults to
    * `MAX_PRIMED_SKILLS_PER_TURN`. When the sum of `manualSkillPrimes` +
-   * `alwaysApplySkillPrimes` exceeds the cap, always-apply primes are
-   * truncated first — manual invocation is explicit user intent and must
-   * never be silently dropped.
+   * `autoMatchedSkillPrimes` + `alwaysApplySkillPrimes` exceeds the cap,
+   * ambient always-apply primes are truncated first, then auto-matched
+   * primes. Manual invocation is explicit user intent and is never dropped.
    */
   maxPrimesPerTurn?: number;
 }
@@ -1137,76 +1157,89 @@ export interface InjectSkillPrimesResult {
   indexTokenCountMap: Record<number, number> | undefined;
   inserted: number;
   insertIdx: number;
+  autoMatchedDropped: number;
+  autoMatchedDedupedFromManual: number;
   alwaysApplyDropped: number;
   /**
    * Count of always-apply primes dropped because the same skill name already
-   * appears in the manual list — dedup prevents the same SKILL.md body from
-   * being spliced in twice in one turn.
+   * appears in a higher-intent manual or auto-matched list — dedup prevents
+   * the same SKILL.md body from being spliced in twice in one turn.
    */
   alwaysApplyDedupedFromManual: number;
 }
 
 /**
- * Splices manual + always-apply skill prime messages into a formatted
- * message array just before the latest user message. Ordering: always-apply
- * primes first (further from the user message, ambient context), then
- * manual primes (closer to the user message, explicit user intent). More
- * recent context gets more attention in most LLMs, so we want explicit `$`
- * picks landing closest to the latest user turn and ambient priming
- * sitting further back. Shifts `indexTokenCountMap` for the combined
- * splice.
+ * Splices always-apply + auto-matched + manual skill prime messages into a
+ * formatted message array just before the latest user message. Ordering is
+ * ambient first, then the host's request-specific route, then the user's
+ * explicit `$` choice closest to the user message.
  *
- * Cross-list dedup: if a user `$`-invokes a skill that is also marked
- * `always-apply`, the always-apply copy is dropped so the SKILL.md body
- * is primed only once. Manual wins (drops the always-apply side) because
- * manual primes sit closer to the user message and carry explicit intent.
+ * Cross-list dedup keeps the closest, highest-intent source: manual wins over
+ * auto-match, and auto-match wins over always-apply.
  *
  * Enforces a combined ceiling (`maxPrimesPerTurn`, default
- * `MAX_PRIMED_SKILLS_PER_TURN`) by truncating always-apply first so
- * manual is never silently dropped. Dedup runs before the cap so the
- * cap reflects the real prime count, not the pre-dedup total.
+ * `MAX_PRIMED_SKILLS_PER_TURN`) by truncating always-apply first, then
+ * auto-match, so manual is never silently dropped.
  */
 export function injectSkillPrimes(params: InjectSkillPrimesParams): InjectSkillPrimesResult {
   const {
     initialMessages,
     manualSkillPrimes = [],
+    autoMatchedSkillPrimes = [],
     alwaysApplySkillPrimes = [],
     maxPrimesPerTurn = MAX_PRIMED_SKILLS_PER_TURN,
   } = params;
   let { indexTokenCountMap } = params;
 
-  let alwaysApply = alwaysApplySkillPrimes;
-  let alwaysApplyDedupedFromManual = 0;
-  if (alwaysApply.length > 0 && manualSkillPrimes.length > 0) {
-    const manualNames = new Set(manualSkillPrimes.map((p) => p.name));
-    const deduped = alwaysApply.filter((p) => !manualNames.has(p.name));
-    alwaysApplyDedupedFromManual = alwaysApply.length - deduped.length;
-    if (alwaysApplyDedupedFromManual > 0) {
-      logger.info(
-        `[injectSkillPrimes] Dropped ${alwaysApplyDedupedFromManual} always-apply prime(s) already present in the manual list; same-named skills are primed only once per turn.`,
-      );
-      alwaysApply = deduped;
-    }
-  }
-
-  let alwaysApplyDropped = 0;
-  const total = manualSkillPrimes.length + alwaysApply.length;
-  if (total > maxPrimesPerTurn) {
-    const budgetForAlwaysApply = Math.max(0, maxPrimesPerTurn - manualSkillPrimes.length);
-    alwaysApplyDropped = alwaysApply.length - budgetForAlwaysApply;
-    alwaysApply = alwaysApply.slice(0, budgetForAlwaysApply);
-    logger.warn(
-      `[injectSkillPrimes] Combined primes ${total} exceeds cap ${maxPrimesPerTurn}; dropping ${alwaysApplyDropped} always-apply prime(s) to preserve manual invocations.`,
+  const manualNames = new Set(manualSkillPrimes.map((p) => p.name));
+  let autoMatched = autoMatchedSkillPrimes.filter((p) => !manualNames.has(p.name));
+  const autoMatchedDedupedFromManual = autoMatchedSkillPrimes.length - autoMatched.length;
+  if (autoMatchedDedupedFromManual > 0) {
+    logger.info(
+      `[injectSkillPrimes] Dropped ${autoMatchedDedupedFromManual} auto-matched prime(s) already present in the manual list; same-named skills are primed only once per turn.`,
     );
   }
 
-  const numPrimes = manualSkillPrimes.length + alwaysApply.length;
+  const autoMatchedNames = new Set(autoMatched.map((p) => p.name));
+  let alwaysApply = alwaysApplySkillPrimes.filter(
+    (p) => !manualNames.has(p.name) && !autoMatchedNames.has(p.name),
+  );
+  const alwaysApplyDedupedFromManual = alwaysApplySkillPrimes.length - alwaysApply.length;
+  if (alwaysApplyDedupedFromManual > 0) {
+    logger.info(
+      `[injectSkillPrimes] Dropped ${alwaysApplyDedupedFromManual} always-apply prime(s) already present in a manual or auto-matched list; same-named skills are primed only once per turn.`,
+    );
+  }
+
+  let autoMatchedDropped = 0;
+  let alwaysApplyDropped = 0;
+  const budgetAfterManual = Math.max(0, maxPrimesPerTurn - manualSkillPrimes.length);
+  if (autoMatched.length > budgetAfterManual) {
+    autoMatchedDropped = autoMatched.length - budgetAfterManual;
+    autoMatched = autoMatched.slice(0, budgetAfterManual);
+    logger.warn(
+      `[injectSkillPrimes] Auto-matched primes exceed the ${maxPrimesPerTurn}-prime budget after manual selections; dropping ${autoMatchedDropped}.`,
+    );
+  }
+
+  const budgetForAlwaysApply = Math.max(0, budgetAfterManual - autoMatched.length);
+  if (alwaysApply.length > budgetForAlwaysApply) {
+    alwaysApplyDropped = alwaysApply.length - budgetForAlwaysApply;
+    alwaysApply = alwaysApply.slice(0, budgetForAlwaysApply);
+    logger.warn(
+      `[injectSkillPrimes] Dropping ${alwaysApplyDropped} always-apply prime(s) to preserve manual and auto-matched primes within the ${maxPrimesPerTurn}-prime budget.`,
+    );
+  }
+
+  const numPrimes = manualSkillPrimes.length + autoMatched.length + alwaysApply.length;
   if (numPrimes === 0 || initialMessages.length === 0) {
     return {
       initialMessages,
       indexTokenCountMap,
       inserted: 0,
       insertIdx: -1,
+      autoMatchedDropped,
+      autoMatchedDedupedFromManual,
       alwaysApplyDropped,
       alwaysApplyDedupedFromManual,
     };
@@ -1236,6 +1269,7 @@ export function injectSkillPrimes(params: InjectSkillPrimesParams): InjectSkillP
 
   const primeMessages: HumanMessage[] = [
     ...alwaysApply.map((p) => buildPrime(p, SKILL_TRIGGER_ALWAYS_APPLY)),
+    ...autoMatched.map((p) => buildPrime(p, SKILL_TRIGGER_AUTO_MATCH)),
     ...manualSkillPrimes.map((p) => buildPrime(p, SKILL_TRIGGER_MANUAL)),
   ];
   initialMessages.splice(insertIdx, 0, ...primeMessages);
@@ -1245,6 +1279,8 @@ export function injectSkillPrimes(params: InjectSkillPrimesParams): InjectSkillP
     indexTokenCountMap,
     inserted: numPrimes,
     insertIdx,
+    autoMatchedDropped,
+    autoMatchedDedupedFromManual,
     alwaysApplyDropped,
     alwaysApplyDedupedFromManual,
   };

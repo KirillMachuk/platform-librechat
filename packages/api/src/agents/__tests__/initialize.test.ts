@@ -1141,6 +1141,41 @@ describe('initializeAgent — manual skill priming (Phase 3)', () => {
     expect(result.manualSkillPrimes).toBeUndefined();
   });
 
+  it('attaches an auto-matched skill without treating it as a manual selection', async () => {
+    const { agent, req, res, loadTools, db } = createMocks();
+    const { Types } = await import('mongoose');
+    const skillId = new Types.ObjectId();
+    const ownerAuthor = {
+      toString: () => req.user?.id,
+    } as unknown as import('mongoose').Types.ObjectId;
+    const getSkillByName: InitializeAgentDbMethods['getSkillByName'] = jest.fn().mockResolvedValue({
+      _id: skillId,
+      name: 'pptx',
+      body: '# PPTX workflow',
+      author: ownerAuthor,
+    });
+
+    const result = await initializeAgent(
+      {
+        req,
+        res,
+        agent,
+        loadTools,
+        endpointOption: { endpoint: EModelEndpoint.agents },
+        allowedProviders: new Set([Providers.OPENAI]),
+        isInitialAgent: true,
+        accessibleSkillIds: [skillId],
+        autoMatchedSkills: ['pptx'],
+      },
+      { ...db, listSkillsByAccess: emptyListSkillsByAccess, getSkillByName },
+    );
+
+    expect(result.manualSkillPrimes).toBeUndefined();
+    expect(result.autoMatchedSkillPrimes).toEqual([
+      { _id: skillId, name: 'pptx', body: '# PPTX workflow' },
+    ]);
+  });
+
   it('returns empty array when every manual skill is unresolvable (no primes, no throw)', async () => {
     const { agent, req, res, loadTools, db } = createMocks();
     const { Types } = await import('mongoose');

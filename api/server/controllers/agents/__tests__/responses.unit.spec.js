@@ -10,16 +10,21 @@ const mockRecordCollectedUsage = jest
   .mockResolvedValue({ input_tokens: 100, output_tokens: 50 });
 const mockGetBalanceConfig = jest.fn().mockReturnValue({ enabled: true });
 const mockGetTransactionsConfig = jest.fn().mockReturnValue({ enabled: true });
-const mockBuildSkillPrimedIdsByName = jest.fn((manualSkillPrimes, alwaysApplySkillPrimes) => {
-  const primed = {};
-  for (const skill of alwaysApplySkillPrimes ?? []) {
-    primed[skill.name] = skill._id.toString();
-  }
-  for (const skill of manualSkillPrimes ?? []) {
-    primed[skill.name] = skill._id.toString();
-  }
-  return Object.keys(primed).length > 0 ? primed : undefined;
-});
+const mockBuildSkillPrimedIdsByName = jest.fn(
+  (manualSkillPrimes, autoMatchedSkillPrimes, alwaysApplySkillPrimes) => {
+    const primed = {};
+    for (const skill of alwaysApplySkillPrimes ?? []) {
+      primed[skill.name] = skill._id.toString();
+    }
+    for (const skill of autoMatchedSkillPrimes ?? []) {
+      primed[skill.name] = skill._id.toString();
+    }
+    for (const skill of manualSkillPrimes ?? []) {
+      primed[skill.name] = skill._id.toString();
+    }
+    return Object.keys(primed).length > 0 ? primed : undefined;
+  },
+);
 const mockEnrichWithSkillConfigurable = jest.fn((result) => result);
 const mockBuildAgentToolContext = jest.fn(({ agent, config }) => ({
   agent,
@@ -33,7 +38,11 @@ const mockBuildAgentToolContext = jest.fn(({ agent, config }) => ({
   skillAuthoringAvailable: config.skillAuthoringAvailable,
   fileAuthoringToolNames: config.fileAuthoringToolNames,
   skillPrimedIdsByName:
-    mockBuildSkillPrimedIdsByName(config.manualSkillPrimes, config.alwaysApplySkillPrimes) ?? {},
+    mockBuildSkillPrimedIdsByName(
+      config.manualSkillPrimes,
+      config.autoMatchedSkillPrimes,
+      config.alwaysApplySkillPrimes,
+    ) ?? {},
 }));
 const mockEnrichLoadedToolsWithAgentContext = jest.fn(({ result, req, ctx }) =>
   mockEnrichWithSkillConfigurable({
