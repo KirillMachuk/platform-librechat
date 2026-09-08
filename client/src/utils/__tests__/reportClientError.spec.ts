@@ -1,7 +1,4 @@
-import {
-  reportClientError,
-  __resetClientErrorReporterForTests,
-} from '../reportClientError';
+import { reportClientError, __resetClientErrorReporterForTests } from '../reportClientError';
 
 describe('reportClientError', () => {
   let fetchMock: jest.Mock;

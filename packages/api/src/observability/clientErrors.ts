@@ -11,11 +11,7 @@ const MAX_MESSAGE = 300;
 const MAX_STACK = 1500;
 const MAX_PATH = 200;
 
-const KINDS: ReadonlySet<string> = new Set<ClientErrorKind>([
-  'boundary',
-  'window',
-  'promise',
-]);
+const KINDS: ReadonlySet<string> = new Set<ClientErrorKind>(['boundary', 'window', 'promise']);
 
 function clip(value: unknown, limit: number): string {
   if (typeof value !== 'string') {

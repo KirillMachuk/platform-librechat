@@ -30,7 +30,9 @@ describe('sanitizeClientErrorReport', () => {
         path: '/reset-password?token=853b7b62&userId=6a9d11e0',
       })?.path,
     ).toBe('/reset-password');
-    expect(sanitizeClientErrorReport({ message: 'boom', path: '/c/abc#frag' })?.path).toBe('/c/abc');
+    expect(sanitizeClientErrorReport({ message: 'boom', path: '/c/abc#frag' })?.path).toBe(
+      '/c/abc',
+    );
   });
 
   test('clips long text so a stack cannot smuggle a document into the log', () => {
