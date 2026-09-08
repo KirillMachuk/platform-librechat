@@ -30,11 +30,16 @@ function fakeToolWorker(): BaseChatModel {
   return { bindTools: () => caller } as unknown as BaseChatModel;
 }
 
-const webSearchTool = tool(async ({ query }: { query: string }) => `данные по ${query}`, {
-  name: 'web_search',
-  description: 'поиск',
-  schema: z.object({ query: z.string() }),
-});
+/* The result cites a page: `extractSources` reads URLs out of the gathering, and the
+ * run surfaces them as a `findings` progress event — the source count on the card. */
+const webSearchTool = tool(
+  async ({ query }: { query: string }) => `данные по ${query} — https://example.org/market`,
+  {
+    name: 'web_search',
+    description: 'поиск',
+    schema: z.object({ query: z.string() }),
+  },
+);
 
 function configurable(): DeepResearchConfigurable {
   return { runId: 'run-1', userId: 'user-1', mode: 'deep', budget: tierToRunBudget(TIER) };
@@ -131,6 +136,12 @@ describe('runDeepResearch', () => {
       true,
     );
     expect(progress.some((p) => p.type === 'report')).toBe(true);
+    /* The researcher's findings surface as the pages they cite. */
+    expect(
+      progress.some(
+        (p) => p.type === 'findings' && (p.sources ?? []).includes('https://example.org/market'),
+      ),
+    ).toBe(true);
   });
 
   it('announces the report phase BEFORE the report is written, not after', async () => {

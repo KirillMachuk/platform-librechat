@@ -223,8 +223,7 @@ const RUNNING = {
   phase: 'research',
   steps: ['Собрать', 'Сравнить'],
   action: 'Ищет источники',
-  searches: 1,
-  progress: 0.5,
+  sources: 2,
   /* The step the RUN reported (r27). It used to be derived from `progress`,
    * which on this very snapshot would put the card on step 2 of 2 and tick
    * step 1 off — while the run had only just started. */
@@ -237,7 +236,7 @@ describe('which plan card draws a live Deep Research run (r26 review)', () => {
     expect(screen.getByText('Собрать').closest('li')).toHaveAttribute('data-status', 'done');
     expect(screen.getByText('Сравнить').closest('li')).toHaveAttribute('data-status', 'active');
     expect(screen.getByTestId('dr-stop')).toBeInTheDocument();
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
+    expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
   });
 
   it('the SAME run, reloaded (drKind now stamped), still belongs to the same card', () => {
@@ -256,11 +255,12 @@ describe('which plan card draws a live Deep Research run (r26 review)', () => {
     expect(screen.getByText('Сравнить').closest('li')).not.toHaveAttribute('data-status', 'active');
     /* The run is still visibly a run: Stop and the bar stay. */
     expect(screen.getByTestId('dr-stop')).toBeInTheDocument();
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
+    expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
   });
 
-  it('the reported step is followed even when the fraction disagrees', () => {
-    renderTree({ latestId: 'resp1', snapshot: { ...RUNNING, progress: 0.95, stepIndex: 0 } });
+  it('the reported step is the only input: a first step stays first however far the run is', () => {
+    /* The fraction that once disagreed with it is gone altogether. */
+    renderTree({ latestId: 'resp1', snapshot: { ...RUNNING, sources: 40, stepIndex: 0 } });
     expect(screen.getByText('Собрать').closest('li')).toHaveAttribute('data-status', 'active');
     expect(screen.getByText('Сравнить').closest('li')).not.toHaveAttribute('data-status', 'done');
   });
@@ -338,7 +338,7 @@ describe('which plan card draws a live Deep Research run (r26 review)', () => {
      * the same field, so both surfaces must stay quiet or one of them lies. */
     renderTree({
       latestId: 'resp1',
-      snapshot: { phase: 'plan', steps: [], action: '', searches: 0, progress: 0 },
+      snapshot: { phase: 'plan', steps: [], action: '', sources: 0 },
     });
     expect(screen.queryByTestId('dr-stop')).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
@@ -415,8 +415,7 @@ describe('which plan card draws a live Deep Research run (r26 review)', () => {
       phase: 'research',
       steps: ['Нормы', 'Температуры'],
       action: 'Исследует',
-      searches: 1,
-      progress: 0.5,
+      sources: 0,
       stepIndex: 1,
     });
 
@@ -485,7 +484,7 @@ describe('which plan card draws a live Deep Research run (r26 review)', () => {
         }),
       ],
       'replan',
-      { phase: 'plan', steps: [], action: '', searches: 0, progress: 0 },
+      { phase: 'plan', steps: [], action: '', sources: 0 },
     );
 
     expect(screen.queryByTestId('dr-stop')).toBeNull();

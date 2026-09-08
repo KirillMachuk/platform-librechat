@@ -121,8 +121,7 @@ describe('PlanCard', () => {
           phase: 'research',
           steps: ['Собрать', 'Сравнить'],
           action: 'Ищет источники',
-          searches: 1,
-          progress: 0.5,
+          sources: 4,
           /* The step the RUN reported (r27) — the fraction no longer decides. */
           stepIndex: 1,
         }),
@@ -133,7 +132,10 @@ describe('PlanCard', () => {
         'aria-label',
         'com_ui_deep_research_stop',
       );
-      expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
+      /* The line claims no fraction (design review 02.09, item 8); the count is
+       * what the researchers have cited. */
+      expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
+      expect(screen.getByTestId('dr-sources')).toHaveTextContent('com_ui_deep_research_sources');
       expect(screen.getByText('Ищет источники')).toBeInTheDocument();
     });
 
@@ -143,8 +145,7 @@ describe('PlanCard', () => {
           phase: 'research',
           steps: ['Собрать', 'Сравнить'],
           action: 'Ищет источники',
-          searches: 1,
-          progress: 0.5,
+          sources: 4,
           stepIndex: 1,
           stalled: true,
         }),
@@ -182,8 +183,7 @@ describe('PlanCard', () => {
                * an empty-steps snapshot is a run NOBODY draws). */
               steps: ['Шаг 1', 'Шаг 2', 'Шаг 3', 'Шаг 4', 'Шаг 5'],
               action: 'Идёт',
-              searches: 1,
-              progress: 0.9,
+              sources: 4,
               stepIndex: 4,
             } as never);
           }}

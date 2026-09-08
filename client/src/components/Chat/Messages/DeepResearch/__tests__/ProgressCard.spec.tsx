@@ -29,8 +29,7 @@ const snapshot = (over: Partial<TDeepResearchProgress>): TDeepResearchProgress =
   phase: 'research',
   steps: [],
   action: 'Исследует источники',
-  searches: 1,
-  progress: 0.5,
+  sources: 0,
   ...over,
 });
 
@@ -56,10 +55,21 @@ describe('ProgressCard — the PROCEED run card (r26)', () => {
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
   });
 
-  it('puts Stop in the header and reports progress to assistive tech', () => {
-    render(<ProgressCard data={snapshot({ steps: ['Собрать'], progress: 0.42 })} />);
+  it('puts Stop in the header and claims no fraction: the line is indeterminate', () => {
+    /* The bar used to announce `aria-valuenow` from a curve over supervisor
+     * rounds that no run could complete (design review 02.09, item 8). */
+    render(<ProgressCard data={snapshot({ steps: ['Собрать'] })} />);
     expect(screen.getByTestId('dr-stop')).toBeInTheDocument();
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '42');
+    const line = screen.getByRole('progressbar');
+    expect(line).not.toHaveAttribute('aria-valuenow');
+    expect(line).not.toHaveAttribute('data-paused');
+  });
+
+  it('counts the sources the researchers have actually cited, and says nothing at zero', () => {
+    const { rerender } = render(<ProgressCard data={snapshot({ sources: 0 })} />);
+    expect(screen.queryByTestId('dr-sources')).toBeNull();
+    rerender(<ProgressCard data={snapshot({ sources: 12 })} />);
+    expect(screen.getByTestId('dr-sources')).toHaveTextContent('com_ui_deep_research_sources');
   });
 
   it('offline: the network notice replaces the action line, and NOTHING shimmers', () => {
@@ -73,5 +83,7 @@ describe('ProgressCard — the PROCEED run card (r26)', () => {
     expect(screen.queryByText('Исследует источники')).not.toBeInTheDocument();
     expect(container.querySelector('.thinking-shimmer-paint')).toBeNull();
     expect(container.querySelector('li[data-status="active"]')).toBeNull();
+    /* The activity line stands still too (§6.17: «всё замирает»). */
+    expect(screen.getByRole('progressbar')).toHaveAttribute('data-paused', 'true');
   });
 });

@@ -11,9 +11,6 @@ import { useLocalize } from '~/hooks';
  * (r26 review).
  */
 
-const pct = (progress?: number): number =>
-  Math.max(0, Math.min(100, Math.round((progress ?? 0) * 100)));
-
 /** Steps carrying the run's live status: done behind, one being worked on,
  *  the rest ahead. A parked run (offline) has NO active step — a card with no
  *  connection must not look busy. */
@@ -55,41 +52,54 @@ export function runActiveIndex(data: TDeepResearchProgress, stepCount: number): 
   return Math.min(Math.max(Math.trunc(reported), 0), stepCount - 1);
 }
 
+/**
+ * The footer claims nothing it does not know. The action line is what the run
+ * says it is doing; the source count is what the researchers have actually
+ * cited so far; the 1px line under them only says «working» — it sweeps while
+ * the run runs and stands still when the run is parked offline. It used to be
+ * a determinate bar filled from a `progress` fraction that climbed a curve
+ * over supervisor rounds no run could complete, and read that number out as a
+ * percentage to assistive tech (design review 02.09, item 8; the same class of
+ * defect r27/r28 removed from the checklist and the PROCEED card).
+ */
 export default function RunFooter({ data }: { data: TDeepResearchProgress }) {
   const localize = useLocalize();
-  const value = pct(data.progress);
+  const stalled = data.stalled === true;
   return (
     <div className="mt-1">
-      {data.stalled === true ? (
-        <div
-          role="status"
-          className="mb-2 flex min-h-5 items-center gap-1.5 text-xs text-text-tertiary"
-        >
-          <WifiOff className="size-3.5 shrink-0" aria-hidden="true" />
-          <span>{localize('com_ui_deep_research_offline')}</span>
-        </div>
-      ) : (
-        data.action && (
-          /* The paint-only shimmer: the label utility's inline-block beat
-           * `line-clamp-2` by source order and flattened this to one clipped
-           * row (package Б review). */
-          <div className="thinking-shimmer-paint mb-2 line-clamp-2 min-h-5 text-xs [overflow-wrap:anywhere]">
-            {data.action}
+      <div className="mb-2 flex min-h-5 items-start justify-between gap-3 text-xs">
+        {stalled ? (
+          <div role="status" className="flex min-h-5 items-center gap-1.5 text-text-tertiary">
+            <WifiOff className="size-3.5 shrink-0" aria-hidden="true" />
+            <span>{localize('com_ui_deep_research_offline')}</span>
           </div>
-        )
-      )}
+        ) : (
+          data.action && (
+            /* The paint-only shimmer: the label utility's inline-block beat
+             * `line-clamp-2` by source order and flattened this to one clipped
+             * row (package Б review). */
+            <div className="thinking-shimmer-paint line-clamp-2 min-w-0 [overflow-wrap:anywhere]">
+              {data.action}
+            </div>
+          )
+        )}
+        {data.sources > 0 && (
+          <span
+            data-testid="dr-sources"
+            className="ml-auto shrink-0 tabular-nums text-text-tertiary"
+          >
+            {localize('com_ui_deep_research_sources', { 0: String(data.sources) })}
+          </span>
+        )}
+      </div>
+      {/* Indeterminate on purpose: no `aria-valuenow`, because there is no value. */}
       <div
         role="progressbar"
         aria-label={localize('com_ui_deep_research')}
-        aria-valuenow={value}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        className="h-1 w-full overflow-hidden rounded-full bg-surface-hover"
+        data-paused={stalled || undefined}
+        className="dr-activity h-px w-full overflow-hidden rounded-full bg-surface-hover"
       >
-        <div
-          className="h-full rounded-full bg-text-accent transition-[width] duration-500 ease-out"
-          style={{ width: `${value}%` }}
-        />
+        <div className="dr-activity-bar h-full w-1/3 rounded-full bg-text-accent" />
       </div>
     </div>
   );

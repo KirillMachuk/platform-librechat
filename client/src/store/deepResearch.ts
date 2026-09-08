@@ -5,14 +5,19 @@ import { createStorageAtom } from './jotai-utils';
  * Live Deep Research progress snapshot carried by the `dr_progress` SSE event
  * (task #21). Emitted by the runner during a research run; the plan card's running
  * state renders from it. `steps` are the approved plan steps (empty when there was
- * no plan, e.g. a PROCEED run); `progress` is a coarse 0..1 fraction.
+ * no plan, e.g. a PROCEED run).
  */
 export interface TDeepResearchProgress {
   phase: 'scope' | 'research' | 'report' | string;
   steps: string[];
   action: string;
-  searches: number;
-  progress: number;
+  /**
+   * Distinct source URLs the researchers have cited so far — the run's one honest
+   * measure of progress. The bar that used to fill from a `progress` fraction climbed a
+   * curve over supervisor rounds that no run could complete, and announced that number to
+   * assistive tech (design review 02.09, item 8).
+   */
+  sources: number;
   /** Set by useResumableSSE while the stream is offline/reconnecting — the card swaps
    *  its action line for a "waiting for network" notice instead of pulsing as healthy. */
   stalled?: boolean;
