@@ -41,11 +41,15 @@ function describe(error: unknown): { message: string; stack: string } {
   if (typeof error === 'string') {
     return { message: error, stack: '' };
   }
-  try {
-    return { message: JSON.stringify(error)?.slice(0, 300) ?? 'unknown error', stack: '' };
-  } catch {
-    return { message: 'unknown error', stack: '' };
-  }
+  /* Never serialise an unknown object. A rejected promise's reason is routinely an
+   * axios error whose `response.data` holds the user's own message, a filename or a
+   * slice of the conversation — and this report is written to a log the daily digest
+   * mails off the box. Read the two fields an error-shaped object is expected to
+   * carry, and nothing else. */
+  const shaped = error as { name?: unknown; message?: unknown } | null | undefined;
+  const name = typeof shaped?.name === 'string' ? shaped.name : 'UnknownError';
+  const detail = typeof shaped?.message === 'string' ? shaped.message : '';
+  return { message: detail ? `${name}: ${detail}` : `${name} (no message)`, stack: '' };
 }
 
 export function reportClientError(kind: ClientErrorKind, error: unknown): void {

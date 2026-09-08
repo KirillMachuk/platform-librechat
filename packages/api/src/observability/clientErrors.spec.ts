@@ -45,6 +45,30 @@ describe('sanitizeClientErrorReport', () => {
     expect(report?.message.endsWith('…')).toBe(true);
   });
 
+  test('strips control characters, so a report cannot rewrite what the operator sees', () => {
+    const report = sanitizeClientErrorReport({
+      message: 'secret\u0008\u0008\u0008\u0008\u0008\u0008public',
+      stack: '\u001b[2J\u001b[1;31mFAKE OK\u001b[0m',
+      path: '/c/\u202Egnp.exe',
+    });
+    expect(report?.message).toBe('secretpublic');
+    expect(report?.stack).toBe('[2J[1;31mFAKE OK[0m');
+    expect(report?.message).not.toMatch(/[\u0000-\u001f]/);
+    expect(report?.path).not.toContain('\u202E');
+  });
+
+  test('a huge payload is bounded before the regexes run', () => {
+    const started = Date.now();
+    const report = sanitizeClientErrorReport({
+      message: 'a '.repeat(1_500_000),
+      stack: 'b '.repeat(1_500_000),
+    });
+    expect(report?.message.length).toBe(301);
+    /* The route cannot cap the body — the app-wide 3 MB parser has already read it —
+     * so the cap has to live here, and it has to be cheap. */
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
   test('collapses whitespace, so one failure groups as one line in the digest', () => {
     expect(sanitizeClientErrorReport({ message: '  a \n\n  b  ' })?.message).toBe('a b');
   });

@@ -13,11 +13,26 @@ const MAX_PATH = 200;
 
 const KINDS: ReadonlySet<string> = new Set<ClientErrorKind>(['boundary', 'window', 'promise']);
 
+/**
+ * Control characters, bidi overrides and zero-width marks.
+ *
+ * A public writer that keeps them controls what the operator SEES rather than only
+ * what is stored: backspaces rewrite a line in `less`, an ANSI escape clears the
+ * screen above it, and a right-to-left override reverses the sentence in the daily
+ * mail. `\s+` collapses none of these.
+ */
+const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/g;
+
 function clip(value: unknown, limit: number): string {
   if (typeof value !== 'string') {
     return '';
   }
-  const text = value.replace(/\s+/g, ' ').trim();
+  /* Bounded BEFORE the regexes run. The route's own 8 kB body limit never applies —
+   * the app-wide 3 MB parser has already consumed the stream by then — so without
+   * this a single request spends hundreds of milliseconds of CPU scanning a 3 MB
+   * string, twice. */
+  const bounded = value.length > limit * 4 ? value.slice(0, limit * 4) : value;
+  const text = bounded.replace(CONTROL, '').replace(/\s+/g, ' ').trim();
   return text.length > limit ? `${text.slice(0, limit)}…` : text;
 }
 

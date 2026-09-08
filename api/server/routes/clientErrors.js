@@ -1,7 +1,8 @@
 const express = require('express');
 const { logger } = require('@librechat/data-schemas');
 const { formatClientErrorMessage, sanitizeClientErrorReport } = require('@librechat/api');
-const { clientErrorLimiter } = require('~/server/middleware');
+const optionalJwtAuth = require('~/server/middleware/optionalJwtAuth');
+const { clientErrorLimiter, clientErrorGlobalLimiter } = require('~/server/middleware');
 
 /**
  * Where browser failures go to be seen.
@@ -12,25 +13,40 @@ const { clientErrorLimiter } = require('~/server/middleware');
  * apart was invisible unless they said so; this writes the failure into the
  * platform's own error log, where the deploy repo's daily digest already looks.
  *
- * Unauthenticated on purpose: the reports most worth having come from the login
- * screen, where there is no session yet. The trade is a public write into a log
- * file, which is why the payload is capped, the fields are an allow-list, and the
- * limiter drops the excess instead of answering.
+ * Sign-in is optional, not required: the reports most worth having come from the
+ * login screen, where there is no session yet, and `optionalJwtAuth` attaches the
+ * user when there is one so a real report can be told apart from an anonymous one.
+ *
+ * The trade is a public write into a log file, bounded three ways: an allow-list
+ * rather than a filter, a per-IP limiter, and a shared ceiling that holds even when
+ * the per-IP one does not — behind a proxy the client IP comes from a header the
+ * caller can write, so the per-IP bucket alone is a courtesy, not a bound.
  */
 const router = express.Router();
 
-router.post('/', clientErrorLimiter, express.json({ limit: '8kb' }), (req, res) => {
-  res.status(202).json({ ok: true });
-
-  const report = sanitizeClientErrorReport(req.body);
-  if (!report) {
-    return;
-  }
-  logger.error(formatClientErrorMessage(report), {
-    stack: report.stack,
-    path: report.path,
-    userId: req.user?.id,
-  });
-});
+/* No `express.json` here: the app-wide parser at 3 MB has already read the body by
+ * the time this router is reached, so a stricter limit on this route would be a
+ * comment pretending to be a control. The size is absorbed in `clip` instead. */
+router.post(
+  '/',
+  clientErrorGlobalLimiter,
+  clientErrorLimiter,
+  optionalJwtAuth,
+  (req, res) => {
+    const report = sanitizeClientErrorReport(req.body);
+    if (report) {
+      logger.error(formatClientErrorMessage(report), {
+        stack: report.stack,
+        path: report.path,
+        userId: req.user?.id,
+      });
+    }
+    /* Answered last, and deliberately: the work above is microseconds of string
+     * handling, while replying first leaves any future throw inside this handler to
+     * reach an error middleware that does not check `headersSent` — which shows up
+     * as a severed connection rather than as an error. */
+    res.status(202).json({ ok: true });
+  },
+);
 
 module.exports = router;

@@ -51,6 +51,21 @@ describe('reportClientError', () => {
     expect(fetchMock).toHaveBeenCalledTimes(10);
   });
 
+  test('a rejected axios error does not carry the response body along', () => {
+    /* The shape a rejected promise actually has in this app: the interesting half
+     * for us is `message`, and `response.data` is the user's own content. */
+    reportClientError('promise', {
+      name: 'AxiosError',
+      message: 'Request failed with status code 500',
+      response: { data: { text: 'зарплата Петрова', file: 'Договор.pdf' } },
+    });
+
+    const body = JSON.stringify(bodyOf(0));
+    expect(body).toContain('Request failed with status code 500');
+    expect(body).not.toContain('зарплата');
+    expect(body).not.toContain('Договор');
+  });
+
   test('never throws, whatever it is handed', () => {
     expect(() => reportClientError('promise', undefined)).not.toThrow();
     expect(() => reportClientError('promise', { weird: true })).not.toThrow();

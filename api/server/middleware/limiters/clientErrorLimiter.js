@@ -1,9 +1,19 @@
 const rateLimit = require('express-rate-limit');
 const { limiterCache, removePorts } = require('@librechat/api');
 
-const { CLIENT_ERROR_WINDOW = 10, CLIENT_ERROR_MAX = 20 } = process.env;
-const windowMs = CLIENT_ERROR_WINDOW * 60 * 1000;
-const max = CLIENT_ERROR_MAX;
+function positiveInt(value, fallback) {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const windowMs = positiveInt(process.env.CLIENT_ERROR_WINDOW, 10) * 60 * 1000;
+const max = positiveInt(process.env.CLIENT_ERROR_MAX, 20);
+/* The per-IP ceiling is only as good as the IP, and behind a proxy the IP comes from
+ * a header the caller can write. So a second, shared bucket bounds what the endpoint
+ * can cost in total: past this many reports in a window the contour stops writing,
+ * whoever is asking. Winston rotates the error log at 20 MB but keeps every rolled
+ * file for 14 days, so "unbounded writes" means "unbounded disk". */
+const globalMax = positiveInt(process.env.CLIENT_ERROR_GLOBAL_MAX, 600);
 
 /**
  * Silently drops the excess instead of answering 429.
@@ -27,4 +37,12 @@ const clientErrorLimiter = rateLimit({
   store: limiterCache('client_error_limiter'),
 });
 
-module.exports = clientErrorLimiter;
+const clientErrorGlobalLimiter = rateLimit({
+  windowMs,
+  max: globalMax,
+  handler,
+  keyGenerator: () => 'all',
+  store: limiterCache('client_error_global_limiter'),
+});
+
+module.exports = { clientErrorLimiter, clientErrorGlobalLimiter };
