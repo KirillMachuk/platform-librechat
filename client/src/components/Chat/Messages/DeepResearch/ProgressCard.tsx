@@ -1,7 +1,7 @@
 import type { TDeepResearchProgress } from '~/store';
 import { ApprovalCard, CARD_SLOT_CLASS } from '~/components/Chat/Cards/ApprovalCard';
-import RunStopAction from './RunStop';
 import useCardStrings from '~/components/Chat/Cards/useCardStrings';
+import RunStopAction from './RunStop';
 import { useLocalize } from '~/hooks';
 import RunFooter from './RunFooter';
 

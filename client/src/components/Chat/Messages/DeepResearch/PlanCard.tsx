@@ -16,14 +16,12 @@ import {
   ApprovalCardHeaderAction,
   CARD_SLOT_CLASS,
 } from '~/components/Chat/Cards/ApprovalCard';
-import RunStopAction from './RunStop';
 import RunFooter, { runActiveIndex, runStatusSteps } from './RunFooter';
 import useCardStrings from '~/components/Chat/Cards/useCardStrings';
 import { useSubmitMessage } from '~/hooks/Messages';
 import { mainTextareaId } from '~/common';
+import RunStopAction from './RunStop';
 import { useLocalize } from '~/hooks';
-
-/** The stop square inside the header slot — same 24px box as the plan's ✕. */
 
 /**
  * True while the user has actually TYPED something in the main textarea. A self-start goes

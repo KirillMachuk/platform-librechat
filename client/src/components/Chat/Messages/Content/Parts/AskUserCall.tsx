@@ -8,9 +8,9 @@ import {
   parseAskUserArgs,
 } from 'librechat-data-provider';
 import type { AskUserQuestion } from 'librechat-data-provider';
+import { ApprovalCard, CARD_SLOT_CLASS } from '~/components/Chat/Cards/ApprovalCard';
 import { useOptionalMessagesOperations } from '~/Providers/MessagesViewContext';
 import { MessageCircleQuestion, ChevronDown } from '~/components/icons';
-import { ApprovalCard, CARD_SLOT_CLASS } from '~/components/Chat/Cards/ApprovalCard';
 import useCardStrings from '~/components/Chat/Cards/useCardStrings';
 import useExpandCollapse from '~/hooks/Messages/useExpandCollapse';
 import { ChatContext, useMessageContext } from '~/Providers';
