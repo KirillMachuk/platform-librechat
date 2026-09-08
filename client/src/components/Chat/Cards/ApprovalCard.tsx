@@ -548,7 +548,12 @@ export function ApprovalCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variant, safeStep, questions]);
 
-  const previewCount = Math.max(0, planPreviewCount);
+  /* A plan that is being asked about is shown WHOLE: «Ещё N» hid part of a
+   * four- or five-step plan at the very moment the person was asked to approve
+   * it (design review 02.09, item 10) — consent to a list that was cut short.
+   * The preview well is for the plan once it is running or done, where the
+   * card is a record rather than a question. */
+  const previewCount = showActions ? plan.length : Math.max(0, planPreviewCount);
   const planPreview = plan.slice(0, previewCount);
   const planRest = plan.slice(previewCount);
   const hasPlanMore = planRest.length > 0;

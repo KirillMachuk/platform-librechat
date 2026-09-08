@@ -359,8 +359,18 @@ describe('ApprovalCard — plan variant', () => {
     return { onApprove, view };
   };
 
-  it('shows the preview and unfolds the rest behind the «ещё» toggle', () => {
+  it('a plan awaiting approval is shown whole — nothing behind «Ещё N»', () => {
+    /* Design review 02.09, item 10: the card asked for consent to a list it
+     * had cut to three. Every step is on screen while the question is open. */
     renderPlan();
+    for (const step of PLAN) {
+      expect(screen.getByText(step.title)).toBeVisible();
+    }
+    expect(screen.queryByRole('button', { name: /Ещё/ })).toBeNull();
+  });
+
+  it('once the plan is a record (running or done) it shows the preview and unfolds the rest behind the «ещё» toggle', () => {
+    renderPlan({ showActions: false });
     expect(screen.getByText('Шаг один')).toBeInTheDocument();
     const toggle = screen.getByRole('button', { name: /Ещё 2/ });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
