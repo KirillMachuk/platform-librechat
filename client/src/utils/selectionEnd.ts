@@ -33,8 +33,8 @@
  *   and that rule fired on the brain icon in the «Думаю» header of the next
  *   answer, where a triple-click on a question ends, so the owner's own
  *   messages kept copying with blank lines (08.09). A selection that reaches
- *   into the next block took nothing on purpose; the copy button carries a
- *   message's pictures;
+ *   into the next block took nothing on purpose, and text/plain never carried
+ *   a picture anyway; a picture is copied from its own context menu;
  * - preformatted text (`pre`, `pre-wrap`, `pre-line` — every message
  *   paragraph here is pre-wrap) keeps every character it covers: a typed
  *   newline or a code line's newline is content. The last line of a code

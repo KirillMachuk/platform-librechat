@@ -237,6 +237,17 @@ test.describe('copying a message by selection', () => {
       { timeout: 30000 },
     );
     await page.getByText(question, { exact: true }).first().click({ clickCount: 3 });
+    /* The premise, pinned: the selection really ends inside the thinking
+     * block, past its icon. Without this the case would stay green — for the
+     * wrong reason — should a selectable line ever land between the question
+     * and the block, or the header stop being selectable. */
+    expect(
+      await page.evaluate(() => {
+        const focus = document.getSelection()?.focusNode ?? null;
+        const block = document.querySelector('[data-testid="thinking-block"]');
+        return Boolean(block && focus && block.contains(focus));
+      }),
+    ).toBe(true);
     await page.keyboard.press('ControlOrMeta+C');
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(question);
   });
