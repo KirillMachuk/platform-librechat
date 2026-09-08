@@ -285,6 +285,21 @@ def _estimated_line_count(text: str, max_chars: int) -> int:
     return max(lines, 1)
 
 
+def _fit_text_height_inches(text: str, width_inches: float, size_pt: float) -> float:
+    """Reserve enough vertical space for wrapped text at the requested size.
+
+    PowerPoint does not expose a reliable pre-rendered text measurement API in
+    python-pptx.  The builder therefore uses the same conservative character
+    estimate as the structural QA pass, with a small leading/padding cushion.
+    Keeping this calculation next to the chart layout prevents a valid report
+    from placing a long takeaway on top of its detail copy.
+    """
+    width_pt = max(float(width_inches) * 72.0, 1.0)
+    max_chars = max(int(width_pt / max(size_pt * 0.5, 1.0)), 1)
+    lines = _estimated_line_count(text, max_chars)
+    return (lines * size_pt * 1.08) / 72.0 + 0.05
+
+
 def _add_slide_title(slide, title: str, source: str = "") -> float:
     line_count = _estimated_line_count(title, 44)
     if line_count > 3:
@@ -574,7 +589,8 @@ def _render_chart(prs: Presentation, item: dict[str, Any]):
     for series in chart_spec.get("series", []):
         data.add_series(str(series.get("name", "Series")), list(series.get("values", [])))
     takeaway = str(item.get("takeaway", "")).strip()
-    chart_width = Inches(8.45) if takeaway else Inches(11.55)
+    takeaway_width = 2.82
+    chart_width = Inches(8.15) if takeaway else Inches(11.55)
     chart_frame = slide.shapes.add_chart(
         chart_type,
         Inches(0.85),
@@ -615,29 +631,43 @@ def _render_chart(prs: Presentation, item: dict[str, Any]):
         series.format.fill.fore_color.rgb = palette[idx % len(palette)]
         series.format.line.color.rgb = palette[idx % len(palette)]
     if takeaway:
+        takeaway_size = 28
+        takeaway_top = content_top + 0.38
+        takeaway_height = max(
+            1.82,
+            _fit_text_height_inches(takeaway, takeaway_width, takeaway_size),
+        )
         _add_text(
             slide,
             takeaway,
             Inches(9.72),
-            Inches(content_top + 0.48),
-            Inches(2.55),
-            Inches(1.65),
-            size=30,
+            Inches(takeaway_top),
+            Inches(takeaway_width),
+            Inches(takeaway_height),
+            size=takeaway_size,
             color=NAVY,
             bold=True,
-            valign=MSO_ANCHOR.MIDDLE,
+            valign=MSO_ANCHOR.TOP,
             name="Chart takeaway",
         )
         detail = str(item.get("takeawayDetail", item.get("detail", ""))).strip()
         if detail:
+            detail_size = 16
+            detail_top = takeaway_top + takeaway_height + 0.18
+            detail_height = _fit_text_height_inches(detail, takeaway_width, detail_size)
+            available_height = 6.58 - detail_top
+            if detail_height > available_height:
+                raise ValueError(
+                    "Chart takeaway detail exceeds the readable area; shorten the detail text"
+                )
             _add_text(
                 slide,
                 detail,
                 Inches(9.72),
-                Inches(content_top + 2.35),
-                Inches(2.55),
-                Inches(1.2),
-                size=17,
+                Inches(detail_top),
+                Inches(takeaway_width),
+                Inches(detail_height),
+                size=detail_size,
                 color=MUTED,
                 name="Chart takeaway detail",
             )
