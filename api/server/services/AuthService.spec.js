@@ -625,7 +625,33 @@ describe('requestPasswordReset', () => {
 
     expect(getAppConfig).toHaveBeenCalledWith({ baseOnly: true });
     expect(findUser).not.toHaveBeenCalled();
-    expect(result).toBeInstanceOf(Error);
+    /* Answers like every other outcome. It used to return an Error, which the
+     * controller turned into a 400 saying "Email domain not allowed" — telling an
+     * unauthenticated caller which domains this deployment accepts, and contradicting
+     * the uniform answer the rest of this function is built to give. */
+    expect(result).not.toBeInstanceOf(Error);
+    expect(result).toEqual({
+      message: 'If an account with that email exists, a password reset link has been sent to it.',
+    });
+  });
+
+  it('answers a blocked domain and an unknown address identically', async () => {
+    isEmailDomainAllowed.mockReturnValue(false);
+    const blocked = await requestPasswordReset({
+      body: { email: 'blocked@evil.com' },
+      ip: '127.0.0.1',
+    });
+
+    jest.clearAllMocks();
+    isEmailDomainAllowed.mockReturnValue(true);
+    getAppConfig.mockResolvedValue({ registration: { allowedDomains: ['example.com'] } });
+    findUser.mockResolvedValue(null);
+    const unknown = await requestPasswordReset({
+      body: { email: 'nobody@example.com' },
+      ip: '127.0.0.1',
+    });
+
+    expect(blocked).toEqual(unknown);
   });
 
   it('should call resolveAppConfigForUser for tenant user', async () => {
