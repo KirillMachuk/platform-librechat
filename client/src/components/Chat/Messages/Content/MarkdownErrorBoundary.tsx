@@ -4,8 +4,8 @@ import supersub from 'remark-supersub';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import type { PluggableList } from 'unified';
-import { code, codeNoExecution, a, p, table } from './MarkdownComponents';
 import { langSubset, remarkApproxTilde, reportClientError } from '~/utils';
+import { code, codeNoExecution, a, p, table } from './MarkdownComponents';
 import { CodeBlockProvider } from '~/Providers';
 
 interface ErrorBoundaryState {

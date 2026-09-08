@@ -1,6 +1,6 @@
 import React, { Component, ReactNode } from 'react';
-import { useLocalize } from '~/hooks';
 import { reportClientError } from '~/utils';
+import { useLocalize } from '~/hooks';
 
 /**
  * The boundary itself is a class, so it cannot localise anything. Its fallback
