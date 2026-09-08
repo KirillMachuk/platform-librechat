@@ -186,8 +186,8 @@ export function ThinkingReasoning({
       <button
         type="button"
         data-testid="thinking-header"
-        /* `tap-target`: 82×26 to the eye, 44 to a finger on a phone — the
-         * platform's own helper, height only (design review 02.09, item 6). */
+        /* `tap-target`: a 26px line to the eye, 44 to a finger on a phone —
+         * the platform's own helper, height only (design review 02.09, item 6). */
         className={
           streaming
             ? `${styles.trHeader} tap-target`
