@@ -1686,7 +1686,7 @@ describe('Code Process', () => {
        * exactly how the sandbox-continuity bug of 31.08 (#464) became visible in this
        * log. Classifying by message instead would also have silenced a broken sandbox
        * image and skill files that failed to mount. */
-      it('stays quiet about a miss the caller came to check for', async () => {
+      it("does not file the probe's own miss as a platform error", async () => {
         const { logAxiosError } = require('@librechat/api');
         mockAxios.mockResolvedValueOnce({
           data: { stdout: '', stderr: 'cat: /mnt/data/new.json: No such file or directory\n' },
@@ -1698,6 +1698,24 @@ describe('Code Process', () => {
 
         expect(logAxiosError).not.toHaveBeenCalled();
         expect(logger.error).not.toHaveBeenCalled();
+      });
+
+      /* Quieter, not silent. Every `Error reading sandbox file` line this stand has
+       * ever recorded came from THIS probe — including both of the 31.08 pair that
+       * revealed the sandbox-continuity bug (#464) — so dropping the line entirely
+       * would leave «the sandbox lost a file the model wrote» with nothing to show
+       * for it. `warn` stays out of `error-*.log`, which is the only platform file
+       * the daily digest reads, and stays in the container log for an investigation. */
+      it("still leaves the probe's miss in the container log", async () => {
+        mockAxios.mockResolvedValueOnce({
+          data: { stdout: '', stderr: 'cat: /mnt/data/new.json: No such file or directory\n' },
+        });
+
+        await expect(
+          readSandboxFile({ file_path: '/mnt/data/new.json', expectMissing: true }),
+        ).rejects.toThrow('No such file or directory');
+
+        expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('/mnt/data/new.json'));
       });
 
       it('still reports the SAME miss for a read that expected the file', async () => {
@@ -1717,20 +1735,49 @@ describe('Code Process', () => {
         );
       });
 
-      it('reports a broken sandbox even when the probe asked for silence', async () => {
+      /* Both fixtures are the exact strings this deployment's sandbox emits (coreutils
+       * 9.4, POSIX locale), read off the live stand rather than guessed. Neither means
+       * «the path is absent», and neither may be swallowed by the probe. */
+      it('reports a broken sandbox image even when the probe asked for quiet', async () => {
         const { logAxiosError } = require('@librechat/api');
         mockAxios.mockResolvedValueOnce({
-          data: { stdout: '', stderr: 'sh: cat: not found\n' },
+          data: { stdout: '', stderr: 'bash: line 1: catt: command not found\n' },
         });
 
         await expect(
           readSandboxFile({ file_path: '/mnt/data/new.json', expectMissing: true }),
-        ).rejects.toThrow('not found');
+        ).rejects.toThrow('command not found');
 
-        /* A bare «not found» is a shell talking about a missing COMMAND, not a tool
-         * talking about an absent path — a broken sandbox image is not what the probe
-         * asked about, and would otherwise go unreported until the write that follows. */
         expect(logAxiosError).toHaveBeenCalled();
+      });
+
+      it('reports a permission denial even when the probe asked for quiet', async () => {
+        const { logAxiosError } = require('@librechat/api');
+        mockAxios.mockResolvedValueOnce({
+          data: { stdout: '', stderr: "ls: cannot access '/mnt/data/x': Permission denied\n" },
+        });
+
+        await expect(
+          readSandboxFile({ file_path: '/mnt/data/x', expectMissing: true }),
+        ).rejects.toThrow('Permission denied');
+
+        expect(logAxiosError).toHaveBeenCalled();
+      });
+
+      it('accepts the ls form of a genuine miss', async () => {
+        const { logAxiosError } = require('@librechat/api');
+        mockAxios.mockResolvedValueOnce({
+          data: {
+            stdout: '',
+            stderr: "ls: cannot access '/mnt/data/gone': No such file or directory\n",
+          },
+        });
+
+        await expect(
+          readSandboxFile({ file_path: '/mnt/data/gone', expectMissing: true }),
+        ).rejects.toThrow('No such file or directory');
+
+        expect(logAxiosError).not.toHaveBeenCalled();
       });
 
       it('reports a transport failure even when the probe asked for silence', async () => {
