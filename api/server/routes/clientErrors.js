@@ -27,26 +27,20 @@ const router = express.Router();
 /* No `express.json` here: the app-wide parser at 3 MB has already read the body by
  * the time this router is reached, so a stricter limit on this route would be a
  * comment pretending to be a control. The size is absorbed in `clip` instead. */
-router.post(
-  '/',
-  clientErrorGlobalLimiter,
-  clientErrorLimiter,
-  optionalJwtAuth,
-  (req, res) => {
-    const report = sanitizeClientErrorReport(req.body);
-    if (report) {
-      logger.error(formatClientErrorMessage(report), {
-        stack: report.stack,
-        path: report.path,
-        userId: req.user?.id,
-      });
-    }
-    /* Answered last, and deliberately: the work above is microseconds of string
-     * handling, while replying first leaves any future throw inside this handler to
-     * reach an error middleware that does not check `headersSent` — which shows up
-     * as a severed connection rather than as an error. */
-    res.status(202).json({ ok: true });
-  },
-);
+router.post('/', clientErrorGlobalLimiter, clientErrorLimiter, optionalJwtAuth, (req, res) => {
+  const report = sanitizeClientErrorReport(req.body);
+  if (report) {
+    logger.error(formatClientErrorMessage(report), {
+      stack: report.stack,
+      path: report.path,
+      userId: req.user?.id,
+    });
+  }
+  /* Answered last, and deliberately: the work above is microseconds of string
+   * handling, while replying first leaves any future throw inside this handler to
+   * reach an error middleware that does not check `headersSent` — which shows up as
+   * a severed connection rather than as an error. */
+  res.status(202).json({ ok: true });
+});
 
 module.exports = router;
