@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getTokenHeader } from 'librechat-data-provider';
 import PdfPreview from './PdfPreview';
 import { useLocalize } from '~/hooks';
 
@@ -106,8 +107,23 @@ export default function VerifiedPresentationPreview({ url, title, refreshKey }: 
 
     (async () => {
       try {
+        /* Code-output downloads are protected by the same JWT middleware as
+         * the rest of the app.  Unlike axios, the browser fetch API does not
+         * inherit the token stored in the data-provider defaults, so a bare
+         * fetch would receive {"message":"No auth token"} and every verified
+         * presentation preview would fail closed.  Keep the route relative
+         * (it was validated by the shared artifact-report schema) and forward
+         * only the current bearer header from the authenticated client. */
+        const authorization = getTokenHeader();
+        let sameOrigin = false;
+        try {
+          sameOrigin = new URL(url, window.location.origin).origin === window.location.origin;
+        } catch {
+          // An invalid URL will fail in fetch; do not attach a bearer token to it.
+        }
         const response = await fetch(url, {
           credentials: 'same-origin',
+          ...(sameOrigin && authorization ? { headers: { Authorization: authorization } } : {}),
           signal: abort.signal,
         });
         if (!response.ok) {
