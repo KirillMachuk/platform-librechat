@@ -160,7 +160,7 @@ describe('trimSelectionEnd', () => {
     expect(selection.getRangeAt(0).toString()).toBe('как дела');
   });
 
-  it('the icon in the next answer\'s «Думаю» header, where a triple-click on a question ends, does not keep the tail', () => {
+  it("the icon in the next answer's «Думаю» header, where a triple-click on a question ends, does not keep the tail", () => {
     /* The owner's case (08.09): the selection ends at offset 0 of the header's
      * label, past the brain icon — a selectable inline svg in a button. The
      * earlier picture rule read that icon as an image the drag had taken on

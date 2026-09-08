@@ -215,7 +215,9 @@ test.describe('copying a message by selection', () => {
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('return 1\n');
   });
 
-  test('a question answered with a thinking block copies exactly the question', async ({ page }) => {
+  test('a question answered with a thinking block copies exactly the question', async ({
+    page,
+  }) => {
     /* The owner's case (08.09): on the stand every answer opens with the
      * «Думаю» block, and a triple-click on the question above it ends INSIDE
      * that block's header, past the brain icon. The earlier picture rule took
