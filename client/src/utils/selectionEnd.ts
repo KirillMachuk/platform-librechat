@@ -27,10 +27,14 @@
  *   ends after it (the strip under the composer, the composer itself — where
  *   a triple-click on the last message and a drag released below it end) is
  *   trimmed back to the last character of the transcript it covers;
- * - a tail that holds a selectable picture (image, video, canvas…) is left
- *   alone: the drag took it on purpose and the trim would drop it from the
- *   text/html copy. Icon buttons under a message and the composer after it
- *   are out of selection and do not count; a table is text like any other;
+ * - what sits between that character and the browser's end of the selection
+ *   is never a reason to keep the tail. An earlier version kept it when a
+ *   picture was in there, meaning to save an image the drag had taken along —
+ *   and that rule fired on the brain icon in the «Думаю» header of the next
+ *   answer, where a triple-click on a question ends, so the owner's own
+ *   messages kept copying with blank lines (08.09). A selection that reaches
+ *   into the next block took nothing on purpose; the copy button carries a
+ *   message's pictures;
  * - preformatted text (`pre`, `pre-wrap`, `pre-line` — every message
  *   paragraph here is pre-wrap) keeps every character it covers: a typed
  *   newline or a code line's newline is content. The last line of a code
@@ -49,17 +53,6 @@
  */
 
 const NOT_WHITESPACE = /[^\s\u200B-\u200D\u2060\uFEFF]/;
-const REPLACED_ELEMENTS = new Set([
-  'IMG',
-  'PICTURE',
-  'VIDEO',
-  'AUDIO',
-  'CANVAS',
-  'SVG',
-  'IFRAME',
-  'OBJECT',
-  'EMBED',
-]);
 function lastNonWhitespaceIndex(text: string): number {
   for (let i = text.length - 1; i >= 0; i--) {
     if (NOT_WHITESPACE.test(text[i])) {
@@ -168,31 +161,6 @@ export function findSelectionCut(range: Range, root: Node): SelectionCut | null 
 }
 
 /**
- * True when a selectable replaced element sits between the cut and the range
- * end — a picture the drag took along. Only the transcript's own content
- * counts: the icon buttons under a message and the composer after it are
- * out of selection, not something the user meant to copy, and the strict
- * containment test keeps an element that merely starts AT the end (offset 0
- * of the next block) from counting as covered.
- */
-function tailHoldsReplacedElement(range: Range, cut: SelectionCut, container: Node): boolean {
-  const tail = document.createRange();
-  tail.setStart(cut.node, cut.offset);
-  tail.setEnd(range.endContainer, range.endOffset);
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_ELEMENT);
-  walker.currentNode = cut.node;
-  for (let el = walker.nextNode() as Element | null; el; el = walker.nextNode() as Element | null) {
-    if (tail.comparePoint(el, 0) > 0) {
-      break;
-    }
-    if (REPLACED_ELEMENTS.has(el.tagName.toUpperCase()) && isSelectableFrom(el)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
  * A triple-click on the LAST message ends in whatever follows the transcript
  * (the strip under the composer, measured), and a drag released below the
  * last message ends there too — those are exactly the selections to trim, so
@@ -241,9 +209,6 @@ export function trimSelectionEnd(selection: Selection, container: Node): boolean
     return false;
   }
   if (range.endContainer === cut.node && range.endOffset === cut.offset) {
-    return false;
-  }
-  if (tailHoldsReplacedElement(range, cut, container)) {
     return false;
   }
   if (typeof selection.setBaseAndExtent !== 'function') {

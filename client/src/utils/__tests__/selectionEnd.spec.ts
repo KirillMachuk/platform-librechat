@@ -160,28 +160,26 @@ describe('trimSelectionEnd', () => {
     expect(selection.getRangeAt(0).toString()).toBe('как дела');
   });
 
-  it('a tail that holds an image is left alone: the picture stays in the copy', () => {
+  it('the icon in the next answer\'s «Думаю» header, where a triple-click on a question ends, does not keep the tail', () => {
+    /* The owner's case (08.09): the selection ends at offset 0 of the header's
+     * label, past the brain icon — a selectable inline svg in a button. The
+     * earlier picture rule read that icon as an image the drag had taken on
+     * purpose and left the tail (and its blank lines) in the copy. */
+    const log = mount(
+      '<p id="a">как дела</p><div><button><svg></svg><span id="h">Думаю…</span></button></div><p id="b">next</p>',
+    );
+    const a = text(log.querySelector('#a'));
+    const selection = select(a, 0, log.querySelector('#h') as Node, 0);
+    expect(trimSelectionEnd(selection, log)).toBe(true);
+    expect(selection.getRangeAt(0).toString()).toBe('как дела');
+  });
+
+  it('a picture the selection reached past is not kept either: the cut is after the last character', () => {
     const log = mount('<p id="a">look</p><p id="i"><img src="x.png" alt=""></p><p id="b">next</p>');
     const a = text(log.querySelector('#a'));
     const selection = select(a, 0, log.querySelector('#b') as Node, 0);
-    expect(trimSelectionEnd(selection, log)).toBe(false);
-  });
-
-  it('icon buttons under the message (out of selection) do not count as pictures in the tail', () => {
-    const log = mount(
-      '<p id="a">answer</p><div inert><button><svg></svg></button><button><svg></svg></button></div><p id="b">next</p>',
-    );
-    const a = text(log.querySelector('#a'));
-    const selection = select(a, 0, log.querySelector('#b') as Node, 0);
     expect(trimSelectionEnd(selection, log)).toBe(true);
-    expect(selection.getRangeAt(0).toString()).toBe('answer');
-  });
-
-  it('an image that merely starts at the end of the selection is not in the tail', () => {
-    const log = mount('<p id="a">look</p><p id="i"><img src="x.png" alt=""></p>');
-    const a = text(log.querySelector('#a'));
-    const selection = select(a, 0, log.querySelector('#i') as Node, 0);
-    expect(trimSelectionEnd(selection, log)).toBe(true);
+    expect(selection.getRangeAt(0).toString()).toBe('look');
   });
 
   it('text under an inert block (folded reasoning) is not where the selection ends', () => {
