@@ -1015,13 +1015,18 @@ const primeFiles = async (options) => {
  */
 function isMissingSandboxPathMessage(message) {
   const text = String(message ?? '').toLowerCase();
-  /* Only the shapes a tool uses to talk about a PATH. A bare «not found» is what a
-   * shell says about a missing COMMAND (`sh: cat: not found`) — that is a broken
-   * sandbox image, not an absent file, and it must keep the loud path even inside a
-   * probe. `isSandboxMissingFileError` in handlers.ts does accept the looser text,
-   * because what the model is told and what the operator is told are not the same
-   * question. */
-  return text.includes('no such file or directory') || text.includes('cannot access');
+  /* One shape, and only one: it is the only wording that cannot mean anything but an
+   * absent path. Measured against this deployment's sandbox (coreutils 9.4, POSIX
+   * locale): `cat` says `cat: <p>: No such file or directory` for a missing file AND
+   * for a missing directory in the path, and `ls` says `ls: cannot access '<p>': No
+   * such file or directory` — so nothing that means «absent» is lost by dropping the
+   * looser tokens. What they would have added is failure: `cannot access` alone also
+   * carries `Permission denied`, and a bare `not found` is a shell talking about a
+   * missing COMMAND (`bash: line 1: catt: command not found`) — a broken sandbox
+   * image. `isSandboxMissingFileError` in handlers.ts keeps the looser set on
+   * purpose: what the model is told and what the operator is told are different
+   * questions. */
+  return text.includes('no such file or directory');
 }
 
 /**
@@ -1051,6 +1056,9 @@ function isMissingSandboxPathMessage(message) {
  * @param {string} [params.session_id] - Sandbox session id from the seeded context.
  * @param {Array<{id: string, name: string, session_id?: string}>} [params.files] - File refs to mount.
  * @param {ServerRequest} [params.req] - Current authenticated request, used to mint Code API auth.
+ * @param {boolean} [params.expectMissing=false] - The caller is probing for existence, so an
+ *   absent path is logged at `warn` instead of `error`. Never set it on a read that expects
+ *   the file to be there.
  * @returns {Promise<{content: string} | null>}
  */
 async function readSandboxFile({ file_path, session_id, files, req, expectMissing = false }) {
@@ -1119,6 +1127,18 @@ async function readSandboxFile({ file_path, session_id, files, req, expectMissin
       error?.sandboxStderr === true &&
       isMissingSandboxPathMessage(error.message)
     ) {
+      /* Quieter, not silent. Every one of the four `Error reading sandbox file` lines
+       * in this stand's fourteen-day log came from THIS probe — including both of the
+       * 31.08 pair that revealed the sandbox-continuity bug (#464). So the reads that
+       * were supposed to keep covering that case have never actually fired in
+       * production, and dropping the line entirely would have left «the sandbox lost a
+       * file the model wrote» with nothing to show for it. `warn` keeps it in the
+       * container log for an investigation while staying out of the daily digest,
+       * which reads `error-*.log` for the platform and skips this container in its
+       * per-service pass. */
+      logger.warn(
+        `[readSandboxFile] "${file_path}" is not in the sandbox (expected by the caller): ${error.message}`,
+      );
       throw error;
     }
     logAxiosError({
@@ -1135,6 +1155,11 @@ async function readSandboxFile({ file_path, session_id, files, req, expectMissin
  * base64-encoded JSON so neither the file path nor the content is
  * interpolated into shell syntax.
  *
+ * There is deliberately no `expectMissing` twin of `readSandboxFile`'s option here: a
+ * write is never a probe. Its stderr is always a real failure — the caller asked for
+ * the file to exist afterwards — so the loud path is correct, and «aligning» the two
+ * would lose a genuine fault.
+ *
  * @param {Object} params
  * @param {string} params.file_path - Path inside the sandbox (prefer `/mnt/data/...`).
  * @param {string} params.content - Complete UTF-8 text content to write.
@@ -1143,9 +1168,6 @@ async function readSandboxFile({ file_path, session_id, files, req, expectMissin
  * @param {ServerRequest} [params.req] - Current authenticated request, used to mint Code API auth.
  * @returns {Promise<{stdout?: string, stderr?: string, session_id?: string, files?: Array<Object>} | null>}
  */
-/* No `expectMissing` twin here on purpose: a write is never a probe. Its stderr is
- * always a real failure — the caller asked for the file to exist afterwards — so the
- * loud path is correct, and «aligning» the two would lose a genuine fault. */
 async function writeSandboxFile({ file_path, content, session_id, files, req }) {
   const baseURL = getCodeBaseURL();
   if (!baseURL) {

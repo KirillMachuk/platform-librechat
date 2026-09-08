@@ -25,14 +25,21 @@ const MAX_FILE_SIZE = 150 * 1024 * 1024;
  * Invalid URL`, a message that names neither the sandbox nor the setting — on the one
  * path where the model is told to fix the error and retry. Note that the variable
  * being UNSET is a different state, which upstream's own default already handles;
- * only the empty string lands here. `readSandboxFile` and `writeSandboxFile` in
- * ./process.js already refuse on an empty base URL; these paths did not.
+ * only the empty string lands here.
+ *
+ * NOT the same behaviour as `readSandboxFile` / `writeSandboxFile` in ./process.js,
+ * which return `null` on an empty base URL and let the caller turn that into a
+ * model-visible message. Those paths still say nothing about the setting; they are
+ * left alone here because the deploy-side cause is closed, and widening this change
+ * into them would be a different edit with a different blast radius.
  *
  * @returns {string} Absolute base URL of the Code API.
  * @throws {Error} When no sandbox address is configured.
  */
 function requireCodeBaseURL() {
-  const baseURL = getCodeBaseURL();
+  /* `.trim()` because a base URL of spaces is not a base URL: it survives `!baseURL`
+   * and comes back as the same anonymous `Invalid URL` this exists to prevent. */
+  const baseURL = String(getCodeBaseURL() ?? '').trim();
   if (!baseURL) {
     throw new Error(
       'Code Interpreter is not configured: LIBRECHAT_CODE_BASEURL is set but empty. ' +
@@ -174,11 +181,14 @@ async function deleteCodeEnvFile(req, file) {
  */
 async function uploadCodeEnvFile({ req, stream, filename, kind, id, version }) {
   try {
+    /* Ahead of the stream, for the same reason as in `batchUploadCodeEnvFiles`:
+     * refusing afterwards leaves the caller's stream attached to a form nobody sends. */
+    const baseURL = requireCodeBaseURL();
+
     const form = new FormData();
     appendCodeEnvFileIdentity(form, { kind, id, version });
     appendCodeEnvFile(form, stream, filename);
 
-    const baseURL = requireCodeBaseURL();
     const authHeaders = await getCodeApiAuthHeaders(req);
     /** @type {import('axios').AxiosRequestConfig} */
     const options = {
