@@ -23,8 +23,21 @@ export interface BillingNotifierDeps {
   tenantId?: string;
   /** Service-period anchor day (1–31; defaults to 1). */
   anchorDay?: number;
-  /** Delivers the alert (email/whatever the stack has); errors are logged, not thrown. */
-  sendAlert: (alert: BillingAlert) => Promise<void>;
+  /**
+   * Delivers the alert and answers how many recipients it reached; never throws.
+   *
+   * The count is not decoration. The claim below is taken BEFORE sending, so an alert
+   * that reaches nobody would otherwise burn it and silence the notification for the
+   * rest of the billing period — up to thirty days — for the two alerts the contract
+   * actually promises the customer.
+   */
+  sendAlert: (alert: BillingAlert) => Promise<number | void>;
+  /** Gives back a claim whose alert reached nobody, so a later spend can try again. */
+  releaseCreditMonthAlert?: (params: {
+    month: string;
+    kind: '80' | 'exhausted';
+    tenantId?: string;
+  }) => Promise<boolean>;
   /** Fire-and-forget audit recorder. */
   recordAudit: (event: AuditLogInput) => void;
 }
@@ -36,6 +49,33 @@ export interface BillingNotifierDeps {
  * The month document's flags make each fire exactly once per month; a package
  * top-up re-arms the exhaustion flag (see `addCreditPackage`).
  */
+/**
+ * Sends, and hands the claim back if the mail reached nobody.
+ *
+ * A `sendAlert` that predates this contract returns `void`; that is treated as
+ * "delivered", which keeps the old behaviour rather than releasing a claim on every
+ * single send.
+ */
+async function deliverOrRelease(
+  deps: BillingNotifierDeps,
+  alert: BillingAlert,
+  kind: '80' | 'exhausted',
+  month: string,
+): Promise<void> {
+  const delivered = await deps.sendAlert(alert);
+  if (delivered !== 0) {
+    return;
+  }
+  const released =
+    deps.releaseCreditMonthAlert != null &&
+    (await deps.releaseCreditMonthAlert({ month, kind, tenantId: deps.tenantId }));
+  logger[released ? 'warn' : 'error'](
+    released
+      ? `[billing] alert "${alert.kind}" reached nobody — claim released, a later spend will retry`
+      : `[billing] alert "${alert.kind}" reached nobody AND the claim could not be released — this period will not warn again`,
+  );
+}
+
 export function createBillingNotifier(deps: BillingNotifierDeps): {
   handleSpendResult: (result: RecordCreditSpendResult) => Promise<void>;
 } {
@@ -64,7 +104,7 @@ export function createBillingNotifier(deps: BillingNotifierDeps): {
       targetId: result.month,
       metadata: { month: result.month, spentCredits, poolCredits, percentUsed },
     });
-    await deps.sendAlert(alert);
+    await deliverOrRelease(deps, alert, '80', result.month);
   }
 
   async function notifyExhausted(result: RecordCreditSpendResult): Promise<void> {
@@ -101,7 +141,7 @@ export function createBillingNotifier(deps: BillingNotifierDeps): {
       targetId: result.month,
       metadata: { month: result.month, spentCredits, poolCredits },
     });
-    await deps.sendAlert(alert);
+    await deliverOrRelease(deps, alert, 'exhausted', result.month);
   }
 
   /** Never throws — notification failures must not affect spend recording. */

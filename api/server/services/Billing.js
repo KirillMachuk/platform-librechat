@@ -90,6 +90,10 @@ function getBillingWiring() {
   const notifier = createBillingNotifier({
     getCreditBillingStatus: db.getCreditBillingStatus,
     markCreditMonthNotified: db.markCreditMonthNotified,
+    /* Same protection the reconciler already had: a claim taken before sending must be
+     * returned when the sending reached nobody, or the two alerts the contract promises
+     * the client go silent for the rest of the period. */
+    releaseCreditMonthAlert: db.releaseCreditMonthAlert,
     poolMicroUsd: config.poolMicroUsd,
     landedCostMultiplier: config.landedCostMultiplier,
     anchorDay: config.anchorDay,
