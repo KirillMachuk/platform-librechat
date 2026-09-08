@@ -186,7 +186,13 @@ export function ThinkingReasoning({
       <button
         type="button"
         data-testid="thinking-header"
-        className={streaming ? styles.trHeader : `${styles.trHeader} ${styles.isClickable}`}
+        /* `tap-target`: 82×26 to the eye, 44 to a finger on a phone — the
+         * platform's own helper, height only (design review 02.09, item 6). */
+        className={
+          streaming
+            ? `${styles.trHeader} tap-target`
+            : `${styles.trHeader} ${styles.isClickable} tap-target`
+        }
         aria-expanded={isOpen}
         aria-disabled={streaming || undefined}
         aria-controls={contentId}

@@ -2,7 +2,7 @@ import { expect, test, devices } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { MongoClient } from 'mongodb';
 import { identify, measureCanon } from './canon.helpers';
-import { MOCK_ENDPOINTS, NEW_CHAT_PATH, selectMockEndpoint, sendMessage } from './helpers';
+import { MOCK_ENDPOINTS, NEW_CHAT_PATH, selectMockEndpoint } from './helpers';
 import { applyRuntimeEnv } from '../../setup/runtimeEnv';
 
 /**
@@ -44,6 +44,18 @@ const PLAN_TEXT = [
   '3. Выделить тренды по регионам',
   '4. Сформировать таблицу и рекомендацию',
 ].join('\n');
+
+/**
+ * On a touch profile Enter is a newline, as on a phone; the message goes by the
+ * send button — which is also why the shared `sendMessage` (Enter) is not used.
+ */
+async function sendByButton(page: Page, text: string) {
+  const input = page.getByRole('textbox', { name: 'Message input' });
+  await input.click();
+  await input.fill(text);
+  await expect(page.getByTestId('send-button')).toBeEnabled();
+  await page.getByTestId('send-button').click();
+}
 
 /** The premise: the phone rules must actually be in force in this profile. */
 async function expectPhoneMedia(page: Page) {
@@ -121,7 +133,7 @@ test.describe('card controls reach 44px on a phone', () => {
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
     await expectPhoneMedia(page);
     await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
-    await sendMessage(page, 'E2E_THINK_REPLY:tap');
+    await sendByButton(page, 'E2E_THINK_REPLY:tap');
     await expect(page.getByText('E2E think reply tap').first()).toBeVisible({ timeout: 30000 });
     const header = page.getByTestId('thinking-header');
     await expect(header).toHaveAttribute('aria-expanded', 'false', { timeout: 30000 });
@@ -188,8 +200,7 @@ test.describe('card controls reach 44px on a phone', () => {
     await serverItem.click();
     await expect(serverItem).toHaveAttribute('aria-checked', 'true');
     await page.keyboard.press('Escape');
-    await textarea.fill(ASK_PROMPT);
-    await textarea.press('Enter');
+    await sendByButton(page, ASK_PROMPT);
     const card = page.getByTestId('approval-card');
     await expect(card).toBeVisible({ timeout: 30000 });
     await card.getByRole('radio', { name: /Полный отчёт/ }).click();

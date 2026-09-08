@@ -108,8 +108,8 @@ describe('ReportCard', () => {
       </ReportCard>,
     );
     fireEvent.click(getByText('com_ui_expand'));
-    const items = (await findAllByRole('button', { name: /Раздел один|Подраздел/ })).filter(
-      (el) => el.className.includes('truncate'),
+    const items = (await findAllByRole('button', { name: /Раздел один|Подраздел/ })).filter((el) =>
+      el.className.includes('truncate'),
     );
     /* The list is built once and mounted twice — the phone's <details> and the
      * desktop aside — so two headings give four buttons. */

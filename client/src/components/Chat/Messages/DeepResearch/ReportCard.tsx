@@ -113,7 +113,9 @@ export default function ReportCard({
           <button
             type="button"
             onClick={() => scrollToHeading(item.node)}
-            className="w-full truncate rounded-lg px-2 py-1.5 text-left text-sm text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+            /* Hover only where a cursor exists: on a touch screen a bare
+             * `hover:` sticks after a tap (design review 02.09, item 7). */
+            className="w-full truncate rounded-lg px-2 py-1.5 text-left text-sm text-text-secondary [@media(hover:hover)]:hover:bg-surface-hover [@media(hover:hover)]:hover:text-text-primary"
             style={{ paddingLeft: `${8 + (item.level - 1) * 12}px` }}
           >
             {item.label}
