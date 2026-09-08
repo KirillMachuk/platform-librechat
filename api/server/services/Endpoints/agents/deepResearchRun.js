@@ -1680,7 +1680,8 @@ async function runNewDeepResearch(params) {
 
       // Task #21 live progress: translate the engine's coarse onProgress into `dr_progress`
       // snapshots the frontend plan card renders (steps checklist + current action + source
-      // count). The count is kept here — no graph changes. Steps come from the
+      // count). The count is kept here; the graph's nodes are untouched (`run.ts` surfaces
+      // a batch's cited pages as a `findings` event). Steps come from the
       // approved plan message. Gated on the plan gate + streamId; fire-and-forget so a slow
       // emit never blocks the run, and it always ALSO logs (the shipped ops line).
       /* The plan of this branch, not merely of the direct parent — see
@@ -1693,9 +1694,10 @@ async function runNewDeepResearch(params) {
        */
       const sourceUrls = new Set();
       /* The snapshot a `findings` event re-emits: the count changed, the phase and the
-       * action did not. */
+       * action did not. Findings follow a research event by the graph's own order, so
+       * these initial values are never sent; they exist so the emit is total. */
       let lastPhase = 'research';
-      let lastAction = 'Исследует источники';
+      let lastAction = drProgressAction({ type: 'research' });
       /**
        * Which plan step the card highlights, 0-based — and the reason this is a
        * variable here rather than arithmetic in the client.
@@ -1704,9 +1706,10 @@ async function runNewDeepResearch(params) {
        * put a five-step plan on step 3 at the FIRST research round, so step 1 was
        * never once shown as running and two steps were already ticked off, while
        * the action line under them described a sub-question that belongs to no
-       * step at all (owner r27). The fraction encodes supervisor rounds, and the
+       * step at all (owner r27). That fraction encoded supervisor rounds, and the
        * relation between rounds and plan steps does not exist — the supervisor
-       * now says which step its batch advances and that answer travels here.
+       * now says which step its batch advances and that answer travels here;
+       * the fraction itself is gone (design review 02.09, item 8).
        *
        * Monotonic on purpose: a checklist reads as progress, so a step that has
        * gone back would UN-TICK finished work. Held server-side so a reload, a
