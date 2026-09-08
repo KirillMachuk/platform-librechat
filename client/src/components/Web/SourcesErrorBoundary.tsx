@@ -1,4 +1,5 @@
 import React, { Component, ReactNode } from 'react';
+import { reportClientError } from '~/utils';
 import { useLocalize } from '~/hooks';
 
 /**
@@ -45,6 +46,7 @@ class SourcesErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Sources error:', error);
+    reportClientError('boundary', error);
     this.props.onError?.(error, errorInfo);
   }
 

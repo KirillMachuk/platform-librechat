@@ -44,9 +44,11 @@ const keys = require('./keys');
 const user = require('./user');
 const mcp = require('./mcp');
 const rum = require('./rum');
+const clientErrors = require('./clientErrors');
 
 module.exports = {
   rum,
+  clientErrors,
   favicon,
   mcp,
   auth,

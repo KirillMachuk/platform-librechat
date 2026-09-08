@@ -1,4 +1,5 @@
 import React from 'react';
+import { reportClientError } from '~/utils';
 
 interface MermaidErrorBoundaryProps {
   children: React.ReactNode;
@@ -24,6 +25,7 @@ class MermaidErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Mermaid rendering error:', error, errorInfo);
+    reportClientError('boundary', error);
   }
 
   componentDidUpdate(prevProps: MermaidErrorBoundaryProps) {

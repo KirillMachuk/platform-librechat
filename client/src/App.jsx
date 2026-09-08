@@ -7,6 +7,7 @@ import * as RadixToast from '@radix-ui/react-toast';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Toast, ThemeProvider, ToastProvider } from '@librechat/client';
 import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-query';
+import { installGlobalErrorReporting } from './utils/reportClientError';
 import { ScreenshotProvider, useApiErrorBoundary } from './hooks';
 import WakeLockManager from '~/components/System/WakeLockManager';
 import QueryDevtoolsGate from '~/components/QueryDevtoolsGate';
@@ -15,6 +16,10 @@ import { getThemeFromEnv } from './utils/getThemeFromEnv';
 import { initializeFontSize } from '~/store/fontSize';
 import { LiveAnnouncer } from '~/a11y';
 import { router } from './routes';
+
+/* At module load, not in an effect: the failures no boundary can catch are the
+ * ones that happen before the first render finishes. */
+installGlobalErrorReporting();
 
 const App = () => {
   const { setError } = useApiErrorBoundary();

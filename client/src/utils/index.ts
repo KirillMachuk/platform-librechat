@@ -183,3 +183,4 @@ Execute the intention of the prompt that is mentioned in the message using the t
   ask({ text: messageText });
   logger.debug('MCP-UI', 'Message submitted successfully');
 };
+export * from './reportClientError';

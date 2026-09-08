@@ -321,6 +321,7 @@ const startServer = async () => {
   app.use('/api/projects', await routes.projects.initialize());
   app.use('/api/mcp', routes.mcp);
   app.use('/api/rum', routes.rum);
+  app.use('/api/client-errors', routes.clientErrors);
 
   app.use('/metrics', metricsRouter);
 

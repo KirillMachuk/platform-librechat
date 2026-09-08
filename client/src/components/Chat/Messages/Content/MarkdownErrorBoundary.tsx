@@ -4,8 +4,8 @@ import supersub from 'remark-supersub';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import type { PluggableList } from 'unified';
+import { langSubset, remarkApproxTilde, reportClientError } from '~/utils';
 import { code, codeNoExecution, a, p, table } from './MarkdownComponents';
-import { langSubset, remarkApproxTilde } from '~/utils';
 import { CodeBlockProvider } from '~/Providers';
 
 interface ErrorBoundaryState {
@@ -34,6 +34,7 @@ class MarkdownErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Markdown rendering error:', error, errorInfo);
+    reportClientError('boundary', error);
   }
 
   componentDidUpdate(prevProps: MarkdownErrorBoundaryProps) {
