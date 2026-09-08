@@ -1,5 +1,6 @@
 import React, { Component, ReactNode } from 'react';
 import { useLocalize } from '~/hooks';
+import { reportClientError } from '~/utils';
 
 /**
  * The boundary itself is a class, so it cannot localise anything. Its fallback
@@ -45,6 +46,7 @@ class SourcesErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Sources error:', error);
+    reportClientError('boundary', error);
     this.props.onError?.(error, errorInfo);
   }
 
