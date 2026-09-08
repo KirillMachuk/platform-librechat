@@ -13,10 +13,10 @@
   },
   "renderEvidence": {
     "algorithm": "sha256-json-v1",
-    "matrixDigest": "511d2676ddaf9e661736a9f07c1afef9ece0ee99c5ba91065515f9a23c0f83b5"
+    "matrixDigest": "8208f1d28c3d948336ff508cd247372245c9a656f26d4c3a347cca6f9f3195b7"
   },
-  "reviewer": "Codex review of the CI renders after the PowerPoint chart compatibility fix",
-  "reviewedAt": "2026-09-07",
+  "reviewer": "Codex review of the fresh CI renders after the Russian chart text-fit repair",
+  "reviewedAt": "2026-09-08",
   "cases": {
     "ru-board-notes": {
       "score": 9.4,
@@ -129,5 +129,5 @@
       "notes": "Russian and English business notation, currency, ratios, dates, native chart, and table render consistently."
     }
   },
-  "reviewNotes": "The digest is the exact Ubuntu CI raster evidence, not a local LibreOffice hash. Reviewed all ten run-1 montages at full resolution after preserving python-pptx's signed chart-axis identifiers and removing the destructive chart-title access. All Cyrillic text remains legible, slide titles and content are unclipped, charts have no placeholder titles or stray glyphs, no slide is blank, and the deck narratives and editable evidence are unchanged. The existing per-case dimension scores therefore still apply without an increase."
+  "reviewNotes": "The digest is the exact Ubuntu CI raster evidence, not a local LibreOffice hash. Reviewed all ten fresh run-1 montages at full resolution after the Russian chart text-fit repair. All Cyrillic text remains legible, slide titles and content are unclipped, charts have no placeholder titles or stray glyphs, no slide is blank, and the deck narratives and editable evidence remain intact. The existing per-case dimension scores therefore still apply without an increase."
 }
