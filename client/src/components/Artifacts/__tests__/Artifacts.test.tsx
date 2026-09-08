@@ -260,6 +260,37 @@ describe('Artifacts panel', () => {
     expect(screen.queryByTestId('verified-presentation-preview')).not.toBeInTheDocument();
   });
 
+  it('does not use the lossy browser renderer when a generated preview asset is unavailable', () => {
+    setPanelState({
+      currentArtifact: buildArtifact({
+        title: 'generated.pptx',
+        type: TOOL_ARTIFACT_TYPES.PRESENTATION,
+        file: {
+          file_id: 'deck-2',
+          filename: 'generated.pptx',
+          artifactReport: {
+            status: 'needs_review',
+            format: 'pptx',
+            sourceFileIds: [],
+            previewAssets: [],
+            qaChecks: [{ name: 'render', status: 'failed', message: 'Failed' }],
+            issues: [{ code: 'render', severity: 'critical', message: 'Failed' }],
+            changeLog: [],
+            skillVersion: '3.3.0',
+            repairIterations: 2,
+          },
+        },
+      }),
+    });
+
+    renderPanel();
+
+    expect(screen.getByTestId('verified-presentation-preview')).toHaveTextContent(
+      'generated.pptx:undefined',
+    );
+    expect(screen.queryByTestId('artifact-tabs')).not.toBeInTheDocument();
+  });
+
   describe('header actions', () => {
     it('copies the artifact content', () => {
       setPanelState();

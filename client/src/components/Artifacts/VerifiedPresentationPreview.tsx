@@ -78,10 +78,9 @@ export const readBoundedPdf = async (
 };
 
 type Props = {
-  url: string;
+  url?: string;
   title: string;
   refreshKey: number;
-  fallback: React.ReactNode;
 };
 
 /**
@@ -89,7 +88,7 @@ type Props = {
  * already constrained by the shared artifact-report schema, but the response
  * is still bounded and checked for PDF magic bytes before it reaches pdf.js.
  */
-export default function VerifiedPresentationPreview({ url, title, refreshKey, fallback }: Props) {
+export default function VerifiedPresentationPreview({ url, title, refreshKey }: Props) {
   const localize = useLocalize();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -99,6 +98,11 @@ export default function VerifiedPresentationPreview({ url, title, refreshKey, fa
     let objectUrl: string | null = null;
     setPreviewUrl(null);
     setFailed(false);
+
+    if (!url) {
+      setFailed(true);
+      return () => abort.abort();
+    }
 
     (async () => {
       try {
@@ -131,7 +135,11 @@ export default function VerifiedPresentationPreview({ url, title, refreshKey, fa
   }, [refreshKey, url]);
 
   if (failed) {
-    return fallback;
+    return (
+      <div className="flex h-full items-center justify-center bg-surface-secondary px-6 text-center">
+        <span className="text-sm text-text-secondary">{localize('com_ui_preview_failed')}</span>
+      </div>
+    );
   }
   if (previewUrl) {
     return <PdfPreview url={previewUrl} title={title} />;

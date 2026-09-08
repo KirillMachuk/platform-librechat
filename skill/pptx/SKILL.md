@@ -5,7 +5,7 @@ description: Create or revise editable PowerPoint presentations with a Russian-f
 
 # Professional PowerPoint authoring
 
-Create the requested `.pptx`; do not substitute Markdown, HTML, or PDF. The editable PowerPoint file is the primary artifact. A PDF is delivered only when the user explicitly requests it; the builder still creates an internal LibreOffice PDF for preview and QA.
+Create the requested presentation as two matching deliverables: an editable `.pptx` and a `.pdf` rendered from that final PPTX. Do not substitute Markdown or HTML. Only omit the PDF when the user explicitly asks for PPTX alone.
 
 ## Available runtime
 
@@ -36,20 +36,20 @@ Create the requested `.pptx`; do not substitute Markdown, HTML, or PDF. The edit
 2. Draft a short story outline. Typical business flow: context → implication → evidence → decision → next steps. Do not create filler slides.
 3. Read `references/spec.md`, then write one JSON spec. Always include the complete `ArtifactJob` and acceptance criteria. Do not read the builder source during normal authoring.
 4. For a revision, inspect the mounted binary with `python-pptx`, confirm the actual slide number and exact source text, and use that file as `inputPath`.
-5. Write the spec to `/tmp/<stem>-spec.json` and run the builder against it in the same `execute_code` call — `/tmp` is scratch for one call and is empty by the next one:
+5. Write the spec to `/mnt/data/_qa_<stem>-spec.json`, then run the builder against it. The `_qa_` prefix is reserved for internal working files and prevents them from becoming user attachments. Keep the spec there across repair calls; never put reusable work in `/tmp`, because `/tmp` is empty on the next call:
 
    ```bash
-   python3 /mnt/data/pptx/scripts/build_presentation.py /tmp/<stem>-spec.json /mnt/data/<clear-name>.pptx
+   python3 /mnt/data/pptx/scripts/build_presentation.py /mnt/data/_qa_<stem>-spec.json /mnt/data/<clear-name>.pptx
    ```
 
-   Later calls keep whatever they need, so a repair spanning several calls simply writes the spec again in the call that rebuilds. Never place final artifacts inside `/mnt/data/pptx`, `/mnt/data/out`, or another subdirectory.
+   Never place final artifacts inside `/mnt/data/pptx`, `/mnt/data/out`, or another subdirectory.
 
 6. Read `/mnt/data/<clear-name>.pptx.artifact-report.json`. The builder reopens the file, checks structure and editability, renders every slide through LibreOffice, raster-checks the result, verifies immutable inputs, and confirms that a targeted revision changed no unrequested package parts.
-7. Inspect the derived PDF when the environment exposes visual file inspection. Review every slide, not only a contact sheet: clipping, wrapping, contrast, hierarchy, whitespace, alignment, factual sources, and consistency with the template.
+7. Inspect the derived PDF when the environment exposes visual file inspection. Review every slide, not only a contact sheet: clipping, wrapping, contrast, hierarchy, whitespace, alignment, factual sources, and consistency with the template. Any temporary slide PNG, montage, or other review evidence written under `/mnt/data` must start with `_qa_`; never call `read_file` on an image already exposed by the execution result.
 8. If a defect remains, revise the JSON and rerun. Allow at most two repair iterations and set `repairIterations` to the actual count.
-9. Deliver the `.pptx` only when the report status is `ready` and the visual review is clean. If a critical issue remains, deliver it as `needs_review` and state the exact issue plainly.
+9. Deliver the `.pptx` and its same-stem `.pdf` only when the report status is `ready` and the visual review is clean. If a critical issue remains, state the exact issue plainly instead of claiming completion.
 
-Final user files must be direct children of `/mnt/data` and use the requested base name. Always deliver `/mnt/data/<name>.pptx`. Set `outputPdf: true` and deliver `/mnt/data/<name>.pdf` only when the user explicitly asks for PDF; otherwise `/mnt/data/<name>.preview.pdf` is internal preview evidence and must not appear as a separate attachment. Do not deliver or mention the JSON spec, artifact-report JSON, rendered slide PNGs, montages, or scratch directories unless the user explicitly asks for QA evidence; the platform consumes artifact reports as metadata.
+Final user files must be direct children of `/mnt/data`, use one requested base name, and differ only by extension: `/mnt/data/<name>.pptx` and `/mnt/data/<name>.pdf`. The PDF must come from the final PPTX, never from a separate drawing pipeline. `outputPdf` defaults to `true`; set it to `false` only when the user explicitly requests PPTX alone. Do not deliver or mention `_qa_` files, the JSON spec, artifact-report JSON, rendered slide PNGs, montages, or scratch directories unless the user explicitly asks for QA evidence; the platform consumes artifact reports as metadata.
 
 ## Core layouts
 
@@ -63,4 +63,4 @@ Use only the layout needed for the message: `title`, `claim`, `section`, `bullet
 
 ## Completion response
 
-Give the user the `.pptx` link first. Briefly mention the audience/goal, source or assumption caveats, QA status, and an explicitly requested PDF if present. Never mention the internal preview PDF and never claim that a deck is verified if the artifact report says `needs_review`.
+When the report is `ready`, answer with one short sentence such as: `Готово — приложил презентацию в PPTX и PDF.` Attachments already carry the files, so do not repeat links, the slide outline, QA status, repair history, internal filenames, or implementation details. Mention only a material source or assumption caveat that the user needs to act on. Never write a `QA:` line. If the report is `needs_review`, do not claim completion; state only the exact remaining user-visible problem.

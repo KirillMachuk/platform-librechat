@@ -286,6 +286,30 @@ describe('artifact report sidecars', () => {
     expect(isInternalArtifactPreview('other.preview.pdf', internal)).toBe(false);
   });
 
+  it('hides reserved QA artifacts without hiding ordinary user files', () => {
+    expect(isInternalArtifactPreview('_qa_preview.pdf', new Map())).toBe(true);
+    expect(isInternalArtifactPreview('_QA_slide-1.png', new Map())).toBe(true);
+    expect(isInternalArtifactPreview('review/_qa_weather-spec.json', new Map())).toBe(true);
+    expect(isInternalArtifactPreview('qa-report.pdf', new Map())).toBe(false);
+    expect(isInternalArtifactPreview('weather-slide-1.png', new Map())).toBe(false);
+  });
+
+  it('hides stale conventional preview PDFs left by an earlier repair attempt', () => {
+    const requested = new Map([
+      [
+        'board-deck.pptx',
+        {
+          ...validReport,
+          previewAssets: [{ filename: 'board-deck.pdf', kind: 'pdf', delivery: 'requested' }],
+        },
+      ],
+    ]);
+
+    expect(isInternalArtifactPreview('board-deck.preview.pdf', requested)).toBe(true);
+    expect(isInternalArtifactPreview('orphan.preview.pdf', new Map())).toBe(false);
+    expect(isInternalArtifactPreview('board-deck.pdf', requested)).toBe(false);
+  });
+
   it('hides the legacy same-stem PDF only when delivery metadata is absent', () => {
     const reports = new Map([['board-deck.pptx', validReport]]);
 

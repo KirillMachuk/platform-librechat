@@ -543,6 +543,47 @@ describe('BaseClient', () => {
       expect(response).toEqual(expectedResult);
     });
 
+    test('persists only the newest repaired artifact for each filename', async () => {
+      TestClient.artifactPromises = [
+        Promise.resolve({
+          file_id: 'deck-file',
+          filename: 'weather.pptx',
+          artifactReport: { status: 'needs_review' },
+        }),
+        Promise.resolve({ file_id: 'pdf-file', filename: 'weather.pdf' }),
+        Promise.resolve({
+          file_id: 'deck-file',
+          filename: 'weather.pptx',
+          artifactReport: { status: 'ready' },
+        }),
+        Promise.resolve(null),
+      ];
+
+      const response = await TestClient.sendMessage(userMessage);
+
+      expect(response.attachments).toEqual([
+        {
+          file_id: 'deck-file',
+          filename: 'weather.pptx',
+          artifactReport: { status: 'ready' },
+        },
+        { file_id: 'pdf-file', filename: 'weather.pdf' },
+      ]);
+    });
+
+    test('deduplicates repair outputs by filename even when the sandbox changes file IDs', async () => {
+      TestClient.artifactPromises = [
+        Promise.resolve({ file_id: 'old-id', filename: 'weather.pptx', version: 'old' }),
+        Promise.resolve({ file_id: 'new-id', filename: 'weather.pptx', version: 'new' }),
+      ];
+
+      const response = await TestClient.sendMessage(userMessage);
+
+      expect(response.attachments).toEqual([
+        { file_id: 'new-id', filename: 'weather.pptx', version: 'new' },
+      ]);
+    });
+
     test('should replace responseMessageId with new UUID when isRegenerate is true and messageId ends with underscore', async () => {
       const mockCrypto = require('crypto');
       const newUUID = 'new-uuid-1234';

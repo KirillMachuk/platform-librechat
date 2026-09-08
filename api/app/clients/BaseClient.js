@@ -55,6 +55,40 @@ const collectHistoricalFileIds = (messages) => {
   return Array.from(fileIds);
 };
 
+/**
+ * Keep only the newest artifact version for a filename. Authoring agents may
+ * emit a `needs_review` draft and then overwrite the same output during a
+ * repair iteration; persisting both leaves the chat pointing at stale preview
+ * metadata even though the live attachment card was already updated.
+ */
+const dedupeArtifactAttachments = (attachments) => {
+  const deduped = [];
+  const positions = new Map();
+  for (const attachment of attachments) {
+    if (!attachment) {
+      continue;
+    }
+    let identity = null;
+    if (typeof attachment.filename === 'string' && attachment.filename.length > 0) {
+      identity = `filename:${attachment.filename}`;
+    } else if (typeof attachment.file_id === 'string' && attachment.file_id.length > 0) {
+      identity = `file:${attachment.file_id}`;
+    }
+    if (identity == null) {
+      deduped.push(attachment);
+      continue;
+    }
+    const existingIndex = positions.get(identity);
+    if (existingIndex === undefined) {
+      positions.set(identity, deduped.length);
+      deduped.push(attachment);
+      continue;
+    }
+    deduped[existingIndex] = attachment;
+  }
+  return deduped;
+};
+
 const buildOwnerFileFilter = (fileIds, user) => {
   if (!user?.id || fileIds.length === 0) {
     return null;
@@ -790,7 +824,9 @@ class BaseClient {
     }
 
     if (this.artifactPromises) {
-      responseMessage.attachments = (await Promise.all(this.artifactPromises)).filter((a) => a);
+      responseMessage.attachments = dedupeArtifactAttachments(
+        await Promise.all(this.artifactPromises),
+      );
     }
 
     if (this.options.attachments) {

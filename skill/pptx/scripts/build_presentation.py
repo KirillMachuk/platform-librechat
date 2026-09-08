@@ -6,13 +6,16 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import posixpath
 import shutil
 import subprocess
 import sys
 import tempfile
 import urllib.parse
 import zipfile
-from pathlib import Path
+import xml.etree.ElementTree as ET
+from collections import Counter
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from pptx import Presentation
@@ -34,8 +37,9 @@ sat right on top of its bullets.
 """
 TITLE_GAP = round(TITLE_LINE_HEIGHT * 0.65, 2)
 
-SKILL_VERSION = "3.2.0"
+SKILL_VERSION = "3.3.0"
 MAX_REPAIR_ITERATIONS = 2
+MAX_COMPAT_XML_BYTES = 8 * 1024 * 1024
 WIDE_WIDTH = Inches(13.333)
 WIDE_HEIGHT = Inches(7.5)
 
@@ -558,16 +562,6 @@ CHART_TYPES = {
 }
 
 
-def _normalize_chart_axis_ids(chart) -> None:
-    """Convert python-pptx's signed random axis IDs to strict OpenXML uint32 values."""
-    for element in chart.part._element.iter():
-        if not (element.tag.endswith("}axId") or element.tag.endswith("}crossAx")):
-            continue
-        raw = element.get("val")
-        if raw is not None and int(raw) < 0:
-            element.set("val", str(int(raw) & 0xFFFFFFFF))
-
-
 def _render_chart(prs: Presentation, item: dict[str, Any]):
     slide = prs.slides.add_slide(_template_layout(prs, item.get("templateLayout")))
     content_top = _add_slide_title(slide, item.get("title", ""), item.get("source", ""))
@@ -591,13 +585,14 @@ def _render_chart(prs: Presentation, item: dict[str, Any]):
     )
     _shape_name(chart_frame, "Native chart")
     chart = chart_frame.chart
+    chart.font.name = FONT
+    chart.font.size = Pt(11)
     chart.has_legend = len(chart_spec.get("series", [])) > 1 or chart_type == XL_CHART_TYPE.PIE
     if chart.has_legend:
         chart.legend.position = XL_LEGEND_POSITION.BOTTOM
         chart.legend.include_in_layout = False
         chart.legend.font.name = FONT
         chart.legend.font.size = Pt(12)
-    chart.chart_title.has_text_frame = False
     chart.has_title = False
     if chart_type != XL_CHART_TYPE.PIE:
         chart.value_axis.has_major_gridlines = True
@@ -646,7 +641,6 @@ def _render_chart(prs: Presentation, item: dict[str, Any]):
                 color=MUTED,
                 name="Chart takeaway detail",
             )
-    _normalize_chart_axis_ids(chart)
     return slide
 
 
@@ -1094,7 +1088,7 @@ def _render_template_item(prs: Presentation, item: dict[str, Any]):
         for series in chart_spec.get("series", []):
             data.add_series(str(series.get("name", "Series")), list(series.get("values", [])))
         chart_frame = slide.shapes.add_chart(chart_type, x, y, width, height, data)
-        _normalize_chart_axis_ids(chart_frame.chart)
+        chart_frame.chart.has_title = False
     elif layout == "table":
         columns = list(item.get("columns", []))
         rows = list(item.get("rows", []))
@@ -1281,6 +1275,122 @@ def _text_exceeds_shape_capacity(shape) -> bool:
     return measured and required_pt > height_pt * 1.04
 
 
+def _relationship_source_directory(rels_name: str) -> PurePosixPath:
+    rels_path = PurePosixPath(rels_name)
+    if rels_name == "_rels/.rels":
+        return PurePosixPath()
+    source_part = rels_path.parent.parent / rels_path.name.removesuffix(".rels")
+    return source_part.parent
+
+
+def _powerpoint_compatibility_issues(path: Path) -> list[str]:
+    """Catch package defects that LibreOffice and python-pptx accept but PowerPoint repairs."""
+    problems: list[str] = []
+    relationship_tag = "{http://schemas.openxmlformats.org/package/2006/relationships}Relationship"
+    chart_namespace = "http://schemas.openxmlformats.org/drawingml/2006/chart"
+    chart_namespaces = {"c": chart_namespace}
+    signed_int_min = -(2**31)
+    signed_int_max = 2**31 - 1
+
+    def read_xml(archive: zipfile.ZipFile, name: str) -> bytes | None:
+        with archive.open(name) as source:
+            payload = source.read(MAX_COMPAT_XML_BYTES + 1)
+        if len(payload) > MAX_COMPAT_XML_BYTES:
+            problems.append(f"oversized package XML: {name}")
+            return None
+        return payload
+
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = archive.namelist()
+            available = set(names)
+            duplicates = sorted(name for name, count in Counter(names).items() if count > 1)
+            if duplicates:
+                problems.append("duplicate package members: " + ", ".join(duplicates[:5]))
+
+            for rels_name in sorted(name for name in available if name.endswith(".rels")):
+                try:
+                    payload = read_xml(archive, rels_name)
+                    if payload is None:
+                        continue
+                    root = ET.fromstring(payload)
+                except ET.ParseError:
+                    problems.append(f"invalid relationships XML: {rels_name}")
+                    continue
+                source_directory = _relationship_source_directory(rels_name)
+                for relationship in root.findall(relationship_tag):
+                    if relationship.get("TargetMode") == "External":
+                        continue
+                    target = relationship.get("Target")
+                    if not target:
+                        problems.append(f"empty relationship target: {rels_name}")
+                        continue
+                    decoded = urllib.parse.unquote(target.split("#", 1)[0])
+                    if decoded.startswith("/"):
+                        resolved = posixpath.normpath(decoded.lstrip("/"))
+                    else:
+                        resolved = posixpath.normpath(str(source_directory / decoded))
+                    if resolved == ".." or resolved.startswith("../") or resolved not in available:
+                        problems.append(f"missing relationship target: {rels_name} -> {target}")
+
+            for chart_name in sorted(
+                name
+                for name in available
+                if name.startswith("ppt/charts/chart") and name.endswith(".xml")
+            ):
+                try:
+                    payload = read_xml(archive, chart_name)
+                    if payload is None:
+                        continue
+                    chart_root = ET.fromstring(payload)
+                except ET.ParseError:
+                    problems.append(f"invalid chart XML: {chart_name}")
+                    continue
+
+                for element_name in ("axId", "crossAx"):
+                    for element in chart_root.findall(f".//c:{element_name}", chart_namespaces):
+                        raw = element.get("val")
+                        try:
+                            value = int(raw or "")
+                        except ValueError:
+                            problems.append(f"invalid chart axis id in {chart_name}: {raw!r}")
+                            continue
+                        # python-pptx intentionally emits signed 32-bit IDs. Rewriting
+                        # its negative values as uint32 values above INT32_MAX makes
+                        # PowerPoint for Mac repair and remove the chart slide.
+                        if value == 0 or not signed_int_min <= value <= signed_int_max:
+                            problems.append(f"PowerPoint-incompatible chart axis id in {chart_name}: {value}")
+
+                axis_tags = {"catAx", "dateAx", "serAx", "valAx"}
+                plot_area = chart_root.find(".//c:plotArea", chart_namespaces)
+                if plot_area is None:
+                    continue
+                defined_ids: set[str] = set()
+                axis_elements = []
+                for child in plot_area:
+                    local_name = child.tag.rsplit("}", 1)[-1]
+                    if local_name not in axis_tags:
+                        continue
+                    axis_elements.append(child)
+                    axis_id = child.find("c:axId", chart_namespaces)
+                    if axis_id is not None and axis_id.get("val"):
+                        defined_ids.add(str(axis_id.get("val")))
+                for axis in axis_elements:
+                    cross_axis = axis.find("c:crossAx", chart_namespaces)
+                    if cross_axis is not None and cross_axis.get("val") not in defined_ids:
+                        problems.append(f"unresolved cross-axis reference in {chart_name}")
+                for child in plot_area:
+                    if child.tag.rsplit("}", 1)[-1] in axis_tags:
+                        continue
+                    for axis_id in child.findall("c:axId", chart_namespaces):
+                        if axis_id.get("val") not in defined_ids:
+                            problems.append(f"unresolved plot axis reference in {chart_name}")
+    except (OSError, zipfile.BadZipFile) as exc:
+        problems.append(f"invalid PowerPoint package: {type(exc).__name__}")
+
+    return problems
+
+
 def _check_structure(path: Path, spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     checks: list[dict[str, Any]] = []
     issues: list[dict[str, Any]] = []
@@ -1292,6 +1402,26 @@ def _check_structure(path: Path, spec: dict[str, Any]) -> tuple[list[dict[str, A
 
     if not prs.slides:
         issues.append(_issue("empty-deck", "critical", "Deck has no slides"))
+    compatibility_issues = _powerpoint_compatibility_issues(path)
+    checks.append(
+        {
+            "name": "powerpoint-compatibility",
+            "status": "failed" if compatibility_issues else "passed",
+            "message": (
+                "; ".join(compatibility_issues[:3])
+                if compatibility_issues
+                else "Package relationships and native chart axes are PowerPoint-compatible"
+            ),
+        }
+    )
+    if compatibility_issues:
+        issues.append(
+            _issue(
+                "powerpoint-package",
+                "critical",
+                "PowerPoint compatibility checks failed: " + "; ".join(compatibility_issues[:3]),
+            )
+        )
     source_path = spec.get("inputPath") or spec.get("templatePath")
     if source_path:
         source = Presentation(str(source_path))
@@ -1468,8 +1598,8 @@ def _check_structure(path: Path, spec: dict[str, Any]) -> tuple[list[dict[str, A
 
 
 def _output_pdf_requested(spec: dict[str, Any]) -> bool:
-    """Deliver a PDF only when the caller explicitly requests one."""
-    return spec.get("outputPdf") is True
+    """Presentations ship as editable PPTX plus a matching PDF by default."""
+    return spec.get("outputPdf") is not False
 
 
 def _render_pdf_target(path: Path, spec: dict[str, Any]) -> tuple[Path, str]:
@@ -1606,6 +1736,26 @@ def _report(
     }
 
 
+def _stale_output_paths(output: Path) -> list[Path]:
+    return [
+        output,
+        Path(f"{output}.artifact-report.json"),
+        output.with_suffix(".pdf"),
+        Path(f'{output.with_suffix(".pdf")}.artifact-report.json'),
+        output.with_suffix(".preview.pdf"),
+        Path(f'{output.with_suffix(".preview.pdf")}.artifact-report.json'),
+    ]
+
+
+def _clear_stale_outputs(output: Path) -> None:
+    """Remove prior repair artifacts so a failed rebuild cannot look successful."""
+    for candidate in _stale_output_paths(output):
+        try:
+            candidate.unlink()
+        except FileNotFoundError:
+            continue
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print("usage: build_presentation.py SPEC.json OUTPUT.pptx", file=sys.stderr)
@@ -1615,8 +1765,16 @@ def main() -> int:
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
     _job(spec, output)
     source_path = spec.get("inputPath") or spec.get("templatePath")
+    if source_path:
+        resolved_source = Path(source_path).resolve()
+        if any(resolved_source == candidate.resolve() for candidate in _stale_output_paths(output)):
+            raise ValueError(
+                "Input/template file conflicts with an output or QA sidecar; "
+                "choose a different output stem"
+            )
     source_hash = _sha256(Path(source_path)) if source_path else None
     output.parent.mkdir(parents=True, exist_ok=True)
+    _clear_stale_outputs(output)
     prs, changes = _build(spec, output)
     prs.save(str(output))
     checks, issues = _check_structure(output, spec)
