@@ -215,6 +215,43 @@ test.describe('copying a message by selection', () => {
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('return 1\n');
   });
 
+  test('a question answered with a thinking block copies exactly the question', async ({
+    page,
+  }) => {
+    /* The owner's case (08.09): on the stand every answer opens with the
+     * «Думаю» block, and a triple-click on the question above it ends INSIDE
+     * that block's header, past the brain icon. The earlier picture rule took
+     * the icon for an image the drag had wanted and left the tail alone — his
+     * own messages kept pasting with blank lines while the mock, answering
+     * without a thinking block, copied clean. */
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
+    const question = 'как дела E2E_THINK_REPLY:copy';
+    await sendMessage(page, question);
+    await expect(page.getByText('E2E think reply copy').first()).toBeVisible({ timeout: 30000 });
+    /* Folded, and sitting between the question and the reply exactly as it
+     * does on the stand. */
+    await expect(page.getByTestId('thinking-block').getByRole('button')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+      { timeout: 30000 },
+    );
+    await page.getByText(question, { exact: true }).first().click({ clickCount: 3 });
+    /* The premise, pinned: the selection really ends inside the thinking
+     * block, past its icon. Without this the case would stay green — for the
+     * wrong reason — should a selectable line ever land between the question
+     * and the block, or the header stop being selectable. */
+    expect(
+      await page.evaluate(() => {
+        const focus = document.getSelection()?.focusNode ?? null;
+        const block = document.querySelector('[data-testid="thinking-block"]');
+        return Boolean(block && focus && block.contains(focus));
+      }),
+    ).toBe(true);
+    await page.keyboard.press('ControlOrMeta+C');
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(question);
+  });
+
   test('a message copied while the composer holds the caret is still exactly the message', async ({
     page,
   }) => {
