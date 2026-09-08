@@ -52,14 +52,22 @@ const EXTENSIONS = /\.(tsx?|jsx?|css)$/;
  * this repo was a size or an arbitrary value.
  */
 const OFFENDING = /\bshadow(?:-(?:md|xl|2xl|inner)\b|-\[[^\]]*\])/g;
-/** A raw `box-shadow: …;` declaration in a stylesheet (not the token definitions). */
-const RAW_BOX_SHADOW = /(?<![-\w])box-shadow\s*:\s*([^;{}]+);/g;
-/** One layer of a raw declaration that the canon allows: a token, a hairline
- *  or focus ring (a border drawn as a shadow), an inset ring, an empty layer
- *  (`0 0 transparent` — Tailwind's ring machinery and a keyframe's rest state),
- *  or Tailwind's own `--tw-*` composition, which is not a depth step. */
-const ALLOWED_LAYER =
-  /^(none|var\(--c-shadow-[\w-]+\)|var\(--tw-[\w-]+(?:,\s*0 0 transparent)?\)|inset\b.*|0 0 0 [\d.]+px\b.*|0 0(?: 0){0,2} transparent)$/;
+/** A raw `box-shadow: …;` declaration in a stylesheet, vendor-prefixed or not
+ *  (the token definitions are `--c-shadow-*: …`, a different property name). */
+const RAW_BOX_SHADOW = /(?<![\w-])(?:-webkit-)?box-shadow\s*:\s*([^;{}]+);/g;
+/** One layer of a raw declaration that the canon allows: a token; an outside
+ *  ring — a border drawn as a shadow, no blur, spread at most 8px (a 9999px
+ *  "ring" is a scrim); an inset ring or fill — no blur, any spread (the
+ *  autofill trick paints a field with a 50vh inset, which is a fill, while a
+ *  blurred inset is depth); an empty layer (`0 0 transparent` — Tailwind's ring
+ *  machinery and a keyframe's rest state); or Tailwind's own `--tw-*`
+ *  composition, which is not a depth step. */
+const OUTSIDE_RING = '0 0 0 (?:[0-7](?:\\.\\d+)?|8)px\\b.*';
+const INSET_RING =
+  '(?:inset 0 0 0 [\\d.]+(?:px|vh|vw|rem|em)\\b.*|0 0 0 [\\d.]+(?:px|vh|vw|rem|em)\\b.* inset)';
+const ALLOWED_LAYER = new RegExp(
+  `^(none|var\\(--c-shadow-[\\w-]+\\)|var\\(--tw-[\\w-]+(?:,\\s*0 0 transparent)?\\)|${OUTSIDE_RING}|${INSET_RING}|0 0(?: 0){0,2} transparent)$`,
+);
 /** Splits a box-shadow value on top-level commas (rgba(…) carries commas of its own). */
 const layers = (value) => {
   const out = [];

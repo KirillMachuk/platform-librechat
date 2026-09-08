@@ -1,7 +1,7 @@
 import { isAskSkipMessage, parseAskAnswersMessage } from 'librechat-data-provider';
+import { USER_BUBBLE_WIDTH_CLASS } from '~/components/Chat/Messages/ui/turn';
 import { MessageCircleQuestion, X } from '~/components/icons';
 import { useLocalize } from '~/hooks';
-import { USER_BUBBLE_WIDTH_CLASS } from '~/components/Chat/Messages/ui/turn';
 
 /**
  * Compact rendering of the user's answers to an `ask_user` card (interactive
