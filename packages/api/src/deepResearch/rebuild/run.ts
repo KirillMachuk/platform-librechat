@@ -18,13 +18,16 @@ const DEFAULT_RECURSION_LIMIT = 256;
 
 /** Status updates surfaced to the UI as the run progresses. */
 export interface DeepResearchProgress {
-  type: 'scope' | 'research' | 'report';
+  type: 'scope' | 'research' | 'report' | 'findings';
   round?: number;
   subQuestion?: string;
   jurisdiction?: string;
   /** 1-based step of the approved plan this round advances; absent/0 when the
    *  run has no plan or the supervisor did not name one (owner r27). */
   planStep?: number;
+  /** `findings` only: the source URLs a researcher batch just cited (distinct within
+   *  the batch; the runner unions them across the run). */
+  sources?: string[];
 }
 
 export interface RunDeepResearchParams {
@@ -123,6 +126,15 @@ function handleUpdate(data: unknown, onProgress: (progress: DeepResearchProgress
         subQuestion: value.currentSubQuestion,
         planStep: value.planStep,
       });
+    } else if (node === 'researcher' && Array.isArray(value.findings)) {
+      /* What the researchers actually brought back — the pages they cite. The
+       * run's one honest measure of how far it has come (ChatGPT and Perplexity
+       * keep exactly this number on screen); a batch that cited nothing has
+       * nothing to add. */
+      const sources = Array.from(new Set(value.findings.flatMap((f) => f.sources ?? [])));
+      if (sources.length > 0) {
+        onProgress({ type: 'findings', sources });
+      }
     } else if (node === 'report') {
       onProgress({ type: 'report' });
     }

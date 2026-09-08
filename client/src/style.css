@@ -2173,6 +2173,27 @@ html {
    ThinkingReasoning.module.css when the waiting label became the reasoning
    header (r27): the gate has to hide the brain icon too, and one file
    deciding it beats two classes racing on CSS chunk order. */
+/* The Deep Research card's activity line (§6.17): 1px, petrol, and it claims no
+   fraction — the segment sweeps the track while the run works and stands still
+   while the run is parked offline (`data-paused`). It replaced a determinate bar
+   filled from a curve no run could complete (design review 02.09, item 8). */
+.dr-activity-bar {
+  animation: dr-activity-sweep 1.6s ease-in-out infinite;
+}
+.dr-activity[data-paused] .dr-activity-bar {
+  animation-play-state: paused;
+}
+@keyframes dr-activity-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dr-activity-bar {
+    animation: none;
+    width: 100%;
+  }
+}
+
 .thinking-shimmer-active,
 .thinking-shimmer-paint {
   --shimmer-base: var(--text-tertiary);

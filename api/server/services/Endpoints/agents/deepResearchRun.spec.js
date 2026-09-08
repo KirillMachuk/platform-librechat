@@ -1375,6 +1375,16 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     mockRunDeepResearch.mockImplementationOnce(async (params) => {
       params.onProgress({ type: 'scope', jurisdiction: 'RU' });
       params.onProgress({ type: 'research', round: 1, subQuestion: 'конкуренты 1ma в СНГ' });
+      /* Two researcher batches citing overlapping pages: the card counts PAGES,
+       * not citations, and the same page answering two sub-questions is one. */
+      params.onProgress({
+        type: 'findings',
+        sources: ['https://a.example/1', 'https://b.example/2'],
+      });
+      params.onProgress({
+        type: 'findings',
+        sources: ['https://b.example/2', 'https://c.example/3'],
+      });
       params.onProgress({ type: 'report' });
       return {
         finalReport: 'Отчёт',
@@ -1387,15 +1397,25 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     await runNewDeepResearch(planParams('Начать исследование'));
 
     const drEvents = mockEmitChunk.mock.calls.filter((c) => c[1]?.event === 'dr_progress');
-    // 1 pre-graph 'prepare' snapshot (round 23) + the 3 graph events
-    expect(drEvents.length).toBe(4);
+    // 1 pre-graph 'prepare' snapshot (round 23) + the 5 graph events
+    expect(drEvents.length).toBe(6);
     expect(drEvents[0][1].data.phase).toBe('prepare');
     const research = drEvents.find((c) => c[1].data.phase === 'research');
     expect(research[1].data.action).toContain('конкуренты 1ma в СНГ');
     expect(research[1].data.steps).toEqual(['Собрать вендоров', 'Сравнить цены']);
-    expect(research[1].data.searches).toBe(1);
-    expect(research[1].data.progress).toBeGreaterThan(0);
-    expect(research[1].data.progress).toBeLessThanOrEqual(1);
+    expect(research[1].data.sources).toBe(0);
+    /* No fraction rides the channel any more (design review 02.09, item 8). */
+    expect(research[1].data.progress).toBeUndefined();
+    /* A findings event re-emits the SAME phase and action with the count grown —
+     * distinct pages, so three, not four — and still carries the checklist. */
+    const afterFindings = drEvents.slice(3, 5).map((c) => c[1].data);
+    expect(afterFindings.map((d) => d.sources)).toEqual([2, 3]);
+    expect(afterFindings.every((d) => d.phase === 'research')).toBe(true);
+    expect(afterFindings.every((d) => d.action.includes('конкуренты 1ma в СНГ'))).toBe(true);
+    expect(afterFindings[1].steps).toEqual(['Собрать вендоров', 'Сравнить цены']);
+    /* The count persists into the report phase. */
+    expect(drEvents[5][1].data.phase).toBe('report');
+    expect(drEvents[5][1].data.sources).toBe(3);
   });
 
   it('carries the approved plan into the graph and reports the step the run is on (r27)', async () => {
@@ -1840,12 +1860,11 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     const snapshots = reportSnapshots();
     // FAILS ON PRE-FIX CODE: one snapshot, then silence for the rest of the phase.
     expect(snapshots.length).toBeGreaterThanOrEqual(14);
-    expect(snapshots[snapshots.length - 1].progress).toBeGreaterThan(snapshots[0].progress);
     expect(snapshots[snapshots.length - 1].action).toMatch(/Формирует отчёт — \d+ мин \d+ с/);
     // The client REPLACES its snapshot, so every tick has to carry the checklist and the
-    // search count too — a partial one would blank the card it is trying to animate.
+    // source count too — a partial one would blank the card it is trying to animate.
     expect(snapshots[0].steps).toEqual(['Собрать вендоров', 'Сравнить цены']);
-    expect(snapshots[0].searches).toBe(1);
+    expect(snapshots[0].sources).toBe(0);
   });
 
   it('stops the heartbeat when the run ends', async () => {
@@ -1889,9 +1908,9 @@ describe('runNewDeepResearch — task #21 plan gate', () => {
     }
     const snapshots = reportSnapshots();
     const last = snapshots[snapshots.length - 1];
-    const previous = snapshots[snapshots.length - 2];
-    expect(last.progress).toBeGreaterThanOrEqual(previous.progress);
-    expect(last.progress).toBeGreaterThan(0.92);
+    /* The clock kept running through the second event: the last tick names the
+     * two minutes that passed, not a phase that has only just begun. */
+    expect(last.action).toMatch(/Формирует отчёт — 2 мин \d+ с/);
   });
 
   it('arms no heartbeat on a legacy run with no card listening', async () => {
@@ -2885,57 +2904,8 @@ describe('failOnToolReportedError — a tool that REPORTS failure now fails', ()
   });
 });
 
-describe('the live card does not promise rounds the budget will not buy', () => {
-  const { drProgressFraction } = require('./deepResearchRun');
-
-  /**
-   * `maxRounds` is the CONFIGURED cap and a run almost never reaches it — the budget gate
-   * stops first. Dividing by it made the bar crawl to 0.35 on a run that afforded two of six
-   * rounds and then jump to the 0.92 the report step claims, skipping two checklist steps.
-   */
-  it('advances on every round without racing the configured cap', () => {
-    const at = (round) => drProgressFraction({ type: 'research', round }, 6, 0);
-
-    expect(at(1)).toBeGreaterThan(0.35);
-    expect(at(2)).toBeGreaterThan(at(1));
-    expect(at(3)).toBeGreaterThan(at(2));
-  });
-
-  it('FAILS ON PRE-FIX CODE: two rounds of six no longer leave the bar at a third', () => {
-    expect(drProgressFraction({ type: 'research', round: 2 }, 6, 0)).toBeGreaterThan(
-      0.1 + 0.75 * (2 / 6),
-    );
-  });
-
-  it('never reaches the fraction the report step claims', () => {
-    for (const round of [1, 2, 4, 8, 16, 64]) {
-      expect(drProgressFraction({ type: 'research', round }, 6, 0)).toBeLessThan(0.92);
-    }
-  });
-
-  it('keeps the scope and report anchors', () => {
-    expect(drProgressFraction({ type: 'scope' }, 6, 0)).toBe(0.08);
-    expect(drProgressFraction({ type: 'report' }, 6, 0)).toBe(0.92);
-  });
-});
-
-describe('the report phase has a curve of its own (the last minutes stop reading as hung)', () => {
-  const { drReportFraction, drReportAction } = require('./deepResearchRun');
-  const MIN = 60_000;
-
-  it('starts exactly where the report step stood and only ever rises', () => {
-    expect(drReportFraction(0)).toBe(0.92);
-    for (const ms of [10_000, MIN, 3 * MIN, 10 * MIN, 30 * MIN]) {
-      expect(drReportFraction(ms)).toBeGreaterThan(drReportFraction(ms / 2));
-    }
-  });
-
-  it('never arrives — only the end of the run fills the bar', () => {
-    // A curve that could reach its ceiling on its own would freeze again, one number
-    // higher, on exactly the long reports this was written for.
-    expect(drReportFraction(60 * MIN)).toBeLessThan(0.99);
-    expect(drReportFraction(5 * MIN)).toBeLessThan(0.99);
-  });
+describe('the report phase names how long it has been writing (the last minutes stop reading as hung)', () => {
+  const { drReportAction } = require('./deepResearchRun');
 
   it('names the elapsed time only once the phase has actually been running', () => {
     expect(drReportAction(0)).toBe('Формирует отчёт');

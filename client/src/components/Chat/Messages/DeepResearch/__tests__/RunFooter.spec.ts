@@ -19,8 +19,7 @@ const snap = (over: Partial<TDeepResearchProgress>): TDeepResearchProgress =>
     phase: 'research',
     steps: ['a', 'b', 'c', 'd', 'e'],
     action: 'Исследует',
-    searches: 1,
-    progress: 0.4,
+    sources: 3,
     ...over,
   }) as TDeepResearchProgress;
 
@@ -30,9 +29,10 @@ describe('runActiveIndex — reported, never derived (r27)', () => {
     expect(runActiveIndex(snap({ stepIndex: 3 }), 5)).toBe(3);
   });
 
-  it('FAILS ON PRE-FIX CODE: the first research round is step 1, not step 3', () => {
-    /* progress 0.40 × 5 steps floored = 2 — the shipped defect, in one line. */
-    expect(runActiveIndex(snap({ stepIndex: 0, progress: 0.4 }), 5)).toBe(0);
+  it('the first research round is step 1, not step 3', () => {
+    /* The shipped defect was `floor(0.40 × 5) = 2`; the fraction no longer
+     * exists at all, and the reported step is the only input. */
+    expect(runActiveIndex(snap({ stepIndex: 0 }), 5)).toBe(0);
   });
 
   it('marks NOTHING when the run reported no step', () => {

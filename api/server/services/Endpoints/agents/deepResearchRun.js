@@ -435,29 +435,6 @@ async function isDrFollowUp({ userId, conversationId, parentMessageId }) {
 const MAX_DR_CHAIN = 24;
 
 /**
- * Coarse 0..1 progress for the live card (task #21) from a graph progress event.
- *
- * `maxRounds` is the CONFIGURED round cap, and a run almost never reaches it — the budget
- * gate stops first. Dividing by it made the bar a promise the run does not keep: with a cap
- * of 6 and a run that affords 2, the bar crawled to 0.35 and then jumped to 0.92, and the
- * plan checklist skipped two steps in one go on the way.
- *
- * So the curve approaches its ceiling instead of racing a denominator: each round adds less
- * than the one before and the bar never stalls, never fills early, and needs no forecast of
- * how many rounds the money will buy. It stays below the 0.92 the report step claims.
- */
-function drProgressFraction(event, maxRounds, searchCount) {
-  if (event.type === 'scope') {
-    return 0.08;
-  }
-  if (event.type === 'report') {
-    return 0.92;
-  }
-  const round = Math.max(0, event.round || searchCount || 0);
-  return 0.1 + 0.75 * (round / (round + 1.5));
-}
-
-/**
  * A masked entity in a sub-question, e.g. `[PERSON_1]`. Its own constant on
  * purpose: TITLE_PII_PLACEHOLDER above is `g`-flagged for `replace`, and a
  * global regex carries `lastIndex` across `.test` calls — it would answer
@@ -496,36 +473,21 @@ function drProgressAction(event) {
 }
 
 /**
- * Report-phase progress, derived from HOW LONG the report has been writing.
- *
- * The REPORT node is one long completion — on a deep run it holds the screen for three to
- * four minutes with no state update of its own. Until the engine learned to announce the
- * phase from the supervisor's concluding pass, the card spent those minutes showing the
- * LAST sub-question at a bar that never moved: not merely idle, but wrong.
+ * The report phase is one long completion — three to four minutes on a deep run with no
+ * state update of its own — so the card's action line carries HOW LONG it has been writing.
  *
  * Elapsed time, not text written. Every DR node model is deliberately built
  * `streaming: false` (see `buildNodeModel`: the streaming branch estimates usage through a
  * tiktoken download a sovereign deployment cannot reach, which cost ~200 s of dead retries
  * per call), so token callbacks deliver the whole report in ONE burst when the node is
- * already done. A length-of-text signal reads beautifully in a test with a streaming fake
- * and does exactly nothing in production. The clock does not lie either way.
+ * already done. The clock does not lie either way.
  *
- * Asymptotic on purpose. Nothing here knows how long a given report will take, so a curve
- * that could reach its ceiling on its own would simply freeze again one number higher;
- * this one starts at the 0.92 the report step already claimed and approaches 0.99 without
- * arriving. Only the run's end fills the bar.
+ * No fraction travels with it any more. The bar used to climb a curve — over supervisor
+ * rounds while gathering, over elapsed time while writing — that could not arrive by
+ * construction, and announced that number to assistive tech as a percentage (design review
+ * 02.09, item 8). What the card gets instead is the one number the run really knows: how
+ * many distinct sources it has cited so far.
  */
-const REPORT_HALFWAY_MS = 3 * 60_000;
-/** Ceiling the curve approaches; only the run's end fills the bar. */
-const REPORT_CEILING = 0.99;
-function drReportFraction(elapsedMs) {
-  const elapsed = Math.max(0, elapsedMs);
-  /* The floor is the report step's own number, read from the curve above rather than
-   * repeated here — two copies of 0.92 would drift the day one of them is tuned. */
-  const floor = drProgressFraction({ type: 'report' }, 0, 0);
-  return floor + (REPORT_CEILING - floor) * (elapsed / (elapsed + REPORT_HALFWAY_MS));
-}
-
 /** Below this the phase has only just started and the plain label reads better than
  *  a counter ticking up from zero. */
 const REPORT_ELAPSED_FLOOR_MS = 30_000;
@@ -1318,7 +1280,7 @@ async function runNewDeepResearch(params) {
     Promise.resolve(
       GenerationJobManager.emitChunk(streamId, {
         event: 'dr_progress',
-        data: { phase, steps: [], action: '', searches: 0, progress: 0 },
+        data: { phase, steps: [], action: '', sources: 0 },
       }),
     ).catch(() => {});
   };
@@ -1717,15 +1679,23 @@ async function runNewDeepResearch(params) {
       });
 
       // Task #21 live progress: translate the engine's coarse onProgress into `dr_progress`
-      // snapshots the frontend plan card renders (steps checklist + current action + bar).
-      // Progress is proportional (computed here — no graph changes). Steps come from the
+      // snapshots the frontend plan card renders (steps checklist + current action + source
+      // count). The count is kept here — no graph changes. Steps come from the
       // approved plan message. Gated on the plan gate + streamId; fire-and-forget so a slow
       // emit never blocks the run, and it always ALSO logs (the shipped ops line).
       /* The plan of this branch, not merely of the direct parent — see
        * `planText` in the turn context. */
       const planSteps = planGateEnabled ? extractPlanSteps(turn.planText ?? '') : [];
-      const maxRounds = Math.max(1, tier.maxOrchestratorCycles || 6);
-      let searchCount = 0;
+      /**
+       * Distinct source URLs the researchers have cited so far — the one number about the
+       * run's progress that is real (ChatGPT and Perplexity keep exactly this on screen).
+       * A union over findings: the same page answers more than one sub-question.
+       */
+      const sourceUrls = new Set();
+      /* The snapshot a `findings` event re-emits: the count changed, the phase and the
+       * action did not. */
+      let lastPhase = 'research';
+      let lastAction = 'Исследует источники';
       /**
        * Which plan step the card highlights, 0-based — and the reason this is a
        * variable here rather than arithmetic in the client.
@@ -1753,9 +1723,11 @@ async function runNewDeepResearch(params) {
       /**
        * One `dr_progress` snapshot. The client REPLACES its snapshot wholesale
        * (`setDrProgress` in useResumableSSE), so every emit has to carry the checklist and
-       * the search count too — a partial one would blank the card's steps.
+       * the source count too — a partial one would blank the card's steps.
        */
-      const emitDrProgress = (phase, action, progress) => {
+      const emitDrProgress = (phase, action) => {
+        lastPhase = phase;
+        lastAction = action;
         if (!streamId || !planGateEnabled) {
           return;
         }
@@ -1766,8 +1738,7 @@ async function runNewDeepResearch(params) {
               phase,
               steps: planSteps,
               action,
-              searches: searchCount,
-              progress,
+              sources: sourceUrls.size,
               stepIndex: agendaReachedGraph ? planStepIndex : undefined,
             },
           }),
@@ -1791,7 +1762,7 @@ async function runNewDeepResearch(params) {
       let reportTicker = null;
       const emitReportProgress = () => {
         const elapsedMs = reportStartedMs > 0 ? Date.now() - reportStartedMs : 0;
-        emitDrProgress('report', drReportAction(elapsedMs), drReportFraction(elapsedMs));
+        emitDrProgress('report', drReportAction(elapsedMs));
       };
       const stopReportTicker = () => {
         if (reportTicker != null) {
@@ -1810,6 +1781,15 @@ async function runNewDeepResearch(params) {
           `[deepResearchRun] ${event.type}` +
             `${event.subQuestion ? ` (sub-question ${event.subQuestion.length} chars)` : ''}`,
         );
+        if (event.type === 'findings') {
+          /* The pages a researcher batch cites. The URLs are not logged — they name what
+           * the user is researching — and only the count leaves this process. */
+          for (const url of event.sources ?? []) {
+            sourceUrls.add(url);
+          }
+          emitDrProgress(lastPhase, lastAction);
+          return;
+        }
         if (event.type === 'report') {
           /* Fired twice by design: once when the supervisor concludes (the phase STARTS)
            * and once when the report node returns (it is over). The first arrival starts
@@ -1836,7 +1816,6 @@ async function runNewDeepResearch(params) {
           return;
         }
         if (event.type === 'research') {
-          searchCount += 1;
           /* The supervisor's own answer, never below where the card already is
            * (see `planStepIndex`). A round it did not label leaves the
            * highlight where it stands rather than moving it somewhere made up.
@@ -1850,11 +1829,7 @@ async function runNewDeepResearch(params) {
             planStepIndex = Math.max(planStepIndex, event.planStep - 1);
           }
         }
-        emitDrProgress(
-          event.type,
-          drProgressAction(event),
-          drProgressFraction(event, maxRounds, searchCount),
-        );
+        emitDrProgress(event.type, drProgressAction(event));
       };
 
       /**
@@ -2293,8 +2268,6 @@ module.exports = {
   isDrFollowUp,
   buildDrTurnContext,
   buildDeepResearchCollectedUsage,
-  /** Test-only: the live card's progress curves. */
-  drProgressFraction,
-  drReportFraction,
+  /** Test-only: the report phase's action line. */
   drReportAction,
 };
