@@ -1,11 +1,15 @@
 ---
 name: pptx
 description: Create or revise editable PowerPoint presentations with a Russian-first professional workflow, native charts, visible sources, template preservation, and render-based QA. Use whenever the user requests slides, a deck, a presentation, PowerPoint, or a .pptx file.
+allowed-tools:
+  - execute_code
 ---
 
 # Professional PowerPoint authoring
 
 Create the requested presentation as two matching deliverables: an editable `.pptx` and a `.pdf` rendered from that final PPTX. Do not substitute Markdown or HTML. Only omit the PDF when the user explicitly asks for PPTX alone.
+
+Keep the chat clean while authoring: call the required tools without prose progress messages between them. Do not write variants of “data collected”, “building the deck”, or “starting QA”; the user should see the final completion sentence, the two deliverables, and only a material caveat that requires action.
 
 ## Available runtime
 
@@ -23,8 +27,9 @@ Create the requested presentation as two matching deliverables: an editable `.pp
 - Prefer one strong idea per slide. Keep titles as conclusions, not topic labels.
 - Use editable PowerPoint text, shapes, tables, and native charts. Use a bitmap only for a supplied photo or a visualization PowerPoint cannot represent.
 - Put a short visible source note on every factual claim, chart, table, and metric slide. Add a final sources slide when sources exist.
-- Do not invent facts, sources, dates, or numeric precision. Record necessary assumptions explicitly.
+- Do not invent facts, sources, dates, or numeric precision. Record necessary assumptions explicitly. Compare the requested period with the current date: if the period has ended, use observed historical data and retrospective wording unless the user explicitly asks for an old forecast.
 - A source URL must be a page you actually opened in this conversation, pointing at the page that carries the fact. Never cite a site's front page (`https://www.statista.com/`), and never reconstruct an address from memory — a plausible-looking URL that 404s is worse than no URL. When you have the publication but not a checked link, give publisher and date and leave the URL out.
+- Search-result snippets are discovery aids, not evidence. Open every web page used as a factual source before putting its claims or URL into the spec.
 - Compare numbers with a native `chart`, not with prose or a table. A table is for values the reader must read exactly; a deck whose only numeric slide is a table reads as a report, not a presentation.
 - Preserve a user's slide size, masters, layouts, theme, and placeholders. If the selected template layout lacks the required inherited placeholders, stop and request a compatible layout instead of drawing a new design over it.
 - For a targeted revision, change only the requested slide or text and save a new version.
@@ -36,7 +41,7 @@ Create the requested presentation as two matching deliverables: an editable `.pp
 2. Draft a short story outline. Typical business flow: context → implication → evidence → decision → next steps. Do not create filler slides.
 3. Read `references/spec.md`, then write one JSON spec. Always include the complete `ArtifactJob` and acceptance criteria. Do not read the builder source during normal authoring.
 4. For a revision, inspect the mounted binary with `python-pptx`, confirm the actual slide number and exact source text, and use that file as `inputPath`.
-5. Write the spec to `/mnt/data/_qa_<stem>-spec.json`, then run the builder against it. The `_qa_` prefix is reserved for internal working files and prevents them from becoming user attachments. Keep the spec there across repair calls; never put reusable work in `/tmp`, because `/tmp` is empty on the next call:
+5. Write the spec to `/mnt/data/_qa_<stem>-spec.json`, then immediately run the builder against it with `bash_tool`. Do not return to web search, read extra sources, or plan again after `create_file` succeeds: the next tool call must be the builder. The `_qa_` prefix is reserved for internal working files and prevents them from becoming user attachments. Keep the spec there across repair calls; never put reusable work in `/tmp`, because `/tmp` is empty on the next call:
 
    ```bash
    python3 /mnt/data/pptx/scripts/build_presentation.py /mnt/data/_qa_<stem>-spec.json /mnt/data/<clear-name>.pptx
