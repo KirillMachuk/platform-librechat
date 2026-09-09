@@ -23,6 +23,8 @@ const {
   getPreliminaryUserMessage,
   shouldRunNewDeepResearch,
   drConversationModel,
+  pickFinalTitle,
+  hasRealTitle,
 } = require('./request');
 
 describe('getPreliminaryUserMessage (DR turn shape)', () => {
@@ -191,5 +193,59 @@ describe('drConversationModel', () => {
 
   it('returns undefined rather than throwing when nothing is available', () => {
     expect(drConversationModel(undefined, undefined)).toBeUndefined();
+  });
+});
+
+/* The chat titles the owner has been chasing for months.
+ *
+ * In immediate mode the title is generated in parallel with the answer and persisted
+ * only after `convoReady`, which resolves AFTER the conversation row behind the final
+ * event was read. So the row carries «New Chat» and the controller sent that to a
+ * client the `title` event had already given the real title — right, then wrong, then
+ * right again when the compensating `/gen_title` poll landed.
+ *
+ * The value used here is what `addTitle` RETURNED, i.e. the title it just persisted.
+ * The first attempt at this fix read the GEN_TITLE cache instead and would have fired
+ * exactly never: that entry lives two minutes, and the three runs it was written for
+ * took 266s, 306s and 404s between the title and the final event. A returned value has
+ * no clock on it. */
+describe('pickFinalTitle — the title the FINAL event carries', () => {
+  it('uses the generated title when the row has not caught up yet', () => {
+    expect(
+      pickFinalTitle({ rowTitle: 'New Chat', generatedTitle: 'Презентация погоды в Минске' }),
+    ).toBe('Презентация погоды в Минске');
+  });
+
+  it('treats a null row title the same way — it also means «none yet»', () => {
+    expect(pickFinalTitle({ rowTitle: null, generatedTitle: 'Отчёт по продажам' })).toBe(
+      'Отчёт по продажам',
+    );
+  });
+
+  it('never overwrites a title the row already has', () => {
+    expect(pickFinalTitle({ rowTitle: 'Настоящий', generatedTitle: 'Другой' })).toBe('Настоящий');
+  });
+
+  it('changes nothing when no title was generated', () => {
+    expect(pickFinalTitle({ rowTitle: 'New Chat', generatedTitle: undefined })).toBe('New Chat');
+    expect(pickFinalTitle({ rowTitle: null, generatedTitle: undefined })).toBeNull();
+  });
+
+  it('does not promote the placeholder — «New Chat» is not a title', () => {
+    expect(pickFinalTitle({ rowTitle: null, generatedTitle: 'New Chat' })).toBeNull();
+  });
+});
+
+describe('hasRealTitle', () => {
+  it('rejects exactly the values that mean «no title yet»', () => {
+    expect(hasRealTitle('New Chat')).toBe(false);
+    expect(hasRealTitle('')).toBe(false);
+    expect(hasRealTitle(null)).toBe(false);
+    expect(hasRealTitle(undefined)).toBe(false);
+  });
+
+  it('accepts a real one, including a title that merely contains the placeholder', () => {
+    expect(hasRealTitle('Презентация погоды')).toBe(true);
+    expect(hasRealTitle('New Chat feature review')).toBe(true);
   });
 });
