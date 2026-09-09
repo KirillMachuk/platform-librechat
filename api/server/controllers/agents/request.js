@@ -82,7 +82,11 @@ function shouldSkipFinalEmit(currentJob, jobCreatedAt) {
  * `abortJob` deleted it.
  *
  * The point of this function existing at all is that the two effects must not be
- * wired to the same condition. Generation is cancelled either way: an ended run should
+ * wired to the same condition. One consequence is deliberate and worth stating: a run
+ * replaced by a newer one that has since finished AND been cleaned up finds no job
+ * either, so its title is now kept rather than dropped. Both runs answer the same
+ * first user message — a title is only generated for a new conversation — so the name
+ * describes that text either way, and the alternative is «New Chat». Generation is cancelled either way: an ended run should
  * not keep paying a title model. A title that has already FINISHED is thrown away only
  * for a job that is genuinely someone else's now — otherwise a stopped chat keeps the
  * name it already earned. Both branches used to fire together, which is why every
@@ -1036,12 +1040,20 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         // their chats read «New Chat» for good — while the one run that completed kept
         // its title. The question the user asked is still sitting in that chat; the
         // title describes it whether or not the answer arrived.
+        /* Cancelling generation is the promise the comment above makes, so it must not
+         * depend on anything that can fail. `getJob` reaches Redis and can reject; if
+         * that took the abort down with it, a failed turn would keep paying a title
+         * model for the full timeout and hold client disposal that long. Abort first,
+         * ask second — the helper's own abort below is then a no-op. */
+        titleAbortController.abort();
         /* «Superseded» is a question with an answer, not something to assume either
          * way: a replaced job leaves the old one running, and if that old one then
          * fails it lands right here. Ask with the predicate that means what it says —
          * an absent job is not proof that anyone took the conversation over. (A user
-         * Stop does not reach this catch at all; `chatCompletion` swallows its abort
-         * and the run leaves by the success path above.) */
+         * Stop is not expected here at all: `chatCompletion` returns rather than
+         * rethrowing on its own abort, so a stopped run leaves by the success path
+         * above. Both paths settle the title the same way, so being wrong about which
+         * one a Stop takes costs nothing.) */
         try {
           const currentJob = await GenerationJobManager.getJob(streamId);
           settleTitleForEndedJob({
