@@ -1540,13 +1540,64 @@ function resolveSandboxContextForCall(
   };
 }
 
+/**
+ * Does the sandbox say this path is absent — as opposed to the request never having
+ * reached it?
+ *
+ * The distinction is not cosmetic. `handleSandboxCreateFileCall` reads a path before
+ * writing it purely to learn whether it is creating or REPLACING, and a `missing`
+ * verdict makes it write with `created: true` — no diff, no «File already exists»
+ * guard. So a transport failure misread as «absent» silently overwrites a file the
+ * user still has. `not found` is easy to hit by accident on that path: proxies and
+ * DNS put it in their own messages («502 Not Found», «host not found»), and none of
+ * that says anything about the file.
+ *
+ * `readSandboxFile` (api/server/services/Files/Code/process.js) tags errors it raised
+ * from the sandbox's OWN stderr with `sandboxStderr`. When that tag is present it
+ * settles the question outright. When it is absent — another provider of the
+ * `readSandboxFile` callback, or a shape that predates the tag — an error that looks
+ * like a transport failure is never a miss, and everything else keeps the old
+ * text-based reading so no legitimate absence stops being recognised.
+ */
 function isSandboxMissingFileError(error: unknown): boolean {
   const message = getThrownValueMessage(error).toLowerCase();
-  return (
+  const tagged = (error as { sandboxStderr?: boolean } | null)?.sandboxStderr;
+  if (tagged === true) {
+    /* The sandbox answered, so its own wording decides — and only the one wording that
+     * cannot mean anything else. `cat` says this for a missing file AND for a missing
+     * directory in the path, and `ls` says `cannot access '<p>': No such file or
+     * directory`, so nothing meaning «absent» is lost. The looser tokens are what would
+     * cost: `cannot access` alone also carries `Permission denied`, and a bare `not
+     * found` is a shell reporting a missing COMMAND (`bash: line 1: catt: command not
+     * found`) — a broken sandbox image. Kept in step with `isMissingSandboxPathMessage`
+     * in api/server/services/Files/Code/process.js, which narrowed for the same reason. */
+    return message.includes('no such file or directory');
+  }
+  const looksMissing =
     message.includes('no such file or directory') ||
     message.includes('cannot access') ||
-    message.includes('not found')
-  );
+    message.includes('not found');
+  return looksMissing && !looksLikeTransportFailure(error);
+}
+
+/**
+ * Did this error come from the request itself rather than from the sandbox's answer?
+ *
+ * The markers axios actually sets, and nothing more. An earlier draft also treated any
+ * SCREAMING_SNAKE `code` as transport, which reads well until you remember that Node's
+ * filesystem errors carry `code: 'ENOENT'` — the canonical «no such file» — so the one
+ * shape this branch exists to serve, a provider reading from disk, would have had its
+ * genuine absence classified as a transport failure and `create_file` would have
+ * refused to create anything at all. Real transport failures from this stack carry a
+ * response, a request, or the axios flag; `ENOTFOUND` from DNS arrives with a request
+ * attached, so nothing is lost by leaving the codes alone.
+ */
+function looksLikeTransportFailure(error: unknown): boolean {
+  if (error == null || typeof error !== 'object') {
+    return false;
+  }
+  const candidate = error as { isAxiosError?: boolean; response?: unknown; request?: unknown };
+  return candidate.isAxiosError === true || candidate.response != null || candidate.request != null;
 }
 
 function invalidSandboxAuthoringPath(filePath: string): string | null {

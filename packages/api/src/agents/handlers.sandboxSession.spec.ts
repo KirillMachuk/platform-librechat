@@ -544,4 +544,173 @@ describe('sandbox session continuity', () => {
       expect(typeof ref.version).toBe('number');
     }
   });
+
+  /**
+   * `create_file` reads a path before writing it ONLY to learn whether it is creating
+   * or replacing, and a «missing» verdict makes it write with `created: true` — no
+   * diff, no «File already exists» guard. The verdict used to be a substring test on
+   * the error text, and `not found` is easy to hit without the sandbox having said
+   * anything about the file: proxies and DNS put it in their own messages. So a read
+   * that never reached the sandbox read as «the file is not there», and the user's
+   * file was overwritten.
+   *
+   * The file below EXISTS and `overwrite` is not set: the only correct outcome is a
+   * refusal, and the content must still be the original afterwards.
+   */
+  it('does not overwrite an existing file when the read failed in transport', async () => {
+    const sandbox = new FakeSandbox();
+    const handler = makeHandler(sandbox);
+    const thread = freshThread();
+
+    const [created] = await step(handler, [createNumbers], thread);
+    expect(created.status).toBe('success');
+
+    /* Shaped like what axios raises: an HTTP response, an axios marker, and a message
+     * that happens to contain the words the old test looked for. */
+    const transportError = Object.assign(new Error('Request failed: 502 Not Found'), {
+      isAxiosError: true,
+      response: { status: 502 },
+    });
+    sandbox.readSandboxFile.mockRejectedValueOnce(transportError);
+
+    const [second] = await step(
+      handler,
+      [
+        {
+          id: 'call_create_again',
+          name: 'create_file',
+          args: { file_path: '/mnt/data/numbers.txt', content: 'ПОТЕРЯ\n' },
+        } as ToolCallRequest,
+      ],
+      thread,
+    );
+
+    expect(second.status).toBe('error');
+    /* The model is told the read failed, not that the file was absent — otherwise it
+     * would «fix» the error by retrying the create and overwrite the file itself. */
+    expect(String((second as { errorMessage?: string }).errorMessage)).toMatch(
+      /Error reading .*sandbox/i,
+    );
+    /* One write in the whole test — the first one. The overwrite never happened. */
+    expect(sandbox.writeSandboxFile).toHaveBeenCalledTimes(1);
+  });
+
+  /* Production's own error shape, which no other test here covers: `readSandboxFile`
+   * tags what it raised from the sandbox's stderr, and that tag settles the verdict.
+   * The tagged path accepts ONLY «no such file or directory» — the two looser tokens
+   * are how a broken sandbox image (`command not found`) or a refused read
+   * (`cannot access …: Permission denied`) would be mistaken for an absent file and
+   * overwrite it, which is the same fault through a different door. */
+  it('creates when the sandbox says the path is absent, in production error shape', async () => {
+    const sandbox = new FakeSandbox();
+    const handler = makeHandler(sandbox);
+
+    sandbox.readSandboxFile.mockRejectedValueOnce(
+      Object.assign(new Error('cat: /mnt/data/fresh.txt: No such file or directory'), {
+        sandboxStderr: true,
+      }),
+    );
+
+    const [created] = await step(
+      handler,
+      [
+        {
+          id: 'call_create_fresh',
+          name: 'create_file',
+          args: { file_path: '/mnt/data/fresh.txt', content: 'привет\n' },
+        } as ToolCallRequest,
+      ],
+      freshThread(),
+    );
+
+    expect(created.status).toBe('success');
+    expect(sandbox.writeSandboxFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses when the sandbox image is broken, even though it says «not found»', async () => {
+    const sandbox = new FakeSandbox();
+    const handler = makeHandler(sandbox);
+    const thread = freshThread();
+
+    const [created] = await step(handler, [createNumbers], thread);
+    expect(created.status).toBe('success');
+
+    sandbox.readSandboxFile.mockRejectedValueOnce(
+      Object.assign(new Error('bash: line 1: catt: command not found'), { sandboxStderr: true }),
+    );
+
+    const [second] = await step(
+      handler,
+      [
+        {
+          id: 'call_create_broken',
+          name: 'create_file',
+          args: { file_path: '/mnt/data/numbers.txt', content: 'ПОТЕРЯ\n' },
+        } as ToolCallRequest,
+      ],
+      thread,
+    );
+
+    expect(second.status).toBe('error');
+    expect(sandbox.writeSandboxFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses when the read was denied, even though it says «cannot access»', async () => {
+    const sandbox = new FakeSandbox();
+    const handler = makeHandler(sandbox);
+    const thread = freshThread();
+
+    const [created] = await step(handler, [createNumbers], thread);
+    expect(created.status).toBe('success');
+
+    sandbox.readSandboxFile.mockRejectedValueOnce(
+      Object.assign(new Error("ls: cannot access '/mnt/data/numbers.txt': Permission denied"), {
+        sandboxStderr: true,
+      }),
+    );
+
+    const [second] = await step(
+      handler,
+      [
+        {
+          id: 'call_create_denied',
+          name: 'create_file',
+          args: { file_path: '/mnt/data/numbers.txt', content: 'ПОТЕРЯ\n' },
+        } as ToolCallRequest,
+      ],
+      thread,
+    );
+
+    expect(second.status).toBe('error');
+    expect(sandbox.writeSandboxFile).toHaveBeenCalledTimes(1);
+  });
+
+  /* A filesystem miss carries `code: 'ENOENT'`, which an earlier draft of the transport
+   * check read as «the request failed» — and `create_file` would then have refused to
+   * create anything for a provider that reads from disk. */
+  it('still treats a filesystem ENOENT as an absent file, not as transport', async () => {
+    const sandbox = new FakeSandbox();
+    const handler = makeHandler(sandbox);
+
+    sandbox.readSandboxFile.mockRejectedValueOnce(
+      Object.assign(new Error("ENOENT: no such file or directory, open '/mnt/data/fs.txt'"), {
+        code: 'ENOENT',
+      }),
+    );
+
+    const [created] = await step(
+      handler,
+      [
+        {
+          id: 'call_create_fs',
+          name: 'create_file',
+          args: { file_path: '/mnt/data/fs.txt', content: 'привет\n' },
+        } as ToolCallRequest,
+      ],
+      freshThread(),
+    );
+
+    expect(created.status).toBe('success');
+    expect(sandbox.writeSandboxFile).toHaveBeenCalledTimes(1);
+  });
 });
