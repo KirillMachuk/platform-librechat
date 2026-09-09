@@ -46,6 +46,50 @@ const {
  * @param {{ req: Express.Request, userId: string, conversationId: string, parentMessageId: string }} params
  * @returns {Promise<boolean>}
  */
+/**
+ * Is this an actual title, rather than the placeholder that means «none yet»?
+ * The literal «New Chat» is what the client renders for an untitled conversation,
+ * so it has to be treated as absence on the way out as well — mirrors `hasRealTitle`
+ * in client/src/hooks/SSE/useEventHandlers.ts.
+ *
+ * @param {string|null|undefined} title
+ * @returns {boolean}
+ */
+function hasRealTitle(title) {
+  return typeof title === 'string' && title !== '' && title !== 'New Chat';
+}
+
+/**
+ * The title the FINAL event should carry.
+ *
+ * In immediate mode the title is generated in parallel with the answer and persisted
+ * only after `convoReady`, which resolves AFTER the conversation row behind the final
+ * event was read — so that row can never carry the title, and stamping it verbatim
+ * sends a literal «New Chat» to a client the `title` event has already given the real
+ * one. That is the flicker: right, then wrong, then right again once the compensating
+ * `/gen_title` poll lands.
+ *
+ * `generatedTitle` is what `addTitle` RETURNED, which is the title it just persisted.
+ * Deliberately not the GEN_TITLE cache: that entry lives two minutes, while the runs
+ * this was written for took four to seven minutes between the title and the final
+ * event, so the cache would have been empty every single time. The returned value has
+ * no clock on it.
+ *
+ * Only ever upgrades. A row that already has a real title keeps it, nothing turns the
+ * «New Chat» placeholder into a title, and an absent generated title changes nothing.
+ *
+ * @param {Object} params
+ * @param {string|null} [params.rowTitle] - Title as read from the conversation row.
+ * @param {string} [params.generatedTitle] - Title `addTitle` produced and persisted.
+ * @returns {string|null|undefined} The title for the final event.
+ */
+function pickFinalTitle({ rowTitle, generatedTitle }) {
+  if (hasRealTitle(rowTitle) || !hasRealTitle(generatedTitle)) {
+    return rowTitle;
+  }
+  return generatedTitle;
+}
+
 async function shouldRunNewDeepResearch({ req, userId, conversationId, parentMessageId }) {
   if (req.config?.deepResearch?.useNewEngine !== true) {
     return false;
@@ -784,13 +828,21 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         // document turn can blow the title's 45s timeout (the agent run is not ready
         // in time), leaving the conversation as "New Chat"; the frontend's genTitle
         // poll has already given up, so a title saved later would not surface without
-        // a reload. Only when this turn COMPLETED successfully — a stopped or
-        // superseded turn intentionally discards its title via `titleDiscardController`
-        // — and the immediate attempt produced nothing, regenerate from the finished
-        // response and push it through the title event while the client is still
-        // subscribed (before `acceptsTitleEvents` is cleared below).
+        // a reload. Only when this turn COMPLETED successfully — a superseded turn
+        // intentionally discards its title via `titleDiscardController` — and the
+        // immediate attempt produced nothing, regenerate from the finished response
+        // and push it through the title event while the client is still subscribed
+        // (before `acceptsTitleEvents` is cleared below).
         if (titleEligible && !wasAbortedBeforeComplete && immediateTitlePromise) {
           const immediateTitle = await immediateTitlePromise;
+          // The title `addTitle` just persisted, arriving here only because this line
+          // sits after `resolveConvoReady()`. Without it the run reports the row as it
+          // was read minutes ago — «New Chat» — to a client that was shown the real
+          // title long before, which is the flicker.
+          conversation.title = pickFinalTitle({
+            rowTitle: conversation.title,
+            generatedTitle: immediateTitle,
+          });
           if (!immediateTitle) {
             try {
               const fallbackTitle = await addTitle(req, {
@@ -893,9 +945,31 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         // Any failure (user Stop, or a preflight/quota failure before the run is
         // even created) must cancel the title and unblock its waits: the title's
         // `_waitForRun` would otherwise never resolve, deferring client disposal
-        // until the 45s title timeout, and no title should persist for a failed turn.
+        // until the 45s title timeout.
+        //
+        // Cancelling generation is NOT the same as discarding a title that already
+        // finished, and only the first belongs here. Discarding exists for ONE case —
+        // a stream superseded by a newer run, which owns the conversation now (see the
+        // `jobWasReplaced` branch above) — and a turn that merely failed or was stopped
+        // has no successor to protect. Measured on the stand: the three presentation
+        // runs of 2026-09-08 that were interrupted (`unfinished: true`) each generated
+        // and paid for a title seconds after the first message, then threw it away, and
+        // their chats read «New Chat» for good — while the one run that completed kept
+        // its title. The question the user asked is still sitting in that chat; the
+        // title describes it whether or not the answer arrived.
         titleAbortController.abort();
-        titleDiscardController.abort();
+        /* «Superseded» is a question with an answer, not something to assume either
+         * way: a replaced job leaves the old one running, and if that old one then
+         * fails it lands right here. Ask, exactly as the success path does — discard
+         * only when a newer job really owns the conversation now. */
+        try {
+          const currentJob = await GenerationJobManager.getJob(streamId);
+          if (!currentJob || currentJob.createdAt !== jobCreatedAt) {
+            titleDiscardController.abort();
+          }
+        } catch (lookupError) {
+          logger.debug('[ResumableAgentController] Could not check job ownership', lookupError);
+        }
         job.abortController.signal.removeEventListener('abort', abortTitleOnJobAbort);
         acceptsTitleEvents = false;
         resolveConvoReady();
@@ -1329,5 +1403,7 @@ module.exports.getPreliminaryUserMessage = getPreliminaryUserMessage;
 /** Test-only export: this is the gate that decides whether a turn becomes a research
  *  run, so it is worth asserting directly rather than through the whole controller. */
 module.exports.shouldRunNewDeepResearch = shouldRunNewDeepResearch;
+module.exports.pickFinalTitle = pickFinalTitle;
+module.exports.hasRealTitle = hasRealTitle;
 /** Test-only export: the consumer end of the conversation-model hop (see JSDoc). */
 module.exports.drConversationModel = drConversationModel;
