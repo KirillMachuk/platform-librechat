@@ -1143,6 +1143,7 @@ describe('initializeAgent — manual skill priming (Phase 3)', () => {
 
   it('attaches an auto-matched skill without treating it as a manual selection', async () => {
     const { agent, req, res, loadTools, db } = createMocks();
+    agent.tools = ['web_search'];
     const { Types } = await import('mongoose');
     const skillId = new Types.ObjectId();
     const ownerAuthor = {
@@ -1153,6 +1154,7 @@ describe('initializeAgent — manual skill priming (Phase 3)', () => {
       name: 'pptx',
       body: '# PPTX workflow',
       author: ownerAuthor,
+      allowedTools: ['execute_code'],
     });
 
     const result = await initializeAgent(
@@ -1172,8 +1174,53 @@ describe('initializeAgent — manual skill priming (Phase 3)', () => {
 
     expect(result.manualSkillPrimes).toBeUndefined();
     expect(result.autoMatchedSkillPrimes).toEqual([
-      { _id: skillId, name: 'pptx', body: '# PPTX workflow' },
+      {
+        _id: skillId,
+        name: 'pptx',
+        body: '# PPTX workflow',
+        allowedTools: ['execute_code'],
+      },
     ]);
+    expect(loadTools.mock.calls[0][0].tools).toEqual(['web_search', 'execute_code']);
+  });
+
+  it('does not let an auto-matched skill bypass the disabled code-execution capability', async () => {
+    const { agent, req, res, loadTools, db } = createMocks();
+    agent.tools = ['web_search'];
+    const { Types } = await import('mongoose');
+    const skillId = new Types.ObjectId();
+    const ownerAuthor = {
+      toString: () => req.user?.id,
+    } as unknown as import('mongoose').Types.ObjectId;
+    const getSkillByName: InitializeAgentDbMethods['getSkillByName'] = jest.fn().mockResolvedValue({
+      _id: skillId,
+      name: 'pptx',
+      body: '# PPTX workflow',
+      author: ownerAuthor,
+      allowedTools: ['execute_code'],
+    });
+
+    const result = await initializeAgent(
+      {
+        req,
+        res,
+        agent,
+        loadTools,
+        endpointOption: { endpoint: EModelEndpoint.agents },
+        allowedProviders: new Set([Providers.OPENAI]),
+        isInitialAgent: true,
+        accessibleSkillIds: [skillId],
+        autoMatchedSkills: ['pptx'],
+        codeEnvAvailable: false,
+      },
+      { ...db, listSkillsByAccess: emptyListSkillsByAccess, getSkillByName },
+    );
+
+    const names = (result.toolDefinitions ?? []).map((definition) => definition.name);
+    expect(loadTools.mock.calls[0][0].tools).toEqual(['web_search', 'execute_code']);
+    expect(names).not.toContain('bash_tool');
+    expect(names).not.toContain('read_file');
+    expect(result.codeEnvAvailable).toBe(false);
   });
 
   it('returns empty array when every manual skill is unresolvable (no primes, no throw)', async () => {

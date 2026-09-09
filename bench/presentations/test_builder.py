@@ -21,6 +21,7 @@ from pptx.util import Inches
 
 ROOT = Path(__file__).resolve().parents[2]
 BUILDER_PATH = ROOT / "skill/pptx/scripts/build_presentation.py"
+SKILL_PATH = ROOT / "skill/pptx/SKILL.md"
 
 
 def _load_builder():
@@ -105,6 +106,20 @@ def _slide_xml(path: Path, number: int) -> bytes:
 
 
 class PresentationBuilderTests(unittest.TestCase):
+    def test_pptx_skill_requires_the_builder_execution_tool(self):
+        skill = SKILL_PATH.read_text(encoding="utf-8")
+        frontmatter = skill.split("---", 2)[1]
+
+        self.assertIn("allowed-tools:\n  - execute_code", frontmatter)
+        self.assertIn(
+            "the next tool call must be the builder",
+            skill,
+        )
+        self.assertIn("with `bash_tool`", skill)
+        self.assertIn("Search-result snippets are discovery aids, not evidence", skill)
+        self.assertIn("if the period has ended, use observed historical data", skill)
+        self.assertIn("without prose progress messages between them", skill)
+
     def test_pdf_delivery_is_default_and_only_literal_false_opts_out(self):
         self.assertTrue(BUILDER._output_pdf_requested({}))
         self.assertFalse(BUILDER._output_pdf_requested({"outputPdf": False}))
@@ -344,6 +359,69 @@ class PresentationBuilderTests(unittest.TestCase):
         self.assertIn("Metric value", names)
         self.assertIn("Process step title", names)
         self.assertFalse(any(shape.shape_type == MSO_SHAPE_TYPE.PICTURE for slide in deck.slides for shape in slide.shapes))
+
+    def test_live_russian_metric_range_stays_on_one_line_at_a_consistent_size(self):
+        """The live PowerPoint split `+17,5…+18,5 °C` after `18`, while the
+        structural QA passed because it checked only the box's vertical capacity."""
+        spec = _base_spec()
+        spec["slides"] = [
+            {
+                "layout": "metrics",
+                "title": "Ключевые показатели месяца",
+                "metrics": [
+                    {
+                        "value": "+17,5…+18,5 °C",
+                        "label": "средняя температура",
+                        "detail": "норма августа — около +17 °C",
+                    },
+                    {
+                        "value": "+20…+26 °C",
+                        "label": "днём, в среднем",
+                        "detail": "тёплые периоды до +27…+30 °C",
+                    },
+                    {
+                        "value": "≈70 мм",
+                        "label": "осадки",
+                        "detail": "около нормы",
+                    },
+                ],
+                "source": "Источник: проверенный погодный архив",
+            }
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "weather.pptx"
+            deck = _save(spec, output)
+            _checks, issues = BUILDER._check_structure(output, spec)
+
+        values = [
+            shape
+            for shape in deck.slides[0].shapes
+            if shape.name == "Metric value"
+        ]
+        sizes = {
+            run.font.size.pt
+            for shape in values
+            for paragraph in shape.text_frame.paragraphs
+            for run in paragraph.runs
+            if run.text.strip()
+        }
+        self.assertEqual(len(sizes), 1)
+        self.assertGreaterEqual(next(iter(sizes)), 30)
+        for shape in values:
+            usable_width_pt = (
+                shape.width - shape.text_frame.margin_left - shape.text_frame.margin_right
+            ) / 12700
+            self.assertLessEqual(
+                BUILDER._estimated_single_line_width_points(
+                    shape.text_frame.text,
+                    next(iter(sizes)),
+                ),
+                usable_width_pt,
+            )
+        self.assertEqual(
+            [issue for issue in issues if issue["code"] == "text-overflow-risk"],
+            [],
+        )
 
     def test_native_chart_axis_ids_stay_within_powerpoints_signed_32_bit_range(self):
         with tempfile.TemporaryDirectory() as folder:

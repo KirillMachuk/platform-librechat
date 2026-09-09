@@ -37,7 +37,7 @@ sat right on top of its bullets.
 """
 TITLE_GAP = round(TITLE_LINE_HEIGHT * 0.65, 2)
 
-SKILL_VERSION = "3.3.0"
+SKILL_VERSION = "3.3.1"
 MAX_REPAIR_ITERATIONS = 2
 MAX_COMPAT_XML_BYTES = 8 * 1024 * 1024
 WIDE_WIDTH = Inches(13.333)
@@ -298,6 +298,54 @@ def _fit_text_height_inches(text: str, width_inches: float, size_pt: float) -> f
     max_chars = max(int(width_pt / max(size_pt * 0.5, 1.0)), 1)
     lines = _estimated_line_count(text, max_chars)
     return (lines * size_pt * 1.08) / 72.0 + 0.05
+
+
+def _estimated_single_line_width_points(text: str, size_pt: float) -> float:
+    """Estimate Arial-like text width without relying on host font files.
+
+    Office renderers can wrap a long numeric token at any character. A plain
+    character-count heuristic missed `+17,5…+18,5 °C`: the box had enough
+    height for two lines, so QA passed even though PowerPoint split the decimal
+    part after `18`. These conservative glyph classes are deterministic across
+    the sandbox, LibreOffice, and PowerPoint hosts.
+    """
+    em_width = 0.0
+    for character in str(text):
+        if character.isspace():
+            em_width += 0.28
+        elif character.isdigit():
+            em_width += 0.56
+        elif character in ".,:;'`|!ijlI":
+            em_width += 0.28
+        elif character in "…%№@MWШЩЮФ":
+            em_width += 0.92
+        elif character in "°()[]{}":
+            em_width += 0.40
+        elif character in "+-=−–—≈<>/\\":
+            em_width += 0.58
+        else:
+            em_width += 0.62
+    return em_width * float(size_pt)
+
+
+def _metric_value_font_size(values: list[str], width_inches: float) -> int:
+    """Choose one readable size that keeps every metric value on one line."""
+    maximum = 48
+    minimum = 30
+    horizontal_margins_pt = 2 * 0.04 * 72
+    usable_width_pt = max(width_inches * 72 - horizontal_margins_pt, 1)
+    longest_em = max(
+        (_estimated_single_line_width_points(value, 1.0) for value in values if value),
+        default=0.0,
+    )
+    if not longest_em:
+        return maximum
+    fitted = int(usable_width_pt / (longest_em * 1.03))
+    if fitted < minimum:
+        raise ValueError(
+            "Metric value is too long for a readable single line; shorten the value or use another layout"
+        )
+    return min(maximum, fitted)
 
 
 def _add_slide_title(slide, title: str, source: str = "") -> float:
@@ -724,6 +772,10 @@ def _render_metrics(prs: Presentation, item: dict[str, Any]):
     gap = 0.42
     width = (available - gap * (len(metrics) - 1)) / len(metrics)
     value_top = content_top + 0.35
+    value_size = _metric_value_font_size(
+        [str(metric.get("value", "")) for metric in metrics],
+        width,
+    )
     for index, metric in enumerate(metrics):
         x = 0.88 + index * (width + gap)
         _add_text(
@@ -733,7 +785,7 @@ def _render_metrics(prs: Presentation, item: dict[str, Any]):
             Inches(value_top),
             Inches(width),
             Inches(1.45),
-            size=48,
+            size=value_size,
             color=ACCENT if index == 0 else NAVY,
             bold=True,
             valign=MSO_ANCHOR.BOTTOM,
@@ -1298,6 +1350,11 @@ def _text_exceeds_shape_capacity(shape) -> bool:
             continue
         measured = True
         font_size = max(sizes)
+        if (
+            shape.name == "Metric value"
+            and _estimated_single_line_width_points(text, font_size) > width_pt
+        ):
+            return True
         max_chars = max(int(width_pt / max(font_size * 0.5, 1)), 1)
         required_pt += _estimated_line_count(text, max_chars) * font_size * 1.02
         if paragraph.space_after is not None:
