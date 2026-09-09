@@ -25,6 +25,9 @@ const {
   drConversationModel,
   pickFinalTitle,
   hasRealTitle,
+  isSupersededByNewerJob,
+  shouldSkipFinalEmit,
+  settleTitleForEndedJob,
 } = require('./request');
 
 describe('getPreliminaryUserMessage (DR turn shape)', () => {
@@ -247,5 +250,85 @@ describe('hasRealTitle', () => {
   it('accepts a real one, including a title that merely contains the placeholder', () => {
     expect(hasRealTitle('Презентация погоды')).toBe(true);
     expect(hasRealTitle('New Chat feature review')).toBe(true);
+  });
+});
+
+/* Two questions the ended-job path used to answer with one flag, which is the whole
+ * bug. Measured on the stand: the owner stopped a presentation run by hand at 07:55
+ * UTC on 2026-09-09; its title had been generated and billed four seconds in
+ * (`db.transactions` context=title) and the chat still came out «New Chat».
+ *
+ * Why: a user Stop does NOT reach the controller's catch — `chatCompletion` swallows
+ * its own abort, so the run unwinds by the success path. There the job is already gone
+ * (`abortJob` deletes it; `cleanupOnComplete` defaults to true), and the single flag
+ * `!currentJob || createdAt mismatch` meant BOTH «skip the final emit» — right, the
+ * aborted final was already sent — AND «throw the title away» — wrong, nobody took the
+ * conversation over.
+ *
+ * The pairing below is the contract: on a Stop, silence yes, discard no.
+ */
+describe('an ended job: emit and discard are different questions', () => {
+  const MINE = 1000;
+
+  it('a Stop deletes the job: stay silent, but keep the title', () => {
+    expect(shouldSkipFinalEmit(undefined, MINE)).toBe(true);
+    expect(isSupersededByNewerJob(undefined, MINE)).toBe(false);
+    expect(shouldSkipFinalEmit(null, MINE)).toBe(true);
+    expect(isSupersededByNewerJob(null, MINE)).toBe(false);
+  });
+
+  it('a newer job owns the conversation: stay silent AND drop the title', () => {
+    expect(shouldSkipFinalEmit({ createdAt: 2000 }, MINE)).toBe(true);
+    expect(isSupersededByNewerJob({ createdAt: 2000 }, MINE)).toBe(true);
+  });
+
+  it('the job in the store is still this one: emit, and keep the title', () => {
+    expect(shouldSkipFinalEmit({ createdAt: MINE }, MINE)).toBe(false);
+    expect(isSupersededByNewerJob({ createdAt: MINE }, MINE)).toBe(false);
+  });
+
+  /* The pair must never agree that a title should go when the run was merely ended —
+   * the one shape that is not «someone else's job» is an absent one. */
+  it('discard is never broader than silence', () => {
+    for (const job of [undefined, null, { createdAt: MINE }, { createdAt: 2000 }]) {
+      if (isSupersededByNewerJob(job, MINE)) {
+        expect(shouldSkipFinalEmit(job, MINE)).toBe(true);
+      }
+    }
+  });
+});
+
+/* The wiring, not just the predicate. Two earlier attempts at this fix each had a
+ * green test suite and shipped the bug anyway, because the tests pinned the QUESTION
+ * while the defect lived in what was done with the answer. These assert the effects. */
+describe('settleTitleForEndedJob — what actually happens to the two controllers', () => {
+  const MINE = 1000;
+  const controllers = () => ({
+    titleAbortController: { abort: jest.fn() },
+    titleDiscardController: { abort: jest.fn() },
+  });
+
+  it('a stopped run: generation cancelled, finished title kept', () => {
+    const c = controllers();
+    settleTitleForEndedJob({ currentJob: undefined, jobCreatedAt: MINE, ...c });
+
+    expect(c.titleAbortController.abort).toHaveBeenCalledTimes(1);
+    expect(c.titleDiscardController.abort).not.toHaveBeenCalled();
+  });
+
+  it('a newer job owns the conversation: both, the title is not ours to keep', () => {
+    const c = controllers();
+    settleTitleForEndedJob({ currentJob: { createdAt: 2000 }, jobCreatedAt: MINE, ...c });
+
+    expect(c.titleAbortController.abort).toHaveBeenCalledTimes(1);
+    expect(c.titleDiscardController.abort).toHaveBeenCalledTimes(1);
+  });
+
+  it('the same job still in the store: generation cancelled, title kept', () => {
+    const c = controllers();
+    settleTitleForEndedJob({ currentJob: { createdAt: MINE }, jobCreatedAt: MINE, ...c });
+
+    expect(c.titleAbortController.abort).toHaveBeenCalledTimes(1);
+    expect(c.titleDiscardController.abort).not.toHaveBeenCalled();
   });
 });

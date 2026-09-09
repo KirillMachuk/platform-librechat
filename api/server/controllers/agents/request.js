@@ -60,6 +60,75 @@ function hasRealTitle(title) {
 }
 
 /**
+ * Should this stream stay silent instead of emitting its FINAL event?
+ *
+ * Yes in two different situations, which is why this question and the one below must
+ * not share an answer: a NEWER job owns the conversation now, or this job is simply
+ * gone — `abortJob` deletes it (`cleanupOnComplete`, default true) after emitting the
+ * aborted final itself. Either way a second final would be wrong, so absence belongs
+ * in this answer.
+ *
+ * @param {{ createdAt?: number|string }|null|undefined} currentJob
+ * @param {number|string} jobCreatedAt - When THIS run's job was created.
+ * @returns {boolean}
+ */
+function shouldSkipFinalEmit(currentJob, jobCreatedAt) {
+  return currentJob == null || currentJob.createdAt !== jobCreatedAt;
+}
+
+/**
+ * Settle the two title controllers for a run whose job has ENDED — either because a
+ * newer job took the conversation over, or because this run was stopped and
+ * `abortJob` deleted it.
+ *
+ * The point of this function existing at all is that the two effects must not be
+ * wired to the same condition. Generation is cancelled either way: an ended run should
+ * not keep paying a title model. A title that has already FINISHED is thrown away only
+ * for a job that is genuinely someone else's now — otherwise a stopped chat keeps the
+ * name it already earned. Both branches used to fire together, which is why every
+ * stopped run came out «New Chat».
+ *
+ * @param {Object} params
+ * @param {{ createdAt?: number|string }|null|undefined} params.currentJob
+ * @param {number|string} params.jobCreatedAt
+ * @param {AbortController} params.titleAbortController - Cancels generation in flight.
+ * @param {AbortController} params.titleDiscardController - Drops an already-made title.
+ */
+function settleTitleForEndedJob({
+  currentJob,
+  jobCreatedAt,
+  titleAbortController,
+  titleDiscardController,
+}) {
+  titleAbortController.abort();
+  if (isSupersededByNewerJob(currentJob, jobCreatedAt)) {
+    titleDiscardController.abort();
+  }
+}
+
+/**
+ * Has a NEWER run taken this conversation over — the only reason to throw away a
+ * title that has already been generated?
+ *
+ * Only true for a job that EXISTS and was created at a different moment. Absence is
+ * not an answer here: a user Stop deletes the job, so `undefined` is the ordinary end
+ * of this very run, and reading it as supersession is what left every stopped chat
+ * called «New Chat». The file next door already knows this trap —
+ * `GenerationJobManager.abortJob` skips cleanup for a producer that finalizes its own
+ * Stop precisely so its emit path does not «read a missing job as replaced mid-run».
+ *
+ * Two questions, two answers, deliberately not one flag: whether to emit a final and
+ * whether to keep a title are simply different things.
+ *
+ * @param {{ createdAt?: number|string }|null|undefined} currentJob
+ * @param {number|string} jobCreatedAt - When THIS run's job was created.
+ * @returns {boolean}
+ */
+function isSupersededByNewerJob(currentJob, jobCreatedAt) {
+  return currentJob != null && currentJob.createdAt !== jobCreatedAt;
+}
+
+/**
  * The title the FINAL event should carry.
  *
  * In immediate mode the title is generated in parallel with the answer and persisted
@@ -781,7 +850,7 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         // Check if our job was replaced by a new request before emitting
         // This prevents stale requests from emitting events to newer jobs
         const currentJob = await GenerationJobManager.getJob(streamId);
-        const jobWasReplaced = !currentJob || currentJob.createdAt !== jobCreatedAt;
+        const jobWasReplaced = shouldSkipFinalEmit(currentJob, jobCreatedAt);
 
         if (jobWasReplaced) {
           logger.debug(`[ResumableAgentController] Skipping FINAL emit - job was replaced`, {
@@ -789,11 +858,21 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
             originalCreatedAt: jobCreatedAt,
             currentCreatedAt: currentJob?.createdAt,
           });
-          // Discard the stale title from this replaced stream: cancel it and
-          // unblock its persistence wait without letting it save (the newer job
-          // owns the conversation now).
-          titleAbortController.abort();
-          titleDiscardController.abort();
+          /* Silent, but not necessarily dispossessed. THIS is where a user Stop lands —
+           * not the catch below: `chatCompletion` swallows its own abort, so the run
+           * unwinds normally, and by now `abortJob` has deleted the job and sent the
+           * aborted final itself. Skipping the emit is right. Throwing the title away
+           * with it was not: that was one flag answering two questions, and it is why a
+           * stopped chat stayed «New Chat» while its title had been generated and billed
+           * seconds after the first message. Cancel generation either way — a stopped
+           * turn should not keep paying — but discard an already-finished title only for
+           * a job that really is someone else's now. */
+          settleTitleForEndedJob({
+            currentJob,
+            jobCreatedAt,
+            titleAbortController,
+            titleDiscardController,
+          });
           job.abortController.signal.removeEventListener('abort', abortTitleOnJobAbort);
           acceptsTitleEvents = false;
           resolveConvoReady();
@@ -957,16 +1036,20 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         // their chats read «New Chat» for good — while the one run that completed kept
         // its title. The question the user asked is still sitting in that chat; the
         // title describes it whether or not the answer arrived.
-        titleAbortController.abort();
         /* «Superseded» is a question with an answer, not something to assume either
          * way: a replaced job leaves the old one running, and if that old one then
-         * fails it lands right here. Ask, exactly as the success path does — discard
-         * only when a newer job really owns the conversation now. */
+         * fails it lands right here. Ask with the predicate that means what it says —
+         * an absent job is not proof that anyone took the conversation over. (A user
+         * Stop does not reach this catch at all; `chatCompletion` swallows its abort
+         * and the run leaves by the success path above.) */
         try {
           const currentJob = await GenerationJobManager.getJob(streamId);
-          if (!currentJob || currentJob.createdAt !== jobCreatedAt) {
-            titleDiscardController.abort();
-          }
+          settleTitleForEndedJob({
+            currentJob,
+            jobCreatedAt,
+            titleAbortController,
+            titleDiscardController,
+          });
         } catch (lookupError) {
           logger.debug('[ResumableAgentController] Could not check job ownership', lookupError);
         }
@@ -1404,6 +1487,10 @@ module.exports.getPreliminaryUserMessage = getPreliminaryUserMessage;
  *  run, so it is worth asserting directly rather than through the whole controller. */
 module.exports.shouldRunNewDeepResearch = shouldRunNewDeepResearch;
 module.exports.pickFinalTitle = pickFinalTitle;
+/** Test-only exports: two questions the ended-job path must answer separately. */
+module.exports.isSupersededByNewerJob = isSupersededByNewerJob;
+module.exports.shouldSkipFinalEmit = shouldSkipFinalEmit;
+module.exports.settleTitleForEndedJob = settleTitleForEndedJob;
 module.exports.hasRealTitle = hasRealTitle;
 /** Test-only export: the consumer end of the conversation-model hop (see JSDoc). */
 module.exports.drConversationModel = drConversationModel;
