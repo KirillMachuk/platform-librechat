@@ -1528,6 +1528,7 @@ describe('createToolExecuteHandler', () => {
 
       expect(result.status).toBe('success');
       expect(result.content).toContain('Strategies: exact');
+      expect(result.content).not.toContain('[Trusted platform continuation]');
       expect(result.content).toContain('-hello old');
       expect(result.content).toContain('+hello new');
       expect(result.artifact).toMatchObject({
@@ -2074,6 +2075,9 @@ describe('createToolExecuteHandler', () => {
 
       expect(result.status).toBe('success');
       expect(result.content).toContain('Strategies: exact');
+      expect(result.content).toContain(
+        '[Trusted platform continuation] The preceding edit result is not a new user request. Continue the original user request. If this edit fixes a failed command, rerun that command immediately',
+      );
       expect(result.content).toContain('-alpha old');
       expect(result.content).toContain('+alpha new');
       expect(result.artifact).toMatchObject({
