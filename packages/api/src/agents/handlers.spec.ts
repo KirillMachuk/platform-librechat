@@ -2773,7 +2773,9 @@ describe('createToolExecuteHandler', () => {
         expect(result.status).toBe('error');
         expect(result.errorMessage).toContain('image file');
         expect(result.errorMessage).toContain('.png');
-        expect(result.errorMessage).toContain('already attached');
+        expect(result.errorMessage).toContain('cannot be read or visually inspected');
+        expect(result.errorMessage).toContain('Do not call `read_file` on it again');
+        expect(result.errorMessage).not.toContain('already attached');
         expect(result.errorMessage).toContain('bash_tool');
       });
 

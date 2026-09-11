@@ -3648,6 +3648,11 @@ describe('AgentClient - a run that broke after doing the work', () => {
     tool_call: { id: 'c2', name: 'bash_tool', args: '{}' },
   });
 
+  const finalText = () => ({
+    type: ContentTypes.TEXT,
+    [ContentTypes.TEXT]: 'Готово — приложил презентацию в PPTX и PDF.',
+  });
+
   const stepLimitError = () =>
     Object.assign(new Error('Recursion limit of 25 reached without hitting a stop condition.'), {
       name: 'GraphRecursionError',
@@ -3680,6 +3685,21 @@ describe('AgentClient - a run that broke after doing the work', () => {
     expect(error).toBeDefined();
     /** A bare code: the wording is the client's, and nothing free-form of ours goes
      *  into JSON that the client has to parse back out. */
+    expect(JSON.parse(error[ContentTypes.ERROR])).toEqual({ code: 'run_incomplete' });
+  });
+
+  it('does not append an interruption after the final answer already followed the last tool', async () => {
+    const error = await runThatBreaks([finishedToolCall(), finalText()], stepLimitError());
+
+    expect(error).toBeUndefined();
+  });
+
+  it('keeps the interruption when text appeared only before unfinished tool work', async () => {
+    const error = await runThatBreaks(
+      [finalText(), finishedToolCall(), danglingToolCall()],
+      stepLimitError(),
+    );
+
     expect(JSON.parse(error[ContentTypes.ERROR])).toEqual({ code: 'run_incomplete' });
   });
 

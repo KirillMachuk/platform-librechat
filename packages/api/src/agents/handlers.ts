@@ -1102,13 +1102,13 @@ function createUnifiedDiff(filePath: string, oldContent: string, newContent: str
  * the result is a multi-KB blob of mojibake that pollutes the LLM context
  * and exposes the raw bytes anyway. Short-circuit before the network call.
  *
- * Image categories surface a "use the existing attachment" message because
- * the file was already attached to the conversation as part of the
- * code-execution artifact pipeline — re-attaching here would dup it.
+ * Image categories explicitly stop `read_file` retries. The artifact pipeline
+ * decides independently whether a generated image is user-visible; reserved
+ * QA paths are intentionally hidden and therefore cannot be described as an
+ * existing attachment here.
  */
 const BINARY_EXTENSIONS_NEVER_READABLE = new Set([
-  // Raster images (already attached as artifacts by the code-execution
-  // pipeline). `.svg` is intentionally NOT in this list — it's an XML
+  // Raster images. `.svg` is intentionally NOT in this list — it's an XML
   // text format with no mojibake risk, and there are legitimate reasons
   // for the model to inspect or edit a generated SVG. The post-fetch
   // NUL-byte sniff still catches anything that turns out to be binary
@@ -1222,7 +1222,7 @@ function lowercaseExtension(filePath: string): string {
  */
 function buildBinaryFileError(filePath: string, ext: string): string {
   if (IMAGE_EXTENSIONS_FOR_HINT.has(ext)) {
-    return `"${filePath}" is an image file (${ext}) and cannot be read as text. The image is already attached to the conversation and visible to the user. To process it programmatically, use \`bash_tool\` (e.g. \`file ${filePath}\` for metadata, or \`python3 -c '...'\` to operate on the bytes).`;
+    return `"${filePath}" is an image file (${ext}) and cannot be read or visually inspected with \`read_file\`. Do not call \`read_file\` on it again. Use \`bash_tool\` only for programmatic metadata or byte processing (e.g. \`file ${filePath}\`). Images intended for delivery are surfaced automatically by the artifact pipeline.`;
   }
   return `"${filePath}" is a binary file (${ext}) and cannot be read as text by \`read_file\`. Use \`bash_tool\` to process it (e.g. \`file ${filePath}\` for metadata, or a runtime-appropriate command for the format).`;
 }

@@ -290,6 +290,8 @@ describe('artifact report sidecars', () => {
     expect(isInternalArtifactPreview('_qa_preview.pdf', new Map())).toBe(true);
     expect(isInternalArtifactPreview('_QA_slide-1.png', new Map())).toBe(true);
     expect(isInternalArtifactPreview('review/_qa_weather-spec.json', new Map())).toBe(true);
+    expect(isInternalArtifactPreview('_qa_prev/slide-1.png', new Map())).toBe(true);
+    expect(isInternalArtifactPreview('review\\_QA_render\\slide-2.png', new Map())).toBe(true);
     expect(isInternalArtifactPreview('qa-report.pdf', new Map())).toBe(false);
     expect(isInternalArtifactPreview('weather-slide-1.png', new Map())).toBe(false);
   });
