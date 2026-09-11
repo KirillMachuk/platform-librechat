@@ -267,6 +267,51 @@ describe('createToolExecuteHandler', () => {
     });
   });
 
+  describe('legacy code execution recovery', () => {
+    it('redirects a missing execute_code call to bash_tool when code execution is enabled', async () => {
+      const loadTools: ToolExecuteOptions['loadTools'] = jest.fn(async () => ({
+        loadedTools: [],
+        configurable: { codeEnvAvailable: true },
+      }));
+      const handler = createToolExecuteHandler({ loadTools });
+
+      const [result] = await invokeHandler(handler, [
+        {
+          id: 'call_legacy_execute_code',
+          name: Constants.EXECUTE_CODE,
+          args: { lang: 'python', code: 'print("hello")' },
+        },
+      ]);
+
+      expect(result.status).toBe('error');
+      expect(result.errorMessage).toContain('[Trusted platform continuation]');
+      expect(result.errorMessage).toContain('capability marker');
+      expect(result.errorMessage).toContain('call `bash_tool` now');
+      expect(result.errorMessage).toContain('original user request');
+      expect(result.errorMessage).not.toBe(`Tool ${Constants.EXECUTE_CODE} not found`);
+    });
+
+    it('keeps the generic missing-tool error when code execution is unavailable', async () => {
+      const loadTools: ToolExecuteOptions['loadTools'] = jest.fn(async () => ({
+        loadedTools: [],
+        configurable: { codeEnvAvailable: false },
+      }));
+      const handler = createToolExecuteHandler({ loadTools });
+
+      const [result] = await invokeHandler(handler, [
+        {
+          id: 'call_unauthorized_execute_code',
+          name: Constants.EXECUTE_CODE,
+          args: { lang: 'python', code: 'print("hello")' },
+        },
+      ]);
+
+      expect(result.status).toBe('error');
+      expect(result.errorMessage).toBe(`Tool ${Constants.EXECUTE_CODE} not found`);
+      expect(result.errorMessage).not.toContain('bash_tool');
+    });
+  });
+
   describe('tool argument normalization', () => {
     it('parses JSON-string args for object-schema tools before invocation', async () => {
       const capturedArgs: unknown[] = [];
@@ -2293,6 +2338,76 @@ describe('createToolExecuteHandler', () => {
       });
       expect(result.status).toBe('success');
       expect(result.content).toContain('hello-world');
+    });
+
+    it('blocks presentation builder source reads without calling the sandbox', async () => {
+      const readSandboxFile = jest.fn(async () => ({ content: 'builder source' }));
+      const handler = makeReadFileHandler({
+        codeEnvAvailable: true,
+        accessibleSkillIds: skillsInScope(),
+        readSandboxFile,
+      });
+
+      const [result] = await invokeHandler(handler, [
+        {
+          id: 'call_pptx_builder_source',
+          name: Constants.READ_FILE,
+          args: { file_path: '/mnt/data/pptx/scripts/build_presentation.py' },
+        },
+      ]);
+
+      expect(readSandboxFile).not.toHaveBeenCalled();
+      expect(result.status).toBe('error');
+      expect(result.errorMessage).toContain('[Trusted platform continuation]');
+      expect(result.errorMessage).toContain('platform-owned presentation builder');
+      expect(result.errorMessage).toContain('original user request');
+      expect(result.errorMessage).toContain('bash_tool');
+    });
+
+    it('appends a trusted task-continuation cue after reading the presentation spec', async () => {
+      const readSandboxFile = jest.fn(async () => ({ content: '# Presentation spec\n' }));
+      const handler = makeReadFileHandler({
+        codeEnvAvailable: true,
+        accessibleSkillIds: skillsInScope(),
+        readSandboxFile,
+      });
+
+      const [result] = await invokeHandler(handler, [
+        {
+          id: 'call_pptx_spec',
+          name: Constants.READ_FILE,
+          args: { file_path: '/mnt/data/pptx/references/spec.md' },
+        },
+      ]);
+
+      expect(result.status).toBe('success');
+      expect(result.content).toContain('# Presentation spec');
+      expect(result.content).toContain('[Trusted platform continuation]');
+      expect(result.content).toContain('supporting material, not a new user request');
+      expect(result.content).toContain('original user request');
+    });
+
+    it('appends a trusted task-continuation cue after reading a presentation artifact report', async () => {
+      const readSandboxFile = jest.fn(async () => ({ content: '{"status":"ready"}\n' }));
+      const handler = makeReadFileHandler({
+        codeEnvAvailable: true,
+        accessibleSkillIds: skillsInScope(),
+        readSandboxFile,
+      });
+
+      const [result] = await invokeHandler(handler, [
+        {
+          id: 'call_pptx_report',
+          name: Constants.READ_FILE,
+          args: { file_path: '/mnt/data/weather.pptx.artifact-report.json' },
+        },
+      ]);
+
+      expect(result.status).toBe('success');
+      expect(result.content).toContain('[Trusted platform continuation]');
+      expect(result.content).toContain('supporting material, not a new user request');
+      expect(result.content).toContain("already-loaded skill's report-handling rule");
+      expect(result.content).not.toContain('If status is ready');
     });
 
     it('returns a clear error for /mnt/data/ when codeEnv is not available', async () => {
