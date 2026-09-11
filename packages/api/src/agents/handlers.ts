@@ -1211,7 +1211,7 @@ const TRUSTED_CONTINUATION_PREFIX = '[Trusted platform continuation]';
 const MAX_CONTINUATION_REQUEST_CHARS = 8_000;
 
 function currentUserRequestCue(req?: ServerRequest): string {
-  const text = req?.body.text?.trim();
+  const text = req?.body?.text?.trim();
   if (!text) {
     return '';
   }
