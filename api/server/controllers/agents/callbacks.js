@@ -19,6 +19,7 @@ const {
   GenerationJobManager,
   writeAttachmentEvent,
   createToolExecuteHandler,
+  findReadyArtifactCompletion,
   HOST_FILE_AUTHORING_ARTIFACT_KEY,
   isCodeSessionToolName,
 } = require('@librechat/api');
@@ -648,9 +649,16 @@ function writeAttachmentUpdate(res, streamId, attachment) {
  * @param {ServerResponse} params.res
  * @param {Promise<MongoFile | { filename: string; filepath: string; expires: number;} | null>[]} params.artifactPromises
  * @param {string | null} [params.streamId] - The stream ID for resumable mode, or null for standard mode.
+ * @param {import('@librechat/api').ArtifactCompletionTracker} [params.completionTracker]
  * @returns {ToolEndCallback} The tool end callback.
  */
-function createToolEndCallback({ req, res, artifactPromises, streamId = null }) {
+function createToolEndCallback({
+  req,
+  res,
+  artifactPromises,
+  streamId = null,
+  completionTracker = null,
+}) {
   /**
    * @type {ToolEndCallback}
    */
@@ -800,6 +808,7 @@ function createToolEndCallback({ req, res, artifactPromises, streamId = null }) 
         session_id: output.artifact.session_id,
       }),
     );
+    const processedArtifactPromises = [];
 
     for (const file of output.artifact.files) {
       /* `inherited` files are unchanged passthroughs of inputs the caller
@@ -899,6 +908,15 @@ function createToolEndCallback({ req, res, artifactPromises, streamId = null }) 
           logger.error('Error processing code output:', error);
           return null;
         }),
+      );
+      processedArtifactPromises.push(artifactPromises[artifactPromises.length - 1]);
+    }
+
+    if (completionTracker && processedArtifactPromises.length > 0) {
+      completionTracker.track(
+        Promise.all(processedArtifactPromises).then(async (attachments) =>
+          findReadyArtifactCompletion(await reportsPromise, attachments),
+        ),
       );
     }
   };

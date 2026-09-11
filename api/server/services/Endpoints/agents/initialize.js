@@ -18,6 +18,7 @@ const {
   resolveDeepResearchMode,
   resolveDeepResearchModel,
   DeepResearchConfigError,
+  createArtifactCompletionTracker,
   buildAgentContextAttachmentsByAgentId,
 } = require('@librechat/api');
 const {
@@ -284,7 +285,14 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
   /** @type {ArtifactPromises} */
   const artifactPromises = [];
   const { contentParts, aggregateContent } = createContentAggregator();
-  const toolEndCallback = createToolEndCallback({ req, res, artifactPromises, streamId });
+  const artifactCompletionTracker = createArtifactCompletionTracker();
+  const toolEndCallback = createToolEndCallback({
+    req,
+    res,
+    artifactPromises,
+    streamId,
+    completionTracker: artifactCompletionTracker,
+  });
 
   /** Query accessible skill IDs once per run (shared across all agents).
    *  Skills activate under strict opt-in semantics — see
@@ -1236,6 +1244,7 @@ const initializeClient = async ({ req, res, signal, endpointOption }) => {
     collectedThoughtSignatures,
     aggregateContent,
     artifactPromises,
+    artifactCompletionTracker,
     primeInvokedSkills: handlePrimeInvokedSkills,
     agent: primaryConfig,
     /** The conversation's OWN model, captured above BEFORE the lead-model override.
