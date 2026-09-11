@@ -262,6 +262,39 @@ const hasCompletedToolWork = (contentParts) =>
   );
 
 /**
+ * A recursion-limit exception can arrive after the last model call has already
+ * produced its final answer. Treat only non-empty text after the final tool call
+ * as terminal, and only after every dispatched tool has completed: earlier
+ * narration or a dangling tool must not hide a genuinely unfinished run.
+ * @param {Array<{ type?: string, text?: string | { value?: string }, tool_call?: { output?: unknown, progress?: number } }>} contentParts
+ */
+const hasTerminalAnswerText = (contentParts) => {
+  let lastToolIndex = -1;
+  let lastTextIndex = -1;
+  let hasIncompleteToolCall = false;
+  for (let i = 0; i < contentParts.length; i++) {
+    const part = contentParts[i];
+    if (part?.type === ContentTypes.TOOL_CALL) {
+      lastToolIndex = i;
+      const toolCall = part[ContentTypes.TOOL_CALL];
+      const hasOutput = toolCall?.output != null && String(toolCall.output) !== '';
+      if (toolCall?.progress !== 1 && !hasOutput) {
+        hasIncompleteToolCall = true;
+      }
+      continue;
+    }
+    if (part?.type !== ContentTypes.TEXT) {
+      continue;
+    }
+    const text = typeof part.text === 'string' ? part.text : part.text?.value;
+    if (typeof text === 'string' && text.trim() !== '') {
+      lastTextIndex = i;
+    }
+  }
+  return !hasIncompleteToolCall && lastTextIndex > lastToolIndex;
+};
+
+/**
  * Whether a finished run left the user anything to look at. Reasoning parts do not count:
  * the UI folds them into a collapsed "Thoughts" toggle, so a reply that exists only there
  * reads as an empty message.
@@ -1816,10 +1849,16 @@ class AgentClient extends BaseClient {
           /** The step ceiling is a configured stop, not a fault — same reasoning as the
            *  balance branch above. Logged so it can still be counted, at a level that
            *  does not put a tuning decision in front of whoever reads error logs. */
-          if (isStepLimitError(err)) {
+          const stepLimitReached = isStepLimitError(err);
+          const terminalAnswer = stepLimitReached && hasTerminalAnswerText(this.contentParts);
+          if (stepLimitReached) {
             logger.warn(
               '[api/server/controllers/agents/client.js #sendCompletion] Run hit the step ceiling',
-              { messageId: this.responseMessageId, conversationId: this.conversationId },
+              {
+                messageId: this.responseMessageId,
+                conversationId: this.conversationId,
+                terminalAnswer,
+              },
             );
           } else {
             logger.error(
@@ -1834,12 +1873,14 @@ class AgentClient extends BaseClient {
            *  A bare code, with no sentence of ours inside it: the client owns the
            *  wording, so it stays one localizable string and nothing free-form ends up
            *  inside JSON the client has to parse back out. */
-          this.contentParts.push({
-            type: ContentTypes.ERROR,
-            [ContentTypes.ERROR]: hasCompletedToolWork(this.contentParts)
-              ? JSON.stringify({ code: ErrorTypes.RUN_INCOMPLETE })
-              : getUserFacingError(err),
-          });
+          if (!terminalAnswer) {
+            this.contentParts.push({
+              type: ContentTypes.ERROR,
+              [ContentTypes.ERROR]: hasCompletedToolWork(this.contentParts)
+                ? JSON.stringify({ code: ErrorTypes.RUN_INCOMPLETE })
+                : getUserFacingError(err),
+            });
+          }
         }
       }
     } finally {

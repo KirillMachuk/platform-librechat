@@ -110,7 +110,7 @@ class PresentationBuilderTests(unittest.TestCase):
         skill = SKILL_PATH.read_text(encoding="utf-8")
         frontmatter = skill.split("---", 2)[1]
 
-        self.assertEqual(BUILDER.SKILL_VERSION, "3.3.2")
+        self.assertEqual(BUILDER.SKILL_VERSION, "3.3.3")
         self.assertIn("allowed-tools:\n  - execute_code", frontmatter)
         self.assertIn(
             "the next tool call must be the builder",
@@ -127,6 +127,11 @@ class PresentationBuilderTests(unittest.TestCase):
         self.assertIn("Never infer today's date from search-result dates", skill)
         self.assertIn("if the period has ended, use observed historical data", skill)
         self.assertIn("without prose progress messages between them", skill)
+        self.assertIn("Read `/mnt/data/<clear-name>.pptx.artifact-report.json` exactly once", skill)
+        self.assertIn("Do not run `pdftoppm` or LibreOffice again", skill)
+        self.assertIn("call `read_file` on an image/PDF", skill)
+        self.assertIn("stop using tools immediately", skill)
+        self.assertIn("non-actionable limitations belong on the sources slide", skill)
 
     def test_pdf_delivery_is_default_and_only_literal_false_opts_out(self):
         self.assertTrue(BUILDER._output_pdf_requested({}))

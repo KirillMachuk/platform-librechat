@@ -186,8 +186,10 @@ function attachArtifactPreviewFiles({ reportsByFilename, files, session_id }) {
  * @returns {boolean}
  */
 function isInternalArtifactPreview(name, reportsByFilename) {
-  const basename = typeof name === 'string' ? path.basename(name).toLowerCase() : '';
-  if (basename.startsWith('_qa_')) {
+  const normalizedName = typeof name === 'string' ? name : '';
+  const segments = normalizedName.split(/[\\/]+/).filter(Boolean);
+  const basename = path.basename(normalizedName).toLowerCase();
+  if (segments.some((segment) => segment.toLowerCase().startsWith('_qa_'))) {
     return true;
   }
   for (const [targetName, report] of reportsByFilename ?? []) {

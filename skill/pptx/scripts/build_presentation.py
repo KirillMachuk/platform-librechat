@@ -37,7 +37,7 @@ sat right on top of its bullets.
 """
 TITLE_GAP = round(TITLE_LINE_HEIGHT * 0.65, 2)
 
-SKILL_VERSION = "3.3.2"
+SKILL_VERSION = "3.3.3"
 MAX_REPAIR_ITERATIONS = 2
 MAX_COMPAT_XML_BYTES = 8 * 1024 * 1024
 WIDE_WIDTH = Inches(13.333)
