@@ -110,13 +110,21 @@ class PresentationBuilderTests(unittest.TestCase):
         skill = SKILL_PATH.read_text(encoding="utf-8")
         frontmatter = skill.split("---", 2)[1]
 
+        self.assertEqual(BUILDER.SKILL_VERSION, "3.3.2")
         self.assertIn("allowed-tools:\n  - execute_code", frontmatter)
         self.assertIn(
             "the next tool call must be the builder",
             skill,
         )
         self.assertIn("with `bash_tool`", skill)
-        self.assertIn("Search-result snippets are discovery aids, not evidence", skill)
+        self.assertIn("make at most three `web_search` calls before authoring", skill)
+        self.assertIn("Do not issue another search merely to “open” a result", skill)
+        self.assertIn("stop searching and build a narrower, honest deck", skill)
+        self.assertIn("whose body the platform scraper returned", skill)
+        self.assertIn("Do not emit any text block between tool calls", skill)
+        self.assertIn("including a rationale, status line, or whitespace-only block", skill)
+        self.assertIn("conversation date supplied by the runtime", skill)
+        self.assertIn("Never infer today's date from search-result dates", skill)
         self.assertIn("if the period has ended, use observed historical data", skill)
         self.assertIn("without prose progress messages between them", skill)
 

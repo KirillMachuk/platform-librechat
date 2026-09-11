@@ -9,7 +9,7 @@ allowed-tools:
 
 Create the requested presentation as two matching deliverables: an editable `.pptx` and a `.pdf` rendered from that final PPTX. Do not substitute Markdown or HTML. Only omit the PDF when the user explicitly asks for PPTX alone.
 
-Keep the chat clean while authoring: call the required tools without prose progress messages between them. Do not write variants of “data collected”, “building the deck”, or “starting QA”; the user should see the final completion sentence, the two deliverables, and only a material caveat that requires action.
+Keep the chat clean while authoring: call the required tools without prose progress messages between them. Do not emit any text block between tool calls, including a rationale, status line, or whitespace-only block. Do not write variants of “data collected”, “building the deck”, or “starting QA”; the user should see the final completion sentence, the two deliverables, and only a material caveat that requires action.
 
 ## Available runtime
 
@@ -27,9 +27,10 @@ Keep the chat clean while authoring: call the required tools without prose progr
 - Prefer one strong idea per slide. Keep titles as conclusions, not topic labels.
 - Use editable PowerPoint text, shapes, tables, and native charts. Use a bitmap only for a supplied photo or a visualization PowerPoint cannot represent.
 - Put a short visible source note on every factual claim, chart, table, and metric slide. Add a final sources slide when sources exist.
-- Do not invent facts, sources, dates, or numeric precision. Record necessary assumptions explicitly. Compare the requested period with the current date: if the period has ended, use observed historical data and retrospective wording unless the user explicitly asks for an old forecast.
-- A source URL must be a page you actually opened in this conversation, pointing at the page that carries the fact. Never cite a site's front page (`https://www.statista.com/`), and never reconstruct an address from memory — a plausible-looking URL that 404s is worse than no URL. When you have the publication but not a checked link, give publisher and date and leave the URL out.
-- Search-result snippets are discovery aids, not evidence. Open every web page used as a factual source before putting its claims or URL into the spec.
+- Do not invent facts, sources, dates, or numeric precision. Record necessary assumptions explicitly. Compare the requested period with the conversation date supplied by the runtime: if the period has ended, use observed historical data and retrospective wording unless the user explicitly asks for an old forecast. Never infer today's date from search-result dates. If the runtime date is absent, call `date -u +%F` once with `bash_tool`; do not search the web for today's date.
+- A source URL must be a page whose body the platform scraper returned in this conversation, pointing at the page that carries the fact. Never cite a site's front page (`https://www.statista.com/`), and never reconstruct an address from memory — a plausible-looking URL that 404s is worse than no URL. When you have the publication but not a checked link, give publisher and date and leave the URL out.
+- `web_search` already asks the platform's scraper to retrieve the top result pages. Do not issue another search merely to “open” a result. Use extracted page content as evidence; an item that fell back to a search-result snippet remains a discovery aid and must not support a factual claim or URL in the spec.
+- For an ordinary deck, make at most three `web_search` calls before authoring, preferably together in one tool round. If the evidence is still incomplete or conflicting after the third call, stop searching and build a narrower, honest deck from the facts that are supported. Put the limitation in the relevant source note or final user caveat; never consume the remaining tool budget on query variants.
 - Compare numbers with a native `chart`, not with prose or a table. A table is for values the reader must read exactly; a deck whose only numeric slide is a table reads as a report, not a presentation.
 - Preserve a user's slide size, masters, layouts, theme, and placeholders. If the selected template layout lacks the required inherited placeholders, stop and request a compatible layout instead of drawing a new design over it.
 - For a targeted revision, change only the requested slide or text and save a new version.
