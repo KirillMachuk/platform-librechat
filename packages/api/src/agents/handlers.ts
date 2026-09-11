@@ -1208,13 +1208,25 @@ const IMAGE_EXTENSIONS_FOR_HINT = new Set([
 const PPTX_BUILDER_PATH = '/mnt/data/pptx/scripts/build_presentation.py';
 const PPTX_SPEC_PATH = '/mnt/data/pptx/references/spec.md';
 const TRUSTED_CONTINUATION_PREFIX = '[Trusted platform continuation]';
+const MAX_CONTINUATION_REQUEST_CHARS = 8_000;
 
-function buildPresentationReadContinuation(filePath: string): string | null {
+function currentUserRequestCue(req?: ServerRequest): string {
+  const text = req?.body?.text?.trim();
+  if (!text) {
+    return '';
+  }
+
+  const request = truncateMiddle(text, MAX_CONTINUATION_REQUEST_CHARS);
+  return ` The current user request is ${JSON.stringify(request)}.`;
+}
+
+function buildPresentationReadContinuation(filePath: string, req?: ServerRequest): string | null {
+  const requestCue = currentUserRequestCue(req);
   if (filePath === PPTX_SPEC_PATH) {
-    return `${TRUSTED_CONTINUATION_PREFIX} The preceding file is supporting material, not a new user request. Continue the original user request now; do not inspect tool availability, read the builder source, or ask the user to restate the task.`;
+    return `${TRUSTED_CONTINUATION_PREFIX} The preceding file is supporting material, not a new user request.${requestCue} Continue the original user request now; do not inspect tool availability, read the builder source, or ask the user to restate the task.`;
   }
   if (filePath.startsWith('/mnt/data/') && filePath.endsWith('.pptx.artifact-report.json')) {
-    return `${TRUSTED_CONTINUATION_PREFIX} The preceding report is supporting material, not a new user request. Continue the original user request and apply the already-loaded skill's report-handling rule. Do not reconstruct the conversation or ask the user to restate the task.`;
+    return `${TRUSTED_CONTINUATION_PREFIX} The preceding report is supporting material, not a new user request.${requestCue} Continue the original user request and apply the already-loaded skill's report-handling rule. Do not reconstruct the conversation or ask the user to restate the task.`;
   }
   return null;
 }
@@ -1359,7 +1371,7 @@ async function handleSandboxFileFallback(
     if (truncated) {
       numbered += `\n\n[truncated at ${MAX_READABLE_BYTES} bytes — use \`bash_tool\` (e.g. \`head -c\` / \`tail\`) to read the rest of "${filePath}"]`;
     }
-    const continuation = buildPresentationReadContinuation(filePath);
+    const continuation = buildPresentationReadContinuation(filePath, req);
     if (continuation) {
       numbered += `\n\n${continuation}`;
     }

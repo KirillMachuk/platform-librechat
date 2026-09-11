@@ -7,6 +7,7 @@ import type { Request } from 'express';
  * (have to use type alias because you can't extend indexed access types like Request['body'])
  */
 export type RequestBody = {
+  text?: string;
   messageId?: string;
   fileTokenLimit?: number;
   conversationId?: string;
