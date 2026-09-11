@@ -264,16 +264,23 @@ const hasCompletedToolWork = (contentParts) =>
 /**
  * A recursion-limit exception can arrive after the last model call has already
  * produced its final answer. Treat only non-empty text after the final tool call
- * as terminal: earlier narration must not hide a genuinely unfinished run.
- * @param {Array<{ type?: string, text?: string | { value?: string } }>} contentParts
+ * as terminal, and only after every dispatched tool has completed: earlier
+ * narration or a dangling tool must not hide a genuinely unfinished run.
+ * @param {Array<{ type?: string, text?: string | { value?: string }, tool_call?: { output?: unknown, progress?: number } }>} contentParts
  */
 const hasTerminalAnswerText = (contentParts) => {
   let lastToolIndex = -1;
   let lastTextIndex = -1;
+  let hasIncompleteToolCall = false;
   for (let i = 0; i < contentParts.length; i++) {
     const part = contentParts[i];
     if (part?.type === ContentTypes.TOOL_CALL) {
       lastToolIndex = i;
+      const toolCall = part[ContentTypes.TOOL_CALL];
+      const hasOutput = toolCall?.output != null && String(toolCall.output) !== '';
+      if (toolCall?.progress !== 1 && !hasOutput) {
+        hasIncompleteToolCall = true;
+      }
       continue;
     }
     if (part?.type !== ContentTypes.TEXT) {
@@ -284,7 +291,7 @@ const hasTerminalAnswerText = (contentParts) => {
       lastTextIndex = i;
     }
   }
-  return lastTextIndex > lastToolIndex;
+  return !hasIncompleteToolCall && lastTextIndex > lastToolIndex;
 };
 
 /**

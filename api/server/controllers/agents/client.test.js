@@ -3703,6 +3703,15 @@ describe('AgentClient - a run that broke after doing the work', () => {
     expect(JSON.parse(error[ContentTypes.ERROR])).toEqual({ code: 'run_incomplete' });
   });
 
+  it('keeps the interruption when a later text part follows an unfinished tool call', async () => {
+    const error = await runThatBreaks(
+      [finishedToolCall(), danglingToolCall(), finalText()],
+      stepLimitError(),
+    );
+
+    expect(JSON.parse(error[ContentTypes.ERROR])).toEqual({ code: 'run_incomplete' });
+  });
+
   /** A run that produced nothing really did fail; that frame stays. */
   it('leaves a run with nothing behind it as a plain failure', async () => {
     const error = await runThatBreaks([danglingToolCall()], stepLimitError());
