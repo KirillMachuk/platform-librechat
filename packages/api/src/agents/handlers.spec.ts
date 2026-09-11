@@ -2369,6 +2369,11 @@ describe('createToolExecuteHandler', () => {
       const handler = makeReadFileHandler({
         codeEnvAvailable: true,
         accessibleSkillIds: skillsInScope(),
+        req: {
+          body: {
+            text: 'Сделай презентацию на 5 слайдов о погоде в Минске в августе 2026.',
+          },
+        },
         readSandboxFile,
       });
 
@@ -2385,6 +2390,9 @@ describe('createToolExecuteHandler', () => {
       expect(result.content).toContain('[Trusted platform continuation]');
       expect(result.content).toContain('supporting material, not a new user request');
       expect(result.content).toContain('original user request');
+      expect(result.content).toContain(
+        'Сделай презентацию на 5 слайдов о погоде в Минске в августе 2026.',
+      );
     });
 
     it('appends a trusted task-continuation cue after reading a presentation artifact report', async () => {
@@ -2392,6 +2400,11 @@ describe('createToolExecuteHandler', () => {
       const handler = makeReadFileHandler({
         codeEnvAvailable: true,
         accessibleSkillIds: skillsInScope(),
+        req: {
+          body: {
+            text: 'Подготовь русскоязычную презентацию и приложи PPTX и PDF.',
+          },
+        },
         readSandboxFile,
       });
 
@@ -2407,6 +2420,7 @@ describe('createToolExecuteHandler', () => {
       expect(result.content).toContain('[Trusted platform continuation]');
       expect(result.content).toContain('supporting material, not a new user request');
       expect(result.content).toContain("already-loaded skill's report-handling rule");
+      expect(result.content).toContain('Подготовь русскоязычную презентацию и приложи PPTX и PDF.');
       expect(result.content).not.toContain('If status is ready');
     });
 
