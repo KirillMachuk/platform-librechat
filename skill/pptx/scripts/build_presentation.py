@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import posixpath
 import shutil
@@ -36,8 +37,9 @@ it. The builder had 0.22in against a 0.52in line — 0.42 — and a three-line t
 sat right on top of its bullets.
 """
 TITLE_GAP = round(TITLE_LINE_HEIGHT * 0.65, 2)
+TEXT_LINE_HEIGHT_FACTOR = 1.16
 
-SKILL_VERSION = "3.3.3"
+SKILL_VERSION = "3.3.4"
 MAX_REPAIR_ITERATIONS = 2
 MAX_COMPAT_XML_BYTES = 8 * 1024 * 1024
 WIDE_WIDTH = Inches(13.333)
@@ -285,19 +287,46 @@ def _estimated_line_count(text: str, max_chars: int) -> int:
     return max(lines, 1)
 
 
+def _estimated_wrapped_line_count(text: str, width_inches: float, size_pt: float) -> int:
+    """Estimate Office word wrapping with conservative Arial-like glyph widths."""
+    usable_width_pt = max(float(width_inches) * 72.0, 1.0)
+    lines = 0
+    for raw_line in str(text).splitlines() or [""]:
+        words = raw_line.split()
+        if not words:
+            lines += 1
+            continue
+        current = ""
+        for word in words:
+            candidate = word if not current else f"{current} {word}"
+            candidate_width = _estimated_single_line_width_points(candidate, size_pt)
+            if candidate_width <= usable_width_pt:
+                current = candidate
+                continue
+            if current:
+                lines += 1
+            word_width = _estimated_single_line_width_points(word, size_pt)
+            if word_width > usable_width_pt:
+                lines += math.ceil(word_width / usable_width_pt)
+                current = ""
+            else:
+                current = word
+        if current:
+            lines += 1
+    return max(lines, 1)
+
+
 def _fit_text_height_inches(text: str, width_inches: float, size_pt: float) -> float:
     """Reserve enough vertical space for wrapped text at the requested size.
 
     PowerPoint does not expose a reliable pre-rendered text measurement API in
-    python-pptx.  The builder therefore uses the same conservative character
+    python-pptx.  The builder therefore uses the same conservative glyph-width
     estimate as the structural QA pass, with a small leading/padding cushion.
     Keeping this calculation next to the chart layout prevents a valid report
     from placing a long takeaway on top of its detail copy.
     """
-    width_pt = max(float(width_inches) * 72.0, 1.0)
-    max_chars = max(int(width_pt / max(size_pt * 0.5, 1.0)), 1)
-    lines = _estimated_line_count(text, max_chars)
-    return (lines * size_pt * 1.08) / 72.0 + 0.05
+    lines = _estimated_wrapped_line_count(text, width_inches, size_pt)
+    return (lines * size_pt * TEXT_LINE_HEIGHT_FACTOR) / 72.0 + 0.05
 
 
 def _estimated_single_line_width_points(text: str, size_pt: float) -> float:
@@ -633,7 +662,8 @@ def _render_chart(prs: Presentation, item: dict[str, Any]):
     if chart_type is None:
         raise ValueError(f"Unsupported native chart type: {chart_spec.get('type')}")
     data = ChartData()
-    data.categories = [str(value) for value in chart_spec.get("categories", [])]
+    categories = [str(value) for value in chart_spec.get("categories", [])]
+    data.categories = categories
     for series in chart_spec.get("series", []):
         data.add_series(str(series.get("name", "Series")), list(series.get("values", [])))
     takeaway = str(item.get("takeaway", "")).strip()
@@ -666,13 +696,14 @@ def _render_chart(prs: Presentation, item: dict[str, Any]):
         chart.category_axis.tick_labels.font.name = FONT
         chart.category_axis.tick_labels.font.size = Pt(11)
     plot = chart.plots[0]
-    plot.has_data_labels = True
-    plot.data_labels.show_value = True
-    plot.data_labels.font.name = FONT
-    plot.data_labels.font.size = Pt(11)
-    if chart_spec.get("numberFormat"):
-        plot.data_labels.number_format = str(chart_spec["numberFormat"])
-        plot.data_labels.number_format_is_linked = False
+    plot.has_data_labels = len(categories) <= 12
+    if plot.has_data_labels:
+        plot.data_labels.show_value = True
+        plot.data_labels.font.name = FONT
+        plot.data_labels.font.size = Pt(11)
+        if chart_spec.get("numberFormat"):
+            plot.data_labels.number_format = str(chart_spec["numberFormat"])
+            plot.data_labels.number_format_is_linked = False
     palette = [ACCENT, NAVY, POSITIVE, RGBColor(240, 158, 64), NEGATIVE]
     for idx, series in enumerate(chart.series):
         series.format.fill.solid()
@@ -1355,8 +1386,15 @@ def _text_exceeds_shape_capacity(shape) -> bool:
             and _estimated_single_line_width_points(text, font_size) > width_pt
         ):
             return True
-        max_chars = max(int(width_pt / max(font_size * 0.5, 1)), 1)
-        required_pt += _estimated_line_count(text, max_chars) * font_size * 1.02
+        if shape.name in {"Chart takeaway", "Chart takeaway detail"}:
+            required_pt += (
+                _estimated_wrapped_line_count(text, width_pt / 72.0, font_size)
+                * font_size
+                * TEXT_LINE_HEIGHT_FACTOR
+            )
+        else:
+            max_chars = max(int(width_pt / max(font_size * 0.5, 1)), 1)
+            required_pt += _estimated_line_count(text, max_chars) * font_size * 1.02
         if paragraph.space_after is not None:
             required_pt += paragraph.space_after.pt
     return measured and required_pt > height_pt * 1.04

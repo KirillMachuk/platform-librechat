@@ -110,7 +110,7 @@ class PresentationBuilderTests(unittest.TestCase):
         skill = SKILL_PATH.read_text(encoding="utf-8")
         frontmatter = skill.split("---", 2)[1]
 
-        self.assertEqual(BUILDER.SKILL_VERSION, "3.3.3")
+        self.assertEqual(BUILDER.SKILL_VERSION, "3.3.4")
         self.assertIn("allowed-tools:\n  - execute_code", frontmatter)
         self.assertIn("is a platform capability marker, not a callable tool", skill)
         self.assertIn("Never call `execute_code`", skill)
@@ -449,6 +449,36 @@ class PresentationBuilderTests(unittest.TestCase):
             [],
         )
 
+    def test_dense_native_chart_omits_default_data_labels(self):
+        spec = _base_spec()
+        spec["slides"] = [
+            {
+                "layout": "chart",
+                "title": "Дневные максимумы меняются в течение месяца",
+                "chart": {
+                    "type": "line",
+                    "categories": [str(day) for day in range(1, 32)],
+                    "series": [
+                        {
+                            "name": "Максимум, °C",
+                            "values": [20 + day % 7 for day in range(1, 32)],
+                        }
+                    ],
+                },
+                "source": "Источник: регрессионный сценарий",
+            }
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / "dense-chart.pptx"
+            deck = _save(spec, output)
+
+        chart = next(
+            shape.chart
+            for shape in deck.slides[0].shapes
+            if shape.shape_type == MSO_SHAPE_TYPE.CHART
+        )
+        self.assertFalse(chart.plots[0].has_data_labels)
+
     def test_native_chart_axis_ids_stay_within_powerpoints_signed_32_bit_range(self):
         with tempfile.TemporaryDirectory() as folder:
             output = Path(folder) / "presentation.pptx"
@@ -520,6 +550,18 @@ class PresentationBuilderTests(unittest.TestCase):
             ),
             1,
         )
+        chart_slide = deck.slides[3]
+        chart = next(
+            shape.chart
+            for shape in chart_slide.shapes
+            if shape.shape_type == MSO_SHAPE_TYPE.CHART
+        )
+        takeaway = next(shape for shape in chart_slide.shapes if shape.name == "Chart takeaway")
+        detail = next(shape for shape in chart_slide.shapes if shape.name == "Chart takeaway detail")
+        self.assertTrue(chart.plots[0].has_data_labels)
+        self.assertGreaterEqual(takeaway.height / Inches(1), 2.2)
+        self.assertGreaterEqual(detail.top, takeaway.top + takeaway.height + Inches(0.15))
+        self.assertFalse(BUILDER._text_exceeds_shape_capacity(takeaway))
         compatibility = next(
             check for check in checks if check["name"] == "powerpoint-compatibility"
         )
