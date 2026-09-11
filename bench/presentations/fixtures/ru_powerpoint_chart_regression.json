@@ -47,21 +47,32 @@
         ],
         "numberFormat": "0.0"
       },
-      "takeaway": "Около двух градусов",
-      "detail": "К концу месяца становится прохладнее.",
+      "takeaway": "Тепло до середины месяца, к концу — свежее",
+      "detail": "Максимум +24, минимум +10 °C",
       "source": "Источник: регрессионный сценарий"
     },
     {
       "layout": "sources",
       "title": "Источники",
       "entries": [
-        { "label": "Проверочный сценарий", "url": "fixture.json — совместимость графика" }
+        {
+          "label": "Проверочный сценарий",
+          "url": "fixture.json — совместимость графика"
+        }
       ]
     }
   ],
-  "sources": [{ "label": "Проверочный сценарий", "url": "fixture.json — совместимость графика" }],
+  "sources": [
+    {
+      "label": "Проверочный сценарий",
+      "url": "fixture.json — совместимость графика"
+    }
+  ],
   "changeLog": [
-    { "target": "Presentation", "summary": "Created a PowerPoint compatibility regression deck" }
+    {
+      "target": "Presentation",
+      "summary": "Created a PowerPoint compatibility regression deck"
+    }
   ],
   "repairIterations": 0,
   "outputPdf": true
