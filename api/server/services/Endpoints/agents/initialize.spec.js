@@ -159,6 +159,22 @@ describe('initializeClient — processAgent ACL gate', () => {
     expect(agentClientArgs.project_id).toBe('proj-42');
   });
 
+  it('shares one artifact completion tracker between persistence and the agent loop', async () => {
+    const { createToolEndCallback } = require('~/server/controllers/agents/callbacks');
+    mockInitializeAgent.mockResolvedValue(makePrimaryConfig([]));
+
+    await initializeClient({
+      req: makeReq(),
+      res: {},
+      signal: new AbortController().signal,
+      endpointOption: makeEndpointOption(),
+    });
+
+    const callbackOptions = createToolEndCallback.mock.calls[0][0];
+    expect(callbackOptions.completionTracker).toBeDefined();
+    expect(agentClientArgs.artifactCompletionTracker).toBe(callbackOptions.completionTracker);
+  });
+
   it('should skip handoff agent and filter its edge when user lacks VIEW access', async () => {
     await createAgent({
       id: TARGET_ID,

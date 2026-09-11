@@ -2,6 +2,7 @@ const { Tools } = require('librechat-data-provider');
 const mockCollectArtifactReports = jest.fn(async () => new Map());
 const mockAttachArtifactPreviewFiles = jest.fn(({ reportsByFilename }) => reportsByFilename);
 const mockIsInternalArtifactPreview = jest.fn(() => false);
+const mockFindReadyArtifactCompletion = jest.fn(() => null);
 
 // Mock all dependencies before requiring the module
 jest.mock('nanoid', () => ({
@@ -11,6 +12,7 @@ jest.mock('nanoid', () => ({
 jest.mock('@librechat/api', () => ({
   sendEvent: jest.fn(),
   HOST_FILE_AUTHORING_ARTIFACT_KEY: '__librechat_file_authoring',
+  findReadyArtifactCompletion: (...args) => mockFindReadyArtifactCompletion(...args),
   isCodeSessionToolName: jest.fn((name) =>
     ['execute_code', 'bash_tool', 'read_file'].includes(name),
   ),
@@ -86,6 +88,7 @@ describe('createToolEndCallback', () => {
     mockCollectArtifactReports.mockResolvedValue(new Map());
     mockAttachArtifactPreviewFiles.mockImplementation(({ reportsByFilename }) => reportsByFilename);
     mockIsInternalArtifactPreview.mockReturnValue(false);
+    mockFindReadyArtifactCompletion.mockReturnValue(null);
 
     // Get the mocked logger
     logger = require('@librechat/data-schemas').logger;
@@ -463,6 +466,64 @@ describe('createToolEndCallback', () => {
           name: 'deck.pptx',
           artifactReport,
         }),
+      );
+    });
+
+    it('tracks completion only after the reported PPTX and requested PDF are persisted', async () => {
+      const artifactReport = {
+        status: 'ready',
+        format: 'pptx',
+        sourceFileIds: [],
+        previewAssets: [{ filename: 'deck.pdf', kind: 'pdf', delivery: 'requested' }],
+        qaChecks: [{ name: 'render', status: 'passed', message: 'Rendered' }],
+        issues: [],
+        changeLog: [],
+        skillVersion: '3.3.3',
+        repairIterations: 0,
+      };
+      const completion = {
+        format: 'pptx',
+        filenames: ['deck.pptx', 'deck.pdf'],
+      };
+      const completionTracker = { track: jest.fn() };
+      mockCollectArtifactReports.mockResolvedValue(new Map([['deck.pptx', artifactReport]]));
+      mockFindReadyArtifactCompletion.mockReturnValue(completion);
+      processCodeOutput.mockImplementation(async ({ name }) => ({
+        file: { file_id: `${name}-id`, filename: name },
+      }));
+
+      const toolEndCallback = createToolEndCallback({
+        req,
+        res,
+        artifactPromises,
+        completionTracker,
+      });
+      const event = makeCodeExecutionEvent({
+        runId: 'run-1',
+        threadId: 'thread-1',
+        toolCallId: 'tool-1',
+        fileId: 'pptx-id',
+        name: 'deck.pptx',
+      });
+      event.output.artifact.files.push(
+        { id: 'pdf-id', name: 'deck.pdf', session_id: 'sess-1' },
+        {
+          id: 'report-id',
+          name: 'deck.pptx.artifact-report.json',
+          session_id: 'sess-1',
+        },
+      );
+
+      await toolEndCallback({ output: event.output }, event.metadata);
+
+      expect(completionTracker.track).toHaveBeenCalledTimes(1);
+      await expect(completionTracker.track.mock.calls[0][0]).resolves.toEqual(completion);
+      expect(mockFindReadyArtifactCompletion).toHaveBeenCalledWith(
+        new Map([['deck.pptx', artifactReport]]),
+        [
+          expect.objectContaining({ filename: 'deck.pptx' }),
+          expect.objectContaining({ filename: 'deck.pdf' }),
+        ],
       );
     });
 

@@ -3694,6 +3694,45 @@ describe('AgentClient - a run that broke after doing the work', () => {
     expect(error).toBeUndefined();
   });
 
+  it('turns the verified artifact stop into one clean final answer', async () => {
+    const { ArtifactReadyCompletionError } = require('@librechat/api');
+    const client = new AgentClient({
+      req: { user: { id: 'user-123' }, body: {}, config: { endpoints: {} } },
+      res: {},
+      agent: {
+        id: 'agent-123',
+        endpoint: EModelEndpoint.openAI,
+        provider: EModelEndpoint.openAI,
+        model_parameters: { model: 'deepseek/deepseek-v4-flash-0731' },
+      },
+      endpointTokenConfig: {},
+      primeInvokedSkills: () =>
+        Promise.reject(
+          new ArtifactReadyCompletionError({
+            format: 'pptx',
+            filenames: ['weather.pptx', 'weather.pdf'],
+          }),
+        ),
+    });
+    client.contentParts = [
+      {
+        type: ContentTypes.TEXT,
+        [ContentTypes.TEXT]: 'I have enough data. Let me build the deck.',
+      },
+      finishedToolCall(),
+    ];
+
+    await client.chatCompletion({ payload: [] });
+
+    expect(client.contentParts.filter((part) => part.type === ContentTypes.ERROR)).toEqual([]);
+    expect(client.contentParts.filter((part) => part.type === ContentTypes.TEXT)).toEqual([
+      finalText(),
+    ]);
+    expect(client.contentParts.filter((part) => part.type === ContentTypes.TOOL_CALL)).toEqual([
+      finishedToolCall(),
+    ]);
+  });
+
   it('keeps the interruption when text appeared only before unfinished tool work', async () => {
     const error = await runThatBreaks(
       [finalText(), finishedToolCall(), danglingToolCall()],

@@ -53,6 +53,8 @@ const {
   buildInitialToolSessions,
   armDeepResearchBudget,
   createAgentTurnBalanceGuard,
+  createArtifactCompletionGuard,
+  isArtifactReadyCompletionError,
   isDataPolicyRefusal,
 } = require('@librechat/api');
 const {
@@ -62,6 +64,7 @@ const {
   TitleMethod,
   formatMessage,
   formatAgentMessages,
+  composeEventHandlers,
   createMetadataAggregator,
 } = require('@librechat/agents');
 const {
@@ -294,6 +297,16 @@ const hasTerminalAnswerText = (contentParts) => {
   return !hasIncompleteToolCall && lastTextIndex > lastToolIndex;
 };
 
+const getArtifactCompletionText = (completion) => {
+  if (completion.format !== 'pptx') {
+    return 'Готово — файлы приложены.';
+  }
+  const hasPdf = completion.filenames.some((filename) => filename.toLowerCase().endsWith('.pdf'));
+  return hasPdf
+    ? 'Готово — приложил презентацию в PPTX и PDF.'
+    : 'Готово — приложил презентацию в PPTX.';
+};
+
 /**
  * Whether a finished run left the user anything to look at. Reasoning parts do not count:
  * the UI folds them into a collapsed "Thoughts" toggle, so a reply that exists only there
@@ -336,6 +349,7 @@ class AgentClient extends BaseClient {
       collectedUsage,
       collectedThoughtSignatures,
       artifactPromises,
+      artifactCompletionTracker,
       maxContextTokens,
       subagentAggregatorsByToolCallId,
       contextUsageSink,
@@ -366,6 +380,8 @@ class AgentClient extends BaseClient {
     this.collectedThoughtSignatures = collectedThoughtSignatures;
     /** @type {ArtifactPromises} */
     this.artifactPromises = artifactPromises;
+    /** @type {import('@librechat/api').ArtifactCompletionTracker | undefined} */
+    this.artifactCompletionTracker = artifactCompletionTracker;
     /** Per-request map of `createContentAggregator` instances keyed by
      *  the parent's `tool_call_id`. `ON_SUBAGENT_UPDATE` events stream
      *  into each aggregator as they arrive; `finalizeSubagentContent`
@@ -1427,35 +1443,51 @@ class AgentClient extends BaseClient {
        *  an empty filter (Mongoose strips `undefined`), matching an arbitrary
        *  balance document — never gate a paid run on someone else's balance. */
       const balanceRecheckUserId = this.user ?? this.options.req.user?.id;
-      if (balanceRecheckEnabled && balanceRecheckUserId && this.options.eventHandlers) {
-        this.options.eventHandlers[GraphEvents.CHAT_MODEL_START] = createAgentTurnBalanceGuard({
-          enabled: true,
-          user: balanceRecheckUserId,
-          collectedUsage: this.collectedUsage,
-          findBalanceByUser: db.findBalanceByUser,
-          pricing: { getMultiplier: db.getMultiplier, getCacheMultiplier: db.getCacheMultiplier },
-          bufferCredits: BALANCE_RECHECK_BUFFER_CREDITS,
-          endpointTokenConfig: this.options.endpointTokenConfig,
-          resolveEndpointTokenConfig: (usage) => this.resolveAgentEndpointTokenConfig(usage),
-          logger,
-          onExhausted: async (errorMessage) => {
-            try {
-              await logViolation(
-                this.options.req,
-                this.options.res,
-                errorMessage.type,
-                errorMessage,
-                0,
-              );
-            } catch (violationErr) {
-              logger.warn('[AgentClient] Failed to log mid-run balance violation', violationErr);
-            }
-            const balanceError = new Error(JSON.stringify(errorMessage));
-            balanceError.balanceExhausted = true;
-            balanceError.balanceErrorMessage = errorMessage;
-            throw balanceError;
-          },
+      const turnBoundaryHandlerSets = [];
+      if (this.options.eventHandlers && this.artifactCompletionTracker) {
+        turnBoundaryHandlerSets.push({
+          [GraphEvents.CHAT_MODEL_START]: createArtifactCompletionGuard(
+            this.artifactCompletionTracker,
+          ),
         });
+      }
+      if (this.options.eventHandlers && balanceRecheckEnabled && balanceRecheckUserId) {
+        turnBoundaryHandlerSets.push({
+          [GraphEvents.CHAT_MODEL_START]: createAgentTurnBalanceGuard({
+            enabled: true,
+            user: balanceRecheckUserId,
+            collectedUsage: this.collectedUsage,
+            findBalanceByUser: db.findBalanceByUser,
+            pricing: { getMultiplier: db.getMultiplier, getCacheMultiplier: db.getCacheMultiplier },
+            bufferCredits: BALANCE_RECHECK_BUFFER_CREDITS,
+            endpointTokenConfig: this.options.endpointTokenConfig,
+            resolveEndpointTokenConfig: (usage) => this.resolveAgentEndpointTokenConfig(usage),
+            logger,
+            onExhausted: async (errorMessage) => {
+              try {
+                await logViolation(
+                  this.options.req,
+                  this.options.res,
+                  errorMessage.type,
+                  errorMessage,
+                  0,
+                );
+              } catch (violationErr) {
+                logger.warn('[AgentClient] Failed to log mid-run balance violation', violationErr);
+              }
+              const balanceError = new Error(JSON.stringify(errorMessage));
+              balanceError.balanceExhausted = true;
+              balanceError.balanceErrorMessage = errorMessage;
+              throw balanceError;
+            },
+          }),
+        });
+      }
+      if (turnBoundaryHandlerSets.length > 0) {
+        this.options.eventHandlers = composeEventHandlers(
+          this.options.eventHandlers,
+          ...turnBoundaryHandlerSets,
+        );
       }
 
       /** @type {AppConfig['endpoints']['agents']} */
@@ -1800,6 +1832,24 @@ class AgentClient extends BaseClient {
         });
       }
     } catch (err) {
+      const artifactCompletion = isArtifactReadyCompletionError(err) ? err.completion : null;
+      if (artifactCompletion) {
+        logger.info('[AgentClient] Stopped after verified artifact delivery', {
+          messageId: this.responseMessageId,
+          conversationId: this.conversationId,
+          format: artifactCompletion.format,
+          filenames: artifactCompletion.filenames,
+        });
+        if (!abortController.signal.aborted) {
+          this.contentParts = this.contentParts.filter((part) => part?.type !== ContentTypes.TEXT);
+          this.contentParts.push({
+            type: ContentTypes.TEXT,
+            [ContentTypes.TEXT]: getArtifactCompletionText(artifactCompletion),
+          });
+        }
+        return;
+      }
+
       logger.error(
         '[api/server/controllers/agents/client.js #sendCompletion] Operation aborted',
         err,
