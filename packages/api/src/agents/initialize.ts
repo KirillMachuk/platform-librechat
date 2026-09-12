@@ -860,7 +860,14 @@ export async function initializeAgent(
   let manualSkillPrimes: ResolvedManualSkill[] | undefined;
   let autoMatchedSkillPrimes: ResolvedAutoMatchedSkill[] | undefined;
   let alwaysApplySkillPrimes: ResolvedAlwaysApplySkill[] | undefined;
-  const primedSkillNames = new Set<string>();
+  /**
+   * Only auto-matched skills are removed from the model-invocable catalog:
+   * their platform-selected workflow is already active and exposing the same
+   * target invites a redundant `skill` call. Manual and always-apply skills
+   * retain the established catalog contract because callers may still invoke
+   * them explicitly during the turn.
+   */
+  const autoMatchedSkillNames = new Set<string>();
   let extraAllowedToolNames: string[] = [];
   let perSkillExtras: Map<string, string[]> = new Map();
   if (hasSkillAccess) {
@@ -961,8 +968,8 @@ export async function initializeAgent(
       ...(autoMatchedSkillPrimes ?? []),
       ...(alwaysApplySkillPrimes ?? []),
     ];
-    for (const prime of primesForUnion) {
-      primedSkillNames.add(prime.name);
+    for (const prime of autoMatchedSkillPrimes ?? []) {
+      autoMatchedSkillNames.add(prime.name);
     }
     if (primesForUnion.length > 0) {
       const union = unionPrimeAllowedTools({
@@ -1342,7 +1349,7 @@ export async function initializeAgent(
       skillStates: params.skillStates,
       defaultActiveOnShare: params.defaultActiveOnShare,
       maxCatalogSkills: getMaxCatalogSkills(req),
-      alreadyPrimedSkillNames: primedSkillNames,
+      alreadyPrimedSkillNames: autoMatchedSkillNames,
     });
     toolDefinitions = skillResult.toolDefinitions;
     skillCount = skillResult.skillCount;

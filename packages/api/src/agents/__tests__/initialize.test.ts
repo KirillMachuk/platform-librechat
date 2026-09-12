@@ -1201,6 +1201,56 @@ describe('initializeAgent — manual skill priming (Phase 3)', () => {
     expect(result.activeSkillNames).toEqual(new Set(['pptx']));
   });
 
+  it('keeps an always-apply skill available in the model-invocable catalog', async () => {
+    const { agent, req, res, loadTools, db } = createMocks();
+    const { Types } = await import('mongoose');
+    const skillId = new Types.ObjectId();
+    const ownerAuthor = {
+      toString: () => req.user?.id,
+    } as unknown as import('mongoose').Types.ObjectId;
+    const alwaysApplySkill = {
+      _id: skillId,
+      name: 'workspace-policy',
+      description: 'Apply the workspace policy.',
+      body: '# Workspace policy',
+      author: ownerAuthor,
+    };
+    const listAlwaysApplySkills: NonNullable<InitializeAgentDbMethods['listAlwaysApplySkills']> =
+      jest.fn().mockResolvedValue({
+        skills: [alwaysApplySkill],
+        has_more: false,
+        after: null,
+      });
+    const listSkillsByAccess: InitializeAgentDbMethods['listSkillsByAccess'] = jest
+      .fn()
+      .mockResolvedValue({
+        skills: [alwaysApplySkill],
+        has_more: false,
+        after: null,
+      });
+
+    const result = await initializeAgent(
+      {
+        req,
+        res,
+        agent,
+        loadTools,
+        endpointOption: { endpoint: EModelEndpoint.agents },
+        allowedProviders: new Set([Providers.OPENAI]),
+        isInitialAgent: true,
+        accessibleSkillIds: [skillId],
+      },
+      { ...db, listAlwaysApplySkills, listSkillsByAccess },
+    );
+
+    expect(result.alwaysApplySkillPrimes).toEqual([
+      { _id: skillId, name: 'workspace-policy', body: '# Workspace policy' },
+    ]);
+    expect(result.toolDefinitions?.map((definition) => definition.name)).toContain('skill');
+    expect(result.skillCount).toBe(1);
+    expect(result.activeSkillNames).toEqual(new Set(['workspace-policy']));
+  });
+
   it('does not let an auto-matched skill bypass the disabled code-execution capability', async () => {
     const { agent, req, res, loadTools, db } = createMocks();
     agent.tools = ['web_search'];
