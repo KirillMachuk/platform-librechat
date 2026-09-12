@@ -25,9 +25,9 @@ Keep the chat clean while authoring: call the required tools without prose progr
 ## Preserve the request
 
 - The user's wording is authoritative. Copy every user-supplied name, number, date, role, and requirement exactly into a compact fact ledger before composing the spec.
-- Do not reinterpret ordinary document terms as people, places, or identifiers. In particular, `колонтитул` means a page header or footer unless the user explicitly identifies a person with that name; quoted text following a document request is normally the document title or subject.
+- Do not reinterpret ordinary document terms as people, places, or identifiers. In particular, `колонтитул` means a page header or footer unless the user explicitly identifies a person with that name. A Russian request shaped like `document for <audience> «<quoted phrase>»` names the audience first and the document title or subject inside the quotes; the quoted phrase is not a person's name unless the user explicitly says it is a name or full name. Ordinary nouns such as `пилот`, `план`, `отчёт`, and `регламент` remain concepts, not surnames.
 - Do not silently expand abbreviations, alter quantities, derive new departments or regions, or assign unnamed people to roles. If a genuine ambiguity would materially change the document, ask one short question before authoring. Otherwise use the most literal grammatical reading.
-- Do not turn a missing target, source, author, or date into a fabricated fact. Mark it as an explicit assumption or omit it when it is not required.
+- Do not turn a missing target, source, author, or date into a fabricated fact. In particular, do not infer a sender from the document topic or insert the current date when the user supplied neither. Mark a genuinely necessary gap as an explicit assumption or omit the field.
 - Do not draft the full document in reasoning or debate multiple interpretations after the request is clear. Use a short outline, then author the JSON specification.
 
 ## Product standard
@@ -36,6 +36,7 @@ Keep the chat clean while authoring: call the required tools without prose progr
 - Treat every supplied file as immutable. Always write a new, clearly named version.
 - Pick the document job before drafting: `memo`, `report`, or `sop`. Use the lightest structure that helps the reader decide, understand, or act.
 - Use real Word heading styles, numbering definitions, tables, headers, footers, live page fields, and hyperlinks. Do not fake headings, bullets, numbering, or tables with plain text.
+- For every new document, the builder automatically uses `title` as the running header and adds a localized footer with live `PAGE` and `NUMPAGES` fields. Do not add undocumented `header`, `footer`, or `pageNumbers` keys to the JSON job; templates and targeted edits preserve their existing page furniture.
 - Use tables only for genuinely comparable rows and columns. Use paragraphs and lists for normal prose.
 - Keep facts, assumptions, and sources distinguishable. Do not invent facts, citations, dates, people, roles, targets, or numeric precision.
 - A web source must be a specific page opened in this conversation. If only a publication is known, give its name and date without fabricating a URL.
@@ -47,7 +48,7 @@ Keep the chat clean while authoring: call the required tools without prose progr
 
 1. Inspect supplied files and record audience, purpose, evidence, constraints, locale, document type, filename, and the exact fact ledger internally.
 2. Draft only a short heading outline. For a memo, lead with the decision. For a report, lead with the executive summary. For an SOP, lead with purpose, scope, roles, and ordered steps.
-3. Read `/mnt/data/docx/references/spec.md` exactly once. After that read succeeds, do not plan again: the next tool call must create the specification from the original request.
+3. Read `/mnt/data/docx/references/spec.md` exactly once. After that read succeeds, do not plan again or reinterpret the fact ledger: the next tool call must create the specification from the original request.
 4. Write one complete UTF-8 JSON specification with the `ArtifactJob` and acceptance criteria to `/mnt/data/_qa_<stem>-spec.json` using `create_file`. The `_qa_` prefix keeps the working file out of user attachments. Keep it there across repair calls; never put reusable work in `/tmp`, because `/tmp` is empty on the next tool call.
 5. For a new document, use `sections`. Use `templatePath` plus `placeholders` to fill a template, or `inputPath` plus `edits` for a targeted revision. Never make the output path equal to an input path.
 6. Immediately after `create_file` succeeds, run the builder with `bash_tool`; do not re-read files, inspect source, restart planning, or emit prose first:

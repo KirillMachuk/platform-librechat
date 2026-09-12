@@ -2099,6 +2099,57 @@ describe('createToolExecuteHandler', () => {
         files: [{ id: 'f1', name: 'input.csv', session_id: 'sess-prev' }],
         req,
       });
+      expect(result.content).not.toContain('DOCX specification is persisted');
+    });
+
+    it('continues directly to the Word builder after persisting a DOCX specification', async () => {
+      const readSandboxFile = jest.fn(async () => {
+        throw new Error('cat: /mnt/data/_qa_memo-spec.json: No such file or directory');
+      });
+      const writeSandboxFile = jest.fn(async () => ({
+        session_id: 'sess-docx-spec',
+        files: [
+          {
+            id: 'file-docx-spec',
+            name: '_qa_memo-spec.json',
+            storage_session_id: 'sess-docx-spec',
+          },
+        ],
+      }));
+      const handler = makeSandboxAuthoringHandler({
+        readSandboxFile,
+        writeSandboxFile,
+      });
+      const content = JSON.stringify({
+        job: { format: 'docx', filename: 'memo.docx' },
+        title: 'Pilot decision',
+      });
+
+      const [result] = await invokeHandler(handler, [
+        {
+          id: 'call_create_docx_spec',
+          name: 'create_file',
+          args: {
+            file_path: '/mnt/data/_qa_memo-spec.json',
+            content,
+          },
+        },
+      ]);
+
+      expect(result.status).toBe('success');
+      expect(result.content).toContain('Created /mnt/data/_qa_memo-spec.json');
+      expect(result.content).toContain('[Trusted platform continuation]');
+      expect(result.content).toContain('DOCX specification is persisted');
+      expect(result.content).toContain('Do not restart planning');
+      expect(result.content).toContain('call `bash_tool` now');
+      expect(result.content).toContain('/mnt/data/docx/scripts/build_document.py');
+      expect(result.content).toContain('artifact report as the validation gate');
+      expect(writeSandboxFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          file_path: '/mnt/data/_qa_memo-spec.json',
+          content,
+        }),
+      );
     });
 
     it('refuses to overwrite an existing sandbox file without overwrite: true', async () => {
@@ -2487,7 +2538,7 @@ describe('createToolExecuteHandler', () => {
         accessibleSkillIds: skillsInScope(),
         req: {
           body: {
-            text: 'Создай служебную записку в DOCX и PDF без вымышленных фактов.',
+            text: 'Создай для генерального директора служебную записку «Пилот единого прогноза продаж» в DOCX и PDF без вымышленных фактов.',
           },
         },
         readSandboxFile,
@@ -2506,9 +2557,15 @@ describe('createToolExecuteHandler', () => {
       expect(result.content).toContain('[Trusted platform continuation]');
       expect(result.content).toContain('The `docx` skill is already active');
       expect(result.content).toContain('`create_file`, `edit_file`, and `bash_tool`');
+      expect(result.content).toContain('the document title or subject');
+      expect(result.content).toContain('`пилот`, `план`, `отчёт`, and `регламент`');
+      expect(result.content).toContain('Do not infer a sender or insert the current date');
+      expect(result.content).toContain('localized footer with live page fields');
+      expect(result.content).toContain('do not add `header`, `footer`, or `pageNumbers` keys');
+      expect(result.content).toContain('the next tool call must write the JSON job');
       expect(result.content).toContain('/mnt/data/docx/scripts/build_document.py');
       expect(result.content).toContain(
-        'Создай служебную записку в DOCX и PDF без вымышленных фактов.',
+        'Создай для генерального директора служебную записку «Пилот единого прогноза продаж» в DOCX и PDF без вымышленных фактов.',
       );
     });
 
