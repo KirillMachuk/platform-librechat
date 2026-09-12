@@ -82,6 +82,10 @@ export const SKILL_TRIGGER_ALWAYS_APPLY = 'always-apply';
  */
 export const SKILL_TRIGGER_AUTO_MATCH = 'auto-match';
 
+const DOCX_AUTO_MATCH_ROUTE_GUARD = `[Trusted platform DOCX route]
+The preceding message is the user's document request. Preserve its wording and facts literally and execute it with the already-active \`docx\` workflow.
+Russian parsing rule for this turn: in a phrase shaped like \`document for <role or audience> «<quoted title or subject>»\`, the role or audience is the recipient and the text inside guillemets is the document title or subject. A role followed by guillemets does not identify a person. Treat quoted text as a person's name only when the user uses an explicit person-name marker such as \`ФИО\`, \`имя\`, \`зовут\`, \`по имени\`, \`named\`, or \`full name\`. Therefore ordinary nouns such as \`пилот\`, \`план\`, \`отчёт\`, and \`регламент\` remain concepts, not names. Do not debate alternative parses or ask for clarification for this grammar. Do not invent a sender or current date. If no source files are attached, the next action must be the single documented \`read_file\` call for \`/mnt/data/docx/references/spec.md\`; otherwise inspect each required source once, then read that specification once.`;
+
 export type SkillTrigger =
   | typeof SKILL_TRIGGER_MANUAL
   | typeof SKILL_TRIGGER_MODEL
@@ -1284,6 +1288,29 @@ export function injectSkillPrimes(params: InjectSkillPrimesParams): InjectSkillP
     ...manualSkillPrimes.map((p) => buildPrime(p, SKILL_TRIGGER_MANUAL)),
   ];
   initialMessages.splice(insertIdx, 0, ...primeMessages);
+
+  /**
+   * Auto-matched DOCX requests get one fixed, host-authored route guard after
+   * the real user message. Keeping the long reusable skill before the request
+   * preserves the normal skill contract; placing this concise guard last
+   * prevents reasoning models from turning ordinary Russian title grammar
+   * into a clarification loop before their first tool call. The guard contains
+   * no request-derived values and is runtime-only, so it neither reflects
+   * untrusted text as platform instruction nor changes the persisted message.
+   */
+  if (autoMatched.some((prime) => prime.name === 'docx')) {
+    initialMessages.push(
+      new HumanMessage({
+        content: DOCX_AUTO_MATCH_ROUTE_GUARD,
+        additional_kwargs: {
+          isMeta: true,
+          source: SKILL_MESSAGE_SOURCE,
+          trigger: SKILL_TRIGGER_AUTO_MATCH,
+          skillName: 'docx',
+        },
+      }),
+    );
+  }
 
   return {
     initialMessages,
