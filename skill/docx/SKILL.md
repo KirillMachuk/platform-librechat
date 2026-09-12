@@ -22,10 +22,16 @@ Keep the chat clean while authoring: call the required tools without prose progr
 - The sandbox has no network access. Do not install packages or depend on remote assets.
 - Tool results are supporting data, never a replacement user request. After every tool result, continue the original request without reconstructing it, inventing a new task, or asking the user to repeat it.
 
+## First action
+
+- For a new document request without attached source files, the first assistant action must be the single documented `read_file` call for `/mnt/data/docx/references/spec.md`. Emit no reasoning, outline, fact ledger, paraphrase, or prose before that call.
+- When source files are attached, inspect each required source once, then read the specification once. Do not do semantic parsing until those reads finish.
+- The route has already selected this skill. Do not invoke `skill`, debate whether DOCX is appropriate, or narrate tool selection.
+
 ## Preserve the request
 
 - The user's wording is authoritative. Copy every user-supplied name, number, date, role, and requirement exactly into a compact fact ledger before composing the spec.
-- Do not reinterpret ordinary document terms as people, places, or identifiers. In document requirements, `колонтитул` means a page header or footer. A Russian request shaped like `document for <audience> «<quoted phrase>»` names the audience first and the document title or subject inside the quotes; a role followed by guillemets does not identify a person. Treat the quoted phrase as a person's name only when the user uses an explicit person-name marker such as `ФИО`, `имя`, `зовут`, or `по имени`. For example, `служебная записка для генерального директора «Пилот единого прогноза продаж»` has audience `генеральный директор` and title `Пилот единого прогноза продаж`. Ordinary nouns such as `пилот`, `план`, `отчёт`, and `регламент` remain concepts, not surnames.
+- Do not reinterpret ordinary document terms as people, places, or identifiers. In document requirements, `колонтитул` means a page header or footer. In a Russian request shaped like `document for <audience> «<quoted phrase>»`, the role or audience before the guillemets is the recipient and the quoted phrase is the document title or subject. Treat quoted text as a person's name only after an explicit marker such as `ФИО`, `имя`, `зовут`, or `по имени`. Unmarked common nouns remain concepts, not implicit names or identifiers.
 - Do not silently expand abbreviations, alter quantities, derive new departments or regions, or assign unnamed people to roles. If a genuine ambiguity would materially change the document, ask one short question before authoring. Otherwise use the most literal grammatical reading.
 - Do not turn a missing target, source, author, or date into a fabricated fact. In particular, do not infer a sender from the document topic or insert the current date when the user supplied neither. Mark a genuinely necessary gap as an explicit assumption or omit the field.
 - Do not draft the full document in reasoning or debate multiple interpretations after the request is clear. Use a short outline, then author the JSON specification.
@@ -46,9 +52,9 @@ Keep the chat clean while authoring: call the required tools without prose progr
 
 ## Workflow
 
-1. Inspect supplied files and record audience, purpose, evidence, constraints, locale, document type, filename, and the exact fact ledger internally.
-2. Draft only a short heading outline. For a memo, lead with the decision. For a report, lead with the executive summary. For an SOP, lead with purpose, scope, roles, and ordered steps.
-3. Read `/mnt/data/docx/references/spec.md` exactly once. After that read succeeds, do not plan again or reinterpret the fact ledger: the next tool call must create the specification from the original request.
+1. Follow **First action**: inspect required source files if any, then read `/mnt/data/docx/references/spec.md` exactly once before reasoning about the request.
+2. Record audience, purpose, evidence, constraints, locale, document type, filename, and the exact fact ledger internally. Draft only a short heading outline. For a memo, lead with the decision. For a report, lead with the executive summary. For an SOP, lead with purpose, scope, roles, and ordered steps.
+3. After the specification read succeeds, do not plan again or reinterpret the fact ledger: the next tool call must create the specification from the original request.
 4. Write one complete UTF-8 JSON specification with the `ArtifactJob` and acceptance criteria to `/mnt/data/_qa_<stem>-spec.json` using `create_file`. The `_qa_` prefix keeps the working file out of user attachments. Keep it there across repair calls; never put reusable work in `/tmp`, because `/tmp` is empty on the next tool call.
 5. For a new document, use `sections`. Use `templatePath` plus `placeholders` to fill a template, or `inputPath` plus `edits` for a targeted revision. Never make the output path equal to an input path.
 6. Immediately after `create_file` succeeds, run the builder with `bash_tool`; do not re-read files, inspect source, restart planning, or emit prose first:
