@@ -45,6 +45,9 @@ const {
   hydrateMissingIndexTokenCounts,
   injectSkillPrimes,
   collectFreshSkillPrimeNames,
+  resolveAutoMatchedFirstToolChoice,
+  installForcedFirstToolChoice,
+  createOneShotToolChoiceReleaseHandler,
   isSkillPrimeMessage,
   collectFileIds,
   processTextWithTokenLimit,
@@ -1633,6 +1636,28 @@ class AgentClient extends BaseClient {
         }
       }
 
+      /**
+       * Prompt guidance alone cannot guarantee that every supported model
+       * enters the DOCX workflow before interpreting the user's prose. For a
+       * host-routed DOCX turn, force the documented read_file call at the
+       * provider API boundary, then release the choice after that execution
+       * batch so the remainder of the run is model-directed. Compose after
+       * the existing executor: release happens only after the tool completes.
+       */
+      const forcedFirstTool = resolveAutoMatchedFirstToolChoice(autoMatchedSkillPrimes);
+      const forcedFirstToolState = {};
+      const toolExecuteHandler = this.options.eventHandlers?.[GraphEvents.ON_TOOL_EXECUTE];
+      const releasableForcedFirstTool = toolExecuteHandler ? forcedFirstTool : undefined;
+      if (releasableForcedFirstTool) {
+        this.options.eventHandlers = composeEventHandlers(this.options.eventHandlers, {
+          [GraphEvents.ON_TOOL_EXECUTE]: createOneShotToolChoiceReleaseHandler({
+            agentId: this.options.agent.id,
+            toolName: releasableForcedFirstTool,
+            state: forcedFirstToolState,
+          }),
+        });
+      }
+
       if (indexTokenCountMap && isEnabled(process.env.AGENT_DEBUG_LOGGING)) {
         const entries = Object.entries(indexTokenCountMap);
         const perMsg = entries.map(([idx, count]) => {
@@ -1747,6 +1772,24 @@ class AgentClient extends BaseClient {
 
         if (!run) {
           throw new Error('Failed to create run');
+        }
+
+        /** `overrideModel` is graph-wide, so arm it only for the standard
+         *  single-agent route. Normal Auto artifact requests use this path;
+         *  multi-agent graphs keep the prompt guard rather than forcing a
+         *  primary-agent tool onto peers that may start in parallel. */
+        if (releasableForcedFirstTool && agents.length === 1 && run.Graph) {
+          const installed = installForcedFirstToolChoice({
+            graph: run.Graph,
+            agentId: this.options.agent.id,
+            toolName: releasableForcedFirstTool,
+            state: forcedFirstToolState,
+          });
+          if (!installed) {
+            logger.warn(
+              `[AgentClient] Could not install forced first tool "${releasableForcedFirstTool}" for auto-matched DOCX route; continuing with the trusted prompt guard.`,
+            );
+          }
         }
 
         this.run = run;

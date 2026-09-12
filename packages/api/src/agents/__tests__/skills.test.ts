@@ -46,6 +46,9 @@ import {
   injectManualSkillPrimes,
   injectSkillPrimes,
   collectFreshSkillPrimeNames,
+  createOneShotToolChoiceReleaseHandler,
+  installForcedFirstToolChoice,
+  resolveAutoMatchedFirstToolChoice,
   extractManualSkills,
   isSkillPrimeMessage,
   buildSkillPrimeContentParts,
@@ -55,6 +58,7 @@ import {
   MAX_PRIMED_SKILLS_PER_TURN,
   SKILL_MESSAGE_SOURCE,
   SKILL_TRIGGER_AUTO_MATCH,
+  DOCX_AUTO_MATCH_FIRST_TOOL,
 } from '../skills';
 import { extractInvokedSkillsFromPayload } from '../run';
 
@@ -2217,10 +2221,12 @@ describe('injectSkillPrimes', () => {
     expect(messages[1]).toBe(userRequest);
     expect(messages[2].content).toContain('[Trusted platform DOCX dispatch]');
     expect(messages[2].content).toContain(
-      'respond with no prose and call `read_file` exactly once',
+      'Respond with no prose and call `read_file` exactly once',
     );
     expect(messages[2].content).toContain('/mnt/data/docx/references/spec.md');
-    expect(messages[2].content).toContain('Perform semantic parsing only after that read returns');
+    expect(messages[2].content).toContain(
+      'inspect any attached source files before semantic parsing',
+    );
     expect(messages[2].content).not.toContain('Пилот единого прогноза продаж');
     expect(messages[2].content).not.toContain('guillemets');
     expect(String(messages[2].content).length).toBeLessThan(800);
@@ -2233,6 +2239,154 @@ describe('injectSkillPrimes', () => {
       }),
     );
     expect(result.indexTokenCountMap).toEqual({ 1: 19 });
+  });
+
+  it('selects read_file only for an auto-matched DOCX route', () => {
+    expect(resolveAutoMatchedFirstToolChoice([{ name: 'docx' }])).toBe(DOCX_AUTO_MATCH_FIRST_TOOL);
+    expect(resolveAutoMatchedFirstToolChoice([{ name: 'pptx' }])).toBeUndefined();
+    expect(resolveAutoMatchedFirstToolChoice()).toBeUndefined();
+  });
+
+  it('releases a forced first-tool model after the selected tool executes', async () => {
+    const forcedModel = { id: 'forced-model' };
+    const graph = { overrideModel: forcedModel };
+    const state = { model: forcedModel };
+    const handler = createOneShotToolChoiceReleaseHandler({
+      agentId: 'agent-docx',
+      toolName: DOCX_AUTO_MATCH_FIRST_TOOL,
+      state,
+    });
+
+    await handler.handle(
+      'on_tool_execute',
+      {
+        toolCalls: [
+          {
+            id: 'call_spec',
+            name: DOCX_AUTO_MATCH_FIRST_TOOL,
+            args: { file_path: '/mnt/data/docx/references/spec.md' },
+          },
+        ],
+        agentId: 'agent-docx',
+      } as never,
+      undefined,
+      graph as never,
+    );
+
+    expect(graph.overrideModel).toBeUndefined();
+    expect(state.model).toBeUndefined();
+  });
+
+  it('keeps the force armed when a different tool executes first', async () => {
+    const forcedModel = { id: 'forced-model' };
+    const graph = { overrideModel: forcedModel };
+    const state = { model: forcedModel };
+    const handler = createOneShotToolChoiceReleaseHandler({
+      agentId: 'agent-docx',
+      toolName: DOCX_AUTO_MATCH_FIRST_TOOL,
+      state,
+    });
+
+    await handler.handle(
+      'on_tool_execute',
+      {
+        toolCalls: [{ id: 'call_other', name: 'bash_tool', args: {} }],
+        agentId: 'agent-docx',
+      } as never,
+      undefined,
+      graph as never,
+    );
+
+    expect(graph.overrideModel).toBe(forcedModel);
+  });
+
+  it('does not release a primary-agent force for another agent batch', async () => {
+    const forcedModel = { id: 'forced-model' };
+    const graph = { overrideModel: forcedModel };
+    const state = { model: forcedModel };
+    const handler = createOneShotToolChoiceReleaseHandler({
+      agentId: 'agent-docx',
+      toolName: DOCX_AUTO_MATCH_FIRST_TOOL,
+      state,
+    });
+
+    await handler.handle(
+      'on_tool_execute',
+      {
+        toolCalls: [{ id: 'call_other_agent', name: DOCX_AUTO_MATCH_FIRST_TOOL, args: {} }],
+        agentId: 'agent-peer',
+      } as never,
+      undefined,
+      graph as never,
+    );
+
+    expect(graph.overrideModel).toBe(forcedModel);
+  });
+
+  it('installs a provider-native named choice when the requested tool is available', () => {
+    const state = {};
+    const graph = {
+      agentContexts: new Map([
+        [
+          'agent-docx',
+          {
+            provider: 'openrouter',
+            clientOptions: { apiKey: 'test', model: 'deepseek/deepseek-v4-flash-0731' },
+            getToolsForBinding: () => [
+              {
+                name: DOCX_AUTO_MATCH_FIRST_TOOL,
+                description: 'Read a file',
+                schema: {
+                  type: 'object',
+                  properties: { file_path: { type: 'string' } },
+                  required: ['file_path'],
+                },
+              },
+            ],
+          },
+        ],
+      ]),
+    };
+
+    expect(
+      installForcedFirstToolChoice({
+        graph: graph as never,
+        agentId: 'agent-docx',
+        toolName: DOCX_AUTO_MATCH_FIRST_TOOL,
+        state,
+      }),
+    ).toBe(true);
+    expect(
+      (graph as { overrideModel?: { defaultOptions?: { tool_choice?: string } } }).overrideModel
+        ?.defaultOptions?.tool_choice,
+    ).toBe(DOCX_AUTO_MATCH_FIRST_TOOL);
+    expect(state).toHaveProperty('model', (graph as { overrideModel?: unknown }).overrideModel);
+  });
+
+  it('does not install a forced model when the selected tool is unavailable', () => {
+    const state = {};
+    const graph = {
+      agentContexts: new Map([
+        [
+          'agent-docx',
+          {
+            provider: 'openrouter',
+            clientOptions: { apiKey: 'test', model: 'test' },
+            getToolsForBinding: () => [],
+          },
+        ],
+      ]),
+    };
+
+    expect(
+      installForcedFirstToolChoice({
+        graph: graph as never,
+        agentId: 'agent-docx',
+        toolName: DOCX_AUTO_MATCH_FIRST_TOOL,
+        state,
+      }),
+    ).toBe(false);
+    expect(graph).not.toHaveProperty('overrideModel');
   });
 
   it('does not append the DOCX route guard for manual-only invocation', () => {
