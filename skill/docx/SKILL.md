@@ -24,8 +24,8 @@ Keep the chat clean while authoring: call the required tools without prose progr
 
 ## First action
 
-- For a new document request without attached source files, the first assistant action must be the single documented `read_file` call for `/mnt/data/docx/references/spec.md`. Emit no reasoning, outline, fact ledger, paraphrase, or prose before that call.
-- When source files are attached, inspect each required source once, then read the specification once. Do not do semantic parsing until those reads finish.
+- For every request, the first assistant action must be the single documented `read_file` call for `/mnt/data/docx/references/spec.md`, including when source files are attached. Emit no reasoning, outline, fact ledger, paraphrase, or prose before that call.
+- After the specification read returns, inspect each required attached source once. Do not do semantic parsing until those reads finish.
 - The route has already selected this skill. Do not invoke `skill`, debate whether DOCX is appropriate, or narrate tool selection.
 
 ## Preserve the request
@@ -52,9 +52,9 @@ Keep the chat clean while authoring: call the required tools without prose progr
 
 ## Workflow
 
-1. Follow **First action**: inspect required source files if any, then read `/mnt/data/docx/references/spec.md` exactly once before reasoning about the request.
+1. Follow **First action**: read `/mnt/data/docx/references/spec.md` exactly once, then inspect required source files if any, before reasoning about the request.
 2. Record audience, purpose, evidence, constraints, locale, document type, filename, and the exact fact ledger internally. Draft only a short heading outline. For a memo, lead with the decision. For a report, lead with the executive summary. For an SOP, lead with purpose, scope, roles, and ordered steps.
-3. After the specification read succeeds, do not plan again or reinterpret the fact ledger: the next tool call must create the specification from the original request.
+3. After the specification and any required source reads succeed, do not plan again or reinterpret the fact ledger: the next tool call must create the specification from the original request.
 4. Write one complete UTF-8 JSON specification with the `ArtifactJob` and acceptance criteria to `/mnt/data/_qa_<stem>-spec.json` using `create_file`. The `_qa_` prefix keeps the working file out of user attachments. Keep it there across repair calls; never put reusable work in `/tmp`, because `/tmp` is empty on the next tool call.
 5. For a new document, use `sections`. Use `templatePath` plus `placeholders` to fill a template, or `inputPath` plus `edits` for a targeted revision. Never make the output path equal to an input path.
 6. Immediately after `create_file` succeeds, run the builder with `bash_tool`; do not re-read files, inspect source, restart planning, or emit prose first:
