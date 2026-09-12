@@ -6,7 +6,9 @@ import {
   ApprovalCardActions,
   ApprovalCardButton,
   ApprovalCardHeaderAction,
+  CARD_SLOT_CLASS,
 } from '~/components/Chat/Cards/ApprovalCard';
+import styles from '~/components/Chat/Cards/ApprovalCard.module.css';
 import { Maximize2 } from '~/components/icons';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -127,7 +129,7 @@ export default function ReportCard({
 
   return (
     <>
-      <div className="my-2 w-full">
+      <div className={CARD_SLOT_CLASS}>
         <ApprovalCardFrame
           variant="report"
           title={displayTitle}
@@ -139,7 +141,7 @@ export default function ReportCard({
               label={localize('com_ui_expand')}
               onClick={() => setOpen(true)}
             >
-              <Maximize2 className="size-3.5" aria-hidden="true" />
+              <Maximize2 className={styles.headActionIcon} aria-hidden="true" />
             </ApprovalCardHeaderAction>
           }
         >
