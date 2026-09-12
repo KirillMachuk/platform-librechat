@@ -1211,6 +1211,7 @@ const DOCX_BUILDER_PATH = '/mnt/data/docx/scripts/build_document.py';
 const DOCX_SPEC_PATH = '/mnt/data/docx/references/spec.md';
 const TRUSTED_CONTINUATION_PREFIX = '[Trusted platform continuation]';
 const MAX_CONTINUATION_REQUEST_CHARS = 8_000;
+const MAX_ARTIFACT_SPEC_CONTINUATION_BYTES = 512 * 1024;
 
 function currentUserRequestCue(req?: ServerRequest): string {
   const text = req?.body?.text?.trim();
@@ -1228,7 +1229,7 @@ function buildArtifactReadContinuation(filePath: string, req?: ServerRequest): s
     return `${TRUSTED_CONTINUATION_PREFIX} The preceding file is supporting material, not a new user request.${requestCue} The \`pptx\` skill is already active for this turn. The callable authoring tools \`create_file\`, \`edit_file\`, and \`bash_tool\` are attached to this run. Do not call \`skill\`, read this specification again, run another web search, inspect tool availability, or read the builder source. Continue the original user request now: write the JSON job under /mnt/data with \`create_file\`, then call \`bash_tool\` to run ${PPTX_BUILDER_PATH}. Do not ask the user to restate the task.`;
   }
   if (filePath === DOCX_SPEC_PATH) {
-    return `${TRUSTED_CONTINUATION_PREFIX} The preceding file is supporting material, not a new user request.${requestCue} The \`docx\` skill is already active for this turn. The callable authoring tools \`create_file\`, \`edit_file\`, and \`bash_tool\` are attached to this run. Do not call \`skill\`, read this specification again, inspect tool availability, or read the builder source. Continue the original user request now: write the JSON job under /mnt/data with \`create_file\`, then call \`bash_tool\` to run ${DOCX_BUILDER_PATH}. Do not ask the user to restate the task.`;
+    return `${TRUSTED_CONTINUATION_PREFIX} The preceding file is supporting material, not a new user request.${requestCue} The \`docx\` skill is already active for this turn. The callable authoring tools \`create_file\`, \`edit_file\`, and \`bash_tool\` are attached to this run. In a Russian request shaped like \`document for <audience> «<quoted phrase>»\`, the audience is not a person's name and the quoted phrase is the document title or subject unless the user explicitly identifies a person; ordinary nouns such as \`пилот\`, \`план\`, \`отчёт\`, and \`регламент\` remain concepts. Do not infer a sender or insert the current date when the user supplied neither. The builder automatically derives the running header from \`title\` and adds a localized footer with live page fields, so do not add \`header\`, \`footer\`, or \`pageNumbers\` keys. Do not call \`skill\`, read this specification again, inspect tool availability, read the builder source, restart planning, or reinterpret the fact ledger. Continue the original user request now: the next tool call must write the JSON job under /mnt/data with \`create_file\`; after it succeeds, call \`bash_tool\` to run ${DOCX_BUILDER_PATH}. Do not ask the user to restate the task.`;
   }
   if (
     filePath.startsWith('/mnt/data/') &&
@@ -1238,6 +1239,26 @@ function buildArtifactReadContinuation(filePath: string, req?: ServerRequest): s
     return `${TRUSTED_CONTINUATION_PREFIX} The preceding report is supporting material, not a new user request.${requestCue} Continue the original user request and apply the already-loaded skill's report-handling rule. Do not reconstruct the conversation or ask the user to restate the task.`;
   }
   return null;
+}
+
+function buildArtifactCreateContinuation(filePath: string, content: string): string | null {
+  if (
+    !/^\/mnt\/data\/_qa_[^/]+-spec\.json$/.test(filePath) ||
+    Buffer.byteLength(content, 'utf8') > MAX_ARTIFACT_SPEC_CONTINUATION_BYTES
+  ) {
+    return null;
+  }
+
+  try {
+    const spec = JSON.parse(content) as { job?: { format?: unknown } };
+    if (spec?.job?.format !== 'docx') {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
+  return `${TRUSTED_CONTINUATION_PREFIX} The DOCX specification is persisted. Do not restart planning, reinterpret the user's facts, inspect the builder source, or read or edit the specification before validation. Unless \`create_file\` itself reported an error, call \`bash_tool\` now to run ${DOCX_BUILDER_PATH} with this specification and the direct /mnt/data output named by \`job.filename\`. Use the builder and artifact report as the validation gate.`;
 }
 
 function lowercaseExtension(filePath: string): string {
@@ -2478,7 +2499,7 @@ async function handleSandboxCreateFileCall({
     return errorResult(tc, 'File already exists. Pass overwrite: true to replace.');
   }
 
-  return await writeSandboxTextForAuthoring({
+  const result = await writeSandboxTextForAuthoring({
     tc,
     options,
     req,
@@ -2488,6 +2509,11 @@ async function handleSandboxCreateFileCall({
     created: current.status === 'missing',
     sandboxContext,
   });
+  const continuation = buildArtifactCreateContinuation(filePath, content);
+  if (result.status === 'success' && continuation) {
+    result.content = `${String(result.content)}\n\n${continuation}`;
+  }
+  return result;
 }
 
 async function handleSandboxEditFileCall({

@@ -42,6 +42,12 @@ The builder accepts one UTF-8 JSON object. All paths are absolute sandbox paths.
 
 `outputPdf` defaults to `false`. Set it to `true` only when the user explicitly requests a PDF deliverable; the builder always performs its temporary PDF render for QA.
 
+## Automatic page furniture
+
+For a new document, the builder automatically creates a running header from `title` and a localized footer with live `PAGE` and `NUMPAGES` fields. The input contract has no `header`, `footer`, or `pageNumbers` keys: adding those undocumented fields does not customize the result. Put the intended running title in `title` and let the builder create the page furniture.
+
+Template filling and targeted editing preserve the source document's existing headers, footers, and page fields instead of replacing them.
+
 ## Content blocks
 
 Each section has a `heading`, optional `level` (`1` to `3`), and `blocks`:
