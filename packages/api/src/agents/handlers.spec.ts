@@ -2557,12 +2557,12 @@ describe('createToolExecuteHandler', () => {
       expect(result.content).toContain('[Trusted platform continuation]');
       expect(result.content).toContain('The `docx` skill is already active');
       expect(result.content).toContain('`create_file`, `edit_file`, and `bash_tool`');
-      expect(result.content).toContain('the document title or subject');
-      expect(result.content).toContain('`пилот`, `план`, `отчёт`, and `регламент`');
-      expect(result.content).toContain('Do not infer a sender or insert the current date');
+      expect(result.content).toContain('keep the stated recipient and quoted subject literal');
+      expect(result.content).toContain('leave an absent sender or date absent');
+      expect(result.content).toContain('Do not restate the request, compare interpretations');
       expect(result.content).toContain('localized footer with live page fields');
       expect(result.content).toContain('do not add `header`, `footer`, or `pageNumbers` keys');
-      expect(result.content).toContain('the next tool call must write the JSON job');
+      expect(result.content).toContain('The next action must be a `create_file` call');
       expect(result.content).toContain('/mnt/data/docx/scripts/build_document.py');
       expect(result.content).toContain(
         'Создай для генерального директора служебную записку «Пилот единого прогноза продаж» в DOCX и PDF без вымышленных фактов.',

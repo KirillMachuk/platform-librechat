@@ -2199,7 +2199,7 @@ describe('injectSkillPrimes', () => {
     expect((messages[0] as HumanMessage).content).toContain('pptx-body');
   });
 
-  it('places a fixed DOCX route guard after the real user request', () => {
+  it('places a fixed first-tool DOCX dispatch after the real user request', () => {
     const userRequest = new HumanMessage(
       'Создай служебную записку для генерального директора «Пилот единого прогноза продаж».',
     );
@@ -2215,12 +2215,15 @@ describe('injectSkillPrimes', () => {
     expect(messages).toHaveLength(3);
     expect(messages[0].content).toContain('docx-body');
     expect(messages[1]).toBe(userRequest);
-    expect(messages[2].content).toContain('[Trusted platform DOCX route]');
+    expect(messages[2].content).toContain('[Trusted platform DOCX dispatch]');
     expect(messages[2].content).toContain(
-      'A role followed by guillemets does not identify a person',
+      'respond with no prose and call `read_file` exactly once',
     );
     expect(messages[2].content).toContain('/mnt/data/docx/references/spec.md');
+    expect(messages[2].content).toContain('Perform semantic parsing only after that read returns');
     expect(messages[2].content).not.toContain('Пилот единого прогноза продаж');
+    expect(messages[2].content).not.toContain('guillemets');
+    expect(String(messages[2].content).length).toBeLessThan(800);
     expect((messages[2] as HumanMessage).additional_kwargs).toEqual(
       expect.objectContaining({
         isMeta: true,
