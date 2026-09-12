@@ -2360,7 +2360,7 @@ describe('injectSkillPrimes', () => {
       (graph as { overrideModel?: { defaultOptions?: { tool_choice?: string } } }).overrideModel
         ?.defaultOptions?.tool_choice,
     ).toBe(DOCX_AUTO_MATCH_FIRST_TOOL);
-    expect(state).toHaveProperty('model', graph.overrideModel);
+    expect(state).toHaveProperty('model', (graph as { overrideModel?: unknown }).overrideModel);
   });
 
   it('does not install a forced model when the selected tool is unavailable', () => {
