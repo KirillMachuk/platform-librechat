@@ -150,6 +150,7 @@ describe('ToolService - Action Capability Gating', () => {
       permissions: {
         [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: true },
         [PermissionTypes.FILE_SEARCH]: { [Permissions.USE]: true },
+        [PermissionTypes.RUN_CODE]: { [Permissions.USE]: true },
       },
     });
   });
@@ -312,6 +313,7 @@ describe('ToolService - Action Capability Gating', () => {
       });
 
       expect(result.codeExecutionAuthorized).toBe(true);
+      expect(mockLoadToolDefinitions.mock.calls[0][0].codeExecutionEnabled).toBe(true);
     });
 
     it('reports code execution as authorized in the full tool-loading path', async () => {
@@ -347,11 +349,12 @@ describe('ToolService - Action Capability Gating', () => {
       const result = await loadAgentTools({
         req,
         res: {},
-        agent: { id: 'agent_123', tools: [Tools.execute_code] },
+        agent: { id: 'agent_123', tools: [Tools.execute_code, 'calculator'] },
         definitionsOnly: true,
       });
 
       expect(result.codeExecutionAuthorized).toBe(false);
+      expect(mockLoadToolDefinitions.mock.calls[0][0].codeExecutionEnabled).toBe(false);
     });
 
     it('reports code execution as unauthorized in the full tool-loading path', async () => {
@@ -1245,6 +1248,78 @@ describe('ToolService - Action Capability Gating', () => {
       ]);
       expect(result.configurable.toolRegistry).toBe(toolRegistry);
       expect(result.configurable.ptcToolMap.size).toBe(0);
+    });
+
+    it('does not load any code execution tool when the role denies code execution', async () => {
+      const capabilities = [
+        AgentCapabilities.tools,
+        AgentCapabilities.programmatic_tools,
+        AgentCapabilities.execute_code,
+      ];
+      const req = createMockReq(capabilities);
+      const toolRegistry = new Map([
+        ['custom_tool', { name: 'custom_tool' }],
+        [AgentConstants.BASH_TOOL, { name: AgentConstants.BASH_TOOL }],
+        [Tools.execute_code, { name: Tools.execute_code }],
+      ]);
+      mockGetEndpointsConfig.mockResolvedValue(createEndpointsConfig(capabilities));
+      mockGetRoleByName.mockResolvedValue({
+        permissions: {
+          [PermissionTypes.RUN_CODE]: { [Permissions.USE]: false },
+        },
+      });
+
+      const result = await loadToolsForExecution({
+        req,
+        res: {},
+        agent: { id: 'agent_ptc', tools: [Tools.execute_code] },
+        toolNames: [
+          Constants.BASH_PROGRAMMATIC_TOOL_CALLING,
+          AgentConstants.BASH_TOOL,
+          Tools.execute_code,
+        ],
+        toolRegistry,
+        actionsEnabled: false,
+      });
+
+      expect(result.loadedTools.map((tool) => tool.name)).toEqual([]);
+      expect(result.configurable.toolRegistry).toBeUndefined();
+      expect(result.configurable.ptcToolMap).toBeUndefined();
+      expect(mockLoadToolsUtil).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when the execution-time role lookup throws', async () => {
+      const capabilities = [
+        AgentCapabilities.tools,
+        AgentCapabilities.programmatic_tools,
+        AgentCapabilities.execute_code,
+      ];
+      const req = createMockReq(capabilities);
+      const toolRegistry = new Map([
+        ['custom_tool', { name: 'custom_tool' }],
+        [AgentConstants.BASH_TOOL, { name: AgentConstants.BASH_TOOL }],
+        [Tools.execute_code, { name: Tools.execute_code }],
+      ]);
+      mockGetEndpointsConfig.mockResolvedValue(createEndpointsConfig(capabilities));
+      mockGetRoleByName.mockRejectedValue(new Error('mongo unreachable'));
+
+      const result = await loadToolsForExecution({
+        req,
+        res: {},
+        agent: { id: 'agent_ptc', tools: [Tools.execute_code] },
+        toolNames: [
+          Constants.BASH_PROGRAMMATIC_TOOL_CALLING,
+          AgentConstants.BASH_TOOL,
+          Tools.execute_code,
+        ],
+        toolRegistry,
+        actionsEnabled: false,
+      });
+
+      expect(result.loadedTools.map((tool) => tool.name)).toEqual([]);
+      expect(result.configurable.toolRegistry).toBeUndefined();
+      expect(result.configurable.ptcToolMap).toBeUndefined();
+      expect(mockLoadToolsUtil).not.toHaveBeenCalled();
     });
 
     it('passes run-scoped MCP tool definitions into PTC execution loading', async () => {

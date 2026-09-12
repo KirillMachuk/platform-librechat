@@ -623,9 +623,6 @@ async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, to
   const actionsEnabled = checkCapability(AgentCapabilities.actions);
   const deferredToolsEnabled = checkCapability(AgentCapabilities.deferred_tools);
   const programmaticToolsEnabled = enabledCapabilities.has(AgentCapabilities.programmatic_tools);
-  const codeExecutionEnabled =
-    agent.tools?.includes(Tools.execute_code) === true &&
-    enabledCapabilities.has(AgentCapabilities.execute_code);
   const hasMCPTools = agent.tools?.some((tool) => tool?.includes(Constants.mcp_delimiter));
   const mcpPermissionContext = createMCPPermissionContext(req);
   const canUseMCP = hasMCPTools ? await mcpPermissionContext.canUseServers(req.user) : true;
@@ -653,6 +650,7 @@ async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, to
     return true;
   });
   const codeExecutionAuthorized = filteredTools?.includes(Tools.execute_code) === true;
+  const codeExecutionEnabled = codeExecutionAuthorized;
 
   /**
    * A tool configured on the agent but dropped here never reaches the model and the
@@ -1590,9 +1588,14 @@ async function loadToolsForExecution({
   if (actionsEnabled === undefined) {
     actionsEnabled = enabledCapabilities.has(AgentCapabilities.actions);
   }
+  const { runCode: codeExecutionAuthorized } =
+    isPTCRequested || isCodeExecutionToolRequested
+      ? await resolveToolRolePermissions(req, agent?.tools)
+      : { runCode: false };
   const codeExecutionEnabled =
     enabledCapabilities?.has(AgentCapabilities.execute_code) === true &&
-    agent?.tools?.includes(Tools.execute_code) === true;
+    agent?.tools?.includes(Tools.execute_code) === true &&
+    codeExecutionAuthorized;
 
   const isPTC =
     isPTCRequested &&
