@@ -2393,6 +2393,30 @@ describe('createToolExecuteHandler', () => {
       expect(result.errorMessage).toContain('bash_tool');
     });
 
+    it('blocks Word builder source reads without calling the sandbox', async () => {
+      const readSandboxFile = jest.fn(async () => ({ content: 'builder source' }));
+      const handler = makeReadFileHandler({
+        codeEnvAvailable: true,
+        accessibleSkillIds: skillsInScope(),
+        readSandboxFile,
+      });
+
+      const [result] = await invokeHandler(handler, [
+        {
+          id: 'call_docx_builder_source',
+          name: Constants.READ_FILE,
+          args: { file_path: '/mnt/data/docx/scripts/build_document.py' },
+        },
+      ]);
+
+      expect(readSandboxFile).not.toHaveBeenCalled();
+      expect(result.status).toBe('error');
+      expect(result.errorMessage).toContain('[Trusted platform continuation]');
+      expect(result.errorMessage).toContain('platform-owned Word builder');
+      expect(result.errorMessage).toContain('original user request');
+      expect(result.errorMessage).toContain('bash_tool');
+    });
+
     it('appends a trusted task-continuation cue after reading the presentation spec', async () => {
       const readSandboxFile = jest.fn(async () => ({ content: '# Presentation spec\n' }));
       const handler = makeReadFileHandler({
@@ -2454,6 +2478,66 @@ describe('createToolExecuteHandler', () => {
       expect(result.content).toContain("already-loaded skill's report-handling rule");
       expect(result.content).toContain('Подготовь русскоязычную презентацию и приложи PPTX и PDF.');
       expect(result.content).not.toContain('If status is ready');
+    });
+
+    it('appends a trusted task-continuation cue after reading the Word specification', async () => {
+      const readSandboxFile = jest.fn(async () => ({ content: '# Word document spec\n' }));
+      const handler = makeReadFileHandler({
+        codeEnvAvailable: true,
+        accessibleSkillIds: skillsInScope(),
+        req: {
+          body: {
+            text: 'Создай служебную записку в DOCX и PDF без вымышленных фактов.',
+          },
+        },
+        readSandboxFile,
+      });
+
+      const [result] = await invokeHandler(handler, [
+        {
+          id: 'call_docx_spec',
+          name: Constants.READ_FILE,
+          args: { file_path: '/mnt/data/docx/references/spec.md' },
+        },
+      ]);
+
+      expect(result.status).toBe('success');
+      expect(result.content).toContain('# Word document spec');
+      expect(result.content).toContain('[Trusted platform continuation]');
+      expect(result.content).toContain('The `docx` skill is already active');
+      expect(result.content).toContain('`create_file`, `edit_file`, and `bash_tool`');
+      expect(result.content).toContain('/mnt/data/docx/scripts/build_document.py');
+      expect(result.content).toContain(
+        'Создай служебную записку в DOCX и PDF без вымышленных фактов.',
+      );
+    });
+
+    it('appends a trusted task-continuation cue after reading a Word artifact report', async () => {
+      const readSandboxFile = jest.fn(async () => ({ content: '{"status":"ready"}\n' }));
+      const handler = makeReadFileHandler({
+        codeEnvAvailable: true,
+        accessibleSkillIds: skillsInScope(),
+        req: {
+          body: {
+            text: 'Подготовь редактируемый документ и приложи DOCX и PDF.',
+          },
+        },
+        readSandboxFile,
+      });
+
+      const [result] = await invokeHandler(handler, [
+        {
+          id: 'call_docx_report',
+          name: Constants.READ_FILE,
+          args: { file_path: '/mnt/data/memo.docx.artifact-report.json' },
+        },
+      ]);
+
+      expect(result.status).toBe('success');
+      expect(result.content).toContain('[Trusted platform continuation]');
+      expect(result.content).toContain('supporting material, not a new user request');
+      expect(result.content).toContain("already-loaded skill's report-handling rule");
+      expect(result.content).toContain('Подготовь редактируемый документ и приложи DOCX и PDF.');
     });
 
     it('returns a clear error for /mnt/data/ when codeEnv is not available', async () => {

@@ -927,12 +927,10 @@ class AgentClient extends BaseClient {
       return;
     }
 
-    /** Forward the same `execute_code` capability gate the chat flow uses —
-     *  memory agents are unlikely to list `execute_code`, but if one does,
-     *  Phase 8 relies on this flag to expand the string into
-     *  `bash_tool` + `read_file` (pre-Phase 8 the legacy `execute_code`
-     *  tool registered unconditionally; without this passthrough the
-     *  memory path would silently lose code-execution tooling). */
+    /** Forward the same global `execute_code` capability gate the chat flow uses.
+     *  Role authorization remains a separate, mandatory result from ToolService;
+     *  this memory-only path has no tool loader and therefore fails closed instead
+     *  of expanding a configured `execute_code` string into sandbox tools. */
     const memoryCapabilities = new Set(appConfig?.endpoints?.[EModelEndpoint.agents]?.capabilities);
     const agent = await initializeAgent(
       {

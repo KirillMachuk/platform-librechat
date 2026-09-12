@@ -150,6 +150,7 @@ describe('ToolService - Action Capability Gating', () => {
       permissions: {
         [PermissionTypes.WEB_SEARCH]: { [Permissions.USE]: true },
         [PermissionTypes.FILE_SEARCH]: { [Permissions.USE]: true },
+        [PermissionTypes.RUN_CODE]: { [Permissions.USE]: true },
       },
     });
   });
@@ -299,6 +300,37 @@ describe('ToolService - Action Capability Gating', () => {
       expect(tools).toContain(Tools.execute_code);
     });
 
+    it('reports code execution as authorized only after the role gate passes', async () => {
+      setPermissions({ webSearch: true, fileSearch: true, runCode: true });
+      const req = createMockReq(toolCapabilities);
+      mockGetEndpointsConfig.mockResolvedValue(createEndpointsConfig(toolCapabilities));
+
+      const result = await loadAgentTools({
+        req,
+        res: {},
+        agent: { id: 'agent_123', tools: [Tools.execute_code] },
+        definitionsOnly: true,
+      });
+
+      expect(result.codeExecutionAuthorized).toBe(true);
+      expect(mockLoadToolDefinitions.mock.calls[0][0].codeExecutionEnabled).toBe(true);
+    });
+
+    it('reports code execution as authorized in the full tool-loading path', async () => {
+      setPermissions({ webSearch: true, fileSearch: true, runCode: true });
+      const req = createMockReq(toolCapabilities);
+      mockGetEndpointsConfig.mockResolvedValue(createEndpointsConfig(toolCapabilities));
+
+      const result = await loadAgentTools({
+        req,
+        res: {},
+        agent: { id: 'agent_123', tools: [Tools.execute_code] },
+        definitionsOnly: false,
+      });
+
+      expect(result.codeExecutionAuthorized).toBe(true);
+    });
+
     /** The toggle is hidden in the UI for a role without RUN_CODE, but hiding a control is
      *  not enforcing it: the flag rides in the request body, so the server has to check. */
     it('withholds code execution from a role that lost the permission', async () => {
@@ -307,6 +339,37 @@ describe('ToolService - Action Capability Gating', () => {
       const tools = await armTools([Tools.execute_code, 'calculator']);
 
       expect(tools).toEqual(['calculator']);
+    });
+
+    it('reports code execution as unauthorized when the role gate denies it', async () => {
+      setPermissions({ webSearch: true, fileSearch: true, runCode: false });
+      const req = createMockReq(toolCapabilities);
+      mockGetEndpointsConfig.mockResolvedValue(createEndpointsConfig(toolCapabilities));
+
+      const result = await loadAgentTools({
+        req,
+        res: {},
+        agent: { id: 'agent_123', tools: [Tools.execute_code, 'calculator'] },
+        definitionsOnly: true,
+      });
+
+      expect(result.codeExecutionAuthorized).toBe(false);
+      expect(mockLoadToolDefinitions.mock.calls[0][0].codeExecutionEnabled).toBe(false);
+    });
+
+    it('reports code execution as unauthorized in the full tool-loading path', async () => {
+      setPermissions({ webSearch: true, fileSearch: true, runCode: false });
+      const req = createMockReq(toolCapabilities);
+      mockGetEndpointsConfig.mockResolvedValue(createEndpointsConfig(toolCapabilities));
+
+      const result = await loadAgentTools({
+        req,
+        res: {},
+        agent: { id: 'agent_123', tools: [Tools.execute_code] },
+        definitionsOnly: false,
+      });
+
+      expect(result.codeExecutionAuthorized).toBe(false);
     });
 
     it('leaves tools without a role permission untouched', async () => {
@@ -1185,6 +1248,78 @@ describe('ToolService - Action Capability Gating', () => {
       ]);
       expect(result.configurable.toolRegistry).toBe(toolRegistry);
       expect(result.configurable.ptcToolMap.size).toBe(0);
+    });
+
+    it('does not load any code execution tool when the role denies code execution', async () => {
+      const capabilities = [
+        AgentCapabilities.tools,
+        AgentCapabilities.programmatic_tools,
+        AgentCapabilities.execute_code,
+      ];
+      const req = createMockReq(capabilities);
+      const toolRegistry = new Map([
+        ['custom_tool', { name: 'custom_tool' }],
+        [AgentConstants.BASH_TOOL, { name: AgentConstants.BASH_TOOL }],
+        [Tools.execute_code, { name: Tools.execute_code }],
+      ]);
+      mockGetEndpointsConfig.mockResolvedValue(createEndpointsConfig(capabilities));
+      mockGetRoleByName.mockResolvedValue({
+        permissions: {
+          [PermissionTypes.RUN_CODE]: { [Permissions.USE]: false },
+        },
+      });
+
+      const result = await loadToolsForExecution({
+        req,
+        res: {},
+        agent: { id: 'agent_ptc', tools: [Tools.execute_code] },
+        toolNames: [
+          Constants.BASH_PROGRAMMATIC_TOOL_CALLING,
+          AgentConstants.BASH_TOOL,
+          Tools.execute_code,
+        ],
+        toolRegistry,
+        actionsEnabled: false,
+      });
+
+      expect(result.loadedTools.map((tool) => tool.name)).toEqual([]);
+      expect(result.configurable.toolRegistry).toBeUndefined();
+      expect(result.configurable.ptcToolMap).toBeUndefined();
+      expect(mockLoadToolsUtil).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when the execution-time role lookup throws', async () => {
+      const capabilities = [
+        AgentCapabilities.tools,
+        AgentCapabilities.programmatic_tools,
+        AgentCapabilities.execute_code,
+      ];
+      const req = createMockReq(capabilities);
+      const toolRegistry = new Map([
+        ['custom_tool', { name: 'custom_tool' }],
+        [AgentConstants.BASH_TOOL, { name: AgentConstants.BASH_TOOL }],
+        [Tools.execute_code, { name: Tools.execute_code }],
+      ]);
+      mockGetEndpointsConfig.mockResolvedValue(createEndpointsConfig(capabilities));
+      mockGetRoleByName.mockRejectedValue(new Error('mongo unreachable'));
+
+      const result = await loadToolsForExecution({
+        req,
+        res: {},
+        agent: { id: 'agent_ptc', tools: [Tools.execute_code] },
+        toolNames: [
+          Constants.BASH_PROGRAMMATIC_TOOL_CALLING,
+          AgentConstants.BASH_TOOL,
+          Tools.execute_code,
+        ],
+        toolRegistry,
+        actionsEnabled: false,
+      });
+
+      expect(result.loadedTools.map((tool) => tool.name)).toEqual([]);
+      expect(result.configurable.toolRegistry).toBeUndefined();
+      expect(result.configurable.ptcToolMap).toBeUndefined();
+      expect(mockLoadToolsUtil).not.toHaveBeenCalled();
     });
 
     it('passes run-scoped MCP tool definitions into PTC execution loading', async () => {

@@ -1207,6 +1207,8 @@ const IMAGE_EXTENSIONS_FOR_HINT = new Set([
 
 const PPTX_BUILDER_PATH = '/mnt/data/pptx/scripts/build_presentation.py';
 const PPTX_SPEC_PATH = '/mnt/data/pptx/references/spec.md';
+const DOCX_BUILDER_PATH = '/mnt/data/docx/scripts/build_document.py';
+const DOCX_SPEC_PATH = '/mnt/data/docx/references/spec.md';
 const TRUSTED_CONTINUATION_PREFIX = '[Trusted platform continuation]';
 const MAX_CONTINUATION_REQUEST_CHARS = 8_000;
 
@@ -1220,12 +1222,19 @@ function currentUserRequestCue(req?: ServerRequest): string {
   return ` The current user request is ${JSON.stringify(request)}.`;
 }
 
-function buildPresentationReadContinuation(filePath: string, req?: ServerRequest): string | null {
+function buildArtifactReadContinuation(filePath: string, req?: ServerRequest): string | null {
   const requestCue = currentUserRequestCue(req);
   if (filePath === PPTX_SPEC_PATH) {
     return `${TRUSTED_CONTINUATION_PREFIX} The preceding file is supporting material, not a new user request.${requestCue} The \`pptx\` skill is already active for this turn. The callable authoring tools \`create_file\`, \`edit_file\`, and \`bash_tool\` are attached to this run. Do not call \`skill\`, read this specification again, run another web search, inspect tool availability, or read the builder source. Continue the original user request now: write the JSON job under /mnt/data with \`create_file\`, then call \`bash_tool\` to run ${PPTX_BUILDER_PATH}. Do not ask the user to restate the task.`;
   }
-  if (filePath.startsWith('/mnt/data/') && filePath.endsWith('.pptx.artifact-report.json')) {
+  if (filePath === DOCX_SPEC_PATH) {
+    return `${TRUSTED_CONTINUATION_PREFIX} The preceding file is supporting material, not a new user request.${requestCue} The \`docx\` skill is already active for this turn. The callable authoring tools \`create_file\`, \`edit_file\`, and \`bash_tool\` are attached to this run. Do not call \`skill\`, read this specification again, inspect tool availability, or read the builder source. Continue the original user request now: write the JSON job under /mnt/data with \`create_file\`, then call \`bash_tool\` to run ${DOCX_BUILDER_PATH}. Do not ask the user to restate the task.`;
+  }
+  if (
+    filePath.startsWith('/mnt/data/') &&
+    (filePath.endsWith('.pptx.artifact-report.json') ||
+      filePath.endsWith('.docx.artifact-report.json'))
+  ) {
     return `${TRUSTED_CONTINUATION_PREFIX} The preceding report is supporting material, not a new user request.${requestCue} Continue the original user request and apply the already-loaded skill's report-handling rule. Do not reconstruct the conversation or ask the user to restate the task.`;
   }
   return null;
@@ -1302,6 +1311,14 @@ async function handleSandboxFileFallback(
       errorMessage: `${TRUSTED_CONTINUATION_PREFIX} This is a platform-owned presentation builder, not task input. Do not inspect its source. Continue the original user request: use the documented spec, write the JSON job under /mnt/data, and call \`bash_tool\` to run this builder. Do not probe tools or ask the user to restate the task.`,
     };
   }
+  if (filePath === DOCX_BUILDER_PATH) {
+    return {
+      toolCallId: tc.id,
+      status: 'error',
+      content: '',
+      errorMessage: `${TRUSTED_CONTINUATION_PREFIX} This is a platform-owned Word builder, not task input. Do not inspect its source. Continue the original user request: use the documented spec, write the JSON job under /mnt/data, and call \`bash_tool\` to run this builder. Do not probe tools or ask the user to restate the task.`,
+    };
+  }
 
   const ext = lowercaseExtension(filePath);
   if (BINARY_EXTENSIONS_NEVER_READABLE.has(ext)) {
@@ -1371,7 +1388,7 @@ async function handleSandboxFileFallback(
     if (truncated) {
       numbered += `\n\n[truncated at ${MAX_READABLE_BYTES} bytes — use \`bash_tool\` (e.g. \`head -c\` / \`tail\`) to read the rest of "${filePath}"]`;
     }
-    const continuation = buildPresentationReadContinuation(filePath, req);
+    const continuation = buildArtifactReadContinuation(filePath, req);
     if (continuation) {
       numbered += `\n\n${continuation}`;
     }

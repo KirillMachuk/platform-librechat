@@ -1,5 +1,5 @@
-import { createAgentChatCompletion } from './service';
 import type { ChatCompletionDependencies } from './service';
+import { createAgentChatCompletion } from './service';
 
 jest.mock('@librechat/data-schemas', () => ({
   logger: {
@@ -103,5 +103,22 @@ describe('createAgentChatCompletion - MCP permission user propagation', () => {
     // No role present → the runtime MCP check fails closed.
     expect(streamConfig.configurable?.user).toEqual({ id: 'api-user' });
     expect(streamConfig.configurable?.user).not.toHaveProperty('role');
+  });
+
+  it('accepts and forwards an authorization-aware tool loader', async () => {
+    const loadAgentTools: NonNullable<ChatCompletionDependencies['loadAgentTools']> = jest
+      .fn()
+      .mockResolvedValue({
+        tools: [],
+        toolContextMap: {},
+        codeExecutionAuthorized: true,
+      });
+    deps.loadAgentTools = loadAgentTools;
+
+    await createAgentChatCompletion(createMockReq(), createMockRes(), deps);
+
+    expect(deps.initializeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ loadTools: loadAgentTools }),
+    );
   });
 });
