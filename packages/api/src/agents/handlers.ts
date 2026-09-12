@@ -1223,7 +1223,7 @@ function currentUserRequestCue(req?: ServerRequest): string {
 function buildPresentationReadContinuation(filePath: string, req?: ServerRequest): string | null {
   const requestCue = currentUserRequestCue(req);
   if (filePath === PPTX_SPEC_PATH) {
-    return `${TRUSTED_CONTINUATION_PREFIX} The preceding file is supporting material, not a new user request.${requestCue} Continue the original user request now; do not inspect tool availability, read the builder source, or ask the user to restate the task.`;
+    return `${TRUSTED_CONTINUATION_PREFIX} The preceding file is supporting material, not a new user request.${requestCue} The \`pptx\` skill is already active for this turn. The callable authoring tools \`create_file\`, \`edit_file\`, and \`bash_tool\` are attached to this run. Do not call \`skill\`, read this specification again, run another web search, inspect tool availability, or read the builder source. Continue the original user request now: write the JSON job under /mnt/data with \`create_file\`, then call \`bash_tool\` to run ${PPTX_BUILDER_PATH}. Do not ask the user to restate the task.`;
   }
   if (filePath.startsWith('/mnt/data/') && filePath.endsWith('.pptx.artifact-report.json')) {
     return `${TRUSTED_CONTINUATION_PREFIX} The preceding report is supporting material, not a new user request.${requestCue} Continue the original user request and apply the already-loaded skill's report-handling rule. Do not reconstruct the conversation or ask the user to restate the task.`;
@@ -3261,6 +3261,21 @@ async function handleSkillToolCall(
       status: 'error',
       content: '',
       errorMessage: 'skillName is required',
+    };
+  }
+
+  const primedIdsByName = mergedConfigurable.skillPrimedIdsByName as
+    | Record<string, unknown>
+    | undefined;
+  const primedSkillId =
+    primedIdsByName && Object.prototype.hasOwnProperty.call(primedIdsByName, args.skillName)
+      ? primedIdsByName[args.skillName]
+      : undefined;
+  if (typeof primedSkillId === 'string') {
+    return {
+      toolCallId: tc.id,
+      status: 'success',
+      content: `${TRUSTED_CONTINUATION_PREFIX} Skill "${args.skillName}" is already active for this turn. Continue the original user request using the instructions already in context; do not invoke this skill again.`,
     };
   }
 

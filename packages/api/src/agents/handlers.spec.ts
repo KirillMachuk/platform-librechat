@@ -663,6 +663,35 @@ describe('createToolExecuteHandler', () => {
       expect(result.content).toContain('normal-skill');
     });
 
+    it('does not reload a skill that is already primed for the current turn', async () => {
+      const { Types } = jest.requireActual<typeof import('mongoose')>('mongoose');
+      const primedId = new Types.ObjectId();
+      const getSkillByName = jest.fn();
+      const loadTools: ToolExecuteOptions['loadTools'] = jest.fn(async () => ({
+        loadedTools: [],
+        configurable: {
+          accessibleSkillIds: [primedId],
+          skillPrimedIdsByName: { pptx: primedId.toString() },
+        },
+      }));
+      const handler = createToolExecuteHandler({ loadTools, getSkillByName });
+
+      const [result] = await invokeHandler(handler, [
+        {
+          id: 'call_skill_already_primed',
+          name: Constants.SKILL_TOOL,
+          args: { skillName: 'pptx' },
+        },
+      ]);
+
+      expect(getSkillByName).not.toHaveBeenCalled();
+      expect(result.status).toBe('success');
+      expect(result.content).toContain('[Trusted platform continuation]');
+      expect(result.content).toContain('already active');
+      expect(result.content).toContain('original user request');
+      expect(result.injectedMessages).toBeUndefined();
+    });
+
     it('skill tool calls getSkillByName with preferModelInvocable (and NOT preferUserInvocable, so model-only skills still resolve)', async () => {
       /* The skill tool should resolve to the cataloged model-invocable doc
          when a same-name disabled duplicate exists — passing
@@ -2390,6 +2419,9 @@ describe('createToolExecuteHandler', () => {
       expect(result.content).toContain('[Trusted platform continuation]');
       expect(result.content).toContain('supporting material, not a new user request');
       expect(result.content).toContain('original user request');
+      expect(result.content).toContain('The `pptx` skill is already active');
+      expect(result.content).toContain('`create_file`, `edit_file`, and `bash_tool`');
+      expect(result.content).toContain('Do not call `skill`, read this specification again');
       expect(result.content).toContain(
         'Сделай презентацию на 5 слайдов о погоде в Минске в августе 2026.',
       );

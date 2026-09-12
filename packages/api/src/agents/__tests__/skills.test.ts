@@ -897,6 +897,49 @@ describe('injectSkillCatalog', () => {
     expect(agent.additional_instructions).toContain('desc-my-skill');
   });
 
+  it('omits already-primed skills from the invocable catalog while keeping them readable', async () => {
+    const pptx = makeSkill('pptx', userObjectId);
+    const research = makeSkill('research', userObjectId);
+    const listSkillsByAccess = buildPager([[pptx, research]]);
+    const agent = makeAgent();
+    const result = await injectSkillCatalog(
+      baseParams({
+        listSkillsByAccess,
+        agent,
+        alreadyPrimedSkillNames: new Set(['pptx']),
+      }),
+    );
+
+    expect(result.skillCount).toBe(1);
+    expect(agent.additional_instructions).not.toContain('desc-pptx');
+    expect(agent.additional_instructions).toContain('desc-research');
+    expect(result.activeSkillIds.map((id) => id.toString()).sort()).toEqual(
+      [pptx._id.toString(), research._id.toString()].sort(),
+    );
+    expect(result.activeSkillNames).toEqual(new Set(['pptx', 'research']));
+  });
+
+  it('omits the skill tool when every model-visible skill is already primed', async () => {
+    const pptx = makeSkill('pptx', userObjectId);
+    const listSkillsByAccess = buildPager([[pptx]]);
+    const agent = makeAgent();
+    const result = await injectSkillCatalog(
+      baseParams({
+        listSkillsByAccess,
+        agent,
+        alreadyPrimedSkillNames: new Set(['pptx']),
+      }),
+    );
+
+    expect(result.skillCount).toBe(0);
+    expect(agent.additional_instructions).toBeUndefined();
+    expect(result.activeSkillIds.map((id) => id.toString())).toEqual([pptx._id.toString()]);
+    expect(result.activeSkillNames).toEqual(new Set(['pptx']));
+    const definedNames = (result.toolDefinitions ?? []).map((definition) => definition.name);
+    expect(definedNames).toContain('read_file');
+    expect(definedNames).not.toContain('skill');
+  });
+
   it('honors a configured maxCatalogSkills below the default hard limit', async () => {
     const first = makeSkill('first-skill', userObjectId);
     const second = makeSkill('second-skill', userObjectId);
@@ -2134,11 +2177,24 @@ describe('injectSkillPrimes', () => {
 
     expect(messages.map((message) => (message as HumanMessage).content)).toEqual([
       'legal-body',
-      'pptx-body',
+      '[Platform skill state: Skill "pptx" is already active for this turn. Do not invoke the `skill` tool for it again; follow the instructions below.]\n\npptx-body',
       'brand-body',
       'create a deck',
     ]);
     expect((messages[1] as HumanMessage).additional_kwargs.trigger).toBe('auto-match');
+  });
+
+  it('marks an auto-matched skill as already active in model-visible content', () => {
+    const messages = [new HumanMessage('create a deck')];
+    injectSkillPrimes({
+      initialMessages: messages,
+      indexTokenCountMap: undefined,
+      autoMatchedSkillPrimes: [autoMatched('pptx', 'pptx-body')],
+    });
+
+    expect((messages[0] as HumanMessage).content).toContain('Skill "pptx" is already active');
+    expect((messages[0] as HumanMessage).content).toContain('Do not invoke the `skill` tool');
+    expect((messages[0] as HumanMessage).content).toContain('pptx-body');
   });
 
   it('keeps a manual selection when it duplicates an auto-matched skill', () => {

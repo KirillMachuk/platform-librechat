@@ -71,7 +71,8 @@ export interface RegisterCodeExecutionToolsParams {
    *
    * Callers:
    * - `initializeAgent` passes `true` iff the `execute_code` capability
-   *   is enabled for the run.
+   *   is enabled and the effective agent + authorized-skill tool union
+   *   requests code execution for the run.
    * - `injectSkillCatalog` passes whatever `codeEnvAvailable` resolved to
    *   for the run.
    *

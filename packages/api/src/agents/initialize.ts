@@ -270,13 +270,12 @@ export type InitializedAgent = Agent & {
   /**
    * Whether the code-execution environment is available *for this agent*.
    * Narrower than the incoming `params.codeEnvAvailable` admin flag — this
-   * is `admin_capability_enabled && agent.tools.includes('execute_code')`,
-   * computed once here so downstream code (`injectSkillCatalog`,
-   * `enrichWithSkillConfigurable`, `primeInvokedSkills`) doesn't have to
-   * re-scan the tool list on every runtime handler invocation.
-   * Authoritative for both persisted and ephemeral agents: the
-   * ephemeral-agent toggle is reconciled into `agent.tools` upstream
-   * (`packages/api/src/agents/added.ts`), so the check is uniform.
+   * is `admin_capability_enabled && requested_tools.includes('execute_code')`,
+   * where requested tools include the agent baseline plus `allowed-tools`
+   * from authorized skill primes. Computed once here so downstream code
+   * (`injectSkillCatalog`, `enrichWithSkillConfigurable`,
+   * `primeInvokedSkills`) doesn't have to re-scan the effective tool list on
+   * every runtime handler invocation.
    */
   codeEnvAvailable: boolean;
   /** Whether host-side skill file authoring is available for this agent/run. */
@@ -861,6 +860,14 @@ export async function initializeAgent(
   let manualSkillPrimes: ResolvedManualSkill[] | undefined;
   let autoMatchedSkillPrimes: ResolvedAutoMatchedSkill[] | undefined;
   let alwaysApplySkillPrimes: ResolvedAlwaysApplySkill[] | undefined;
+  /**
+   * Only auto-matched skills are removed from the model-invocable catalog:
+   * their platform-selected workflow is already active and exposing the same
+   * target invites a redundant `skill` call. Manual and always-apply skills
+   * retain the established catalog contract because callers may still invoke
+   * them explicitly during the turn.
+   */
+  const autoMatchedSkillNames = new Set<string>();
   let extraAllowedToolNames: string[] = [];
   let perSkillExtras: Map<string, string[]> = new Map();
   if (hasSkillAccess) {
@@ -961,6 +968,9 @@ export async function initializeAgent(
       ...(autoMatchedSkillPrimes ?? []),
       ...(alwaysApplySkillPrimes ?? []),
     ];
+    for (const prime of autoMatchedSkillPrimes ?? []) {
+      autoMatchedSkillNames.add(prime.name);
+    }
     if (primesForUnion.length > 0) {
       const union = unionPrimeAllowedTools({
         primes: primesForUnion,
@@ -1144,7 +1154,7 @@ export async function initializeAgent(
 
   /**
    * Unify code-execution tools around `bash_tool` + `read_file` when the
-   * agent explicitly lists `execute_code` in its tools and the admin
+   * agent or an authorized skill prime requests `execute_code` and the admin
    * capability is enabled for the run. The legacy `execute_code` tool
    * (backed by `CodeExecutionToolDefinition` + `primeCodeFiles`) is no
    * longer registered; the string `execute_code` on the agent document
@@ -1154,8 +1164,11 @@ export async function initializeAgent(
    * this initializer when skill files are actually available.
    *
    * `effectiveCodeEnvAvailable` is the per-agent truth: the admin-level
-   * `params.codeEnvAvailable` AND the agent actually asking for code
-   * execution. Computed once and reused by the expansion block below,
+   * `params.codeEnvAvailable` AND the effective tool union actually asking
+   * for code execution. This includes `allowed-tools: execute_code` on a
+   * resolved manual, auto-matched, or always-apply skill; otherwise the skill
+   * would be primed while its documented `bash_tool` stayed invisible to the
+   * model. Computed once and reused by the expansion block below,
    * the `injectSkillCatalog` call, and the returned `InitializedAgent`.
    * Downstream handlers (runtime `configurable`, `primeInvokedSkills`)
    * read it from the stored per-agent value so a skills-only agent
@@ -1170,8 +1183,9 @@ export async function initializeAgent(
    * code-only description to the skill-aware description without adding a
    * duplicate — exactly one copy of each tool reaches the LLM.
    */
-  const agentRequestsCodeExec = (agent.tools ?? []).includes(Tools.execute_code);
-  const effectiveCodeEnvAvailable = params.codeEnvAvailable === true && agentRequestsCodeExec;
+  const effectiveToolsRequestCodeExec = requestedToolNames.includes(Tools.execute_code);
+  const effectiveCodeEnvAvailable =
+    params.codeEnvAvailable === true && effectiveToolsRequestCodeExec;
   if (effectiveCodeEnvAvailable) {
     const codeExecResult = registerCodeExecutionTools({
       toolRegistry,
@@ -1181,7 +1195,7 @@ export async function initializeAgent(
       enableToolOutputReferences: effectiveCodeEnvAvailable,
     });
     toolDefinitions = codeExecResult.toolDefinitions;
-  } else if (agentRequestsCodeExec) {
+  } else if (effectiveToolsRequestCodeExec) {
     /**
      * Agent asked for `execute_code` but the admin-level gate is off —
      * surface a debug log so operators tracing "why isn't code
@@ -1191,7 +1205,7 @@ export async function initializeAgent(
      * the tool silently vanishes from the LLM's definitions with no trace.
      */
     logger.debug(
-      `[initializeAgent] Agent "${agent.id}" requests execute_code but codeEnvAvailable=${String(params.codeEnvAvailable)}; skipping bash_tool + read_file registration.`,
+      `[initializeAgent] Agent "${agent.id}" or an authorized skill requests execute_code but codeEnvAvailable=${String(params.codeEnvAvailable)}; skipping bash_tool + read_file registration.`,
     );
   }
 
@@ -1335,6 +1349,7 @@ export async function initializeAgent(
       skillStates: params.skillStates,
       defaultActiveOnShare: params.defaultActiveOnShare,
       maxCatalogSkills: getMaxCatalogSkills(req),
+      alreadyPrimedSkillNames: autoMatchedSkillNames,
     });
     toolDefinitions = skillResult.toolDefinitions;
     skillCount = skillResult.skillCount;
