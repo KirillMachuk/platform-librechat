@@ -1152,10 +1152,25 @@ describe('initializeAgent — manual skill priming (Phase 3)', () => {
     const getSkillByName: InitializeAgentDbMethods['getSkillByName'] = jest.fn().mockResolvedValue({
       _id: skillId,
       name: 'pptx',
+      description: 'Create presentation files.',
       body: '# PPTX workflow',
       author: ownerAuthor,
       allowedTools: ['execute_code'],
     });
+    const listSkillsByAccess: InitializeAgentDbMethods['listSkillsByAccess'] = jest
+      .fn()
+      .mockResolvedValue({
+        skills: [
+          {
+            _id: skillId,
+            name: 'pptx',
+            description: 'Create presentation files.',
+            author: ownerAuthor,
+          },
+        ],
+        has_more: false,
+        after: null,
+      });
 
     const result = await initializeAgent(
       {
@@ -1169,7 +1184,7 @@ describe('initializeAgent — manual skill priming (Phase 3)', () => {
         accessibleSkillIds: [skillId],
         autoMatchedSkills: ['pptx'],
       },
-      { ...db, listSkillsByAccess: emptyListSkillsByAccess, getSkillByName },
+      { ...db, listSkillsByAccess, getSkillByName },
     );
 
     expect(result.manualSkillPrimes).toBeUndefined();
@@ -1182,6 +1197,8 @@ describe('initializeAgent — manual skill priming (Phase 3)', () => {
       },
     ]);
     expect(loadTools.mock.calls[0][0].tools).toEqual(['web_search', 'execute_code']);
+    expect(result.toolDefinitions?.map((definition) => definition.name)).not.toContain('skill');
+    expect(result.activeSkillNames).toEqual(new Set(['pptx']));
   });
 
   it('does not let an auto-matched skill bypass the disabled code-execution capability', async () => {
@@ -1221,6 +1238,48 @@ describe('initializeAgent — manual skill priming (Phase 3)', () => {
     expect(names).not.toContain('bash_tool');
     expect(names).not.toContain('read_file');
     expect(result.codeEnvAvailable).toBe(false);
+  });
+
+  it('expands execute_code contributed by an auto-matched skill when the capability is enabled', async () => {
+    const { agent, req, res, loadTools, db } = createMocks();
+    agent.tools = ['web_search'];
+    const { Types } = await import('mongoose');
+    const skillId = new Types.ObjectId();
+    const ownerAuthor = {
+      toString: () => req.user?.id,
+    } as unknown as import('mongoose').Types.ObjectId;
+    const getSkillByName: InitializeAgentDbMethods['getSkillByName'] = jest.fn().mockResolvedValue({
+      _id: skillId,
+      name: 'pptx',
+      body: '# PPTX workflow',
+      author: ownerAuthor,
+      allowedTools: ['execute_code'],
+    });
+
+    const result = await initializeAgent(
+      {
+        req,
+        res,
+        agent,
+        loadTools,
+        endpointOption: { endpoint: EModelEndpoint.agents },
+        allowedProviders: new Set([Providers.OPENAI]),
+        isInitialAgent: true,
+        accessibleSkillIds: [skillId],
+        autoMatchedSkills: ['pptx'],
+        codeEnvAvailable: true,
+      },
+      { ...db, listSkillsByAccess: emptyListSkillsByAccess, getSkillByName },
+    );
+
+    const names = (result.toolDefinitions ?? []).map((definition) => definition.name);
+    expect(loadTools.mock.calls[0][0].tools).toEqual(['web_search', 'execute_code']);
+    expect(names).toContain('bash_tool');
+    expect(names).toContain('read_file');
+    expect(names).not.toContain('skill');
+    expect(names).not.toContain('execute_code');
+    expect(result.codeEnvAvailable).toBe(true);
+    expect(result.skillCount).toBe(0);
   });
 
   it('returns empty array when every manual skill is unresolvable (no primes, no throw)', async () => {
@@ -1781,10 +1840,11 @@ describe('initializeAgent — execute_code capability expansion', () => {
 
   it('narrows codeEnvAvailable on InitializedAgent to the per-agent effective value', async () => {
     /* The admin-level `params.codeEnvAvailable` is AND-ed with
-       `agent.tools.includes('execute_code')` and stored on the returned
-       agent. Downstream runtime code (JS controllers, `primeInvokedSkills`)
-       reads the narrowed value from the stored context so skills-only
-       agents never accidentally trip sandbox-side logic. */
+       the effective agent + authorized-skill tool union requesting
+       `execute_code`, then stored on the returned agent. Downstream runtime
+       code (JS controllers, `primeInvokedSkills`) reads the narrowed value
+       from the stored context so unrelated skills never accidentally trip
+       sandbox-side logic. */
     const { agent, req, res, loadTools, db } = createMocks();
 
     // Admin cap on, agent asks for execute_code → effective true.

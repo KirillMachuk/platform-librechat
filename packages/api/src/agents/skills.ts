@@ -335,6 +335,8 @@ export interface InjectSkillCatalogParams {
   defaultActiveOnShare?: boolean;
   /** Admin-configured cap on the model-visible catalog. Defaults to 100. */
   maxCatalogSkills?: number;
+  /** Skills whose instructions are already present in this turn's context. */
+  alreadyPrimedSkillNames?: Set<string>;
 }
 
 export interface InjectSkillCatalogResult {
@@ -387,6 +389,7 @@ export async function injectSkillCatalog(
     skillStates,
     defaultActiveOnShare = false,
     maxCatalogSkills,
+    alreadyPrimedSkillNames,
   } = params;
   const catalogLimit = normalizeSkillCatalogLimit(maxCatalogSkills);
 
@@ -406,8 +409,8 @@ export async function injectSkillCatalog(
 
   const activeSkills: SkillSummary[] = [];
   /**
-   * Catalog cap counts only model-visible (non-`disable-model-invocation`)
-   * skills. Counting against the merged active set would let a tenant
+   * Catalog cap counts only model-visible, not-yet-primed
+   * (non-`disable-model-invocation`) skills. Counting against the merged active set would let a tenant
    * with many disabled skills near the top of the cursor exhaust the
    * 100-slot quota before any invocable skills got scanned — the catalog
    * could end up empty even though invocable skills exist further down
@@ -441,7 +444,7 @@ export async function injectSkillCatalog(
        */
       if (isActive(skill)) {
         activeSkills.push(skill);
-        if (skill.disableModelInvocation !== true) {
+        if (skill.disableModelInvocation !== true && !alreadyPrimedSkillNames?.has(skill.name)) {
           visibleCount += 1;
         }
       }
@@ -476,7 +479,10 @@ export async function injectSkillCatalog(
    * can't reach any of them anyway — registering the skill tool would
    * burn context tokens for nothing.
    */
-  const catalogVisibleSkills = activeSkills.filter((s) => s.disableModelInvocation !== true);
+  const modelInvocableSkills = activeSkills.filter((s) => s.disableModelInvocation !== true);
+  const catalogVisibleSkills = modelInvocableSkills.filter(
+    (s) => !alreadyPrimedSkillNames?.has(s.name),
+  );
 
   /**
    * Resolve same-name collisions in the runtime ACL set: when an invocable
@@ -494,7 +500,7 @@ export async function injectSkillCatalog(
    * `getSkillByName` picks the newest (deterministic).
    */
   const invocableNames = new Set<string>();
-  for (const s of catalogVisibleSkills) {
+  for (const s of modelInvocableSkills) {
     invocableNames.add(s.name);
   }
   const executableSkills = activeSkills.filter(
@@ -1256,9 +1262,13 @@ export function injectSkillPrimes(params: InjectSkillPrimesParams): InjectSkillP
     indexTokenCountMap = shifted;
   }
 
-  const buildPrime = (p: { name: string; body: string }, trigger: SkillTrigger): HumanMessage =>
-    new HumanMessage({
-      content: p.body,
+  const buildPrime = (p: { name: string; body: string }, trigger: SkillTrigger): HumanMessage => {
+    const content =
+      trigger === SKILL_TRIGGER_AUTO_MATCH
+        ? `[Platform skill state: Skill "${p.name}" is already active for this turn. Do not invoke the \`skill\` tool for it again; follow the instructions below.]\n\n${p.body}`
+        : p.body;
+    return new HumanMessage({
+      content,
       additional_kwargs: {
         isMeta: true,
         source: SKILL_MESSAGE_SOURCE,
@@ -1266,6 +1276,7 @@ export function injectSkillPrimes(params: InjectSkillPrimesParams): InjectSkillP
         skillName: p.name,
       },
     });
+  };
 
   const primeMessages: HumanMessage[] = [
     ...alwaysApply.map((p) => buildPrime(p, SKILL_TRIGGER_ALWAYS_APPLY)),
