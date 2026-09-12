@@ -53,6 +53,8 @@ import {
   MAX_MANUAL_SKILLS,
   MAX_ALWAYS_APPLY_SKILLS,
   MAX_PRIMED_SKILLS_PER_TURN,
+  SKILL_MESSAGE_SOURCE,
+  SKILL_TRIGGER_AUTO_MATCH,
 } from '../skills';
 import { extractInvokedSkillsFromPayload } from '../run';
 
@@ -2195,6 +2197,52 @@ describe('injectSkillPrimes', () => {
     expect((messages[0] as HumanMessage).content).toContain('Skill "pptx" is already active');
     expect((messages[0] as HumanMessage).content).toContain('Do not invoke the `skill` tool');
     expect((messages[0] as HumanMessage).content).toContain('pptx-body');
+  });
+
+  it('places a fixed DOCX route guard after the real user request', () => {
+    const userRequest = new HumanMessage(
+      'Создай служебную записку для генерального директора «Пилот единого прогноза продаж».',
+    );
+    const messages = [userRequest];
+
+    const result = injectSkillPrimes({
+      initialMessages: messages,
+      indexTokenCountMap: { 0: 19 },
+      autoMatchedSkillPrimes: [autoMatched('docx', 'docx-body')],
+    });
+
+    expect(result.inserted).toBe(1);
+    expect(messages).toHaveLength(3);
+    expect(messages[0].content).toContain('docx-body');
+    expect(messages[1]).toBe(userRequest);
+    expect(messages[2].content).toContain('[Trusted platform DOCX route]');
+    expect(messages[2].content).toContain(
+      'A role followed by guillemets does not identify a person',
+    );
+    expect(messages[2].content).toContain('/mnt/data/docx/references/spec.md');
+    expect(messages[2].content).not.toContain('Пилот единого прогноза продаж');
+    expect((messages[2] as HumanMessage).additional_kwargs).toEqual(
+      expect.objectContaining({
+        isMeta: true,
+        source: SKILL_MESSAGE_SOURCE,
+        trigger: SKILL_TRIGGER_AUTO_MATCH,
+        skillName: 'docx',
+      }),
+    );
+    expect(result.indexTokenCountMap).toEqual({ 1: 19 });
+  });
+
+  it('does not append the DOCX route guard for manual-only invocation', () => {
+    const messages = [new HumanMessage('create a document')];
+
+    injectSkillPrimes({
+      initialMessages: messages,
+      indexTokenCountMap: undefined,
+      manualSkillPrimes: [manual('docx', 'docx-body')],
+    });
+
+    expect(messages).toHaveLength(2);
+    expect(messages[1].content).toBe('create a document');
   });
 
   it('keeps a manual selection when it duplicates an auto-matched skill', () => {
