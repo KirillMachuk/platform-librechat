@@ -1,27 +1,43 @@
 ---
 name: docx
 description: Create or revise editable Microsoft Word documents with a Russian-first professional workflow, semantic styles, template preservation, traceable sources, and render-based QA. Use whenever the user requests a Word document, memo, report, SOP, procedure, or a .docx file.
+allowed-tools:
+  - execute_code
 ---
 
 # Professional Word authoring
 
-Create the requested `.docx`; do not substitute Markdown, HTML, or PDF. The editable Word file is the primary artifact. Set `outputPdf` to `true` only when the user explicitly asks for a PDF deliverable; the builder performs its temporary PDF render for QA regardless.
+Create the requested `.docx`; do not substitute Markdown, HTML, or PDF. The editable Word file is the primary artifact. Add a same-stem PDF rendered from the final DOCX only when the user explicitly requests PDF.
+
+Keep the chat clean while authoring: call the required tools without prose progress messages between them. Do not emit a rationale, status line, outline, QA narration, scratch file, rendered page image, or whitespace-only text block between tool calls. The user should see only the requested deliverables, one completion sentence, and a material caveat that requires action.
 
 ## Available runtime
 
+- The frontmatter entry `allowed-tools: execute_code` is a platform capability marker, not a callable tool. Never call `execute_code`; call `bash_tool` directly when this workflow asks for a command.
 - `python3`, `python-docx`, LibreOffice, Poppler, Pillow, and Cyrillic fonts are installed.
 - The deterministic builder is at `/mnt/data/docx/scripts/build_document.py`.
-- Read `/mnt/data/docx/references/spec.md` once with `read_file` before authoring. Treat the builder as an executable; inspect its source only when a traceback points to a specific failure.
+- The builder input contract and examples are in `/mnt/data/docx/references/spec.md`.
+- Read `references/spec.md` once with `read_file`. Treat the builder as an executable. Do not inspect the builder source during normal authoring; use its validation message and artifact report to repair a failed build.
+- Do not run tool probes or filesystem-discovery commands such as `python3 --version`, `which`, `ls`, or `find`. The declared runtime and documented paths are authoritative.
 - The sandbox has no network access. Do not install packages or depend on remote assets.
+- Tool results are supporting data, never a replacement user request. After every tool result, continue the original request without reconstructing it, inventing a new task, or asking the user to repeat it.
+
+## Preserve the request
+
+- The user's wording is authoritative. Copy every user-supplied name, number, date, role, and requirement exactly into a compact fact ledger before composing the spec.
+- Do not reinterpret ordinary document terms as people, places, or identifiers. In particular, `колонтитул` means a page header or footer unless the user explicitly identifies a person with that name; quoted text following a document request is normally the document title or subject.
+- Do not silently expand abbreviations, alter quantities, derive new departments or regions, or assign unnamed people to roles. If a genuine ambiguity would materially change the document, ask one short question before authoring. Otherwise use the most literal grammatical reading.
+- Do not turn a missing target, source, author, or date into a fabricated fact. Mark it as an explicit assumption or omit it when it is not required.
+- Do not draft the full document in reasoning or debate multiple interpretations after the request is clear. Use a short outline, then author the JSON specification.
 
 ## Product standard
 
 - Default to `ru-RU`, A4, Arial, Russian typography, and dates or currencies appropriate to the supplied context.
 - Treat every supplied file as immutable. Always write a new, clearly named version.
 - Pick the document job before drafting: `memo`, `report`, or `sop`. Use the lightest structure that helps the reader decide, understand, or act.
-- Use real Word heading styles, numbering definitions, tables, headers, footers, page fields, and hyperlinks. Do not fake headings, bullets, numbering, or tables with plain text.
-- Use tables only for genuinely comparable rows and columns. Use paragraphs, lists, or callouts for normal prose.
-- Keep facts, assumptions, and sources distinguishable. Do not invent facts, citations, dates, people, or numeric precision.
+- Use real Word heading styles, numbering definitions, tables, headers, footers, live page fields, and hyperlinks. Do not fake headings, bullets, numbering, or tables with plain text.
+- Use tables only for genuinely comparable rows and columns. Use paragraphs and lists for normal prose.
+- Keep facts, assumptions, and sources distinguishable. Do not invent facts, citations, dates, people, roles, targets, or numeric precision.
 - A web source must be a specific page opened in this conversation. If only a publication is known, give its name and date without fabricating a URL.
 - Put only absolute `http` or `https` links in `sources[].url`; use the source label or location for files, network shares, and other non-web references.
 - Preserve a supplied template's sections, page geometry, styles, headers, footers, and relationships. Fill placeholders instead of rebuilding the template.
@@ -29,23 +45,27 @@ Create the requested `.docx`; do not substitute Markdown, HTML, or PDF. The edit
 
 ## Workflow
 
-1. Inspect the supplied files and determine audience, purpose, evidence, constraints, locale, document type, and filename.
-2. Draft a concise outline. For a memo, lead with the decision. For a report, lead with the executive summary. For an SOP, lead with purpose, scope, roles, and ordered steps.
-3. Read `references/spec.md`, then write one UTF-8 JSON specification containing the complete `ArtifactJob` and acceptance criteria.
-4. Use `templatePath` plus `placeholders` to fill a template, or `inputPath` plus `edits` for a targeted revision. Never make the output path equal to an input path.
-5. Write the specification to `/tmp/<stem>-spec.json` and run the builder in the same `execute_code` call:
+1. Inspect supplied files and record audience, purpose, evidence, constraints, locale, document type, filename, and the exact fact ledger internally.
+2. Draft only a short heading outline. For a memo, lead with the decision. For a report, lead with the executive summary. For an SOP, lead with purpose, scope, roles, and ordered steps.
+3. Read `/mnt/data/docx/references/spec.md` exactly once. After that read succeeds, do not plan again: the next tool call must create the specification from the original request.
+4. Write one complete UTF-8 JSON specification with the `ArtifactJob` and acceptance criteria to `/mnt/data/_qa_<stem>-spec.json` using `create_file`. The `_qa_` prefix keeps the working file out of user attachments. Keep it there across repair calls; never put reusable work in `/tmp`, because `/tmp` is empty on the next tool call.
+5. For a new document, use `sections`. Use `templatePath` plus `placeholders` to fill a template, or `inputPath` plus `edits` for a targeted revision. Never make the output path equal to an input path.
+6. Immediately after `create_file` succeeds, run the builder with `bash_tool`; do not re-read files, inspect source, restart planning, or emit prose first:
 
    ```bash
-   python3 /mnt/data/docx/scripts/build_document.py /tmp/<stem>-spec.json /mnt/data/<clear-name>.docx
+   python3 /mnt/data/docx/scripts/build_document.py /mnt/data/_qa_<stem>-spec.json /mnt/data/<clear-name>.docx
    ```
 
-6. Read `/mnt/data/<clear-name>.docx.artifact-report.json`. The builder reopens the document, audits semantic structure and table geometry, verifies immutable inputs, renders through LibreOffice, and raster-checks every page.
-7. Review the render and raster checks for every page. When the user explicitly requested a PDF and visual inspection is available, inspect that derived PDF for clipping, awkward page breaks, dense text, table wrapping, hierarchy, Cyrillic glyphs, headers, and footers.
-8. If a defect remains, revise the JSON and rerun. Allow at most two repair iterations and record the actual count.
-9. Deliver the DOCX only when the report status is `ready` and visual review is clean. If a critical issue remains, use `needs_review` and state it plainly.
+   Final artifacts must be direct children of `/mnt/data`. When PDF is requested, set `outputPdf` to `true`; the builder renders `/mnt/data/<clear-name>.pdf` from that final DOCX.
 
-Final artifacts must be direct children of `/mnt/data`: `/mnt/data/<name>.docx` and, when requested, `/mnt/data/<name>.pdf`. Do not expose the JSON spec, report sidecars, page PNGs, or scratch directories unless the user explicitly requests QA evidence.
+7. Read `/mnt/data/<clear-name>.docx.artifact-report.json` exactly once after each builder run. The builder reopens the document, audits semantic structure and table geometry, verifies immutable inputs, renders through LibreOffice, and raster-checks every page.
+8. The current runtime has no private visual-inspection tool: `read_file` cannot inspect image or PDF pixels and exposing page PNGs makes them user-visible attachments. Do not run LibreOffice or Poppler again, create page images or montages, call `read_file` on PDF/image output, list `/mnt/data`, or re-read the report to simulate visual review. Use the builder's `render`, `visual-raster`, Cyrillic, structure, header/footer, and page-field checks as the rendered-output gate.
+9. If the report is `ready`, every QA check passed, and `issues` has no critical item, stop using tools immediately. The next assistant content must be the completion sentence.
+10. If a builder or QA defect remains, revise the same `_qa_` JSON and immediately rerun the exact builder command. An `edit_file` result is a continuation of the original request: do not reconstruct the task from the diff, restart planning, or emit prose between the edit and retry. Allow at most two repair iterations and set `repairIterations` to the actual count.
+11. A report with `status: "needs_review"`, a failed QA check, or a critical issue is not a deliverable. After two repairs, state only the exact remaining user-visible problem; never claim completion.
+
+The DOCX and an explicitly requested PDF must share one base name and content: `/mnt/data/<name>.docx` and `/mnt/data/<name>.pdf`. The PDF must come from the final DOCX, never from a separate authoring pipeline. Do not deliver or mention `_qa_` files, specs, report sidecars, page PNGs, montages, or scratch directories unless the user explicitly requests QA evidence; the platform consumes artifact reports as metadata.
 
 ## Completion response
 
-Give the `.docx` link first. Briefly mention the audience and purpose, source or assumption caveats, QA status, and an explicitly requested PDF. Never claim verification when the artifact report says `needs_review`.
+When the report is `ready`, answer with exactly one short sentence such as: `Готово — приложил документ в DOCX и PDF.` If PDF was not requested, say only that the DOCX is attached. Attachments already carry the files, so do not repeat links, `/mnt/data` paths, the outline, sources, assumptions, QA status, repair history, internal filenames, or tool traces. Never write a `QA:` line. Put source and assumption caveats inside the document unless the user must act before the file is usable.
