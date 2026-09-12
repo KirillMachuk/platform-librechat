@@ -378,6 +378,8 @@ export interface InitializeAgentParams {
     toolDefinitions?: LCTool[];
     hasDeferredTools?: boolean;
     actionsEnabled?: boolean;
+    /** True only when the caller passed the capability and RUN_CODE role gates. */
+    codeExecutionAuthorized?: boolean;
     /**
      * Pre-uploaded code-env file refs for the agent's
      * `tool_resources.execute_code`. Bubbled up so the run host can seed
@@ -1052,6 +1054,7 @@ export async function initializeAgent(
     actionsEnabled,
     tools: structuredTools,
     primedCodeFiles,
+    codeExecutionAuthorized = false,
   } = loadToolsResult ?? {
     tools: [],
     toolContextMap: {},
@@ -1064,6 +1067,7 @@ export async function initializeAgent(
     hasDeferredTools: false,
     actionsEnabled: undefined,
     primedCodeFiles: undefined,
+    codeExecutionAuthorized: false,
   };
 
   let toolDefinitions = loadedToolDefinitions;
@@ -1164,11 +1168,12 @@ export async function initializeAgent(
    * this initializer when skill files are actually available.
    *
    * `effectiveCodeEnvAvailable` is the per-agent truth: the admin-level
-   * `params.codeEnvAvailable` AND the effective tool union actually asking
-   * for code execution. This includes `allowed-tools: execute_code` on a
-   * resolved manual, auto-matched, or always-apply skill; otherwise the skill
-   * would be primed while its documented `bash_tool` stayed invisible to the
-   * model. Computed once and reused by the expansion block below,
+   * `params.codeEnvAvailable`, the role-authorized ToolService result, AND the
+   * effective tool union actually asking for code execution. This includes
+   * `allowed-tools: execute_code` on a resolved manual, auto-matched, or
+   * always-apply skill; otherwise the skill would be primed while its
+   * documented `bash_tool` stayed invisible to the model. Computed once and
+   * reused by the expansion block below,
    * the `injectSkillCatalog` call, and the returned `InitializedAgent`.
    * Downstream handlers (runtime `configurable`, `primeInvokedSkills`)
    * read it from the stored per-agent value so a skills-only agent
@@ -1185,7 +1190,9 @@ export async function initializeAgent(
    */
   const effectiveToolsRequestCodeExec = requestedToolNames.includes(Tools.execute_code);
   const effectiveCodeEnvAvailable =
-    params.codeEnvAvailable === true && effectiveToolsRequestCodeExec;
+    params.codeEnvAvailable === true &&
+    codeExecutionAuthorized === true &&
+    effectiveToolsRequestCodeExec;
   if (effectiveCodeEnvAvailable) {
     const codeExecResult = registerCodeExecutionTools({
       toolRegistry,

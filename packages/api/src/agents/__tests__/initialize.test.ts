@@ -138,6 +138,7 @@ function createMocks(overrides?: {
     parameters?: object;
   }>;
   structuredTools?: unknown[];
+  codeExecutionAuthorized?: boolean;
   /** Extra fields merged into the mock getOptions llmConfig (e.g. modelKwargs). */
   llmConfigExtra?: Record<string, unknown>;
 }) {
@@ -153,6 +154,7 @@ function createMocks(overrides?: {
     providerTools,
     loadedToolDefinitions = [],
     structuredTools = [],
+    codeExecutionAuthorized = true,
     llmConfigExtra,
   } = overrides ?? {};
 
@@ -207,6 +209,7 @@ function createMocks(overrides?: {
     toolRegistry: undefined,
     toolDefinitions: loadedToolDefinitions,
     hasDeferredTools: false,
+    codeExecutionAuthorized,
   });
 
   const db: InitializeAgentDbMethods = {
@@ -1285,6 +1288,69 @@ describe('initializeAgent — manual skill priming (Phase 3)', () => {
 
     const names = (result.toolDefinitions ?? []).map((definition) => definition.name);
     expect(loadTools.mock.calls[0][0].tools).toEqual(['web_search', 'execute_code']);
+    expect(names).not.toContain('bash_tool');
+    expect(names).not.toContain('read_file');
+    expect(result.codeEnvAvailable).toBe(false);
+  });
+
+  it('does not let an auto-matched skill bypass a denied RUN_CODE role permission', async () => {
+    const { agent, req, res, loadTools, db } = createMocks({
+      codeExecutionAuthorized: false,
+    });
+    const { Types } = await import('mongoose');
+    const skillId = new Types.ObjectId();
+    const ownerAuthor = {
+      toString: () => req.user?.id,
+    } as unknown as import('mongoose').Types.ObjectId;
+    const getSkillByName: InitializeAgentDbMethods['getSkillByName'] = jest.fn().mockResolvedValue({
+      _id: skillId,
+      name: 'docx',
+      body: '# DOCX workflow',
+      author: ownerAuthor,
+      allowedTools: ['execute_code'],
+    });
+
+    const result = await initializeAgent(
+      {
+        req,
+        res,
+        agent,
+        loadTools,
+        endpointOption: { endpoint: EModelEndpoint.agents },
+        allowedProviders: new Set([Providers.OPENAI]),
+        isInitialAgent: true,
+        accessibleSkillIds: [skillId],
+        autoMatchedSkills: ['docx'],
+        codeEnvAvailable: true,
+      },
+      { ...db, listSkillsByAccess: emptyListSkillsByAccess, getSkillByName },
+    );
+
+    const names = (result.toolDefinitions ?? []).map((definition) => definition.name);
+    expect(loadTools.mock.calls[0][0].tools).toContain('execute_code');
+    expect(names).not.toContain('bash_tool');
+    expect(names).not.toContain('read_file');
+    expect(result.codeEnvAvailable).toBe(false);
+  });
+
+  it('fails code execution closed when the caller has no authorization-aware tool loader', async () => {
+    const { agent, req, res, db } = createMocks();
+    agent.tools = ['execute_code'];
+
+    const result = await initializeAgent(
+      {
+        req,
+        res,
+        agent,
+        endpointOption: { endpoint: EModelEndpoint.agents },
+        allowedProviders: new Set([Providers.OPENAI]),
+        isInitialAgent: true,
+        codeEnvAvailable: true,
+      },
+      db,
+    );
+
+    const names = (result.toolDefinitions ?? []).map((definition) => definition.name);
     expect(names).not.toContain('bash_tool');
     expect(names).not.toContain('read_file');
     expect(result.codeEnvAvailable).toBe(false);

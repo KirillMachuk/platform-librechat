@@ -508,6 +508,7 @@ async function processRequiredActions(client, requiredActions) {
  *   userMCPAuthMap?: Record<string, Record<string, string>>;
  *   toolRegistry?: Map<string, import('~/utils/toolClassification').LCTool>;
  *   hasDeferredTools?: boolean;
+ *   codeExecutionAuthorized?: boolean;
  * }>} The agent tools and registry.
  */
 /** Native LibreChat tools that are not in the manifest */
@@ -599,18 +600,19 @@ const isBuiltInTool = (toolName) =>
  *   mcpAvailableTools?: Record<string, import('@librechat/api').LCAvailableTools>;
  *   userMCPAuthMap?: Record<string, Record<string, string>>;
  *   hasDeferredTools?: boolean;
+ *   codeExecutionAuthorized?: boolean;
  * }>}
  */
 async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, tool_resources }) {
   if (!agent.tools || agent.tools.length === 0) {
-    return { toolDefinitions: [] };
+    return { toolDefinitions: [], codeExecutionAuthorized: false };
   }
 
   if (
     agent.tools.length === 1 &&
     (agent.tools[0] === AgentCapabilities.context || agent.tools[0] === AgentCapabilities.ocr)
   ) {
-    return { toolDefinitions: [] };
+    return { toolDefinitions: [], codeExecutionAuthorized: false };
   }
 
   const appConfig = req.config;
@@ -650,6 +652,7 @@ async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, to
     }
     return true;
   });
+  const codeExecutionAuthorized = filteredTools?.includes(Tools.execute_code) === true;
 
   /**
    * A tool configured on the agent but dropped here never reaches the model and the
@@ -666,7 +669,7 @@ async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, to
   }
 
   if (!filteredTools || filteredTools.length === 0) {
-    return { toolDefinitions: [] };
+    return { toolDefinitions: [], codeExecutionAuthorized: false };
   }
 
   /** @type {Record<string, Record<string, string>>} */
@@ -1163,6 +1166,7 @@ async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, to
     hasDeferredTools,
     actionsEnabled,
     primedCodeFiles,
+    codeExecutionAuthorized,
   };
 }
 
