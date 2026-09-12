@@ -541,7 +541,7 @@ const isDocumentTool = (toolName) => documentTools.has(toolName);
  * declare neither kind of tool — the common case — never pay for the lookup.
  * @param {ServerRequest} req
  * @param {string[]} [tools] - The agent's declared tools
- * @returns {Promise<{ webSearch: boolean, fileSearch: boolean }>}
+ * @returns {Promise<{ webSearch: boolean, fileSearch: boolean, runCode: boolean }>}
  */
 const resolveToolRolePermissions = async (req, tools) => {
   const wantsWebSearch = tools?.includes(Tools.web_search) === true;
@@ -1183,6 +1183,11 @@ async function loadToolDefinitionsWrapper({ req, res, agent, streamId = null, to
  * @param {boolean} [params.definitionsOnly=true] - When true, returns only serializable
  *   tool definitions without creating full tool instances. Use for event-driven mode
  *   where tools are loaded on-demand during execution.
+ * @returns {Promise<{
+ *   tools?: StructuredTool[];
+ *   toolDefinitions?: import('@librechat/api').LCTool[];
+ *   codeExecutionAuthorized?: boolean;
+ * }>} The filtered tools and the post-authorization code-execution attestation.
  */
 async function loadAgentTools({
   req,
@@ -1199,14 +1204,14 @@ async function loadAgentTools({
   }
 
   if (!agent.tools || agent.tools.length === 0) {
-    return { toolDefinitions: [] };
+    return { toolDefinitions: [], codeExecutionAuthorized: false };
   } else if (
     agent.tools &&
     agent.tools.length === 1 &&
     /** Legacy handling for `ocr` as may still exist in existing Agents */
     (agent.tools[0] === AgentCapabilities.context || agent.tools[0] === AgentCapabilities.ocr)
   ) {
-    return { toolDefinitions: [] };
+    return { toolDefinitions: [], codeExecutionAuthorized: false };
   }
 
   const appConfig = req.config;
@@ -1252,9 +1257,10 @@ async function loadAgentTools({
     }
     return true;
   });
+  const codeExecutionAuthorized = _agentTools?.includes(Tools.execute_code) === true;
 
   if (!_agentTools || _agentTools.length === 0) {
-    return {};
+    return { codeExecutionAuthorized: false };
   }
   /** @type {ReturnType<typeof createOnSearchResults>} */
   let webSearchCallbacks;
@@ -1300,8 +1306,7 @@ async function loadAgentTools({
   const deferredToolsEnabled = checkCapability(AgentCapabilities.deferred_tools);
   const programmaticToolsEnabled = enabledCapabilities.has(AgentCapabilities.programmatic_tools);
   const codeExecutionEnabled =
-    agent.tools?.includes(Tools.execute_code) === true &&
-    enabledCapabilities.has(AgentCapabilities.execute_code);
+    codeExecutionAuthorized && enabledCapabilities.has(AgentCapabilities.execute_code);
   const { toolRegistry, toolDefinitions, additionalTools, hasDeferredTools } =
     await buildToolClassification({
       loadedTools,
@@ -1373,6 +1378,7 @@ async function loadAgentTools({
       actionsEnabled,
       tools: agentTools,
       primedCodeFiles,
+      codeExecutionAuthorized,
     };
   }
 
@@ -1392,6 +1398,7 @@ async function loadAgentTools({
       actionsEnabled,
       tools: agentTools,
       primedCodeFiles,
+      codeExecutionAuthorized,
     };
   }
 
@@ -1507,7 +1514,7 @@ async function loadAgentTools({
 
   if (_agentTools.length > 0 && agentTools.length === 0) {
     logger.warn(`No tools found for the specified tool calls: ${_agentTools.join(', ')}`);
-    return {};
+    return { codeExecutionAuthorized };
   }
 
   return {
@@ -1521,6 +1528,7 @@ async function loadAgentTools({
     actionsEnabled,
     tools: agentTools,
     primedCodeFiles,
+    codeExecutionAuthorized,
   };
 }
 

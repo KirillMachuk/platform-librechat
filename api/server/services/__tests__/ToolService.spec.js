@@ -314,6 +314,21 @@ describe('ToolService - Action Capability Gating', () => {
       expect(result.codeExecutionAuthorized).toBe(true);
     });
 
+    it('reports code execution as authorized in the full tool-loading path', async () => {
+      setPermissions({ webSearch: true, fileSearch: true, runCode: true });
+      const req = createMockReq(toolCapabilities);
+      mockGetEndpointsConfig.mockResolvedValue(createEndpointsConfig(toolCapabilities));
+
+      const result = await loadAgentTools({
+        req,
+        res: {},
+        agent: { id: 'agent_123', tools: [Tools.execute_code] },
+        definitionsOnly: false,
+      });
+
+      expect(result.codeExecutionAuthorized).toBe(true);
+    });
+
     /** The toggle is hidden in the UI for a role without RUN_CODE, but hiding a control is
      *  not enforcing it: the flag rides in the request body, so the server has to check. */
     it('withholds code execution from a role that lost the permission', async () => {
@@ -334,6 +349,21 @@ describe('ToolService - Action Capability Gating', () => {
         res: {},
         agent: { id: 'agent_123', tools: [Tools.execute_code] },
         definitionsOnly: true,
+      });
+
+      expect(result.codeExecutionAuthorized).toBe(false);
+    });
+
+    it('reports code execution as unauthorized in the full tool-loading path', async () => {
+      setPermissions({ webSearch: true, fileSearch: true, runCode: false });
+      const req = createMockReq(toolCapabilities);
+      mockGetEndpointsConfig.mockResolvedValue(createEndpointsConfig(toolCapabilities));
+
+      const result = await loadAgentTools({
+        req,
+        res: {},
+        agent: { id: 'agent_123', tools: [Tools.execute_code] },
+        definitionsOnly: false,
       });
 
       expect(result.codeExecutionAuthorized).toBe(false);

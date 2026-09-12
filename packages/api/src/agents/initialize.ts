@@ -1212,7 +1212,7 @@ export async function initializeAgent(
      * the tool silently vanishes from the LLM's definitions with no trace.
      */
     logger.debug(
-      `[initializeAgent] Agent "${agent.id}" or an authorized skill requests execute_code but codeEnvAvailable=${String(params.codeEnvAvailable)}; skipping bash_tool + read_file registration.`,
+      `[initializeAgent] Agent "${agent.id}" or an authorized skill requests execute_code but codeEnvAvailable=${String(params.codeEnvAvailable)} and codeExecutionAuthorized=${String(codeExecutionAuthorized)}; skipping bash_tool + read_file registration.`,
     );
   }
 
