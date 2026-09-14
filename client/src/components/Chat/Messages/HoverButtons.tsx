@@ -114,6 +114,14 @@ const HoverButton = memo(
   }: HoverButtonProps) => {
     const buttonStyle = cn(
       'hover-button tap-target flex h-7 w-7 items-center justify-center rounded-lg text-text-secondary-alt [&_svg]:h-4 [&_svg]:w-4',
+      /* Canon §4: to a finger every control is 44 in BOTH directions. The
+         `tap-target` helper grows height only (its sideways ::after fed the
+         scroller and stole neighbours' taps, 14.08), so under a coarse pointer
+         the button itself becomes the 44 box — the icon stays 16, the row's
+         gap goes to zero so the pitch is 44 instead of 28 + 10 (owner's
+         decision 14.09: «как правильно по лучшим практикам»: Apple HIG 44,
+         Material 48, WCAG 2.5.8 at least 24). */
+      '[@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11',
       'hover:text-text-primary hover:bg-surface-hover',
       /* Канон §6.2, решение владельца: кнопки под сообщением видны ВСЕГДА.
          `isVisible` остаётся только для СТРУКТУРНЫХ случаев (это сообщение в
@@ -243,7 +251,7 @@ const HoverButtons = ({
   const handleCopy = () => copyToClipboard(setIsCopied);
 
   return (
-    <div className="group visible flex justify-center gap-2.5 self-end focus-within:outline-none lg:justify-start">
+    <div className="group visible flex flex-wrap justify-center gap-2.5 self-end focus-within:outline-none lg:justify-start [@media(pointer:coarse)]:gap-0">
       {/* Text to Speech — only when there is an answer to read (see hasAnswerText) */}
       {TextToSpeech && answerText && (
         <MessageAudio

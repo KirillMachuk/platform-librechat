@@ -119,6 +119,26 @@ test.describe('card controls reach 44px on a phone', () => {
     expect(found.interactive).toBeGreaterThan(5);
     expect(found.targets.map(identify)).not.toContain('thinking-header');
     expect(await stolenCentres(page, ['thinking-header'])).toEqual([]);
+    /* The action row under a message: 28px wide to a finger until 14.09 (the
+     * helper grows height only). Under a coarse pointer each button is now a
+     * 44 box, so none of them may be reported small, and the fork button —
+     * the one with a test id — must not cover a neighbour's centre. */
+    const ACTION_ROW = [
+      'Copy to clipboard',
+      'Edit',
+      'Branch to a new chat from here',
+      'Regenerate',
+      'Love this',
+      'Needs improvement',
+    ];
+    const small = found.targets.map(identify);
+    expect(small.filter((name) => ACTION_ROW.includes(name))).toEqual([]);
+    expect(await stolenCentres(page, ['fork-button'])).toEqual([]);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBe(0);
 
     await seedPlanCard(page);
     /* Awaiting approval: the ✕ is there and every step is on screen — a plan
