@@ -4,6 +4,7 @@ import type { StructuredToolInterface } from '@langchain/core/tools';
 import type { BaseCheckpointSaver } from '@langchain/langgraph';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { DeepResearchState, DeepResearchStateUpdate } from './state';
+import type { SteeringMailbox } from './steering';
 import type { DeepResearchTier } from './config';
 import { routeFromSupervisor, createSupervisorNode } from './nodes/supervisor';
 import { createResearcherNode } from './nodes/researcher';
@@ -91,6 +92,12 @@ export interface DeepResearchGraphDeps {
   nonce: string;
   /** Injected wall-clock reader for the supervisor's time gate (A1); defaults to `Date.now`. */
   clock?: () => number;
+  /**
+   * Mid-run clarifications typed into the composer while the run goes (see
+   * `steering.ts`). SUPERVISOR reads them at the start of every round, REPORT
+   * when it writes. Absent = a run that cannot be steered (tests, the bench).
+   */
+  steering?: SteeringMailbox;
   checkpointer?: BaseCheckpointSaver;
 }
 
@@ -105,6 +112,7 @@ export function createDeepResearchGraph(deps: DeepResearchGraphDeps) {
         now: deps.now,
         nonce: deps.nonce,
         clock: deps.clock,
+        steering: deps.steering,
       }),
       researcher: createResearcherNode({
         model: deps.workerModel,
@@ -120,6 +128,7 @@ export function createDeepResearchGraph(deps: DeepResearchGraphDeps) {
         tier: deps.tier,
         now: deps.now,
         nonce: deps.nonce,
+        steering: deps.steering,
       }),
     },
     { checkpointer: deps.checkpointer },

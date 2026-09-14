@@ -8,6 +8,7 @@ import type {
   DeepResearchStateUpdate,
   DeepResearchConfigurable,
 } from '../state';
+import type { SteeringMailbox } from '../steering';
 import type { DeepResearchTier } from '../config';
 import {
   lastHumanText,
@@ -33,6 +34,8 @@ export interface SupervisorNodeDeps {
    * node" rule is why this is injected rather than called directly).
    */
   clock?: () => number;
+  /** Mid-run clarifications (see `../steering.ts`); read at the start of every round. */
+  steering?: SteeringMailbox;
 }
 
 /** The most any single completed round cost, from the findings it produced. */
@@ -238,6 +241,11 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
       // sub-questions and the fallback below researches the whole brief as ONE question,
       // silently costing the round its parallel fan-out.
       const planSteps = configurable?.planSteps ?? [];
+      /* Snapshotted HERE, at the start of the round: a clarification that lands
+       * while this batch runs waits for the next supervisor call — the
+       * contract the owner chose (applied at the round boundary, nothing
+       * already running is thrown away). */
+      const steers = deps.steering?.texts() ?? [];
       const prompt = [
         new SystemMessage(
           buildSupervisorPrompt({
@@ -246,6 +254,7 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
             maxConcurrent: deps.tier.maxConcurrentResearchers,
             nonce: deps.nonce,
             planSteps,
+            steers,
           }),
         ),
         new HumanMessage(
@@ -256,6 +265,7 @@ export function createSupervisorNode(deps: SupervisorNodeDeps) {
             maxRounds: deps.tier.maxOrchestratorCycles,
             nonce: deps.nonce,
             planSteps,
+            steers,
           }),
         ),
       ];

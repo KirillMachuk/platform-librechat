@@ -10,6 +10,7 @@ import type {
   DeepResearchStateUpdate,
   SupervisorConcludeReason,
 } from '../state';
+import type { SteeringMailbox } from '../steering';
 import type { DeepResearchTier } from '../config';
 import type { DeepResearchNode } from '../graph';
 import {
@@ -52,6 +53,8 @@ export interface ReportNodeDeps {
   now: string;
   /** Per-run spotlighting nonce for fencing untrusted findings (H5). */
   nonce: string;
+  /** Mid-run clarifications (see `../steering.ts`); read when the report is written. */
+  steering?: SteeringMailbox;
 }
 
 /** Maps the supervisor's stop reason to the run's finalize reason. Every branch here ends
@@ -115,6 +118,8 @@ export async function composeReport(params: {
   nonce: string;
   signal?: AbortSignal;
   maxRetries?: number;
+  /** Mid-run clarifications, oldest first. */
+  steers?: string[];
 }): Promise<{
   text: string;
   usage: Partial<DeepResearchTokenUsage>;
@@ -148,7 +153,9 @@ export async function composeReport(params: {
     const perFindingSources = Math.max(1, Math.ceil(SOURCES_PER_FINDING / 2 ** attempt));
     try {
       const prompt = [
-        new SystemMessage(buildReportPrompt({ request, brief, jurisdiction, now, nonce })),
+        new SystemMessage(
+          buildReportPrompt({ request, brief, jurisdiction, now, nonce, steers: params.steers }),
+        ),
         new HumanMessage(
           fenceUntrusted(formatFindings(findings, perDigestCap, perFindingSources), nonce),
         ),
@@ -397,6 +404,7 @@ export function createReportNode(deps: ReportNodeDeps): DeepResearchNode {
       digestCap: deps.tier.digestCap,
       now: deps.now,
       nonce: deps.nonce,
+      steers: deps.steering?.texts(),
       signal: config.signal,
     });
     /**

@@ -816,7 +816,7 @@ export const tMessageSchema = z.object({
    * 'aborted' (research stopped before a valid report) routes the next message back into
    * planning; 'report' (valid terminal answer) routes it to normal chat.
    */
-  drKind: z.enum(['plan', 'clarify', 'start', 'cancel', 'report', 'aborted']).optional(),
+  drKind: z.enum(['plan', 'clarify', 'start', 'cancel', 'report', 'aborted', 'steer']).optional(),
 });
 
 export type MemoryArtifact = {

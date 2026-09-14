@@ -157,7 +157,7 @@ const messageSchema: Schema<IMessage> = new Schema(
      */
     drKind: {
       type: String,
-      enum: ['plan', 'clarify', 'start', 'cancel', 'report', 'aborted'],
+      enum: ['plan', 'clarify', 'start', 'cancel', 'report', 'aborted', 'steer'],
       default: undefined,
     },
     /*
