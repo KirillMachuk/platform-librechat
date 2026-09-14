@@ -706,7 +706,9 @@ export default function useEventHandlers({
 
         /* a11y announcements */
         announcePolite({ message: 'end', isStatus: true });
-        announcePolite({ message: getAllContentText(responseMessage) });
+        if (responseMessage != null) {
+          announcePolite({ message: getAllContentText(responseMessage) });
+        }
 
         const isNewConvo = conversation.conversationId !== submissionConvo.conversationId;
 
@@ -760,6 +762,17 @@ export default function useEventHandlers({
           });
         } else if (requestMessage != null && responseMessage != null) {
           finalMessages = [...messages, requestMessage, responseMessage];
+        } else if (responseMessage == null && requestMessage != null) {
+          /* A Stop before the first token: the server persisted the question and
+           * nothing else, and its final says so by carrying no answer. The chat
+           * shows exactly that — the question, no empty turn under it. On a
+           * regenerate the question is already in the tree; only the placeholder
+           * this turn added goes. */
+          finalMessages = isRegenerate
+            ? (submission.regenerateMessages ?? currentMessages).filter(
+                (m) => m.messageId !== submission.initialResponse.messageId,
+              )
+            : [...messages, requestMessage];
         }
 
         /* Preserve files from current messages when server response lacks them */

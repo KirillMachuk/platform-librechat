@@ -4,6 +4,7 @@ import { TooltipAnchor } from '@librechat/client';
 /* Owner's 11.08-4 picks: pencil / copy / check / repeat, drawn by the Tabler
    shims — the upstream hand-drawn svgs these replace predated the migration. */
 import { Check, Copy, Pencil, PlayerTrackNext, Repeat } from '~/components/icons';
+import { ContentTypes } from 'librechat-data-provider';
 import type { TConversation, TMessage, TFeedback } from 'librechat-data-provider';
 import { useGenerationsByLatest, useLocalize } from '~/hooks';
 import { Fork } from '~/components/Conversations';
@@ -70,6 +71,34 @@ const extractMessageContent = (message: TMessage): string => {
   }
 
   return message.text || '';
+};
+
+/**
+ * Whether the turn holds an answer to act on: its text, or a text part. A
+ * thinking block alone is not an answer — a Stop mid-thought leaves exactly
+ * that — and neither is an empty turn; Copy and Read aloud have nothing to
+ * take from either, so they stay off the row (Edit, Fork, Regenerate remain).
+ */
+const hasAnswerText = (message: TMessage): boolean => {
+  if ((message.text ?? '').trim().length > 0) {
+    return true;
+  }
+  if (!Array.isArray(message.content)) {
+    return false;
+  }
+  return message.content.some((part) => {
+    if (part == null || part.type !== ContentTypes.TEXT) {
+      return false;
+    }
+    const raw: unknown = part.text;
+    if (typeof raw === 'string') {
+      return raw.trim().length > 0;
+    }
+    if (raw != null && typeof raw === 'object' && 'value' in raw) {
+      return String((raw as { value?: unknown }).value ?? '').trim().length > 0;
+    }
+    return false;
+  });
 };
 
 const HoverButton = memo(
@@ -187,6 +216,7 @@ const HoverButtons = ({
   }
 
   const { isCreatedByUser, error } = message;
+  const answerText = hasAnswerText(message);
 
   if (error === true) {
     return (
@@ -214,8 +244,8 @@ const HoverButtons = ({
 
   return (
     <div className="group visible flex justify-center gap-2.5 self-end focus-within:outline-none lg:justify-start">
-      {/* Text to Speech */}
-      {TextToSpeech && (
+      {/* Text to Speech — only when there is an answer to read (see hasAnswerText) */}
+      {TextToSpeech && answerText && (
         <MessageAudio
           index={index}
           isLast={isLast}
@@ -237,7 +267,7 @@ const HoverButtons = ({
           copying your own question is harmless at any moment, and the vanishing
           act (opacity-0 until hover) read as «иконки куда-то пропадают» in
           every chat with a long-running answer. */}
-      {!isComparison && (
+      {!isComparison && answerText && (
         <HoverButton
           onClick={handleCopy}
           title={

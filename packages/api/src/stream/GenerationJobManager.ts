@@ -18,8 +18,8 @@ import {
   setGenerationJobsInFlight,
 } from '~/app/metrics';
 import { InMemoryEventTransport } from './implementations/InMemoryEventTransport';
+import { filterPersistableAbortContent, hasNoAbortContent } from './abortContent';
 import { InMemoryJobStore } from './implementations/InMemoryJobStore';
-import { filterPersistableAbortContent } from './abortContent';
 
 /**
  * Error surfaced to any client still attached when a stale/hung job is reaped. Emitted as the
@@ -842,21 +842,30 @@ class GenerationJobManagerClass {
             isCreatedByUser: true,
           }
         : null,
-      responseMessage: isEarlyAbort
-        ? null
-        : {
-            messageId: jobData.responseMessageId ?? `${userMessageId ?? 'aborted'}_`,
-            parentMessageId: userMessageId,
-            conversationId: jobData.conversationId,
-            content: abortContent,
-            sender: jobData.sender ?? 'AI',
-            endpoint: jobData.endpoint,
-            iconURL: jobData.iconURL,
-            model: jobData.model,
-            unfinished: true,
-            error: false,
-            isCreatedByUser: false,
-          },
+      /**
+       * A stop that produced nothing ships NO answer message, whether or not `created`
+       * went out: nothing is persisted for it (see the abort route and BaseClient), so a
+       * message here would be a phantom — the client would draw an empty turn with a
+       * full action row under it, and a reload would make it vanish. The question stays
+       * (it is saved by then); the answer never began. An OAuth-only abort is NOT that
+       * case — see hasNoAbortContent.
+       */
+      responseMessage:
+        isEarlyAbort || hasNoAbortContent(content)
+          ? null
+          : {
+              messageId: jobData.responseMessageId ?? `${userMessageId ?? 'aborted'}_`,
+              parentMessageId: userMessageId,
+              conversationId: jobData.conversationId,
+              content: abortContent,
+              sender: jobData.sender ?? 'AI',
+              endpoint: jobData.endpoint,
+              iconURL: jobData.iconURL,
+              model: jobData.model,
+              unfinished: true,
+              error: false,
+              isCreatedByUser: false,
+            },
       aborted: true,
       // Flag for early abort - no messages saved, frontend should go to new chat
       earlyAbort: isEarlyAbort,

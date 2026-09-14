@@ -767,6 +767,42 @@ describe('BaseClient', () => {
       );
     });
 
+    /**
+     * The owner's 14.09 report: a Stop while the model was still silent left an empty
+     * answer under the question. `sendCompletion` swallows its own abort, so the run
+     * comes back here as a success with nothing in it — and was saved as a row.
+     */
+    test('a Stop that produced nothing is not saved; the question still is', async () => {
+      const abortController = new AbortController();
+      abortController.abort();
+      TestClient.sendCompletion = jest.fn(async () => ({ completion: '', metadata: undefined }));
+      const saveSpy = jest.spyOn(TestClient, 'saveMessageToDatabase');
+
+      const response = await TestClient.sendMessage('Привет', { user: {}, abortController });
+
+      const savedIds = saveSpy.mock.calls.map(([message]) => message.messageId);
+      expect(savedIds).toContain(response.parentMessageId);
+      expect(savedIds).not.toContain(response.messageId);
+      expect(TestClient.savedMessageIds.has(response.messageId)).toBe(false);
+      await expect(response.databasePromise).resolves.toEqual({ message: null });
+    });
+
+    test('a Stop after some text keeps the partial answer', async () => {
+      const abortController = new AbortController();
+      abortController.abort();
+      TestClient.sendCompletion = jest.fn(async () => ({
+        completion: 'Начал…',
+        metadata: undefined,
+      }));
+      const saveSpy = jest.spyOn(TestClient, 'saveMessageToDatabase');
+
+      const response = await TestClient.sendMessage('Привет', { user: {}, abortController });
+
+      expect(saveSpy.mock.calls.map(([message]) => message.messageId)).toContain(
+        response.messageId,
+      );
+    });
+
     test('saveMessageToDatabase is called with the correct arguments', async () => {
       const saveOptions = TestClient.getSaveOptions();
       const user = {};
