@@ -21,12 +21,16 @@ export default function useTextarea({
   setIsScrollable,
   disabled = false,
   placeholder,
+  canSteer = false,
 }: {
   textAreaRef: React.RefObject<HTMLTextAreaElement>;
   submitButtonRef: React.RefObject<HTMLButtonElement>;
   setIsScrollable: React.Dispatch<React.SetStateAction<boolean>>;
   disabled?: boolean;
   placeholder?: string;
+  /** Mid-run steering: Enter sends a clarification to the running research
+   *  instead of being swallowed while `isSubmitting` (useSteerRun). */
+  canSteer?: boolean;
 }) {
   const localize = useLocalize();
   const isComposing = useRef(false);
@@ -138,7 +142,7 @@ export default function useTextarea({
         const scrollable = checkIfScrollable(textAreaRef.current);
         scrollable && setIsScrollable(scrollable);
       }
-      if (e.key === 'Enter' && isSubmitting) {
+      if (e.key === 'Enter' && isSubmitting && !canSteer) {
         return;
       }
 
@@ -182,6 +186,7 @@ export default function useTextarea({
     },
     [
       isSubmitting,
+      canSteer,
       checkHealth,
       filesLoading,
       enterToSend,
