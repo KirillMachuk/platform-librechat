@@ -42,6 +42,23 @@ describe('SteeringMailbox', () => {
     const late = new SteeringMailbox({ headMessageId: 'um1' });
     late.phase = 'report';
     expect(late.refusal('поздно')).toBe('report');
+    late.phase = 'closed';
+    expect(late.refusal('поздно')).toBe('closed');
+  });
+
+  it('takes back only the LAST entry, and the head returns to the previous message', () => {
+    const box = new SteeringMailbox({ headMessageId: 'um1' });
+    box.add({ text: 'a', message: message('s1') });
+    box.add({ text: 'b', message: message('s2') });
+    /* An earlier entry may already be the parent of a later one: never removed. */
+    expect(box.remove('s1')).toBe(false);
+    expect(box.headMessageId).toBe('s2');
+    expect(box.remove('s2')).toBe(true);
+    expect(box.headMessageId).toBe('s1');
+    expect(box.texts()).toEqual(['a']);
+    expect(box.remove('s1')).toBe(true);
+    expect(box.headMessageId).toBe('um1');
+    expect(box.remove('nothing')).toBe(false);
   });
 
   it('prepares the graph text through the mask when there is one, trimmed either way', async () => {

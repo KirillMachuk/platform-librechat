@@ -253,12 +253,19 @@ const STEER_REFUSALS = {
   limit: `За один прогон принимается не больше ${MAX_STEERS_PER_RUN} уточнений. Дождитесь отчёта и продолжите обычным сообщением.`,
   report:
     'Отчёт уже пишется — новое уточнение в него не попадёт. Дождитесь отчёта и напишите следом.',
+  closed:
+    'Исследование уже завершилось — напишите это обычным сообщением, оно уйдёт следующим ходом.',
   'no-run':
     'Исследование уже завершилось — напишите это обычным сообщением, оно уйдёт следующим ходом.',
+  'not-ready': 'Исследование ещё готовится — повторите через несколько секунд.',
   'not-steerable':
     'Уточнить на ходу можно только идущее исследование. Дождитесь ответа и напишите следом.',
   mask: 'Анонимайзер сейчас недоступен — уточнение не принято. Повторите через минуту.',
+  save: 'Не удалось сохранить уточнение. Повторите.',
 };
+
+const steerRefused = (res, status, reason) =>
+  res.status(status).json({ error: STEER_REFUSALS[reason], reason });
 
 /**
  * @route POST /chat/steer
@@ -277,16 +284,16 @@ router.post('/chat/steer', async (req, res) => {
   const userId = req.user?.id;
 
   if (!conversationId || conversationId === 'new') {
-    return res.status(400).json({ error: STEER_REFUSALS['not-steerable'] });
+    return steerRefused(res, 400, 'not-steerable');
   }
   if (!text) {
-    return res.status(400).json({ error: STEER_REFUSALS.empty });
+    return steerRefused(res, 400, 'empty');
   }
 
   // streamId === conversationId for every job this route can address.
   const job = await GenerationJobManager.getJob(conversationId);
   if (!job || job.status !== 'running') {
-    return res.status(409).json({ error: STEER_REFUSALS['no-run'] });
+    return steerRefused(res, 409, 'no-run');
   }
   if (job.metadata?.userId && job.metadata.userId !== userId) {
     logger.warn(`[AgentStream] Unauthorized steer attempt for ${conversationId} by user ${userId}`);
@@ -296,16 +303,19 @@ router.post('/chat/steer', async (req, res) => {
     return res.status(403).json({ error: 'Unauthorized' });
   }
 
-  /* No mailbox: not a Deep Research run, a run that already ended, or a run
-   * held by another process (the mailbox lives with the graph). */
+  /* No mailbox: a research run still assembling its graph (the job exists,
+   * the mailbox is registered right before the graph streams — «try again in
+   * a few seconds»), or not a research run at all, or one held by another
+   * process (the mailbox lives with the graph). */
   const steering = getSteering(conversationId);
   if (!steering) {
-    return res.status(409).json({ error: STEER_REFUSALS['not-steerable'] });
+    const isResearchRun = job.metadata?.producerFinalizesOnAbort === true;
+    return steerRefused(res, 409, isResearchRun ? 'not-ready' : 'not-steerable');
   }
-  const refusal = steering.refusal(text);
-  if (refusal) {
-    const status = refusal === 'length' || refusal === 'empty' ? 400 : 409;
-    return res.status(status).json({ error: STEER_REFUSALS[refusal], reason: refusal });
+  const refusalStatus = (reason) => (reason === 'length' || reason === 'empty' ? 400 : 409);
+  const early = steering.refusal(text);
+  if (early) {
+    return steerRefused(res, refusalStatus(early), early);
   }
 
   /* Sovereign mode: masked BEFORE anything is stored or shown, so a failure
@@ -315,9 +325,17 @@ router.post('/chat/steer', async (req, res) => {
     graphText = await steering.prepare(text);
   } catch (error) {
     logger.warn(`[AgentStream] steer masking failed for ${conversationId}`, error);
-    return res.status(503).json({ error: STEER_REFUSALS.mask, reason: 'mask' });
+    return steerRefused(res, 503, 'mask');
   }
 
+  /* Re-checked AFTER the await and recorded in the SAME tick as the head is
+   * read: the report may have started (or the run ended) while masking ran,
+   * and a second clarification may have landed — with no await between the
+   * check, the head and `add()`, neither can slip in (first review, п.1-2). */
+  const late = steering.refusal(text);
+  if (late) {
+    return steerRefused(res, refusalStatus(late), late);
+  }
   const parentMessageId = steering.headMessageId;
   const message = {
     messageId: randomUUID(),
@@ -332,8 +350,16 @@ router.post('/chat/steer', async (req, res) => {
      * bubble, the run's history knows it was a mid-run clarification. */
     drKind: 'steer',
   };
+  const entry = steering.add({ text: graphText, message });
+
+  /* Persisted right after: a steer the run reads must also be one the chat
+   * shows after a reload. A failed save takes the entry back (the head returns
+   * to the previous message) and the person is told to resend — the run may
+   * then read the same words twice, which is harmless; a message the chat
+   * shows but the run ignored would not be. */
+  let saved;
   try {
-    await saveMessage(
+    saved = await saveMessage(
       {
         userId,
         isTemporary: req?.body?.isTemporary,
@@ -344,15 +370,18 @@ router.post('/chat/steer', async (req, res) => {
     );
   } catch (error) {
     logger.error(`[AgentStream] Failed to save steer message for ${conversationId}`, error);
-    return res.status(500).json({ error: 'Не удалось сохранить уточнение. Повторите.' });
   }
-  /* Recorded only once the message is safely in the database: a steer the run
-   * reads must also be one the chat shows after a reload. */
-  steering.add({ text: graphText, message });
+  if (!saved) {
+    steering.remove(message.messageId);
+    return steerRefused(res, 500, 'save');
+  }
+  /* The persisted document (timestamps and all) is what the final event and
+   * the chat get — same reason the runner keeps the saved response. */
+  entry.message = saved;
   logger.info(
     `[AgentStream] steer accepted for ${conversationId} (${text.length} chars, ${steering.size} this run)`,
   );
-  return res.json({ message, parentMessageId, accepted: steering.size });
+  return res.json({ message: saved, parentMessageId, accepted: steering.size });
 });
 
 /**

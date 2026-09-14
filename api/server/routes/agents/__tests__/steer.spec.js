@@ -139,6 +139,105 @@ describe('POST /chat/steer', () => {
     expect(box.headMessageId).toBe('um1');
   });
 
+  it('refuses when the report starts WHILE the clarification is being masked — nothing stored (review п.1)', async () => {
+    const box = new SteeringMailbox({
+      headMessageId: 'um1',
+      mask: async (text) => {
+        box.phase = 'report';
+        return text;
+      },
+    });
+    mockGetSteering.mockReturnValue(box);
+    const res = await steer({ conversationId: CONVO, text: 'на самой границе' });
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe('report');
+    expect(mockSaveMessage).not.toHaveBeenCalled();
+    expect(box.size).toBe(0);
+    expect(box.headMessageId).toBe('um1');
+  });
+
+  it('refuses a mailbox the run has already closed, with the «write it as a normal message» step', async () => {
+    const box = new SteeringMailbox({ headMessageId: 'um1' });
+    box.phase = 'closed';
+    mockGetSteering.mockReturnValue(box);
+    const res = await steer({ conversationId: CONVO, text: 'после конца' });
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe('closed');
+    expect(res.body.error).toMatch(/обычным сообщением/);
+    expect(mockSaveMessage).not.toHaveBeenCalled();
+  });
+
+  it('two clarifications in flight at once chain under each other, never share a parent (review п.2)', async () => {
+    const box = new SteeringMailbox({
+      headMessageId: 'um1',
+      mask: (text) => new Promise((resolve) => setTimeout(() => resolve(text), 20)),
+    });
+    mockGetSteering.mockReturnValue(box);
+    const [a, b] = await Promise.all([
+      steer({ conversationId: CONVO, text: 'первое' }),
+      steer({ conversationId: CONVO, text: 'второе' }),
+    ]);
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+    const parents = [a.body.parentMessageId, b.body.parentMessageId].sort();
+    const ids = [a.body.message.messageId, b.body.message.messageId];
+    expect(parents).toContain('um1');
+    expect(parents.filter((p) => ids.includes(p))).toHaveLength(1);
+    expect(box.size).toBe(2);
+    expect(ids).toContain(box.headMessageId);
+  });
+
+  it('takes the entry back and restores the head when the database returns nothing', async () => {
+    const box = new SteeringMailbox({ headMessageId: 'um1' });
+    mockGetSteering.mockReturnValue(box);
+    mockSaveMessage.mockResolvedValue(undefined);
+    const res = await steer({ conversationId: CONVO, text: 'x' });
+    expect(res.status).toBe(500);
+    expect(res.body.reason).toBe('save');
+    expect(box.size).toBe(0);
+    expect(box.headMessageId).toBe('um1');
+  });
+
+  it('answers with the PERSISTED document and keeps it in the mailbox', async () => {
+    const box = new SteeringMailbox({ headMessageId: 'um1' });
+    mockGetSteering.mockReturnValue(box);
+    mockSaveMessage.mockImplementation(async (ctx, msg) => ({ ...msg, createdAt: 'T' }));
+    const res = await steer({ conversationId: CONVO, text: 'x' });
+    expect(res.status).toBe(200);
+    expect(res.body.message.createdAt).toBe('T');
+    expect(box.messages()[0].createdAt).toBe('T');
+  });
+
+  it('tells a research run still assembling its graph to retry, and a non-research job that it cannot be steered', async () => {
+    mockGetSteering.mockReturnValue(undefined);
+    mockGenerationJobManager.getJob.mockResolvedValue({
+      status: 'running',
+      metadata: { userId: 'test-user-123', producerFinalizesOnAbort: true },
+    });
+    const notReady = await steer({ conversationId: CONVO, text: 'x' });
+    expect(notReady.status).toBe(409);
+    expect(notReady.body.reason).toBe('not-ready');
+    expect(notReady.body.error).toMatch(/несколько секунд/);
+
+    mockGenerationJobManager.getJob.mockResolvedValue({
+      status: 'running',
+      metadata: { userId: 'test-user-123' },
+    });
+    const plain = await steer({ conversationId: CONVO, text: 'x' });
+    expect(plain.body.reason).toBe('not-steerable');
+  });
+
+  it('403 on a tenant mismatch, like abort', async () => {
+    mockGenerationJobManager.getJob.mockResolvedValue({
+      status: 'running',
+      metadata: { userId: 'test-user-123', tenantId: 'tenant-b' },
+    });
+    mockGetSteering.mockReturnValue(new SteeringMailbox({ headMessageId: 'um1' }));
+    const res = await steer({ conversationId: CONVO, text: 'x' });
+    expect(res.status).toBe(403);
+    expect(mockSaveMessage).not.toHaveBeenCalled();
+  });
+
   it('refuses once the report is being written — the run would never read it', async () => {
     const box = new SteeringMailbox({ headMessageId: 'um1' });
     box.phase = 'report';
@@ -166,8 +265,10 @@ describe('POST /chat/steer', () => {
     expect(over.body.error).toMatch(/обычным сообщением/);
   });
 
-  it('400 on empty text or a placeholder conversation', async () => {
-    expect((await steer({ conversationId: CONVO, text: '   ' })).status).toBe(400);
+  it('400 on empty text or a placeholder conversation, each with its reason', async () => {
+    const empty = await steer({ conversationId: CONVO, text: '   ' });
+    expect(empty.status).toBe(400);
+    expect(empty.body.reason).toBe('empty');
     expect((await steer({ conversationId: 'new', text: 'x' })).status).toBe(400);
     expect((await steer({ text: 'x' })).status).toBe(400);
     expect(mockGenerationJobManager.getJob).not.toHaveBeenCalled();
@@ -211,6 +312,8 @@ describe('POST /chat/steer', () => {
     mockSaveMessage.mockRejectedValue(new Error('mongo down'));
     const res = await steer({ conversationId: CONVO, text: 'x' });
     expect(res.status).toBe(500);
+    expect(res.body.reason).toBe('save');
     expect(box.size).toBe(0);
+    expect(box.headMessageId).toBe('um1');
   });
 });

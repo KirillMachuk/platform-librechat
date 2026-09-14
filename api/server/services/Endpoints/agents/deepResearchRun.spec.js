@@ -3026,6 +3026,20 @@ describe('runNewDeepResearch — mid-run steering (DR_MIDRUN_STEERING_Plan.md)',
     expect(getSteering('stream-1')).toBeUndefined();
   });
 
+  it('closes the mailbox when the run unwinds — even when the engine throws — and unregisters it', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    let box;
+    mockRunDeepResearch.mockImplementation(async () => {
+      box = getSteering('stream-1');
+      throw new Error('engine exploded');
+    });
+    await runNewDeepResearch(baseParams('q')).catch(() => {});
+    expect(box).toBeDefined();
+    expect(box.phase).toBe('closed');
+    expect(box.refusal('после конца')).toBe('closed');
+    expect(getSteering('stream-1')).toBeUndefined();
+  });
+
   it('closes the mailbox for new clarifications once the report phase starts', async () => {
     mockStartSovereignSession.mockResolvedValue(null);
     const phases = [];

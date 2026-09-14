@@ -1925,6 +1925,10 @@ async function runNewDeepResearch(params) {
          * unwinds through here — or it keeps emitting into a stream the client has
          * already finalized. */
         stopReportTicker();
+        /* Closed BEFORE it is unregistered: a steer request that already holds
+         * the mailbox (it looked it up before the run ended) must be refused,
+         * not recorded under an answer that has already been written. */
+        steering.phase = 'closed';
         if (streamId) {
           unregisterSteering(streamId, steering);
         }

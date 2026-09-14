@@ -34,9 +34,10 @@ export interface SteeringEntry {
   at: string;
 }
 
-export type SteeringPhase = 'research' | 'report';
+/** `closed` = the run is over (or unwinding): nothing will read the mailbox again. */
+export type SteeringPhase = 'research' | 'report' | 'closed';
 
-export type SteeringRefusal = 'empty' | 'length' | 'limit' | 'report';
+export type SteeringRefusal = 'empty' | 'length' | 'limit' | 'report' | 'closed';
 
 /** A clarification longer than this is a new question, not a steer. */
 export const MAX_STEER_CHARS = 2000;
@@ -46,6 +47,7 @@ export const MAX_STEERS_PER_RUN = 10;
 export class SteeringMailbox {
   private readonly list: SteeringEntry[] = [];
   private head: string;
+  private readonly initialHead: string;
   private currentPhase: SteeringPhase = 'research';
   private readonly mask?: (text: string) => Promise<string>;
 
@@ -56,6 +58,7 @@ export class SteeringMailbox {
     mask?: (text: string) => Promise<string>;
   }) {
     this.head = options.headMessageId;
+    this.initialHead = options.headMessageId;
     this.mask = options.mask;
   }
 
@@ -68,7 +71,8 @@ export class SteeringMailbox {
     return this.currentPhase;
   }
 
-  /** The runner flips this once the report node starts: no round will read a new steer. */
+  /** The runner flips this once the report node starts (`report`) and when the
+   *  run unwinds (`closed`): no node will read a new steer after either. */
   set phase(next: SteeringPhase) {
     this.currentPhase = next;
   }
@@ -84,6 +88,9 @@ export class SteeringMailbox {
     }
     if (text.length > MAX_STEER_CHARS) {
       return 'length';
+    }
+    if (this.currentPhase === 'closed') {
+      return 'closed';
     }
     if (this.currentPhase === 'report') {
       return 'report';
@@ -105,7 +112,15 @@ export class SteeringMailbox {
     return this.mask ? this.mask(trimmed) : trimmed;
   }
 
-  /** Records an accepted clarification and moves the branch head onto its message. */
+  /**
+   * Records an accepted clarification and moves the branch head onto its message.
+   *
+   * Synchronous on purpose, and meant to be called in the same tick as the
+   * `refusal()` check and the read of `headMessageId` that named the message's
+   * parent: with no `await` between them the phase cannot flip and no second
+   * clarification can slip in — the two windows the first review found
+   * (a steer accepted after the report snapshot; two steers under one head).
+   */
   add(entry: { text: string; message: SteeringMessage; at?: string }): SteeringEntry {
     const stored: SteeringEntry = {
       text: entry.text,
@@ -115,6 +130,22 @@ export class SteeringMailbox {
     this.list.push(stored);
     this.head = entry.message.messageId;
     return stored;
+  }
+
+  /**
+   * Takes a clarification back — only the LAST one, whose message failed to
+   * persist: an earlier one may already be another entry's parent. Returns
+   * whether it was removed; the head goes back to the previous message.
+   */
+  remove(messageId: string): boolean {
+    const last = this.list[this.list.length - 1];
+    if (!last || last.message.messageId !== messageId) {
+      return false;
+    }
+    this.list.pop();
+    const previous = this.list[this.list.length - 1];
+    this.head = previous ? previous.message.messageId : this.initialHead;
+    return true;
   }
 
   /** The clarifications a node reads at its start, oldest first. */
