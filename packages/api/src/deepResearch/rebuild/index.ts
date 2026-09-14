@@ -15,6 +15,15 @@ export {
   mergeUsageByModel,
 } from './shared';
 export { startSovereignSession, sovereignPassthroughHeaders } from './sovereign';
+export {
+  SteeringMailbox,
+  registerSteering,
+  getSteering,
+  unregisterSteering,
+  MAX_STEER_CHARS,
+  MAX_STEERS_PER_RUN,
+} from './steering';
+export type { SteeringEntry, SteeringMessage, SteeringPhase, SteeringRefusal } from './steering';
 export { reportToPdfBuffer } from './pdf';
 export {
   buildClarifyPrompt,

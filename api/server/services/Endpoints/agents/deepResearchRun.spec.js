@@ -73,6 +73,9 @@ const mockCompressModelFor = jest.fn(() => 'compress-model');
 const mockGetJob = jest.fn(async () => ({ streamId: 'stream-1', createdAt: 1 }));
 
 jest.mock('@librechat/agents', () => ({
+  /* The real package underneath: `@librechat/api`'s index (needed for the
+   * real steering mailbox below) reads tool definitions from it at load time. */
+  ...jest.requireActual('@librechat/agents'),
   Providers: { OPENAI: 'openAI' },
   getChatModelClass: jest.fn(() => mockFakeModel),
   createSearchTool: jest.fn(() => ({ name: 'web_search' })),
@@ -100,6 +103,13 @@ jest.mock('@librechat/api', () => ({
   runDeepResearch: (...a) => mockRunDeepResearch(...a),
   startSovereignSession: (...a) => mockStartSovereignSession(...a),
   createDeepResearchGraph: (...a) => mockCreateDeepResearchGraph(...a),
+  /* The real mailbox + registry: the steer route reaches the run through them,
+   * so the wiring under test is the real contract, not a stand-in. */
+  ...(() => {
+    const { SteeringMailbox, registerSteering, unregisterSteering } =
+      jest.requireActual('@librechat/api');
+    return { SteeringMailbox, registerSteering, unregisterSteering };
+  })(),
   loadWebSearchAuth: jest.fn(async () => ({ authenticated: false })),
   tierToRunBudget: jest.fn(() => ({})),
   GenerationJobManager: {
@@ -2968,5 +2978,98 @@ describe('a truncated run is recorded, not announced (owner decision 27.08.2026)
 
     expect(mockReportToPdfBuffer).toHaveBeenCalledTimes(1);
     expect(mockReportToPdfBuffer.mock.calls[0][0]).toBe(report);
+  });
+});
+
+describe('runNewDeepResearch — mid-run steering (DR_MIDRUN_STEERING_Plan.md)', () => {
+  const { getSteering } = jest.requireActual('@librechat/api');
+
+  it('registers the mailbox for the run, hangs the answer under the LAST clarification, ships the clarifications in the final, and unregisters', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    let seenDuringRun;
+    mockRunDeepResearch.mockImplementation(async () => {
+      seenDuringRun = getSteering('stream-1');
+      seenDuringRun.add({ text: 'не Минск', message: { messageId: 'steer-1', text: 'не Минск' } });
+      seenDuringRun.add({
+        text: 'только 2026',
+        message: { messageId: 'steer-2', text: 'только 2026' },
+      });
+      return {
+        finalReport: REPORT,
+        finalizeReason: 'completed',
+        usage: { input: 1, output: 1, total: 2 },
+        usageByModel: {},
+        findings: [],
+      };
+    });
+
+    await runNewDeepResearch(baseParams('q'));
+
+    expect(seenDuringRun).toBeDefined();
+    expect(seenDuringRun.headMessageId).toBe('steer-2');
+    expect(mockCreateDeepResearchGraph.mock.calls[0][0].steering).toBe(seenDuringRun);
+    const reportMsg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(reportMsg.parentMessageId).toBe('steer-2');
+    const final = mockEmittedFinals[mockEmittedFinals.length - 1];
+    expect(final.responseMessage.parentMessageId).toBe('steer-2');
+    expect(final.steerMessages.map((m) => m.messageId)).toEqual(['steer-1', 'steer-2']);
+    expect(getSteering('stream-1')).toBeUndefined();
+  });
+
+  it('without a clarification the answer hangs under the request, and the final carries no steer list', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    await runNewDeepResearch(baseParams('q'));
+    const reportMsg = mockSavedMessages.find((m) => m.messageId === 'r1');
+    expect(reportMsg.parentMessageId).toBe('um1');
+    const final = mockEmittedFinals[mockEmittedFinals.length - 1];
+    expect(final.steerMessages).toBeUndefined();
+    expect(getSteering('stream-1')).toBeUndefined();
+  });
+
+  it('closes the mailbox for new clarifications once the report phase starts', async () => {
+    mockStartSovereignSession.mockResolvedValue(null);
+    const phases = [];
+    mockRunDeepResearch.mockImplementation(async ({ onProgress }) => {
+      const box = getSteering('stream-1');
+      phases.push(box.phase);
+      onProgress({ type: 'research', round: 1 });
+      phases.push(box.phase);
+      onProgress({ type: 'report' });
+      phases.push(box.phase, box.refusal('поздно'));
+      return {
+        finalReport: REPORT,
+        finalizeReason: 'completed',
+        usage: { input: 1, output: 1, total: 2 },
+        usageByModel: {},
+        findings: [],
+      };
+    });
+    await runNewDeepResearch(baseParams('q'));
+    expect(phases).toEqual(['research', 'research', 'report', 'report']);
+  });
+
+  it("sovereign: a clarification is masked through the run's own session before the graph may read it", async () => {
+    const maskContent = jest.fn(async (t) => t.replace('Иванов', '[PERSON_1]'));
+    mockStartSovereignSession.mockResolvedValue({
+      maskedQuestion: 'q',
+      passthroughHeaders: {},
+      maskContent,
+      restore: async (t) => t,
+      drop: async () => {},
+    });
+    let prepared;
+    mockRunDeepResearch.mockImplementation(async () => {
+      prepared = await getSteering('stream-1').prepare('Иванов — не тот');
+      return {
+        finalReport: REPORT,
+        finalizeReason: 'completed',
+        usage: { input: 1, output: 1, total: 2 },
+        usageByModel: {},
+        findings: [],
+      };
+    });
+    await runNewDeepResearch(baseParams('q'));
+    expect(maskContent).toHaveBeenCalledWith('Иванов — не тот');
+    expect(prepared).toBe('[PERSON_1] — не тот');
   });
 });

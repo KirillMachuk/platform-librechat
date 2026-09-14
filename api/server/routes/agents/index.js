@@ -1,6 +1,10 @@
 const express = require('express');
+const { randomUUID } = require('node:crypto');
 const {
   isEnabled,
+  getSteering,
+  MAX_STEER_CHARS,
+  MAX_STEERS_PER_RUN,
   GenerationJobManager,
   hasPersistableAbortContent,
   buildAbortedResponseMetadata,
@@ -236,6 +240,119 @@ router.get('/chat/status/:conversationId', async (req, res) => {
     createdAt: job.createdAt,
     resumeState,
   });
+});
+
+/**
+ * Why a clarification was not taken, in the user's words — every text names the
+ * next step (engineering principle: never dead-end). Keyed by the mailbox's
+ * refusal codes plus the route's own.
+ */
+const STEER_REFUSALS = {
+  empty: 'Напишите уточнение текстом.',
+  length: `Уточнение длиннее ${MAX_STEER_CHARS} знаков — это уже новый запрос. Сократите его или дождитесь отчёта и задайте отдельно.`,
+  limit: `За один прогон принимается не больше ${MAX_STEERS_PER_RUN} уточнений. Дождитесь отчёта и продолжите обычным сообщением.`,
+  report:
+    'Отчёт уже пишется — новое уточнение в него не попадёт. Дождитесь отчёта и напишите следом.',
+  'no-run':
+    'Исследование уже завершилось — напишите это обычным сообщением, оно уйдёт следующим ходом.',
+  'not-steerable':
+    'Уточнить на ходу можно только идущее исследование. Дождитесь ответа и напишите следом.',
+  mask: 'Анонимайзер сейчас недоступен — уточнение не принято. Повторите через минуту.',
+};
+
+/**
+ * @route POST /chat/steer
+ * @desc Hand a running Deep Research job a clarification typed into the composer
+ * @access Private
+ * @description Mid-run steering (DR_MIDRUN_STEERING_Plan.md). The clarification is
+ * persisted as an ordinary user message under the run's current branch head and
+ * handed to the run's mailbox; the supervisor reads it at the start of the next
+ * round and the report reads it when it writes. Mounted before chatRouter like
+ * `/chat/abort`, whose ownership checks it repeats.
+ */
+router.post('/chat/steer', async (req, res) => {
+  const { conversationId } = req.body ?? {};
+  const rawText = typeof req.body?.text === 'string' ? req.body.text : '';
+  const text = rawText.trim();
+  const userId = req.user?.id;
+
+  if (!conversationId || conversationId === 'new') {
+    return res.status(400).json({ error: STEER_REFUSALS['not-steerable'] });
+  }
+  if (!text) {
+    return res.status(400).json({ error: STEER_REFUSALS.empty });
+  }
+
+  // streamId === conversationId for every job this route can address.
+  const job = await GenerationJobManager.getJob(conversationId);
+  if (!job || job.status !== 'running') {
+    return res.status(409).json({ error: STEER_REFUSALS['no-run'] });
+  }
+  if (job.metadata?.userId && job.metadata.userId !== userId) {
+    logger.warn(`[AgentStream] Unauthorized steer attempt for ${conversationId} by user ${userId}`);
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
+  if (hasTenantMismatch(job, req.user)) {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
+
+  /* No mailbox: not a Deep Research run, a run that already ended, or a run
+   * held by another process (the mailbox lives with the graph). */
+  const steering = getSteering(conversationId);
+  if (!steering) {
+    return res.status(409).json({ error: STEER_REFUSALS['not-steerable'] });
+  }
+  const refusal = steering.refusal(text);
+  if (refusal) {
+    const status = refusal === 'length' || refusal === 'empty' ? 400 : 409;
+    return res.status(status).json({ error: STEER_REFUSALS[refusal], reason: refusal });
+  }
+
+  /* Sovereign mode: masked BEFORE anything is stored or shown, so a failure
+   * leaves no half-accepted message behind — the text stays in the composer. */
+  let graphText;
+  try {
+    graphText = await steering.prepare(text);
+  } catch (error) {
+    logger.warn(`[AgentStream] steer masking failed for ${conversationId}`, error);
+    return res.status(503).json({ error: STEER_REFUSALS.mask, reason: 'mask' });
+  }
+
+  const parentMessageId = steering.headMessageId;
+  const message = {
+    messageId: randomUUID(),
+    conversationId,
+    parentMessageId,
+    text,
+    sender: 'User',
+    isCreatedByUser: true,
+    user: userId,
+    endpoint: job.metadata?.endpoint,
+    /* Provenance, like every other DR artifact: the chat renders it as a plain
+     * bubble, the run's history knows it was a mid-run clarification. */
+    drKind: 'steer',
+  };
+  try {
+    await saveMessage(
+      {
+        userId,
+        isTemporary: req?.body?.isTemporary,
+        interfaceConfig: req?.config?.interfaceConfig,
+      },
+      message,
+      { context: 'api/server/routes/agents/index.js - steer endpoint' },
+    );
+  } catch (error) {
+    logger.error(`[AgentStream] Failed to save steer message for ${conversationId}`, error);
+    return res.status(500).json({ error: 'Не удалось сохранить уточнение. Повторите.' });
+  }
+  /* Recorded only once the message is safely in the database: a steer the run
+   * reads must also be one the chat shows after a reload. */
+  steering.add({ text: graphText, message });
+  logger.info(
+    `[AgentStream] steer accepted for ${conversationId} (${text.length} chars, ${steering.size} this run)`,
+  );
+  return res.json({ message, parentMessageId, accepted: steering.size });
 });
 
 /**

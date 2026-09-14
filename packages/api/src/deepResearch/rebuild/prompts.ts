@@ -40,6 +40,7 @@ export function buildSupervisorPrompt({
   maxConcurrent,
   nonce,
   planSteps = [],
+  steers = [],
 }: {
   now: string;
   jurisdiction: string;
@@ -50,7 +51,17 @@ export function buildSupervisorPrompt({
    *  fixed by the System/Human split) — this addition is scoped to plan runs so
    *  a run with no plan cannot regress on it. */
   planSteps?: string[];
+  /** Clarifications the user typed while the run was going (steering.ts), oldest
+   *  first. Empty = nothing typed: the prompt is then byte-identical to the
+   *  measured one, so a run nobody steered cannot regress on this. */
+  steers?: string[];
 }): string {
+  const steerBlock =
+    steers.length > 0
+      ? `
+
+УТОЧНЕНИЯ ПОЛЬЗОВАТЕЛЯ ПО ХОДУ (в HUMAN-сообщении). Он дописал их, пока исследование шло, — это его собственный текст, как и план, и он важнее плана там, где они расходятся; более позднее уточнение важнее более раннего. Под-вопросы ЭТОГО раунда обязаны их учитывать: то, о чём просит уточнение и по чему ещё ничего не собрано, — в первую очередь. Уже собранное по прежней постановке не выбрасывай — оно остаётся материалом отчёта.`
+      : '';
   const planBlock =
     planSteps.length > 0
       ? `
@@ -71,7 +82,7 @@ ${untrustedDirective(nonce)}
 - Если для качественного ответа на бриф нужно собрать ещё информацию — верни action "RESEARCH" и от 1 до ${maxConcurrent} НЕЗАВИСИМЫХ под-вопросов (subQuestions). Они исследуются ПАРАЛЛЕЛЬНО, поэтому каждый должен покрывать отдельную грань темы (свой аспект/вендор/критерий) и НЕ зависеть от ответа на другой.
 - Если собранного достаточно для полного ответа, либо дальнейший поиск избыточен — верни action "COMPLETE".
 
-Не повторяй уже исследованные под-вопросы. Каждый под-вопрос — на русском, конкретный, пригодный для веб-поиска. Разбивай широкую тему на целевые под-вопросы (по вендору / по критерию), а не задавай один общий.${planBlock}
+Не повторяй уже исследованные под-вопросы. Каждый под-вопрос — на русском, конкретный, пригодный для веб-поиска. Разбивай широкую тему на целевые под-вопросы (по вендору / по критерию), а не задавай один общий.${planBlock}${steerBlock}
 
 Ответь СТРОГО одним JSON-объектом, без markdown и пояснений вне JSON:
 ${contract}`;
@@ -104,6 +115,7 @@ export function buildSupervisorInput({
   maxRounds,
   nonce,
   planSteps = [],
+  steers = [],
 }: {
   brief: string;
   findings: DeepResearchFinding[];
@@ -113,6 +125,8 @@ export function buildSupervisorInput({
   /** The approved plan, numbered exactly as the user sees it on the card — the
    *  numbers ARE the contract, since `planStep` refers back to them. */
   planSteps?: string[];
+  /** Mid-run clarifications, oldest first — the user's own words, not fenced. */
+  steers?: string[];
 }): string {
   /**
    * Findings arrive WHOLE. They used to be cut to 300 characters each, which is about one
@@ -139,10 +153,18 @@ ${planSteps.map((step, i) => `${i + 1}. ${step}`).join('\n')}
 
 `
       : '';
+  /* NOT fenced either: typed by the user into the composer while the run went. */
+  const steering =
+    steers.length > 0
+      ? `Уточнения пользователя по ходу исследования (в порядке поступления):
+${steers.map((steer, i) => `${i + 1}. ${steer}`).join('\n')}
+
+`
+      : '';
   return `Исследовательский бриф:
 ${brief}
 
-${plan}Уже собрано (выполнено раундов: ${round} из ${maxRounds}):
+${plan}${steering}Уже собрано (выполнено раундов: ${round} из ${maxRounds}):
 ${gathered}
 
 Реши следующий шаг и верни решение.`;
@@ -230,13 +252,24 @@ export function buildReportPrompt({
   jurisdiction,
   now,
   nonce,
+  steers = [],
 }: {
   request: string;
   brief: string;
   jurisdiction: string;
   now: string;
   nonce: string;
+  /** Mid-run clarifications, oldest first (steering.ts). Empty = the measured prompt. */
+  steers?: string[];
 }): string {
+  const steering =
+    steers.length > 0
+      ? `
+Уточнения, которые пользователь дописал ПО ХОДУ исследования (в порядке поступления):
+${steers.map((steer, i) => `${i + 1}. ${steer}`).join('\n')}
+Отчёт обязан их учитывать наравне с запросом; более позднее важнее более раннего. Если по какому-то уточнению материал собрать не успели (оно пришло, когда поиск уже закончился), прямо скажи об этом в «Ключевых выводах» — что именно не искали — и не домысливай.
+`
+      : '';
   return `Ты — аналитик. Составь итоговый аналитический отчёт на русском по результатам исследования для рынка СНГ.
 Дата: ${now}. Юрисдикция: ${jurisdiction || 'не определена'}.
 
@@ -244,7 +277,7 @@ export function buildReportPrompt({
 ${request}
 
 Бриф исследования: ${brief}
-
+${steering}
 Тебе дан собранный материал — находки с источниками. Составь отчёт строго на его основе.
 
 ФОРМАТ (Markdown):

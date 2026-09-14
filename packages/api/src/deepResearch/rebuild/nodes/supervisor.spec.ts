@@ -13,6 +13,7 @@ import {
   normalizePlanStep,
 } from './supervisor';
 import { resolveDeepResearchTier } from '../config';
+import { SteeringMailbox } from '../steering';
 
 const NOW = '2026-06-25T00:00:00Z';
 const NONCE = 'test-nonce';
@@ -620,5 +621,57 @@ describe('SUPERVISOR works the approved plan (r27)', () => {
     expect(String(system.content)).not.toContain('ПЛАН, УТВЕРЖДЁННЫЙ');
     expect(String(human.content)).not.toContain('Утверждённый план');
     expect(update.planStep).toBe(0);
+  });
+});
+
+describe('mid-run steering (DR_MIDRUN_STEERING_Plan.md)', () => {
+  const capture = () => {
+    const seen: BaseMessage[][] = [];
+    const model = {
+      invoke: async (messages: BaseMessage[]) => {
+        seen.push(messages);
+        return new AIMessage('{"action":"RESEARCH","subQuestions":["a","b"]}');
+      },
+    } as unknown as BaseChatModel;
+    return { seen, model };
+  };
+
+  it('a clarification typed during a round reaches the NEXT round: rules in System, words in Human', async () => {
+    const { seen, model } = capture();
+    const steering = new SteeringMailbox({ headMessageId: 'um1' });
+    const node = createSupervisorNode({ model, tier: TIER, now: NOW, nonce: NONCE, steering });
+
+    await node(stateWith({}), configWith());
+    /* Lands while round 1 runs... */
+    steering.add({ text: 'смотри не Минск, а всю область', message: { messageId: 's1' } });
+    /* ...and is read when round 2 is planned, not before. */
+    await node(stateWith({ round: 1 }), configWith());
+
+    expect(String(seen[0][1].content)).not.toContain('всю область');
+    const [system, human] = seen[1];
+    expect(String(system.content)).toContain('УТОЧНЕНИЯ ПОЛЬЗОВАТЕЛЯ ПО ХОДУ');
+    expect(String(human.content)).toContain('Уточнения пользователя по ходу исследования');
+    expect(String(human.content)).toContain('1. смотри не Минск, а всю область');
+    // The user's own words are NOT fenced as untrusted page content.
+    expect(String(human.content)).not.toMatch(/<<<untrusted[^>]*>>>[^]*всю область/);
+  });
+
+  it('with nothing typed the prompts are byte-identical to an unsteerable run (the measured ones)', async () => {
+    const plain = capture();
+    await createSupervisorNode({ model: plain.model, tier: TIER, now: NOW, nonce: NONCE })(
+      stateWith({}),
+      configWith(),
+    );
+    const steerable = capture();
+    await createSupervisorNode({
+      model: steerable.model,
+      tier: TIER,
+      now: NOW,
+      nonce: NONCE,
+      steering: new SteeringMailbox({ headMessageId: 'um1' }),
+    })(stateWith({}), configWith());
+    expect(steerable.seen[0].map((m) => String(m.content))).toEqual(
+      plain.seen[0].map((m) => String(m.content)),
+    );
   });
 });

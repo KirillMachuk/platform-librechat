@@ -17,6 +17,9 @@ const {
   resolveDeepResearchTier,
   sanitizeMessageForTransmit,
   createDeepResearchGraph,
+  SteeringMailbox,
+  registerSteering,
+  unregisterSteering,
   selectChatFileSearchInputs,
   startSovereignSession,
   buildClarifyPrompt,
@@ -1345,6 +1348,9 @@ async function runNewDeepResearch(params) {
   // M1: the soft DR concurrency cap short-circuits via a sentinel into the same finalize.
   let result;
   let sovereign = null;
+  /** Mid-run clarifications (DR_MIDRUN_STEERING_Plan.md): created with the graph,
+   *  reachable by the steer route under the stream id while the run goes. */
+  let steering = null;
   // Pre-graph model spend (clarify + plan decision) — merged into result.usage after the
   // run for EVERY outcome, so billing covers each call.
   let clarifyUsage = null;
@@ -1665,6 +1671,16 @@ async function runNewDeepResearch(params) {
         );
       }
 
+      /* The response hangs under the LAST clarification once there is one (the
+       * chat then reads: question → clarification → answer); until then under
+       * the request, exactly as before. In sovereign mode every clarification is
+       * masked into THIS run's placeholder map before the graph may read it —
+       * the plan is read back out of the masked transcript, but a mid-run
+       * message is not in that transcript, so it takes the detect call. */
+      steering = new SteeringMailbox({
+        headMessageId: requestMessage?.messageId ?? parentMessageId,
+        mask: sovereign ? (text) => sovereign.maskContent(text) : undefined,
+      });
       const graph = createDeepResearchGraph({
         leadModel,
         workerModel,
@@ -1676,6 +1692,7 @@ async function runNewDeepResearch(params) {
         // Per-run spotlighting nonce: fences untrusted web/RAG/tool material so injected
         // page content cannot escape the data fences into instruction space (H5).
         nonce: randomUUID(),
+        steering,
       });
 
       // Task #21 live progress: translate the engine's coarse onProgress into `dr_progress`
@@ -1794,6 +1811,10 @@ async function runNewDeepResearch(params) {
           return;
         }
         if (event.type === 'report') {
+          /* No round will read a clarification from here on: the steer route
+           * refuses with «the report is being written» instead of accepting a
+           * message the run would never see. */
+          steering.phase = 'report';
           /* Fired twice by design: once when the supervisor concludes (the phase STARTS)
            * and once when the report node returns (it is over). The first arrival starts
            * the clock and the heartbeat; the second is just the last tick before the
@@ -1869,6 +1890,10 @@ async function runNewDeepResearch(params) {
       }
       agendaReachedGraph = graphPlanSteps.length > 0;
 
+      /* Reachable by `POST /chat/steer` for exactly as long as the graph runs. */
+      if (streamId) {
+        registerSteering(streamId, steering);
+      }
       try {
         result = await runDeepResearch({
           graph,
@@ -1900,6 +1925,9 @@ async function runNewDeepResearch(params) {
          * unwinds through here — or it keeps emitting into a stream the client has
          * already finalized. */
         stopReportTicker();
+        if (streamId) {
+          unregisterSteering(streamId, steering);
+        }
       }
     }
   } catch (error) {
@@ -2077,7 +2105,9 @@ async function runNewDeepResearch(params) {
     // H2: the report's parent is the user's QUESTION, not the question's parent.
     // Otherwise the report and the question become siblings and `buildTree` drops
     // the report on refetch (it vanishes on reload). Mirrors GenerationJobManager.
-    parentMessageId: requestMessage?.messageId ?? parentMessageId,
+    // With mid-run clarifications the question is the LAST of them (steering.ts):
+    // the chat reads question → clarification → answer, one branch, one run.
+    parentMessageId: steering?.headMessageId ?? requestMessage?.messageId ?? parentMessageId,
     sender: sender ?? 'Deep Research',
     isCreatedByUser: false,
     user: userId,
@@ -2234,6 +2264,12 @@ async function runNewDeepResearch(params) {
     title: finalConversation.title,
     requestMessage: requestMessage ? sanitizeMessageForTransmit(requestMessage) : undefined,
     responseMessage,
+    /* The clarifications typed during the run, already persisted by the steer
+     * route: the client's final assembles the feed from its snapshot taken
+     * BEFORE the turn, so without these it would drop them on finalization. */
+    ...(steering && steering.size > 0
+      ? { steerMessages: steering.messages().map((m) => sanitizeMessageForTransmit(m)) }
+      : {}),
   };
 
   if (streamId) {

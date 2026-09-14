@@ -1,5 +1,6 @@
 import { FakeListChatModel } from '@langchain/core/utils/testing';
 import { AIMessage, HumanMessage } from '@langchain/core/messages';
+import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { BaseMessage } from '@langchain/core/messages';
 import type { DeepResearchState, DeepResearchFinding } from '../state';
@@ -87,6 +88,25 @@ describe('composeReport', () => {
     now: NOW,
     nonce: NONCE,
   };
+
+  it('mid-run clarifications reach the report rules, and say what to do with a late one', async () => {
+    const seen: string[] = [];
+    const reportModel = {
+      invoke: async (messages: { content: unknown }[]) => {
+        seen.push(String(messages[0].content));
+        return new AIMessage('# Отчёт');
+      },
+    } as unknown as BaseChatModel;
+    await composeReport({ ...base, reportModel, steers: ['не Минск, а вся область'] });
+    expect(seen[0]).toContain('Уточнения, которые пользователь дописал ПО ХОДУ');
+    expect(seen[0]).toContain('1. не Минск, а вся область');
+    expect(seen[0]).toContain('материал собрать не успели');
+
+    await composeReport({ ...base, reportModel, steers: [] });
+    await composeReport({ ...base, reportModel });
+    expect(seen[1]).toBe(seen[2]);
+    expect(seen[1]).not.toContain('Уточнения');
+  });
 
   it('returns the model report on success', async () => {
     const result = await composeReport({
