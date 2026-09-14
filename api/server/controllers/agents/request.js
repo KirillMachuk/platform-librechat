@@ -29,24 +29,6 @@ const {
 } = require('~/server/services/Endpoints/agents/deepResearchRun');
 
 /**
- * Whether this turn is routed into the rebuilt Deep Research engine.
- *
- * Two ways in: the badge, or a reply to a persisted DR turn (`isDrFollowUp` —
- * drKind-gated plan/clarify/aborted parent, i.e. the badge is off but the user is
- * answering a clarify prompt or pressing Start/Edit on a plan card).
- *
- * The Web Search permission gates BOTH arms. The badge arm is the obvious one; the
- * follow-up arm needs it too, or a role whose permission was revoked could keep
- * answering its own older plan/clarify turns and resurrect research indefinitely.
- *
- * Both arms are admission: the graph itself runs later, inside `runNewDeepResearch`.
- * A denial here can only stop a run from starting — it can never cut a running one
- * short. Keep it that way; an admitted run must reach its end.
- *
- * @param {{ req: Express.Request, userId: string, conversationId: string, parentMessageId: string }} params
- * @returns {Promise<boolean>}
- */
-/**
  * Is this an actual title, rather than the placeholder that means «none yet»?
  * The literal «New Chat» is what the client renders for an untitled conversation,
  * so it has to be treated as absence on the way out as well — mirrors `hasRealTitle`
@@ -62,11 +44,14 @@ function hasRealTitle(title) {
 /**
  * Should this stream stay silent instead of emitting its FINAL event?
  *
- * Yes in two different situations, which is why this question and the one below must
- * not share an answer: a NEWER job owns the conversation now, or this job is simply
- * gone — `abortJob` deletes it (`cleanupOnComplete`, default true) after emitting the
- * aborted final itself. Either way a second final would be wrong, so absence belongs
- * in this answer.
+ * Yes in two situations: a NEWER job owns the stream now, or this job is simply gone —
+ * `abortJob` deletes it (`cleanupOnComplete`, default true) after emitting the aborted
+ * final itself. Either way a second final would be wrong, so absence belongs in this
+ * answer.
+ *
+ * This is ONLY about the final event. It must not decide what happens to a generated
+ * title: that is how every stopped chat came out «New Chat» (#497) — one flag answered
+ * both questions, and a Stop, which leaves the job absent, threw the title away.
  *
  * @param {{ createdAt?: number|string }|null|undefined} currentJob
  * @param {number|string} jobCreatedAt - When THIS run's job was created.
@@ -74,62 +59,6 @@ function hasRealTitle(title) {
  */
 function shouldSkipFinalEmit(currentJob, jobCreatedAt) {
   return currentJob == null || currentJob.createdAt !== jobCreatedAt;
-}
-
-/**
- * Settle the two title controllers for a run whose job has ENDED — either because a
- * newer job took the conversation over, or because this run was stopped and
- * `abortJob` deleted it.
- *
- * The point of this function existing at all is that the two effects must not be
- * wired to the same condition. One consequence is deliberate and worth stating: a run
- * replaced by a newer one that has since finished AND been cleaned up finds no job
- * either, so its title is now kept rather than dropped. Both runs answer the same
- * first user message — a title is only generated for a new conversation — so the name
- * describes that text either way, and the alternative is «New Chat». Generation is cancelled either way: an ended run should
- * not keep paying a title model. A title that has already FINISHED is thrown away only
- * for a job that is genuinely someone else's now — otherwise a stopped chat keeps the
- * name it already earned. Both branches used to fire together, which is why every
- * stopped run came out «New Chat».
- *
- * @param {Object} params
- * @param {{ createdAt?: number|string }|null|undefined} params.currentJob
- * @param {number|string} params.jobCreatedAt
- * @param {AbortController} params.titleAbortController - Cancels generation in flight.
- * @param {AbortController} params.titleDiscardController - Drops an already-made title.
- */
-function settleTitleForEndedJob({
-  currentJob,
-  jobCreatedAt,
-  titleAbortController,
-  titleDiscardController,
-}) {
-  titleAbortController.abort();
-  if (isSupersededByNewerJob(currentJob, jobCreatedAt)) {
-    titleDiscardController.abort();
-  }
-}
-
-/**
- * Has a NEWER run taken this conversation over — the only reason to throw away a
- * title that has already been generated?
- *
- * Only true for a job that EXISTS and was created at a different moment. Absence is
- * not an answer here: a user Stop deletes the job, so `undefined` is the ordinary end
- * of this very run, and reading it as supersession is what left every stopped chat
- * called «New Chat». The file next door already knows this trap —
- * `GenerationJobManager.abortJob` skips cleanup for a producer that finalizes its own
- * Stop precisely so its emit path does not «read a missing job as replaced mid-run».
- *
- * Two questions, two answers, deliberately not one flag: whether to emit a final and
- * whether to keep a title are simply different things.
- *
- * @param {{ createdAt?: number|string }|null|undefined} currentJob
- * @param {number|string} jobCreatedAt - When THIS run's job was created.
- * @returns {boolean}
- */
-function isSupersededByNewerJob(currentJob, jobCreatedAt) {
-  return currentJob != null && currentJob.createdAt !== jobCreatedAt;
 }
 
 /**
@@ -163,6 +92,24 @@ function pickFinalTitle({ rowTitle, generatedTitle }) {
   return generatedTitle;
 }
 
+/**
+ * Whether this turn is routed into the rebuilt Deep Research engine.
+ *
+ * Two ways in: the badge, or a reply to a persisted DR turn (`isDrFollowUp` —
+ * drKind-gated plan/clarify/aborted parent, i.e. the badge is off but the user is
+ * answering a clarify prompt or pressing Start/Edit on a plan card).
+ *
+ * The Web Search permission gates BOTH arms. The badge arm is the obvious one; the
+ * follow-up arm needs it too, or a role whose permission was revoked could keep
+ * answering its own older plan/clarify turns and resurrect research indefinitely.
+ *
+ * Both arms are admission: the graph itself runs later, inside `runNewDeepResearch`.
+ * A denial here can only stop a run from starting — it can never cut a running one
+ * short. Keep it that way; an admitted run must reach its end.
+ *
+ * @param {{ req: Express.Request, userId: string, conversationId: string, parentMessageId: string }} params
+ * @returns {Promise<boolean>}
+ */
 async function shouldRunNewDeepResearch({ req, userId, conversationId, parentMessageId }) {
   if (req.config?.deepResearch?.useNewEngine !== true) {
     return false;
@@ -693,11 +640,21 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
        *  `completeJob` also aborts on *successful* completion and would otherwise
        *  cancel a title that is merely slower than a short response. */
       const titleAbortController = new AbortController();
-      /** Separate from `titleAbortController`: a user Stop cancels the in-flight
-       *  title model call but keeps a title that already finished generating.
-       *  Only a superseded/failed stream aborts this to discard such a title so it
-       *  cannot clobber the conversation now owned by the newer run. */
-      const titleDiscardController = new AbortController();
+      /* No `discardSignal` is passed to `addTitle`, deliberately: nothing here ever
+       * throws a FINISHED title away. Upstream discards one when the stream is
+       * superseded or the turn fails, «so it cannot clobber the conversation now owned
+       * by the newer run» — but no newer run can own a title. A title is generated only
+       * for a new conversation (`isNewConvo`, which mints a fresh id and so a fresh
+       * stream), so whatever supersedes this stream is a follow-up, a regenerate or an
+       * edit, and none of those persists one (a Deep Research follow-up may generate a
+       * title, but reuses the row's title once it exists). Discarding therefore protected nothing
+       * and left the chat «New Chat» for good — after a failed turn (#494), after a
+       * Stop (#497), and after a Stop followed quickly by the next message, when the
+       * old run finds the follow-up's job in the store (review, 14.09). The title
+       * describes the first user message, which is still in the chat either way.
+       * REVISIT if new-conversation ids ever become idempotent per client request (as
+       * upstream has moved to): a retried «new chat» would then reuse the stream with
+       * `isNewConvo` true on both runs — the one case a discard would protect. */
       const abortTitleOnJobAbort = () => titleAbortController.abort();
       if (job.abortController.signal.aborted) {
         titleAbortController.abort();
@@ -789,7 +746,6 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
             immediate: true,
             convoReady,
             signal: titleAbortController.signal,
-            discardSignal: titleDiscardController.signal,
             onTitleGenerated: emitTitleEvent,
           }).catch((err) => {
             logger.error('[ResumableAgentController] Error in immediate title generation', err);
@@ -862,21 +818,14 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
             originalCreatedAt: jobCreatedAt,
             currentCreatedAt: currentJob?.createdAt,
           });
-          /* Silent, but not necessarily dispossessed. THIS is where a user Stop lands —
-           * not the catch below: `chatCompletion` swallows its own abort, so the run
-           * unwinds normally, and by now `abortJob` has deleted the job and sent the
-           * aborted final itself. Skipping the emit is right. Throwing the title away
-           * with it was not: that was one flag answering two questions, and it is why a
-           * stopped chat stayed «New Chat» while its title had been generated and billed
-           * seconds after the first message. Cancel generation either way — a stopped
-           * turn should not keep paying — but discard an already-finished title only for
-           * a job that really is someone else's now. */
-          settleTitleForEndedJob({
-            currentJob,
-            jobCreatedAt,
-            titleAbortController,
-            titleDiscardController,
-          });
+          /* Silent, but the title stays. THIS is where a user Stop lands — not the
+           * catch below: `chatCompletion` swallows its own abort, so the run unwinds
+           * normally, and by now `abortJob` has deleted the job and sent the aborted
+           * final itself. Skipping the emit is right. Cancel a title still being
+           * generated — an ended turn should not keep paying — but a title that already
+           * finished is persisted once `convoReady` resolves below (see the note by
+           * `convoReady` on why it is never discarded). */
+          titleAbortController.abort();
           job.abortController.signal.removeEventListener('abort', abortTitleOnJobAbort);
           acceptsTitleEvents = false;
           resolveConvoReady();
@@ -911,8 +860,8 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         // document turn can blow the title's 45s timeout (the agent run is not ready
         // in time), leaving the conversation as "New Chat"; the frontend's genTitle
         // poll has already given up, so a title saved later would not surface without
-        // a reload. Only when this turn COMPLETED successfully — a superseded turn
-        // intentionally discards its title via `titleDiscardController` — and the
+        // a reload. Only when this turn COMPLETED successfully (an ended or failed
+        // turn has no response to title from) and the
         // immediate attempt produced nothing, regenerate from the finished response
         // and push it through the title event while the client is still subscribed
         // (before `acceptsTitleEvents` is cleared below).
@@ -1031,40 +980,17 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         // until the 45s title timeout.
         //
         // Cancelling generation is NOT the same as discarding a title that already
-        // finished, and only the first belongs here. Discarding exists for ONE case —
-        // a stream superseded by a newer run, which owns the conversation now (see the
-        // `jobWasReplaced` branch above) — and a turn that merely failed or was stopped
-        // has no successor to protect. Measured on the stand: the three presentation
-        // runs of 2026-09-08 that were interrupted (`unfinished: true`) each generated
+        // finished, and only the first belongs here (nothing in this controller
+        // discards — see the note by `convoReady`). Measured on the stand: the three
+        // presentation runs of 2026-09-08 that were interrupted (`unfinished: true`) each generated
         // and paid for a title seconds after the first message, then threw it away, and
         // their chats read «New Chat» for good — while the one run that completed kept
         // its title. The question the user asked is still sitting in that chat; the
         // title describes it whether or not the answer arrived.
-        /* Cancelling generation is the promise the comment above makes, so it must not
-         * depend on anything that can fail. `getJob` reaches Redis and can reject; if
-         * that took the abort down with it, a failed turn would keep paying a title
-         * model for the full timeout and hold client disposal that long. Abort first,
-         * ask second — the helper's own abort below is then a no-op. */
+        /* Unconditional, and before anything that can fail: a failed turn must stop
+         * paying a title model rather than hold it — and client disposal — for the full
+         * timeout. */
         titleAbortController.abort();
-        /* «Superseded» is a question with an answer, not something to assume either
-         * way: a replaced job leaves the old one running, and if that old one then
-         * fails it lands right here. Ask with the predicate that means what it says —
-         * an absent job is not proof that anyone took the conversation over. (A user
-         * Stop is not expected here at all: `chatCompletion` returns rather than
-         * rethrowing on its own abort, so a stopped run leaves by the success path
-         * above. Both paths settle the title the same way, so being wrong about which
-         * one a Stop takes costs nothing.) */
-        try {
-          const currentJob = await GenerationJobManager.getJob(streamId);
-          settleTitleForEndedJob({
-            currentJob,
-            jobCreatedAt,
-            titleAbortController,
-            titleDiscardController,
-          });
-        } catch (lookupError) {
-          logger.debug('[ResumableAgentController] Could not check job ownership', lookupError);
-        }
         job.abortController.signal.removeEventListener('abort', abortTitleOnJobAbort);
         acceptsTitleEvents = false;
         resolveConvoReady();
@@ -1499,10 +1425,8 @@ module.exports.getPreliminaryUserMessage = getPreliminaryUserMessage;
  *  run, so it is worth asserting directly rather than through the whole controller. */
 module.exports.shouldRunNewDeepResearch = shouldRunNewDeepResearch;
 module.exports.pickFinalTitle = pickFinalTitle;
-/** Test-only exports: two questions the ended-job path must answer separately. */
-module.exports.isSupersededByNewerJob = isSupersededByNewerJob;
+/** Test-only exports: whether an ended job still emits its final; the title placeholder. */
 module.exports.shouldSkipFinalEmit = shouldSkipFinalEmit;
-module.exports.settleTitleForEndedJob = settleTitleForEndedJob;
 module.exports.hasRealTitle = hasRealTitle;
 /** Test-only export: the consumer end of the conversation-model hop (see JSDoc). */
 module.exports.drConversationModel = drConversationModel;

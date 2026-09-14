@@ -2,77 +2,106 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * A structural guard, on purpose.
+ * A structural guard, on purpose — and one that reads CODE, not comments.
  *
- * Three attempts at one fix shipped in a single day, each with a green suite, because
- * the tests pinned the DECISION while the defect lived at the CALL SITE: the success
- * path threw the generated title away together with skipping the final emit, and
- * mutating that call site back to the two-liner left every unit test passing. The
- * neighbouring `jobReplacement.spec.js` cannot catch it either — it re-implements the
- * branch it is describing rather than running it, so it stays green whatever the
- * controller does.
+ * The title of a stopped or failed chat was lost three times over (#494, #497, and a
+ * Stop followed quickly by the next message, found in review on 14.09), each time with
+ * a green suite, because the defect lived at a call site in the controller while the
+ * tests pinned a helper. Running the real controller would mean standing up the agent
+ * client, the job manager, the model and the database. The invariants are about
+ * wiring, so the guard checks wiring:
  *
- * Running the real controller here would mean standing up the agent client, the job
- * manager, the model and the database, which is a bigger construction than the code it
- * would protect. The invariant is structural, so the guard is too: exactly one function
- * may throw a generated title away, and it makes that decision with the predicate that
- * treats an absent job as «this run ended», not as «someone else owns this now».
+ * 1. the controller never hands `addTitle` a way to throw a finished title away
+ *    (`discardSignal`) — `addTitle` persists a finished title even when `signal` was
+ *    aborted, which is pinned by its own test in services/Endpoints/agents/title.test.js;
+ * 2. every path that ends a run cancels a title still being generated — so an ended
+ *    turn stops paying the title model — and the failure path does so before anything
+ *    that can fail. (Ordering against `resolveConvoReady()` is deliberately NOT pinned:
+ *    `addTitle` saves a finished title whether or not `signal` was aborted, so that
+ *    order has no observable effect, and a guard on it would guard nothing.)
+ *
+ * Comments are stripped first. The previous version of this guard matched the text
+ * `titleDiscardController.abort()` and so could be failed by a comment and passed by a
+ * call with an argument; review mutated the controller three ways and it stayed green.
  */
-describe('only settleTitleForEndedJob may discard a generated title', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'request.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'request.js'), 'utf8');
+const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1');
 
-  /** Body of a top-level `function name(...) {...}`, matched by brace depth.
-   *  The parameter list is skipped first: a destructured signature opens braces of its
-   *  own, and counting from the first one returns the signature instead of the body —
-   *  which is how the first draft of this guard passed on code it should have failed. */
-  const functionBody = (name) => {
-    const start = source.indexOf(`function ${name}(`);
-    expect(start).toBeGreaterThan(-1);
-    let parens = 0;
-    let afterParams = -1;
-    for (let i = source.indexOf('(', start); i < source.length; i++) {
-      if (source[i] === '(') parens++;
-      else if (source[i] === ')' && --parens === 0) {
-        afterParams = i;
-        break;
-      }
+/** Text between the brace that opens at or after `from` and its matching close. */
+function blockAt(text, from) {
+  const open = text.indexOf('{', from);
+  expect(open).toBeGreaterThan(-1);
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    if (text[i] === '{') {
+      depth++;
+    } else if (text[i] === '}' && --depth === 0) {
+      return text.slice(open, i + 1);
     }
-    expect(afterParams).toBeGreaterThan(-1);
-    let depth = 0;
-    for (let i = source.indexOf('{', afterParams); i < source.length; i++) {
-      if (source[i] === '{') depth++;
-      else if (source[i] === '}' && --depth === 0) return source.slice(afterParams, i + 1);
+  }
+  throw new Error('unbalanced braces');
+}
+
+function addTitleCalls(text) {
+  const calls = [];
+  const pattern = /\baddTitle\(\s*req\s*,/g;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    calls.push(blockAt(text, match.index));
+  }
+  return calls;
+}
+
+describe('a finished title is never thrown away by the agents controller', () => {
+  it('finds the calls it is guarding', () => {
+    /* immediate, fallback, final-timing and the legacy controller */
+    expect(addTitleCalls(code).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('no addTitle call carries a discard signal, under any name', () => {
+    for (const call of addTitleCalls(code)) {
+      expect(call).not.toMatch(/discardSignal/);
     }
-    throw new Error(`unbalanced braces in ${name}`);
+    expect(code).not.toMatch(/titleDiscard/);
+  });
+
+  it('the immediate title is cancelled by the title controller, not the job controller', () => {
+    /* `completeJob` aborts the job's own controller on SUCCESS, which would cancel a
+     * title that is merely slower than a short answer. */
+    const immediate = addTitleCalls(code).find((call) => /immediate:\s*true/.test(call));
+    expect(immediate).toBeDefined();
+    expect(immediate).toMatch(/signal:\s*titleAbortController\.signal/);
+  });
+});
+
+describe('every path that ends a run cancels a title still in generation', () => {
+  const cancels = (block) => {
+    const abortAt = block.indexOf('titleAbortController.abort()');
+    expect(abortAt).toBeGreaterThan(-1);
+    return abortAt;
   };
 
-  it('names exactly one place that aborts the discard controller', () => {
-    const calls = source.match(/titleDiscardController\.abort\(\)/g) ?? [];
-    expect(calls).toHaveLength(1);
-    expect(functionBody('settleTitleForEndedJob')).toContain('titleDiscardController.abort()');
+  it('the replaced branch of the success path (where a Stop that deleted the job lands)', () => {
+    const at = code.indexOf('if (jobWasReplaced)');
+    expect(at).toBeGreaterThan(-1);
+    cancels(blockAt(code, at));
   });
 
-  it('gates that abort on supersession, never on the job merely being gone', () => {
-    const body = functionBody('settleTitleForEndedJob');
-    expect(body).toContain('isSupersededByNewerJob(');
-    expect(body).not.toContain('shouldSkipFinalEmit(');
+  it('the stopped branch of the success path (a Stop that left the job in place)', () => {
+    const at = code.indexOf('if (wasAbortedBeforeComplete) {', code.indexOf('if (jobWasReplaced)'));
+    expect(at).toBeGreaterThan(-1);
+    cancels(blockAt(code, at));
   });
 
-  it('keeps the two questions apart: absence ends a run, it does not replace one', () => {
-    expect(functionBody('isSupersededByNewerJob')).toMatch(/currentJob\s*!=\s*null/);
-    expect(functionBody('shouldSkipFinalEmit')).toMatch(/currentJob\s*==\s*null/);
-  });
-
-  it('cancels generation on the failure path even if the job lookup throws', () => {
-    /* The comment there promises a failed turn stops paying for a title. Inside the
-     * try that promise is only kept while Redis answers. */
-    const catchBlock = source.slice(
-      source.indexOf('} catch (error) {', source.indexOf('emitDone')),
-    );
-    const abortAt = catchBlock.indexOf('titleAbortController.abort()');
-    const tryAt = catchBlock.indexOf('const currentJob = await GenerationJobManager.getJob');
-    expect(abortAt).toBeGreaterThan(-1);
-    expect(tryAt).toBeGreaterThan(-1);
-    expect(abortAt).toBeLessThan(tryAt);
+  it('the failure path, before anything it awaits', () => {
+    const replacedAt = code.indexOf('const jobWasReplaced');
+    const catchAt = code.indexOf('} catch (error) {', replacedAt);
+    expect(catchAt).toBeGreaterThan(-1);
+    const block = blockAt(code, catchAt + 1);
+    const abortAt = cancels(block);
+    const firstAwait = block.indexOf('await ');
+    if (firstAwait > -1) {
+      expect(abortAt).toBeLessThan(firstAwait);
+    }
   });
 });
