@@ -14,8 +14,11 @@ const path = require('path');
  * 1. the controller never hands `addTitle` a way to throw a finished title away
  *    (`discardSignal`) — `addTitle` persists a finished title even when `signal` was
  *    aborted, which is pinned by its own test in services/Endpoints/agents/title.test.js;
- * 2. every path that ends a run cancels a title still being generated BEFORE it
- *    unblocks the title's persistence wait, and before anything that can fail.
+ * 2. every path that ends a run cancels a title still being generated — so an ended
+ *    turn stops paying the title model — and the failure path does so before anything
+ *    that can fail. (Ordering against `resolveConvoReady()` is deliberately NOT pinned:
+ *    `addTitle` saves a finished title whether or not `signal` was aborted, so that
+ *    order has no observable effect, and a guard on it would guard nothing.)
  *
  * Comments are stripped first. The previous version of this guard matched the text
  * `titleDiscardController.abort()` and so could be failed by a comment and passed by a
@@ -71,20 +74,23 @@ describe('a finished title is never thrown away by the agents controller', () =>
   });
 });
 
-describe('an ended run cancels generation before it unblocks persistence', () => {
-  const cancelsBeforeUnblocking = (block) => {
+describe('every path that ends a run cancels a title still in generation', () => {
+  const cancels = (block) => {
     const abortAt = block.indexOf('titleAbortController.abort()');
-    const readyAt = block.indexOf('resolveConvoReady()');
     expect(abortAt).toBeGreaterThan(-1);
-    expect(readyAt).toBeGreaterThan(-1);
-    expect(abortAt).toBeLessThan(readyAt);
     return abortAt;
   };
 
-  it('the stopped or replaced branch of the success path', () => {
+  it('the replaced branch of the success path (where a Stop that deleted the job lands)', () => {
     const at = code.indexOf('if (jobWasReplaced)');
     expect(at).toBeGreaterThan(-1);
-    cancelsBeforeUnblocking(blockAt(code, at));
+    cancels(blockAt(code, at));
+  });
+
+  it('the stopped branch of the success path (a Stop that left the job in place)', () => {
+    const at = code.indexOf('if (wasAbortedBeforeComplete) {', code.indexOf('if (jobWasReplaced)'));
+    expect(at).toBeGreaterThan(-1);
+    cancels(blockAt(code, at));
   });
 
   it('the failure path, before anything it awaits', () => {
@@ -92,7 +98,7 @@ describe('an ended run cancels generation before it unblocks persistence', () =>
     const catchAt = code.indexOf('} catch (error) {', replacedAt);
     expect(catchAt).toBeGreaterThan(-1);
     const block = blockAt(code, catchAt + 1);
-    const abortAt = cancelsBeforeUnblocking(block);
+    const abortAt = cancels(block);
     const firstAwait = block.indexOf('await ');
     if (firstAwait > -1) {
       expect(abortAt).toBeLessThan(firstAwait);

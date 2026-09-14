@@ -47,7 +47,8 @@ function resolveTitleTimeoutMs(titleModel) {
  *   immediate-mode generation), cancels the in-flight title model call so a
  *   turn stopped before the title finished does not consume the title model. A
  *   title that already finished generating is still persisted and surfaced.
- * @param {AbortSignal} [params.discardSignal] - When aborted, discards an
+ * @param {AbortSignal} [params.discardSignal] - (Not passed by this fork's agents
+ *   controller — see the note there.) When aborted, discards an
  *   already-generated title instead of persisting it. Used only when this stream
  *   is superseded by a newer run (or the turn failed), so a stale title does not
  *   clobber the conversation now owned by the newer run. A plain user Stop does

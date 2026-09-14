@@ -1759,9 +1759,17 @@ async function loadSandboxTextForAuthoring({
     }
     const message = getThrownValueMessage(error);
     logger.warn(`[file_authoring] Sandbox read failed for "${filePath}": ${message}`);
+    /* The next step depends on who failed. When the sandbox itself answered (a
+     * directory, a permission) the same path fails the same way on every retry, and
+     * «the sandbox is unavailable» would be false — the fix is a different path. Only a
+     * request that never got an answer is worth retrying. */
+    const nextStep =
+      (error as { sandboxStderr?: boolean } | null)?.sandboxStderr === true
+        ? 'Nothing was written. Retrying the same path will fail the same way: check it with `bash_tool` or choose another path.'
+        : 'Nothing was written. Retry once; if it fails again, tell the user the sandbox is unavailable.';
     return {
       status: 'error',
-      message: `Error reading "${filePath}" from the code-execution sandbox: ${message}. Nothing was written. Retry once; if it fails again, tell the user the sandbox is unavailable.`,
+      message: `Error reading "${filePath}" from the code-execution sandbox: ${message}. ${nextStep}`,
     };
   }
 }

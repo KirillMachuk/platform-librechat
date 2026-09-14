@@ -687,6 +687,11 @@ describe('sandbox session continuity', () => {
     );
 
     expect(second.status).toBe('error');
+    /* The sandbox answered, so a retry fails identically: the model is pointed at the
+     * path, not told the sandbox is down. */
+    const denied = String((second as { errorMessage?: string }).errorMessage);
+    expect(denied).toMatch(/Retrying the same path will fail the same way/);
+    expect(denied).not.toMatch(/sandbox is unavailable/);
     expect(sandbox.writeSandboxFile).toHaveBeenCalledTimes(1);
   });
 

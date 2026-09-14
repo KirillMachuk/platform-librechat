@@ -646,11 +646,15 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
        * by the newer run» — but no newer run can own a title. A title is generated only
        * for a new conversation (`isNewConvo`, which mints a fresh id and so a fresh
        * stream), so whatever supersedes this stream is a follow-up, a regenerate or an
-       * edit, and none of those generate one. Discarding therefore protected nothing
+       * edit, and none of those persists one (a Deep Research follow-up may generate a
+       * title, but reuses the row's title once it exists). Discarding therefore protected nothing
        * and left the chat «New Chat» for good — after a failed turn (#494), after a
        * Stop (#497), and after a Stop followed quickly by the next message, when the
        * old run finds the follow-up's job in the store (review, 14.09). The title
-       * describes the first user message, which is still in the chat either way. */
+       * describes the first user message, which is still in the chat either way.
+       * REVISIT if new-conversation ids ever become idempotent per client request (as
+       * upstream has moved to): a retried «new chat» would then reuse the stream with
+       * `isNewConvo` true on both runs — the one case a discard would protect. */
       const abortTitleOnJobAbort = () => titleAbortController.abort();
       if (job.abortController.signal.aborted) {
         titleAbortController.abort();
@@ -1421,7 +1425,7 @@ module.exports.getPreliminaryUserMessage = getPreliminaryUserMessage;
  *  run, so it is worth asserting directly rather than through the whole controller. */
 module.exports.shouldRunNewDeepResearch = shouldRunNewDeepResearch;
 module.exports.pickFinalTitle = pickFinalTitle;
-/** Test-only exports: two questions the ended-job path must answer separately. */
+/** Test-only exports: whether an ended job still emits its final; the title placeholder. */
 module.exports.shouldSkipFinalEmit = shouldSkipFinalEmit;
 module.exports.hasRealTitle = hasRealTitle;
 /** Test-only export: the consumer end of the conversation-model hop (see JSDoc). */
