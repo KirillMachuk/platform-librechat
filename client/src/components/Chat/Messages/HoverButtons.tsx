@@ -10,6 +10,7 @@ import { useGenerationsByLatest, useLocalize } from '~/hooks';
 import { Fork } from '~/components/Conversations';
 import MessageAudio from './MessageAudio';
 import Feedback from './Feedback';
+import { ACTION_ROW_BUTTON_CLASS } from './ui/turn';
 import { cn } from '~/utils';
 import store from '~/store';
 
@@ -113,7 +114,7 @@ const HoverButton = memo(
     className = '',
   }: HoverButtonProps) => {
     const buttonStyle = cn(
-      'hover-button tap-target flex h-7 w-7 items-center justify-center rounded-lg text-text-secondary-alt [&_svg]:h-4 [&_svg]:w-4',
+      ACTION_ROW_BUTTON_CLASS,
       'hover:text-text-primary hover:bg-surface-hover',
       /* Канон §6.2, решение владельца: кнопки под сообщением видны ВСЕГДА.
          `isVisible` остаётся только для СТРУКТУРНЫХ случаев (это сообщение в
@@ -243,7 +244,7 @@ const HoverButtons = ({
   const handleCopy = () => copyToClipboard(setIsCopied);
 
   return (
-    <div className="group visible flex justify-center gap-2.5 self-end focus-within:outline-none lg:justify-start">
+    <div className="group visible flex flex-wrap justify-center gap-2.5 self-end focus-within:outline-none lg:justify-start [@media(pointer:coarse)]:gap-0">
       {/* Text to Speech — only when there is an answer to read (see hasAnswerText) */}
       {TextToSpeech && answerText && (
         <MessageAudio

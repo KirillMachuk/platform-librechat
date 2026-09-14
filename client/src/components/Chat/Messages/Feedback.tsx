@@ -14,6 +14,7 @@ import {
   ThumbsUp,
   ThumbsDown,
 } from '~/components/icons';
+import { ACTION_ROW_BUTTON_CLASS } from './ui/turn';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
@@ -218,7 +219,7 @@ function FeedbackButtons({
 
 function buttonClasses(isActive: boolean) {
   return cn(
-    'hover-button tap-target flex h-7 w-7 items-center justify-center rounded-lg text-text-secondary-alt [&_svg]:h-4 [&_svg]:w-4',
+    ACTION_ROW_BUTTON_CLASS,
     'hover:text-text-primary hover:bg-surface-hover',
     /* Канон §6.14, решение владельца: кнопки под ответом видны ВСЕГДА. Правило
        уже применили к кнопкам из `HoverButton`, а сюда оно не доехало — оценить
