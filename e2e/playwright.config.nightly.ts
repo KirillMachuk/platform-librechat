@@ -49,7 +49,10 @@ export default defineConfig({
        * that does not apply there. */
       name: 'phone',
       testMatch: /(layout|touch-targets)\.spec\.ts/,
-      use: { ...chrome, viewport: { width: 414, height: 896 } },
+      /* A finger, not just a narrow screen: the tap-target helper hangs on
+       * `(pointer: coarse)`, which chromium reports only under touch emulation
+       * (measured: `hasTouch` alone is enough; a bare viewport is a mouse). */
+      use: { ...chrome, viewport: { width: 414, height: 896 }, hasTouch: true },
     },
     {
       /**

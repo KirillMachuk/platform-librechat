@@ -1,9 +1,14 @@
 import { expect, test, devices } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { MongoClient } from 'mongodb';
 import { identify, measureCanon } from './canon.helpers';
+import {
+  answerAskUserCard,
+  enableMcpServer,
+  openAskUserCard,
+  seedPlanCard,
+  sendByButton,
+} from './cards.helpers';
 import { MOCK_ENDPOINTS, NEW_CHAT_PATH, selectMockEndpoint } from './helpers';
-import { applyRuntimeEnv } from '../../setup/runtimeEnv';
 
 /**
  * Design review 02.09, item 6: four controls in the chat cards were the only
@@ -32,30 +37,6 @@ test.use({
   hasTouch: true,
   isMobile: true,
 });
-
-const MCP_SERVER_TITLE = 'E2E Memory';
-const ASK_PROMPT = 'E2E: спроси меня';
-/* Four steps against a preview of three, so the «Ещё N» control exists. */
-const PLAN_TEXT = [
-  '**План исследования:** Рынок доставки для быстрого питания',
-  '',
-  '1. Собрать предложения крупнейших агрегаторов',
-  '2. Сравнить комиссии и условия 2025–2026',
-  '3. Выделить тренды по регионам',
-  '4. Сформировать таблицу и рекомендацию',
-].join('\n');
-
-/**
- * On a touch profile Enter is a newline, as on a phone; the message goes by the
- * send button — which is also why the shared `sendMessage` (Enter) is not used.
- */
-async function sendByButton(page: Page, text: string) {
-  const input = page.getByRole('textbox', { name: 'Message input' });
-  await input.click();
-  await input.fill(text);
-  await expect(page.getByTestId('send-button')).toBeEnabled();
-  await page.getByTestId('send-button').click();
-}
 
 /** The premise: the phone rules must actually be in force in this profile. */
 async function expectPhoneMedia(page: Page) {
@@ -126,10 +107,6 @@ async function stolenCentres(page: Page, testIds: string[]): Promise<string[]> {
 test.describe('card controls reach 44px on a phone', () => {
   test('the «Thoughts» header, «Ещё N» under a plan and the cancel ✕', async ({ page }) => {
     test.setTimeout(120000);
-    applyRuntimeEnv();
-    if (!process.env.MONGO_URI) {
-      throw new Error('MONGO_URI must be available to seed a plan card');
-    }
     await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
     await expectPhoneMedia(page);
     await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
@@ -143,30 +120,7 @@ test.describe('card controls reach 44px on a phone', () => {
     expect(found.targets.map(identify)).not.toContain('thinking-header');
     expect(await stolenCentres(page, ['thinking-header'])).toEqual([]);
 
-    /* A plan card comes from a Deep Research run the fake model cannot stage;
-     * the workshop's plan probe seeds one by rewriting the reply in the
-     * database, and this does the same in the test's own conversation. */
-    const conversationId = page.url().match(/\/c\/([\w-]+)/)?.[1];
-    expect(conversationId).toBeTruthy();
-    const client = new MongoClient(process.env.MONGO_URI);
-    await client.connect();
-    try {
-      const messages = client.db().collection('messages');
-      const reply = await messages.findOne(
-        { conversationId, isCreatedByUser: false },
-        { sort: { createdAt: -1 } },
-      );
-      expect(reply).toBeTruthy();
-      await messages.updateOne(
-        { _id: reply!._id },
-        { $set: { text: PLAN_TEXT, content: [{ type: 'text', text: PLAN_TEXT }], drKind: 'plan' } },
-      );
-    } finally {
-      await client.close();
-    }
-    await page.reload({ timeout: 20000 });
-    const plan = page.locator('[data-testid="approval-card"][data-variant="plan"]');
-    await expect(plan).toBeVisible({ timeout: 30000 });
+    await seedPlanCard(page);
     /* Awaiting approval: the ✕ is there and every step is on screen — a plan
      * being asked about is never cut to «Ещё N» (design review item 10). */
     await expect(page.getByTestId('dr-cancel')).toBeVisible();
@@ -203,19 +157,9 @@ test.describe('card controls reach 44px on a phone', () => {
     await page.goto(NEW_CHAT_PATH, { waitUntil: 'domcontentloaded' });
     const textarea = page.getByTestId('text-input');
     await textarea.waitFor({ state: 'visible' });
-    await page.getByRole('button', { name: 'MCP Servers', exact: true }).click();
-    const serverItem = page.getByRole('menuitemcheckbox', { name: new RegExp(MCP_SERVER_TITLE) });
-    await expect(serverItem).toBeVisible();
-    await serverItem.click();
-    await expect(serverItem).toHaveAttribute('aria-checked', 'true');
-    await page.keyboard.press('Escape');
-    await sendByButton(page, ASK_PROMPT);
-    const card = page.getByTestId('approval-card');
-    await expect(card).toBeVisible({ timeout: 30000 });
-    await card.getByRole('radio', { name: /Полный отчёт/ }).click();
-    await card.getByRole('radio', { name: /Квартал/ }).click();
-    await card.getByRole('button', { name: /Продолжить|Continue/ }).click();
-    await expect(page.getByTestId('ask-user-collapsed')).toBeVisible({ timeout: 15000 });
+    await enableMcpServer(page);
+    await openAskUserCard(page);
+    await answerAskUserCard(page);
 
     await page.setViewportSize(iphone.viewport);
     await expectPhoneMedia(page);

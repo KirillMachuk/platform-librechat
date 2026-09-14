@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { MCPIcon, TooltipAnchor } from '@librechat/client';
+import { MCPIcon } from '@librechat/client';
 import type { MCPServerDefinition } from '~/hooks/MCP/useMCPServerManager';
 import { getSelectedServerIcons } from './mcpServerUtils';
 import { cn } from '~/utils';
@@ -58,36 +58,36 @@ export default function StackedMCPIcons({
   const sizes = sizeConfig[iconSize];
   const colors = variantConfig[variant];
 
+  /* Decoration, not controls: the stack sits inside the MCP chip (a menu
+   * button) and is hidden from assistive tech, while the chip's own text and
+   * the menu name every server. Each icon used to be a tooltip anchor — a
+   * focusable div inside an aria-hidden wrapper inside a button: a tab stop
+   * a screen reader cannot announce, and a control nested in a control (axe
+   * aria-hidden-focus, design review 02.09, item 16). */
   return (
     <div className="flex items-center" aria-hidden="true">
       {icons.map((icon, index) => (
-        <TooltipAnchor
+        <div
           key={icon.key}
-          description={icon.displayName}
-          className="cursor-default"
-          render={
-            <div
-              className={cn(
-                'relative flex items-center justify-center rounded-full border',
-                colors.border,
-                colors.bg,
-                sizes.container,
-                index > 0 && sizes.overlap,
-              )}
-              style={{ zIndex: icons.length - index }}
-            >
-              {icon.iconPath ? (
-                <img
-                  src={icon.iconPath}
-                  alt={icon.displayName}
-                  className={cn('rounded-full object-cover', sizes.icon)}
-                />
-              ) : (
-                <MCPIcon className={cn('text-text-primary', sizes.icon)} />
-              )}
-            </div>
-          }
-        />
+          className={cn(
+            'relative flex items-center justify-center rounded-full border',
+            colors.border,
+            colors.bg,
+            sizes.container,
+            index > 0 && sizes.overlap,
+          )}
+          style={{ zIndex: icons.length - index }}
+        >
+          {icon.iconPath ? (
+            <img
+              src={icon.iconPath}
+              alt={icon.displayName}
+              className={cn('rounded-full object-cover', sizes.icon)}
+            />
+          ) : (
+            <MCPIcon className={cn('text-text-primary', sizes.icon)} />
+          )}
+        </div>
       ))}
       {overflowCount > 0 && (
         <div

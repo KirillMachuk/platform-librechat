@@ -548,6 +548,7 @@ Covered by a flow, not just seeded: `PROMPTS.SHARE`/`SHARE_PUBLIC`, `AGENTS.SHAR
 | Icon-only buttons have accessible names, outside the sidebar                 | a11y  | `e2e/specs/mock/a11y.spec.ts#const SIDEBAR = 'aside'`                                                        | covered  |
 | Conversation screen passes axe                                               | a11y  | `e2e/specs/mock/a11y.spec.ts#a conversation fails only on the two known sidebar defects`                     | fixme:Ф1 |
 | File library dialog passes axe                                               | a11y  | `e2e/specs/mock/a11y.spec.ts#the file library fails on the header contrast and on its own rows`              | fixme:Ф1 |
+| Chat cards pass axe: thinking block folded/open, plan awaiting approval / as a record, questions card open/folded | a11y  | `e2e/specs/mock/a11y.spec.ts#the chat cards have no WCAG A/AA violations` | covered |
 | Tab order reaches the composer from the top of the document                  | a11y  | `e2e/specs/mock/a11y.spec.ts#the composer is reachable and operable from the keyboard alone`                 | covered  |
 | Closing a dialog returns focus to what opened it                             | a11y  | `e2e/specs/mock/a11y.spec.ts#closing the file panel hands focus back to what opened it`                      | covered  |
 | Closing the settings dialog returns focus to the account button              | a11y  | `e2e/specs/mock/dialogs.spec.ts#the settings dialog keeps the other four, and drops focus to the body`       | fixme:Ф1 |

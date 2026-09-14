@@ -11,6 +11,13 @@ import {
   selectMockEndpoint,
   sendMessage,
 } from './helpers';
+import {
+  answerAskUserCard,
+  enableMcpServer,
+  openAskUserCard,
+  seedPlanCard,
+  sendByButton,
+} from './cards.helpers';
 import { attachFixture, fileFixture, openFilesPanel, openPreview } from './files.helpers';
 
 /**
@@ -50,6 +57,14 @@ const describeViolations = (results: Awaited<ReturnType<typeof scan>>) =>
     rule: violation.id,
     impact: violation.impact,
     where: violation.nodes.map((node) => node.target.join(' ')),
+    /* The opening tag, so a class-only selector still says which element. */
+    html: violation.nodes.map((node) => node.html.slice(0, 160)),
+    /* The descendants a check blamed (for aria-hidden-focus: what is focusable). */
+    related: violation.nodes.map((node) =>
+      [...node.any, ...node.all, ...node.none].flatMap((check) =>
+        (check.relatedNodes ?? []).map((related) => related.html.slice(0, 160)),
+      ),
+    ),
   }));
 
 const FILE_PANEL = 'div[role="dialog"]';
@@ -94,6 +109,55 @@ test.describe('accessibility', () => {
         .map((violation) => violation.rule)
         .sort(),
     ).toEqual(['aria-required-children', 'nested-interactive']);
+  });
+
+  /**
+   * Design review 02.09, item 16: no axe scan had ever reached the chat cards —
+   * the conversation scans above end on a plain text reply. Every card a
+   * conversation can hold, in every state a user meets it: the thinking block
+   * folded and reopened, a plan awaiting approval (cancel ✕, all steps), the same
+   * plan as a record («Ещё N»), the questions card open and folded. Scoped to
+   * the messages so the sidebar's own defects stay with their tests.
+   */
+  test('the chat cards have no WCAG A/AA violations', async ({ page }) => {
+    test.setTimeout(180000);
+    await page.addInitScript(() => {
+      window.localStorage.setItem('PIN_MCP_', 'true');
+    });
+    await page.goto(NEW_CHAT_PATH, { timeout: 15000 });
+    await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
+    const view = messagesView(page);
+    const MESSAGES = '[data-testid="messages-view"]';
+    const scanCards = async (state: string) => {
+      const found = describeViolations(await scan(page, MESSAGES));
+      expect(found, state).toEqual([]);
+    };
+
+    /* The thinking block, folded and reopened. */
+    await sendByButton(page, 'E2E_THINK_REPLY:a11y');
+    await expect(view.getByText('E2E think reply a11y').first()).toBeVisible({ timeout: 60000 });
+    const header = page.getByTestId('thinking-header');
+    await expect(header).toHaveAttribute('aria-expanded', 'false', { timeout: 30000 });
+    await scanCards('thinking block folded');
+    await header.click();
+    await expect(header).toHaveAttribute('aria-expanded', 'true');
+    await scanCards('thinking block open');
+
+    /* A plan awaiting approval, then the same plan as a record. */
+    await seedPlanCard(page);
+    await expect(page.getByTestId('dr-cancel')).toBeVisible();
+    await scanCards('plan awaiting approval');
+    await sendByButton(page, 'E2E_THINK_REPLY:after');
+    await expect(view.getByText('E2E think reply after').first()).toBeVisible({ timeout: 60000 });
+    await expect(page.getByTestId('plan-more')).toBeVisible();
+    await scanCards('plan as a record');
+
+    /* The questions card, open and folded. */
+    await enableMcpServer(page);
+    await openAskUserCard(page);
+    await scanCards('questions card open');
+    await answerAskUserCard(page);
+    await scanCards('questions card folded');
   });
 
   /**

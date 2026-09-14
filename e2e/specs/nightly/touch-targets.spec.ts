@@ -9,10 +9,12 @@ import { identify, measureCanon } from '../mock/canon.helpers';
  *
  * Nightly and phone-only on purpose: the rule is about fingers, the helper that
  * satisfies it (`.tap-target`, which grows the hit area with an invisible
- * `::after`) is itself inside `@media (max-width: 767.98px)`, and measuring at
- * desktop reports every icon button in the app as a violation of a rule that
- * does not apply there. Measured at 1280px this scan finds sixteen "violations"
- * and every one of them is noise.
+ * `::after`) is itself inside `@media (pointer: coarse)` — a finger is a coarse
+ * pointer, not a narrow screen (design review 02.09, item 15; measured: Playwright's
+ * `hasTouch` is what makes chromium report it) — and measuring with a mouse
+ * reports every icon button in the app as a violation of a rule that does not
+ * apply there. Measured at 1280px with a mouse this scan finds sixteen
+ * "violations" and every one of them is noise.
  *
  * Known limit, carried over from the probe this is ported from: an element is
  * "visible" here if it has size and is not `display:none`, which includes a
