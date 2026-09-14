@@ -1,8 +1,19 @@
 import { logger } from '@librechat/data-schemas';
 import { isEphemeralAgentId } from 'librechat-data-provider';
 import { HumanMessage } from '@librechat/agents/langchain/messages';
-import { formatSkillCatalog, SkillToolDefinition } from '@librechat/agents';
-import type { LCToolRegistry, LCTool, InjectedMessage } from '@librechat/agents';
+import {
+  formatSkillCatalog,
+  initializeModel,
+  resolveLocalToolsForBinding,
+  SkillToolDefinition,
+} from '@librechat/agents';
+import type {
+  EventHandler,
+  LCToolRegistry,
+  LCTool,
+  InjectedMessage,
+  ToolExecuteBatchRequest,
+} from '@librechat/agents';
 import type { BaseMessage } from '@librechat/agents/langchain/messages';
 import type { Agent } from 'librechat-data-provider';
 import type { Types } from 'mongoose';
@@ -83,7 +94,133 @@ export const SKILL_TRIGGER_ALWAYS_APPLY = 'always-apply';
 export const SKILL_TRIGGER_AUTO_MATCH = 'auto-match';
 
 const DOCX_AUTO_MATCH_ROUTE_GUARD = `[Trusted platform DOCX dispatch]
-The preceding message is the user's document request and the \`docx\` workflow is already active. Do not restate, summarize, translate, interpret, or reason about the request before using tools. If no source files are attached, respond with no prose and call \`read_file\` exactly once for \`/mnt/data/docx/references/spec.md\` now. If source files are attached, inspect each required source once and then read that specification once. Perform semantic parsing only after that read returns, following the skill's literal-fact rules.`;
+The preceding message is the user's document request and the \`docx\` workflow is already active. Do not restate, summarize, translate, interpret, or reason about the request before using tools. Respond with no prose and call \`read_file\` exactly once for \`/mnt/data/docx/references/spec.md\` now. After that read returns, inspect any attached source files before semantic parsing and follow the skill's literal-fact rules.`;
+
+/** The deterministic first tool for host-routed DOCX authoring turns. */
+export const DOCX_AUTO_MATCH_FIRST_TOOL = 'read_file';
+
+/**
+ * Selects a host-controlled first tool only for a request-specific DOCX route.
+ * Manual and ambient skills stay advisory, and unrelated artifact workflows
+ * retain normal model tool selection.
+ */
+export function resolveAutoMatchedFirstToolChoice(
+  autoMatchedSkillPrimes?: Pick<ResolvedAutoMatchedSkill, 'name'>[],
+): string | undefined {
+  return autoMatchedSkillPrimes?.some((prime) => prime.name === 'docx')
+    ? DOCX_AUTO_MATCH_FIRST_TOOL
+    : undefined;
+}
+
+type ForcedToolChoiceAgentContext = {
+  provider: Parameters<typeof initializeModel>[0]['provider'];
+  clientOptions?: Parameters<typeof initializeModel>[0]['clientOptions'];
+  getToolsForBinding: () => Parameters<typeof resolveLocalToolsForBinding>[0]['tools'];
+};
+
+type ForcedToolChoiceGraph = {
+  agentContexts: Map<string, ForcedToolChoiceAgentContext>;
+  toolExecution?: Parameters<typeof resolveLocalToolsForBinding>[0]['toolExecution'];
+  overrideModel?: unknown;
+};
+
+type BindableModel = {
+  bindTools: (
+    tools: ReturnType<typeof resolveLocalToolsForBinding>,
+    options: { tool_choice: string },
+  ) => unknown;
+};
+
+export type ForcedToolChoiceState = { model?: unknown };
+
+function getToolName(tool: unknown): string | undefined {
+  const candidate = tool as { name?: unknown; function?: { name?: unknown } };
+  if (typeof candidate.name === 'string') {
+    return candidate.name;
+  }
+  return typeof candidate.function?.name === 'string' ? candidate.function.name : undefined;
+}
+
+/**
+ * Installs a provider-native, named tool choice for the first model call of a
+ * standard graph. The agents SDK rebuilds its ordinary model on every later
+ * turn, so clearing `overrideModel` restores the unmodified provider path.
+ */
+export function installForcedFirstToolChoice({
+  graph,
+  agentId,
+  toolName,
+  state,
+}: {
+  graph: ForcedToolChoiceGraph;
+  agentId: string;
+  toolName: string;
+  state: ForcedToolChoiceState;
+}): boolean {
+  const agentContext = graph.agentContexts.get(agentId);
+  if (!agentContext) {
+    return false;
+  }
+  const tools = resolveLocalToolsForBinding({
+    tools: agentContext.getToolsForBinding(),
+    toolExecution: graph.toolExecution,
+  });
+  if (!tools?.some((tool: unknown) => getToolName(tool) === toolName)) {
+    return false;
+  }
+
+  const model = initializeModel({
+    provider: agentContext.provider,
+    clientOptions: agentContext.clientOptions,
+  }) as unknown as BindableModel;
+  if (typeof model.bindTools !== 'function') {
+    return false;
+  }
+  state.model = model.bindTools(tools, { tool_choice: toolName });
+  graph.overrideModel = state.model;
+  return true;
+}
+
+/**
+ * Clears a forced first-tool choice once that tool's execution batch has
+ * completed. The host composes this handler after the real tool executor, so
+ * the first call is deterministic while every later model turn returns to
+ * ordinary tool selection.
+ */
+export function createOneShotToolChoiceReleaseHandler({
+  agentId,
+  toolName,
+  state,
+}: {
+  agentId: string;
+  toolName: string;
+  state: ForcedToolChoiceState;
+}): EventHandler {
+  let armed = true;
+
+  return {
+    handle: async (_event, data, _metadata, graph) => {
+      if (!armed) {
+        return;
+      }
+      const toolCalls = (data as ToolExecuteBatchRequest | undefined)?.toolCalls;
+      const executingAgentId = (data as ToolExecuteBatchRequest | undefined)?.agentId;
+      if (
+        (executingAgentId != null && executingAgentId !== agentId) ||
+        !toolCalls?.some((toolCall) => toolCall.name === toolName)
+      ) {
+        return;
+      }
+
+      const mutableGraph = graph as ForcedToolChoiceGraph | undefined;
+      if (state.model !== undefined && mutableGraph?.overrideModel === state.model) {
+        armed = false;
+        mutableGraph.overrideModel = undefined;
+        state.model = undefined;
+      }
+    },
+  };
+}
 
 export type SkillTrigger =
   | typeof SKILL_TRIGGER_MANUAL
