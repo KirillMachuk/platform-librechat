@@ -28,6 +28,8 @@ export interface ConversationMethods {
       unsetFields?: Record<string, number>;
       noUpsert?: boolean;
       createdAtOnInsert?: Date;
+      untitledOnly?: boolean;
+      keepUpdatedAt?: boolean;
     },
   ): Promise<IConversation | { message: string } | null>;
   bulkSaveConvos(conversations: Array<Record<string, unknown>>): Promise<unknown>;
@@ -227,6 +229,14 @@ export function createConversationMethods(
       unsetFields?: Record<string, number>;
       noUpsert?: boolean;
       createdAtOnInsert?: Date;
+      /** Write only to a row that has no real title yet (absent, empty or «New Chat»).
+       *  A generated title must never replace one the user typed, or a title another
+       *  attempt already wrote. Never upserts: a filter miss would otherwise insert a
+       *  duplicate conversation. */
+      untitledOnly?: boolean;
+      /** Leave `updatedAt` alone. A title is not activity: bumping it seconds after the
+       *  user read the chat lights the unread dot on their other devices. */
+      keepUpdatedAt?: boolean;
     },
   ) {
     try {
@@ -318,16 +328,18 @@ export function createConversationMethods(
         updateOperation.$setOnInsert = { createdAt: createdAtOnInsert };
       }
 
-      const conversationResult = (await Conversation.findOneAndUpdate(
-        { conversationId, user: userId },
-        updateOperation,
-        {
-          new: true,
-          upsert: metadata?.noUpsert !== true,
-          includeResultMetadata: true,
-          ...(createdAtOnInsert ? { timestamps: false } : {}),
-        },
-      )) as unknown as {
+      const untitledOnly = metadata?.untitledOnly === true;
+      const filter: FilterQuery<IConversation> = { conversationId, user: userId };
+      if (untitledOnly) {
+        filter.$or = [{ title: { $exists: false } }, { title: { $in: [null, '', 'New Chat'] } }];
+      }
+
+      const conversationResult = (await Conversation.findOneAndUpdate(filter, updateOperation, {
+        new: true,
+        upsert: metadata?.noUpsert !== true && !untitledOnly,
+        includeResultMetadata: true,
+        ...(createdAtOnInsert || metadata?.keepUpdatedAt === true ? { timestamps: false } : {}),
+      })) as unknown as {
         value:
           | (IConversation & {
               _id: unknown;

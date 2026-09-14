@@ -42,6 +42,117 @@ function hasRealTitle(title) {
 }
 
 /**
+ * Should this turn generate a title for its conversation?
+ *
+ * Upstream titles only the first turn of a NEW conversation, once. Anything that loses
+ * that one attempt — a Stop before the run had started, a title model error, a timeout,
+ * a process restart — left the chat «New Chat» for good, and every later turn,
+ * including an edit of that very first message, skipped titling because the
+ * conversation was no longer new. So an EXISTING conversation that still has no real
+ * title gets another attempt on its next turn. A real title — generated or typed by the
+ * user — is never replaced.
+ *
+ * @param {Object} params
+ * @param {boolean} params.canTitle - `addTitle` was provided.
+ * @param {boolean} [params.isTemporary]
+ * @param {boolean} params.isNewConvo
+ * @param {string} params.parentMessageId
+ * @param {{ title?: string|null }|null|undefined} params.existingConversation - The row
+ *   read before this turn; `null`/`undefined` when it is new, missing, or unreadable.
+ * @returns {boolean}
+ */
+function isTitleEligible({
+  canTitle,
+  isTemporary,
+  isNewConvo,
+  parentMessageId,
+  existingConversation,
+}) {
+  if (!canTitle || isTemporary) {
+    return false;
+  }
+  if (isNewConvo) {
+    return parentMessageId === Constants.NO_PARENT;
+  }
+  return (
+    existingConversation != null &&
+    existingConversation.isTemporary !== true &&
+    !hasRealTitle(existingConversation.title)
+  );
+}
+
+/**
+ * How long a later turn of an untitled conversation waits for its title before sending
+ * the final event. A first turn waits for the title outright, as it always has — that
+ * is how the title reaches a client whose stream closes at the final event. A retry on
+ * a later turn is a repair and must not tax the turn: if the title model is failing,
+ * every turn of that chat would otherwise hold its final event for the full title
+ * timeout (45 s, 120 s for a reasoning model) and pay a second, fallback call. The
+ * title keeps generating after this and is saved either way; past the wait it shows
+ * on the next load instead of live. Titles here take 1.6–6.7 s from the START of the
+ * turn (measured on the stand), so a turn that ran longer than that usually has one.
+ */
+const RETITLE_FINAL_WAIT_MS = 5000;
+
+/**
+ * Resolves to the promise's value, or to `undefined` after `ms` — whichever comes
+ * first. The timer is cleared either way, so it never holds the process open.
+ *
+ * @template T
+ * @param {Promise<T>} promise
+ * @param {number} ms
+ * @returns {Promise<T|undefined>}
+ */
+function settleWithin(promise, ms) {
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(resolve, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * The text a title is generated from: the conversation's opening question.
+ *
+ * On a first turn — new, or an edit or regenerate of the first message — that is this
+ * turn's own text. On a later turn it is not: titling «продолжи» would name the chat
+ * after the follow-up. The latest root user message is the one the user edited last,
+ * which is the branch they are on. Any failure to read falls back to this turn's text:
+ * a weaker title beats no title.
+ *
+ * @param {Object} params
+ * @param {string} params.text - This turn's user text.
+ * @param {string} params.parentMessageId
+ * @param {string} params.conversationId
+ * @param {string} params.userId
+ * @returns {Promise<string>}
+ */
+async function resolveTitleSourceText({ text, parentMessageId, conversationId, userId }) {
+  if (parentMessageId === Constants.NO_PARENT) {
+    return text;
+  }
+  try {
+    const roots = await getMessages(
+      {
+        conversationId,
+        user: userId,
+        parentMessageId: Constants.NO_PARENT,
+        isCreatedByUser: true,
+      },
+      'text',
+    );
+    const opening = roots?.[roots.length - 1]?.text;
+    return typeof opening === 'string' && opening.trim() !== '' ? opening : text;
+  } catch (error) {
+    logger.warn('[ResumableAgentController] Could not read the opening message for a title', {
+      conversationId,
+      error: error?.message ?? error,
+    });
+    return text;
+  }
+}
+
+/**
  * Should this stream stay silent instead of emitting its FINAL event?
  *
  * Yes in two situations: a NEWER job owns the stream now, or this job is simply gone —
@@ -64,11 +175,10 @@ function shouldSkipFinalEmit(currentJob, jobCreatedAt) {
 /**
  * The title the FINAL event should carry.
  *
- * In immediate mode the title is generated in parallel with the answer and persisted
- * only after `convoReady`, which resolves AFTER the conversation row behind the final
- * event was read — so that row can never carry the title, and stamping it verbatim
- * sends a literal «New Chat» to a client the `title` event has already given the real
- * one. That is the flicker: right, then wrong, then right again once the compensating
+ * In immediate mode the title is generated in parallel with the answer. It is usually
+ * saved before the row behind the final event is read, but not always — a slow title
+ * lands after — and stamping that row verbatim sends a literal «New Chat» to a client
+ * the `title` event has already given the real one. That is the flicker: right, then wrong, then right again once the compensating
  * `/gen_title` poll lands.
  *
  * `generatedTitle` is what `addTitle` RETURNED, which is the title it just persisted.
@@ -367,6 +477,8 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
     res.json({ streamId, conversationId, status: 'started' });
 
     await attachConversationCreatedAt(req, { userId, conversationId, isNewConvo });
+    /* Read here: `BaseClient` deletes `req.resolvedConversation` when it saves. */
+    const conversationBeforeTurn = req.resolvedConversation;
 
     const endpointIconURL = getEndpointIconURL(req, endpointOption);
     const responseModel = getAgentResponseModel(req, endpointOption);
@@ -625,16 +737,26 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
 
       /** Immediate-mode title generation runs in parallel with the response, so
        *  the conversation row may not exist when the title resolves. `convoReady`
-       *  resolves once the response (and thus the conversation) has been saved,
-       *  gating the title's `saveConvo`. Declared here so both the success tail
-       *  and the catch block can settle it and gate `disposeClient` on the title. */
+       *  gates the title's `saveConvo` (`noUpsert`) on that row existing — which it
+       *  does as soon as the USER message is saved, a second or so into the turn, not
+       *  when the response is. Waiting for the response, as upstream does, kept a
+       *  generated title out of the database for the whole run: minutes of «New Chat»
+       *  on reload or on another device during a long presentation, and the title
+       *  gone entirely if the process died. The success tail and the catch still
+       *  resolve it too, for a turn that never saved a user message. */
       let immediateTitlePromise = null;
+      /** The opening question, read once: the immediate attempt and the fallback must
+       *  title the same text, or a later turn's fallback names the chat «продолжи». */
+      let titleSourceTextPromise = null;
       let titleEventPromise = null;
       let acceptsTitleEvents = true;
       let resolveConvoReady;
       const convoReady = new Promise((resolve) => {
         resolveConvoReady = resolve;
       });
+      if (!isNewConvo) {
+        resolveConvoReady();
+      }
       /** Dedicated controller so a user Stop (or a replaced stream) cancels the
        *  in-flight title — kept separate from `job.abortController`, which
        *  `completeJob` also aborts on *successful* completion and would otherwise
@@ -643,26 +765,39 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
       /* No `discardSignal` is passed to `addTitle`, deliberately: nothing here ever
        * throws a FINISHED title away. Upstream discards one when the stream is
        * superseded or the turn fails, «so it cannot clobber the conversation now owned
-       * by the newer run» — but no newer run can own a title. A title is generated only
-       * for a new conversation (`isNewConvo`, which mints a fresh id and so a fresh
-       * stream), so whatever supersedes this stream is a follow-up, a regenerate or an
-       * edit, and none of those persists one (a Deep Research follow-up may generate a
-       * title, but reuses the row's title once it exists). Discarding therefore protected nothing
-       * and left the chat «New Chat» for good — after a failed turn (#494), after a
+       * by the newer run» — but that protected nothing. A title describes the
+       * conversation's opening question, whichever turn generated it, and the write is
+       * `untitledOnly`: whichever title lands first stays, and nothing replaces a real
+       * one. Discarding only ever left the chat «New Chat» — after a failed turn (#494), after a
        * Stop (#497), and after a Stop followed quickly by the next message, when the
        * old run finds the follow-up's job in the store (review, 14.09). The title
        * describes the first user message, which is still in the chat either way.
        * REVISIT if new-conversation ids ever become idempotent per client request (as
        * upstream has moved to): a retried «new chat» would then reuse the stream with
        * `isNewConvo` true on both runs — the one case a discard would protect. */
-      const abortTitleOnJobAbort = () => titleAbortController.abort();
+      /* A user Stop or a failure cancels the title only while the run has not started.
+       * Until then the title is parked in `_waitForRun`, which may never resolve and
+       * would hold client disposal for the full title timeout. Once the run exists the
+       * title is one cheap call already under way, and cancelling it left a stopped
+       * chat «New Chat» — so it is allowed to finish, bounded by its own timeout. */
+      const cancelTitleIfRunNeverStarted = () => {
+        if (!client?.run) {
+          titleAbortController.abort();
+        }
+      };
+      const abortTitleOnJobAbort = () => cancelTitleIfRunNeverStarted();
       if (job.abortController.signal.aborted) {
-        titleAbortController.abort();
+        cancelTitleIfRunNeverStarted();
       } else {
         job.abortController.signal.addEventListener('abort', abortTitleOnJobAbort, { once: true });
       }
-      const titleEligible =
-        addTitle && parentMessageId === Constants.NO_PARENT && isNewConvo && !req.body?.isTemporary;
+      const titleEligible = isTitleEligible({
+        canTitle: !!addTitle,
+        isTemporary: req.body?.isTemporary,
+        isNewConvo,
+        parentMessageId,
+        existingConversation: conversationBeforeTurn,
+      });
       const emitTitleEvent = ({ conversationId: titleConversationId, title }) => {
         titleEventPromise = (async () => {
           if (!acceptsTitleEvents || titleAbortController.signal.aborted) {
@@ -715,7 +850,12 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         const messageOptions = {
           user: userId,
           onStart,
-          getReqData,
+          getReqData: (data = {}) => {
+            getReqData(data);
+            if (data.userMessagePromise) {
+              Promise.resolve(data.userMessagePromise).then(resolveConvoReady, resolveConvoReady);
+            }
+          },
           isContinued,
           isRegenerate,
           editedContent,
@@ -739,17 +879,27 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         const sendPromise = client.sendMessage(text, messageOptions);
 
         if (titleEligible && titleTiming === 'immediate') {
-          immediateTitlePromise = addTitle(req, {
+          titleSourceTextPromise = resolveTitleSourceText({
             text,
+            parentMessageId,
             conversationId,
-            client,
-            immediate: true,
-            convoReady,
-            signal: titleAbortController.signal,
-            onTitleGenerated: emitTitleEvent,
-          }).catch((err) => {
-            logger.error('[ResumableAgentController] Error in immediate title generation', err);
+            userId,
           });
+          immediateTitlePromise = titleSourceTextPromise
+            .then((titleText) =>
+              addTitle(req, {
+                text: titleText,
+                conversationId,
+                client,
+                immediate: true,
+                convoReady,
+                signal: titleAbortController.signal,
+                onTitleGenerated: emitTitleEvent,
+              }),
+            )
+            .catch((err) => {
+              logger.error('[ResumableAgentController] Error in immediate title generation', err);
+            });
         }
 
         const response = await sendPromise;
@@ -821,11 +971,9 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
           /* Silent, but the title stays. THIS is where a user Stop lands — not the
            * catch below: `chatCompletion` swallows its own abort, so the run unwinds
            * normally, and by now `abortJob` has deleted the job and sent the aborted
-           * final itself. Skipping the emit is right. Cancel a title still being
-           * generated — an ended turn should not keep paying — but a title that already
-           * finished is persisted once `convoReady` resolves below (see the note by
-           * `convoReady` on why it is never discarded). */
-          titleAbortController.abort();
+           * final itself. Skipping the emit is right; the title is neither discarded
+           * (see the note by `convoReady`) nor cancelled once the run had started. */
+          cancelTitleIfRunNeverStarted();
           job.abortController.signal.removeEventListener('abort', abortTitleOnJobAbort);
           acceptsTitleEvents = false;
           resolveConvoReady();
@@ -843,17 +991,14 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
           return;
         }
 
-        // If the user stopped this turn, cancel the title BEFORE unblocking its
-        // persistence wait — otherwise resolving `convoReady` lets the title task
-        // resume and save before the later abort runs.
         if (wasAbortedBeforeComplete) {
-          titleAbortController.abort();
+          cancelTitleIfRunNeverStarted();
         } else {
           job.abortController.signal.removeEventListener('abort', abortTitleOnJobAbort);
         }
 
-        // The conversation row now exists and this stream is authoritative; allow
-        // any in-flight immediate title generation to persist (saveConvo uses noUpsert).
+        // Normally already resolved when the user message was saved; this covers a
+        // turn that saved none.
         resolveConvoReady();
 
         // Recover a lost title before the stream closes. In immediate mode a slow
@@ -866,7 +1011,9 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         // and push it through the title event while the client is still subscribed
         // (before `acceptsTitleEvents` is cleared below).
         if (titleEligible && !wasAbortedBeforeComplete && immediateTitlePromise) {
-          const immediateTitle = await immediateTitlePromise;
+          const immediateTitle = isNewConvo
+            ? await immediateTitlePromise
+            : await settleWithin(immediateTitlePromise, RETITLE_FINAL_WAIT_MS);
           // The title `addTitle` just persisted, arriving here only because this line
           // sits after `resolveConvoReady()`. Without it the run reports the row as it
           // was read minutes ago — «New Chat» — to a client that was shown the real
@@ -875,10 +1022,11 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
             rowTitle: conversation.title,
             generatedTitle: immediateTitle,
           });
-          if (!immediateTitle) {
+          /* A retry on a later turn gets no second call: see RETITLE_FINAL_WAIT_MS. */
+          if (!immediateTitle && isNewConvo) {
             try {
               const fallbackTitle = await addTitle(req, {
-                text,
+                text: await titleSourceTextPromise,
                 response: { ...response },
                 client,
                 conversationId: conversation.conversationId,
@@ -942,9 +1090,9 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         }
 
         if (titleTiming === 'immediate') {
-          // Title was fired in parallel above (if eligible); a stopped turn already
-          // aborted it before `resolveConvoReady`. Defer disposal until it settles
-          // so the run/req aren't torn down mid-generation.
+          // Title was fired in parallel above (if eligible) and may still be running
+          // after a Stop. Defer disposal until it settles so the run/req aren't torn
+          // down mid-generation.
           if (immediateTitlePromise) {
             immediateTitlePromise.finally(() => {
               if (client) {
@@ -974,10 +1122,9 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
           }
         }
       } catch (error) {
-        // Any failure (user Stop, or a preflight/quota failure before the run is
-        // even created) must cancel the title and unblock its waits: the title's
-        // `_waitForRun` would otherwise never resolve, deferring client disposal
-        // until the 45s title timeout.
+        // Any failure must unblock the title's waits; a failure before the run was even
+        // created must also cancel it, or `_waitForRun` never resolves and client
+        // disposal waits out the 45s title timeout.
         //
         // Cancelling generation is NOT the same as discarding a title that already
         // finished, and only the first belongs here (nothing in this controller
@@ -987,10 +1134,9 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         // their chats read «New Chat» for good — while the one run that completed kept
         // its title. The question the user asked is still sitting in that chat; the
         // title describes it whether or not the answer arrived.
-        /* Unconditional, and before anything that can fail: a failed turn must stop
-         * paying a title model rather than hold it — and client disposal — for the full
-         * timeout. */
-        titleAbortController.abort();
+        /* Before anything that can fail. A failure before the run started must not park
+         * the title — and client disposal — for the full timeout. */
+        cancelTitleIfRunNeverStarted();
         job.abortController.signal.removeEventListener('abort', abortTitleOnJobAbort);
         acceptsTitleEvents = false;
         resolveConvoReady();
@@ -1427,6 +1573,8 @@ module.exports.shouldRunNewDeepResearch = shouldRunNewDeepResearch;
 module.exports.pickFinalTitle = pickFinalTitle;
 /** Test-only exports: whether an ended job still emits its final; the title placeholder. */
 module.exports.shouldSkipFinalEmit = shouldSkipFinalEmit;
+module.exports.isTitleEligible = isTitleEligible;
+module.exports.resolveTitleSourceText = resolveTitleSourceText;
 module.exports.hasRealTitle = hasRealTitle;
 /** Test-only export: the consumer end of the conversation-model hop (see JSDoc). */
 module.exports.drConversationModel = drConversationModel;
