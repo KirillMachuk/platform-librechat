@@ -152,6 +152,83 @@ describe('GenerationJobManager Integration Tests', () => {
   }
 
   describe('In-Memory Mode', () => {
+    /**
+     * The owner's 14.09 report: Stop pressed while the model was still silent left an
+     * EMPTY answer under the question with the whole action row (Read aloud, Copy…)
+     * beneath it. The job's abort final was shipping a response message with no
+     * content because `created` had already gone out. Nothing is persisted for such
+     * a stop, so the final must carry no answer either: the question stays, the
+     * answer never began. This is NOT the early-abort path (that one also drops the
+     * question, which by now is saved).
+     */
+    test('a Stop before the first token ships no answer message, and is not an early abort', async () => {
+      GenerationJobManager.configure({
+        jobStore: new InMemoryJobStore({ ttlAfterComplete: 60000 }),
+        eventTransport: new InMemoryEventTransport(),
+        isRedis: false,
+      });
+      GenerationJobManager.initialize();
+
+      const streamId = `inmem-abort-silent-${Date.now()}`;
+      await GenerationJobManager.createJob(streamId, 'user-1');
+      await GenerationJobManager.emitChunk(streamId, {
+        created: true,
+        message: {
+          messageId: 'u-1',
+          parentMessageId: '00000000-0000-0000-0000-000000000000',
+          conversationId: 'c-1',
+          text: 'Привет',
+          sender: 'User',
+          isCreatedByUser: true,
+        },
+        streamId,
+      } as never);
+
+      const abortResult = await GenerationJobManager.abortJob(streamId);
+
+      expect(abortResult.success).toBe(true);
+      expect(abortResult.content).toEqual([]);
+      const finalEvent = abortResult.finalEvent as Record<string, unknown>;
+      expect(finalEvent.aborted).toBe(true);
+      expect(finalEvent.earlyAbort).toBe(false);
+      expect(finalEvent.responseMessage).toBeNull();
+      expect((finalEvent.requestMessage as Record<string, unknown>).messageId).toBe('u-1');
+
+      await GenerationJobManager.destroy();
+    });
+
+    test('a Stop after some text keeps the partial answer as the answer message', async () => {
+      GenerationJobManager.configure({
+        jobStore: new InMemoryJobStore({ ttlAfterComplete: 60000 }),
+        eventTransport: new InMemoryEventTransport(),
+        isRedis: false,
+      });
+      GenerationJobManager.initialize();
+
+      const streamId = `inmem-abort-think-${Date.now()}`;
+      await GenerationJobManager.createJob(streamId, 'user-1');
+      await GenerationJobManager.emitChunk(streamId, {
+        created: true,
+        message: { messageId: 'u-2', conversationId: 'c-2', text: 'Привет', sender: 'User' },
+        streamId,
+      } as never);
+      /* In-memory, the abort reads the graph's live content parts through the reference
+       * the run registers; this is that reference with a few words already in it. */
+      GenerationJobManager.setContentParts(streamId, [
+        { type: 'text', text: 'Начал отвечать…' },
+      ] as never);
+
+      const abortResult = await GenerationJobManager.abortJob(streamId);
+      const finalEvent = abortResult.finalEvent as Record<string, unknown>;
+      expect(finalEvent.responseMessage).not.toBeNull();
+      expect((finalEvent.responseMessage as Record<string, unknown>).content).toEqual(
+        abortResult.content,
+      );
+      expect(abortResult.content.length).toBeGreaterThan(0);
+
+      await GenerationJobManager.destroy();
+    });
+
     test('should create and manage jobs', async () => {
       // Configure with in-memory
       // cleanupOnComplete: false so we can verify completed status

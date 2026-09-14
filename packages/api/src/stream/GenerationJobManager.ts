@@ -842,7 +842,14 @@ class GenerationJobManagerClass {
             isCreatedByUser: true,
           }
         : null,
-      responseMessage: isEarlyAbort
+      /**
+       * A stop that produced nothing ships NO answer message, whether or not `created`
+       * went out: nothing is persisted for it (see the abort route and BaseClient), so a
+       * message here would be a phantom — the client would draw an empty turn with a
+       * full action row under it, and a reload would make it vanish. The question stays
+       * (it is saved by then); the answer never began.
+       */
+      responseMessage: !shouldPersistAbortContent
         ? null
         : {
             messageId: jobData.responseMessageId ?? `${userMessageId ?? 'aborted'}_`,

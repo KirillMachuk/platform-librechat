@@ -11,6 +11,7 @@ const {
   encodeAndFormatAudios,
   encodeAndFormatVideos,
   encodeAndFormatDocuments,
+  hasPersistableAbortContent,
 } = require('@librechat/api');
 const {
   Constants,
@@ -174,6 +175,15 @@ const rehydrateMessageFileRefs = (refs, filesById, { preserveDisplayOnly = false
   }
   return files.length > 0 ? files : undefined;
 };
+
+/** Whether a response holds anything a chat could show: text, or a content part
+ *  the abort filter would keep (a thinking block with words in it, a tool call). */
+function hasPersistableResponse(responseMessage) {
+  if ((responseMessage.text ?? '').trim().length > 0) {
+    return true;
+  }
+  return hasPersistableAbortContent(responseMessage.content);
+}
 
 class BaseClient {
   constructor(apiKey, options = {}) {
@@ -839,6 +849,23 @@ class BaseClient {
 
     if (this.contextMeta) {
       responseMessage.contextMeta = this.contextMeta;
+    }
+
+    /**
+     * A user Stop before the first token unwinds through here as a success —
+     * `sendCompletion` swallows its own abort — with an answer that holds nothing.
+     * Saving it would put an empty assistant turn into the chat (drawn with a full
+     * action row, fed to the model as context on the next turn). The question was
+     * saved on its way in; the answer never began, so no row is written for it.
+     * Callers read `databasePromise` for the conversation; the shape without one is
+     * the same as `skipSaveConvo` returns.
+     */
+    if (this.abortController?.signal?.aborted && !hasPersistableResponse(responseMessage)) {
+      logger.debug('[BaseClient] Stopped before any content; the empty response is not saved', {
+        messageId: responseMessage.messageId,
+      });
+      responseMessage.databasePromise = Promise.resolve({ message: null });
+      return responseMessage;
     }
 
     responseMessage.databasePromise = this.saveMessageToDatabase(

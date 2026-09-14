@@ -72,6 +72,31 @@ const extractMessageContent = (message: TMessage): string => {
   return message.text || '';
 };
 
+/**
+ * Whether the turn holds an answer to act on: its text, or a text part. A
+ * thinking block alone is not an answer — a Stop mid-thought leaves exactly
+ * that — and neither is an empty turn; Copy and Read aloud have nothing to
+ * take from either, so they stay off the row (Edit, Fork, Regenerate remain).
+ */
+const hasAnswerText = (message: TMessage): boolean => {
+  if ((message.text ?? '').trim().length > 0) {
+    return true;
+  }
+  if (!Array.isArray(message.content)) {
+    return false;
+  }
+  return message.content.some((part) => {
+    if (part == null || typeof part === 'string') {
+      return typeof part === 'string' && part.trim().length > 0;
+    }
+    if (!('text' in part) || 'think' in part) {
+      return false;
+    }
+    const text = typeof part.text === 'string' ? part.text : part.text?.value;
+    return (text ?? '').trim().length > 0;
+  });
+};
+
 const HoverButton = memo(
   ({
     id,
@@ -187,6 +212,7 @@ const HoverButtons = ({
   }
 
   const { isCreatedByUser, error } = message;
+  const answerText = hasAnswerText(message);
 
   if (error === true) {
     return (
@@ -214,8 +240,8 @@ const HoverButtons = ({
 
   return (
     <div className="group visible flex justify-center gap-2.5 self-end focus-within:outline-none lg:justify-start">
-      {/* Text to Speech */}
-      {TextToSpeech && (
+      {/* Text to Speech — only when there is an answer to read (see hasAnswerText) */}
+      {TextToSpeech && answerText && (
         <MessageAudio
           index={index}
           isLast={isLast}
@@ -237,7 +263,7 @@ const HoverButtons = ({
           copying your own question is harmless at any moment, and the vanishing
           act (opacity-0 until hover) read as «иконки куда-то пропадают» in
           every chat with a long-running answer. */}
-      {!isComparison && (
+      {!isComparison && answerText && (
         <HoverButton
           onClick={handleCopy}
           title={

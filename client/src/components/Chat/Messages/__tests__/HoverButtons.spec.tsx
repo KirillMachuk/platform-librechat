@@ -95,3 +95,47 @@ describe('actions under a user message at rest', () => {
     expect(edit).toBeDisabled();
   });
 });
+
+/**
+ * The owner's 14.09 report: Stop pressed while the model was still thinking left an
+ * answer with no text and the whole row under it — Read aloud, Copy… Copy and Read
+ * aloud act on the answer's text; a turn without one (a thinking block alone, or
+ * nothing at all) does not get them. Regenerate stays: that is the way out.
+ */
+describe('actions under an answer with no text', () => {
+  const answer = (overrides: Partial<TMessage> = {}) =>
+    ({
+      messageId: 'm-answer',
+      isCreatedByUser: false,
+      text: '',
+      error: false,
+      ...overrides,
+    }) as TMessage;
+
+  it('a thinking block alone: no Copy, Regenerate stays', () => {
+    renderButtons({
+      isSubmitting: false,
+      message: answer({ content: [{ type: 'think', think: 'Мысль 1' }] } as Partial<TMessage>),
+    });
+    expect(screen.queryByLabelText('com_ui_copy_to_clipboard')).toBeNull();
+    expect(screen.getByLabelText('com_ui_regenerate')).toBeEnabled();
+  });
+
+  it('an empty turn: no Copy either', () => {
+    renderButtons({ isSubmitting: false, message: answer({ content: [] }) });
+    expect(screen.queryByLabelText('com_ui_copy_to_clipboard')).toBeNull();
+  });
+
+  it('a text part brings Copy back', () => {
+    renderButtons({
+      isSubmitting: false,
+      message: answer({
+        content: [
+          { type: 'think', think: 'Мысль 1' },
+          { type: 'text', text: 'Ответ' },
+        ],
+      } as Partial<TMessage>),
+    });
+    expect(screen.getByLabelText('com_ui_copy_to_clipboard')).toBeEnabled();
+  });
+});

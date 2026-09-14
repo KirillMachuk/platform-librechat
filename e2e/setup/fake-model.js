@@ -26,6 +26,10 @@ const COUNTED_REPLY_MARKER = 'E2E_COUNTED_REPLY:';
 const SLOW_REPLY_MARKER = 'E2E_SLOW_REPLY:';
 const THINK_REPLY_MARKER = 'E2E_THINK_REPLY:';
 const SLOW_THINK_REPLY_MARKER = 'E2E_SLOW_THINK_REPLY:';
+/** Silence before the first token: the window in which a user can Stop before
+ *  anything was produced. Long enough for a test to press Stop with margin. */
+const SILENT_REPLY_MARKER = 'E2E_SILENT_REPLY:';
+const SILENT_REPLY_FIRST_TOKEN_MS = 8000;
 const SLOW_COUNTED_REPLY_MARKER = 'E2E_SLOW_COUNTED_REPLY:';
 const RESUME_ICON_REPLY_MARKER = 'E2E_RESUME_ICON_REPLY:';
 const FORCED_ERROR_MARKER = 'E2E_FORCED_ERROR:';
@@ -298,6 +302,14 @@ function replyResponses(text) {
     };
   }
 
+  const silentName = getMarkerValue(text, SILENT_REPLY_MARKER);
+  if (silentName) {
+    return {
+      responses: [`E2E silent reply ${silentName}`],
+      firstTokenSleep: SILENT_REPLY_FIRST_TOKEN_MS,
+    };
+  }
+
   const slowThinkName = getMarkerValue(text, SLOW_THINK_REPLY_MARKER);
   if (slowThinkName) {
     return {
@@ -382,8 +394,9 @@ class UsageEmittingFakeChatModel extends FakeChatModel {
     // the client shows its waiting indicator. Real models are silent here for
     // seconds; without this knob the mock answers instantly and the indicator
     // can never be observed or measured live.
-    if (FIRST_TOKEN_DELAY_MS > 0) {
-      await new Promise((resolve) => setTimeout(resolve, FIRST_TOKEN_DELAY_MS));
+    const firstTokenDelayMs = this.firstTokenSleepMs ?? FIRST_TOKEN_DELAY_MS;
+    if (firstTokenDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, firstTokenDelayMs));
     }
     for (const piece of this.reasoningChunks ?? []) {
       await new Promise((resolve) => setTimeout(resolve, this.reasoningSleepMs ?? CHUNK_DELAY_MS));
@@ -425,6 +438,7 @@ function overrideModel({
   thrownErrorAfterTool,
   reasoning,
   reasoningSleep,
+  firstTokenSleep,
 }) {
   if (!thrownError) {
     const model = new UsageEmittingFakeChatModel({
@@ -435,6 +449,7 @@ function overrideModel({
     });
     model.reasoningChunks = reasoning;
     model.reasoningSleepMs = reasoningSleep;
+    model.firstTokenSleepMs = firstTokenSleep;
     graph.overrideModel = model;
     return;
   }
@@ -688,6 +703,7 @@ module.exports = function fakeModelHook(run, context) {
     thrownErrorAfterTool,
     reasoning,
     reasoningSleep,
+    firstTokenSleep,
   } = resolveResponses({
     agents: context?.agents,
     messages: context?.messages,
@@ -703,5 +719,6 @@ module.exports = function fakeModelHook(run, context) {
     thrownErrorAfterTool,
     reasoning,
     reasoningSleep,
+    firstTokenSleep,
   });
 };

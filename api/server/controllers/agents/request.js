@@ -9,6 +9,7 @@ const {
   HEARTBEAT_INTERVAL_MS,
   GenerationJobManager,
   filterPersistableAbortContent,
+  hasPersistableAbortContent,
   decrementPendingRequest,
   sanitizeMessageForTransmit,
   checkAndIncrementPendingRequest,
@@ -799,7 +800,13 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         // CRITICAL: Save response message BEFORE emitting final event.
         // This prevents race conditions where the client sends a follow-up message
         // before the response is saved to the database, causing orphaned parentMessageIds.
-        if (client.savedMessageIds && !client.savedMessageIds.has(messageId)) {
+        // A Stop that produced nothing is not saved (BaseClient skips it on purpose);
+        // this fallback must not write the empty turn the client just refused.
+        const stoppedEmpty =
+          wasAbortedBeforeComplete &&
+          !(response.text ?? '').trim() &&
+          !hasPersistableAbortContent(response.content);
+        if (client.savedMessageIds && !client.savedMessageIds.has(messageId) && !stoppedEmpty) {
           await saveMessage(
             reqCtx,
             { ...response, user: userId, unfinished: wasAbortedBeforeComplete },
