@@ -11,17 +11,17 @@ import {
   drProgressByConvoId,
   planArrivedLive,
 } from '~/store/deepResearch';
-import { ApprovalCard, ApprovalCardHeaderAction } from '~/components/Chat/Cards/ApprovalCard';
+import {
+  ApprovalCard,
+  ApprovalCardHeaderAction,
+  CARD_SLOT_CLASS,
+} from '~/components/Chat/Cards/ApprovalCard';
 import RunFooter, { runActiveIndex, runStatusSteps } from './RunFooter';
 import useCardStrings from '~/components/Chat/Cards/useCardStrings';
 import { useSubmitMessage } from '~/hooks/Messages';
-import { useChatContext } from '~/Providers';
-import { Square } from '~/components/icons';
 import { mainTextareaId } from '~/common';
+import RunStopAction from './RunStop';
 import { useLocalize } from '~/hooks';
-
-/** The stop square inside the header slot — same 24px box as the plan's ✕. */
-const STOP_GLYPH = 'size-3 fill-current';
 
 /**
  * True while the user has actually TYPED something in the main textarea. A self-start goes
@@ -86,7 +86,6 @@ export default function PlanCard({
   const localize = useLocalize();
   const { showToast } = useToastContext();
   const { submitMessage } = useSubmitMessage();
-  const { stopGenerating } = useChatContext();
   /* An idle card subscribes to the empty key — a shared, always-null atom —
    * so a conversation full of past plans costs one no-op subscription each. */
   const snapshot = useRecoilValue(drProgressByConvoId(isRunning ? (conversationId ?? '') : ''));
@@ -232,15 +231,7 @@ export default function PlanCard({
 
   let headerAction: ReactNode;
   if (running != null) {
-    headerAction = (
-      <ApprovalCardHeaderAction
-        label={localize('com_ui_deep_research_stop')}
-        onClick={stopGenerating}
-        testId="dr-stop"
-      >
-        <Square className={STOP_GLYPH} aria-hidden="true" />
-      </ApprovalCardHeaderAction>
-    );
+    headerAction = <RunStopAction />;
   } else if (showControls) {
     /* Named for what it does. «Отмена» alone was one of two ✕ with that caption on the
      * same card, with opposite consequences (design review 02.09, К1). */
@@ -268,7 +259,7 @@ export default function PlanCard({
   }
 
   return (
-    <div className="my-2 w-full">
+    <div className={CARD_SLOT_CLASS}>
       <ApprovalCard
         variant="plan"
         strings={cardStrings}
