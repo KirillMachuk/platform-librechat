@@ -18,6 +18,7 @@ import {
   useQueryParams,
   useSubmitMessage,
   useFocusChatEffect,
+  useSteerRun,
 } from '~/hooks';
 import {
   useChatContext,
@@ -166,6 +167,22 @@ const ChatForm = memo(function ChatForm({
   });
 
   const { submitMessage, submitPrompt } = useSubmitMessage();
+  /* Mid-run steering: while a research run gathers, the composer stays a live
+   * channel — Send hands the run a clarification, Stop lives on the card. */
+  const { canSteer, steerClosed, steerPending, steer } = useSteerRun();
+  const steerMessage = useCallback(
+    async (data: { text: string }) => {
+      if (await steer(data.text)) {
+        methods.reset();
+      }
+    },
+    [steer, methods],
+  );
+  const composerPlaceholder = canSteer
+    ? localize('com_ui_dr_steer_placeholder')
+    : steerClosed
+      ? localize('com_ui_dr_steer_closed_placeholder')
+      : placeholder;
 
   const handleKeyUp = useHandleKeyUp({
     index,
@@ -182,7 +199,8 @@ const ChatForm = memo(function ChatForm({
     submitButtonRef,
     setIsScrollable,
     disabled: disableInputs,
-    placeholder,
+    placeholder: composerPlaceholder,
+    canSteer,
   });
 
   useQueryParams({ textAreaRef });
@@ -238,7 +256,7 @@ const ChatForm = memo(function ChatForm({
 
   return (
     <form
-      onSubmit={methods.handleSubmit(submitMessage)}
+      onSubmit={methods.handleSubmit(canSteer ? steerMessage : submitMessage)}
       /* autoComplete off: the browser's contact-autofill popover appeared over
        * the composer whenever a chat switch re-focused the textarea (round 24;
        * Safari offers contact fill for any focused named field in a form). */
@@ -418,14 +436,20 @@ const ChatForm = memo(function ChatForm({
                 />
               )}
               <div>
-                {isSubmitting && showStopButton ? (
+                {isSubmitting && showStopButton && !canSteer && !steerClosed ? (
                   <StopButton stop={handleStopGenerating} setShowStopButton={setShowStopButton} />
                 ) : (
                   endpoint && (
                     <SendButton
                       ref={submitButtonRef}
                       control={methods.control}
-                      disabled={filesLoading || isSubmitting || disableInputs || isNotAppendable}
+                      disabled={
+                        filesLoading ||
+                        (isSubmitting && !canSteer) ||
+                        steerPending ||
+                        disableInputs ||
+                        isNotAppendable
+                      }
                     />
                   )
                 )}

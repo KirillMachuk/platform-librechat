@@ -20,6 +20,12 @@ jest.mock('~/hooks', () => ({
   useQueryParams: () => undefined,
   useSubmitMessage: () => ({ submitMessage: jest.fn(), submitPrompt: jest.fn() }),
   useFocusChatEffect: () => undefined,
+  useSteerRun: () => ({
+    canSteer: false,
+    steerClosed: false,
+    steerPending: false,
+    steer: jest.fn(),
+  }),
   useTextarea: () => ({
     isNotAppendable: false,
     handlePaste: jest.fn(),

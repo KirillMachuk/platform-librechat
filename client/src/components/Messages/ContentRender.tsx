@@ -312,7 +312,17 @@ const ContentRender = memo(function ContentRender({
     const startCommand = children.find(
       (child) => child.drKind === 'start' || isDrStartCommand(child.text ?? ''),
     );
-    const runReplies = startCommand?.children ?? [];
+    /* Clarifications typed during the run (mid-run steering) hang between
+     * the command and the answer: command → steer → steer → answer. The
+     * answer is under the LAST of them, so follow the chain down. */
+    let runReplies = startCommand?.children ?? [];
+    for (let hops = 0; hops < 16; hops++) {
+      const steer = runReplies.find((child) => child.drKind === 'steer');
+      if (steer == null) {
+        break;
+      }
+      runReplies = steer.children ?? [];
+    }
     let outcome: 'report' | 'stopped' | undefined;
     if (runReplies.some((child) => child.drKind === 'report')) {
       outcome = 'report';
