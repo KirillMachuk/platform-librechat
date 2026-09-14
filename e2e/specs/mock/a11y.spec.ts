@@ -57,6 +57,8 @@ const describeViolations = (results: Awaited<ReturnType<typeof scan>>) =>
     rule: violation.id,
     impact: violation.impact,
     where: violation.nodes.map((node) => node.target.join(' ')),
+    /* The opening tag, so a class-only selector still says which element. */
+    html: violation.nodes.map((node) => node.html.slice(0, 160)),
   }));
 
 const FILE_PANEL = 'div[role="dialog"]';
