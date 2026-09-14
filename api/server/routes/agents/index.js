@@ -380,10 +380,11 @@ router.post('/chat/steer', async (req, res) => {
   entry.message = saved;
   /* The job's «user message of this turn» becomes the clarification: a tab
    * that reloads mid-run rebuilds its placeholder under resumeState.userMessage
-   * (useResumeOnLoad), which must be the new branch head — otherwise the
-   * placeholder and the clarification end up siblings and the chat grows a
-   * switcher nobody made. Best-effort: a failed metadata write only costs the
-   * reload case, and the run itself already knows the head. */
+   * (useResumeOnLoad), which must be the new branch head. The final still
+   * carries the ORIGINAL request; the client's withMidRunSteers drops every
+   * id it re-appends from that reload snapshot, so nothing doubles. Best-
+   * effort: a failed metadata write only costs the reload case, and the run
+   * itself already knows the head. */
   try {
     await GenerationJobManager.updateMetadata(conversationId, {
       userMessage: { messageId: message.messageId, parentMessageId, conversationId, text },

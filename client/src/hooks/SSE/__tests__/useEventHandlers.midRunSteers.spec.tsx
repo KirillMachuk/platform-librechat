@@ -56,19 +56,21 @@ const report = message({ messageId: 'r1', parentMessageId: 's2', drKind: 'report
 describe('withMidRunSteers', () => {
   it('slots the clarifications between the request and the answer', () => {
     expect(
-      withMidRunSteers([plan, start], [steer1, steer2], [report]).map((m) => m.messageId),
+      withMidRunSteers([plan], [steer1, steer2], [start, report]).map((m) => m.messageId),
     ).toEqual(['plan1', 'um1', 's1', 's2', 'r1']);
   });
 
-  it('replaces copies already in the snapshot (a reload read them from the database) instead of duplicating', () => {
+  it('after a reload the snapshot still holds the request and the earlier clarifications — no id doubles (review of part B, К1)', () => {
+    /* messagesBeforeTurn with the LAST clarification as the turn's user
+     * message keeps `um1` and `s1`; the final re-sends all three. */
     const stale = { ...steer1, text: 'stale copy' };
-    const out = withMidRunSteers([plan, start, stale], [steer1, steer2], [report]);
+    const out = withMidRunSteers([plan, start, stale], [steer1, steer2], [start, report]);
     expect(out.map((m) => m.messageId)).toEqual(['plan1', 'um1', 's1', 's2', 'r1']);
     expect(out.find((m) => m.messageId === 's1')?.text).toBe('не Минск');
   });
 
   it('is the plain concatenation when nothing was steered', () => {
-    expect(withMidRunSteers([plan, start], undefined, [report]).map((m) => m.messageId)).toEqual([
+    expect(withMidRunSteers([plan], undefined, [start, report]).map((m) => m.messageId)).toEqual([
       'plan1',
       'um1',
       'r1',

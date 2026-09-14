@@ -137,22 +137,31 @@ export const mergeRegenerateFinalMessages = ({
 
 /**
  * Clarifications typed during a Deep Research run (mid-run steering) sit
- * between the request and the answer. The final assembles the feed from the
- * submission's snapshot taken BEFORE the turn, so without this they would
- * vanish at finalization; a reload's snapshot already holds them (they are in
- * the database), so the server's copies replace rather than duplicate.
+ * between the request and the answer: `[...before, request, ...steers,
+ * answer]`. The final assembles the feed from the submission's snapshot taken
+ * BEFORE the turn, so without this they would vanish at finalization.
+ *
+ * After a reload the snapshot is cut differently: the job then names the LAST
+ * clarification as the turn's user message (the steer route rewrites it so
+ * the placeholder hangs under it), so `messagesBeforeTurn` keeps the original
+ * request and every earlier clarification in the snapshot — while the final
+ * still carries the original request as `requestMessage`. Every id this
+ * function appends is therefore removed from the snapshot first; the copies
+ * from the server win. Without steers the shape is exactly the old one.
  */
 export function withMidRunSteers(
   before: TMessage[],
   steerMessages: TMessage[] | undefined,
-  after: TMessage[],
+  turn: [request: TMessage, answer: TMessage],
 ): TMessage[] {
   const steers = steerMessages ?? [];
+  const [request, answer] = turn;
   if (steers.length === 0) {
-    return [...before, ...after];
+    return [...before, request, answer];
   }
-  const ids = new Set(steers.map((m) => m.messageId));
-  return [...before.filter((m) => !ids.has(m.messageId)), ...steers, ...after];
+  const appended = [request, ...steers, answer];
+  const ids = new Set(appended.map((m) => m.messageId));
+  return [...before.filter((m) => !ids.has(m.messageId)), ...appended];
 }
 
 export const getExistingConversationAbortMessages = ({
@@ -781,7 +790,8 @@ export default function useEventHandlers({
             initialResponseId: submission.initialResponse.messageId,
           });
         } else if (requestMessage != null && responseMessage != null) {
-          finalMessages = withMidRunSteers([...messages, requestMessage], steerMessages, [
+          finalMessages = withMidRunSteers(messages, steerMessages, [
+            requestMessage,
             responseMessage,
           ]);
         } else if (responseMessage == null && requestMessage != null) {

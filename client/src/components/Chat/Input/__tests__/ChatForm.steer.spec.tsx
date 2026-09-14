@@ -74,7 +74,7 @@ jest.mock('../StreamAudio', () => () => null);
 jest.mock('../TokenUsage', () => () => null);
 jest.mock('../StopButton', () => () => <button type="button" data-testid="stop" />);
 jest.mock('../SendButton', () => {
-  const { forwardRef } = jest.requireActual('react');
+  const { forwardRef } = jest.requireActual('react') as typeof import('react');
   const Send = forwardRef<HTMLButtonElement, { disabled?: boolean }>(function Send(
     { disabled },
     ref,

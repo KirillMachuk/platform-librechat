@@ -178,11 +178,12 @@ const ChatForm = memo(function ChatForm({
     },
     [steer, methods],
   );
-  const composerPlaceholder = canSteer
-    ? localize('com_ui_dr_steer_placeholder')
-    : steerClosed
-      ? localize('com_ui_dr_steer_closed_placeholder')
-      : placeholder;
+  let composerPlaceholder = placeholder;
+  if (canSteer) {
+    composerPlaceholder = localize('com_ui_dr_steer_placeholder');
+  } else if (steerClosed) {
+    composerPlaceholder = localize('com_ui_dr_steer_closed_placeholder');
+  }
 
   const handleKeyUp = useHandleKeyUp({
     index,
