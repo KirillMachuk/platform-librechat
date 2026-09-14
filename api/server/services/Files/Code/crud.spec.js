@@ -426,7 +426,7 @@ describe('Code CRUD', () => {
    * one, and empty is not "off" — it is relative. On 2026-09-08 a recreate handed
    * the stand's container an empty address and the pptx skill upload died with
    * `TypeError: Invalid URL` from inside axios: a message naming neither the
-   * sandbox nor the setting, on a path where the model is told to fix and retry.
+   * sandbox nor the setting, on a path whose failure only an operator log sees.
    * The request must not be attempted, and the refusal must say where to look. */
   describe('an unconfigured Code Interpreter', () => {
     beforeEach(() => {

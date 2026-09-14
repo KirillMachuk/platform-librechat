@@ -1730,7 +1730,7 @@ async function loadSandboxTextForAuthoring({
     if (!result || result.content == null) {
       return {
         status: 'error',
-        message: `Failed to read "${filePath}" from the code-execution sandbox.`,
+        message: `Could not read "${filePath}" from the code-execution sandbox, so nothing was written. Retry once; if it fails again, tell the user the sandbox is unavailable.`,
       };
     }
     if (looksBinary(result.content)) {
@@ -1761,7 +1761,7 @@ async function loadSandboxTextForAuthoring({
     logger.warn(`[file_authoring] Sandbox read failed for "${filePath}": ${message}`);
     return {
       status: 'error',
-      message: `Error reading "${filePath}" from the code-execution sandbox: ${message}.`,
+      message: `Error reading "${filePath}" from the code-execution sandbox: ${message}. Nothing was written. Retry once; if it fails again, tell the user the sandbox is unavailable.`,
     };
   }
 }

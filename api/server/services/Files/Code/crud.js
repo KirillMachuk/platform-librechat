@@ -22,8 +22,9 @@ const MAX_FILE_SIZE = 150 * 1024 * 1024;
  * An unconfigured `LIBRECHAT_CODE_BASEURL` is EMPTY, not absent, and empty is not
  * «off» — it is relative. Every caller here interpolates it into a request path, so
  * the empty case reached axios as `/upload/batch` and came back as `TypeError:
- * Invalid URL`, a message that names neither the sandbox nor the setting — on the one
- * path where the model is told to fix the error and retry. Note that the variable
+ * Invalid URL`, a message that names neither the sandbox nor the setting. The skill
+ * upload that hit it swallows the error into an operator log, so that log line is the
+ * only place anyone learns what is wrong — it has to say so. Note that the variable
  * being UNSET is a different state, which upstream's own default already handles;
  * only the empty string lands here.
  *
@@ -181,8 +182,7 @@ async function deleteCodeEnvFile(req, file) {
  */
 async function uploadCodeEnvFile({ req, stream, filename, kind, id, version }) {
   try {
-    /* Ahead of the stream, for the same reason as in `batchUploadCodeEnvFiles`:
-     * refusing afterwards leaves the caller's stream attached to a form nobody sends. */
+    /* Before any request is built, so nothing is attempted against a relative URL. */
     const baseURL = requireCodeBaseURL();
 
     const form = new FormData();
@@ -251,8 +251,7 @@ async function uploadCodeEnvFile({ req, stream, filename, kind, id, version }) {
  * @throws {Error} If the batch upload fails entirely.
  */
 async function batchUploadCodeEnvFiles({ req, files, kind, id, version, read_only = false }) {
-  /* Checked before the caller's streams are attached to a FormData that will never
-   * be sent: refusing after that leaves them half-consumed for no reason. */
+  /* Before any request is built, so nothing is attempted against a relative URL. */
   const baseURL = requireCodeBaseURL();
 
   const form = new FormData();

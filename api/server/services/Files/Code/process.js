@@ -1127,15 +1127,11 @@ async function readSandboxFile({ file_path, session_id, files, req, expectMissin
       error?.sandboxStderr === true &&
       isMissingSandboxPathMessage(error.message)
     ) {
-      /* Quieter, not silent. Every one of the four `Error reading sandbox file` lines
-       * in this stand's fourteen-day log came from THIS probe — including both of the
-       * 31.08 pair that revealed the sandbox-continuity bug (#464). So the reads that
-       * were supposed to keep covering that case have never actually fired in
-       * production, and dropping the line entirely would have left «the sandbox lost a
+      /* Quieter, not silent. The misses this probe logged in production were also
+       * the only trace of the sandbox-continuity bug of 31.08 (#464) — no other read
+       * ever reported it — so dropping the line entirely would leave «the sandbox lost a
        * file the model wrote» with nothing to show for it. `warn` keeps it in the
-       * container log for an investigation while staying out of the daily digest,
-       * which reads `error-*.log` for the platform and skips this container in its
-       * per-service pass. */
+       * general log for an investigation while keeping it out of the error log. */
       logger.warn(
         `[readSandboxFile] "${file_path}" is not in the sandbox (expected by the caller): ${error.message}`,
       );

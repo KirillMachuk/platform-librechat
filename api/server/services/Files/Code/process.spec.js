@@ -1682,10 +1682,9 @@ describe('Code Process', () => {
        * and must not be filed as a platform fault — until this was fixed, every
        * created file left one `error`-level line behind while the call it belonged to
        * succeeded. The permission is the CALLER'S, passed as `expectMissing`: a read
-       * that expects the file to exist keeps the loud path, because a miss there is
-       * exactly how the sandbox-continuity bug of 31.08 (#464) became visible in this
-       * log. Classifying by message instead would also have silenced a broken sandbox
-       * image and skill files that failed to mount. */
+       * that expects the file to exist keeps the loud path, because a miss there is a
+       * real finding. Classifying by message instead would also have silenced a broken
+       * sandbox image and skill files that failed to mount. */
       it("does not file the probe's own miss as a platform error", async () => {
         const { logAxiosError } = require('@librechat/api');
         mockAxios.mockResolvedValueOnce({
@@ -1700,12 +1699,28 @@ describe('Code Process', () => {
         expect(logger.error).not.toHaveBeenCalled();
       });
 
-      /* Quieter, not silent. Every `Error reading sandbox file` line this stand has
-       * ever recorded came from THIS probe — including both of the 31.08 pair that
-       * revealed the sandbox-continuity bug (#464) — so dropping the line entirely
-       * would leave «the sandbox lost a file the model wrote» with nothing to show
-       * for it. `warn` stays out of `error-*.log`, which is the only platform file
-       * the daily digest reads, and stays in the container log for an investigation. */
+      /* Quieter, not silent. The probe's misses were also the only trace the
+       * sandbox-continuity bug of 31.08 (#464) ever left, so dropping the line entirely
+       * would leave «the sandbox lost a file the model wrote» with nothing to show for
+       * it. `warn` stays out of the error log and stays in the general log. */
+      /* The producing half of a contract `isSandboxMissingFileError` in
+       * packages/api/src/agents/handlers.ts relies on to tell «the sandbox answered»
+       * from «the request failed». Without it a rename here leaves both suites green
+       * while every stderr error falls through to the looser, text-only reading. */
+      it("tags an error raised from the sandbox's own stderr, and only that one", async () => {
+        mockAxios.mockResolvedValueOnce({
+          data: { stdout: '', stderr: 'cat: /mnt/data/new.json: No such file or directory\n' },
+        });
+        await expect(readSandboxFile({ file_path: '/mnt/data/new.json' })).rejects.toMatchObject({
+          sandboxStderr: true,
+        });
+
+        const transport = new Error('timeout of 15000ms exceeded');
+        mockAxios.mockRejectedValueOnce(transport);
+        await expect(readSandboxFile({ file_path: '/mnt/data/new.json' })).rejects.toBe(transport);
+        expect(transport.sandboxStderr).toBeUndefined();
+      });
+
       it("still leaves the probe's miss in the container log", async () => {
         mockAxios.mockResolvedValueOnce({
           data: { stdout: '', stderr: 'cat: /mnt/data/new.json: No such file or directory\n' },
@@ -1780,13 +1795,22 @@ describe('Code Process', () => {
         expect(logAxiosError).not.toHaveBeenCalled();
       });
 
+      /* The fixture carries the exact miss wording on purpose: without it, the text
+       * check alone would keep this loud and the test would not notice the origin
+       * check (`sandboxStderr`) being deleted. A rejection from axios is never the
+       * sandbox's own answer, whatever its message says. */
       it('reports a transport failure even when the probe asked for silence', async () => {
         const { logAxiosError } = require('@librechat/api');
-        mockAxios.mockRejectedValueOnce(new Error('socket hang up: file not found upstream'));
+        mockAxios.mockRejectedValueOnce(
+          new Error('socket hang up: cat: /mnt/data/new.json: No such file or directory'),
+        );
 
         await expect(
           readSandboxFile({ file_path: '/mnt/data/new.json', expectMissing: true }),
         ).rejects.toThrow('socket hang up');
+        expect(logger.warn).not.toHaveBeenCalledWith(
+          expect.stringContaining('expected by the caller'),
+        );
 
         expect(logAxiosError).toHaveBeenCalledWith(
           expect.objectContaining({

@@ -591,6 +591,11 @@ describe('sandbox session continuity', () => {
     expect(String((second as { errorMessage?: string }).errorMessage)).toMatch(
       /Error reading .*sandbox/i,
     );
+    /* And it is told what to do next, so a failed read is not a dead end: retrying is
+     * safe because the retry repeats this same existence check before any write. */
+    expect(String((second as { errorMessage?: string }).errorMessage)).toMatch(
+      /Nothing was written\. Retry once; if it fails again, tell the user/,
+    );
     /* One write in the whole test — the first one. The overwrite never happened. */
     expect(sandbox.writeSandboxFile).toHaveBeenCalledTimes(1);
   });
