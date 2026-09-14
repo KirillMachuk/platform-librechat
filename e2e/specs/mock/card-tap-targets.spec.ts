@@ -124,6 +124,7 @@ test.describe('card controls reach 44px on a phone', () => {
      * 44 box, so none of them may be reported small, and the fork button —
      * the one with a test id — must not cover a neighbour's centre. */
     const ACTION_ROW = [
+      'fork-button',
       'Copy to clipboard',
       'Edit',
       'Branch to a new chat from here',

@@ -3,6 +3,7 @@ import { ForkOptions } from 'librechat-data-provider';
 import { TooltipAnchor, useToastContext } from '@librechat/client';
 import { useLocalize, useNavigateToConvo } from '~/hooks';
 import { useForkConvoMutation } from '~/data-provider';
+import { ACTION_ROW_BUTTON_CLASS } from './ui/turn';
 import { GitFork } from '~/components/icons';
 import { cn } from '~/utils';
 
@@ -32,7 +33,7 @@ export default function Fork({
   const { navigateToConvo } = useNavigateToConvo();
 
   const buttonStyle = cn(
-    'hover-button tap-target flex h-7 w-7 items-center justify-center rounded-lg text-text-secondary-alt [&_svg]:h-4 [&_svg]:w-4',
+    ACTION_ROW_BUTTON_CLASS,
     'hover:text-text-primary hover:bg-surface-hover',
     /* Канон §6.14, решение владельца: кнопки под ответом видны ВСЕГДА. Правило
        уже применили к кнопкам из `HoverButton`, а сюда оно не доехало — на
