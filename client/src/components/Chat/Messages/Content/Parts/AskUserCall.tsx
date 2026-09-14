@@ -1,4 +1,4 @@
-import { memo, useContext, useId, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useContext, useId, useMemo, useRef, useState } from 'react';
 import { useToastContext } from '@librechat/client';
 import {
   ASK_SKIP_MARKER,
@@ -8,6 +8,7 @@ import {
   parseAskUserArgs,
 } from 'librechat-data-provider';
 import type { AskUserQuestion } from 'librechat-data-provider';
+import { cn, clearAskAnswersDraft, getAskAnswersDraft, setAskAnswersDraft } from '~/utils';
 import { ApprovalCard, CARD_SLOT_CLASS } from '~/components/Chat/Cards/ApprovalCard';
 import { useOptionalMessagesOperations } from '~/Providers/MessagesViewContext';
 import { MessageCircleQuestion, ChevronDown } from '~/components/icons';
@@ -16,7 +17,6 @@ import useExpandCollapse from '~/hooks/Messages/useExpandCollapse';
 import { ChatContext, useMessageContext } from '~/Providers';
 import { useSubmitMessage } from '~/hooks/Messages';
 import { useLocalize } from '~/hooks';
-import { cn } from '~/utils';
 
 /**
  * Renders the `ask_user` tool call as the interactive questions card
@@ -29,7 +29,10 @@ import { cn } from '~/utils';
  * r25 (owner): the options are selectable the moment the card appears — even
  * while the model's closing sentence still streams — and only the commit
  * controls wait for the turn to end (actionsArmed). Selections survive the
- * finalization remount through ContentParts' askAnswers map. An answered or
+ * finalization remount through ContentParts' askAnswers map, and a page
+ * reload through localStorage (keyed by the tool call id — the phone
+ * browser reloads a background tab on its own, and the owner confirmed a
+ * half-filled card must come back as it was left). An answered or
  * historical card folds into a one-line summary (the answers chip below
  * carries the content), reopening onto the static card.
  *
@@ -170,7 +173,7 @@ function CollapsedQuestions({ questions }: { questions: AskUserQuestion[] }) {
   );
 }
 
-function InteractiveCard({ questions }: { questions: AskUserQuestion[] }) {
+function InteractiveCard({ questions, callId }: { questions: AskUserQuestion[]; callId?: string }) {
   const localize = useLocalize();
   const strings = useCardStrings();
   const { showToast } = useToastContext();
@@ -179,6 +182,21 @@ function InteractiveCard({ questions }: { questions: AskUserQuestion[] }) {
     useMessageContext();
   const [acted, setActed] = useState(false);
   const actedRef = useRef(false);
+  /* The in-session map (ContentParts) is the fresher source: it holds what
+   * was picked in THIS mount's lifetime. The stored draft only fills in after
+   * a reload, when the map is empty. Read once — ApprovalCard seeds its state
+   * from initialAnswers at mount and reports every change back through
+   * onAnswersChange, which is where the draft is written. */
+  const [storedDraft] = useState(() => (callId ? getAskAnswersDraft(callId) : undefined));
+  const handleAnswersChange = useCallback(
+    (answers: Record<string, string>) => {
+      onAskAnswersChange?.(answers);
+      if (callId) {
+        setAskAnswersDraft(callId, answers);
+      }
+    },
+    [callId, onAskAnswersChange],
+  );
 
   const send = (text: string): void => {
     if (actedRef.current) {
@@ -190,6 +208,11 @@ function InteractiveCard({ questions }: { questions: AskUserQuestion[] }) {
     }
     actedRef.current = true;
     setActed(true);
+    /* Committed — sent or skipped — so the draft has nothing left to restore.
+     * A refused submit (the chat is busy) keeps it: the card stays live. */
+    if (callId) {
+      clearAskAnswersDraft(callId);
+    }
   };
 
   const present = isLatestMessage === true && !acted;
@@ -210,8 +233,8 @@ function InteractiveCard({ questions }: { questions: AskUserQuestion[] }) {
         questions={questions}
         showActions={true}
         actionsArmed={armed}
-        initialAnswers={askAnswersInitial}
-        onAnswersChange={onAskAnswersChange}
+        initialAnswers={askAnswersInitial ?? storedDraft}
+        onAnswersChange={handleAnswersChange}
         onApprove={(payload) => {
           if (payload?.answers == null) {
             return;
@@ -224,7 +247,7 @@ function InteractiveCard({ questions }: { questions: AskUserQuestion[] }) {
   );
 }
 
-const AskUserCall = memo(({ args }: { args: unknown }) => {
+const AskUserCall = memo(({ args, callId }: { args: unknown; callId?: string }) => {
   const chat = useContext(ChatContext);
   const questions = useMemo(() => parseAskUserArgs(args), [args]);
 
@@ -237,7 +260,7 @@ const AskUserCall = memo(({ args }: { args: unknown }) => {
   if (chat == null) {
     return <CollapsedQuestions questions={questions} />;
   }
-  return <InteractiveCard questions={questions} />;
+  return <InteractiveCard questions={questions} callId={callId} />;
 });
 
 AskUserCall.displayName = 'AskUserCall';

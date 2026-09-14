@@ -191,7 +191,7 @@ const Part = memo(function Part({
         />
       );
     } else if (isToolCall && toolCall.name === ASK_USER_TOOL) {
-      return <AskUserCall args={toolCall.args} />;
+      return <AskUserCall args={toolCall.args} callId={toolCall.id} />;
     } else if (isToolCall && toolCall.name === 'skill') {
       return (
         <SkillCall

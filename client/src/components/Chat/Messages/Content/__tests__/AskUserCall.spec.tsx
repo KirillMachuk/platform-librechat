@@ -28,6 +28,7 @@ type Ctx = {
   isLatestMessage?: boolean;
   askAnswersInitial?: Record<string, string>;
   onAskAnswersChange?: (answers: Record<string, string>) => void;
+  callId?: string;
 };
 
 const renderCall = (ctx: Ctx = {}, args = ARGS) =>
@@ -43,7 +44,7 @@ const renderCall = (ctx: Ctx = {}, args = ARGS) =>
           onAskAnswersChange: ctx.onAskAnswersChange,
         }}
       >
-        <AskUserCall args={args} />
+        <AskUserCall args={args} callId={ctx.callId} />
       </MessageContext.Provider>
     </ChatContext.Provider>,
   );
@@ -320,6 +321,124 @@ describe('AskUserCall (interactive cards К3 + r25)', () => {
   it('renders nothing while the args are still streaming', () => {
     const { container } = renderCall({}, '{"questions":[{"prom');
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('unsent answers survive a page reload (owner, r26 follow-up)', () => {
+  /**
+   * The phone browser reloads a background tab on its own, and a reload used
+   * to hand back a blank card — every pick and the «Другое…» text gone. The
+   * card now keeps its unsent answers in localStorage under the TOOL CALL id
+   * and reads them back when it mounts with an empty in-session map. A
+   * reload here is a full unmount followed by a fresh mount with no
+   * askAnswersInitial — the same thing the browser does.
+   */
+  const CALL = 'call-ask-42';
+  const STORAGE_KEY = `askAnswersDraft_${CALL}`;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockSubmit.mockReset().mockReturnValue(undefined);
+    mockShowToast.mockReset();
+    window.localStorage.clear();
+  });
+  afterEach(() => {
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+    jest.useRealTimers();
+  });
+
+  const pickAndType = () => {
+    fireEvent.click(screen.getByRole('radio', { name: /Отчёт/ }));
+    act(() => {
+      jest.advanceTimersByTime(320);
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Custom answer: Период?' }), {
+      target: { value: 'Полгода' },
+    });
+  };
+
+  it('a picked option and a typed «Другое…» come back after the reload, and Continue sends them', () => {
+    const first = renderCall({ callId: CALL });
+    pickAndType();
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '{}')).toEqual({
+      q1: 'Отчёт',
+      q2: 'Полгода',
+    });
+    first.unmount();
+
+    renderCall({ callId: CALL });
+    expect(screen.getByRole('radio', { name: /Отчёт/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByDisplayValue('Полгода')).toBeInTheDocument();
+    const continueBtn = screen.getByRole('button', { name: /Continue/ });
+    expect(continueBtn).toBeEnabled();
+    fireEvent.click(continueBtn);
+    expect(mockSubmit).toHaveBeenCalledWith({
+      text: 'Ответы на вопросы:\n1) Какой формат? — Отчёт\n2) Период? — Полгода',
+    });
+  });
+
+  it('Continue clears the draft: the next mount of that card is blank', () => {
+    const first = renderCall({ callId: CALL });
+    pickAndType();
+    fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+    first.unmount();
+
+    renderCall({ callId: CALL });
+    expect(screen.getByRole('radio', { name: /Отчёт/ })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled();
+  });
+
+  it('Skip clears the draft too', () => {
+    renderCall({ callId: CALL });
+    pickAndType();
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it('a refused submit keeps the draft — the card is still live', () => {
+    mockSubmit.mockReturnValue(false);
+    renderCall({ callId: CALL });
+    pickAndType();
+    fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
+    expect(mockShowToast).toHaveBeenCalled();
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '{}')).toEqual({
+      q1: 'Отчёт',
+      q2: 'Полгода',
+    });
+  });
+
+  it('the in-session map wins over the stored draft (it is the fresher of the two)', () => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ q1: 'Отчёт' }));
+    renderCall({ callId: CALL, askAnswersInitial: { q1: 'Сводка' } });
+    expect(screen.getByRole('radio', { name: /Сводка/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: /Отчёт/ })).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('clearing every answer removes the entry instead of storing an empty object', () => {
+    renderCall({ callId: CALL });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Custom answer: Какой формат?' }), {
+      target: { value: 'Свой' },
+    });
+    expect(window.localStorage.getItem(STORAGE_KEY)).not.toBeNull();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Custom answer: Какой формат?' }), {
+      target: { value: '' },
+    });
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it('a corrupt entry is ignored, not thrown', () => {
+    window.localStorage.setItem(STORAGE_KEY, '{not json');
+    expect(() => renderCall({ callId: CALL })).not.toThrow();
+    expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled();
+  });
+
+  it('without a call id nothing is stored', () => {
+    renderCall({});
+    fireEvent.click(screen.getByRole('radio', { name: /Отчёт/ }));
+    expect(window.localStorage.length).toBe(0);
   });
 });
 
