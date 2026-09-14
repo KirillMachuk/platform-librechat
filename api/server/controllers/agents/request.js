@@ -9,7 +9,7 @@ const {
   HEARTBEAT_INTERVAL_MS,
   GenerationJobManager,
   filterPersistableAbortContent,
-  hasPersistableAbortContent,
+  hasNoAbortContent,
   decrementPendingRequest,
   sanitizeMessageForTransmit,
   checkAndIncrementPendingRequest,
@@ -805,7 +805,7 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         const stoppedEmpty =
           wasAbortedBeforeComplete &&
           !(response.text ?? '').trim() &&
-          !hasPersistableAbortContent(response.content);
+          hasNoAbortContent(response.content);
         if (client.savedMessageIds && !client.savedMessageIds.has(messageId) && !stoppedEmpty) {
           await saveMessage(
             reqCtx,

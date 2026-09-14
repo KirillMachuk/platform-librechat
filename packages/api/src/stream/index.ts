@@ -16,7 +16,11 @@ export { HEARTBEAT_INTERVAL_MS, STALE_HEARTBEAT_MS } from './interfaces/IJobStor
 
 export { createStreamServices } from './createStreamServices';
 export type { StreamServicesConfig, StreamServices } from './createStreamServices';
-export { filterPersistableAbortContent, hasPersistableAbortContent } from './abortContent';
+export {
+  filterPersistableAbortContent,
+  hasNoAbortContent,
+  hasPersistableAbortContent,
+} from './abortContent';
 
 // Implementations (for advanced use cases)
 export { InMemoryJobStore } from './implementations/InMemoryJobStore';

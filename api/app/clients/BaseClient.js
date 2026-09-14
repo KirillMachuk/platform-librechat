@@ -11,7 +11,7 @@ const {
   encodeAndFormatAudios,
   encodeAndFormatVideos,
   encodeAndFormatDocuments,
-  hasPersistableAbortContent,
+  hasNoAbortContent,
 } = require('@librechat/api');
 const {
   Constants,
@@ -177,12 +177,13 @@ const rehydrateMessageFileRefs = (refs, filesById, { preserveDisplayOnly = false
 };
 
 /** Whether a response holds anything a chat could show: text, or a content part
- *  the abort filter would keep (a thinking block with words in it, a tool call). */
+ *  the abort filter would keep (a thinking block with words in it, a tool call,
+ *  an OAuth prompt the replay contract needs). */
 function hasPersistableResponse(responseMessage) {
   if ((responseMessage.text ?? '').trim().length > 0) {
     return true;
   }
-  return hasPersistableAbortContent(responseMessage.content);
+  return !hasNoAbortContent(responseMessage.content);
 }
 
 class BaseClient {
@@ -861,7 +862,7 @@ class BaseClient {
      * the same as `skipSaveConvo` returns.
      */
     if (this.abortController?.signal?.aborted && !hasPersistableResponse(responseMessage)) {
-      logger.debug('[BaseClient] Stopped before any content; the empty response is not saved', {
+      logger.info('[BaseClient] Stopped before any content; the empty response is not saved', {
         messageId: responseMessage.messageId,
       });
       responseMessage.databasePromise = Promise.resolve({ message: null });

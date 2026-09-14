@@ -4,6 +4,7 @@ import { TooltipAnchor } from '@librechat/client';
 /* Owner's 11.08-4 picks: pencil / copy / check / repeat, drawn by the Tabler
    shims — the upstream hand-drawn svgs these replace predated the migration. */
 import { Check, Copy, Pencil, PlayerTrackNext, Repeat } from '~/components/icons';
+import { ContentTypes } from 'librechat-data-provider';
 import type { TConversation, TMessage, TFeedback } from 'librechat-data-provider';
 import { useGenerationsByLatest, useLocalize } from '~/hooks';
 import { Fork } from '~/components/Conversations';
@@ -86,14 +87,17 @@ const hasAnswerText = (message: TMessage): boolean => {
     return false;
   }
   return message.content.some((part) => {
-    if (part == null || typeof part === 'string') {
-      return typeof part === 'string' && part.trim().length > 0;
-    }
-    if (!('text' in part) || 'think' in part) {
+    if (part == null || part.type !== ContentTypes.TEXT) {
       return false;
     }
-    const text = typeof part.text === 'string' ? part.text : part.text?.value;
-    return (text ?? '').trim().length > 0;
+    const raw: unknown = part.text;
+    if (typeof raw === 'string') {
+      return raw.trim().length > 0;
+    }
+    if (raw != null && typeof raw === 'object' && 'value' in raw) {
+      return String((raw as { value?: unknown }).value ?? '').trim().length > 0;
+    }
+    return false;
   });
 };
 

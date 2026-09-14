@@ -71,6 +71,23 @@ function isPersistableAbortContentPart(
   return Object.keys(part).length > 0;
 }
 
+/**
+ * Whether a stopped run produced nothing at all: no part the abort filter keeps AND no
+ * OAuth prompt. The distinction matters for what the abort final ships and what gets
+ * saved. An OAuth-only abort is the coalesced-connection replay contract — the created
+ * turn keeps its response id (see collectedUsage.spec «post-created OAuth-only aborts»);
+ * a run stopped before its first token has no such claim, and an answer that never began
+ * must not exist: no row, no message in the final, no empty turn on screen.
+ */
+export function hasNoAbortContent(content: unknown): boolean {
+  if (!Array.isArray(content)) {
+    return true;
+  }
+  return (
+    !content.some(isOAuthPromptContentPart) && filterPersistableAbortContent(content).length === 0
+  );
+}
+
 export function hasPersistableAbortContent(content: unknown): boolean {
   return filterPersistableAbortContent(content).length > 0;
 }
