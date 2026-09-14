@@ -123,6 +123,10 @@ test.describe('ask_user questions card', () => {
       'aria-checked',
       'true',
     );
+    /* The remount opens on question 1; the other pages are aria-hidden, so
+     * page forward before reading the second question's input (the same
+     * step the jest survival spec takes). */
+    await again.getByRole('button', { name: /next question|Следующий вопрос/i }).click();
     await expect(
       again.getByRole('textbox', { name: 'Custom answer: За какой период?' }),
     ).toHaveValue('Полгода');
