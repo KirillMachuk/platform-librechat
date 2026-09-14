@@ -1,4 +1,4 @@
-import { join, relative } from 'path';
+import { join, relative, sep } from 'path';
 import { existsSync, readdirSync, readFileSync } from 'fs';
 
 /**
@@ -111,7 +111,9 @@ describe('transparent text must survive being selected (owner r28)', () => {
   const ROOTS = [CLIENT_SRC, join(CLIENT_SRC, '../../packages/client/src')].filter(existsSync);
   const SHEETS: [string, string][] = ROOTS.flatMap((root) =>
     stylesheets(root).map((file): [string, string] => [
-      relative(CLIENT_SRC, file),
+      // Windows spells the same path with backslashes; the names are compared
+      // against forward-slash literals, so the separator is normalised here.
+      relative(CLIENT_SRC, file).split(sep).join('/'),
       readFileSync(file, 'utf8'),
     ]),
   );
