@@ -78,6 +78,77 @@ test.describe('ask_user questions card', () => {
   });
 
   /**
+   * Unsent answers survive a reload (owner, r26 follow-up): the phone browser
+   * reloads a background tab on its own, and a reload used to hand back a
+   * blank card. The draft lives in localStorage under the tool call id, so
+   * this is the real chain — pick, type, F5, the same card comes back filled,
+   * and Continue sends exactly what was left there. The card is committed
+   * after the turn ends (Continue enabled) so the reload lands on a finished
+   * message, not on a stream being resumed.
+   */
+  test('a half-filled card comes back the same after a reload', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('PIN_MCP_', 'true');
+    });
+    await page.goto('/c/new', { waitUntil: 'domcontentloaded' });
+    const textarea = page.getByTestId('text-input');
+    await textarea.waitFor({ state: 'visible' });
+    await selectEphemeralMCP(page);
+    await textarea.fill(ASK_PROMPT);
+    await textarea.press('Enter');
+
+    const card = page.getByTestId('approval-card');
+    await expect(card).toBeVisible({ timeout: 30_000 });
+    await card.getByRole('radio', { name: /Полный отчёт/ }).click();
+    const custom = card.getByRole('textbox', { name: 'Custom answer: За какой период?' });
+    await custom.click();
+    await custom.fill('Полгода');
+    /* The turn has ended once Continue arms — reload a finished message. */
+    await expect(card.getByRole('button', { name: /Продолжить|Continue/ })).toBeEnabled({
+      timeout: 15_000,
+    });
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          Object.keys(window.localStorage).some((k) => k.startsWith('askAnswersDraft_')),
+        ),
+      )
+      .toBe(true);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+
+    const again = page.getByTestId('approval-card');
+    await expect(again).toBeVisible({ timeout: 30_000 });
+    await expect(again.getByRole('radio', { name: /Полный отчёт/ })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    /* The remount opens on question 1; the other pages are aria-hidden, so
+     * page forward before reading the second question's input (the same
+     * step the jest survival spec takes). */
+    await again.getByRole('button', { name: /next question|Следующий вопрос/i }).click();
+    await expect(
+      again.getByRole('textbox', { name: 'Custom answer: За какой период?' }),
+    ).toHaveValue('Полгода');
+    const continueBtn = again.getByRole('button', { name: /Продолжить|Continue/ });
+    await expect(continueBtn).toBeEnabled();
+    await continueBtn.click();
+
+    const chip = page.getByTestId('answers-chip');
+    await expect(chip).toBeVisible({ timeout: 15_000 });
+    await expect(chip.getByText('Какой формат отчёта? — Полный отчёт')).toBeVisible();
+    await expect(chip.getByText('За какой период? — Полгода')).toBeVisible();
+    /* Committed: the draft is gone, so a later reload cannot resurrect it. */
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          Object.keys(window.localStorage).some((k) => k.startsWith('askAnswersDraft_')),
+        ),
+      )
+      .toBe(false);
+  });
+
+  /**
    * The canon focus ring is drawn OUTSIDE an option's box (outline 2px +
    * offset 2px), and the carousel clips at its own padding box — so the
    * viewport must leave the ring 4px on every side of every option. It left
