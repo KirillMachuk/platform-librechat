@@ -135,6 +135,26 @@ export const mergeRegenerateFinalMessages = ({
   return finalMessages;
 };
 
+/**
+ * Clarifications typed during a Deep Research run (mid-run steering) sit
+ * between the request and the answer. The final assembles the feed from the
+ * submission's snapshot taken BEFORE the turn, so without this they would
+ * vanish at finalization; a reload's snapshot already holds them (they are in
+ * the database), so the server's copies replace rather than duplicate.
+ */
+export function withMidRunSteers(
+  before: TMessage[],
+  steerMessages: TMessage[] | undefined,
+  after: TMessage[],
+): TMessage[] {
+  const steers = steerMessages ?? [];
+  if (steers.length === 0) {
+    return [...before, ...after];
+  }
+  const ids = new Set(steers.map((m) => m.messageId));
+  return [...before.filter((m) => !ids.has(m.messageId)), ...steers, ...after];
+}
+
 export const getExistingConversationAbortMessages = ({
   messages,
   currentMessages,
@@ -627,7 +647,7 @@ export default function useEventHandlers({
 
   const finalHandler = useCallback(
     (data: TFinalResData, submission: EventSubmission) => {
-      const { requestMessage, responseMessage, conversation, runMessages } = data;
+      const { requestMessage, responseMessage, conversation, runMessages, steerMessages } = data;
       const {
         messages,
         conversation: submissionConvo,
@@ -761,7 +781,9 @@ export default function useEventHandlers({
             initialResponseId: submission.initialResponse.messageId,
           });
         } else if (requestMessage != null && responseMessage != null) {
-          finalMessages = [...messages, requestMessage, responseMessage];
+          finalMessages = withMidRunSteers([...messages, requestMessage], steerMessages, [
+            responseMessage,
+          ]);
         } else if (responseMessage == null && requestMessage != null) {
           /* A Stop before the first token: the server persisted the question and
            * nothing else, and its final says so by carrying no answer. The chat

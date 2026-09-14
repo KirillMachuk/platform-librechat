@@ -77,18 +77,37 @@ const tree = (over: {
   runReply?: Partial<TMessage>;
   cancelInstead?: boolean;
   persisted?: boolean;
+  /** Mid-run clarifications between the start command and the answer. */
+  steers?: number;
 }): TMessage[] => {
+  const steerCount = over.steers ?? 0;
   const reply = {
     messageId: 'resp1',
     conversationId: CONVO,
-    parentMessageId: 'start1',
+    parentMessageId: steerCount > 0 ? `steer${steerCount}` : 'start1',
     isCreatedByUser: false,
     text: '',
     content: [],
-    depth: 2,
+    depth: 2 + steerCount,
     children: [],
     ...over.runReply,
   } as unknown as TMessage;
+  /* command → steer1 → steer2 → answer: the chain the steer route builds. */
+  let runChildren: TMessage[] = [reply];
+  for (let i = steerCount; i >= 1; i--) {
+    runChildren = [
+      {
+        messageId: `steer${i}`,
+        conversationId: CONVO,
+        parentMessageId: i === 1 ? 'start1' : `steer${i - 1}`,
+        isCreatedByUser: true,
+        drKind: 'steer',
+        text: `Уточнение ${i}`,
+        depth: 1 + i,
+        children: runChildren,
+      } as unknown as TMessage,
+    ];
+  }
   const cancelReply = {
     messageId: 'cancel-reply',
     conversationId: CONVO,
@@ -118,7 +137,7 @@ const tree = (over: {
         ...(over.persisted === true ? { drKind: 'start' } : {}),
         text: 'Начать исследование',
         depth: 1,
-        children: [reply],
+        children: runChildren,
       } as unknown as TMessage);
   return [
     {
@@ -146,6 +165,7 @@ const renderTree = (opts: {
   runReply?: Partial<TMessage>;
   cancelInstead?: boolean;
   persisted?: boolean;
+  steers?: number;
 }) =>
   renderCustom(
     tree({
@@ -153,6 +173,7 @@ const renderTree = (opts: {
       runReply: opts.runReply,
       cancelInstead: opts.cancelInstead,
       persisted: opts.persisted,
+      steers: opts.steers,
     }),
     opts.latestId,
     opts.snapshot,
@@ -502,6 +523,27 @@ describe('which plan card draws a live Deep Research run (r26 review)', () => {
   it('a finished run leaves every step done and takes the Stop away', () => {
     renderTree({
       latestId: 'resp1',
+      runReply: { drKind: 'report', text: 'Отчёт', content: [] } as Partial<TMessage>,
+    });
+    expect(screen.getByText('Собрать').closest('li')).toHaveAttribute('data-status', 'done');
+    expect(screen.getByText('Сравнить').closest('li')).toHaveAttribute('data-status', 'done');
+    expect(screen.queryByTestId('dr-stop')).toBeNull();
+  });
+
+  it('a run steered mid-way still lights its plan card: the tail walks up through the clarifications', () => {
+    renderTree({ latestId: 'resp1', snapshot: RUNNING, persisted: true, steers: 2 });
+    expect(screen.getByTestId('dr-stop')).toBeInTheDocument();
+    expect(screen.getByText('Сравнить').closest('li')).toHaveAttribute('data-status', 'active');
+    /* The clarifications are ordinary user bubbles, not chips or cards. */
+    expect(screen.getByText('Уточнение 1')).toBeInTheDocument();
+    expect(screen.getByText('Уточнение 2')).toBeInTheDocument();
+  });
+
+  it('a finished run steered mid-way still shows its outcome: the report is found below the clarifications (review of PR-A, п.3)', () => {
+    renderTree({
+      latestId: 'resp1',
+      persisted: true,
+      steers: 2,
       runReply: { drKind: 'report', text: 'Отчёт', content: [] } as Partial<TMessage>,
     });
     expect(screen.getByText('Собрать').closest('li')).toHaveAttribute('data-status', 'done');

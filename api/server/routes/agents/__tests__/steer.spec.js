@@ -12,6 +12,7 @@ const mockGenerationJobManager = {
   getJob: jest.fn(),
   abortJob: jest.fn(),
   getActiveJobIdsForUser: jest.fn(),
+  updateMetadata: jest.fn(async () => {}),
 };
 const mockSaveMessage = jest.fn();
 const mockGetSteering = jest.fn();
@@ -108,6 +109,34 @@ describe('POST /chat/steer', () => {
       first.body.message.messageId,
       second.body.message.messageId,
     ]);
+  });
+
+  it("moves the job's «user message of this turn» onto the clarification, so a reload hangs the placeholder under it", async () => {
+    const box = new SteeringMailbox({ headMessageId: 'um1' });
+    mockGetSteering.mockReturnValue(box);
+    const res = await steer({ conversationId: CONVO, text: 'не Минск' });
+    expect(res.status).toBe(200);
+    expect(mockGenerationJobManager.updateMetadata).toHaveBeenCalledWith(CONVO, {
+      userMessage: {
+        messageId: res.body.message.messageId,
+        parentMessageId: 'um1',
+        conversationId: CONVO,
+        text: 'не Минск',
+      },
+    });
+  });
+
+  it('a failed metadata write does not undo an accepted clarification', async () => {
+    const box = new SteeringMailbox({ headMessageId: 'um1' });
+    mockGetSteering.mockReturnValue(box);
+    mockGenerationJobManager.updateMetadata.mockRejectedValueOnce(new Error('redis down'));
+    const res = await steer({ conversationId: CONVO, text: 'x' });
+    expect(res.status).toBe(200);
+    expect(box.size).toBe(1);
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('job metadata not updated'),
+      expect.any(Error),
+    );
   });
 
   it('hands the graph the MASKED text and the chat the raw one (sovereign)', async () => {
