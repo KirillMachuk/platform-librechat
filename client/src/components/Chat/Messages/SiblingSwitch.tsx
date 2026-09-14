@@ -1,6 +1,7 @@
 import { TooltipAnchor } from '@librechat/client';
 import type { TMessageProps } from '~/common';
 import { ChevronLeft, ChevronRight } from '~/components/icons';
+import { ACTION_ROW_BUTTON_CLASS } from './ui/turn';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
@@ -27,7 +28,7 @@ export default function SiblingSwitch({
   };
 
   const buttonStyle = cn(
-    'hover-button tap-target flex h-7 w-7 items-center justify-center rounded-lg text-text-secondary-alt [&_svg]:h-4 [&_svg]:w-4',
+    ACTION_ROW_BUTTON_CLASS,
     'hover:text-text-primary hover:bg-surface-hover',
     'group-hover:visible group-focus-within:visible group-[.final-completion]:visible',
     'focus-visible:outline-none',
