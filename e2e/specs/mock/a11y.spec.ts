@@ -59,6 +59,12 @@ const describeViolations = (results: Awaited<ReturnType<typeof scan>>) =>
     where: violation.nodes.map((node) => node.target.join(' ')),
     /* The opening tag, so a class-only selector still says which element. */
     html: violation.nodes.map((node) => node.html.slice(0, 160)),
+    /* The descendants a check blamed (for aria-hidden-focus: what is focusable). */
+    related: violation.nodes.map((node) =>
+      [...node.any, ...node.all, ...node.none].flatMap((check) =>
+        (check.relatedNodes ?? []).map((related) => related.html.slice(0, 160)),
+      ),
+    ),
   }));
 
 const FILE_PANEL = 'div[role="dialog"]';
