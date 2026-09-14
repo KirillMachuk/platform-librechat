@@ -26,7 +26,10 @@ const {
   pickFinalTitle,
   hasRealTitle,
   shouldSkipFinalEmit,
+  isTitleEligible,
+  resolveTitleSourceText,
 } = require('./request');
+const { getMessages } = require('~/models');
 
 describe('getPreliminaryUserMessage (DR turn shape)', () => {
   const conversationId = 'convo-1';
@@ -272,5 +275,104 @@ describe('shouldSkipFinalEmit — whether an ended job still sends its final', (
 
   it('the job in the store is still this one: emit', () => {
     expect(shouldSkipFinalEmit({ createdAt: MINE }, MINE)).toBe(false);
+  });
+});
+
+/* Measured on the stand, 14.09: the owner pressed Stop 0.4 s into a new chat — before the
+ * run, and so the title, had started — then edited that first message and sent it again.
+ * No title was ever billed, and the chat stayed «New Chat» for good: upstream titles only
+ * the first turn of a NEW conversation, and an edit of an existing one is not new. */
+describe('isTitleEligible — a conversation still without a title gets another attempt', () => {
+  const NO_PARENT = '00000000-0000-0000-0000-000000000000';
+  const base = { canTitle: true, isTemporary: false, parentMessageId: NO_PARENT };
+
+  it('the first turn of a new conversation', () => {
+    expect(isTitleEligible({ ...base, isNewConvo: true, existingConversation: undefined })).toBe(
+      true,
+    );
+  });
+
+  it('an existing conversation still called «New Chat», on an edit or a follow-up', () => {
+    const untitled = { title: 'New Chat' };
+    expect(isTitleEligible({ ...base, isNewConvo: false, existingConversation: untitled })).toBe(
+      true,
+    );
+    expect(
+      isTitleEligible({
+        ...base,
+        isNewConvo: false,
+        parentMessageId: 'user-msg-2',
+        existingConversation: { title: null },
+      }),
+    ).toBe(true);
+  });
+
+  it('never replaces a real title, generated or typed by the user', () => {
+    expect(
+      isTitleEligible({ ...base, isNewConvo: false, existingConversation: { title: 'Погода' } }),
+    ).toBe(false);
+  });
+
+  it('not for a row that could not be read, a temporary chat, or without a title service', () => {
+    expect(isTitleEligible({ ...base, isNewConvo: false, existingConversation: null })).toBe(false);
+    expect(
+      isTitleEligible({
+        ...base,
+        isNewConvo: false,
+        existingConversation: { title: 'New Chat', isTemporary: true },
+      }),
+    ).toBe(false);
+    expect(isTitleEligible({ ...base, isNewConvo: true, isTemporary: true })).toBe(false);
+    expect(isTitleEligible({ ...base, isNewConvo: true, canTitle: false })).toBe(false);
+  });
+
+  it('a new conversation is titled only from its root turn', () => {
+    expect(isTitleEligible({ ...base, isNewConvo: true, parentMessageId: 'not-root' })).toBe(false);
+  });
+});
+
+describe('resolveTitleSourceText — the title describes the opening question', () => {
+  const NO_PARENT = '00000000-0000-0000-0000-000000000000';
+  const ids = { conversationId: 'c1', userId: 'u1' };
+
+  beforeEach(() => {
+    getMessages.mockReset();
+  });
+
+  it('a root turn (new, edited or regenerated first message) uses its own text', async () => {
+    await expect(
+      resolveTitleSourceText({ ...ids, text: 'какая погода в минске', parentMessageId: NO_PARENT }),
+    ).resolves.toBe('какая погода в минске');
+    expect(getMessages).not.toHaveBeenCalled();
+  });
+
+  it('a follow-up uses the latest root user message, not «продолжи»', async () => {
+    getMessages.mockResolvedValueOnce([
+      { text: 'какая погода в минксе' },
+      { text: 'какая погода в минске' },
+    ]);
+    await expect(
+      resolveTitleSourceText({ ...ids, text: 'продолжи', parentMessageId: 'answer-1' }),
+    ).resolves.toBe('какая погода в минске');
+    expect(getMessages).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'c1',
+        user: 'u1',
+        parentMessageId: NO_PARENT,
+        isCreatedByUser: true,
+      }),
+      'text',
+    );
+  });
+
+  it('falls back to this turn when the opening message cannot be read', async () => {
+    getMessages.mockRejectedValueOnce(new Error('mongo down'));
+    await expect(
+      resolveTitleSourceText({ ...ids, text: 'продолжи', parentMessageId: 'answer-1' }),
+    ).resolves.toBe('продолжи');
+    getMessages.mockResolvedValueOnce([{ text: '   ' }]);
+    await expect(
+      resolveTitleSourceText({ ...ids, text: 'продолжи', parentMessageId: 'answer-1' }),
+    ).resolves.toBe('продолжи');
   });
 });

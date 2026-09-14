@@ -39,14 +39,13 @@ function resolveTitleTimeoutMs(titleModel) {
  * @param {string} [params.conversationId] - Required for `immediate` timing, where
  *   `response` is not yet available; falls back to `response.conversationId`.
  * @param {boolean} [params.immediate] - When true, the title is generated in parallel
- *   with the response (from the user's first message) and persisted to the conversation
- *   only after `convoReady` resolves (the conversation row must exist for `noUpsert`).
- * @param {Promise<void>} [params.convoReady] - Resolves once the conversation has been
- *   persisted; awaited before saving the title in `immediate` mode.
- * @param {AbortSignal} [params.signal] - When aborted (e.g. the user stops an
- *   immediate-mode generation), cancels the in-flight title model call so a
- *   turn stopped before the title finished does not consume the title model. A
- *   title that already finished generating is still persisted and surfaced.
+ *   with the response and persisted to the conversation only after `convoReady`
+ *   resolves (the conversation row must exist for `noUpsert`).
+ * @param {Promise<void>} [params.convoReady] - Resolves once the conversation row
+ *   exists; awaited before saving the title in `immediate` mode.
+ * @param {AbortSignal} [params.signal] - When aborted, cancels the in-flight title model
+ *   call. The agents controller aborts it only while the run has not started; a title
+ *   that already finished generating is still persisted.
  * @param {AbortSignal} [params.discardSignal] - (Not passed by this fork's agents
  *   controller — see the note there.) When aborted, discards an
  *   already-generated title instead of persisting it. Used only when this stream
@@ -181,7 +180,7 @@ const addTitle = async (
       return;
     }
 
-    await saveConvo(
+    const saved = await saveConvo(
       {
         userId: req?.user?.id,
         isTemporary: req?.body?.isTemporary,
@@ -191,8 +190,23 @@ const addTitle = async (
         conversationId: convoId,
         title,
       },
-      { context: 'api/server/services/Endpoints/agents/title.js', noUpsert: true },
+      {
+        context: 'api/server/services/Endpoints/agents/title.js',
+        noUpsert: true,
+        /* A generated title never replaces a real one (the user's rename, or another
+         * attempt that landed first), and is not activity: it must not light the unread
+         * dot on a chat the user has just read. */
+        untitledOnly: true,
+        keepUpdatedAt: true,
+      },
     );
+
+    /* `null` means the row refused it: it already has a real title (a rename, or another
+     * attempt that landed first) or is gone. Reporting the generated title anyway would
+     * have the final event stamp a name the database does not hold. */
+    if (saved === null) {
+      return;
+    }
 
     return title;
   } catch (error) {

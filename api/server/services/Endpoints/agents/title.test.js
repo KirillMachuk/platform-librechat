@@ -67,8 +67,23 @@ describe('agents addTitle', () => {
     expect(mockSaveConvo).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ conversationId: 'cid-immediate', title: 'My Title' }),
-      expect.objectContaining({ noUpsert: true }),
+      /* Never over a real title, and never as «activity» that lights the unread dot. */
+      expect.objectContaining({ noUpsert: true, untitledOnly: true, keepUpdatedAt: true }),
     );
+  });
+
+  it('reports no title when the row refused it (already titled, or gone)', async () => {
+    mockSaveConvo.mockResolvedValueOnce(null);
+
+    const result = await addTitle(makeReq(), {
+      text: 'hello',
+      client: makeClient('Generated'),
+      conversationId: 'cid-renamed',
+      immediate: true,
+      convoReady: Promise.resolve(),
+    });
+
+    expect(result).toBeUndefined();
   });
 
   it('passes immediate:true through to client.titleConvo', async () => {

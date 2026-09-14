@@ -193,6 +193,44 @@ describe('Conversation Operations', () => {
       expect(refreshedProject?.lastConversationId).toBe(firstConversationId);
     });
 
+    it("a keepUpdatedAt write does not make an older chat the project's last conversation", async () => {
+      const project = await ChatProject.create({
+        user: mockCtx.userId,
+        name: 'Project Titles',
+        conversationCount: 0,
+        lastConversationAt: null,
+        lastConversationId: null,
+      });
+      const olderId = uuidv4();
+      const newerId = uuidv4();
+      const chatProjectId = project._id!.toString();
+
+      await saveConvo(mockCtx, {
+        conversationId: olderId,
+        endpoint: EModelEndpoint.openAI,
+        chatProjectId,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      await saveConvo(mockCtx, {
+        conversationId: newerId,
+        endpoint: EModelEndpoint.openAI,
+        chatProjectId,
+      });
+
+      /* The older chat's title lands late — after a Stop, say. A title write carries no
+       * `chatProjectId`, which saveConvo reads as a membership change and answers with a
+       * full recount from every chat's `updatedAt` — so the untouched `updatedAt` keeps
+       * the newer chat last. Pinned because the incremental path would not. */
+      await saveConvo(
+        { userId: mockCtx.userId },
+        { conversationId: olderId, title: 'Поздний заголовок' },
+        { noUpsert: true, untitledOnly: true, keepUpdatedAt: true },
+      );
+
+      const refreshedProject = await ChatProject.findById(project._id).lean<IChatProject>();
+      expect(refreshedProject?.lastConversationId).toBe(newerId);
+    });
+
     it('bulkSaveConvos keeps owned project ids and strips orphan ones', async () => {
       const project = await ChatProject.create({
         user: mockCtx.userId,
@@ -333,6 +371,82 @@ describe('Conversation Operations', () => {
       expect(result).not.toBeNull();
       expect(result?.title).toBe('Updated Title');
       expect(result?.conversationId).toBe(mockConversationData.conversationId);
+    });
+
+    it('untitledOnly writes a title only while the conversation has none', async () => {
+      await saveConvo(mockCtx, { ...mockConversationData, title: 'New Chat' });
+
+      const first = await saveConvo(
+        mockCtx,
+        { conversationId: mockConversationData.conversationId, title: 'Погода в Минске' },
+        { noUpsert: true, untitledOnly: true },
+      );
+      expect(first?.title).toBe('Погода в Минске');
+
+      /* A second attempt, or the user's own rename, is already there: leave it. */
+      const second = await saveConvo(
+        mockCtx,
+        { conversationId: mockConversationData.conversationId, title: 'Другой заголовок' },
+        { noUpsert: true, untitledOnly: true },
+      );
+      expect(second).toBeNull();
+      const dbConvo = await Conversation.findOne({
+        conversationId: mockConversationData.conversationId,
+      }).lean();
+      expect(dbConvo?.title).toBe('Погода в Минске');
+    });
+
+    it('untitledOnly also accepts an empty or missing title, and never inserts', async () => {
+      await saveConvo(mockCtx, mockConversationData);
+      await Conversation.updateOne(
+        { conversationId: mockConversationData.conversationId },
+        { $unset: { title: 1 } },
+      );
+      const fromMissing = await saveConvo(
+        mockCtx,
+        { conversationId: mockConversationData.conversationId, title: 'Из пустоты' },
+        { untitledOnly: true },
+      );
+      expect(fromMissing?.title).toBe('Из пустоты');
+
+      await Conversation.updateOne(
+        { conversationId: mockConversationData.conversationId },
+        { $set: { title: '' } },
+      );
+      const fromEmpty = await saveConvo(
+        mockCtx,
+        { conversationId: mockConversationData.conversationId, title: 'Из пустой строки' },
+        { untitledOnly: true },
+      );
+      expect(fromEmpty?.title).toBe('Из пустой строки');
+
+      const ghostId = uuidv4();
+      const ghost = await saveConvo(
+        mockCtx,
+        { conversationId: ghostId, title: 'Ghost Title' },
+        { untitledOnly: true },
+      );
+      expect(ghost).toBeNull();
+      expect(await Conversation.findOne({ conversationId: ghostId })).toBeNull();
+    });
+
+    it('keepUpdatedAt leaves updatedAt where it was', async () => {
+      await saveConvo(mockCtx, mockConversationData);
+      const before = await Conversation.findOne({
+        conversationId: mockConversationData.conversationId,
+      }).lean();
+      await new Promise((resolve) => setTimeout(resolve, 15));
+
+      await saveConvo(
+        mockCtx,
+        { conversationId: mockConversationData.conversationId, title: 'Тихий заголовок' },
+        { noUpsert: true, keepUpdatedAt: true },
+      );
+      const after = await Conversation.findOne({
+        conversationId: mockConversationData.conversationId,
+      }).lean();
+      expect(after?.title).toBe('Тихий заголовок');
+      expect(after?.updatedAt?.getTime()).toBe(before?.updatedAt?.getTime());
     });
 
     it('should still upsert by default when noUpsert is not provided', async () => {
