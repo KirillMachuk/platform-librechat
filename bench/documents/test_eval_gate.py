@@ -10,6 +10,7 @@ from pathlib import Path
 from PIL import Image
 
 from bench.documents.run_goldens import (
+    _required_qa_check_issues,
     _reset_run_dir,
     _write_montage,
     build_render_evidence_digest,
@@ -18,6 +19,23 @@ from bench.documents.run_goldens import (
 
 
 class DocumentEvalGateTests(unittest.TestCase):
+    def test_new_document_gate_requires_font_embedding_and_render_parity(self):
+        report = {
+            "qaChecks": [
+                {"name": "embedded-fonts", "status": "passed"},
+                {"name": "font-parity", "status": "failed"},
+            ]
+        }
+
+        issues = _required_qa_check_issues(report, {"embedded-fonts", "font-parity"})
+
+        self.assertEqual(issues, ["required QA check font-parity is failed"])
+
+    def test_new_document_gate_rejects_missing_qa_checks(self):
+        issues = _required_qa_check_issues({}, {"embedded-fonts", "font-parity"})
+
+        self.assertEqual(issues, ["artifact report has no QA checks"])
+
     def test_run_directory_is_cleared_before_each_build(self):
         with tempfile.TemporaryDirectory() as folder:
             run_dir = Path(folder) / "run-1"

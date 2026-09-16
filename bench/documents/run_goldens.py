@@ -337,12 +337,30 @@ def _num_paragraphs(document: Document) -> int:
     return sum(1 for paragraph in document.paragraphs if paragraph._p.get_or_add_pPr().find(qn("w:numPr")) is not None)
 
 
+def _required_qa_check_issues(report: dict[str, Any], required: set[str]) -> list[str]:
+    checks = report.get("qaChecks")
+    if not isinstance(checks, list):
+        return ["artifact report has no QA checks"]
+    status_by_name = {
+        str(check.get("name")): check.get("status")
+        for check in checks
+        if isinstance(check, dict) and check.get("name")
+    }
+    return [
+        f"required QA check {name} is {status_by_name.get(name, 'missing')}"
+        for name in sorted(required)
+        if status_by_name.get(name) != "passed"
+    ]
+
+
 def _assert_requirements(case: dict[str, Any], output: Path, report: dict[str, Any], source: Path | None, source_hash: str | None, images: list[Path]) -> list[str]:
     requirements = case["requirements"]
     document = Document(output)
     issues: list[str] = []
     if report.get("status") != "ready":
         issues.append(f"artifact status is {report.get('status')}")
+    if source is None:
+        issues.extend(_required_qa_check_issues(report, {"embedded-fonts", "font-parity"}))
     if len(images) < int(requirements.get("minPages", 1)):
         issues.append(f"rendered {len(images)} pages, expected at least {requirements.get('minPages')}")
     if requirements.get("semanticLists") and _num_paragraphs(document) == 0:

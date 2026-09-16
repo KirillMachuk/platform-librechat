@@ -7,6 +7,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import struct
 import tempfile
 import unittest
 import zipfile
@@ -28,6 +29,25 @@ MODULE_SPEC.loader.exec_module(BUILDER)
 
 RU_TITLE = "\u041f\u043b\u0430\u043d \u0437\u0430\u043f\u0443\u0441\u043a\u0430"
 RU_SUMMARY = "\u041f\u0438\u043b\u043e\u0442 \u0434\u043e\u0441\u0442\u0438\u0433 \u0446\u0435\u043b\u0435\u0432\u044b\u0445 \u043f\u043e\u043a\u0430\u0437\u0430\u0442\u0435\u043b\u0435\u0439."
+
+
+def _write_test_font(path: Path, fs_type: int = 0) -> None:
+    data = bytearray(64)
+    data[:4] = b"\x00\x01\x00\x00"
+    struct.pack_into(">H", data, 4, 1)
+    data[12:16] = b"OS/2"
+    struct.pack_into(">II", data, 20, 32, 12)
+    struct.pack_into(">H", data, 40, fs_type)
+    path.write_bytes(data)
+
+
+def _test_font_faces(root: Path) -> dict[str, Path]:
+    faces = {}
+    for name in ("regular", "bold", "italic", "bold_italic"):
+        path = root / f"{name}.ttf"
+        _write_test_font(path)
+        faces[name] = path
+    return faces
 
 
 def _job(filename: str = "document.docx") -> dict:
@@ -80,7 +100,11 @@ def _build_without_render(spec: dict, output: Path):
     source_value = spec.get("inputPath") or spec.get("templatePath")
     source = Path(source_value) if source_value else None
     source_hash = BUILDER._sha256(source) if source else None
-    _document, changes, requested = BUILDER._build(spec, output)
+    if source:
+        _document, changes, requested = BUILDER._build(spec, output)
+    else:
+        with mock.patch.object(BUILDER, "_resolve_font_faces", return_value=_test_font_faces(output.parent)):
+            _document, changes, requested = BUILDER._build(spec, output)
     checks, issues = BUILDER._check_structure(output, spec, requested)
     if source:
         immutable = source_hash == BUILDER._sha256(source)
@@ -147,13 +171,14 @@ class ArtifactJobTests(unittest.TestCase):
             render_check = {"name": "render", "status": "passed", "message": "Rendered"}
             stdout = io.StringIO()
 
-            with mock.patch.object(BUILDER, "_render", return_value=([render_check], [], None)) as render:
-                with mock.patch.object(BUILDER.sys, "argv", ["build_document.py", str(spec_path), str(output)]):
-                    with contextlib.redirect_stdout(stdout):
-                        exit_code = BUILDER.main()
+            with mock.patch.object(BUILDER, "_resolve_font_faces", return_value=_test_font_faces(root)):
+                with mock.patch.object(BUILDER, "_render", return_value=([render_check], [], None)) as render:
+                    with mock.patch.object(BUILDER.sys, "argv", ["build_document.py", str(spec_path), str(output)]):
+                        with contextlib.redirect_stdout(stdout):
+                            exit_code = BUILDER.main()
 
             payload = json.loads(stdout.getvalue())
-            render.assert_called_once_with(output, keep_pdf=False)
+            render.assert_called_once_with(output, keep_pdf=False, expected_font=BUILDER.DEFAULT_FONT)
             self.assertEqual(exit_code, 0)
             self.assertFalse(output.with_suffix(".pdf").exists())
             self.assertEqual(payload["reports"], [f"{output}.artifact-report.json"])
@@ -191,6 +216,75 @@ class ArtifactJobTests(unittest.TestCase):
 
 
 class NewDocumentTests(unittest.TestCase):
+    def test_new_document_embeds_all_editable_font_faces(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            output = root / "document.docx"
+            source_faces = _test_font_faces(root)
+            spec = _new_spec()
+
+            with mock.patch.object(BUILDER, "_resolve_font_faces", return_value=source_faces):
+                report = _build_without_render(spec, output)
+
+            embedded = next(check for check in report["qaChecks"] if check["name"] == "embedded-fonts")
+            self.assertEqual(embedded["status"], "passed")
+            with zipfile.ZipFile(output) as package:
+                names = set(package.namelist())
+                self.assertIn("word/_rels/fontTable.xml.rels", names)
+                self.assertEqual(len([name for name in names if name.startswith("word/fonts/")]), 4)
+                settings = package.read("word/settings.xml").decode("utf-8")
+                self.assertIn("embedTrueTypeFonts", settings)
+
+    def test_font_embedding_rejects_non_editable_license_bits(self):
+        with tempfile.TemporaryDirectory() as folder:
+            restricted = Path(folder) / "restricted.ttf"
+            preview_only = Path(folder) / "preview-only.ttf"
+            _write_test_font(restricted, fs_type=2)
+            _write_test_font(preview_only, fs_type=4)
+
+            with self.assertRaisesRegex(ValueError, "embedding"):
+                BUILDER._read_embeddable_font(restricted)
+            with self.assertRaisesRegex(ValueError, "editable"):
+                BUILDER._read_embeddable_font(preview_only)
+
+    def test_fontconfig_cannot_reuse_regular_face_for_bold(self):
+        result = mock.Mock(returncode=0, stdout="Liberation Sans\x1fRegular\x1f/fonts/regular.ttf")
+
+        with mock.patch.object(BUILDER, "FONT_FILE_CANDIDATES", {BUILDER.DEFAULT_FONT: {}}):
+            with mock.patch.object(BUILDER.shutil, "which", return_value="/usr/bin/fc-match"):
+                with mock.patch.object(BUILDER.subprocess, "run", return_value=result):
+                    with mock.patch.object(BUILDER, "_read_embeddable_font", return_value=b"font"):
+                        with self.assertRaisesRegex(ValueError, "style"):
+                            BUILDER._resolve_font_faces(BUILDER.DEFAULT_FONT)
+
+    def test_font_family_requires_four_distinct_face_files(self):
+        same = Path("/fonts/same.ttf")
+
+        with self.assertRaisesRegex(ValueError, "four distinct"):
+            BUILDER._require_distinct_font_faces(
+                BUILDER.DEFAULT_FONT,
+                {face: same for face in BUILDER.FONT_FACES},
+            )
+
+    def test_font_obfuscation_round_trip_preserves_the_font(self):
+        source = bytes(range(64))
+        key = "{001B70DC-AA60-4AD5-90EC-18A0948E1EAE}"
+
+        embedded = BUILDER._obfuscate_font(source, key)
+
+        self.assertNotEqual(embedded[:32], source[:32])
+        self.assertEqual(BUILDER._obfuscate_font(embedded, key), source)
+
+    def test_pdf_font_audit_rejects_substitution(self):
+        valid = [
+            {"name": "BAAAAA+LiberationSans", "embedded": True},
+            {"name": "CAAAAA+LiberationSans-Bold", "embedded": True},
+        ]
+        substituted = [*valid, {"name": "DAAAAA+NotoSans-Bold", "embedded": True}]
+
+        self.assertEqual(BUILDER._pdf_font_issues(valid, "Liberation Sans"), [])
+        self.assertTrue(BUILDER._pdf_font_issues(substituted, "Liberation Sans"))
+
     def test_source_urls_reject_unsafe_relationship_targets(self):
         unsafe_urls = [
             "file:///Users/example/secret.txt",
@@ -248,6 +342,12 @@ class NewDocumentTests(unittest.TestCase):
             self.assertEqual(report["status"], "ready", report["issues"])
             self.assertEqual(round(document.sections[0].page_width.cm, 1), 21.0)
             self.assertEqual(round(document.sections[0].page_height.cm, 1), 29.7)
+            compatibility = next(
+                node
+                for node in document.settings._element.findall(f".//{qn('w:compatSetting')}")
+                if node.get(qn("w:name")) == "compatibilityMode"
+            )
+            self.assertEqual(compatibility.get(qn("w:val")), "15")
             self.assertTrue(any(p.style.name == "Heading 1" for p in document.paragraphs))
             numbered = [
                 p
@@ -257,6 +357,10 @@ class NewDocumentTests(unittest.TestCase):
             self.assertGreaterEqual(len(numbered), 6)
             self.assertFalse(BUILDER._table_geometry_issues(document))
             self.assertIn(RU_TITLE, "\n".join(p.text for p in document.paragraphs))
+            for style_name in ("Normal", "Title", "Subtitle", "Heading 1", "Heading 2", "Heading 3"):
+                fonts = document.styles[style_name].element.get_or_add_rPr().get_or_add_rFonts()
+                for attribute in ("asciiTheme", "hAnsiTheme", "eastAsiaTheme", "cstheme"):
+                    self.assertIsNone(fonts.get(qn(f"w:{attribute}")))
 
     def test_independent_lists_restart_with_distinct_numbering_ids(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -308,7 +412,8 @@ class NewDocumentTests(unittest.TestCase):
         spec["changeLog"] = []
         with tempfile.TemporaryDirectory() as folder:
             output = Path(folder) / "document.docx"
-            _document, changes, _requested = BUILDER._build(spec, output)
+            with mock.patch.object(BUILDER, "_resolve_font_faces", return_value=_test_font_faces(Path(folder))):
+                _document, changes, _requested = BUILDER._build(spec, output)
 
         self.assertTrue(any("\u0400" <= char <= "\u04ff" for char in changes[0]["summary"]))
 
@@ -449,15 +554,20 @@ class RenderIntegrationTests(unittest.TestCase):
             root = Path(folder)
             output = root / "document.docx"
             spec = _new_spec()
+            try:
+                BUILDER._resolve_font_faces(BUILDER.DEFAULT_FONT)
+            except ValueError as exc:
+                self.skipTest(str(exc))
             BUILDER._job(spec, output)
             BUILDER._build(spec, output)
-            checks, issues, pdf = BUILDER._render(output, keep_pdf=True)
+            checks, issues, pdf = BUILDER._render(output, keep_pdf=True, expected_font=BUILDER.DEFAULT_FONT)
 
             self.assertIsNotNone(pdf)
             self.assertTrue(pdf and pdf.is_file())
             self.assertFalse([issue for issue in issues if issue["severity"] == "critical"], issues)
             self.assertEqual(next(c for c in checks if c["name"] == "render")["status"], "passed")
             self.assertEqual(next(c for c in checks if c["name"] == "cyrillic-render")["status"], "passed")
+            self.assertEqual(next(c for c in checks if c["name"] == "font-parity")["status"], "passed")
 
 
 if __name__ == "__main__":
