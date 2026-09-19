@@ -50,6 +50,62 @@ async function renameConversation(page: Page, conversation: Locator, title: stri
 }
 
 test.describe('conversation management', () => {
+  test('keeps the composer on one axis while a sidebar chat loads', async ({ page }) => {
+    test.setTimeout(120000);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await openMockChat(page);
+    const first = await sendAndExpectReply(page, uniqueLabel('gutter-first'));
+    const firstUrl = page.url();
+
+    await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
+    await selectMockEndpoint(page, MOCK_ENDPOINTS[0]);
+    await sendAndExpectReply(page, uniqueLabel('gutter-second'));
+    await page.reload({ timeout: 10000 });
+    await expect(messagesView(page)).toBeVisible();
+
+    const composerCenter = () =>
+      page.getByTestId('composer-shell').evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return box.x + box.width / 2;
+      });
+    const before = await composerCenter();
+
+    let releaseMessages!: () => void;
+    const heldRequest = new Promise<void>((resolve) => {
+      releaseMessages = resolve;
+    });
+    const firstId = firstUrl.split('/').pop();
+    const messageRoute = `**/api/messages/${firstId}`;
+    await page.route(messageRoute, async (route) => {
+      await heldRequest;
+      await route.continue();
+    });
+
+    try {
+      await Promise.all([
+        page.waitForRequest(
+          (request) =>
+            request.method() === 'GET' && request.url().endsWith(`/api/messages/${firstId}`),
+          { timeout: 10000 },
+        ),
+        page.getByTestId('convo-item').nth(1).click(),
+      ]);
+      await expect(page).toHaveURL(firstUrl);
+      await expect(page.getByRole('log')).toHaveCount(0);
+      await expect(page.locator('[data-chat-scroller]')).toHaveCSS('scrollbar-gutter', 'stable');
+      const during = await composerCenter();
+      expect(Math.abs(during - before)).toBeLessThanOrEqual(1);
+
+      releaseMessages();
+      await expect(messagesView(page).getByText(first.prompt)).toBeVisible();
+      const after = await composerCenter();
+      expect(Math.abs(after - before)).toBeLessThanOrEqual(1);
+    } finally {
+      releaseMessages();
+      await page.unroute(messageRoute);
+    }
+  });
+
   test('loads a past sidebar conversation with its message history', async ({ page }) => {
     const firstLabel = uniqueLabel('sidebar-history-first');
     const secondLabel = uniqueLabel('sidebar-history-second');
