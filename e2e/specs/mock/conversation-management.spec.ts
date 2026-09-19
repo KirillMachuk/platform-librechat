@@ -74,7 +74,8 @@ test.describe('conversation management', () => {
     const heldRequest = new Promise<void>((resolve) => {
       releaseMessages = resolve;
     });
-    const firstId = firstUrl.split('/').pop();
+    const firstId = new URL(firstUrl).pathname.split('/').pop();
+    expect(firstId).toMatch(/^[0-9a-fA-F-]{36}$/);
     const messageRoute = `**/api/messages/${firstId}`;
     await page.route(messageRoute, async (route) => {
       await heldRequest;
