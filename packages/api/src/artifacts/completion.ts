@@ -38,17 +38,32 @@ export function findReadyArtifactCompletion(
     ),
   );
   for (const [targetFilename, report] of reportsByFilename) {
-    // Enable each format only after its authoring workflow has its own
-    // acceptance suite. Today only PPTX has passed that gate.
-    if (report.format !== 'pptx' || !isTrustedReadyReport(report)) {
+    const isWordDocument = report.format === 'docx';
+    if ((report.format !== 'pptx' && !isWordDocument) || !isTrustedReadyReport(report)) {
       continue;
     }
     if (!targetFilename.toLowerCase().endsWith(`.${report.format}`)) {
       continue;
     }
+    if (
+      isWordDocument &&
+      (report.qaChecks.some((check) => check.status !== 'passed') || report.issues.length > 0)
+    ) {
+      continue;
+    }
+
+    const expectedWordPdf = targetFilename.replace(/\.docx$/i, '.pdf').toLowerCase();
+    if (
+      isWordDocument &&
+      report.previewAssets.some(
+        (asset) => asset.kind !== 'pdf' || asset.filename.toLowerCase() !== expectedWordPdf,
+      )
+    ) {
+      continue;
+    }
 
     const requestedNames = report.previewAssets.flatMap((asset) =>
-      asset.delivery === 'requested' ? [asset.filename] : [],
+      isWordDocument || asset.delivery === 'requested' ? [asset.filename] : [],
     );
     const filenames = Array.from(new Set([targetFilename, ...requestedNames]));
     if (!filenames.every((filename) => persistedNames.has(filename))) {
