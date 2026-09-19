@@ -28,7 +28,10 @@ import store from '~/store';
 
 function LoadingSpinner() {
   return (
-    <div className="relative flex-1 overflow-hidden overflow-y-auto overflow-x-hidden">
+    <div
+      data-chat-scroller
+      className="scrollbar-gutter-stable relative flex-1 overflow-hidden overflow-y-auto overflow-x-hidden"
+    >
       <div className="relative flex h-full items-center justify-center">
         <Spinner className="text-text-primary" />
       </div>
@@ -44,7 +47,10 @@ function LoadingSpinner() {
 function MessagesLoadError({ onRetry }: { onRetry: () => void }) {
   const localize = useLocalize();
   return (
-    <div className="relative flex-1 overflow-hidden overflow-y-auto overflow-x-hidden">
+    <div
+      data-chat-scroller
+      className="scrollbar-gutter-stable relative flex-1 overflow-hidden overflow-y-auto overflow-x-hidden"
+    >
       <div className="relative flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
         <p className="text-sm text-text-secondary">{localize('com_ui_messages_load_error')}</p>
         <Button variant="outline" onClick={onRetry}>
