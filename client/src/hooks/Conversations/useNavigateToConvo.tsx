@@ -128,9 +128,9 @@ const useNavigateToConvo = (index = 0) => {
        */
       queryClient.removeQueries([QueryKeys.messages, convo.conversationId]);
       queryClient.invalidateQueries([QueryKeys.conversation, convo.conversationId]);
+      clearModelForNonEphemeralAgent(convo);
     }
 
-    clearModelForNonEphemeralAgent(convo);
     setConversation(convo);
     const path = buildConvoPath({
       conversationId: convo.conversationId ?? Constants.NEW_CONVO,
