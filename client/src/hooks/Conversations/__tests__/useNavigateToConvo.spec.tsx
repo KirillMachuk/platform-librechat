@@ -1,4 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
+import { EModelEndpoint } from 'librechat-data-provider';
 import type { TConversation } from 'librechat-data-provider';
 import useNavigateToConvo from '../useNavigateToConvo';
 
@@ -13,7 +14,7 @@ jest.mock('react-router-dom', () => ({ useNavigate: () => mockNavigate }));
 jest.mock('recoil', () => ({ useSetRecoilState: () => mockSetSubmission }));
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({
-    getQueryData: () => ({ mock: {} }),
+    getQueryData: () => ({ openAI: {} }),
     removeQueries: jest.fn(),
     invalidateQueries: jest.fn(),
     fetchQuery: mockFetchQuery,
@@ -22,6 +23,7 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('librechat-data-provider', () => ({
   QueryKeys: { endpoints: 'endpoints', messages: 'messages', conversation: 'conversation' },
   Constants: { NEW_CONVO: 'new' },
+  EModelEndpoint: { openAI: 'openAI' },
   dataService: { getConversationById: jest.fn() },
   getEndpointField: jest.fn(),
   getDefaultParamsEndpoint: jest.fn(),
@@ -54,8 +56,13 @@ jest.mock('~/store', () => ({
   },
 }));
 
-const conversation = (conversationId: string): TConversation =>
-  ({ conversationId, endpoint: 'mock', title: conversationId }) as TConversation;
+const conversation = (conversationId: string): TConversation => ({
+  conversationId,
+  endpoint: EModelEndpoint.openAI,
+  title: conversationId,
+  createdAt: '2026-09-19T00:00:00.000Z',
+  updatedAt: '2026-09-19T00:00:00.000Z',
+});
 
 function deferredConversation() {
   let resolve!: (value: TConversation) => void;
