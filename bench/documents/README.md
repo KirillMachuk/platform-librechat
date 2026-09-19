@@ -16,4 +16,4 @@ Run the complete render matrix:
 python bench/documents/run_goldens.py --runs 3
 ```
 
-The command fails when a file cannot reopen, a critical QA issue remains, render output is missing, source immutability fails, or a case-specific structural requirement is not met. Page montages and report sidecars are retained as CI review evidence.
+The command fails when a file cannot reopen, its portable font family is incomplete, LibreOffice substitutes a font, a critical QA issue remains, render output is missing, source immutability fails, or a case-specific structural requirement is not met. Page montages and report sidecars are retained as CI review evidence.

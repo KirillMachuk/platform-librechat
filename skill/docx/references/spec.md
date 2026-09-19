@@ -21,6 +21,7 @@ The builder accepts one UTF-8 JSON object. All paths are absolute sandbox paths.
     ]
   },
   "documentType": "memo",
+  "theme": { "font": "Liberation Sans" },
   "title": "Project launch decision",
   "subtitle": "Executive decision memo",
   "metadata": [
@@ -39,6 +40,8 @@ The builder accepts one UTF-8 JSON object. All paths are absolute sandbox paths.
 ```
 
 `documentType` is `memo`, `report`, or `sop`. New documents use `sections`. Template filling uses `templatePath` plus `placeholders`. Targeted revision uses `inputPath` plus `edits`. The output path must differ from every input path.
+
+For new documents, `theme.font` is optional and defaults to `Liberation Sans`. `Liberation Sans` and `PT Sans` are the only portable choices: all four editable faces are embedded into the DOCX, and QA rejects any different font used by the derived PDF. Template filling and targeted editing preserve the source document's fonts instead of adding or replacing them.
 
 `outputPdf` defaults to `false`. Set it to `true` only when the user explicitly requests a PDF deliverable; the builder always performs its temporary PDF render for QA.
 
@@ -192,7 +195,7 @@ The builder writes `<output>.artifact-report.json`. When `outputPdf` is explicit
   ],
   "issues": [],
   "changeLog": [{ "target": "Document", "summary": "Created a decision memo" }],
-  "skillVersion": "1.0.0",
+  "skillVersion": "1.1.0",
   "repairIterations": 0
 }
 ```

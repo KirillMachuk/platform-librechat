@@ -5,12 +5,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import posixpath
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
 import urllib.parse
+import uuid
 import zipfile
 from pathlib import Path
 from typing import Any, Iterable, Iterator
@@ -28,11 +31,41 @@ from docx.text.paragraph import Paragraph
 from lxml import etree
 
 
-SKILL_VERSION = "1.0.0"
+SKILL_VERSION = "1.1.0"
 MAX_REPAIR_ITERATIONS = 2
-DEFAULT_FONT = "Arial"
-ALLOWED_FONTS = {"Arial", "Calibri", "PT Sans", "Liberation Sans"}
+DEFAULT_FONT = "Liberation Sans"
+ALLOWED_FONTS = {"Liberation Sans", "PT Sans"}
 PAGE_WIDTH_DXA = 9638  # A4 with 20 mm left/right margins.
+MAX_EMBEDDED_FONT_BYTES = 16 * 1024 * 1024
+
+WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+PACKAGE_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+CONTENT_TYPE_NS = "http://schemas.openxmlformats.org/package/2006/content-types"
+FONT_REL_TYPE = f"{REL_NS}/font"
+OBFUSCATED_FONT_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.obfuscatedFont"
+
+FONT_FACES = {
+    "regular": ("embedRegular", "Regular"),
+    "bold": ("embedBold", "Bold"),
+    "italic": ("embedItalic", "Italic"),
+    "bold_italic": ("embedBoldItalic", "Bold Italic"),
+}
+
+FONT_FILE_CANDIDATES = {
+    "Liberation Sans": {
+        "regular": (Path("/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"),),
+        "bold": (Path("/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf"),),
+        "italic": (Path("/usr/share/fonts/truetype/liberation2/LiberationSans-Italic.ttf"),),
+        "bold_italic": (Path("/usr/share/fonts/truetype/liberation2/LiberationSans-BoldItalic.ttf"),),
+    },
+    "PT Sans": {
+        "regular": (Path("/usr/share/fonts/truetype/paratype/PTS55F.ttf"),),
+        "bold": (Path("/usr/share/fonts/truetype/paratype/PTS75F.ttf"),),
+        "italic": (Path("/usr/share/fonts/truetype/paratype/PTS56F.ttf"),),
+        "bold_italic": (Path("/usr/share/fonts/truetype/paratype/PTS76F.ttf"),),
+    },
+}
 
 COLORS = {
     "ink": "20242A",
@@ -75,6 +108,259 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _normalized_font_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", value.lower())
+
+
+def _font_style_matches(face: str, matched_style: str) -> bool:
+    normalized = _normalized_font_name(matched_style)
+    bold = "bold" in normalized
+    italic = "italic" in normalized or "oblique" in normalized
+    return {
+        "regular": not bold and not italic,
+        "bold": bold and not italic,
+        "italic": italic and not bold,
+        "bold_italic": bold and italic,
+    }[face]
+
+
+def _require_distinct_font_faces(font_name: str, faces: dict[str, Path]) -> None:
+    resolved = [path.resolve() for path in faces.values()]
+    if len(resolved) != len(set(resolved)):
+        raise ValueError(f"Font family {font_name} does not provide four distinct editable faces")
+
+
+def _sfnt_table(data: bytes, tag: bytes) -> bytes:
+    if len(data) < 12 or data[:4] not in {b"\x00\x01\x00\x00", b"OTTO", b"true"}:
+        raise ValueError("Font must be a standalone TrueType or OpenType file")
+    table_count = struct.unpack_from(">H", data, 4)[0]
+    directory_end = 12 + table_count * 16
+    if directory_end > len(data):
+        raise ValueError("Font table directory is truncated")
+    for index in range(table_count):
+        record = 12 + index * 16
+        current_tag = data[record : record + 4]
+        offset, length = struct.unpack_from(">II", data, record + 8)
+        if offset > len(data) or length > len(data) - offset:
+            raise ValueError("Font table points outside the font file")
+        if current_tag == tag:
+            return data[offset : offset + length]
+    raise ValueError(f"Font has no {tag.decode('ascii', errors='replace')} table")
+
+
+def _validate_embeddable_font(data: bytes, label: str) -> None:
+    if len(data) < 32 or len(data) > MAX_EMBEDDED_FONT_BYTES:
+        raise ValueError(f"Font face has an unsupported size: {label}")
+    os2 = _sfnt_table(data, b"OS/2")
+    if len(os2) < 10:
+        raise ValueError(f"Font OS/2 table is truncated: {label}")
+    fs_type = struct.unpack_from(">H", os2, 8)[0]
+    permission = fs_type & 0x000F
+    if permission == 2:
+        raise ValueError(f"Font license forbids document embedding: {label}")
+    if permission == 4:
+        raise ValueError(f"Font license permits preview/print embedding, not editable documents: {label}")
+    if permission not in {0, 8} or fs_type & 0x0200:
+        raise ValueError(f"Font license does not permit editable outline embedding: {label}")
+
+
+def _read_embeddable_font(path: Path) -> bytes:
+    if path.suffix.lower() not in {".ttf", ".otf"} or not path.is_file():
+        raise ValueError(f"Font face must be a readable .ttf or .otf file: {path}")
+    data = path.read_bytes()
+    _validate_embeddable_font(data, str(path))
+    return data
+
+
+def _resolve_font_faces(font_name: str) -> dict[str, Path]:
+    configured = FONT_FILE_CANDIDATES.get(font_name, {})
+    direct = {
+        face: next((path for path in configured.get(face, ()) if path.is_file()), None)
+        for face in FONT_FACES
+    }
+    if all(path is not None for path in direct.values()):
+        resolved = {face: path for face, path in direct.items() if path is not None}
+        _require_distinct_font_faces(font_name, resolved)
+        for path in resolved.values():
+            _read_embeddable_font(path)
+        return resolved
+
+    matcher = shutil.which("fc-match")
+    if not matcher:
+        raise ValueError(f"Exact font faces for {font_name} are unavailable")
+    resolved: dict[str, Path] = {}
+    for face, (_embed_tag, style) in FONT_FACES.items():
+        result = subprocess.run(
+            [matcher, "-f", "%{family}\x1f%{style}\x1f%{file}", f"{font_name}:style={style}"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        fields = result.stdout.split("\x1f", 2)
+        if result.returncode != 0 or len(fields) != 3:
+            raise ValueError(f"Could not resolve the {style} face for {font_name}")
+        family, matched_style, filename = (field.strip() for field in fields)
+        if _normalized_font_name(family.split(",", 1)[0]) != _normalized_font_name(font_name):
+            raise ValueError(f"Fontconfig substituted {family or 'another family'} for {font_name}")
+        if not _font_style_matches(face, matched_style):
+            raise ValueError(f"Fontconfig substituted the {matched_style or 'unknown'} style for {style}")
+        path = Path(filename)
+        _read_embeddable_font(path)
+        resolved[face] = path
+    _require_distinct_font_faces(font_name, resolved)
+    return resolved
+
+
+def _font_key(font_name: str, face: str, data: bytes) -> str:
+    fingerprint = hashlib.sha256(data).hexdigest()
+    value = uuid.uuid5(uuid.NAMESPACE_URL, f"https://1ma.ai/docx/fonts/{font_name}/{face}/{fingerprint}")
+    return "{" + str(value).upper() + "}"
+
+
+def _obfuscate_font(data: bytes, font_key: str) -> bytes:
+    key = uuid.UUID(font_key.strip("{}")).bytes_le[::-1]
+    output = bytearray(data)
+    for index in range(min(32, len(output))):
+        output[index] ^= key[index % len(key)]
+    return bytes(output)
+
+
+def _xml_bytes(root: etree._Element) -> bytes:
+    return etree.tostring(root, encoding="UTF-8", xml_declaration=True, standalone=True)
+
+
+def _add_embedding_setting(settings: etree._Element) -> None:
+    tag = qn("w:embedTrueTypeFonts")
+    current = settings.find(tag)
+    if current is not None:
+        current.set(qn("w:val"), "true")
+        return
+    element = etree.Element(tag)
+    element.set(qn("w:val"), "true")
+    predecessors = {
+        qn(name)
+        for name in (
+            "w:writeProtection",
+            "w:view",
+            "w:zoom",
+            "w:removePersonalInformation",
+            "w:removeDateAndTime",
+            "w:doNotDisplayPageBoundaries",
+            "w:displayBackgroundShape",
+            "w:printPostScriptOverText",
+            "w:printFractionalCharacterWidth",
+            "w:printFormsData",
+        )
+    }
+    index = next((index for index, child in enumerate(settings) if child.tag not in predecessors), len(settings))
+    settings.insert(index, element)
+
+
+def _new_zip_info(name: str) -> zipfile.ZipInfo:
+    info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+    info.compress_type = zipfile.ZIP_DEFLATED
+    info.external_attr = 0o600 << 16
+    return info
+
+
+def _embed_font_family(path: Path, font_name: str) -> None:
+    faces = _resolve_font_faces(font_name)
+    font_data = {face: _read_embeddable_font(font_path) for face, font_path in faces.items()}
+    with zipfile.ZipFile(path) as source:
+        infos = source.infolist()
+        if len(infos) != len({info.filename for info in infos}):
+            raise ValueError("DOCX package contains duplicate part names")
+        parts = {info.filename: source.read(info.filename) for info in infos}
+
+    font_table = etree.fromstring(parts["word/fontTable.xml"])
+    font_node = next(
+        (node for node in font_table.findall(qn("w:font")) if node.get(qn("w:name")) == font_name),
+        None,
+    )
+    if font_node is None:
+        font_node = etree.SubElement(font_table, qn("w:font"))
+        font_node.set(qn("w:name"), font_name)
+        family = etree.SubElement(font_node, qn("w:family"))
+        family.set(qn("w:val"), "swiss")
+        pitch = etree.SubElement(font_node, qn("w:pitch"))
+        pitch.set(qn("w:val"), "variable")
+    for embed_tag, _style in FONT_FACES.values():
+        current = font_node.find(qn(f"w:{embed_tag}"))
+        if current is not None:
+            font_node.remove(current)
+
+    rels_name = "word/_rels/fontTable.xml.rels"
+    if rels_name in parts:
+        relationships = etree.fromstring(parts[rels_name])
+    else:
+        relationships = etree.Element(f"{{{PACKAGE_REL_NS}}}Relationships", nsmap={None: PACKAGE_REL_NS})
+    relationship_ids = {
+        str(node.get("Id"))
+        for node in relationships.findall(f"{{{PACKAGE_REL_NS}}}Relationship")
+    }
+    part_names = set(parts)
+    new_parts: dict[str, bytes] = {}
+    relationship_number = 1
+    part_number = 1
+    for face, (embed_tag, _style) in FONT_FACES.items():
+        relationship_id = f"rIdEmbeddedFont{relationship_number}"
+        while relationship_id in relationship_ids:
+            relationship_number += 1
+            relationship_id = f"rIdEmbeddedFont{relationship_number}"
+        relationship_ids.add(relationship_id)
+        part_name = f"word/fonts/font{part_number}.odttf"
+        while part_name in part_names or part_name in new_parts:
+            part_number += 1
+            part_name = f"word/fonts/font{part_number}.odttf"
+        key = _font_key(font_name, face, font_data[face])
+        new_parts[part_name] = _obfuscate_font(font_data[face], key)
+        relationship = etree.SubElement(relationships, f"{{{PACKAGE_REL_NS}}}Relationship")
+        relationship.set("Id", relationship_id)
+        relationship.set("Type", FONT_REL_TYPE)
+        relationship.set("Target", part_name.removeprefix("word/"))
+        embedded = etree.SubElement(font_node, qn(f"w:{embed_tag}"))
+        embedded.set(qn("r:id"), relationship_id)
+        embedded.set(qn("w:fontKey"), key)
+        relationship_number += 1
+        part_number += 1
+
+    content_types = etree.fromstring(parts["[Content_Types].xml"])
+    odttf = next(
+        (
+            node
+            for node in content_types.findall(f"{{{CONTENT_TYPE_NS}}}Default")
+            if str(node.get("Extension", "")).lower() == "odttf"
+        ),
+        None,
+    )
+    if odttf is None:
+        odttf = etree.SubElement(content_types, f"{{{CONTENT_TYPE_NS}}}Default")
+        odttf.set("Extension", "odttf")
+    odttf.set("ContentType", OBFUSCATED_FONT_CONTENT_TYPE)
+
+    settings = etree.fromstring(parts["word/settings.xml"])
+    _add_embedding_setting(settings)
+    parts["word/fontTable.xml"] = _xml_bytes(font_table)
+    parts[rels_name] = _xml_bytes(relationships)
+    parts["[Content_Types].xml"] = _xml_bytes(content_types)
+    parts["word/settings.xml"] = _xml_bytes(settings)
+
+    with tempfile.NamedTemporaryFile(prefix=f".{path.stem}-", suffix=".docx", dir=path.parent, delete=False) as handle:
+        temporary = Path(handle.name)
+    try:
+        with zipfile.ZipFile(temporary, "w") as output:
+            for info in infos:
+                output.writestr(info, parts[info.filename])
+            if rels_name not in {info.filename for info in infos}:
+                output.writestr(_new_zip_info(rels_name), parts[rels_name])
+            for part_name, data in new_parts.items():
+                output.writestr(_new_zip_info(part_name), data)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _zip_part_sha256(archive: zipfile.ZipFile, name: str) -> str:
@@ -221,6 +507,8 @@ def _set_run_font(run, name: str, size: float | None = None, color: str | None =
     fonts = run._element.rPr.get_or_add_rFonts()
     for attr in ("ascii", "hAnsi", "eastAsia", "cs"):
         fonts.set(qn(f"w:{attr}"), name)
+    for attr in ("asciiTheme", "hAnsiTheme", "eastAsiaTheme", "cstheme"):
+        fonts.attrib.pop(qn(f"w:{attr}"), None)
     if size is not None:
         run.font.size = Pt(size)
     if color is not None:
@@ -236,6 +524,8 @@ def _set_style_font(style, name: str, size: float, color: str = COLORS["ink"], b
     fonts = rpr.get_or_add_rFonts()
     for attr in ("ascii", "hAnsi", "eastAsia", "cs"):
         fonts.set(qn(f"w:{attr}"), name)
+    for attr in ("asciiTheme", "hAnsiTheme", "eastAsiaTheme", "cstheme"):
+        fonts.attrib.pop(qn(f"w:{attr}"), None)
     lang = rpr.find(qn("w:lang"))
     if lang is None:
         lang = OxmlElement("w:lang")
@@ -253,7 +543,7 @@ def _get_or_add_style(document: DocumentObject, name: str, style_type: WD_STYLE_
 
 def _configure_styles(document: DocumentObject, font_name: str) -> None:
     if font_name not in ALLOWED_FONTS:
-        raise ValueError("theme.font must be Arial, Calibri, PT Sans, or Liberation Sans")
+        raise ValueError("theme.font must be Liberation Sans or PT Sans")
 
     normal = document.styles["Normal"]
     _set_style_font(normal, font_name, 10.5)
@@ -309,6 +599,20 @@ def _configure_page(document: DocumentObject) -> None:
         section.left_margin = Cm(2)
         section.header_distance = Cm(1)
         section.footer_distance = Cm(1)
+
+
+def _configure_compatibility(document: DocumentObject) -> None:
+    settings = document.settings._element
+    compatibility = next(
+        (
+            node
+            for node in settings.findall(f".//{qn('w:compatSetting')}")
+            if node.get(qn("w:name")) == "compatibilityMode"
+        ),
+        None,
+    )
+    if compatibility is not None:
+        compatibility.set(qn("w:val"), "15")
 
 
 def _paragraph_shading(paragraph: Paragraph, fill: str) -> None:
@@ -952,6 +1256,7 @@ def _build(spec: dict[str, Any], output: Path) -> tuple[DocumentObject, list[dic
     document = Document()
     font_name = str((spec.get("theme") or {}).get("font", DEFAULT_FONT)).strip()
     _configure_page(document)
+    _configure_compatibility(document)
     _configure_styles(document, font_name)
     title = str(spec.get("title", "")).strip()
     locale = str(spec.get("job", {}).get("locale", "ru-RU"))
@@ -962,6 +1267,7 @@ def _build(spec: dict[str, Any], output: Path) -> tuple[DocumentObject, list[dic
     document.core_properties.subject = str(spec.get("job", {}).get("goal", ""))
     document.core_properties.comments = f"Generated by docx skill {SKILL_VERSION}; inputs treated as immutable."
     document.save(str(output))
+    _embed_font_family(output, font_name)
     if not changes:
         changes.append(
             {
@@ -1038,6 +1344,75 @@ def _section_geometry(document: DocumentObject) -> list[tuple[int, ...]]:
     ]
 
 
+def _embedded_font_problems(path: Path, font_name: str) -> list[str]:
+    problems: list[str] = []
+    with zipfile.ZipFile(path) as archive:
+        names = set(archive.namelist())
+        required = {
+            "word/fontTable.xml",
+            "word/_rels/fontTable.xml.rels",
+            "word/settings.xml",
+            "[Content_Types].xml",
+        }
+        missing = sorted(required - names)
+        if missing:
+            return ["missing package parts: " + ", ".join(missing)]
+        font_table = etree.fromstring(archive.read("word/fontTable.xml"))
+        relationships = etree.fromstring(archive.read("word/_rels/fontTable.xml.rels"))
+        settings = etree.fromstring(archive.read("word/settings.xml"))
+        content_types = etree.fromstring(archive.read("[Content_Types].xml"))
+        font_node = next(
+            (node for node in font_table.findall(qn("w:font")) if node.get(qn("w:name")) == font_name),
+            None,
+        )
+        if font_node is None:
+            return [f"font table has no {font_name} entry"]
+        relation_map = {
+            str(node.get("Id")): node
+            for node in relationships.findall(f"{{{PACKAGE_REL_NS}}}Relationship")
+        }
+        for face, (embed_tag, _style) in FONT_FACES.items():
+            embedded = font_node.find(qn(f"w:{embed_tag}"))
+            if embedded is None:
+                problems.append(f"{face} face is not embedded")
+                continue
+            relationship_id = embedded.get(qn("r:id"))
+            font_key = embedded.get(qn("w:fontKey"))
+            relationship = relation_map.get(str(relationship_id))
+            if relationship is None or relationship.get("Type") != FONT_REL_TYPE:
+                problems.append(f"{face} face has no valid font relationship")
+                continue
+            target = str(relationship.get("Target", ""))
+            if relationship.get("TargetMode") or target.startswith(("/", "\\")) or "\\" in target:
+                problems.append(f"{face} face has an unsafe font relationship target")
+                continue
+            part_name = posixpath.normpath(posixpath.join("word", target))
+            if not part_name.startswith("word/fonts/") or part_name not in names:
+                problems.append(f"{face} face points to a missing font part")
+                continue
+            try:
+                uuid.UUID(str(font_key).strip("{}"))
+                font_data = _obfuscate_font(archive.read(part_name), str(font_key))
+                _validate_embeddable_font(font_data, part_name)
+            except (TypeError, ValueError) as exc:
+                problems.append(f"{face} face is invalid ({exc})")
+
+        setting = settings.find(qn("w:embedTrueTypeFonts"))
+        if setting is None or str(setting.get(qn("w:val"), "true")).lower() in {"0", "false", "off"}:
+            problems.append("embedTrueTypeFonts is not enabled")
+        odttf = next(
+            (
+                node
+                for node in content_types.findall(f"{{{CONTENT_TYPE_NS}}}Default")
+                if str(node.get("Extension", "")).lower() == "odttf"
+            ),
+            None,
+        )
+        if odttf is None or odttf.get("ContentType") != OBFUSCATED_FONT_CONTENT_TYPE:
+            problems.append("odttf content type is missing or invalid")
+    return problems
+
+
 def _check_structure(
     path: Path,
     spec: dict[str, Any],
@@ -1090,6 +1465,19 @@ def _check_structure(
         issues.append(_issue("fake-list", "critical", "One or more lists are plain text instead of editable Word lists"))
 
     source_mode = bool(spec.get("inputPath") or spec.get("templatePath"))
+    if not source_mode:
+        font_name = str((spec.get("theme") or {}).get("font", DEFAULT_FONT)).strip()
+        font_problems = _embedded_font_problems(path, font_name)
+        checks.append(
+            {
+                "name": "embedded-fonts",
+                "status": "failed" if font_problems else "passed",
+                "message": "; ".join(font_problems) if font_problems else f"Embedded four editable {font_name} font faces",
+            }
+        )
+        if font_problems:
+            issues.append(_issue("embedded-fonts", "critical", "Generated document does not contain a complete portable font family"))
+
     geometry_problems = [] if source_mode else _table_geometry_issues(document)
     checks.append(
         {
@@ -1192,9 +1580,53 @@ def _pdf_page_count(pdf: Path) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def _pdf_fonts(pdf: Path) -> list[dict[str, Any]] | None:
+    binary = shutil.which("pdffonts")
+    if not binary:
+        return None
+    result = subprocess.run([binary, str(pdf)], capture_output=True, text=True, timeout=15, check=False)
+    if result.returncode != 0:
+        return None
+    records: list[dict[str, Any]] = []
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) < 8 or fields[-5] not in {"yes", "no"}:
+            continue
+        records.append({"name": fields[0], "embedded": fields[-5] == "yes"})
+    return records
+
+
+def _pdf_font_issues(fonts: list[dict[str, Any]], expected_font: str) -> list[str]:
+    if not fonts:
+        return ["rendered PDF contains no inspectable fonts"]
+    expected = _normalized_font_name(expected_font)
+    auxiliary = {"opensymbol", "symbol", "zapfdingbats", "wingdings"}
+    unexpected: list[str] = []
+    missing_programs: list[str] = []
+    expected_present = False
+    for font in fonts:
+        name = re.sub(r"^[A-Z]{6}\+", "", str(font.get("name", "")))
+        normalized = _normalized_font_name(name)
+        if normalized.startswith(expected):
+            expected_present = True
+        elif not any(normalized.startswith(allowed) for allowed in auxiliary):
+            unexpected.append(name)
+        if not bool(font.get("embedded")):
+            missing_programs.append(name)
+    issues: list[str] = []
+    if not expected_present:
+        issues.append(f"rendered PDF does not use {expected_font}")
+    if unexpected:
+        issues.append("substituted fonts: " + ", ".join(sorted(set(unexpected))))
+    if missing_programs:
+        issues.append("PDF font programs are not embedded: " + ", ".join(sorted(set(missing_programs))))
+    return issues
+
+
 def _render(
     path: Path,
     keep_pdf: bool,
+    expected_font: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], Path | None]:
     checks: list[dict[str, Any]] = []
     issues: list[dict[str, Any]] = []
@@ -1234,6 +1666,30 @@ def _render(
                 "message": f"LibreOffice rendered {page_count} pages" if page_count else "LibreOffice rendered the document",
             }
         )
+
+        if expected_font:
+            pdf_fonts = _pdf_fonts(pdf)
+            if pdf_fonts is None:
+                checks.append(
+                    {
+                        "name": "font-parity",
+                        "status": "failed",
+                        "message": "Poppler font inspection is unavailable",
+                    }
+                )
+                issues.append(_issue("font-parity", "critical", "Rendered PDF fonts could not be verified"))
+            else:
+                font_problems = _pdf_font_issues(pdf_fonts, expected_font)
+                checks.append(
+                    {
+                        "name": "font-parity",
+                        "status": "failed" if font_problems else "passed",
+                        "message": "; ".join(font_problems) if font_problems else f"DOCX and PDF use portable {expected_font} fonts",
+                        "details": {"fonts": pdf_fonts},
+                    }
+                )
+                if font_problems:
+                    issues.append(_issue("font-parity", "critical", "LibreOffice substituted or omitted the document font"))
 
         raster = shutil.which("pdftoppm")
         if raster:
@@ -1371,7 +1827,14 @@ def main() -> int:
         )
         if not immutable:
             issues.append(_issue("input-modified", "critical", "Input/template file changed during authoring"))
-    render_checks, render_issues, preview_pdf = _render(output, keep_pdf=_output_pdf_requested(spec))
+    expected_font = None
+    if not source_path:
+        expected_font = str((spec.get("theme") or {}).get("font", DEFAULT_FONT)).strip()
+    render_checks, render_issues, preview_pdf = _render(
+        output,
+        keep_pdf=_output_pdf_requested(spec),
+        expected_font=expected_font,
+    )
     checks.extend(render_checks)
     issues.extend(render_issues)
     report = _report(spec, checks, issues, changes, preview_pdf)

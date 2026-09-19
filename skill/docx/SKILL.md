@@ -38,7 +38,7 @@ Keep the chat clean while authoring: call the required tools without prose progr
 
 ## Product standard
 
-- Default to `ru-RU`, A4, Arial, Russian typography, and dates or currencies appropriate to the supplied context.
+- Default to `ru-RU`, A4, Liberation Sans, Russian typography, and dates or currencies appropriate to the supplied context. For new documents the builder embeds the complete editable font family so Word and the derived PDF use the same glyphs and metrics on systems where the font is not installed. Use `PT Sans` only when explicitly requested; do not request Arial or Calibri because they are unavailable in the sovereign runtime and silent substitution is not acceptable.
 - Treat every supplied file as immutable. Always write a new, clearly named version.
 - Pick the document job before drafting: `memo`, `report`, or `sop`. Use the lightest structure that helps the reader decide, understand, or act.
 - Use real Word heading styles, numbering definitions, tables, headers, footers, live page fields, and hyperlinks. Do not fake headings, bullets, numbering, or tables with plain text.
@@ -65,7 +65,7 @@ Keep the chat clean while authoring: call the required tools without prose progr
 
    Final artifacts must be direct children of `/mnt/data`. When PDF is requested, set `outputPdf` to `true`; the builder renders `/mnt/data/<clear-name>.pdf` from that final DOCX.
 
-7. Read `/mnt/data/<clear-name>.docx.artifact-report.json` exactly once after each builder run. The builder reopens the document, audits semantic structure and table geometry, verifies immutable inputs, renders through LibreOffice, and raster-checks every page.
+7. Read `/mnt/data/<clear-name>.docx.artifact-report.json` exactly once after each builder run. The builder reopens the document, audits semantic structure, embedded editable fonts, and table geometry, verifies immutable inputs, renders through LibreOffice, rejects font substitution in the PDF, and raster-checks every page.
 8. The current runtime has no private visual-inspection tool: `read_file` cannot inspect image or PDF pixels and exposing page PNGs makes them user-visible attachments. Do not run LibreOffice or Poppler again, create page images or montages, call `read_file` on PDF/image output, list `/mnt/data`, or re-read the report to simulate visual review. Use the builder's `render`, `visual-raster`, Cyrillic, structure, header/footer, and page-field checks as the rendered-output gate.
 9. If the report is `ready`, every QA check passed, and `issues` has no critical item, stop using tools immediately. The next assistant content must be the completion sentence.
 10. If a builder or QA defect remains, revise the same `_qa_` JSON and immediately rerun the exact builder command. An `edit_file` result is a continuation of the original request: do not reconstruct the task from the diff, restart planning, or emit prose between the edit and retry. Allow at most two repair iterations and set `repairIterations` to the actual count.
