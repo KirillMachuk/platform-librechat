@@ -50,6 +50,46 @@ async function renameConversation(page: Page, conversation: Locator, title: stri
 }
 
 test.describe('conversation management', () => {
+  test('opens on the first click before details load', async ({ page }) => {
+    test.setTimeout(120000);
+    await openMockChat(page);
+    const turn = await sendAndExpectReply(page, uniqueLabel('first-click'));
+    const conversationUrl = page.url();
+    const conversationId = new URL(conversationUrl).pathname.split('/').pop();
+    expect(conversationId).toMatch(/^[0-9a-fA-F-]{36}$/);
+
+    await page.goto(NEW_CHAT_PATH, { timeout: 10000 });
+    await expect(firstConversation(page)).toBeVisible();
+
+    let releaseDetails!: () => void;
+    const heldRequest = new Promise<void>((resolve) => {
+      releaseDetails = resolve;
+    });
+    const detailsRoute = `**/api/convos/${conversationId}`;
+    await page.route(detailsRoute, async (route) => {
+      await heldRequest;
+      await route.continue();
+    });
+
+    try {
+      await Promise.all([
+        page.waitForRequest(
+          (request) =>
+            request.method() === 'GET' && request.url().endsWith(`/api/convos/${conversationId}`),
+          { timeout: 10000 },
+        ),
+        firstConversation(page).click(),
+      ]);
+      await expect(page).toHaveURL(conversationUrl, { timeout: 1000 });
+
+      releaseDetails();
+      await expect(messagesView(page).getByText(turn.prompt)).toBeVisible();
+    } finally {
+      releaseDetails();
+      await page.unroute(detailsRoute);
+    }
+  });
+
   test('keeps the composer on one axis while a sidebar chat loads', async ({ page }) => {
     test.setTimeout(120000);
     await page.setViewportSize({ width: 1280, height: 800 });

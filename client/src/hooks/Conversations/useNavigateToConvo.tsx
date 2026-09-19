@@ -52,35 +52,26 @@ const useNavigateToConvo = (index = 0) => {
     [setConvo, queryClient, applyModelSpecEffects],
   );
 
-  const fetchFreshData = async (conversation?: Partial<TConversation>) => {
-    const conversationId = conversation?.conversationId;
-    if (!conversationId) {
-      return;
-    }
+  const fetchFreshData = async (conversationId: string, requestedPath: string) => {
     try {
       const data = await queryClient.fetchQuery([QueryKeys.conversation, conversationId], () =>
         dataService.getConversationById(conversationId),
       );
       logger.log('conversation', 'Fetched fresh conversation data', data);
 
+      if (window.location.pathname !== requestedPath) {
+        return;
+      }
+
       const convoData = { ...data };
       clearModelForNonEphemeralAgent(convoData);
       setConversation(convoData);
-      navigate(
-        buildConvoPath({
-          conversationId: conversationId ?? Constants.NEW_CONVO,
-          projectId: convoData.project_id,
-        }),
-        { state: { focusChat: true } },
-      );
+      const freshPath = buildConvoPath({ conversationId, projectId: convoData.project_id });
+      if (freshPath !== requestedPath) {
+        navigate(freshPath, { replace: true, state: { focusChat: true } });
+      }
     } catch (error) {
       console.error('Error fetching conversation data on navigation', error);
-      if (conversation) {
-        setConversation(conversation as TConversation);
-        navigate(buildConvoPath({ conversationId, projectId: conversation.project_id }), {
-          state: { focusChat: true },
-        });
-      }
     }
   };
 
@@ -137,16 +128,18 @@ const useNavigateToConvo = (index = 0) => {
        */
       queryClient.removeQueries([QueryKeys.messages, convo.conversationId]);
       queryClient.invalidateQueries([QueryKeys.conversation, convo.conversationId]);
-      fetchFreshData(convo);
-    } else {
-      setConversation(convo);
-      navigate(
-        buildConvoPath({
-          conversationId: convo.conversationId ?? Constants.NEW_CONVO,
-          projectId: convo.project_id,
-        }),
-        { state: { focusChat: true } },
-      );
+      clearModelForNonEphemeralAgent(convo);
+    }
+
+    setConversation(convo);
+    const path = buildConvoPath({
+      conversationId: convo.conversationId ?? Constants.NEW_CONVO,
+      projectId: convo.project_id,
+    });
+    navigate(path, { state: { focusChat: true } });
+
+    if (convo.conversationId && convo.conversationId !== Constants.NEW_CONVO) {
+      void fetchFreshData(convo.conversationId, path);
     }
   };
 
