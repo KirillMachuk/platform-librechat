@@ -77,10 +77,7 @@ describe('findReadyArtifactCompletion', () => {
 
     expect(findReadyArtifactCompletion(reports, [{ filename: 'memo.docx' }])).toBeNull();
     expect(
-      findReadyArtifactCompletion(reports, [
-        { filename: 'memo.docx' },
-        { filename: 'memo.pdf' },
-      ]),
+      findReadyArtifactCompletion(reports, [{ filename: 'memo.docx' }, { filename: 'memo.pdf' }]),
     ).toEqual({ format: 'docx', filenames: ['memo.docx', 'memo.pdf'] });
   });
 
@@ -88,9 +85,7 @@ describe('findReadyArtifactCompletion', () => {
     const report = { ...readyDocxReport(), previewAssets: [] };
 
     expect(
-      findReadyArtifactCompletion(new Map([['memo.docx', report]]), [
-        { filename: 'memo.docx' },
-      ]),
+      findReadyArtifactCompletion(new Map([['memo.docx', report]]), [{ filename: 'memo.docx' }]),
     ).toEqual({ format: 'docx', filenames: ['memo.docx'] });
   });
 
