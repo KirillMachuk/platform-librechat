@@ -25,6 +25,21 @@ const readyPptxReport = (): TArtifactReport => ({
   repairIterations: 0,
 });
 
+const readyDocxReport = (): TArtifactReport => ({
+  status: 'ready',
+  format: 'docx',
+  sourceFileIds: [],
+  previewAssets: [{ filename: 'memo.pdf', kind: 'pdf' }],
+  qaChecks: [
+    { name: 'reopen', status: 'passed', message: 'DOCX reopens' },
+    { name: 'font-parity', status: 'passed', message: 'Fonts match the PDF' },
+  ],
+  issues: [],
+  changeLog: [{ target: 'Document', summary: 'Created a memo' }],
+  skillVersion: '1.1.0',
+  repairIterations: 0,
+});
+
 describe('findReadyArtifactCompletion', () => {
   it('accepts a ready editable deck only after every requested delivery was persisted', () => {
     const completion = findReadyArtifactCompletion(new Map([['weather.pptx', readyPptxReport()]]), [
@@ -53,6 +68,51 @@ describe('findReadyArtifactCompletion', () => {
       findReadyArtifactCompletion(new Map([['weather.pptx', report]]), [
         { filename: 'weather.pptx' },
         { filename: 'weather.pdf' },
+      ]),
+    ).toBeNull();
+  });
+
+  it('stops a verified Word run only after its derived PDF is persisted', () => {
+    const reports = new Map([['memo.docx', readyDocxReport()]]);
+
+    expect(findReadyArtifactCompletion(reports, [{ filename: 'memo.docx' }])).toBeNull();
+    expect(
+      findReadyArtifactCompletion(reports, [{ filename: 'memo.docx' }, { filename: 'memo.pdf' }]),
+    ).toEqual({ format: 'docx', filenames: ['memo.docx', 'memo.pdf'] });
+  });
+
+  it('stops a verified DOCX-only run without waiting for an unrequested PDF', () => {
+    const report = { ...readyDocxReport(), previewAssets: [] };
+
+    expect(
+      findReadyArtifactCompletion(new Map([['memo.docx', report]]), [{ filename: 'memo.docx' }]),
+    ).toEqual({ format: 'docx', filenames: ['memo.docx'] });
+  });
+
+  it('keeps Word authoring active for warnings, issues, or an unreviewed report', () => {
+    const attachments = [{ filename: 'memo.docx' }, { filename: 'memo.pdf' }];
+    const base = readyDocxReport();
+    const reports = [
+      { ...base, status: 'needs_review' as const },
+      { ...base, qaChecks: [{ name: 'render', status: 'warning' as const, message: 'Inspect' }] },
+      { ...base, issues: [{ code: 'layout', severity: 'warning' as const, message: 'Inspect' }] },
+    ];
+
+    for (const report of reports) {
+      expect(findReadyArtifactCompletion(new Map([['memo.docx', report]]), attachments)).toBeNull();
+    }
+  });
+
+  it('does not complete Word delivery for a PDF with a different base name', () => {
+    const report = {
+      ...readyDocxReport(),
+      previewAssets: [{ filename: 'other.pdf', kind: 'pdf' as const }],
+    };
+
+    expect(
+      findReadyArtifactCompletion(new Map([['memo.docx', report]]), [
+        { filename: 'memo.docx' },
+        { filename: 'other.pdf' },
       ]),
     ).toBeNull();
   });
