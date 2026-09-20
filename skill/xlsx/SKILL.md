@@ -23,11 +23,17 @@ name is a capability marker, not a callable tool: use `bash_tool` for the
 builder command.
 
 Design the smallest useful workbook. A simple calculation can stay on one
-sheet. Add a summary sheet only for a distinct output or useful chart; add
+sheet: when the user asks for a total below the data, use
+`summaryPlacement: "below_table"` and a matching `summary` item. Add a
+summary sheet only for a distinct output or useful chart; add
 source or review sheets only when the data or workflow requires them. Derived
 results must be editable Excel formulas, not Python-computed constants. The
 builder accepts structured calculations rather than arbitrary formula text.
 Never write formula-looking source text as a formula.
+Use an ASCII-only internal `table.name` such as `SalesSept2026`, while
+visible sheet names and headers stay in the user's language. Base columns
+cannot have `numberFormat`; calculated columns can. Follow the exact schema
+in the specification rather than guessing accepted fields.
 
 The spec belongs at `/mnt/data/_qa_<stem>-spec.json`; reusable work must not
 go in `/tmp`, which does not persist between tool calls. Run:

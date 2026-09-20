@@ -7,19 +7,19 @@ Auto selects the XLSX authoring skill for explicit new-workbook requests.
 Existing-workbook edits and multi-source merges remain outside the builder's
 supported scope; preview parity and the live pilot are separate rollout gates.
 
-The first draft PR covers only the new-workbook core. Its local gate is:
+The new-workbook core has this local gate:
 
 ```bash
 python3 -m unittest bench.spreadsheets.test_builder -v
 python3 bench/spreadsheets/run_core_goldens.py --runs 3 --output-dir /path/to/new/evidence-directory
 ```
 
-The core eval checks ten scenarios within the current new-workbook scope:
-calculation with chart, single sheet, source trace, typed dates, discount,
+The core eval checks eleven scenarios within the current new-workbook scope:
+calculation with chart, single sheet, inline total, source trace, typed dates, discount,
 aggregation, line trend, chained calculations, literal formula-looking source
 text, and a long printed table. It verifies exact formulas and values after
 independent LibreOffice recalculation, native workbook features, expected PDF
-pagination, and repeated render pixels. Two cases also edit an input in a
+pagination, and repeated render pixels. Three cases also edit an input in a
 disposable copy, recalculate it in LibreOffice, and check downstream formulas
 while confirming that native charts still reference the editable data and the
 delivered workbook's bytes are unchanged. It is **not** the full mixed-mode

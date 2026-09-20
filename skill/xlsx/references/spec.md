@@ -8,6 +8,15 @@ Unknown fields are rejected at every level. This version also rejects a
 template or edit an existing workbook. Do not silently replace either task
 with a newly designed workbook.
 
+Before writing JSON, check the internal identifiers and field locations:
+`table.name` and every column `key` must use ASCII letters, digits, or `_`,
+starting with a letter or `_` (for example `SalesSept2026`). Keep the visible
+`sheetName`, title, headers, and row labels in the user's language. Base
+`table.columns` accept only `key`, `header`, `type`, `choices`, `minimum`, and
+`maximum`; do not put `numberFormat` there. A calculated column may use
+`numberFormat`. Copy only fields documented here; a rejected spec is not a
+successful repair iteration and should be corrected before claiming QA passed.
+
 ```json
 {
   "job": {
@@ -85,7 +94,15 @@ Excel format strings are intentionally unsupported.
 `summary` is optional. It creates a separate first sheet only when there are
 useful headline results. Each item references a numeric base or calculated
 column and uses `sum`, `average`, `min`, `max`, or `count`. The result is a
-native formula linked to the data sheet. `chart` is optional and currently
+native formula linked to the data sheet. Set root-level
+`"summaryPlacement": "below_table"` when the user asks for a total beneath
+the rows on a single-sheet workbook. It places the summary label and formula
+below the Excel Table on the data sheet, without a duplicate summary sheet.
+This mode needs at least two columns, a nonempty `summary`, and no `chart`.
+Omit `summaryPlacement` (default `sheet`) when a distinct overview or chart
+is useful. For a Russian locale, that sheet is named `Итоги`; for other
+locales it is `Summary`. Do not claim a total is below the table when it is
+on a separate sheet. `chart` is optional and currently
 supports a `bar` or `line` chart on the summary sheet, backed by the data
 table. It requires a text category and numeric value column.
 

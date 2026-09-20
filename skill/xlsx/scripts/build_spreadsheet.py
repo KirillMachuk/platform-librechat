@@ -31,7 +31,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from PIL import Image, ImageChops
 
 
-SKILL_VERSION = "0.1.0"
+SKILL_VERSION = "0.2.0"
 MAX_ROWS = 200
 MAX_COLUMNS = 8
 MAX_PRINT_WIDTH = 125
@@ -160,7 +160,7 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
     for unsupported in ("inputPath", "templatePath", "rawFormulas", "outputPdf"):
         if unsupported in spec:
             raise SpecError(f"{unsupported} is not supported by this builder version")
-    _reject_unknown(spec, {"job", "title", "table", "summary", "chart", "sources", "changeLog", "repairIterations"}, "spec")
+    _reject_unknown(spec, {"job", "title", "table", "summary", "summaryPlacement", "chart", "sources", "changeLog", "repairIterations"}, "spec")
     job = spec.get("job")
     if not isinstance(job, dict) or job.get("format") != "xlsx":
         raise SpecError("job.format must be xlsx")
@@ -309,6 +309,15 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
             "integer", "number", "percent", "calculated"
         }:
             raise SpecError("chart needs a text category and numeric value column")
+    summary_placement = spec.get("summaryPlacement", "sheet")
+    if not isinstance(summary_placement, str) or summary_placement not in {"sheet", "below_table"}:
+        raise SpecError("summaryPlacement must be sheet or below_table")
+    if summary_placement == "below_table" and (not summary or chart or len(columns) + len(calculated) < 2):
+        raise SpecError("summaryPlacement below_table requires a summary, at least two columns, and no chart")
+    if summary_placement == "sheet" and (summary or chart):
+        overview_name = "Итоги" if job["locale"].lower().startswith("ru") else "Summary"
+        if sheet_name.casefold() == overview_name.casefold():
+            raise SpecError("table.sheetName must differ from the generated summary sheet name")
     sources = [_source(item, index) for index, item in enumerate(_items(spec.get("sources", []), "sources", 20))]
     changes = _items(spec.get("changeLog", []), "changeLog", 20)
     for index, change in enumerate(changes):
@@ -329,6 +338,7 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
         "calculated": calculated,
         "rows": expected_rows,
         "summary": summary,
+        "summaryPlacement": summary_placement,
         "chart": chart,
         "sources": sources,
         "changes": changes,
@@ -356,11 +366,11 @@ def _style_header(sheet: Any, row: int, width: int) -> None:
 
 def _build(spec: dict[str, Any], output: Path) -> tuple[dict[str, str], dict[str, int | float], list[str]]:
     russian = spec["job"]["locale"].lower().startswith("ru")
-    has_summary = bool(spec["summary"] or spec["chart"])
+    has_summary = bool(spec["summary"] or spec["chart"]) and spec["summaryPlacement"] == "sheet"
     workbook = Workbook()
     if has_summary:
         summary_sheet = workbook.active
-        summary_sheet.title = "Summary"
+        summary_sheet.title = "Итоги" if russian else "Summary"
         data = workbook.create_sheet(spec["sheetName"])
     else:
         summary_sheet = None
@@ -420,7 +430,37 @@ def _build(spec: dict[str, Any], output: Path) -> tuple[dict[str, str], dict[str
     table = Table(displayName=spec["table"]["name"], ref=f"A3:{last_col}{last_row}")
     table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True)
     data.add_table(table)
-    data.print_area = f"A1:{last_col}{last_row}"
+    if spec["summaryPlacement"] == "below_table":
+        total_column = len(all_columns)
+        for offset, item in enumerate(spec["summary"]):
+            summary_row = last_row + 2 + offset
+            data.merge_cells(start_row=summary_row, start_column=1, end_row=summary_row, end_column=total_column - 1)
+            label = data.cell(summary_row, 1)
+            _literal(label, item["label"])
+            label.font = Font(name=FONT_NAME, size=10, bold=True, color=COLORS["ink"])
+            label.alignment = Alignment(vertical="center")
+            source_column = get_column_letter(positions[item["column"]])
+            source_range = f"{source_column}4:{source_column}{last_row}"
+            function = "COUNTA" if item["operation"] == "count" else item["operation"].upper()
+            result = data.cell(summary_row, total_column)
+            result.value = f"={function}({source_range})"
+            result.number_format = "#,##0" if function == "COUNTA" else "#,##0.00"
+            result.font = Font(name=FONT_NAME, size=10, bold=True, color=COLORS["ink"])
+            result.alignment = Alignment(horizontal="right", vertical="center")
+            data.row_dimensions[summary_row].height = 24
+            formulas[f"{data.title}!{result.coordinate}"] = result.value
+            values = [row[item["column"]] for row in spec["rows"]]
+            expected[f"{data.title}!{result.coordinate}"] = {
+                "sum": lambda: sum(values),
+                "average": lambda: sum(values) / len(values),
+                "min": lambda: min(values),
+                "max": lambda: max(values),
+                "count": lambda: len(values),
+            }[item["operation"]]()
+        last_print_row = last_row + 1 + len(spec["summary"])
+    else:
+        last_print_row = last_row
+    data.print_area = f"A1:{last_col}{last_print_row}"
     for column in spec["columns"]:
         position = get_column_letter(positions[column["key"]])
         target = f"{position}4:{position}{last_row}"
@@ -476,9 +516,9 @@ def _build(spec: dict[str, Any], output: Path) -> tuple[dict[str, str], dict[str
             cell.value = f"={function}({source_range})"
             cell.number_format = "#,##0" if function == "COUNTA" else "#,##0.00"
             cell.font = Font(name=FONT_NAME, size=10, bold=True, color=COLORS["ink"])
-            formulas[f"Summary!{cell.coordinate}"] = cell.value
+            formulas[f"{summary_sheet.title}!{cell.coordinate}"] = cell.value
             values = [row[item["column"]] for row in spec["rows"]]
-            expected[f"Summary!{cell.coordinate}"] = {
+            expected[f"{summary_sheet.title}!{cell.coordinate}"] = {
                 "sum": lambda: sum(values),
                 "average": lambda: sum(values) / len(values),
                 "min": lambda: min(values),
@@ -541,7 +581,7 @@ def _check_structure(output: Path, spec: dict[str, Any], formulas: dict[str, str
         issues.append("Native Excel Table is missing")
     if data.freeze_panes != "A4":
         issues.append("Data header freeze pane is missing")
-    if spec["chart"] and len(workbook["Summary"]._charts) != 1:
+    if spec["chart"] and len(workbook["Итоги" if spec["job"]["locale"].lower().startswith("ru") else "Summary"]._charts) != 1:
         issues.append("Native chart is missing")
     for address, formula in formulas.items():
         sheet_name, cell_address = address.split("!", 1)
@@ -753,7 +793,10 @@ def main() -> int:
     checks: list[dict[str, str]] = []
     issues: list[dict[str, str]] = []
     structure_issues = _check_structure(output, spec, formulas, sheetnames)
-    checks.append(_check("structure-and-formulas", structure_issues, "Workbook reopens with native table, chart, and editable formulas"))
+    structure_success = "Workbook reopens with native table and editable formulas"
+    if spec["chart"]:
+        structure_success += " and chart"
+    checks.append(_check("structure-and-formulas", structure_issues, structure_success))
     issues.extend(_issue("structure-and-formulas", problem) for problem in structure_issues)
     with tempfile.TemporaryDirectory(prefix="xlsx-qa-") as folder:
         scratch = Path(folder)
