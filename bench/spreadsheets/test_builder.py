@@ -58,6 +58,61 @@ def example_spec() -> dict:
 
 
 class SpreadsheetBuilderTests(unittest.TestCase):
+    def test_russian_single_sheet_total_stays_below_table(self):
+        spec = example_spec()
+        spec["job"]["sourceFileIds"] = []
+        spec["job"]["filename"] = "prodazhi.xlsx"
+        spec["title"] = "Учёт продаж"
+        spec["table"]["sheetName"] = "Продажи"
+        spec["table"]["name"] = "Sales2026"
+        spec["summary"] = [{"label": "Итоговая выручка, BYN", "operation": "sum", "column": "cost"}]
+        spec["summaryPlacement"] = "below_table"
+        spec["chart"] = None
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            spec_path = root / "spec.json"
+            spec_path.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+            output = root / "prodazhi.xlsx"
+            result = subprocess.run(
+                [sys.executable, str(BUILDER), str(spec_path), str(output)],
+                capture_output=True, text=True, timeout=180, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads(Path(f"{output}.artifact-report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["status"], "ready", report)
+            workbook = load_workbook(output, data_only=False)
+            self.assertEqual(workbook.sheetnames, ["Продажи"])
+            self.assertEqual(workbook["Продажи"]["A7"].value, "Итоговая выручка, BYN")
+            self.assertEqual(workbook["Продажи"]["D7"].value, "=SUM(D4:D5)")
+            self.assertEqual(workbook["Продажи"].tables["Sales2026"].ref, "A3:D5")
+            workbook.close()
+            cached = load_workbook(output, data_only=True)
+            self.assertEqual(cached["Продажи"]["D7"].value, 2700)
+            cached.close()
+
+    def test_inline_total_rejects_chart_and_single_column(self):
+        spec = example_spec()
+        spec["summaryPlacement"] = "below_table"
+        with self.assertRaisesRegex(SpecError, "summaryPlacement"):
+            _validate(spec, Path("service-cost.xlsx"))
+        spec["chart"] = None
+        spec["table"]["columns"] = [spec["table"]["columns"][0]]
+        spec["table"]["calculatedColumns"] = []
+        spec["table"]["rows"] = [{"service": "Support"}]
+        spec["summary"] = [{"label": "Count", "operation": "count", "column": "service"}]
+        with self.assertRaisesRegex(SpecError, "summaryPlacement"):
+            _validate(spec, Path("service-cost.xlsx"))
+        spec = example_spec()
+        spec["summaryPlacement"] = []
+        with self.assertRaisesRegex(SpecError, "summaryPlacement"):
+            _validate(spec, Path("service-cost.xlsx"))
+
+    def test_localized_summary_name_cannot_conflict_with_data_sheet(self):
+        spec = example_spec()
+        spec["table"]["sheetName"] = "Итоги"
+        with self.assertRaisesRegex(SpecError, "summary sheet name"):
+            _validate(spec, Path("service-cost.xlsx"))
+
     def test_russian_fixture_renders_localized_summary_and_chart(self):
         with tempfile.TemporaryDirectory() as folder:
             output = Path(folder) / "stoimost-uslug.xlsx"
@@ -68,6 +123,9 @@ class SpreadsheetBuilderTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             report = json.loads(Path(f"{output}.artifact-report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["status"], "ready", report)
+            workbook = load_workbook(output, data_only=False)
+            self.assertEqual(workbook.sheetnames[:2], ["Итоги", "Данные"])
+            workbook.close()
             pdf = output.with_name("_qa_stoimost-uslug-preview.pdf")
             rendered = subprocess.run(
                 ["pdftotext", "-layout", str(pdf), "-"],
@@ -109,15 +167,15 @@ class SpreadsheetBuilderTests(unittest.TestCase):
             self.assertTrue((root / "_qa_service-cost-preview.pdf").is_file())
             cached = load_workbook(output, data_only=True)
             self.assertEqual(cached["Data"]["D4"].value, 1500)
-            self.assertEqual(cached["Summary"]["B3"].value, 2700)
+            self.assertEqual(cached["Итоги"]["B3"].value, 2700)
             cached.close()
             workbook = load_workbook(output, data_only=False)
-            self.assertEqual(workbook.sheetnames, ["Summary", "Data"])
+            self.assertEqual(workbook.sheetnames, ["Итоги", "Data"])
             self.assertEqual(workbook["Data"]["D4"].value, "=B4*C4")
-            self.assertEqual(workbook["Summary"]["B3"].value, "=SUM('Data'!D4:D5)")
+            self.assertEqual(workbook["Итоги"]["B3"].value, "=SUM('Data'!D4:D5)")
             self.assertIn("ServiceCosts", workbook["Data"].tables)
             self.assertEqual(workbook["Data"].tables["ServiceCosts"].tableStyleInfo.name, "TableStyleMedium2")
-            self.assertEqual(len(workbook["Summary"]._charts), 1)
+            self.assertEqual(len(workbook["Итоги"]._charts), 1)
             self.assertTrue(workbook["Data"].data_validations.dataValidation)
             workbook["Data"]["B4"] = 20
             workbook.save(output)
@@ -125,7 +183,7 @@ class SpreadsheetBuilderTests(unittest.TestCase):
             recalculated = _office_convert(output, root / "updated", "xlsx", root / "updated-profile")
             values = load_workbook(recalculated, data_only=True)
             self.assertEqual(values["Data"]["D4"].value, 2500)
-            self.assertEqual(values["Summary"]["B3"].value, 3700)
+            self.assertEqual(values["Итоги"]["B3"].value, 3700)
             values.close()
 
     def test_source_text_that_looks_like_a_formula_remains_literal(self):
@@ -269,7 +327,7 @@ class SpreadsheetBuilderTests(unittest.TestCase):
             report = json.loads(Path(f"{output}.artifact-report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["status"], "ready", report)
             workbook = load_workbook(output, data_only=False)
-            self.assertEqual(workbook["Summary"]["B3"].value, "=COUNTA('Data'!A4:A5)")
+            self.assertEqual(workbook["Итоги"]["B3"].value, "=COUNTA('Data'!A4:A5)")
             workbook.close()
 
     def test_invalid_excel_identifiers_and_lists_are_rejected(self):

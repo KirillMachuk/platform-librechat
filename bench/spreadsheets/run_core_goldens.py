@@ -30,10 +30,10 @@ def _cases() -> dict[str, tuple[dict, dict]]:
 
     planned = copy.deepcopy(base)
     cases["planned_cost"] = (planned, {
-        "sheets": ["Summary", "Данные"], "formulas": {"Данные!D4": "=B4*C4"},
-        "values": {"Данные!D4": 72000, "Summary!B3": 378700, "Summary!B4": 6},
+        "sheets": ["Итоги", "Данные"], "formulas": {"Данные!D4": "=B4*C4"},
+        "values": {"Данные!D4": 72000, "Итоги!B3": 378700, "Итоги!B4": 6},
         "mutation": {"input": ("Данные!B4", 5),
-                     "values": {"Данные!D4": 90000, "Summary!B3": 396700}},
+                     "values": {"Данные!D4": 90000, "Итоги!B3": 396700}},
         "chart": True, "chart_value_column": "D",
         "text": ["Показатель", "Стоимость по услугам", "Источник:"],
     })
@@ -47,12 +47,24 @@ def _cases() -> dict[str, tuple[dict, dict]]:
         "text": ["Плановая стоимость услуг", "Стоимость, ₽"],
     })
 
+    inline = copy.deepcopy(base)
+    inline["chart"] = None
+    inline["summaryPlacement"] = "below_table"
+    cases["inline_total"] = (inline, {
+        "sheets": ["Данные"],
+        "formulas": {"Данные!D4": "=B4*C4", "Данные!D11": "=SUM(D4:D9)"},
+        "values": {"Данные!D4": 72000, "Данные!D11": 378700},
+        "mutation": {"input": ("Данные!B4", 5),
+                     "values": {"Данные!D4": 90000, "Данные!D11": 396700}},
+        "chart": False, "text": ["Итого, ₽", "Стоимость, ₽"],
+    })
+
     sourced = copy.deepcopy(base)
     sourced["sources"].append({"label": "Методика", "location": "Демонстрационное описание расчёта"})
     cases["source_trace"] = (sourced, {
-        "sheets": ["Summary", "Данные", "Sources"],
+        "sheets": ["Итоги", "Данные", "Sources"],
         "formulas": {"Данные!D4": "=B4*C4"},
-        "values": {"Данные!D4": 72000, "Summary!B3": 378700},
+        "values": {"Данные!D4": 72000, "Итоги!B3": 378700},
         "chart": True, "text": ["Источники", "Демонстрационное описание расчёта"],
     })
 
@@ -62,8 +74,8 @@ def _cases() -> dict[str, tuple[dict, dict]]:
         row["date"] = f"2026-09-{index:02d}"
     dated["chart"] = None
     cases["typed_dates"] = (dated, {
-        "sheets": ["Summary", "Данные"], "formulas": {"Данные!E4": "=C4*D4"},
-        "values": {"Данные!E4": 72000, "Summary!B3": 378700},
+        "sheets": ["Итоги", "Данные"], "formulas": {"Данные!E4": "=C4*D4"},
+        "values": {"Данные!E4": 72000, "Итоги!B3": 378700},
         "chart": False, "date": ("Данные!B4", datetime(2026, 9, 1)),
         "text": ["Дата", "Итого, ₽"],
     })
@@ -87,11 +99,11 @@ def _cases() -> dict[str, tuple[dict, dict]]:
     discounted["summary"][0]["column"] = "net_cost"
     discounted["chart"]["value"] = "net_cost"
     cases["scenario_discount"] = (discounted, {
-        "sheets": ["Summary", "Данные"],
+        "sheets": ["Итоги", "Данные"],
         "formulas": {"Данные!E4": "=B4*C4", "Данные!F4": "=E4*D4", "Данные!G4": "=E4-F4"},
-        "values": {"Данные!E4": 72000, "Данные!F4": 7200, "Данные!G4": 64800, "Summary!B3": 340830},
+        "values": {"Данные!E4": 72000, "Данные!F4": 7200, "Данные!G4": 64800, "Итоги!B3": 340830},
         "mutation": {"input": ("Данные!D4", 0.2),
-                     "values": {"Данные!F4": 14400, "Данные!G4": 57600, "Summary!B3": 333630}},
+                     "values": {"Данные!F4": 14400, "Данные!G4": 57600, "Итоги!B3": 333630}},
         "chart": True, "chart_value_column": "G", "text": ["Скидка", "После скидки, ₽"],
     })
 
@@ -105,10 +117,10 @@ def _cases() -> dict[str, tuple[dict, dict]]:
         {"label": "Количество услуг", "operation": "count", "column": "service"},
     ]
     cases["aggregate_stats"] = (aggregates, {
-        "sheets": ["Summary", "Данные"],
-        "formulas": {"Summary!B3": "=SUM('Данные'!D4:D9)", "Summary!B7": "=COUNTA('Данные'!A4:A9)"},
-        "values": {"Summary!B3": 378700, "Summary!B4": 378700 / 6,
-                   "Summary!B5": 34800, "Summary!B6": 86400, "Summary!B7": 6},
+        "sheets": ["Итоги", "Данные"],
+        "formulas": {"Итоги!B3": "=SUM('Данные'!D4:D9)", "Итоги!B7": "=COUNTA('Данные'!A4:A9)"},
+        "values": {"Итоги!B3": 378700, "Итоги!B4": 378700 / 6,
+                   "Итоги!B5": 34800, "Итоги!B6": 86400, "Итоги!B7": 6},
         "chart": False, "text": ["Средняя стоимость, ₽", "Максимум, ₽"],
     })
 
@@ -125,10 +137,10 @@ def _cases() -> dict[str, tuple[dict, dict]]:
     trend["chart"].update(kind="line", title="Стоимость по месяцам, ₽", value="total")
     trend["summary"][0]["column"] = "total"
     cases["line_trend"] = (trend, {
-        "sheets": ["Summary", "Данные"],
+        "sheets": ["Итоги", "Данные"],
         "formulas": {"Данные!E4": "=B4*C4", "Данные!F4": "=E4+D4",
-                     "Summary!B3": "=SUM('Данные'!F4:F9)"},
-        "values": {"Данные!F4": 73000, "Summary!B3": 384700},
+                     "Итоги!B3": "=SUM('Данные'!F4:F9)"},
+        "values": {"Данные!F4": 73000, "Итоги!B3": 384700},
         "chart": True, "chart_kind": "line", "text": ["Месяц", "Стоимость по месяцам, ₽"],
     })
 
@@ -150,11 +162,11 @@ def _cases() -> dict[str, tuple[dict, dict]]:
     ])
     chained["summary"][0]["column"] = "net_cost"
     cases["chained_calculations"] = (chained, {
-        "sheets": ["Summary", "Данные"],
+        "sheets": ["Итоги", "Данные"],
         "formulas": {"Данные!E4": "=B4*C4", "Данные!F4": "=E4*D4",
                      "Данные!G4": "=E4-F4", "Данные!H4": "=G4/B4"},
         "values": {"Данные!F4": 7200, "Данные!G4": 64800,
-                   "Данные!H4": 16200, "Summary!B3": 340830},
+                   "Данные!H4": 16200, "Итоги!B3": 340830},
         "chart": False, "text": ["К оплате, ₽", "За ед., ₽"],
     })
 
@@ -162,9 +174,9 @@ def _cases() -> dict[str, tuple[dict, dict]]:
     literal["chart"] = None
     literal["table"]["rows"][0]["service"] = "=1+1"
     cases["literal_source_text"] = (literal, {
-        "sheets": ["Summary", "Данные"],
+        "sheets": ["Итоги", "Данные"],
         "formulas": {"Данные!D4": "=B4*C4"},
-        "values": {"Данные!D4": 72000, "Summary!B3": 378700},
+        "values": {"Данные!D4": 72000, "Итоги!B3": 378700},
         "literal": ("Данные!A4", "=1+1"),
         "chart": False, "text": ["=1+1", "Стоимость, ₽"],
     })
@@ -223,7 +235,7 @@ def _verify_mutation(output: Path, oracle: dict, run_dir: Path) -> None:
         address, replacement = mutation["input"]
         _sheet_cell(workbook, address).value = replacement
         if oracle["chart"]:
-            chart = workbook["Summary"]._charts[0]
+            chart = workbook["Итоги"]._charts[0]
             value_reference = chart.series[0].val.numRef.f
             column = oracle["chart_value_column"]
             _require(value_reference == f"'Данные'!${column}$4:${column}$9",
@@ -284,11 +296,11 @@ def _verify(case_id: str, spec: dict, oracle: dict, run_dir: Path) -> tuple[str,
         data = workbook[spec["table"]["sheetName"]]
         _require(spec["table"]["name"] in data.tables, "Native Excel Table is missing")
         _require(data.freeze_panes == "A4", "Freeze pane is missing")
-        chart_present = bool(workbook["Summary"]._charts) if "Summary" in workbook else False
+        chart_present = bool(workbook["Итоги"]._charts) if "Итоги" in workbook else False
         _require(chart_present == oracle["chart"], "Native chart presence differs")
         if chart_present:
             expected_chart = LineChart if oracle.get("chart_kind") == "line" else BarChart
-            _require(isinstance(workbook["Summary"]._charts[0], expected_chart),
+            _require(isinstance(workbook["Итоги"]._charts[0], expected_chart),
                      "Native chart type differs")
         for address, formula in oracle["formulas"].items():
             _require(_sheet_cell(workbook, address).value == formula, address)
@@ -355,6 +367,7 @@ def _verify(case_id: str, spec: dict, oracle: dict, run_dir: Path) -> tuple[str,
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runs", type=int, default=1)
+    parser.add_argument("--case", choices=sorted(_cases()))
     parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args()
     if not 1 <= args.runs <= 3:
@@ -365,7 +378,10 @@ def main() -> int:
     try:
         output_dir = args.output_dir or Path(temporary.name)
         output_dir.mkdir(parents=True, exist_ok=True)
-        for case_id, (spec, oracle) in _cases().items():
+        cases = _cases()
+        if args.case:
+            cases = {args.case: cases[args.case]}
+        for case_id, (spec, oracle) in cases.items():
             fingerprints = []
             for run in range(1, args.runs + 1):
                 fingerprints.append(_verify(case_id, copy.deepcopy(spec), oracle, output_dir / case_id / f"run-{run}"))
@@ -373,7 +389,7 @@ def main() -> int:
                 raise AssertionError(f"Rendered pixels changed between {case_id} runs")
             print(f"{case_id}: {args.runs}/{args.runs} passed")
         print(
-            f"Core-only evaluation passed: {len(_cases())} cases × {args.runs} runs; "
+            f"Core-only evaluation passed: {len(cases)} cases × {args.runs} runs; "
             "not the mixed-mode XLSX acceptance gate"
         )
         if args.output_dir:
