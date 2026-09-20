@@ -12,7 +12,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-from skill.xlsx.scripts.build_spreadsheet import SpecError, _validate
+from skill.xlsx.scripts.build_spreadsheet import SpecError, _office_convert, _validate
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -107,7 +107,14 @@ class SpreadsheetBuilderTests(unittest.TestCase):
             self.assertIn("ServiceCosts", workbook["Data"].tables)
             self.assertEqual(len(workbook["Summary"]._charts), 1)
             self.assertTrue(workbook["Data"].data_validations.dataValidation)
+            workbook["Data"]["B4"] = 20
+            workbook.save(output)
             workbook.close()
+            recalculated = _office_convert(output, root / "updated", "xlsx", root / "updated-profile")
+            values = load_workbook(recalculated, data_only=True)
+            self.assertEqual(values["Data"]["D4"].value, 2500)
+            self.assertEqual(values["Summary"]["B3"].value, 3700)
+            values.close()
 
     def test_source_text_that_looks_like_a_formula_remains_literal(self):
         spec = example_spec()
@@ -181,8 +188,17 @@ class SpreadsheetBuilderTests(unittest.TestCase):
     def test_invalid_excel_identifiers_and_lists_are_rejected(self):
         cases = [
             (lambda spec: spec["table"].update(name="A1"), "cell coordinate"),
+            (lambda spec: spec["table"].update(name="R"), "reserved name"),
+            (lambda spec: spec["table"].update(name="R1C1"), "Excel reference"),
             (lambda spec: spec["table"].update(sheetName="Data!More"), "valid Excel sheet name"),
             (lambda spec: spec["table"]["columns"][0].update(choices=["A,B"]), "cannot contain"),
+            (lambda spec: spec["table"]["calculatedColumns"][0].update(numberFormat=";;;"), "numberFormat is unsupported"),
+            (lambda spec: spec["table"]["columns"][0].update(type=[]), "unsupported type"),
+            (lambda spec: spec["table"]["columns"][0].update(choices=[{}]), "invalid or duplicate"),
+            (lambda spec: spec["table"]["calculatedColumns"][0].update(operation=[]), "invalid header or operation"),
+            (lambda spec: spec["table"]["calculatedColumns"][0].update(inputs=[{}, "units"]), "preceding numeric keys"),
+            (lambda spec: spec["summary"][0].update(operation=[]), "unsupported operation"),
+            (lambda spec: spec.update(chart={"kind": [], "title": "Test"}), "chart.kind"),
             (lambda spec: spec.update(repairIterations=True), "repairIterations"),
         ]
         for change, error in cases:

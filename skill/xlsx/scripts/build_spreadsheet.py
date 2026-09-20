@@ -167,6 +167,10 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
     table_name = _text(table.get("name"), "table.name", 80)
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table_name):
         raise SpecError("table.name must be an Excel-safe identifier")
+    if table_name.casefold() in {"r", "c"} or re.fullmatch(
+        r"R[1-9][0-9]*C[1-9][0-9]*", table_name, re.IGNORECASE
+    ):
+        raise SpecError("table.name cannot be an Excel reference or reserved name")
     try:
         coordinate_from_string(table_name)
     except CellCoordinatesException:
@@ -187,7 +191,7 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
         kind = column.get("type")
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key) or key in types:
             raise SpecError(f"table.columns[{index}].key must be a unique identifier")
-        if header.casefold() in headers or kind not in BASE_TYPES:
+        if header.casefold() in headers or not isinstance(kind, str) or kind not in BASE_TYPES:
             raise SpecError(f"table.columns[{index}] has a duplicate header or unsupported type")
         types[key] = kind
         headers.add(header.casefold())
@@ -195,7 +199,7 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
         if choices is not None:
             if kind != "text" or not isinstance(choices, list) or not 1 <= len(choices) <= 20:
                 raise SpecError(f"table.columns[{index}].choices needs a text column and 1 to 20 values")
-            if len(set(choices)) != len(choices) or any(not isinstance(choice, str) for choice in choices):
+            if any(not isinstance(choice, str) for choice in choices) or len(set(choices)) != len(choices):
                 raise SpecError(f"table.columns[{index}].choices contains invalid or duplicate values")
             for choice_index, choice in enumerate(choices):
                 _text(choice, f"table.columns[{index}].choices[{choice_index}]", 50)
@@ -218,15 +222,21 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
         inputs = column.get("inputs")
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key) or key in types:
             raise SpecError(f"table.calculatedColumns[{index}].key must be unique")
-        if header.casefold() in headers or column.get("operation") not in CALCULATIONS:
+        operation = column.get("operation")
+        if header.casefold() in headers or not isinstance(operation, str) or operation not in CALCULATIONS:
             raise SpecError(f"table.calculatedColumns[{index}] has an invalid header or operation")
         if not isinstance(inputs, list) or len(inputs) != 2 or any(
-            operand not in types or types[operand] not in {"integer", "number", "percent", "calculated"}
+            not isinstance(operand, str)
+            or operand not in types
+            or types[operand] not in {"integer", "number", "percent", "calculated"}
             for operand in inputs
         ):
             raise SpecError(f"table.calculatedColumns[{index}].inputs must name two preceding numeric keys")
         if "numberFormat" in column:
-            _text(column["numberFormat"], f"table.calculatedColumns[{index}].numberFormat", 40)
+            if not isinstance(column["numberFormat"], str) or column["numberFormat"] not in {
+                "#,##0", "#,##0.00", "0.0%", "0.00%"
+            }:
+                raise SpecError(f"table.calculatedColumns[{index}].numberFormat is unsupported")
         if "highlightNegative" in column and not isinstance(column["highlightNegative"], bool):
             raise SpecError(f"table.calculatedColumns[{index}].highlightNegative must be boolean")
         types[key] = "calculated"
@@ -249,16 +259,25 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
         if not isinstance(item, dict):
             raise SpecError(f"summary[{index}] must be an object")
         _text(item.get("label"), f"summary[{index}].label", 100)
-        if item.get("operation") not in SUMMARIES or item.get("column") not in types:
+        if (
+            not isinstance(item.get("operation"), str)
+            or item["operation"] not in SUMMARIES
+            or not isinstance(item.get("column"), str)
+            or item["column"] not in types
+        ):
             raise SpecError(f"summary[{index}] has an unsupported operation or column")
         if item["operation"] != "count" and types[item["column"]] in {"text", "date"}:
             raise SpecError(f"summary[{index}] needs a numeric column")
     chart = spec.get("chart")
     if chart is not None:
-        if not isinstance(chart, dict) or chart.get("kind") not in {"bar", "line"}:
+        if not isinstance(chart, dict) or not isinstance(chart.get("kind"), str) or chart["kind"] not in {
+            "bar", "line"
+        }:
             raise SpecError("chart.kind must be bar or line")
         _text(chart.get("title"), "chart.title", 100)
-        if types.get(chart.get("category")) != "text" or types.get(chart.get("value")) not in {
+        if not isinstance(chart.get("category"), str) or not isinstance(chart.get("value"), str):
+            raise SpecError("chart needs a text category and numeric value column")
+        if types.get(chart["category"]) != "text" or types.get(chart["value"]) not in {
             "integer", "number", "percent", "calculated"
         }:
             raise SpecError("chart needs a text category and numeric value column")
@@ -456,6 +475,12 @@ def _build(spec: dict[str, Any], output: Path) -> tuple[dict[str, str], dict[str
     if len(spec["sources"]) > 1:
         sources_sheet = workbook.create_sheet("Sources")
         sources_sheet.sheet_view.showGridLines = False
+        sources_sheet.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+        sources_sheet.page_setup.fitToWidth = 1
+        sources_sheet.page_setup.fitToHeight = 1
+        sources_sheet.page_setup.orientation = "landscape"
+        sources_sheet.page_setup.paperSize = sources_sheet.PAPERSIZE_A4
+        sources_sheet.page_margins = PageMargins(left=0.4, right=0.4, top=0.5, bottom=0.5, header=0.2, footer=0.2)
         sources_sheet.column_dimensions["A"].width = 32
         sources_sheet.column_dimensions["B"].width = 70
         _literal(sources_sheet["A1"], "Источники" if russian else "Sources")
@@ -542,7 +567,7 @@ def _check_recalculated(path: Path, expected: dict[str, int | float]) -> list[st
     return issues
 
 
-def _check_render(pdf: Path, sheetnames: list[str], scratch: Path) -> list[str]:
+def _check_render(pdf: Path, sheetnames: list[str], scratch: Path, exact_pages: bool) -> list[str]:
     rasterizer = shutil.which("pdftoppm")
     if not rasterizer:
         return ["Poppler rasterizer is unavailable"]
@@ -557,6 +582,8 @@ def _check_render(pdf: Path, sheetnames: list[str], scratch: Path) -> list[str]:
     if result.returncode != 0 or len(images) < len(sheetnames):
         return ["Not every worksheet rendered to a PDF page"]
     issues: list[str] = []
+    if exact_pages and len(images) != len(sheetnames):
+        issues.append(f"Small workbook rendered {len(images)} pages for {len(sheetnames)} sheets")
     for index, image_path in enumerate(images, start=1):
         with Image.open(image_path) as image:
             page = image.convert("RGB")
@@ -620,7 +647,8 @@ def main() -> int:
         issues.extend(_issue("recalculated-values", problem) for problem in value_issues)
         try:
             pdf = _office_convert(output, scratch / "rendered", "pdf", scratch / "profile-render")
-            render_issues = _check_render(pdf, sheetnames, scratch)
+            compact = len(spec["rows"]) <= 20 and len(spec["columns"]) + len(spec["calculated"]) <= 8
+            render_issues = _check_render(pdf, sheetnames, scratch, exact_pages=compact)
             shutil.copyfile(pdf, preview_path)
         except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
             render_issues = [str(exc)]

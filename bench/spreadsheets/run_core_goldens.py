@@ -1,0 +1,225 @@
+#!/usr/bin/env python3
+"""Exercise supported XLSX authoring cases against real LibreOffice output."""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import hashlib
+import json
+import math
+import subprocess
+import sys
+import tempfile
+from datetime import datetime
+from pathlib import Path
+
+from openpyxl import load_workbook
+from PIL import Image
+
+
+ROOT = Path(__file__).resolve().parents[2]
+BUILDER = ROOT / "skill/xlsx/scripts/build_spreadsheet.py"
+FIXTURE = ROOT / "bench/spreadsheets/fixtures/ru_service_cost.json"
+
+
+def _cases() -> dict[str, tuple[dict, dict]]:
+    base = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    cases: dict[str, tuple[dict, dict]] = {}
+
+    planned = copy.deepcopy(base)
+    cases["planned_cost"] = (planned, {
+        "sheets": ["Summary", "Данные"], "formulas": {"Данные!D4": "=B4*C4"},
+        "values": {"Данные!D4": 72000, "Summary!B3": 378700, "Summary!B4": 6},
+        "chart": True, "text": ["Показатель", "Стоимость по услугам", "Источник:"],
+    })
+
+    single = copy.deepcopy(base)
+    single["summary"] = []
+    single["chart"] = None
+    cases["single_sheet"] = (single, {
+        "sheets": ["Данные"], "formulas": {"Данные!D4": "=B4*C4"},
+        "values": {"Данные!D4": 72000}, "chart": False,
+        "text": ["Плановая стоимость услуг", "Стоимость, ₽"],
+    })
+
+    sourced = copy.deepcopy(base)
+    sourced["sources"].append({"label": "Методика", "location": "Демонстрационное описание расчёта"})
+    cases["source_trace"] = (sourced, {
+        "sheets": ["Summary", "Данные", "Sources"],
+        "formulas": {"Данные!D4": "=B4*C4"},
+        "values": {"Данные!D4": 72000, "Summary!B3": 378700},
+        "chart": True, "text": ["Источники", "Демонстрационное описание расчёта"],
+    })
+
+    dated = copy.deepcopy(base)
+    dated["table"]["columns"].insert(1, {"key": "date", "header": "Дата", "type": "date"})
+    for index, row in enumerate(dated["table"]["rows"], start=1):
+        row["date"] = f"2026-09-{index:02d}"
+    dated["chart"] = None
+    cases["typed_dates"] = (dated, {
+        "sheets": ["Summary", "Данные"], "formulas": {"Данные!E4": "=C4*D4"},
+        "values": {"Данные!E4": 72000, "Summary!B3": 378700},
+        "chart": False, "date": ("Данные!B4", datetime(2026, 9, 1)),
+        "text": ["Дата", "Итого, ₽"],
+    })
+
+    discounted = copy.deepcopy(base)
+    discounted["table"]["columns"].append(
+        {"key": "discount", "header": "Скидка", "type": "percent", "minimum": 0, "maximum": 1}
+    )
+    for row in discounted["table"]["rows"]:
+        row["discount"] = 0.1
+    discounted["table"]["calculatedColumns"].extend([
+        {
+            "key": "discount_amount", "header": "Сумма скидки, ₽",
+            "operation": "multiply", "inputs": ["cost", "discount"],
+        },
+        {
+            "key": "net_cost", "header": "После скидки, ₽",
+            "operation": "subtract", "inputs": ["cost", "discount_amount"],
+        },
+    ])
+    discounted["summary"][0]["column"] = "net_cost"
+    discounted["chart"]["value"] = "net_cost"
+    cases["scenario_discount"] = (discounted, {
+        "sheets": ["Summary", "Данные"],
+        "formulas": {"Данные!E4": "=B4*C4", "Данные!F4": "=E4*D4", "Данные!G4": "=E4-F4"},
+        "values": {"Данные!E4": 72000, "Данные!F4": 7200, "Данные!G4": 64800, "Summary!B3": 340830},
+        "chart": True, "text": ["Скидка", "После скидки, ₽"],
+    })
+    return cases
+
+
+def _sheet_cell(workbook, address: str):
+    sheet, cell = address.split("!", 1)
+    return workbook[sheet][cell]
+
+
+def _require(condition: bool, message: object) -> None:
+    if not condition:
+        raise AssertionError(message)
+
+
+def _render_pixels(pdf: Path, folder: Path) -> tuple[str, ...]:
+    result = subprocess.run(
+        ["pdftoppm", "-r", "72", "-png", str(pdf), str(folder / "page")],
+        capture_output=True, text=True, timeout=120, check=False,
+    )
+    if result.returncode:
+        raise AssertionError(f"PDF rasterization failed: {result.stderr}")
+    fingerprints = []
+    for path in sorted(folder.glob("page-*.png")):
+        with Image.open(path) as image:
+            fingerprints.append(hashlib.sha256(image.convert("RGB").tobytes()).hexdigest())
+    if not fingerprints:
+        raise AssertionError("No PDF pages rendered")
+    return tuple(fingerprints)
+
+
+def _verify(case_id: str, spec: dict, oracle: dict, run_dir: Path) -> tuple[str, ...]:
+    run_dir.mkdir(parents=True)
+    spec["job"]["filename"] = f"{case_id}.xlsx"
+    spec_path = run_dir / "spec.json"
+    spec_path.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+    output = run_dir / spec["job"]["filename"]
+    result = subprocess.run(
+        [sys.executable, str(BUILDER), str(spec_path), str(output)],
+        capture_output=True, text=True, timeout=180, check=False,
+    )
+    if result.returncode:
+        raise AssertionError(f"Builder failed: {result.stderr}")
+    report = json.loads(Path(f"{output}.artifact-report.json").read_text(encoding="utf-8"))
+    if report["status"] != "ready" or report["issues"] or any(
+        check["status"] != "passed" for check in report["qaChecks"]
+    ):
+        raise AssertionError(f"QA report is not green: {report}")
+    workbook = load_workbook(output, data_only=False)
+    try:
+        _require(workbook.sheetnames == oracle["sheets"], workbook.sheetnames)
+        data = workbook[spec["table"]["sheetName"]]
+        _require(spec["table"]["name"] in data.tables, "Native Excel Table is missing")
+        _require(data.freeze_panes == "A4", "Freeze pane is missing")
+        chart_present = bool(workbook["Summary"]._charts) if "Summary" in workbook else False
+        _require(chart_present == oracle["chart"], "Native chart presence differs")
+        for address, formula in oracle["formulas"].items():
+            _require(_sheet_cell(workbook, address).value == formula, address)
+        if "date" in oracle:
+            address, expected_date = oracle["date"]
+            _require(_sheet_cell(workbook, address).value == expected_date, address)
+    finally:
+        workbook.close()
+
+    recalculated_dir = run_dir / "oracle-recalc"
+    recalculated_dir.mkdir()
+    result = subprocess.run(
+        [
+            "soffice", f"-env:UserInstallation={(run_dir / 'oracle-profile').as_uri()}",
+            "--headless", "--convert-to", "xlsx", "--outdir", str(recalculated_dir), str(output),
+        ],
+        capture_output=True, text=True, timeout=120, check=False,
+    )
+    recalculated_path = recalculated_dir / output.name
+    if result.returncode or not recalculated_path.is_file():
+        raise AssertionError(f"Independent recalculation failed: {result.stderr or result.stdout}")
+    values = load_workbook(recalculated_path, data_only=True)
+    try:
+        for address, expected in oracle["values"].items():
+            actual = _sheet_cell(values, address).value
+            _require(
+                isinstance(actual, (int, float)) and math.isclose(actual, expected, rel_tol=1e-9),
+                (address, actual, expected),
+            )
+        for sheet in values:
+            for row in sheet:
+                for cell in row:
+                    _require(cell.data_type != "e", (sheet.title, cell.coordinate, cell.value))
+    finally:
+        values.close()
+
+    pdf = run_dir / f"_qa_{output.stem}-preview.pdf"
+    rendered_text = subprocess.run(
+        ["pdftotext", "-layout", str(pdf), "-"],
+        capture_output=True, text=True, timeout=30, check=True,
+    ).stdout
+    for phrase in oracle["text"]:
+        _require(phrase in rendered_text, (case_id, phrase))
+    pages = _render_pixels(pdf, run_dir)
+    _require(len(pages) == len(oracle["sheets"]), (case_id, len(pages), len(oracle["sheets"])))
+    return pages
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--runs", type=int, default=1)
+    parser.add_argument("--output-dir", type=Path)
+    args = parser.parse_args()
+    if not 1 <= args.runs <= 3:
+        parser.error("--runs must be between 1 and 3")
+    if args.output_dir and args.output_dir.exists():
+        parser.error("--output-dir must not already exist")
+    temporary = tempfile.TemporaryDirectory(prefix="xlsx-core-goldens-") if not args.output_dir else None
+    try:
+        output_dir = args.output_dir or Path(temporary.name)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for case_id, (spec, oracle) in _cases().items():
+            fingerprints = []
+            for run in range(1, args.runs + 1):
+                fingerprints.append(_verify(case_id, copy.deepcopy(spec), oracle, output_dir / case_id / f"run-{run}"))
+            if len(set(fingerprints)) != 1:
+                raise AssertionError(f"Rendered pixels changed between {case_id} runs")
+            print(f"{case_id}: {args.runs}/{args.runs} passed")
+        print(
+            f"Core-only evaluation passed: {len(_cases())} cases × {args.runs} runs; "
+            "not the full ten-case XLSX gate"
+        )
+        if args.output_dir:
+            print(f"Rendered evidence: {output_dir}")
+        return 0
+    finally:
+        if temporary:
+            temporary.cleanup()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

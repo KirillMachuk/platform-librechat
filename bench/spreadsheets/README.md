@@ -5,6 +5,20 @@ It starts from the already merged `ArtifactJob` and `artifactReport` contracts,
 the Russian-first PPTX/DOCX builders, and the existing isolated Code Interpreter.
 The current production route does not yet select an XLSX authoring skill.
 
+The first draft PR covers only the new-workbook core. Its local gate is:
+
+```bash
+python3 -m unittest bench.spreadsheets.test_builder -v
+python3 bench/spreadsheets/run_core_goldens.py --runs 3 --output-dir /path/to/new/evidence-directory
+```
+
+The core eval checks five Russian-first scenarios (calculation with chart,
+single sheet, source trace, typed dates, and a discount scenario), exact
+formulas and values after independent LibreOffice recalculation, native
+workbook features, expected PDF page count, and repeated render pixels. It is
+**not** the full ten-case acceptance gate below. Inspect its retained PDFs
+visually; pixel consistency proves repeatability, not design quality.
+
 ## Scope and order
 
 1. **Builder and acceptance gate, behind no product route.** Add a small

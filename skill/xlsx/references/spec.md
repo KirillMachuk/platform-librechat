@@ -69,6 +69,9 @@ that reflect an actual input rule.
 two existing numeric keys and uses `add`, `subtract`, `multiply`, or `divide`.
 Calculations are written as native formulas. A zero divisor or missing numeric
 input is rejected instead of being converted into a plausible zero.
+Optional calculated-column `numberFormat` accepts `#,##0`, `#,##0.00`,
+`0.0%`, or `0.00%`; use the column header for currency units. Arbitrary
+Excel format strings are intentionally unsupported.
 
 `summary` is optional. It creates a separate first sheet only when there are
 useful headline results. Each item references a numeric base or calculated
