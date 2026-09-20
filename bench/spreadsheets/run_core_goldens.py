@@ -32,7 +32,10 @@ def _cases() -> dict[str, tuple[dict, dict]]:
     cases["planned_cost"] = (planned, {
         "sheets": ["Summary", "Данные"], "formulas": {"Данные!D4": "=B4*C4"},
         "values": {"Данные!D4": 72000, "Summary!B3": 378700, "Summary!B4": 6},
-        "chart": True, "text": ["Показатель", "Стоимость по услугам", "Источник:"],
+        "mutation": {"input": ("Данные!B4", 5),
+                     "values": {"Данные!D4": 90000, "Summary!B3": 396700}},
+        "chart": True, "chart_value_column": "D",
+        "text": ["Показатель", "Стоимость по услугам", "Источник:"],
     })
 
     single = copy.deepcopy(base)
@@ -87,7 +90,9 @@ def _cases() -> dict[str, tuple[dict, dict]]:
         "sheets": ["Summary", "Данные"],
         "formulas": {"Данные!E4": "=B4*C4", "Данные!F4": "=E4*D4", "Данные!G4": "=E4-F4"},
         "values": {"Данные!E4": 72000, "Данные!F4": 7200, "Данные!G4": 64800, "Summary!B3": 340830},
-        "chart": True, "text": ["Скидка", "После скидки, ₽"],
+        "mutation": {"input": ("Данные!D4", 0.2),
+                     "values": {"Данные!F4": 14400, "Данные!G4": 57600, "Summary!B3": 333630}},
+        "chart": True, "chart_value_column": "G", "text": ["Скидка", "После скидки, ₽"],
     })
 
     aggregates = copy.deepcopy(base)
@@ -207,6 +212,51 @@ def _render_pixels(pdf: Path, folder: Path) -> tuple[str, ...]:
     return tuple(fingerprints)
 
 
+def _verify_mutation(output: Path, oracle: dict, run_dir: Path) -> None:
+    mutation = oracle.get("mutation")
+    if not mutation:
+        return
+    original_hash = hashlib.sha256(output.read_bytes()).digest()
+    edited = run_dir / "edited-copy.xlsx"
+    workbook = load_workbook(output)
+    try:
+        address, replacement = mutation["input"]
+        _sheet_cell(workbook, address).value = replacement
+        if oracle["chart"]:
+            chart = workbook["Summary"]._charts[0]
+            value_reference = chart.series[0].val.numRef.f
+            column = oracle["chart_value_column"]
+            _require(value_reference == f"'Данные'!${column}$4:${column}$9",
+                     ("Chart is not bound to editable source cells", value_reference))
+        workbook.save(edited)
+    finally:
+        workbook.close()
+    recalculated_dir = run_dir / "edited-recalc"
+    recalculated_dir.mkdir()
+    result = subprocess.run(
+        ["soffice", f"-env:UserInstallation={(run_dir / 'edited-profile').as_uri()}",
+         "--headless", "--convert-to", "xlsx", "--outdir", str(recalculated_dir), str(edited)],
+        capture_output=True, text=True, timeout=120, check=False,
+    )
+    recalculated = recalculated_dir / edited.name
+    _require(result.returncode == 0 and recalculated.is_file(),
+             ("Edited workbook did not recalculate", result.stderr or result.stdout))
+    values = load_workbook(recalculated, data_only=True)
+    try:
+        for address, expected in mutation["values"].items():
+            actual = _sheet_cell(values, address).value
+            _require(isinstance(actual, (int, float)) and not isinstance(actual, bool) and
+                     math.isclose(actual, expected, rel_tol=1e-9), (address, actual, expected))
+        for sheet in values:
+            for row in sheet:
+                for cell in row:
+                    _require(cell.data_type != "e", (sheet.title, cell.coordinate, cell.value))
+    finally:
+        values.close()
+    _require(hashlib.sha256(output.read_bytes()).digest() == original_hash,
+             "Testing an input edit changed the delivered workbook")
+
+
 def _verify(case_id: str, spec: dict, oracle: dict, run_dir: Path) -> tuple[str, ...]:
     run_dir.mkdir(parents=True)
     spec["job"]["filename"] = f"{case_id}.xlsx"
@@ -274,6 +324,8 @@ def _verify(case_id: str, spec: dict, oracle: dict, run_dir: Path) -> tuple[str,
                     _require(cell.data_type != "e", (sheet.title, cell.coordinate, cell.value))
     finally:
         values.close()
+
+    _verify_mutation(output, oracle, run_dir)
 
     pdf = run_dir / f"_qa_{output.stem}-preview.pdf"
     rendered_text = subprocess.run(

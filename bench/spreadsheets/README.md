@@ -17,7 +17,10 @@ calculation with chart, single sheet, source trace, typed dates, discount,
 aggregation, line trend, chained calculations, literal formula-looking source
 text, and a long printed table. It verifies exact formulas and values after
 independent LibreOffice recalculation, native workbook features, expected PDF
-pagination, and repeated render pixels. It is **not** the full mixed-mode
+pagination, and repeated render pixels. Two cases also edit an input in a
+disposable copy, recalculate it in LibreOffice, and check downstream formulas
+while confirming that native charts still reference the editable data and the
+delivered workbook's bytes are unchanged. It is **not** the full mixed-mode
 acceptance gate below: template, edit, merge, and refresh modes do not exist
 yet. Inspect its retained PDFs visually; pixel consistency proves
 repeatability, not design quality.
