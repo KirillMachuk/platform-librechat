@@ -70,4 +70,23 @@ describe('ArtifactQualitySummary', () => {
     expect(disclosure).toHaveTextContent('com_ui_artifact_qa_needs_review');
     expect(disclosure).toHaveTextContent('Review page 2');
   });
+
+  it('does not show a green ready state when a check still needs human review', () => {
+    const pendingCriteria: TArtifactReport = {
+      ...report,
+      qaChecks: [
+        report.qaChecks[0],
+        { name: 'acceptance-criteria', status: 'warning', message: 'Human review is pending' },
+      ],
+    };
+
+    render(<ArtifactQualitySummary artifact={artifact(pendingCriteria)} />);
+
+    const disclosure = screen.getByTestId('artifact-quality-summary');
+    expect(disclosure).toHaveTextContent('com_ui_artifact_qa_needs_review');
+    expect(disclosure).toHaveTextContent('com_ui_artifact_qa_score:1/2');
+    expect(disclosure.querySelector('summary span[aria-hidden="true"]')).toHaveClass(
+      'bg-amber-500',
+    );
+  });
 });
