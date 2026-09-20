@@ -169,6 +169,18 @@ class SpreadsheetBuilderTests(unittest.TestCase):
         with self.assertRaisesRegex(SpecError, "1 to 8 total columns"):
             _validate(spec, Path("service-cost.xlsx"))
 
+    def test_long_headers_exceed_print_width_even_with_eight_columns(self):
+        spec = example_spec()
+        for index in range(4):
+            key = f"extra_{index}"
+            spec["table"]["columns"].append({
+                "key": key, "header": f"Extended explanatory column {index}", "type": "integer",
+            })
+            for row in spec["table"]["rows"]:
+                row[key] = 1
+        with self.assertRaisesRegex(SpecError, "print width"):
+            _validate(spec, Path("service-cost.xlsx"))
+
     def test_long_table_repeats_header_on_later_pdf_pages(self):
         spec = example_spec()
         spec["summary"] = []

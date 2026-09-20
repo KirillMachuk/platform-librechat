@@ -32,6 +32,7 @@ from PIL import Image, ImageChops
 SKILL_VERSION = "0.1.0"
 MAX_ROWS = 200
 MAX_COLUMNS = 8
+MAX_PRINT_WIDTH = 125
 MAX_REPAIR_ITERATIONS = 2
 FONT_NAME = "Liberation Sans"
 BASE_TYPES = {"text", "integer", "number", "percent", "date"}
@@ -140,6 +141,10 @@ def _calculate(operation: str, left: int | float, right: int | float, field: str
     return _number(result, field)
 
 
+def _column_width(header: str) -> int:
+    return min(max(len(header) + 5, 15), 28)
+
+
 def _validate(spec: Any, output: Path) -> dict[str, Any]:
     if not isinstance(spec, dict):
         raise SpecError("The specification must be an object")
@@ -241,6 +246,9 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
             raise SpecError(f"table.calculatedColumns[{index}].highlightNegative must be boolean")
         types[key] = "calculated"
         headers.add(header.casefold())
+    print_width = sum(_column_width(column["header"]) for column in [*columns, *calculated])
+    if print_width > MAX_PRINT_WIDTH:
+        raise SpecError("The table exceeds the readable A4 print width; shorten headers or reduce columns")
     rows = _items(table.get("rows"), "table.rows", MAX_ROWS)
     if not rows:
         raise SpecError("table.rows cannot be empty")
@@ -360,7 +368,7 @@ def _build(spec: dict[str, Any], output: Path) -> tuple[dict[str, str], dict[str
     positions = {column["key"]: index + 1 for index, column in enumerate(all_columns)}
     for index, column in enumerate(all_columns, start=1):
         _literal(data.cell(3, index), column["header"])
-        data.column_dimensions[get_column_letter(index)].width = min(max(len(column["header"]) + 5, 15), 28)
+        data.column_dimensions[get_column_letter(index)].width = _column_width(column["header"])
     _style_header(data, 3, len(all_columns))
     expected: dict[str, int | float] = {}
     formulas: dict[str, str] = {}

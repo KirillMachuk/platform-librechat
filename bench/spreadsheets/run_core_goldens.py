@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 from openpyxl import load_workbook
+from openpyxl.chart import BarChart, LineChart
 from PIL import Image
 
 
@@ -88,6 +89,95 @@ def _cases() -> dict[str, tuple[dict, dict]]:
         "values": {"Данные!E4": 72000, "Данные!F4": 7200, "Данные!G4": 64800, "Summary!B3": 340830},
         "chart": True, "text": ["Скидка", "После скидки, ₽"],
     })
+
+    aggregates = copy.deepcopy(base)
+    aggregates["chart"] = None
+    aggregates["summary"] = [
+        {"label": "Итого, ₽", "operation": "sum", "column": "cost"},
+        {"label": "Средняя стоимость, ₽", "operation": "average", "column": "cost"},
+        {"label": "Минимум, ₽", "operation": "min", "column": "cost"},
+        {"label": "Максимум, ₽", "operation": "max", "column": "cost"},
+        {"label": "Количество услуг", "operation": "count", "column": "service"},
+    ]
+    cases["aggregate_stats"] = (aggregates, {
+        "sheets": ["Summary", "Данные"],
+        "formulas": {"Summary!B3": "=SUM('Данные'!D4:D9)", "Summary!B7": "=COUNTA('Данные'!A4:A9)"},
+        "values": {"Summary!B3": 378700, "Summary!B4": 378700 / 6,
+                   "Summary!B5": 34800, "Summary!B6": 86400, "Summary!B7": 6},
+        "chart": False, "text": ["Средняя стоимость, ₽", "Максимум, ₽"],
+    })
+
+    trend = copy.deepcopy(base)
+    trend["table"]["columns"][0]["header"] = "Месяц"
+    trend["table"]["columns"].append({"key": "extra", "header": "Дополнительно, ₽", "type": "number"})
+    trend["table"]["calculatedColumns"].append({
+        "key": "total", "header": "Всего, ₽", "operation": "add", "inputs": ["cost", "extra"],
+    })
+    for row, month in zip(trend["table"]["rows"],
+                          ("Январь", "Февраль", "Март", "Апрель", "Май", "Июнь")):
+        row["service"] = month
+        row["extra"] = 1000
+    trend["chart"].update(kind="line", title="Стоимость по месяцам, ₽", value="total")
+    trend["summary"][0]["column"] = "total"
+    cases["line_trend"] = (trend, {
+        "sheets": ["Summary", "Данные"],
+        "formulas": {"Данные!E4": "=B4*C4", "Данные!F4": "=E4+D4",
+                     "Summary!B3": "=SUM('Данные'!F4:F9)"},
+        "values": {"Данные!F4": 73000, "Summary!B3": 384700},
+        "chart": True, "chart_kind": "line", "text": ["Месяц", "Стоимость по месяцам, ₽"],
+    })
+
+    chained = copy.deepcopy(base)
+    chained["chart"] = None
+    chained["table"]["columns"][2]["header"] = "Цена, ₽"
+    chained["table"]["columns"].append({
+        "key": "discount", "header": "Скидка", "type": "percent", "minimum": 0, "maximum": 1,
+    })
+    for row in chained["table"]["rows"]:
+        row["discount"] = 0.1
+    chained["table"]["calculatedColumns"].extend([
+        {"key": "discount_amount", "header": "Скидка, ₽",
+         "operation": "multiply", "inputs": ["cost", "discount"]},
+        {"key": "net_cost", "header": "К оплате, ₽",
+         "operation": "subtract", "inputs": ["cost", "discount_amount"]},
+        {"key": "net_unit", "header": "За ед., ₽",
+         "operation": "divide", "inputs": ["net_cost", "units"]},
+    ])
+    chained["summary"][0]["column"] = "net_cost"
+    cases["chained_calculations"] = (chained, {
+        "sheets": ["Summary", "Данные"],
+        "formulas": {"Данные!E4": "=B4*C4", "Данные!F4": "=E4*D4",
+                     "Данные!G4": "=E4-F4", "Данные!H4": "=G4/B4"},
+        "values": {"Данные!F4": 7200, "Данные!G4": 64800,
+                   "Данные!H4": 16200, "Summary!B3": 340830},
+        "chart": False, "text": ["К оплате, ₽", "За ед., ₽"],
+    })
+
+    literal = copy.deepcopy(base)
+    literal["chart"] = None
+    literal["table"]["rows"][0]["service"] = "=1+1"
+    cases["literal_source_text"] = (literal, {
+        "sheets": ["Summary", "Данные"],
+        "formulas": {"Данные!D4": "=B4*C4"},
+        "values": {"Данные!D4": 72000, "Summary!B3": 378700},
+        "literal": ("Данные!A4", "=1+1"),
+        "chart": False, "text": ["=1+1", "Стоимость, ₽"],
+    })
+
+    long_table = copy.deepcopy(base)
+    long_table["summary"] = []
+    long_table["chart"] = None
+    long_table["table"]["rows"] = [
+        {"service": f"Service {index:02d}", "units": index, "unit_cost": 125}
+        for index in range(1, 81)
+    ]
+    cases["long_table"] = (long_table, {
+        "sheets": ["Данные"],
+        "formulas": {"Данные!D4": "=B4*C4", "Данные!D83": "=B83*C83"},
+        "values": {"Данные!D4": 125, "Данные!D83": 10000},
+        "chart": False, "text": ["Service 01", "Service 80"],
+        "pages_min": 2, "pages_max": 5, "header_every_page": "Цена за единицу, ₽",
+    })
     return cases
 
 
@@ -142,11 +232,19 @@ def _verify(case_id: str, spec: dict, oracle: dict, run_dir: Path) -> tuple[str,
         _require(data.freeze_panes == "A4", "Freeze pane is missing")
         chart_present = bool(workbook["Summary"]._charts) if "Summary" in workbook else False
         _require(chart_present == oracle["chart"], "Native chart presence differs")
+        if chart_present:
+            expected_chart = LineChart if oracle.get("chart_kind") == "line" else BarChart
+            _require(isinstance(workbook["Summary"]._charts[0], expected_chart),
+                     "Native chart type differs")
         for address, formula in oracle["formulas"].items():
             _require(_sheet_cell(workbook, address).value == formula, address)
         if "date" in oracle:
             address, expected_date = oracle["date"]
             _require(_sheet_cell(workbook, address).value == expected_date, address)
+        if "literal" in oracle:
+            address, expected_text = oracle["literal"]
+            cell = _sheet_cell(workbook, address)
+            _require(cell.value == expected_text and cell.data_type == "s", address)
     finally:
         workbook.close()
 
@@ -185,7 +283,16 @@ def _verify(case_id: str, spec: dict, oracle: dict, run_dir: Path) -> tuple[str,
     for phrase in oracle["text"]:
         _require(phrase in rendered_text, (case_id, phrase))
     pages = _render_pixels(pdf, run_dir)
-    _require(len(pages) == len(oracle["sheets"]), (case_id, len(pages), len(oracle["sheets"])))
+    _require(oracle.get("pages_min", len(oracle["sheets"])) <= len(pages) <=
+             oracle.get("pages_max", len(oracle["sheets"])),
+             (case_id, len(pages), len(oracle["sheets"])))
+    if "header_every_page" in oracle:
+        for page in range(1, len(pages) + 1):
+            page_text = subprocess.run(
+                ["pdftotext", "-f", str(page), "-l", str(page), "-layout", str(pdf), "-"],
+                capture_output=True, text=True, timeout=30, check=True,
+            ).stdout
+            _require(oracle["header_every_page"] in page_text, (case_id, page, "missing header"))
     return pages
 
 
@@ -211,7 +318,7 @@ def main() -> int:
             print(f"{case_id}: {args.runs}/{args.runs} passed")
         print(
             f"Core-only evaluation passed: {len(_cases())} cases × {args.runs} runs; "
-            "not the full ten-case XLSX gate"
+            "not the mixed-mode XLSX acceptance gate"
         )
         if args.output_dir:
             print(f"Rendered evidence: {output_dir}")

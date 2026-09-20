@@ -63,7 +63,10 @@ and `date` (ISO `YYYY-MM-DD`). Numbers and dates are typed Excel values, not
 formatted strings. Text beginning with `=` remains literal text. Each row
 must provide every base column. This first builder supports at most eight
 columns in total so the rendered A4 page remains readable; wider worksheets
-need a later pagination workflow. Use a `choices` array for a text dropdown,
+need a later pagination workflow. It also rejects a combined print width above
+125 Excel width units: eight long headers can still make fitted text too small.
+Shorten labels without losing their units or use a later supported view.
+Use a `choices` array for a text dropdown,
 or `minimum`/`maximum` for a numeric validation. Only include validations
 that reflect an actual input rule.
 

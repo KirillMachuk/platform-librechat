@@ -12,14 +12,18 @@ python3 -m unittest bench.spreadsheets.test_builder -v
 python3 bench/spreadsheets/run_core_goldens.py --runs 3 --output-dir /path/to/new/evidence-directory
 ```
 
-The core eval checks five Russian-first scenarios (calculation with chart,
-single sheet, source trace, typed dates, and a discount scenario), exact
-formulas and values after independent LibreOffice recalculation, native
-workbook features, expected PDF page count, and repeated render pixels. It is
-**not** the full ten-case acceptance gate below. Inspect its retained PDFs
-visually; pixel consistency proves repeatability, not design quality.
-The first builder deliberately accepts at most eight total columns; wider
-print pagination has not yet been visually validated.
+The core eval checks ten scenarios within the current new-workbook scope:
+calculation with chart, single sheet, source trace, typed dates, discount,
+aggregation, line trend, chained calculations, literal formula-looking source
+text, and a long printed table. It verifies exact formulas and values after
+independent LibreOffice recalculation, native workbook features, expected PDF
+pagination, and repeated render pixels. It is **not** the full mixed-mode
+acceptance gate below: template, edit, merge, and refresh modes do not exist
+yet. Inspect its retained PDFs visually; pixel consistency proves
+repeatability, not design quality.
+The first builder deliberately accepts at most eight total columns and a
+combined print width of 125 Excel units; wider print pagination has not yet
+been visually validated.
 Long, narrow tables are covered separately by a real-office test that checks
 column headers repeat on later PDF pages.
 
