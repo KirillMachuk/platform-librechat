@@ -20,6 +20,8 @@ workbook features, expected PDF page count, and repeated render pixels. It is
 visually; pixel consistency proves repeatability, not design quality.
 The first builder deliberately accepts at most eight total columns; wider
 print pagination has not yet been visually validated.
+Long, narrow tables are covered separately by a real-office test that checks
+column headers repeat on later PDF pages.
 
 ## Scope and order
 

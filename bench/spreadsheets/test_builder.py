@@ -169,6 +169,33 @@ class SpreadsheetBuilderTests(unittest.TestCase):
         with self.assertRaisesRegex(SpecError, "1 to 8 total columns"):
             _validate(spec, Path("service-cost.xlsx"))
 
+    def test_long_table_repeats_header_on_later_pdf_pages(self):
+        spec = example_spec()
+        spec["summary"] = []
+        spec["chart"] = None
+        spec["table"]["rows"] = [
+            {"service": "Support", "units": index, "unit_cost": 125}
+            for index in range(1, 81)
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            spec_path = root / "spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            output = root / "service-cost.xlsx"
+            result = subprocess.run(
+                [sys.executable, str(BUILDER), str(spec_path), str(output)],
+                capture_output=True, text=True, timeout=180, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads(Path(f"{output}.artifact-report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["status"], "ready", report)
+            pdf = root / "_qa_service-cost-preview.pdf"
+            page_two = subprocess.run(
+                ["pdftotext", "-f", "2", "-l", "2", "-layout", str(pdf), "-"],
+                capture_output=True, text=True, timeout=30, check=True,
+            ).stdout
+            self.assertIn("Unit cost", page_two)
+
     def test_original_spec_is_not_modified_by_validation(self):
         spec = example_spec()
         original = copy.deepcopy(spec)

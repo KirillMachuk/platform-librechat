@@ -346,6 +346,7 @@ def _build(spec: dict[str, Any], output: Path) -> tuple[dict[str, str], dict[str
     data.page_setup.paperSize = data.PAPERSIZE_A4
     data.page_margins = PageMargins(left=0.4, right=0.4, top=0.5, bottom=0.5, header=0.2, footer=0.2)
     data.print_options.horizontalCentered = True
+    data.print_title_rows = "1:3"
     data.sheet_properties.outlinePr.summaryBelow = True
     _literal(data["A1"], spec["title"])
     data["A1"].font = Font(name=FONT_NAME, size=14, bold=True, color=COLORS["ink"])
