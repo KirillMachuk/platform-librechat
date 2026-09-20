@@ -36,4 +36,31 @@ describe('selectAutoMatchedSkills', () => {
   ])('does not prime docx for %s / %s', (spec, text) => {
     expect(selectAutoMatchedSkills({ spec, text })).toEqual([]);
   });
+
+  it.each([
+    'Создай таблицу Excel с формулами по этим данным',
+    'Сделай редактируемый файл .xlsx с расходами за месяц',
+    'Подготовь электронную таблицу для учёта заявок',
+    'Create an editable spreadsheet with native formulas',
+  ])('matches an explicit new-workbook request: %s', (text) => {
+    expect(selectAutoMatchedSkills({ spec: 'auto', text })).toEqual(['xlsx']);
+  });
+
+  it.each([
+    ['auto', 'Объясни, как сделать таблицу в Excel'],
+    ['auto', 'Сделай таблицу прямо в ответе, файл не нужен'],
+    ['auto', 'Сделай анализ файла budget.xlsx и ответь в чате без нового файла'],
+    ['auto', 'Обнови формулы в прикреплённом файле budget.xlsx'],
+    ['auto', 'Измени третий лист в существующей Excel-книге'],
+    ['other', 'Создай редактируемый файл .xlsx'],
+  ])('does not prime xlsx for %s / %s', (spec, text) => {
+    expect(selectAutoMatchedSkills({ spec, text })).toEqual([]);
+  });
+
+  it.each([
+    ['Сделай презентацию по данным из budget.xlsx', 'pptx'],
+    ['Создай документ Word по данным из budget.xlsx', 'docx'],
+  ])('does not prime xlsx when an Excel file is the source for %s', (text, skill) => {
+    expect(selectAutoMatchedSkills({ spec: 'auto', text })).toEqual([skill]);
+  });
 });

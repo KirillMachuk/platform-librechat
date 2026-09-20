@@ -1638,8 +1638,8 @@ class AgentClient extends BaseClient {
 
       /**
        * Prompt guidance alone cannot guarantee that every supported model
-       * enters the DOCX workflow before interpreting the user's prose. For a
-       * host-routed DOCX turn, force the documented read_file call at the
+       * enters the DOCX/XLSX workflow before interpreting the user's prose. For a
+       * host-routed authoring turn, force the documented read_file call at the
        * provider API boundary, then release the choice after that execution
        * batch so the remainder of the run is model-directed. Compose after
        * the existing executor: release happens only after the tool completes.
@@ -1787,7 +1787,7 @@ class AgentClient extends BaseClient {
           });
           if (!installed) {
             logger.warn(
-              `[AgentClient] Could not install forced first tool "${releasableForcedFirstTool}" for auto-matched DOCX route; continuing with the trusted prompt guard.`,
+              `[AgentClient] Could not install forced first tool "${releasableForcedFirstTool}" for auto-matched authoring route; continuing with the trusted prompt guard.`,
             );
           }
         }
