@@ -1,0 +1,58 @@
+{
+  "job": {
+    "format": "xlsx",
+    "audience": "Руководитель сервиса",
+    "goal": "Сравнить плановую стоимость услуг",
+    "sourceFileIds": [],
+    "immutableElements": [],
+    "locale": "ru-RU",
+    "filename": "stoimost-uslug.xlsx",
+    "acceptanceCriteria": [
+      "Стоимость строк рассчитывается формулами",
+      "Итог пересчитывается при изменении входных значений"
+    ]
+  },
+  "title": "Плановая стоимость услуг · пример",
+  "table": {
+    "sheetName": "Данные",
+    "name": "ServicePlan",
+    "columns": [
+      { "key": "service", "header": "Услуга", "type": "text" },
+      { "key": "units", "header": "Количество", "type": "integer", "minimum": 0 },
+      { "key": "unit_cost", "header": "Цена за единицу, ₽", "type": "number", "minimum": 0 }
+    ],
+    "rows": [
+      { "service": "Аудит", "units": 4, "unit_cost": 18000 },
+      { "service": "Обучение", "units": 8, "unit_cost": 9500 },
+      { "service": "Сопровождение", "units": 12, "unit_cost": 7200 },
+      { "service": "Настройка", "units": 3, "unit_cost": 23000 },
+      { "service": "Консультация", "units": 6, "unit_cost": 5800 },
+      { "service": "Проверка", "units": 5, "unit_cost": 8100 }
+    ],
+    "calculatedColumns": [
+      {
+        "key": "cost",
+        "header": "Стоимость, ₽",
+        "operation": "multiply",
+        "inputs": ["units", "unit_cost"],
+        "numberFormat": "#,##0",
+        "highlightNegative": false
+      }
+    ]
+  },
+  "summary": [
+    { "label": "Итого, ₽", "operation": "sum", "column": "cost" },
+    { "label": "Количество услуг", "operation": "count", "column": "service" }
+  ],
+  "chart": {
+    "kind": "bar",
+    "title": "Стоимость по услугам, ₽",
+    "category": "service",
+    "value": "cost"
+  },
+  "sources": [
+    { "label": "Демонстрационные данные", "location": "Тестовый сценарий; не реальные цены" }
+  ],
+  "changeLog": [],
+  "repairIterations": 0
+}
