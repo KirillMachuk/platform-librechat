@@ -61,7 +61,9 @@ must equal `job.filename`; the builder never edits an input workbook.
 The supported base column types are `text`, `integer`, `number`, `percent`,
 and `date` (ISO `YYYY-MM-DD`). Numbers and dates are typed Excel values, not
 formatted strings. Text beginning with `=` remains literal text. Each row
-must provide every base column. Use a `choices` array for a text dropdown,
+must provide every base column. This first builder supports at most eight
+columns in total so the rendered A4 page remains readable; wider worksheets
+need a later pagination workflow. Use a `choices` array for a text dropdown,
 or `minimum`/`maximum` for a numeric validation. Only include validations
 that reflect an actual input rule.
 

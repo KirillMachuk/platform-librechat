@@ -18,6 +18,8 @@ formulas and values after independent LibreOffice recalculation, native
 workbook features, expected PDF page count, and repeated render pixels. It is
 **not** the full ten-case acceptance gate below. Inspect its retained PDFs
 visually; pixel consistency proves repeatability, not design quality.
+The first builder deliberately accepts at most eight total columns; wider
+print pagination has not yet been visually validated.
 
 ## Scope and order
 

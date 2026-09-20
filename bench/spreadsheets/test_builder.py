@@ -159,6 +159,16 @@ class SpreadsheetBuilderTests(unittest.TestCase):
         with self.assertRaisesRegex(SpecError, "finite number"):
             _validate(spec, Path("service-cost.xlsx"))
 
+    def test_wide_worksheet_is_rejected_before_unreadable_render(self):
+        spec = example_spec()
+        for index in range(5):
+            key = f"extra_{index}"
+            spec["table"]["columns"].append({"key": key, "header": key, "type": "integer"})
+            for row in spec["table"]["rows"]:
+                row[key] = 1
+        with self.assertRaisesRegex(SpecError, "1 to 8 total columns"):
+            _validate(spec, Path("service-cost.xlsx"))
+
     def test_original_spec_is_not_modified_by_validation(self):
         spec = example_spec()
         original = copy.deepcopy(spec)

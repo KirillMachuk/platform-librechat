@@ -31,7 +31,7 @@ from PIL import Image, ImageChops
 
 SKILL_VERSION = "0.1.0"
 MAX_ROWS = 200
-MAX_COLUMNS = 20
+MAX_COLUMNS = 8
 MAX_REPAIR_ITERATIONS = 2
 FONT_NAME = "Liberation Sans"
 BASE_TYPES = {"text", "integer", "number", "percent", "date"}
@@ -180,7 +180,7 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
     columns = _items(table.get("columns"), "table.columns", MAX_COLUMNS)
     calculated = _items(table.get("calculatedColumns", []), "table.calculatedColumns", MAX_COLUMNS)
     if not columns or len(columns) + len(calculated) > MAX_COLUMNS:
-        raise SpecError("The table needs 1 to 20 total columns")
+        raise SpecError("The table needs 1 to 8 total columns in this builder version")
     types: dict[str, str] = {}
     headers: set[str] = set()
     for index, column in enumerate(columns):
