@@ -3,6 +3,10 @@
 The builder reads one UTF-8 JSON object and writes one editable `.xlsx`.
 Paths passed to the command are absolute sandbox paths. The output filename
 must equal `job.filename`; the builder never edits an input workbook.
+Unknown fields are rejected at every level. This version also rejects a
+`templateFileId` and nonempty `immutableElements`: it cannot preserve a supplied
+template or edit an existing workbook. Do not silently replace either task
+with a newly designed workbook.
 
 ```json
 {
@@ -91,6 +95,13 @@ do not invent citations. The report always carries `sourceFileIds` and
 `changeLog`. A source list does not require a separate worksheet for a single
 source. The builder creates an internal PDF render for QA; it is not a
 requested deliverable.
+The delivered XLSX keeps native formulas and cached values from an independently
+recalculated copy. The PDF render checks for missing title, header, row-label,
+summary-label, and chart-title text. These checks cannot prove visual quality;
+inspect every page manually. Free-text `job.acceptanceCriteria` are listed in
+`acceptanceCriteriaReview` as `pending`, with a QA warning, because arbitrary
+human criteria cannot be verified by the builder. The report's `ready` status
+means only that deterministic structural, value, and render checks passed.
 
 This first contract intentionally has no `inputPath`, `templatePath`, raw
 formula strings, macros, external workbook links, or merge instructions.

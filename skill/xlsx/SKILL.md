@@ -40,9 +40,12 @@ Read the generated `<stem>.xlsx.artifact-report.json`. Deliver only when its
 status is `ready`, every critical check passed, and no critical issue remains.
 The builder reopens the workbook, checks native features and formulas,
 recalculates a disposable copy in LibreOffice, compares control values, and
-renders the workbook. `ready` confirms these automated checks, not visual
-quality. Inspect every PDF page for clipping, unreadable labels, and excessive
-empty space, and verify the user's acceptance criteria before delivery. Repair
+copies verified formula caches into the original workbook without replacing its
+native table style or chart, then renders the workbook. `ready` confirms these
+automated checks, not visual quality or the free-text acceptance criteria.
+The report lists those criteria as `pending`; inspect every PDF page for clipping,
+unreadable labels, and excessive empty space, and verify each criterion before
+delivery. If a criterion cannot be verified, disclose that gap. Repair
 at most twice using new versioned filenames; previous outputs are immutable.
 If a critical issue remains, report it plainly
 instead of claiming completion.

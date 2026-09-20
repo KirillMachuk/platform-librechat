@@ -15,7 +15,10 @@ export default function ArtifactQualitySummary({ artifact }: { artifact: Artifac
     return null;
   }
 
-  const isReady = report.status === 'ready';
+  const isReady =
+    report.status === 'ready' &&
+    report.qaChecks.every((check) => check.status === 'passed') &&
+    report.issues.length === 0;
   const passedChecks = report.qaChecks.filter((check) => check.status === 'passed').length;
   const statusLabel = localize(
     isReady ? 'com_ui_artifact_qa_ready' : 'com_ui_artifact_qa_needs_review',

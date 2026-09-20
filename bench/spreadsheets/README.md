@@ -35,8 +35,9 @@ column headers repeat on later PDF pages.
 1. **Builder and acceptance gate, behind no product route.** Add a small
    `openpyxl` builder for new formula-driven XLSX files. A job declares the
    audience, goal, locale, sources, output name, and acceptance criteria. The
-   builder owns the workbook structure and formulas, reopens its output,
-   recalculates a copy with LibreOffice, renders the used sheets, and emits the
+builder owns the workbook structure and formulas, reopens its output,
+   recalculates a copy with LibreOffice, copies verified formula caches back
+   without replacing native styles or charts, renders the used sheets, and emits the
    existing `artifactReport` contract. Source files remain unchanged.
 2. **Ten Russian-first golden cases, three runs each.** Cover a basic
    calculation, aggregation, formulas, multiple sources, unmatched keys,
@@ -78,6 +79,10 @@ network functions from supplied files or model-authored formulas.
 - Source files are byte-identical after creation or revision.
 - Every relevant sheet renders; no critical clipping, blank chart, or font
   substitution is accepted as `ready`.
+- The PDF text check detects missing titles, headers, and row labels. It does
+  not replace human visual inspection. Free-text acceptance criteria remain
+  explicitly pending in the report until reviewed separately; technical
+  `ready` never claims those criteria were automatically verified.
 - At least 90% of golden outputs score 7/10 or higher visually and the mean
   is at least 8/10. These scores are tied to the exact rendered evidence.
 - The live pilot confirms formula updates, downloadable XLSX integrity, and

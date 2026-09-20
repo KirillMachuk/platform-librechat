@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import shutil
 import subprocess
@@ -14,6 +15,7 @@ import urllib.parse
 from datetime import date
 from pathlib import Path
 from typing import Any
+from zipfile import ZipFile
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.chart import BarChart, LineChart, Reference
@@ -52,6 +54,12 @@ class SpecError(ValueError):
     """The requested workbook cannot be built without guessing."""
 
 
+def _reject_unknown(value: dict[str, Any], allowed: set[str], field: str) -> None:
+    unexpected = set(value) - allowed
+    if unexpected:
+        raise SpecError(f"{field} has an unsupported field: {sorted(unexpected)[0]}")
+
+
 def _text(value: Any, field: str, limit: int = 500) -> str:
     if not isinstance(value, str) or not value.strip() or len(value) > limit:
         raise SpecError(f"{field} must be non-empty text of at most {limit} characters")
@@ -88,6 +96,7 @@ def _sheet_name(value: Any, field: str) -> str:
 def _source(source: Any, index: int) -> dict[str, str]:
     if not isinstance(source, dict):
         raise SpecError(f"sources[{index}] must be an object")
+    _reject_unknown(source, {"label", "location", "url"}, f"sources[{index}]")
     label = _text(source.get("label"), f"sources[{index}].label", 160)
     location = source.get("location")
     url = source.get("url")
@@ -151,9 +160,13 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
     for unsupported in ("inputPath", "templatePath", "rawFormulas", "outputPdf"):
         if unsupported in spec:
             raise SpecError(f"{unsupported} is not supported by this builder version")
+    _reject_unknown(spec, {"job", "title", "table", "summary", "chart", "sources", "changeLog", "repairIterations"}, "spec")
     job = spec.get("job")
     if not isinstance(job, dict) or job.get("format") != "xlsx":
         raise SpecError("job.format must be xlsx")
+    if "templateFileId" in job:
+        raise SpecError("job.templateFileId is not supported by this builder version")
+    _reject_unknown(job, {"format", "audience", "goal", "sourceFileIds", "immutableElements", "locale", "filename", "acceptanceCriteria"}, "job")
     for field in ("audience", "goal", "locale", "filename"):
         _text(job.get(field), f"job.{field}", 180)
     if job["filename"] != output.name or output.suffix.lower() != ".xlsx":
@@ -162,12 +175,15 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
         values = _items(job.get(field), f"job.{field}", 100)
         if field == "acceptanceCriteria" and not values:
             raise SpecError("job.acceptanceCriteria cannot be empty")
+        if field == "immutableElements" and values:
+            raise SpecError("job.immutableElements is not supported for a new workbook")
         for index, value in enumerate(values):
             _text(value, f"job.{field}[{index}]", 300)
     title = _text(spec.get("title"), "title", 160)
     table = spec.get("table")
     if not isinstance(table, dict):
         raise SpecError("table must be an object")
+    _reject_unknown(table, {"sheetName", "name", "columns", "rows", "calculatedColumns"}, "table")
     sheet_name = _sheet_name(table.get("sheetName"), "table.sheetName")
     table_name = _text(table.get("name"), "table.name", 80)
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table_name):
@@ -191,6 +207,7 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
     for index, column in enumerate(columns):
         if not isinstance(column, dict):
             raise SpecError(f"table.columns[{index}] must be an object")
+        _reject_unknown(column, {"key", "header", "type", "choices", "minimum", "maximum"}, f"table.columns[{index}]")
         key = _text(column.get("key"), f"table.columns[{index}].key", 40)
         header = _text(column.get("header"), f"table.columns[{index}].header", 100)
         kind = column.get("type")
@@ -222,6 +239,7 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
     for index, column in enumerate(calculated):
         if not isinstance(column, dict):
             raise SpecError(f"table.calculatedColumns[{index}] must be an object")
+        _reject_unknown(column, {"key", "header", "operation", "inputs", "numberFormat", "highlightNegative"}, f"table.calculatedColumns[{index}]")
         key = _text(column.get("key"), f"table.calculatedColumns[{index}].key", 40)
         header = _text(column.get("header"), f"table.calculatedColumns[{index}].header", 100)
         inputs = column.get("inputs")
@@ -266,6 +284,7 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
     for index, item in enumerate(summary):
         if not isinstance(item, dict):
             raise SpecError(f"summary[{index}] must be an object")
+        _reject_unknown(item, {"label", "operation", "column"}, f"summary[{index}]")
         _text(item.get("label"), f"summary[{index}].label", 100)
         if (
             not isinstance(item.get("operation"), str)
@@ -282,6 +301,7 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
             "bar", "line"
         }:
             raise SpecError("chart.kind must be bar or line")
+        _reject_unknown(chart, {"kind", "title", "category", "value"}, "chart")
         _text(chart.get("title"), "chart.title", 100)
         if not isinstance(chart.get("category"), str) or not isinstance(chart.get("value"), str):
             raise SpecError("chart needs a text category and numeric value column")
@@ -294,6 +314,7 @@ def _validate(spec: Any, output: Path) -> dict[str, Any]:
     for index, change in enumerate(changes):
         if not isinstance(change, dict):
             raise SpecError(f"changeLog[{index}] must be an object")
+        _reject_unknown(change, {"target", "summary"}, f"changeLog[{index}]")
         _text(change.get("target"), f"changeLog[{index}].target", 100)
         _text(change.get("summary"), f"changeLog[{index}].summary", 300)
     repair_iterations = spec.get("repairIterations", 0)
@@ -576,7 +597,68 @@ def _check_recalculated(path: Path, expected: dict[str, int | float]) -> list[st
     return issues
 
 
-def _check_render(pdf: Path, sheetnames: list[str], scratch: Path, exact_pages: bool) -> list[str]:
+def _cache_formula_values(
+    output: Path,
+    recalculated: Path,
+    expected: dict[str, int | float],
+    spec: dict[str, Any],
+    formulas: dict[str, str],
+    sheetnames: list[str],
+) -> list[str]:
+    values = load_workbook(recalculated, data_only=True, keep_links=False)
+    replacements: dict[str, dict[str, bytes]] = {}
+    try:
+        for address in expected:
+            sheet_name, coordinate = address.split("!", 1)
+            value = values[sheet_name][coordinate].value
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                return [f"No numeric recalculated cache at {address}"]
+            sheet_path = f"xl/worksheets/sheet{sheetnames.index(sheet_name) + 1}.xml"
+            replacements.setdefault(sheet_path, {})[coordinate] = repr(value).encode("ascii")
+    finally:
+        values.close()
+
+    with tempfile.TemporaryDirectory(prefix=".xlsx-cache-", dir=output.parent) as folder:
+        candidate = Path(folder) / output.name
+        with ZipFile(output) as original, ZipFile(candidate, "w") as updated:
+            updated.comment = original.comment
+            for member in original.infolist():
+                content = original.read(member.filename)
+                sheet_replacements = {
+                    coordinate.encode("ascii"): number
+                    for coordinate, number in replacements.get(member.filename, {}).items()
+                }
+                if sheet_replacements:
+                    seen: set[bytes] = set()
+                    pattern = re.compile(rb'(<c\b[^>]*\br="([A-Z]+[0-9]+)"[^>]*>)(.*?)(</c>)', re.DOTALL)
+
+                    def replace_cell(match: re.Match[bytes]) -> bytes:
+                        coordinate = match.group(2)
+                        number = sheet_replacements.get(coordinate)
+                        if number is None:
+                            return match.group(0)
+                        body = match.group(3)
+                        if coordinate in seen or b"<f" not in body or body.count(b"<v></v>") != 1:
+                            raise RuntimeError(f"Formula cache structure changed at {member.filename}!{coordinate.decode()}")
+                        seen.add(coordinate)
+                        return match.group(1) + body.replace(b"<v></v>", b"<v>" + number + b"</v>") + match.group(4)
+
+                    content = pattern.sub(replace_cell, content)
+                    if seen != set(sheet_replacements):
+                        raise RuntimeError(f"Formula cache cells are missing from {member.filename}")
+                updated.writestr(member, content)
+        with ZipFile(candidate) as updated:
+            if updated.testzip() is not None:
+                return ["Cached workbook archive did not pass integrity check"]
+        issues = _check_structure(candidate, spec, formulas, sheetnames)
+        issues.extend(_check_recalculated(candidate, expected))
+        if issues:
+            return issues
+        os.replace(candidate, output)
+    return []
+
+
+def _check_render(pdf: Path, spec: dict[str, Any], sheetnames: list[str], scratch: Path, exact_pages: bool) -> list[str]:
     rasterizer = shutil.which("pdftoppm")
     if not rasterizer:
         return ["Poppler rasterizer is unavailable"]
@@ -599,6 +681,28 @@ def _check_render(pdf: Path, sheetnames: list[str], scratch: Path, exact_pages: 
             difference = ImageChops.difference(page, Image.new("RGB", page.size, "white"))
             if difference.getbbox() is None:
                 issues.append(f"Rendered page {index} is blank")
+    extracted = subprocess.run(
+        ["pdftotext", "-layout", str(pdf), "-"],
+        capture_output=True, text=True, timeout=30, check=False,
+    )
+    if extracted.returncode != 0:
+        issues.append("Rendered text could not be inspected")
+        return issues
+    rendered_text = re.sub(r"\s+", " ", extracted.stdout)
+    required_text = [spec["title"]]
+    required_text.extend(column["header"] for column in [*spec["columns"], *spec["calculated"]])
+    required_text.extend(
+        row[column["key"]]
+        for row in spec["rows"]
+        for column in spec["columns"]
+        if column["type"] == "text"
+    )
+    required_text.extend(item["label"] for item in spec["summary"])
+    if spec["chart"]:
+        required_text.append(spec["chart"]["title"])
+    for phrase in required_text:
+        if re.sub(r"\s+", " ", phrase) not in rendered_text:
+            issues.append(f"Required text is missing from rendered PDF: {phrase[:80]}")
     return issues
 
 
@@ -611,13 +715,19 @@ def _issue(code: str, message: str) -> dict[str, str]:
 
 
 def _report(spec: dict[str, Any], checks: list[dict[str, str]], issues: list[dict[str, str]], preview: Path | None) -> dict[str, Any]:
+    criteria = list(spec["job"]["acceptanceCriteria"])
     return {
         "status": "needs_review" if issues else "ready",
         "format": "xlsx",
         "sourceFileIds": list(spec["job"]["sourceFileIds"]),
         "previewAssets": ([{"filename": preview.name, "kind": "pdf", "delivery": "preview_only"}] if preview else []),
-        "qaChecks": checks,
+        "qaChecks": [
+            *checks,
+            {"name": "acceptance-criteria", "status": "warning",
+             "message": "User-defined acceptance criteria require separate review; automated checks do not verify them"},
+        ],
         "issues": issues,
+        "acceptanceCriteriaReview": {"status": "pending", "criteria": criteria},
         "changeLog": list(spec["changes"]) or [{"target": spec["job"]["filename"], "summary": "Created an editable formula-driven workbook"}],
         "skillVersion": SKILL_VERSION,
         "repairIterations": spec["repairIterations"],
@@ -650,6 +760,8 @@ def main() -> int:
         try:
             recalculated = _office_convert(output, scratch / "recalculated", "xlsx", scratch / "profile-recalc")
             value_issues = _check_recalculated(recalculated, expected)
+            if not value_issues:
+                value_issues = _cache_formula_values(output, recalculated, expected, spec, formulas, sheetnames)
         except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
             value_issues = [str(exc)]
         checks.append(_check("recalculated-values", value_issues, "LibreOffice values match independent calculations"))
@@ -657,7 +769,7 @@ def main() -> int:
         try:
             pdf = _office_convert(output, scratch / "rendered", "pdf", scratch / "profile-render")
             compact = len(spec["rows"]) <= 20 and len(spec["columns"]) + len(spec["calculated"]) <= 8
-            render_issues = _check_render(pdf, sheetnames, scratch, exact_pages=compact)
+            render_issues = _check_render(pdf, spec, sheetnames, scratch, exact_pages=compact)
             shutil.copyfile(pdf, preview_path)
         except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
             render_issues = [str(exc)]

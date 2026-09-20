@@ -98,13 +98,25 @@ class SpreadsheetBuilderTests(unittest.TestCase):
             report = json.loads(Path(f"{output}.artifact-report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["status"], "ready", report)
             self.assertEqual(report["sourceFileIds"], ["pilot-notes.csv"])
+            self.assertEqual(report["acceptanceCriteriaReview"], {
+                "status": "pending", "criteria": example_spec()["job"]["acceptanceCriteria"],
+            })
+            self.assertEqual(
+                [(check["name"], check["status"]) for check in report["qaChecks"] if check["name"] == "acceptance-criteria"],
+                [("acceptance-criteria", "warning")],
+            )
             self.assertEqual(source.read_bytes(), b"original source bytes")
             self.assertTrue((root / "_qa_service-cost-preview.pdf").is_file())
+            cached = load_workbook(output, data_only=True)
+            self.assertEqual(cached["Data"]["D4"].value, 1500)
+            self.assertEqual(cached["Summary"]["B3"].value, 2700)
+            cached.close()
             workbook = load_workbook(output, data_only=False)
             self.assertEqual(workbook.sheetnames, ["Summary", "Data"])
             self.assertEqual(workbook["Data"]["D4"].value, "=B4*C4")
             self.assertEqual(workbook["Summary"]["B3"].value, "=SUM('Data'!D4:D5)")
             self.assertIn("ServiceCosts", workbook["Data"].tables)
+            self.assertEqual(workbook["Data"].tables["ServiceCosts"].tableStyleInfo.name, "TableStyleMedium2")
             self.assertEqual(len(workbook["Summary"]._charts), 1)
             self.assertTrue(workbook["Data"].data_validations.dataValidation)
             workbook["Data"]["B4"] = 20
@@ -152,6 +164,14 @@ class SpreadsheetBuilderTests(unittest.TestCase):
                 spec[field] = value
                 with self.assertRaisesRegex(SpecError, "not supported"):
                     _validate(spec, Path("service-cost.xlsx"))
+        spec = example_spec()
+        spec["job"]["templateFileId"] = "file-1"
+        with self.assertRaisesRegex(SpecError, "not supported"):
+            _validate(spec, Path("service-cost.xlsx"))
+        spec = example_spec()
+        spec["job"]["immutableElements"] = ["Preserve the original layout"]
+        with self.assertRaisesRegex(SpecError, "not supported"):
+            _validate(spec, Path("service-cost.xlsx"))
 
     def test_missing_numeric_input_is_not_silently_zero(self):
         spec = example_spec()
@@ -208,6 +228,24 @@ class SpreadsheetBuilderTests(unittest.TestCase):
             ).stdout
             self.assertIn("Unit cost", page_two)
 
+    def test_clipped_source_text_does_not_receive_ready_status(self):
+        spec = example_spec()
+        spec["table"]["columns"][0].pop("choices")
+        spec["table"]["rows"][0]["service"] = "Important source label " + "description" * 25
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            spec_path = root / "spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            output = root / "service-cost.xlsx"
+            result = subprocess.run(
+                [sys.executable, str(BUILDER), str(spec_path), str(output)],
+                capture_output=True, text=True, timeout=180, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads(Path(f"{output}.artifact-report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["status"], "needs_review", report)
+            self.assertTrue(any(issue["code"] == "render" for issue in report["issues"]))
+
     def test_original_spec_is_not_modified_by_validation(self):
         spec = example_spec()
         original = copy.deepcopy(spec)
@@ -255,6 +293,25 @@ class SpreadsheetBuilderTests(unittest.TestCase):
                 spec = example_spec()
                 change(spec)
                 with self.assertRaisesRegex(SpecError, error):
+                    _validate(spec, Path("service-cost.xlsx"))
+
+    def test_unknown_specification_fields_are_rejected(self):
+        cases = [
+            lambda spec: spec.update(template_path="/mnt/data/template.xlsx"),
+            lambda spec: spec["job"].update(templatedFileId="file-1"),
+            lambda spec: spec["table"].update(joins=[]),
+            lambda spec: spec["table"]["columns"][0].update(formula="=1+1"),
+            lambda spec: spec["table"]["calculatedColumns"][0].update(formula="=B4*C4"),
+            lambda spec: spec["summary"][0].update(value=999),
+            lambda spec: spec["chart"].update(externalData="https://example.invalid"),
+            lambda spec: spec["sources"][0].update(authToken="secret"),
+            lambda spec: spec["changeLog"].append({"target": "Data!A1", "summary": "Edit", "oldValue": "x"}),
+        ]
+        for change in cases:
+            with self.subTest(change=change):
+                spec = example_spec()
+                change(spec)
+                with self.assertRaisesRegex(SpecError, "unsupported field"):
                     _validate(spec, Path("service-cost.xlsx"))
 
     def test_existing_output_is_never_overwritten_even_during_repair(self):

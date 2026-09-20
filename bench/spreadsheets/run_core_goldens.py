@@ -271,8 +271,12 @@ def _verify(case_id: str, spec: dict, oracle: dict, run_dir: Path) -> tuple[str,
         raise AssertionError(f"Builder failed: {result.stderr}")
     report = json.loads(Path(f"{output}.artifact-report.json").read_text(encoding="utf-8"))
     if report["status"] != "ready" or report["issues"] or any(
-        check["status"] != "passed" for check in report["qaChecks"]
-    ):
+        check["status"] != "passed" and
+        (check["name"], check["status"]) != ("acceptance-criteria", "warning")
+        for check in report["qaChecks"]
+    ) or report.get("acceptanceCriteriaReview") != {
+        "status": "pending", "criteria": spec["job"]["acceptanceCriteria"],
+    }:
         raise AssertionError(f"QA report is not green: {report}")
     workbook = load_workbook(output, data_only=False)
     try:
