@@ -26,9 +26,19 @@ function selectAutoMatchedSkills({ spec, text }) {
     /(?:документ|файл).{0,24}\bword\b|\bword\b.{0,24}(?:документ|файл)|ворд|служебн\S*\s+записк/.test(
       normalized,
     );
+  const requestsSpreadsheet =
+    /\b(xlsx|excel|spreadsheet|spreadsheets|workbook|workbooks)\b/.test(normalized) ||
+    /эксел|электронн\S*\s+таблиц/.test(normalized);
   const requestsCreation =
     /\b(create|make|build|prepare|generate|update|edit|revise|attach|export)\b/.test(normalized) ||
     /(создай|сделай|подготовь|собери|сгенерируй|оформи|обнови|измени|доработай|переделай|приложи|выгрузи|экспортируй|отправь)/.test(
+      normalized,
+    );
+  const requestsNewWorkbook =
+    /\b(create|make|build|prepare|generate|export)\b/.test(normalized) ||
+    /(создай|сделай|подготовь|собери|сгенерируй|оформи|выгрузи|экспортируй)/.test(normalized);
+  const requestsTextOnly =
+    /(?:без нового файла|файл не нужен|только в чате|without (?:a |new )?file|no file needed)/.test(
       normalized,
     );
 
@@ -38,6 +48,15 @@ function selectAutoMatchedSkills({ spec, text }) {
   }
   if (requestsWordDocument && requestsCreation) {
     matched.push('docx');
+  }
+  if (
+    requestsSpreadsheet &&
+    requestsNewWorkbook &&
+    !requestsTextOnly &&
+    !requestsPresentation &&
+    !requestsWordDocument
+  ) {
+    matched.push('xlsx');
   }
   return matched;
 }

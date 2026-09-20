@@ -2241,8 +2241,35 @@ describe('injectSkillPrimes', () => {
     expect(result.indexTokenCountMap).toEqual({ 1: 19 });
   });
 
-  it('selects read_file only for an auto-matched DOCX route', () => {
+  it('places a fixed first-tool XLSX dispatch after the real user request', () => {
+    const userRequest = new HumanMessage('Создай таблицу Excel с формулами по этим данным.');
+    const messages = [userRequest];
+
+    injectSkillPrimes({
+      initialMessages: messages,
+      indexTokenCountMap: undefined,
+      autoMatchedSkillPrimes: [autoMatched('xlsx', 'xlsx-body')],
+    });
+
+    expect(messages).toHaveLength(3);
+    expect(messages[0].content).toContain('xlsx-body');
+    expect(messages[1]).toBe(userRequest);
+    expect(messages[2].content).toContain('[Trusted platform XLSX dispatch]');
+    expect(messages[2].content).toContain('/mnt/data/xlsx/references/spec.md');
+    expect(messages[2].content).not.toContain('Создай таблицу Excel');
+    expect((messages[2] as HumanMessage).additional_kwargs).toEqual(
+      expect.objectContaining({
+        isMeta: true,
+        source: SKILL_MESSAGE_SOURCE,
+        trigger: SKILL_TRIGGER_AUTO_MATCH,
+        skillName: 'xlsx',
+      }),
+    );
+  });
+
+  it('selects read_file for auto-matched DOCX or XLSX routes only', () => {
     expect(resolveAutoMatchedFirstToolChoice([{ name: 'docx' }])).toBe(DOCX_AUTO_MATCH_FIRST_TOOL);
+    expect(resolveAutoMatchedFirstToolChoice([{ name: 'xlsx' }])).toBe(DOCX_AUTO_MATCH_FIRST_TOOL);
     expect(resolveAutoMatchedFirstToolChoice([{ name: 'pptx' }])).toBeUndefined();
     expect(resolveAutoMatchedFirstToolChoice()).toBeUndefined();
   });

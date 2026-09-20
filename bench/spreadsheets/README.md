@@ -3,7 +3,9 @@
 This is the remaining spreadsheet track of the editable-office-artifact program.
 It starts from the already merged `ArtifactJob` and `artifactReport` contracts,
 the Russian-first PPTX/DOCX builders, and the existing isolated Code Interpreter.
-The current production route does not yet select an XLSX authoring skill.
+Auto selects the XLSX authoring skill for explicit new-workbook requests.
+Existing-workbook edits and multi-source merges remain outside the builder's
+supported scope; preview parity and the live pilot are separate rollout gates.
 
 The first draft PR covers only the new-workbook core. Its local gate is:
 
@@ -46,8 +48,8 @@ builder owns the workbook structure and formulas, reopens its output,
    immutability, formula errors, and rendered evidence. Record a separate
    human visual score from fresh renders; a green structural report is not a
    visual-quality claim.
-3. **Product route and preview.** Select the XLSX skill for explicit workbook
-   requests in Auto, retain plain model-chat context when switching to Auto,
+3. **Product route and preview.** Select the XLSX skill for explicit new-workbook
+   requests in Auto. Retain plain model-chat context when switching to Auto,
    and expose the validated report in the existing artifact panel. Preview
    should use the isolated office render and show each relevant sheet without
    changing the original workbook. Keep this step separate from the builder

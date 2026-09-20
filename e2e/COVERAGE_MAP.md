@@ -443,6 +443,8 @@ cannot have a skipped test waiting for it, only an entry saying nobody has writt
 | A skill written in the interface offers its author an Edit, a configured one does not                                    | e2e   | `e2e/specs/mock/skills.spec.ts#a skill of my own is mine to edit`                                                                        | covered |
 | A skill is attached to an agent from the interface                                                                       | e2e   | `e2e/specs/mock/agent-skills.spec.ts#a skill picked in the builder is still on the agent after saving`                                   | covered |
 | A skill that is a database document stays on the agent too                                                               | e2e   | `e2e/specs/mock/agent-skills.spec.ts#a skill that is a database document is kept too`                                                    | covered |
+| Auto primes the XLSX skill for new workbook requests, but not explanations, existing-workbook edits, or XLSX source files for other outputs | unit | `api/server/services/Endpoints/agents/autoSkills.spec.js` | covered |
+| Auto loads the XLSX builder specification before the model authors a new workbook | unit | `packages/api/src/agents/__tests__/skills.test.ts#places a fixed first-tool XLSX dispatch after the real user request` | covered |
 
 | An agent shared with everyone appears in the marketplace for other people | e2e | `e2e/specs/permissions/marketplace.spec.ts#an agent shared with everyone reaches the marketplace, an unshared one does not` | covered |
 | An unshared agent stays out of other people's marketplace | e2e | `e2e/specs/permissions/marketplace.spec.ts#expectNoMarketplaceHit(pageB, privateName)` | covered |
