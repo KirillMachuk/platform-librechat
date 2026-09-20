@@ -95,19 +95,21 @@ export const SKILL_TRIGGER_AUTO_MATCH = 'auto-match';
 
 const DOCX_AUTO_MATCH_ROUTE_GUARD = `[Trusted platform DOCX dispatch]
 The preceding message is the user's document request and the \`docx\` workflow is already active. Do not restate, summarize, translate, interpret, or reason about the request before using tools. Respond with no prose and call \`read_file\` exactly once for \`/mnt/data/docx/references/spec.md\` now. After that read returns, inspect any attached source files before semantic parsing and follow the skill's literal-fact rules.`;
+const XLSX_AUTO_MATCH_ROUTE_GUARD = `[Trusted platform XLSX dispatch]
+The preceding message is the user's spreadsheet request and the \`xlsx\` workflow is already active. Respond with no prose and call \`read_file\` exactly once for \`/mnt/data/xlsx/references/spec.md\` now. After that read returns, follow the skill's supported-scope and source-data rules. Do not claim an existing-workbook edit or multi-source merge is supported.`;
 
-/** The deterministic first tool for host-routed DOCX authoring turns. */
+/** The deterministic first tool for host-routed DOCX and XLSX authoring turns. */
 export const DOCX_AUTO_MATCH_FIRST_TOOL = 'read_file';
 
 /**
- * Selects a host-controlled first tool only for a request-specific DOCX route.
+ * Selects a host-controlled first tool for request-specific DOCX/XLSX routes.
  * Manual and ambient skills stay advisory, and unrelated artifact workflows
  * retain normal model tool selection.
  */
 export function resolveAutoMatchedFirstToolChoice(
   autoMatchedSkillPrimes?: Pick<ResolvedAutoMatchedSkill, 'name'>[],
 ): string | undefined {
-  return autoMatchedSkillPrimes?.some((prime) => prime.name === 'docx')
+  return autoMatchedSkillPrimes?.some((prime) => prime.name === 'docx' || prime.name === 'xlsx')
     ? DOCX_AUTO_MATCH_FIRST_TOOL
     : undefined;
 }
@@ -1426,7 +1428,7 @@ export function injectSkillPrimes(params: InjectSkillPrimesParams): InjectSkillP
   initialMessages.splice(insertIdx, 0, ...primeMessages);
 
   /**
-   * Auto-matched DOCX requests get one fixed, host-authored dispatch after the
+   * Auto-matched DOCX/XLSX requests get one fixed, host-authored dispatch after the
    * real user message. Keeping the reusable skill before the request preserves
    * the normal skill contract; placing the minimal next-tool instruction last
    * avoids asking the model to parse the request before it has loaded the job
@@ -1443,6 +1445,18 @@ export function injectSkillPrimes(params: InjectSkillPrimesParams): InjectSkillP
           source: SKILL_MESSAGE_SOURCE,
           trigger: SKILL_TRIGGER_AUTO_MATCH,
           skillName: 'docx',
+        },
+      }),
+    );
+  } else if (autoMatched.some((prime) => prime.name === 'xlsx')) {
+    initialMessages.push(
+      new HumanMessage({
+        content: XLSX_AUTO_MATCH_ROUTE_GUARD,
+        additional_kwargs: {
+          isMeta: true,
+          source: SKILL_MESSAGE_SOURCE,
+          trigger: SKILL_TRIGGER_AUTO_MATCH,
+          skillName: 'xlsx',
         },
       }),
     );
