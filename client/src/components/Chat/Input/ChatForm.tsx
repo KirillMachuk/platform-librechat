@@ -18,6 +18,7 @@ import {
   useQueryParams,
   useSubmitMessage,
   useFocusChatEffect,
+  useSteerRun,
 } from '~/hooks';
 import {
   useChatContext,
@@ -166,6 +167,37 @@ const ChatForm = memo(function ChatForm({
   });
 
   const { submitMessage, submitPrompt } = useSubmitMessage();
+  /* Mid-run steering: while a research run gathers, the composer stays a live
+   * channel — Send hands the run a clarification, Stop lives on the card. */
+  const { canSteer, steerClosed, steerPending, steer } = useSteerRun();
+  const steerMessage = useCallback(
+    async (data: { text: string }) => {
+      if (await steer(data.text)) {
+        methods.reset();
+      }
+    },
+    [steer, methods],
+  );
+  /* Dictation with auto-send: the recorder calls `ask` and clears the field
+   * unless told `false`. The clarification is confirmed asynchronously, so the
+   * text stays until the run has taken it. */
+  const steerFromVoice = useCallback(
+    (data: { text: string }): false => {
+      void steer(data.text).then((accepted) => {
+        if (accepted) {
+          methods.reset();
+        }
+      });
+      return false;
+    },
+    [steer, methods],
+  );
+  let composerPlaceholder = placeholder;
+  if (canSteer) {
+    composerPlaceholder = localize('com_ui_dr_steer_placeholder');
+  } else if (steerClosed) {
+    composerPlaceholder = localize('com_ui_dr_steer_closed_placeholder');
+  }
 
   const handleKeyUp = useHandleKeyUp({
     index,
@@ -182,7 +214,8 @@ const ChatForm = memo(function ChatForm({
     submitButtonRef,
     setIsScrollable,
     disabled: disableInputs,
-    placeholder,
+    placeholder: composerPlaceholder,
+    canSteer,
   });
 
   useQueryParams({ textAreaRef });
@@ -238,7 +271,7 @@ const ChatForm = memo(function ChatForm({
 
   return (
     <form
-      onSubmit={methods.handleSubmit(submitMessage)}
+      onSubmit={methods.handleSubmit(canSteer ? steerMessage : submitMessage)}
       /* autoComplete off: the browser's contact-autofill popover appeared over
        * the composer whenever a chat switch re-focused the textarea (round 24;
        * Safari offers contact fill for any focused named field in a form). */
@@ -412,20 +445,28 @@ const ChatForm = memo(function ChatForm({
               {SpeechToText && (
                 <AudioRecorder
                   methods={methods}
-                  ask={submitMessage}
+                  ask={canSteer ? steerFromVoice : submitMessage}
                   disabled={disableInputs || isNotAppendable}
-                  isSubmitting={isSubmitting}
+                  /* In steer mode the composer IS open: the recorder's «can't
+                   * submit speech while generating» guard would contradict it. */
+                  isSubmitting={isSubmitting && !canSteer}
                 />
               )}
               <div>
-                {isSubmitting && showStopButton ? (
+                {isSubmitting && showStopButton && !canSteer && !steerClosed ? (
                   <StopButton stop={handleStopGenerating} setShowStopButton={setShowStopButton} />
                 ) : (
                   endpoint && (
                     <SendButton
                       ref={submitButtonRef}
                       control={methods.control}
-                      disabled={filesLoading || isSubmitting || disableInputs || isNotAppendable}
+                      disabled={
+                        filesLoading ||
+                        (isSubmitting && !canSteer) ||
+                        steerPending ||
+                        disableInputs ||
+                        isNotAppendable
+                      }
                     />
                   )
                 )}

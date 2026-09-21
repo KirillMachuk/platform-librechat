@@ -135,6 +135,35 @@ export const mergeRegenerateFinalMessages = ({
   return finalMessages;
 };
 
+/**
+ * Clarifications typed during a Deep Research run (mid-run steering) sit
+ * between the request and the answer: `[...before, request, ...steers,
+ * answer]`. The final assembles the feed from the submission's snapshot taken
+ * BEFORE the turn, so without this they would vanish at finalization.
+ *
+ * After a reload the snapshot is cut differently: the job then names the LAST
+ * clarification as the turn's user message (the steer route rewrites it so
+ * the placeholder hangs under it), so `messagesBeforeTurn` keeps the original
+ * request and every earlier clarification in the snapshot — while the final
+ * still carries the original request as `requestMessage`. Every id this
+ * function appends is therefore removed from the snapshot first; the copies
+ * from the server win. Without steers the shape is exactly the old one.
+ */
+export function withMidRunSteers(
+  before: TMessage[],
+  steerMessages: TMessage[] | undefined,
+  turn: [request: TMessage, answer: TMessage],
+): TMessage[] {
+  const steers = steerMessages ?? [];
+  const [request, answer] = turn;
+  if (steers.length === 0) {
+    return [...before, request, answer];
+  }
+  const appended = [request, ...steers, answer];
+  const ids = new Set(appended.map((m) => m.messageId));
+  return [...before.filter((m) => !ids.has(m.messageId)), ...appended];
+}
+
 export const getExistingConversationAbortMessages = ({
   messages,
   currentMessages,
@@ -627,7 +656,7 @@ export default function useEventHandlers({
 
   const finalHandler = useCallback(
     (data: TFinalResData, submission: EventSubmission) => {
-      const { requestMessage, responseMessage, conversation, runMessages } = data;
+      const { requestMessage, responseMessage, conversation, runMessages, steerMessages } = data;
       const {
         messages,
         conversation: submissionConvo,
@@ -760,8 +789,17 @@ export default function useEventHandlers({
             responseMessage,
             initialResponseId: submission.initialResponse.messageId,
           });
+          /* A regenerated research run can be steered too, and
+           * `regenerateMessages` is the snapshot from the click: without the
+           * clarifications the new report's parent is missing from the array
+           * and buildTree parks it at the root (second review, В-1). */
+          const present = new Set(finalMessages.map((m) => m.messageId));
+          finalMessages.push(...(steerMessages ?? []).filter((m) => !present.has(m.messageId)));
         } else if (requestMessage != null && responseMessage != null) {
-          finalMessages = [...messages, requestMessage, responseMessage];
+          finalMessages = withMidRunSteers(messages, steerMessages, [
+            requestMessage,
+            responseMessage,
+          ]);
         } else if (responseMessage == null && requestMessage != null) {
           /* A Stop before the first token: the server persisted the question and
            * nothing else, and its final says so by carrying no answer. The chat

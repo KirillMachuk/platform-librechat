@@ -643,6 +643,9 @@ export type TBaseResData = {
   conversation: t.TConversation;
   conversationId?: string;
   runMessages?: t.TMessage[];
+  /** Clarifications typed during a Deep Research run, persisted by the steer
+   *  route and hung between the request and the answer (mid-run steering). */
+  steerMessages?: t.TMessage[];
 };
 
 export type TResData = TBaseResData & {
