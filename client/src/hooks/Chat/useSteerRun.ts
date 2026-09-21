@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useRecoilValue } from 'recoil';
 import { useToastContext } from '@librechat/client';
 import type { TMessage } from 'librechat-data-provider';
@@ -29,11 +29,14 @@ function refusalText(error: unknown): string | undefined {
 export default function useSteerRun() {
   const localize = useLocalize();
   const { showToast } = useToastContext();
-  const { conversation, isSubmitting, getMessages, setMessages, latestMessageId } =
+  const { conversation, isSubmitting, getMessages, setMessages, latestMessageId, files } =
     useChatContext();
   const conversationId = conversation?.conversationId ?? '';
   const progress = useRecoilValue(drProgressByConvoId(conversationId));
   const [steerPending, setSteerPending] = useState(false);
+  /* The state above is for the button; the ref is the guard: Enter and a click
+   * in the same tick both read the state before React re-rendered it. */
+  const inFlight = useRef(false);
 
   const live =
     isSubmitting && progress != null && conversationId !== '' && conversationId !== 'new';
@@ -44,16 +47,27 @@ export default function useSteerRun() {
   const steer = useCallback(
     async (text: string): Promise<boolean> => {
       const clean = text.trim();
-      if (!clean || !canSteer || steerPending) {
+      if (!clean || !canSteer || inFlight.current) {
         return false;
       }
+      /* A clarification is words only (owner decision 3). Attached files would
+       * otherwise stay in the composer unseen and ride along with the NEXT
+       * ordinary message — refuse aloud and keep everything where it is. */
+      if (files != null && files.size > 0) {
+        showToast({ message: localize('com_ui_dr_steer_no_files'), status: 'warning' });
+        return false;
+      }
+      inFlight.current = true;
       setSteerPending(true);
       try {
         const { message, parentMessageId } = await steerStream({ conversationId, text: clean });
         const list = getMessages() ?? [];
-        /* The running answer is the latest message and hangs under the head the
-         * server named; it moves under the clarification, exactly as the server
-         * will save it. Anything else is left alone — a reload re-reads the tree. */
+        /* In the tab that started the run the running answer is the latest
+         * message and hangs under the head the server named; it moves under
+         * the clarification, exactly as the server will save it. After a reload
+         * there is no placeholder in the feed (research streams no content
+         * before the report), so nothing matches and nothing moves — the
+         * server's final brings the tree. */
         const rehung = list.map((m) =>
           !m.isCreatedByUser &&
           m.messageId === latestMessageId &&
@@ -74,16 +88,17 @@ export default function useSteerRun() {
         });
         return false;
       } finally {
+        inFlight.current = false;
         setSteerPending(false);
       }
     },
     [
       canSteer,
-      steerPending,
       conversationId,
       getMessages,
       setMessages,
       latestMessageId,
+      files,
       showToast,
       localize,
     ],

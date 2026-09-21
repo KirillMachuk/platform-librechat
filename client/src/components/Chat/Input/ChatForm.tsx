@@ -178,11 +178,26 @@ const ChatForm = memo(function ChatForm({
     },
     [steer, methods],
   );
-  const composerPlaceholder = canSteer
-    ? localize('com_ui_dr_steer_placeholder')
-    : steerClosed
-      ? localize('com_ui_dr_steer_closed_placeholder')
-      : placeholder;
+  /* Dictation with auto-send: the recorder calls `ask` and clears the field
+   * unless told `false`. The clarification is confirmed asynchronously, so the
+   * text stays until the run has taken it. */
+  const steerFromVoice = useCallback(
+    (data: { text: string }): false => {
+      void steer(data.text).then((accepted) => {
+        if (accepted) {
+          methods.reset();
+        }
+      });
+      return false;
+    },
+    [steer, methods],
+  );
+  let composerPlaceholder = placeholder;
+  if (canSteer) {
+    composerPlaceholder = localize('com_ui_dr_steer_placeholder');
+  } else if (steerClosed) {
+    composerPlaceholder = localize('com_ui_dr_steer_closed_placeholder');
+  }
 
   const handleKeyUp = useHandleKeyUp({
     index,
@@ -430,9 +445,11 @@ const ChatForm = memo(function ChatForm({
               {SpeechToText && (
                 <AudioRecorder
                   methods={methods}
-                  ask={submitMessage}
+                  ask={canSteer ? steerFromVoice : submitMessage}
                   disabled={disableInputs || isNotAppendable}
-                  isSubmitting={isSubmitting}
+                  /* In steer mode the composer IS open: the recorder's «can't
+                   * submit speech while generating» guard would contradict it. */
+                  isSubmitting={isSubmitting && !canSteer}
                 />
               )}
               <div>

@@ -936,6 +936,7 @@
   "com_ui_dr_steer_closed_placeholder": "The report is being written — clarifications are closed; ask after it lands",
   "com_ui_dr_steer_accepted": "Noted — applied from the next round (1–3 min)",
   "com_ui_dr_steer_failed": "The clarification was not accepted. Try again.",
+  "com_ui_dr_steer_no_files": "A clarification is text only — remove the attached files, or send them after the report",
   "com_ui_cancel": "Cancel",
   "com_ui_cancelled": "Cancelled",
   "com_ui_category": "Category",

@@ -13,6 +13,7 @@ const mockCtx = {
   latestMessageId: 'resp1',
   getMessages: jest.fn(),
   setMessages: jest.fn(),
+  files: new Map<string, unknown>(),
 };
 
 jest.mock('~/data-provider', () => ({
@@ -59,6 +60,22 @@ describe('useSteerRun (mid-run steering)', () => {
     mockCtx.isSubmitting = true;
     mockCtx.getMessages.mockReset().mockReturnValue([question, running]);
     mockCtx.setMessages.mockReset();
+    mockCtx.files = new Map();
+  });
+
+  it('refuses aloud when files are attached — they would ride along with the next ordinary message', async () => {
+    mockCtx.files = new Map([['f1', {}]]);
+    const { result } = renderSteer(snapshot('research'));
+    let ok = true;
+    await act(async () => {
+      ok = await result.current.steer('с файлом');
+    });
+    expect(ok).toBe(false);
+    expect(mockSteerStream).not.toHaveBeenCalled();
+    expect(mockShowToast).toHaveBeenCalledWith({
+      message: 'com_ui_dr_steer_no_files',
+      status: 'warning',
+    });
   });
 
   it('is open only while the graph gathers: not before it (prepare/plan), not once the report is written', () => {

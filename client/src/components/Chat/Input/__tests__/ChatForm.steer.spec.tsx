@@ -12,6 +12,8 @@ import store from '~/store';
  */
 
 const mockSteerRun = jest.fn();
+const mockSubmitMessage = jest.fn();
+const mockAudioRecorder = jest.fn();
 const mockUseTextarea = jest.fn();
 
 jest.mock('~/hooks', () => ({
@@ -20,7 +22,7 @@ jest.mock('~/hooks', () => ({
   useRequiresKey: () => ({ requiresKey: false }),
   useHandleKeyUp: () => jest.fn(),
   useQueryParams: () => undefined,
-  useSubmitMessage: () => ({ submitMessage: jest.fn(), submitPrompt: jest.fn() }),
+  useSubmitMessage: () => ({ submitMessage: mockSubmitMessage, submitPrompt: jest.fn() }),
   useFocusChatEffect: () => undefined,
   useSteerRun: () => mockSteerRun(),
   useTextarea: (args: unknown) => {
@@ -69,12 +71,15 @@ jest.mock('../TextareaHeader', () => () => null);
 jest.mock('../PromptsCommand', () => () => null);
 jest.mock('../SkillsCommand', () => () => null);
 jest.mock('../PendingManualSkillsChips', () => () => null);
-jest.mock('../AudioRecorder', () => () => null);
+jest.mock('../AudioRecorder', () => (props: unknown) => {
+  mockAudioRecorder(props);
+  return null;
+});
 jest.mock('../StreamAudio', () => () => null);
 jest.mock('../TokenUsage', () => () => null);
 jest.mock('../StopButton', () => () => <button type="button" data-testid="stop" />);
 jest.mock('../SendButton', () => {
-  const { forwardRef } = jest.requireActual('react');
+  const { forwardRef } = jest.requireActual('react') as typeof import('react');
   const Send = forwardRef<HTMLButtonElement, { disabled?: boolean }>(function Send(
     { disabled },
     ref,
@@ -108,6 +113,8 @@ describe('the composer while a research run is under way', () => {
   beforeEach(() => {
     mockSteerRun.mockReset();
     mockUseTextarea.mockReset();
+    mockAudioRecorder.mockReset();
+    mockSubmitMessage.mockReset();
   });
 
   it('shows Stop, as before, when the run cannot be steered (pre-graph phases, ordinary chats)', () => {
@@ -144,5 +151,41 @@ describe('the composer while a research run is under way', () => {
       canSteer: false,
       placeholder: 'com_ui_dr_steer_closed_placeholder',
     });
+  });
+
+  const renderWithSpeech = () =>
+    render(
+      <RecoilRoot
+        initializeState={({ set }) => {
+          set(store.showStopButtonByIndex(0), true);
+          /* The recorder renders only when speech-to-text is on. */
+          set(store.speechToText, true);
+        }}
+      >
+        <ChatForm index={0} />
+      </RecoilRoot>,
+    );
+
+  it('dictation follows the composer: in steer mode it goes to the run and the «wait» guard stands down', () => {
+    const steer = jest.fn().mockResolvedValue(true);
+    mockSteerRun.mockReturnValue(steerState({ canSteer: true, steer }));
+    renderWithSpeech();
+    const props = mockAudioRecorder.mock.calls[0][0] as {
+      ask: (data: { text: string }) => false | void;
+      isSubmitting: boolean;
+    };
+    expect(props.isSubmitting).toBe(false);
+    /* `false` keeps the dictated text in the field until the run has taken it. */
+    expect(props.ask({ text: 'голосом' })).toBe(false);
+    expect(steer).toHaveBeenCalledWith('голосом');
+    expect(mockSubmitMessage).not.toHaveBeenCalled();
+  });
+
+  it('dictation outside steer mode is the ordinary submit behind the ordinary guard', () => {
+    mockSteerRun.mockReturnValue(steerState());
+    renderWithSpeech();
+    const props = mockAudioRecorder.mock.calls[0][0] as { ask: unknown; isSubmitting: boolean };
+    expect(props.isSubmitting).toBe(true);
+    expect(props.ask).toBe(mockSubmitMessage);
   });
 });

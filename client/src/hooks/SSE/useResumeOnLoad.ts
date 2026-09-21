@@ -112,7 +112,7 @@ function messagesBeforeTurn(
  * Build a submission object from resume state for reconnected streams.
  * This provides the minimum data needed for useResumableSSE to subscribe.
  */
-function buildSubmissionFromResumeState(
+export function buildSubmissionFromResumeState(
   resumeState: Agents.ResumeState,
   streamId: string,
   messages: TMessage[],

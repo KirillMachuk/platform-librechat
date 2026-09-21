@@ -339,6 +339,7 @@ const {
   runNewDeepResearch,
   buildDeepResearchTitle,
   isDrFollowUp,
+  buildDrTurnContext,
   buildDeepResearchCollectedUsage,
 } = require('./deepResearchRun');
 
@@ -3085,5 +3086,96 @@ describe('runNewDeepResearch — mid-run steering (DR_MIDRUN_STEERING_Plan.md)',
     await runNewDeepResearch(baseParams('q'));
     expect(maskContent).toHaveBeenCalledWith('Иванов — не тот');
     expect(prepared).toBe('[PERSON_1] — не тот');
+  });
+});
+
+describe('DR routing through a steered run (regenerate / edit after mid-run clarifications)', () => {
+  const models = require('~/models');
+  const CHAIN = [
+    {
+      messageId: 'plan1',
+      parentMessageId: 'q1',
+      isCreatedByUser: false,
+      drKind: 'plan',
+      text: '**План исследования:** Тема\n\n1. Шаг',
+    },
+    {
+      messageId: 'start1',
+      parentMessageId: 'plan1',
+      isCreatedByUser: true,
+      drKind: 'start',
+      text: 'Начать исследование',
+    },
+    {
+      messageId: 's1',
+      parentMessageId: 'start1',
+      isCreatedByUser: true,
+      drKind: 'steer',
+      text: 'не Минск',
+    },
+    {
+      messageId: 's2',
+      parentMessageId: 's1',
+      isCreatedByUser: true,
+      drKind: 'steer',
+      text: 'только 2026',
+    },
+    {
+      messageId: 'r1',
+      parentMessageId: 's2',
+      isCreatedByUser: false,
+      drKind: 'report',
+      text: 'Отчёт',
+    },
+  ];
+
+  it('isDrFollowUp: a turn whose parent is a clarification still belongs to the plan above it', async () => {
+    models.getMessages
+      .mockResolvedValueOnce([{ messageId: 's1', isCreatedByUser: true, drKind: 'steer' }])
+      .mockResolvedValueOnce(CHAIN);
+    await expect(
+      isDrFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 's1' }),
+    ).resolves.toBe(true);
+  });
+
+  it('isDrFollowUp: the same for a parent that is the start command (regenerating the FIRST clarification)', async () => {
+    models.getMessages
+      .mockResolvedValueOnce([{ messageId: 'start1', isCreatedByUser: true, drKind: 'start' }])
+      .mockResolvedValueOnce(CHAIN);
+    await expect(
+      isDrFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'start1' }),
+    ).resolves.toBe(true);
+  });
+
+  it('isDrFollowUp: an ordinary user parent is still normal chat, and costs no second query', async () => {
+    models.getMessages.mockResolvedValueOnce([{ messageId: 'u9', isCreatedByUser: true }]);
+    await expect(
+      isDrFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'u9' }),
+    ).resolves.toBe(false);
+    expect(models.getMessages).toHaveBeenCalledTimes(1);
+  });
+
+  it('isDrFollowUp: a clarification chain that does not end at a plan is normal chat (fail-closed)', async () => {
+    models.getMessages
+      .mockResolvedValueOnce([{ messageId: 's1', isCreatedByUser: true, drKind: 'steer' }])
+      .mockResolvedValueOnce([
+        { messageId: 's1', parentMessageId: 'gone', isCreatedByUser: true, drKind: 'steer' },
+      ]);
+    await expect(
+      isDrFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 's1' }),
+    ).resolves.toBe(false);
+  });
+
+  it('buildDrTurnContext: the re-sent clarification is a comment on the plan (plan-edit), with that plan found', async () => {
+    models.getMessages.mockResolvedValueOnce(CHAIN);
+    const turn = await buildDrTurnContext({
+      userId: 'u1',
+      conversationId: 'c1',
+      parentMessageId: 's1',
+      text: 'только 2026',
+      currentUserMessageId: 's2-regen',
+    });
+    expect(turn.kind).toBe('plan-edit');
+    expect(turn.planText).toContain('План исследования');
   });
 });

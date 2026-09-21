@@ -413,6 +413,33 @@ async function attachReportPdf({ req, responseMessage, reportMarkdown, title, fi
  * client-side, same gate) — accepted for the tiny test-era population.
  * Fail-closed: any error → false (normal chat).
  */
+/** A user message a research RUN hangs from: its start command or a mid-run clarification. */
+function isRunCommandOrSteer(message) {
+  return (
+    message != null &&
+    message.isCreatedByUser === true &&
+    (message.drKind === 'steer' || message.drKind === 'start')
+  );
+}
+
+/**
+ * Mid-run steering put user messages between a plan and its run's answer:
+ * plan → «Начать» → clarification → … → answer. Anything re-sent from inside
+ * that chain (regenerate the report, edit a clarification) arrives with a USER
+ * parent, which every DR routing rule reads as «not a research turn» — the
+ * clarification text would then go to an ordinary chat model as if it were a
+ * question. Walk up to the assistant message the run hangs from instead; the
+ * turn is then a comment on that plan (a re-plan), like any other free text
+ * under it. Keys on the persisted `drKind`, never on display text (review r2).
+ */
+function hopOverRunMessages(byId, message) {
+  let cursor = message;
+  for (let hops = 0; isRunCommandOrSteer(cursor) && hops < MAX_DR_CHAIN; hops++) {
+    cursor = cursor.parentMessageId ? (byId.get(cursor.parentMessageId) ?? null) : null;
+  }
+  return cursor ?? null;
+}
+
 async function isDrFollowUp({ userId, conversationId, parentMessageId }) {
   if (!conversationId || !parentMessageId || parentMessageId === Constants.NO_PARENT) {
     return false;
@@ -422,7 +449,18 @@ async function isDrFollowUp({ userId, conversationId, parentMessageId }) {
       { conversationId, user: userId, messageId: parentMessageId },
       'messageId isCreatedByUser drKind',
     );
-    const parent = Array.isArray(messages) ? messages[0] : null;
+    let parent = Array.isArray(messages) ? messages[0] : null;
+    if (isRunCommandOrSteer(parent)) {
+      /* A regenerate or an edit after a STEERED run re-sends a clarification,
+       * whose parent is another clarification or the start command — user
+       * messages. The turn still belongs to the plan they hang from. */
+      const all = await getMessages(
+        { conversationId, user: userId },
+        'messageId parentMessageId isCreatedByUser drKind',
+      );
+      const byId = new Map((Array.isArray(all) ? all : []).map((m) => [m.messageId, m]));
+      parent = hopOverRunMessages(byId, parent);
+    }
     if (!parent || parent.isCreatedByUser === true) {
       return false;
     }
@@ -597,7 +635,9 @@ async function buildDrTurnContext({
       return fresh;
     }
     const byId = new Map(messages.map((m) => [m.messageId, m]));
-    const parent = byId.get(parentMessageId);
+    /* Through a steered run's own user messages up to its plan — see
+     * `hopOverRunMessages`. */
+    const parent = hopOverRunMessages(byId, byId.get(parentMessageId));
     if (!parent || parent.isCreatedByUser === true) {
       return fresh;
     }
