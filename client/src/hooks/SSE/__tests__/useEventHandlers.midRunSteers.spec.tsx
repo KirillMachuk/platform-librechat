@@ -2,6 +2,7 @@ import React from 'react';
 import 'test/matchMedia.mock';
 import { RecoilRoot } from 'recoil';
 import { MemoryRouter } from 'react-router-dom';
+import { buildTree } from 'librechat-data-provider';
 import { renderHook, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { EventSubmission, TMessage } from 'librechat-data-provider';
@@ -132,6 +133,10 @@ describe('finalHandler with mid-run clarifications', () => {
 
     expect(messages.map((m) => m.messageId)).toEqual(['plan1', 'um1', 's1', 's2', 'r1']);
     expect(messages.find((m) => m.messageId === 'r1')?.parentMessageId).toBe('s2');
+    /* One root, one chain — judged by the real tree builder, which attaches a
+     * message only to a parent that comes earlier in the array. */
+    const roots = buildTree({ messages }) ?? [];
+    expect(roots.map((m) => m.messageId)).toEqual(['plan1']);
   });
 
   it('after a RELOAD mid-run the feed still has one «Начать», one of each clarification, one report (review of part B, К1)', () => {
@@ -213,6 +218,10 @@ describe('finalHandler with mid-run clarifications', () => {
     expect(new Set(ids).size).toBe(ids.length);
     const report = messages.find((m) => m.messageId === 'um1_');
     expect(report?.parentMessageId).toBe('s1');
-    expect(ids).toContain(report?.parentMessageId);
+    /* The clarification must come BEFORE the report in the array, or buildTree
+     * parks the report at the root: one root, the chain intact. */
+    expect(ids.indexOf('s1')).toBeLessThan(ids.indexOf('um1_'));
+    const roots = buildTree({ messages }) ?? [];
+    expect(roots.map((m) => m.messageId)).toEqual(['plan1']);
   });
 });

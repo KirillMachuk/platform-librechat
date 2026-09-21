@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useRecoilValue } from 'recoil';
 import { useToastContext } from '@librechat/client';
+import { Constants, LocalStorageKeys } from 'librechat-data-provider';
 import type { TMessage } from 'librechat-data-provider';
 import { drProgressByConvoId } from '~/store/deepResearch';
 import { steerStream } from '~/data-provider';
@@ -61,24 +62,46 @@ export default function useSteerRun() {
       setSteerPending(true);
       try {
         const { message, parentMessageId } = await steerStream({ conversationId, text: clean });
-        const list = getMessages() ?? [];
+        const list = (getMessages() ?? []).filter((m) => m.messageId !== message.messageId);
         /* In the tab that started the run the running answer is the latest
          * message and hangs under the head the server named; it moves under
          * the clarification, exactly as the server will save it. After a reload
          * there is no placeholder in the feed (research streams no content
          * before the report), so nothing matches and nothing moves — the
-         * server's final brings the tree. */
-        const rehung = list.map((m) =>
-          !m.isCreatedByUser &&
-          m.messageId === latestMessageId &&
-          m.parentMessageId === parentMessageId
-            ? { ...m, parentMessageId: message.messageId }
-            : m,
+         * server's final brings the tree.
+         *
+         * ORDER MATTERS: buildTree attaches a message only to a parent that
+         * comes EARLIER in the array. The clarification therefore goes right
+         * BEFORE the answer it now parents — appended after it, the answer
+         * found no parent, became a root of its own, and the feed showed that
+         * lone root instead of the conversation (seen live on the first steered
+         * run, 21.09.2026: question, plan card and bubble all gone until the
+         * final rebuilt the array). */
+        const answerAt = list.findIndex(
+          (m) =>
+            !m.isCreatedByUser &&
+            m.messageId === latestMessageId &&
+            m.parentMessageId === parentMessageId,
         );
-        setMessages([
-          ...rehung.filter((m) => m.messageId !== message.messageId),
-          message as TMessage,
-        ]);
+        if (answerAt < 0) {
+          setMessages([...list, message as TMessage]);
+        } else {
+          setMessages([
+            ...list.slice(0, answerAt),
+            message as TMessage,
+            { ...list[answerAt], parentMessageId: message.messageId },
+            ...list.slice(answerAt + 1),
+          ]);
+        }
+        /* Text typed while a response is generated is kept as the PENDING
+         * draft and restored into the field when the turn ends — right for an
+         * unsent thought, wrong for a clarification the run has taken: it came
+         * back into the composer after the report (same live run). */
+        try {
+          localStorage.removeItem(`${LocalStorageKeys.TEXT_DRAFT}${Constants.PENDING_CONVO}`);
+        } catch {
+          /* Storage unavailable: nothing was saved there either. */
+        }
         showToast({ message: localize('com_ui_dr_steer_accepted'), status: 'success' });
         return true;
       } catch (error) {
