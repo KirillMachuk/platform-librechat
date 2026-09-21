@@ -1,5 +1,6 @@
 import React from 'react';
 import { RecoilRoot } from 'recoil';
+import { buildTree } from 'librechat-data-provider';
 import { renderHook, act } from '@testing-library/react';
 import type { TMessage } from 'librechat-data-provider';
 import { drProgressByConvoId } from '~/store/deepResearch';
@@ -61,6 +62,7 @@ describe('useSteerRun (mid-run steering)', () => {
     mockCtx.getMessages.mockReset().mockReturnValue([question, running]);
     mockCtx.setMessages.mockReset();
     mockCtx.files = new Map();
+    window.localStorage.clear();
   });
 
   it('refuses aloud when files are attached — they would ride along with the next ordinary message', async () => {
@@ -109,12 +111,46 @@ describe('useSteerRun (mid-run steering)', () => {
     expect(ok).toBe(true);
     expect(mockSteerStream).toHaveBeenCalledWith({ conversationId: 'c1', text: 'не Минск' });
     const next = mockCtx.setMessages.mock.calls[0][0] as TMessage[];
-    expect(next.map((m) => m.messageId)).toEqual(['um1', 'resp1', 's1']);
+    /* The clarification BEFORE the answer it now parents: buildTree attaches a
+     * message only to a parent that comes earlier in the array. Appended after
+     * it, the answer became a lone root and the feed showed nothing else (seen
+     * live, 21.09.2026). The real buildTree is the judge. */
+    expect(next.map((m) => m.messageId)).toEqual(['um1', 's1', 'resp1']);
     expect(next.find((m) => m.messageId === 'resp1')?.parentMessageId).toBe('s1');
+    const roots = buildTree({ messages: next }) ?? [];
+    expect(roots.map((m) => m.messageId)).toEqual(['um1']);
+    expect(roots[0].children?.[0].messageId).toBe('s1');
+    expect(roots[0].children?.[0].children?.[0].messageId).toBe('resp1');
     expect(mockShowToast).toHaveBeenCalledWith({
       message: 'com_ui_dr_steer_accepted',
       status: 'success',
     });
+  });
+
+  it('clears the PENDING draft: an accepted clarification must not come back into the field after the report', async () => {
+    window.localStorage.setItem('textDraft_PENDING', 'draft-of-the-steer');
+    window.localStorage.setItem('textDraft_c1', 'an unrelated earlier draft');
+    mockSteerStream.mockResolvedValue({
+      message: message({ messageId: 's1', parentMessageId: 'um1', isCreatedByUser: true }),
+      parentMessageId: 'um1',
+      accepted: 1,
+    });
+    const { result } = renderSteer(snapshot('research'));
+    await act(async () => {
+      await result.current.steer('не Минск');
+    });
+    expect(window.localStorage.getItem('textDraft_PENDING')).toBeNull();
+    expect(window.localStorage.getItem('textDraft_c1')).toBe('an unrelated earlier draft');
+  });
+
+  it('a refused clarification keeps the PENDING draft — the text is still unsent', async () => {
+    window.localStorage.setItem('textDraft_PENDING', 'draft-of-the-steer');
+    mockSteerStream.mockRejectedValue({ response: { data: { error: 'нет' } } });
+    const { result } = renderSteer(snapshot('research'));
+    await act(async () => {
+      await result.current.steer('поздно');
+    });
+    expect(window.localStorage.getItem('textDraft_PENDING')).toBe('draft-of-the-steer');
   });
 
   it('leaves an answer alone that does not hang under the head the server named', async () => {

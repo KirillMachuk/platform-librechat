@@ -793,8 +793,14 @@ export default function useEventHandlers({
            * `regenerateMessages` is the snapshot from the click: without the
            * clarifications the new report's parent is missing from the array
            * and buildTree parks it at the root (second review, В-1). */
+          /* Placed BEFORE the report: buildTree attaches a message only to a
+           * parent that comes earlier in the array. */
           const present = new Set(finalMessages.map((m) => m.messageId));
-          finalMessages.push(...(steerMessages ?? []).filter((m) => !present.has(m.messageId)));
+          const missing = (steerMessages ?? []).filter((m) => !present.has(m.messageId));
+          const reportAt = finalMessages.findIndex(
+            (m) => m.messageId === responseMessage.messageId,
+          );
+          finalMessages.splice(reportAt < 0 ? finalMessages.length : reportAt, 0, ...missing);
         } else if (requestMessage != null && responseMessage != null) {
           finalMessages = withMidRunSteers(messages, steerMessages, [
             requestMessage,
