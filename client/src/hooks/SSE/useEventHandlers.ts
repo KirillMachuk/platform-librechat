@@ -789,6 +789,12 @@ export default function useEventHandlers({
             responseMessage,
             initialResponseId: submission.initialResponse.messageId,
           });
+          /* A regenerated research run can be steered too, and
+           * `regenerateMessages` is the snapshot from the click: without the
+           * clarifications the new report's parent is missing from the array
+           * and buildTree parks it at the root (second review, В-1). */
+          const present = new Set(finalMessages.map((m) => m.messageId));
+          finalMessages.push(...(steerMessages ?? []).filter((m) => !present.has(m.messageId)));
         } else if (requestMessage != null && responseMessage != null) {
           finalMessages = withMidRunSteers(messages, steerMessages, [
             requestMessage,

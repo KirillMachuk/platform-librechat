@@ -3147,6 +3147,15 @@ describe('DR routing through a steered run (regenerate / edit after mid-run clar
     ).resolves.toBe(true);
   });
 
+  it('isDrFollowUp: a start command whose run was NEVER steered routes as before — normal chat (a run that died with its process)', async () => {
+    models.getMessages
+      .mockResolvedValueOnce([{ messageId: 'start1', isCreatedByUser: true, drKind: 'start' }])
+      .mockResolvedValueOnce(CHAIN.filter((m) => m.drKind !== 'steer' && m.drKind !== 'report'));
+    await expect(
+      isDrFollowUp({ userId: 'u1', conversationId: 'c1', parentMessageId: 'start1' }),
+    ).resolves.toBe(false);
+  });
+
   it('isDrFollowUp: an ordinary user parent is still normal chat, and costs no second query', async () => {
     models.getMessages.mockResolvedValueOnce([{ messageId: 'u9', isCreatedByUser: true }]);
     await expect(

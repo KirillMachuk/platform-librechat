@@ -177,4 +177,42 @@ describe('finalHandler with mid-run clarifications', () => {
     expect(ids).toEqual(['plan1', 'um1', 's1', 's2', 'r1']);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it('a REGENERATED run steered mid-way keeps its clarifications too — the new report must find its parent (second review, В-1)', () => {
+    const oldReport = message({ messageId: 'um1_', parentMessageId: 'um1', drKind: 'report' });
+    const newReport = message({
+      messageId: 'um1_',
+      parentMessageId: 's1',
+      drKind: 'report',
+      text: 'Новый отчёт',
+    });
+    const { result, messages } = setup([plan, start, oldReport]);
+    const data = {
+      final: true,
+      requestMessage: start,
+      responseMessage: newReport,
+      steerMessages: [steer1],
+      conversation: { conversationId: 'c1', endpoint: 'agents' },
+    } as unknown as TFinalResData;
+    const submission = {
+      messages: [plan],
+      /* The snapshot from the click on «Regenerate»: no clarification in it. */
+      regenerateMessages: [plan, start, oldReport],
+      conversation: { conversationId: 'c1', endpoint: 'agents' },
+      initialResponse: oldReport,
+      userMessage: start,
+      isRegenerate: true,
+    } as unknown as EventSubmission;
+
+    act(() => {
+      result.current.finalHandler(data, submission);
+    });
+
+    const ids = messages.map((m) => m.messageId);
+    expect(ids).toContain('s1');
+    expect(new Set(ids).size).toBe(ids.length);
+    const report = messages.find((m) => m.messageId === 'um1_');
+    expect(report?.parentMessageId).toBe('s1');
+    expect(ids).toContain(report?.parentMessageId);
+  });
 });
